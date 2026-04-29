@@ -53,3 +53,16 @@
 - Selection is deterministic: sorted by filename, first-N from each complexity bucket
 - `cargo xtask regen-goldens` re-runs selection via `scripts/select_goldens.py`
 - manifest.json sorted by (arch, function_name) for reproducibility
+
+## [Task 8] ELF loader
+- `unlace-loader` crate: 4 source files — lib.rs, image.rs, elf.rs, error.rs
+- `trait Loader { fn can_load(&[u8]) -> bool; fn load(&[u8]) -> Result<BinaryImage, LoadError>; }` — associated functions (not methods), since loaders are stateless
+- `BinaryImage` holds: arch (ArchId), endian (Endian), entry (u64), sections (Vec<Section>), symbols (BTreeMap<u64, Symbol>)
+- Section.data is owned Vec<u8> (not a reference) for ownership simplicity in v1
+- `ElfLoader` handles ELF32/64 via generic `load_elf::<Elf: FileHeader>()` dispatch based on EI_CLASS byte
+- `object` crate v0.39 API: use `elf_header()` not deprecated `raw_header()`, Ident field is `.class` not `.ei_class`, no `EI_NIDENT` const (use `size_of::<elf::Ident>()`)
+- e_machine mapping: EM_MIPS disambiguates Mips vs Mips64 using ELF class (ELFCLASS32 vs ELFCLASS64)
+- Reads both .symtab and .dynsym; merges into single BTreeMap, preferring symbols with non-empty names on address collision
+- SectionFlags uses manual bitflag struct (not the `bitflags` crate) — READ, WRITE, EXEC derived from SHF_ALLOC, SHF_WRITE, SHF_EXECINSTR
+- `ArchId::Unknown(u16)` variant captures unmapped e_machine values without returning an error
+- 5 tests: load hello_world, reject non-ELF, .text is executable, stripped vs non-stripped symbol count, symbol_at lookup

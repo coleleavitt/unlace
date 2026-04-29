@@ -195,7 +195,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
 
 ### Wave 1 — Foundation
 
-- [ ] 1. Project workspace + CI scaffolding
+- [x] 1. Project workspace + CI scaffolding
   **What to do**: Create Cargo workspace with 14 crates: unlace-ir, unlace-loader, unlace-lift (facade), unlace-lift-x86, unlace-lift-arm, unlace-lift-riscv, unlace-lift-mips, unlace-lift-ppc, unlace-lift-v850, unlace-lift-arc, unlace-passes, unlace-struct, unlace-output, unlace-cli. (7 architecture lifters: x86, ARM, RISC-V, MIPS, PPC, V850, ARC. hex_loader is a file-format dispatcher, not an architecture — it doesn't need its own lifter.) Add workspace deps: object, iced-x86, capstone, gimli, petgraph, clap, symbolic-demangle, insta, tracing. GitHub Actions CI. rustfmt.toml, clippy.toml. cargo xtask scaffold.
   **Must NOT do**: Any decompiler logic. Pure scaffolding.
   **Parallelization**: Wave 1, start immediately. Blocks: 7, 8, 11.
@@ -218,7 +218,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `chore: project workspace + CI scaffolding`
 
-- [ ] 2. IR specification document (~70 opcodes)
+- [x] 2. IR specification document (~70 opcodes)
   **What to do**: Write `docs/ir-spec.md` — complete LIR opcode set modeled after Ghidra P-code. ~70 opcodes (COPY, LOAD, STORE, INT_ADD/SUB/MULT/DIV, BOOL_*, FLOAT_*, BRANCH, CBRANCH, CALL, RETURN, MULTIEQUAL/phi, UNIMPLEMENTED, etc.). Define Varnode (space, offset, size) with 5 address spaces (register, ram, const, unique, stack). Define canonical text form. Each opcode: name, arity, semantics, example.
   **Must NOT do**: Implement in Rust (Task 7).
   **Parallelization**: Wave 1, start immediately. Blocks: 7, 9.
@@ -239,7 +239,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `docs: IR specification v1.0`
 
-- [ ] 3. Determinism charter + lint rules
+- [x] 3. Determinism charter + lint rules
   **What to do**: Write `docs/determinism.md` — no HashMap/HashSet in output-affecting crates, BTreeMap/IndexMap only, monotonic counters for naming, canonical IR form (blocks by address, insns by index), platform-identical output. Create `xtask lint-determinism` that greps for HashMap in unlace-output/struct/passes/ir. Add to CI.
   **Must NOT do**: Implement IR or output code.
   **Parallelization**: Wave 1, start immediately. Blocks: 7.
@@ -260,7 +260,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `docs: determinism charter + lint enforcement`
 
-- [ ] 5. Stratified golden corpus extraction
+- [x] 5. Stratified golden corpus extraction
   **What to do**: Select 250 functions from 113K reference files. 150 from hexx64, 25 from hexarm, 15 each from hexrv/hexmips/hexppc/hexv850/hexarc. Complexity: ~30% trivial, ~30% simple, ~20% branchy, ~20% complex. Copy to `tests/golden/{arch}/`. Create `tests/golden/manifest.json`. Create `cargo xtask regen-goldens`.
   **Must NOT do**: Write comparison harness (Task 10).
   **Parallelization**: Wave 1. Blocks: 10, 23.
@@ -282,7 +282,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `test: stratified golden corpus — 250 functions`
 
-- [ ] 6. Test fixture binaries
+- [x] 6. Test fixture binaries
   **What to do**: Compile C programs to ELF fixtures: hello_world, branches (if/else/switch), loops (for/while/do-while), calls, medium (~50 funcs), stripped (strip -s), empty. `gcc -O2 -o fixtures/X.elf X.c`. Write `fixtures/README.md`.
   **Must NOT do**: Non-x86 fixtures.
   **Parallelization**: Wave 1. Blocks: 10, 23.
@@ -303,7 +303,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
 
 ### Wave 2 — Core Types + x86-64 Frontend
 
-- [ ] 7. unlace-ir crate: IR types
+- [x] 7. unlace-ir crate: IR types
   **What to do**: Implement IR spec as Rust types. `SpaceId` enum (Register/Ram/Const/Unique/Stack). `Varnode { space, offset: u64, size: u8 }`. `IrOp` enum ~70 variants `#[non_exhaustive]`. `IrInsn { op, output: Option<Varnode>, inputs: SmallVec<[Varnode; 3]>, addr: u64 }`. `BasicBlock { id, insns, successors }`. `Function { name, entry, blocks: BTreeMap<BlockId, BasicBlock>, addr }`. All BTreeMap. Display impls matching canonical form. Clone + Debug + PartialEq + Eq.
   **Must NOT do**: SSA, CFG graph, petgraph.
   **Parallelization**: Wave 2. Depends: 2, 3. Blocks: 9, 11, 12, 19.
@@ -322,7 +322,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(ir): core IR types — Varnode, IROp, Function, BasicBlock`
 
-- [ ] 8. unlace-loader crate: ELF loader
+- [x] 8. unlace-loader crate: ELF loader
   **What to do**: `trait Loader { fn can_load(data) -> bool; fn load(data) -> Result<BinaryImage>; }`. `BinaryImage` with sections, entry point, arch, endianness, symbols. `ElfLoader` via `object` crate. Handle ELF32/64, little/big endian, .symtab + .dynsym. Return `ArchId` from e_machine.
   **Must NOT do**: PE, Mach-O (Tasks 33-34).
   **Parallelization**: Wave 2. Depends: 1. Blocks: 21, 33, 34.
@@ -346,7 +346,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(loader): ELF loader via object crate`
 
-- [ ] 9. unlace-lift-x86 crate: x86-64 lifter
+- [x] 9. unlace-lift-x86 crate: x86-64 lifter
   **What to do**: Define `trait Lifter` in unlace-ir: `fn lift_insn(&self, bytes, addr) -> Result<LiftedInsn>`, `fn register_file()`, `fn arch() -> ArchId`. Implement `X86Lifter` via iced-x86. Lift: MOV, ADD, SUB, MUL, DIV, AND, OR, XOR, SHL, SHR, CMP, TEST, JMP, Jcc, CALL, RET, PUSH, POP, LEA. Model x86 regs as Varnodes (RAX=0, RCX=8, ..., RSP=32, RBP=40). RFLAGS as separate bits. LOAD/STORE for memory. UNIMPLEMENTED for SSE/AVX. Per-instruction unit tests.
   **Must NOT do**: SSE/AVX/AMX, function-level analysis, CFG.
   **Parallelization**: Wave 2. Depends: 2, 7. Blocks: 22.
@@ -370,7 +370,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(lift-x86): x86-64 lifter via iced-x86`
 
-- [ ] 10. Golden comparison harness
+- [x] 10. Golden comparison harness
   **What to do**: Rust binary in `tests/golden-harness/` using tree-sitter-c. Parse expected + actual C, compare ASTs ignoring names/whitespace/comments. Report divergence location. `#[test] fn golden_x86_64()` initially `#[ignore]`. insta snapshots as alternative.
   **Must NOT do**: Decompiler logic.
   **Parallelization**: Wave 2. Depends: 5, 6. Blocks: 23.
@@ -394,7 +394,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `test: golden comparison harness via tree-sitter-c`
 
-- [ ] 11. Architecture trait + 7 stub lifters
+- [x] 11. Architecture trait + 7 stub lifters
   **What to do**: In each of unlace-lift-{arm,riscv,mips,ppc,v850,arc}: implement Lifter trait returning `Err(UnsupportedArch)`. Define register file per arch from public ISA docs. Create `unlace-lift` facade crate with `fn get_lifter(arch) -> Box<dyn Lifter>`. One test per stub.
   **Must NOT do**: Actual lifting for non-x86.
   **Parallelization**: Wave 2. Depends: 7. Blocks: 26-32.

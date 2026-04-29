@@ -223,3 +223,26 @@
 - 5 tests: test_dot_basic, test_dot_diamond, test_dot_loop, test_dot_renders (conditional on `dot` binary), test_dot_deterministic
 - smallvec added to dev-dependencies for test helpers
 - lint-determinism passes
+
+## [Task 17] Control Flow Structuring
+- New module files in `crates/unlace-struct/src/`: lib.rs (re-exports), hir.rs (HIR types), structurer.rs (algorithm + tests)
+- `HirNode` enum: Block, Statement, If, While, DoWhile, Switch, Return, Goto, Label — covers all structured constructs + goto fallback
+- `HirFunction { name, params, return_type, body, addr }` — structured function container
+- `LabelId(u32)` newtype for goto/label pairs; `SwitchCase` enum with Value and Range variants
+- `pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError>` — main entry point
+- Algorithm: StructureCtx does pre-order dominator tree walk with pattern matching:
+  - Back-edge detection: edge (src → tgt) where tgt dominates src → identifies natural loops and loop headers
+  - While: loop header has CBRANCH (exit test at top), body is the dominated successor, exit is the non-dominated successor
+  - DoWhile: header has no CBRANCH, single latch block has CBRANCH (exit test at bottom)
+  - If/else: CBRANCH block with ConditionalTrue/False edges; join point found by BFS reachability intersection (max depth 16)
+  - Fallback: unstructured loops emit `while(true)` with gotos; irreducible CFGs handled gracefully via emitted-set dedup
+- `dominates(dom_tree, a, b)` helper walks idom chain from b upward to check if a is an ancestor
+- `classify_loop_edges` uses domination to distinguish body-entry from exit successor
+- `find_join_point` uses bounded BFS from both branches to find first common reachable block (simple post-dominator proxy)
+- `emitted: BTreeSet<BlockId>` prevents double-emission of blocks; `block_labels: BTreeMap` tracks goto targets
+- CBRANCH condition resolved from var_map at input slot 1 (P-code CBRANCH convention); falls back to synthetic constant if not found
+- Control-flow terminators (Branch, Cbranch, Branchind) are skipped during statement emission — handled structurally
+- 4 tests: test_structure_linear (statements + return, no control flow), test_structure_if_else (diamond → If node), test_structure_while (back-edge → While node), test_structure_irreducible_goto (cycle without domination → must not panic)
+- BTreeMap/BTreeSet throughout — no HashMap, lint-determinism passes
+- smallvec added to dev-dependencies for test construction helpers
+- Cargo.toml already had unlace-ir, unlace-passes, thiserror, tracing dependencies

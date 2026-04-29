@@ -1,0 +1,21 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/unlace_output-c5689ef9ea4b2674)
+
+running 8 tests
+test ir_dump::tests::test_dump_empty_function ... ok
+test ir_dump::tests::test_dump_deterministic ... ok
+test ir_dump::tests::test_dump_branch_target_resolution ... ok
+test ir_dump::tests::test_dump_canonical_form ... ok
+test ir_dump::tests::test_dump_varnode_spaces ... ok
+test ir_dump::tests::test_dump_multiple_blocks_sorted ... ok
+test ir_dump::tests::test_dump_with_phi ... ok
+test ir_dump::tests::test_dump_simple_function ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+   Doc-tests unlace_output
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

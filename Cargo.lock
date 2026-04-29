@@ -918,6 +918,7 @@ version = "0.1.0"
 dependencies = [
  "iced-x86",
  "insta",
+ "smallvec",
  "thiserror",
  "tracing",
  "unlace-ir",

@@ -3,42 +3,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-/// Target architecture identifier, derived from the ELF `e_machine` field
-/// (or equivalent in PE/Mach-O).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ArchId {
-    X86,
-    X86_64,
-    Arm,
-    AArch64,
-    RiscV64,
-    Mips,
-    Mips64,
-    Ppc,
-    Ppc64,
-    V850,
-    Arc,
-    Unknown(u16),
-}
-
-impl fmt::Display for ArchId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::X86 => f.write_str("x86"),
-            Self::X86_64 => f.write_str("x86_64"),
-            Self::Arm => f.write_str("arm"),
-            Self::AArch64 => f.write_str("aarch64"),
-            Self::RiscV64 => f.write_str("riscv64"),
-            Self::Mips => f.write_str("mips"),
-            Self::Mips64 => f.write_str("mips64"),
-            Self::Ppc => f.write_str("ppc"),
-            Self::Ppc64 => f.write_str("ppc64"),
-            Self::V850 => f.write_str("v850"),
-            Self::Arc => f.write_str("arc"),
-            Self::Unknown(id) => write!(f, "unknown({id:#x})"),
-        }
-    }
-}
+pub use unlace_ir::ArchId;
 
 /// Byte order of the loaded binary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

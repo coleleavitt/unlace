@@ -8,6 +8,7 @@ object = { workspace = true }
 gimli = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+unlace-ir = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }

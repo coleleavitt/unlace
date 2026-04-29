@@ -109,3 +109,20 @@
 - Facade maps: Arm|AArch64→ArmLifter, RiscV64→RiscVLifter, Mips|Mips64→MipsLifter, Ppc|Ppc64→PpcLifter, V850→V850Lifter, Arc→ArcLifter
 - 14 unit tests total: 1 per stub crate + 8 in facade (per-arch + unknown fallback + all-stubs-unimplemented)
 - Task 9 created `ArchId` in unlace-ir/src/arch.rs and `Lifter` trait in unlace-ir/src/lifter.rs — both now canonical
+
+## [Task 9] x86-64 lifter
+- `X86Lifter` struct in unlace-lift-x86/src/lift.rs implements `trait Lifter` from unlace-ir
+- Source layout: lib.rs, lift.rs (main decoder + LiftCtx), register_file.rs, ops/{mod,data_move,arithmetic,bitwise,control_flow,stack}.rs
+- iced-x86 `Decoder::with_ip(64, bytes, addr, DecoderOptions::NONE)` for x86-64 decoding
+- `ArchId` moved from unlace-loader/src/image.rs to unlace-ir/src/arch.rs; loader re-exports via `pub use unlace_ir::ArchId`
+- `LiftCtx` struct manages: emitted ops vec, unique counter, machine address; methods: alloc_unique, emit, emit_store, operand_read, operand_write, write_operand_insn, memory_address
+- Register file: RAX=0, RCX=8, RDX=16, RBX=24, RSP=32, RBP=40, RSI=48, RDI=56, R8=64..R15=120, RIP=128; RFLAGS at 256+ (CF=256,PF=257,AF=258,ZF=259,SF=260,OF=261)
+- Sub-registers: iced_reg_to_varnode() maps EAX/AX/AL etc to (parent_offset, smaller_size); AH/BH/CH/DH mapped to offset+1 size=1
+- Memory destinations: must check `insn.op0_kind() == OpKind::Memory` to distinguish STORE vs COPY — address varnodes from compute_memory_address live in Unique space, not Ram
+- RIP-relative: iced-x86 resolves to absolute address in memory_displacement64 when Decoder::with_ip is used — no manual RIP computation needed
+- Shift operations emit explicit `INT_AND` mask for x86 shift count masking (count & (bits-1)) per ISA behavior
+- Jcc conditions: each maps to flag checks — JE=ZF, JB=CF, JL=SF^OF, JG=!ZF&(SF==OF), etc using BOOL_* ops
+- CALL: emits RSP-=8, STORE return_addr, then CALL/CALLIND. RET: LOAD from [RSP], RSP+=8, RETURN
+- Unknown/SSE/AVX → IrOp::Unimplemented (never panic)
+- 32 unit tests pass: arch, register_file, mov(reg-reg, reg-imm, mem-read, mem-write), add, sub, cmp, test, and, or, xor, shl, shr, not, neg, sar, jmp, je, jne, call, ret, push, pop, lea, nop, unknown_insn, empty_buffer, imul_3op, div, no_unwrap_in_lib
+- No unwrap() in library code — all paths use `?` or return Option/Result

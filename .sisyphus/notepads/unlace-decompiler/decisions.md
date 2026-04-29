@@ -19,3 +19,12 @@
 ## Determinism
 - **Decision**: No HashMap in output paths. BTreeMap/IndexMap only.
 - **Rationale**: Required for golden file testing — output must be byte-identical across runs
+
+## [Task 3] Determinism
+- **Charter**: Full determinism rules documented in `docs/determinism.md`
+- **Enforced crates**: unlace-ir, unlace-passes, unlace-struct, unlace-output
+- **Exempt crates**: unlace-cli, unlace-loader, unlace-lift-*, xtask
+- **Lint**: `cargo xtask lint-determinism` — word-boundary grep for HashMap/HashSet, skips comments and string literals
+- **Escape hatch**: `// determinism:allow` on the line
+- **CI**: Added `lint-determinism` job to `.github/workflows/ci.yml`
+- **Key rules**: No HashMap/HashSet, monotonic counters for naming, canonical IR form (blocks by address, insns by index), platform-identical output (LF only, no locale), no unseeded randomness, no thread-order-dependent output

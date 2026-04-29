@@ -1,0 +1,1752 @@
+[
+  {
+    "arch": "arc",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/func.c",
+    "function_name": "func",
+    "block_count": 10
+  },
+  {
+    "arch": "arc",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_1000C0.c",
+    "function_name": "sub_1000C0",
+    "block_count": 14
+  },
+  {
+    "arch": "arc",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_100420.c",
+    "function_name": "sub_100420",
+    "block_count": 16
+  },
+  {
+    "arch": "arc",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_1005A0.c",
+    "function_name": "sub_1005A0",
+    "block_count": 1
+  },
+  {
+    "arch": "arc",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_100600.c",
+    "function_name": "sub_100600",
+    "block_count": 7
+  },
+  {
+    "arch": "arc",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_100670.c",
+    "function_name": "sub_100670",
+    "block_count": 8
+  },
+  {
+    "arch": "arc",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_100820.c",
+    "function_name": "sub_100820",
+    "block_count": 2
+  },
+  {
+    "arch": "arc",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_1008B0.c",
+    "function_name": "sub_1008B0",
+    "block_count": 2
+  },
+  {
+    "arch": "arc",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_1009A0.c",
+    "function_name": "sub_1009A0",
+    "block_count": 2
+  },
+  {
+    "arch": "arc",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_100A30.c",
+    "function_name": "sub_100A30",
+    "block_count": 5
+  },
+  {
+    "arch": "arc",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_100AF0.c",
+    "function_name": "sub_100AF0",
+    "block_count": 5
+  },
+  {
+    "arch": "arc",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_101500.c",
+    "function_name": "sub_101500",
+    "block_count": 1
+  },
+  {
+    "arch": "arc",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_104150.c",
+    "function_name": "sub_104150",
+    "block_count": 1
+  },
+  {
+    "arch": "arc",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_10A120.c",
+    "function_name": "sub_10A120",
+    "block_count": 1
+  },
+  {
+    "arch": "arc",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarc/all/sub_10A2B0.c",
+    "function_name": "sub_10A2B0",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/func.c",
+    "function_name": "func",
+    "block_count": 10
+  },
+  {
+    "arch": "arm",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_100A70.c",
+    "function_name": "sub_100A70",
+    "block_count": 31
+  },
+  {
+    "arch": "arm",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101320.c",
+    "function_name": "sub_101320",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101330.c",
+    "function_name": "sub_101330",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101340.c",
+    "function_name": "sub_101340",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101350.c",
+    "function_name": "sub_101350",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101370.c",
+    "function_name": "sub_101370",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101380.c",
+    "function_name": "sub_101380",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_1013A0.c",
+    "function_name": "sub_1013A0",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_1013C0.c",
+    "function_name": "sub_1013C0",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101540.c",
+    "function_name": "sub_101540",
+    "block_count": 3
+  },
+  {
+    "arch": "arm",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_1015C0.c",
+    "function_name": "sub_1015C0",
+    "block_count": 3
+  },
+  {
+    "arch": "arm",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_1016B0.c",
+    "function_name": "sub_1016B0",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101750.c",
+    "function_name": "sub_101750",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101770.c",
+    "function_name": "sub_101770",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101790.c",
+    "function_name": "sub_101790",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_1017B0.c",
+    "function_name": "sub_1017B0",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_1017D0.c",
+    "function_name": "sub_1017D0",
+    "block_count": 1
+  },
+  {
+    "arch": "arm",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_1017F0.c",
+    "function_name": "sub_1017F0",
+    "block_count": 5
+  },
+  {
+    "arch": "arm",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101850.c",
+    "function_name": "sub_101850",
+    "block_count": 2
+  },
+  {
+    "arch": "arm",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_1018D0.c",
+    "function_name": "sub_1018D0",
+    "block_count": 2
+  },
+  {
+    "arch": "arm",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101950.c",
+    "function_name": "sub_101950",
+    "block_count": 7
+  },
+  {
+    "arch": "arm",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_101A40.c",
+    "function_name": "sub_101A40",
+    "block_count": 11
+  },
+  {
+    "arch": "arm",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_102090.c",
+    "function_name": "sub_102090",
+    "block_count": 4
+  },
+  {
+    "arch": "arm",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexarm/all/sub_102100.c",
+    "function_name": "sub_102100",
+    "block_count": 5
+  },
+  {
+    "arch": "mips",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/func.c",
+    "function_name": "func",
+    "block_count": 10
+  },
+  {
+    "arch": "mips",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_100240.c",
+    "function_name": "sub_100240",
+    "block_count": 10
+  },
+  {
+    "arch": "mips",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_1003E0.c",
+    "function_name": "sub_1003E0",
+    "block_count": 17
+  },
+  {
+    "arch": "mips",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_1006A0.c",
+    "function_name": "sub_1006A0",
+    "block_count": 23
+  },
+  {
+    "arch": "mips",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_100BF0.c",
+    "function_name": "sub_100BF0",
+    "block_count": 1
+  },
+  {
+    "arch": "mips",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_100C10.c",
+    "function_name": "sub_100C10",
+    "block_count": 2
+  },
+  {
+    "arch": "mips",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_101100.c",
+    "function_name": "sub_101100",
+    "block_count": 1
+  },
+  {
+    "arch": "mips",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_101180.c",
+    "function_name": "sub_101180",
+    "block_count": 4
+  },
+  {
+    "arch": "mips",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_102A60.c",
+    "function_name": "sub_102A60",
+    "block_count": 1
+  },
+  {
+    "arch": "mips",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_102AC0.c",
+    "function_name": "sub_102AC0",
+    "block_count": 7
+  },
+  {
+    "arch": "mips",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_102EF0.c",
+    "function_name": "sub_102EF0",
+    "block_count": 5
+  },
+  {
+    "arch": "mips",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_102FB0.c",
+    "function_name": "sub_102FB0",
+    "block_count": 5
+  },
+  {
+    "arch": "mips",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_1039C0.c",
+    "function_name": "sub_1039C0",
+    "block_count": 1
+  },
+  {
+    "arch": "mips",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_10C5E0.c",
+    "function_name": "sub_10C5E0",
+    "block_count": 1
+  },
+  {
+    "arch": "mips",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexmips/all/sub_10C770.c",
+    "function_name": "sub_10C770",
+    "block_count": 1
+  },
+  {
+    "arch": "ppc",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/func.c",
+    "function_name": "func",
+    "block_count": 10
+  },
+  {
+    "arch": "ppc",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100110.c",
+    "function_name": "sub_100110",
+    "block_count": 4
+  },
+  {
+    "arch": "ppc",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100180.c",
+    "function_name": "sub_100180",
+    "block_count": 4
+  },
+  {
+    "arch": "ppc",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100200.c",
+    "function_name": "sub_100200",
+    "block_count": 2
+  },
+  {
+    "arch": "ppc",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100230.c",
+    "function_name": "sub_100230",
+    "block_count": 3
+  },
+  {
+    "arch": "ppc",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100320.c",
+    "function_name": "sub_100320",
+    "block_count": 1
+  },
+  {
+    "arch": "ppc",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100340.c",
+    "function_name": "sub_100340",
+    "block_count": 1
+  },
+  {
+    "arch": "ppc",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100360.c",
+    "function_name": "sub_100360",
+    "block_count": 6
+  },
+  {
+    "arch": "ppc",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100410.c",
+    "function_name": "sub_100410",
+    "block_count": 1
+  },
+  {
+    "arch": "ppc",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100640.c",
+    "function_name": "sub_100640",
+    "block_count": 7
+  },
+  {
+    "arch": "ppc",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100760.c",
+    "function_name": "sub_100760",
+    "block_count": 32
+  },
+  {
+    "arch": "ppc",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_100A00.c",
+    "function_name": "sub_100A00",
+    "block_count": 10
+  },
+  {
+    "arch": "ppc",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_103220.c",
+    "function_name": "sub_103220",
+    "block_count": 1
+  },
+  {
+    "arch": "ppc",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_103280.c",
+    "function_name": "sub_103280",
+    "block_count": 7
+  },
+  {
+    "arch": "ppc",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexppc/all/sub_1036B0.c",
+    "function_name": "sub_1036B0",
+    "block_count": 5
+  },
+  {
+    "arch": "riscv",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/func.c",
+    "function_name": "func",
+    "block_count": 10
+  },
+  {
+    "arch": "riscv",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_100120.c",
+    "function_name": "sub_100120",
+    "block_count": 17
+  },
+  {
+    "arch": "riscv",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_1003E0.c",
+    "function_name": "sub_1003E0",
+    "block_count": 23
+  },
+  {
+    "arch": "riscv",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_100930.c",
+    "function_name": "sub_100930",
+    "block_count": 1
+  },
+  {
+    "arch": "riscv",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_100950.c",
+    "function_name": "sub_100950",
+    "block_count": 2
+  },
+  {
+    "arch": "riscv",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_100980.c",
+    "function_name": "sub_100980",
+    "block_count": 18
+  },
+  {
+    "arch": "riscv",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_100E40.c",
+    "function_name": "sub_100E40",
+    "block_count": 1
+  },
+  {
+    "arch": "riscv",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_100EC0.c",
+    "function_name": "sub_100EC0",
+    "block_count": 4
+  },
+  {
+    "arch": "riscv",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_1027A0.c",
+    "function_name": "sub_1027A0",
+    "block_count": 1
+  },
+  {
+    "arch": "riscv",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_102800.c",
+    "function_name": "sub_102800",
+    "block_count": 7
+  },
+  {
+    "arch": "riscv",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_102C30.c",
+    "function_name": "sub_102C30",
+    "block_count": 5
+  },
+  {
+    "arch": "riscv",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_102CF0.c",
+    "function_name": "sub_102CF0",
+    "block_count": 5
+  },
+  {
+    "arch": "riscv",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_103700.c",
+    "function_name": "sub_103700",
+    "block_count": 1
+  },
+  {
+    "arch": "riscv",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_10C320.c",
+    "function_name": "sub_10C320",
+    "block_count": 1
+  },
+  {
+    "arch": "riscv",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexrv/all/sub_10C4B0.c",
+    "function_name": "sub_10C4B0",
+    "block_count": 1
+  },
+  {
+    "arch": "v850",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/func.c",
+    "function_name": "func",
+    "block_count": 10
+  },
+  {
+    "arch": "v850",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_100230.c",
+    "function_name": "sub_100230",
+    "block_count": 1
+  },
+  {
+    "arch": "v850",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_100250.c",
+    "function_name": "sub_100250",
+    "block_count": 2
+  },
+  {
+    "arch": "v850",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_100280.c",
+    "function_name": "sub_100280",
+    "block_count": 18
+  },
+  {
+    "arch": "v850",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_1004A0.c",
+    "function_name": "sub_1004A0",
+    "block_count": 13
+  },
+  {
+    "arch": "v850",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_100580.c",
+    "function_name": "sub_100580",
+    "block_count": 23
+  },
+  {
+    "arch": "v850",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_100740.c",
+    "function_name": "sub_100740",
+    "block_count": 1
+  },
+  {
+    "arch": "v850",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_1007C0.c",
+    "function_name": "sub_1007C0",
+    "block_count": 4
+  },
+  {
+    "arch": "v850",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_1020A0.c",
+    "function_name": "sub_1020A0",
+    "block_count": 1
+  },
+  {
+    "arch": "v850",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_102100.c",
+    "function_name": "sub_102100",
+    "block_count": 7
+  },
+  {
+    "arch": "v850",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_102530.c",
+    "function_name": "sub_102530",
+    "block_count": 5
+  },
+  {
+    "arch": "v850",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_1025F0.c",
+    "function_name": "sub_1025F0",
+    "block_count": 5
+  },
+  {
+    "arch": "v850",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_103000.c",
+    "function_name": "sub_103000",
+    "block_count": 1
+  },
+  {
+    "arch": "v850",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_10BC20.c",
+    "function_name": "sub_10BC20",
+    "block_count": 1
+  },
+  {
+    "arch": "v850",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexv850/all/sub_10BDB0.c",
+    "function_name": "sub_10BDB0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/func.c",
+    "function_name": "func",
+    "block_count": 10
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_100140.c",
+    "function_name": "sub_100140",
+    "block_count": 76
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101030.c",
+    "function_name": "sub_101030",
+    "block_count": 31
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1018E0.c",
+    "function_name": "sub_1018E0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1018F0.c",
+    "function_name": "sub_1018F0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101900.c",
+    "function_name": "sub_101900",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101910.c",
+    "function_name": "sub_101910",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101930.c",
+    "function_name": "sub_101930",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101940.c",
+    "function_name": "sub_101940",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101960.c",
+    "function_name": "sub_101960",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101980.c",
+    "function_name": "sub_101980",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1019A0.c",
+    "function_name": "sub_1019A0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1019F0.c",
+    "function_name": "sub_1019F0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101A20.c",
+    "function_name": "sub_101A20",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101A30.c",
+    "function_name": "sub_101A30",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101A40.c",
+    "function_name": "sub_101A40",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101A50.c",
+    "function_name": "sub_101A50",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101A60.c",
+    "function_name": "sub_101A60",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101A70.c",
+    "function_name": "sub_101A70",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101AA0.c",
+    "function_name": "sub_101AA0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101AB0.c",
+    "function_name": "sub_101AB0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101B00.c",
+    "function_name": "sub_101B00",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101B80.c",
+    "function_name": "sub_101B80",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101C10.c",
+    "function_name": "sub_101C10",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101C30.c",
+    "function_name": "sub_101C30",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101C50.c",
+    "function_name": "sub_101C50",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101C60.c",
+    "function_name": "sub_101C60",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101C70.c",
+    "function_name": "sub_101C70",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101CA0.c",
+    "function_name": "sub_101CA0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101D10.c",
+    "function_name": "sub_101D10",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101D30.c",
+    "function_name": "sub_101D30",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101D50.c",
+    "function_name": "sub_101D50",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101D70.c",
+    "function_name": "sub_101D70",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101D90.c",
+    "function_name": "sub_101D90",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101DB0.c",
+    "function_name": "sub_101DB0",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101E10.c",
+    "function_name": "sub_101E10",
+    "block_count": 2
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101E90.c",
+    "function_name": "sub_101E90",
+    "block_count": 2
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_101F10.c",
+    "function_name": "sub_101F10",
+    "block_count": 7
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102000.c",
+    "function_name": "sub_102000",
+    "block_count": 11
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102130.c",
+    "function_name": "sub_102130",
+    "block_count": 11
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102260.c",
+    "function_name": "sub_102260",
+    "block_count": 11
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102500.c",
+    "function_name": "sub_102500",
+    "block_count": 7
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102650.c",
+    "function_name": "sub_102650",
+    "block_count": 4
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1026C0.c",
+    "function_name": "sub_1026C0",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102810.c",
+    "function_name": "sub_102810",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102850.c",
+    "function_name": "sub_102850",
+    "block_count": 4
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1028D0.c",
+    "function_name": "sub_1028D0",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102950.c",
+    "function_name": "sub_102950",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1029D0.c",
+    "function_name": "sub_1029D0",
+    "block_count": 6
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102B40.c",
+    "function_name": "sub_102B40",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102BB0.c",
+    "function_name": "sub_102BB0",
+    "block_count": 7
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102D00.c",
+    "function_name": "sub_102D00",
+    "block_count": 25
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_102EE0.c",
+    "function_name": "sub_102EE0",
+    "block_count": 25
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1030B0.c",
+    "function_name": "sub_1030B0",
+    "block_count": 7
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1031F0.c",
+    "function_name": "sub_1031F0",
+    "block_count": 31
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103540.c",
+    "function_name": "sub_103540",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103560.c",
+    "function_name": "sub_103560",
+    "block_count": 32
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103B50.c",
+    "function_name": "sub_103B50",
+    "block_count": 4
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103BC0.c",
+    "function_name": "sub_103BC0",
+    "block_count": 4
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103C40.c",
+    "function_name": "sub_103C40",
+    "block_count": 2
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103C70.c",
+    "function_name": "sub_103C70",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103CE0.c",
+    "function_name": "sub_103CE0",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103D60.c",
+    "function_name": "sub_103D60",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103D80.c",
+    "function_name": "sub_103D80",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103DA0.c",
+    "function_name": "sub_103DA0",
+    "block_count": 6
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103E50.c",
+    "function_name": "sub_103E50",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103EF0.c",
+    "function_name": "sub_103EF0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_103FB0.c",
+    "function_name": "sub_103FB0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_104080.c",
+    "function_name": "sub_104080",
+    "block_count": 7
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1041A0.c",
+    "function_name": "sub_1041A0",
+    "block_count": 32
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_104440.c",
+    "function_name": "sub_104440",
+    "block_count": 10
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1045E0.c",
+    "function_name": "sub_1045E0",
+    "block_count": 17
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1048A0.c",
+    "function_name": "sub_1048A0",
+    "block_count": 23
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_104DF0.c",
+    "function_name": "sub_104DF0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_104E10.c",
+    "function_name": "sub_104E10",
+    "block_count": 2
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_104E40.c",
+    "function_name": "sub_104E40",
+    "block_count": 18
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_105060.c",
+    "function_name": "sub_105060",
+    "block_count": 13
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_105140.c",
+    "function_name": "sub_105140",
+    "block_count": 23
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_105300.c",
+    "function_name": "sub_105300",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_105380.c",
+    "function_name": "sub_105380",
+    "block_count": 4
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1053D0.c",
+    "function_name": "sub_1053D0",
+    "block_count": 11
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_105590.c",
+    "function_name": "sub_105590",
+    "block_count": 7
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1056B0.c",
+    "function_name": "sub_1056B0",
+    "block_count": 50
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_106670.c",
+    "function_name": "sub_106670",
+    "block_count": 7
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_106780.c",
+    "function_name": "sub_106780",
+    "block_count": 14
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_106AE0.c",
+    "function_name": "sub_106AE0",
+    "block_count": 16
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_106C60.c",
+    "function_name": "sub_106C60",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_106CC0.c",
+    "function_name": "sub_106CC0",
+    "block_count": 7
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "complex",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_106D30.c",
+    "function_name": "sub_106D30",
+    "block_count": 8
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_106EE0.c",
+    "function_name": "sub_106EE0",
+    "block_count": 2
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_106F70.c",
+    "function_name": "sub_106F70",
+    "block_count": 2
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_107060.c",
+    "function_name": "sub_107060",
+    "block_count": 2
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1070F0.c",
+    "function_name": "sub_1070F0",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1071B0.c",
+    "function_name": "sub_1071B0",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_107270.c",
+    "function_name": "sub_107270",
+    "block_count": 12
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1073D0.c",
+    "function_name": "sub_1073D0",
+    "block_count": 7
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_107730.c",
+    "function_name": "sub_107730",
+    "block_count": 6
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_107BC0.c",
+    "function_name": "sub_107BC0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10A810.c",
+    "function_name": "sub_10A810",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10AB80.c",
+    "function_name": "sub_10AB80",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10AC40.c",
+    "function_name": "sub_10AC40",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10AD00.c",
+    "function_name": "sub_10AD00",
+    "block_count": 12
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10AE60.c",
+    "function_name": "sub_10AE60",
+    "block_count": 6
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10AFA0.c",
+    "function_name": "sub_10AFA0",
+    "block_count": 6
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10B360.c",
+    "function_name": "sub_10B360",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10B410.c",
+    "function_name": "sub_10B410",
+    "block_count": 4
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10B640.c",
+    "function_name": "sub_10B640",
+    "block_count": 4
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10B720.c",
+    "function_name": "sub_10B720",
+    "block_count": 9
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10B9C0.c",
+    "function_name": "sub_10B9C0",
+    "block_count": 4
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10BCE0.c",
+    "function_name": "sub_10BCE0",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10BF10.c",
+    "function_name": "sub_10BF10",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10CA80.c",
+    "function_name": "sub_10CA80",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10EC70.c",
+    "function_name": "sub_10EC70",
+    "block_count": 2
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10EE00.c",
+    "function_name": "sub_10EE00",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_10FFB0.c",
+    "function_name": "sub_10FFB0",
+    "block_count": 7
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_110340.c",
+    "function_name": "sub_110340",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1107E0.c",
+    "function_name": "sub_1107E0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_1108E0.c",
+    "function_name": "sub_1108E0",
+    "block_count": 5
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_110970.c",
+    "function_name": "sub_110970",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "branchy",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_110EB0.c",
+    "function_name": "sub_110EB0",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_110F20.c",
+    "function_name": "sub_110F20",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_110FD0.c",
+    "function_name": "sub_110FD0",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_111030.c",
+    "function_name": "sub_111030",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_111110.c",
+    "function_name": "sub_111110",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_111130.c",
+    "function_name": "sub_111130",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_113680.c",
+    "function_name": "sub_113680",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_118F20.c",
+    "function_name": "sub_118F20",
+    "block_count": 2
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_119460.c",
+    "function_name": "sub_119460",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B400.c",
+    "function_name": "sub_11B400",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B410.c",
+    "function_name": "sub_11B410",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B420.c",
+    "function_name": "sub_11B420",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B430.c",
+    "function_name": "sub_11B430",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B530.c",
+    "function_name": "sub_11B530",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B570.c",
+    "function_name": "sub_11B570",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B5D0.c",
+    "function_name": "sub_11B5D0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B600.c",
+    "function_name": "sub_11B600",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B620.c",
+    "function_name": "sub_11B620",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B650.c",
+    "function_name": "sub_11B650",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B670.c",
+    "function_name": "sub_11B670",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B6F0.c",
+    "function_name": "sub_11B6F0",
+    "block_count": 3
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B8F0.c",
+    "function_name": "sub_11B8F0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B900.c",
+    "function_name": "sub_11B900",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B920.c",
+    "function_name": "sub_11B920",
+    "block_count": 4
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B980.c",
+    "function_name": "sub_11B980",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B9A0.c",
+    "function_name": "sub_11B9A0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "simple",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11B9C0.c",
+    "function_name": "sub_11B9C0",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11CA10.c",
+    "function_name": "sub_11CA10",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11CA60.c",
+    "function_name": "sub_11CA60",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11CB40.c",
+    "function_name": "sub_11CB40",
+    "block_count": 1
+  },
+  {
+    "arch": "x86_64",
+    "complexity": "trivial",
+    "source_path": "references/hexrays/ida_dump/hexx64/all/sub_11D4A0.c",
+    "function_name": "sub_11D4A0",
+    "block_count": 1
+  }
+]

@@ -81,3 +81,17 @@
 - 22 unit tests covering: varnode equality, IrOp variant count, BasicBlock construction, Function construction, Display roundtrip for 10 opcodes (INT_ADD, STORE, CBRANCH, FLOAT_ADD, INT_SLESS, BOOL_NEGATE, COPY, UNIMPLEMENTED, RETURN, FLOAT_INT2FLOAT)
 - BTreeMap used for Function.blocks — no HashMap anywhere in crate, lint passes
 - `smallvec` already in workspace deps, `thiserror` dep exists but not yet used (will be needed for parsing errors)
+
+## [Task 10] Golden comparison harness
+- `crates/unlace-test-harness/` crate: lib.rs, ast_compare.rs, tests/golden_x86_64.rs
+- `ast_equiv(expected, actual) -> Result<(), AstDivergence>` — public API for AST structural comparison
+- tree-sitter = "0.24", tree-sitter-c = "0.23" (task specified 0.22/0.21 but those are outdated; latest compatible used)
+- Comparison algorithm: pre-order walk with explicit stack, yields (node_kind, depth) tuples
+- Skipped node kinds (entire subtree pruned): comment, preproc_include, preproc_def, preproc_function_def, identifier, field_identifier, type_identifier
+- Critical: must skip the subtree (don't push children) not just the node — preproc_include has child nodes like system_lib_string
+- `AstDivergence` error enum reports: KindMismatch (with both locations), ExpectedExtra, ActualExtra, parse errors
+- 150 ignored golden tests (`golden_{function_name}`) + 2 non-ignored helper tests (test_identical_match, test_structural_divergence)
+- `#![allow(non_snake_case)]` needed in test file — hex addresses like sub_11B9C0 trigger warnings
+- Integration tests live in crate (`crates/unlace-test-harness/tests/`) not workspace root (virtual workspace has no root package)
+- `cargo test --test golden_x86_64` works from workspace root without `-p` flag
+- No HashMap used — comparison uses iterators, no collection needed

@@ -1,0 +1,9 @@
+[package]
+name = "unlace-test-harness"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tree-sitter = "0.24"
+tree-sitter-c = "0.23"
+thiserror = { workspace = true }

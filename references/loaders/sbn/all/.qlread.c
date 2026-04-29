@@ -1,0 +1,22 @@
+// ============================================================
+// THUNK / TRAMPOLINE
+// ============================================================
+// Address:         0x10D0
+// Name:            .qlread
+// Size:            6 bytes (1 instructions)
+// Disassembly:
+//   0x10D0 jmp     cs:off_4050
+//
+// Resolved target: qlread
+// Target address:  0x4128
+// GOT/IAT slot:    0x4050
+// Slot symbol:     off_4050
+// Target type:     <no type info>
+// ============================================================
+
+void .qlread(/* see target signature */)
+{
+    // Tail-call to qlread via GOT/IAT indirection
+    return qlread(/* forwarded args */);
+}
+

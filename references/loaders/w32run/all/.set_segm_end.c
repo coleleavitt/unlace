@@ -1,0 +1,22 @@
+// ============================================================
+// THUNK / TRAMPOLINE
+// ============================================================
+// Address:         0x1070
+// Name:            .set_segm_end
+// Size:            6 bytes (1 instructions)
+// Disassembly:
+//   0x1070 jmp     cs:off_4020
+//
+// Resolved target: set_segm_end
+// Target address:  0x4148
+// GOT/IAT slot:    0x4020
+// Slot symbol:     off_4020
+// Target type:     <no type info>
+// ============================================================
+
+void .set_segm_end(/* see target signature */)
+{
+    // Tail-call to set_segm_end via GOT/IAT indirection
+    return set_segm_end(/* forwarded args */);
+}
+

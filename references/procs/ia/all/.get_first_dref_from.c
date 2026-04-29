@@ -1,0 +1,22 @@
+// ============================================================
+// THUNK / TRAMPOLINE
+// ============================================================
+// Address:         0x7150
+// Name:            .get_first_dref_from
+// Size:            6 bytes (1 instructions)
+// Disassembly:
+//   0x7150 jmp     cs:off_26090
+//
+// Resolved target: get_first_dref_from
+// Target address:  0x26348
+// GOT/IAT slot:    0x26090
+// Slot symbol:     off_26090
+// Target type:     <no type info>
+// ============================================================
+
+void .get_first_dref_from(/* see target signature */)
+{
+    // Tail-call to get_first_dref_from via GOT/IAT indirection
+    return get_first_dref_from(/* forwarded args */);
+}
+

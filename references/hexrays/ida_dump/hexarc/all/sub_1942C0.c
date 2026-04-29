@@ -1,0 +1,72 @@
+_QWORD *__fastcall sub_1942C0(__int64 a1, __int64 a2, int a3, __int64 a4, __int64 a5, char a6)
+{
+  __m128i si128; // xmm1
+  char *v9; // rbx
+  __m128i *v10; // rax
+  __int64 v11; // rsi
+  __int64 v12; // rsi
+  _QWORD *v13; // rsi
+  _QWORD *v14; // r13
+  int v15; // eax
+  const char *v16; // rax
+  __int64 v17; // rdi
+  __int64 v21; // [rsp+10h] [rbp-108h] BYREF
+  char v22; // [rsp+18h] [rbp-100h]
+  __int64 v23; // [rsp+20h] [rbp-F8h] BYREF
+  char v24; // [rsp+28h] [rbp-F0h]
+  _BYTE v25[80]; // [rsp+30h] [rbp-E8h] BYREF
+  _BYTE v26[80]; // [rsp+80h] [rbp-98h] BYREF
+  char v27; // [rsp+D0h] [rbp-48h] BYREF
+  unsigned __int64 v28; // [rsp+D8h] [rbp-40h]
+
+  si128 = _mm_load_si128((const __m128i *)&xmmword_3FA110);
+  v9 = &v27;
+  v10 = (__m128i *)v25;
+  v28 = __readfsqword(0x28u);
+  do
+  {
+    v10->m128i_i32[1] = -1;
+    v10 += 5;
+    v10[-5].m128i_i16[0] = 0;
+    v10[-5].m128i_i16[1] = 0;
+    v10[-5].m128i_i64[1] = 0;
+    v10[-4] = si128;
+    v10[-3].m128i_i64[0] = 0;
+    *(__m128i *)((char *)&v10[-3] + 8) = 0;
+    v10[-2].m128i_i32[2] = 0;
+    v10[-1].m128i_i64[0] = 0;
+    v10[-1].m128i_i32[2] = 0;
+  }
+  while ( v10 != (__m128i *)&v27 );
+  v11 = *(_QWORD *)(a1 + 64);
+  v21 = a5;
+  v22 = 5;
+  sub_18F4E0((__int64)v25, v11, &v21, -1, a6);
+  v12 = *(_QWORD *)(a1 + 64);
+  v23 = a4;
+  v24 = 5;
+  sub_18F4E0((__int64)v26, v12, &v23, -1, a6);
+  v13 = (_QWORD *)sub_190380(*(_QWORD *)(a1 + 64), a3, (__int64)v25);
+  v14 = sub_9CAA0(a1, v13, a2);
+  v15 = *(_DWORD *)(a1 + 24);
+  BYTE1(v15) &= ~2u;
+  LOBYTE(v15) = v15 | 0x80;
+  *(_DWORD *)(a1 + 24) = v15;
+  v16 = (const char *)sub_1AF340(v14, v13);
+  sub_9BE60(a1, (__int64)"make va_copy: %s", v16);
+  do
+  {
+    v9 -= 80;
+    cleanup_argloc(v9 + 56);
+    v17 = *((_QWORD *)v9 + 4);
+    if ( v17 )
+    {
+      *((_QWORD *)v9 + 5) = 0;
+      qfree(v17);
+    }
+    clear_tinfo_t(v9 + 24);
+    sub_1166E0((__int64)v9);
+  }
+  while ( v9 != v25 );
+  return v14;
+}

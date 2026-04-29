@@ -1,0 +1,19 @@
+bool __fastcall sub_365640(
+        const char *a1,
+        unsigned __int64 **a2,
+        int a3,
+        double a4,
+        double a5,
+        __m128 a6,
+        __m128 a7,
+        double a8,
+        double a9,
+        __m128 a10)
+{
+  __int64 module_data; // rax
+  double v12; // xmm4_8
+  double v13; // xmm5_8
+
+  module_data = get_module_data((unsigned int)dword_4DC8D8);
+  return sub_364D90(*(const __m128i **)(module_data + 800), 0, a1, a2, a3, a4, a5, a6, a7, v12, v13, a10);
+}

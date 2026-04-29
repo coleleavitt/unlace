@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x2A898
+// Name:     insn_create_op_data
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to insn_create_op_data are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void insn_create_op_data(/* see import library declaration */);
+

@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x4BCB28
+// Name:     deserialize_tinfo
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to deserialize_tinfo are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void deserialize_tinfo(/* see import library declaration */);
+

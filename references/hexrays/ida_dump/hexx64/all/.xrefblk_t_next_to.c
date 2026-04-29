@@ -1,0 +1,22 @@
+// ============================================================
+// THUNK / TRAMPOLINE
+// ============================================================
+// Address:         0x2BE30
+// Name:            .xrefblk_t_next_to
+// Size:            6 bytes (1 instructions)
+// Disassembly:
+//   0x2BE30 jmp     cs:off_4ED700
+//
+// Resolved target: xrefblk_t_next_to
+// Target address:  0x4F1A10
+// GOT/IAT slot:    0x4ED700
+// Slot symbol:     off_4ED700
+// Target type:     <no type info>
+// ============================================================
+
+void .xrefblk_t_next_to(/* see target signature */)
+{
+    // Tail-call to xrefblk_t_next_to via GOT/IAT indirection
+    return xrefblk_t_next_to(/* forwarded args */);
+}
+

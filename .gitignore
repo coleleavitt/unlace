@@ -1,0 +1,12 @@
+/target
+
+# Hex-Rays plugin .so binaries — large, local-only.
+# Source copies live at ~/Downloads/Software/IDAPro/ida-pro-9.3sp1/
+# and at hexrays/<ida-version>/*.so on disk (gitignored).
+hexrays/
+
+# Re-include decompilation output that the global ~/.gitignore_global
+# would otherwise filter (it excludes *.so, hidden ._* files, etc.).
+# These are small text files — stored as regular git objects, NOT LFS.
+!/references/
+!/references/**

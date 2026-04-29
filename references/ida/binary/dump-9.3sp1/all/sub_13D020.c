@@ -1,0 +1,82 @@
+__int64 __fastcall sub_13D020(__int64 a1, __int64 a2, __int64 a3, char a4)
+{
+  char v4; // al
+  __int64 v5; // rdx
+  __int64 v8; // r13
+  __int64 v9; // rdi
+  __int64 v10; // rdx
+  __int64 v11; // rcx
+  __int64 v12; // rdx
+  int v13; // eax
+  int v14; // ecx
+  int v15; // r8d
+  int v16; // r9d
+  __int64 v17; // r12
+  int v18; // eax
+  __int64 func; // rax
+  int v20; // eax
+  _QWORD v21[9]; // [rsp+0h] [rbp-48h] BYREF
+
+  v21[3] = __readfsqword(0x28u);
+  if ( a4 )
+    return 0;
+  v4 = *(_BYTE *)a2;
+  v5 = *(_QWORD *)(a1 + 32);
+  if ( *(_BYTE *)a2 == 4 )
+  {
+    v8 = *(_QWORD *)(*(_QWORD *)(a2 + 8) + 24LL);
+  }
+  else
+  {
+    if ( v4 == 10 )
+    {
+LABEL_12:
+      *(_BYTE *)(a1 + 40) = 1;
+      return 0;
+    }
+    if ( v4 != 1 )
+      return 0;
+    v17 = *(_QWORD *)(a1 + 8);
+    v8 = *(_QWORD *)(v5 + 24);
+    v18 = *(_DWORD *)(a2 + 8);
+    if ( v18 != *(_DWORD *)(*(_QWORD *)(v17 + 1504) + 60LL) )
+    {
+      if ( v18 != *(_DWORD *)(v17 + 1184) )
+        return 0;
+      sub_330F80(*(_QWORD *)(a1 + 8));
+      func = get_func();
+      v20 = func ? *(_DWORD *)(func + 16) : *(_DWORD *)(v17 + 112);
+      if ( (v20 & 0x10) == 0 )
+        return 0;
+      v5 = *(_QWORD *)(a1 + 32);
+    }
+  }
+  v9 = *(_QWORD *)(a1 + 16);
+  v21[1] = 0;
+  v21[0] = 0xFFFFFFFF00000000LL;
+  if ( (unsigned __int8)sub_13C7E0(v9, (__int64)v21, (int *)v5, a1 + 64, a2, 0xFFFFFFFF) )
+  {
+    sub_11CA10((char *)a2, (char *)v21);
+    sub_11C950((unsigned __int8 *)a2, *(_QWORD *)(a1 + 48), v10, v11);
+    if ( *(_DWORD *)(a2 + 4) < SHIDWORD(v21[0]) )
+      sub_1207E0((char *)a2, *(_QWORD *)(a1 + 48), 9, *(_QWORD *)(*(_QWORD *)(a1 + 32) + 24LL), SHIDWORD(v21[0]));
+    v12 = *(_QWORD *)(a1 + 16);
+    v13 = *(_DWORD *)(v12 + 24);
+    BYTE1(v13) &= ~2u;
+    LOBYTE(v13) = v13 | 0x80;
+    *(_DWORD *)(v12 + 24) = v13;
+    ++*(_DWORD *)(a1 + 56);
+    sub_11CDA0((__int64)v21);
+    if ( (unsigned int)(**(_DWORD **)(a1 + 32) - 10) <= 1 )
+    {
+      sub_3311F0(*(_QWORD *)(a1 + 8), v8, 16, v14, v15, v16);
+      *(_DWORD *)(a2 + 4) = *(_DWORD *)(*(_QWORD *)(a1 + 32) + 68LL);
+      **(_DWORD **)(a1 + 32) = 4;
+    }
+    goto LABEL_12;
+  }
+  sub_11CDA0((__int64)v21);
+  if ( *(_BYTE *)a2 == 1 )
+    ++*(_DWORD *)(a1 + 60);
+  return 0;
+}

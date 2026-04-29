@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x4EC0C8
+// Name:     getseg
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to getseg are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void getseg(/* see import library declaration */);
+

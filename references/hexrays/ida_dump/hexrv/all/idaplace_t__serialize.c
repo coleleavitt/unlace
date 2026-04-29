@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x4C2EE8
+// Name:     idaplace_t__serialize
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to idaplace_t__serialize are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void idaplace_t__serialize(/* see import library declaration */);
+

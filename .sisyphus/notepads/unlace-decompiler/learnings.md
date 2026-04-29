@@ -42,3 +42,14 @@
 - stripped.elf = medium.elf + `strip -s` (no symbols)
 - All fixtures < 16KB (well under 1MB limit)
 - Used by Task 22 (e2e pipeline) and Task 23 (golden tests)
+
+## [Task 5] Golden corpus stats
+- 250 functions selected across 7 architectures from ~54K valid candidates (after filtering ~12K stubs)
+- hexx64→x86_64: 150 files, hexarm→arm: 25, hexrv→riscv: 15, hexmips→mips: 15, hexppc→ppc: 15, hexv850→v850: 15, hexarc→arc: 15
+- Complexity distribution (global): trivial=73 (29.2%), simple=73 (29.2%), branchy=50 (20.0%), complex=54 (21.6%)
+- All per-arch buckets >= 15% threshold
+- Filtered out: dot-prefixed PLT thunks, THUNK/TRAMPOLINE files, extern-only stubs, nullsub_*, __unwind_resume
+- Dot-prefixed filenames (e.g. `.abort.c`) are PLT/GOT trampolines, not real decompiled functions
+- Selection is deterministic: sorted by filename, first-N from each complexity bucket
+- `cargo xtask regen-goldens` re-runs selection via `scripts/select_goldens.py`
+- manifest.json sorted by (arch, function_name) for reproducibility

@@ -1,27 +1,26 @@
 use std::env;
 use std::path::{Path, PathBuf};
-use std::process;
+use std::process::{self, Command};
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("scaffold") => println!("xtask scaffold: not yet implemented"),
         Some("lint-determinism") => lint_determinism(),
+        Some("regen-goldens") => regen_goldens(),
         Some(cmd) => {
             eprintln!("unknown xtask command: {cmd}");
-            eprintln!("available commands: scaffold, lint-determinism");
             process::exit(1);
         }
         None => {
             eprintln!("usage: cargo xtask <command>");
-            eprintln!("available commands: scaffold, lint-determinism");
+            eprintln!("available commands: scaffold, lint-determinism, regen-goldens");
             process::exit(1);
         }
     }
 }
 
 fn workspace_root() -> PathBuf {
-    // CARGO_MANIFEST_DIR points to xtask/ when invoked via `cargo xtask`.
     if let Ok(dir) = env::var("CARGO_MANIFEST_DIR") {
         if let Some(parent) = Path::new(&dir).parent() {
             return parent.to_path_buf();
@@ -42,6 +41,27 @@ fn workspace_root() -> PathBuf {
             eprintln!("error: could not find workspace root");
             process::exit(1);
         }
+    }
+}
+
+fn regen_goldens() {
+    let root = workspace_root();
+    let script = root.join("scripts/select_goldens.py");
+
+    if !script.exists() {
+        eprintln!("error: {script:?} not found");
+        process::exit(1);
+    }
+
+    let status = Command::new("python3")
+        .arg(&script)
+        .current_dir(&root)
+        .status()
+        .expect("failed to run python3");
+
+    if !status.success() {
+        eprintln!("regen-goldens failed with {status}");
+        process::exit(status.code().unwrap_or(1));
     }
 }
 
@@ -71,13 +91,11 @@ fn contains_word(line: &str, word: &str) -> bool {
     while let Some(pos) = line[search_from..].find(word) {
         let abs_pos = search_from + pos;
 
-        // Word boundary before.
         let before_ok = abs_pos == 0 || {
             let ch = line.as_bytes()[abs_pos - 1];
             !ch.is_ascii_alphanumeric() && ch != b'_'
         };
 
-        // Word boundary after.
         let end = abs_pos + word.len();
         let after_ok = end >= line.len() || {
             let ch = line.as_bytes()[end];
@@ -85,8 +103,7 @@ fn contains_word(line: &str, word: &str) -> bool {
         };
 
         if before_ok && after_ok {
-            // Ensure we're not inside a string literal: count unescaped
-            // double-quotes before the match position.
+            // Odd quote-count before match ⇒ inside a string literal.
             let quote_count = line[..abs_pos].chars().filter(|&c| c == '"').count();
             if quote_count % 2 == 0 {
                 return true;
@@ -202,10 +219,8 @@ mod tests {
 
     #[test]
     fn word_boundary_check() {
-        // Should not match partial words.
         assert!(!is_violation("let x = MyHashMapper::new();"));
         assert!(!is_violation("fn hash_map_like() {}"));
-        // Should match standalone usage.
         assert!(is_violation("type Map = HashMap<K, V>;"));
     }
 }

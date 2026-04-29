@@ -49,3 +49,12 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --check
+
+  lint-determinism:
+    name: determinism lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo xtask lint-determinism

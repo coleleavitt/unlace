@@ -1,0 +1,103 @@
+unsigned __int64 __fastcall sub_1AD1D0(__int64 a1, __int64 *a2, double a3, double a4)
+{
+  __int64 v4; // rax
+  unsigned __int64 *v5; // rbp
+  __m128i si128; // xmm0
+  __int64 v8; // r14
+  unsigned __int64 v9; // r15
+  __int64 v10; // r8
+  __int64 v11; // rsi
+  __int64 v12; // r14
+  __int64 v13; // r8
+  unsigned __int64 v14; // r15
+  __int64 v15; // rsi
+  __int64 v16; // r14
+  __int64 v17; // rax
+  __int64 v18; // rax
+  __int64 v20; // [rsp+8h] [rbp-60h]
+  __int64 v21; // [rsp+8h] [rbp-60h]
+  __m128i v22; // [rsp+10h] [rbp-58h] BYREF
+  unsigned __int64 v23; // [rsp+28h] [rbp-40h]
+
+  v4 = *(_QWORD *)(a1 + 8);
+  v23 = __readfsqword(0x28u);
+  v5 = *(unsigned __int64 **)a1;
+  if ( 16 * v4 )
+  {
+    while ( 1 )
+    {
+      si128 = _mm_load_si128((const __m128i *)&xmmword_3FA120);
+      v22 = si128;
+      if ( !(unsigned int)sub_30FBC0(v5, &v22) )
+        break;
+      sub_1ACC10(v5, a2, *(double *)si128.m128i_i64, a4);
+LABEL_4:
+      v5 += 2;
+      if ( v5 == (unsigned __int64 *)(*(_QWORD *)a1 + 16LL * *(_QWORD *)(a1 + 8)) )
+        return v23 - __readfsqword(0x28u);
+      if ( *(unsigned __int64 **)a1 != v5 )
+      {
+        v8 = a2[1];
+        if ( v8 )
+        {
+          v9 = v8 + 1;
+          v10 = a2[1];
+          v11 = *a2;
+          --v8;
+          if ( a2[2] >= v9 )
+            goto LABEL_8;
+        }
+        else
+        {
+          v11 = *a2;
+          v10 = 1;
+          v9 = 2;
+          if ( (unsigned __int64)a2[2] >= 2 )
+            goto LABEL_8;
+        }
+        v20 = v10;
+        v17 = qvector_reserve(a2, v11, v9, 1);
+        v10 = v20;
+        *a2 = v17;
+        v11 = v17;
+LABEL_8:
+        a2[1] = v9;
+        *(_BYTE *)(v11 + v8) = 44;
+        *(_BYTE *)(*a2 + v10) = 0;
+      }
+    }
+    v12 = a2[1];
+    if ( v12 )
+    {
+      v13 = v12 + 5;
+      v14 = v12 + 6;
+      v15 = *a2;
+      --v12;
+      if ( a2[2] >= v14 )
+      {
+LABEL_11:
+        a2[1] = v14;
+        *(_BYTE *)(v15 + v13) = 0;
+        v16 = *a2 + v12;
+        *(_DWORD *)v16 = 1296845889;
+        *(_WORD *)(v16 + 4) = 19781;
+        goto LABEL_4;
+      }
+    }
+    else
+    {
+      v15 = *a2;
+      v14 = 7;
+      v13 = 6;
+      if ( (unsigned __int64)a2[2] >= 7 )
+        goto LABEL_11;
+    }
+    v21 = v13;
+    v18 = qvector_reserve(a2, v15, v14, 1);
+    v13 = v21;
+    *a2 = v18;
+    v15 = v18;
+    goto LABEL_11;
+  }
+  return v23 - __readfsqword(0x28u);
+}

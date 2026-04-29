@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x4CFBD0
+// Name:     __udivti3
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to __udivti3 are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void __udivti3(/* see import library declaration */);
+

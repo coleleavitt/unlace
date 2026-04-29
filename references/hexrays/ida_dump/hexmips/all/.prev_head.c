@@ -1,0 +1,22 @@
+// ============================================================
+// THUNK / TRAMPOLINE
+// ============================================================
+// Address:         0x2AA10
+// Name:            .prev_head
+// Size:            6 bytes (1 instructions)
+// Disassembly:
+//   0x2AA10 jmp     cs:off_4CD4F0
+//
+// Resolved target: prev_head
+// Target address:  0x4CFEF8
+// GOT/IAT slot:    0x4CD4F0
+// Slot symbol:     off_4CD4F0
+// Target type:     <no type info>
+// ============================================================
+
+void .prev_head(/* see target signature */)
+{
+    // Tail-call to prev_head via GOT/IAT indirection
+    return prev_head(/* forwarded args */);
+}
+

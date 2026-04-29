@@ -1,0 +1,45 @@
+__int64 __fastcall sub_36C980(__int64 a1)
+{
+  _QWORD *v2; // r12
+  __int64 v3; // rbx
+  void *v4; // rdi
+  _QWORD *v5; // r12
+  __int64 v6; // rbx
+  void *v7; // rdi
+  __int64 result; // rax
+
+  v2 = *(_QWORD **)(a1 + 1128);
+  v3 = v2[11];
+  while ( v3 )
+  {
+    sub_364350(*(_QWORD **)(v3 + 24));
+    v4 = (void *)v3;
+    v3 = *(_QWORD *)(v3 + 16);
+    operator delete(v4, 0x28u);
+  }
+  v2[11] = 0;
+  v2[12] = v2 + 10;
+  v2[13] = v2 + 10;
+  v2[14] = 0;
+  v5 = *(_QWORD **)(a1 + 1136);
+  if ( v5 )
+  {
+    v6 = v5[2];
+    while ( v6 )
+    {
+      sub_364350(*(_QWORD **)(v6 + 24));
+      v7 = (void *)v6;
+      v6 = *(_QWORD *)(v6 + 16);
+      operator delete(v7, 0x28u);
+    }
+    operator delete(v5, 0x30u);
+  }
+  result = operator new(0x30u);
+  *(_DWORD *)(result + 8) = 0;
+  *(_QWORD *)(result + 16) = 0;
+  *(_QWORD *)(result + 24) = result + 8;
+  *(_QWORD *)(result + 32) = result + 8;
+  *(_QWORD *)(result + 40) = 0;
+  *(_QWORD *)(a1 + 1136) = result;
+  return result;
+}

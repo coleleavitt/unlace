@@ -246,3 +246,43 @@
 - BTreeMap/BTreeSet throughout — no HashMap, lint-determinism passes
 - smallvec added to dev-dependencies for test construction helpers
 - Cargo.toml already had unlace-ir, unlace-passes, thiserror, tracing dependencies
+
+## [Task 19] IR dump
+- `pub fn dump_ir(func: &SsaFunction) -> String` in unlace-output/src/ir_dump.rs
+- Produces canonical text form per IR spec §2: `func <name> @ 0x<addr> { ... }`
+- Block headers: `BB_<id> [annotations]:` with annotations in spec order: entry, loop_header, unreachable, exit
+- Instructions: 2-space indent, `<output>:<type> = <OPCODE> <inputs>` or `<OPCODE> <inputs>`
+- Phi nodes: `<output>:<type> = MULTIEQUAL <input>:<type>(BB_<pred>), ...` — emitted before regular instructions per block
+- SSA varnodes rendered as `v<id>` (version 0) or `v<id>#<version>` (version > 0)
+- Varnode ID encoding: register offsets pass through, unique/ram/stack use disjoint ranges (0x10000, 0x100000, 0x200000)
+- Branch targets resolved to `@BB_<n>` by matching Const-space offset against block first-instruction addresses
+- Non-SSA varnodes fall back to raw literals: r<offset>, m0x<hex>, c0x<hex>/c<dec>, u<offset>, s<signed>
+- Type tags derived from `IrOp::type_family()` and `IrOp::input_type_family(index)` — i/f/b prefix + bit-width
+- Loop header detection: back-edge heuristic (predecessor BlockId > current BlockId in RPO numbering)
+- Exit detection: block ends in RETURN, or has no successors and no branch/call terminator
+- Deterministic: BTreeMap iteration for blocks (sorted by BlockId), no HashMap, no pointer addresses
+- SpaceId is `#[non_exhaustive]` — wildcard arms needed in match expressions in external crates
+- 8 tests: simple_function, with_phi, deterministic, canonical_form, branch_target_resolution, multiple_blocks_sorted, varnode_spaces, empty_function
+- `pub use ir_dump::dump_ir` re-exported from lib.rs alongside existing `cfg_dot::emit_cfg_dot`
+- lint-determinism passes
+
+## [Task 18] C printer
+- `pub fn print_c(func: &HirFunction) -> String` in unlace-output/src/c_printer.rs
+- Produces valid C syntax that passes `gcc -fsyntax-only -x c - -std=c11`
+- Variables named `v1, v2, ...` via monotonic counter in `PrintCtx`; assigned in pre-walk order (deterministic)
+- Variable names stored in `BTreeMap<SsaVarnode, String>` — no HashMap
+- Two-pass approach: `collect_varnodes` pre-walks HIR to assign names + infer types; then `emit_nodes` does the actual printing
+- Type mapping: PrimitiveType → C types: Bool→`_Bool`, Int(1)→`signed char`, Int(2)→`short`, Int(4)→`int`, Int(8)→`long long`, UnsignedInt(N)→`unsigned {char,short,int,long long}`, Float→`float`, Double→`double`, Ptr→`void *`, Unknown→`int`
+- Heuristic type inference from IrOp::type_family(): `'b'`→Bool, `'f'`→Float/Double (by size), `'i'`→Int with size; special cases for Ptradd/Load→Ptr, IntDiv/IntRem→UnsignedInt
+- 4-space indentation per nesting level via `indent(depth, out)` helper
+- Expression emission: recursive on IrOp — binary ops, unary ops, casts (IntZext/IntSext/Cast), function calls (FloatAbs→`fabs()`, Popcount→`__builtin_popcount()`), Piece/Subpiece
+- Statement emission: assignments for instructions with output; STORE → `*(void **)(<addr>) = <val>`; Call/Callind → `<target>()`
+- Constants: small values as decimal, large/negative-looking values as `0x...ULL`
+- Labels emit as `label_N:;` (empty statement after colon for valid C)
+- Switch uses GCC case-range extension for `SwitchCase::Range`
+- INT_SCARRY/INT_SBORROW approximated as `0` (no clean C equivalent)
+- IrInsn inputs in HIR use version=0 SsaVarnode wrappers (structurer output convention)
+- unlace-struct was already in Cargo.toml dependencies (no change needed)
+- 10 tests: simple, if_else, while, deterministic, compiles (gcc), goto_label, do_while, types, indentation, params
+- `pub use c_printer::print_c` re-exported from lib.rs
+- lint-determinism passes

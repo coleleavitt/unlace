@@ -5,8 +5,5 @@ edition.workspace = true
 
 [dependencies]
 unlace-ir = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true }

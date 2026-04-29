@@ -95,3 +95,17 @@
 - Integration tests live in crate (`crates/unlace-test-harness/tests/`) not workspace root (virtual workspace has no root package)
 - `cargo test --test golden_x86_64` works from workspace root without `-p` flag
 - No HashMap used — comparison uses iterators, no collection needed
+
+## [Task 11] Stub lifters
+- 6 stub crates: unlace-lift-{arm,riscv,mips,ppc,v850,arc} — each implements `trait Lifter` from unlace-ir
+- Facade crate: `unlace-lift` with `pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter>` dispatching to all 7 arch lifters
+- Stub lifters return `Ok(LiftedInsn { ir_ops: vec![IrInsn::without_output(IrOp::Unimplemented, ...)], len: N })` — never panic
+- Register files use `&'static str` names (not `String`) per `RegisterDef { name: &'static str, varnode: Varnode }`
+- Register file sizes: ARM=34 (X0-X30+SP+PC+NZCV), RISC-V=33 (x0-x31+pc), MIPS=35 ($0-$31+HI+LO+PC), PPC=37 (r0-r31+CR+LR+CTR+XER+PC), V850=34 (r0-r31+PC+PSW), ARC=68 (r0-r63+STATUS32+BTA+LP_START+LP_END)
+- V850 registers are 4-byte (32-bit arch), ARC core regs are 4-byte; ARM/RISC-V/MIPS/PPC GP regs are 8-byte
+- V850 instruction stub length = 2 bytes (16-bit base encoding); all others = 4 bytes
+- Removed capstone dependency from all 4 stub crates that had it (arm, riscv, mips, ppc) — stubs don't decode
+- `UnimplementedLifter` fallback in facade returns `Err(LiftError::Unsupported)` and empty register file
+- Facade maps: Arm|AArch64→ArmLifter, RiscV64→RiscVLifter, Mips|Mips64→MipsLifter, Ppc|Ppc64→PpcLifter, V850→V850Lifter, Arc→ArcLifter
+- 14 unit tests total: 1 per stub crate + 8 in facade (per-arch + unknown fallback + all-stubs-unimplemented)
+- Task 9 created `ArchId` in unlace-ir/src/arch.rs and `Lifter` trait in unlace-ir/src/lifter.rs — both now canonical

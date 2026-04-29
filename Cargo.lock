@@ -86,25 +86,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d20789868f4b01b2f2caec9f5c4e0213b41e3e5702a50157d699ae31ced2fcb"
 
 [[package]]
-name = "capstone"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f442ae0f2f3f1b923334b4a5386c95c69c1cfa072bafa23d6fae6d9682eb1dd4"
-dependencies = [
- "capstone-sys",
- "static_assertions",
-]
-
-[[package]]
-name = "capstone-sys"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4e8087cab6731295f5a2a2bd82989ba4f41d3a428aab2e7c98d8f4db38aac05"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "cc"
 version = "1.2.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -693,12 +674,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
 name = "streaming-iterator"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -899,9 +874,6 @@ dependencies = [
 name = "unlace-lift-arc"
 version = "0.1.0"
 dependencies = [
- "insta",
- "thiserror",
- "tracing",
  "unlace-ir",
 ]
 
@@ -909,10 +881,6 @@ dependencies = [
 name = "unlace-lift-arm"
 version = "0.1.0"
 dependencies = [
- "capstone",
- "insta",
- "thiserror",
- "tracing",
  "unlace-ir",
 ]
 
@@ -920,10 +888,6 @@ dependencies = [
 name = "unlace-lift-mips"
 version = "0.1.0"
 dependencies = [
- "capstone",
- "insta",
- "thiserror",
- "tracing",
  "unlace-ir",
 ]
 
@@ -931,10 +895,6 @@ dependencies = [
 name = "unlace-lift-ppc"
 version = "0.1.0"
 dependencies = [
- "capstone",
- "insta",
- "thiserror",
- "tracing",
  "unlace-ir",
 ]
 
@@ -942,10 +902,6 @@ dependencies = [
 name = "unlace-lift-riscv"
 version = "0.1.0"
 dependencies = [
- "capstone",
- "insta",
- "thiserror",
- "tracing",
  "unlace-ir",
 ]
 
@@ -953,9 +909,6 @@ dependencies = [
 name = "unlace-lift-v850"
 version = "0.1.0"
 dependencies = [
- "insta",
- "thiserror",
- "tracing",
  "unlace-ir",
 ]
 
@@ -979,6 +932,7 @@ dependencies = [
  "object",
  "thiserror",
  "tracing",
+ "unlace-ir",
 ]
 
 [[package]]

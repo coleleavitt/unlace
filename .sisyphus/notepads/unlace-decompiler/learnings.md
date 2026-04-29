@@ -66,3 +66,18 @@
 - SectionFlags uses manual bitflag struct (not the `bitflags` crate) — READ, WRITE, EXEC derived from SHF_ALLOC, SHF_WRITE, SHF_EXECINSTR
 - `ArchId::Unknown(u16)` variant captures unmapped e_machine values without returning an error
 - 5 tests: load hello_world, reject non-ELF, .text is executable, stripped vs non-stripped symbol count, symbol_at lookup
+
+## [Task 7] unlace-ir implementation
+- 7 source modules: space.rs, varnode.rs, op.rs, insn.rs, block.rs, function.rs, display.rs
+- `SpaceId` enum with 5 variants, `#[repr(u8)]` with stable discriminants (Register=0..Stack=4)
+- `Varnode { space: SpaceId, offset: u64, size: u8 }` — Copy + Clone + Debug + PartialEq + Eq + Hash + PartialOrd + Ord
+- `IrOp` enum with exactly 75 variants (discriminants 0..=74) matching SS4.4 stable ordering, `#[non_exhaustive]` + `#[repr(u8)]`
+- `IrInsn { op, output: Option<Varnode>, inputs: SmallVec<[Varnode; 3]>, addr: u64 }`
+- `BlockId(u32)` newtype — Copy + Ord + Display ("BB_N")
+- `BasicBlock { id: BlockId, insns: Vec<IrInsn>, successors: SmallVec<[BlockId; 2]> }`
+- `Function { name: String, entry: BlockId, blocks: BTreeMap<BlockId, BasicBlock>, addr: u64 }`
+- Display impls for IrInsn, BasicBlock, Function matching canonical text form (SS2)
+- Type tags derived from `(opcode, size)` via `IrOp::type_family()` and `IrOp::input_type_family(index)`
+- 22 unit tests covering: varnode equality, IrOp variant count, BasicBlock construction, Function construction, Display roundtrip for 10 opcodes (INT_ADD, STORE, CBRANCH, FLOAT_ADD, INT_SLESS, BOOL_NEGATE, COPY, UNIMPLEMENTED, RETURN, FLOAT_INT2FLOAT)
+- BTreeMap used for Function.blocks — no HashMap anywhere in crate, lint passes
+- `smallvec` already in workspace deps, `thiserror` dep exists but not yet used (will be needed for parsing errors)

@@ -1,0 +1,36 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/unlace_ir-a8fe5eb6c237204a)
+
+running 22 tests
+test display::tests::basic_block_construction ... ok
+test display::tests::display_block_header ... ok
+test display::tests::display_function ... ok
+test display::tests::display_roundtrip_copy ... ok
+test display::tests::display_roundtrip_float_add ... ok
+test display::tests::display_roundtrip_float_int2float ... ok
+test display::tests::display_roundtrip_int_sless ... ok
+test display::tests::display_roundtrip_int_add ... ok
+test display::tests::display_roundtrip_return ... ok
+test display::tests::display_roundtrip_unimplemented ... ok
+test display::tests::display_varnode_const_decimal ... ok
+test display::tests::display_roundtrip_store ... ok
+test display::tests::display_roundtrip_bool_negate ... ok
+test display::tests::display_roundtrip_cbranch ... ok
+test display::tests::display_varnode_const_hex ... ok
+test display::tests::display_varnode_stack_negative ... ok
+test display::tests::display_varnode_unique ... ok
+test display::tests::function_construction ... ok
+test display::tests::varnode_equality ... ok
+test display::tests::display_varnode_ram ... ok
+test display::tests::display_varnode_register ... ok
+test display::tests::irop_variant_count ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests unlace_ir
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Spec opcodes (H3 headers): 106, Source variants: 75

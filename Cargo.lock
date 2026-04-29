@@ -942,6 +942,7 @@ name = "unlace-output"
 version = "0.1.0"
 dependencies = [
  "insta",
+ "smallvec",
  "symbolic-demangle",
  "thiserror",
  "tracing",
@@ -966,6 +967,7 @@ name = "unlace-struct"
 version = "0.1.0"
 dependencies = [
  "insta",
+ "smallvec",
  "thiserror",
  "tracing",
  "unlace-ir",

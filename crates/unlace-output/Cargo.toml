@@ -12,3 +12,4 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
+smallvec = { workspace = true }

@@ -209,3 +209,17 @@
 - `pub mod dce` and `pub use dce::DeadCodeElimPass` added to lib.rs alongside existing pass modules
 - 4 tests: remove_unused_add, preserve_store, preserve_call, cascade (3-pass fixed-point)
 - BTreeSet for use-set, no HashMap — lint-determinism passes
+
+## [Task 20] CFG dot
+- `emit_cfg_dot(func: &SsaFunction) -> String` in unlace-output/src/cfg_dot.rs
+- Richer than Task 12's `dot_export(cfg)`: operates on SsaFunction, shows IR instructions in node labels, colors entry/exit/loop-header blocks
+- Node labels: BlockId + up to 5 IR instructions, left-aligned with `\l` DOT escape
+- Edge labels: T/F/fallthrough/indirect/call/return; Unconditional gets no label
+- Fill colors: entry=lightgreen, exit(RETURN)=lightcoral, loop header=lightblue; entry takes precedence over loop header
+- Loop header detection: walk incoming edges, check if target dominates source via idom chain walk
+- Synthetic exit/unknown blocks are excluded from DOT output; RETURN blocks detected via EdgeKind::Return edge presence
+- All iteration uses BTreeMap key order (BlockId sorted), edges sorted by (source, target, kind) — deterministic
+- DOT escape handles: `"`, `\`, `<`, `>`, `{`, `}`, `|`
+- 5 tests: test_dot_basic, test_dot_diamond, test_dot_loop, test_dot_renders (conditional on `dot` binary), test_dot_deterministic
+- smallvec added to dev-dependencies for test helpers
+- lint-determinism passes

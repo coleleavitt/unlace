@@ -1,0 +1,2 @@
+ELF count: 7
+All fixtures valid

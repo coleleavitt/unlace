@@ -15,6 +15,7 @@ mod display;
 mod arch;
 mod lifter;
 pub mod cfg;
+pub mod ssa;
 
 pub use space::SpaceId;
 pub use varnode::Varnode;

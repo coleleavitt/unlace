@@ -129,6 +129,19 @@ impl ControlFlowGraph {
     pub fn node_index(&self, block: BlockId) -> Option<NodeIndex> {
         self.node_map.get(&block).copied()
     }
+
+    /// Returns a reference to the `BlockId → NodeIndex` mapping.
+    pub fn node_map(&self) -> &BTreeMap<BlockId, NodeIndex> {
+        &self.node_map
+    }
+
+    /// Returns sorted predecessors (source blocks) of the given block.
+    pub fn predecessors(&self, block: BlockId) -> Vec<BlockId> {
+        let mut preds: Vec<BlockId> = self.edges_to(block).iter().map(|(s, _)| *s).collect();
+        preds.sort();
+        preds.dedup();
+        preds
+    }
 }
 
 /// Builds a [`ControlFlowGraph`] from a [`Function`] by inspecting terminators.

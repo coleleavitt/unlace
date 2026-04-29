@@ -15,6 +15,7 @@ members = [
     "crates/unlace-struct",
     "crates/unlace-output",
     "crates/unlace-cli",
+    "crates/unlace-test-harness",
     "xtask",
 ]
 
@@ -71,3 +72,4 @@ unlace-passes = { path = "crates/unlace-passes" }
 unlace-struct = { path = "crates/unlace-struct" }
 unlace-output = { path = "crates/unlace-output" }
 unlace-cli = { path = "crates/unlace-cli" }
+unlace-test-harness = { path = "crates/unlace-test-harness" }

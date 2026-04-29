@@ -1,0 +1,115 @@
+Task 2 — IR Specification Document — Completeness Evidence
+==========================================================
+Generated: 2026-04-29T22:30:25Z
+File: docs/ir-spec.md
+
+[QA Gate 1] File existence
+  Command: test -f docs/ir-spec.md
+  Result:  PASS
+
+[QA Gate 2] Opcode header count (>= 65 required)
+  Command: grep -c "^### " docs/ir-spec.md
+  Result:  106  (PASS)
+
+[QA Gate 3] Example count (>= 65 required)
+  Command: grep -c "Example:" docs/ir-spec.md
+  Result:  75  (PASS)
+
+[QA Gate 4] No placeholders
+  Command: grep -i "TODO\|TBD\|FIXME" docs/ir-spec.md
+  Result:  0 matches  (PASS)
+
+[QA Gate 5] Unique opcode coverage (uppercase ALL_CAPS)
+  Command: grep -cE "^### [A-Z][A-Z_0-9]*$" docs/ir-spec.md
+  Result:  75 opcodes
+
+[QA Gate 6] Required structural elements
+  SpaceId enum:        PASS
+  Varnode struct:      PASS
+  BNF grammar:         PASS
+  5 address spaces:    PASS
+  Block header form:   PASS
+  Worked example:      PASS
+
+[Document statistics]
+  Lines: 1480
+  Bytes: 61221
+
+Opcode list (75 total):
+  - COPY
+  - LOAD
+  - STORE
+  - INDIRECT
+  - INT_ADD
+  - INT_SUB
+  - INT_MULT
+  - INT_DIV
+  - INT_SDIV
+  - INT_REM
+  - INT_SREM
+  - INT_NEGATE
+  - INT_2COMP
+  - INT_ZEXT
+  - INT_SEXT
+  - INT_EQUAL
+  - INT_NOTEQUAL
+  - INT_LESS
+  - INT_SLESS
+  - INT_LESSEQUAL
+  - INT_SLESSEQUAL
+  - INT_CARRY
+  - INT_SCARRY
+  - INT_SBORROW
+  - INT_AND
+  - INT_OR
+  - INT_XOR
+  - INT_LEFT
+  - INT_RIGHT
+  - INT_SRIGHT
+  - BOOL_NEGATE
+  - BOOL_AND
+  - BOOL_OR
+  - BOOL_XOR
+  - FLOAT_ADD
+  - FLOAT_SUB
+  - FLOAT_MULT
+  - FLOAT_DIV
+  - FLOAT_NEG
+  - FLOAT_ABS
+  - FLOAT_SQRT
+  - FLOAT_CEIL
+  - FLOAT_FLOOR
+  - FLOAT_ROUND
+  - FLOAT_TRUNC
+  - FLOAT_NAN
+  - FLOAT_INT2FLOAT
+  - FLOAT_FLOAT2FLOAT
+  - FLOAT_FLOAT2INT
+  - FLOAT_EQUAL
+  - FLOAT_NOTEQUAL
+  - FLOAT_LESS
+  - FLOAT_LESSEQUAL
+  - BRANCH
+  - CBRANCH
+  - BRANCHIND
+  - CALL
+  - CALLIND
+  - RETURN
+  - PIECE
+  - SUBPIECE
+  - POPCOUNT
+  - LZCOUNT
+  - INSERT
+  - ZPULL
+  - SPULL
+  - PTRADD
+  - PTRSUB
+  - CAST
+  - MULTIEQUAL
+  - CALLOTHER
+  - CPOOLREF
+  - NEW
+  - SEGMENTOP
+  - UNIMPLEMENTED
+
+Spec validation pass

@@ -197,3 +197,15 @@
 - Total: 29 tests pass (14 new + 4 DCE + 11 type inference)
 - BTreeMap only — no HashMap, lint-determinism passes
 - This task set the Pass trait pattern used by Tasks 15 (DCE) and 16 (type inference) which were already implemented
+
+## [Task 15] DCE
+- `DeadCodeElimPass` struct in unlace-passes/src/dce.rs implements `Pass` trait
+- Single linear sweep: builds `BTreeSet<SsaVarnode>` use-set from all instruction inputs + phi node inputs, then removes instructions with unused output and no side effects
+- Side-effecting opcodes (never removed): STORE, CALL, CALLIND, RETURN, BRANCH, CBRANCH, BRANCHIND, NEW, CALLOTHER, CPOOLREF, INDIRECT, LOAD (LOAD treated as side-effecting for MVP due to volatile/MMIO)
+- Phi nodes (MULTIEQUAL) are left untouched in MVP
+- Returns `Ok(true)` if any instruction was removed; external fixed-point runner handles cascading
+- var_map compaction: when instructions are removed, remaining entries are re-keyed to new indices; stale entries beyond new block length are purged via BTreeMap range scan
+- `DominatorTree::new()` constructor added to unlace-ir/src/ssa.rs for test construction
+- `pub mod dce` and `pub use dce::DeadCodeElimPass` added to lib.rs alongside existing pass modules
+- 4 tests: remove_unused_add, preserve_store, preserve_call, cascade (3-pass fixed-point)
+- BTreeSet for use-set, no HashMap — lint-determinism passes

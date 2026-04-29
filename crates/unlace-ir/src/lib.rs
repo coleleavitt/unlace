@@ -12,6 +12,8 @@ mod insn;
 mod block;
 mod function;
 mod display;
+mod arch;
+mod lifter;
 
 pub use space::SpaceId;
 pub use varnode::Varnode;
@@ -19,3 +21,5 @@ pub use op::{IrOp, IROP_COUNT};
 pub use insn::IrInsn;
 pub use block::{BlockId, BasicBlock};
 pub use function::Function;
+pub use arch::ArchId;
+pub use lifter::{Lifter, LiftedInsn, LiftError, RegisterFile, RegisterDef};

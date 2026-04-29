@@ -1,0 +1,11 @@
+[package]
+name = "unlace-ir"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+smallvec = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

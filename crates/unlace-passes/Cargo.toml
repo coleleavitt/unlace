@@ -1,0 +1,13 @@
+[package]
+name = "unlace-passes"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+petgraph = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

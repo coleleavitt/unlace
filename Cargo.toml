@@ -1,6 +1,73 @@
-[package]
-name = "unlace"
+[workspace]
+resolver = "3"
+members = [
+    "crates/unlace-ir",
+    "crates/unlace-loader",
+    "crates/unlace-lift",
+    "crates/unlace-lift-x86",
+    "crates/unlace-lift-arm",
+    "crates/unlace-lift-riscv",
+    "crates/unlace-lift-mips",
+    "crates/unlace-lift-ppc",
+    "crates/unlace-lift-v850",
+    "crates/unlace-lift-arc",
+    "crates/unlace-passes",
+    "crates/unlace-struct",
+    "crates/unlace-output",
+    "crates/unlace-cli",
+    "xtask",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+license = "MIT OR Apache-2.0"
 
-[dependencies]
+[workspace.dependencies]
+# Binary format parsing
+object = "0.39"
+
+# Architecture decoders
+iced-x86 = "1.21"
+capstone = "0.14"
+
+# Debug info
+gimli = "0.33"
+
+# Graph algorithms (CFG, dominator trees)
+petgraph = "0.8"
+
+# CLI
+clap = { version = "4.6", features = ["derive"] }
+
+# Symbol demangling
+symbolic-demangle = "12"
+
+# Snapshot testing
+insta = "1"
+
+# Observability
+tracing = "0.1"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Data structures
+smallvec = "1"
+
+# Internal crates
+unlace-ir = { path = "crates/unlace-ir" }
+unlace-loader = { path = "crates/unlace-loader" }
+unlace-lift = { path = "crates/unlace-lift" }
+unlace-lift-x86 = { path = "crates/unlace-lift-x86" }
+unlace-lift-arm = { path = "crates/unlace-lift-arm" }
+unlace-lift-riscv = { path = "crates/unlace-lift-riscv" }
+unlace-lift-mips = { path = "crates/unlace-lift-mips" }
+unlace-lift-ppc = { path = "crates/unlace-lift-ppc" }
+unlace-lift-v850 = { path = "crates/unlace-lift-v850" }
+unlace-lift-arc = { path = "crates/unlace-lift-arc" }
+unlace-passes = { path = "crates/unlace-passes" }
+unlace-struct = { path = "crates/unlace-struct" }
+unlace-output = { path = "crates/unlace-output" }
+unlace-cli = { path = "crates/unlace-cli" }

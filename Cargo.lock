@@ -851,6 +851,7 @@ name = "unlace-ir"
 version = "0.1.0"
 dependencies = [
  "insta",
+ "petgraph",
  "smallvec",
  "thiserror",
 ]

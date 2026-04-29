@@ -159,3 +159,41 @@
 - Added `node_map()` and `predecessors()` methods to ControlFlowGraph for SSA module's use
 - 4 unit tests: straight_line (no phis), diamond_phi (phi at merge BB3), loop_phi (phi at loop header BB0), versions_monotonic (3 defs of r0 with strictly increasing versions)
 - BTreeMap/BTreeSet throughout — no HashMap, lint-determinism passes
+
+## [Task 16] Type Inference
+- PrimitiveType enum in unlace-ir/src/ssa.rs: Unknown, Bool, Int(u8), UnsignedInt(u8), Float, Double, Ptr
+- Width is in bytes (matching Varnode.size), not bits
+- Type lattice: Unknown joins with anything to become that type; equal types stay; Int+UnsignedInt of same width collapse to Int; other conflicts collapse to Unknown
+- var_types: BTreeMap<SsaVarnode, PrimitiveType> field added to SsaFunction
+- TypeInferPass in unlace-passes/src/type_infer.rs implements Pass trait
+- Uses split borrows to avoid borrow checker conflicts: infer_insn takes &VarMap + &mut TypeMap separately from the function blocks iteration
+- Worklist: internal fixed-point loop — iterate over all instructions + phis until no changes
+- COPY propagates types bidirectionally between input and output
+- Phi nodes propagate types: all inputs and outputs get the joined type
+- Constants (SpaceId::Const) are skipped — they have no SSA varnode entries
+- Float vs Double determined by Varnode.size: 4 -> Float, anything else -> Double
+- Had to fix pre-existing compile error in dce.rs (VarnodeSlot not Copy — needed clone())
+- Also had to fix pre-existing duplicate `pub mod pass;` in lib.rs
+- 11 tests: int_add, load_addr_ptr, cbranch_bool, float_add, float_double, bool_ops, comparison_bool, store_ptr, call_const, callind_ptr, lattice_join
+
+## [Task 14] Constant Folding + Copy Propagation
+- `trait Pass: Send + Sync { fn name(&self) -> &str; fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError>; }` in pass.rs
+- `PassError` enum with variants: MissingBlock, ArityMismatch, InvariantViolation
+- `run_to_fixedpoint(passes: &[&dyn Pass], func: &mut SsaFunction) -> Result<usize, PassError>` loops all passes until no changes
+- **ConstantFoldPass** (const_fold.rs): walks all instructions in all blocks; for instructions with all-Const inputs, evaluates the operation and replaces with `COPY <computed_constant>`
+  - Handles: INT_ADD/SUB/MULT/DIV/SDIV/REM/SREM, INT_NEGATE/2COMP/ZEXT/SEXT, INT_AND/OR/XOR/LEFT/RIGHT/SRIGHT, all INT comparisons, INT_CARRY/SCARRY/SBORROW, BOOL_NEGATE/AND/OR/XOR
+  - Does NOT fold: float ops (IEEE semantics too complex for MVP), control flow, memory, pseudo ops
+  - Respects Varnode.size via `mask_for_size()`: 32-bit ADD wraps at 2^32
+  - Sign-extend helper for signed ops: `sign_extend(val, size)` shifts left then arithmetic-right to propagate sign
+  - Division by zero returns None (skip fold); INT_MIN/-1 also skipped for SDIV/SREM
+  - INT_CARRY uses wrapping add + comparison to detect unsigned overflow
+  - INT_SCARRY/SBORROW use the bitwise signed-overflow formula: `(a ^ result) & (b ^ result) < 0`
+- **CopyPropagationPass** (copy_prop.rs): builds BTreeMap of `output -> source` from all COPY instructions, chases chains to root, replaces inputs in instructions and phi node inputs
+  - Chain resolution: follows COPY chains (v3->v2->v1) with depth limit to handle cycles
+  - Also propagates through phi_map inputs (separate from function.blocks iteration)
+  - Const-space outputs are skipped (constants are never COPY targets in well-formed IR)
+- smallvec added to unlace-passes/Cargo.toml dependencies (needed for IrInsn construction in const_fold)
+- 14 new tests: const_fold (int_add, int_sub, bool_and, wrapping_32bit, no_change_on_non_const, div_by_zero, int_negate, bool_or, int_carry), copy_prop (simple, chain, no_change), fixedpoint (iteration, terminates_no_change)
+- Total: 29 tests pass (14 new + 4 DCE + 11 type inference)
+- BTreeMap only — no HashMap, lint-determinism passes
+- This task set the Pass trait pattern used by Tasks 15 (DCE) and 16 (type inference) which were already implemented

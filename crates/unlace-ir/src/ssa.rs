@@ -32,6 +32,14 @@ pub struct DominatorTree {
 }
 
 impl DominatorTree {
+    pub fn new(
+        idom: BTreeMap<BlockId, BlockId>,
+        children: BTreeMap<BlockId, Vec<BlockId>>,
+        root: BlockId,
+    ) -> Self {
+        Self { idom, children, root }
+    }
+
     pub fn root(&self) -> BlockId {
         self.root
     }
@@ -45,6 +53,63 @@ impl DominatorTree {
     }
 }
 
+/// Inferred primitive type for an SSA varnode.
+///
+/// The type lattice starts at [`Unknown`](Self::Unknown) and is refined by
+/// [`TypeInferPass`](https://docs.rs/unlace-passes) as it walks instructions.
+/// Width is in **bytes** (matching [`Varnode::size`](crate::Varnode::size)).
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum PrimitiveType {
+    /// No type information yet — joins with anything to become that type.
+    Unknown,
+    /// Boolean (1 byte, value in {0, 1}).
+    Bool,
+    /// Integer of the given width in bytes (signedness ambiguous in MVP).
+    Int(u8),
+    /// Unsigned integer of the given width in bytes (used for zero-extend, unsigned div, etc.).
+    UnsignedInt(u8),
+    /// IEEE-754 binary32 (4 bytes).
+    Float,
+    /// IEEE-754 binary64 (8 bytes).
+    Double,
+    /// Pointer (size = pointer width, typically 8 on 64-bit targets).
+    Ptr,
+}
+
+impl PrimitiveType {
+    /// Join two types in the lattice. `Unknown` yields the other; two equal
+    /// concrete types stay; mismatched concrete types collapse to `Unknown`
+    /// (conflict — recorded but not blocking).
+    pub fn join(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Unknown, t) | (t, Self::Unknown) => t,
+            (a, b) if a == b => a,
+            // Int and UnsignedInt of same width — keep Int (less specific).
+            (Self::Int(w), Self::UnsignedInt(w2)) | (Self::UnsignedInt(w2), Self::Int(w))
+                if w == w2 =>
+            {
+                Self::Int(w)
+            }
+            // Conflict: collapse back to Unknown.
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl std::fmt::Display for PrimitiveType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unknown => f.write_str("unknown"),
+            Self::Bool => f.write_str("bool"),
+            Self::Int(w) => write!(f, "i{}", w * 8),
+            Self::UnsignedInt(w) => write!(f, "u{}", w * 8),
+            Self::Float => f.write_str("f32"),
+            Self::Double => f.write_str("f64"),
+            Self::Ptr => f.write_str("ptr"),
+        }
+    }
+}
+
 /// The SSA form of a function.
 pub struct SsaFunction {
     pub function: Function,
@@ -52,6 +117,8 @@ pub struct SsaFunction {
     pub dom_tree: DominatorTree,
     pub phi_map: BTreeMap<BlockId, Vec<PhiNode>>,
     pub var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    /// Inferred types for SSA varnodes, populated by [`TypeInferPass`].
+    pub var_types: BTreeMap<SsaVarnode, PrimitiveType>,
 }
 
 /// Identifies which varnode slot of an instruction an SSA version refers to.
@@ -77,7 +144,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         &phi_locations,
     );
 
-    SsaFunction { function: func, cfg, dom_tree, phi_map, var_map }
+    SsaFunction { function: func, cfg, dom_tree, phi_map, var_map, var_types: BTreeMap::new() }
 }
 
 fn build_dominator_tree(cfg: &ControlFlowGraph) -> DominatorTree {

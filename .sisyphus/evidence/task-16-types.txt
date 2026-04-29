@@ -1,0 +1,25 @@
+   Compiling unlace-passes v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-passes)
+    Building [========================>  ] 43/46: unlace-passes, unlace_passe…    Building [=========================> ] 45/46: unlace_passes(test)             Finished `test` profile [unoptimized + debuginfo] target(s) in 0.35s
+     Running unittests src/lib.rs (target/debug/deps/unlace_passes-bd11cfbc919d870f)
+
+running 11 tests
+test type_infer::tests::test_call_const_target_no_crash ... ok
+test type_infer::tests::test_bool_ops ... ok
+test type_infer::tests::test_callind_target_ptr ... ok
+test type_infer::tests::test_comparison_output_bool ... ok
+test type_infer::tests::test_float_double_size ... ok
+test type_infer::tests::test_store_addr_ptr ... ok
+test type_infer::tests::test_int_add_typed_int ... ok
+test type_infer::tests::test_load_addr_typed_ptr ... ok
+test type_infer::tests::test_lattice_join ... ok
+test type_infer::tests::test_float_add ... ok
+test type_infer::tests::test_cbranch_cond_bool ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s
+
+   Doc-tests unlace_passes
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

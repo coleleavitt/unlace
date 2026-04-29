@@ -1,0 +1,223 @@
+    Updating crates.io index
+       Fetch 8 complete; 5 pending                                                   Fetch 12 complete; 1 pending                                                  Fetch 14 complete; 26 pending                                                 Fetch 18 complete; 22 pending                                                 Fetch 37 complete; 3 pending                                                  Fetch 40 complete; 28 pending                                                 Fetch 43 complete; 25 pending                                                 Fetch 65 complete; 3 pending                                                  Fetch 66 complete; 2 pending                                                  Fetch 67 complete; 1 pending                                                  Fetch 70 complete; 16 pending                                                 Fetch 72 complete; 14 pending                                                 Fetch 85 complete; 1 pending                                                  Fetch 86 complete; 6 pending                                                  Fetch 88 complete; 4 pending                                                  Fetch 92 complete; 5 pending                                                  Fetch 96 complete; 1 pending                                                  Fetch 97 complete; 4 pending                                                  Fetch 100 complete; 1 pending                                                 Fetch 101 complete; 3 pending                                                 Fetch 102 complete; 2 pending                                                 Fetch 103 complete; 1 pending                                                 Fetch 104 complete; 7 pending                                                 Fetch 108 complete; 3 pending                                                 Fetch 110 complete; 1 pending                                                 Fetch 111 complete; 2 pending                                                 Fetch 112 complete; 1 pending                                               Locking 115 packages to latest Rust 1.97.0-nightly compatible versions
+      Adding adler2 v2.0.1
+      Adding anstream v1.0.0
+      Adding anstyle v1.0.14
+      Adding anstyle-parse v1.0.0
+      Adding anstyle-query v1.1.5
+      Adding anstyle-wincon v3.0.11
+      Adding anyhow v1.0.102
+      Adding bitflags v2.11.1
+      Adding bumpalo v3.20.2
+      Adding capstone v0.14.0
+      Adding capstone-sys v0.18.0
+      Adding cc v1.2.61
+      Adding cfg-if v1.0.4
+      Adding clap v4.6.1
+      Adding clap_builder v4.6.0
+      Adding clap_derive v4.6.1
+      Adding clap_lex v1.1.0
+      Adding colorchoice v1.0.5
+      Adding console v0.16.3
+      Adding cpp_demangle v0.4.5
+      Adding crc32fast v1.5.0
+      Adding debugid v0.8.0
+      Adding encode_unicode v1.0.0
+      Adding equivalent v1.0.2
+      Adding errno v0.3.14
+      Adding fastrand v2.4.1
+      Adding find-msvc-tools v0.1.9
+      Adding fixedbitset v0.5.7
+      Adding flate2 v1.1.9
+      Adding fnv v1.0.7
+      Adding foldhash v0.1.5
+      Adding futures-core v0.3.32
+      Adding futures-task v0.3.32
+      Adding futures-util v0.3.32
+      Adding getrandom v0.4.2
+      Adding gimli v0.33.0
+      Adding hashbrown v0.15.5
+      Adding hashbrown v0.16.1
+      Adding hashbrown v0.17.0
+      Adding heck v0.5.0
+      Adding iced-x86 v1.21.0
+      Adding id-arena v2.3.0
+      Adding indexmap v2.14.0
+      Adding insta v1.47.2
+      Adding is_terminal_polyfill v1.70.2
+      Adding itoa v1.0.18
+      Adding js-sys v0.3.97
+      Adding lazy_static v1.5.0
+      Adding leb128fmt v0.1.0
+      Adding libc v0.2.186
+      Adding linux-raw-sys v0.12.1
+      Adding log v0.4.29
+      Adding memchr v2.8.0
+      Adding memmap2 v0.9.10
+      Adding miniz_oxide v0.8.9
+      Adding msvc-demangler v0.11.0
+      Adding object v0.39.1
+      Adding once_cell v1.21.4
+      Adding once_cell_polyfill v1.70.2
+      Adding petgraph v0.8.3
+      Adding pin-project-lite v0.2.17
+      Adding prettyplease v0.2.37
+      Adding proc-macro2 v1.0.106
+      Adding quote v1.0.45
+      Adding r-efi v6.0.0
+      Adding rustc-demangle v0.1.27
+      Adding rustix v1.1.4
+      Adding rustversion v1.0.22
+      Adding ruzstd v0.8.2
+      Adding semver v1.0.28
+      Adding serde v1.0.228
+      Adding serde_core v1.0.228
+      Adding serde_derive v1.0.228
+      Adding serde_json v1.0.149
+      Adding shlex v1.3.0
+      Adding simd-adler32 v0.3.9
+      Adding similar v2.7.0
+      Adding slab v0.4.12
+      Adding smallvec v1.15.1
+      Adding stable_deref_trait v1.2.1
+      Adding static_assertions v1.1.0
+      Adding strsim v0.11.1
+      Adding symbolic-common v12.18.3
+      Adding symbolic-demangle v12.18.3
+      Adding syn v2.0.117
+      Adding tempfile v3.27.0
+      Adding thiserror v2.0.18
+      Adding thiserror-impl v2.0.18
+      Adding tracing v0.1.44
+      Adding tracing-attributes v0.1.31
+      Adding tracing-core v0.1.36
+      Adding twox-hash v2.1.2
+      Adding unicode-ident v1.0.24
+      Adding unicode-xid v0.2.6
+      Adding utf8parse v0.2.2
+      Adding uuid v1.23.1
+      Adding wasip2 v1.0.3+wasi-0.2.9
+      Adding wasip3 v0.4.0+wasi-0.3.0-rc-2026-01-06
+      Adding wasm-bindgen v0.2.120
+      Adding wasm-bindgen-macro v0.2.120
+      Adding wasm-bindgen-macro-support v0.2.120
+      Adding wasm-bindgen-shared v0.2.120
+      Adding wasm-encoder v0.244.0
+      Adding wasm-metadata v0.244.0
+      Adding wasmparser v0.244.0
+      Adding windows-link v0.2.1
+      Adding windows-sys v0.61.2
+      Adding wit-bindgen v0.51.0
+      Adding wit-bindgen v0.57.1
+      Adding wit-bindgen-core v0.51.0
+      Adding wit-bindgen-rust v0.51.0
+      Adding wit-bindgen-rust-macro v0.51.0
+      Adding wit-component v0.244.0
+      Adding wit-parser v0.244.0
+      Adding zmij v1.0.21
+ Downloading 0 crates                                                          Downloading 1 crate                                                           Downloading 2 crates                                                          Downloading 3 crates                                                          Downloading 4 crates                                                          Downloading 5 crates                                                          Downloading 6 crates                                                           Downloaded cpp_demangle v0.4.5
+ Downloading 6 crates, remaining bytes: 372.7KiB                                Downloaded msvc-demangler v0.11.0
+ Downloading 5 crates, remaining bytes: 306.5KiB                                Downloaded gimli v0.33.0
+ Downloading 4 crates                                                          Downloading 4 crates, remaining bytes: 1.3MiB                                  Downloaded object v0.39.1
+ Downloading 3 crates, remaining bytes: 883.5KiB                                Downloaded symbolic-common v12.18.3
+ Downloading 2 crates, remaining bytes: 602.8KiB                                Downloaded iced-x86 v1.21.0
+ Downloading 1 crate, extracting iced-x86 ...                                   Downloaded symbolic-demangle v12.18.3
+ Downloading 0 crates                                                           Downloaded 7 crates (2.2MiB) in 0.71s (largest was `iced-x86` at 1.2MiB)
+   Compiling proc-macro2 v1.0.106
+    Building [                           ] 0/101: proc-macro2(build.rs)          Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling thiserror v2.0.18
+   Compiling shlex v1.3.0
+    Checking once_cell v1.21.4
+   Compiling find-msvc-tools v0.1.9
+    Checking pin-project-lite v0.2.17
+    Checking smallvec v1.15.1
+    Checking equivalent v1.0.2
+    Checking cfg-if v1.0.4
+    Checking hashbrown v0.17.0
+    Checking static_assertions v1.1.0
+   Compiling libc v0.2.186
+    Checking stable_deref_trait v1.2.1
+    Checking foldhash v0.1.5
+   Compiling crc32fast v1.5.0
+   Compiling cpp_demangle v0.4.5
+    Checking fixedbitset v0.5.7
+    Checking utf8parse v0.2.2
+    Checking adler2 v2.0.1
+    Checking simd-adler32 v0.3.9
+    Checking uuid v1.23.1
+    Checking is_terminal_polyfill v1.70.2
+    Checking colorchoice v1.0.5
+    Checking anstyle v1.0.14
+    Checking itoa v1.0.18
+    Checking twox-hash v2.1.2
+    Checking lazy_static v1.5.0
+   Compiling object v0.39.1
+    Checking bitflags v2.11.1
+    Checking anstyle-query v1.1.5
+    Building [                           ] 0/101: anstyle-query, static_asser…    Building [                           ] 1/101: anstyle-query, static_asser…    Checking strsim v0.11.1
+    Building [                           ] 2/101: anstyle-query, static_asser…    Building [                           ] 3/101: anstyle-query, static_asser…   Compiling anyhow v1.0.102
+    Building [>                          ] 4/101: anstyle-query, static_asser…    Building [>                          ] 5/101: anstyle-query, static_asser…    Building [>                          ] 6/101: anstyle-query, static_asser…    Building [>                          ] 7/101: anstyle-query, object(build…   Compiling heck v0.5.0
+    Building [=>                         ] 8/101: anstyle-query, static_asser…    Building [=>                         ] 9/101: anstyle-query, static_asser…    Building [=>                        ] 10/101: anstyle-query, static_asser…    Checking rustc-demangle v0.1.27
+    Building [=>                        ] 11/101: anstyle-query, static_asser…    Checking fnv v1.0.7
+    Building [==>                       ] 12/101: anstyle-query, stable_deref…    Building [==>                       ] 13/101: anstyle-query, stable_deref…    Checking memchr v2.8.0
+    Building [==>                       ] 14/101: anstyle-query, stable_deref…    Checking clap_lex v1.1.0
+    Building [==>                       ] 15/101: anstyle-query, stable_deref…    Checking hashbrown v0.16.1
+    Building [===>                      ] 16/101: anstyle-query, stable_deref…    Building [===>                      ] 17/101: anstyle-query, stable_deref…    Checking xtask v0.1.0 (/home/cole/RustProjects/active/unlace/xtask)
+    Building [===>                      ] 18/101: anstyle-query, stable_deref…    Checking hashbrown v0.15.5
+    Building [===>                      ] 19/101: hashbrown, anstyle-query, s…    Checking anstyle-parse v1.0.0
+    Building [====>                     ] 20/101: hashbrown, anstyle-query, s…    Building [====>                     ] 21/101: hashbrown, anstyle-query, s…    Checking iced-x86 v1.21.0
+    Building [====>                     ] 22/101: hashbrown, anstyle-query, s…    Building [====>                     ] 23/101: hashbrown, stable_deref_tra…    Building [=====>                    ] 24/101: hashbrown, stable_deref_tra…    Building [=====>                    ] 25/101: hashbrown, stable_deref_tra…    Building [=====>                    ] 26/101: hashbrown, stable_deref_tra…    Building [=====>                    ] 27/101: hashbrown, stable_deref_tra…    Building [======>                   ] 28/101: hashbrown, stable_deref_tra…    Building [======>                   ] 29/101: hashbrown, uuid, memchr, ha…    Building [======>                   ] 30/101: hashbrown, uuid, memchr, ha…    Checking tracing-core v0.1.36
+    Building [======>                   ] 31/101: hashbrown, uuid, memchr, ha…    Building [=======>                  ] 32/101: hashbrown, uuid, memchr, ha…    Building [=======>                  ] 33/101: hashbrown, uuid, memchr, ha…   Compiling cc v1.2.61
+    Checking msvc-demangler v0.11.0
+    Building [========>                 ] 35/101: hashbrown, uuid, memchr, ha…    Building [========>                 ] 36/101: hashbrown, uuid, memchr, ha…    Checking debugid v0.8.0
+    Building [========>                 ] 37/101: hashbrown, debugid, memchr,…    Building [========>                 ] 38/101: hashbrown, debugid, memchr,…    Checking miniz_oxide v0.8.9
+    Building [=========>                ] 39/101: hashbrown, debugid, memchr,…    Building [=========>                ] 40/101: hashbrown, debugid, proc-ma…    Building [=========>                ] 41/101: hashbrown, debugid, proc-ma…    Checking ruzstd v0.8.2
+    Building [=========>                ] 42/101: hashbrown, debugid, proc-ma…    Building [==========>               ] 43/101: hashbrown, debugid, proc-ma…    Building [==========>               ] 44/101: debugid, proc-macro2, memch…    Building [==========>               ] 45/101: debugid, proc-macro2, memch…    Building [==========>               ] 46/101: debugid, proc-macro2, memch…    Building [===========>              ] 47/101: debugid, proc-macro2, memch…    Checking anstream v1.0.0
+    Building [===========>              ] 48/101: debugid, proc-macro2, anstr…    Building [===========>              ] 49/101: debugid, proc-macro2, anstr…    Checking indexmap v2.14.0
+    Building [===========>              ] 50/101: debugid, proc-macro2, anstr…    Building [============>             ] 51/101: debugid, proc-macro2, anstr…    Building [============>             ] 52/101: proc-macro2, anstream, libc…    Building [============>             ] 53/101: proc-macro2, anstream, libc…    Building [============>             ] 54/101: proc-macro2, anstream, libc…    Building [=============>            ] 55/101: proc-macro2, anstream, libc…    Checking memmap2 v0.9.10
+    Building [=============>            ] 56/101: proc-macro2, anstream, memm…    Checking clap_builder v4.6.0
+    Building [=============>            ] 57/101: proc-macro2, memmap2, ruzst…    Building [=============>            ] 58/101: proc-macro2, memmap2, ruzst…    Checking flate2 v1.1.9
+    Building [==============>           ] 59/101: proc-macro2, memmap2, ruzst…    Checking symbolic-common v12.18.3
+    Building [==============>           ] 60/101: symbolic-common, proc-macro…    Building [==============>           ] 61/101: symbolic-common, proc-macro…    Checking petgraph v0.8.3
+    Building [==============>           ] 62/101: symbolic-common, proc-macro…    Checking gimli v0.33.0
+    Building [===============>          ] 63/101: symbolic-common, proc-macro…    Building [===============>          ] 64/101: symbolic-common, proc-macro…    Building [===============>          ] 65/101: symbolic-common, petgraph, …    Building [===============>          ] 66/101: petgraph, iced-x86, clap_bu…   Compiling syn v2.0.117
+    Building [================>         ] 67/101: petgraph, iced-x86, clap_bu…    Building [================>         ] 68/101: petgraph, iced-x86, object,…    Building [================>         ] 69/101: iced-x86, object, cc, syn, …   Compiling capstone-sys v0.18.0
+   Compiling symbolic-demangle v12.18.3
+    Building [=================>        ] 70/101: iced-x86, capstone-sys(buil…    Building [=================>        ] 71/101: iced-x86, capstone-sys(buil…    Building [=================>        ] 72/101: iced-x86, object, capstone-…    Building [=================>        ] 73/101: iced-x86, object, capstone-…    Building [==================>       ] 74/101: iced-x86, capstone-sys(buil…    Building [==================>       ] 75/101: capstone-sys(build), symbol…   Compiling thiserror-impl v2.0.18
+   Compiling tracing-attributes v0.1.31
+   Compiling clap_derive v4.6.1
+    Building [==================>       ] 76/101: clap_derive, capstone-sys(b…    Building [==================>       ] 77/101: thiserror, clap_derive, cap…    Checking unlace-ir v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-ir)
+    Building [===================>      ] 78/101: unlace-ir, clap_derive, cap…    Building [===================>      ] 79/101: clap_derive, capstone-sys(b…    Checking tracing v0.1.44
+    Building [===================>      ] 80/101: tracing, clap_derive, capst…    Checking clap v4.6.1
+    Building [===================>      ] 81/101: tracing, clap, capstone-sys…    Checking unlace-passes v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-passes)
+    Checking unlace-lift-x86 v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-x86)
+    Checking unlace-lift-v850 v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-v850)
+    Checking unlace-lift-arc v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-arc)
+    Checking unlace-loader v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-loader)
+    Building [====================>     ] 82/101: unlace-lift-x86, clap, caps…    Building [====================>     ] 83/101: unlace-lift-x86, capstone-s…    Checking unlace-struct v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-struct)
+    Building [====================>     ] 84/101: unlace-struct, unlace-lift-…    Building [====================>     ] 85/101: unlace-struct, unlace-lift-…    Building [=====================>    ] 86/101: unlace-struct, capstone-sys…    Building [=====================>    ] 87/101: unlace-struct, capstone-sys…    Building [=====================>    ] 88/101: unlace-struct, capstone-sys…    Building [=====================>    ] 89/101: capstone-sys(build), symbol…    Building [======================>   ] 90/101: symbolic-demangle, capstone…    Checking unlace-output v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-output)
+    Building [======================>   ] 91/101: capstone-sys(build), unlace…    Building [======================>   ] 92/101: capstone-sys(build)             Building [======================>   ] 93/101: capstone-sys                    Checking capstone v0.14.0
+    Building [=======================>  ] 94/101: capstone                        Checking unlace-lift-arm v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-arm)
+    Building [=======================>  ] 95/101: unlace-lift-arm                 Checking unlace-lift-ppc v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-ppc)
+    Checking unlace-lift-riscv v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-riscv)
+    Checking unlace-lift-mips v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-mips)
+    Building [=======================>  ] 95/101: unlace-lift-riscv, unlace-l…    Building [=======================>  ] 96/101: unlace-lift-riscv, unlace-l…    Building [=======================>  ] 97/101: unlace-lift-riscv, unlace-l…    Building [========================> ] 98/101: unlace-lift-mips                Checking unlace-lift v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift)
+    Building [========================> ] 99/101: unlace-lift                     Checking unlace-cli v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-cli)
+    Building [=======================> ] 100/101: unlace-cli(bin)                 Finished `dev` profile [unoptimized + debuginfo] target(s) in 33.05s
+    Checking unlace-ir v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-ir)
+    Checking xtask v0.1.0 (/home/cole/RustProjects/active/unlace/xtask)
+    Checking unlace-loader v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-loader)
+    Building [=====================>    ] 86/101: xtask(bin), unlace-ir, unla…    Checking unlace-passes v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-passes)
+    Checking unlace-lift-arm v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-arm)
+    Checking unlace-lift-ppc v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-ppc)
+    Checking unlace-lift-arc v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-arc)
+    Checking unlace-lift-mips v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-mips)
+    Checking unlace-lift-v850 v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-v850)
+    Checking unlace-lift-riscv v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-riscv)
+    Checking unlace-lift-x86 v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift-x86)
+    Building [=====================>    ] 88/101: unlace-lift-riscv, xtask(bi…    Building [=====================>    ] 89/101: unlace-lift-riscv, unlace-p…    Building [======================>   ] 91/101: unlace-lift-riscv, unlace-p…    Building [======================>   ] 93/101: unlace-lift-riscv, unlace-p…    Checking unlace-struct v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-struct)
+    Building [=======================>  ] 95/101: unlace-lift-riscv, unlace-s…    Building [=======================>  ] 96/101: unlace-struct, unlace-lift-…    Checking unlace-lift v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-lift)
+    Building [=======================>  ] 97/101: unlace-lift, unlace-struct      Checking unlace-output v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-output)
+    Building [========================> ] 98/101: unlace-lift, unlace-output      Building [========================> ] 99/101: unlace-output                   Checking unlace-cli v0.1.0 (/home/cole/RustProjects/active/unlace/crates/unlace-cli)
+    Building [=======================> ] 100/101: unlace-cli(bin)                 Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s

@@ -1,0 +1,14 @@
+[package]
+name = "unlace-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-loader = { workspace = true }
+unlace-lift = { workspace = true }
+unlace-passes = { workspace = true }
+unlace-struct = { workspace = true }
+unlace-output = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }

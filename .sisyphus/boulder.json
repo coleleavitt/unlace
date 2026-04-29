@@ -1,0 +1,12 @@
+{
+  "active_plan": "/home/cole/RustProjects/active/unlace/.sisyphus/plans/unlace-decompiler.md",
+  "started_at": "2026-04-29T22:10:29.871Z",
+  "session_ids": [
+    "ses_2259eea58ffekd42HVWKymUkpb"
+  ],
+  "session_origins": {
+    "ses_2259eea58ffekd42HVWKymUkpb": "direct"
+  },
+  "plan_name": "unlace-decompiler",
+  "agent": "atlas"
+}

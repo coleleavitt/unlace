@@ -1,0 +1,15 @@
+[package]
+name = "unlace-lift"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+unlace-lift-x86 = { workspace = true }
+unlace-lift-arm = { workspace = true }
+unlace-lift-riscv = { workspace = true }
+unlace-lift-mips = { workspace = true }
+unlace-lift-ppc = { workspace = true }
+unlace-lift-v850 = { workspace = true }
+unlace-lift-arc = { workspace = true }
+thiserror = { workspace = true }

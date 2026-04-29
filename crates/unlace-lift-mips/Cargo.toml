@@ -1,0 +1,13 @@
+[package]
+name = "unlace-lift-mips"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+capstone = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

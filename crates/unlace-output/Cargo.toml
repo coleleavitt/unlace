@@ -1,0 +1,14 @@
+[package]
+name = "unlace-output"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+unlace-struct = { workspace = true }
+symbolic-demangle = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

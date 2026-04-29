@@ -126,3 +126,16 @@
 - Unknown/SSE/AVX → IrOp::Unimplemented (never panic)
 - 32 unit tests pass: arch, register_file, mov(reg-reg, reg-imm, mem-read, mem-write), add, sub, cmp, test, and, or, xor, shl, shr, not, neg, sar, jmp, je, jne, call, ret, push, pop, lea, nop, unknown_insn, empty_buffer, imul_3op, div, no_unwrap_in_lib
 - No unwrap() in library code — all paths use `?` or return Option/Result
+
+## [Task 12] CFG construction
+- New module: `crates/unlace-ir/src/cfg.rs` — public module (`pub mod cfg;` in lib.rs)
+- `petgraph = { workspace = true }` added to unlace-ir/Cargo.toml (workspace already declared `petgraph = "0.8"`)
+- `EdgeKind` enum: Unconditional, ConditionalTrue, ConditionalFalse, Fallthrough, IndirectJump, Call, Return
+- `ControlFlowGraph` struct wraps `StableDiGraph<BlockId, EdgeKind>` + `BTreeMap<BlockId, NodeIndex>` node map + entry/exit/unknown BlockIds
+- Synthetic sinks: exit block (target of RETURN edges) and unknown block (target of unresolved BRANCHIND) allocated beyond max real BlockId
+- `build_cfg(func: &Function) -> ControlFlowGraph` walks blocks in sorted order, inspects `terminator_of(block)` → last insn's IrOp
+- Edge inference from terminator: Branch→Unconditional, Cbranch→ConditionalTrue+ConditionalFalse, Branchind→IndirectJump (to successors or unknown sink), Return→Return (to exit), Call/Callind→Call+Fallthrough, no terminator→Fallthrough
+- `dot_export(cfg) -> String` hand-writes graphviz DOT with per-EdgeKind styling (colors, dashed/dotted/bold)
+- petgraph 0.8 API: `EdgeRef` and `IntoEdgeReferences` traits must be explicitly imported for `.target()`, `.source()`, `.edge_references()`
+- 12 unit tests: linear, diamond, loop (back-edge), switch (multi-successor BRANCHIND), branchind_no_successors, call_fallthrough, empty_function, edges_to, node_index_lookup, dot_export (2), synthetic_block_ids
+- No HashMap — `BTreeMap` only, lint-determinism passes

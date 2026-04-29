@@ -33,3 +33,12 @@
 - `thiserror = "2"` used (latest major, not 1.x) — compatible with edition 2024
 - Old `src/main.rs` removed; CLI entry point moved to `crates/unlace-cli/src/main.rs`
 - `cargo check --workspace` and `cargo clippy --workspace -- -D warnings` both pass clean
+
+## [Task 6] Fixture binaries
+- 7 ELF fixtures in `fixtures/`: hello_world, branches, loops, calls, medium, stripped, empty
+- Source C files in `fixtures/src/` for reproducibility
+- Compiled with `gcc -O2` (no debug info), x86-64 Linux, dynamically linked
+- medium.c has ~50 functions in source but most are inlined at -O2; ~896 instructions remain with 3 recursive functions as separate symbols
+- stripped.elf = medium.elf + `strip -s` (no symbols)
+- All fixtures < 16KB (well under 1MB limit)
+- Used by Task 22 (e2e pipeline) and Task 23 (golden tests)

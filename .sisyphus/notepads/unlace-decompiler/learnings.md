@@ -138,4 +138,24 @@
 - `dot_export(cfg) -> String` hand-writes graphviz DOT with per-EdgeKind styling (colors, dashed/dotted/bold)
 - petgraph 0.8 API: `EdgeRef` and `IntoEdgeReferences` traits must be explicitly imported for `.target()`, `.source()`, `.edge_references()`
 - 12 unit tests: linear, diamond, loop (back-edge), switch (multi-successor BRANCHIND), branchind_no_successors, call_fallthrough, empty_function, edges_to, node_index_lookup, dot_export (2), synthetic_block_ids
-- No HashMap — `BTreeMap` only, lint-determinism passes
+- No HashMap used — `BTreeMap` only, lint-determinism passes
+
+## [Task 13] SSA
+- New module: `crates/unlace-ir/src/ssa.rs` — public module (`pub mod ssa;` in lib.rs)
+- `SsaVarnode { base: Varnode, version: u32 }` — Copy + Clone + Debug + PartialEq + Eq + Hash + PartialOrd + Ord
+- `PhiNode { output: SsaVarnode, inputs: Vec<(BlockId, SsaVarnode)> }` — one input per predecessor
+- `DominatorTree` wraps `BTreeMap<BlockId, BlockId>` (idom) + `BTreeMap<BlockId, Vec<BlockId>>` (children) + root
+- `SsaFunction { function, cfg, dom_tree, phi_map, var_map }` — phi_map keyed by BlockId, var_map keyed by (BlockId, insn_index, VarnodeSlot)
+- `VarnodeSlot` enum: Output | Input(usize) — identifies which operand slot an SSA version maps to
+- `build_ssa(func: Function) -> SsaFunction` — main entry point, takes ownership of Function
+- Dominator tree via `petgraph::algo::dominators::simple_fast(&graph, entry_ni)` — returns `Dominators<NodeIndex>` with `.immediate_dominator(ni)` method
+- Dominance frontier (Cytron et al. 1991): for each CFG edge (P → X), walk P up dom tree to idom(X), adding X to DF(node); must NOT gate on `preds.len() >= 2` because entry blocks with back-edges need frontiers too
+- Phi placement: iterative worklist — for each variable defined in multiple blocks, insert phi at dominance frontier blocks (also adds phi block to worklist since phi is a new def)
+- Variable renaming: explicit-stack preorder walk of dom tree, (block, is_cleanup) pairs; cleanup pops versions pushed by that block
+- Key insight: phi_map entries must be pre-populated before the rename walk, otherwise successors' phis won't be found when predecessors try to fill phi inputs
+- phi inputs record (predecessor_block_id, SsaVarnode) — the predecessor is the block being processed (`bid`), not the successor block
+- Const-space varnodes are skipped during input renaming (they don't have SSA versions)
+- Children of dom tree sorted for deterministic traversal; pushed in reverse order onto work stack
+- Added `node_map()` and `predecessors()` methods to ControlFlowGraph for SSA module's use
+- 4 unit tests: straight_line (no phis), diamond_phi (phi at merge BB3), loop_phi (phi at loop header BB0), versions_monotonic (3 defs of r0 with strictly increasing versions)
+- BTreeMap/BTreeSet throughout — no HashMap, lint-determinism passes

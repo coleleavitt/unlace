@@ -1,0 +1,8 @@
+# Hex-Rays plugin decompilation dumps land here.
+#
+# Layout convention (mirrors references/ida/):
+#   references/hexrays/<plugin>/<ida-version>/all/      — per-function .c files
+#   references/hexrays/<plugin>/<ida-version>/all_funcs.txt
+#   references/hexrays/<plugin>/<ida-version>/failed_addrs.txt
+#
+# Source binaries live in /hexrays/<ida-version>/<plugin>.so.

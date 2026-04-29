@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x4F16B8
+// Name:     qmutex_unlock
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to qmutex_unlock are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void qmutex_unlock(/* see import library declaration */);
+

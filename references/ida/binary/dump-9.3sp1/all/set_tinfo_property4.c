@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x4F1F40
+// Name:     set_tinfo_property4
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to set_tinfo_property4 are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void set_tinfo_property4(/* see import library declaration */);
+

@@ -1,0 +1,61 @@
+__int64 __fastcall sub_13FF30(__int64 a1, unsigned int a2, __int64 a3, __int64 a4, __int64 a5, __int64 a6)
+{
+  __int64 v6; // rdx
+  __int64 v7; // rcx
+  __int64 v8; // r8
+  int v9; // r9d
+  __int64 v10; // rbx
+  unsigned int i; // ebp
+  __int64 v12; // rcx
+  __int64 v13; // r8
+  __int64 v14; // r9
+  __int64 v15; // rcx
+  __int64 v16; // r8
+  __int64 v17; // r9
+  __int64 v18; // rax
+  __int64 v20; // rdx
+  __int64 v21; // rax
+  __int64 v22; // rdx
+  __int64 v23; // rbx
+  unsigned int v24; // [rsp+Ch] [rbp-5Ch] BYREF
+  __int64 v25[11]; // [rsp+10h] [rbp-58h] BYREF
+
+  v25[5] = __readfsqword(0x28u);
+  v24 = 0;
+  sub_13FC70((__int64 *)a1, (__int128 *)(a2 & 1), (unsigned __int64)&v24, a4, a5, a6);
+  if ( (a2 & 6) != 0 && (~*(_WORD *)a1 & 0x5000) == 0 && (BYTE1(*(_DWORD *)a1) & 0x80u) == 0 )
+  {
+    if ( (unsigned __int8)sub_65BF0(a1) )
+      ++v24;
+    v10 = *(_QWORD *)(a1 + 520);
+    for ( i = v24; v10; v24 = i )
+    {
+      if ( (*(_DWORD *)(v10 + 24) & 0x600) != 0x200 )
+        i += sub_A30D0(v10, 0, v6, v7, v8, v9);
+      v10 = *(_QWORD *)(v10 + 8);
+    }
+    if ( (unsigned __int8)sub_21D340(a1, a2) )
+    {
+      if ( (~*(_DWORD *)a1 & 0x8020) == 0 )
+      {
+        v20 = *(unsigned int *)(a1 + 64);
+        v21 = (unsigned int)(v20 - 1);
+        if ( !(_DWORD)v20 )
+          sub_1301F0(a1, a2, v20, v12, v13, v14);
+        v22 = *(_QWORD *)(a1 + 528);
+        v23 = *(_QWORD *)(v22 + 8 * v21);
+        sub_602C0((__int64 *)(a1 + 360), (__int64 *)(v23 + 160), v22, v12, v13, v14);
+        sub_312B60(a1 + 376, v23 + 176);
+      }
+      ++v24;
+      memset(&v25[1], 0, 32);
+      v25[0] = (__int64)&off_4B0528;
+      sub_11B520(a1, v25);
+      v18 = *(_QWORD *)(a1 + 784);
+      if ( v18 )
+        *(_DWORD *)(v18 + 48) = 63;
+      sub_13FC70((__int64 *)a1, (__int128 *)&byte_1, (unsigned __int64)&v24, v15, v16, v17);
+    }
+  }
+  return v24;
+}

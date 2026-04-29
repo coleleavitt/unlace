@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x4C25F0
+// Name:     get_udm_by_fullname
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to get_udm_by_fullname are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void get_udm_by_fullname(/* see import library declaration */);
+

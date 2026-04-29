@@ -1,0 +1,11 @@
+__int64 sub_2A8B40()
+{
+  __int64 v1; // [rsp+8h] [rbp-40h]
+  unsigned __int64 v2; // [rsp+18h] [rbp-30h]
+
+  v2 = __readfsqword(0x28u);
+  v1 = 0;
+  copy_tinfo_t();
+  clear_tinfo_t();
+  return 0;
+}

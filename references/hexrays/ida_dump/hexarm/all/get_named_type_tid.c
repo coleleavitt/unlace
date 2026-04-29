@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x4EC848
+// Name:     get_named_type_tid
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to get_named_type_tid are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void get_named_type_tid(/* see import library declaration */);
+

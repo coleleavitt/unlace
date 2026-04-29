@@ -1,0 +1,13 @@
+// ============================================================
+// EXTERNAL IMPORT
+// ============================================================
+// Address:  0x4EC030
+// Name:     get_place_class
+// Segment:  extern (SEG_XTRN)
+// Note:     This is an extern symbol resolved at link/load time.
+//           No code body exists in this binary; calls to get_place_class are
+//           dispatched through GOT/IAT to the dynamic library.
+// ============================================================
+
+extern void get_place_class(/* see import library declaration */);
+

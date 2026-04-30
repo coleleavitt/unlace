@@ -1,0 +1,119 @@
+P3-11 — Common Subexpression Elimination (CSE)
+================================================
+
+TASK
+----
+Implement dominator-tree-based CSE pass in unlace-passes:
+  * file:   crates/unlace-passes/src/cse.rs   (NEW)
+  * lib.rs: pub mod cse; pub use cse::CsePass;
+  * algo:   walk SSA function in dominator-tree pre-order, hash each
+            eligible instruction by (op, ordered SSA inputs), replace
+            duplicates with COPY of the earlier dominating result.
+  * lints:  BTreeMap only (no HashMap), determinism preserved.
+
+ALGORITHM
+---------
+Cooper & Torczon §8.6.1 (Engineering a Compiler) — scoped dominator-tree
+walk.  An expression-table BTreeMap<CseKey, SsaVarnode> is grown when
+entering a block and pruned when leaving the dominator subtree, so a
+later occurrence is only matched against earlier definitions that
+strictly dominate it.
+
+Eligible opcodes (pure):
+  INT_{ADD,SUB,MULT,DIV,SDIV,REM,SREM},
+  INT_{NEGATE,2COMP,ZEXT,SEXT},
+  INT_{AND,OR,XOR,LEFT,RIGHT,SRIGHT},
+  INT_{EQUAL,NOTEQUAL,LESS,LESSEQUAL,SLESS,SLESSEQUAL,CARRY,SCARRY,SBORROW},
+  BOOL_{NEGATE,AND,OR,XOR},
+  PIECE, SUBPIECE, POPCOUNT, LZCOUNT.
+
+Skipped (impure / side-effecting / control flow):
+  LOAD, STORE, CALL, CALLIND, CALLOTHER, NEW, CPOOLREF, INDIRECT,
+  BRANCH, CBRANCH, BRANCHIND, RETURN, MULTIEQUAL.
+
+Commutative ops with sorted operand keys:
+  INT_ADD, INT_MULT, INT_AND, INT_OR, INT_XOR,
+  INT_EQUAL, INT_NOTEQUAL, INT_CARRY, INT_SCARRY,
+  BOOL_AND, BOOL_OR, BOOL_XOR.
+
+
+VERIFICATION
+============
+
+Step 1 — CSE-only tests (cargo test -p unlace-passes -- cse)
+------------------------------------------------------------
+running 11 tests
+test cse::tests::test_chain_cse ... ok
+test cse::tests::test_idempotent ... ok
+test cse::tests::test_non_commutative_no_swap ... ok
+test cse::tests::test_no_cse_after_intervening_def ... ok
+test cse::tests::test_different_op_no_match ... ok
+test cse::tests::test_dominance_required_dominates ... ok
+test cse::tests::test_commutative_cse ... ok
+test cse::tests::test_no_cse_calls ... ok
+test cse::tests::test_dominance_required_no_dom ... ok
+test cse::tests::test_simple_cse ... ok
+test cse::tests::test_no_cse_loads ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored.
+Exit code: 0
+
+
+Step 2 — Determinism lint (cargo xtask lint-determinism)
+--------------------------------------------------------
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/xtask lint-determinism`
+lint-determinism: OK — no HashMap/HashSet in enforced crates
+Exit code: 0
+
+
+Step 3 — Full workspace test (cargo test --workspace)
+-----------------------------------------------------
+Total tests passed:  805
+Failures:            0
+(includes Wave 1 + sibling P3-2 ModuloIdiomPass + P3-7/P3-10
+ in-flight files; CSE introduces no regressions.)
+
+The unlace-passes crate alone runs 149 tests, all green:
+    test result: ok. 149 passed; 0 failed; 0 ignored;
+                     0 measured; 0 filtered out; finished in 0.01s
+
+
+TEST SCENARIOS COVERED
+======================
+Required by plan (7):
+  test_simple_cse                       ✓  v3=a+b ; v7=a+b → COPY(v3)
+  test_commutative_cse                  ✓  v3=a+b ; v7=b+a → COPY(v3)
+  test_no_cse_after_intervening_def     ✓  redefining `a` produces a
+                                            new SSA version, keys diverge
+  test_no_cse_loads                     ✓  LOAD never CSE'd
+  test_no_cse_calls                     ✓  CALL never CSE'd
+  test_dominance_required (split into
+    test_dominance_required_dominates   ✓  BB0 dominates BB1 → CSE
+    test_dominance_required_no_dom )    ✓  siblings BB1, BB2 → no CSE
+  test_chain_cse                        ✓  v3=a+b; v7=a+b; v11=a+b
+                                            → both later become COPY(v3)
+
+Additional defensive tests (4):
+  test_non_commutative_no_swap          ✓  INT_SUB is order-sensitive
+  test_different_op_no_match            ✓  INT_ADD ≠ INT_MULT
+  test_idempotent                       ✓  fixed-point safe (2nd run
+                                            returns false)
+
+
+FILE INVENTORY
+==============
+NEW       crates/unlace-passes/src/cse.rs            (706 lines)
+MODIFIED  crates/unlace-passes/src/lib.rs            (+2 lines)
+EVIDENCE  .sisyphus/evidence/p3-11-cse.txt           (this file)
+
+
+CONSTRAINTS HONOURED
+====================
+[x]  BTreeMap / BTreeSet only (no HashMap)
+[x]  Commutative inputs canonicalized via sort
+[x]  Dominator tree walked for correctness (scoped table)
+[x]  ≥6 unit tests (delivered: 11)
+[x]  Conservative — skips LOAD/STORE/CALL/CALLIND/CALLOTHER/INDIRECT
+[x]  No edits to sibling files (structurer.rs, variable_merge.rs,
+     modulo_idiom.rs untouched by P3-11)

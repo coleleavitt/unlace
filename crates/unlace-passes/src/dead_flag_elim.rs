@@ -180,6 +180,9 @@ mod tests {
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
             foldable_exprs: BTreeSet::new(),
+            noreturn: false,
+            tail_call_map: BTreeMap::new(),
+            merged_names: BTreeMap::new(),
         }
     }
 

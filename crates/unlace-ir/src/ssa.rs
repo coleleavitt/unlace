@@ -165,9 +165,21 @@ pub struct SsaFunction {
     /// sub-expression rather than emitted as a standalone statement.
     /// Populated by [`ExpressionTreePass`](https://docs.rs/unlace-passes).
     pub foldable_exprs: BTreeSet<SsaVarnode>,
+    /// Whether this function never returns to its caller (calls `exit`,
+    /// `abort`, `panic`, etc.).
+    /// Populated by [`NoreturnDetectPass`](https://docs.rs/unlace-passes).
+    pub noreturn: bool,
+    /// Blocks whose terminator is a tail call (unconditional branch to an
+    /// address outside the function). Maps `BlockId → target address`.
+    /// Populated by [`TailCallDetectPass`](https://docs.rs/unlace-passes).
+    pub tail_call_map: BTreeMap<BlockId, u64>,
+    /// Canonical C variable names after SSA version merging.
+    ///
+    /// Multiple `SsaVarnode`s sharing the same base [`Varnode`] map to the
+    /// same name string. Populated by `VariableMergePass`.
+    pub merged_names: BTreeMap<SsaVarnode, String>,
 }
 
-/// Identifies which varnode slot of an instruction an SSA version refers to.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum VarnodeSlot {
     Output,
@@ -200,6 +212,9 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         calling_convention: CallingConvention::Unknown,
         stack_vars: BTreeMap::new(),
         foldable_exprs: BTreeSet::new(),
+        noreturn: false,
+        tail_call_map: BTreeMap::new(),
+        merged_names: BTreeMap::new(),
     }
 }
 

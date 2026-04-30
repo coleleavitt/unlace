@@ -1,0 +1,21 @@
+P5-1: Enable SCCP in optimization pipeline
+============================================
+
+Change: Added SccpPass to the fixedpoint optimization loop in pipeline.rs
+
+Before:
+  let passes: &[&dyn Pass] = &[&fold, &prop, &dce];
+
+After:
+  let passes: &[&dyn Pass] = &[&fold, &prop, &dce, &sccp];
+
+Imports added: SccpPass
+
+Test results:
+  Baseline: 995 passed, 0 failed
+  After SCCP: 995 passed, 0 failed
+  No regressions.
+
+SCCP (Sparse Conditional Constant Propagation) benefits from iteration because
+constants discovered by SCCP can enable further constant folding and copy
+propagation, which in turn can expose more SCCP opportunities.

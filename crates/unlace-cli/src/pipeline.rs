@@ -9,8 +9,8 @@ use unlace_ir::{BasicBlock, BlockId, Function, IrOp, Lifter};
 use unlace_loader::{BinaryImage, DwarfInfo, SymbolKind};
 use unlace_passes::{
     CallingConventionDetectPass, ConstantFoldPass, CopyPropagationPass, DeadCodeElimPass,
-    ExpressionTreePass, ParamInferPass, ReturnTypeInferPass, VariableMergePass, Pass,
-    run_to_fixedpoint,
+    ExpressionTreePass, ParamInferPass, ReturnTypeInferPass, SccpPass, VariableMergePass,
+    Pass, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -354,7 +354,8 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     let fold = ConstantFoldPass;
     let prop = CopyPropagationPass;
     let dce = DeadCodeElimPass;
-    let passes: &[&dyn Pass] = &[&fold, &prop, &dce];
+    let sccp = SccpPass;
+    let passes: &[&dyn Pass] = &[&fold, &prop, &dce, &sccp];
 
     let changes = run_to_fixedpoint(passes, ssa)
         .context("pass pipeline failed")?;

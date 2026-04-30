@@ -8,8 +8,9 @@ use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BasicBlock, BlockId, Function, IrOp, Lifter};
 use unlace_loader::{BinaryImage, DwarfInfo, SymbolKind};
 use unlace_passes::{
-    CallingConventionDetectPass, ConstantFoldPass, CopyPropagationPass, CsePass,
-    DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass, ExpressionTreePass,
+    CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
+    CopyPropagationPass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
+    DivisionIdiomPass, ExpressionTreePass, IdiomRecognitionPass, ModuloIdiomPass,
     ParamInferPass, ReturnTypeInferPass, SccpPass, VariableMergePass, Pass,
     run_to_fixedpoint,
 };
@@ -357,7 +358,9 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     let dce = DeadCodeElimPass;
     let sccp = SccpPass;
     let cse = CsePass;
-    let passes: &[&dyn Pass] = &[&fold, &prop, &dce, &sccp, &cse];
+    let idiom = IdiomRecognitionPass;
+    let cond = ConditionSimplifyPass;
+    let passes: &[&dyn Pass] = &[&fold, &prop, &dce, &sccp, &cse, &idiom, &cond];
 
     let changes = run_to_fixedpoint(passes, ssa)
         .context("pass pipeline failed")?;
@@ -367,6 +370,10 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
         .context("dead store elimination failed")?;
     DeadFlagElimPass.run(ssa)
         .context("dead flag elimination failed")?;
+    DivisionIdiomPass.run(ssa)
+        .context("division idiom recovery failed")?;
+    ModuloIdiomPass.run(ssa)
+        .context("modulo idiom recovery failed")?;
 
     CallingConventionDetectPass.run(ssa)
         .context("calling convention detection failed")?;

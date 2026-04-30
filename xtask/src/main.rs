@@ -8,13 +8,14 @@ fn main() {
         Some("scaffold") => println!("xtask scaffold: not yet implemented"),
         Some("lint-determinism") => lint_determinism(),
         Some("regen-goldens") => regen_goldens(),
+        Some("measure-parity") => measure_parity(&args[1..]),
         Some(cmd) => {
             eprintln!("unknown xtask command: {cmd}");
             process::exit(1);
         }
         None => {
             eprintln!("usage: cargo xtask <command>");
-            eprintln!("available commands: scaffold, lint-determinism, regen-goldens");
+            eprintln!("available commands: scaffold, lint-determinism, regen-goldens, measure-parity");
             process::exit(1);
         }
     }
@@ -61,6 +62,29 @@ fn regen_goldens() {
 
     if !status.success() {
         eprintln!("regen-goldens failed with {status}");
+        process::exit(status.code().unwrap_or(1));
+    }
+}
+
+fn measure_parity(extra_args: &[String]) {
+    let root = workspace_root();
+    let script = root.join("scripts/measure_parity.py");
+
+    if !script.exists() {
+        eprintln!("error: {script:?} not found");
+        process::exit(1);
+    }
+
+    let mut cmd = Command::new("python3");
+    cmd.arg(&script).current_dir(&root);
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
+
+    let status = cmd.status().expect("failed to run python3");
+
+    if !status.success() {
+        eprintln!("measure-parity failed with {status}");
         process::exit(status.code().unwrap_or(1));
     }
 }

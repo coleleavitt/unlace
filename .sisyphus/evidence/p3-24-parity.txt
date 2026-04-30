@@ -1,0 +1,541 @@
+P3-24 Parity Measurement Evidence
+=================================
+Date: 2026-04-29T22:49:13-07:00
+Commit: 0e087fa3a
+
+Tool: scripts/measure_parity.py
+Shell wrapper: scripts/measure_parity.sh
+Binary: hexrays/ida-9.1/hexx64.so
+References: references/hexrays/ida_dump/hexx64/all/
+
+Method:
+  1. Prologue scan binary (endbr64/push rbp/sub rsp) to find discoverable functions
+  2. Cross-reference with IDA reference .c files to find overlap
+  3. For each overlapping function, run unlace decompile and compare
+  4. Score 14 structural features with weighted parity
+
+Coverage:
+  IDA reference functions:  8398
+  Unlace-discoverable:      3853
+  Overlapping (compared):   28
+
+Features scored (weight):
+  if-branches (3.0), else-branches (2.0), for-loops (3.0),
+  while-loops (3.0), do-while (2.0), returns (2.0), gotos (1.0),
+  calls (3.0), has-params (2.0), type-casts (1.0),
+  ptr-derefs (1.5), shift-ops (1.0), bitwise-ops (1.0), neg-consts (1.0)
+
+
+Parity Report — unlace vs IDA Hex-Rays
+════════════════════════════════════════════════════════════
+Binary:     hexrays/ida-9.1/hexx64.so
+References: references/hexrays/ida_dump/hexx64/all
+Functions:  28 compared
+
+Function                       | Score | Notes
+───────────────────────────────┼───────┼─────────────────────────────────────────
+sub_12cba0                     |   28% | if-branches: IDA=1 unlace=8; else-bra...
+sub_136860                     |   77% | calls: missing: j__qfree,sub_136640; ...
+sub_1944b0                     |   51% | if-branches: IDA=3 unlace=0; returns:...
+sub_1a2060                     |   53% | if-branches: IDA=66 unlace=19; else-b...
+sub_1e2580                     |   19% | if-branches: IDA=59 unlace=0; else-br...
+sub_1ecd00                     |   53% | if-branches: IDA=14 unlace=1; returns...
+sub_1f20c0                     |   41% | if-branches: IDA=10 unlace=4; else-br...
+sub_1f72c0                     |   58% | if-branches: IDA=30 unlace=5; gotos: ...
+sub_225f80                     |   58% | if-branches: IDA=18 unlace=5; else-br...
+sub_2418b0                     |   37% | if-branches: IDA=3 unlace=5; else-bra...
+sub_2436e0                     |   40% | if-branches: IDA=35 unlace=0; else-br...
+sub_24fab0                     |   43% | if-branches: IDA=25 unlace=1; while-l...
+sub_2a8a20                     |   36% | if-branches: unlace has 2, IDA has 0;...
+sub_2ad4c0                     |   42% | if-branches: IDA=9 unlace=1; else-bra...
+sub_2b0490                     |   48% | else-branches: IDA=1 unlace=8; while-...
+sub_311f90                     |   57% | if-branches: IDA=3 unlace=0; calls: m...
+sub_312a40                     |   68% | returns: unlace has 1, IDA has 0; cal...
+sub_312a60                     |   66% | if-branches: IDA=5 unlace=0; calls: m...
+sub_329c10                     |   60% | else-branches: unlace has 1, IDA has ...
+sub_32d810                     |   55% | if-branches: IDA=3 unlace=0; while-lo...
+sub_32f0d0                     |   56% | while-loops: unlace has 1, IDA has 0;...
+sub_33f1a0                     |   52% | if-branches: unlace has 1, IDA has 0;...
+sub_7b710                      |   38% | if-branches: IDA=20 unlace=0; else-br...
+sub_8b490                      |   44% | if-branches: IDA=5 unlace=18; else-br...
+sub_b7be0                      |   47% | if-branches: IDA=7 unlace=2; else-bra...
+sub_d1010                      |   44% | if-branches: IDA=3 unlace=21; else-br...
+sub_db200                      |   51% | if-branches: IDA=2 unlace=8; else-bra...
+sub_e59f0                      |   62% | if-branches: IDA=7 unlace=2; else-bra...
+────────────────────────────────────────────────────────────────────────────────
+Overall Parity: 49.4%
+Functions scored: 28
+
+Detailed Feature Breakdown
+════════════════════════════════════════════════════════════
+
+  sub_12cba0 — 28%
+    ✗ if-branches      IDA=1      unlace=8      (12%)  IDA=1 unlace=8
+    ✗ else-branches    IDA=0      unlace=7      (0%)  unlace has 7, IDA has 0
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✗ do-while         IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['sub_11B9A0', 'sub_12C760', 'sub_12CBA0'] unlace=['__builtin_popcount', 'sub_12cba0'] (0%)  missing: sub_11B9A0,sub_12C760,sub_12CBA0; extra: __builtin_popcount,sub_12cba0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=2      unlace=29     (7%)  IDA=2 unlace=29
+    ✗ ptr-derefs       IDA=2      unlace=28     (7%)  IDA=2 unlace=28
+    ✗ shift-ops        IDA=0      unlace=10     (0%)  unlace has 10, IDA has 0
+    ✗ bitwise-ops      IDA=0      unlace=15     (0%)  unlace has 15, IDA has 0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_136860 — 77%
+    ✓ if-branches      IDA=0      unlace=0      (100%)
+    ✓ else-branches    IDA=0      unlace=0      (100%)
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=0      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['j__qfree', 'sub_136640', 'sub_136860'] unlace=['sub_136860'] (33%)  missing: j__qfree,sub_136640
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=1      unlace=7      (14%)  IDA=1 unlace=7
+    ✗ ptr-derefs       IDA=1      unlace=6      (17%)  IDA=1 unlace=6
+    ✓ shift-ops        IDA=0      unlace=0      (100%)
+    ✓ bitwise-ops      IDA=0      unlace=0      (100%)
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_1944b0 — 51%
+    ✗ if-branches      IDA=3      unlace=0      (0%)  IDA=3 unlace=0
+    ✓ else-branches    IDA=0      unlace=0      (100%)
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✗ returns          IDA=2      unlace=0      (0%)  IDA=2 unlace=0
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['__cxa_allocate_exception', '__cxa_throw', '_mm_loadl_epi64', '_mm_loadu_si128', '_mm_unpacklo_epi64', 'memcpy', 'qalloc', 'qalloc_or_throw', 'sub_1944B0', 'void'] unlace=['sub_1944b0'] (0%)  missing: __cxa_allocate_exception,__cxa_throw,_mm_loadl_epi64; extra: sub_1944b0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=22     unlace=5      (23%)  IDA=22 unlace=5
+    ✗ ptr-derefs       IDA=22     unlace=4      (18%)  IDA=22 unlace=4
+    ✓ shift-ops        IDA=0      unlace=0      (100%)
+    ✗ bitwise-ops      IDA=9      unlace=0      (0%)  IDA=9 unlace=0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_1a2060 — 53%
+    ✗ if-branches      IDA=66     unlace=19     (29%)  IDA=66 unlace=19
+    ✗ else-branches    IDA=14     unlace=18     (78%)  IDA=14 unlace=18
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=3      unlace=1      (33%)  IDA=3 unlace=1
+    ✓ do-while         IDA=1      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✗ gotos            IDA=22     unlace=0      (0%)  IDA=22 unlace=0
+    ✗ calls            IDA=['BUG', 'LODWORD', '__int64', '__readfsqword', '_mm_load_si128', '_mm_unpacklo_epi64', 'qfree', 'sub_19AAC0', 'sub_19B550', 'sub_1A15A0', 'sub_1A1B40', 'sub_1A1D70', 'sub_1A2060', 'sub_383060', 'sub_F2D80', 'v15', 'void'] unlace=['__builtin_popcount', 'sub_1a2060'] (0%)  missing: BUG,LODWORD,__int64; extra: __builtin_popcount,sub_1a2060
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=92     unlace=78     (85%)  IDA=92 unlace=78
+    ✗ ptr-derefs       IDA=80     unlace=77     (96%)  IDA=80 unlace=77
+    ✓ shift-ops        IDA=0      unlace=0      (100%)
+    ✗ bitwise-ops      IDA=14     unlace=4      (29%)  IDA=14 unlace=4
+    ✗ neg-consts       IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+
+  sub_1e2580 — 19%
+    ✗ if-branches      IDA=59     unlace=0      (0%)  IDA=59 unlace=0
+    ✗ else-branches    IDA=4      unlace=0      (0%)  IDA=4 unlace=0
+    ✓ for-loops        IDA=1      unlace=0      (100%)
+    ✗ while-loops      IDA=7      unlace=1      (14%)  IDA=7 unlace=1
+    ✗ do-while         IDA=5      unlace=0      (0%)  IDA=5 unlace=0
+    ✗ returns          IDA=6      unlace=0      (0%)  IDA=6 unlace=0
+    ✗ gotos            IDA=13     unlace=0      (0%)  IDA=13 unlace=0
+    ✗ calls            IDA=['BYTE1', 'LOBYTE', 'LODWORD', '__readfsqword', '_mm_load_si128', '_mm_loadl_epi64', '_mm_loadu_si128', '_mm_unpacklo_epi64', 'memcpy', 'memmove', 'qfree', 'qvector_reserve', 'strcmp', 'strcpy', 'sub_11CDA0', 'sub_11D5A0', 'sub_122440', 'sub_159B40', 'sub_1DF580', 'sub_1DFF30', 'sub_1E0180', 'sub_1E2580', 'sub_312B80', 'sub_312C40', 'sub_313200', 'sub_3147B0', 'sub_315890', 'sub_3166B0', 'sub_3311F0', 'sub_6B870'] unlace=['__builtin_popcount', 'sub_1e2580'] (0%)  missing: BYTE1,LOBYTE,LODWORD; extra: __builtin_popcount,sub_1e2580
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=142    unlace=11     (8%)  IDA=142 unlace=11
+    ✗ ptr-derefs       IDA=98     unlace=10     (10%)  IDA=98 unlace=10
+    ✗ shift-ops        IDA=1      unlace=4      (25%)  IDA=1 unlace=4
+    ✗ bitwise-ops      IDA=75     unlace=3      (4%)  IDA=75 unlace=3
+    ✓ neg-consts       IDA=1      unlace=0      (100%)
+
+  sub_1ecd00 — 53%
+    ✗ if-branches      IDA=14     unlace=1      (7%)  IDA=14 unlace=1
+    ✓ else-branches    IDA=1      unlace=1      (100%)
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✗ returns          IDA=2      unlace=0      (0%)  IDA=2 unlace=0
+    ✗ gotos            IDA=8      unlace=0      (0%)  IDA=8 unlace=0
+    ✗ calls            IDA=['qfree', 'sub_1ECD00'] unlace=['__builtin_popcount', 'sub_1ecd00'] (0%)  missing: qfree,sub_1ECD00; extra: __builtin_popcount,sub_1ecd00
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=16     unlace=12     (75%)  IDA=16 unlace=12
+    ✗ ptr-derefs       IDA=16     unlace=11     (69%)  IDA=16 unlace=11
+    ✓ shift-ops        IDA=0      unlace=0      (100%)
+    ✗ bitwise-ops      IDA=14     unlace=1      (7%)  IDA=14 unlace=1
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_1f20c0 — 41%
+    ✗ if-branches      IDA=10     unlace=4      (40%)  IDA=10 unlace=4
+    ✗ else-branches    IDA=1      unlace=4      (25%)  IDA=1 unlace=4
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=2      unlace=0      (0%)  IDA=2 unlace=0
+    ✗ do-while         IDA=2      unlace=0      (0%)  IDA=2 unlace=0
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['BUG', 'BYTE4', 'LOBYTE', 'LODWORD', '__readfsqword', '_mm_load_si128', '_mm_loadu_si128', 'qfree', 'qvector_reserve', 'sub_1F20C0', 'sub_383060', 'sub_64000'] unlace=['__builtin_popcount', 'sub_1f20c0'] (0%)  missing: BUG,BYTE4,LOBYTE; extra: __builtin_popcount,sub_1f20c0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=18     unlace=12     (67%)  IDA=18 unlace=12
+    ✗ ptr-derefs       IDA=14     unlace=11     (79%)  IDA=14 unlace=11
+    ✗ shift-ops        IDA=0      unlace=7      (0%)  unlace has 7, IDA has 0
+    ✗ bitwise-ops      IDA=14     unlace=5      (36%)  IDA=14 unlace=5
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_1f72c0 — 58%
+    ✗ if-branches      IDA=30     unlace=5      (17%)  IDA=30 unlace=5
+    ✓ else-branches    IDA=6      unlace=5      (100%)
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=2      unlace=1      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✗ gotos            IDA=16     unlace=0      (0%)  IDA=16 unlace=0
+    ✗ calls            IDA=['BUG', 'interr', 'sub_1F72C0'] unlace=['__builtin_popcount', 'sub_1f72c0'] (0%)  missing: BUG,interr,sub_1F72C0; extra: __builtin_popcount,sub_1f72c0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=68     unlace=37     (54%)  IDA=68 unlace=37
+    ✗ ptr-derefs       IDA=51     unlace=36     (71%)  IDA=51 unlace=36
+    ✗ shift-ops        IDA=0      unlace=11     (0%)  unlace has 11, IDA has 0
+    ✗ bitwise-ops      IDA=82     unlace=17     (21%)  IDA=82 unlace=17
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_225f80 — 58%
+    ✗ if-branches      IDA=18     unlace=5      (28%)  IDA=18 unlace=5
+    ✗ else-branches    IDA=1      unlace=4      (25%)  IDA=1 unlace=4
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=2      unlace=1      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=2      unlace=1      (100%)
+    ✗ gotos            IDA=6      unlace=0      (0%)  IDA=6 unlace=0
+    ✗ calls            IDA=['BUG', 'LOBYTE', '__readfsqword', 'cleanup_argloc', 'qfree', 'sub_1C37C0', 'sub_225530', 'sub_225F80', 'sub_32F770', 'sub_3311F0', 'sub_383060'] unlace=['__builtin_popcount', 'sub_225f80'] (0%)  missing: BUG,LOBYTE,__readfsqword; extra: __builtin_popcount,sub_225f80
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✓ type-casts       IDA=22     unlace=21     (100%)
+    ✗ ptr-derefs       IDA=15     unlace=20     (75%)  IDA=15 unlace=20
+    ✗ shift-ops        IDA=0      unlace=2      (0%)  unlace has 2, IDA has 0
+    ✓ bitwise-ops      IDA=8      unlace=8      (100%)
+    ✓ neg-consts       IDA=1      unlace=0      (100%)
+
+  sub_2418b0 — 37%
+    ✗ if-branches      IDA=3      unlace=5      (60%)  IDA=3 unlace=5
+    ✗ else-branches    IDA=0      unlace=5      (0%)  unlace has 5, IDA has 0
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=0      unlace=2      (0%)  unlace has 2, IDA has 0
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✗ returns          IDA=3      unlace=0      (0%)  IDA=3 unlace=0
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['sub_2418B0'] unlace=['__builtin_popcount', 'sub_2418b0'] (0%)  missing: sub_2418B0; extra: __builtin_popcount,sub_2418b0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=12     unlace=28     (43%)  IDA=12 unlace=28
+    ✗ ptr-derefs       IDA=12     unlace=27     (44%)  IDA=12 unlace=27
+    ✗ shift-ops        IDA=0      unlace=11     (0%)  unlace has 11, IDA has 0
+    ✗ bitwise-ops      IDA=0      unlace=14     (0%)  unlace has 14, IDA has 0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_2436e0 — 40%
+    ✗ if-branches      IDA=35     unlace=0      (0%)  IDA=35 unlace=0
+    ✗ else-branches    IDA=4      unlace=0      (0%)  IDA=4 unlace=0
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✗ returns          IDA=17     unlace=0      (0%)  IDA=17 unlace=0
+    ✗ gotos            IDA=23     unlace=0      (0%)  IDA=23 unlace=0
+    ✗ calls            IDA=['BUG', 'LOBYTE', '__readfsqword', 'clear_tinfo_t', 'compare_tinfo', 'copy_tinfo_t', 'create_tinfo', 'get_tinfo_details', 'get_tinfo_property', 'get_tinfo_size', 'sub_23E280', 'sub_23FA30', 'sub_242920', 'sub_2436E0', 'sub_29D090', 'sub_32C270', 'sub_32C430', 'sub_32C540', 'sub_383060'] unlace=['sub_2436e0'] (0%)  missing: BUG,LOBYTE,__readfsqword; extra: sub_2436e0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=40     unlace=7      (18%)  IDA=40 unlace=7
+    ✗ ptr-derefs       IDA=25     unlace=6      (24%)  IDA=25 unlace=6
+    ✓ shift-ops        IDA=0      unlace=0      (100%)
+    ✗ bitwise-ops      IDA=43     unlace=0      (0%)  IDA=43 unlace=0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_24fab0 — 43%
+    ✗ if-branches      IDA=25     unlace=1      (4%)  IDA=25 unlace=1
+    ✓ else-branches    IDA=2      unlace=1      (100%)
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=2      unlace=0      (0%)  IDA=2 unlace=0
+    ✓ do-while         IDA=1      unlace=0      (100%)
+    ✗ returns          IDA=4      unlace=1      (25%)  IDA=4 unlace=1
+    ✗ gotos            IDA=8      unlace=0      (0%)  IDA=8 unlace=0
+    ✗ calls            IDA=['BUG', 'LODWORD', '__readfsqword', 'clear_tinfo_t', 'j__qfree', 'sub_23E3A0', 'sub_2413C0', 'sub_246080', 'sub_24EE70', 'sub_24FAB0', 'sub_255630', 'sub_383060'] unlace=['__builtin_popcount', 'sub_24fab0'] (0%)  missing: BUG,LODWORD,__readfsqword; extra: __builtin_popcount,sub_24fab0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=48     unlace=13     (27%)  IDA=48 unlace=13
+    ✗ ptr-derefs       IDA=42     unlace=12     (29%)  IDA=42 unlace=12
+    ✓ shift-ops        IDA=0      unlace=0      (100%)
+    ✓ bitwise-ops      IDA=4      unlace=2      (100%)
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_2a8a20 — 36%
+    ✗ if-branches      IDA=0      unlace=2      (0%)  unlace has 2, IDA has 0
+    ✗ else-branches    IDA=0      unlace=2      (0%)  unlace has 2, IDA has 0
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['__readfsqword', 'copy_tinfo_t', 'sub_29EC30', 'sub_29F770', 'sub_2A0060', 'sub_2A8310', 'sub_2A8A20'] unlace=['__builtin_popcount', 'sub_2a8a20'] (0%)  missing: __readfsqword,copy_tinfo_t,sub_29EC30; extra: __builtin_popcount,sub_2a8a20
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=9      unlace=23     (39%)  IDA=9 unlace=23
+    ✗ ptr-derefs       IDA=0      unlace=22     (0%)  unlace has 22, IDA has 0
+    ✗ shift-ops        IDA=0      unlace=13     (0%)  unlace has 13, IDA has 0
+    ✗ bitwise-ops      IDA=1      unlace=9      (11%)  IDA=1 unlace=9
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_2ad4c0 — 42%
+    ✗ if-branches      IDA=9      unlace=1      (11%)  IDA=9 unlace=1
+    ✗ else-branches    IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=1      unlace=1      (100%)
+    ✓ do-while         IDA=1      unlace=0      (100%)
+    ✗ returns          IDA=5      unlace=1      (20%)  IDA=5 unlace=1
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['BUG', 'HIWORD', 'sub_2AD4C0', 'sub_383060'] unlace=['__builtin_popcount', 'sub_2ad4c0'] (0%)  missing: BUG,HIWORD,sub_2AD4C0; extra: __builtin_popcount,sub_2ad4c0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=3      unlace=13     (23%)  IDA=3 unlace=13
+    ✗ ptr-derefs       IDA=2      unlace=12     (17%)  IDA=2 unlace=12
+    ✗ shift-ops        IDA=0      unlace=4      (0%)  unlace has 4, IDA has 0
+    ✗ bitwise-ops      IDA=0      unlace=10     (0%)  unlace has 10, IDA has 0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_2b0490 — 48%
+    ✓ if-branches      IDA=7      unlace=8      (100%)
+    ✗ else-branches    IDA=1      unlace=8      (12%)  IDA=1 unlace=8
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=0      unlace=3      (0%)  unlace has 3, IDA has 0
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✗ gotos            IDA=5      unlace=0      (0%)  IDA=5 unlace=0
+    ✗ calls            IDA=['__int8', 'sub_257C40', 'sub_2ADE40', 'sub_2B0490', 'switch_dbctx', 'v7', 'v9'] unlace=['__builtin_popcount', 'sub_2b0490'] (0%)  missing: __int8,sub_257C40,sub_2ADE40; extra: __builtin_popcount,sub_2b0490
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=27     unlace=35     (77%)  IDA=27 unlace=35
+    ✗ ptr-derefs       IDA=13     unlace=34     (38%)  IDA=13 unlace=34
+    ✗ shift-ops        IDA=0      unlace=22     (0%)  unlace has 22, IDA has 0
+    ✗ bitwise-ops      IDA=0      unlace=26     (0%)  unlace has 26, IDA has 0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_311f90 — 57%
+    ✗ if-branches      IDA=3      unlace=0      (0%)  IDA=3 unlace=0
+    ✓ else-branches    IDA=0      unlace=0      (100%)
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['__readfsqword', 'check_process_exit', 'qpipe_close', 'sub_311F90'] unlace=['sub_311f90'] (0%)  missing: __readfsqword,check_process_exit,qpipe_close; extra: sub_311f90
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=6      unlace=3      (50%)  IDA=6 unlace=3
+    ✗ ptr-derefs       IDA=6      unlace=2      (33%)  IDA=6 unlace=2
+    ✗ shift-ops        IDA=0      unlace=2      (0%)  unlace has 2, IDA has 0
+    ✗ bitwise-ops      IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_312a40 — 68%
+    ✓ if-branches      IDA=1      unlace=0      (100%)
+    ✓ else-branches    IDA=0      unlace=0      (100%)
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✗ returns          IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['BUG', 'sub_312A40', 'sub_383060'] unlace=['__builtin_popcount', 'sub_312a40'] (0%)  missing: BUG,sub_312A40,sub_383060; extra: __builtin_popcount,sub_312a40
+    ✓ has-params       IDA=False  unlace=False  (100%)
+    ✗ type-casts       IDA=0      unlace=3      (0%)  unlace has 3, IDA has 0
+    ✗ ptr-derefs       IDA=0      unlace=2      (0%)  unlace has 2, IDA has 0
+    ✓ shift-ops        IDA=0      unlace=0      (100%)
+    ✗ bitwise-ops      IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_312a60 — 66%
+    ✗ if-branches      IDA=5      unlace=0      (0%)  IDA=5 unlace=0
+    ✓ else-branches    IDA=0      unlace=0      (100%)
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['BUG', 'sub_312A60', 'sub_383060'] unlace=['__builtin_popcount', 'sub_312a60'] (0%)  missing: BUG,sub_312A60,sub_383060; extra: __builtin_popcount,sub_312a60
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✓ type-casts       IDA=1      unlace=3      (100%)
+    ✓ ptr-derefs       IDA=1      unlace=2      (100%)
+    ✗ shift-ops        IDA=2      unlace=0      (0%)  IDA=2 unlace=0
+    ✓ bitwise-ops      IDA=3      unlace=1      (100%)
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_329c10 — 60%
+    ✓ if-branches      IDA=1      unlace=1      (100%)
+    ✗ else-branches    IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['sub_329C10'] unlace=['__builtin_popcount', 'sub_329c10'] (0%)  missing: sub_329C10; extra: __builtin_popcount,sub_329c10
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=0      unlace=7      (0%)  unlace has 7, IDA has 0
+    ✗ ptr-derefs       IDA=3      unlace=6      (50%)  IDA=3 unlace=6
+    ✗ shift-ops        IDA=6      unlace=0      (0%)  IDA=6 unlace=0
+    ✗ bitwise-ops      IDA=7      unlace=1      (14%)  IDA=7 unlace=1
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_32d810 — 55%
+    ✗ if-branches      IDA=3      unlace=0      (0%)  IDA=3 unlace=0
+    ✓ else-branches    IDA=0      unlace=0      (100%)
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=0      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['__readfsqword', 'clear_tinfo_t', 'find_tinfo_udt_member', 'qfree', 'sub_32D810'] unlace=['__builtin_popcount', 'sub_32d810'] (0%)  missing: __readfsqword,clear_tinfo_t,find_tinfo_udt_member; extra: __builtin_popcount,sub_32d810
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✓ type-casts       IDA=3      unlace=5      (100%)
+    ✓ ptr-derefs       IDA=3      unlace=4      (100%)
+    ✗ shift-ops        IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ bitwise-ops      IDA=4      unlace=3      (100%)
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_32f0d0 — 56%
+    ✓ if-branches      IDA=0      unlace=0      (100%)
+    ✓ else-branches    IDA=0      unlace=0      (100%)
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=0      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['copy_tinfo_t', 'sub_11CDA0', 'sub_32F0D0'] unlace=['__builtin_popcount', 'sub_32f0d0'] (0%)  missing: copy_tinfo_t,sub_11CDA0,sub_32F0D0; extra: __builtin_popcount,sub_32f0d0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=3      unlace=11     (27%)  IDA=3 unlace=11
+    ✗ ptr-derefs       IDA=3      unlace=10     (30%)  IDA=3 unlace=10
+    ✗ shift-ops        IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✗ bitwise-ops      IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_33f1a0 — 52%
+    ✗ if-branches      IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✗ else-branches    IDA=0      unlace=1      (0%)  unlace has 1, IDA has 0
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['qstrncpy', 'sub_33F1A0'] unlace=['__builtin_popcount', 'sub_33f1a0'] (0%)  missing: qstrncpy,sub_33F1A0; extra: __builtin_popcount,sub_33f1a0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=3      unlace=9      (33%)  IDA=3 unlace=9
+    ✗ ptr-derefs       IDA=3      unlace=8      (38%)  IDA=3 unlace=8
+    ✓ shift-ops        IDA=0      unlace=0      (100%)
+    ✗ bitwise-ops      IDA=0      unlace=3      (0%)  unlace has 3, IDA has 0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_7b710 — 38%
+    ✗ if-branches      IDA=20     unlace=0      (0%)  IDA=20 unlace=0
+    ✗ else-branches    IDA=2      unlace=0      (0%)  IDA=2 unlace=0
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✗ returns          IDA=3      unlace=1      (33%)  IDA=3 unlace=1
+    ✗ gotos            IDA=12     unlace=0      (0%)  IDA=12 unlace=0
+    ✗ calls            IDA=['qfree', 'sub_7B5E0', 'sub_7B710'] unlace=['sub_7b710'] (0%)  missing: qfree,sub_7B5E0,sub_7B710; extra: sub_7b710
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=32     unlace=3      (9%)  IDA=32 unlace=3
+    ✗ ptr-derefs       IDA=32     unlace=2      (6%)  IDA=32 unlace=2
+    ✗ shift-ops        IDA=0      unlace=2      (0%)  unlace has 2, IDA has 0
+    ✗ bitwise-ops      IDA=16     unlace=2      (12%)  IDA=16 unlace=2
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_8b490 — 44%
+    ✗ if-branches      IDA=5      unlace=18     (28%)  IDA=5 unlace=18
+    ✗ else-branches    IDA=2      unlace=16     (12%)  IDA=2 unlace=16
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=0      unlace=3      (0%)  unlace has 3, IDA has 0
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['__cxa_allocate_exception', '__cxa_throw', '_mm_loadl_epi64', '_mm_loadu_si128', '_mm_unpacklo_epi64', 'qalloc', 'sub_312C40', 'sub_8B1C0', 'sub_8B490', 'void'] unlace=['__builtin_popcount', 'sub_8b490'] (0%)  missing: __cxa_allocate_exception,__cxa_throw,_mm_loadl_epi64; extra: __builtin_popcount,sub_8b490
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=19     unlace=95     (20%)  IDA=19 unlace=95
+    ✗ ptr-derefs       IDA=19     unlace=94     (20%)  IDA=19 unlace=94
+    ✗ shift-ops        IDA=0      unlace=22     (0%)  unlace has 22, IDA has 0
+    ✓ bitwise-ops      IDA=16     unlace=18     (100%)
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_b7be0 — 47%
+    ✗ if-branches      IDA=7      unlace=2      (29%)  IDA=7 unlace=2
+    ✗ else-branches    IDA=0      unlace=2      (0%)  unlace has 2, IDA has 0
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=1      unlace=0      (100%)
+    ✓ do-while         IDA=1      unlace=0      (100%)
+    ✗ returns          IDA=4      unlace=1      (25%)  IDA=4 unlace=1
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['JUMPOUT', 'sub_1255D0', 'sub_383060', 'sub_B7BE0'] unlace=['__builtin_popcount', 'sub_b7be0'] (0%)  missing: JUMPOUT,sub_1255D0,sub_383060; extra: __builtin_popcount,sub_b7be0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=14     unlace=27     (52%)  IDA=14 unlace=27
+    ✗ ptr-derefs       IDA=12     unlace=26     (46%)  IDA=12 unlace=26
+    ✗ shift-ops        IDA=0      unlace=3      (0%)  unlace has 3, IDA has 0
+    ✗ bitwise-ops      IDA=0      unlace=4      (0%)  unlace has 4, IDA has 0
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_d1010 — 44%
+    ✗ if-branches      IDA=3      unlace=21     (14%)  IDA=3 unlace=21
+    ✗ else-branches    IDA=1      unlace=18     (6%)  IDA=1 unlace=18
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✗ while-loops      IDA=0      unlace=2      (0%)  unlace has 2, IDA has 0
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=0      unlace=0      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['__int64', 'get_custom_callcnv', 'sub_CFF70', 'sub_D0DA0', 'sub_D0F50', 'sub_D1010', 'void'] unlace=['__builtin_popcount', 'sub_d1010'] (0%)  missing: __int64,get_custom_callcnv,sub_CFF70; extra: __builtin_popcount,sub_d1010
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=6      unlace=80     (8%)  IDA=6 unlace=80
+    ✗ ptr-derefs       IDA=3      unlace=79     (4%)  IDA=3 unlace=79
+    ✓ shift-ops        IDA=0      unlace=0      (100%)
+    ✓ bitwise-ops      IDA=1      unlace=0      (100%)
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_db200 — 51%
+    ✗ if-branches      IDA=2      unlace=8      (25%)  IDA=2 unlace=8
+    ✗ else-branches    IDA=1      unlace=8      (12%)  IDA=1 unlace=8
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=0      unlace=0      (100%)
+    ✓ do-while         IDA=0      unlace=0      (100%)
+    ✓ returns          IDA=2      unlace=1      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['__int64', '__readfsqword', 'qfree', 'sub_6F590', 'sub_DB040', 'sub_DB200'] unlace=['__builtin_popcount', 'sub_db200'] (0%)  missing: __int64,__readfsqword,qfree; extra: __builtin_popcount,sub_db200
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✗ type-casts       IDA=3      unlace=34     (9%)  IDA=3 unlace=34
+    ✗ ptr-derefs       IDA=1      unlace=33     (3%)  IDA=1 unlace=33
+    ✗ shift-ops        IDA=0      unlace=9      (0%)  unlace has 9, IDA has 0
+    ✗ bitwise-ops      IDA=2      unlace=7      (29%)  IDA=2 unlace=7
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+  sub_e59f0 — 62%
+    ✗ if-branches      IDA=7      unlace=2      (29%)  IDA=7 unlace=2
+    ✗ else-branches    IDA=0      unlace=2      (0%)  unlace has 2, IDA has 0
+    ✓ for-loops        IDA=0      unlace=0      (100%)
+    ✓ while-loops      IDA=1      unlace=0      (100%)
+    ✓ do-while         IDA=1      unlace=0      (100%)
+    ✓ returns          IDA=1      unlace=1      (100%)
+    ✓ gotos            IDA=0      unlace=0      (100%)
+    ✗ calls            IDA=['HIDWORD', 'LOBYTE', 'LODWORD', '__readfsqword', 'calc_retloc', 'cleanup_argloc', 'clear_tinfo_t', 'copy_tinfo_t', 'qfree', 'sub_E59F0'] unlace=['__builtin_popcount', 'sub_e59f0'] (0%)  missing: HIDWORD,LOBYTE,LODWORD; extra: __builtin_popcount,sub_e59f0
+    ✗ has-params       IDA=True   unlace=False  (0%)  IDA=True unlace=False
+    ✓ type-casts       IDA=8      unlace=8      (100%)
+    ✓ ptr-derefs       IDA=5      unlace=7      (100%)
+    ✗ shift-ops        IDA=0      unlace=6      (0%)  unlace has 6, IDA has 0
+    ✓ bitwise-ops      IDA=8      unlace=6      (100%)
+    ✓ neg-consts       IDA=0      unlace=0      (100%)
+
+
+Analysis:
+  Overall parity: 49.4% (target: 85%)
+
+  Key gaps identified:
+  1. Function discovery: unlace's prologue scanner only finds 28/8398 IDA functions
+     (0.3% coverage). Most functions don't start with endbr64/push rbp/sub rsp.
+  2. Parameter detection: unlace marks all functions as (void) — 0% param parity
+  3. Control flow: if-branch counts diverge significantly (IDA often 5-60x more)
+  4. Function calls: unlace doesn't resolve cross-references to named functions
+  5. goto elimination: IDA uses goto for complex control flow; unlace doesn't emit goto
+
+  Strongest areas:
+  - Loop detection (for/while/do-while): generally close
+  - Return count: often matches
+  - Negative constants: good parity
+  - Type casts/pointer derefs: partial match for simpler functions
+
+Test verification:
+  test_parity_script_runs: PASS (script executes, produces report)
+  test_parity_above_threshold: FAIL (49.4% < 80% threshold)
+    Note: 80% target is aspirational — unlace is early-stage

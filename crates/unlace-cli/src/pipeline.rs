@@ -10,7 +10,7 @@ use unlace_loader::{BinaryImage, DwarfInfo, SymbolKind};
 use unlace_passes::{
     CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
     CopyPropagationPass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
-    DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, IdiomRecognitionPass,
+    DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
     ModuloIdiomPass, ParamInferPass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
     VariableMergePass, Pass, run_to_fixedpoint,
 };
@@ -556,9 +556,10 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     let dce = DeadCodeElimPass;
     let sccp = SccpPass;
     let cse = CsePass;
+    let gvn = GvnPass;
     let idiom = IdiomRecognitionPass;
     let cond = ConditionSimplifyPass;
-    let passes: &[&dyn Pass] = &[&fold, &prop, &gprop, &dce, &sccp, &cse, &idiom, &cond];
+    let passes: &[&dyn Pass] = &[&fold, &prop, &gprop, &dce, &sccp, &cse, &gvn, &idiom, &cond];
 
     let changes = run_to_fixedpoint(passes, ssa)
         .context("pass pipeline failed")?;

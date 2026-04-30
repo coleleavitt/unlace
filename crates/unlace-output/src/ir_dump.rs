@@ -269,6 +269,7 @@ mod tests {
             enum_discriminants: Vec::new(),
             panic_sites: BTreeMap::new(),
             vtable_calls: BTreeMap::new(),
+            cpp_vtable_calls: BTreeMap::new(),
             inferred_params: Vec::new(),
             inferred_return_type: unlace_ir::ssa::PrimitiveType::Unknown,
             frame_setup_insns: BTreeSet::new(),
@@ -276,6 +277,7 @@ mod tests {
             inferred_structs: BTreeMap::new(),
             composite_var_types: BTreeMap::new(),
             array_strides: BTreeMap::new(),
+            cpp_vtable_calls: BTreeMap::new(),
         }
     }
 

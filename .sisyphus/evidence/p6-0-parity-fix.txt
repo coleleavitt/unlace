@@ -1,0 +1,109 @@
+P6-0: Macro-as-call extraction fix in scripts/measure_parity.py
+================================================================
+
+OBJECTIVE
+---------
+Exclude IDA-style byte/word/dword extraction macros, overflow/carry macros,
+compiler builtins, _mm_* SIMD intrinsics, and C type-cast keywords from the
+"calls" feature extracted by measure_parity.py. These were being counted as
+function calls, polluting the Jaccard similarity score on the calls feature
+(weight 3.0).
+
+CHANGE
+------
+File: scripts/measure_parity.py (lines 70-95)
+- BEFORE: keywords = {'if', 'for', 'while', 'switch', 'return', 'sizeof', 'typeof'}
+          (7 entries)
+- AFTER:  keywords set expanded to 63 entries covering:
+          * 7 C keywords with parens
+          * 26 IDA byte/word/dword extraction macros (LOBYTE, BYTE0-7, LOWORD,
+            HIWORD, WORD0-3, LODWORD, HIDWORD, DWORD0-1, signed variants)
+          * 10 IDA overflow/carry macros (__OFADD__, __OFSUB__, __SETP__,
+            __SETO__, __SETS__, __SETZ__, __CFADD__, __CFSUB__, __SCFADD__,
+            __SCFSUB__)
+          * 10 compiler builtins (__builtin_*, __readfsqword, __readfsdword,
+            __readgsqword, __rdtsc)
+          * 4 C type-cast tokens (unsigned, signed, const, volatile)
+- Plus prefix-based exclusions for _mm_*, _mm256_*, __builtin_* identifiers
+
+EVIDENCE: BEFORE-FIX BASELINE
+-----------------------------
+Command: python3 scripts/measure_parity.py 2>/dev/null | grep "Overall Parity"
+Result:  Overall Parity: 53.1%
+Functions scored: 28
+
+Sample of polluted calls feature (sub_12cba0):
+  IDA=['sub_11B9A0', 'sub_12C760', 'sub_12CBA0']
+  unlace=['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD',
+          'LOWORD', '__OFADD__', '__OFSUB__', 'sub_12cba0']
+  Jaccard: 0%
+
+Sample of polluted calls feature (sub_1944b0):
+  IDA=['__cxa_allocate_exception', '__cxa_throw', '_mm_loadl_epi64',
+       '_mm_loadu_si128', '_mm_unpacklo_epi64', 'memcpy', 'qalloc',
+       'qalloc_or_throw', 'sub_1944B0', 'void']
+  unlace=['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE',
+          'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_1944b0']
+  Jaccard: 0%
+
+Across all 28 functions: 28/28 had IDA-macro pollution in unlace's calls list
+(BYTE/WORD/DWORD/_OF*_ etc. counted as function calls).
+
+EVIDENCE: AFTER-FIX RESULT
+--------------------------
+Command: python3 scripts/measure_parity.py 2>/dev/null | grep "Overall Parity"
+Result:  Overall Parity: 53.0%
+Functions scored: 28
+
+Same sample (sub_12cba0) AFTER fix:
+  IDA=['sub_11B9A0', 'sub_12C760', 'sub_12CBA0']
+  unlace=['sub_12cba0']
+  Jaccard: 0% (case mismatch — separate issue)
+
+Same sample (sub_1944b0) AFTER fix:
+  IDA=['__cxa_allocate_exception', '__cxa_throw', 'memcpy', 'qalloc',
+       'qalloc_or_throw', 'sub_1944B0', 'void']
+  unlace=['sub_1944b0']
+  Jaccard: 0% (case mismatch — separate issue)
+
+Across all 28 functions: 0/28 contain IDA-macro pollution. The macro
+filtering is now mechanically correct — IDA macros, _mm_* intrinsics, and
+__builtin_* are correctly excluded from the calls feature on BOTH sides.
+
+PER-FUNCTION DELTAS
+-------------------
+Improved:   2 functions (best: sub_136860 +3%)
+Worsened:   7 functions (worst: sub_e59f0 -2%)
+Unchanged: 19 functions
+Sum of changes: -4 percentage points (across 28 functions)
+Average change: -0.14% per function (within rounding noise)
+
+WHY THE OVERALL PARITY DIDN'T JUMP +10-15%
+------------------------------------------
+The task hypothesis was that the macros only appeared on unlace's side and
+their removal would directly improve Jaccard scores. Empirical investigation
+shows the IDA reference decompilations ALSO contain these same macros (e.g.
+IDA's call list for sub_1e2580 originally included 'BYTE1', 'LOBYTE',
+'LODWORD'). Removing them from BOTH sides shrinks both the intersection and
+the union proportionally, leaving the Jaccard ratio largely unchanged.
+
+The dominant remaining source of Jaccard mismatch on calls is case
+sensitivity: IDA emits `sub_1944B0` (uppercase hex) while unlace emits
+`sub_1944b0` (lowercase hex). Per the task spec, fixing this is OUT OF SCOPE
+for P6-0 ("Do NOT modify the feature extraction logic beyond the calls
+exclusion"). Suggested follow-up task: add `.lower()` normalization in
+score_call_overlap when comparing sub_<hex> identifiers.
+
+CORRECTNESS VALIDATION
+----------------------
+- Keyword set count: 63 entries (>= 50 required)
+- Wildcard exclusions present: _mm_*, _mm256_*, __builtin_*
+- Macro pollution: 28/28 → 0/28 functions affected
+- No other extraction logic modified
+- No Rust source code modified
+- Parity formula weights unchanged (verified diff)
+- All 28 functions still scored (none broken)
+
+The fix correctly implements the specified macro-exclusion logic. The
+expected parity jump did not materialize because of the case-sensitivity
+issue noted above, which is documented for follow-up work.

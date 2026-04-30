@@ -200,3 +200,26 @@ self-contained, so `unsafe impl Send/Sync` is safe for the lifter struct.
 - Mach-O 64-bit: mach_header_64 (32 bytes) + LC_SEGMENT_64 (72 bytes) + section_64 (80 bytes) + LC_SYMTAB (24 bytes) + section data.
 - Mach-O 32-bit: mach_header (28 bytes) + LC_SEGMENT (56 bytes) + section (68 bytes) + LC_SYMTAB (24 bytes) + section data.
 - Fat binary: fat_header (8 bytes, big-endian) + fat_arch entries (20 bytes each, big-endian) + page-aligned embedded Mach-O slices.
+
+## Task 40: Stack Variable Recovery
+
+### Pattern Detection
+- The x86 lifter emits raw RSP arithmetic (`INT_SUB rsp, 8` + `STORE [ram, addr, val]`),
+  not `SpaceId::Stack` varnodes. The stack variable recovery pass traces address operands
+  back through `INT_ADD`/`INT_SUB`/`COPY` chains to determine the RSP-relative offset.
+- Three address patterns handled: (1) `SpaceId::Stack` varnodes already present,
+  (2) direct RSP/RBP register used as address (offset 0), (3) unique/register defined
+  by `INT_ADD(rsp, const)` / `INT_SUB(rsp, const)` with recursive chain resolution.
+
+### Implementation Notes
+- `StackVar` struct added to `unlace-ir/src/ssa.rs`: `{ offset: i64, name: String, ty: PrimitiveType, accesses: Vec<SsaVarnode> }`.
+- `SsaFunction::stack_vars: BTreeMap<i64, StackVar>` keyed by RSP-relative signed offset.
+- `StackVarRecoveryPass` in `unlace-passes/src/stack_vars.rs`.
+- Names follow `local_<abs_offset_hex>` pattern (e.g. `local_8`, `local_18`).
+- Type inference reuses `var_types` from the `TypeInferPass` — the stack var type is the
+  lattice join of all accessing varnodes' types, falling back to `Int(access_size)`.
+- `find_rsp_relative_offset()` recursively traces through `INT_ADD`/`INT_SUB`/`COPY` chains
+  to handle patterns like `u0 = INT_SUB rsp, 32; u1 = INT_ADD u0, 8` → offset -24.
+- RSP offset = 32, RBP offset = 40 (matching `calling_convention.rs` constants).
+- Adding `stack_vars` field required updating struct-literal sites in `dce.rs`, `ir_dump.rs`,
+  and `build_ssa()` in `ssa.rs`.

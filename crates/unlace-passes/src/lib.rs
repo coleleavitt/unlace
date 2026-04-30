@@ -5,6 +5,7 @@ pub mod calling_convention;
 pub mod const_fold;
 pub mod copy_prop;
 pub mod dce;
+pub mod stack_vars;
 pub mod type_infer;
 
 pub use pass::{Pass, PassError, run_to_fixedpoint};
@@ -12,6 +13,7 @@ pub use calling_convention::CallingConventionDetectPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;
 pub use dce::DeadCodeElimPass;
+pub use stack_vars::StackVarRecoveryPass;
 
 #[cfg(test)]
 mod tests {

@@ -5,6 +5,7 @@
 //! starting with [`ElfLoader`].
 
 pub mod dwarf;
+pub mod eh_frame;
 pub mod elf;
 pub mod error;
 pub mod image;
@@ -15,6 +16,7 @@ pub use dwarf::{
     import_dwarf, DwarfInfo, EnumType, FunctionDebugInfo, ParameterInfo, SourceLocation,
     StructField, StructType, UnionType,
 };
+pub use eh_frame::{parse_eh_frame, EhFrameInfo, FunctionExtent, LsdaEntry};
 pub use elf::ElfLoader;
 pub use error::LoadError;
 pub use pe::PeLoader;

@@ -416,7 +416,7 @@ Max Concurrent: 5 (Wave 4)
 
 > Per Metis: Wave 1 features (CSE, expression trees, ternary, idiom recognition, tail call, noreturn) ALREADY EXIST. This wave EXTENDS/FIXES, never CREATES. The medium.c goto regression (12→30) is the headline target.
 
-- [ ] P10-4. node_split heuristic retune to fix medium.c goto regression
+- [x] P10-4. node_split heuristic retune to fix medium.c goto regression
 
   **What to do**:
   - Read `crates/unlace-struct/src/node_split.rs::pick_split_target`. Current heuristic: pick entry with most external preds, BlockId tiebreak.

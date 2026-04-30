@@ -866,5 +866,96 @@ mod tests {
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
     }
+
+    use crate::ops::bitwise::bit_tag;
+
+    #[test]
+    fn test_bt_reg_reg() {
+        // 0F A3 D8 = bt eax, ebx
+        let result = lifter()
+            .lift_insn(&[0x0F, 0xA3, 0xD8], 0x1000)
+            .expect("should decode bt eax, ebx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRight));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
+        let cf = unlace_ir::Varnode::reg(256, 1);
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::Copy && i.output == Some(cf)),
+            "BT should write CF"
+        );
+    }
+
+    #[test]
+    fn test_bsf_reg_reg() {
+        // 0F BC C3 = bsf eax, ebx
+        let result = lifter()
+            .lift_insn(&[0x0F, 0xBC, 0xC3], 0x1000)
+            .expect("should decode bsf eax, ebx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::BSF, 8));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntEqual));
+    }
+
+    #[test]
+    fn test_bsr_reg_reg() {
+        // 0F BD C3 = bsr eax, ebx
+        let result = lifter()
+            .lift_insn(&[0x0F, 0xBD, 0xC3], 0x1000)
+            .expect("should decode bsr eax, ebx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::BSR, 8));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntEqual));
+    }
+
+    #[test]
+    fn test_tzcnt_reg_reg() {
+        // F3 0F BC C3 = tzcnt eax, ebx
+        let result = lifter()
+            .lift_insn(&[0xF3, 0x0F, 0xBC, 0xC3], 0x1000)
+            .expect("should decode tzcnt eax, ebx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::TZCNT, 8));
+        let eq_count = result.ir_ops.iter().filter(|i| i.op == IrOp::IntEqual).count();
+        assert!(eq_count >= 2, "TZCNT should set both ZF and CF via IntEqual");
+    }
+
+    #[test]
+    fn test_lzcnt_reg_reg() {
+        // F3 0F BD C3 = lzcnt eax, ebx
+        let result = lifter()
+            .lift_insn(&[0xF3, 0x0F, 0xBD, 0xC3], 0x1000)
+            .expect("should decode lzcnt eax, ebx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Lzcount));
+        let eq_count = result.ir_ops.iter().filter(|i| i.op == IrOp::IntEqual).count();
+        assert!(eq_count >= 2, "LZCNT should set both ZF and CF via IntEqual");
+    }
+
+    #[test]
+    fn test_popcnt_reg_reg() {
+        // F3 0F B8 C3 = popcnt eax, ebx
+        let result = lifter()
+            .lift_insn(&[0xF3, 0x0F, 0xB8, 0xC3], 0x1000)
+            .expect("should decode popcnt eax, ebx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Popcount));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntEqual));
+    }
+
+    #[test]
+    fn test_ud2_emits_trap() {
+        // 0F 0B = ud2
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x0B], 0x1000)
+            .expect("should decode ud2");
+        assert_eq!(result.len, 2);
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::TRAP, 8));
+        assert!(co.output.is_none(), "UD2 should have no output");
+    }
 }
 

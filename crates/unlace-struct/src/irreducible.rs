@@ -49,19 +49,25 @@ pub struct IrreducibleRegion {
 /// Returns regions in topological order of the SCC condensation. The list is
 /// empty for reducible CFGs (the common case for compiled C/C++).
 pub fn detect_irreducible_regions(func: &SsaFunction) -> Vec<IrreducibleRegion> {
-    let synthetic: BTreeSet<BlockId> = [func.cfg.exit_block(), func.cfg.unknown_block()]
+    detect_irreducible_regions_in_cfg(&func.cfg)
+}
+
+/// CFG-only variant of [`detect_irreducible_regions`].
+///
+/// Used by pre-SSA passes like [`crate::node_split`] that operate on the raw
+/// [`unlace_ir::Function`] before SSA construction.
+pub fn detect_irreducible_regions_in_cfg(cfg: &ControlFlowGraph) -> Vec<IrreducibleRegion> {
+    let synthetic: BTreeSet<BlockId> = [cfg.exit_block(), cfg.unknown_block()]
         .into_iter()
         .collect();
 
-    let sccs = tarjan_scc(&func.cfg, &synthetic);
+    let sccs = tarjan_scc(cfg, &synthetic);
     let mut regions = Vec::new();
 
     for scc in sccs {
-        // Singleton SCC without self-loop is not a loop at all.
         if scc.len() == 1 {
             let only = *scc.iter().next().expect("singleton SCC has one block");
-            let has_self_loop = func
-                .cfg
+            let has_self_loop = cfg
                 .edges_from(only)
                 .into_iter()
                 .any(|(succ, _)| succ == only);
@@ -70,7 +76,7 @@ pub fn detect_irreducible_regions(func: &SsaFunction) -> Vec<IrreducibleRegion> 
             }
         }
 
-        let entry_blocks = collect_entry_blocks(&scc, &func.cfg, &synthetic);
+        let entry_blocks = collect_entry_blocks(&scc, cfg, &synthetic);
 
         // A natural loop has exactly one entry. > 1 entry → irreducible.
         if entry_blocks.len() > 1 {

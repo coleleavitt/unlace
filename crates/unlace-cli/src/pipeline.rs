@@ -744,6 +744,15 @@ pub fn decompile_function_with_symbols(
         );
     }
 
+    let splits = unlace_struct::split_irreducible_entries(&mut ir_func);
+    if splits > 0 {
+        tracing::debug!(
+            func = %entry.name,
+            splits,
+            "node-split broke irreducible regions pre-SSA"
+        );
+    }
+
     check_timeout(deadline, &entry.name)?;
 
     let mut ssa = unlace_ir::ssa::build_ssa(ir_func);

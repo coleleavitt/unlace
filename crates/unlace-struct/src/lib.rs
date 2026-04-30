@@ -6,6 +6,7 @@ pub mod eager_returns;
 pub mod hir;
 pub mod if_to_switch;
 pub mod irreducible;
+pub mod node_split;
 pub mod short_circuit;
 pub mod structurer;
 pub mod switch_recovery;
@@ -17,6 +18,7 @@ pub use eager_returns::eager_returns;
 pub use hir::{HirFunction, HirNode, LabelId, SwitchCase};
 pub use if_to_switch::if_chain_to_switch;
 pub use irreducible::{detect_irreducible_regions, IrreducibleRegion};
+pub use node_split::split_irreducible_entries;
 pub use short_circuit::short_circuit_recovery;
 pub use structurer::{
     recover_for_loops, structure, structure_preserve_returns,

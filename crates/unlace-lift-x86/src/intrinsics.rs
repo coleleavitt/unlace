@@ -30,6 +30,8 @@ pub enum IntrinsicCategory {
     AvxArith,
     /// AVX aligned/unaligned moves: VMOVDQA, VMOVDQU.
     AvxMove,
+    /// x87 FPU instructions: FLD, FSTP, FADD, FMUL, etc.
+    X87Fpu,
     /// Anything that doesn't fit the above.
     Other,
 }
@@ -237,6 +239,29 @@ impl Default for IntrinsicRegistry {
             ("VMULPD",   info("_mm256_mul_pd",       2, 32, AvxArith)),
             ("VSQRTPS",  info("_mm256_sqrt_ps",      1, 32, AvxArith)),
             ("VSQRTPD",  info("_mm256_sqrt_pd",      1, 32, AvxArith)),
+            // ── x87 FPU stack ───────────────────────────────────────
+            ("FLD",      info("__fld",    1, 10, X87Fpu)),
+            ("FST",      info("__fst",    2, 0,  X87Fpu)),
+            ("FSTP",     info("__fstp",   2, 0,  X87Fpu)),
+            ("FADD",     info("__fadd",   2, 10, X87Fpu)),
+            ("FADDP",    info("__faddp",  2, 10, X87Fpu)),
+            ("FSUB",     info("__fsub",   2, 10, X87Fpu)),
+            ("FSUBP",    info("__fsubp",  2, 10, X87Fpu)),
+            ("FSUBR",    info("__fsubr",  2, 10, X87Fpu)),
+            ("FSUBRP",   info("__fsubrp", 2, 10, X87Fpu)),
+            ("FMUL",     info("__fmul",   2, 10, X87Fpu)),
+            ("FMULP",    info("__fmulp",  2, 10, X87Fpu)),
+            ("FDIV",     info("__fdiv",   2, 10, X87Fpu)),
+            ("FDIVP",    info("__fdivp",  2, 10, X87Fpu)),
+            ("FDIVR",    info("__fdivr",  2, 10, X87Fpu)),
+            ("FDIVRP",   info("__fdivrp", 2, 10, X87Fpu)),
+            ("FCOM",     info("__fcom",   2, 0,  X87Fpu)),
+            ("FCOMP",    info("__fcomp",  2, 0,  X87Fpu)),
+            ("FCOMPP",   info("__fcompp", 2, 0,  X87Fpu)),
+            ("FUCOM",    info("__fucom",  2, 0,  X87Fpu)),
+            ("FUCOMP",   info("__fucomp", 2, 0,  X87Fpu)),
+            ("FUCOMPP",  info("__fucompp",2, 0,  X87Fpu)),
+            ("FXCH",     info("__fxch",   2, 0,  X87Fpu)),
         ];
 
         let mut entries = BTreeMap::new();
@@ -441,6 +466,34 @@ mod tests {
             let info = reg.lookup(mnemonic).unwrap_or_else(|| panic!("{mnemonic} missing"));
             assert_eq!(info.c_name, expected_c);
             assert_eq!(info.category, IntrinsicCategory::SsePack);
+        }
+    }
+
+    #[test]
+    fn test_x87_fpu_family_present() {
+        let reg = registry();
+        for (mnemonic, expected_c) in [
+            ("FLD", "__fld"),
+            ("FSTP", "__fstp"),
+            ("FADD", "__fadd"),
+            ("FSUB", "__fsub"),
+            ("FMUL", "__fmul"),
+            ("FDIV", "__fdiv"),
+            ("FCOM", "__fcom"),
+            ("FXCH", "__fxch"),
+        ] {
+            let info = reg.lookup(mnemonic).unwrap_or_else(|| panic!("{mnemonic} missing"));
+            assert_eq!(info.c_name, expected_c);
+            assert_eq!(info.category, IntrinsicCategory::X87Fpu);
+        }
+    }
+
+    #[test]
+    fn test_x87_pop_variants_present() {
+        let reg = registry();
+        for name in ["FADDP", "FSUBP", "FSUBRP", "FMULP", "FDIVP", "FDIVRP", "FCOMP", "FCOMPP"] {
+            let info = reg.lookup(name).unwrap_or_else(|| panic!("{name} missing"));
+            assert_eq!(info.category, IntrinsicCategory::X87Fpu);
         }
     }
 

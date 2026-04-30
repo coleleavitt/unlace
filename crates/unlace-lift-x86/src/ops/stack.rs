@@ -2,7 +2,7 @@ use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::lift::LiftCtx;
-use crate::register_file::RSP;
+use crate::register_file::{RBP, RSP};
 
 pub fn lift_push(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let src = ctx.operand_read(insn, 0);
@@ -62,4 +62,25 @@ pub fn lift_pop(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
         }
         None => ctx.emit_unimplemented(),
     }
+}
+
+/// LEAVE = MOV RSP, RBP; POP RBP
+pub fn lift_leave(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
+    let rsp = Varnode::new(SpaceId::Register, RSP, 8);
+    let rbp = Varnode::new(SpaceId::Register, RBP, 8);
+
+    // RSP = RBP
+    ctx.emit(IrInsn::with_output(IrOp::Copy, rsp, smallvec![rbp], ctx.addr));
+
+    // RBP = LOAD(RSP)  (pop old frame pointer)
+    let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+    let loaded = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(IrOp::Load, loaded, smallvec![ram_space, rsp], ctx.addr));
+    ctx.emit(IrInsn::with_output(IrOp::Copy, rbp, smallvec![loaded], ctx.addr));
+
+    // RSP = RSP + 8
+    let eight = Varnode::constant(8, 8);
+    let new_rsp = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(IrOp::IntAdd, new_rsp, smallvec![rsp, eight], ctx.addr));
+    ctx.emit(IrInsn::with_output(IrOp::Copy, rsp, smallvec![new_rsp], ctx.addr));
 }

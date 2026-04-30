@@ -98,6 +98,10 @@ pub enum HirNode {
         /// The output varnode that both branches write to.
         output: Varnode,
     },
+
+    TailCall {
+        target: u64,
+    },
 }
 
 /// A structured function in the HIR.

@@ -1,0 +1,36 @@
+P2-13: String operation recognition (REP MOVSB/STOSB/CMPSB → Callother)
+=======================================================================
+
+Files changed:
+  - NEW: crates/unlace-lift-x86/src/ops/string_ops.rs
+  - EDIT: crates/unlace-lift-x86/src/ops/mod.rs (added string_ops module)
+  - EDIT: crates/unlace-lift-x86/src/lift.rs (dispatch REP-prefixed string ops)
+  - EDIT: crates/unlace-lift-x86/src/lib.rs (7 unit tests)
+
+Implementation:
+  - REP MOVSB/W/D/Q → Callother(tag=0x1/MEMCPY, dst=RDI, src=RSI, count=RCX, elem_size)
+  - REP STOSB/W/D/Q → Callother(tag=0x2/MEMSET, dst=RDI, val=AL/AX/EAX/RAX, count=RCX, elem_size)
+  - REPE/REPNE CMPSB/W/D/Q → Callother(tag=0x3/MEMCMP, a=RSI, b=RDI, count=RCX, elem_size) + result→ZF
+  - Post-loop: RCX zeroed for all variants
+  - Detection via iced-x86's has_rep_prefix()/has_repe_prefix()/has_repne_prefix()
+  - try_lift_rep_string() checked before mnemonic match in dispatch_mnemonic()
+
+Callother convention (Const-space input[0] tag):
+  - 0x1 = memcpy
+  - 0x2 = memset
+  - 0x3 = memcmp
+
+Tests added (7):
+  - test_rep_movsb: F3 A4, asserts Callother with tag=0x1
+  - test_rep_movsq: F3 48 A5, asserts elem_size=8
+  - test_rep_stosb: F3 AA, asserts Callother with tag=0x2
+  - test_rep_stosd: F3 AB, asserts elem_size=4
+  - test_rep_cmpsb: F3 A6, asserts Callother with tag=0x3 and output present
+  - test_repne_cmpsb: F2 A6, asserts REPNE also handled
+  - test_rep_movs_zeroes_rcx: asserts RCX=0 after REP MOVSB
+
+Verification:
+  - cargo test -p unlace-lift-x86 -- rep: 7/7 passed
+  - cargo test -p unlace-lift-x86: 39/39 passed (32 existing + 7 new)
+  - cargo test --workspace: 726 passed, 1 ignored, 0 failed
+  - cargo xtask lint-determinism: OK — no HashMap/HashSet

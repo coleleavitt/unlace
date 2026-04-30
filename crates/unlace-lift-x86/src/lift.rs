@@ -4,7 +4,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
-use crate::ops::{arithmetic, bitwise, control_flow, data_move, stack};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, stack, string_ops};
 use crate::register_file::{iced_reg_to_varnode, x86_64_register_file};
 
 pub struct X86Lifter {
@@ -264,6 +264,12 @@ fn operand_size(insn: &Instruction, _idx: u32) -> u8 {
 }
 
 fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
+    // REP-prefixed string operations get first priority since iced-x86 decodes
+    // them as plain MOVSB/STOSB/CMPSB mnemonics with the rep flag set.
+    if string_ops::try_lift_rep_string(ctx, insn) {
+        return;
+    }
+
     use Mnemonic as M;
 
     match insn.mnemonic() {

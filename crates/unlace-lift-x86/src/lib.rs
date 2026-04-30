@@ -307,5 +307,105 @@ mod tests {
             );
         }
     }
+
+    // -- REP string operations -------------------------------------------
+
+    #[test]
+    fn test_rep_movsb() {
+        // F3 A4 = REP MOVSB
+        let result = lifter()
+            .lift_insn(&[0xf3, 0xa4], 0x1000)
+            .expect("should decode REP MOVSB");
+        assert_eq!(result.len, 2);
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
+            "REP MOVSB should emit Callother"
+        );
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x1, 8), "tag should be MEMCPY=0x1");
+    }
+
+    #[test]
+    fn test_rep_movsq() {
+        // F3 48 A5 = REP MOVSQ
+        let result = lifter()
+            .lift_insn(&[0xf3, 0x48, 0xa5], 0x1000)
+            .expect("should decode REP MOVSQ");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x1, 8));
+        assert_eq!(co.inputs[4], unlace_ir::Varnode::constant(8, 8), "elem_size should be 8");
+    }
+
+    #[test]
+    fn test_rep_stosb() {
+        // F3 AA = REP STOSB
+        let result = lifter()
+            .lift_insn(&[0xf3, 0xaa], 0x1000)
+            .expect("should decode REP STOSB");
+        assert_eq!(result.len, 2);
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
+            "REP STOSB should emit Callother"
+        );
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x2, 8), "tag should be MEMSET=0x2");
+    }
+
+    #[test]
+    fn test_rep_stosd() {
+        // F3 AB = REP STOSD
+        let result = lifter()
+            .lift_insn(&[0xf3, 0xab], 0x1000)
+            .expect("should decode REP STOSD");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x2, 8));
+        assert_eq!(co.inputs[4], unlace_ir::Varnode::constant(4, 8), "elem_size should be 4");
+    }
+
+    #[test]
+    fn test_rep_cmpsb() {
+        // F3 A6 = REPE CMPSB
+        let result = lifter()
+            .lift_insn(&[0xf3, 0xa6], 0x1000)
+            .expect("should decode REPE CMPSB");
+        assert_eq!(result.len, 2);
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
+            "REPE CMPSB should emit Callother"
+        );
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x3, 8), "tag should be MEMCMP=0x3");
+        assert!(co.output.is_some(), "CMPS Callother should produce a result");
+    }
+
+    #[test]
+    fn test_repne_cmpsb() {
+        // F2 A6 = REPNE CMPSB
+        let result = lifter()
+            .lift_insn(&[0xf2, 0xa6], 0x1000)
+            .expect("should decode REPNE CMPSB");
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
+            "REPNE CMPSB should also emit Callother"
+        );
+    }
+
+    #[test]
+    fn test_rep_movs_zeroes_rcx() {
+        // F3 A4 = REP MOVSB — after Callother, RCX should be zeroed
+        let result = lifter()
+            .lift_insn(&[0xf3, 0xa4], 0x1000)
+            .expect("should decode");
+        let rcx = unlace_ir::Varnode::reg(0x08, 8); // RCX offset
+        let zero = unlace_ir::Varnode::constant(0, 8);
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::Copy && i.output == Some(rcx) && i.inputs[0] == zero
+            }),
+            "should zero RCX after REP MOVSB"
+        );
+    }
 }
 

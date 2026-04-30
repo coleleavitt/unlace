@@ -253,6 +253,37 @@ fn try_resolve_field_from_addr(addr_vn: &Varnode, _idx: usize, stmt_idx: u32, ac
 // Varnode collection — pre-walk to assign names deterministically
 // ---------------------------------------------------------------------------
 
+fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
+    let idx = ctx.next_stmt;
+    ctx.next_stmt += 1;
+    ctx.stmt_depths.insert(idx, ctx.collect_depth);
+
+    let mut input_svs = Vec::new();
+    for input in &insn.inputs {
+        if input.space == SpaceId::Const {
+            continue;
+        }
+        let ver = ctx.current_version(input);
+        let sv = SsaVarnode { base: *input, version: ver };
+        ctx.name_of(&sv);
+        input_svs.push(sv);
+    }
+    ctx.stmt_inputs.insert(idx, input_svs);
+
+    let output_sv = if let Some(output) = insn.output {
+        let ver = ctx.next_version(&output);
+        let sv = SsaVarnode { base: output, version: ver };
+        ctx.name_of(&sv);
+        infer_type_from_insn(insn, &sv, ctx);
+        Some(sv)
+    } else {
+        None
+    };
+    ctx.stmt_outputs.insert(idx, output_sv);
+    ctx.stmt_insns.insert(idx, insn.clone());
+    idx
+}
+
 fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
     for node in nodes {
         match node {
@@ -313,6 +344,16 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.collect_depth -= 1;
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+            }
+
+            HirNode::For { init, cond, update, body } => {
+                collect_insn_as_stmt(init, ctx);
+                ctx.name_of(cond);
+                ctx.cond_uses.push(*cond);
+                ctx.collect_depth += 1;
+                collect_varnodes(body, ctx);
+                collect_insn_as_stmt(update, ctx);
+                ctx.collect_depth -= 1;
             }
 
             HirNode::Switch { cond, cases, default } => {
@@ -581,6 +622,27 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let _ = writeln!(out, "}} while ({});", cond_expr);
         }
 
+        HirNode::For { init, cond, update, body } => {
+            let init_idx = ctx.emit_stmt;
+            ctx.emit_stmt += 1;
+            let init_str = emit_for_clause(init, init_idx, ctx);
+
+            let mut body_buf = String::new();
+            emit_nodes(body, depth + 1, ctx, &mut body_buf);
+
+            let update_idx = ctx.emit_stmt;
+            ctx.emit_stmt += 1;
+            let update_str = emit_for_clause(update, update_idx, ctx);
+
+            let cond_expr = resolve_sv_expr(cond, ctx);
+
+            indent(depth, out);
+            let _ = writeln!(out, "for ({}; {}; {}) {{", init_str, cond_expr, update_str);
+            out.push_str(&body_buf);
+            indent(depth, out);
+            let _ = writeln!(out, "}}");
+        }
+
         HirNode::Switch { cond, cases, default } => {
             let cond_expr = resolve_sv_expr(cond, ctx);
             indent(depth, out);
@@ -663,6 +725,68 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 // ---------------------------------------------------------------------------
 // Statement emission (single IR instruction)
 // ---------------------------------------------------------------------------
+
+fn emit_for_clause(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    let lhs_sv = match ctx.stmt_outputs.get(&stmt_idx).cloned().flatten() {
+        Some(sv) => sv,
+        None => return format!("/* {} */", insn.op.name()),
+    };
+    let lhs = ctx.name_of(&lhs_sv);
+
+    if let Some(short) = try_emit_increment_form(insn, &lhs) {
+        return short;
+    }
+
+    if let Some(short) = try_emit_compound_assign(insn, stmt_idx, &lhs, ctx) {
+        return short;
+    }
+
+    let rhs = emit_expr(insn, stmt_idx, ctx);
+    format!("{} = {}", lhs, rhs)
+}
+
+fn try_emit_increment_form(insn: &IrInsn, lhs: &str) -> Option<String> {
+    if insn.inputs.len() != 2 {
+        return None;
+    }
+    let (counter_in, const_in) = match (insn.inputs[0].space, insn.inputs[1].space) {
+        (SpaceId::Const, _) => (&insn.inputs[1], &insn.inputs[0]),
+        (_, SpaceId::Const) => (&insn.inputs[0], &insn.inputs[1]),
+        _ => return None,
+    };
+    if Some(*counter_in) != insn.output {
+        return None;
+    }
+    if const_in.offset != 1 {
+        return None;
+    }
+    match insn.op {
+        IrOp::IntAdd => Some(format!("{}++", lhs)),
+        IrOp::IntSub if insn.inputs[1].space == SpaceId::Const => Some(format!("{}--", lhs)),
+        _ => None,
+    }
+}
+
+fn try_emit_compound_assign(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    lhs: &str,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    if insn.inputs.len() != 2 {
+        return None;
+    }
+    let counter_is_first = Some(insn.inputs[0]) == insn.output;
+    let counter_is_second = Some(insn.inputs[1]) == insn.output;
+    let op_str = match insn.op {
+        IrOp::IntAdd if counter_is_first || counter_is_second => "+=",
+        IrOp::IntSub if counter_is_first => "-=",
+        _ => return None,
+    };
+    let other_idx = if counter_is_first { 1 } else { 0 };
+    let other = emit_operand_resolved(&insn.inputs[other_idx], other_idx, stmt_idx, ctx);
+    Some(format!("{} {} {}", lhs, op_str, other))
+}
 
 fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
     let idx = ctx.emit_stmt;
@@ -2111,6 +2235,156 @@ mod tests {
         assert!(
             output.contains("0x"),
             "bitwise AND constant should stay as hex: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // For-loop emission tests (P3-7)
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_for_loop_simple_emit() {
+        let i = reg(0, 4);
+        let zero = con(0, 4);
+        let one = con(1, 4);
+
+        let body = vec![
+            HirNode::For {
+                init: IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000),
+                cond: sv(0, 4),
+                update: IrInsn::with_output(IrOp::IntAdd, i, smallvec![i, one], 0x1018),
+                body: vec![],
+            },
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("for_simple", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("for ("),
+            "should contain 'for (': {output}",
+        );
+        assert!(
+            output.contains("v1++"),
+            "increment should be rendered as v1++: {output}",
+        );
+        assert!(
+            !output.contains("while ("),
+            "should NOT emit a while loop: {output}",
+        );
+    }
+
+    #[test]
+    fn test_for_loop_compound_step_emit() {
+        let i = reg(0, 4);
+        let zero = con(0, 4);
+        let two = con(2, 4);
+
+        let body = vec![
+            HirNode::For {
+                init: IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000),
+                cond: sv(0, 4),
+                update: IrInsn::with_output(IrOp::IntAdd, i, smallvec![i, two], 0x1018),
+                body: vec![],
+            },
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("for_step2", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("v1 += 2"),
+            "step-2 should render as v1 += 2: {output}",
+        );
+    }
+
+    #[test]
+    fn test_for_loop_decrement_emit() {
+        let i = reg(0, 4);
+        let n = reg(8, 4);
+        let one = con(1, 4);
+
+        let body = vec![
+            HirNode::For {
+                init: IrInsn::with_output(IrOp::Copy, i, smallvec![n], 0x1000),
+                cond: sv(0, 4),
+                update: IrInsn::with_output(IrOp::IntSub, i, smallvec![i, one], 0x1018),
+                body: vec![],
+            },
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("for_decrement", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("--)"),
+            "decrement should render as `<var>--`: {output}",
+        );
+        assert!(
+            output.contains("for ("),
+            "should be a for-loop: {output}",
+        );
+    }
+
+    #[test]
+    fn test_for_loop_compiles() {
+        let gcc_available = std::process::Command::new("gcc")
+            .arg("--version")
+            .output()
+            .is_ok();
+        if !gcc_available {
+            eprintln!("gcc not found, skipping test_for_loop_compiles");
+            return;
+        }
+
+        let i = reg(0, 4);
+        let acc = reg(8, 4);
+        let zero = con(0, 4);
+        let one = con(1, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, acc, smallvec![zero], 0x0FFC)),
+            HirNode::For {
+                init: IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000),
+                cond: sv(0, 4),
+                update: IrInsn::with_output(IrOp::IntAdd, i, smallvec![i, one], 0x1018),
+                body: vec![HirNode::Statement(IrInsn::with_output(
+                    IrOp::IntAdd, acc, smallvec![acc, one], 0x1014,
+                ))],
+            },
+            HirNode::Return(Some(SsaVarnode { base: acc, version: 1 })),
+        ];
+
+        let func = make_func("for_compile", body);
+        let source = print_c(&func);
+
+        let result = std::process::Command::new("gcc")
+            .args(["-fsyntax-only", "-x", "c", "-", "-std=c11"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn();
+
+        let Ok(mut child) = result else {
+            eprintln!("Failed to spawn gcc, skipping");
+            return;
+        };
+
+        {
+            use std::io::Write;
+            let stdin = child.stdin.as_mut().expect("stdin pipe");
+            stdin.write_all(source.as_bytes()).expect("write to stdin");
+        }
+
+        let output = child.wait_with_output().expect("wait for gcc");
+        assert!(
+            output.status.success(),
+            "gcc -fsyntax-only failed on for-loop:\n--- source ---\n{}\n--- stderr ---\n{}",
+            source,
+            String::from_utf8_lossy(&output.stderr),
         );
     }
 

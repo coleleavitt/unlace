@@ -71,6 +71,26 @@ pub enum HirNode {
         cond: SsaVarnode,
     },
 
+    /// A C-style for-loop: `for (init; cond; update) body`.
+    ///
+    /// Recovered from `init; while (cond) { body; update }` patterns by
+    /// [`recover_for_loops`](crate::structurer::recover_for_loops). Eligibility
+    /// requires:
+    ///   1. `init` defines a base varnode V (the induction variable).
+    ///   2. `cond` reads V.
+    ///   3. `update` writes V (and reads V plus a constant step).
+    ///   4. V is not referenced after the loop in the surrounding scope.
+    For {
+        /// The init statement (e.g. `i = 0`).
+        init: IrInsn,
+        /// The loop condition (e.g. `i < n`).
+        cond: SsaVarnode,
+        /// The update statement at the end of the loop body (e.g. `i++`).
+        update: IrInsn,
+        /// Body statements with the trailing update removed.
+        body: Vec<HirNode>,
+    },
+
     /// A switch/case construct.
     Switch {
         cond: SsaVarnode,

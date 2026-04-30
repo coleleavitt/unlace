@@ -41,3 +41,71 @@ Created `pe64_with_pdata_and_debug()` — 3072-byte hand-crafted PE32+ binary.
 - UNWIND_INFO uses ALLOC_SMALL (op=2) — simplest single unwind code
 - SecurityCookie VA = ImageBase + rdata_rva + 0x100 (arbitrary valid VA)
 - SizeOfHeaders = 0x400 (section table ends at 0x228, aligned to FileAlignment=0x200)
+
+## P10-3: ARM64 ELF Fixture (2026-04-30)
+
+Created `fixtures/arm64_features.elf` — 1856-byte hand-crafted AArch64 ELF64 binary (no cross-toolchain needed).
+
+### Byte Layout
+```
+0x000-0x03F  ELF64 header (e_machine=183/EM_AARCH64, entry=0x400100)
+0x040-0x077  Program header (1 PT_LOAD, R+X)
+0x100-0x163  .text (100 bytes = 25 ARM64 instructions)
+0x200-0x28F  .symtab (6 symbols: null, file, _start, mul_test, csel_test, bitfield_test)
+0x400-0x439  .strtab
+0x500-0x520  .shstrtab
+0x600-0x73F  Section headers (5 sections)
+```
+
+### Functions & Instructions
+- `_start` (0x400100, 24B): BL×3, MOVZ×2, SVC — entry point calling all test functions
+- `mul_test` (0x400118, 16B): MUL, SDIV, MADD, RET — multiply/divide ops
+- `csel_test` (0x400128, 32B): CMP, CSEL, CSINC, CSINV, CSNEG, B.EQ, ADD, RET — conditional selects
+- `bitfield_test` (0x400148, 28B): STP(pre), UBFM, SBFM, EXTR, LDP(post), DMB ISH, RET — bitfield + memory pairs
+
+### Key Decisions
+- Hand-encoded all 25 instructions as raw 32-bit LE words (Python script at `/tmp/build_arm64_elf.py`)
+- Assembly source documented in `fixtures/src/arm64_features.S`
+- Used `object` crate-compatible ELF structure (5 sections, proper .symtab with STT_FUNC symbols)
+- Added AArch64 to CLI arch gate (`main.rs` + `batch.rs`) — was previously x86-only
+- Currently-lifted instructions (LDP, STP, B.cond, BL, RET, CMP, ADD) produce real IR
+- Unlifted instructions (MUL, SDIV, MADD, CSEL, CSINC, CSINV, CSNEG, UBFM, SBFM, EXTR, DMB) emit `Unimplemented` — Wave 5 (P10-30..33) will add these
+
+### Verification
+- `file` → `ELF 64-bit LSB executable, ARM aarch64, version 1 (SYSV), statically linked, not stripped`
+- `readelf -s` → 6 symbols with correct types and sizes
+- `unlace decompile --arch aarch64 --emit ir` → exit 0, 4 functions in IR output
+
+## P10-2: Synthetic Mach-O 64-bit Fixture with LC_DYLD_INFO + LC_DYSYMTAB (2026-04-30)
+
+Created `macho64_with_dyld_info()` — 768-byte hand-crafted Mach-O 64-bit binary.
+
+### Byte Layout
+```
+0x000  mach_header_64          (32 B, ncmds=5)
+0x020  LC_SEGMENT_64 __TEXT    (152 B, 1 section: __text)
+0x0B8  LC_SEGMENT_64 __DATA    (152 B, 1 section: __la_symbol_ptr)
+0x150  LC_SYMTAB               (24 B, 1 nlist for "_malloc")
+0x168  LC_DYSYMTAB             (80 B, 1 indirect sym entry)
+0x1B8  LC_DYLD_INFO            (48 B, bind opcodes for "_printf")
+--- load commands end at 0x1E8 ---
+0x1F0  __text data             (1 B: 0xC3 RET)
+0x200  __la_symbol_ptr data    (8 B: pointer slot)
+0x210  string table            ("\0_malloc\0", 9 B)
+0x220  nlist64                 (16 B)
+0x230  indirect sym table      (4 B: [0])
+0x238  bind opcodes            (15 B)
+```
+
+### Key Decisions
+- 5 load commands: 2× LC_SEGMENT_64 + LC_SYMTAB + LC_DYSYMTAB + LC_DYLD_INFO
+- sizeofcmds = 152×2 + 24 + 80 + 48 = 456 bytes, load commands end at 0x1E8
+- __text data placed at 0x1F0 (AFTER load commands) — critical: with 5 load commands, the __DATA section header occupies 0x100, so placing __text data at 0x100 would corrupt the section name
+- __la_symbol_ptr section uses S_LAZY_SYMBOL_POINTERS (0x7) flag, reserved1=0 for indirect table start index
+- LC_DYSYMTAB: iundefsym=0, nundefsym=1, indirectsymoff=0x230, nindirectsyms=1
+- LC_DYLD_INFO (0x22, not 0x80000022): bind_off=0x238, bind_size=15
+- Bind opcode stream: SET_DYLIB_ORDINAL_IMM(1), SET_SYMBOL_TRAILING_FLAGS_IMM("_printf"), SET_TYPE_IMM(POINTER), SET_SEGMENT_AND_OFFSET_ULEB(1,0), DO_BIND, DONE
+- nlist64: n_strx=1, n_type=N_EXT|N_UNDF=0x01, n_sect=0, n_desc=0, n_value=0
+
+### Pitfall Found
+- When fixture has many load commands (5 here), the section headers extend well past 0x100. The __DATA segment's section header starts at dseg+72 = 0xB8+0x48 = 0x100. Writing __text data at 0x100 corrupts the __la_symbol_ptr section name, causing `object` crate to report "Non UTF-8 Mach-O section name". Always place section data AFTER load commands end.

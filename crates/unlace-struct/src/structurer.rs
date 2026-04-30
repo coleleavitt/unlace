@@ -377,7 +377,7 @@ impl<'a> StructureCtx<'a> {
             }
         }
 
-        let join = self.find_switch_join(&targets);
+        let join = self.find_switch_join(bid, &targets);
 
         let num_cases = if targets.len() > 2 { targets.len() - 1 } else { targets.len() };
         let mut cases = Vec::new();
@@ -540,9 +540,16 @@ impl<'a> StructureCtx<'a> {
         }
     }
 
-    fn find_switch_join(&self, targets: &[BlockId]) -> Option<BlockId> {
+    fn find_switch_join(&self, cond_block: BlockId, targets: &[BlockId]) -> Option<BlockId> {
         if targets.is_empty() {
             return None;
+        }
+
+        if let Some(join) = self.find_join_point_postdom(cond_block) {
+            let target_set: BTreeSet<BlockId> = targets.iter().copied().collect();
+            if !target_set.contains(&join) {
+                return Some(join);
+            }
         }
 
         let mut reachable_sets: Vec<BTreeSet<BlockId>> = targets
@@ -608,7 +615,7 @@ impl<'a> StructureCtx<'a> {
         }
 
         // Find the join point: a block that both branches eventually reach.
-        let join = self.find_join_point(true_blk, false_blk);
+        let join = self.find_join_point(bid, true_blk, false_blk);
 
         let then_body = self.structure_until(true_blk, join);
         let else_body = self.structure_until(false_blk, join);
@@ -1101,10 +1108,30 @@ impl<'a> StructureCtx<'a> {
         None
     }
 
-    /// Find the join point (post-dominator) of two branches.
-    /// Simple heuristic: walk successors of both branches and find the first
-    /// common block that is reachable from both.
-    fn find_join_point(&self, true_blk: BlockId, false_blk: BlockId) -> Option<BlockId> {
+    fn find_join_point(
+        &self,
+        cond_block: BlockId,
+        true_blk: BlockId,
+        false_blk: BlockId,
+    ) -> Option<BlockId> {
+        if let Some(join) = self.find_join_point_postdom(cond_block) {
+            return Some(join);
+        }
+        self.find_join_point_bfs(true_blk, false_blk)
+    }
+
+    fn find_join_point_postdom(&self, cond_block: BlockId) -> Option<BlockId> {
+        let pdom = self.func.post_dom_tree.as_ref()?;
+        let ipdom = pdom.idom(cond_block)?;
+
+        if self.synthetic.contains(&ipdom) {
+            return None;
+        }
+
+        Some(ipdom)
+    }
+
+    fn find_join_point_bfs(&self, true_blk: BlockId, false_blk: BlockId) -> Option<BlockId> {
         // Collect all blocks reachable from true_blk (stopping at already-emitted).
         let true_reachable = self.collect_reachable(true_blk, 16);
         let false_reachable = self.collect_reachable(false_blk, 16);
@@ -2513,5 +2540,254 @@ mod tests {
             "exit edge should NOT produce Goto: {:#?}",
             hir.body
         );
+    }
+
+    #[test]
+    fn test_join_point_matches_postdom() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("postdom_join", BlockId(0), 0x30000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0x30000));
+        bb0.insns.push(cbranch_insn(cond_vn, 0x30004));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0x30010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0x30018));
+        bb1.successors = smallvec![BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r8, c2], 0x30020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x30028));
+        bb2.successors = smallvec![BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(arith_insn(r0, &[r0, c1], 0x30030));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0x30038));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+
+        let pdom = ssa.post_dom_tree.as_ref().expect("should have post_dom_tree");
+        assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(3)));
+
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn contains_if(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::If { .. } => true,
+                HirNode::Block(inner) => contains_if(inner),
+                _ => false,
+            })
+        }
+        assert!(contains_if(&hir.body), "should produce If node using post-dom join");
+
+        let has_return = hir.body.iter().any(|n| matches!(n, HirNode::Return(_)));
+        assert!(has_return, "post-join code should appear after if/else");
+    }
+
+    #[test]
+    fn test_join_point_deep_nesting() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("deep_nesting", BlockId(0), 0x40000);
+
+        // BB0: if → BB1 / BB2
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(cbranch_insn(cond_vn, 0x40000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        // BB1: then chain through 20 blocks to BB22
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0x40010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0x40018));
+        bb1.successors = smallvec![BlockId(3)];
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+
+        // Chain: BB3→BB4→...→BB21
+        for i in 3..22 {
+            let mut bb = BasicBlock::new(BlockId(i));
+            bb.insns.push(arith_insn(r0, &[r0, c1], 0x40000 + (i as u64) * 0x10));
+            bb.insns.push(ctrl_insn(IrOp::Branch, 0x40008 + (i as u64) * 0x10));
+            bb.successors = smallvec![BlockId(i + 1)];
+            func.insert_block(bb);
+        }
+
+        // BB22: join point
+        let mut bb22 = BasicBlock::new(BlockId(22));
+        bb22.insns.push(ctrl_insn(IrOp::Return, 0x40160));
+        func.insert_block(bb22);
+
+        // BB2: else, direct to join
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r8, c1], 0x40020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x40028));
+        bb2.successors = smallvec![BlockId(22)];
+        func.insert_block(bb2);
+
+        let ssa = build_ssa(func);
+
+        let pdom = ssa.post_dom_tree.as_ref().expect("should have post_dom_tree");
+        assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(22)),
+            "post-dom should find BB22 as join regardless of depth");
+
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn contains_if(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::If { .. } => true,
+                HirNode::Block(inner) => contains_if(inner),
+                _ => false,
+            })
+        }
+        assert!(contains_if(&hir.body),
+            "deep nesting (depth > 16) should still find join via post-dom");
+    }
+
+    #[test]
+    fn test_postdom_switch_join() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+
+        let mut func = Function::new("switch_postdom", BlockId(0), 0x50000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(ctrl_insn(IrOp::Branchind, 0x50000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2), BlockId(3)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0x50010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0x50014));
+        bb1.successors = smallvec![BlockId(4)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r8, c2], 0x50020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x50024));
+        bb2.successors = smallvec![BlockId(4)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(arith_insn(r0, &[r0, c1], 0x50030));
+        bb3.insns.push(ctrl_insn(IrOp::Branch, 0x50034));
+        bb3.successors = smallvec![BlockId(4)];
+
+        let mut bb4 = BasicBlock::new(BlockId(4));
+        bb4.insns.push(ctrl_insn(IrOp::Return, 0x50040));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+        func.insert_block(bb4);
+
+        let ssa = build_ssa(func);
+        let pdom = ssa.post_dom_tree.as_ref().expect("should have post_dom_tree");
+        assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(4)));
+
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn contains_switch(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::Switch { .. } => true,
+                HirNode::Block(inner) => contains_switch(inner),
+                _ => false,
+            })
+        }
+        assert!(contains_switch(&hir.body), "switch with post-dom join should produce Switch");
+
+        let has_return = hir.body.iter().any(|n| matches!(n, HirNode::Return(_)));
+        assert!(has_return, "post-switch join code should be structured");
+    }
+
+    #[test]
+    fn test_postdom_fallback_to_bfs() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("fallback_bfs", BlockId(0), 0x60000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(cbranch_insn(cond_vn, 0x60000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0x60010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0x60018));
+        bb1.successors = smallvec![BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r8, c1], 0x60020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x60028));
+        bb2.successors = smallvec![BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0x60030));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let mut ssa = build_ssa(func);
+        ssa.post_dom_tree = None;
+
+        let hir = structure(&ssa).expect("structuring should succeed without post_dom_tree");
+
+        fn contains_if(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::If { .. } => true,
+                HirNode::Block(inner) => contains_if(inner),
+                _ => false,
+            })
+        }
+        assert!(contains_if(&hir.body), "BFS fallback should still find join point");
+    }
+
+    #[test]
+    fn test_postdom_early_return_no_join() {
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("early_return", BlockId(0), 0x70000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(cbranch_insn(cond_vn, 0x70000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(ctrl_insn(IrOp::Return, 0x70010));
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(ctrl_insn(IrOp::Return, 0x70020));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+
+        let ssa = build_ssa(func);
+
+        let pdom = ssa.post_dom_tree.as_ref().expect("should have post_dom_tree");
+        let exit = ssa.cfg.exit_block();
+        assert_eq!(pdom.idom(BlockId(0)), Some(exit),
+            "both branches return → post-dom is exit");
+
+        let hir = structure(&ssa).expect("structuring should succeed");
+        assert!(!hir.body.is_empty());
     }
 }

@@ -1,0 +1,30 @@
+P5-24: Post-dominator join detection (replacing BFS heuristic)
+================================================================
+
+Implementation:
+- Modified `find_join_point` in structurer.rs to accept the condition block
+  and try post-dominator first, falling back to BFS
+- Added `find_join_point_postdom(cond_block)` which queries the post-dominator
+  tree for the immediate post-dominator of the condition block
+- Updated `find_switch_join` to also try post-dom before BFS
+- If post_dom_tree is None (e.g., in test helpers), falls back to BFS
+- If post-dom result is a synthetic block (exit/unknown), falls back to BFS
+- BFS implementation preserved as `find_join_point_bfs` for fallback
+
+Key advantage:
+- BFS has depth-16 limit — misses join points in deeply nested code
+- Post-dom has no depth limit — correctly finds join for any CFG depth
+- Example: 20-block chain in then-branch, BFS fails, post-dom finds BB22
+
+Tests added (5):
+- test_join_point_matches_postdom: diamond if/else → post-dom finds correct join
+- test_join_point_deep_nesting: 20-block chain (depth > 16) → post-dom finds join
+- test_postdom_switch_join: switch with post-dom join detection
+- test_postdom_fallback_to_bfs: post_dom_tree=None → BFS still works
+- test_postdom_early_return_no_join: both branches return → no real join point
+
+Files modified:
+- crates/unlace-struct/src/structurer.rs (join detection logic + tests)
+
+Baseline: 1060 → After P5-23: 1071 → After P5-24: 1076 tests
+All 1076 tests pass.

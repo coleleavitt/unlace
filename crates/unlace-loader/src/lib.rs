@@ -11,6 +11,7 @@ pub mod error;
 pub mod image;
 pub mod pdb;
 pub mod pe;
+pub mod strings;
 
 pub use dwarf::{
     import_dwarf, DwarfInfo, EnumType, FunctionDebugInfo, ParameterInfo, SourceLocation,

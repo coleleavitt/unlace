@@ -165,6 +165,11 @@ pub struct BinaryImage {
     pub plt_symbols: BTreeMap<u64, String>,
     /// Resolved relocations from `.rela.plt` and `.rela.dyn` (or equivalent).
     pub relocations: Vec<Relocation>,
+    /// Recovered string literals: virtual address → string content.
+    ///
+    /// Built by scanning `.rodata` and `.data` sections for null-terminated
+    /// printable ASCII sequences (minimum 4 characters).
+    pub string_table: BTreeMap<u64, String>,
 }
 
 impl BinaryImage {

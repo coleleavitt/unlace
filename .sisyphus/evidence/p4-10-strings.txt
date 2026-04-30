@@ -1,0 +1,69 @@
+P4-10: String literal recovery from .rodata sections
+=====================================================
+
+## Implementation
+
+### 1. String scanner (`crates/unlace-loader/src/strings.rs`)
+- Scans `.rodata` and `.data` sections for null-terminated ASCII strings
+- Heuristic: sequence of printable bytes (0x20-0x7E) + \n + \t, terminated by 0x00
+- Minimum length: 4 characters
+- Returns BTreeMap<u64, String> mapping virtual address → string content
+
+### 2. BinaryImage (`crates/unlace-loader/src/image.rs`)
+- Added `pub string_table: BTreeMap<u64, String>` field
+- Updated all constructors (ELF, PE, Mach-O, eh_frame tests)
+
+### 3. ELF loader (`crates/unlace-loader/src/elf.rs`)
+- Calls `scan_strings(&sections)` after loading sections
+- Populates `string_table` in BinaryImage
+
+### 4. C printer (`crates/unlace-output/src/c_printer.rs`)
+- Added `string_table` parameter to `print_c_full()`
+- Added `string_table` field to `PrintCtx`
+- In `emit_operand_with_prec`: checks if a Const varnode offset matches string_table
+- When matched: emits `"escaped_string"` instead of raw hex address
+- `escape_c_string()` helper handles \n, \t, \", \\, \0
+
+### 5. Pipeline (`crates/unlace-cli/src/pipeline.rs`)
+- `emit_output()` now takes `&BinaryImage` (not just symbols)
+- Passes `&image.string_table` through to `print_c_full()`
+- Fixed P4-8 merge artifacts (duplicate functions, stray code)
+
+## Tests
+
+### Loader tests (7 new in strings.rs):
+- test_rodata_string_detected: scans synthetic .rodata → finds strings at correct vaddrs
+- test_short_strings_rejected: strings < 4 chars are excluded
+- test_non_string_section_skipped: .text section not scanned
+- test_no_null_terminator_rejected: no null = no string
+- test_data_section_scanned: .data section is also scanned
+- test_strings_with_whitespace: tabs and newlines preserved
+- test_fixture_rodata_strings: debug_hello.elf has "Hello" in string_table
+
+### C printer tests (3 new):
+- test_string_inlined_in_output: Const 0x2004 in string_table → emits "Hello"
+- test_non_string_address_unchanged: address not in table → raw hex preserved
+- test_string_escape_special_chars: \n \t \" properly escaped in output
+
+## Evidence
+
+### cargo test --workspace:
+All 949 tests pass, 0 failures.
+
+### String table from debug_hello.elf:
+```
+$ readelf -p .rodata fixtures/debug_hello.elf
+  [     4]  Hello
+```
+String "Hello" at .rodata vaddr 0x2000 + offset 4 = 0x2004.
+The fixture's string_table correctly contains {0x2004: "Hello"}.
+
+### Limitation:
+x86-64 RIP-relative LEA instructions (e.g. `lea rdi, [rip+offset]`) are lifted
+as register arithmetic rather than resolved constants. The string address 0x2004
+does not appear as a Const varnode in the current IR. Therefore, string inlining
+does not trigger for `debug_hello.elf` in the actual decompiled output.
+
+The infrastructure is correct and verified by unit tests: when string addresses
+DO appear as constants (direct addressing, other architectures, or after future
+constant folding of RIP+offset), they will be properly inlined.

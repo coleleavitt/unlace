@@ -254,6 +254,7 @@ mod tests {
             symbols: BTreeMap::new(),
             plt_symbols: BTreeMap::new(),
             relocations: vec![],
+            string_table: BTreeMap::new(),
         };
 
         let info = parse_eh_frame(&img).expect("missing .eh_frame should not error");
@@ -282,6 +283,7 @@ mod tests {
             symbols: BTreeMap::new(),
             plt_symbols: BTreeMap::new(),
             relocations: vec![],
+            string_table: BTreeMap::new(),
         };
 
         let result = parse_eh_frame(&img);

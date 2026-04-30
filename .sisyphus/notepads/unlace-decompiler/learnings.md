@@ -322,3 +322,47 @@
 ### Tests
 - 9 integration tests in tests/cli_smoke.rs using std::process::Command
 - Tests: version, emit ir/c/cfg-dot, hex addr filter, nonexistent function, arch mismatch, invalid file, output to file
+
+## [Task 22] Pipeline hardening
+
+### Prologue-Scan Function Discovery
+- For stripped binaries (no function symbols), scan .text section for x86-64 prologue patterns
+- Three patterns detected (1-byte incremental scan): `endbr64` [0xf3, 0x0f, 0x1e, 0xfa], `push rbp; mov rbp, rsp` [0x55, 0x48, 0x89, 0xe5], `sub rsp, imm8` [0x48, 0x83, 0xec]
+- BTreeSet used for deduplication of discovered addresses
+- Function sizes computed from gap between consecutive discovered addresses; last function extends to end of .text
+- Functions named `sub_{addr:x}` (hex address, no 0x prefix) matching IDA/Ghidra convention
+- Discovery order: symbol table first → prologue scan if no symbols → entry point fallback if scan finds nothing
+- stripped.elf discovers 8 functions via prologue scan vs 1 ("entry") previously
+
+### Per-Function Timeout
+- `--timeout <secs>` CLI flag (default: 30), backed by `std::time::Instant` deadline
+- `PipelineConfig { timeout: Duration }` struct passed through pipeline
+- `check_timeout(deadline, func_name)` called at 3 checkpoints: after lift, after SSA construction, after passes
+- Timeout=0 immediately fails every function (useful for testing failure path)
+
+### Graceful Per-Function Failure
+- `decompile_function()` encapsulates the full per-function pipeline (lift → SSA → passes → emit)
+- On failure, main loop emits `/* decompilation failed for '<name>': <reason> */` and continues
+- Process exits 0 even when individual functions fail — only binary-level errors (bad file, arch mismatch) cause non-zero exit
+
+### IR Size Warning
+- `warn_if_large_ir()` checks instruction count after SSA construction
+- Threshold: 100,000 IR nodes (configurable via `IR_NODE_WARN_THRESHOLD` const)
+- Emits tracing::warn with function name, node count, and threshold
+
+### TypeInferPass Divergence Fix
+- Added `max_iterations = 100` bound to the `while changed` loop in TypeInferPass::run()
+- Emits tracing::warn when iteration limit is hit, indicating possible oscillation
+- Root cause remains: bidirectional COPY propagation in type_infer.rs lines 340-352 can oscillate
+- The bounded CLI workaround (`run_type_infer_bounded`, 50 iterations, monotonic-only) remains as defense-in-depth
+
+### Integration Tests Added
+- 6 new tests (total 15): stripped_binary_discovers_functions_via_prologue_scan, timeout_zero_emits_failure_comments, timeout_flag_accepts_custom_value, all_fixtures_exit_zero, branches_fixture_has_output, loops_fixture_has_output
+- `all_fixtures_exit_zero` tests all 7 fixtures in a single test for comprehensive coverage
+- `timeout_zero_emits_failure_comments` verifies the failure comment format
+
+### Key Design Decisions
+- No external timeout crates — `std::time::Instant` only, as specified
+- No HashMap — BTreeSet for prologue scan deduplication, BTreeMap for block construction
+- `sub rsp, imm8` prologue included as third pattern — catches functions without frame pointer that start with stack allocation
+- PipelineConfig uses Default trait for ergonomic construction with overrides

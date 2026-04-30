@@ -1,0 +1,42 @@
+=== hello_world ===
+int main(void) {
+    int v8;
+    long long v6;
+    int v7;
+    long long v1;
+Exit: 0
+=== branches ===
+int main(void) {
+    long long v3;
+    void * v1;
+    long long v2;
+
+Exit: 0
+=== loops ===
+int main(void) {
+    long long v3;
+    void * v1;
+    long long v2;
+
+Exit: 0
+=== calls ===
+int main(void) {
+    long long v3;
+    void * v1;
+    long long v2;
+
+Exit: 0
+=== empty ===
+int main(void) {
+    int v4;
+    long long v7;
+    int v1;
+    void * v5;
+Exit: 0
+=== stripped ===
+int sub_1060(void) {
+    int v5;
+    int v3;
+    long long v2;
+    int v4;
+Exit: 0

@@ -116,3 +116,85 @@ fn decompile_output_to_file() {
     assert!(content.contains("func main"), "file should contain IR: {content}");
     let _ = std::fs::remove_file(tmpfile);
 }
+
+#[test]
+fn stripped_binary_discovers_functions_via_prologue_scan() {
+    let output = unlace_bin()
+        .args(["decompile", "--emit", "c"])
+        .arg(fixture("stripped.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let func_count = stdout.matches("sub_").count();
+    assert!(func_count >= 2, "prologue scan should find multiple functions, found {func_count}");
+}
+
+#[test]
+fn timeout_zero_emits_failure_comments() {
+    let output = unlace_bin()
+        .args(["decompile", "--emit", "c", "--timeout", "0", "--function", "main"])
+        .arg(fixture("hello_world.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(output.status.success(), "exit 0 even when functions fail");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("/* decompilation failed"),
+        "should contain failure comment: {stdout}"
+    );
+}
+
+#[test]
+fn timeout_flag_accepts_custom_value() {
+    let output = unlace_bin()
+        .args(["decompile", "--emit", "c", "--timeout", "5", "--function", "main"])
+        .arg(fixture("hello_world.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("main("), "should decompile within 5s timeout: {stdout}");
+}
+
+#[test]
+fn all_fixtures_exit_zero() {
+    for name in ["hello_world", "branches", "loops", "calls", "empty", "stripped", "medium"] {
+        let output = unlace_bin()
+            .args(["decompile", "--emit", "c"])
+            .arg(fixture(&format!("{name}.elf")))
+            .output()
+            .unwrap_or_else(|e| panic!("failed to run unlace on {name}: {e}"));
+        assert!(
+            output.status.success(),
+            "{name}.elf failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+fn branches_fixture_has_output() {
+    let output = unlace_bin()
+        .args(["decompile", "--emit", "c"])
+        .arg(fixture("branches.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.is_empty(), "branches.elf should produce output");
+    assert!(stdout.contains("main("), "should contain main: {stdout}");
+}
+
+#[test]
+fn loops_fixture_has_output() {
+    let output = unlace_bin()
+        .args(["decompile", "--emit", "c"])
+        .arg(fixture("loops.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.is_empty(), "loops.elf should produce output");
+    assert!(stdout.contains("main("), "should contain main: {stdout}");
+}

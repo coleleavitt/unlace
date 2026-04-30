@@ -18,8 +18,18 @@ impl Pass for TypeInferPass {
         let before_len = func.var_types.len();
         let snapshot: BTreeMap<SsaVarnode, PrimitiveType> = func.var_types.clone();
 
+        let max_iterations = 100;
         let mut changed = true;
+        let mut iteration = 0;
         while changed {
+            if iteration >= max_iterations {
+                tracing::warn!(
+                    iterations = max_iterations,
+                    "TypeInferPass hit iteration limit; possible oscillation"
+                );
+                break;
+            }
+            iteration += 1;
             changed = false;
             for (&bid, block) in &func.function.blocks {
                 for (insn_idx, insn) in block.insns.iter().enumerate() {

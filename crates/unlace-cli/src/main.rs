@@ -3,17 +3,18 @@ mod pipeline;
 
 use std::fs;
 use std::io::Write;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
-use unlace_ir::ssa::build_ssa;
 use unlace_ir::ArchId;
 use unlace_loader::{ElfLoader, Loader};
 use unlace_lift::get_lifter;
 
 use crate::args::{Args, Cmd};
+use crate::pipeline::PipelineConfig;
 
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -27,9 +28,13 @@ fn main() -> Result<()> {
             output,
             all: _,
             verbose,
+            timeout,
         } => {
             init_tracing(verbose);
-            run_decompile(&binary, function.as_deref(), emit, arch.as_deref(), output.as_deref())
+            let config = PipelineConfig {
+                timeout: Duration::from_secs(timeout),
+            };
+            run_decompile(&binary, function.as_deref(), emit, arch.as_deref(), output.as_deref(), &config)
         }
     }
 }
@@ -55,6 +60,7 @@ fn run_decompile(
     emit: args::EmitFormat,
     arch_override: Option<&str>,
     output_path: Option<&std::path::Path>,
+    config: &PipelineConfig,
 ) -> Result<()> {
     let data = fs::read(binary_path)
         .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
@@ -96,24 +102,14 @@ fn run_decompile(
     for func_entry in &functions {
         tracing::info!(name = %func_entry.name, addr = %format_args!("{:#x}", func_entry.addr), "decompiling");
 
-        let ir_func = match pipeline::lift_function(&image, lifter.as_ref(), func_entry) {
-            Ok(f) => f,
-            Err(e) => {
-                tracing::warn!(name = %func_entry.name, err = %e, "skipping function");
-                continue;
-            }
-        };
-
-        let mut ssa = build_ssa(ir_func);
-
-        if let Err(e) = pipeline::run_passes(&mut ssa) {
-            tracing::warn!(name = %func_entry.name, err = %e, "pass pipeline failed; emitting unoptimized");
-        }
-
-        match pipeline::emit_output(emit, &ssa) {
+        match pipeline::decompile_function(&image, lifter.as_ref(), func_entry, emit, config) {
             Ok(text) => all_output.push_str(&text),
             Err(e) => {
-                tracing::warn!(name = %func_entry.name, err = %e, "output emission failed");
+                tracing::warn!(name = %func_entry.name, err = %e, "function decompilation failed");
+                all_output.push_str(&format!(
+                    "/* decompilation failed for '{}': {} */\n",
+                    func_entry.name, e
+                ));
             }
         }
     }

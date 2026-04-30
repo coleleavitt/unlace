@@ -728,7 +728,16 @@ pub fn decompile_function_with_symbols(
 ) -> Result<String> {
     let deadline = Instant::now() + config.timeout;
 
-    let ir_func = lift_function(image, lifter, entry)?;
+    let mut ir_func = lift_function(image, lifter, entry)?;
+
+    let merges = unlace_struct::merge_linear_blocks(&mut ir_func);
+    if merges > 0 {
+        tracing::debug!(
+            func = %entry.name,
+            merges,
+            "block-merge collapsed linear chains pre-SSA"
+        );
+    }
 
     check_timeout(deadline, &entry.name)?;
 

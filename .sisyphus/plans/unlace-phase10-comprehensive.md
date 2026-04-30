@@ -323,7 +323,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): synthetic PE32+ fixture with .pdata/.xdata/.debug/load_config`
 
-- [ ] P10-2. Synthetic Mach-O fixture with LC_DYLD_INFO + LC_DYSYMTAB
+- [x] P10-2. Synthetic Mach-O fixture with LC_DYLD_INFO + LC_DYSYMTAB
 
   **What to do**:
   - Add a new test in `crates/unlace-loader/src/macho.rs::tests`: `macho64_with_dyld_info()` matching the convention of `macho64_with_function_starts()` from P9-22.
@@ -367,7 +367,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): synthetic Mach-O fixture with LC_DYLD_INFO/LC_DYSYMTAB for Wave 4`
 
-- [ ] P10-3. Hand-crafted ARM64 ELF fixture covering MUL/CSEL/UBFM
+- [x] P10-3. Hand-crafted ARM64 ELF fixture covering MUL/CSEL/UBFM
 
   **What to do**:
   - Add `fixtures/src/arm64_features.S` (assembly) covering MUL, SDIV, UDIV, CSEL, CSINC, UBFM, SBFM, EXTR, LDP, STP, B.cond, BL, RET.
@@ -394,9 +394,9 @@ Max Concurrent: 5 (Wave 4)
   - ARM ARMv8-A reference manual
 
   **Acceptance Criteria**:
-  - [ ] `fixtures/arm64_features.elf` exists and is recognized as `ELF 64-bit aarch64`
-  - [ ] `MachHeader64` → N/A (this is an ELF — parsed via `ElfLoader::load`, NOT Mach-O)
-  - [ ] Decompiles via `unlace decompile fixtures/arm64_features.elf --arch aarch64 --emit ir` without panic
+  - [x] `fixtures/arm64_features.elf` exists and is recognized as `ELF 64-bit aarch64`
+  - [x] `MachHeader64` → N/A (this is an ELF — parsed via `ElfLoader::load`, NOT Mach-O)
+  - [x] Decompiles via `unlace decompile fixtures/arm64_features.elf --arch aarch64 --emit ir` without panic
 
   **QA Scenarios**:
   ```

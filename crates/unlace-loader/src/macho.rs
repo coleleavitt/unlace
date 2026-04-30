@@ -885,6 +885,182 @@ mod tests {
         assert_eq!(entry_b.name, "sub_1140");
     }
 
+    /// Mach-O 64-bit with LC_DYLD_INFO + LC_DYSYMTAB.
+    ///
+    /// Layout (< 1 KB):
+    /// ```text
+    /// 0x000  mach_header_64          (32 B)
+    /// 0x020  LC_SEGMENT_64 __TEXT    (152 B, 1 section: __text)
+    /// 0x0B8  LC_SEGMENT_64 __DATA    (152 B, 1 section: __la_symbol_ptr)
+    /// 0x150  LC_SYMTAB               (24 B, 1 nlist for "_malloc")
+    /// 0x168  LC_DYSYMTAB             (80 B, 1 indirect sym entry)
+    /// 0x1B8  LC_DYLD_INFO            (48 B, bind opcodes for "_printf")
+    /// --- load commands end at 0x1E8 ---
+    /// 0x1F0  __text data             (1 B: 0xC3 RET)
+    /// 0x200  __la_symbol_ptr data    (8 B: pointer slot)
+    /// 0x210  string table            ("\0_malloc\0", 9 B)
+    /// 0x220  nlist64                 (16 B)
+    /// 0x230  indirect sym table      (4 B: [0])
+    /// 0x238  bind opcodes            (15 B)
+    /// ```
+    fn macho64_with_dyld_info() -> Vec<u8> {
+        let mut buf = vec![0u8; 0x300];
+
+        // ── Sizes ──────────────────────────────────────────────────
+        let seg_cmdsize: u32 = 152; // 72 base + 80 section
+        let symtab_cmdsize: u32 = 24;
+        let dysymtab_cmdsize: u32 = 80;
+        let dyld_info_cmdsize: u32 = 48;
+        let sizeofcmds: u32 =
+            seg_cmdsize * 2 + symtab_cmdsize + dysymtab_cmdsize + dyld_info_cmdsize;
+
+        // ── mach_header_64 (0x00) ──────────────────────────────────
+        buf[0..4].copy_from_slice(&macho::MH_MAGIC_64.to_le_bytes());
+        buf[4..8].copy_from_slice(&(macho::CPU_TYPE_X86_64 as i32).to_le_bytes());
+        buf[8..12].copy_from_slice(&3u32.to_le_bytes()); // cpusubtype
+        buf[12..16].copy_from_slice(&2u32.to_le_bytes()); // MH_EXECUTE
+        buf[16..20].copy_from_slice(&5u32.to_le_bytes()); // ncmds
+        buf[20..24].copy_from_slice(&sizeofcmds.to_le_bytes());
+
+        // ── LC_SEGMENT_64 __TEXT (0x20) ────────────────────────────
+        let seg = 0x20usize;
+        buf[seg..seg + 4].copy_from_slice(&0x19u32.to_le_bytes()); // LC_SEGMENT_64
+        buf[seg + 4..seg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        buf[seg + 24..seg + 32].copy_from_slice(&0x1000u64.to_le_bytes()); // vmaddr
+        buf[seg + 32..seg + 40].copy_from_slice(&0x1000u64.to_le_bytes()); // vmsize
+        // fileoff = 0 (default)
+        buf[seg + 48..seg + 56].copy_from_slice(&0x200u64.to_le_bytes()); // filesize
+        buf[seg + 56..seg + 60].copy_from_slice(&0x05u32.to_le_bytes()); // maxprot R|X
+        buf[seg + 60..seg + 64].copy_from_slice(&0x05u32.to_le_bytes()); // initprot R|X
+        buf[seg + 64..seg + 68].copy_from_slice(&1u32.to_le_bytes()); // nsects
+
+        // section __text
+        let sec = seg + 72;
+        buf[sec..sec + 6].copy_from_slice(b"__text");
+        buf[sec + 16..sec + 22].copy_from_slice(b"__TEXT");
+        buf[sec + 32..sec + 40].copy_from_slice(&0x11F0u64.to_le_bytes()); // addr
+        buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes()); // size
+        buf[sec + 48..sec + 52].copy_from_slice(&0x1F0u32.to_le_bytes()); // offset
+        buf[sec + 64..sec + 68]
+            .copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes()); // flags
+
+        // ── LC_SEGMENT_64 __DATA (0xB8) ────────────────────────────
+        let dseg = 0xB8usize;
+        buf[dseg..dseg + 4].copy_from_slice(&0x19u32.to_le_bytes()); // LC_SEGMENT_64
+        buf[dseg + 4..dseg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[dseg + 8..dseg + 14].copy_from_slice(b"__DATA");
+        buf[dseg + 24..dseg + 32].copy_from_slice(&0x2000u64.to_le_bytes()); // vmaddr
+        buf[dseg + 32..dseg + 40].copy_from_slice(&0x1000u64.to_le_bytes()); // vmsize
+        buf[dseg + 40..dseg + 48].copy_from_slice(&0x200u64.to_le_bytes()); // fileoff
+        buf[dseg + 48..dseg + 56].copy_from_slice(&0x10u64.to_le_bytes()); // filesize
+        buf[dseg + 56..dseg + 60].copy_from_slice(&0x03u32.to_le_bytes()); // maxprot R|W
+        buf[dseg + 60..dseg + 64].copy_from_slice(&0x03u32.to_le_bytes()); // initprot R|W
+        buf[dseg + 64..dseg + 68].copy_from_slice(&1u32.to_le_bytes()); // nsects
+
+        // section __la_symbol_ptr
+        let dsec = dseg + 72;
+        buf[dsec..dsec + 16].copy_from_slice(b"__la_symbol_ptr\0");
+        buf[dsec + 16..dsec + 22].copy_from_slice(b"__DATA");
+        buf[dsec + 32..dsec + 40].copy_from_slice(&0x2000u64.to_le_bytes()); // addr
+        buf[dsec + 40..dsec + 48].copy_from_slice(&8u64.to_le_bytes()); // size (1 pointer)
+        buf[dsec + 48..dsec + 52].copy_from_slice(&0x200u32.to_le_bytes()); // offset
+        // flags: S_LAZY_SYMBOL_POINTERS = 0x7
+        buf[dsec + 64..dsec + 68]
+            .copy_from_slice(&macho::S_LAZY_SYMBOL_POINTERS.to_le_bytes());
+        // reserved1 = 0 (indirect symbol table start index) — already zero
+
+        // ── LC_SYMTAB (0x150) ──────────────────────────────────────
+        let sym_cmd = 0x150usize;
+        buf[sym_cmd..sym_cmd + 4].copy_from_slice(&0x02u32.to_le_bytes()); // LC_SYMTAB
+        buf[sym_cmd + 4..sym_cmd + 8].copy_from_slice(&symtab_cmdsize.to_le_bytes());
+        buf[sym_cmd + 8..sym_cmd + 12].copy_from_slice(&0x220u32.to_le_bytes()); // symoff
+        buf[sym_cmd + 12..sym_cmd + 16].copy_from_slice(&1u32.to_le_bytes()); // nsyms
+        buf[sym_cmd + 16..sym_cmd + 20].copy_from_slice(&0x210u32.to_le_bytes()); // stroff
+        buf[sym_cmd + 20..sym_cmd + 24].copy_from_slice(&9u32.to_le_bytes()); // strsize
+
+        // ── LC_DYSYMTAB (0x168) ────────────────────────────────────
+        // DysymtabCommand: 20 × u32 = 80 bytes
+        let dys = 0x168usize;
+        buf[dys..dys + 4].copy_from_slice(&macho::LC_DYSYMTAB.to_le_bytes()); // cmd
+        buf[dys + 4..dys + 8].copy_from_slice(&dysymtab_cmdsize.to_le_bytes());
+        // ilocalsym=0, nlocalsym=0 (offsets 8,12 — already zero)
+        // iextdefsym=0, nextdefsym=0 (offsets 16,20 — already zero)
+        // iundefsym=0
+        buf[dys + 24..dys + 28].copy_from_slice(&0u32.to_le_bytes()); // iundefsym
+        buf[dys + 28..dys + 32].copy_from_slice(&1u32.to_le_bytes()); // nundefsym
+        // tocoff..nextrefsyms (offsets 32-52) — all zero
+        // indirectsymoff, nindirectsyms
+        buf[dys + 56..dys + 60].copy_from_slice(&0x230u32.to_le_bytes()); // indirectsymoff
+        buf[dys + 60..dys + 64].copy_from_slice(&1u32.to_le_bytes()); // nindirectsyms
+        // extreloff..nlocrel (offsets 64-76) — all zero
+
+        // ── LC_DYLD_INFO (0x1B8) ──────────────────────────────────
+        // DyldInfoCommand: 12 × u32 = 48 bytes
+        let dyi = 0x1B8usize;
+        buf[dyi..dyi + 4].copy_from_slice(&macho::LC_DYLD_INFO.to_le_bytes()); // cmd
+        buf[dyi + 4..dyi + 8].copy_from_slice(&dyld_info_cmdsize.to_le_bytes());
+        // rebase_off=0, rebase_size=0 (offsets 8,12 — zero)
+        buf[dyi + 16..dyi + 20].copy_from_slice(&0x238u32.to_le_bytes()); // bind_off
+        buf[dyi + 20..dyi + 24].copy_from_slice(&15u32.to_le_bytes()); // bind_size
+        // weak_bind, lazy_bind, export — all zero
+
+        // ── __text data (0x100) ────────────────────────────────────
+        buf[0x1F0] = 0xC3; // RET
+
+        // ── String table (0x210) ───────────────────────────────────
+        // "\0_malloc\0"
+        buf[0x210] = 0x00;
+        buf[0x211..0x219].copy_from_slice(b"_malloc\0");
+
+        // ── nlist64 (0x220) ────────────────────────────────────────
+        // n_strx = 1 (index of "_malloc" in strtab)
+        buf[0x220..0x224].copy_from_slice(&1u32.to_le_bytes());
+        // n_type = N_EXT | N_UNDF = 0x01
+        buf[0x224] = macho::N_EXT | macho::N_UNDF;
+        // n_sect = 0 (NO_SECT)
+        // n_desc = 0
+        // n_value = 0
+        // (bytes 0x225..0x230 already zero)
+
+        // ── Indirect symbol table (0x230) ──────────────────────────
+        // 1 entry: index 0 into symtab
+        buf[0x230..0x234].copy_from_slice(&0u32.to_le_bytes());
+
+        // ── Bind opcodes (0x238, 15 bytes) ─────────────────────────
+        let bind = 0x238usize;
+        buf[bind] = 0x11; // SET_DYLIB_ORDINAL_IMM | 1
+        buf[bind + 1] = 0x40; // SET_SYMBOL_TRAILING_FLAGS_IMM | 0
+        buf[bind + 2..bind + 10].copy_from_slice(b"_printf\0"); // symbol name
+        buf[bind + 10] = 0x51; // SET_TYPE_IMM | BIND_TYPE_POINTER(1)
+        buf[bind + 11] = 0x71; // SET_SEGMENT_AND_OFFSET_ULEB | 1
+        buf[bind + 12] = 0x00; // ULEB128(0)
+        buf[bind + 13] = 0x90; // DO_BIND
+        buf[bind + 14] = 0x00; // DONE
+
+        buf
+    }
+
+    #[test]
+    fn test_macho_dyld_info_fixture_loads() {
+        let bin = macho64_with_dyld_info();
+        assert!(bin.len() < 1024, "fixture must be < 1 KB");
+        let img = MachoLoader::load(&bin).expect("Mach-O with LC_DYLD_INFO must load");
+
+        assert_eq!(img.arch, ArchId::X86_64);
+        assert_eq!(img.endian, Endian::Little);
+
+        let text = img
+            .section_by_name("__text")
+            .expect("__text section must exist");
+        assert!(text.flags.contains(SectionFlags::EXEC));
+
+        let la_ptr = img
+            .section_by_name("__la_symbol_ptr")
+            .expect("__la_symbol_ptr section must exist");
+        assert!(la_ptr.flags.contains(SectionFlags::READ));
+    }
+
     #[test]
     fn test_text_section_not_writable() {
         let data = minimal_macho64();

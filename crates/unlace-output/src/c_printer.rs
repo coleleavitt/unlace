@@ -164,7 +164,7 @@ pub fn print_c_full(
     let return_type_str = dwarf_func
         .and_then(|df| df.return_type.as_deref())
         .map(|s| dwarf_type_to_c(s))
-        .unwrap_or_else(|| c_return_type(&func.return_type).to_string());
+        .unwrap_or_else(|| c_sig_return_type(&func.return_type).to_string());
 
     let conv_annotation = header.and_then(|h| calling_convention_annotation(&h.convention));
     if let Some(conv) = conv_annotation {
@@ -194,7 +194,7 @@ pub fn print_c_full(
             if i > 0 {
                 out.push_str(", ");
             }
-            let _ = write!(out, "{} {}", c_type(pty), pname);
+            let _ = write!(out, "{} {}", c_sig_type(pty), pname);
         }
         if func.params.is_empty()
             && dwarf_func.map_or(true, |df| df.params.is_empty())
@@ -887,6 +887,38 @@ fn c_return_type(ty: &PrimitiveType) -> &'static str {
     match ty {
         PrimitiveType::Unknown => "void",
         other => c_type(other),
+    }
+}
+
+/// IDA-style type names for function signature parameters.
+fn c_sig_type(ty: &PrimitiveType) -> &'static str {
+    match ty {
+        PrimitiveType::Unknown => "__int64",
+        PrimitiveType::Bool => "_BOOL",
+        PrimitiveType::Int(w) => match w {
+            1 => "__int8",
+            2 => "__int16",
+            4 => "__int32",
+            8 => "__int64",
+            _ => "__int64",
+        },
+        PrimitiveType::UnsignedInt(w) => match w {
+            1 => "unsigned __int8",
+            2 => "unsigned __int16",
+            4 => "unsigned __int32",
+            8 => "unsigned __int64",
+            _ => "unsigned __int64",
+        },
+        PrimitiveType::Float => "float",
+        PrimitiveType::Double => "double",
+        PrimitiveType::Ptr => "void *",
+    }
+}
+
+fn c_sig_return_type(ty: &PrimitiveType) -> &'static str {
+    match ty {
+        PrimitiveType::Unknown => "void",
+        other => c_sig_type(other),
     }
 }
 
@@ -2181,6 +2213,7 @@ typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
 typedef unsigned int _DWORD;
 typedef unsigned long long _QWORD;
+typedef unsigned char _BOOL;
 typedef signed char __int8;
 typedef signed short __int16;
 typedef signed int __int32;
@@ -2487,7 +2520,7 @@ mod tests {
 
         let output = print_c(&func);
         assert!(
-            output.contains("void * with_params(int a, void * b)"),
+            output.contains("void * with_params(__int32 a, void * b)"),
             "params: {output}"
         );
     }
@@ -2784,7 +2817,7 @@ mod tests {
 
         let output = super::print_c(&func);
         assert!(
-            output.contains("int sub_1000(void)"),
+            output.contains("__int32 sub_1000(void)"),
             "should use fallback sub_NNNN naming: {output}",
         );
     }
@@ -4486,7 +4519,7 @@ mod tests {
         );
         let sig_line = output.lines().find(|l| l.contains("sub_401000(")).expect("function sig");
         assert!(
-            sig_line.starts_with("int sub_401000("),
+            sig_line.starts_with("__int32 sub_401000("),
             "SysV should have no convention annotation: {sig_line}",
         );
     }
@@ -4512,7 +4545,7 @@ mod tests {
         );
         let sig_line = output.lines().find(|l| l.contains("sub_500000(")).expect("function sig");
         assert!(
-            sig_line.starts_with("int sub_500000("),
+            sig_line.starts_with("__int32 sub_500000("),
             "unknown convention should have no annotation: {sig_line}",
         );
     }
@@ -5175,7 +5208,7 @@ mod tests {
 
         let output = print_c(&func);
         assert!(
-            output.contains("long long add_two(long long a1, long long a2)"),
+            output.contains("__int64 add_two(__int64 a1, __int64 a2)"),
             "should emit typed params: {output}",
         );
     }
@@ -5196,6 +5229,67 @@ mod tests {
         assert!(
             output.contains("void void_func(void)"),
             "Unknown return type should emit void: {output}",
+        );
+    }
+
+    #[test]
+    fn test_sig_params_ida_types() {
+        let func = HirFunction {
+            name: "sub_401000".to_string(),
+            params: vec![
+                ("a1".to_string(), PrimitiveType::Int(8)),
+                ("a2".to_string(), PrimitiveType::UnsignedInt(4)),
+                ("a3".to_string(), PrimitiveType::Ptr),
+            ],
+            return_type: PrimitiveType::Int(8),
+            body: vec![HirNode::Return(None)],
+            addr: 0x401000,
+            foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
+        };
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("__int64 sub_401000(__int64 a1, unsigned __int32 a2, void * a3)"),
+            "signature should use IDA-style types: {output}",
+        );
+    }
+
+    #[test]
+    fn test_sig_no_params_shows_void() {
+        let func = HirFunction {
+            name: "sub_402000".to_string(),
+            params: vec![],
+            return_type: PrimitiveType::Int(4),
+            body: vec![HirNode::Return(None)],
+            addr: 0x402000,
+            foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
+        };
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("__int32 sub_402000(void)"),
+            "empty params should emit (void): {output}",
+        );
+    }
+
+    #[test]
+    fn test_sig_return_type_bool() {
+        let func = HirFunction {
+            name: "sub_403000".to_string(),
+            params: vec![("a1".to_string(), PrimitiveType::Int(4))],
+            return_type: PrimitiveType::Bool,
+            body: vec![HirNode::Return(None)],
+            addr: 0x403000,
+            foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
+        };
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("_BOOL sub_403000(__int32 a1)"),
+            "Bool return type should emit _BOOL: {output}",
         );
     }
 }

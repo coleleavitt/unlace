@@ -1,0 +1,49 @@
+P5-5: Wire inferred_params and inferred_return_type to C printer signatures
+============================================================================
+
+STATUS: COMPLETE
+
+WHAT WAS DONE:
+1. Added `c_sig_type()` — IDA-style type names for function signature parameters:
+   - PrimitiveType::Int(4)       → "__int32"
+   - PrimitiveType::Int(8)       → "__int64"
+   - PrimitiveType::UnsignedInt(4) → "unsigned __int32"
+   - PrimitiveType::UnsignedInt(8) → "unsigned __int64"
+   - PrimitiveType::Ptr          → "void *"
+   - PrimitiveType::Float        → "float"
+   - PrimitiveType::Double       → "double"
+   - PrimitiveType::Bool         → "_BOOL"
+   - PrimitiveType::Unknown      → "__int64" (IDA default for unknown params)
+
+2. Added `c_sig_return_type()` — IDA-style for return types:
+   - PrimitiveType::Unknown → "void" (no return info = void)
+   - All others → c_sig_type()
+
+3. Updated signature emission in `print_c_full()`:
+   - Return type: c_return_type → c_sig_return_type
+   - Parameter types: c_type → c_sig_type
+   - Existing `c_type()` kept for local variable declarations
+
+4. Added `_BOOL` typedef to IDA_TYPEDEFS prelude
+
+5. Updated 5 existing tests for new IDA-style type names in signatures
+6. Added 3 new tests:
+   - test_sig_params_ida_types: mixed param types emit correct IDA names
+   - test_sig_no_params_shows_void: empty params → "(void)"
+   - test_sig_return_type_bool: _BOOL return type emitted correctly
+
+DATA FLOW (already wired):
+  ParamInferPass → SsaFunction.inferred_params
+  ReturnTypeInferPass → SsaFunction.inferred_return_type
+  structurer.rs:47-48 → HirFunction.params / HirFunction.return_type
+  c_printer.rs → reads func.params and func.return_type (NOW with IDA types)
+
+TESTS: 998 passed, 0 failed (cargo test --workspace)
+
+FILES MODIFIED:
+- crates/unlace-output/src/c_printer.rs
+  - Added c_sig_type(), c_sig_return_type()
+  - Updated print_c_full() to use IDA-style types in signatures
+  - Added _BOOL to IDA_TYPEDEFS
+  - Updated 5 existing test expectations
+  - Added 3 new tests

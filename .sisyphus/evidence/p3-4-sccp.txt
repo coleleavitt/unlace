@@ -1,0 +1,33 @@
+P3-4: Sparse Conditional Constant Propagation (SCCP)
+=====================================================
+
+Implementation: crates/unlace-passes/src/sccp.rs
+Module registered: crates/unlace-passes/src/lib.rs (pub mod sccp; pub use sccp::SccpPass;)
+
+Algorithm (Wegman & Zadeck 1991):
+- Three-valued lattice: Top (uninitialized) → Constant(value, size) → Bottom (overdefined)
+- Two worklists: CFG edges (block reachability) and SSA edges (def-use propagation)
+- Entry block seeded as reachable; external inputs (undefined registers) initialized to Bottom
+- CBRANCH with constant condition: only feasible successor edge added
+- Phi nodes: meet of all reachable input values (unreachable predecessors skipped)
+- Rewrite phase: replace Constant outputs with COPY of literal; Top in reachable blocks → COPY 0
+
+Data structures (BTreeMap/BTreeSet per lint):
+- values: BTreeMap<SsaVarnode, LatticeValue> — lattice state per SSA variable
+- reachable: BTreeSet<BlockId> — which blocks are reachable
+- uses: BTreeMap<SsaVarnode, Vec<(BlockId, usize)>> — def-use chains for instructions
+- phi_uses: BTreeMap<SsaVarnode, Vec<(BlockId, SsaVarnode)>> — def-use chains for phi nodes
+
+Pass trait: SccpPass implements Pass { name: "sccp", run: solve + rewrite }
+
+Tests (5):
+- test_sccp_basic_const: v1 = COPY 5; v2 = INT_ADD(v1, 3) → v2 = COPY 8
+- test_sccp_through_branch_taken: if (INT_EQUAL(5,5)) v1=5; else v1=10 → phi resolves to 5
+- test_sccp_unreachable_branch: if (5==5) ...; else <unreachable> → BB2 not reachable
+- test_sccp_phi_meet: runtime condition → both branches reachable → phi(5, 10) = Bottom
+- test_sccp_phi_one_reachable: constant condition → one branch unreachable → phi(5, ⊥) = 5
+
+Verification:
+- cargo test -p unlace-passes -- sccp: 5 passed, 0 failed
+- cargo xtask lint-determinism: OK — no HashMap/HashSet in enforced crates
+- cargo test --workspace: 122 pass tests + all workspace tests pass (0 failures)

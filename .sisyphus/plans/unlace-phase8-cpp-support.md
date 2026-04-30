@@ -123,7 +123,7 @@ Wave FINAL (Verification):
 
 ## TODOs
 
-- [ ] P8-0. Create C++ vtable test fixture
+- [x] P8-0. Create C++ vtable test fixture
 
   **What to do**:
   - Write `fixtures/src/cpp_vtable.cpp`:
@@ -154,7 +154,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(fixtures): C++ vtable test fixture with virtual classes`
 
-- [ ] P8-1. Create C++ exception test fixture
+- [x] P8-1. Create C++ exception test fixture
 
   **What to do**:
   - Write `fixtures/src/cpp_exceptions.cpp`:
@@ -180,7 +180,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(fixtures): C++ exception test fixture with try/catch/throw`
 
-- [ ] P8-2. Create C++ RTTI test fixture
+- [x] P8-2. Create C++ RTTI test fixture
 
   **What to do**:
   - Write `fixtures/src/cpp_rtti.cpp`:
@@ -207,7 +207,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(fixtures): C++ RTTI test fixture with dynamic_cast/typeid`
 
-- [ ] P8-3. Convert critical structurer panics to Result types
+- [x] P8-3. Convert critical structurer panics to Result types
 
   **What to do**:
   - In `crates/unlace-struct/src/`:
@@ -231,7 +231,7 @@ Wave FINAL (Verification):
 
   **Commit**: `fix(struct): convert critical panics to Result types for C++ safety`
 
-- [ ] P8-4. Add golden tests for C++ fixtures
+- [x] P8-4. Add golden tests for C++ fixtures
 
   **What to do**:
   - Extend `crates/unlace-test-harness/tests/golden_fixtures.rs` to include C++ fixtures
@@ -251,7 +251,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(tests): golden tests for C++ fixtures`
 
-- [ ] P8-5. Fix dead assignment elimination
+- [x] P8-5. Fix dead assignment elimination
 
   **What to do**:
   - Investigate the 191 dead assignments in medium.elf
@@ -273,7 +273,7 @@ Wave FINAL (Verification):
 
   **Commit**: `fix(passes): reduce dead assignments in output`
 
-- [ ] P8-6. Reduce spurious type casts
+- [x] P8-6. Reduce spurious type casts
 
   **What to do**:
   - Currently unlace emits ~120 type casts where IDA emits ~19 for the same function
@@ -296,7 +296,7 @@ Wave FINAL (Verification):
 
   **Commit**: `fix(output): reduce spurious type casts with elision rules`
 
-- [ ] P8-7. Fixture-based quality metrics baseline
+- [x] P8-7. Fixture-based quality metrics baseline
 
   **What to do**:
   - For each fixture (including new C++ ones), capture metrics:
@@ -316,7 +316,7 @@ Wave FINAL (Verification):
 
   **Commit**: NO (measurement only)
 
-- [ ] P8-8. Measure Wave 1 improvement
+- [x] P8-8. Measure Wave 1 improvement
 
   **What to do**:
   - Run metrics on all fixtures, compare against P8-7 baseline
@@ -335,7 +335,7 @@ Wave FINAL (Verification):
 
   **Commit**: NO (measurement only)
 
-- [ ] P8-9. _ZTV/_ZTI/_ZTS symbol recognition
+- [x] P8-9. _ZTV/_ZTI/_ZTS symbol recognition
 
   **What to do**:
   - In `crates/unlace-output/src/demangle.rs`:
@@ -361,7 +361,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-9-symbols.txt
   ```
 
-- [ ] P8-10. Type recovery from mangled names
+- [x] P8-10. Type recovery from mangled names
 
   **What to do**:
   - Extend `demangle.rs` to extract structured type info from demangled signatures
@@ -382,7 +382,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-10-typerecovery.txt
   ```
 
-- [ ] P8-11. Constructor/destructor detection
+- [x] P8-11. Constructor/destructor detection
 
   **What to do**:
   - Detect C1/C2 constructors and D0/D1/D2 destructors from mangled names
@@ -402,7 +402,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-11-ctordtor.txt
   ```
 
-- [ ] P8-12. Demangled names in C output
+- [x] P8-12. Demangled names in C output
 
   **What to do**:
   - Ensure demangled C++ names appear in function signatures and call sites
@@ -423,7 +423,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-12-demangled.txt
   ```
 
-- [ ] P8-13. .gcc_except_table LSDA parser
+- [x] P8-13. .gcc_except_table LSDA parser
 
   **What to do**:
   - WRITE `crates/unlace-loader/src/gcc_except_table.rs` (~300 LOC)
@@ -445,7 +445,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-13-lsda.txt
   ```
 
-- [ ] P8-14. RTTI scanner
+- [x] P8-14. RTTI scanner
 
   **What to do**:
   - WRITE `crates/unlace-loader/src/rtti.rs` (~400 LOC)
@@ -467,7 +467,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-14-rtti.txt
   ```
 
-- [ ] P8-15. Class hierarchy recovery
+- [x] P8-15. Class hierarchy recovery
 
   **What to do**:
   - Build inheritance tree from RTTI base class pointers
@@ -487,7 +487,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-15-hierarchy.txt
   ```
 
-- [ ] P8-16. Vtable method enumeration
+- [x] P8-16. Vtable method enumeration
 
   **What to do**:
   - For each _ZTV* symbol, enumerate virtual method pointers
@@ -508,7 +508,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-16-vtable-enum.txt
   ```
 
-- [ ] P8-17. Integrate RTTI class names into C output
+- [x] P8-17. Integrate RTTI class names into C output
 
   **What to do**:
   - When emitting function signatures, use RTTI class names for `this` parameter type
@@ -529,7 +529,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-17-rtti-output.txt
   ```
 
-- [ ] P8-18. C++ vtable dispatch pass
+- [x] P8-18. C++ vtable dispatch pass
 
   **What to do**:
   - WRITE `crates/unlace-passes/src/cpp_vtable.rs` (~150 LOC)
@@ -550,7 +550,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-18-vtable.txt
   ```
 
-- [ ] P8-19. Exception region annotation
+- [x] P8-19. Exception region annotation
 
   **What to do**:
   - Using LSDA data from P8-13, annotate functions with try/catch regions
@@ -571,7 +571,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-19-exception.txt
   ```
 
-- [ ] P8-20. __cxa_throw/__cxa_allocate_exception recognition
+- [x] P8-20. __cxa_throw/__cxa_allocate_exception recognition
 
   **What to do**:
   - Add to libc_signatures.rs: __cxa_allocate_exception, __cxa_throw, __cxa_begin_catch, __cxa_end_catch, __cxa_rethrow
@@ -591,7 +591,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-20-cxa.txt
   ```
 
-- [ ] P8-21. Verify C++ fixtures produce correct output
+- [x] P8-21. Verify C++ fixtures produce correct output
 
   **What to do**:
   - Decompile all 3 C++ fixtures and verify:
@@ -614,7 +614,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-21-verify.txt
   ```
 
-- [ ] P8-22. Callother → C intrinsic rendering
+- [x] P8-22. Callother → C intrinsic rendering
 
   **What to do**:
   - In c_printer.rs: when emitting CALLOTHER, look up the tag in IntrinsicRegistry
@@ -636,7 +636,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-22-callother.txt
   ```
 
-- [ ] P8-23. Reduce dead assignments in medium.elf
+- [x] P8-23. Reduce dead assignments in medium.elf
 
   **What to do**:
   - After P8-5 general fix, specifically target medium.elf
@@ -656,7 +656,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-23-dead.txt
   ```
 
-- [ ] P8-24. Final golden file updates + measurement
+- [x] P8-24. Final golden file updates + measurement
 
   **What to do**:
   - Re-capture all golden files
@@ -681,7 +681,7 @@ Wave FINAL (Verification):
 
 ## Final Verification Wave
 
-- [ ] P8-F1. **Code Quality Review** — `general`
+- [x] P8-F1. **Code Quality Review** — `general`
 
   **QA Scenarios**:
   ```
@@ -695,7 +695,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-f1-quality.txt
   ```
 
-- [ ] P8-F2. **C++ Fixture Golden Test Verification** — `general`
+- [x] P8-F2. **C++ Fixture Golden Test Verification** — `general`
 
   **QA Scenarios**:
   ```
@@ -708,7 +708,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-f2-golden.txt
   ```
 
-- [ ] P8-F3. **Regression Check** — `general`
+- [x] P8-F3. **Regression Check** — `general`
 
   **QA Scenarios**:
   ```
@@ -721,7 +721,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p8-f3-regression.txt
   ```
 
-- [ ] P8-F4. **Feature Compliance Audit** — `oracle`
+- [x] P8-F4. **Feature Compliance Audit** — `oracle`
 
   **QA Scenarios**:
   ```

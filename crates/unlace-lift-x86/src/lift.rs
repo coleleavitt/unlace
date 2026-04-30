@@ -309,6 +309,8 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Shl => bitwise::lift_shl(ctx, insn),
         M::Shr => bitwise::lift_shr(ctx, insn),
         M::Sar => bitwise::lift_sar(ctx, insn),
+        M::Rol => bitwise::lift_rol(ctx, insn),
+        M::Ror => bitwise::lift_ror(ctx, insn),
         M::Bt => bitwise::lift_bt(ctx, insn),
         M::Bsf => bitwise::lift_bsf(ctx, insn),
         M::Bsr => bitwise::lift_bsr(ctx, insn),

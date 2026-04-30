@@ -842,5 +842,29 @@ mod tests {
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLess));
     }
+
+    // -- ROL / ROR rotation -------------------------------------------------
+
+    #[test]
+    fn test_rol_reg_imm() {
+        // 48 C1 C0 04 = rol rax, 4
+        let result = lifter()
+            .lift_insn(&[0x48, 0xC1, 0xC0, 0x04], 0x1000)
+            .expect("should decode rol rax, 4");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRight));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
+    }
+
+    #[test]
+    fn test_ror_reg_imm() {
+        // 48 C1 C8 04 = ror rax, 4
+        let result = lifter()
+            .lift_insn(&[0x48, 0xC1, 0xC8, 0x04], 0x1000)
+            .expect("should decode ror rax, 4");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRight));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
+    }
 }
 

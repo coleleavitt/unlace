@@ -142,7 +142,7 @@ Wave FINAL (Verification):
 
 ## TODOs
 
-- [ ] P6-0. Fix macro-as-call extraction in measure_parity.py
+- [x] P6-0. Fix macro-as-call extraction in measure_parity.py
 
   **What to do**:
   - In `scripts/measure_parity.py` line 70, the keywords set is too small: `{'if', 'for', 'while', 'switch', 'return', 'sizeof', 'typeof'}`
@@ -214,7 +214,7 @@ print('PASS')
 
   **Commit**: `fix(scripts): exclude IDA-style macros and intrinsics from parity calls extraction`
 
-- [ ] P6-1. Investigate why complex functions produce 0 if-branches
+- [x] P6-1. Investigate why complex functions produce 0 if-branches
 
   **What to do**:
   - Critical investigation task. Functions sub_1e2580 (IDA: 59 if-branches, unlace: 0) and sub_2436e0 (IDA: 35 if-branches, unlace: 0) are the dominant `if-branches` parity drag.
@@ -252,7 +252,7 @@ print('PASS')
 
   **Commit**: `chore: investigation report for 0-if-branch on complex functions`
 
-- [ ] P6-2. Rebaseline parity with fixed measurement
+- [x] P6-2. Rebaseline parity with fixed measurement
 
   **What to do**:
   - After P6-0 lands, run parity measurement and store as new baseline:
@@ -285,7 +285,7 @@ print('PASS')
 
   **Commit**: NO (measurement only)
 
-- [ ] P6-3. Fix root cause of 0-if-branch on complex functions
+- [x] P6-3. Fix root cause of 0-if-branch on complex functions
 
   **What to do**:
   - Based on P6-1's investigation report, fix the root cause of complex functions producing 0 if-branches
@@ -315,7 +315,7 @@ print('PASS')
 
   **Commit**: `fix(struct): root cause of 0-if-branch on complex functions`
 
-- [ ] P6-4. Block merging pass (single-pred-single-succ elimination)
+- [x] P6-4. Block merging pass (single-pred-single-succ elimination)
 
   **What to do**:
   - WRITE `crates/unlace-struct/src/block_merge.rs` (new pre-structuring pass)
@@ -341,7 +341,7 @@ print('PASS')
 
   **Commit**: `feat(struct): block merging pass for single-pred-single-succ elimination`
 
-- [ ] P6-5. IDA-matching goto emission
+- [x] P6-5. IDA-matching goto emission
 
   **What to do**:
   - In `crates/unlace-struct/src/structurer.rs`:
@@ -366,7 +366,7 @@ print('PASS')
 
   **Commit**: `feat(struct): IDA-matching goto emission for irreducible CFG regions`
 
-- [ ] P6-6. Multiple return recovery
+- [x] P6-6. Multiple return recovery
 
   **What to do**:
   - Investigation: IDA emits 2-17 returns per function; unlace emits 0-1
@@ -390,7 +390,7 @@ print('PASS')
 
   **Commit**: `feat(struct): preserve multiple return points in structured output`
 
-- [ ] P6-7. Switch table recovery improvements
+- [x] P6-7. Switch table recovery improvements
 
   **What to do**:
   - Currently unlace handles BRANCHIND but doesn't validate jump table structure
@@ -414,7 +414,7 @@ print('PASS')
 
   **Commit**: `feat(struct): switch table recovery with jump table validation`
 
-- [ ] P6-8. Eliminate spurious shift-ops from SUBPIECE expansion
+- [x] P6-8. Eliminate spurious shift-ops from SUBPIECE expansion
 
   **What to do**:
   - Per parity data: `shift-ops` scores 0.0 avg — unlace emits 5-11 shift ops per function while IDA emits 0-1
@@ -440,7 +440,7 @@ print('PASS')
 
   **Commit**: `fix(output): eliminate spurious shift-ops from SUBPIECE expansion`
 
-- [ ] P6-9. Eliminate spurious bitwise-ops from SUBPIECE expansion
+- [x] P6-9. Eliminate spurious bitwise-ops from SUBPIECE expansion
 
   **What to do**:
   - Same root cause as P6-8: SUBPIECE emits `& 0xFF` masks that IDA hides via macros
@@ -463,7 +463,7 @@ print('PASS')
 
   **Commit**: `fix(output): eliminate spurious bitwise-ops from SUBPIECE expansion`
 
-- [ ] P6-10. Add 25 algebraic simplification rules
+- [x] P6-10. Add 25 algebraic simplification rules
 
   **What to do**:
   - In `crates/unlace-passes/src/idiom_recognition.rs` (extend existing):
@@ -494,7 +494,7 @@ print('PASS')
 
   **Commit**: `feat(passes): 25 algebraic simplification rules (offset cancellation, distributive)`
 
-- [ ] P6-11. Add 15 comparison simplification rules
+- [x] P6-11. Add 15 comparison simplification rules
 
   **What to do**:
   - In `crates/unlace-passes/src/condition_simplify.rs` (extend existing):
@@ -523,7 +523,7 @@ print('PASS')
 
   **Commit**: `feat(passes): 15 comparison simplification rules`
 
-- [ ] P6-12. Add conversion composition rules
+- [x] P6-12. Add conversion composition rules
 
   **What to do**:
   - In `crates/unlace-passes/src/idiom_recognition.rs`:
@@ -548,7 +548,7 @@ print('PASS')
 
   **Commit**: `feat(passes): conversion composition rules (zext/sext composition, subpiece elimination)`
 
-- [ ] P6-13. libc signature database
+- [x] P6-13. libc signature database
 
   **What to do**:
   - WRITE `crates/unlace-loader/src/libc_signatures.rs` (new file) or `crates/unlace-passes/src/libc_signatures.rs`
@@ -575,7 +575,7 @@ print('PASS')
 
   **Commit**: `feat(passes): libc signature database for symbol resolution`
 
-- [ ] P6-14. IDA SDK signature overlay
+- [x] P6-14. IDA SDK signature overlay
 
   **What to do**:
   - Specifically for hexx64.so (the parity target binary), the IDA SDK functions appear in IDA references:
@@ -600,7 +600,7 @@ print('PASS')
 
   **Commit**: `feat(passes): IDA SDK signature overlay extracted from reference dumps`
 
-- [ ] P6-15. __readfsqword stack canary intrinsic
+- [x] P6-15. __readfsqword stack canary intrinsic
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -627,7 +627,7 @@ print('PASS')
 
   **Commit**: `feat(output): __readfsqword/__readfsdword stack canary intrinsics`
 
-- [ ] P6-16. _mm_* SSE intrinsic catalog expansion
+- [x] P6-16. _mm_* SSE intrinsic catalog expansion
 
   **What to do**:
   - Already have CALLOTHER → intrinsic mapping for SSE2 in P3-13
@@ -653,7 +653,7 @@ print('PASS')
 
   **Commit**: `feat(lift-x86): expand SSE/AVX intrinsic catalog`
 
-- [ ] P6-17. Create Type enum wrapper
+- [x] P6-17. Create Type enum wrapper
 
   **What to do**:
   - WRITE `crates/unlace-ir/src/types.rs` (new file)
@@ -689,7 +689,7 @@ print('PASS')
 
   **Commit**: `feat(ir): Type enum wrapper for composite types (struct, union, enum, array, ptr<T>, funcptr)`
 
-- [ ] P6-18. Cast opcode type inference rules
+- [x] P6-18. Cast opcode type inference rules
 
   **What to do**:
   - In `crates/unlace-passes/src/type_infer.rs`:
@@ -713,7 +713,7 @@ print('PASS')
 
   **Commit**: `feat(passes): Cast opcode type inference rules`
 
-- [ ] P6-19. Integrate DWARF parameter names with ParamInferPass
+- [x] P6-19. Integrate DWARF parameter names with ParamInferPass
 
   **What to do**:
   - Currently DWARF extracts function info (params, names, types) but not all is integrated with ParamInferPass
@@ -738,7 +738,7 @@ print('PASS')
 
   **Commit**: `feat(passes): integrate DWARF parameter names with ParamInferPass`
 
-- [ ] P6-20. Integrate DWARF struct types into type inference
+- [x] P6-20. Integrate DWARF struct types into type inference
 
   **What to do**:
   - Currently DWARF extracts struct types but they're not wired into type inference
@@ -763,7 +763,7 @@ print('PASS')
 
   **Commit**: `feat(passes): integrate DWARF struct types into type inference`
 
-- [ ] P6-21. __noreturn annotation for non-returning functions
+- [x] P6-21. __noreturn annotation for non-returning functions
 
   **What to do**:
   - Currently NoreturnPass detects but unlace doesn't emit `__noreturn` annotation
@@ -785,7 +785,7 @@ print('PASS')
 
   **Commit**: `feat(output): __noreturn annotation for non-returning functions`
 
-- [ ] P6-22. __cdecl/__stdcall calling convention annotations
+- [x] P6-22. __cdecl/__stdcall calling convention annotations
 
   **What to do**:
   - Currently c_printer only emits `__fastcall` for MS x64 and `__aapcs` for ARM
@@ -810,7 +810,7 @@ print('PASS')
 
   **Commit**: `feat(output): __cdecl/__stdcall/__thiscall calling convention annotations`
 
-- [ ] P6-23. Negative stack offset comments [rbp-Xh]
+- [x] P6-23. Negative stack offset comments [rbp-Xh]
 
   **What to do**:
   - Currently variable comments show `// [rsp+Xh]` but not `[rbp-Xh]`
@@ -833,7 +833,7 @@ print('PASS')
 
   **Commit**: `feat(output): negative stack offset comments [rbp-Xh] in addition to [rsp+Xh]`
 
-- [ ] P6-24. BYREF annotation infrastructure
+- [x] P6-24. BYREF annotation infrastructure
 
   **What to do**:
   - When a stack variable is passed to a function by reference (its address taken), IDA annotates with BYREF
@@ -855,7 +855,7 @@ print('PASS')
 
   **Commit**: `feat(output): BYREF annotation for address-taken stack variables`
 
-- [ ] P6-25. Loop counter naming heuristics
+- [x] P6-25. Loop counter naming heuristics
 
   **What to do**:
   - When ForLoopPass detects a for-loop with a counter variable that's:
@@ -880,7 +880,7 @@ print('PASS')
 
   **Commit**: `feat(output): loop counter naming heuristics (i/j/k for for-loop counters)`
 
-- [ ] P6-26. Variable name from DWARF integration
+- [x] P6-26. Variable name from DWARF integration
 
   **What to do**:
   - When DWARF variable info is available, prefer DWARF names over generated names
@@ -909,7 +909,7 @@ print('PASS')
 
 ## Final Verification Wave
 
-- [ ] P6-F1. **Plan Compliance Audit** — `oracle`
+- [x] P6-F1. **Plan Compliance Audit** — `oracle`
   Read plan end-to-end. For each "Must Have": verify implementation exists. For each "Must NOT Have": search codebase for forbidden patterns. Compare deliverables against plan.
   Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
@@ -924,7 +924,7 @@ print('PASS')
     Evidence: .sisyphus/evidence/p6-f1-compliance.txt
   ```
 
-- [ ] P6-F2. **Code Quality Review** — `general`
+- [x] P6-F2. **Code Quality Review** — `general`
   Run `cargo test --workspace` + `cargo xtask lint-determinism`. Review changed files for semantic correctness.
   Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | VERDICT`
 
@@ -940,7 +940,7 @@ print('PASS')
     Evidence: .sisyphus/evidence/p6-f2-quality.txt
   ```
 
-- [ ] P6-F3. **Parity Measurement** — `general`
+- [x] P6-F3. **Parity Measurement** — `general`
   Run parity script and verify overall_parity ≥ 75.0%. Compare per-feature scores against Wave 0 rebaseline.
   Output: `Parity [X%] | vs Baseline [+Y%] | Regressions [NONE/list] | VERDICT`
 
@@ -956,7 +956,7 @@ print('PASS')
     Evidence: .sisyphus/evidence/p6-f3-parity.json
   ```
 
-- [ ] P6-F4. **Regression Check** — `general`
+- [x] P6-F4. **Regression Check** — `general`
   Run all 4 fixtures, verify each decompiles. Verify test count ≥ 1080. Verify 0 FAILED tests.
   Output: `Fixtures [N/N] | Tests [N pass] | VERDICT`
 

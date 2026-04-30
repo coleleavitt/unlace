@@ -7,6 +7,7 @@ pub mod const_fold;
 pub mod copy_prop;
 pub mod dce;
 pub mod dead_flag_elim;
+pub mod expression_tree;
 pub mod stack_vars;
 pub mod type_infer;
 
@@ -17,6 +18,7 @@ pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;
 pub use dce::DeadCodeElimPass;
 pub use dead_flag_elim::DeadFlagElimPass;
+pub use expression_tree::ExpressionTreePass;
 pub use stack_vars::StackVarRecoveryPass;
 
 #[cfg(test)]

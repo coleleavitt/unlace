@@ -8,7 +8,8 @@ use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BasicBlock, BlockId, Function, IrOp, Lifter};
 use unlace_loader::{BinaryImage, SymbolKind};
 use unlace_passes::{
-    ConstantFoldPass, CopyPropagationPass, DeadCodeElimPass, Pass, run_to_fixedpoint,
+    ConstantFoldPass, CopyPropagationPass, DeadCodeElimPass, ExpressionTreePass, Pass,
+    run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -356,6 +357,9 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
 
     let changes = run_to_fixedpoint(passes, ssa)
         .context("pass pipeline failed")?;
+
+    ExpressionTreePass.run(ssa)
+        .context("expression tree pass failed")?;
 
     run_type_infer_bounded(ssa);
 

@@ -47,7 +47,7 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
         return_type: PrimitiveType::Unknown,
         body,
         addr: func.function.addr,
-        foldable_exprs: BTreeSet::new(),
+        foldable_exprs: func.foldable_exprs.clone(),
     })
 }
 

@@ -179,6 +179,7 @@ mod tests {
             var_types: BTreeMap::new(),
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
+            foldable_exprs: BTreeSet::new(),
         }
     }
 

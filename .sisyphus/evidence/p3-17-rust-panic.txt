@@ -1,0 +1,59 @@
+P3-17: Rust Panic Path Annotation
+==================================
+
+Date: 2026-04-29
+
+## What was done
+
+1. Added `ExpectFailed` variant to `PanicKind` enum in `crates/unlace-ir/src/ssa.rs`
+2. Created `crates/unlace-passes/src/rust_panic.rs` implementing `RustPanicPass`
+3. Registered module and re-export in `crates/unlace-passes/src/lib.rs`
+4. Added `panic_sites: BTreeMap<u64, PanicKind>` to `HirFunction` in `crates/unlace-struct/src/hir.rs`
+5. Threaded panic_sites from SsaFunction through structurer into HirFunction
+6. Added panic comment emission in `crates/unlace-output/src/c_printer.rs`
+7. Fixed all downstream HirFunction constructors (switch_recovery, ternary_recovery, c_printer tests)
+
+## Detection logic
+
+- `classify_panic()` matches both demangled and mangled Rust symbol names:
+  - core::panicking::panic / _ZN4core9panicking5panic* → PanicKind::Panic
+  - core::panicking::panic_fmt → PanicKind::Panic
+  - core::panicking::panic_bounds_check → PanicKind::BoundsCheck
+  - core::result::unwrap_failed / _ZN4core6result13unwrap_failed* → PanicKind::UnwrapFailed
+  - core::option::expect_failed / _ZN4core6option13expect_failed* → PanicKind::ExpectFailed
+  - std::process::abort / _ZN3std7process5abort* → PanicKind::Abort
+
+## C printer integration
+
+- When emitting CALL/CALLIND instructions, checks `ctx.panic_sites` by instruction address
+- Emits `/* PANIC: <kind> */` comment before the call statement
+
+## Tests (9 total, all passing)
+
+```
+cargo test -p unlace-passes -- rust_panic
+
+running 9 tests
+test rust_panic::tests::test_no_panic_for_callind ... ok
+test rust_panic::tests::test_no_change_on_rerun ... ok
+test rust_panic::tests::test_detect_mangled_panic ... ok
+test rust_panic::tests::test_bounds_check_kind ... ok
+test rust_panic::tests::test_no_panic_for_printf ... ok
+test rust_panic::tests::test_unwrap_failed_kind ... ok
+test rust_panic::tests::test_detect_panic_call ... ok
+test rust_panic::tests::test_expect_failed_kind ... ok
+test rust_panic::tests::test_pass_trait_without_resolver ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 163 filtered out
+```
+
+## Determinism lint
+
+```
+cargo xtask lint-determinism
+lint-determinism: OK — no HashMap/HashSet in enforced crates
+```
+
+## Workspace tests
+
+863 tests passing (1 pre-existing failure in rust_enum::tests::test_enum_no_load_non_zero_offset unrelated to this change).

@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
-use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
+use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaVarnode};
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::DwarfInfo;
 use unlace_struct::{HirFunction, HirNode, SwitchCase};
@@ -29,7 +29,7 @@ pub fn print_c(func: &HirFunction) -> String {
 }
 
 pub fn print_c_with_dwarf(func: &HirFunction, dwarf: Option<&DwarfInfo>) -> String {
-    let mut ctx = PrintCtx::new(dwarf);
+    let mut ctx = PrintCtx::new(dwarf, func.panic_sites.clone());
 
     collect_varnodes(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
@@ -144,10 +144,11 @@ struct PrintCtx {
     collect_depth: u32,
     stmt_depths: BTreeMap<u32, u32>,
     field_by_offset: BTreeMap<u64, Vec<(String, String, u64)>>,
+    panic_sites: BTreeMap<u64, PanicKind>,
 }
 
 impl PrintCtx {
-    fn new(dwarf: Option<&DwarfInfo>) -> Self {
+    fn new(dwarf: Option<&DwarfInfo>, panic_sites: BTreeMap<u64, PanicKind>) -> Self {
         let field_by_offset = build_field_offset_map(dwarf);
         Self {
             next_var: 1,
@@ -167,6 +168,7 @@ impl PrintCtx {
             collect_depth: 0,
             stmt_depths: BTreeMap::new(),
             field_by_offset,
+            panic_sites,
         }
     }
 
@@ -431,6 +433,13 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
             HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_)
             | HirNode::TailCall { .. } | HirNode::Continue => {}
+
+            HirNode::TryCatch { try_body, catch_body } => {
+                ctx.collect_depth += 1;
+                collect_varnodes(try_body, ctx);
+                collect_varnodes(catch_body, ctx);
+                ctx.collect_depth -= 1;
+            }
         }
     }
 }
@@ -724,6 +733,17 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             indent(depth, out);
             let _ = writeln!(out, "continue;");
         }
+
+        HirNode::TryCatch { try_body, catch_body } => {
+            indent(depth, out);
+            let _ = writeln!(out, "__try {{");
+            emit_nodes(try_body, depth + 1, ctx, out);
+            indent(depth, out);
+            let _ = writeln!(out, "}} __except {{");
+            emit_nodes(catch_body, depth + 1, ctx, out);
+            indent(depth, out);
+            let _ = writeln!(out, "}}");
+        }
     }
 }
 
@@ -825,6 +845,10 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 }
             }
             IrOp::Call | IrOp::Callind => {
+                if let Some(kind) = ctx.panic_sites.get(&insn.addr) {
+                    let _ = writeln!(out, "/* PANIC: {} */", kind);
+                    indent(depth, out);
+                }
                 let target = if !insn.inputs.is_empty() {
                     emit_operand_resolved(&insn.inputs[0], 0, idx, ctx)
                 } else {
@@ -1282,6 +1306,7 @@ mod tests {
             body,
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
         }
     }
 
@@ -1570,6 +1595,7 @@ mod tests {
             body: vec![HirNode::Return(None)],
             addr: 0x2000,
             foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -2415,6 +2441,86 @@ mod tests {
         assert!(
             output.contains("== -1"),
             "comparison with 0xffffffff (4-byte) should render as `== -1`: {output}",
+        );
+    }
+
+    // ── P3-16: Try/catch C output tests ──
+
+    #[test]
+    fn test_try_catch_c_output() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::TryCatch {
+                try_body: vec![HirNode::Statement(IrInsn::with_output(
+                    IrOp::IntAdd, r0, smallvec![r0, c1], 0x1000,
+                ))],
+                catch_body: vec![HirNode::Statement(IrInsn::with_output(
+                    IrOp::Copy, r8, smallvec![con(0, 4)], 0x1010,
+                ))],
+            },
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let func = make_func("try_catch_func", body);
+        let output = print_c(&func);
+
+        assert!(output.contains("__try {"), "__try: {output}");
+        assert!(output.contains("} __except {"), "__except: {output}");
+    }
+
+    #[test]
+    fn test_try_catch_no_landing_pads_no_output() {
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, r0, smallvec![r0, c1], 0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let func = make_func("no_try_catch", body);
+        let output = print_c(&func);
+
+        assert!(!output.contains("__try"), "no TryCatch node → no __try: {output}");
+        assert!(!output.contains("__except"), "no TryCatch node → no __except: {output}");
+    }
+
+    #[test]
+    fn test_try_catch_nested_indentation() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::TryCatch {
+                try_body: vec![HirNode::Statement(IrInsn::with_output(
+                    IrOp::IntAdd, r8, smallvec![r0, c1], 0x1000,
+                ))],
+                catch_body: vec![HirNode::Statement(IrInsn::with_output(
+                    IrOp::IntAdd, r0, smallvec![r0, c1], 0x1010,
+                ))],
+            },
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("try_indent", body);
+        let output = print_c(&func);
+
+        let try_line = output.lines().find(|l| l.contains("__try")).expect("__try line");
+        assert!(
+            try_line.starts_with("    __try"),
+            "try should be indented one level: {try_line:?}",
+        );
+
+        let except_line = output.lines().find(|l| l.contains("__except")).expect("__except line");
+        assert!(
+            except_line.starts_with("    }"),
+            "except should be at depth 1: {except_line:?}",
         );
     }
 }

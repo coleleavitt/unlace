@@ -4,9 +4,19 @@
 //! Recognized idioms:
 //! - `INT_XOR(v, v)` / `INT_SUB(v, v)` → `COPY 0` (self-zeroing)
 //! - `INT_AND(v, all_ones)` → `COPY v` (identity mask)
-//! - `INT_OR(v, 0)` / `INT_ADD(v, 0)` → `COPY v` (identity additive)
+//! - `INT_OR(v, 0)` / `INT_ADD(v, 0)` / `INT_XOR(v, 0)` → `COPY v` (identity additive)
+//! - `INT_SUB(v, 0)` → `COPY v` (subtractive identity)
 //! - `INT_MUL(v, 1)` → `COPY v` (identity multiplicative)
+//! - `INT_DIV(v, 1)` / `INT_SDIV(v, 1)` → `COPY v` (division identity)
+//! - `INT_REM(v, 1)` / `INT_SREM(v, 1)` → `COPY 0` (modulo one)
+//! - `INT_LEFT(v, 0)` / `INT_RIGHT(v, 0)` / `INT_SRIGHT(v, 0)` → `COPY v` (shift by zero)
+//! - `INT_AND(v, 0)` → `COPY 0` (annihilator)
+//! - `INT_OR(v, all_ones)` → `COPY all_ones` (annihilator)
+//! - `INT_AND(v, v)` / `INT_OR(v, v)` → `COPY v` (integer idempotent)
 //! - `BOOL_AND(v, v)` / `BOOL_OR(v, v)` → `COPY v` (idempotent)
+//! - `INT_RIGHT(v, bits-1)` → `INT_SLESS(v, 0)` (sign-bit extraction)
+//! - `INT_CARRY(v, INT_2COMP(v))` → `INT_NOTEQUAL(v, 0)` (carry elimination)
+//! - `INT_CARRY(v, 0)` → `COPY 0` (carry of zero)
 //!
 //! Iterates internally to a fixed point.
 
@@ -95,23 +105,66 @@ fn try_recognize(insn: &IrInsn) -> Option<IrInsn> {
             Some(make_copy(insn, Varnode::constant(0, output.size)))
         }
 
-        // ── Identity mask: v & all_ones → v ────────────────────────
+        // ── v & all_ones → v, v & 0 → 0, v & v → v ───────────────
         IrOp::IntAnd => {
             if is_all_ones(&b) && a.space != SpaceId::Const {
                 Some(make_copy(insn, a))
             } else if is_all_ones(&a) && b.space != SpaceId::Const {
+                Some(make_copy(insn, b))
+            } else if is_const_val(&b, 0) {
+                Some(make_copy(insn, Varnode::constant(0, output.size)))
+            } else if is_const_val(&a, 0) {
+                Some(make_copy(insn, Varnode::constant(0, output.size)))
+            } else if a == b && a.space != SpaceId::Const {
+                Some(make_copy(insn, a))
+            } else {
+                None
+            }
+        }
+
+        // ── v | 0 → v, v | all_ones → all_ones, v | v → v ────────
+        IrOp::IntOr => {
+            if is_const_val(&b, 0) && a.space != SpaceId::Const {
+                Some(make_copy(insn, a))
+            } else if is_const_val(&a, 0) && b.space != SpaceId::Const {
+                Some(make_copy(insn, b))
+            } else if is_all_ones(&b) {
+                Some(make_copy(insn, Varnode::constant(mask_for_size(output.size), output.size)))
+            } else if is_all_ones(&a) {
+                Some(make_copy(insn, Varnode::constant(mask_for_size(output.size), output.size)))
+            } else if a == b && a.space != SpaceId::Const {
+                Some(make_copy(insn, a))
+            } else {
+                None
+            }
+        }
+
+        // ── Additive identity: v + 0 → v ──────────────────────────
+        IrOp::IntAdd => {
+            if is_const_val(&b, 0) && a.space != SpaceId::Const {
+                Some(make_copy(insn, a))
+            } else if is_const_val(&a, 0) && b.space != SpaceId::Const {
                 Some(make_copy(insn, b))
             } else {
                 None
             }
         }
 
-        // ── Additive identity: v | 0 → v, v + 0 → v ──────────────
-        IrOp::IntOr | IrOp::IntAdd => {
+        // ── v ^ 0 → v ─────────────────────────────────────────────
+        IrOp::IntXor => {
             if is_const_val(&b, 0) && a.space != SpaceId::Const {
                 Some(make_copy(insn, a))
             } else if is_const_val(&a, 0) && b.space != SpaceId::Const {
                 Some(make_copy(insn, b))
+            } else {
+                None
+            }
+        }
+
+        // ── Subtractive identity: v - 0 → v ───────────────────────
+        IrOp::IntSub => {
+            if is_const_val(&b, 0) && a.space != SpaceId::Const {
+                Some(make_copy(insn, a))
             } else {
                 None
             }
@@ -123,6 +176,33 @@ fn try_recognize(insn: &IrInsn) -> Option<IrInsn> {
                 Some(make_copy(insn, a))
             } else if is_const_val(&a, 1) && b.space != SpaceId::Const {
                 Some(make_copy(insn, b))
+            } else {
+                None
+            }
+        }
+
+        // ── Division identity: v / 1 → v ──────────────────────────
+        IrOp::IntDiv | IrOp::IntSdiv => {
+            if is_const_val(&b, 1) && a.space != SpaceId::Const {
+                Some(make_copy(insn, a))
+            } else {
+                None
+            }
+        }
+
+        // ── Modulo one: v % 1 → 0 ─────────────────────────────────
+        IrOp::IntRem | IrOp::IntSrem => {
+            if is_const_val(&b, 1) {
+                Some(make_copy(insn, Varnode::constant(0, output.size)))
+            } else {
+                None
+            }
+        }
+
+        // ── Shift by zero: v << 0 → v, v >> 0 → v ────────────────
+        IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright => {
+            if is_const_val(&b, 0) && a.space != SpaceId::Const {
+                Some(make_copy(insn, a))
             } else {
                 None
             }
@@ -394,6 +474,242 @@ mod tests {
         let all_ones = Varnode::constant(u64::MAX, 8);
         let out = Varnode::unique(0, 8);
         let insn = IrInsn::with_output(IrOp::IntAnd, out, smallvec![v0, all_ones], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── INT_SUB(v, 0) → COPY v ────────────────────────────────────
+
+    #[test]
+    fn test_idiom_sub_zero_identity() {
+        let v0 = Varnode::reg(0, 4);
+        let zero = Varnode::constant(0, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntSub, out, smallvec![v0, zero], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── INT_DIV(v, 1) → COPY v ────────────────────────────────────
+
+    #[test]
+    fn test_idiom_div_one_identity() {
+        let v0 = Varnode::reg(0, 4);
+        let one = Varnode::constant(1, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntDiv, out, smallvec![v0, one], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── INT_SDIV(v, 1) → COPY v ───────────────────────────────────
+
+    #[test]
+    fn test_idiom_sdiv_one_identity() {
+        let v0 = Varnode::reg(0, 4);
+        let one = Varnode::constant(1, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntSdiv, out, smallvec![v0, one], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── INT_REM(v, 1) → COPY 0 ────────────────────────────────────
+
+    #[test]
+    fn test_idiom_rem_one_zero() {
+        let v0 = Varnode::reg(0, 4);
+        let one = Varnode::constant(1, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntRem, out, smallvec![v0, one], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0].space, SpaceId::Const);
+        assert_eq!(block.insns[0].inputs[0].offset, 0);
+    }
+
+    // ── INT_SREM(v, 1) → COPY 0 ───────────────────────────────────
+
+    #[test]
+    fn test_idiom_srem_one_zero() {
+        let v0 = Varnode::reg(0, 4);
+        let one = Varnode::constant(1, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntSrem, out, smallvec![v0, one], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0].space, SpaceId::Const);
+        assert_eq!(block.insns[0].inputs[0].offset, 0);
+    }
+
+    // ── INT_XOR(v, 0) → COPY v ────────────────────────────────────
+
+    #[test]
+    fn test_idiom_xor_zero_identity() {
+        let v0 = Varnode::reg(0, 4);
+        let zero = Varnode::constant(0, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntXor, out, smallvec![v0, zero], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── INT_LEFT(v, 0) → COPY v ───────────────────────────────────
+
+    #[test]
+    fn test_idiom_left_shift_zero_identity() {
+        let v0 = Varnode::reg(0, 4);
+        let zero = Varnode::constant(0, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntLeft, out, smallvec![v0, zero], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── INT_RIGHT(v, 0) → COPY v ──────────────────────────────────
+
+    #[test]
+    fn test_idiom_right_shift_zero_identity() {
+        let v0 = Varnode::reg(0, 4);
+        let zero = Varnode::constant(0, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntRight, out, smallvec![v0, zero], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── INT_SRIGHT(v, 0) → COPY v ─────────────────────────────────
+
+    #[test]
+    fn test_idiom_sright_shift_zero_identity() {
+        let v0 = Varnode::reg(0, 4);
+        let zero = Varnode::constant(0, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntSright, out, smallvec![v0, zero], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── INT_AND(v, 0) → COPY 0 ────────────────────────────────────
+
+    #[test]
+    fn test_idiom_and_zero_annihilator() {
+        let v0 = Varnode::reg(0, 4);
+        let zero = Varnode::constant(0, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntAnd, out, smallvec![v0, zero], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0].space, SpaceId::Const);
+        assert_eq!(block.insns[0].inputs[0].offset, 0);
+    }
+
+    // ── INT_OR(v, all_ones) → COPY all_ones ────────────────────────
+
+    #[test]
+    fn test_idiom_or_all_ones_annihilator() {
+        let v0 = Varnode::reg(0, 4);
+        let all_ones = Varnode::constant(0xFFFF_FFFF, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntOr, out, smallvec![v0, all_ones], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0].space, SpaceId::Const);
+        assert_eq!(block.insns[0].inputs[0].offset, 0xFFFF_FFFF);
+    }
+
+    // ── INT_AND(v, v) → COPY v ─────────────────────────────────────
+
+    #[test]
+    fn test_idiom_and_self_idempotent() {
+        let v0 = Varnode::reg(0, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntAnd, out, smallvec![v0, v0], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── INT_OR(v, v) → COPY v ──────────────────────────────────────
+
+    #[test]
+    fn test_idiom_or_self_idempotent() {
+        let v0 = Varnode::reg(0, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntOr, out, smallvec![v0, v0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
         let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");

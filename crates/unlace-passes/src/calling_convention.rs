@@ -243,7 +243,10 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
         CallingConvention::SystemV => (SYSV_ARG_REGS, SYSV_FLOAT_REGS),
         CallingConvention::MicrosoftX64 => (MSX64_ARG_REGS, MSX64_FLOAT_REGS),
         CallingConvention::AArch64 => (AARCH64_ARG_REGS, &[]),
-        CallingConvention::Unknown => return Vec::new(),
+        CallingConvention::Thiscall => (&[8], &[]),
+        CallingConvention::Cdecl
+        | CallingConvention::Stdcall
+        | CallingConvention::Unknown => return Vec::new(),
     };
 
     // Build a map of which registers feed into which ops in the entry block,

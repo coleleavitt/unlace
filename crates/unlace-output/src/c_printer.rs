@@ -2227,6 +2227,9 @@ fn calling_convention_annotation(convention: &str) -> Option<&'static str> {
     match convention {
         "Microsoft x64" => Some("__fastcall"),
         "AArch64 AAPCS64" => Some("__aapcs"),
+        "cdecl" => Some("__cdecl"),
+        "stdcall" => Some("__stdcall"),
+        "thiscall" => Some("__thiscall"),
         _ => None,
     }
 }
@@ -2802,6 +2805,55 @@ mod tests {
             output.contains("int add(int a, int b)"),
             "should use DWARF param names/types: {output}",
         );
+    }
+
+    #[test]
+    fn test_dwarf_param_names_override_inferred() {
+        use std::collections::BTreeMap;
+        use unlace_loader::{DwarfInfo, FunctionDebugInfo, ParameterInfo};
+
+        let body = vec![HirNode::Return(None)];
+        let func = HirFunction {
+            name: "sub_2000".to_string(),
+            params: vec![
+                ("a1".to_string(), PrimitiveType::Int(8)),
+                ("a2".to_string(), PrimitiveType::Int(8)),
+            ],
+            return_type: PrimitiveType::Int(4),
+            body,
+            addr: 0x2000,
+            foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
+        };
+
+        let mut functions = BTreeMap::new();
+        functions.insert(0x2000, FunctionDebugInfo {
+            name: "process".to_string(),
+            linkage_name: None,
+            low_pc: 0x2000,
+            high_pc: Some(0x2020),
+            params: vec![
+                ParameterInfo { name: Some("count".to_string()), type_name: Some("int".to_string()) },
+                ParameterInfo { name: Some("buf".to_string()), type_name: Some("char *".to_string()) },
+            ],
+            return_type: Some("int".to_string()),
+            decl: None,
+        });
+        let dwarf = DwarfInfo {
+            functions,
+            source_map: BTreeMap::new(),
+            structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
+        };
+
+        let output = super::print_c_with_dwarf(&func, Some(&dwarf));
+        assert!(
+            output.contains("int process(int count, char * buf)"),
+            "DWARF names must override inferred a1/a2: {output}",
+        );
+        assert!(!output.contains("a1"), "must not contain inferred 'a1': {output}");
+        assert!(!output.contains("__int64"), "must not use inferred __int64 type: {output}");
     }
 
     #[test]
@@ -4653,6 +4705,65 @@ mod tests {
         assert!(
             sig_line.starts_with("__int32 sub_500000("),
             "unknown convention should have no annotation: {sig_line}",
+        );
+    }
+
+    #[test]
+    fn test_cdecl_annotation() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("sub_404010", body);
+        let header = super::FunctionHeaderInfo {
+            name: "sub_404010".to_string(),
+            address: 0x404010,
+            size: 0x40,
+            convention: "cdecl".to_string(),
+            stack_frame: 0x10,
+            callees: vec![],
+        };
+
+        let output = super::print_c_full(&func, None, Some(&header), None, None);
+
+        assert!(
+            output.contains("__cdecl sub_404010("),
+            "cdecl should emit __cdecl annotation: {output}",
+        );
+        assert!(
+            !output.contains("__fastcall"),
+            "cdecl should NOT emit __fastcall: {output}",
+        );
+    }
+
+    #[test]
+    fn test_stdcall_and_thiscall_annotation() {
+        let body = vec![HirNode::Return(None)];
+        let func1 = make_func("WinMain", body.clone());
+        let header1 = super::FunctionHeaderInfo {
+            name: "WinMain".to_string(),
+            address: 0x401000,
+            size: 0x40,
+            convention: "stdcall".to_string(),
+            stack_frame: 0,
+            callees: vec![],
+        };
+        let out1 = super::print_c_full(&func1, None, Some(&header1), None, None);
+        assert!(
+            out1.contains("__stdcall WinMain("),
+            "stdcall should emit __stdcall: {out1}",
+        );
+
+        let func2 = make_func("Foo__bar", body);
+        let header2 = super::FunctionHeaderInfo {
+            name: "Foo__bar".to_string(),
+            address: 0x402000,
+            size: 0x40,
+            convention: "thiscall".to_string(),
+            stack_frame: 0,
+            callees: vec![],
+        };
+        let out2 = super::print_c_full(&func2, None, Some(&header2), None, None);
+        assert!(
+            out2.contains("__thiscall Foo__bar("),
+            "thiscall should emit __thiscall: {out2}",
         );
     }
 

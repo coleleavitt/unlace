@@ -204,8 +204,8 @@ pub struct SsaFunction {
     /// Recovered stack variables keyed by RSP-relative offset.
     pub stack_vars: BTreeMap<i64, StackVar>,
     /// SSA varnodes whose defining instruction can be folded inline as a
-    /// sub-expression rather than emitted as a standalone statement.
-    /// Populated by [`ExpressionTreePass`](https://docs.rs/unlace-passes).
+    /// sub-expression rather than emitted as a statement.
+    /// Populated by [`ExpressionPass`](https://docs.rs/unlace-passes).
     pub foldable_exprs: BTreeSet<SsaVarnode>,
     /// Whether this function never returns to its caller (calls `exit`,
     /// `abort`, `panic`, etc.).
@@ -218,7 +218,7 @@ pub struct SsaFunction {
     /// Canonical C variable names after SSA version merging.
     ///
     /// Multiple `SsaVarnode`s sharing the same base [`Varnode`] map to the
-    /// same name string. Populated by `VariableMergePass`.
+    /// same name. Populated by `VariableMergePass`.
     pub merged_names: BTreeMap<SsaVarnode, String>,
     pub enum_discriminants: Vec<EnumDiscriminant>,
     pub panic_sites: BTreeMap<(BlockId, usize), PanicKind>,
@@ -226,6 +226,13 @@ pub struct SsaFunction {
     /// Keyed by `(BlockId, insn_index)` of the `CALLIND` instruction.
     /// Populated by [`RustVtablePass`](https://docs.rs/unlace-passes).
     pub vtable_calls: BTreeMap<(BlockId, usize), VtableCallInfo>,
+    /// Inferred function parameters from calling convention register usage.
+    /// Each entry is `(name, type)` — e.g. `("a1", PrimitiveType::Int(8))`.
+    /// Populated by [`ParamInferPass`](https://docs.rs/unlace-passes).
+    pub inferred_params: Vec<(String, PrimitiveType)>,
+    /// Inferred return type from RETURN instruction analysis.
+    /// Populated by [`ReturnTypeInferPass`](https://docs.rs/unlace-passes).
+    pub inferred_return_type: PrimitiveType,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -274,6 +281,8 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         enum_discriminants: Vec::new(),
         panic_sites: BTreeMap::new(),
         vtable_calls: BTreeMap::new(),
+        inferred_params: Vec::new(),
+        inferred_return_type: PrimitiveType::Unknown,
     }
 }
 

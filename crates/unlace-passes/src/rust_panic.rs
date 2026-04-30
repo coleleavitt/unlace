@@ -117,7 +117,7 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{
-        CallingConvention, DominatorTree, PanicKind, SsaFunction, SsaVarnode, VarnodeSlot,
+        CallingConvention, DominatorTree, PanicKind, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
@@ -152,6 +152,8 @@ mod tests {
             enum_discriminants: Vec::new(),
             panic_sites: BTreeMap::new(),
             vtable_calls: BTreeMap::new(),
+            inferred_params: Vec::new(),
+            inferred_return_type: PrimitiveType::Unknown,
         }
     }
 

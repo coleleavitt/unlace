@@ -97,9 +97,75 @@ impl RttiInfo {
         }
         map
     }
+
+    /// Return typeinfo addresses of root classes (no base classes).
+    pub fn root_classes(&self) -> Vec<u64> {
+        self.classes
+            .iter()
+            .filter(|(_, cls)| cls.bases.is_empty())
+            .map(|(&addr, _)| addr)
+            .collect()
+    }
+
+    /// Compute inheritance depth for each class (0 for roots).
+    pub fn inheritance_depths(&self) -> BTreeMap<u64, usize> {
+        let mut depths = BTreeMap::new();
+        for &root in &self.root_classes() {
+            depths.insert(root, 0);
+        }
+        let children = self.children_map();
+        let mut queue: Vec<u64> = self.root_classes();
+        while let Some(parent) = queue.pop() {
+            let parent_depth = depths.get(&parent).copied().unwrap_or(0);
+            if let Some(kids) = children.get(&parent) {
+                for &child in kids {
+                    let existing = depths.get(&child).copied().unwrap_or(0);
+                    let new_depth = parent_depth + 1;
+                    if new_depth > existing {
+                        depths.insert(child, new_depth);
+                    }
+                    queue.push(child);
+                }
+            }
+        }
+        depths
+    }
+
+    /// Format the class hierarchy as a multi-line string for display.
+    pub fn format_hierarchy(&self) -> String {
+        let children = self.children_map();
+        let roots = self.root_classes();
+        let mut out = String::new();
+        for root in &roots {
+            if let Some(cls) = self.classes.get(root) {
+                format_hierarchy_node(cls, &children, &self.classes, 0, &mut out);
+            }
+        }
+        out
+    }
 }
 
-/// Known vtable-pointer prefixes that identify typeinfo kind.
+fn format_hierarchy_node(
+    cls: &CppClass,
+    children: &BTreeMap<u64, Vec<u64>>,
+    all_classes: &BTreeMap<u64, CppClass>,
+    depth: usize,
+    out: &mut String,
+) {
+    use std::fmt::Write;
+    for _ in 0..depth {
+        out.push_str("  ");
+    }
+    let _ = writeln!(out, "{}", cls.demangled_name);
+    if let Some(kids) = children.get(&cls.typeinfo_addr) {
+        for &child_addr in kids {
+            if let Some(child) = all_classes.get(&child_addr) {
+                format_hierarchy_node(child, children, all_classes, depth + 1, out);
+            }
+        }
+    }
+}
+
 const CLASS_TYPE_INFO_SUFFIX: &str = "__cxxabiv117__class_type_infoE";
 const SI_CLASS_TYPE_INFO_SUFFIX: &str = "__cxxabiv120__si_class_type_infoE";
 const VMI_CLASS_TYPE_INFO_SUFFIX: &str = "__cxxabiv121__vmi_class_type_infoE";
@@ -581,5 +647,42 @@ mod tests {
         assert_eq!(demangle_typeinfo_name("6Animal"), "Animal");
         assert_eq!(demangle_typeinfo_name("3Dog"), "Dog");
         assert_eq!(demangle_typeinfo_name("3Cat"), "Cat");
+    }
+
+    #[test]
+    fn test_inheritance_depths() {
+        let img = load_fixture("cpp_rtti.elf");
+        let info = scan_rtti(&img);
+
+        let depths = info.inheritance_depths();
+        let animal = info.class_by_name("Animal").expect("Animal");
+        let dog = info.class_by_name("Dog").expect("Dog");
+
+        assert_eq!(
+            depths.get(&animal.typeinfo_addr).copied(),
+            Some(0),
+            "Animal should be at depth 0",
+        );
+        assert_eq!(
+            depths.get(&dog.typeinfo_addr).copied(),
+            Some(1),
+            "Dog should be at depth 1",
+        );
+    }
+
+    #[test]
+    fn test_format_hierarchy() {
+        let img = load_fixture("cpp_rtti.elf");
+        let info = scan_rtti(&img);
+
+        let hierarchy = info.format_hierarchy();
+        assert!(
+            hierarchy.contains("Animal"),
+            "hierarchy should mention Animal: {hierarchy}",
+        );
+        assert!(
+            hierarchy.contains("Dog"),
+            "hierarchy should mention Dog: {hierarchy}",
+        );
     }
 }

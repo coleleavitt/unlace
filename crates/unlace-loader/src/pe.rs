@@ -5,12 +5,12 @@
 use std::collections::BTreeMap;
 
 use object::pe;
-use object::read::pe::{ImageNtHeaders, PeFile};
+use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile};
 use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 
 use crate::error::LoadError;
 use crate::image::{
-    ArchId, BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind,
+    ArchId, BinaryImage, Endian, RelocKind, Relocation, Section, SectionFlags, Symbol, SymbolKind,
 };
 use crate::Loader;
 
@@ -74,23 +74,79 @@ where
     let sections = load_sections(&file);
     let mut symbols = load_coff_symbols(&file);
 
-    // Merge exported symbols (from the export directory).
     load_exports(&file, &mut symbols);
-
-    // Merge imported symbols (from the IAT / import directory).
     load_imports(&file, &mut symbols);
+
+    let relocations = load_base_relocations(&file, data);
 
     Ok(BinaryImage {
         arch,
-        // PE is always little-endian.
         endian: Endian::Little,
         entry,
         sections,
         symbols,
         plt_symbols: BTreeMap::new(),
-        relocations: Vec::new(),
+        relocations,
         string_table: BTreeMap::new(),
     })
+}
+
+/// Parse the PE base relocation directory into resolved [`Relocation`] entries.
+///
+/// Each [`pe::IMAGE_BASE_RELOCATION`] block targets a 4 KiB page; entries are
+/// `u16` packed as `(type << 12) | offset_within_page`. We resolve each entry
+/// to an absolute virtual address via `image_base + page_rva + offset` and map
+/// the PE relocation type to our [`RelocKind`] vocabulary. Empty/missing
+/// directories return `Vec::new()` rather than erroring — many object files
+/// (e.g. `IMAGE_FILE_RELOCS_STRIPPED`) legitimately omit the table.
+fn load_base_relocations<Pe>(file: &PeFile<Pe>, data: &[u8]) -> Vec<Relocation>
+where
+    Pe: ImageNtHeaders,
+{
+    let image_base = file.nt_headers().optional_header().image_base();
+    let section_table = file.section_table();
+    let mut blocks = match file.data_directories().relocation_blocks(data, &section_table) {
+        Ok(Some(iter)) => iter,
+        Ok(None) => return Vec::new(),
+        Err(err) => {
+            tracing::debug!(?err, "PE base relocation directory unreadable");
+            return Vec::new();
+        }
+    };
+
+    let mut out = Vec::new();
+    while let Some(block_result) = blocks.next().transpose() {
+        let block = match block_result {
+            Ok(b) => b,
+            Err(err) => {
+                tracing::debug!(?err, "PE base relocation block parse failed; truncating");
+                break;
+            }
+        };
+        for reloc in block {
+            let kind = pe_reloc_kind(reloc.typ);
+            if matches!(kind, RelocKind::Other) && reloc.typ == pe::IMAGE_REL_BASED_ABSOLUTE {
+                continue;
+            }
+            out.push(Relocation {
+                addr: image_base.wrapping_add(u64::from(reloc.virtual_address)),
+                sym_name: String::new(),
+                kind,
+            });
+        }
+    }
+    out
+}
+
+fn pe_reloc_kind(typ: u16) -> RelocKind {
+    match typ {
+        pe::IMAGE_REL_BASED_HIGHLOW
+        | pe::IMAGE_REL_BASED_DIR64
+        | pe::IMAGE_REL_BASED_HIGH
+        | pe::IMAGE_REL_BASED_LOW
+        | pe::IMAGE_REL_BASED_HIGHADJ => RelocKind::Relative,
+        _ => RelocKind::Other,
+    }
 }
 
 /// Map the PE `IMAGE_FILE_MACHINE_*` value to our [`ArchId`].
@@ -551,10 +607,123 @@ mod tests {
         let text = img
             .section_by_name(".text")
             .expect(".text section must exist");
-        // Our synthetic .text has at least the 0xC3 byte.
         assert!(
             !text.data.is_empty(),
             ".text should have data"
         );
+    }
+
+    #[test]
+    fn test_pe_no_reloc_directory_returns_empty() {
+        let pe = minimal_pe64();
+        let img = PeLoader::load(&pe).expect("should parse");
+        assert!(
+            img.relocations.is_empty(),
+            "PE without IMAGE_DIRECTORY_ENTRY_BASERELOC should have no relocations"
+        );
+    }
+
+    /// Build a PE32+ binary with a `.reloc` section containing one block of
+    /// three relocations: one `DIR64`, one `HIGHLOW`, and one `ABSOLUTE` (padding).
+    fn pe64_with_reloc() -> Vec<u8> {
+        let nt: usize = 0x80;
+        let opt_hdr_size: u16 = 16 * 8 + 112;
+        let oh = nt + 24;
+        let sh = oh + opt_hdr_size as usize;
+        let section_count: u16 = 2;
+        let section_table_end = sh + (section_count as usize) * 40;
+        let text_offset: u32 = 0x400;
+        let reloc_offset: u32 = 0x600;
+        let reloc_size: u32 = 0x200;
+        let total_size: u32 = reloc_offset + reloc_size;
+        let mut buf = vec![0u8; total_size as usize];
+
+        buf[0] = b'M';
+        buf[1] = b'Z';
+        buf[0x3C..0x40].copy_from_slice(&(nt as u32).to_le_bytes());
+
+        buf[nt..nt + 4].copy_from_slice(&[b'P', b'E', 0, 0]);
+
+        let fh = nt + 4;
+        buf[fh..fh + 2].copy_from_slice(&pe::IMAGE_FILE_MACHINE_AMD64.to_le_bytes());
+        buf[fh + 2..fh + 4].copy_from_slice(&section_count.to_le_bytes());
+        buf[fh + 16..fh + 18].copy_from_slice(&opt_hdr_size.to_le_bytes());
+        buf[fh + 18..fh + 20].copy_from_slice(&pe::IMAGE_FILE_EXECUTABLE_IMAGE.to_le_bytes());
+
+        buf[oh..oh + 2].copy_from_slice(&pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC.to_le_bytes());
+        buf[oh + 16..oh + 20].copy_from_slice(&0x1000u32.to_le_bytes());
+        let image_base: u64 = 0x0040_0000;
+        buf[oh + 24..oh + 32].copy_from_slice(&image_base.to_le_bytes());
+        buf[oh + 32..oh + 36].copy_from_slice(&0x1000u32.to_le_bytes());
+        buf[oh + 36..oh + 40].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[oh + 56..oh + 60].copy_from_slice(&0x4000u32.to_le_bytes());
+        buf[oh + 60..oh + 64].copy_from_slice(&(section_table_end as u32).to_le_bytes());
+        let dir_count: u32 = 16;
+        buf[oh + 108..oh + 112].copy_from_slice(&dir_count.to_le_bytes());
+
+        let basereloc_dir = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_BASERELOC as usize) * 8;
+        let reloc_rva: u32 = 0x3000;
+        buf[basereloc_dir..basereloc_dir + 4].copy_from_slice(&reloc_rva.to_le_bytes());
+        let reloc_block_size: u32 = 8 + 3 * 2 + 2;
+        buf[basereloc_dir + 4..basereloc_dir + 8].copy_from_slice(&reloc_block_size.to_le_bytes());
+
+        buf[sh..sh + 5].copy_from_slice(b".text");
+        buf[sh + 8..sh + 12].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[sh + 12..sh + 16].copy_from_slice(&0x1000u32.to_le_bytes());
+        buf[sh + 16..sh + 20].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[sh + 20..sh + 24].copy_from_slice(&text_offset.to_le_bytes());
+        buf[sh + 36..sh + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_MEM_EXECUTE | pe::IMAGE_SCN_CNT_CODE)
+                .to_le_bytes(),
+        );
+
+        let sh2 = sh + 40;
+        buf[sh2..sh2 + 6].copy_from_slice(b".reloc");
+        buf[sh2 + 8..sh2 + 12].copy_from_slice(&reloc_size.to_le_bytes());
+        buf[sh2 + 12..sh2 + 16].copy_from_slice(&reloc_rva.to_le_bytes());
+        buf[sh2 + 16..sh2 + 20].copy_from_slice(&reloc_size.to_le_bytes());
+        buf[sh2 + 20..sh2 + 24].copy_from_slice(&reloc_offset.to_le_bytes());
+        buf[sh2 + 36..sh2 + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_MEM_DISCARDABLE | pe::IMAGE_SCN_CNT_INITIALIZED_DATA)
+                .to_le_bytes(),
+        );
+
+        buf[text_offset as usize] = 0xC3;
+
+        let r = reloc_offset as usize;
+        buf[r..r + 4].copy_from_slice(&reloc_rva.to_le_bytes());
+        buf[r + 4..r + 8].copy_from_slice(&reloc_block_size.to_le_bytes());
+
+        let entry_dir64: u16 = (u16::from(pe::IMAGE_REL_BASED_DIR64) << 12) | 0x100;
+        let entry_highlow: u16 = (u16::from(pe::IMAGE_REL_BASED_HIGHLOW) << 12) | 0x200;
+        let entry_padding: u16 = u16::from(pe::IMAGE_REL_BASED_ABSOLUTE) << 12;
+        buf[r + 8..r + 10].copy_from_slice(&entry_dir64.to_le_bytes());
+        buf[r + 10..r + 12].copy_from_slice(&entry_highlow.to_le_bytes());
+        buf[r + 12..r + 14].copy_from_slice(&entry_padding.to_le_bytes());
+
+        buf
+    }
+
+    #[test]
+    fn test_pe_reloc_block_parsed() {
+        let pe = pe64_with_reloc();
+        let img = PeLoader::load(&pe).expect("PE with .reloc must parse");
+
+        assert_eq!(
+            img.relocations.len(),
+            2,
+            "two real relocations (ABSOLUTE padding excluded)"
+        );
+
+        let image_base: u64 = 0x0040_0000;
+        let page_rva: u64 = 0x3000;
+        let dir64 = &img.relocations[0];
+        assert_eq!(dir64.addr, image_base + page_rva + 0x100);
+        assert_eq!(dir64.kind, RelocKind::Relative);
+        assert!(dir64.sym_name.is_empty());
+
+        let highlow = &img.relocations[1];
+        assert_eq!(highlow.addr, image_base + page_rva + 0x200);
+        assert_eq!(highlow.kind, RelocKind::Relative);
     }
 }

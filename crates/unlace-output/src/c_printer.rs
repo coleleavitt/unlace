@@ -929,6 +929,23 @@ fn try_emit_compound_assign(
     let counter_is_first = Some(insn.inputs[0]) == insn.output;
     let counter_is_second = Some(insn.inputs[1]) == insn.output;
 
+    let counter_idx = if counter_is_first { 0 } else if counter_is_second { 1 } else { return None; };
+
+    // If the counter input has a foldable definition, its expression expands
+    // inline and compound form would be wrong (e.g. `((1) + 2) += 3`).
+    let counter_vn = &insn.inputs[counter_idx];
+    if counter_vn.space != SpaceId::Const {
+        let counter_sv = ctx
+            .stmt_inputs
+            .get(&stmt_idx)
+            .and_then(|inputs| inputs.iter().find(|sv| sv.base == *counter_vn).copied());
+        if let Some(csv) = counter_sv {
+            if ctx.sv_defining_stmt.contains_key(&csv) {
+                return None;
+            }
+        }
+    }
+
     // For commutative ops, either operand position is fine.
     // For non-commutative ops (sub, div, mod, shifts), only first-position works.
     let op_str = match insn.op {
@@ -945,7 +962,8 @@ fn try_emit_compound_assign(
         _ => return None,
     };
     let other_idx = if counter_is_first { 1 } else { 0 };
-    let other = emit_operand_resolved(&insn.inputs[other_idx], other_idx, stmt_idx, ctx);
+    let const_ctx = const_context_for_op(insn.op);
+    let other = emit_operand_with_prec(&insn.inputs[other_idx], other_idx, stmt_idx, const_ctx, 0, ctx);
     Some(format!("{} {} {}", lhs, op_str, other))
 }
 
@@ -1069,6 +1087,7 @@ fn c_precedence(op: IrOp) -> u8 {
 }
 
 /// Return `true` if `op` is a binary operator that we emit via `emit_binop`.
+#[allow(dead_code)]
 fn is_binop(op: IrOp) -> bool {
     matches!(op,
         IrOp::IntAdd | IrOp::FloatAdd
@@ -1115,7 +1134,7 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
         // -- Boolean ops --
         IrOp::BoolAnd => emit_binop(insn, "&&", stmt_idx, parent_prec, ctx),
         IrOp::BoolOr => emit_binop(insn, "||", stmt_idx, parent_prec, ctx),
-        IrOp::BoolXor => emit_binop(insn, "!=", stmt_idx, parent_prec, ctx),
+        IrOp::BoolXor => emit_binop(insn, "^", stmt_idx, parent_prec, ctx),
 
         // -- Comparisons --
         IrOp::IntEqual | IrOp::FloatEqual => emit_binop(insn, "==", stmt_idx, parent_prec, ctx),
@@ -1369,33 +1388,6 @@ fn emit_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut
     }
 }
 
-fn emit_unsigned_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
-    let my_prec = c_precedence(insn.op);
-    let const_ctx = ConstContext::Bitwise;
-    let lhs = if !insn.inputs.is_empty() {
-        let raw = emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, const_ctx, my_prec, ctx);
-        let sz = insn.inputs[0].size;
-        let ty = type_for_size(sz, false);
-        format!("({}){}", ty, raw)
-    } else {
-        "0".to_string()
-    };
-    let rhs = if insn.inputs.len() >= 2 {
-        let raw = emit_operand_with_prec(&insn.inputs[1], 1, stmt_idx, const_ctx, my_prec, ctx);
-        let sz = insn.inputs[1].size;
-        let ty = type_for_size(sz, false);
-        format!("({}){}", ty, raw)
-    } else {
-        "0".to_string()
-    };
-    let expr = format!("{} {} {}", lhs, op, rhs);
-    if my_prec > 0 && my_prec < parent_prec {
-        format!("({})", expr)
-    } else {
-        expr
-    }
-}
-
 fn emit_unaryop(insn: &IrInsn, op: &str, stmt_idx: u32, _parent_prec: u8, ctx: &mut PrintCtx) -> String {
     let my_prec = c_precedence(insn.op);
     let operand = if !insn.inputs.is_empty() {
@@ -1431,6 +1423,10 @@ fn emit_bool_negate(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut Pri
         if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
             if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
                 if let Some(negated_op) = negate_comparison(def_insn.op) {
+                    let is_unsigned = matches!(def_insn.op, IrOp::IntLess | IrOp::IntLessequal);
+                    if is_unsigned {
+                        return emit_unsigned_binop(&def_insn, negated_op, def_stmt, parent_prec, ctx);
+                    }
                     return emit_binop(&def_insn, negated_op, def_stmt, parent_prec, ctx);
                 }
             }
@@ -1451,20 +1447,21 @@ fn emit_call1(insn: &IrInsn, func: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> S
 
 fn emit_unsigned_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
     let my_prec = c_precedence(insn.op);
+    let const_ctx = ConstContext::Bitwise;
     let lhs = if !insn.inputs.is_empty() {
-        let raw = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
-        let cast = unsigned_cast(insn.inputs[0].size);
-        format!("{}{}", cast, raw)
+        let raw = emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, const_ctx, my_prec, ctx);
+        let ty = type_for_size(insn.inputs[0].size, false);
+        format!("({}){}", ty, raw)
     } else {
         "0".to_string()
     };
     let rhs = if insn.inputs.len() >= 2 {
-        let raw = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
         if op == ">>" {
-            raw
+            emit_operand_with_prec(&insn.inputs[1], 1, stmt_idx, const_ctx, my_prec, ctx)
         } else {
-            let cast = unsigned_cast(insn.inputs[1].size);
-            format!("{}{}", cast, raw)
+            let raw = emit_operand_with_prec(&insn.inputs[1], 1, stmt_idx, const_ctx, my_prec, ctx);
+            let ty = type_for_size(insn.inputs[1].size, false);
+            format!("({}){}", ty, raw)
         }
     } else {
         "0".to_string()
@@ -1488,16 +1485,6 @@ fn emit_operand_resolved(
     ctx: &mut PrintCtx,
 ) -> String {
     emit_operand_with_prec(vn, _raw_idx, stmt_idx, ConstContext::Signed, 0, ctx)
-}
-
-fn emit_operand_with_context(
-    vn: &unlace_ir::Varnode,
-    _raw_idx: usize,
-    stmt_idx: u32,
-    const_ctx: ConstContext,
-    ctx: &mut PrintCtx,
-) -> String {
-    emit_operand_with_prec(vn, _raw_idx, stmt_idx, const_ctx, 0, ctx)
 }
 
 fn emit_operand_with_prec(
@@ -1632,17 +1619,6 @@ fn indent(depth: usize, out: &mut String) {
     }
 }
 
-/// Returns a C unsigned cast appropriate for the given operand byte size.
-fn unsigned_cast(size: u8) -> &'static str {
-    match size {
-        1 => "(unsigned char)",
-        2 => "(unsigned short)",
-        4 => "(unsigned int)",
-        8 => "(unsigned long long)",
-        _ => "(unsigned int)",
-    }
-}
-
 fn type_for_size(size: u8, signed: bool) -> &'static str {
     if signed {
         match size {
@@ -1751,7 +1727,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(output.contains("int simple(void)"), "function signature: {output}");
-        assert!(output.contains("v1 = v1 + 1;"), "assignment: {output}");
+        assert!(output.contains("v1++;"), "assignment: {output}");
         assert!(output.contains("return v1;"), "return: {output}");
         assert!(output.ends_with("}\n"), "closing brace: {output}");
     }
@@ -1812,7 +1788,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(output.contains("while (v1)"), "while: {output}");
-        assert!(output.contains("v1 = v1 - 1;"), "body: {output}");
+        assert!(output.contains("v1--;"), "body: {output}");
         assert!(output.contains("return;"), "return: {output}");
     }
 
@@ -1985,7 +1961,7 @@ mod tests {
         // Depth 3: function body (1) + outer if (2) + inner if (3) = 12 spaces.
         let add_line = output
             .lines()
-            .find(|l| l.contains("v1 = v1 + 1;"))
+            .find(|l| l.contains("v1++;"))
             .expect("should find add line");
         assert!(
             add_line.starts_with("            "),
@@ -2056,7 +2032,7 @@ mod tests {
         );
 
         assert!(
-            output.contains("v1 = ((1) + 2) + 3;"),
+            output.contains("v1 = 1 + 2 + 3;"),
             "folded expression expected: {output}",
         );
 
@@ -2589,8 +2565,8 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("- 8"),
-            "8-byte 0xfffffffffffffff8 in INT_ADD should render as `- 8`: {output}",
+            output.contains("+= -8"),
+            "8-byte 0xfffffffffffffff8 in INT_ADD should render as `+= -8`: {output}",
         );
         assert!(
             !output.contains("0xfffffffffffffff8"),
@@ -2617,8 +2593,8 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("- 4"),
-            "4-byte 0xfffffffc in INT_ADD should render as `- 4`: {output}",
+            output.contains("+= -4"),
+            "4-byte 0xfffffffc in INT_ADD should render as `+= -4`: {output}",
         );
     }
 
@@ -3090,5 +3066,514 @@ mod tests {
         assert!(output.contains("#define HIWORD"), "prelude should contain HIWORD macro: {output}");
         assert!(output.contains("#define LODWORD"), "prelude should contain LODWORD macro: {output}");
         assert!(output.contains("#define HIDWORD"), "prelude should contain HIDWORD macro: {output}");
+    }
+
+    // -------------------------------------------------------------------
+    // P4-6: Expanded compound assignment tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_compound_mul_assign() {
+        let v = reg(0, 4);
+        let c3 = con(3, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntMult, v, smallvec![v, c3], 0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+        let func = make_func("mul_assign", body);
+        let output = print_c(&func);
+        assert!(output.contains("v1 *= 3;"), "should emit v1 *= 3: {output}");
+    }
+
+    #[test]
+    fn test_compound_shl_assign() {
+        let v = reg(0, 4);
+        let c2 = con(2, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntLeft, v, smallvec![v, c2], 0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+        let func = make_func("shl_assign", body);
+        let output = print_c(&func);
+        assert!(output.contains("v1 <<= 2;"), "should emit v1 <<= 2: {output}");
+    }
+
+    #[test]
+    fn test_compound_and_assign() {
+        let v = reg(0, 4);
+        let mask = reg(8, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAnd, v, smallvec![v, mask], 0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+        let func = make_func("and_assign", body);
+        let output = print_c(&func);
+        assert!(output.contains("v1 &= v2;"), "should emit v1 &= v2: {output}");
+    }
+
+    #[test]
+    fn test_compound_or_assign() {
+        let v = reg(0, 4);
+        let flag = reg(8, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntOr, v, smallvec![v, flag], 0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+        let func = make_func("or_assign", body);
+        let output = print_c(&func);
+        assert!(output.contains("v1 |= v2;"), "should emit v1 |= v2: {output}");
+    }
+
+    // -------------------------------------------------------------------
+    // P4-7: Negation folding tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_negate_less_to_geq() {
+        let a = reg(0, 4);
+        let b = reg(8, 4);
+        let cmp_out = reg(16, 1);
+        let neg_out = reg(24, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSless, cmp_out, smallvec![a, b], 0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::BoolNegate, neg_out, smallvec![cmp_out], 0x1004,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: neg_out, version: 0 })),
+        ];
+        let func = make_func("negate_less", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains(">= v2"),
+            "!(a < b) should fold to a >= b: {output}",
+        );
+        assert!(
+            !output.contains("!("),
+            "should not contain negation prefix: {output}",
+        );
+    }
+
+    #[test]
+    fn test_negate_equal_to_neq() {
+        let a = reg(0, 4);
+        let b = reg(8, 4);
+        let cmp_out = reg(16, 1);
+        let neg_out = reg(24, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntEqual, cmp_out, smallvec![a, b], 0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::BoolNegate, neg_out, smallvec![cmp_out], 0x1004,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: neg_out, version: 0 })),
+        ];
+        let func = make_func("negate_equal", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("!= v2"),
+            "!(a == b) should fold to a != b: {output}",
+        );
+    }
+
+    #[test]
+    fn test_negate_non_comparison_kept() {
+        let r0 = reg(0, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::BoolNegate, r0, smallvec![r0], 0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+        let func = make_func("negate_plain", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("!v1"),
+            "!flag should remain as !flag: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-4: IntCarry / IntScarry / IntSborrow emission tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_intcarry_emits_check() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let out = reg(16, 1);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntCarry, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 1))),
+        ];
+        let func = make_func("carry_test", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("(v1 + v2) < v1"),
+            "IntCarry should emit `(a + b) < a`: {output}",
+        );
+    }
+
+    #[test]
+    fn test_intscarry_emits_ofadd() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let out = reg(16, 1);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntScarry, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 1))),
+        ];
+        let func = make_func("scarry_test", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("__OFADD__(v1, v2)"),
+            "IntScarry should emit `__OFADD__(a, b)`: {output}",
+        );
+    }
+
+    #[test]
+    fn test_intsborrow_emits_ofsub() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let out = reg(16, 1);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSborrow, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 1))),
+        ];
+        let func = make_func("sborrow_test", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("__OFSUB__(v1, v2)"),
+            "IntSborrow should emit `__OFSUB__(a, b)`: {output}",
+        );
+    }
+
+    #[test]
+    fn test_ofadd_ofsub_in_prelude() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("prelude_test", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("#define __OFADD__"),
+            "__OFADD__ macro should be in prelude: {output}",
+        );
+        assert!(
+            output.contains("#define __OFSUB__"),
+            "__OFSUB__ macro should be in prelude: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-5: Signed/unsigned operator distinction tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_unsigned_div_cast() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let out = reg(16, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntDiv, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 4))),
+        ];
+        let func = make_func("unsigned_div", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("(unsigned __int32)v1 / (unsigned __int32)v2"),
+            "IntDiv should cast both operands to unsigned: {output}",
+        );
+    }
+
+    #[test]
+    fn test_signed_div_no_cast() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let out = reg(16, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSdiv, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 4))),
+        ];
+        let func = make_func("signed_div", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("v1 / v2"),
+            "IntSdiv should NOT cast to unsigned: {output}",
+        );
+        let div_line = output.lines().find(|l| l.contains("/")).expect("div line");
+        let body_output: String = output.lines()
+            .skip_while(|l| !l.contains("signed_div"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            !body_output.contains("unsigned"),
+            "IntSdiv should not contain 'unsigned' cast: {output}",
+        );
+    }
+
+    #[test]
+    fn test_unsigned_shift_cast() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let out = reg(16, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntRight, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 4))),
+        ];
+        let func = make_func("unsigned_shift", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("(unsigned __int32)v1 >> v2"),
+            "IntRight should cast LHS to unsigned, not RHS: {output}",
+        );
+    }
+
+    #[test]
+    fn test_signed_shift_no_cast() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let out = reg(16, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSright, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 4))),
+        ];
+        let func = make_func("signed_shift", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("v1 >> v2"),
+            "IntSright should not cast to unsigned: {output}",
+        );
+    }
+
+    #[test]
+    fn test_unsigned_less_cast() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let out = reg(16, 1);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntLess, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 1))),
+        ];
+        let func = make_func("unsigned_less", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("(unsigned __int32)v1 < (unsigned __int32)v2"),
+            "IntLess should cast both operands to unsigned: {output}",
+        );
+    }
+
+    #[test]
+    fn test_signed_less_no_cast() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let out = reg(16, 1);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSless, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 1))),
+        ];
+        let func = make_func("signed_less", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("v1 < v2"),
+            "IntSless should not cast to unsigned: {output}",
+        );
+    }
+
+    #[test]
+    fn test_unsigned_rem_cast() {
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 8);
+        let out = reg(16, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntRem, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 8))),
+        ];
+        let func = make_func("unsigned_rem", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("(unsigned __int64)v1 % (unsigned __int64)v2"),
+            "IntRem should cast both operands to unsigned: {output}",
+        );
+    }
+
+    #[test]
+    fn test_unsigned_lessequal_cast() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let out = reg(16, 1);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntLessequal, out, smallvec![r0, r8], 0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 1))),
+        ];
+        let func = make_func("unsigned_leq", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("(unsigned __int32)v1 <= (unsigned __int32)v2"),
+            "IntLessequal should cast both operands to unsigned: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-2: Operator precedence / parenthesization tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_parens_shift_in_add() {
+        let a = reg(0, 4);
+        let b = reg(8, 4);
+        let c = reg(16, 4);
+        let tmp = reg(24, 4);
+        let out = reg(32, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::IntLeft, tmp, smallvec![a, b], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, out, smallvec![tmp, c], 0x1004)),
+            HirNode::Return(Some(sv(32, 4))),
+        ];
+
+        let func = make_func("shift_in_add", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("(v1 << v2) + v3"),
+            "shift inside add must be parenthesized: {output}",
+        );
+    }
+
+    #[test]
+    fn test_parens_add_in_multiply() {
+        let a = reg(0, 4);
+        let b = reg(8, 4);
+        let c = reg(16, 4);
+        let tmp = reg(24, 4);
+        let out = reg(32, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, tmp, smallvec![a, b], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::IntMult, out, smallvec![tmp, c], 0x1004)),
+            HirNode::Return(Some(sv(32, 4))),
+        ];
+
+        let func = make_func("add_in_mult", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("(v1 + v2) * v3"),
+            "add inside multiply must be parenthesized: {output}",
+        );
+    }
+
+    #[test]
+    fn test_no_parens_same_prec_assoc() {
+        let a = reg(0, 4);
+        let b = reg(8, 4);
+        let c = reg(16, 4);
+        let tmp = reg(24, 4);
+        let out = reg(32, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, tmp, smallvec![a, b], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, out, smallvec![tmp, c], 0x1004)),
+            HirNode::Return(Some(sv(32, 4))),
+        ];
+
+        let func = make_func("same_prec", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("v1 + v2 + v3"),
+            "same-prec associative ops should NOT have extra parens: {output}",
+        );
+        assert!(
+            !output.contains("(v1 + v2) + v3"),
+            "should not wrap same-prec: {output}",
+        );
+    }
+
+    #[test]
+    fn test_parens_nested_binop() {
+        let a = reg(0, 4);
+        let b = reg(8, 4);
+        let c = reg(16, 4);
+        let tmp = reg(24, 4);
+        let out = reg(32, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::IntOr, tmp, smallvec![a, b], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::IntAnd, out, smallvec![tmp, c], 0x1004)),
+            HirNode::Return(Some(sv(32, 4))),
+        ];
+
+        let func = make_func("nested_binop", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("(v1 | v2) & v3"),
+            "OR inside AND must be parenthesized: {output}",
+        );
+    }
+
+    #[test]
+    fn test_parens_unary_on_binop() {
+        let a = reg(0, 4);
+        let b = reg(8, 4);
+        let tmp = reg(16, 4);
+        let out = reg(24, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, tmp, smallvec![a, b], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::Int2comp, out, smallvec![tmp], 0x1004)),
+            HirNode::Return(Some(sv(24, 4))),
+        ];
+
+        let func = make_func("unary_on_binop", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("-(v1 + v2)"),
+            "unary minus on binop should parenthesize the add: {output}",
+        );
     }
 }

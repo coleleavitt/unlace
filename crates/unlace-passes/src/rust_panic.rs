@@ -159,6 +159,7 @@ mod tests {
             dwarf_local_names: BTreeMap::new(),
             inferred_structs: BTreeMap::new(),
             composite_var_types: BTreeMap::new(),
+            array_strides: BTreeMap::new(),
         }
     }
 

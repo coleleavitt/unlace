@@ -61,10 +61,97 @@ impl Pass for TypeInferPass {
         }
 
         seed_from_composites(func);
+        detect_array_strides(func);
 
         let types_changed = func.var_types.len() != before_len || func.var_types != snapshot;
         Ok(types_changed)
     }
+}
+
+/// Annotate `INT_ADD` / `PTRADD` / `PTRSUB` instructions whose offset
+/// operand is `idx * stride` (where `stride` is a constant) with the
+/// detected stride.
+///
+/// Recognised patterns:
+///
+/// * `IntMult $idx, $stride_const` — direct multiply (e.g. `idx * 4`)
+/// * `IntLeft $idx, $shift_const`  — shift-by-constant (e.g. `idx << 2`)
+///
+/// The `IntLeft` pattern catches optimised builds where compilers
+/// rewrite `idx * 4` as `idx << 2`. Strides outside {1, 2, 4, 8, 16}
+/// are ignored to avoid false positives on unrelated arithmetic.
+fn detect_array_strides(func: &mut SsaFunction) {
+    let mut detections: Vec<((unlace_ir::BlockId, usize), u64)> = Vec::new();
+
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            if !matches!(insn.op, IrOp::IntAdd | IrOp::Ptradd | IrOp::Ptrsub) {
+                continue;
+            }
+            if insn.inputs.len() < 2 {
+                continue;
+            }
+
+            for offset_idx in 0..2 {
+                let candidate = &insn.inputs[offset_idx];
+                if let Some(stride) = stride_of_varnode(candidate, func) {
+                    if matches!(stride, 1 | 2 | 4 | 8 | 16) {
+                        detections.push(((bid, insn_idx), stride));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    for (key, stride) in detections {
+        func.array_strides.insert(key, stride);
+    }
+}
+
+fn stride_of_varnode(v: &unlace_ir::Varnode, func: &SsaFunction) -> Option<u64> {
+    if v.space == SpaceId::Const {
+        return None;
+    }
+
+    for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
+        if *slot != VarnodeSlot::Output {
+            continue;
+        }
+        if sv.base != *v {
+            continue;
+        }
+        let block = func.function.blocks.get(&bid)?;
+        let def_insn = block.insns.get(insn_idx)?;
+
+        match def_insn.op {
+            IrOp::IntMult => {
+                if def_insn.inputs.len() != 2 {
+                    return None;
+                }
+                let (a, b) = (&def_insn.inputs[0], &def_insn.inputs[1]);
+                if a.space == SpaceId::Const && b.space != SpaceId::Const {
+                    return Some(a.offset);
+                }
+                if b.space == SpaceId::Const && a.space != SpaceId::Const {
+                    return Some(b.offset);
+                }
+                return None;
+            }
+            IrOp::IntLeft => {
+                if def_insn.inputs.len() != 2 {
+                    return None;
+                }
+                let (a, b) = (&def_insn.inputs[0], &def_insn.inputs[1]);
+                if b.space == SpaceId::Const && a.space != SpaceId::Const && b.offset < 64 {
+                    return 1u64.checked_shl(b.offset as u32);
+                }
+                return None;
+            }
+            _ => return None,
+        }
+    }
+    None
 }
 
 /// Seed `var_types` from `composite_var_types` so primitive type inference
@@ -895,6 +982,110 @@ mod tests {
             Type::Primitive(PrimitiveType::Unknown).join(s1.clone()),
             s1,
             "Unknown joins from either side"
+        );
+    }
+
+    #[test]
+    fn test_array_stride_detection_int_mult() {
+        let base = Varnode::reg(0, 8);
+        let idx = Varnode::reg(8, 8);
+        let scaled = Varnode::unique(0, 8);
+        let addr = Varnode::unique(8, 8);
+        let c4 = Varnode::constant(4, 8);
+
+        let mut func = Function::new("array_stride", BlockId(0), 0xf000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            scaled,
+            smallvec![idx, c4],
+            0xf000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![base, scaled],
+            0xf004,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0xf008));
+        func.insert_block(bb0);
+
+        let ssa = run_type_infer(func);
+
+        assert_eq!(
+            ssa.array_strides.get(&(BlockId(0), 1)).copied(),
+            Some(4),
+            "should detect stride=4 from idx*4 + base"
+        );
+    }
+
+    #[test]
+    fn test_array_stride_detection_shift_left() {
+        let base = Varnode::reg(0, 8);
+        let idx = Varnode::reg(8, 8);
+        let shifted = Varnode::unique(0, 8);
+        let addr = Varnode::unique(8, 8);
+        let c3 = Varnode::constant(3, 8);
+
+        let mut func = Function::new("array_stride_shl", BlockId(0), 0xf100);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntLeft,
+            shifted,
+            smallvec![idx, c3],
+            0xf100,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![base, shifted],
+            0xf104,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0xf108));
+        func.insert_block(bb0);
+
+        let ssa = run_type_infer(func);
+
+        assert_eq!(
+            ssa.array_strides.get(&(BlockId(0), 1)).copied(),
+            Some(8),
+            "should detect stride=8 from idx<<3 + base"
+        );
+    }
+
+    #[test]
+    fn test_array_stride_no_detection_for_non_power_of_two() {
+        let base = Varnode::reg(0, 8);
+        let idx = Varnode::reg(8, 8);
+        let scaled = Varnode::unique(0, 8);
+        let addr = Varnode::unique(8, 8);
+        let c12 = Varnode::constant(12, 8);
+
+        let mut func = Function::new("non_array_stride", BlockId(0), 0xf200);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            scaled,
+            smallvec![idx, c12],
+            0xf200,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![base, scaled],
+            0xf204,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0xf208));
+        func.insert_block(bb0);
+
+        let ssa = run_type_infer(func);
+
+        assert!(
+            ssa.array_strides.is_empty(),
+            "stride 12 is outside the whitelist; should not annotate"
         );
     }
 

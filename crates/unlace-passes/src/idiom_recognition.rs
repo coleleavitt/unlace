@@ -20,6 +20,8 @@
 //!
 //! Iterates internally to a fixed point.
 
+use std::collections::BTreeMap;
+
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
@@ -37,11 +39,12 @@ impl Pass for IdiomRecognitionPass {
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut changed_any = false;
         loop {
+            let def_map = build_def_map(func);
             let mut changed = false;
 
             for block in func.function.blocks.values_mut() {
                 for insn in &mut block.insns {
-                    if let Some(replacement) = try_recognize(insn) {
+                    if let Some(replacement) = try_recognize(insn, &def_map) {
                         *insn = replacement;
                         changed = true;
                     }
@@ -83,6 +86,38 @@ fn is_sign_bit_shift(value: &Varnode, shift_amt: &Varnode) -> bool {
     shift_amt.offset == bits_minus_one
 }
 
+fn build_def_map(func: &SsaFunction) -> BTreeMap<Varnode, IrInsn> {
+    let mut map = BTreeMap::new();
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            if let Some(output) = insn.output {
+                if output.space != SpaceId::Const {
+                    map.insert(output, insn.clone());
+                }
+            }
+        }
+    }
+    map
+}
+
+/// Check if `candidate` is `INT_2COMP(target)` by looking up its definition.
+fn is_twos_complement_of(
+    candidate: &Varnode,
+    target: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> bool {
+    if candidate.space == SpaceId::Const {
+        return false;
+    }
+    if let Some(def_insn) = def_map.get(candidate) {
+        def_insn.op == IrOp::Int2comp
+            && def_insn.inputs.len() == 1
+            && def_insn.inputs[0] == *target
+    } else {
+        false
+    }
+}
+
 /// Build a `COPY` instruction that replaces `insn`'s output with `source`.
 fn make_copy(insn: &IrInsn, source: Varnode) -> IrInsn {
     IrInsn::with_output(
@@ -93,7 +128,7 @@ fn make_copy(insn: &IrInsn, source: Varnode) -> IrInsn {
     )
 }
 
-fn try_recognize(insn: &IrInsn) -> Option<IrInsn> {
+fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<IrInsn> {
     let output = insn.output?;
 
     // Already a COPY — nothing to do.
@@ -236,6 +271,22 @@ fn try_recognize(insn: &IrInsn) -> Option<IrInsn> {
         // ── Boolean idempotent: v & v → v, v | v → v ──────────────
         IrOp::BoolAnd | IrOp::BoolOr if a == b && a.space != SpaceId::Const => {
             Some(make_copy(insn, a))
+        }
+
+        // ── CARRY(x, 0) → 0, CARRY(x, -x) → x != 0 ──────────────
+        IrOp::IntCarry => {
+            if is_const_val(&b, 0) {
+                Some(make_copy(insn, Varnode::constant(0, output.size)))
+            } else if is_twos_complement_of(&b, &a, def_map) {
+                Some(IrInsn::with_output(
+                    IrOp::IntNotequal,
+                    output,
+                    smallvec::smallvec![a, Varnode::constant(0, a.size)],
+                    insn.addr,
+                ))
+            } else {
+                None
+            }
         }
 
         _ => None,
@@ -797,5 +848,46 @@ mod tests {
         let mut ssa = make_single_block_ssa(vec![insn]);
         let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
         assert!(!changed);
+    }
+
+    // ── INT_CARRY(x, 0) → COPY 0 ──────────────────────────────────
+
+    #[test]
+    fn test_idiom_carry_zero() {
+        let v0 = Varnode::reg(0, 4);
+        let zero = Varnode::constant(0, 4);
+        let out = Varnode::unique(0, 1);
+        let insn = IrInsn::with_output(IrOp::IntCarry, out, smallvec![v0, zero], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Copy);
+        assert_eq!(block.insns[0].inputs[0].space, SpaceId::Const);
+        assert_eq!(block.insns[0].inputs[0].offset, 0);
+    }
+
+    // ── INT_CARRY(x, INT_2COMP(x)) → INT_NOTEQUAL(x, 0) ──────────
+
+    #[test]
+    fn test_idiom_carry_twos_complement() {
+        let v0 = Varnode::reg(0, 4);
+        let neg_v0 = Varnode::unique(0, 4);
+        let out = Varnode::unique(8, 1);
+
+        let negate = IrInsn::with_output(IrOp::Int2comp, neg_v0, smallvec![v0], 0x1000);
+        let carry = IrInsn::with_output(IrOp::IntCarry, out, smallvec![v0, neg_v0], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![negate, carry]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[1].op, IrOp::IntNotequal);
+        assert_eq!(block.insns[1].inputs[0], v0);
+        assert_eq!(block.insns[1].inputs[1].space, SpaceId::Const);
+        assert_eq!(block.insns[1].inputs[1].offset, 0);
     }
 }

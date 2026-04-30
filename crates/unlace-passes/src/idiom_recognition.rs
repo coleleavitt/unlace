@@ -35,6 +35,8 @@
 //! - `SUBPIECE(ZEXT/SEXT(x), 0)` with output size ≤ source size → `COPY x` or `SUBPIECE(x, 0)`
 //! - N consecutive `LOAD(ram, src+i*w)` + `STORE(ram, dst+i*w, loaded)` pairs → `Callother(__memcpy__, dst, src, N*w)`
 //! - N consecutive `STORE(ram, dst+i*w, const)` with same const → `Callother(__memset__, dst, const, N*w)`
+//! - `(x >> shift) & mask` where mask is contiguous low bits → `Callother(__bitfield_get__, x, shift, width)` (bitfield read)
+//! - `(x & ~(mask << shift)) | ((y & mask) << shift)` → `Callother(__bitfield_set__, x, y, shift, width)` (bitfield write)
 //!
 //! Iterates internally to a fixed point.
 
@@ -67,6 +69,12 @@ const CALLOTHER_MEMCPY: u64 = 0x325;
 
 /// Callother tag for unrolled memset: `__memset__(dst, val, size)`.
 const CALLOTHER_MEMSET: u64 = 0x326;
+
+/// Callother tag for bitfield read: `__bitfield_get__(x, shift, width)`.
+const CALLOTHER_BITFIELD_GET: u64 = 0x327;
+
+/// Callother tag for bitfield write: `__bitfield_set__(x, y, shift, width)`.
+const CALLOTHER_BITFIELD_SET: u64 = 0x328;
 
 /// Maximum number of consecutive Load+Store pairs (memcpy) or Store
 /// instructions (memset) we will collapse. Prevents pathological matching.
@@ -633,7 +641,8 @@ fn make_callother(insn: &IrInsn, tag: u64, args: smallvec::SmallVec<[Varnode; 3]
     inputs.extend(args);
     IrInsn::with_output(
         IrOp::Callother,
-        insn.output.expect("idiom-recognizable insn always has output"),
+        insn.output
+            .expect("idiom-recognizable insn always has output"),
         inputs,
         insn.addr,
     )
@@ -705,7 +714,11 @@ fn try_min_idiom_ordered(
         return None;
     }
 
-    Some(make_callother(insn, CALLOTHER_MIN, smallvec::smallvec![sub_a, sub_b]))
+    Some(make_callother(
+        insn,
+        CALLOTHER_MIN,
+        smallvec::smallvec![sub_a, sub_b],
+    ))
 }
 
 /// Branchless max: `INT_SUB(a, INT_AND(d, s))` where `d = INT_SUB(a, b)`,
@@ -736,7 +749,11 @@ fn try_max_idiom(
         return None;
     }
 
-    Some(make_callother(insn, CALLOTHER_MAX, smallvec::smallvec![sub_a, sub_b]))
+    Some(make_callother(
+        insn,
+        CALLOTHER_MAX,
+        smallvec::smallvec![sub_a, sub_b],
+    ))
 }
 
 fn try_recognize_unary(
@@ -793,7 +810,10 @@ fn try_recognize_unary(
 }
 
 fn is_side_effecting(op: IrOp) -> bool {
-    matches!(op, IrOp::Call | IrOp::Callind | IrOp::Callother | IrOp::Branchind)
+    matches!(
+        op,
+        IrOp::Call | IrOp::Callind | IrOp::Callother | IrOp::Branchind
+    )
 }
 
 fn is_ram_load(insn: &IrInsn) -> bool {
@@ -812,7 +832,11 @@ fn is_ram_store(insn: &IrInsn) -> bool {
 }
 
 fn const_addr(vn: &Varnode) -> Option<u64> {
-    if vn.space == SpaceId::Const { Some(vn.offset) } else { None }
+    if vn.space == SpaceId::Const {
+        Some(vn.offset)
+    } else {
+        None
+    }
 }
 
 fn try_recognize_sequences(insns: &mut Vec<IrInsn>) -> bool {
@@ -1009,12 +1033,140 @@ fn try_rotate(
     Some(IrInsn::with_output(
         IrOp::Callother,
         output,
-        smallvec::smallvec![
-            Varnode::constant(tag, 8),
-            ls,
-            Varnode::constant(n, ls.size),
-        ],
+        smallvec::smallvec![Varnode::constant(tag, 8), ls, Varnode::constant(n, ls.size),],
         insn.addr,
+    ))
+}
+
+fn is_contiguous_low_mask(val: u64) -> Option<u8> {
+    if val == 0 {
+        return None;
+    }
+    let width = val.count_ones() as u8;
+    let expected = if width >= 64 {
+        u64::MAX
+    } else {
+        (1u64 << width) - 1
+    };
+    if val == expected {
+        Some(width)
+    } else {
+        None
+    }
+}
+
+fn try_bitfield_read(
+    insn: &IrInsn,
+    a: &Varnode,
+    b: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    let output = insn.output?;
+
+    let (shifted_vn, mask_vn) = if b.space == SpaceId::Const {
+        (a, b)
+    } else if a.space == SpaceId::Const {
+        (b, a)
+    } else {
+        return None;
+    };
+
+    let width = is_contiguous_low_mask(mask_vn.offset)?;
+
+    let def = def_of(shifted_vn, def_map)?;
+    if !matches!(def.op, IrOp::IntRight | IrOp::IntSright) || def.inputs.len() != 2 {
+        return None;
+    }
+    let x = def.inputs[0];
+    let shift_vn = def.inputs[1];
+    if shift_vn.space != SpaceId::Const || x.space == SpaceId::Const {
+        return None;
+    }
+
+    let bits = (x.size as u64) * 8;
+    if shift_vn.offset + (width as u64) > bits {
+        return None;
+    }
+
+    Some(make_callother(
+        insn,
+        CALLOTHER_BITFIELD_GET,
+        smallvec::smallvec![
+            x,
+            Varnode::constant(shift_vn.offset, output.size),
+            Varnode::constant(width as u64, output.size),
+        ],
+    ))
+}
+
+fn try_bitfield_write(
+    insn: &IrInsn,
+    a: &Varnode,
+    b: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    let output = insn.output?;
+
+    // Pattern: (x & ~(mask << shift)) | ((y & mask) << shift)
+    // One OR operand is the clear: AND(x, ~(mask << shift))
+    // The other is the insert: LEFT(AND(y, mask), shift)
+    try_bitfield_write_ordered(insn, a, b, output, def_map)
+        .or_else(|| try_bitfield_write_ordered(insn, b, a, output, def_map))
+}
+
+fn try_bitfield_write_ordered(
+    insn: &IrInsn,
+    clear_vn: &Varnode,
+    insert_vn: &Varnode,
+    output: Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    // insert_vn = LEFT(AND(y, mask), shift)
+    let (and_vn, insert_shift) = def_binary(insert_vn, IrOp::IntLeft, def_map)?;
+    if insert_shift.space != SpaceId::Const {
+        return None;
+    }
+    let shift = insert_shift.offset;
+
+    let (y, mask_vn) = def_binary(&and_vn, IrOp::IntAnd, def_map)?;
+    let (y, mask_vn) = if mask_vn.space == SpaceId::Const && y.space != SpaceId::Const {
+        (y, mask_vn)
+    } else if y.space == SpaceId::Const && mask_vn.space != SpaceId::Const {
+        (mask_vn, y)
+    } else {
+        return None;
+    };
+    let width = is_contiguous_low_mask(mask_vn.offset)?;
+
+    // clear_vn = AND(x, ~(mask << shift))
+    let (x, inv_mask_vn) = def_binary(clear_vn, IrOp::IntAnd, def_map)?;
+    let (x, inv_mask_vn) = if inv_mask_vn.space == SpaceId::Const && x.space != SpaceId::Const {
+        (x, inv_mask_vn)
+    } else if x.space == SpaceId::Const && inv_mask_vn.space != SpaceId::Const {
+        (inv_mask_vn, x)
+    } else {
+        return None;
+    };
+
+    let expected_inv_mask = !(mask_vn.offset << shift) & mask_for_size(output.size);
+    if inv_mask_vn.offset != expected_inv_mask {
+        return None;
+    }
+
+    let bits = (output.size as u64) * 8;
+    if shift + (width as u64) > bits {
+        return None;
+    }
+
+    Some(make_callother(
+        insn,
+        CALLOTHER_BITFIELD_SET,
+        smallvec::smallvec![
+            x,
+            y,
+            Varnode::constant(shift, output.size),
+            Varnode::constant(width as u64, output.size),
+        ],
     ))
 }
 
@@ -1046,6 +1198,8 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
         IrOp::IntAnd => {
             if let Some(sub) = try_subpiece_from_and(insn, &a, &b, def_map) {
                 Some(sub)
+            } else if let Some(bf) = try_bitfield_read(insn, &a, &b, def_map) {
+                Some(bf)
             } else if is_all_ones(&b) && a.space != SpaceId::Const {
                 Some(make_copy(insn, a))
             } else if is_all_ones(&a) && b.space != SpaceId::Const {
@@ -1083,6 +1237,8 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
                 Some(make_copy(insn, a))
             } else if let Some(r) = try_or_simplify(insn, &a, &b, def_map) {
                 Some(r)
+            } else if let Some(bf) = try_bitfield_write(insn, &a, &b, def_map) {
+                Some(bf)
             } else {
                 try_rotate(insn, &a, &b, def_map)
             }
@@ -1931,7 +2087,15 @@ mod tests {
         let changed = IdiomRecognitionPass
             .run(&mut ssa)
             .expect("pass should succeed");
-        assert!(!changed);
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let result = &block.insns[1];
+        assert_eq!(result.op, IrOp::Callother);
+        assert_eq!(result.inputs[0].offset, super::CALLOTHER_BITFIELD_GET);
+        assert_eq!(result.inputs[1], r0);
+        assert_eq!(result.inputs[2].offset, 8);
+        assert_eq!(result.inputs[3].offset, 8);
     }
 
     #[test]
@@ -2622,7 +2786,9 @@ mod tests {
         let i_or = IrInsn::with_output(IrOp::IntOr, out, smallvec![shl, shr], 0x1008);
 
         let mut ssa = make_single_block_ssa(vec![i_shl, i_shr, i_or]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -2649,7 +2815,9 @@ mod tests {
         let i_or = IrInsn::with_output(IrOp::IntOr, out, smallvec![shr, shl], 0x1008);
 
         let mut ssa = make_single_block_ssa(vec![i_shr, i_shl, i_or]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -2670,13 +2838,18 @@ mod tests {
         let out = Varnode::unique(16, 4);
 
         let sright = IrInsn::with_output(
-            IrOp::IntSright, s, smallvec![x, Varnode::constant(31, 4)], 0x1000,
+            IrOp::IntSright,
+            s,
+            smallvec![x, Varnode::constant(31, 4)],
+            0x1000,
         );
         let xor = IrInsn::with_output(IrOp::IntXor, xored, smallvec![x, s], 0x1004);
         let sub = IrInsn::with_output(IrOp::IntSub, out, smallvec![xored, s], 0x1008);
 
         let mut ssa = make_single_block_ssa(vec![sright, xor, sub]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -2699,13 +2872,18 @@ mod tests {
 
         let sub = IrInsn::with_output(IrOp::IntSub, d, smallvec![a, b], 0x1000);
         let sright = IrInsn::with_output(
-            IrOp::IntSright, s, smallvec![d, Varnode::constant(31, 4)], 0x1004,
+            IrOp::IntSright,
+            s,
+            smallvec![d, Varnode::constant(31, 4)],
+            0x1004,
         );
         let and = IrInsn::with_output(IrOp::IntAnd, masked, smallvec![d, s], 0x1008);
         let add = IrInsn::with_output(IrOp::IntAdd, out, smallvec![b, masked], 0x100C);
 
         let mut ssa = make_single_block_ssa(vec![sub, sright, and, add]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -2729,13 +2907,18 @@ mod tests {
 
         let sub_d = IrInsn::with_output(IrOp::IntSub, d, smallvec![a, b], 0x1000);
         let sright = IrInsn::with_output(
-            IrOp::IntSright, s, smallvec![d, Varnode::constant(31, 4)], 0x1004,
+            IrOp::IntSright,
+            s,
+            smallvec![d, Varnode::constant(31, 4)],
+            0x1004,
         );
         let and = IrInsn::with_output(IrOp::IntAnd, masked, smallvec![d, s], 0x1008);
         let sub_out = IrInsn::with_output(IrOp::IntSub, out, smallvec![a, masked], 0x100C);
 
         let mut ssa = make_single_block_ssa(vec![sub_d, sright, and, sub_out]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -2762,19 +2945,29 @@ mod tests {
             let dst_addr = Varnode::constant(dst_base + i * (width as u64), 8);
 
             insns.push(IrInsn::with_output(
-                IrOp::Load, loaded, smallvec![ram_space, src_addr], 0x1000 + i * 8,
+                IrOp::Load,
+                loaded,
+                smallvec![ram_space, src_addr],
+                0x1000 + i * 8,
             ));
             insns.push(IrInsn::without_output(
-                IrOp::Store, smallvec![ram_space, dst_addr, loaded], 0x1004 + i * 8,
+                IrOp::Store,
+                smallvec![ram_space, dst_addr, loaded],
+                0x1004 + i * 8,
             ));
         }
 
         let mut ssa = make_single_block_ssa(insns);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
-        let co = block.insns.iter().find(|i| i.op == IrOp::Callother)
+        let co = block
+            .insns
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
             .expect("should have Callother");
         assert_eq!(co.inputs[0].offset, super::CALLOTHER_MEMCPY);
         assert_eq!(co.inputs[1].offset, dst_base);
@@ -2796,21 +2989,96 @@ mod tests {
         for i in 0u64..4 {
             let dst_addr = Varnode::constant(dst_base + i * (width as u64), 8);
             insns.push(IrInsn::without_output(
-                IrOp::Store, smallvec![ram_space, dst_addr, fill_val], 0x1000 + i * 4,
+                IrOp::Store,
+                smallvec![ram_space, dst_addr, fill_val],
+                0x1000 + i * 4,
             ));
         }
 
         let mut ssa = make_single_block_ssa(insns);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
-        let co = block.insns.iter().find(|i| i.op == IrOp::Callother)
+        let co = block
+            .insns
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
             .expect("should have Callother");
         assert_eq!(co.inputs[0].offset, super::CALLOTHER_MEMSET);
         assert_eq!(co.inputs[1].offset, dst_base);
         assert_eq!(co.inputs[2], fill_val);
         assert_eq!(co.inputs[3].offset, 4 * (width as u64));
         assert!(co.output.is_none());
+    }
+
+    // ── Bitfield read: (r0 >> 4) & 0xFF → __bitfield_get__(r0, 4, 8) ──
+
+    #[test]
+    fn test_idiom_bitfield_read() {
+        let r0 = Varnode::reg(0, 4);
+        let c4 = Varnode::constant(4, 4);
+        let mask = Varnode::constant(0xFF, 4);
+        let shifted = Varnode::unique(0, 4);
+        let out = Varnode::unique(8, 4);
+
+        let shr = IrInsn::with_output(IrOp::IntRight, shifted, smallvec![r0, c4], 0x1000);
+        let and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![shifted, mask], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![shr, and]);
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let result = &block.insns[1];
+        assert_eq!(result.op, IrOp::Callother);
+        assert_eq!(result.inputs[0].offset, super::CALLOTHER_BITFIELD_GET);
+        assert_eq!(result.inputs[1], r0);
+        assert_eq!(result.inputs[2].offset, 4);
+        assert_eq!(result.inputs[3].offset, 8);
+    }
+
+    // ── Bitfield write: (x & ~(0xFF << 4)) | ((y & 0xFF) << 4) → __bitfield_set__(x, y, 4, 8) ──
+
+    #[test]
+    fn test_idiom_bitfield_write() {
+        let x = Varnode::reg(0, 4);
+        let y = Varnode::reg(8, 4);
+        let c4 = Varnode::constant(4, 4);
+        let mask = Varnode::constant(0xFF, 4);
+        // ~(0xFF << 4) = ~0xFF0 = 0xFFFFF00F
+        let inv_mask = Varnode::constant(0xFFFFF00F, 4);
+
+        let cleared = Varnode::unique(0, 4);
+        let masked_y = Varnode::unique(8, 4);
+        let shifted_y = Varnode::unique(16, 4);
+        let out = Varnode::unique(24, 4);
+
+        let clear = IrInsn::with_output(IrOp::IntAnd, cleared, smallvec![x, inv_mask], 0x1000);
+        let mask_insn =
+            IrInsn::with_output(IrOp::IntAnd, masked_y, smallvec![y, mask], 0x1004);
+        let shift =
+            IrInsn::with_output(IrOp::IntLeft, shifted_y, smallvec![masked_y, c4], 0x1008);
+        let combine =
+            IrInsn::with_output(IrOp::IntOr, out, smallvec![cleared, shifted_y], 0x100C);
+
+        let mut ssa = make_single_block_ssa(vec![clear, mask_insn, shift, combine]);
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let result = &block.insns[3];
+        assert_eq!(result.op, IrOp::Callother);
+        assert_eq!(result.inputs[0].offset, super::CALLOTHER_BITFIELD_SET);
+        assert_eq!(result.inputs[1], x);
+        assert_eq!(result.inputs[2], y);
+        assert_eq!(result.inputs[3].offset, 4);
+        assert_eq!(result.inputs[4].offset, 8);
     }
 }

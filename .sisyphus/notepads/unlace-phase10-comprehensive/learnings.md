@@ -192,3 +192,22 @@ Added `StructFieldDetectPass`, a single-function SSA analysis that groups `LOAD`
 - Field names are intentionally mechanical (`field_<offset>`); struct names use the base varnode offset (`struct_<base_offset_hex>`).
 - Access size maps to unsigned primitives, with 16-byte fields represented as `PrimitiveType::UnsignedInt(16)` so the C printer can render `_OWORD`.
 - Wired before type inference and variable merging so composite types seed primitive pointer inference and survive to C output.
+
+## P10-10: Bitfield Extraction/Insertion Idiom Recognition (2026-04-30)
+
+Added 2 bitfield idiom patterns to `idiom_recognition.rs`:
+
+### Patterns
+- **bitfield read**: `(x >> shift) & mask` where mask is contiguous low bits → `Callother(__bitfield_get__, x, shift, width)` (tag 0x327)
+- **bitfield write**: `(x & ~(mask << shift)) | ((y & mask) << shift)` → `Callother(__bitfield_set__, x, y, shift, width)` (tag 0x328)
+
+### Key Decisions
+- `is_contiguous_low_mask(val)` helper detects masks of form `(1 << width) - 1` via `count_ones()` + reconstruction check; handles `u64::MAX` (width=64) without overflow
+- Bitfield read matches both `IntRight` and `IntSright` as the shift operation
+- Bitfield read is checked AFTER `try_subpiece_from_and` (byte-aligned extraction takes priority) but BEFORE identity/annihilator checks
+- Bitfield write matches on `IntOr` with 4-level def chain: OR(AND(x, inv_mask), LEFT(AND(y, mask), shift))
+- Both patterns require shift and mask to be constants; source operand must be non-constant
+- Bounds check: `shift + width ≤ bits` prevents out-of-range extractions
+- Updated existing `test_idiom_subpiece_no_match_when_mask_size_mismatch` — this pattern is now correctly recognized as a bitfield read instead of being unmatched
+- Tags 0x327-0x328 continue the idiom-recognition range after memcpy/memset (0x325-0x326)
+- C printer maps 0x327 → `__bitfield_get__`, 0x328 → `__bitfield_set__`

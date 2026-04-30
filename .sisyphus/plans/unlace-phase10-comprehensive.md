@@ -708,7 +708,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(passes): struct field detection from base + const_offset Load patterns`
 
-- [ ] P10-10. Bitfield extraction from AND/SHIFT patterns
+- [x] P10-10. Bitfield extraction from AND/SHIFT patterns
 
   **What to do**:
   - Extend `idiom_recognition.rs` (NOT type_infer): patterns

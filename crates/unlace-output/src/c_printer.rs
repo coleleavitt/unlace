@@ -139,6 +139,7 @@ pub fn print_c_full(
 
     collect_varnodes(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
+    compute_byref_bases(&mut ctx);
 
     let mut out = String::with_capacity(1024);
 
@@ -167,10 +168,11 @@ pub fn print_c_full(
         .unwrap_or_else(|| c_sig_return_type(&func.return_type).to_string());
 
     let conv_annotation = header.and_then(|h| calling_convention_annotation(&h.convention));
+    let noreturn_mod = if func.noreturn { " __noreturn" } else { "" };
     if let Some(conv) = conv_annotation {
-        let _ = write!(out, "{} {} {}(", return_type_str, conv, emit_name);
+        let _ = write!(out, "{}{} {} {}(", return_type_str, noreturn_mod, conv, emit_name);
     } else {
-        let _ = write!(out, "{} {}(", return_type_str, emit_name);
+        let _ = write!(out, "{}{} {}(", return_type_str, noreturn_mod, emit_name);
     }
 
     if let Some(df) = dwarf_func.filter(|df| !df.params.is_empty()) {
@@ -219,8 +221,22 @@ pub fn print_c_full(
         }
         let ty = ctx.var_types.get(sv).copied().unwrap_or(PrimitiveType::Unknown);
         let frame_size = header.map(|h| h.stack_frame);
+        let byref_suffix = if ctx.byref_bases.contains(&sv.base) {
+            " BYREF"
+        } else {
+            ""
+        };
         if let Some(comment) = varnode_location_comment(&sv.base, frame_size) {
-            let _ = writeln!(out, "    {} {}; // {}", c_type(&ty), name, comment);
+            let _ = writeln!(
+                out,
+                "    {} {}; // {}{}",
+                c_type(&ty),
+                name,
+                comment,
+                byref_suffix,
+            );
+        } else if !byref_suffix.is_empty() {
+            let _ = writeln!(out, "    {} {}; //{}", c_type(&ty), name, byref_suffix);
         } else {
             let _ = writeln!(out, "    {} {};", c_type(&ty), name);
         }
@@ -857,6 +873,75 @@ fn compute_foldable(ctx: &mut PrintCtx) {
 
         ctx.foldable_stmts.insert(stmt_idx);
         ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
+    }
+}
+
+/// Mark stack variables whose address is passed to a CALL as BYREF.
+///
+/// Detection runs over the linearized statement stream. We track the most
+/// recent definition of every Varnode that resolves to `RSP/RBP + const`
+/// (the address-of-stack-slot pattern produced by lifters) and, when a
+/// `CALL`/`CALLIND` consumes such a varnode, the corresponding stack slot
+/// is recorded in `byref_bases`. Direct `SpaceId::Stack` arguments are
+/// also flagged.
+fn compute_byref_bases(ctx: &mut PrintCtx) {
+    const RSP_REG_OFF: u64 = 32;
+    const RBP_REG_OFF: u64 = 40;
+
+    fn stack_offset_of_add(a: &Varnode, b: &Varnode) -> Option<i64> {
+        if b.space != SpaceId::Const {
+            return None;
+        }
+        if a.space == SpaceId::Register && (a.offset == RSP_REG_OFF || a.offset == RBP_REG_OFF) {
+            return Some(b.offset as i64);
+        }
+        None
+    }
+
+    let mut stack_addr_def: BTreeMap<Varnode, i64> = BTreeMap::new();
+
+    let stmt_indices: Vec<u32> = ctx.stmt_insns.keys().copied().collect();
+    for idx in stmt_indices {
+        let insn = match ctx.stmt_insns.get(&idx) {
+            Some(i) => i.clone(),
+            None => continue,
+        };
+
+        if matches!(insn.op, IrOp::IntAdd) && insn.inputs.len() == 2 {
+            if let Some(out) = insn.output {
+                let a = &insn.inputs[0];
+                let b = &insn.inputs[1];
+                let off = stack_offset_of_add(a, b).or_else(|| stack_offset_of_add(b, a));
+                if let Some(off) = off {
+                    stack_addr_def.insert(out, off);
+                    continue;
+                }
+                if let Some(&base_off) = stack_addr_def.get(a) {
+                    if b.space == SpaceId::Const {
+                        stack_addr_def.insert(out, base_off.wrapping_add(b.offset as i64));
+                        continue;
+                    }
+                }
+                if let Some(&base_off) = stack_addr_def.get(b) {
+                    if a.space == SpaceId::Const {
+                        stack_addr_def.insert(out, base_off.wrapping_add(a.offset as i64));
+                        continue;
+                    }
+                }
+            }
+        }
+
+        if matches!(insn.op, IrOp::Call | IrOp::Callind) {
+            let skip = if matches!(insn.op, IrOp::Call) { 1 } else { 0 };
+            for input in insn.inputs.iter().skip(skip) {
+                if input.space == SpaceId::Stack {
+                    ctx.byref_bases.insert(*input);
+                } else if let Some(&off) = stack_addr_def.get(input) {
+                    let stk = Varnode::stack(off as u64, input.size);
+                    ctx.byref_bases.insert(stk);
+                }
+            }
+        }
     }
 }
 
@@ -2297,6 +2382,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         }
     }
 
@@ -2562,6 +2648,7 @@ mod tests {
             addr: 0x2000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         };
 
         let output = print_c(&func);
@@ -2894,6 +2981,7 @@ mod tests {
             addr: 0x2000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         };
 
         let mut functions = BTreeMap::new();
@@ -2958,6 +3046,48 @@ mod tests {
         assert!(
             output.contains("long get_value("),
             "should use DWARF return type 'long': {output}",
+        );
+    }
+
+    #[test]
+    fn test_noreturn_annotation_emitted() {
+        let body = vec![HirNode::Return(None)];
+        let func = HirFunction {
+            name: "sub_f5300".to_string(),
+            params: vec![],
+            return_type: PrimitiveType::Unknown,
+            body,
+            addr: 0xf5300,
+            foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
+            noreturn: true,
+        };
+
+        let output = super::print_c(&func);
+        assert!(
+            output.contains("void __noreturn sub_f5300("),
+            "noreturn=true must emit '__noreturn' between return type and name: {output}",
+        );
+    }
+
+    #[test]
+    fn test_noreturn_not_emitted_when_false() {
+        let body = vec![HirNode::Return(None)];
+        let func = HirFunction {
+            name: "sub_1000".to_string(),
+            params: vec![],
+            return_type: PrimitiveType::Int(4),
+            body,
+            addr: 0x1000,
+            foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
+        };
+
+        let output = super::print_c(&func);
+        assert!(
+            !output.contains("__noreturn"),
+            "noreturn=false must not emit '__noreturn': {output}",
         );
     }
 
@@ -5425,6 +5555,53 @@ mod tests {
     }
 
     #[test]
+    fn test_byref_annotation_for_address_taken_stack_var() {
+        let rsp = reg(32, 8);
+        let off = con(0x58, 8);
+        let addr = Varnode::unique(0x100, 8);
+        let target = con(0x401000, 8);
+        let stk = Varnode::stack(0x58, 8);
+        let one = con(1, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy, stk, smallvec![one], 0x0FFC,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, addr, smallvec![rsp, off], 0x1000,
+            )),
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Call, smallvec![target, addr], 0x1004,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("byref_caller", body);
+        let header = super::FunctionHeaderInfo {
+            name: "byref_caller".to_string(),
+            address: 0x1000,
+            size: 0x40,
+            convention: "System V AMD64".to_string(),
+            stack_frame: 0xa0,
+            callees: vec![],
+        };
+        let output = super::print_c_full(&func, None, Some(&header), None, None);
+
+        assert!(
+            output.contains("BYREF"),
+            "address-taken stack slot at rsp+58h should be BYREF: {output}",
+        );
+        let byref_line = output
+            .lines()
+            .find(|l| l.contains("BYREF"))
+            .expect("BYREF declaration line");
+        assert!(
+            byref_line.contains("[rsp+58h]"),
+            "BYREF line should reference [rsp+58h]: {byref_line}",
+        );
+    }
+
+    #[test]
     fn test_stack_comment_with_rbp_offset() {
         let stk = Varnode::stack(0x10, 8);
         let c1 = con(1, 8);
@@ -5526,6 +5703,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         };
 
         let output = print_c(&func);
@@ -5545,6 +5723,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         };
 
         let output = print_c(&func);
@@ -5568,6 +5747,7 @@ mod tests {
             addr: 0x401000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         };
 
         let output = print_c(&func);
@@ -5587,6 +5767,7 @@ mod tests {
             addr: 0x402000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         };
 
         let output = print_c(&func);
@@ -5606,6 +5787,7 @@ mod tests {
             addr: 0x403000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         };
 
         let output = print_c(&func);
@@ -5651,6 +5833,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: foldable,
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         };
 
         let output = print_c(&func);

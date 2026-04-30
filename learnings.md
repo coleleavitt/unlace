@@ -36,3 +36,43 @@
 - ADC (add-with-carry) simplified to ADD for MVP.
 - r28=SP, r31=BLINK (return address) are the key well-known registers.
 - The `lift_binop_sized` helper must take an explicit `len` parameter since all register varnodes are 4-byte regardless of instruction width.
+
+## Task 28: RISC-V RV64I Lifter via Capstone
+
+### Capstone RISC-V Pseudo-Instruction Handling
+
+Capstone 0.14 aggressively folds RISC-V pseudo-instructions, changing both the
+mnemonic string and the operand layout while keeping the same instruction ID.
+You cannot rely on a fixed operand pattern per instruction ID.
+
+Key pseudo-instruction mappings:
+
+| Encoding | ID | Mnemonic | Operands |
+|---|---|---|---|
+| `addi x0, x0, 0` | ADDI(2) | `nop` | `[]` |
+| `addi x1, x2, 0` | ADDI(2) | `mv` | `[Reg(x1), Reg(x2)]` |
+| `addi x1, x0, 42` | ADDI(2) | `addi` | `[Reg(x1), Reg(x0), Imm(42)]` |
+| `jal x1, +8` (rd=ra) | JAL(206) | `jal` | `[Imm(target)]` — rd=ra implicit |
+| `jal x5, +8` (rd!=ra) | JAL(206) | `jal` | `[Reg(x5), Imm(target)]` |
+| `jalr x0, 0(x1)` | JALR(207) | `ret` | `[]` |
+| `jalr x0, 0(x5)` | JALR(207) | `jr` | `[Reg(x5)]` — rd=x0 implicit |
+| `jalr x1, 0(x2)` (rd=ra) | JALR(207) | `jalr` | `[Reg(x2)]` — rd=ra implicit |
+| `jalr x1, x2, 4` | JALR(207) | `jalr` | `[Reg(x1), Reg(x2), Imm(4)]` |
+
+The mnemonic string (`"jr"` vs `"jalr"`) must be used to disambiguate the 1-operand
+JALR form since `jr rs` (rd=x0) and `jalr rs` (rd=ra) both produce `ops=[Reg(rs)]`.
+
+### Capstone RegId Mapping
+
+Capstone RISC-V registers start at 1: `RISCV_REG_X0=1`, `RISCV_REG_X1=2`, etc.
+Register file offset = `(reg_id - 1) * 8`.
+
+### x0 Hardwired Zero
+
+Reads from x0 produce `Varnode::constant(0, 8)`. Writes to x0 are silently dropped
+(`cs_reg_to_varnode()` returns `None`). This keeps the IR clean.
+
+### Send + Sync for Capstone
+
+`Capstone` does not impl `Send + Sync` by default, but each `disasm_count` call is
+self-contained, so `unsafe impl Send/Sync` is safe for the lifter struct.

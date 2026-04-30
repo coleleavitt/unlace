@@ -388,6 +388,13 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Fst => fpu::lift_fst(ctx, insn),
         M::Fstp => fpu::lift_fstp(ctx, insn),
 
+        M::Fadd  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FADD, false),
+        M::Faddp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FADD, false),
+        M::Fsub  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, false),
+        M::Fsubp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, false),
+        M::Fsubr  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, true),
+        M::Fsubrp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, true),
+
         _ => ctx.emit_unimplemented(),
     }
 }

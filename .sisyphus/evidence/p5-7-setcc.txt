@@ -1,0 +1,51 @@
+P5-7: Lift SETcc family (16 conditional byte-set variants)
+==========================================================
+
+WHAT: Implemented all 16 SETcc x86-64 instruction variants in the lifter.
+
+FILES CHANGED:
+- crates/unlace-lift-x86/src/lift.rs: Added match arms for all 16 SETcc mnemonics
+  in dispatch_mnemonic routing to data_move::lift_setcc
+- crates/unlace-lift-x86/src/ops/data_move.rs: Added lift_setcc and setcc_condition
+  functions implementing flag condition evaluation + zero-extend to output size
+- crates/unlace-lift-x86/src/lib.rs: Added 17 tests covering all 16 variants + memory operand
+
+VARIANTS COVERED:
+  Sete (ZF==1), Setne (ZF==0), Setb (CF==1), Setae (CF==0),
+  Seta (CF==0 AND ZF==0), Setbe (CF==1 OR ZF==1),
+  Setl (SF!=OF), Setge (SF==OF), Setg (ZF==0 AND SF==OF), Setle (ZF==1 OR SF!=OF),
+  Sets (SF==1), Setns (SF==0), Seto (OF==1), Setno (OF==0),
+  Setp (PF==1), Setnp (PF==0)
+
+IR PATTERN:
+  1. Evaluate condition from RFLAGS (same logic as jcc_condition)
+  2. If output > 1 byte, IntZext the 1-byte condition
+  3. Write to destination via write_operand_insn (handles reg vs memory)
+
+TESTS ADDED (17):
+  test_sete_sets_byte_on_zero_flag
+  test_setne_uses_bool_negate
+  test_setb_reads_carry_flag
+  test_setg_signed_greater
+  test_setl_signed_less
+  test_seta_unsigned_above
+  test_setle_signed_less_or_equal
+  test_setbe_unsigned_below_or_equal
+  test_setae_unsigned_above_or_equal
+  test_setge_signed_greater_or_equal
+  test_sets_reads_sign_flag
+  test_setns_negates_sign_flag
+  test_seto_reads_overflow_flag
+  test_setno_negates_overflow_flag
+  test_setp_reads_parity_flag
+  test_setnp_negates_parity_flag
+  test_setcc_memory_operand
+
+TEST RESULTS:
+  cargo test -p unlace-lift-x86 -- set   => 19 passed, 0 failed
+  cargo test --workspace                  => 1015 passed, 0 failed, 1 ignored
+  (baseline was ~998 tests; 17 new SETcc tests added)
+
+IMPACT: Eliminates 3,746 Unimplemented instructions in hexx64.so (the #1 unlifted
+instruction family). Conditional byte-set assignments will now propagate through
+the IR pipeline for structuring, optimization, and C output.

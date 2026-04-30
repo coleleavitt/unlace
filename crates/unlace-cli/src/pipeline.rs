@@ -8,7 +8,7 @@ use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BasicBlock, BlockId, Function, IrOp, Lifter};
 use unlace_loader::{BinaryImage, SymbolKind};
 use unlace_passes::{
-    ConstantFoldPass, CopyPropagationPass, DeadCodeElimPass, ExpressionTreePass, Pass,
+    ConstantFoldPass, CopyPropagationPass, DeadCodeElimPass, ExpressionTreePass, VariableMergePass, Pass,
     run_to_fixedpoint,
 };
 
@@ -360,6 +360,9 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
 
     ExpressionTreePass.run(ssa)
         .context("expression tree pass failed")?;
+
+    VariableMergePass.run(ssa)
+        .context("variable merge pass failed")?;
 
     run_type_infer_bounded(ssa);
 

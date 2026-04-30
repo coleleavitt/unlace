@@ -13,6 +13,7 @@ pub mod noreturn;
 pub mod stack_vars;
 pub mod tail_call;
 pub mod type_infer;
+pub mod variable_merge;
 
 pub use pass::{Pass, PassError, run_to_fixedpoint};
 pub use calling_convention::CallingConventionDetectPass;
@@ -26,6 +27,7 @@ pub use idiom_recognition::IdiomRecognitionPass;
 pub use noreturn::NoreturnDetectPass;
 pub use stack_vars::StackVarRecoveryPass;
 pub use tail_call::TailCallDetectPass;
+pub use variable_merge::VariableMergePass;
 
 #[cfg(test)]
 mod tests {

@@ -198,3 +198,69 @@ fn loops_fixture_has_output() {
     assert!(!stdout.is_empty(), "loops.elf should produce output");
     assert!(stdout.contains("main("), "should contain main: {stdout}");
 }
+
+#[test]
+fn batch_merged_output() {
+    let output = unlace_bin()
+        .args(["batch", "--jobs", "2"])
+        .arg(fixture("medium.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let separator_count = stdout.matches("// ═").count();
+    assert!(
+        separator_count >= 2,
+        "batch merged output should have multiple separators, found {separator_count}:\n{stdout}"
+    );
+}
+
+#[test]
+fn batch_output_dir() {
+    let tmp = tempfile::tempdir().unwrap();
+    let output = unlace_bin()
+        .args(["batch", "--jobs", "2", "--output-dir"])
+        .arg(tmp.path())
+        .arg(fixture("medium.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+
+    let c_files: Vec<_> = std::fs::read_dir(tmp.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "c"))
+        .collect();
+    assert!(
+        c_files.len() >= 2,
+        "output-dir should contain .c files, found {}",
+        c_files.len()
+    );
+}
+
+#[test]
+fn batch_jobs_single_thread() {
+    let output = unlace_bin()
+        .args(["batch", "--jobs", "1"])
+        .arg(fixture("hello_world.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.is_empty(), "single-threaded batch should produce output");
+}
+
+#[test]
+fn batch_error_resilience() {
+    let output = unlace_bin()
+        .args(["batch", "--jobs", "1", "--timeout", "0"])
+        .arg(fixture("medium.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(output.status.success(), "batch should exit 0 even with failed functions");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("/* FAILED:") || stdout.contains("// ═"),
+        "should contain either failure comments or separators: {stdout}"
+    );
+}

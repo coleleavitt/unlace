@@ -47,6 +47,44 @@ pub enum Cmd {
         /// Per-function decompilation timeout in seconds (default: 30).
         #[arg(long, default_value = "30")]
         timeout: u64,
+
+        /// Directory containing plugin shared libraries (.so/.dylib/.dll).
+        #[arg(long)]
+        plugin_dir: Option<PathBuf>,
+    },
+
+    /// Batch-decompile all functions in a binary in parallel.
+    Batch {
+        /// Path to the binary file.
+        binary: PathBuf,
+
+        /// Number of parallel threads (default: number of CPUs).
+        #[arg(long, short, default_value_t = 0)]
+        jobs: usize,
+
+        /// Output format.
+        #[arg(long, default_value = "c")]
+        emit: EmitFormat,
+
+        /// Override architecture detection (e.g. "x86_64").
+        #[arg(long)]
+        arch: Option<String>,
+
+        /// Write one .c file per function into this directory.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+
+        /// Write single merged output (default when --output-dir is absent).
+        #[arg(long)]
+        merged: bool,
+
+        /// Per-function decompilation timeout in seconds (default: 30).
+        #[arg(long, default_value = "30")]
+        timeout: u64,
+
+        /// Increase verbosity (-v, -vv, -vvv).
+        #[arg(long, short, action = clap::ArgAction::Count)]
+        verbose: u8,
     },
 }
 

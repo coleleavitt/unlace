@@ -1,0 +1,38 @@
+P3-5: Negative Constant Normalization
+======================================
+
+WHAT: Constants with MSB set are now rendered as negative decimal numbers
+in signed contexts, matching IDA/Hex-Rays output style.
+
+CHANGES: crates/unlace-output/src/c_printer.rs
+  - Added ConstContext enum (Signed | Bitwise) to classify operations
+  - Added const_context_for_op() to map IrOp → context
+  - Added format_constant_ctx() with sign-extension and context-aware rendering
+  - Added sign_extend() for proper size-based sign extension (1/2/4/8 byte)
+  - Added emit_operand_with_context() threading context to constant formatting
+  - Modified emit_binop() to:
+    - Pass Bitwise context for &, |, ^, <<, >> (keeps hex)
+    - Pass Signed context for arithmetic/comparison ops (renders negative)
+    - Transform INT_ADD with negative constant into subtraction: `v1 - 8` not `v1 + -8`
+  - Heuristic: 1-byte constants never negated, 2-byte only if abs_val ≤ 128, 4/8-byte always
+
+EXAMPLES:
+  Before: v1 = v1 + 0xfffffffffffffff8ULL;    After: v1 = v1 - 8;
+  Before: v1 = 0xffffffffULL;                  After: v1 = -1;
+  Before: v1 == 0xffffffffULL                  After: v1 == -1
+  Before: v1 = v1 + 0xfffffffcULL;             After: v1 = v1 - 4;
+  Kept:   v1 & 0xfffffffffffffffcULL (bitwise context stays hex)
+  Kept:   0xff in 1-byte context stays 0xffULL
+
+TESTS (6 new, all pass):
+  test_negative_const_8byte       — 0xfffffffffffffff8 (8B) in INT_ADD → `- 8`
+  test_negative_const_4byte       — 0xfffffffc (4B) in INT_ADD → `- 4`
+  test_negative_const_copy_minus1 — 0xffffffff (4B) in COPY → `-1`
+  test_negative_const_small_unsigned_kept — 0xFF (1B) stays hex
+  test_negative_const_bitwise_kept_hex — 0xfffffffffffffffc in INT_AND stays hex
+  test_negative_const_comparison  — 0xffffffff in INT_EQUAL → `== -1`
+
+VERIFICATION:
+  cargo test -p unlace-output -- negative_const  → 6 passed
+  cargo test -p unlace-output --lib              → 54 passed (0 regressions)
+  cargo xtask lint-determinism                   → OK

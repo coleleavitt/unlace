@@ -70,24 +70,21 @@ void main(void) {
     v1 = v10 + 0x2020LL;
     v11 = *(_QWORD *)(0LL);
     v12 = _mm_load_si128(v11);
-    /* CALLOTHER 258 */ 0;
+    _mm_load_ps(0LL, v12);
     v1 = v10 + 0x2030LL;
     v11 = *(_QWORD *)(0LL);
     v12 = _mm_load_si128(v11);
-    /* CALLOTHER 258 */ 0;
+    _mm_load_ps(0LL, v12);
     v1 = v10 + 0x2040LL;
     v11 = *(_QWORD *)(0LL);
     v12 = _mm_load_si128(v11);
-    /* CALLOTHER 258 */ 0;
+    _mm_load_ps(0LL, v12);
     while (v16) {
         break;
     }
-    v3 = 0x391;
-    v9 = 0x391;
     while (v16) {
         break;
     }
-    v3 = 0x394;
     while (v17) {
     }
     while (v16) {
@@ -108,19 +105,16 @@ void main(void) {
         }
     } else {
         v3 = *(_DWORD *)(0LL);
-        v14 = 1;
         v7 = 0;
         if (v14) {
         }
     }
-    v14 = 1;
     if (v20) {
         while (v16) {
             break;
         }
     } else {
         v3 = *(_DWORD *)(0x48LL);
-        v14 = 1;
         if (v14) {
         }
     }
@@ -132,11 +126,8 @@ void main(void) {
     v12 = _mm_load_si128(0);
     while (v14) {
         v3 = *(_DWORD *)(0x48LL);
-        v4 = -15;
-        v14 = 1;
         break;
     }
-    v30 = 1;
     if (v5) {
         while (v16) {
             break;
@@ -145,9 +136,6 @@ void main(void) {
         if (v8) {
         }
     }
-    v3 = 1;
-    v18 = 1;
-    v3 = -9;
     if (v18) {
         goto label_5;
     }
@@ -157,27 +145,18 @@ void main(void) {
     while (v16) {
         if (v29) {
         } else {
-            v14 = 1;
-            v17 = 1;
             if (v5) {
             label_7:;
             }
         label_8:;
             while (v5) {
-                v3 = 1;
-                v15 = 1;
-                v3 = -19;
             }
-            v1 = 0x48LL;
-            v24 = 0x175LL;
             while (v16) {
                 break;
             }
         }
-        v3 = -2;
         if (v14) {
         } else {
-            v14 = 1;
             if (v14) {
             } else {
                 goto label_7;
@@ -290,17 +269,12 @@ void f_rec_fib(void) {
         *(_QWORD *)(0LL) = 0LL;
         *(_QWORD *)(0LL) = 0LL;
         result = v13 - 2;
-        v14 = 0x30LL;
         *(_QWORD *)(0LL) = 0LL;
-        v15 = 0x30LL;
-        v1 = -1;
-        v2 = 1;
         v4 = LOBYTE(0);
         v8 = 1;
         if (v8) {
         } else {
             while (v8) {
-                v8 = 1;
                 if (v17) {
                 } else {
                     if (v5) {
@@ -309,20 +283,12 @@ void f_rec_fib(void) {
                     if (v17) {
                     label_2:;
                     } else {
-                        result = 0x30LL;
-                        v11 = 0x30LL;
                         result = *(_QWORD *)(0LL);
-                        v19 = 0x30LL;
                         result = *(_QWORD *)(0LL);
-                        v20 = 0x30LL;
                         result = *(_QWORD *)(0LL);
-                        v21 = 0x30LL;
                         result = *(_QWORD *)(0LL);
-                        v22 = 0x30LL;
                         result = *(_QWORD *)(0LL);
-                        v23 = 0x30LL;
                         result = *(_QWORD *)(0LL);
-                        v24 = 0x30LL;
                         result = *(_QWORD *)(0LL);
                         return result;
                     }
@@ -451,34 +417,24 @@ void f_rec_power.constprop.0(__int64 a1) {
     v5 = __builtin_popcount(1);
     if (v3) {
     } else {
-        v7 = 2;
         if (v12) {
         } else {
             v6 = LOBYTE(0);
             v10 = 0;
-            v2 = 1;
             if (v3) {
             } else {
-                v15 = 2;
-                v8 = -1;
                 v3 = 1;
                 if (v12) {
                 label_0:;
                 } else {
-                    v3 = 1;
                     if (v3) {
                     } else {
-                        v8 = -1;
-                        v3 = 1;
-                        v16 = 2;
                         if (v3) {
                         } else {
                             v3 = 1;
                             if (v3) {
                             } else {
-                                v8 = -1;
                                 v3 = 1;
-                                v17 = 2;
                                 if (v3) {
                                 label_1:;
                                 label_2:;
@@ -489,7 +445,6 @@ void f_rec_power.constprop.0(__int64 a1) {
                                 } else {
                                     result = v18 - 0x18LL;
                                     v20 = v18;
-                                    v9 = -1;
                                     result = v18 + 4LL;
                                     *(_DWORD *)(v18) = 0;
                                     result = v18;
@@ -505,7 +460,6 @@ void f_rec_power.constprop.0(__int64 a1) {
                                     result = v18 + 4LL;
                                     v9 = *(_DWORD *)(v18);
                                     v8 = *(_DWORD *)(v18);
-                                    v9 = -1;
                                     result = v18 + 0x10LL;
                                     v20 = v18;
                                     result = *(_QWORD *)(v18);

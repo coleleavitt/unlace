@@ -1,0 +1,28 @@
+P4-9: Resolve PLT/symbol names in CALL emission
+=================================================
+
+CHANGES:
+- Added `resolve_call_target()` helper in c_printer.rs:
+  1. Check if target is SpaceId::Const
+  2. If so, look up ctx.symbols.get(&target_addr)
+  3. If found → return symbol name (e.g., "printf")
+  4. If not found → return "sub_{:x}" format
+  5. If not Const → fall through to emit_operand_resolved (indirect calls)
+- Updated both CALL emission sites to use resolve_call_target:
+  - emit_statement (CALL without output) — line ~1075
+  - emit_expr (CALL with output) — line ~1392
+- FunctionHeaderInfo::from_ssa also resolves callee names via symbol table
+
+TESTS ADDED (4 new):
+1. test_call_with_symbol_resolved: CALL to 0x401030 with symbol "printf" → emits "printf();"
+2. test_call_without_symbol_keeps_sub: CALL to 0x402000 with no symbol → emits "sub_402000();"
+3. test_call_with_output_resolves_symbol: CALL with output to "malloc" → emits "malloc()"
+4. test_symbols_passed_through_pipeline_header: verifies header shows "Xrefs to: printf" and body shows "printf();"
+
+VERIFICATION:
+- cargo test --workspace: 949 tests pass, 0 failures (was 944 + 4 new + 1 fixed)
+- E2E test:
+  $ ./target/debug/unlace decompile fixtures/debug_hello.elf --function main 2>/dev/null
+  Output shows:
+    * Xrefs to:   puts       (resolved from PLT symbol table)
+    * puts();                 (resolved CALL target instead of sub_XXXX)

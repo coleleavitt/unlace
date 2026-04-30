@@ -520,17 +520,45 @@ impl<'a> StructureCtx<'a> {
                 body: body_nodes,
             })
         } else if latch_has_cbranch {
-            // Do-while loop: condition at latch.
+            // ── Pattern: do-while ──
             let latch = single_latch.expect("guarded by is_some_and check");
-            let cond = self.find_cbranch_cond(latch);
 
+            // Verify latch has back-edge to header and an exit edge.
+            let latch_edges = self.func.cfg.edges_from(latch);
+            let has_back_to_header = latch_edges.iter().any(|(tgt, _)| *tgt == header);
+            let has_exit = latch_edges
+                .iter()
+                .any(|(tgt, _)| !self.synthetic.contains(tgt) && *tgt != header);
+
+            if !has_back_to_header || !has_exit {
+                let cond = SsaVarnode {
+                    base: unlace_ir::Varnode::constant(1, 1),
+                    version: 0,
+                };
+                self.emitted.insert(header);
+                let mut body_nodes = Vec::new();
+                self.emit_block_statements_inline(header, &mut body_nodes);
+                let edges = self.func.cfg.edges_from(header);
+                let non_back_succs: Vec<BlockId> = edges
+                    .iter()
+                    .filter(|(tgt, _)| !self.synthetic.contains(tgt) && *tgt != header)
+                    .map(|(tgt, _)| *tgt)
+                    .collect();
+                for succ in non_back_succs {
+                    if !self.emitted.contains(&succ) {
+                        let inner = self.structure_loop_body(succ, header);
+                        body_nodes.extend(inner);
+                    }
+                }
+                return Some(HirNode::While { cond, body: body_nodes });
+            }
+
+            let cond = self.find_cbranch_cond(latch);
             self.emitted.insert(header);
 
-            // Structure the body from header through the latch.
             let mut body_nodes = Vec::new();
             self.emit_block_statements_inline(header, &mut body_nodes);
 
-            // Walk from header's successor(s) to the latch.
             let edges = self.func.cfg.edges_from(header);
             let non_back_succs: Vec<BlockId> = edges
                 .iter()
@@ -545,7 +573,6 @@ impl<'a> StructureCtx<'a> {
                 }
             }
 
-            // Emit latch's non-CF statements.
             self.emit_block_statements_inline(latch, &mut body_nodes);
 
             Some(HirNode::DoWhile {
@@ -827,14 +854,32 @@ impl<'a> StructureCtx<'a> {
             if self.synthetic.contains(tgt) {
                 continue;
             }
-            // The exit is the successor NOT dominated by the header,
-            // or the false branch in a while loop.
             if !dominates(&self.func.dom_tree, header, *tgt) {
                 return Some(*tgt);
             }
         }
 
-        // If all successors are dominated, look for exits from loop body blocks.
+        // For do-while: exit is the latch's non-header successor.
+        // Header dominates everything so the domination check above misses it.
+        let latches: Vec<BlockId> = self
+            .back_edges
+            .iter()
+            .filter(|(_latch, hdr)| *hdr == header)
+            .map(|(latch, _)| *latch)
+            .collect();
+
+        for latch in &latches {
+            let latch_edges = self.func.cfg.edges_from(*latch);
+            for (tgt, _kind) in &latch_edges {
+                if self.synthetic.contains(tgt) {
+                    continue;
+                }
+                if *tgt != header {
+                    return Some(*tgt);
+                }
+            }
+        }
+
         None
     }
 
@@ -1759,5 +1804,154 @@ mod tests {
             matches!(hir_body[1], HirNode::While { .. }),
             "cond not referencing counter → must remain While"
         );
+    }
+
+    // ── P3-8: Do-while loop recovery tests ──
+
+    #[test]
+    fn test_do_while_basic() {
+        // BB0 (header, no CBRANCH) → BB1 (latch with CBRANCH: back→BB0, exit→BB2)
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("do_while_basic", BlockId(0), 0xA000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0xA000));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0xA004));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r0, c1], 0xA010));
+        bb1.insns.push(cbranch_insn(cond_vn, 0xA014));
+        bb1.successors = smallvec![BlockId(0), BlockId(2)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(ctrl_insn(IrOp::Return, 0xA020));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn contains_do_while(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::DoWhile { .. } => true,
+                HirNode::Block(inner) => contains_do_while(inner),
+                _ => false,
+            })
+        }
+        assert!(
+            contains_do_while(&hir.body),
+            "do-while CFG should produce a DoWhile node, got: {:#?}",
+            hir.body
+        );
+    }
+
+    #[test]
+    fn test_do_while_vs_while() {
+        let r0 = Varnode::reg(0, 8);
+        let c1 = Varnode::constant(1, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut while_func = Function::new("while_fn", BlockId(0), 0xB000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(cbranch_insn(cond_vn, 0xB000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r0, c1], 0xB010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0xB014));
+        bb1.successors = smallvec![BlockId(0)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(ctrl_insn(IrOp::Return, 0xB020));
+
+        while_func.insert_block(bb0);
+        while_func.insert_block(bb1);
+        while_func.insert_block(bb2);
+
+        let ssa_while = build_ssa(while_func);
+        let hir_while = structure(&ssa_while).expect("while structuring should succeed");
+
+        fn has_while(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::While { .. } => true,
+                HirNode::Block(inner) => has_while(inner),
+                _ => false,
+            })
+        }
+        fn has_do_while(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::DoWhile { .. } => true,
+                HirNode::Block(inner) => has_do_while(inner),
+                _ => false,
+            })
+        }
+
+        assert!(has_while(&hir_while.body), "while-loop should produce While");
+        assert!(!has_do_while(&hir_while.body), "while-loop should NOT produce DoWhile");
+
+        let mut dw_func = Function::new("do_while_fn", BlockId(0), 0xC000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r0, c1], 0xC000));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0xC004));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r0, c1], 0xC010));
+        bb1.insns.push(cbranch_insn(cond_vn, 0xC014));
+        bb1.successors = smallvec![BlockId(0), BlockId(2)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(ctrl_insn(IrOp::Return, 0xC020));
+
+        dw_func.insert_block(bb0);
+        dw_func.insert_block(bb1);
+        dw_func.insert_block(bb2);
+
+        let ssa_dw = build_ssa(dw_func);
+        let hir_dw = structure(&ssa_dw).expect("do-while structuring should succeed");
+
+        assert!(has_do_while(&hir_dw.body), "do-while should produce DoWhile, got: {:#?}", hir_dw.body);
+        assert!(!has_while(&hir_dw.body), "do-while should NOT produce While");
+    }
+
+    #[test]
+    fn test_do_while_exit_found() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("do_while_exit", BlockId(0), 0xD000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0xD000));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0xD004));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r0, c1], 0xD010));
+        bb1.insns.push(cbranch_insn(cond_vn, 0xD014));
+        bb1.successors = smallvec![BlockId(0), BlockId(2)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r8, &[r0, c1], 0xD020));
+        bb2.insns.push(ctrl_insn(IrOp::Return, 0xD024));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        let has_return = hir.body.iter().any(|n| matches!(n, HirNode::Return(_)));
+        assert!(has_return, "post-loop return should be structured, got: {:#?}", hir.body);
     }
 }

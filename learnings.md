@@ -125,3 +125,46 @@ self-contained, so `unsafe impl Send/Sync` is safe for the lifter struct.
   32-byte shadow space stores at [RSP+8..+32] in entry block).
 - Adding a field to `SsaFunction` requires updating all struct-literal construction
   sites across the workspace (dce.rs tests, ir_dump.rs tests, etc.).
+
+## Task 38: PDB Debug Info Import
+
+### `pdb` Crate (v0.8.0) API
+- `PDB::open(file)` takes any `Read + Seek` source (typically `std::fs::File`).
+- `pdb.address_map()` produces an `AddressMap` needed to convert `PdbInternalSectionOffset`
+  values to `Rva` (relative virtual address) values.
+- `pdb.global_symbols()` → `SymbolTable` → iterate with `FallibleIterator`.
+  `SymbolData::Public` has a `.function` flag and `.offset` for function publics.
+- `pdb.debug_information()` → `DebugInformation` → `.modules()` for per-module info.
+- Per-module: `pdb.module_info(&module)` → `ModuleInfo` → `.symbols()` for procedure
+  symbols, `.line_program()` for source line info.
+- `SymbolData::Procedure` has `.name`, `.offset`, `.len` (code size), `.type_index`.
+- `RawString::to_string()` returns `Cow<str>` but Rust's blanket `Display::to_string()`
+  shadows it, returning `String` directly. Use `.to_string().to_string()` or just
+  `.to_string()` — avoid `.into_owned()` on the result since it's already `String`.
+
+### PDB Address Spaces
+- PDB stores addresses as `PdbInternalSectionOffset` (section index + offset within section).
+  These are "internal" because they refer to the unoptimized layout.
+- `offset.to_rva(&address_map)` converts to `Rva` (relative virtual address).
+- `Rva` must be cast to `u64` via `u64::from(u32::from(rva))` — `Rva` wraps `u32`.
+- To get absolute VA for the loaded PE: `image_base + rva`.
+
+### Symbol Merging Strategy
+- Public symbols (from global symbol table) lack code size — they're just names+addresses.
+- Procedure symbols (from module symbol streams) have code length — prefer them.
+- Merge strategy: if address already exists, upgrade size from 0 to non-zero, upgrade
+  empty name to non-empty name, upgrade kind to Function when PDB says it's a procedure.
+- `merge_pdb_symbols()` rebases RVAs by adding `image_base` before insertion.
+
+### Line Information
+- `LineProgram::lines()` returns `LineIterator` yielding `LineInfo` records with
+  `offset`, `file_index`, `line_start`, `column_start: Option<u32>`.
+- `line_program.get_file_info(file_index)` → `FileInfo` with `.name` for source path.
+- Line records are NOT guaranteed ordered by offset — callers must sort if needed.
+
+### Testing Without Fixtures
+- Unit tests for internal helpers (insert_symbol, merge_pdb_symbols, rva_to_u64) run
+  without any PDB fixture.
+- The `import_pdb()` integration test is `#[ignore]` since no PDB fixture is checked in.
+- `fallible-iterator` v0.2 (used by pdb 0.8) must be added alongside the workspace's
+  v0.3 (used by gimli 0.33) — both coexist since they're different semver-major versions.

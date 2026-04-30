@@ -34,6 +34,9 @@ capstone = "0.14"
 
 # Debug info
 gimli = "0.33"
+addr2line = "0.26"
+pdb = "0.8"
+fallible-iterator = "0.2"
 
 # Graph algorithms (CFG, dominator trees)
 petgraph = "0.8"

@@ -59,6 +59,7 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
                 (block.insns[idx].addr, kind.clone())
             })
             .collect(),
+        noreturn: func.noreturn,
     })
 }
 

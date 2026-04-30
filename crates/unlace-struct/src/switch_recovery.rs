@@ -334,6 +334,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         }
     }
 
@@ -358,6 +359,7 @@ mod tests {
             addr: 0x2000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         };
 
         recover_switches(&mut func);
@@ -492,6 +494,7 @@ mod tests {
             addr: switch_addr,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            noreturn: false,
         };
 
         let targets = [0x4200u64, 0x4210, 0x4220];

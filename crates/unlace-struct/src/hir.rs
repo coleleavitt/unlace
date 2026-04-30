@@ -153,4 +153,8 @@ pub struct HirFunction {
     pub foldable_exprs: BTreeSet<SsaVarnode>,
     /// Panic call sites keyed by instruction machine address.
     pub panic_sites: BTreeMap<u64, PanicKind>,
+    /// `true` when the function never returns to its caller (e.g. tail-calls
+    /// `exit`/`abort`/`panic`). Mirrors [`unlace_ir::ssa::SsaFunction::noreturn`]
+    /// and triggers an `__noreturn` annotation in the C output.
+    pub noreturn: bool,
 }

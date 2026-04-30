@@ -49,7 +49,156 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
         body,
         addr: func.function.addr,
         foldable_exprs: func.foldable_exprs.clone(),
+        panic_sites: func
+            .panic_sites
+            .iter()
+            .map(|(&(_bid, idx), kind)| {
+                let block = &func.function.blocks[&_bid];
+                (block.insns[idx].addr, kind.clone())
+            })
+            .collect(),
     })
+}
+
+/// Like [`structure`] but wraps regions at `landing_pad_addrs` in `TryCatch` nodes.
+///
+/// When `landing_pad_addrs` is empty this behaves identically to [`structure`].
+pub fn structure_with_landing_pads(
+    func: &SsaFunction,
+    landing_pad_addrs: &BTreeSet<u64>,
+) -> Result<HirFunction, StructureError> {
+    let mut hir = structure(func)?;
+    if !landing_pad_addrs.is_empty() {
+        let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
+        if !confirmed.is_empty() {
+            hir.body = wrap_try_catch(hir.body, &confirmed, func);
+        }
+    }
+    Ok(hir)
+}
+
+fn resolve_landing_pad_addrs(
+    func: &SsaFunction,
+    landing_pad_addrs: &BTreeSet<u64>,
+) -> BTreeSet<u64> {
+    let mut confirmed = BTreeSet::new();
+    for block in func.function.blocks.values() {
+        if let Some(first_insn) = block.insns.first() {
+            if landing_pad_addrs.contains(&first_insn.addr) {
+                confirmed.insert(first_insn.addr);
+            }
+        }
+    }
+    confirmed
+}
+
+fn wrap_try_catch(
+    nodes: Vec<HirNode>,
+    landing_pad_addrs: &BTreeSet<u64>,
+    func: &SsaFunction,
+) -> Vec<HirNode> {
+    let split_idx = nodes.iter().position(|node| {
+        node_starts_at_landing_pad(node, landing_pad_addrs)
+    });
+
+    let Some(idx) = split_idx else {
+        return nodes.into_iter().map(|n| {
+            recurse_try_catch_children(n, landing_pad_addrs, func)
+        }).collect();
+    };
+
+    let (try_nodes, catch_and_rest) = nodes.split_at(idx);
+
+    let catch_end = catch_and_rest.iter().position(|node| {
+        !node_starts_at_landing_pad(node, landing_pad_addrs)
+    }).unwrap_or(catch_and_rest.len());
+
+    let try_body: Vec<HirNode> = try_nodes.to_vec();
+    let catch_body: Vec<HirNode> = catch_and_rest[..catch_end].to_vec();
+    let rest: Vec<HirNode> = catch_and_rest[catch_end..].to_vec();
+
+    let mut result = Vec::new();
+    if try_body.is_empty() {
+        result.extend(catch_body);
+    } else {
+        result.push(HirNode::TryCatch { try_body, catch_body });
+    }
+
+    if !rest.is_empty() {
+        result.extend(wrap_try_catch(rest, landing_pad_addrs, func));
+    }
+
+    result
+}
+
+fn node_starts_at_landing_pad(
+    node: &HirNode,
+    landing_pad_addrs: &BTreeSet<u64>,
+) -> bool {
+    match node {
+        HirNode::Statement(insn) => landing_pad_addrs.contains(&insn.addr),
+        HirNode::Block(children) => {
+            children.first().is_some_and(|n| {
+                node_starts_at_landing_pad(n, landing_pad_addrs)
+            })
+        }
+        _ => false,
+    }
+}
+
+fn recurse_try_catch_children(
+    node: HirNode,
+    landing_pad_addrs: &BTreeSet<u64>,
+    func: &SsaFunction,
+) -> HirNode {
+    match node {
+        HirNode::Block(children) => {
+            HirNode::Block(wrap_try_catch(children, landing_pad_addrs, func))
+        }
+        HirNode::If { cond, then_body, else_body } => {
+            HirNode::If {
+                cond,
+                then_body: wrap_try_catch(then_body, landing_pad_addrs, func),
+                else_body: else_body.map(|eb| wrap_try_catch(eb, landing_pad_addrs, func)),
+            }
+        }
+        HirNode::While { cond, body } => {
+            HirNode::While {
+                cond,
+                body: wrap_try_catch(body, landing_pad_addrs, func),
+            }
+        }
+        HirNode::DoWhile { body, cond } => {
+            HirNode::DoWhile {
+                body: wrap_try_catch(body, landing_pad_addrs, func),
+                cond,
+            }
+        }
+        HirNode::For { init, cond, update, body } => {
+            HirNode::For {
+                init,
+                cond,
+                update,
+                body: wrap_try_catch(body, landing_pad_addrs, func),
+            }
+        }
+        HirNode::Switch { cond, cases, default } => {
+            HirNode::Switch {
+                cond,
+                cases: cases.into_iter().map(|(c, body)| {
+                    (c, wrap_try_catch(body, landing_pad_addrs, func))
+                }).collect(),
+                default: default.map(|d| wrap_try_catch(d, landing_pad_addrs, func)),
+            }
+        }
+        HirNode::TryCatch { try_body, catch_body } => {
+            HirNode::TryCatch {
+                try_body: wrap_try_catch(try_body, landing_pad_addrs, func),
+                catch_body: wrap_try_catch(catch_body, landing_pad_addrs, func),
+            }
+        }
+        other => other,
+    }
 }
 
 struct StructureCtx<'a> {
@@ -1010,6 +1159,10 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
                 recover_for_loops(def);
             }
         }
+        HirNode::TryCatch { try_body, catch_body } => {
+            recover_for_loops(try_body);
+            recover_for_loops(catch_body);
+        }
         HirNode::Statement(_)
         | HirNode::Return(_)
         | HirNode::Goto(_)
@@ -1168,6 +1321,10 @@ fn node_references_varnode(node: &HirNode, target: &Varnode) -> bool {
                 || output == target
                 || insn_references_varnode(then_insn, target)
                 || insn_references_varnode(else_insn, target)
+        }
+        HirNode::TryCatch { try_body, catch_body } => {
+            try_body.iter().any(|c| node_references_varnode(c, target))
+                || catch_body.iter().any(|c| node_references_varnode(c, target))
         }
         HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_)
         | HirNode::TailCall { .. } | HirNode::Continue => false,
@@ -1954,5 +2111,199 @@ mod tests {
 
         let has_return = hir.body.iter().any(|n| matches!(n, HirNode::Return(_)));
         assert!(has_return, "post-loop return should be structured, got: {:#?}", hir.body);
+    }
+
+    // ── P3-16: Try/catch structuring tests ──
+
+    #[test]
+    fn test_no_landing_pads_unchanged() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("no_lp", BlockId(0), 0xE000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0xE000));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0xE008));
+
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let empty_pads = BTreeSet::new();
+        let hir = super::structure_with_landing_pads(&ssa, &empty_pads)
+            .expect("structuring should succeed");
+
+        fn contains_try_catch(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::TryCatch { .. } => true,
+                HirNode::Block(inner) => contains_try_catch(inner),
+                _ => false,
+            })
+        }
+        assert!(
+            !contains_try_catch(&hir.body),
+            "no landing pads → no TryCatch nodes, got: {:#?}",
+            hir.body
+        );
+    }
+
+    #[test]
+    fn test_try_catch_basic_structure() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("with_lp", BlockId(0), 0xF000);
+
+        // BB0: normal code → BB1
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0xF000));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0xF004));
+        bb0.successors = smallvec![BlockId(1)];
+
+        // BB1: landing pad handler → return
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r0, c1], 0xF010));
+        bb1.insns.push(ctrl_insn(IrOp::Return, 0xF018));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+
+        let ssa = build_ssa(func);
+        let mut landing_pads = BTreeSet::new();
+        landing_pads.insert(0xF010_u64);
+
+        let hir = super::structure_with_landing_pads(&ssa, &landing_pads)
+            .expect("structuring should succeed");
+
+        fn find_try_catch(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::TryCatch { .. } => true,
+                HirNode::Block(inner) => find_try_catch(inner),
+                _ => false,
+            })
+        }
+        assert!(
+            find_try_catch(&hir.body),
+            "landing pad at 0xF010 should produce TryCatch, got: {:#?}",
+            hir.body
+        );
+
+        fn get_try_catch(nodes: &[HirNode]) -> Option<(&[HirNode], &[HirNode])> {
+            for n in nodes {
+                match n {
+                    HirNode::TryCatch { try_body, catch_body } => {
+                        return Some((try_body, catch_body));
+                    }
+                    HirNode::Block(inner) => {
+                        if let Some(tc) = get_try_catch(inner) {
+                            return Some(tc);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        let (try_body, catch_body) = get_try_catch(&hir.body).expect("should have TryCatch");
+        assert!(!try_body.is_empty(), "try body should not be empty");
+        assert!(!catch_body.is_empty(), "catch body should not be empty");
+    }
+
+    #[test]
+    fn test_try_catch_unmatched_landing_pad_ignored() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("unmatched_lp", BlockId(0), 0x10000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0x10000));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0x10008));
+
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let mut landing_pads = BTreeSet::new();
+        landing_pads.insert(0xDEAD_u64);
+
+        let hir = super::structure_with_landing_pads(&ssa, &landing_pads)
+            .expect("structuring should succeed");
+
+        fn contains_try_catch(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::TryCatch { .. } => true,
+                HirNode::Block(inner) => contains_try_catch(inner),
+                _ => false,
+            })
+        }
+        assert!(
+            !contains_try_catch(&hir.body),
+            "unmatched LP address should not produce TryCatch",
+        );
+    }
+
+    #[test]
+    fn test_try_catch_multiple_landing_pads() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+
+        let mut func = Function::new("multi_lp", BlockId(0), 0x11000);
+
+        // BB0: normal → BB1
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0x11000));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0x11004));
+        bb0.successors = smallvec![BlockId(1)];
+
+        // BB1: first landing pad → BB2
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r0, c1], 0x11010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0x11014));
+        bb1.successors = smallvec![BlockId(2)];
+
+        // BB2: normal code → BB3
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r0, c2], 0x11020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x11024));
+        bb2.successors = smallvec![BlockId(3)];
+
+        // BB3: second landing pad → return
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(arith_insn(r8, &[r0, c1], 0x11030));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0x11038));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+        let mut landing_pads = BTreeSet::new();
+        landing_pads.insert(0x11010_u64);
+        landing_pads.insert(0x11030_u64);
+
+        let hir = super::structure_with_landing_pads(&ssa, &landing_pads)
+            .expect("structuring should succeed");
+
+        fn count_try_catch(nodes: &[HirNode]) -> usize {
+            nodes.iter().map(|n| match n {
+                HirNode::TryCatch { try_body, catch_body } => {
+                    1 + count_try_catch(try_body) + count_try_catch(catch_body)
+                }
+                HirNode::Block(inner) => count_try_catch(inner),
+                _ => 0,
+            }).sum()
+        }
+        let tc_count = count_try_catch(&hir.body);
+        assert!(
+            tc_count >= 2,
+            "two landing pads should produce at least 2 TryCatch nodes, got {tc_count}: {:#?}",
+            hir.body
+        );
     }
 }

@@ -1,0 +1,45 @@
+P3-16: Basic try/catch structuring from .eh_frame landing pads
+================================================================
+
+STATUS: COMPLETE
+
+Changes:
+  - crates/unlace-struct/src/hir.rs: Added TryCatch { try_body, catch_body } variant to HirNode
+  - crates/unlace-struct/src/structurer.rs: Added structure_with_landing_pads() public function,
+    resolve_landing_pad_addrs(), wrap_try_catch(), node_starts_at_landing_pad(),
+    recurse_try_catch_children() — post-pass that wraps HIR regions at landing pad
+    addresses in TryCatch nodes. Updated node_references_varnode() and
+    recover_for_loops_in_children() for exhaustive match.
+  - crates/unlace-struct/src/lib.rs: Exported structure_with_landing_pads
+  - crates/unlace-output/src/c_printer.rs: TryCatch handling in collect_varnodes() and
+    emit_node() — emits `__try { ... } __except { ... }` syntax.
+
+Tests added (7 total):
+  unlace-struct:
+    1. test_no_landing_pads_unchanged — no landing pads → no TryCatch in output
+    2. test_try_catch_basic_structure — landing pad at known addr → TryCatch with non-empty bodies
+    3. test_try_catch_unmatched_landing_pad_ignored — LP addr not matching any block → no TryCatch
+    4. test_try_catch_multiple_landing_pads — 2 landing pads → at least 2 TryCatch nodes
+  unlace-output:
+    5. test_try_catch_c_output — C output contains __try and __except
+    6. test_try_catch_no_landing_pads_no_output — plain function has no __try/__except
+    7. test_try_catch_nested_indentation — proper indentation of __try/__except blocks
+
+Test commands:
+  cargo test -p unlace-struct -- try_catch          → 3 passed
+  cargo test -p unlace-struct -- no_landing_pads    → 1 passed
+  cargo test -p unlace-output -- try_catch          → 3 passed
+  cargo xtask lint-determinism                      → OK (no HashMap/HashSet)
+  cargo test --workspace                            → 864 passed, 0 failed
+
+Design:
+  - structure_with_landing_pads(func, landing_pad_addrs) is the entry point.
+  - It calls structure() first, then post-processes the HIR tree.
+  - resolve_landing_pad_addrs() confirms which landing pad addresses match
+    actual block first-instruction addresses in the function.
+  - wrap_try_catch() scans HIR nodes at each level; when a node's address
+    matches a landing pad, all preceding nodes become the try_body and the
+    landing pad node(s) become the catch_body.
+  - Recursion handles landing pads inside nested constructs (if/while/etc).
+  - When landing_pad_addrs is empty, behavior is identical to structure().
+  - Uses BTreeSet exclusively (no HashMap).

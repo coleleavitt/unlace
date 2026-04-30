@@ -7,6 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use petgraph::algo::dominators::simple_fast;
+use petgraph::stable_graph::StableDiGraph;
 
 use crate::cfg::{build_cfg, ControlFlowGraph};
 use crate::{BlockId, Function, Varnode};
@@ -197,6 +198,9 @@ pub struct SsaFunction {
     pub function: Function,
     pub cfg: ControlFlowGraph,
     pub dom_tree: DominatorTree,
+    /// Post-dominator tree computed from the reversed CFG.
+    /// Used to find join points (convergence) for if/else and switch constructs.
+    pub post_dom_tree: Option<DominatorTree>,
     pub phi_map: BTreeMap<BlockId, Vec<PhiNode>>,
     pub var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
     pub var_types: BTreeMap<SsaVarnode, PrimitiveType>,
@@ -256,6 +260,7 @@ pub enum VarnodeSlot {
 pub fn build_ssa(func: Function) -> SsaFunction {
     let cfg = build_cfg(&func);
     let dom_tree = build_dominator_tree(&cfg);
+    let post_dom_tree = build_post_dominator_tree(&cfg, &func);
     let df = compute_dominance_frontiers(&cfg, &dom_tree);
 
     let (defs_per_var, all_blocks) = collect_defs(&func);
@@ -273,6 +278,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         function: func,
         cfg,
         dom_tree,
+        post_dom_tree: Some(post_dom_tree),
         phi_map,
         var_map,
         var_types: BTreeMap::new(),
@@ -322,6 +328,85 @@ fn build_dominator_tree(cfg: &ControlFlowGraph) -> DominatorTree {
     }
 
     DominatorTree { idom, children, root: entry }
+}
+
+/// Build a post-dominator tree by reversing the CFG and running the
+/// dominator algorithm with the synthetic exit node as root.
+pub fn build_post_dominator_tree(cfg: &ControlFlowGraph, _func: &Function) -> DominatorTree {
+    let exit_bid = cfg.exit_block();
+    let unknown_bid = cfg.unknown_block();
+
+    let mut rev_graph = StableDiGraph::<BlockId, ()>::new();
+    let mut rev_node_map: BTreeMap<BlockId, petgraph::stable_graph::NodeIndex> = BTreeMap::new();
+
+    for &bid in cfg.node_map().keys() {
+        let ni = rev_graph.add_node(bid);
+        rev_node_map.insert(bid, ni);
+    }
+
+    for (&bid, &_ni) in cfg.node_map() {
+        if bid == unknown_bid {
+            continue;
+        }
+        for (target, _kind) in cfg.edges_from(bid) {
+            if target == unknown_bid {
+                continue;
+            }
+            if let (Some(&from_ni), Some(&to_ni)) =
+                (rev_node_map.get(&target), rev_node_map.get(&bid))
+            {
+                rev_graph.add_edge(from_ni, to_ni, ());
+            }
+        }
+    }
+
+    // Dead-end blocks (no successors except synthetic) implicitly exit.
+    for (&bid, &_ni) in cfg.node_map() {
+        if bid == exit_bid || bid == unknown_bid {
+            continue;
+        }
+        let has_real_succ = cfg
+            .edges_from(bid)
+            .iter()
+            .any(|(t, _)| *t != unknown_bid);
+        if !has_real_succ {
+            if let (Some(&exit_ni), Some(&bid_ni)) =
+                (rev_node_map.get(&exit_bid), rev_node_map.get(&bid))
+            {
+                rev_graph.add_edge(exit_ni, bid_ni, ());
+            }
+        }
+    }
+
+    let Some(&exit_ni) = rev_node_map.get(&exit_bid) else {
+        return DominatorTree {
+            idom: BTreeMap::new(),
+            children: BTreeMap::new(),
+            root: exit_bid,
+        };
+    };
+
+    let dominators = simple_fast(&rev_graph, exit_ni);
+
+    let mut idom = BTreeMap::new();
+    let mut children: BTreeMap<BlockId, Vec<BlockId>> = BTreeMap::new();
+
+    for (&bid, &ni) in &rev_node_map {
+        if bid == exit_bid {
+            continue;
+        }
+        if let Some(dom_ni) = dominators.immediate_dominator(ni) {
+            let dom_bid = rev_graph[dom_ni];
+            idom.insert(bid, dom_bid);
+            children.entry(dom_bid).or_default().push(bid);
+        }
+    }
+
+    for children_list in children.values_mut() {
+        children_list.sort();
+    }
+
+    DominatorTree { idom, children, root: exit_bid }
 }
 
 /// Cytron et al. 1991, Section 4.2: for each CFG edge (P → X),
@@ -693,5 +778,162 @@ mod tests {
                 versions,
             );
         }
+    }
+
+    #[test]
+    fn test_post_dom_simple_diamond() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("diamond_pdom", BlockId(0), 0x5000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(ctrl_insn(IrOp::Cbranch, 0x5000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(def_insn(r0, &[r8, c1], 0x5010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0x5014));
+        bb1.successors = smallvec![BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(def_insn(r0, &[r8, c1], 0x5020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x5024));
+        bb2.successors = smallvec![BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0x5030));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+        let pdom = ssa.post_dom_tree.as_ref().expect("post_dom_tree should be Some");
+
+        assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(3)));
+        assert_eq!(pdom.idom(BlockId(1)), Some(BlockId(3)));
+        assert_eq!(pdom.idom(BlockId(2)), Some(BlockId(3)));
+    }
+
+    #[test]
+    fn test_post_dom_chain() {
+        let mut func = Function::new("chain_pdom", BlockId(0), 0x6000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0x6000));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0x6010));
+        bb1.successors = smallvec![BlockId(2)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(ctrl_insn(IrOp::Return, 0x6020));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+
+        let ssa = build_ssa(func);
+        let pdom = ssa.post_dom_tree.as_ref().expect("post_dom_tree should be Some");
+
+        assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(1)));
+        assert_eq!(pdom.idom(BlockId(1)), Some(BlockId(2)));
+    }
+
+    #[test]
+    fn test_post_dom_with_early_return() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("early_return_pdom", BlockId(0), 0x7000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(ctrl_insn(IrOp::Cbranch, 0x7000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(ctrl_insn(IrOp::Return, 0x7010));
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(def_insn(r0, &[r8, c1], 0x7020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x7024));
+        bb2.successors = smallvec![BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0x7030));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+        let pdom = ssa.post_dom_tree.as_ref().expect("post_dom_tree should be Some");
+        let exit = ssa.cfg.exit_block();
+
+        assert_eq!(pdom.idom(BlockId(0)), Some(exit));
+    }
+
+    #[test]
+    fn test_post_dom_nested_if() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("nested_pdom", BlockId(0), 0x8000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(ctrl_insn(IrOp::Cbranch, 0x8000));
+        bb0.successors = smallvec![BlockId(1), BlockId(4)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(ctrl_insn(IrOp::Cbranch, 0x8010));
+        bb1.successors = smallvec![BlockId(2), BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(def_insn(r0, &[r8, c1], 0x8020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x8024));
+        bb2.successors = smallvec![BlockId(4)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(def_insn(r0, &[r8, c1], 0x8030));
+        bb3.insns.push(ctrl_insn(IrOp::Branch, 0x8034));
+        bb3.successors = smallvec![BlockId(4)];
+
+        let mut bb4 = BasicBlock::new(BlockId(4));
+        bb4.insns.push(ctrl_insn(IrOp::Return, 0x8040));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+        func.insert_block(bb4);
+
+        let ssa = build_ssa(func);
+        let pdom = ssa.post_dom_tree.as_ref().expect("post_dom_tree should be Some");
+
+        assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(4)));
+        assert_eq!(pdom.idom(BlockId(1)), Some(BlockId(4)));
+    }
+
+    #[test]
+    fn test_post_dom_available_in_build_ssa() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("pdom_available", BlockId(0), 0x9000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(def_insn(r0, &[r8, c1], 0x9000));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0x9004));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        assert!(ssa.post_dom_tree.is_some());
     }
 }

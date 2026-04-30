@@ -1,0 +1,22 @@
+P2-2: Debug fixture binaries with DWARF struct info
+====================================================
+Date: 2026-04-29
+Status: PASS
+
+Files created:
+  fixtures/src/debug_structs.c  — C source with struct Point, struct Rect, area(), offset()
+  fixtures/debug_structs.elf    — compiled with gcc -g -O1 (DWARF debug info)
+  fixtures/debug_hello.elf      — hello_world.c compiled with gcc -g -O1 (DWARF debug info)
+
+Verification:
+  readelf --debug-dump=info fixtures/debug_structs.elf | grep -c DW_TAG_structure_type => 2
+  Both ELFs: ELF 64-bit LSB pie executable, x86-64, with debug_info, not stripped
+
+Compiler: gcc (Gentoo 15.2.1_p20260214 p5) 15.2.1 20260214
+Build flags: -g -O1
+
+Purpose:
+  These fixtures provide DWARF debug information for testing struct/type recovery
+  in the decompiler pipeline. debug_structs.elf contains nested structs (Rect
+  containing two Points) and functions that take/return structs, exercising
+  DW_TAG_structure_type and DW_TAG_member parsing.

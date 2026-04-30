@@ -1,0 +1,13 @@
+P5-28: Suppress single-use temporaries from variable declarations
+
+Changes:
+- crates/unlace-output/src/c_printer.rs: In print_c_full, the foldable_svs set
+  now includes both the c_printer's own sv_defining_stmt entries AND the
+  func.foldable_exprs from the ExpressionTreePass. Variables whose SsaVarnode
+  appears in either set are skipped during declaration emission.
+
+Test: test_foldable_expr_not_declared
+  Creates a HirFunction with a varnode in foldable_exprs, verifies it does NOT
+  appear in the variable declaration section of the C output.
+
+Commit: feat(output): suppress single-use temporaries from variable declarations

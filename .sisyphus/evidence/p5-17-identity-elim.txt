@@ -1,0 +1,25 @@
+P5-17: Identity elimination rules
+==================================
+
+Commit: feat(passes): add identity elimination rules (x+0→x, x*1→x, x&0→0, etc.)
+
+New rules added to idiom_recognition.rs:
+  - x - 0 → x (IntSub with const 0)
+  - x / 1 → x (IntDiv with const 1)
+  - x / 1 → x (IntSdiv with const 1)
+  - x % 1 → 0 (IntRem with const 1)
+  - x % 1 → 0 (IntSrem with const 1)
+  - x ^ 0 → x (IntXor with const 0)
+  - x << 0 → x (IntLeft with const 0)
+  - x >> 0 → x (IntRight with const 0)
+  - x >>> 0 → x (IntSright with const 0)
+  - x & 0 → 0 (IntAnd annihilator)
+  - x | all_ones → all_ones (IntOr annihilator)
+  - x & x → x (IntAnd idempotent)
+  - x | x → x (IntOr idempotent)
+
+Existing rules (unchanged):
+  - x ^ x → 0, x - x → 0, x & all_ones → x, x | 0 → x, x + 0 → x, x * 1 → x
+
+Tests: 14 new tests added (total 27 idiom recognition tests)
+All tests pass.

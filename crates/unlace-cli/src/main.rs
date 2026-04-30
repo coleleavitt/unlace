@@ -1,4 +1,5 @@
 mod args;
+mod batch;
 mod pipeline;
 
 use std::fs;
@@ -12,8 +13,10 @@ use tracing_subscriber::EnvFilter;
 use unlace_ir::ArchId;
 use unlace_loader::{ElfLoader, Loader, import_dwarf};
 use unlace_lift::get_lifter;
+use unlace_plugin::PluginManager;
 
 use crate::args::{Args, Cmd};
+use crate::batch::BatchConfig;
 use crate::pipeline::PipelineConfig;
 
 fn main() {
@@ -29,12 +32,32 @@ fn main() {
             all: _,
             verbose,
             timeout,
+            plugin_dir,
         } => {
             init_tracing(verbose);
             let config = PipelineConfig {
                 timeout: Duration::from_secs(timeout),
             };
-            run_decompile(&binary, function.as_deref(), emit, arch.as_deref(), output.as_deref(), &config)
+            load_plugins(plugin_dir.as_deref())
+                .and_then(|mgr| run_decompile(&binary, function.as_deref(), emit, arch.as_deref(), output.as_deref(), &config, &mgr))
+        }
+        Cmd::Batch {
+            binary,
+            jobs,
+            emit,
+            arch,
+            output_dir,
+            merged: _,
+            timeout,
+            verbose,
+        } => {
+            init_tracing(verbose);
+            let config = BatchConfig {
+                jobs,
+                emit,
+                timeout_secs: timeout,
+            };
+            batch::run_batch(&binary, &config, arch.as_deref(), output_dir.as_deref())
         }
     };
 
@@ -59,6 +82,17 @@ fn init_tracing(verbose: u8) {
         .init();
 }
 
+fn load_plugins(dir: Option<&std::path::Path>) -> Result<PluginManager> {
+    let mut mgr = PluginManager::new();
+    if let Some(dir) = dir {
+        let count = mgr
+            .load_from_dir(dir)
+            .with_context(|| format!("failed to load plugins from '{}'", dir.display()))?;
+        tracing::info!(count, dir = %dir.display(), "loaded plugins");
+    }
+    Ok(mgr)
+}
+
 fn run_decompile(
     binary_path: &std::path::Path,
     function_filter: Option<&str>,
@@ -66,6 +100,7 @@ fn run_decompile(
     arch_override: Option<&str>,
     output_path: Option<&std::path::Path>,
     config: &PipelineConfig,
+    _plugin_mgr: &PluginManager,
 ) -> Result<()> {
     let data = fs::read(binary_path)
         .with_context(|| format!("failed to read '{}'", binary_path.display()))?;

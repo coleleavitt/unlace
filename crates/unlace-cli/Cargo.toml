@@ -14,14 +14,17 @@ unlace-lift = { workspace = true }
 unlace-passes = { workspace = true }
 unlace-struct = { workspace = true }
 unlace-output = { workspace = true }
+unlace-plugin = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 smallvec = { workspace = true }
+rayon = { workspace = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3"
 
 [[bench]]
 name = "decompile_medium"

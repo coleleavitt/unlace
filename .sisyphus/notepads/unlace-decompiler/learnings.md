@@ -286,3 +286,39 @@
 - 10 tests: simple, if_else, while, deterministic, compiles (gcc), goto_label, do_while, types, indentation, params
 - `pub use c_printer::print_c` re-exported from lib.rs
 - lint-determinism passes
+
+## [Task 21] CLI
+
+### Pipeline Wiring
+- Full pipeline: ElfLoader::load → discover_functions → lift_function → build_ssa → run_passes → emit_output
+- `unlace-lift` facade was missing X86 in get_lifter() — added `ArchId::X86 | ArchId::X86_64 => Box::new(X86Lifter::new())`
+- Block splitting: two-pass algorithm — pass 1 identifies block starts (after terminators + at branch targets), pass 2 populates blocks with instructions and wires successor edges
+- Cbranch fall-through successor requires special handling — must compute position of next instruction after the cbranch in the instruction stream
+
+### TypeInferPass Divergence Bug
+- TypeInferPass has an internal `while changed` loop that diverges on real-world IR from the x86 lifter
+- Root cause likely: bidirectional type propagation in COPY handling + complex flag computations create oscillation
+- Workaround: bounded type inference in CLI pipeline using `entry().or_insert()` (monotonic insertion, no updates)
+- The workaround runs up to 50 iterations of forward-only type assignment
+- run_to_fixedpoint is used for fold/prop/dce; TypeInfer runs separately after
+
+### CLI Structure
+- `args.rs`: clap derive with `#[derive(Parser)]`, `#[derive(Subcommand)]`, `#[derive(ValueEnum)]`
+- `pipeline.rs`: function discovery, lifting, block splitting, pass execution, output emission
+- `main.rs`: argument parsing, tracing init, decompile orchestration
+- Binary name: `unlace` (configured via `[[bin]]` in Cargo.toml)
+- Doc comments on clap args are functional (used as --help text)
+
+### Function Discovery
+- Iterates symbols with `SymbolKind::Function` and `size > 0`
+- Fallback for stripped binaries: decompile entry point as "entry"
+- Filter by name or hex address (`0x...` prefix)
+
+### Dependencies Added
+- tracing-subscriber (with env-filter feature) for `-v` verbosity
+- smallvec (for SmallVec in IR types)
+- All workspace crates except test-harness
+
+### Tests
+- 9 integration tests in tests/cli_smoke.rs using std::process::Command
+- Tests: version, emit ir/c/cfg-dot, hex addr filter, nonexistent function, arch mismatch, invalid file, output to file

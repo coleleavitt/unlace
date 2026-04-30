@@ -16,7 +16,7 @@ pub mod ternary_recovery;
 pub use block_merge::merge_linear_blocks;
 pub use cross_jump_revert::cross_jump_revert;
 pub use eager_returns::eager_returns;
-pub use flatten_if_else::flatten_if_else_chains;
+pub use flatten_if_else::{flatten_if_else_chains, simplify_chain_conditions};
 pub use hir::{HirFunction, HirNode, LabelId, SwitchCase};
 pub use if_to_switch::if_chain_to_switch;
 pub use irreducible::{detect_irreducible_regions, IrreducibleRegion};

@@ -815,5 +815,32 @@ mod tests {
         let dst = co.output.expect("reg form should have output");
         assert_eq!(dst.size, 16);
     }
+
+    // -- ADC / SBB carry arithmetic -----------------------------------------
+
+    #[test]
+    fn test_adc_reg_reg() {
+        // 48 11 D8 = adc rax, rbx
+        let result = lifter()
+            .lift_insn(&[0x48, 0x11, 0xD8], 0x1000)
+            .expect("should decode adc rax, rbx");
+        // ADC: tmp = a + b; result = tmp + zext(CF)
+        let add_count = result.ir_ops.iter().filter(|i| i.op == IrOp::IntAdd).count();
+        assert!(add_count >= 2, "ADC should emit at least two IntAdd ops");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntCarry));
+    }
+
+    #[test]
+    fn test_sbb_reg_reg() {
+        // 48 19 D8 = sbb rax, rbx
+        let result = lifter()
+            .lift_insn(&[0x48, 0x19, 0xD8], 0x1000)
+            .expect("should decode sbb rax, rbx");
+        let sub_count = result.ir_ops.iter().filter(|i| i.op == IrOp::IntSub).count();
+        assert!(sub_count >= 2, "SBB should emit at least two IntSub ops");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLess));
+    }
 }
 

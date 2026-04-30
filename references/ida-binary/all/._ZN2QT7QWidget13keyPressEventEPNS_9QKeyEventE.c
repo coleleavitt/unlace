@@ -1,0 +1,22 @@
+// ============================================================
+// THUNK / TRAMPOLINE
+// ============================================================
+// Address:         0x119350
+// Name:            ._ZN2QT7QWidget13keyPressEventEPNS_9QKeyEventE
+// Size:            6 bytes (1 instructions)
+// Disassembly:
+//   0x119350 jmp     cs:_ZN2QT7QWidget13keyPressEventEPNS_9QKeyEventE_ptr
+//
+// Resolved target: _ZN2QT7QWidget13keyPressEventEPNS_9QKeyEventE
+// Target address:  0x8D83F0
+// GOT/IAT slot:    0x8A3648
+// Slot symbol:     _ZN2QT7QWidget13keyPressEventEPNS_9QKeyEventE_ptr
+// Target type:     _QWORD(QT::QWidget *__hidden this, QT::QKeyEvent *)
+// ============================================================
+
+/* see target sig */ ._ZN2QT7QWidget13keyPressEventEPNS_9QKeyEventE(/* see target signature */)
+{
+    // Tail-call to _ZN2QT7QWidget13keyPressEventEPNS_9QKeyEventE via GOT/IAT indirection
+    return _ZN2QT7QWidget13keyPressEventEPNS_9QKeyEventE(/* forwarded args */);
+}
+

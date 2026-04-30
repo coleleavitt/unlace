@@ -1,0 +1,22 @@
+// ============================================================
+// THUNK / TRAMPOLINE
+// ============================================================
+// Address:         0x116100
+// Name:            ._ZSt25__throw_bad_function_callv
+// Size:            6 bytes (1 instructions)
+// Disassembly:
+//   0x116100 jmp     cs:_ZSt25__throw_bad_function_callv_ptr
+//
+// Resolved target: _ZSt25__throw_bad_function_callv
+// Target address:  0x8D6478
+// GOT/IAT slot:    0x8A1D20
+// Slot symbol:     _ZSt25__throw_bad_function_callv_ptr
+// Target type:     void __noreturn()
+// ============================================================
+
+/* see target sig */ ._ZSt25__throw_bad_function_callv(/* see target signature */)
+{
+    // Tail-call to _ZSt25__throw_bad_function_callv via GOT/IAT indirection
+    return _ZSt25__throw_bad_function_callv(/* forwarded args */);
+}
+

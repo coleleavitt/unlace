@@ -1,0 +1,34 @@
+double __fastcall sub_20ECB0(_QWORD *a1, const char *a2)
+{
+  __int64 v3; // rdi
+  double result; // xmm0_8
+  __int64 v5; // rdi
+  __int64 v6; // rdi
+  __int64 v7; // rdi
+
+  v3 = a1[12];
+  if ( v3 )
+  {
+    a1[13] = 0;
+    result = qfree(v3, a2);
+  }
+  v5 = a1[9];
+  if ( v5 )
+  {
+    a1[10] = 0;
+    result = qfree(v5, a2);
+  }
+  v6 = a1[6];
+  if ( v6 )
+  {
+    a1[7] = 0;
+    result = qfree(v6, a2);
+  }
+  v7 = a1[3];
+  if ( v7 )
+  {
+    a1[4] = 0;
+    return qfree(v7, a2);
+  }
+  return result;
+}

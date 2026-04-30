@@ -3,6 +3,7 @@ use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::lift::LiftCtx;
+use crate::ops::arithmetic::atomic_tag;
 use crate::register_file::*;
 
 pub fn lift_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
@@ -226,4 +227,59 @@ fn setcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Va
 
         _ => None,
     }
+}
+
+/// BSWAP r32/r64
+///
+/// Reverses the byte order of a register operand. Lowered to
+/// `Callother(BSWAP, src)` which the downstream printer renders as
+/// `__builtin_bswap32` / `__builtin_bswap64` based on operand width.
+/// Behavior of BSWAP r16 is officially undefined; we lift it the same way
+/// and let the printer pick a width-appropriate intrinsic name.
+pub fn lift_bswap(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let dst = ctx.operand_write(insn, 0);
+    let src = ctx.operand_read(insn, 0);
+    let (dst, src) = match (dst, src) {
+        (Some(d), Some(s)) => (d, s),
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+    let tag = Varnode::constant(atomic_tag::BSWAP, 8);
+    let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        result,
+        smallvec![tag, src],
+        ctx.addr,
+    ));
+    ctx.write_operand_insn(insn, 0, dst, result);
+}
+
+/// MOVBE — load/store with byte swap.
+///
+/// `MOVBE reg, m`  ⇒ load m, byte-swap, write to reg.
+/// `MOVBE m, reg`  ⇒ byte-swap reg, store to m.
+/// The operand-read/operand-write helpers handle load/store transparently;
+/// we emit a single BSWAP intrinsic on the value path.
+pub fn lift_movbe(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let dst = ctx.operand_write(insn, 0);
+    let src = ctx.operand_read(insn, 1);
+    let (dst, src) = match (dst, src) {
+        (Some(d), Some(s)) => (d, s),
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+    let tag = Varnode::constant(atomic_tag::BSWAP, 8);
+    let swapped = Varnode::unique(ctx.alloc_unique(), src.size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        swapped,
+        smallvec![tag, src],
+        ctx.addr,
+    ));
+    ctx.write_operand_insn(insn, 0, dst, swapped);
 }

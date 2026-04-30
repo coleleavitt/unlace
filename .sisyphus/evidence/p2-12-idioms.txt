@@ -1,0 +1,47 @@
+P2-12 Idiom Recognition — Evidence
+===================================
+
+Created: crates/unlace-passes/src/idiom_recognition.rs
+Updated: crates/unlace-passes/src/lib.rs (pub mod + pub use)
+
+Patterns implemented:
+  1. INT_XOR(v, v)        → COPY 0   (self-zeroing)
+  2. INT_SUB(v, v)        → COPY 0   (self-zeroing)
+  3. INT_AND(v, all_ones)  → COPY v   (identity mask, commutative)
+  4. INT_OR(v, 0)          → COPY v   (additive identity, commutative)
+  5. INT_ADD(v, 0)         → COPY v   (additive identity, commutative)
+  6. INT_MUL(v, 1)         → COPY v   (multiplicative identity, commutative)
+  7. BOOL_AND(v, v)        → COPY v   (idempotent)
+  8. BOOL_OR(v, v)         → COPY v   (idempotent)
+
+Design notes:
+  - Compares inputs via full Varnode equality (space + offset + size)
+  - Skips const-const operands (defers to ConstantFoldPass)
+  - All-ones detection: mask_for_size(size) matches input offset
+  - Fixed-point iteration loop inside run()
+  - No HashMap used (lint-determinism passes)
+
+Tests (14 total):
+  test_idiom_xor_self_zero            — INT_XOR v0, v0 → COPY 0
+  test_idiom_sub_self_zero            — INT_SUB v0, v0 → COPY 0
+  test_idiom_and_max_identity         — INT_AND v0, 0xFFFFFFFF → COPY v0
+  test_idiom_or_zero_identity         — INT_OR v0, 0 → COPY v0
+  test_idiom_add_zero_identity        — INT_ADD v0, 0 → COPY v0
+  test_idiom_mul_one_identity         — INT_MUL v0, 1 → COPY v0
+  test_idiom_bool_and_self            — BOOL_AND v0, v0 → COPY v0
+  test_idiom_bool_or_self             — BOOL_OR v0, v0 → COPY v0
+  test_idiom_and_max_commutative      — INT_AND 0xFFFFFFFF, v0 → COPY v0
+  test_idiom_add_zero_commutative     — INT_ADD 0, v0 → COPY v0
+  test_idiom_no_change_different_operands — no match when inputs differ
+  test_idiom_skips_const_const        — defers to const fold
+  test_idiom_xor_self_zero_8byte      — 8-byte xor self
+  test_idiom_and_max_identity_8byte   — 8-byte all-ones mask
+
+Verification:
+  cargo test -p unlace-passes -- idiom     → 14/14 passed
+  cargo test -p unlace-passes              → 93/93 passed
+  cargo xtask lint-determinism             → OK
+
+Pre-existing failures (not caused by this change):
+  - unlace-cli: VariableMergePass import (variable_merge module not registered)
+  - unlace-output: test_ssa_version_names (c_printer.rs modified)

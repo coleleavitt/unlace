@@ -8,7 +8,10 @@ pub mod copy_prop;
 pub mod dce;
 pub mod dead_flag_elim;
 pub mod expression_tree;
+pub mod idiom_recognition;
+pub mod noreturn;
 pub mod stack_vars;
+pub mod tail_call;
 pub mod type_infer;
 
 pub use pass::{Pass, PassError, run_to_fixedpoint};
@@ -19,7 +22,10 @@ pub use copy_prop::CopyPropagationPass;
 pub use dce::DeadCodeElimPass;
 pub use dead_flag_elim::DeadFlagElimPass;
 pub use expression_tree::ExpressionTreePass;
+pub use idiom_recognition::IdiomRecognitionPass;
+pub use noreturn::NoreturnDetectPass;
 pub use stack_vars::StackVarRecoveryPass;
+pub use tail_call::TailCallDetectPass;
 
 #[cfg(test)]
 mod tests {

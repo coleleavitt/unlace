@@ -1488,6 +1488,7 @@ fn c_type(ty: &PrimitiveType) -> &'static str {
             2 => "short",
             4 => "int",
             8 => "long long",
+            16 => "__int128",
             _ => "int",
         },
         PrimitiveType::UnsignedInt(w) => match w {
@@ -1495,6 +1496,7 @@ fn c_type(ty: &PrimitiveType) -> &'static str {
             2 => "unsigned short",
             4 => "unsigned int",
             8 => "unsigned long long",
+            16 => "_OWORD",
             _ => "unsigned int",
         },
         PrimitiveType::Float => "float",
@@ -2822,6 +2824,7 @@ fn emit_subpiece_macro(src: &str, byte_offset: u64, output_size: u8, input_size:
                 2 => "(_WORD)",
                 4 => "(_DWORD)",
                 8 => "(_QWORD)",
+                16 => "(_OWORD)",
                 _ => "(_DWORD)",
             };
             if byte_offset == 0 {
@@ -3003,6 +3006,7 @@ fn ida_ptr_type(size: u8) -> &'static str {
         2 => "_WORD *",
         4 => "_DWORD *",
         8 => "_QWORD *",
+        16 => "_OWORD *",
         _ => "_QWORD *",
     }
 }
@@ -3024,6 +3028,7 @@ typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
 typedef unsigned int _DWORD;
 typedef unsigned long long _QWORD;
+typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD;
 typedef unsigned char _BOOL;
 typedef signed char __int8;
 typedef signed short __int16;
@@ -3282,6 +3287,13 @@ mod tests {
         assert_eq!(super::c_type(&PrimitiveType::Double), "double");
         assert_eq!(super::c_type(&PrimitiveType::Ptr), "void *");
         assert_eq!(super::c_type(&PrimitiveType::Unknown), "int");
+    }
+
+    #[test]
+    fn test_oword_type_for_128_bit_values() {
+        assert_eq!(super::c_type(&PrimitiveType::UnsignedInt(16)), "_OWORD");
+        assert_eq!(super::c_type(&PrimitiveType::Int(16)), "__int128");
+        assert_eq!(super::ida_ptr_type(16), "_OWORD *");
     }
 
     #[test]

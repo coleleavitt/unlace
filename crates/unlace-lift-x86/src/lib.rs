@@ -1039,5 +1039,68 @@ mod tests {
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd),
             "LOCK XADD still updates flags via add of original + src");
     }
+
+    use crate::ops::fpu::fpu_tag;
+
+    fn assert_fpu_tag(bytes: &[u8], expected_tag: u64) {
+        let result = lifter()
+            .lift_insn(bytes, 0x1000)
+            .expect("should decode x87 instruction");
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "x87 instruction should not lower to Unimplemented (bytes={bytes:02x?})"
+        );
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("should emit Callother for x87 instruction");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(expected_tag, 8),
+            "Callother tag mismatch"
+        );
+    }
+
+    #[test]
+    fn test_lift_fld_mem_dword() {
+        assert_fpu_tag(&[0xD9, 0x00], fpu_tag::FLD);
+        let result = lifter().lift_insn(&[0xD9, 0x00], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("FLD should write to ST(0)");
+        assert_eq!(dst.size, 10, "FLD output is 80-bit ST(0)");
+        assert_eq!(dst.offset, crate::register_file::ST0);
+    }
+
+    #[test]
+    fn test_lift_fld_st_register() {
+        assert_fpu_tag(&[0xD9, 0xC1], fpu_tag::FLD);
+        let result = lifter().lift_insn(&[0xD9, 0xC1], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.output.unwrap().offset, crate::register_file::ST0);
+    }
+
+    #[test]
+    fn test_lift_fstp_mem() {
+        assert_fpu_tag(&[0xDD, 0x18], fpu_tag::FSTP);
+        let result = lifter().lift_insn(&[0xDD, 0x18], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert!(co.output.is_none(), "FSTP m64fp does not write to a varnode output");
+        assert_eq!(co.inputs.len(), 3, "FSTP m: (tag, dst_addr, src=ST0)");
+    }
+
+    #[test]
+    fn test_lift_fstp_st_register() {
+        assert_fpu_tag(&[0xDD, 0xD9], fpu_tag::FSTP);
+    }
+
+    #[test]
+    fn test_lift_fst_st_register() {
+        assert_fpu_tag(&[0xDD, 0xD2], fpu_tag::FST);
+        let result = lifter().lift_insn(&[0xDD, 0xD2], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("FST ST(i) writes to a register output");
+        assert_eq!(dst.size, 10);
+    }
 }
 

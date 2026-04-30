@@ -241,24 +241,34 @@ pub fn lift_fpu_binop(
     }
 }
 
-/// `FCOM/FCOMP/FCOMPP/FUCOM*` — compare ST(0) with operand and update FPU
-/// status flags (modelled implicitly via the Callother output).
+/// `FCOM/FCOMP/FCOMPP/FUCOM*` — compare ST(0) with operand.
 ///
-/// We emit the tagged Callother but do not yet propagate to the host's CF/PF/ZF
-/// (`FCOMI` would do that). Variants with implicit operands (`FCOMPP`,
-/// `FCOMP` zero-arg) compare against ST(1).
+/// iced always exposes `FCOM ST1` as two operands `(ST0, ST1)`; the
+/// zero-operand encoding (`FCOMPP`, `FUCOMPP`) implicitly compares ST(0)
+/// against ST(1). We emit the tagged Callother without an output; downstream
+/// passes can still recognise the comparison via the tag.
 pub fn lift_fcom(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let tag = Varnode::constant(fpu_tag::FCOM, 8);
-    let lhs = st_reg(0);
 
-    let rhs = match insn.op_count() {
-        0 => st_reg(1),
-        _ => {
-            let Some(r) = read_st_or_mem(ctx, insn, 0) else {
+    let (lhs, rhs) = match insn.op_count() {
+        0 => (st_reg(0), st_reg(1)),
+        1 => {
+            let Some(rhs) = read_st_or_mem(ctx, insn, 0) else {
                 ctx.emit_unimplemented();
                 return;
             };
-            r
+            (st_reg(0), rhs)
+        }
+        _ => {
+            let Some(lhs) = read_st_or_mem(ctx, insn, 0) else {
+                ctx.emit_unimplemented();
+                return;
+            };
+            let Some(rhs) = read_st_or_mem(ctx, insn, 1) else {
+                ctx.emit_unimplemented();
+                return;
+            };
+            (lhs, rhs)
         }
     };
 
@@ -271,27 +281,38 @@ pub fn lift_fcom(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
 
 /// `FXCH ST(i)` — swap ST(0) with ST(i).
 ///
-/// With no explicit operand iced reports a single ST(1) operand; we just pass
-/// it through. The swap is encoded as a single Callother — modelling it as two
+/// iced reports both operands explicitly (op0=ST0, op1=ST(i)) so we use them
+/// directly. The swap is encoded as a single Callother — modelling it as two
 /// sequential Copies via a temp would be misleading because the IR does not
-/// know about the FPU register naming aliasing.
+/// model the FPU stack pointer.
 pub fn lift_fxch(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let tag = Varnode::constant(fpu_tag::FXCH, 8);
 
-    let other = match insn.op_count() {
-        0 => st_reg(1),
-        _ => {
-            let Some(r) = read_st_or_mem(ctx, insn, 0) else {
+    let (a, b) = match insn.op_count() {
+        0 => (st_reg(0), st_reg(1)),
+        1 => {
+            let Some(other) = read_st_or_mem(ctx, insn, 0) else {
                 ctx.emit_unimplemented();
                 return;
             };
-            r
+            (st_reg(0), other)
+        }
+        _ => {
+            let Some(a) = read_st_or_mem(ctx, insn, 0) else {
+                ctx.emit_unimplemented();
+                return;
+            };
+            let Some(b) = read_st_or_mem(ctx, insn, 1) else {
+                ctx.emit_unimplemented();
+                return;
+            };
+            (a, b)
         }
     };
 
     ctx.emit(IrInsn::without_output(
         IrOp::Callother,
-        smallvec![tag, st_reg(0), other],
+        smallvec![tag, a, b],
         ctx.addr,
     ));
 }

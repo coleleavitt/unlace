@@ -109,3 +109,17 @@ Created `macho64_with_dyld_info()` — 768-byte hand-crafted Mach-O 64-bit binar
 
 ### Pitfall Found
 - When fixture has many load commands (5 here), the section headers extend well past 0x100. The __DATA segment's section header starts at dseg+72 = 0xB8+0x48 = 0x100. Writing __text data at 0x100 corrupts the __la_symbol_ptr section name, causing `object` crate to report "Non UTF-8 Mach-O section name". Always place section data AFTER load commands end.
+
+## P10-4: node_split Heuristic Retune (2026-04-30)
+
+Retuned `pick_split_target` to simulate candidate splits and choose only entries that shrink the largest remaining irreducible SCC overlapping the current region.
+
+### Key Findings
+- Profiling the old heuristic showed repeated medium.c splits in large SCCs (notably 21/28/49-block regions) where splitting an entry did not shrink the region and produced more goto-heavy output.
+- A pure “smallest simulated SCC” scorer still over-split when the best candidate preserved the current SCC size; the important guard is to skip non-shrinking candidates entirely.
+- With the shrink guard, medium.c returns to the pre-regression shape: `goto=12` (target ≤15) after `UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures golden_medium`.
+- Existing node_split tests still pass (3/3), and `cargo xtask lint-determinism` remains clean.
+
+### Fixture Regression Check
+- `cpp_exceptions=0`, `cpp_rtti=2`, `cpp_vtable=0`, `debug_calls=0`, `debug_hello=0`, `debug_structs=0`, `medium=12`, `x87_math=0` gotos.
+- No fixture increased by more than 2 gotos versus `.sisyphus/evidence/p10-baseline-metrics.txt`.

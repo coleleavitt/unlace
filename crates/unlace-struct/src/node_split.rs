@@ -32,7 +32,7 @@ use smallvec::SmallVec;
 use unlace_ir::cfg::build_cfg;
 use unlace_ir::{BasicBlock, BlockId, Function};
 
-use crate::irreducible::{detect_irreducible_regions_in_cfg, IrreducibleRegion};
+use crate::irreducible::{IrreducibleRegion, detect_irreducible_regions_in_cfg};
 
 const MAX_SPLIT_ROUNDS: usize = 16;
 
@@ -67,6 +67,14 @@ fn split_one_round(func: &mut Function, regions: &[IrreducibleRegion]) -> usize 
             continue;
         };
 
+        tracing::trace!(
+            entry = ?entry,
+            external_preds = ?external,
+            body_blocks = region.body_blocks.len(),
+            entry_blocks = ?region.entry_blocks,
+            "node_split selected entry"
+        );
+
         let Some(orig) = func.blocks.get(&entry) else {
             continue;
         };
@@ -87,8 +95,10 @@ fn split_one_round(func: &mut Function, regions: &[IrreducibleRegion]) -> usize 
     splits
 }
 
-/// Choose one entry per region — the one with the most external predecessors,
-/// breaking ties by `BlockId`. Returns `(entry, external_preds)`.
+/// Choose one entry per region by simulating each split and minimizing the
+/// largest remaining irreducible SCC overlapping the current region. Ties
+/// prefer fewer remaining entries, then fewer external predecessors (less
+/// duplication), then lower `BlockId`. Returns `(entry, external_preds)`.
 ///
 /// Splitting a single entry per round (rather than all simultaneously) is
 /// essential for convergence: simultaneous splitting creates new copy nodes
@@ -97,21 +107,140 @@ fn pick_split_target(
     func: &Function,
     region: &IrreducibleRegion,
 ) -> Option<(BlockId, Vec<BlockId>)> {
-    let mut best: Option<(BlockId, Vec<BlockId>, Vec<BlockId>)> = None;
+    let mut pred_map = BTreeMap::new();
     for &entry in &region.entry_blocks {
         let preds = predecessors(func, entry);
         let (external, internal) = partition_preds(&preds, &region.body_blocks);
+        pred_map.insert(entry, (external, internal));
+    }
+
+    let mut best: Option<SplitCandidate> = None;
+    for &entry in &region.entry_blocks {
+        let Some((external, internal)) = pred_map.get(&entry) else {
+            continue;
+        };
         if external.is_empty() || internal.is_empty() {
             continue;
         }
-        let candidate = (entry, external, internal);
+
+        let score = simulate_post_split_score(func, region, entry, external);
+        if score.largest_body >= region.body_blocks.len() {
+            tracing::trace!(
+                entry = ?entry,
+                current_body = region.body_blocks.len(),
+                remaining_largest_body = score.largest_body,
+                "node_split skipped non-shrinking candidate"
+            );
+            continue;
+        }
+
+        let candidate = SplitCandidate {
+            entry,
+            external: external.clone(),
+            score,
+        };
+
+        tracing::trace!(
+            entry = ?candidate.entry,
+            external_pred_count = candidate.external.len(),
+            remaining_largest_body = candidate.score.largest_body,
+            remaining_entry_count = candidate.score.entry_count,
+            remaining_total_body = candidate.score.total_body,
+            "node_split scored candidate"
+        );
+
         match &best {
             None => best = Some(candidate),
-            Some((_, ext, _)) if candidate.1.len() > ext.len() => best = Some(candidate),
+            Some(best_candidate) if candidate.is_better_than(best_candidate) => {
+                best = Some(candidate);
+            }
             _ => {}
         }
     }
-    best.map(|(e, ext, _)| (e, ext))
+    best.map(|candidate| (candidate.entry, candidate.external))
+}
+
+#[derive(Debug)]
+struct SplitCandidate {
+    entry: BlockId,
+    external: Vec<BlockId>,
+    score: SplitScore,
+}
+
+impl SplitCandidate {
+    fn is_better_than(&self, other: &Self) -> bool {
+        (
+            self.score.largest_body,
+            self.score.entry_count,
+            self.score.total_body,
+            self.external.len(),
+            self.entry,
+        ) < (
+            other.score.largest_body,
+            other.score.entry_count,
+            other.score.total_body,
+            other.external.len(),
+            other.entry,
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SplitScore {
+    largest_body: usize,
+    entry_count: usize,
+    total_body: usize,
+}
+
+fn simulate_post_split_score(
+    func: &Function,
+    region: &IrreducibleRegion,
+    split_entry: BlockId,
+    external: &[BlockId],
+) -> SplitScore {
+    let mut trial = func.clone();
+    let Some(orig) = trial.blocks.get(&split_entry).cloned() else {
+        return SplitScore {
+            largest_body: usize::MAX,
+            entry_count: usize::MAX,
+            total_body: usize::MAX,
+        };
+    };
+
+    let copy_id = trial.blocks.keys().last().map_or(0, |b| b.0 + 1);
+    let copy_id = BlockId(copy_id);
+
+    let mut copy_block = BasicBlock::new(copy_id);
+    copy_block.insns = orig.insns;
+    copy_block.successors = orig.successors;
+    trial.insert_block(copy_block);
+
+    for &ext in external {
+        redirect_successors(&mut trial, ext, split_entry, copy_id);
+    }
+
+    let trial_cfg = build_cfg(&trial);
+    let trial_regions = detect_irreducible_regions_in_cfg(&trial_cfg);
+
+    let mut score = SplitScore {
+        largest_body: 0,
+        entry_count: 0,
+        total_body: 0,
+    };
+
+    for trial_region in trial_regions {
+        if trial_region
+            .body_blocks
+            .iter()
+            .any(|block| region.body_blocks.contains(block))
+        {
+            score.largest_body = score.largest_body.max(trial_region.body_blocks.len());
+            score.entry_count += trial_region.entry_blocks.len();
+            score.total_body += trial_region.body_blocks.len();
+        }
+    }
+
+    score
 }
 
 fn predecessors(func: &Function, target: BlockId) -> Vec<BlockId> {

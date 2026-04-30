@@ -110,6 +110,41 @@ Created `macho64_with_dyld_info()` — 768-byte hand-crafted Mach-O 64-bit binar
 ### Pitfall Found
 - When fixture has many load commands (5 here), the section headers extend well past 0x100. The __DATA segment's section header starts at dseg+72 = 0xB8+0x48 = 0x100. Writing __text data at 0x100 corrupts the __la_symbol_ptr section name, causing `object` crate to report "Non UTF-8 Mach-O section name". Always place section data AFTER load commands end.
 
+## P10-6: Idiom Recognition abs/min/max (2026-04-30)
+
+Added 3 branchless conditional-select idiom patterns to `idiom_recognition.rs`:
+
+### Patterns
+- **abs**: `INT_SUB(INT_XOR(x, s), s)` where `s = INT_SRIGHT(x, bits-1)` → `Callother(__abs__, x)` (tag 0x322)
+- **min**: `INT_ADD(b, INT_AND(d, s))` where `d = INT_SUB(a, b)`, `s = INT_SRIGHT(d, bits-1)` → `Callother(__min__, a, b)` (tag 0x323)
+- **max**: `INT_SUB(a, INT_AND(d, s))` where `d = INT_SUB(a, b)`, `s = INT_SRIGHT(d, bits-1)` → `Callother(__max__, a, b)` (tag 0x324)
+
+### Key Decisions
+- Matched branchless bit-manipulation idioms (not CMOV/phi-based conditional selects) — these are the patterns compilers emit with `-O2` for `abs()`, `min()`, `max()` on signed integers
+- Used `def_binary` helper to walk the def chain (3-4 levels deep for min/max)
+- min pattern handles commutative ADD ordering via `try_min_idiom_ordered` called both ways
+- Tags 0x322-0x324 sit after ROL/ROR (0x320-0x321) in the idiom-recognition range
+- Also wired ROL/ROR/abs/min/max into C printer `callother_intrinsic_name` (0x320-0x324)
+
+## P10-7: Unrolled memcpy/memset Idiom Recognition (2026-04-30)
+
+Added sequence-level pattern matching to `idiom_recognition.rs` for detecting compiler-unrolled memory operations.
+
+### Patterns
+- **memcpy**: N consecutive `LOAD(ram, src+i*w)` → `STORE(ram, dst+i*w, loaded)` pairs where addresses increment by access width → `Callother(__memcpy__, dst, src, N*w)` (tag 0x325)
+- **memset**: N consecutive `STORE(ram, dst+i*w, const)` with same constant value → `Callother(__memset__, dst, const, N*w)` (tag 0x326)
+
+### Key Decisions
+- Sequence detection operates at block level via `try_recognize_sequences()`, separate from per-instruction `try_recognize()`
+- Called after per-instruction pass within the same fixedpoint loop iteration
+- Uses `Vec::splice` to replace matched instruction ranges with single Callother
+- Requires ≥2 consecutive pairs/stores to trigger (avoids false positives on single Load+Store)
+- Capped at 64 operations (`MAX_UNROLLED_OPS`) to prevent pathological matching
+- Only matches constant addresses (via `const_addr` helper) — won't match register-indirect patterns
+- Side-effect check: breaks sequence if any intervening instruction is Call/Callind/Callother/Branchind
+- Tags 0x325-0x326 continue the idiom-recognition range after abs/min/max (0x322-0x324)
+- C printer maps 0x325 → `__memcpy__`, 0x326 → `__memset__`
+
 ## P10-4: node_split Heuristic Retune (2026-04-30)
 
 Retuned `pick_split_target` to simulate candidate splits and choose only entries that shrink the largest remaining irreducible SCC overlapping the current region.

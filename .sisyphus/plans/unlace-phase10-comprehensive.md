@@ -516,7 +516,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(passes): idiom_recognition rotate-left/right (ROL/ROR)`
 
-- [ ] P10-6. Idiom recognition: abs/min/max conditional select patterns
+- [x] P10-6. Idiom recognition: abs/min/max conditional select patterns
 
   **What to do**:
   - Extend `idiom_recognition.rs` with three patterns:
@@ -560,7 +560,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(passes): idiom_recognition abs/min/max conditional-select patterns`
 
-- [ ] P10-7. Idiom recognition: memcpy/memset call sequence patterns
+- [x] P10-7. Idiom recognition: memcpy/memset call sequence patterns
 
   **What to do**:
   - Recognize unrolled memcpy: a sequence of N consecutive `Load(src+i)` + `Store(dst+i)` pairs where i increments by access-size, all with same width — replace with `Callother("__memcpy__", dst, src, N*width)`.

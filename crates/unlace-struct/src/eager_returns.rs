@@ -37,7 +37,9 @@ pub fn eager_returns(func: &mut SsaFunction) {
             continue;
         }
 
-        let ret_insns = func.function.blocks[&ret_bid].insns.clone();
+        let Some(ret_insns) = func.function.blocks.get(&ret_bid).map(|b| b.insns.clone()) else {
+            continue;
+        };
 
         for &pred_bid in &preds {
             let Some(pred_block) = func.function.blocks.get_mut(&pred_bid) else {

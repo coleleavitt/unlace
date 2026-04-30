@@ -263,6 +263,13 @@ pub struct SsaFunction {
     /// [`StackVarRecoveryPass`](https://docs.rs/unlace-passes) when adjacent
     /// stack slots share a primitive type.
     pub inferred_structs: BTreeMap<i64, crate::types::Type>,
+    /// Per-varnode composite types that should survive primitive type
+    /// inference. The lattice for `var_types` is intentionally primitive
+    /// (`Copy`, no recursion); when the loader resolves a DWARF `Type::Struct`
+    /// or `Type::Array` for a particular SSA varnode it goes here so passes
+    /// like [`TypeInferPass`](https://docs.rs/unlace-passes) can preserve
+    /// the richer information end-to-end.
+    pub composite_var_types: BTreeMap<SsaVarnode, crate::types::Type>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -318,6 +325,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         frame_setup_insns: BTreeSet::new(),
         dwarf_local_names: BTreeMap::new(),
         inferred_structs: BTreeMap::new(),
+        composite_var_types: BTreeMap::new(),
     }
 }
 

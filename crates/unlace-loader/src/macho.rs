@@ -110,6 +110,7 @@ where
     let mut symbols = load_symbols(&file);
 
     merge_function_starts::<Mach>(&file, data, &mut symbols);
+    merge_chained_imports::<Mach>(&file, data, &mut symbols);
 
     Ok(BinaryImage {
         arch,
@@ -205,6 +206,122 @@ where
     }
     let _ = endian;
     None
+}
+
+/// Merge bound import names from `LC_DYLD_CHAINED_FIXUPS` into `out`.
+///
+/// Modern Apple binaries (since macOS 12 / iOS 15) replace the legacy
+/// `LC_DYLD_INFO` rebase/bind opcodes with a chained-fixup format defined in
+/// dyld's `mach-o/fixup-chains.h`. The payload starts with a 28-byte
+/// `dyld_chained_fixups_header` followed by an imports table and a symbol
+/// strings blob.
+///
+/// We parse only the imports — extracting bound symbol names is the most
+/// directly useful metadata for a decompiler. Walking per-segment / per-page
+/// fixup chains (to compute every patched VA) is deferred; that data is also
+/// reachable on demand from the existing object::Object::dynamic_relocations
+/// surface area for current consumers.
+///
+/// `imports_format` values:
+/// - 1 (`DYLD_CHAINED_IMPORT`): 4-byte entries, top 23 bits = name offset
+/// - 2/3 (`_ADDEND`/`_ADDEND64`): unsupported here — skip the table
+fn merge_chained_imports<Mach>(
+    file: &MachOFile<Mach>,
+    data: &[u8],
+    out: &mut BTreeMap<u64, Symbol>,
+) where
+    Mach: MachHeader<Endian = object::Endianness>,
+{
+    let endian = match file.macho_header().endian() {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    let mut cmds = match file.macho_header().load_commands(endian, data, 0) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    while let Ok(Some(cmd)) = cmds.next() {
+        let variant = match cmd.variant() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let LoadCommandVariant::LinkeditData(linkedit) = variant else {
+            continue;
+        };
+        if linkedit.cmd.get(endian) != macho::LC_DYLD_CHAINED_FIXUPS {
+            continue;
+        }
+        let dataoff = linkedit.dataoff.get(endian) as usize;
+        let datasize = linkedit.datasize.get(endian) as usize;
+        if datasize < 28 || dataoff.saturating_add(datasize) > data.len() {
+            tracing::debug!(dataoff, datasize, "LC_DYLD_CHAINED_FIXUPS payload bounds invalid");
+            return;
+        }
+        let payload = &data[dataoff..dataoff + datasize];
+        decode_chained_imports(payload, out);
+        return;
+    }
+}
+
+fn decode_chained_imports(payload: &[u8], out: &mut BTreeMap<u64, Symbol>) {
+    let fixups_version = u32::from_le_bytes(payload[0..4].try_into().unwrap_or([0; 4]));
+    if fixups_version != 0 {
+        tracing::debug!(fixups_version, "unsupported chained fixups version");
+        return;
+    }
+    let imports_offset =
+        u32::from_le_bytes(payload[8..12].try_into().unwrap_or([0; 4])) as usize;
+    let symbols_offset =
+        u32::from_le_bytes(payload[12..16].try_into().unwrap_or([0; 4])) as usize;
+    let imports_count =
+        u32::from_le_bytes(payload[16..20].try_into().unwrap_or([0; 4])) as usize;
+    let imports_format =
+        u32::from_le_bytes(payload[20..24].try_into().unwrap_or([0; 4]));
+    let symbols_format =
+        u32::from_le_bytes(payload[24..28].try_into().unwrap_or([0; 4]));
+
+    if imports_format != 1 || symbols_format != 0 {
+        tracing::debug!(
+            imports_format,
+            symbols_format,
+            "chained-fixup variants beyond DYLD_CHAINED_IMPORT (uncompressed) not yet supported"
+        );
+        return;
+    }
+
+    let entry_size = 4usize;
+    let imports_end = imports_offset.saturating_add(imports_count.saturating_mul(entry_size));
+    if imports_end > payload.len() || symbols_offset > payload.len() {
+        return;
+    }
+
+    let symbols_blob = &payload[symbols_offset..];
+    for i in 0..imports_count {
+        let off = imports_offset + i * entry_size;
+        let raw = u32::from_le_bytes(payload[off..off + 4].try_into().unwrap_or([0; 4]));
+        let name_offset = (raw >> 9) as usize;
+        if name_offset >= symbols_blob.len() {
+            continue;
+        }
+        let end = symbols_blob[name_offset..]
+            .iter()
+            .position(|&b| b == 0)
+            .map(|p| name_offset + p)
+            .unwrap_or(symbols_blob.len());
+        let name = String::from_utf8_lossy(&symbols_blob[name_offset..end]).to_string();
+        if name.is_empty() {
+            continue;
+        }
+        let qualified = format!("dyld!{name}");
+        out.entry(0).or_insert(Symbol {
+            name: qualified,
+            addr: 0,
+            size: 0,
+            kind: SymbolKind::Unknown,
+        });
+    }
 }
 
 /// Map the Mach-O `cputype` value to our [`ArchId`].

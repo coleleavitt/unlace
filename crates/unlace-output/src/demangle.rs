@@ -49,6 +49,12 @@ pub struct DemangleResult {
     /// Comma-separated parameter types extracted from the parenthesised
     /// argument list, with top-level commas only.
     pub param_types: Vec<String>,
+    /// `true` when this symbol is a C++ constructor — detected from the
+    /// Itanium C1/C2/C3 tag or from `short_name == class_name`.
+    pub is_ctor: bool,
+    /// `true` when this symbol is a C++ destructor — detected from the
+    /// Itanium D0/D1/D2 tag or from `short_name` starting with `~`.
+    pub is_dtor: bool,
 }
 
 /// Attempt to demangle a mangled symbol name.
@@ -75,6 +81,19 @@ pub fn demangle(name: &str) -> Option<DemangleResult> {
     let short_name = extract_short_name(&full_signature);
     let (namespaces, class_name, param_types) = parse_signature(&full_signature);
 
+    let final_component = short_name.rsplit("::").next().unwrap_or(&short_name);
+    let is_ctor = symbol_kind == SymbolKind::Constructor
+        || class_name
+            .as_deref()
+            .map_or(false, |c| !c.is_empty() && c == final_component);
+    let is_dtor = symbol_kind == SymbolKind::Destructor || final_component.starts_with('~');
+
+    let symbol_kind = match symbol_kind {
+        SymbolKind::Normal if is_ctor => SymbolKind::Constructor,
+        SymbolKind::Normal if is_dtor => SymbolKind::Destructor,
+        other => other,
+    };
+
     Some(DemangleResult {
         short_name,
         full_signature: full_signature.into_owned(),
@@ -83,6 +102,8 @@ pub fn demangle(name: &str) -> Option<DemangleResult> {
         namespaces,
         class_name,
         param_types,
+        is_ctor,
+        is_dtor,
     })
 }
 
@@ -665,5 +686,41 @@ mod tests {
             segs,
             vec!["std".to_string(), "map<int, std::string>".to_string(), "find".to_string()],
         );
+    }
+
+    #[test]
+    fn detect_constructor_from_itanium_tag() {
+        for mangled in ["_ZN4BaseC1Ev", "_ZN4BaseC2Ev", "_ZN4BaseC3Ev"] {
+            let r = demangle(mangled).expect("ctor demangles");
+            assert!(r.is_ctor, "{} should be ctor, got {:?}", mangled, r);
+            assert!(!r.is_dtor, "{} should not be dtor", mangled);
+            assert_eq!(r.symbol_kind, SymbolKind::Constructor);
+            assert_eq!(r.class_name.as_deref(), Some("Base"));
+            let final_component = r.short_name.rsplit("::").next().unwrap();
+            assert_eq!(final_component, "Base");
+        }
+    }
+
+    #[test]
+    fn detect_destructor_from_itanium_tag() {
+        for mangled in ["_ZN4BaseD0Ev", "_ZN4BaseD1Ev", "_ZN4BaseD2Ev"] {
+            let r = demangle(mangled).expect("dtor demangles");
+            assert!(r.is_dtor, "{} should be dtor, got {:?}", mangled, r);
+            assert!(!r.is_ctor, "{} should not be ctor", mangled);
+            assert_eq!(r.symbol_kind, SymbolKind::Destructor);
+            let final_component = r.short_name.rsplit("::").next().unwrap();
+            assert!(
+                final_component.starts_with('~'),
+                "final component should start with ~, got: {}",
+                final_component,
+            );
+        }
+    }
+
+    #[test]
+    fn ctor_dtor_negative_for_normal_method() {
+        let r = demangle("_ZN3foo3barEv").expect("normal method");
+        assert!(!r.is_ctor);
+        assert!(!r.is_dtor);
     }
 }

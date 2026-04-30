@@ -602,7 +602,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(passes): idiom_recognition unrolled memcpy/memset detection`
 
-- [ ] P10-8. Refresh medium golden + measure goto/if delta + per-fixture regression check
+- [x] P10-8. Refresh medium golden + measure goto/if delta + per-fixture regression check
 
   **What to do**:
   - Run `UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures` to refresh all 8 fixtures.

@@ -1,0 +1,40 @@
+P2-6 Condition Simplification Pass — Evidence
+==============================================
+
+Created: crates/unlace-passes/src/condition_simplify.rs
+Updated: crates/unlace-passes/src/lib.rs (pub mod + pub use)
+
+Patterns implemented (9 total):
+  1. BoolNegate(BoolNegate(x))       → x               (double negation)
+  2. BoolAnd(x, const_true)          → x
+  3. BoolAnd(x, const_false)         → const_false
+  4. BoolOr(x, const_true)           → const_true
+  5. BoolOr(x, const_false)          → x
+  6. BoolNegate(IntEqual(a, b))       → IntNotequal(a, b)
+  7. BoolNegate(IntNotequal(a, b))    → IntEqual(a, b)
+  8. BoolNegate(IntLess(a, b))        → IntLessequal(b, a)  (swap & invert)
+  9. BoolXor(x, const_false)          → x
+
+All commutative variants handled (const on left or right).
+Fixed-point iteration via inner loop (rebuilds def_map each round).
+Def-use chain followed via BTreeMap<Varnode, IrInsn>.
+
+Unit tests: 14 total
+  - test_double_negation_eliminated
+  - test_bool_and_with_true
+  - test_bool_and_with_false
+  - test_bool_or_with_true
+  - test_bool_or_with_false
+  - test_negate_equal_to_notequal
+  - test_negate_notequal_to_equal
+  - test_negate_less_to_lessequal_swapped
+  - test_bool_xor_with_false
+  - test_triple_negation_fixedpoint
+  - test_no_change_on_non_bool_op
+  - test_bool_and_true_on_left
+  - test_bool_or_false_on_left
+  - test_bool_xor_false_on_left
+
+cargo test -p unlace-passes -- condition_simplify: 14 passed
+cargo xtask lint-determinism: OK (no HashMap/HashSet)
+cargo test --workspace: all 665 tests pass (1 ignored: pdb fixture)

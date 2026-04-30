@@ -330,6 +330,9 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
 
         M::Movdqa => sse::lift_sse_mov(ctx, insn, sse::tag::MOVDQA),
         M::Movdqu => sse::lift_sse_mov(ctx, insn, sse::tag::MOVDQU),
+        M::Movaps => sse::lift_sse_mov(ctx, insn, sse::tag::MOVAPS),
+        M::Movups => sse::lift_sse_mov(ctx, insn, sse::tag::MOVUPS),
+        M::Movsd  => sse::lift_sse_mov_scalar(ctx, insn, sse::tag::MOVSD),
 
         M::Paddb => sse::lift_sse_binop(ctx, insn, sse::tag::PADDB),
         M::Paddw => sse::lift_sse_binop(ctx, insn, sse::tag::PADDW),

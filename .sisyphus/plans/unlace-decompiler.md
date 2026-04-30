@@ -601,7 +601,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
 
 ### Wave 5 — End-to-End + Golden Tests
 
-- [ ] 22. End-to-end pipeline wiring
+- [x] 22. End-to-end pipeline wiring
   **What to do**: Wire complete pipeline: load → discover functions (symbol-based for non-stripped, linear sweep fallback for stripped — identify function prologues like `push rbp; mov rbp, rsp` and `endbr64` patterns) → lift → CFG → SSA → passes (fold, copyprop, DCE, types) → structuring → output. Graceful per-function failure: emit `/* decompilation failed */` and continue. 30s per-function timeout. Warn on >100K IR nodes. Function discovery: for stripped binaries, scan .text for prologue patterns; for non-stripped, use symbol table.
   **Parallelization**: Wave 5. Depends: 21. Blocks: 23, 24, 25.
   **QA Scenarios**:
@@ -627,7 +627,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat: end-to-end decompilation pipeline`
 
-- [ ] 23. Golden test suite: x86-64
+- [x] 23. Golden test suite: x86-64
   **What to do**: Enable ignored golden tests. Run unlace on fixtures, compare via harness. Fix pipeline until 80%+ pass. Mark known failures with TODO.
   **Parallelization**: Wave 5. Depends: 10, 22. Blocks: 26-32.
   **QA Scenarios**:
@@ -647,7 +647,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `test: x86-64 golden suite — N/150 passing`
 
-- [ ] 24. Performance benchmarks
+- [x] 24. Performance benchmarks
   **What to do**: criterion/divan benches. medium.elf end-to-end. Assert <60s, <2GB RSS. Per-stage breakdown. CI optional check.
   **Parallelization**: Wave 5. Depends: 22.
   **QA Scenarios**:
@@ -663,7 +663,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `perf: benchmarks + memory budget`
 
-- [ ] 25. Error handling + graceful degradation
+- [x] 25. Error handling + graceful degradation
   **What to do**: Replace all unwrap() in lib crates with proper errors. `unlace_ir::Error` enum. Unknown opcodes → `__unknown_insn_0xNN()`. Malformed input → exit 1. Timeout → skip + comment. thiserror in libs, anyhow in CLI.
   **Parallelization**: Wave 5. Depends: 22.
   **QA Scenarios**:
@@ -689,7 +689,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
 
 ### Wave 6 — Additional Architectures
 
-- [ ] 26. ARM/AArch64 lifter via capstone
+- [x] 26. ARM/AArch64 lifter via capstone
   **What to do**: Replace ARM stub with working lifter. capstone for ARM64 decoding. Lift: ADD, SUB, AND, ORR, EOR, MOV, LDR, STR, B, BL, BR, BLR, CBZ, CBNZ, Bcc, RET, CMP, TST. Registers: X0-X30, SP, LR, PC, NZCV. ARM64 only (no AArch32/Thumb for MVP).
   **Parallelization**: Wave 6. Depends: 11, 23 passing.
   **References**: `references/hexrays/ida_dump/hexarm/all/` (7,793 funcs), `references/ida/processors/arm/all/` (1,094 funcs)
@@ -705,7 +705,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(lift-arm): ARM/AArch64 lifter via capstone`
 
-- [ ] 27. ARM golden tests
+- [x] 27. ARM golden tests
   **What to do**: Run golden comparison on 25 ARM functions. Target 70%+ pass.
   **Parallelization**: Wave 6. Depends: 26.
   **QA Scenarios**:
@@ -725,7 +725,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `test: ARM golden suite`
 
-- [ ] 28. RISC-V lifter via capstone
+- [x] 28. RISC-V lifter via capstone
   **What to do**: RV64I base integer ISA. Registers: x0-x31, pc. Same lifter pattern as ARM.
   **References**: `references/hexrays/ida_dump/hexrv/all/` (7,635 funcs), `references/procs/riscv/` (443 funcs)
   **Parallelization**: Wave 6. Depends: 11, 23.
@@ -741,7 +741,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(lift-riscv): RISC-V lifter via capstone`
 
-- [ ] 29. MIPS lifter via capstone
+- [x] 29. MIPS lifter via capstone
   **What to do**: MIPS64. Registers: $0-$31, HI, LO, PC. Handle delay slots.
   **References**: `references/hexrays/ida_dump/hexmips/all/` (7,674 funcs), `references/procs/mips/all/sub_1F3B0.c` (3,298-line ana)
   **Parallelization**: Wave 6. Depends: 11, 23.
@@ -757,7 +757,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(lift-mips): MIPS lifter via capstone`
 
-- [ ] 30. PowerPC lifter via capstone
+- [x] 30. PowerPC lifter via capstone
   **What to do**: PPC64. Registers: r0-r31, CR, LR, CTR, XER.
   **References**: `references/hexrays/ida_dump/hexppc/all/` (7,735 funcs), `references/procs/ppc/` (736 funcs)
   **Parallelization**: Wave 6. Depends: 11, 23.
@@ -773,7 +773,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(lift-ppc): PowerPC lifter via capstone`
 
-- [ ] 31. V850 lifter (custom decoder)
+- [x] 31. V850 lifter (custom decoder)
   **What to do**: Custom V850 instruction decoder (no crate exists). V850E2M ISA manual. Registers: r0-r31, PC, PSW.
   **References**: `references/hexrays/ida_dump/hexv850/all/` (7,647 funcs), `references/procs/nec850/` (419 funcs)
   **Parallelization**: Wave 6. Depends: 11, 23.
@@ -789,7 +789,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(lift-v850): V850 lifter (custom decoder)`
 
-- [ ] 32. ARC lifter (custom decoder)
+- [x] 32. ARC lifter (custom decoder)
   **What to do**: Custom ARC instruction decoder. ARCv2 ISA manual. Registers: r0-r63, STATUS32, BTA, LP_START/END.
   **References**: `references/hexrays/ida_dump/hexarc/all/` (7,617 funcs), `references/procs/arc/` (315 funcs)
   **Parallelization**: Wave 6. Depends: 11, 23.
@@ -807,7 +807,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
 
 ### Wave 7 — Post-MVP Features
 
-- [ ] 33. PE loader via `object`
+- [x] 33. PE loader via `object`
   **What to do**: Add PE32/PE64 to unlace-loader. Sections, imports (IAT), exports, relocations. RVA → VA.
   **References**: `references/ida/loaders/pe/` (404 funcs), `references/loaders/coff/` (308 funcs)
   **Parallelization**: Wave 7. Depends: 8.
@@ -823,7 +823,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(loader): PE loader`
 
-- [ ] 34. Mach-O loader via `object`
+- [x] 34. Mach-O loader via `object`
   **What to do**: Add Mach-O. Segments, sections, symtab, dysymtab, fat/universal.
   **References**: `references/ida/loaders/dyld/` (2,415 funcs), `references/ida/loaders/macho/` (40 files)
   **Parallelization**: Wave 7. Depends: 8.
@@ -839,7 +839,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(loader): Mach-O loader`
 
-- [ ] 35. C++/Rust/Swift demangling
+- [x] 35. C++/Rust/Swift demangling
   **What to do**: Integrate symbolic-demangle. Mangled symbol → short name. Full signature as comment.
   **References**: `references/plugins/rust/` (137 funcs), `references/demangle/librustdemangle/` (39 funcs), `references/demangle/libswiftdemangle/` (556 funcs)
   **Parallelization**: Wave 7. Depends: 18.
@@ -855,7 +855,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(output): C++/Rust/Swift demangling`
 
-- [ ] 36. Switch table recovery
+- [x] 36. Switch table recovery
   **What to do**: Detect BRANCHIND + table LOAD pattern → switch. `target = LOAD(base + index * entry_size)`.
   **References**: `references/hexrays/ida_dump/hexx64/all/`
   **Parallelization**: Wave 7. Depends: 17.
@@ -871,7 +871,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(struct): switch table recovery`
 
-- [ ] 37. DWARF debug info import via gimli
+- [x] 37. DWARF debug info import via gimli
   **What to do**: Parse .debug_info via gimli + addr2line. Import function names, param names/types, locals, source file/line. Apply to type inference.
   **References**: `references/plugins/dwarf/` (1,465 funcs)
   **Parallelization**: Wave 7. Depends: 16.
@@ -887,7 +887,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(loader): DWARF import via gimli`
 
-- [ ] 38. PDB debug info import via pdb2
+- [x] 38. PDB debug info import via pdb2
   **What to do**: Parse PDB via pdb2 crate. Import function sigs, types, line numbers. Apply to PE binaries.
   **References**: `references/plugins/pdb/` (1,427 funcs)
   **Parallelization**: Wave 7. Depends: 16.
@@ -903,7 +903,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(loader): PDB import via pdb2`
 
-- [ ] 39. Calling convention detection
+- [x] 39. Calling convention detection
   **What to do**: Detect System V AMD64 vs Microsoft x64 from argument register usage. Annotate function signatures.
   **References**: `references/hexrays/ida_dump/hexx64/all/`
   **Parallelization**: Wave 7. Depends: 16.
@@ -919,7 +919,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(passes): calling convention detection`
 
-- [ ] 40. Stack variable recovery
+- [x] 40. Stack variable recovery
   **What to do**: Analyze RSP/RBP offsets → local variables. Name as local_N. Assign types.
   **References**: `references/hexrays/ida_dump/hexx64/all/`
   **Parallelization**: Wave 7. Depends: 16, 39.
@@ -941,7 +941,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
 
 ## Final Verification Wave
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   Read the plan end-to-end. For each "Must Have": verify implementation exists. For each "Must NOT Have": search codebase for forbidden patterns. Check evidence files exist.
   **QA Scenarios**:
   ```
@@ -957,7 +957,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   Output: `Must Have [N/N] | Must NOT Have [N/N] | VERDICT: APPROVE/REJECT`
 
-- [ ] F2. **Code Quality Review** — `general`
+- [x] F2. **Code Quality Review** — `general`
   Run `cargo check --workspace` + `cargo clippy --workspace` + `cargo test --workspace`. Check determinism: run `unlace` twice, diff output.
   **QA Scenarios**:
   ```
@@ -977,7 +977,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   Output: `Build [PASS/FAIL] | Tests [N pass/N fail] | Determinism [PASS/FAIL] | VERDICT`
 
-- [ ] F3. **Real Manual QA** — `general`
+- [x] F3. **Real Manual QA** — `general`
   Execute EVERY QA scenario from EVERY task. Test edge cases: empty binary, /dev/null, stripped binary.
   **QA Scenarios**:
   ```
@@ -993,7 +993,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   Output: `Scenarios [N/N pass] | Edge Cases [N tested] | VERDICT`
 
-- [ ] F4. **Scope Fidelity Check** — `general`
+- [x] F4. **Scope Fidelity Check** — `general`
   For each task: read spec, read actual impl. Verify 1:1. Flag unaccounted changes.
   **QA Scenarios**:
   ```

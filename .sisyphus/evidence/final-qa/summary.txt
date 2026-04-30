@@ -1,0 +1,32 @@
+=== UNLACE FINAL QA SUMMARY ===
+Date: 2026-04-29
+
+TEST 1: Fixture Decompilation [7/7 PASS]
+  hello_world  -> exit 0, 71 lines
+  branches     -> exit 0, 88 lines
+  loops        -> exit 0, 323 lines
+  calls        -> exit 0, 75 lines
+  medium       -> exit 0, 544 lines
+  stripped     -> exit 0, 456 lines
+  empty        -> exit 0, 62 lines
+
+TEST 2: Emit Modes [3/3 PASS]
+  --emit c       -> exit 0, 71 lines
+  --emit ir      -> exit 0, 48 lines
+  --emit cfg-dot -> exit 0, 12 lines
+
+TEST 3: Edge Cases [3/3 PASS]
+  /dev/null       -> exit 1, "not a valid ELF binary"
+  /etc/hostname   -> exit 1, "not a valid ELF binary"
+  /nonexistent    -> exit 1, "No such file or directory"
+
+TEST 4: --function Flag [1/1 PASS]
+  --function main -> exit 0, valid C output
+
+TEST 5: Test Suite [PASS]
+  650 tests pass, 0 fail
+
+TEST 6: Determinism [PASS]
+  Two runs of medium.elf produce identical output
+
+Scenarios [6/6 pass] | Integration [7/7] | Edge Cases [3 tested] | VERDICT: APPROVE

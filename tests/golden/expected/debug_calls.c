@@ -38,23 +38,6 @@ void _start(void) {
     signed char v6; // temp
     unsigned long long v10; // temp
 
-    v1 = 0;
-    v2 = 0;
-    v3 = 0LL;
-    v4 = 0LL;
-    v5 = 0LL;
-    v3 = 0LL;
-    v6 = 0;
-    v4 = 0LL;
-    v5 = 0LL;
-    v4 = 0LL;
-    v5 = 0LL;
-    v4 = 0LL;
-    v1 = 0;
-    v7 = 0;
-    v1 = 0;
-    v8 = 0;
-    v5 = 0LL;
     *(_QWORD *)(0LL) = 0x1065LL;
     v3 = v9 + 0x3fd8LL;
     v10 = *(_QWORD *)(0LL);
@@ -98,18 +81,9 @@ int add(int a, int b) {
     long long v1; // temp
     int v6; // temp
 
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    v1 = 0LL;
     *(_DWORD *)(0LL) = v4;
-    v1 = 0LL;
     *(_DWORD *)(0LL) = v5;
-    v6 = 0;
-    v7 = 0;
-    v8 = 0;
-    v1 = 0LL;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
@@ -149,19 +123,9 @@ int sub(int a, int b) {
     int v4; // edi
     long long v1; // temp
 
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    v1 = 0LL;
     *(_DWORD *)(0LL) = v4;
-    v1 = 0LL;
     *(_DWORD *)(0LL) = v5;
-    v6 = 0;
-    v7 = 0;
-    v8 = 0;
-    v9 = 0;
-    v1 = 0LL;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
@@ -201,15 +165,9 @@ int mul(int a, int b) {
     int v4; // edi
     long long result; // temp
 
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    result = 0LL;
     *(_DWORD *)(0LL) = v4;
-    result = 0LL;
     *(_DWORD *)(0LL) = v5;
-    result = 0LL;
     return result;
 }
 typedef unsigned char _BYTE;
@@ -250,21 +208,10 @@ int square(int x) {
     long long result; // temp
     int v4; // temp
 
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    result = 0LL;
-    v2 = 0LL;
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    v4 = 0;
-    v5 = 0;
-    v6 = 0;
-    result = 0LL;
     *(_QWORD *)(0LL) = 0x118cLL;
     mul();
-    result = 0LL;
     return result;
 }
 typedef unsigned char _BYTE;
@@ -305,26 +252,12 @@ int cube(int x) {
     long long v3; // rbp
     long long result; // temp
 
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    result = 0LL;
-    v2 = 0LL;
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    v4 = 0;
-    v5 = 0;
-    v6 = 0;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x11a7LL;
     square();
-    v7 = 0;
-    result = 0LL;
     *(_QWORD *)(0LL) = 0x11b5LL;
     mul();
-    result = 0LL;
     return result;
 }
 typedef unsigned char _BYTE;
@@ -364,20 +297,8 @@ int abs_val(int x) {
     int v4; // edi
     long long result; // temp
 
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    result = 0LL;
     *(_DWORD *)(0LL) = v4;
-    v5 = 0;
-    v6 = 0;
-    v7 = 0;
-    v8 = 0;
-    v9 = 0;
-    v10 = 0;
-    v11 = 0;
-    result = 0LL;
     return result;
 }
 typedef unsigned char _BYTE;
@@ -418,18 +339,9 @@ int max(int a, int b) {
     int v4; // edi
     long long v1; // temp
 
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    v1 = 0LL;
     *(_DWORD *)(0LL) = v4;
-    v1 = 0LL;
     *(_DWORD *)(0LL) = v5;
-    v6 = 0;
-    v7 = 0;
-    v8 = 0;
-    v1 = 0LL;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
@@ -469,18 +381,9 @@ int min(int a, int b) {
     int v4; // edi
     long long v1; // temp
 
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    v1 = 0LL;
     *(_DWORD *)(0LL) = v4;
-    v1 = 0LL;
     *(_DWORD *)(0LL) = v5;
-    v6 = 0;
-    v7 = 0;
-    v8 = 0;
-    v1 = 0LL;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
@@ -521,33 +424,14 @@ int clamp(int x, int lo, int hi) {
     long long v3; // rbp
     long long result; // temp
 
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    result = 0LL;
-    v2 = 0LL;
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    v4 = 0;
-    v5 = 0;
-    v4 = 0;
-    v6 = 0;
-    v7 = 0;
-    v8 = 0;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x1228LL;
     max();
-    v5 = 0;
-    result = 0LL;
     *(_QWORD *)(0LL) = 0x1236LL;
     min();
-    result = 0LL;
     return result;
 }
 typedef unsigned char _BYTE;
@@ -588,63 +472,27 @@ int compute(int x) {
     long long v3; // rbp
     long long result; // temp
 
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    result = 0LL;
-    v2 = 0LL;
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    v4 = 0;
-    v5 = 0;
-    v6 = 0;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x1256LL;
     add();
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    v4 = 0;
-    v5 = 0;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x1268LL;
     sub();
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    v4 = 0;
-    v5 = 0;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x1275LL;
     square();
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x1282LL;
     cube();
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    v4 = 0;
-    v7 = 0;
-    v4 = 0;
-    v5 = 0;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x1294LL;
     sub();
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x129bLL;
     abs_val();
-    result = 0LL;
     *(_DWORD *)(0LL) = 0;
-    result = 0LL;
     *(_QWORD *)(0LL) = 0x12b2LL;
     clamp();
-    result = 0LL;
     return result;
 }
 typedef unsigned char _BYTE;
@@ -683,15 +531,8 @@ int main(void) {
     long long v2; // rsp
     long long result; // temp
 
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    v3 = 0LL;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x12c6LL;
     compute();
-    v4 = 0LL;
-    result = 0LL;
     return result;
 }

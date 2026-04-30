@@ -38,17 +38,8 @@ void main(void) {
     signed char v4; // temp
     signed char v5; // temp
 
-    v1 = 0LL;
-    v2 = 0LL;
-    v3 = 0;
-    v4 = 0;
-    v5 = 0;
-    v6 = 0;
-    v1 = 0LL;
     *(_QWORD *)(0LL) = 0x1080LL;
     __printf_chk();
-    v3 = 0;
-    v1 = 0LL;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
@@ -90,23 +81,6 @@ void _start(void) {
     signed char v6; // temp
     unsigned long long v10; // temp
 
-    v1 = 0;
-    v2 = 0;
-    v3 = 0LL;
-    v4 = 0LL;
-    v5 = 0LL;
-    v3 = 0LL;
-    v6 = 0;
-    v4 = 0LL;
-    v5 = 0LL;
-    v4 = 0LL;
-    v5 = 0LL;
-    v4 = 0LL;
-    v1 = 0;
-    v7 = 0;
-    v1 = 0;
-    v8 = 0;
-    v5 = 0LL;
     *(_QWORD *)(0LL) = 0x10b5LL;
     v3 = v9 + 0x3fe0LL;
     v10 = *(_QWORD *)(0LL);
@@ -135,7 +109,7 @@ _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
 
 /*
- * Function:   _Z8use_baseP4Base
+ * Function:   use_base(Base*)
  * Address:    0x1180
  * Size:       0x7 (7 bytes)
  * Convention: System V AMD64

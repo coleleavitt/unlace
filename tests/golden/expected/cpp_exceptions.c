@@ -22,12 +22,12 @@ _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
 
 /*
- * Function:   _Z9may_throwi.cold
+ * Function:   may_throw(int) [clone .cold]
  * Address:    0x1140
  * Size:       0x4c (76 bytes)
  * Convention: AArch64 AAPCS64
  * Stack frame: 0x0 (0 bytes)
- * Xrefs to:   _Unwind_Resume, _ZNSt13runtime_errorC1EPKc, __cxa_allocate_exception, __cxa_free_exception, __cxa_throw
+ * Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_free_exception, __cxa_throw
  * Xrefs from: unknown
  */
 // may_throw(int) [clone .cold]
@@ -38,36 +38,21 @@ void __aapcs may_throw(void * a1) {
     long long v1; // temp
     unsigned long long v6; // temp
 
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = v3;
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = v3;
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = v3;
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x114eLL;
     __cxa_allocate_exception();
     v4 = v3;
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x1160LL;
-    _ZNSt13runtime_errorC1EPKc();
+    std_runtime_error_runtime_error();
     v1 = v5 + 0x3fe0LL;
     v6 = *(_QWORD *)(0LL);
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x1176LL;
     __cxa_throw();
     v7 = v3;
-    v1 = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x1185LL;
     __cxa_free_exception();
-    v1 = 0LL;
     *(_QWORD *)(0LL) = 0x118dLL;
     _Unwind_Resume();
 }
@@ -95,12 +80,12 @@ _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
 
 /*
- * Function:   _Z9safe_calli.cold
+ * Function:   safe_call(int) [clone .cold]
  * Address:    0x118d
  * Size:       0x92 (146 bytes)
  * Convention: unknown
  * Stack frame: 0x0 (0 bytes)
- * Xrefs to:   _ZNSt13runtime_errorC1EPKc, __cxa_allocate_exception, __cxa_begin_catch, __cxa_free_exception, __cxa_throw
+ * Xrefs to:   std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_free_exception, __cxa_throw
  * Xrefs from: unknown
  */
 // safe_call(int) [clone .cold]
@@ -119,65 +104,33 @@ __int32 safe_call(void) {
     signed char v13; // temp
     signed char v14; // temp
 
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(8LL) = 8LL;
-    result = 0LL;
-    v2 = 0LL;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x119cLL;
     __cxa_allocate_exception();
     result = v3 + "negative";
-    v4 = 0LL;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(0LL) = 0x11aeLL;
-    _ZNSt13runtime_errorC1EPKc();
+    std_runtime_error_runtime_error();
     result = v3 + 0x3fe0LL;
     v5 = *(_QWORD *)(0LL);
     v6 = 8LL;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(8LL) = 0x11c4LL;
     __cxa_throw();
     *(_QWORD *)(8LL) = 8LL;
-    result = 0LL;
     *(_QWORD *)(8LL) = 8LL;
-    result = 0LL;
-    v2 = 0LL;
     *(_QWORD *)(8LL) = 0x11d9LL;
     __cxa_free_exception();
-    result = 0LL;
-    v5 = 0LL;
-    v7 = 0LL;
-    result = 0LL;
-    v8 = 0;
-    v7 = 0LL;
     v9 = 0;
     if (v9) {
     } else {
-        result = 0LL;
-        v2 = 0LL;
         *(_QWORD *)(0LL) = 0x11edLL;
         __cxa_begin_catch();
         result = *(_QWORD *)(0LL);
-        v6 = 0LL;
-        result = 0LL;
-        v2 = 0LL;
         *(_QWORD *)(0LL) = 0x11f6LL;
         v5 = 0x10LL;
         pfn = *(_QWORD *)(8LL);
         ((void (*)())pfn)();
-        v11 = 0;
         v12 = LOBYTE(0);
         v13 = 0;
-        v14 = 0;
-        v15 = 0;
-        result = 0LL;
-        v2 = 0LL;
-        result = 0LL;
-        v2 = 0LL;
         *(_QWORD *)(8LL) = 0x1211LL;
         result = 8LL;
         v2 = 8LL;
@@ -261,23 +214,6 @@ void _start(void) {
     signed char v6; // temp
     unsigned long long v10; // temp
 
-    v1 = 0;
-    v2 = 0;
-    v3 = 0LL;
-    v4 = 0LL;
-    v5 = 0LL;
-    v3 = 0LL;
-    v6 = 0;
-    v4 = 0LL;
-    v5 = 0LL;
-    v4 = 0LL;
-    v5 = 0LL;
-    v4 = 0LL;
-    v1 = 0;
-    v7 = 0;
-    v1 = 0;
-    v8 = 0;
-    v5 = 0LL;
     *(_QWORD *)(0LL) = 0x1285LL;
     v3 = v9 + 0x3fd8LL;
     v10 = *(_QWORD *)(0LL);
@@ -306,7 +242,7 @@ _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
 
 /*
- * Function:   _Z9may_throwi
+ * Function:   may_throw(int)
  * Address:    0x1350
  * Size:       0xc (12 bytes)
  * Convention: unknown
@@ -327,8 +263,6 @@ void may_throw(void) {
         cond = (__builtin_popcount(LOBYTE(v1)) & 1) == 0;
     } while (v6);
     result = 0LL;
-    v12 = 0LL;
-    v13 = 0LL;
     return result;
 }
 typedef unsigned char _BYTE;
@@ -355,7 +289,7 @@ _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
 
 /*
- * Function:   _Z9safe_calli
+ * Function:   safe_call(int)
  * Address:    0x1360
  * Size:       0xe (14 bytes)
  * Convention: unknown
@@ -374,16 +308,7 @@ void safe_call(void) {
 
     do {
         v2 = v1;
-        v3 = 0;
-        v5 = 0;
         v6 = LOBYTE(0);
         v7 = 0;
     } while (v5);
-    v2 = 0;
-    v6 = 0;
-    v7 = 0;
-    v8 = 0;
-    v9 = 0LL;
-    v10 = 0LL;
-    v11 = 0LL;
 }

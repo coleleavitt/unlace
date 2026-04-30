@@ -38,23 +38,6 @@ void _start(void) {
     signed char v6; // temp
     unsigned long long v10; // temp
 
-    v1 = 0;
-    v2 = 0;
-    v3 = 0LL;
-    v4 = 0LL;
-    v5 = 0LL;
-    v3 = 0LL;
-    v6 = 0;
-    v4 = 0LL;
-    v5 = 0LL;
-    v4 = 0LL;
-    v5 = 0LL;
-    v4 = 0LL;
-    v1 = 0;
-    v7 = 0;
-    v1 = 0;
-    v8 = 0;
-    v5 = 0LL;
     *(_QWORD *)(0LL) = 0x1085LL;
     v3 = v9 + 0x3fd8LL;
     v10 = *(_QWORD *)(0LL);
@@ -100,8 +83,6 @@ __int32 area(__int64 a1) {
     result = v1 + 0xcLL;
     v3 = *(_DWORD *)(0LL);
     result = 0LL;
-    v5 = 0LL;
-    v6 = 0LL;
     return result;
 }
 typedef unsigned char _BYTE;
@@ -141,13 +122,6 @@ Point offset(Point p, int dx, int dy) {
     signed char v2; // temp
     signed char v3; // temp
 
-    v1 = 0LL;
-    v2 = 0;
-    v3 = 0;
-    v4 = 0LL;
-    v5 = 0LL;
-    v1 = 0LL;
-    v6 = 0LL;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
@@ -185,15 +159,6 @@ int main(void) {
     long long result; // temp
     signed char v4; // temp
 
-    result = 0LL;
-    v2 = 0;
-    v3 = 0;
-    v4 = 0;
-    v5 = 0LL;
-    result = 0LL;
-    v5 = 0LL;
     *(_QWORD *)(0LL) = 0x1191LL;
-    result = 0LL;
-    result = 0LL;
     return result;
 }

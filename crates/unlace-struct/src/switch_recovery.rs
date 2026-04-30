@@ -78,6 +78,7 @@ mod tests {
             ],
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
         }
     }
 
@@ -101,6 +102,7 @@ mod tests {
             body: vec![HirNode::Statement(branchind)],
             addr: 0x2000,
             foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
         };
 
         recover_switches(&mut func);

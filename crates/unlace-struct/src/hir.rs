@@ -5,10 +5,10 @@
 //! these nodes in a recursive descent, falling back to [`Goto`]/[`Label`] pairs
 //! for irreducible regions.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
+use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaVarnode};
 use unlace_ir::{IrInsn, Varnode};
 
 /// Opaque label identifier for goto/label fallback.
@@ -128,6 +128,11 @@ pub enum HirNode {
     /// Recovered from gotos that target the loop header (while/for) or
     /// latch (do-while), skipping the rest of the loop body.
     Continue,
+
+    TryCatch {
+        try_body: Vec<HirNode>,
+        catch_body: Vec<HirNode>,
+    },
 }
 
 /// A structured function in the HIR.
@@ -140,4 +145,6 @@ pub struct HirFunction {
     /// Machine address of the function entry point.
     pub addr: u64,
     pub foldable_exprs: BTreeSet<SsaVarnode>,
+    /// Panic call sites keyed by instruction machine address.
+    pub panic_sites: BTreeMap<u64, PanicKind>,
 }

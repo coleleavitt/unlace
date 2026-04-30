@@ -134,6 +134,7 @@ mod tests {
             body,
             addr: 0x1000,
             foldable_exprs: BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
         }
     }
 

@@ -1,0 +1,39 @@
+P3-18 Rust Enum Discriminant Detection — Evidence
+==================================================
+
+Date: 2026-04-29
+
+Implementation
+--------------
+- Created crates/unlace-passes/src/rust_enum.rs (RustEnumPass)
+- Added `pub mod rust_enum; pub use rust_enum::RustEnumPass;` to lib.rs
+- Uses existing EnumDiscriminant struct and enum_discriminants field from ssa.rs
+
+Detection Logic
+---------------
+1. find_discriminant_loads: scans all LOAD instructions for offset-0 loads with output size 1/2/4/8
+2. is_offset_zero: checks if address is bare register/unique/stack OR defined by INT_ADD(base,0) / PTRADD(base,0,...) / COPY
+3. find_comparisons: scans all INT_EQUAL instructions, maps SSA varnode → constant comparisons
+4. Main pass: for each load, collects all comparisons against its SSA varnode; requires 2+ distinct constants
+5. Builds EnumDiscriminant with Variant_{value} naming, stores in function.enum_discriminants
+
+Tests (7 passing)
+-----------------
+- test_simple_enum_2_variants: LOAD(ptr, 4) then v==0 and v==1 → 2 variants detected
+- test_enum_3_variants: 3 comparisons → 3 variants
+- test_no_enum_single_compare: only 1 comparison → NOT flagged
+- test_no_enum_different_loads: two different LOADs compared → NOT flagged
+- test_enum_variant_names: variants named Variant_0, Variant_1, Variant_5
+- test_enum_load_size_1_byte: 1-byte discriminant works
+- test_enum_no_load_non_zero_offset: INT_ADD(ptr, 8) then LOAD → NOT flagged (non-zero offset)
+
+Verification
+------------
+$ cargo test -p unlace-passes -- rust_enum
+running 7 tests — all passed
+
+$ cargo xtask lint-determinism
+lint-determinism: OK — no HashMap/HashSet in enforced crates
+
+$ cargo test --workspace
+830 tests passed, 0 failed, 1 ignored

@@ -1222,7 +1222,11 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     indent(depth, out);
                 }
                 let target = resolve_call_target(insn, idx, ctx);
-                let _ = writeln!(out, "{}();", target);
+                if insn.op == IrOp::Callind {
+                    let _ = writeln!(out, "(*{})();", target);
+                } else {
+                    let _ = writeln!(out, "{}();", target);
+                }
             }
             IrOp::Unimplemented => {
                 let _ = writeln!(out, "__unknown_insn_0x{:X}();", insn.addr);
@@ -1575,7 +1579,11 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
         // -- Call with output --
         IrOp::Call | IrOp::Callind => {
             let target = resolve_call_target(insn, stmt_idx, ctx);
-            format!("{}()", target)
+            if insn.op == IrOp::Callind {
+                format!("(*{})()", target)
+            } else {
+                format!("{}()", target)
+            }
         }
 
         // -- Unknown / unimplemented instruction --
@@ -4508,6 +4516,75 @@ mod tests {
         assert!(
             !output.contains("["),
             "should NOT emit array subscript: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-17: CALLIND distinction tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_callind_star_syntax() {
+        // CALLIND(fptr) → (*fptr)()
+        let fptr = reg(0, 8);
+
+        let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr], 0x1000);
+        let body = vec![
+            HirNode::Statement(callind),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("callind_test", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("(*v1)();"),
+            "CALLIND should emit (*fptr)(): {output}",
+        );
+    }
+
+    #[test]
+    fn test_call_direct_no_star() {
+        // CALL(addr) → func() — no star
+        let target = con(0x401000, 8);
+
+        let call = IrInsn::without_output(IrOp::Call, smallvec![target], 0x1000);
+        let body = vec![
+            HirNode::Statement(call),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("call_direct", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("sub_401000();"),
+            "direct CALL should emit func(): {output}",
+        );
+        assert!(
+            !output.contains("(*"),
+            "direct CALL should NOT have star: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callind_with_output_star_syntax() {
+        // CALLIND with output → v1 = (*fptr)()
+        let fptr = reg(0, 8);
+        let ret = reg(8, 8);
+
+        let callind = IrInsn::with_output(IrOp::Callind, ret, smallvec![fptr], 0x1000);
+        let body = vec![
+            HirNode::Statement(callind),
+            HirNode::Return(Some(SsaVarnode { base: ret, version: 0 })),
+        ];
+
+        let func = make_func("callind_output", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("(*v1)()"),
+            "CALLIND with output should emit (*fptr)(): {output}",
         );
     }
 

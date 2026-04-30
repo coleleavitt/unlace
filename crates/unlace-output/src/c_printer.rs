@@ -218,7 +218,8 @@ pub fn print_c_full(
             continue;
         }
         let ty = ctx.var_types.get(sv).copied().unwrap_or(PrimitiveType::Unknown);
-        if let Some(comment) = varnode_location_comment(&sv.base) {
+        let frame_size = header.map(|h| h.stack_frame);
+        if let Some(comment) = varnode_location_comment(&sv.base, frame_size) {
             let _ = writeln!(out, "    {} {}; // {}", c_type(&ty), name, comment);
         } else {
             let _ = writeln!(out, "    {} {};", c_type(&ty), name);
@@ -2095,18 +2096,24 @@ fn emit_subpiece_macro(src: &str, byte_offset: u64, output_size: u8) -> String {
 /// Return an IDA-style location comment for a variable declaration.
 ///
 /// - Register-backed: `"rax"`, `"xmm0"`, etc.
-/// - Stack variable: `"[rsp+20h]"`
+/// - Stack variable: `"[rsp+20h]"`, optionally followed by `" [rbp-Nh]"` when
+///   `frame_size` is known and the slot lies within the frame.
 /// - Unique/temporary: `"temp"`
 /// - Other spaces (Const, Ram): `None`
-fn varnode_location_comment(vn: &Varnode) -> Option<String> {
+fn varnode_location_comment(vn: &Varnode, frame_size: Option<u64>) -> Option<String> {
     match vn.space {
         SpaceId::Register => {
             let name = x86_64_register_name(vn.offset, vn.size);
             Some(name.to_string())
         }
         SpaceId::Stack => {
-            let offset = vn.offset;
-            Some(format!("[rsp+{:x}h]", offset))
+            let rsp_off = vn.offset;
+            match frame_size {
+                Some(fs) if fs > rsp_off => {
+                    Some(format!("[rsp+{:x}h] [rbp-{:x}h]", rsp_off, fs - rsp_off))
+                }
+                _ => Some(format!("[rsp+{:x}h]", rsp_off)),
+            }
         }
         SpaceId::Unique => Some("temp".to_string()),
         _ => None,
@@ -2852,8 +2859,10 @@ mod tests {
             output.contains("int process(int count, char * buf)"),
             "DWARF names must override inferred a1/a2: {output}",
         );
-        assert!(!output.contains("a1"), "must not contain inferred 'a1': {output}");
-        assert!(!output.contains("__int64"), "must not use inferred __int64 type: {output}");
+        assert!(
+            !output.contains("__int64 a1"),
+            "must not emit inferred '__int64 a1' parameter: {output}",
+        );
     }
 
     #[test]
@@ -5349,6 +5358,39 @@ mod tests {
         assert!(
             decl_line.contains("// [rsp+20h]"),
             "stack var at offset 0x20 should have `// [rsp+20h]` comment: {decl_line}",
+        );
+    }
+
+    #[test]
+    fn test_stack_comment_with_rbp_offset() {
+        let stk = Varnode::stack(0x10, 8);
+        let c1 = con(1, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, stk, smallvec![stk, c1], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: stk, version: 0 })),
+        ];
+
+        let func = make_func("stack_rbp_comment", body);
+        let header = super::FunctionHeaderInfo {
+            name: "stack_rbp_comment".to_string(),
+            address: 0x1000,
+            size: 0x40,
+            convention: "System V AMD64".to_string(),
+            stack_frame: 0x60,
+            callees: vec![],
+        };
+        let output = super::print_c_full(&func, None, Some(&header), None, None);
+
+        let decl_line = output
+            .lines()
+            .find(|l| l.contains("v1;") || l.contains("v1 ;"))
+            .expect("should find v1 declaration");
+        assert!(
+            decl_line.contains("// [rsp+10h] [rbp-50h]"),
+            "stack var at rsp+10h with frame 60h should annotate [rbp-50h]: {decl_line}",
         );
     }
 

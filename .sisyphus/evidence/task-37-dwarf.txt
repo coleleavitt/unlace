@@ -1,0 +1,42 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running unittests src/lib.rs (target/debug/deps/unlace_loader-19b75faf6cc55711)
+
+running 29 tests
+test dwarf::tests::debug_sections_present ... ok
+test elf::tests::test_reject_non_elf ... ok
+test elf::tests::test_load_hello_world ... ok
+test pdb::tests::import_real_pdb ... ignored, requires a real PDB fixture file
+test pdb::tests::insert_data_symbol_no_overwrite ... ok
+test elf::tests::test_symbol_at_lookup ... ok
+test pdb::tests::insert_symbol_prefers_sized ... ok
+test dwarf::tests::extracts_all_functions ... ok
+test dwarf::tests::parameter_names_and_types ... ok
+test elf::tests::test_stripped_binary_has_few_symbols ... ok
+test dwarf::tests::source_location_for_function ... ok
+test elf::tests::test_text_section_is_executable ... ok
+test pdb::tests::merge_pdb_symbols_upgrades_existing ... ok
+test dwarf::tests::function_addresses_valid ... ok
+test pdb::tests::merge_pdb_symbols_adds_image_base ... ok
+test pdb::tests::source_location_equality ... ok
+test pe::tests::test_can_load_minimal_pe ... ok
+test pe::tests::test_pe_entry_is_absolute_va ... ok
+test pe::tests::test_load_pe32 ... ok
+test dwarf::tests::three_param_function ... ok
+test dwarf::tests::return_type ... ok
+test dwarf::tests::no_dwarf_returns_empty ... ok
+test pe::tests::test_pe_sections_have_data ... ok
+test pe::tests::test_pe_text_section_flags ... ok
+test pe::tests::test_reject_non_pe ... ok
+test dwarf::tests::source_map_populated ... ok
+test pe::tests::test_load_minimal_pe64 ... ok
+test pdb::tests::rva_to_u64_roundtrip ... ok
+test pdb::tests::insert_symbol_prefers_named ... ok
+
+test result: ok. 28 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests unlace_loader
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

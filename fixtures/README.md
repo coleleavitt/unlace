@@ -13,6 +13,7 @@ ELF binaries for golden testing of the unlace decompiler pipeline.
 | `medium.elf` | ~50 functions (inlined at -O2) | `src/medium.c` | Inlined code recovery, complex CFG, recursion, mixed operations |
 | `stripped.elf` | Same as medium, symbols removed | `src/medium.c` | Function boundary detection without symbol hints |
 | `empty.elf` | `main` returning 0 | `src/empty.c` | Minimal ELF parsing, trivial function decompilation |
+| `debug_calls.elf` | `calls.c` compiled with `-g -O0` | `src/calls.c` | DWARF debug info import, function/param/type extraction |
 
 ## Build
 
@@ -25,6 +26,8 @@ gcc -O2 -o fixtures/X.elf fixtures/src/X.c
 `stripped.elf` is a copy of `medium.elf` processed with `strip -s`.
 
 No debug info (`-g` not used). Dynamically linked, x86-64 Linux ELF.
+
+Exception: `debug_calls.elf` is compiled with `gcc -g -O0` for DWARF testing.
 
 ## Reproduction
 

@@ -126,6 +126,45 @@ self-contained, so `unsafe impl Send/Sync` is safe for the lifter struct.
 - Adding a field to `SsaFunction` requires updating all struct-literal construction
   sites across the workspace (dce.rs tests, ir_dump.rs tests, etc.).
 
+## Task 37: DWARF Debug Info Import via gimli
+
+### gimli 0.33 API Notes
+- `DebuggingInformationEntry::attr_value(DwAt) -> Option<AttributeValue<R>>` returns
+  `Option` directly, not `Result`. The `?` operator is not needed on the return value
+  itself, only on methods called on the `AttributeValue`.
+- `Dwarf::attr_string(unit, attr_value)` is the correct way to resolve any string
+  attribute — it handles all DWARF string forms (inline, strp, strx, line_strp).
+  Returns `R` (the Reader type), not `String`.
+- `EndianSlice::to_string_lossy()` returns `Cow<str>` directly (the inherent method).
+  The `Reader` trait version returns `Result<Cow<str>>`. Since we use `EndianSlice`
+  concretely, the inherent method takes priority.
+- `Dwarf<R>` does NOT implement `Clone`. Cannot pass it to `addr2line::Context::from_dwarf()`
+  without owning it. For source map building, parse `.debug_line` directly instead.
+- `EntriesTreeNode` has 2 lifetime parameters `<'abbrev, 'tree, R>`, not 3.
+- gimli constants like `DW_TAG_subprogram` are lowercase consts, which triggers
+  `non_upper_case_globals` warnings in match arms. Use if-else chains instead.
+
+### DW_AT_high_pc Encoding
+- `DW_AT_high_pc` can be either `AttributeValue::Addr(u64)` (absolute address) or
+  `AttributeValue::Udata(u64)` (size offset from low_pc). Always handle both forms.
+- GCC with `-g -O0` produces DWARF v5 with `DW_AT_high_pc` as `Udata` (relative size).
+
+### Source Map via Line Program
+- Walking `IncompleteLineProgram::rows()` and filtering by `row.is_stmt()` gives
+  the statement-level addr→file:line:column mapping without needing `addr2line`.
+- `row.file_index()` is 1-based in DWARF v5 (0 means no file). `row.line()` returns
+  `Option<NonZeroU64>`.
+- `resolve_file_name` must join `FileEntry::directory(header)` with `FileEntry::path_name()`
+  to produce the full path.
+
+### Implementation Structure
+- `import_dwarf(&BinaryImage) -> Result<DwarfInfo, LoadError>` is the public entry point.
+- `DwarfInfo` contains `functions: BTreeMap<u64, FunctionDebugInfo>` (keyed by low_pc)
+  and `source_map: BTreeMap<u64, SourceLocation>` (addr→file:line:column).
+- Type resolution follows `DW_AT_type` → `UnitRef` → type DIE, handling pointer/const/
+  volatile/restrict/typedef chains recursively.
+- `DwarfSections::load` + `borrow()` is the recommended loading pattern for borrowed data.
+
 ## Task 38: PDB Debug Info Import
 
 ### `pdb` Crate (v0.8.0) API

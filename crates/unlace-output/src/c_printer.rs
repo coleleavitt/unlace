@@ -2826,7 +2826,12 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         // ── Trap (0x300) ───────────────────────────────────────
         0x300 => Some("__builtin_trap"), // UD2 / INT3
 
-        // ── Idiom-recognized intrinsics (0x325..0x326) ─────────
+        // ── Idiom-recognized intrinsics (0x320..0x326) ─────────
+        0x320 => Some("__ROL__"),
+        0x321 => Some("__ROR__"),
+        0x322 => Some("__abs__"),
+        0x323 => Some("__min__"),
+        0x324 => Some("__max__"),
         0x325 => Some("__memcpy__"),
         0x326 => Some("__memset__"),
 

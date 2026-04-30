@@ -257,6 +257,12 @@ pub struct SsaFunction {
     /// [`StackVarRecoveryPass`](https://docs.rs/unlace-passes) to override
     /// the synthesised `local_X` names.
     pub dwarf_local_names: BTreeMap<i64, String>,
+    /// Composite (struct/array/typed-pointer) types inferred from stack-slot
+    /// layout or DWARF. Keyed by the starting RSP-relative offset of the
+    /// composite. Populated by
+    /// [`StackVarRecoveryPass`](https://docs.rs/unlace-passes) when adjacent
+    /// stack slots share a primitive type.
+    pub inferred_structs: BTreeMap<i64, crate::types::Type>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -311,6 +317,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         inferred_return_type: PrimitiveType::Unknown,
         frame_setup_insns: BTreeSet::new(),
         dwarf_local_names: BTreeMap::new(),
+        inferred_structs: BTreeMap::new(),
     }
 }
 

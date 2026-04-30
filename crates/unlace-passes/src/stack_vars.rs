@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, StackVar, VarnodeSlot};
+use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
@@ -156,8 +157,86 @@ impl Pass for StackVarRecoveryPass {
             );
         }
 
+        infer_struct_layouts(func);
+
         let changed = func.stack_vars.len() != old_len || func.stack_vars != snapshot;
         Ok(changed)
+    }
+}
+
+/// Group adjacent stack slots with compatible primitive types into structs.
+///
+/// Walks `stack_vars` in offset order; whenever the next slot's offset
+/// equals `current_offset + current_size` and both slots have a known
+/// primitive size we extend the in-progress field group. A group of
+/// 2 or more contiguous fields becomes a `Type::Struct` keyed by the
+/// starting offset; lone slots are not promoted.
+fn infer_struct_layouts(func: &mut SsaFunction) {
+    let entries: Vec<(i64, &StackVar)> = func.stack_vars.iter().map(|(o, sv)| (*o, sv)).collect();
+    if entries.is_empty() {
+        return;
+    }
+
+    let mut groups: Vec<Vec<(i64, PrimitiveType, u8)>> = Vec::new();
+    let mut current: Vec<(i64, PrimitiveType, u8)> = Vec::new();
+
+    for (offset, sv) in entries {
+        let size = match field_size(sv.ty) {
+            Some(s) => s,
+            None => {
+                if current.len() >= 2 {
+                    groups.push(std::mem::take(&mut current));
+                } else {
+                    current.clear();
+                }
+                continue;
+            }
+        };
+
+        let is_adjacent = current
+            .last()
+            .map(|(prev_off, _, prev_size)| prev_off + i64::from(*prev_size) == offset)
+            .unwrap_or(false);
+
+        if !is_adjacent {
+            if current.len() >= 2 {
+                groups.push(std::mem::take(&mut current));
+            } else {
+                current.clear();
+            }
+        }
+
+        current.push((offset, sv.ty, size));
+    }
+    if current.len() >= 2 {
+        groups.push(current);
+    }
+
+    for group in groups {
+        let start = group[0].0;
+        let abs = start.unsigned_abs();
+        let name = format!("anon_struct_{abs:x}");
+        let fields: Vec<StructFieldType> = group
+            .iter()
+            .enumerate()
+            .map(|(i, (off, ty, _))| StructFieldType {
+                name: format!("field_{i}"),
+                ty: Type::Primitive(*ty),
+                offset: (off - start) as u64,
+            })
+            .collect();
+        func.inferred_structs.insert(start, Type::Struct { name, fields });
+    }
+}
+
+fn field_size(ty: PrimitiveType) -> Option<u8> {
+    match ty {
+        PrimitiveType::Bool => Some(1),
+        PrimitiveType::Int(w) | PrimitiveType::UnsignedInt(w) => Some(w),
+        PrimitiveType::Float => Some(4),
+        PrimitiveType::Double => Some(8),
+        PrimitiveType::Ptr => Some(8),
+        PrimitiveType::Unknown => None,
     }
 }
 
@@ -559,6 +638,73 @@ mod tests {
 
         let sv = &ssa.stack_vars[&-8];
         assert_eq!(sv.name, "user_count");
+    }
+
+    #[test]
+    fn test_struct_inference_two_adjacent_int_fields() {
+        let mut ssa = make_single_block_ssa(vec![]);
+        ssa.stack_vars.insert(
+            -8,
+            StackVar {
+                offset: -8,
+                name: "local_8".into(),
+                ty: PrimitiveType::Int(4),
+                accesses: Vec::new(),
+            },
+        );
+        ssa.stack_vars.insert(
+            -4,
+            StackVar {
+                offset: -4,
+                name: "local_4".into(),
+                ty: PrimitiveType::Int(4),
+                accesses: Vec::new(),
+            },
+        );
+
+        infer_struct_layouts(&mut ssa);
+
+        assert_eq!(ssa.inferred_structs.len(), 1);
+        let (start, ty) = ssa.inferred_structs.iter().next().unwrap();
+        assert_eq!(*start, -8);
+        match ty {
+            Type::Struct { fields, .. } => {
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].offset, 0);
+                assert_eq!(fields[0].ty, Type::Primitive(PrimitiveType::Int(4)));
+                assert_eq!(fields[1].offset, 4);
+                assert_eq!(fields[1].ty, Type::Primitive(PrimitiveType::Int(4)));
+            }
+            other => panic!("expected Type::Struct, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_struct_inference_skips_non_adjacent() {
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        let val1 = Varnode::reg(0, 4);
+        let val2 = Varnode::reg(4, 4);
+        let c8 = Varnode::constant(8, 8);
+        let c40 = Varnode::constant(40, 8);
+        let space_ram = Varnode::constant(1, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), c8], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![space_ram, u0, val1], 0x1004),
+            IrInsn::with_output(IrOp::IntSub, u1, smallvec![rsp(), c40], 0x1008),
+            IrInsn::without_output(IrOp::Store, smallvec![space_ram, u1, val2], 0x100c),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let pass = StackVarRecoveryPass;
+        pass.run(&mut ssa).expect("pass should succeed");
+
+        assert!(
+            ssa.inferred_structs.is_empty(),
+            "non-adjacent slots should not produce a struct, got: {:?}",
+            ssa.inferred_structs
+        );
     }
 
     #[test]

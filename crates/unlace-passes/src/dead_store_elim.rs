@@ -16,8 +16,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::IrOp;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::{SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
+
+/// Architecture-specific register offsets used to recognise stack-relative
+/// addresses.  Mirrors the constants in [`stack_vars`](crate::stack_vars)
+/// — only RSP/RBP for x86_64 are recognised in this MVP.
+const RSP_OFFSET: u64 = 32;
+const RBP_OFFSET: u64 = 40;
 
 /// Dead store elimination: remove writes that are overwritten before being read.
 pub struct DeadStoreElimPass;
@@ -304,6 +311,7 @@ mod tests {
             inferred_return_type: PrimitiveType::Unknown,
             frame_setup_insns: std::collections::BTreeSet::new(),
             dwarf_local_names: BTreeMap::new(),
+            inferred_structs: BTreeMap::new(),
         }
     }
 

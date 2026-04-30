@@ -259,6 +259,7 @@ mod tests {
             phi_map: BTreeMap::new(),
             var_map: BTreeMap::new(),
             var_types: BTreeMap::new(),
+            calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
         }
     }
 

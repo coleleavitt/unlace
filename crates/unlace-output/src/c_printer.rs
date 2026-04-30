@@ -19,17 +19,31 @@ use unlace_struct::{HirFunction, HirNode, SwitchCase};
 ///
 /// Variables are named `v1, v2, ...` (monotonic, deterministic).
 /// Indentation is 4 spaces per nesting level.
+///
+/// If the function name is a mangled C++/Rust/Swift/MSVC symbol, the
+/// emitted name is the demangled short form (sanitized for C) and a
+/// comment with the full demangled signature is prepended.
 pub fn print_c(func: &HirFunction) -> String {
     let mut ctx = PrintCtx::new();
 
     collect_varnodes(&func.body, &mut ctx);
 
     let mut out = String::with_capacity(1024);
+
+    let demangled = crate::demangle::demangle(&func.name);
+    let emit_name = match &demangled {
+        Some(dr) => {
+            let _ = writeln!(out, "// {}", dr.full_signature);
+            crate::demangle::sanitize_for_c(&dr.short_name)
+        }
+        None => func.name.clone(),
+    };
+
     let _ = write!(
         out,
         "{} {}(",
         c_type(&func.return_type),
-        func.name,
+        emit_name,
     );
     for (i, (pname, pty)) in func.params.iter().enumerate() {
         if i > 0 {

@@ -84,3 +84,17 @@ unlace-output = { path = "crates/unlace-output" }
 unlace-plugin = { path = "crates/unlace-plugin" }
 unlace-cli = { path = "crates/unlace-cli" }
 unlace-test-harness = { path = "crates/unlace-test-harness" }
+
+[profile.dev]
+incremental = true
+
+[profile.dev.package."*"]
+opt-level = 1
+
+[profile.test]
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+overflow-checks = false

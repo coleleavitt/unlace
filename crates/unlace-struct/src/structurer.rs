@@ -1015,7 +1015,8 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
         | HirNode::Goto(_)
         | HirNode::Label(_)
         | HirNode::Ternary { .. }
-        | HirNode::TailCall { .. } => {}
+        | HirNode::TailCall { .. }
+        | HirNode::Continue => {}
     }
 }
 
@@ -1169,7 +1170,7 @@ fn node_references_varnode(node: &HirNode, target: &Varnode) -> bool {
                 || insn_references_varnode(else_insn, target)
         }
         HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_)
-        | HirNode::TailCall { .. } => false,
+        | HirNode::TailCall { .. } | HirNode::Continue => false,
     }
 }
 

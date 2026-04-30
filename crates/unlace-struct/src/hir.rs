@@ -122,6 +122,12 @@ pub enum HirNode {
     TailCall {
         target: u64,
     },
+
+    /// A `continue` statement inside a loop body.
+    ///
+    /// Recovered from gotos that target the loop header (while/for) or
+    /// latch (do-while), skipping the rest of the loop body.
+    Continue,
 }
 
 /// A structured function in the HIR.

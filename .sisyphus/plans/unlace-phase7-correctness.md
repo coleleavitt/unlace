@@ -217,7 +217,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: NO (measurement only)
 
-- [ ] P7-4. Fix root cause of 0-ifs on debug fixtures
+- [x] P7-4. Fix root cause of 0-ifs on debug fixtures
 
   **What to do**:
   - Based on P7-0 investigation, apply targeted fix
@@ -241,7 +241,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `fix: root cause of 0-ifs on debug fixtures`
 
-- [ ] P7-5. Verify debug_calls.elf correctness
+- [x] P7-5. Verify debug_calls.elf correctness
 
   **What to do**:
   - Decompile debug_calls.elf and verify each function produces reasonable output
@@ -262,7 +262,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `chore: verify and update debug_calls.elf golden output`
 
-- [ ] P7-6. Verify debug_structs.elf correctness
+- [x] P7-6. Verify debug_structs.elf correctness
 
   **What to do**:
   - Decompile debug_structs.elf and verify struct access patterns
@@ -283,7 +283,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `chore: verify and update debug_structs.elf golden output`
 
-- [ ] P7-7. Update golden snapshots after fixes
+- [x] P7-7. Update golden snapshots after fixes
 
   **What to do**:
   - Re-capture golden snapshots with improved output from P7-4/5/6
@@ -303,7 +303,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `chore: update golden snapshots after control flow fixes`
 
-- [ ] P7-8. Measure Wave 1 improvement
+- [x] P7-8. Measure Wave 1 improvement
 
   **What to do**:
   - Re-run metrics from P7-3 and compare
@@ -588,7 +588,7 @@ Wave FINAL (Verification — 3 tasks):
     Evidence: .sisyphus/evidence/p7-f1-quality.txt
   ```
 
-- [ ] P7-F2. **Fixture Golden Test Verification** — `general`
+- [x] P7-F2. **Fixture Golden Test Verification** — `general`
 
   **QA Scenarios**:
   ```

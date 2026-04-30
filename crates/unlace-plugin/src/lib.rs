@@ -67,6 +67,8 @@ pub trait UnlacePlugin: Send + Sync {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
 
     struct DummyPlugin;

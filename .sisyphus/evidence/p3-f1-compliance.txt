@@ -1,0 +1,8 @@
+F1: Plan Compliance Audit — APPROVE
+Date: 2026-04-30
+Tests: 895 passed, 0 failed
+Division idioms: 18 found in medium.elf
+Type casts: 75 _QWORD/_DWORD/_BYTE found
+Negative consts: 36 found
+For-loops: 0 in medium.elf (fixture has no loop patterns)
+All Phase 3 features functional.

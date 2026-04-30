@@ -1,0 +1,5 @@
+F4: Regression Check — APPROVE
+Date: 2026-04-30
+Test failures: 0
+Invalid input handling: exit code 1 (correct)
+Phase 1+2 features intact. No regressions.

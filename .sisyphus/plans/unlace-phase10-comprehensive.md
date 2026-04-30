@@ -750,7 +750,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(passes): bitfield extraction/insertion idiom recognition`
 
-- [ ] P10-11. Pointer-chain type propagation (1-level Load)
+- [x] P10-11. Pointer-chain type propagation (1-level Load)
 
   **What to do**:
   - Extend `type_infer.rs`: when a Load output's TYPE is later used as a Load address, propagate Ptr-of-T type backwards through the chain.

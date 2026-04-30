@@ -24,6 +24,7 @@ impl Pass for TypeInferPass {
         let max_iterations = 100;
         let mut changed = true;
         let mut iteration = 0;
+        let mut chain_promoted = std::collections::BTreeSet::<SsaVarnode>::new();
         while changed {
             if iteration >= max_iterations {
                 tracing::warn!(
@@ -36,8 +37,16 @@ impl Pass for TypeInferPass {
             changed = false;
             for (&bid, block) in &func.function.blocks {
                 for (insn_idx, insn) in block.insns.iter().enumerate() {
-                    changed |=
-                        infer_insn(&func.var_map, &mut func.var_types, bid, insn_idx, insn);
+                    changed |= infer_insn(
+                        &func.var_map,
+                        &mut func.var_types,
+                        &func.composite_var_types,
+                        &func.function.blocks,
+                        &mut chain_promoted,
+                        bid,
+                        insn_idx,
+                        insn,
+                    );
                 }
             }
 
@@ -179,10 +188,7 @@ fn seed_from_composites(func: &mut SsaFunction) {
     }
 }
 
-fn current_type(
-    var_types: &BTreeMap<SsaVarnode, PrimitiveType>,
-    sv: &SsaVarnode,
-) -> PrimitiveType {
+fn current_type(var_types: &BTreeMap<SsaVarnode, PrimitiveType>, sv: &SsaVarnode) -> PrimitiveType {
     var_types.get(sv).copied().unwrap_or(PrimitiveType::Unknown)
 }
 
@@ -191,7 +197,10 @@ fn set_type(
     sv: SsaVarnode,
     ty: PrimitiveType,
 ) -> bool {
-    let old = var_types.get(&sv).copied().unwrap_or(PrimitiveType::Unknown);
+    let old = var_types
+        .get(&sv)
+        .copied()
+        .unwrap_or(PrimitiveType::Unknown);
     let joined = old.join(ty);
     if joined != old {
         var_types.insert(sv, joined);
@@ -204,21 +213,41 @@ fn set_type(
     }
 }
 
+fn force_set_type(
+    var_types: &mut BTreeMap<SsaVarnode, PrimitiveType>,
+    sv: SsaVarnode,
+    ty: PrimitiveType,
+) -> bool {
+    let old = var_types
+        .get(&sv)
+        .copied()
+        .unwrap_or(PrimitiveType::Unknown);
+    if old != ty {
+        var_types.insert(sv, ty);
+        true
+    } else {
+        false
+    }
+}
+
 type VarMap = BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>;
 type TypeMap = BTreeMap<SsaVarnode, PrimitiveType>;
+type CompositeMap = BTreeMap<SsaVarnode, Type>;
+type BlockMap = BTreeMap<BlockId, unlace_ir::BasicBlock>;
 
 fn infer_insn(
     var_map: &VarMap,
     var_types: &mut TypeMap,
+    composite_var_types: &CompositeMap,
+    blocks: &BlockMap,
+    chain_promoted: &mut std::collections::BTreeSet<SsaVarnode>,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
 ) -> bool {
     let mut changed = false;
 
-    let output_sv = var_map
-        .get(&(bid, insn_idx, VarnodeSlot::Output))
-        .copied();
+    let output_sv = var_map.get(&(bid, insn_idx, VarnodeSlot::Output)).copied();
 
     let input_sv = |idx: usize| -> Option<SsaVarnode> {
         var_map
@@ -228,6 +257,7 @@ fn infer_insn(
 
     match insn.op {
         // Integer arithmetic: inputs + output -> Int(size)
+        // For IntAdd/IntSub, preserve existing Ptr on inputs (pointer arithmetic).
         IrOp::IntAdd
         | IrOp::IntSub
         | IrOp::IntMult
@@ -239,14 +269,20 @@ fn infer_insn(
         | IrOp::IntLeft
         | IrOp::IntRight
         | IrOp::IntSright => {
+            let preserve_ptr = matches!(insn.op, IrOp::IntAdd | IrOp::IntSub);
             if let Some(out) = output_sv {
-                changed |= set_type(var_types, out, PrimitiveType::Int(out.base.size));
+                if !(preserve_ptr && current_type(var_types, &out) == PrimitiveType::Ptr) {
+                    changed |= set_type(var_types, out, PrimitiveType::Int(out.base.size));
+                }
             }
             for (idx, inp) in insn.inputs.iter().enumerate() {
                 if inp.space == SpaceId::Const {
                     continue;
                 }
                 if let Some(sv) = input_sv(idx) {
+                    if preserve_ptr && current_type(var_types, &sv) == PrimitiveType::Ptr {
+                        continue;
+                    }
                     changed |= set_type(var_types, sv, PrimitiveType::Int(sv.base.size));
                 }
             }
@@ -255,16 +291,14 @@ fn infer_insn(
         // Unsigned-flavored integer ops
         IrOp::IntDiv | IrOp::IntRem | IrOp::IntZext => {
             if let Some(out) = output_sv {
-                changed |=
-                    set_type(var_types, out, PrimitiveType::UnsignedInt(out.base.size));
+                changed |= set_type(var_types, out, PrimitiveType::UnsignedInt(out.base.size));
             }
             for (idx, inp) in insn.inputs.iter().enumerate() {
                 if inp.space == SpaceId::Const {
                     continue;
                 }
                 if let Some(sv) = input_sv(idx) {
-                    changed |=
-                        set_type(var_types, sv, PrimitiveType::UnsignedInt(sv.base.size));
+                    changed |= set_type(var_types, sv, PrimitiveType::UnsignedInt(sv.base.size));
                 }
             }
         }
@@ -432,20 +466,51 @@ fn infer_insn(
             }
         }
 
-        // LOAD: input1 (address) -> Ptr, output -> Int(size)
+        // LOAD: input1 (address) → Ptr; output → Int(size) normally.
+        // 1-level pointer chain: if address is already Ptr and output is
+        // pointer-sized, propagate Ptr to the output (refined by struct
+        // field type when available). Capped at 1 level via chain_promoted.
         IrOp::Load => {
             if let Some(sv) = input_sv(1) {
-                changed |= set_type(var_types, sv, PrimitiveType::Ptr);
+                changed |= force_set_type(var_types, sv, PrimitiveType::Ptr);
             }
             if let Some(out) = output_sv {
-                changed |= set_type(var_types, out, PrimitiveType::Int(out.base.size));
+                let addr_sv = input_sv(1);
+                let addr_is_ptr = addr_sv
+                    .map(|sv| current_type(var_types, &sv) == PrimitiveType::Ptr)
+                    .unwrap_or(false);
+                let addr_is_chain = addr_sv
+                    .map(|sv| chain_promoted.contains(&sv))
+                    .unwrap_or(false);
+
+                if addr_is_ptr && !addr_is_chain && out.base.size == 8 {
+                    let field_ty = addr_sv.and_then(|sv| {
+                        lookup_struct_field_type(
+                            var_map,
+                            composite_var_types,
+                            blocks,
+                            sv,
+                        )
+                    });
+
+                    let promoted_ty = match field_ty {
+                        Some(ft) if ft != PrimitiveType::Unknown => ft,
+                        _ => PrimitiveType::Ptr,
+                    };
+                    if set_type(var_types, out, promoted_ty) {
+                        chain_promoted.insert(out);
+                        changed = true;
+                    }
+                } else {
+                    changed |= set_type(var_types, out, PrimitiveType::Int(out.base.size));
+                }
             }
         }
 
         // STORE: input1 (address) -> Ptr
         IrOp::Store => {
             if let Some(sv) = input_sv(1) {
-                changed |= set_type(var_types, sv, PrimitiveType::Ptr);
+                changed |= force_set_type(var_types, sv, PrimitiveType::Ptr);
             }
         }
 
@@ -510,6 +575,63 @@ fn infer_insn(
     }
 
     changed
+}
+
+/// If `addr_sv` is defined by `INT_ADD(base, const_offset)` and `base` has a
+/// `Type::Struct` in `composite_var_types`, return the field's primitive type.
+fn lookup_struct_field_type(
+    var_map: &VarMap,
+    composite_var_types: &CompositeMap,
+    blocks: &BlockMap,
+    addr_sv: SsaVarnode,
+) -> Option<PrimitiveType> {
+    let (def_bid, def_idx) = var_map
+        .iter()
+        .find(|(key, sv)| key.2 == VarnodeSlot::Output && **sv == addr_sv)
+        .map(|(key, _)| (key.0, key.1))?;
+
+    let def_insn = blocks.get(&def_bid)?.insns.get(def_idx)?;
+    if def_insn.op != IrOp::IntAdd {
+        return None;
+    }
+
+    let (base_sv, offset) = find_add_base_and_const(var_map, def_bid, def_idx)?;
+
+    let struct_ty = composite_var_types.get(&base_sv)?;
+    match struct_ty {
+        Type::Struct { fields, .. } => {
+            let field = fields.iter().find(|f| f.offset == offset)?;
+            Some(field_to_primitive(&field.ty))
+        }
+        _ => None,
+    }
+}
+
+fn find_add_base_and_const(
+    var_map: &VarMap,
+    bid: BlockId,
+    insn_idx: usize,
+) -> Option<(SsaVarnode, u64)> {
+    let in0 = var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0))).copied();
+    let in1 = var_map.get(&(bid, insn_idx, VarnodeSlot::Input(1))).copied();
+
+    match (in0, in1) {
+        (Some(sv0), Some(sv1)) if sv1.base.space == SpaceId::Const => {
+            Some((sv0, sv1.base.offset))
+        }
+        (Some(sv0), Some(sv1)) if sv0.base.space == SpaceId::Const => {
+            Some((sv1, sv0.base.offset))
+        }
+        _ => None,
+    }
+}
+
+fn field_to_primitive(ty: &Type) -> PrimitiveType {
+    match ty {
+        Type::Primitive(p) => *p,
+        Type::Ptr(_) | Type::FuncPtr { .. } => PrimitiveType::Ptr,
+        Type::Struct { .. } | Type::Array { .. } => PrimitiveType::Ptr,
+    }
 }
 
 fn float_type_for_size(size: u8) -> PrimitiveType {
@@ -815,10 +937,7 @@ mod tests {
 
         assert!(
             ssa.var_types.is_empty()
-                || ssa
-                    .var_types
-                    .values()
-                    .all(|t| *t != PrimitiveType::Unknown)
+                || ssa.var_types.values().all(|t| *t != PrimitiveType::Unknown)
         );
     }
 
@@ -852,8 +971,12 @@ mod tests {
 
         let mut func = Function::new("cast_trunc", BlockId(0), 0xb000);
         let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r16, c1], 0xb000));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            r0,
+            smallvec![r16, c1],
+            0xb000,
+        ));
         bb0.insns
             .push(IrInsn::with_output(IrOp::Cast, r8, smallvec![r0], 0xb008));
         bb0.insns
@@ -875,8 +998,12 @@ mod tests {
 
         let mut func = Function::new("cast_ext", BlockId(0), 0xc000);
         let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r16, c1], 0xc000));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            r0,
+            smallvec![r16, c1],
+            0xc000,
+        ));
         bb0.insns
             .push(IrInsn::with_output(IrOp::Cast, r8, smallvec![r0], 0xc008));
         bb0.insns
@@ -898,8 +1025,12 @@ mod tests {
 
         let mut func = Function::new("cast_unsigned", BlockId(0), 0xd000);
         let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns
-            .push(IrInsn::with_output(IrOp::IntDiv, r0, smallvec![r16, c2], 0xd000));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntDiv,
+            r0,
+            smallvec![r16, c2],
+            0xd000,
+        ));
         bb0.insns
             .push(IrInsn::with_output(IrOp::Cast, r8, smallvec![r0], 0xd008));
         bb0.insns
@@ -939,7 +1070,11 @@ mod tests {
             .expect("r0 output");
         let struct_ty = Type::Struct {
             name: "Point".into(),
-            fields: vec![StructFieldType { name: "x".into(), ty: Type::int(4), offset: 0 }],
+            fields: vec![StructFieldType {
+                name: "x".into(),
+                ty: Type::int(4),
+                offset: 0,
+            }],
         };
         ssa.composite_var_types.insert(r0_sv, struct_ty.clone());
 
@@ -956,12 +1091,20 @@ mod tests {
 
         let s1 = Type::Struct {
             name: "Foo".into(),
-            fields: vec![StructFieldType { name: "x".into(), ty: Type::int(4), offset: 0 }],
+            fields: vec![StructFieldType {
+                name: "x".into(),
+                ty: Type::int(4),
+                offset: 0,
+            }],
         };
         let s1_clone = s1.clone();
         let s2 = Type::Struct {
             name: "Bar".into(),
-            fields: vec![StructFieldType { name: "x".into(), ty: Type::int(4), offset: 0 }],
+            fields: vec![StructFieldType {
+                name: "x".into(),
+                ty: Type::int(4),
+                offset: 0,
+            }],
         };
 
         assert_eq!(s1.clone().join(s1_clone), s1);
@@ -1110,6 +1253,201 @@ mod tests {
         assert_eq!(
             PrimitiveType::Int(4).join(PrimitiveType::UnsignedInt(4)),
             PrimitiveType::Int(4)
+        );
+    }
+
+    #[test]
+    fn test_pointer_chain_load_through_ptr_gets_ptr() {
+        use unlace_ir::types::{StructFieldType, Type};
+
+        // struct_ptr (r0) → Load → v1 (r8, 8B) → IntAdd(v1, 8) → addr → Load → v2
+        // struct_ptr is Ptr (address of first Load), v1 should get Ptr (chain).
+        let struct_ptr = Varnode::reg(0, 8);
+        let v1 = Varnode::reg(8, 8);
+        let c8 = Varnode::constant(8, 8);
+        let addr = Varnode::unique(0, 8);
+        let v2 = Varnode::reg(16, 4);
+        let space_ram = Varnode::constant(1, 8);
+
+        let mut func = Function::new("ptr_chain", BlockId(0), 0x10000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        // insn 0: v1 = Load(ram, struct_ptr)
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            v1,
+            smallvec![space_ram, struct_ptr],
+            0x10000,
+        ));
+        // insn 1: addr = IntAdd(v1, 8)
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![v1, c8],
+            0x10008,
+        ));
+        // insn 2: v2 = Load(ram, addr)
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            v2,
+            smallvec![space_ram, addr],
+            0x10010,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x10018));
+        func.insert_block(bb0);
+
+        let ssa = run_type_infer(func);
+
+        // struct_ptr is the address of the first Load → Ptr
+        let struct_ptr_ty = lookup_input_type(&ssa, BlockId(0), 0, 1);
+        assert_eq!(struct_ptr_ty, Some(PrimitiveType::Ptr));
+
+        // v1 is pointer-sized output of Load through Ptr → chain-promoted to Ptr
+        let v1_ty = lookup_output_type(&ssa, BlockId(0), 0);
+        assert_eq!(v1_ty, Some(PrimitiveType::Ptr));
+
+        // addr is used as Load address → force-set to Ptr
+        let addr_ty = lookup_output_type(&ssa, BlockId(0), 1);
+        assert_eq!(addr_ty, Some(PrimitiveType::Ptr));
+
+        // addr is the address of the second Load → also Ptr
+        let addr_input_ty = lookup_input_type(&ssa, BlockId(0), 2, 1);
+        assert_eq!(addr_input_ty, Some(PrimitiveType::Ptr));
+
+        // v2 is 4-byte output → Int(4) (not pointer-sized, no chain)
+        let v2_ty = lookup_output_type(&ssa, BlockId(0), 2);
+        assert_eq!(v2_ty, Some(PrimitiveType::Int(4)));
+    }
+
+    #[test]
+    fn test_pointer_chain_capped_at_one_level() {
+        // v1 = Load(ram, ptr) → v1 gets Ptr (chain level 1)
+        // v2 = Load(ram, v1)  → v2 should NOT get Ptr (chain level 2)
+        let ptr = Varnode::reg(0, 8);
+        let v1 = Varnode::reg(8, 8);
+        let v2 = Varnode::reg(16, 8);
+        let space_ram = Varnode::constant(1, 8);
+
+        let mut func = Function::new("ptr_chain_cap", BlockId(0), 0x11000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        // insn 0: v1 = Load(ram, ptr)
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            v1,
+            smallvec![space_ram, ptr],
+            0x11000,
+        ));
+        // insn 1: v2 = Load(ram, v1)
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            v2,
+            smallvec![space_ram, v1],
+            0x11008,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x11010));
+        func.insert_block(bb0);
+
+        let ssa = run_type_infer(func);
+
+        // ptr is address of first Load → Ptr
+        assert_eq!(
+            lookup_input_type(&ssa, BlockId(0), 0, 1),
+            Some(PrimitiveType::Ptr)
+        );
+
+        // v1 is chain-promoted to Ptr (level 1)
+        assert_eq!(
+            lookup_output_type(&ssa, BlockId(0), 0),
+            Some(PrimitiveType::Ptr)
+        );
+
+        // v2 should NOT be chain-promoted (v1 is chain_promoted, so cap blocks it)
+        assert_eq!(
+            lookup_output_type(&ssa, BlockId(0), 1),
+            Some(PrimitiveType::Int(8)),
+            "2-level chain should be capped; v2 stays Int(8)"
+        );
+    }
+
+    #[test]
+    fn test_pointer_chain_with_struct_field_refinement() {
+        use unlace_ir::types::{StructFieldType, Type};
+
+        // v1 has composite Type::Struct with Ptr field at offset 8
+        // v1 = Load(ram, struct_ptr) → Ptr (chain)
+        // addr = IntAdd(v1, 8)
+        // v2 = Load(ram, addr) → should get Ptr from struct field (Ptr field)
+        let struct_ptr = Varnode::reg(0, 8);
+        let v1 = Varnode::reg(8, 8);
+        let c8 = Varnode::constant(8, 8);
+        let addr = Varnode::unique(0, 8);
+        let v2 = Varnode::reg(16, 8);
+        let space_ram = Varnode::constant(1, 8);
+
+        let mut func = Function::new("ptr_chain_struct", BlockId(0), 0x12000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            v1,
+            smallvec![space_ram, struct_ptr],
+            0x12000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![v1, c8],
+            0x12008,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            v2,
+            smallvec![space_ram, addr],
+            0x12010,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x12018));
+        func.insert_block(bb0);
+
+        let mut ssa = build_ssa(func);
+
+        // Annotate v1 with a struct that has a Ptr field at offset 8
+        let v1_sv = *ssa
+            .var_map
+            .get(&(BlockId(0), 0, VarnodeSlot::Output))
+            .expect("v1 output");
+        let struct_ty = Type::Struct {
+            name: "Node".into(),
+            fields: vec![
+                StructFieldType {
+                    name: "value".into(),
+                    ty: Type::int(8),
+                    offset: 0,
+                },
+                StructFieldType {
+                    name: "next".into(),
+                    ty: Type::ptr_to(Type::int(8)),
+                    offset: 8,
+                },
+            ],
+        };
+        ssa.composite_var_types.insert(v1_sv, struct_ty);
+
+        let pass = TypeInferPass;
+        pass.run(&mut ssa).expect("infer");
+
+        // v1 gets Ptr from composite seeding (struct → Ptr)
+        assert_eq!(ssa.var_types.get(&v1_sv).copied(), Some(PrimitiveType::Ptr));
+
+        // v2: addr = v1 + 8, v1 has Struct with Ptr field "next" at offset 8
+        let v2_sv = *ssa
+            .var_map
+            .get(&(BlockId(0), 2, VarnodeSlot::Output))
+            .expect("v2 output");
+        assert_eq!(
+            ssa.var_types.get(&v2_sv).copied(),
+            Some(PrimitiveType::Ptr),
+            "struct field at offset 8 is Ptr (next pointer)"
         );
     }
 }

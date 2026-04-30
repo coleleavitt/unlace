@@ -1818,6 +1818,24 @@ fn try_emit_compound_assign(
     Some(format!("{} {} {}", lhs, op_str, other))
 }
 
+fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
+    if insn.op != IrOp::Call || insn.inputs.is_empty() {
+        return None;
+    }
+    let target = &insn.inputs[0];
+    if target.space != SpaceId::Const {
+        return None;
+    }
+    let name = ctx.symbols.get(&target.offset)?;
+    match name.as_str() {
+        "__cxa_throw" | "__cxa_rethrow" => Some("throw"),
+        "__cxa_begin_catch" => Some("catch"),
+        "__cxa_end_catch" => Some("end catch"),
+        "__cxa_allocate_exception" => Some("allocate exception"),
+        _ => None,
+    }
+}
+
 fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
     let idx = ctx.emit_stmt;
     ctx.emit_stmt += 1;
@@ -1834,6 +1852,13 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
 
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
         let lhs = ctx.name_of(&sv);
+
+        if matches!(insn.op, IrOp::Call | IrOp::Callind) {
+            if let Some(ann) = cxa_call_annotation(insn, ctx) {
+                let _ = writeln!(out, "/* {} */", ann);
+                indent(depth, out);
+            }
+        }
 
         if let Some(short) = try_emit_increment_form(insn, &lhs) {
             let _ = writeln!(out, "{};", short);
@@ -1867,6 +1892,11 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             IrOp::Call | IrOp::Callind => {
                 if let Some(kind) = ctx.panic_sites.get(&insn.addr) {
                     let _ = writeln!(out, "/* PANIC: {} */", kind);
+                    indent(depth, out);
+                }
+                let cxa_annotation = cxa_call_annotation(insn, ctx);
+                if let Some(ref ann) = cxa_annotation {
+                    let _ = writeln!(out, "/* {} */", ann);
                     indent(depth, out);
                 }
                 if insn.op == IrOp::Callind {
@@ -2375,24 +2405,78 @@ fn emit_call1(insn: &IrInsn, func: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> S
     format!("{}({})", func, arg)
 }
 
+/// Resolve a CALLOTHER tag to its C intrinsic name.
+///
+/// Tags are assigned by the lifter (`unlace-lift-x86`) and encode the
+/// original x86 mnemonic. This table mirrors the tag constants from
+/// `ops/sse.rs::tag` and `ops/bitwise.rs::bit_tag`, mapping each to the
+/// corresponding Intel intrinsic or GCC builtin.
 fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
     match tag {
+        // ── String / memory builtins ────────────────────────────
         0x1 => Some("__builtin_memcpy"),
         0x2 => Some("__builtin_memset"),
         0x3 => Some("__builtin_memcmp"),
-        0x100 => Some("_mm_load_si128"),
-        0x101 => Some("_mm_loadu_si128"),
-        0x110 => Some("_mm_add_epi8"),
-        0x111 => Some("_mm_add_epi16"),
-        0x112 => Some("_mm_add_epi32"),
-        0x113 => Some("_mm_add_epi64"),
-        0x118 => Some("_mm_sub_epi8"),
-        0x119 => Some("_mm_sub_epi16"),
-        0x11A => Some("_mm_sub_epi32"),
-        0x11B => Some("_mm_sub_epi64"),
-        0x120 => Some("_mm_and_si128"),
-        0x121 => Some("_mm_or_si128"),
-        0x122 => Some("_mm_xor_si128"),
+
+        // ── SSE/SSE2 moves (0x100..0x10F) ──────────────────────
+        0x100 => Some("_mm_load_si128"),    // MOVDQA
+        0x101 => Some("_mm_loadu_si128"),   // MOVDQU
+        0x102 => Some("_mm_load_ps"),       // MOVAPS
+        0x103 => Some("_mm_loadu_ps"),      // MOVUPS
+        0x104 => Some("_mm_load_sd"),       // MOVSD
+
+        // ── SSE2 packed integer add (0x110..0x113) ─────────────
+        0x110 => Some("_mm_add_epi8"),      // PADDB
+        0x111 => Some("_mm_add_epi16"),     // PADDW
+        0x112 => Some("_mm_add_epi32"),     // PADDD
+        0x113 => Some("_mm_add_epi64"),     // PADDQ
+
+        // ── SSE2 packed integer sub (0x118..0x11B) ─────────────
+        0x118 => Some("_mm_sub_epi8"),      // PSUBB
+        0x119 => Some("_mm_sub_epi16"),     // PSUBW
+        0x11A => Some("_mm_sub_epi32"),     // PSUBD
+        0x11B => Some("_mm_sub_epi64"),     // PSUBQ
+
+        // ── SSE2 packed bitwise logic (0x120..0x122) ───────────
+        0x120 => Some("_mm_and_si128"),     // PAND
+        0x121 => Some("_mm_or_si128"),      // POR
+        0x122 => Some("_mm_xor_si128"),     // PXOR
+
+        // ── SSE packed float arithmetic (0x130..0x136) ─────────
+        0x130 => Some("_mm_add_ps"),        // ADDPS
+        0x131 => Some("_mm_sub_ps"),        // SUBPS
+        0x132 => Some("_mm_mul_ps"),        // MULPS
+        0x133 => Some("_mm_div_ps"),        // DIVPS
+        0x134 => Some("_mm_min_ps"),        // MINPS
+        0x135 => Some("_mm_max_ps"),        // MAXPS
+        0x136 => Some("_mm_sqrt_ps"),       // SQRTPS
+
+        // ── SSE2 shuffle/unpack (0x140..0x142) ─────────────────
+        0x140 => Some("_mm_shuffle_epi32"), // PSHUFD
+        0x141 => Some("_mm_shuffle_epi8"),  // PSHUFB
+        0x142 => Some("_mm_unpacklo_epi8"), // PUNPCKLBW
+
+        // ── SSE misc (0x150) ───────────────────────────────────
+        0x150 => Some("_mm_movemask_epi8"), // PMOVMSKB
+
+        // ── SSE2 pack-with-saturation (0x160..0x161) ───────────
+        0x160 => Some("_mm_packs_epi16"),   // PACKSSWB
+        0x161 => Some("_mm_packus_epi16"),  // PACKUSWB
+
+        // ── SSE4.1 blend/select (0x170..0x171) ─────────────────
+        0x170 => Some("_mm_blend_ps"),      // BLENDPS
+        0x171 => Some("_mm_blendv_epi8"),   // PBLENDVB
+
+        // ── Bit-manipulation builtins (0x200..0x204) ───────────
+        0x200 => Some("__builtin_ctz"),     // BSF
+        0x201 => Some("__bsr"),             // BSR
+        0x202 => Some("__builtin_ctz"),     // TZCNT
+        0x203 => Some("__builtin_clz"),     // LZCNT
+        0x204 => Some("__builtin_popcount"),// POPCNT
+
+        // ── Trap (0x300) ───────────────────────────────────────
+        0x300 => Some("__builtin_trap"),    // UD2 / INT3
+
         _ => None,
     }
 }
@@ -2417,7 +2501,7 @@ fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
                 .collect();
             format!("{}({})", name, args.join(", "))
         }
-        None => format!("/* CALLOTHER {} */ 0", tag),
+        None => format!("/* CALLOTHER tag={} */ 0", tag),
     }
 }
 
@@ -5800,7 +5884,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("/* CALLOTHER 57005 */"),
+            output.contains("/* CALLOTHER tag=57005 */"),
             "unknown tag should have CALLOTHER comment with decimal tag: {output}",
         );
     }
@@ -5824,6 +5908,51 @@ mod tests {
         assert!(
             output.contains("_mm_load_si128("),
             "CALLOTHER store-form MOVDQA should still emit intrinsic: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_movaps_resolved() {
+        let r0 = reg(0, 16);
+        let out = reg(32, 16);
+        let tag = con(0x102, 8); // MOVAPS
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother, out, smallvec![tag, r0], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+        ];
+
+        let func = make_func("sse_movaps", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("_mm_load_ps("),
+            "CALLOTHER with MOVAPS tag should emit _mm_load_ps: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_mulps_resolved() {
+        let r0 = reg(0, 16);
+        let r16 = reg(16, 16);
+        let out = reg(32, 16);
+        let tag = con(0x132, 8); // MULPS
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother, out, smallvec![tag, r0, r16], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+        ];
+
+        let func = make_func("sse_mulps", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("_mm_mul_ps("),
+            "CALLOTHER with MULPS tag should emit _mm_mul_ps: {output}",
         );
     }
 
@@ -6805,6 +6934,46 @@ mod tests {
         assert!(
             output.contains("printf();"),
             "non-mangled callee should pass through, got: {output}",
+        );
+    }
+
+    #[test]
+    fn test_cxa_throw_annotation() {
+        let throw_addr = con(0x402000, 8);
+        let alloc_addr = con(0x402100, 8);
+        let catch_addr = con(0x402200, 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Call, smallvec![alloc_addr], 0x1000,
+            )),
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Call, smallvec![throw_addr], 0x1008,
+            )),
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Call, smallvec![catch_addr], 0x1010,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("test_exceptions", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x402000, "__cxa_throw".to_string());
+        symbols.insert(0x402100, "__cxa_allocate_exception".to_string());
+        symbols.insert(0x402200, "__cxa_begin_catch".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("/* throw */"),
+            "should annotate __cxa_throw, got: {output}",
+        );
+        assert!(
+            output.contains("/* allocate exception */"),
+            "should annotate __cxa_allocate_exception, got: {output}",
+        );
+        assert!(
+            output.contains("/* catch */"),
+            "should annotate __cxa_begin_catch, got: {output}",
         );
     }
 }

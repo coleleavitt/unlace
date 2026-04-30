@@ -67,6 +67,12 @@ pub enum CallingConvention {
     MicrosoftX64,
     /// AArch64 (AAPCS64): args in X0–X7; return in X0.
     AArch64,
+    /// 32-bit x86 cdecl: all args on stack (right-to-left), caller cleans up.
+    Cdecl,
+    /// 32-bit x86 stdcall: all args on stack (right-to-left), callee cleans up.
+    Stdcall,
+    /// 32-bit x86 thiscall: `this` in ECX, remaining args on stack, callee cleans up.
+    Thiscall,
     /// Could not determine (insufficient evidence or unsupported architecture).
     Unknown,
 }
@@ -77,6 +83,9 @@ impl std::fmt::Display for CallingConvention {
             Self::SystemV => f.write_str("System V AMD64"),
             Self::MicrosoftX64 => f.write_str("Microsoft x64"),
             Self::AArch64 => f.write_str("AArch64 AAPCS64"),
+            Self::Cdecl => f.write_str("cdecl"),
+            Self::Stdcall => f.write_str("stdcall"),
+            Self::Thiscall => f.write_str("thiscall"),
             Self::Unknown => f.write_str("unknown"),
         }
     }

@@ -17,6 +17,8 @@
 //! - `INT_RIGHT(v, bits-1)` → `INT_SLESS(v, 0)` (sign-bit extraction)
 //! - `INT_CARRY(v, INT_2COMP(v))` → `INT_NOTEQUAL(v, 0)` (carry elimination)
 //! - `INT_CARRY(v, 0)` → `COPY 0` (carry of zero)
+//! - `INT_AND(INT_RIGHT(x, N*8), (1<<(K*8))-1)` → `SUBPIECE(x, N)` (byte extraction)
+//! - `INT_AND(x, (1<<(K*8))-1)` → `SUBPIECE(x, 0)` (low-byte extraction)
 //!
 //! Iterates internally to a fixed point.
 
@@ -128,6 +130,77 @@ fn make_copy(insn: &IrInsn, source: Varnode) -> IrInsn {
     )
 }
 
+fn low_byte_mask_count(v: &Varnode) -> Option<u8> {
+    if v.space != SpaceId::Const {
+        return None;
+    }
+    match v.offset {
+        0xFF => Some(1),
+        0xFFFF => Some(2),
+        0xFF_FFFF => Some(3),
+        0xFFFF_FFFF => Some(4),
+        0xFF_FFFF_FFFF => Some(5),
+        0xFFFF_FFFF_FFFF => Some(6),
+        0xFF_FFFF_FFFF_FFFF => Some(7),
+        _ => None,
+    }
+}
+
+fn try_subpiece_from_and(
+    insn: &IrInsn,
+    a: &Varnode,
+    b: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    let output = insn.output?;
+    let (value, mask) = if low_byte_mask_count(b).is_some() {
+        (a, b)
+    } else if low_byte_mask_count(a).is_some() {
+        (b, a)
+    } else {
+        return None;
+    };
+    let mask_bytes = low_byte_mask_count(mask)?;
+    if mask_bytes != output.size {
+        return None;
+    }
+    if value.space == SpaceId::Const {
+        return None;
+    }
+
+    if let Some(def_insn) = def_map.get(value) {
+        if def_insn.op == IrOp::IntRight && def_insn.inputs.len() == 2 {
+            let shift_src = def_insn.inputs[0];
+            let shift_amt = def_insn.inputs[1];
+            if shift_amt.space == SpaceId::Const && shift_amt.offset % 8 == 0 {
+                let byte_offset = shift_amt.offset / 8;
+                if byte_offset + (output.size as u64) <= shift_src.size as u64 {
+                    return Some(IrInsn::with_output(
+                        IrOp::Subpiece,
+                        output,
+                        smallvec::smallvec![
+                            shift_src,
+                            Varnode::constant(byte_offset, 4),
+                        ],
+                        insn.addr,
+                    ));
+                }
+            }
+        }
+    }
+
+    if (value.size as u64) > (output.size as u64) {
+        return Some(IrInsn::with_output(
+            IrOp::Subpiece,
+            output,
+            smallvec::smallvec![*value, Varnode::constant(0, 4)],
+            insn.addr,
+        ));
+    }
+
+    None
+}
+
 fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<IrInsn> {
     let output = insn.output?;
 
@@ -151,7 +224,9 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
 
         // ── v & all_ones → v, v & 0 → 0, v & v → v ───────────────
         IrOp::IntAnd => {
-            if is_all_ones(&b) && a.space != SpaceId::Const {
+            if let Some(sub) = try_subpiece_from_and(insn, &a, &b, def_map) {
+                Some(sub)
+            } else if is_all_ones(&b) && a.space != SpaceId::Const {
                 Some(make_copy(insn, a))
             } else if is_all_ones(&a) && b.space != SpaceId::Const {
                 Some(make_copy(insn, b))
@@ -867,6 +942,82 @@ mod tests {
         assert_eq!(block.insns[0].op, IrOp::Copy);
         assert_eq!(block.insns[0].inputs[0].space, SpaceId::Const);
         assert_eq!(block.insns[0].inputs[0].offset, 0);
+    }
+
+    #[test]
+    fn test_idiom_subpiece_from_shift_and_byte_mask() {
+        let r0 = Varnode::reg(0, 4);
+        let shifted = Varnode::unique(0, 4);
+        let out = Varnode::unique(8, 1);
+        let shift_amt = Varnode::constant(8, 4);
+        let mask = Varnode::constant(0xFF, 1);
+
+        let shift = IrInsn::with_output(IrOp::IntRight, shifted, smallvec![r0, shift_amt], 0x1000);
+        let and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![shifted, mask], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![shift, and]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[1].op, IrOp::Subpiece);
+        assert_eq!(block.insns[1].inputs[0], r0);
+        assert_eq!(block.insns[1].inputs[1].offset, 1);
+    }
+
+    #[test]
+    fn test_idiom_subpiece_from_shift_and_word_mask() {
+        let r0 = Varnode::reg(0, 4);
+        let shifted = Varnode::unique(0, 4);
+        let out = Varnode::unique(8, 2);
+        let shift_amt = Varnode::constant(16, 4);
+        let mask = Varnode::constant(0xFFFF, 2);
+
+        let shift = IrInsn::with_output(IrOp::IntRight, shifted, smallvec![r0, shift_amt], 0x1000);
+        let and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![shifted, mask], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![shift, and]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[1].op, IrOp::Subpiece);
+        assert_eq!(block.insns[1].inputs[0], r0);
+        assert_eq!(block.insns[1].inputs[1].offset, 2);
+    }
+
+    #[test]
+    fn test_idiom_subpiece_from_truncating_and() {
+        let r0 = Varnode::reg(0, 4);
+        let out = Varnode::unique(8, 1);
+        let mask = Varnode::constant(0xFF, 1);
+
+        let and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![r0, mask], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![and]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::Subpiece);
+        assert_eq!(block.insns[0].inputs[0], r0);
+        assert_eq!(block.insns[0].inputs[1].offset, 0);
+    }
+
+    #[test]
+    fn test_idiom_subpiece_no_match_when_mask_size_mismatch() {
+        let r0 = Varnode::reg(0, 4);
+        let shifted = Varnode::unique(0, 4);
+        let out = Varnode::unique(8, 4);
+        let shift_amt = Varnode::constant(8, 4);
+        let mask = Varnode::constant(0xFF, 4);
+
+        let shift = IrInsn::with_output(IrOp::IntRight, shifted, smallvec![r0, shift_amt], 0x1000);
+        let and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![shifted, mask], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![shift, and]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(!changed);
     }
 
     // ── INT_CARRY(x, INT_2COMP(x)) → INT_NOTEQUAL(x, 0) ──────────

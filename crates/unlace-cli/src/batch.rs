@@ -135,13 +135,14 @@ fn decompile_all_parallel(
     sorted
         .par_iter()
         .map(|entry| {
-            let output = pipeline::decompile_function(
+            let output = pipeline::decompile_function_with_symbols(
                 image,
                 lifter.as_ref(),
                 entry,
                 config.emit,
                 &pipeline_config,
                 dwarf,
+                functions,
             );
             BatchResult {
                 addr: entry.addr,

@@ -613,7 +613,17 @@ impl Default for PipelineConfig {
 }
 
 pub fn build_symbol_table(image: &BinaryImage) -> BTreeMap<u64, String> {
+    build_symbol_table_with_functions(image, &[])
+}
+
+pub fn build_symbol_table_with_functions(
+    image: &BinaryImage,
+    discovered: &[FunctionEntry],
+) -> BTreeMap<u64, String> {
     let mut table = BTreeMap::new();
+    for entry in discovered {
+        table.insert(entry.addr, entry.name.clone());
+    }
     for (addr, sym) in &image.symbols {
         if sym.kind == SymbolKind::Function {
             table.insert(*addr, sym.name.clone());
@@ -633,6 +643,18 @@ pub fn decompile_function(
     config: &PipelineConfig,
     dwarf: Option<&DwarfInfo>,
 ) -> Result<String> {
+    decompile_function_with_symbols(image, lifter, entry, emit, config, dwarf, &[])
+}
+
+pub fn decompile_function_with_symbols(
+    image: &BinaryImage,
+    lifter: &dyn Lifter,
+    entry: &FunctionEntry,
+    emit: EmitFormat,
+    config: &PipelineConfig,
+    dwarf: Option<&DwarfInfo>,
+    discovered: &[FunctionEntry],
+) -> Result<String> {
     let deadline = Instant::now() + config.timeout;
 
     let ir_func = lift_function(image, lifter, entry)?;
@@ -650,7 +672,7 @@ pub fn decompile_function(
 
     check_timeout(deadline, &entry.name)?;
 
-    let symbols = build_symbol_table(image);
+    let symbols = build_symbol_table_with_functions(image, discovered);
     emit_output(emit, &ssa, dwarf, &symbols, &image.string_table)
 }
 

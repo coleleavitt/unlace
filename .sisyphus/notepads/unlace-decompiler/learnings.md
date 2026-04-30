@@ -406,3 +406,13 @@
 - Error type coverage: unlace-ir (LiftError via thiserror), unlace-loader (LoadError), unlace-passes (PassError), unlace-struct (StructureError) — all already existed before this task
 - Stub lifters (ARM, RISC-V, MIPS, PPC, V850, ARC) don't need own Error types — they use `LiftError` from unlace-ir
 - Created missing bench stub `crates/unlace-cli/benches/decompile_medium.rs` to fix build
+
+## Task 26: ARM/AArch64 Lifter via Capstone
+- capstone `Capstone` type is `!Send + !Sync` (contains raw `*mut c_void`); cannot be stored in struct implementing `Lifter: Send + Sync`. Solution: create `Capstone` per `lift_insn` call.
+- Capstone ARM64 register IDs from capstone-sys: X0=218, X28=246, FP(X29)=2, LR(X30)=3, SP=5, XZR=9, WZR=8, W0=187, W28=215, W29=216, W30=217. These differ from intuitive numbering.
+- ARM64 XZR/WZR (zero registers) must be modeled as constant-0 varnodes, not register-space varnodes, since writes are discarded.
+- ARM64 condition flags: C flag for SUB is inverted vs x86 (C = NOT borrow). The `IntLess` + `BoolNegate` pattern is required.
+- `Arm64Shift` in capstone 0.14 is an enum (`Lsl(u32)`, `Msl(u32)`, etc.), not a struct.
+- Capstone's `insn_detail().arch_detail().arm64().cc()` provides the condition code for B.cond instructions (both B and B.cond have `ARM64_INS_B` as their ID).
+- STP/LDP pair instructions: capstone reports operands as [reg1, reg2, mem]. Second store/load at base+size offset.
+- The `Arm64Insn::from(insn.id().0)` conversion maps capstone instruction IDs to the typed enum.

@@ -1,0 +1,11 @@
+--- /dev/null ---
+Error: '/dev/null' is not a valid ELF binary
+Exit: 1
+
+--- /etc/hostname (non-ELF) ---
+Error: '/etc/hostname' is not a valid ELF binary
+Exit: 1
+
+--- /nonexistent/file ---
+Error: failed to read '/nonexistent/file': No such file or directory (os error 2)
+Exit: 1

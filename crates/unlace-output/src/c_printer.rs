@@ -928,9 +928,20 @@ fn try_emit_compound_assign(
     }
     let counter_is_first = Some(insn.inputs[0]) == insn.output;
     let counter_is_second = Some(insn.inputs[1]) == insn.output;
+
+    // For commutative ops, either operand position is fine.
+    // For non-commutative ops (sub, div, mod, shifts), only first-position works.
     let op_str = match insn.op {
         IrOp::IntAdd if counter_is_first || counter_is_second => "+=",
         IrOp::IntSub if counter_is_first => "-=",
+        IrOp::IntMult if counter_is_first || counter_is_second => "*=",
+        IrOp::IntDiv | IrOp::IntSdiv if counter_is_first => "/=",
+        IrOp::IntRem | IrOp::IntSrem if counter_is_first => "%=",
+        IrOp::IntLeft if counter_is_first => "<<=",
+        IrOp::IntRight | IrOp::IntSright if counter_is_first => ">>=",
+        IrOp::IntAnd if counter_is_first || counter_is_second => "&=",
+        IrOp::IntOr if counter_is_first || counter_is_second => "|=",
+        IrOp::IntXor if counter_is_first || counter_is_second => "^=",
         _ => return None,
     };
     let other_idx = if counter_is_first { 1 } else { 0 };
@@ -992,39 +1003,121 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
 }
 
 // ---------------------------------------------------------------------------
+// Operator precedence (C standard levels)
+// ---------------------------------------------------------------------------
+
+/// Return the C precedence level for an IrOp when used as a binary operator.
+///
+/// Higher values bind tighter.  When a child expression has lower precedence
+/// than its parent, parentheses are required.
+fn c_precedence(op: IrOp) -> u8 {
+    match op {
+        // Multiply / divide / mod — 54
+        IrOp::IntMult | IrOp::FloatMult
+        | IrOp::IntDiv | IrOp::IntSdiv | IrOp::FloatDiv
+        | IrOp::IntRem | IrOp::IntSrem => 54,
+
+        // Add / subtract — 50
+        IrOp::IntAdd | IrOp::FloatAdd
+        | IrOp::IntSub | IrOp::FloatSub
+        | IrOp::Ptradd | IrOp::Ptrsub => 50,
+
+        // Shifts — 46
+        IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright => 46,
+
+        // Relational — 42
+        IrOp::IntLess | IrOp::IntLessequal
+        | IrOp::IntSless | IrOp::IntSlessequal
+        | IrOp::FloatLess | IrOp::FloatLessequal => 42,
+
+        // Equality — 38
+        IrOp::IntEqual | IrOp::IntNotequal
+        | IrOp::FloatEqual | IrOp::FloatNotequal => 38,
+
+        // Bitwise AND — 34
+        IrOp::IntAnd => 34,
+
+        // Bitwise XOR — 30
+        IrOp::IntXor | IrOp::BoolXor => 30,
+
+        // Bitwise OR — 26
+        IrOp::IntOr => 26,
+
+        // Logical AND — 22
+        IrOp::BoolAnd => 22,
+
+        // Logical OR — 18
+        IrOp::BoolOr => 18,
+
+        // Unary prefix (!, ~, -, *, &, casts) — 62
+        IrOp::IntNegate | IrOp::BoolNegate
+        | IrOp::Int2comp | IrOp::FloatNeg => 62,
+
+        // Function call, subscript, member access — 70
+        IrOp::Call | IrOp::Callind => 70,
+
+        // Everything else (copy, load, store, etc.) — 0
+        _ => 0,
+    }
+}
+
+/// Return `true` if `op` is a binary operator that we emit via `emit_binop`.
+fn is_binop(op: IrOp) -> bool {
+    matches!(op,
+        IrOp::IntAdd | IrOp::FloatAdd
+        | IrOp::IntSub | IrOp::FloatSub
+        | IrOp::IntMult | IrOp::FloatMult
+        | IrOp::IntDiv | IrOp::IntSdiv | IrOp::FloatDiv
+        | IrOp::IntRem | IrOp::IntSrem
+        | IrOp::IntAnd | IrOp::IntOr | IrOp::IntXor
+        | IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright
+        | IrOp::BoolAnd | IrOp::BoolOr | IrOp::BoolXor
+        | IrOp::IntEqual | IrOp::FloatEqual
+        | IrOp::IntNotequal | IrOp::FloatNotequal
+        | IrOp::IntLess | IrOp::IntSless | IrOp::FloatLess
+        | IrOp::IntLessequal | IrOp::IntSlessequal | IrOp::FloatLessequal
+        | IrOp::Ptradd | IrOp::Ptrsub
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Expression emission
 // ---------------------------------------------------------------------------
 
 fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    emit_expr_with_prec(insn, stmt_idx, 0, ctx)
+}
+
+fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
     match insn.op {
         // -- Binary arithmetic/bitwise --
-        IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", stmt_idx, ctx),
-        IrOp::IntSub | IrOp::FloatSub => emit_binop(insn, "-", stmt_idx, ctx),
-        IrOp::IntMult | IrOp::FloatMult => emit_binop(insn, "*", stmt_idx, ctx),
-        IrOp::IntDiv | IrOp::IntSdiv | IrOp::FloatDiv => emit_binop(insn, "/", stmt_idx, ctx),
-        IrOp::IntRem | IrOp::IntSrem => emit_binop(insn, "%", stmt_idx, ctx),
-        IrOp::IntAnd => emit_binop(insn, "&", stmt_idx, ctx),
-        IrOp::IntOr => emit_binop(insn, "|", stmt_idx, ctx),
-        IrOp::IntXor => emit_binop(insn, "^", stmt_idx, ctx),
-        IrOp::IntLeft => emit_binop(insn, "<<", stmt_idx, ctx),
-        IrOp::IntRight | IrOp::IntSright => emit_binop(insn, ">>", stmt_idx, ctx),
+        IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", stmt_idx, parent_prec, ctx),
+        IrOp::IntSub | IrOp::FloatSub => emit_binop(insn, "-", stmt_idx, parent_prec, ctx),
+        IrOp::IntMult | IrOp::FloatMult => emit_binop(insn, "*", stmt_idx, parent_prec, ctx),
+        IrOp::IntDiv | IrOp::IntSdiv | IrOp::FloatDiv => emit_binop(insn, "/", stmt_idx, parent_prec, ctx),
+        IrOp::IntRem | IrOp::IntSrem => emit_binop(insn, "%", stmt_idx, parent_prec, ctx),
+        IrOp::IntAnd => emit_binop(insn, "&", stmt_idx, parent_prec, ctx),
+        IrOp::IntOr => emit_binop(insn, "|", stmt_idx, parent_prec, ctx),
+        IrOp::IntXor => emit_binop(insn, "^", stmt_idx, parent_prec, ctx),
+        IrOp::IntLeft => emit_binop(insn, "<<", stmt_idx, parent_prec, ctx),
+        IrOp::IntRight | IrOp::IntSright => emit_binop(insn, ">>", stmt_idx, parent_prec, ctx),
 
         // -- Boolean ops --
-        IrOp::BoolAnd => emit_binop(insn, "&&", stmt_idx, ctx),
-        IrOp::BoolOr => emit_binop(insn, "||", stmt_idx, ctx),
-        IrOp::BoolXor => emit_binop(insn, "!=", stmt_idx, ctx),
+        IrOp::BoolAnd => emit_binop(insn, "&&", stmt_idx, parent_prec, ctx),
+        IrOp::BoolOr => emit_binop(insn, "||", stmt_idx, parent_prec, ctx),
+        IrOp::BoolXor => emit_binop(insn, "!=", stmt_idx, parent_prec, ctx),
 
         // -- Comparisons --
-        IrOp::IntEqual | IrOp::FloatEqual => emit_binop(insn, "==", stmt_idx, ctx),
-        IrOp::IntNotequal | IrOp::FloatNotequal => emit_binop(insn, "!=", stmt_idx, ctx),
-        IrOp::IntLess | IrOp::IntSless | IrOp::FloatLess => emit_binop(insn, "<", stmt_idx, ctx),
+        IrOp::IntEqual | IrOp::FloatEqual => emit_binop(insn, "==", stmt_idx, parent_prec, ctx),
+        IrOp::IntNotequal | IrOp::FloatNotequal => emit_binop(insn, "!=", stmt_idx, parent_prec, ctx),
+        IrOp::IntLess | IrOp::IntSless | IrOp::FloatLess => emit_binop(insn, "<", stmt_idx, parent_prec, ctx),
         IrOp::IntLessequal | IrOp::IntSlessequal | IrOp::FloatLessequal => {
-            emit_binop(insn, "<=", stmt_idx, ctx)
+            emit_binop(insn, "<=", stmt_idx, parent_prec, ctx)
         }
 
         // -- Unary ops --
-        IrOp::IntNegate | IrOp::BoolNegate => emit_unaryop(insn, "!", stmt_idx, ctx),
-        IrOp::Int2comp | IrOp::FloatNeg => emit_unaryop(insn, "-", stmt_idx, ctx),
+        IrOp::IntNegate | IrOp::BoolNegate => emit_unaryop(insn, "!", stmt_idx, parent_prec, ctx),
+        IrOp::Int2comp | IrOp::FloatNeg => emit_unaryop(insn, "-", stmt_idx, parent_prec, ctx),
 
         // -- Copy / move --
         IrOp::Copy => {
@@ -1082,8 +1175,8 @@ fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
         }
 
         // -- Pointer arithmetic --
-        IrOp::Ptradd => emit_binop(insn, "+", stmt_idx, ctx),
-        IrOp::Ptrsub => emit_binop(insn, "-", stmt_idx, ctx),
+        IrOp::Ptradd => emit_binop(insn, "+", stmt_idx, parent_prec, ctx),
+        IrOp::Ptrsub => emit_binop(insn, "-", stmt_idx, parent_prec, ctx),
 
         // -- Float conversions --
         IrOp::FloatInt2float => {
@@ -1165,6 +1258,7 @@ fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
         }
 
         // -- Carry / borrow (emit as comparison) --
+        // INT_CARRY: unsigned carry — true when (a + b) wraps around.
         IrOp::IntCarry => {
             if insn.inputs.len() >= 2 {
                 let a = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
@@ -1174,9 +1268,25 @@ fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
                 "0".to_string()
             }
         }
-        // INT_SCARRY/INT_SBORROW: no clean C equivalent, emit 0.
-        IrOp::IntScarry | IrOp::IntSborrow => {
-            "0".to_string()
+        // INT_SCARRY: signed overflow on addition.
+        IrOp::IntScarry => {
+            if insn.inputs.len() >= 2 {
+                let a = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
+                let b = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
+                format!("__OFADD__({}, {})", a, b)
+            } else {
+                "0".to_string()
+            }
+        }
+        // INT_SBORROW: signed overflow on subtraction.
+        IrOp::IntSborrow => {
+            if insn.inputs.len() >= 2 {
+                let a = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
+                let b = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
+                format!("__OFSUB__({}, {})", a, b)
+            } else {
+                "0".to_string()
+            }
         }
 
         // -- Call with output --
@@ -1197,20 +1307,21 @@ fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     }
 }
 
-fn emit_binop(insn: &IrInsn, op: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+fn emit_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
+    let my_prec = c_precedence(insn.op);
     let const_ctx = const_context_for_op(insn.op);
     let lhs = if !insn.inputs.is_empty() {
-        emit_operand_with_context(&insn.inputs[0], 0, stmt_idx, const_ctx, ctx)
+        emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, const_ctx, my_prec, ctx)
     } else {
         "0".to_string()
     };
     let rhs = if insn.inputs.len() >= 2 {
-        emit_operand_with_context(&insn.inputs[1], 1, stmt_idx, const_ctx, ctx)
+        emit_operand_with_prec(&insn.inputs[1], 1, stmt_idx, const_ctx, my_prec, ctx)
     } else {
         "0".to_string()
     };
 
-    if const_ctx == ConstContext::Signed
+    let bare = if const_ctx == ConstContext::Signed
         && op == "+"
         && insn.inputs.len() >= 2
         && insn.inputs[1].space == SpaceId::Const
@@ -1229,12 +1340,23 @@ fn emit_binop(insn: &IrInsn, op: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> Str
             let abs_val = signed.unsigned_abs();
             let should_negate = sz >= 4 || (sz == 2 && abs_val <= 128);
             if should_negate {
-                return format!("{} - {}", lhs, abs_val);
+                Some(format!("{} - {}", lhs, abs_val))
+            } else {
+                None
             }
+        } else {
+            None
         }
-    }
+    } else {
+        None
+    };
 
-    format!("{} {} {}", lhs, op, rhs)
+    let expr = bare.unwrap_or_else(|| format!("{} {} {}", lhs, op, rhs));
+    if my_prec > 0 && my_prec < parent_prec {
+        format!("({})", expr)
+    } else {
+        expr
+    }
 }
 
 fn emit_unaryop(insn: &IrInsn, op: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
@@ -1368,6 +1490,20 @@ fn indent(depth: usize, out: &mut String) {
     }
 }
 
+/// Returns a C unsigned cast appropriate for the given operand byte size.
+///
+/// Used to distinguish unsigned ops (IntDiv, IntRight, IntLess, etc.) from
+/// their signed counterparts in emitted C code.
+fn unsigned_cast(size: u8) -> &'static str {
+    match size {
+        1 => "(unsigned char)",
+        2 => "(unsigned short)",
+        4 => "(unsigned int)",
+        8 => "(unsigned long long)",
+        _ => "(unsigned int)",
+    }
+}
+
 fn type_for_size(size: u8, signed: bool) -> &'static str {
     if signed {
         match size {
@@ -1411,6 +1547,8 @@ typedef signed char __int8;
 typedef signed short __int16;
 typedef signed int __int32;
 typedef signed long long __int64;
+#define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
+#define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
 ";
 
 #[cfg(test)]
@@ -2646,6 +2784,77 @@ mod tests {
         assert!(
             except_line.starts_with("    }"),
             "except should be at depth 1: {except_line:?}",
+        );
+    }
+
+    #[test]
+    fn test_boolxor_emits_caret() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::BoolXor,
+                r0,
+                smallvec![r0, r8],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let func = make_func("boolxor", body);
+        let output = print_c(&func);
+
+        assert!(output.contains("^"), "BoolXor should emit ^: {output}");
+        assert!(
+            !output.contains("!="),
+            "BoolXor must not emit !=: {output}",
+        );
+    }
+
+    #[test]
+    fn test_intnegate_emits_tilde() {
+        let r0 = reg(0, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntNegate,
+                r0,
+                smallvec![r0],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let func = make_func("intnegate", body);
+        let output = print_c(&func);
+
+        assert!(output.contains("~"), "IntNegate should emit ~: {output}");
+        let rhs = output.lines().find(|l| l.contains("~")).expect("line with ~");
+        assert!(!rhs.contains("!="), "should not contain !=: {rhs}");
+    }
+
+    #[test]
+    fn test_boolnegate_emits_bang() {
+        let r0 = reg(0, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::BoolNegate,
+                r0,
+                smallvec![r0],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let func = make_func("boolnegate", body);
+        let output = print_c(&func);
+
+        assert!(output.contains("!"), "BoolNegate should emit !: {output}");
+        assert!(
+            !output.contains("~"),
+            "BoolNegate must not emit ~: {output}",
         );
     }
 }

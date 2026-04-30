@@ -12,7 +12,7 @@ use unlace_passes::{
     CopyPropagationPass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
     DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
     ModuloIdiomPass, ParamInferPass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
-    VariableMergePass, Pass, run_to_fixedpoint,
+    VariableMergePass, CppVtablePass, Pass, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -576,6 +576,9 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
 
     PrologueElimPass.run(ssa)
         .context("prologue/epilogue detection failed")?;
+
+    CppVtablePass.run(ssa)
+        .context("C++ vtable dispatch detection failed")?;
 
     CallingConventionDetectPass.run(ssa)
         .context("calling convention detection failed")?;

@@ -1,0 +1,379 @@
+# P6-1 Investigation Report: 0 If-Branches on Complex Functions
+
+**Date**: 2026-04-30
+**Task**: Investigate why complex functions like sub_1e2580 produce 0 if-branches
+        in unlace while IDA produces 59 (and similar gaps for sub_2436e0, sub_7b710).
+**Severity**: P1 — dominant if-branches parity drag (weight 3.0, score 0.15).
+
+---
+
+## TL;DR
+
+**Root cause is NOT in the structurer.** It is in the upstream pipeline:
+**LIFTING / FUNCTION-DISCOVERY**.
+
+The prologue scanner (`crates/unlace-cli/src/pipeline.rs:84-145`) treats every
+`push %r12`/`push %r13`/`push %r14`/`push %r15` byte-pair as a function start.
+When a real function uses these as its **second/third instruction** (after
+`push %rbp; mov %rsp, %rbp`), the scanner inserts a spurious function entry,
+and `recompute_sizes` cuts the previous function off after the first 4
+bytes. The lifter then linearly sweeps only those 4 bytes and stops.
+
+A second, smaller leak: tail-merge / shared-tail jumps to addresses outside
+the function's lifted region (`JMP 0x1e2360` from inside `sub_1e2580`)
+produce dangling CFG edges. The structurer correctly walks only blocks
+reachable from entry, so all the real branchy code becomes "unreachable"
+in the BB list and is silently dropped.
+
+**No structurer/SSA/output bug is involved**. The structurer is doing the
+right thing on the (broken) input it's handed.
+
+---
+
+## Classification
+
+| Field                   | Value                                                       |
+|-------------------------|-------------------------------------------------------------|
+| **Root-cause category** | **LIFTING** (specifically: function discovery + bounds)     |
+| **Sub-category**        | Prologue scanner false positives + missing chunk handling   |
+| **Specific files**      | `crates/unlace-cli/src/pipeline.rs:74-249`                  |
+| **Specific functions**  | `scan_for_prologues`, `recompute_sizes`, `lift_instructions`|
+| **Estimated effort**    | **MEDIUM** (3–5 days for 80% of cases, 2 weeks for full)    |
+| **Wave-1 in scope?**    | **NO** — too risky for Wave 1; defer to Wave 2 or Phase 7.  |
+
+---
+
+## Evidence
+
+### Test 1 — `sub_1e2580` (IDA: 59 if-branches, 626 lines)
+
+```
+$ ./target/release/unlace decompile --function sub_1e2580 hexrays/ida-9.1/hexx64.so | wc -l
+93
+$ ... | grep -c "if"
+0
+$ RUST_LOG=debug ... 2>&1 | grep "lifting"
+DEBUG unlace::pipeline: lifting function func=sub_1e2580 addr=0x1e2580 size=497
+```
+
+`size=497` (≈ IDA-recorded `0x1e9` = 489) — so this function's bounds are
+roughly correct. The problem here is different: outside-region branches.
+
+**IR dump** (`--emit ir`): 472 lines, 20 BBs, 11 BRANCH/CBRANCH. But the
+**CFG** has **only 7 entry-reachable blocks** out of 20:
+
+```
+$ ./target/release/unlace decompile --function sub_1e2580 --emit cfg-dot ...
+BB_0 [entry, loop_header]:    <- entry
+BB_1: ...                      reachable
+BB_2: ...                      reachable
+BB_3 [loop_header]:            reachable, has BRANCH c0x1e2360:i64  <-- !!
+BB_4 [unreachable]: ...        unreachable
+BB_5: ...                      ←orphan
+BB_6 [unreachable]: ...
+BB_7 [unreachable]: ...
+BB_8..BB_15: ...               ←all orphans
+BB_16 [unreachable]: ...
+BB_17/18/19 [exit]:            reachable as exits but no incoming from main path
+```
+
+Edges from CFG dot (only 6 connect from BB_0):
+```
+BB_0 -> BB_1 (fallthrough)
+BB_1 -> BB_0 (T)             # back-edge → loop
+BB_1 -> BB_2 (F)
+BB_2 -> BB_3 (fallthrough/call)
+BB_3 -> BB_0                 # body just loops back!
+```
+
+The remaining 14 edges are between BB_4..BB_19 with no incoming edge from
+{BB_0, BB_1, BB_2, BB_3}, so the structurer's `structure_region(entry)`
+walk never reaches them. The emitted C is just `while (v1) { ... }` with
+no branches.
+
+**Why?** `objdump` shows:
+
+```
+1e25bb: 0f 84 9f fd ff ff   je 1e2360       <-- jumps OUTSIDE function
+1e25cf: e9 8c fd ff ff      jmp 1e2360      <-- jumps OUTSIDE function
+```
+
+`0x1e2360` is **inside `sub_1E22F0`'s byte range**, not `sub_1e2580`. IDA
+recognizes this as a **shared tail / function chunk** and re-includes the
+code at `0x1e2360-0x1e2400+` as part of `sub_1E2580`. Unlace has no concept
+of function chunks, so the BRANCH target lands at no BlockId, the edge is
+silently dropped, and the rest of the BBs (orphaned because their
+predecessors are also orphans by transitivity) are unreachable.
+
+The 14 orphan blocks actually **are** lifted — their IR ops are present
+(`v65541#3:i8 ...`, real `LOAD/STORE/CBRANCH` ops). They just have no
+incoming edge from `BB_0`'s reachable set, so the structurer's depth-first
+walk never sees them.
+
+**Wait** — if they were truly created by linear lifting of bytes inside
+`[0x1e2580..0x1e2769]`, why aren't they connected? Because the predecessors
+of those BBs are *also* orphan (e.g. BB_5 only has BB_4 as predecessor,
+BB_4 only has incoming from a hypothetical block we never created). The
+real flow is: BB_3 emits `BRANCH c0x1e2360`, control should flow there,
+but `0x1e2360` isn't in `block_starts` (line 380 of `pipeline.rs`), so no
+edge is added. Meanwhile blocks BB_4..BB_15 were created because intra-
+region CBRANCH targets (e.g. `0x1e2950`, `0x1e269d`) are in-region — they
+were inserted into `block_starts` at line 392. But the BB that was
+*supposed* to flow into BB_4 is the one that did `BRANCH c0x1e2360`, and
+that fall-through dies at the synthetic out-of-bounds boundary.
+
+### Test 2 — `sub_2436e0` (IDA: 35 if-branches, 23 gotos)
+
+```
+$ ./target/release/unlace decompile --function sub_2436e0 hexrays/ida-9.1/hexx64.so | wc -l
+38
+$ ... | grep -c "if"
+0
+$ RUST_LOG=debug ... 2>&1 | grep "lifting"
+DEBUG unlace::pipeline: lifting function func=sub_2436e0 addr=0x2436e0 size=4   <-- !!!
+```
+
+**Size = 4 bytes.** Real function is hundreds of bytes.
+
+Disassembly:
+```
+2436e0: 55             push %rbp           <-- prologue scanner: function start
+2436e1: 48 89 e5       mov  %rsp, %rbp
+2436e4: 41 57          push %r15           <-- prologue scanner: ANOTHER function start!
+2436e6: 41 56          push %r14
+...
+```
+
+`scan_for_prologues` matched `PUSH_RBP_MOV_RBP_RSP` at `0x2436e0` (good)
+AND `PUSH_R15` at `0x2436e4` (FALSE POSITIVE — it's just register-save,
+not a function start). `recompute_sizes` set sub_2436e0's size to
+`0x2436e4 − 0x2436e0 = 4`.
+
+Lifter sees only `push %rbp; mov %rsp, %rbp`, lifts it, hits the size
+boundary, stops. Output has 1 BB, 0 branches, 5 IR ops total.
+
+```
+BB_0 [entry, exit]:
+  v65536:i64 = COPY v32:i64
+  v32:i64 = COPY v65536:i64
+  STORE c1:i64, v65536:i64, v40:i64
+  v40:i64 = COPY v32:i64
+```
+
+This is **the dominant cause of 0-if-branch functions in stripped binaries**.
+
+### Test 3 — `sub_7b710` (IDA: 20 if-branches, 116 lines)
+
+```
+$ ./target/release/unlace decompile --function sub_7b710 hexrays/ida-9.1/hexx64.so | wc -l
+50
+$ ... | grep -c "if"
+0
+$ RUST_LOG=debug ... 2>&1 | grep "lifting"
+DEBUG unlace::pipeline: lifting function func=sub_7b710 addr=0x7b710 size=32   <-- !!!
+```
+
+**Size = 32 bytes.** Disassembly:
+```
+7b710: 48 83 ec 08    sub  $0x8, %rsp        <-- prologue match
+7b714: 31 f6          xor  %esi, %esi
+7b716: e8 ...         call 29ea30
+7b71b: 48 83 c4 08    add  $0x8, %rsp
+7b71f: 83 f0 01       xor  $0x1, %eax
+7b722: c3             ret
+7b723: 0f 1f 44 ...   nopl ...                <-- alignment padding
+7b728: c3             ret
+7b729: 0f 1f 80 ...   nopl ...                <-- alignment padding
+7b730: 41 54          push %r12               <-- prologue scanner: NEW FUNC!!
+7b732: 89 d0          mov  %edx, %eax
+...
+7b740: 0f 87 02 04 ...ja   7bb48               <-- real function continues
+```
+
+**This is the most insidious case**: there's a real `RET` at `0x7b722`,
+followed by NOPL padding, followed by what looks like the real body of
+the IDA-recognized `sub_7b710` starting at `0x7b730`. The IDA function is
+~269 instructions (`0x7b710..0x7bb50`), but unlace cuts it at `0x7b730`.
+
+Looking at the disasm, this is actually an unusual case: the **first 32
+bytes are a tiny tail-call wrapper or sibling function**, and IDA *also*
+considers them part of `sub_7b710` (the dispatch happens via an indirect
+table at `0x7b75c..7b75f: jmp *%rcx`). It's possible IDA treats this as a
+single function because of cross-references, while unlace's prologue
+scanner correctly identified two function-like patterns but mis-attributed
+the boundary.
+
+---
+
+## Root-Cause Categorization
+
+### Failure-mode taxonomy across the 3 tested functions
+
+| Function       | Failure mode                    | Pipeline stage      |
+|----------------|----------------------------------|---------------------|
+| sub_2436e0     | Prologue false positive split    | scan_for_prologues  |
+| sub_7b710      | Prologue false positive split    | scan_for_prologues  |
+| sub_1e2580     | Cross-function tail jump (chunk) | recursive_descent + |
+|                |                                  | build_function_from |
+|                |                                  | _insns              |
+
+So **2 of 3 are the same bug**: the `PUSH_R15`/`PUSH_R14`/`PUSH_R13`/`PUSH_R12`
+patterns (lines 78-81, 113-118 of `pipeline.rs`) are false-positive prologue
+markers when they appear as the second instruction of a real function.
+
+The third is a separate, harder problem: function chunking / shared tails.
+
+### Why this is LIFTING, not STRUCTURER
+
+| Stage              | Diagnostic                                                  |
+|--------------------|-------------------------------------------------------------|
+| Disassembly (objdump) | Real function has 50–270 instructions                    |
+| Lifter input          | Only 4–32 bytes presented as the function range          |
+| IR (post-lift)        | 5–80 ops, 1–20 BBs, 1–11 branches                        |
+| CFG edges             | Only entry-reachable subset is connected (≤7 of 20 BBs)  |
+| SSA                   | Works correctly on what it's given                       |
+| Passes                | Work correctly on what they're given                     |
+| **Structurer**        | Walks `cfg.entry()`, emits `while/if` for reachable BBs  |
+| Output                | Only emits structures for the ≤7 reachable BBs           |
+
+The structurer never even sees the missing branches — they don't exist
+in the IR (sub_2436e0, sub_7b710) or are unreachable from entry (sub_1e2580).
+
+### What is NOT the problem
+
+- ✘ SCCP (no constants are killing real branches; check: ConditionSimplifyPass
+  output is sane on `sub_4e530` which works).
+- ✘ DCE / DSE (only 5 IR ops for `sub_2436e0` — there's nothing to eliminate;
+  the deletion happened in the lifter by never lifting more bytes).
+- ✘ Output / cprinter (correctly walks the HIR; HIR is empty of `If` nodes).
+- ✘ Structurer (correctly walks `cfg.entry()`; the CFG provided to it has
+  the ≤7 reachable BBs; everything else is correctly unreachable).
+
+---
+
+## Estimated Fix Effort
+
+### Fix A — Prologue false-positive (covers sub_2436e0, sub_7b710)
+
+**Effort: 1–2 days, LOW risk**.
+
+Approach: Don't treat `PUSH_R15`/`R14`/`R13`/`R12` as a function-start
+pattern unless it appears **at a 16-byte aligned address AND is preceded
+by alignment padding (NOP/INT3)**. This matches what IDA / GHIDRA / Ninja
+do.
+
+Better: use the **call-target set from `recursive_descent_discovery`** as
+the ground truth, and only fall back to prologue scanning for addresses
+that are also call targets. Spurious `push %r15` mid-function is never a
+call target.
+
+Specific changes:
+- `pipeline.rs:111-119`: gate `PUSH_R15..R12` matches on `(base+idx) % 16 == 0`
+  AND `idx > 0 && data[idx-1] in {0x90, 0xCC, 0x66...}` (NOP/INT3/multi-byte NOP).
+- Or, defer prologue scanning until after recursive descent: only emit a
+  prologue-discovered function if (a) its address is a known call target,
+  or (b) its prologue is *strict* (ENDBR64 or `push rbp; mov rbp, rsp`).
+
+Expected impact: dramatically increases lifted size for ~most functions
+in stripped binaries with frame setup. Likely **+10–20% if-branches parity**
+just from this.
+
+### Fix B — Function chunks / shared tail (covers sub_1e2580)
+
+**Effort: 1–2 weeks, MEDIUM-HIGH risk**.
+
+Approach: After initial discovery, run a CFG-completion pass:
+1. After lifting, collect all in-IR BRANCH/CBRANCH targets.
+2. If a target falls in `.text` but **outside** the function's bounds, AND
+   it's not a discovered function entry, the target is a "chunk" — extend
+   the function's bounds to include its basic block, lift those bytes,
+   add them to the function's BB list.
+3. Recurse: the chunk may itself have out-of-bounds branches.
+4. Stop at any byte that IS a discovered function entry.
+
+This is essentially what IDA / GHIDRA do (Ghidra calls them "fallthrough
+overrides" and "function chunks"). Implementation is non-trivial because:
+- Chunks may be shared with other functions (so we'd duplicate code in
+  every function that references them — an acceptable trade-off for parity).
+- Lifting a chunk may discover new chunks transitively.
+- Need to be careful not to lift into another discovered function's body.
+
+Expected impact: fixes sub_1e2580-class issues. Likely **+5–10% if-branches
+parity**.
+
+### Fix C — Better function discovery (covers everything else)
+
+**Effort: 2–3 weeks, MEDIUM risk**.
+
+Improve `recursive_descent_discovery` to follow `JMP rel32` (not just `CALL`).
+Currently lines 181-199 only follow `0xE8` (CALL); add `0xE9` (JMP rel32),
+`0x0F 0x84..0x8F` (Jcc rel32). Tail calls are common in optimized code.
+
+Also: walk relocations / `.eh_frame` FDEs if present (DWARF unwind info
+declares function bounds explicitly). This is the most reliable source.
+
+Expected impact: covers gaps Fix A + Fix B don't. Likely **+5% parity**.
+
+---
+
+## Wave 1 Scope Recommendation
+
+**Out of scope for Wave 1.**
+
+Reasoning:
+- Fix A is small (1–2 days) and should land in Wave 1 — it's pure
+  improvement with low risk and high impact. Recommend **moving Fix A
+  into Wave 1**.
+- Fix B (function chunks) is too invasive for Wave 1 — it changes the
+  function model, requires test-fixture updates, and risks breaking
+  the existing 1080-test suite. **Defer to Wave 2 or Phase 7.**
+- Fix C is medium effort and depends on relocations/eh-frame parsing
+  that may not be in `unlace-loader` yet — verify first. **Defer.**
+
+### Recommended Wave-1 Action
+
+Add a new task **P6-1.1: Tighten prologue scanner heuristics** with
+acceptance criteria:
+1. `sub_2436e0` lifts ≥ 200 bytes (currently 4).
+2. `sub_7b710` lifts ≥ 200 bytes (currently 32).
+3. Total `if-branches` parity score increases by ≥ 0.10 (from 0.15 to ≥ 0.25).
+4. No regression in test suite (1080 tests still pass).
+5. Effort budget: 1.5 days max.
+
+Defer **P6-1.2: Function chunk handling** to Wave 2 with a separate plan.
+
+---
+
+## Verification Commands
+
+```bash
+# Confirm the prologue false-positive theory
+RUST_LOG=debug ./target/release/unlace decompile --function sub_2436e0 \
+    hexrays/ida-9.1/hexx64.so 2>&1 | grep "lifting"
+# Expected output: size=4 (currently); after Fix A: size > 200
+
+# Confirm the cross-function jump theory
+./target/release/unlace decompile --function sub_1e2580 --emit cfg-dot \
+    hexrays/ida-9.1/hexx64.so | grep "->" | wc -l
+# Currently: 6 reachable edges out of ~20 in IR; after Fix B: ≥ 20
+
+# Sanity check that structurer is innocent
+./target/release/unlace decompile --function sub_4e530 \
+    hexrays/ida-9.1/hexx64.so | grep -c "if"
+# Currently: 2 (works fine on a function that lifts correctly)
+```
+
+---
+
+## Files Inspected
+
+- `crates/unlace-cli/src/pipeline.rs` (lines 1-479) — pipeline + discovery
+- `crates/unlace-struct/src/structurer.rs` (lines 66-300) — structurer logic
+- `crates/unlace-lift-x86/src/lift.rs` — x86 lifter dispatch
+- `references/hexrays/ida_dump/hexx64/all/sub_1E2580.c` — IDA reference (626 lines, 59 ifs)
+- `references/hexrays/ida_dump/hexx64/all/sub_7B710.c` — IDA reference (116 lines, 20 ifs)
+- objdump output of `hexrays/ida-9.1/hexx64.so` — ground-truth disassembly
+
+## Files NOT touched (out of scope for investigation)
+
+- No code changes made — this is a research task.

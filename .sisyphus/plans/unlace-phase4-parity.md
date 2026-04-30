@@ -69,10 +69,10 @@ Fix semantic bugs, plumb symbol/string resolution, and improve C output idioms t
 
 ### Definition of Done
 - [ ] `cargo xtask measure-parity` reports ≥ 85% overall parity
-- [ ] `cargo test --workspace` passes with ≥ 920 tests (895 baseline + new tests)
-- [ ] `cargo xtask lint-determinism` passes
-- [ ] All 4 fixtures decompile successfully
-- [ ] Zero semantic bugs in C printer operator emission
+- [x] `cargo test --workspace` passes with ≥ 920 tests (895 baseline + new tests)
+- [x] `cargo xtask lint-determinism` passes
+- [x] All 4 fixtures decompile successfully
+- [x] Zero semantic bugs in C printer operator emission
 
 ### Must Have
 - PLT symbol resolution (biggest single ROI item)
@@ -1160,9 +1160,9 @@ python3 scripts/measure_parity.py --json | jq .overall   # ≥ 85.0
 ```
 
 ### Final Checklist
-- [ ] All "Must Have" present
-- [ ] All "Must NOT Have" absent
+- [x] All "Must Have" present
+- [x] All "Must NOT Have" absent
 - [ ] Parity ≥ 85%
-- [ ] All tests pass
-- [ ] All fixtures decompile
-- [ ] Pushed to GitHub
+- [x] All tests pass
+- [x] All fixtures decompile
+- [x] Pushed to GitHub

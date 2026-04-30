@@ -1040,6 +1040,61 @@ mod tests {
             "LOCK XADD still updates flags via add of original + src");
     }
 
+    #[test]
+    fn test_bswap_64() {
+        // 48 0F C8 = bswap rax
+        let result = lifter()
+            .lift_insn(&[0x48, 0x0F, 0xC8], 0x1000)
+            .expect("should decode bswap rax");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("BSWAP should emit Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(atomic_tag::BSWAP, 8),
+            "tag should be BSWAP"
+        );
+        let result_vn = co.output.expect("BSWAP must produce a result");
+        assert_eq!(result_vn.size, 8, "bswap rax produces 8-byte result");
+    }
+
+    #[test]
+    fn test_bswap_32() {
+        // 0F C8 = bswap eax
+        let result = lifter()
+            .lift_insn(&[0x0F, 0xC8], 0x1000)
+            .expect("should decode bswap eax");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("BSWAP should emit Callother");
+        assert_eq!(co.output.expect("output").size, 4);
+    }
+
+    #[test]
+    fn test_movbe_load() {
+        // 48 0F 38 F0 07 = movbe rax, [rdi]
+        let result = lifter()
+            .lift_insn(&[0x48, 0x0F, 0x38, 0xF0, 0x07], 0x1000)
+            .expect("should decode movbe rax, [rdi]");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load),
+            "MOVBE load form should emit a Load before swapping");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("MOVBE should emit BSWAP Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(atomic_tag::BSWAP, 8),
+        );
+    }
+
     use crate::ops::fpu::fpu_tag;
 
     fn assert_fpu_tag(bytes: &[u8], expected_tag: u64) {
@@ -1101,6 +1156,57 @@ mod tests {
         let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
         let dst = co.output.expect("FST ST(i) writes to a register output");
         assert_eq!(dst.size, 10);
+    }
+
+    #[test]
+    fn test_lift_fadd_st0_st1() {
+        // D8 C1 = fadd st0, st1
+        assert_fpu_tag(&[0xD8, 0xC1], fpu_tag::FADD);
+        let result = lifter().lift_insn(&[0xD8, 0xC1], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs.len(), 3, "FADD st0,st1: (tag, st0, st1)");
+        let dst = co.output.expect("FADD writes to ST(0)");
+        assert_eq!(dst.offset, crate::register_file::ST0);
+    }
+
+    #[test]
+    fn test_lift_faddp_implicit() {
+        // DE C1 = faddp st1, st0
+        assert_fpu_tag(&[0xDE, 0xC1], fpu_tag::FADD);
+        let result = lifter().lift_insn(&[0xDE, 0xC1], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("FADDP writes to ST(1)");
+        assert_eq!(dst.offset, crate::register_file::ST1);
+    }
+
+    #[test]
+    fn test_lift_fsub_st0_st1() {
+        // D8 E1 = fsub st0, st1
+        assert_fpu_tag(&[0xD8, 0xE1], fpu_tag::FSUB);
+        let result = lifter().lift_insn(&[0xD8, 0xE1], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs.len(), 3);
+    }
+
+    #[test]
+    fn test_lift_fsubr_swaps_operands() {
+        // D8 E9 = fsubr st0, st1   (st0 = st1 - st0)
+        assert_fpu_tag(&[0xD8, 0xE9], fpu_tag::FSUB);
+        let result = lifter().lift_insn(&[0xD8, 0xE9], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        // Forward FSUB st0,st1 emits (st0, st1); reverse FSUBR swaps -> (st1, st0).
+        assert_eq!(co.inputs[1].offset, crate::register_file::ST1, "FSUBR lhs is st1");
+        assert_eq!(co.inputs[2].offset, crate::register_file::ST0, "FSUBR rhs is st0");
+    }
+
+    #[test]
+    fn test_lift_fadd_mem() {
+        // D8 00 = fadd dword [rax]
+        assert_fpu_tag(&[0xD8, 0x00], fpu_tag::FADD);
+        let result = lifter().lift_insn(&[0xD8, 0x00], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("FADD m32 writes to ST(0)");
+        assert_eq!(dst.offset, crate::register_file::ST0);
     }
 }
 

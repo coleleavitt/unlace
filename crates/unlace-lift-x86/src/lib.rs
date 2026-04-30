@@ -538,6 +538,60 @@ mod tests {
         assert_callother_tag(&[0x66, 0x0F, 0xFB, 0xC1], sse_tag::PSUBQ);
     }
 
+    // -- Sign extension (CDQE / CDQ / CQO / CBW / CWDE) --------------------
+
+    #[test]
+    fn test_cbw() {
+        // 66 98 = CBW (sign-extend AL to AX)
+        let result = lifter().lift_insn(&[0x66, 0x98], 0x1000).expect("should decode CBW");
+        assert_eq!(result.len, 2);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
+    }
+
+    #[test]
+    fn test_cwde() {
+        // 98 = CWDE (sign-extend AX to EAX)
+        let result = lifter().lift_insn(&[0x98], 0x1000).expect("should decode CWDE");
+        assert_eq!(result.len, 1);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
+    }
+
+    #[test]
+    fn test_cdqe() {
+        // 48 98 = CDQE (sign-extend EAX to RAX)
+        let result = lifter().lift_insn(&[0x48, 0x98], 0x1000).expect("should decode CDQE");
+        assert_eq!(result.len, 2);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
+    }
+
+    #[test]
+    fn test_cdq() {
+        // 99 = CDQ (sign-extend EAX to EDX:EAX)
+        let result = lifter().lift_insn(&[0x99], 0x1000).expect("should decode CDQ");
+        assert_eq!(result.len, 1);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSright));
+    }
+
+    #[test]
+    fn test_cqo() {
+        // 48 99 = CQO (sign-extend RAX to RDX:RAX)
+        let result = lifter().lift_insn(&[0x48, 0x99], 0x1000).expect("should decode CQO");
+        assert_eq!(result.len, 2);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSright));
+    }
+
+    // -- LEAVE ---------------------------------------------------------------
+
+    #[test]
+    fn test_leave() {
+        // C9 = LEAVE (MOV RSP,RBP; POP RBP)
+        let result = lifter().lift_insn(&[0xc9], 0x1000).expect("should decode LEAVE");
+        assert_eq!(result.len, 1);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
+        assert_eq!(result.ir_ops.iter().filter(|i| i.op == IrOp::Copy).count(), 3);
+    }
+
     #[test]
     fn test_lift_sse_movdqa_store() {
         // 66 0F 7F 07 = movdqa [rdi], xmm0
@@ -547,6 +601,181 @@ mod tests {
         let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
         assert!(co.output.is_none(), "store form should have no output");
         assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(sse_tag::MOVDQA, 8));
+    }
+
+    // -- SETcc lifting -------------------------------------------------------
+
+    #[test]
+    fn test_sete_sets_byte_on_zero_flag() {
+        // 0F 94 C0 = sete al
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x94, 0xC0], 0x1000)
+            .expect("should decode sete al");
+        assert_eq!(result.len, 3);
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_setne_uses_bool_negate() {
+        // 0F 95 C0 = setne al
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x95, 0xC0], 0x1000)
+            .expect("should decode setne al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate));
+    }
+
+    #[test]
+    fn test_setb_reads_carry_flag() {
+        // 0F 92 C0 = setb al
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x92, 0xC0], 0x1000)
+            .expect("should decode setb al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_setg_signed_greater() {
+        // 0F 9F C0 = setg al — ZF==0 AND SF==OF
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x9F, 0xC0], 0x1000)
+            .expect("should decode setg al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolAnd));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolXor));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate));
+    }
+
+    #[test]
+    fn test_setl_signed_less() {
+        // 0F 9C C0 = setl al — SF != OF
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x9C, 0xC0], 0x1000)
+            .expect("should decode setl al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolXor));
+    }
+
+    #[test]
+    fn test_seta_unsigned_above() {
+        // 0F 97 C0 = seta al — CF==0 AND ZF==0
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x97, 0xC0], 0x1000)
+            .expect("should decode seta al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolAnd));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate));
+    }
+
+    #[test]
+    fn test_setle_signed_less_or_equal() {
+        // 0F 9E C0 = setle al — ZF==1 OR SF!=OF
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x9E, 0xC0], 0x1000)
+            .expect("should decode setle al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolOr));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolXor));
+    }
+
+    #[test]
+    fn test_setbe_unsigned_below_or_equal() {
+        // 0F 96 C0 = setbe al — CF==1 OR ZF==1
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x96, 0xC0], 0x1000)
+            .expect("should decode setbe al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolOr));
+    }
+
+    #[test]
+    fn test_setae_unsigned_above_or_equal() {
+        // 0F 93 C0 = setae al — CF==0
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x93, 0xC0], 0x1000)
+            .expect("should decode setae al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate));
+    }
+
+    #[test]
+    fn test_setge_signed_greater_or_equal() {
+        // 0F 9D C0 = setge al — SF==OF
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x9D, 0xC0], 0x1000)
+            .expect("should decode setge al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolXor));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate));
+    }
+
+    #[test]
+    fn test_sets_reads_sign_flag() {
+        // 0F 98 C0 = sets al
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x98, 0xC0], 0x1000)
+            .expect("should decode sets al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn test_setns_negates_sign_flag() {
+        // 0F 99 C0 = setns al
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x99, 0xC0], 0x1000)
+            .expect("should decode setns al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate));
+    }
+
+    #[test]
+    fn test_seto_reads_overflow_flag() {
+        // 0F 90 C0 = seto al
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x90, 0xC0], 0x1000)
+            .expect("should decode seto al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn test_setno_negates_overflow_flag() {
+        // 0F 91 C0 = setno al
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x91, 0xC0], 0x1000)
+            .expect("should decode setno al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate));
+    }
+
+    #[test]
+    fn test_setp_reads_parity_flag() {
+        // 0F 9A C0 = setp al
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x9A, 0xC0], 0x1000)
+            .expect("should decode setp al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn test_setnp_negates_parity_flag() {
+        // 0F 9B C0 = setnp al
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x9B, 0xC0], 0x1000)
+            .expect("should decode setnp al");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate));
+    }
+
+    #[test]
+    fn test_setcc_memory_operand() {
+        // 0F 94 07 = sete [rdi]
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x94, 0x07], 0x1000)
+            .expect("should decode sete [rdi]");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
     }
 }
 

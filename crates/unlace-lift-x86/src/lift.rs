@@ -294,6 +294,11 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Neg => arithmetic::lift_neg(ctx, insn),
         M::Inc => arithmetic::lift_inc(ctx, insn),
         M::Dec => arithmetic::lift_dec(ctx, insn),
+        M::Cbw => arithmetic::lift_cbw(ctx, insn),
+        M::Cwde => arithmetic::lift_cwde(ctx, insn),
+        M::Cdqe => arithmetic::lift_cdqe(ctx, insn),
+        M::Cdq => arithmetic::lift_cdq(ctx, insn),
+        M::Cqo => arithmetic::lift_cqo(ctx, insn),
 
         M::And => bitwise::lift_and(ctx, insn),
         M::Or => bitwise::lift_or(ctx, insn),
@@ -313,8 +318,15 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Call => control_flow::lift_call(ctx, insn),
         M::Ret => control_flow::lift_ret(ctx, insn),
 
+        M::Sete | M::Setne | M::Setb | M::Setae | M::Seta | M::Setbe
+        | M::Setl | M::Setge | M::Setg | M::Setle | M::Sets | M::Setns
+        | M::Seto | M::Setno | M::Setp | M::Setnp => {
+            data_move::lift_setcc(ctx, insn);
+        }
+
         M::Push => stack::lift_push(ctx, insn),
         M::Pop => stack::lift_pop(ctx, insn),
+        M::Leave => stack::lift_leave(ctx, insn),
 
         M::Movdqa => sse::lift_sse_mov(ctx, insn, sse::tag::MOVDQA),
         M::Movdqu => sse::lift_sse_mov(ctx, insn, sse::tag::MOVDQU),

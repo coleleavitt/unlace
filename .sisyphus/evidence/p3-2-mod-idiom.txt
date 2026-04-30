@@ -1,0 +1,112 @@
+P3-2: Compiler modulo idiom recovery
+=====================================
+
+TASK
+----
+Recognize compiler-emitted modulo patterns in the post-SSA IR and rewrite
+them back to INT_REM / INT_SREM. Operates AFTER P3-1 division_idiom
+(which canonicalises INT_DIV / INT_SDIV from multiply-shift form), so the
+remaining modulo patterns appear as clean ALU chains.
+
+DELIVERABLES
+------------
+- crates/unlace-passes/src/modulo_idiom.rs           (NEW, 583 lines)
+- crates/unlace-passes/src/lib.rs                    (modified: +2 lines)
+  * `pub mod modulo_idiom;`
+  * `pub use modulo_idiom::ModuloIdiomPass;`
+
+PATTERNS RECOGNISED
+-------------------
+1. Unsigned subtract form
+     INT_SUB(v, INT_MULT(INT_DIV(v, N),  N))  ->  INT_REM(v, N)
+2. Signed subtract form
+     INT_SUB(v, INT_MULT(INT_SDIV(v, N), N))  ->  INT_SREM(v, N)
+3. Power-of-two AND mask (only in index-like context)
+     INT_AND(v, 2^k - 1)  ->  INT_REM(v, 2^k)
+   * "Index-like" heuristic: AND output is consumed by INT_ADD,
+     INT_LESS, or INT_LESSEQUAL in the same block.
+
+ALGORITHM SKETCH
+----------------
+Per block, two linear sweeps:
+
+* Sweep 1 (subtract form)
+  - Find every IntSub.
+  - Look back for the producer of inputs[1]; require IntMult.
+  - From the IntMult, extract (variable, constant_M) commutatively.
+  - Look back for the producer of `variable`; require IntDiv or IntSdiv
+    with inputs == [SUB.inputs[0], constant_N].
+  - Require constant_N == constant_M (modulus must equal divisor).
+  - Replace IntSub with IntRem / IntSrem; neutralize the original
+    INT_MULT and INT_DIV / INT_SDIV to COPY so DCE can drop them.
+
+* Sweep 2 (power-of-two AND)
+  - Find every IntAnd whose constant operand is one of
+    { 0x7, 0xF, 0x1F, 0x3F, 0x7F, 0xFF, 0xFFFF,
+      0x7FFFFFFF, 0x7FFFFFFFFFFFFFFF }.
+  - Verify mask + 1 is_power_of_two (defence in depth).
+  - Walk downstream insns in the same block; only rewrite if the
+    AND output is consumed by IntAdd, IntLess, or IntLessequal.
+  - Replace AND with IntRem(v, 2^k).
+
+DETERMINISM
+-----------
+- BTreeMap-only (no HashMap, no HashSet) per workspace lint.
+- Same matcher style as sibling division_idiom.rs (committed Wave 1).
+- Per-block sweeps preserve insn order; no reordering of side effects.
+
+TESTS  (`cargo test -p unlace-passes -- modulo_idiom`)
+------------------------------------------------------
+running 9 tests
+test modulo_idiom::tests::test_mod_via_div_subtract ............... ok
+test modulo_idiom::tests::test_smod_via_sdiv_subtract ............. ok
+test modulo_idiom::tests::test_mod_via_div_subtract_commutative ... ok
+test modulo_idiom::tests::test_pow2_and_to_mod_in_index ........... ok
+test modulo_idiom::tests::test_pow2_and_to_mod_in_less_context .... ok
+test modulo_idiom::tests::test_pow2_and_kept_no_index ............. ok
+test modulo_idiom::tests::test_non_pow2_mask_no_match ............. ok
+test modulo_idiom::tests::test_different_vars_no_match ............ ok
+test modulo_idiom::tests::test_div_const_mismatch ................. ok
+test result: ok. 9 passed; 0 failed; 0 ignored
+
+All required tests from spec covered:
+  [x] test_mod_via_div_subtract       - unsigned subtract form
+  [x] test_smod_via_sdiv_subtract     - signed subtract form
+  [x] test_pow2_and_to_mod_in_index   - AND in INT_ADD context
+  [x] test_pow2_and_kept_no_index     - AND in non-index context preserved
+  [x] test_different_vars_no_match    - SSA varnode equality enforced
+  [x] test_div_const_mismatch         - divisor != multiplier rejected
+
+Bonus tests added for robustness:
+  [x] test_mod_via_div_subtract_commutative - const may be MULT.inputs[0]
+  [x] test_pow2_and_to_mod_in_less_context  - INT_LESS also flags as index
+  [x] test_non_pow2_mask_no_match           - mask must be 2^k-1
+
+LINT  (`cargo xtask lint-determinism`)
+--------------------------------------
+lint-determinism: OK -- no HashMap/HashSet in enforced crates
+
+WORKSPACE TESTS  (`cargo test --workspace`)
+-------------------------------------------
+unlace-passes:  131 passed; 0 failed   (includes my 9 new tests)
+
+unlace-output:  build error in c_printer.rs --
+                non-exhaustive match for HirNode::For added by parallel
+                sibling task P3-7 (for-loop recovery in structurer.rs).
+                NOT in my territory -- task spec explicitly says
+                "MUST NOT DO: touch other Wave 2 files: structurer.rs,
+                variable_merge.rs". Verified by stashing my changes:
+                workspace fails identically without my modifications,
+                confirming the failure pre-exists in the parallel WIP
+                state and is unrelated to modulo_idiom.
+
+FILES TOUCHED
+-------------
+M crates/unlace-passes/src/lib.rs        (+2 lines: pub mod + pub use)
+A crates/unlace-passes/src/modulo_idiom.rs
+
+NOT TOUCHED (per spec)
+----------------------
+- crates/unlace-passes/src/division_idiom.rs   (Wave 1, committed)
+- crates/unlace-struct/src/structurer.rs       (P3-7 sibling)
+- crates/unlace-passes/src/variable_merge.rs   (P3-10 sibling)

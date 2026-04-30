@@ -1,0 +1,30 @@
+P4-15: if-chain → switch conversion post-structuring pass
+=========================================================
+
+Created: crates/unlace-struct/src/if_to_switch.rs
+Modified: crates/unlace-struct/src/lib.rs (module registration + re-export)
+Modified: crates/unlace-cli/src/pipeline.rs (wired into post-structuring pipeline)
+
+Algorithm (RetDec-style):
+  1. Build def_map: SsaVarnode → IrInsn from SsaFunction var_map
+  2. Walk HIR looking for if-else-if chains (HirNode::If with else_body containing another If)
+  3. For each condition, extract IntEqual(expr, Const) via def_map lookup
+  4. Verify same base Varnode across all conditions in the chain
+  5. Reject side-effecting expressions: RAM-space operands, Call/Callind/Callother/Load defines
+  6. Require ≥ 3 cases (MIN_CASES = 3)
+  7. Convert to HirNode::Switch { cond, cases: Vec<(SwitchCase::Value, body)>, default }
+  8. Final else clause becomes default case
+
+Pipeline integration:
+  - Runs after ternary_recovery, before C emission
+  - Called in pipeline.rs: unlace_struct::if_chain_to_switch(&mut hir, ssa)
+
+Tests (4):
+  test_if_chain_3_cases_to_switch       — 3-case chain → switch with 3 Value cases
+  test_if_chain_different_vars_no_convert — mixed variables → stays if-else
+  test_if_chain_2_cases_no_convert       — 2 cases (below threshold) → stays if-else
+  test_if_chain_with_else_becomes_default — trailing else → default case
+
+Test results:
+  cargo test -p unlace-struct --lib if_to_switch: 4/4 passed
+  cargo test --workspace: 949 passed, 2 pre-existing failures (structurer break tests)

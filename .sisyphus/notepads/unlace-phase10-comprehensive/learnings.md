@@ -211,3 +211,17 @@ Added 2 bitfield idiom patterns to `idiom_recognition.rs`:
 - Updated existing `test_idiom_subpiece_no_match_when_mask_size_mismatch` — this pattern is now correctly recognized as a bitfield read instead of being unmatched
 - Tags 0x327-0x328 continue the idiom-recognition range after memcpy/memset (0x325-0x326)
 - C printer maps 0x327 → `__bitfield_get__`, 0x328 → `__bitfield_set__`
+
+## P10-11: 1-Level Pointer-Chain Type Propagation (2026-04-30)
+
+Added pointer-chain propagation to `type_infer.rs`: when a Load's address input already has Ptr type and the output is pointer-sized (8 bytes), the output also gets Ptr type (or a refined type from struct field detection).
+
+### Key Decisions
+- Chain depth capped at 1 level via `chain_promoted: BTreeSet<SsaVarnode>` — varnodes promoted by the chain rule are tracked, and the rule won't fire if the address input was itself chain-promoted
+- Struct field refinement: if the address is `INT_ADD(base, const_offset)` and `base` has a `Type::Struct` in `composite_var_types`, the field type at that offset is used instead of generic Ptr
+- `force_set_type` introduced for Load/Store address inputs — these are definitively pointers and must not be demoted by lattice join with Int from arithmetic rules
+- IntAdd/IntSub preserve existing Ptr on both inputs and output — prevents `Ptr.join(Int(8)) = Unknown` oscillation from pointer arithmetic patterns
+- No oscillation: `force_set_type` for addresses + `preserve_ptr` guard on IntAdd converges in 2 iterations (IntAdd sets Int, Load force-sets Ptr, next iteration IntAdd skips)
+
+### Pitfall Found
+- `PrimitiveType::join(Ptr, Int(8)) = Unknown` — the lattice treats Ptr and Int as conflicting types. Without `force_set_type`, a varnode used as both IntAdd output (→ Int) and Load address (→ Ptr) oscillates between Int(8) and Unknown indefinitely. The fix: address operands use `force_set_type` which bypasses the lattice join.

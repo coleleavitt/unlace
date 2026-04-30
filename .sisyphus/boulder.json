@@ -1,8 +1,12 @@
 {
-  "active_plan": "/home/cole/RustProjects/active/unlace/.sisyphus/plans/unlace-phase3-advanced.md",
-  "started_at": "2026-04-30T07:00:00.000Z",
-  "session_ids": [],
-  "session_origins": {},
-  "plan_name": "unlace-phase3-advanced",
+  "active_plan": "/home/cole/RustProjects/active/unlace/.sisyphus/plans/unlace-phase4-parity.md",
+  "started_at": "2026-04-30T06:20:04.256Z",
+  "session_ids": [
+    "ses_2259eea58ffekd42HVWKymUkpb"
+  ],
+  "session_origins": {
+    "ses_2259eea58ffekd42HVWKymUkpb": "direct"
+  },
+  "plan_name": "unlace-phase4-parity",
   "agent": "atlas"
 }

@@ -203,7 +203,7 @@ Max Concurrent: 7 (Wave 1)
 
 ## TODOs
 
-- [ ] P4-0. Parity baseline measurement
+- [x] P4-0. Parity baseline measurement
 
   **What to do**:
   - Run `cargo build --release -p unlace-cli`

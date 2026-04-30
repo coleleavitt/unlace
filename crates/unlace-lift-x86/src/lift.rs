@@ -395,6 +395,21 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Fsubr  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, true),
         M::Fsubrp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, true),
 
+        M::Fmul  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FMUL, false),
+        M::Fmulp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FMUL, false),
+        M::Fdiv  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FDIV, false),
+        M::Fdivp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FDIV, false),
+        M::Fdivr  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FDIV, true),
+        M::Fdivrp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FDIV, true),
+
+        M::Fcom    => fpu::lift_fcom(ctx, insn),
+        M::Fcomp   => fpu::lift_fcom(ctx, insn),
+        M::Fcompp  => fpu::lift_fcom(ctx, insn),
+        M::Fucom   => fpu::lift_fcom(ctx, insn),
+        M::Fucomp  => fpu::lift_fcom(ctx, insn),
+        M::Fucompp => fpu::lift_fcom(ctx, insn),
+        M::Fxch    => fpu::lift_fxch(ctx, insn),
+
         _ => ctx.emit_unimplemented(),
     }
 }

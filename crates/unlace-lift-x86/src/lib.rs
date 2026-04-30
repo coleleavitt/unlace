@@ -1095,6 +1095,57 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_repne_scasb() {
+        // F2 AE = REPNE SCASB
+        let result = lifter()
+            .lift_insn(&[0xF2, 0xAE], 0x1000)
+            .expect("should decode repne scasb");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("REPNE SCASB should emit Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(0x4, 8),
+            "tag should be MEMSCAN=0x4"
+        );
+        assert_eq!(co.inputs.len(), 5, "MEMSCAN takes (tag, ptr, val, count, elem_size)");
+        assert_eq!(co.inputs[4], unlace_ir::Varnode::constant(1, 8),
+            "elem_size should be 1 for SCASB");
+
+        let rcx = unlace_ir::Varnode::reg(8, 8);
+        let zero = unlace_ir::Varnode::constant(0, 8);
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::Copy && i.output == Some(rcx) && i.inputs[0] == zero
+            }),
+            "should zero RCX after REPNE SCASB"
+        );
+    }
+
+    #[test]
+    fn test_repe_scasd() {
+        // F3 AF = REPE SCASD
+        let result = lifter()
+            .lift_insn(&[0xF3, 0xAF], 0x1000)
+            .expect("should decode repe scasd");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("REPE SCASD should emit Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(0x4, 8),
+        );
+        assert_eq!(co.inputs[4], unlace_ir::Varnode::constant(4, 8),
+            "elem_size should be 4 for SCASD");
+    }
+
     use crate::ops::fpu::fpu_tag;
 
     fn assert_fpu_tag(bytes: &[u8], expected_tag: u64) {
@@ -1207,6 +1258,92 @@ mod tests {
         let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
         let dst = co.output.expect("FADD m32 writes to ST(0)");
         assert_eq!(dst.offset, crate::register_file::ST0);
+    }
+
+    #[test]
+    fn test_lift_fmul_st0_st1() {
+        // D8 C9 = fmul st0, st1
+        assert_fpu_tag(&[0xD8, 0xC9], fpu_tag::FMUL);
+        let result = lifter().lift_insn(&[0xD8, 0xC9], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs.len(), 3);
+        let dst = co.output.expect("FMUL writes to ST(0)");
+        assert_eq!(dst.offset, crate::register_file::ST0);
+    }
+
+    #[test]
+    fn test_lift_fmulp_implicit() {
+        // DE C9 = fmulp st1, st0
+        assert_fpu_tag(&[0xDE, 0xC9], fpu_tag::FMUL);
+        let result = lifter().lift_insn(&[0xDE, 0xC9], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("FMULP writes to ST(1)");
+        assert_eq!(dst.offset, crate::register_file::ST1);
+    }
+
+    #[test]
+    fn test_lift_fdiv_st0_st1() {
+        // D8 F1 = fdiv st0, st1
+        assert_fpu_tag(&[0xD8, 0xF1], fpu_tag::FDIV);
+    }
+
+    #[test]
+    fn test_lift_fdivr_swaps_operands() {
+        // D8 F9 = fdivr st0, st1   (st0 = st1 / st0)
+        assert_fpu_tag(&[0xD8, 0xF9], fpu_tag::FDIV);
+        let result = lifter().lift_insn(&[0xD8, 0xF9], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[1].offset, crate::register_file::ST1, "FDIVR lhs is st1");
+        assert_eq!(co.inputs[2].offset, crate::register_file::ST0, "FDIVR rhs is st0");
+    }
+
+    #[test]
+    fn test_lift_fcom_st1() {
+        // D8 D1 = fcom st1
+        assert_fpu_tag(&[0xD8, 0xD1], fpu_tag::FCOM);
+        let result = lifter().lift_insn(&[0xD8, 0xD1], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert!(co.output.is_none(), "FCOM does not produce a varnode output");
+        assert_eq!(co.inputs.len(), 3, "FCOM: (tag, st0, st1)");
+        assert_eq!(co.inputs[1].offset, crate::register_file::ST0);
+        assert_eq!(co.inputs[2].offset, crate::register_file::ST1);
+    }
+
+    #[test]
+    fn test_lift_fcompp_implicit() {
+        // DE D9 = fcompp   (compare ST(0) with ST(1), pop both)
+        assert_fpu_tag(&[0xDE, 0xD9], fpu_tag::FCOM);
+        let result = lifter().lift_insn(&[0xDE, 0xD9], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[1].offset, crate::register_file::ST0);
+        assert_eq!(co.inputs[2].offset, crate::register_file::ST1);
+    }
+
+    #[test]
+    fn test_lift_fucom_st1() {
+        // DD E1 = fucom st1
+        assert_fpu_tag(&[0xDD, 0xE1], fpu_tag::FCOM);
+    }
+
+    #[test]
+    fn test_lift_fxch_st1() {
+        // D9 C9 = fxch st1
+        assert_fpu_tag(&[0xD9, 0xC9], fpu_tag::FXCH);
+        let result = lifter().lift_insn(&[0xD9, 0xC9], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert!(co.output.is_none(), "FXCH does not produce a single-varnode output");
+        assert_eq!(co.inputs.len(), 3, "FXCH: (tag, st0, st1)");
+        assert_eq!(co.inputs[1].offset, crate::register_file::ST0);
+        assert_eq!(co.inputs[2].offset, crate::register_file::ST1);
+    }
+
+    #[test]
+    fn test_lift_fxch_st3() {
+        // D9 CB = fxch st3
+        assert_fpu_tag(&[0xD9, 0xCB], fpu_tag::FXCH);
+        let result = lifter().lift_insn(&[0xD9, 0xCB], 0x1000).unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[2].offset, crate::register_file::ST3);
     }
 }
 

@@ -22,6 +22,10 @@ pub enum IntrinsicCategory {
     SseCompare,
     /// Scalar/packed type conversions: CVTSI2SD, CVTSD2SI, etc.
     SseConvert,
+    /// SSE4.1 blend/select: BLENDPS, PBLENDVB, etc.
+    SseBlend,
+    /// SSE2 pack-with-saturation: PACKSSWB, PACKUSWB, etc.
+    SsePack,
     /// AVX packed arithmetic: VPADDB, VPADDW, etc.
     AvxArith,
     /// AVX aligned/unaligned moves: VMOVDQA, VMOVDQU.
@@ -179,6 +183,33 @@ impl Default for IntrinsicRegistry {
             // ── SSE misc ────────────────────────────────────────────
             ("PMOVMSKB", info("_mm_movemask_epi8", 1, 4,  Other)),
             ("MOVMSKPS", info("_mm_movemask_ps",   1, 4,  Other)),
+            // ── SSE float sqrt/rcp ──────────────────────────────────
+            ("SQRTPS",   info("_mm_sqrt_ps",       1, 16, SseArith)),
+            ("SQRTPD",   info("_mm_sqrt_pd",       1, 16, SseArith)),
+            ("SQRTSS",   info("_mm_sqrt_ss",       1, 16, SseArith)),
+            ("SQRTSD",   info("_mm_sqrt_sd",       2, 16, SseArith)),
+            ("RCPPS",    info("_mm_rcp_ps",        1, 16, SseArith)),
+            ("RCPSS",    info("_mm_rcp_ss",        1, 16, SseArith)),
+            ("RSQRTPS",  info("_mm_rsqrt_ps",      1, 16, SseArith)),
+            ("RSQRTSS",  info("_mm_rsqrt_ss",      1, 16, SseArith)),
+            // ── SSE/SSE2 min/max packed integer ─────────────────────
+            ("PMINUB",   info("_mm_min_epu8",      2, 16, SseArith)),
+            ("PMAXUB",   info("_mm_max_epu8",      2, 16, SseArith)),
+            ("PMINSW",   info("_mm_min_epi16",     2, 16, SseArith)),
+            ("PMAXSW",   info("_mm_max_epi16",     2, 16, SseArith)),
+            ("MINPD",    info("_mm_min_pd",        2, 16, SseArith)),
+            ("MAXPD",    info("_mm_max_pd",        2, 16, SseArith)),
+            // ── SSE2 pack-with-saturation ───────────────────────────
+            ("PACKSSWB", info("_mm_packs_epi16",   2, 16, SsePack)),
+            ("PACKSSDW", info("_mm_packs_epi32",   2, 16, SsePack)),
+            ("PACKUSWB", info("_mm_packus_epi16",  2, 16, SsePack)),
+            // ── SSE4.1 blend/select ─────────────────────────────────
+            ("BLENDPS",  info("_mm_blend_ps",      3, 16, SseBlend)),
+            ("BLENDPD",  info("_mm_blend_pd",      3, 16, SseBlend)),
+            ("BLENDVPS", info("_mm_blendv_ps",     3, 16, SseBlend)),
+            ("BLENDVPD", info("_mm_blendv_pd",     3, 16, SseBlend)),
+            ("PBLENDW",  info("_mm_blend_epi16",   3, 16, SseBlend)),
+            ("PBLENDVB", info("_mm_blendv_epi8",   3, 16, SseBlend)),
             // ── AVX moves ───────────────────────────────────────────
             ("VMOVDQA",  info("_mm256_load_si256",  1, 32, AvxMove)),
             ("VMOVDQU",  info("_mm256_loadu_si256", 1, 32, AvxMove)),
@@ -197,6 +228,15 @@ impl Default for IntrinsicRegistry {
             ("VPAND",    info("_mm256_and_si256",    2, 32, AvxArith)),
             ("VPOR",     info("_mm256_or_si256",     2, 32, AvxArith)),
             ("VPXOR",    info("_mm256_xor_si256",    2, 32, AvxArith)),
+            // ── AVX packed float arithmetic ─────────────────────────
+            ("VADDPS",   info("_mm256_add_ps",       2, 32, AvxArith)),
+            ("VSUBPS",   info("_mm256_sub_ps",       2, 32, AvxArith)),
+            ("VMULPS",   info("_mm256_mul_ps",       2, 32, AvxArith)),
+            ("VDIVPS",   info("_mm256_div_ps",       2, 32, AvxArith)),
+            ("VADDPD",   info("_mm256_add_pd",       2, 32, AvxArith)),
+            ("VMULPD",   info("_mm256_mul_pd",       2, 32, AvxArith)),
+            ("VSQRTPS",  info("_mm256_sqrt_ps",      1, 32, AvxArith)),
+            ("VSQRTPD",  info("_mm256_sqrt_pd",      1, 32, AvxArith)),
         ];
 
         let mut entries = BTreeMap::new();
@@ -357,5 +397,65 @@ mod tests {
         let mut sorted = mnemonics.clone();
         sorted.sort();
         assert_eq!(mnemonics, sorted, "BTreeMap iteration should be sorted");
+    }
+
+    #[test]
+    fn test_sse_sqrt_family_present() {
+        let reg = registry();
+        let sqrtps = reg.lookup("SQRTPS").expect("SQRTPS missing");
+        assert_eq!(sqrtps.c_name, "_mm_sqrt_ps");
+        assert_eq!(sqrtps.input_count, 1);
+        assert_eq!(sqrtps.output_size, 16);
+        assert_eq!(sqrtps.category, IntrinsicCategory::SseArith);
+
+        for name in ["SQRTPD", "SQRTSS", "RCPPS", "RSQRTPS"] {
+            assert!(reg.lookup(name).is_some(), "{name} should be registered");
+        }
+    }
+
+    #[test]
+    fn test_sse41_blend_family_present() {
+        let reg = registry();
+        let blendps = reg.lookup("BLENDPS").expect("BLENDPS missing");
+        assert_eq!(blendps.c_name, "_mm_blend_ps");
+        assert_eq!(blendps.input_count, 3);
+        assert_eq!(blendps.category, IntrinsicCategory::SseBlend);
+
+        let pblendvb = reg.lookup("PBLENDVB").expect("PBLENDVB missing");
+        assert_eq!(pblendvb.c_name, "_mm_blendv_epi8");
+        assert_eq!(pblendvb.input_count, 3);
+        assert_eq!(pblendvb.category, IntrinsicCategory::SseBlend);
+    }
+
+    #[test]
+    fn test_sse2_pack_family_present() {
+        let reg = registry();
+        let packsswb = reg.lookup("PACKSSWB").expect("PACKSSWB missing");
+        assert_eq!(packsswb.c_name, "_mm_packs_epi16");
+        assert_eq!(packsswb.category, IntrinsicCategory::SsePack);
+
+        for (mnemonic, expected_c) in [
+            ("PACKSSDW", "_mm_packs_epi32"),
+            ("PACKUSWB", "_mm_packus_epi16"),
+        ] {
+            let info = reg.lookup(mnemonic).unwrap_or_else(|| panic!("{mnemonic} missing"));
+            assert_eq!(info.c_name, expected_c);
+            assert_eq!(info.category, IntrinsicCategory::SsePack);
+        }
+    }
+
+    #[test]
+    fn test_avx_float_arith_present() {
+        let reg = registry();
+        for (mnemonic, expected_c) in [
+            ("VADDPS", "_mm256_add_ps"),
+            ("VMULPS", "_mm256_mul_ps"),
+            ("VSQRTPS", "_mm256_sqrt_ps"),
+        ] {
+            let info = reg.lookup(mnemonic).unwrap_or_else(|| panic!("{mnemonic} missing"));
+            assert_eq!(info.c_name, expected_c);
+            assert_eq!(info.output_size, 32, "AVX entry should be 32 bytes");
+            assert_eq!(info.category, IntrinsicCategory::AvxArith);
+        }
     }
 }

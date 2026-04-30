@@ -32,6 +32,26 @@ pub mod tag {
     pub const PAND: u64 = 0x120;
     pub const POR: u64 = 0x121;
     pub const PXOR: u64 = 0x122;
+
+    pub const ADDPS: u64 = 0x130;
+    pub const SUBPS: u64 = 0x131;
+    pub const MULPS: u64 = 0x132;
+    pub const DIVPS: u64 = 0x133;
+    pub const MINPS: u64 = 0x134;
+    pub const MAXPS: u64 = 0x135;
+    pub const SQRTPS: u64 = 0x136;
+
+    pub const PSHUFD: u64 = 0x140;
+    pub const PSHUFB: u64 = 0x141;
+    pub const PUNPCKLBW: u64 = 0x142;
+
+    pub const PMOVMSKB: u64 = 0x150;
+
+    pub const PACKSSWB: u64 = 0x160;
+    pub const PACKUSWB: u64 = 0x161;
+
+    pub const BLENDPS: u64 = 0x170;
+    pub const PBLENDVB: u64 = 0x171;
 }
 
 /// MOVDQA / MOVDQU: store form emits without output, load/reg form with output.
@@ -94,6 +114,60 @@ pub fn lift_sse_binop(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother
         IrOp::Callother,
         dst,
         smallvec![tag_vn, src0, src1],
+        ctx.addr,
+    ));
+}
+
+/// Single-source packed SSE (e.g. SQRTPS, PMOVMSKB): `dst = Callother(tag, src)`.
+///
+/// The destination is operand 0 (which may be a GP register for movemask) and
+/// the only input is operand 1.
+pub fn lift_sse_unop(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    let tag_vn = Varnode::constant(callother_tag, 8);
+
+    let Some(src) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![tag_vn, src],
+        ctx.addr,
+    ));
+}
+
+/// Three-operand SSE4.1 blend (BLENDPS, PBLENDVB): `dst = Callother(tag, a, b, mask)`.
+///
+/// BLENDPS uses an immediate mask in operand 2; BLENDVPS/PBLENDVB use the
+/// implicit XMM0 register as the mask. Both reach the IR as
+/// `(tag, src0, src1, mask)`.
+pub fn lift_sse_blend(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    let tag_vn = Varnode::constant(callother_tag, 8);
+
+    let Some(src0) = ctx.operand_read(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src1) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let mask = ctx.operand_read(insn, 2).unwrap_or_else(|| Varnode::constant(0, 1));
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![tag_vn, src0, src1, mask],
         ctx.addr,
     ));
 }

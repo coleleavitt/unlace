@@ -360,6 +360,26 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Por  => sse::lift_sse_binop(ctx, insn, sse::tag::POR),
         M::Pxor => sse::lift_sse_binop(ctx, insn, sse::tag::PXOR),
 
+        M::Addps => sse::lift_sse_binop(ctx, insn, sse::tag::ADDPS),
+        M::Subps => sse::lift_sse_binop(ctx, insn, sse::tag::SUBPS),
+        M::Mulps => sse::lift_sse_binop(ctx, insn, sse::tag::MULPS),
+        M::Divps => sse::lift_sse_binop(ctx, insn, sse::tag::DIVPS),
+        M::Minps => sse::lift_sse_binop(ctx, insn, sse::tag::MINPS),
+        M::Maxps => sse::lift_sse_binop(ctx, insn, sse::tag::MAXPS),
+        M::Sqrtps => sse::lift_sse_unop(ctx, insn, sse::tag::SQRTPS),
+
+        M::Pshufd => sse::lift_sse_binop(ctx, insn, sse::tag::PSHUFD),
+        M::Pshufb => sse::lift_sse_binop(ctx, insn, sse::tag::PSHUFB),
+        M::Punpcklbw => sse::lift_sse_binop(ctx, insn, sse::tag::PUNPCKLBW),
+
+        M::Pmovmskb => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVMSKB),
+
+        M::Packsswb => sse::lift_sse_binop(ctx, insn, sse::tag::PACKSSWB),
+        M::Packuswb => sse::lift_sse_binop(ctx, insn, sse::tag::PACKUSWB),
+
+        M::Blendps => sse::lift_sse_blend(ctx, insn, sse::tag::BLENDPS),
+        M::Pblendvb => sse::lift_sse_blend(ctx, insn, sse::tag::PBLENDVB),
+
         _ => ctx.emit_unimplemented(),
     }
 }

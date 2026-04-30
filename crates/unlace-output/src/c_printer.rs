@@ -3477,7 +3477,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("(v1 << v2) + v3"),
+            output.contains("(v1 << v2) + v4"),
             "shift inside add must be parenthesized: {output}",
         );
     }
@@ -3500,7 +3500,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("(v1 + v2) * v3"),
+            output.contains("(v1 + v2) * v4"),
             "add inside multiply must be parenthesized: {output}",
         );
     }
@@ -3523,11 +3523,11 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("v1 + v2 + v3"),
+            output.contains("v1 + v2 + v4"),
             "same-prec associative ops should NOT have extra parens: {output}",
         );
         assert!(
-            !output.contains("(v1 + v2) + v3"),
+            !output.contains("(v1 + v2) + v4"),
             "should not wrap same-prec: {output}",
         );
     }
@@ -3550,7 +3550,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("(v1 | v2) & v3"),
+            output.contains("(v1 | v2) & v4"),
             "OR inside AND must be parenthesized: {output}",
         );
     }

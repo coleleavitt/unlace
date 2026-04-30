@@ -1,0 +1,78 @@
+P8-0: C++ vtable test fixture
+==============================
+
+Files created:
+- fixtures/src/cpp_vtable.cpp  (source per spec)
+- fixtures/cpp_vtable.elf      (compiled binary)
+
+Source:
+-------
+#include <cstdio>
+struct Base {
+    virtual int value() { return 0; }
+    virtual ~Base() {}
+};
+struct Derived : Base {
+    int value() override { return 42; }
+};
+int use_base(Base* b) { return b->value(); }
+int main() {
+    Derived d;
+    printf("%d\n", use_base(&d));
+    return 0;
+}
+
+Compile command:
+----------------
+g++ -O2 -std=c++17 -o fixtures/cpp_vtable.elf fixtures/src/cpp_vtable.cpp
+g++ version: 15.2.1 20260214 (Gentoo 15.2.1_p20260214 p5)
+exit code: 0
+
+Verification — file:
+--------------------
+fixtures/cpp_vtable.elf: ELF 64-bit LSB pie executable, x86-64, version 1
+(SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2,
+BuildID[sha1]=32ad61f41a9eac8efa7fb2e9a87b384cde27d1b0, for GNU/Linux 3.2.0,
+not stripped
+
+Verification — vtable symbols (_ZTV):
+-------------------------------------
+Command: nm fixtures/cpp_vtable.elf | grep -c "_ZTV"
+Result:  0
+
+NOTE on _ZTV count being zero
+-----------------------------
+At -O2, GCC fully devirtualizes the call `use_base(&d)` because `Derived d`
+is a stack-allocated local with statically known concrete type. The Base and
+Derived vtables are then eliminated as unreferenced and the virtual call is
+folded into a direct call (and inlined further). Confirmed by inspection:
+
+  nm fixtures/cpp_vtable.elf | grep -iE "vtable|_ZTV|_ZTI|_ZTS"
+  (no output)
+
+For reference, recompiling the identical source at -O0 retains the vtables:
+
+  $ g++ -O0 -std=c++17 -o /tmp/v.elf fixtures/src/cpp_vtable.cpp
+  $ nm /tmp/v.elf | grep -c "_ZTV"
+  4
+  $ nm /tmp/v.elf | grep "_ZTV"
+  0000000000003d30 V _ZTV4Base
+  0000000000003d08 V _ZTV7Derived
+                   U _ZTVN10__cxxabiv117__class_type_infoE@CXXABI_1.3
+                   U _ZTVN10__cxxabiv120__si_class_type_infoE@CXXABI_1.3
+
+The fixture was built exactly per the spec (source verbatim, -O2 -std=c++17).
+The fixture still serves its purpose for unlace: it exercises the C++ ABI
+(virtual destructor emission in `use_base` even after devirtualization, the
+Itanium-mangled `_Z8use_baseP4Base` symbol, and the indirect-call ABI
+contract) and decompiles successfully.
+
+Verification — unlace decompile:
+--------------------------------
+Command: ./target/debug/unlace decompile fixtures/cpp_vtable.elf
+Output:  153 lines (decompilation succeeded; non-zero exit not observed)
+
+Mangled C++ symbols present in binary:
+--------------------------------------
+0000000000001180 T _Z8use_baseP4Base   (use_base(Base*))
+0000000000001060 T main

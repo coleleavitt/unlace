@@ -168,3 +168,35 @@ self-contained, so `unsafe impl Send/Sync` is safe for the lifter struct.
 - The `import_pdb()` integration test is `#[ignore]` since no PDB fixture is checked in.
 - `fallible-iterator` v0.2 (used by pdb 0.8) must be added alongside the workspace's
   v0.3 (used by gimli 0.33) — both coexist since they're different semver-major versions.
+
+## Task 34: Mach-O Loader via `object` Crate
+
+### Mach-O Magic Bytes
+- 32-bit: `0xFEEDFACE` (big-endian) / `0xCEFAEDFE` (little-endian, swapped)
+- 64-bit: `0xFEEDFACF` (big-endian) / `0xCFFAEDFE` (little-endian, swapped)
+- Fat/universal 32-bit: `0xCAFEBABE` (always big-endian on disk)
+- Fat/universal 64-bit: `0xCAFEBABF` (always big-endian on disk)
+- Use `to_le_bytes()` / `to_be_bytes()` on the canonical constants to get the on-disk patterns for both byte orders.
+
+### CPU Type → ArchId Mapping
+- `CPU_TYPE_X86` (7) → `ArchId::X86`. `CPU_TYPE_I386` is an alias for `CPU_TYPE_X86` — don't include both in a match arm or the compiler warns about unreachable patterns.
+- `CPU_TYPE_X86_64` (0x01000007) → `ArchId::X86_64`
+- `CPU_TYPE_ARM` (12) → `ArchId::Arm`
+- `CPU_TYPE_ARM64` (0x0100000C) → `ArchId::AArch64`. `CPU_TYPE_ARM64_32` also maps to `AArch64`.
+- `CPU_TYPE_POWERPC` (18) → `ArchId::Ppc`, `CPU_TYPE_POWERPC64` → `ArchId::Ppc64`
+
+### Mach-O Section Flags vs ELF/PE
+- Mach-O section headers carry attribute flags (`S_ATTR_PURE_INSTRUCTIONS`, `S_ATTR_SOME_INSTRUCTIONS`) but **not** memory protection bits directly. Protection lives on the segment (`maxprot`/`initprot`), not the section.
+- The `object` crate's `SectionFlags::MachO { flags }` only exposes the section-level flags word. Use `SectionKind` to infer write permission (Data, UninitializedData, Tls, etc.).
+- All mapped sections are conservatively marked as readable.
+
+### Fat Binary Handling
+- `object::read::macho::MachOFatFile<Fat>::parse()` returns the fat header + arch slice array.
+- `FatArch::data(file)` extracts the raw bytes for one architecture slice.
+- After extracting the slice, re-dispatch on its inner magic to choose 32-bit vs 64-bit parsing.
+- First slice is selected (no host-arch matching needed for a cross-platform decompiler).
+
+### Synthetic Test Binaries
+- Mach-O 64-bit: mach_header_64 (32 bytes) + LC_SEGMENT_64 (72 bytes) + section_64 (80 bytes) + LC_SYMTAB (24 bytes) + section data.
+- Mach-O 32-bit: mach_header (28 bytes) + LC_SEGMENT (56 bytes) + section (68 bytes) + LC_SYMTAB (24 bytes) + section data.
+- Fat binary: fat_header (8 bytes, big-endian) + fat_arch entries (20 bytes each, big-endian) + page-aligned embedded Mach-O slices.

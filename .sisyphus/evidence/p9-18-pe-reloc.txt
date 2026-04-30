@@ -1,0 +1,18 @@
+=== P9-18: PE relocation parsing ===
+Implemented: load_base_relocations<Pe>(file, data) -> Vec<Relocation>
+Strategy: object::read::pe::DataDirectories::relocation_blocks
+Maps types: DIR64/HIGHLOW/HIGH/LOW/HIGHADJ -> RelocKind::Relative
+ABSOLUTE (padding) -> skipped
+Address resolution: image_base + page_rva + entry_offset
+
+=== Tests ===
+test pe::tests::test_load_pe32 ... ok
+test pe::tests::test_load_minimal_pe64 ... ok
+test pe::tests::test_pe_entry_is_absolute_va ... ok
+test pe::tests::test_can_load_minimal_pe ... ok
+test pe::tests::test_pe_text_section_flags ... ok
+test pe::tests::test_pe_sections_have_data ... ok
+test pe::tests::test_reject_non_pe ... ok
+test pe::tests::test_pe_reloc_block_parsed ... ok
+test pe::tests::test_pe_no_reloc_directory_returns_empty ... ok
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 54 filtered out; finished in 0.00s

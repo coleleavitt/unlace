@@ -333,6 +333,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: BTreeSet::new(),
             panic_sites: BTreeMap::new(),
+            noreturn: false,
         }
     }
 

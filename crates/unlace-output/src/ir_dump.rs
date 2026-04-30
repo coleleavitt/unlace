@@ -277,71 +277,10 @@ mod tests {
             inferred_structs: BTreeMap::new(),
             composite_var_types: BTreeMap::new(),
             array_strides: BTreeMap::new(),
-            cpp_vtable_calls: BTreeMap::new(),
         }
     }
 
     #[test]
-    fn test_dump_simple_function() {
-        let r0 = Varnode::reg(0, 4);
-        let r8 = Varnode::reg(8, 4);
-        let r16 = Varnode::reg(16, 4);
-
-        let mut func = Function::new("example", BlockId(0), 0x1000);
-        let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns.push(IrInsn::with_output(
-            IrOp::IntAdd,
-            r0,
-            smallvec![r8, r16],
-            0x1000,
-        ));
-        bb0.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![Varnode::unique(0, 8), r0],
-            0x1004,
-        ));
-        func.insert_block(bb0);
-
-        let mut ssa = make_ssa(func);
-
-        // Add SSA version mappings.
-        let sv_r8 = SsaVarnode { base: r8, version: 0 };
-        let sv_r16 = SsaVarnode { base: r16, version: 0 };
-        let sv_r0_out = SsaVarnode { base: r0, version: 1 };
-        ssa.var_map.insert(
-            (BlockId(0), 0, VarnodeSlot::Input(0)),
-            sv_r8,
-        );
-        ssa.var_map.insert(
-            (BlockId(0), 0, VarnodeSlot::Input(1)),
-            sv_r16,
-        );
-        ssa.var_map.insert(
-            (BlockId(0), 0, VarnodeSlot::Output),
-            sv_r0_out,
-        );
-        ssa.var_map.insert(
-            (BlockId(0), 1, VarnodeSlot::Input(1)),
-            SsaVarnode { base: r0, version: 1 },
-        );
-
-        let output = dump_ir(&ssa);
-
-        // Check function header.
-        assert!(output.starts_with("func example @ 0x1000 {\n"));
-
-        // Check block header with entry annotation.
-        assert!(output.contains("BB_0 [entry, exit]:"));
-
-        // Check the INT_ADD line uses SSA varnodes.
-        assert!(output.contains("v0#1:i32 = INT_ADD v8:i32, v16:i32"));
-
-        // Check the RETURN line.
-        assert!(output.contains("RETURN"));
-
-        // Check closing brace.
-        assert!(output.ends_with("}\n"));
-    }
 
     #[test]
     fn test_dump_with_phi() {

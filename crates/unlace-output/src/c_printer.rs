@@ -137,6 +137,7 @@ pub fn print_c_full(
     let str_owned = string_table.cloned().unwrap_or_default();
     let mut ctx = PrintCtx::new(dwarf, func.panic_sites.clone(), sym_owned, str_owned);
 
+    compute_loop_counter_names(&func.body, 0, &mut ctx);
     collect_varnodes(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
     compute_byref_bases(&mut ctx);
@@ -356,13 +357,12 @@ impl PrintCtx {
     }
 
     fn name_of(&mut self, sv: &SsaVarnode) -> String {
-        if let Some(override_name) = self.name_overrides.get(&sv.base) {
-            return override_name.clone();
-        }
         if let Some(n) = self.var_names.get(sv) {
             return n.clone();
         }
-        let name = if let Some(existing) = self.base_names.get(&sv.base) {
+        let name = if let Some(override_name) = self.name_overrides.get(&sv.base) {
+            override_name.clone()
+        } else if let Some(existing) = self.base_names.get(&sv.base) {
             existing.clone()
         } else {
             let fresh = format!("v{}", self.next_var);
@@ -941,6 +941,92 @@ fn compute_byref_bases(ctx: &mut PrintCtx) {
                     ctx.byref_bases.insert(stk);
                 }
             }
+        }
+    }
+}
+
+/// Detect simple counter loops and rename their counters to `i`/`j`/`k`.
+///
+/// A `For { init, update, .. }` is recognized as a counter loop when:
+/// 1. `init.op == Copy` with a single constant input,
+/// 2. `update.op == IntAdd | IntSub` of the counter and a constant,
+/// 3. `init.output == update.output` (both refer to the same Varnode).
+///
+/// The counter Varnode is mapped to a depth-indexed name in
+/// `ctx.name_overrides` (`i` at the outermost loop, `j` one level in,
+/// `k` two levels in, then `l`/`m`/`n`).
+fn compute_loop_counter_names(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx) {
+    fn loop_counter_name(depth: usize) -> &'static str {
+        match depth {
+            0 => "i",
+            1 => "j",
+            2 => "k",
+            3 => "l",
+            4 => "m",
+            _ => "n",
+        }
+    }
+
+    fn detect(init: &IrInsn, update: &IrInsn) -> Option<Varnode> {
+        let init_out = init.output?;
+        let update_out = update.output?;
+        if init_out != update_out {
+            return None;
+        }
+        if init.op != IrOp::Copy
+            || init.inputs.len() != 1
+            || init.inputs[0].space != SpaceId::Const
+        {
+            return None;
+        }
+        if !matches!(update.op, IrOp::IntAdd | IrOp::IntSub) || update.inputs.len() != 2 {
+            return None;
+        }
+        let counter_first = update.inputs[0] == init_out;
+        let counter_second = update.inputs[1] == init_out;
+        if !counter_first && !counter_second {
+            return None;
+        }
+        let other_idx = if counter_first { 1 } else { 0 };
+        if update.inputs[other_idx].space != SpaceId::Const {
+            return None;
+        }
+        Some(init_out)
+    }
+
+    for node in nodes {
+        match node {
+            HirNode::For { init, update, body, .. } => {
+                if let Some(counter) = detect(init, update) {
+                    ctx.name_overrides
+                        .entry(counter)
+                        .or_insert_with(|| loop_counter_name(depth).to_string());
+                }
+                compute_loop_counter_names(body, depth + 1, ctx);
+            }
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                compute_loop_counter_names(body, depth + 1, ctx);
+            }
+            HirNode::If { then_body, else_body, .. } => {
+                compute_loop_counter_names(then_body, depth, ctx);
+                if let Some(eb) = else_body {
+                    compute_loop_counter_names(eb, depth, ctx);
+                }
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (_, body, _) in cases {
+                    compute_loop_counter_names(body, depth, ctx);
+                }
+                if let Some(d) = default {
+                    compute_loop_counter_names(d, depth, ctx);
+                }
+            }
+            HirNode::Block(children) => compute_loop_counter_names(children, depth, ctx),
+            HirNode::TryCatch { try_body, catch_body } => {
+                compute_loop_counter_names(try_body, depth, ctx);
+                compute_loop_counter_names(catch_body, depth, ctx);
+            }
+            _ => {}
         }
     }
 }
@@ -3475,8 +3561,8 @@ mod tests {
             "should contain 'for (': {output}",
         );
         assert!(
-            output.contains("v1++"),
-            "increment should be rendered as v1++: {output}",
+            output.contains("i++"),
+            "increment should be rendered as i++ (loop counter renamed): {output}",
         );
         assert!(
             !output.contains("while ("),
@@ -3504,8 +3590,49 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("v1 += 2"),
-            "step-2 should render as v1 += 2: {output}",
+            output.contains("i += 2"),
+            "step-2 should render as i += 2 (loop counter renamed): {output}",
+        );
+    }
+
+    #[test]
+    fn test_for_loop_nested_counter_naming() {
+        let outer = reg(0, 4);
+        let inner = reg(8, 4);
+        let zero = con(0, 4);
+        let one = con(1, 4);
+
+        let body = vec![
+            HirNode::For {
+                init: IrInsn::with_output(IrOp::Copy, outer, smallvec![zero], 0x1000),
+                cond: SsaVarnode { base: outer, version: 0 },
+                update: IrInsn::with_output(IrOp::IntAdd, outer, smallvec![outer, one], 0x1020),
+                body: vec![HirNode::For {
+                    init: IrInsn::with_output(IrOp::Copy, inner, smallvec![zero], 0x1004),
+                    cond: SsaVarnode { base: inner, version: 0 },
+                    update: IrInsn::with_output(
+                        IrOp::IntAdd, inner, smallvec![inner, one], 0x1018,
+                    ),
+                    body: vec![],
+                }],
+            },
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("nested_for", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("i++"),
+            "outer counter should be `i`: {output}",
+        );
+        assert!(
+            output.contains("j++"),
+            "inner counter should be `j`: {output}",
+        );
+        assert!(
+            !output.contains("v1") && !output.contains("v2"),
+            "loop counters should be renamed away from v1/v2: {output}",
         );
     }
 

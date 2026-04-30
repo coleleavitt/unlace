@@ -171,6 +171,7 @@ mod tests {
             frame_setup_insns: BTreeSet::new(),
             dwarf_local_names: BTreeMap::new(),
             inferred_structs: BTreeMap::new(),
+            composite_var_types: BTreeMap::new(),
         }
     }
 

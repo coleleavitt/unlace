@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::types::Type;
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
@@ -17,6 +18,8 @@ impl Pass for TypeInferPass {
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let before_len = func.var_types.len();
         let snapshot: BTreeMap<SsaVarnode, PrimitiveType> = func.var_types.clone();
+
+        seed_from_composites(func);
 
         let max_iterations = 100;
         let mut changed = true;
@@ -57,8 +60,35 @@ impl Pass for TypeInferPass {
             }
         }
 
+        seed_from_composites(func);
+
         let types_changed = func.var_types.len() != before_len || func.var_types != snapshot;
         Ok(types_changed)
+    }
+}
+
+/// Seed `var_types` from `composite_var_types` so primitive type inference
+/// has a consistent starting point.
+///
+/// A varnode flagged as `Type::Struct`/`Type::Array`/`Type::Ptr` in the
+/// composite map is reachable through a pointer at the primitive level, so
+/// its `var_types` entry is force-set to [`PrimitiveType::Ptr`]. A varnode
+/// flagged as `Type::Primitive(p)` simply propagates `p`. The lattice
+/// `join` enforces that subsequent inference cannot demote these entries
+/// back to `Unknown`.
+fn seed_from_composites(func: &mut SsaFunction) {
+    for (sv, ty) in &func.composite_var_types {
+        let primitive = match ty {
+            Type::Primitive(p) => *p,
+            Type::Ptr(_) | Type::Struct { .. } | Type::Array { .. } | Type::FuncPtr { .. } => {
+                PrimitiveType::Ptr
+            }
+        };
+        let entry = func.var_types.entry(*sv).or_insert(primitive);
+        *entry = entry.join(primitive);
+        if *entry == PrimitiveType::Unknown {
+            *entry = primitive;
+        }
     }
 }
 
@@ -793,6 +823,79 @@ mod tests {
 
         let cast_out = lookup_output_type(&ssa, BlockId(0), 1);
         assert_eq!(cast_out, Some(PrimitiveType::UnsignedInt(4)));
+    }
+
+    #[test]
+    fn test_composite_struct_preserved_through_inference() {
+        use unlace_ir::types::{StructFieldType, Type};
+
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("composite_pres", BlockId(0), 0xe000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            r0,
+            smallvec![r8, c1],
+            0xe000,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0xe008));
+        func.insert_block(bb0);
+
+        let mut ssa = build_ssa(func);
+        let r0_sv = *ssa
+            .var_map
+            .get(&(BlockId(0), 0, VarnodeSlot::Output))
+            .expect("r0 output");
+        let struct_ty = Type::Struct {
+            name: "Point".into(),
+            fields: vec![StructFieldType { name: "x".into(), ty: Type::int(4), offset: 0 }],
+        };
+        ssa.composite_var_types.insert(r0_sv, struct_ty.clone());
+
+        let pass = TypeInferPass;
+        pass.run(&mut ssa).expect("infer");
+
+        assert_eq!(ssa.var_types.get(&r0_sv).copied(), Some(PrimitiveType::Ptr));
+        assert_eq!(ssa.composite_var_types.get(&r0_sv), Some(&struct_ty));
+    }
+
+    #[test]
+    fn test_composite_lattice_join_struct_same_name() {
+        use unlace_ir::types::{StructFieldType, Type};
+
+        let s1 = Type::Struct {
+            name: "Foo".into(),
+            fields: vec![StructFieldType { name: "x".into(), ty: Type::int(4), offset: 0 }],
+        };
+        let s1_clone = s1.clone();
+        let s2 = Type::Struct {
+            name: "Bar".into(),
+            fields: vec![StructFieldType { name: "x".into(), ty: Type::int(4), offset: 0 }],
+        };
+
+        assert_eq!(s1.clone().join(s1_clone), s1);
+
+        assert_eq!(
+            s1.clone().join(s2),
+            Type::Primitive(PrimitiveType::Unknown),
+            "different struct names should not join"
+        );
+
+        assert_eq!(
+            s1.clone().join(Type::Primitive(PrimitiveType::Unknown)),
+            s1,
+            "Unknown is the bottom element"
+        );
+
+        assert_eq!(
+            Type::Primitive(PrimitiveType::Unknown).join(s1.clone()),
+            s1,
+            "Unknown joins from either side"
+        );
     }
 
     #[test]

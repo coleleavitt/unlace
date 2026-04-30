@@ -141,6 +141,47 @@ impl Type {
     pub fn to_c_string(&self) -> String {
         self.to_string()
     }
+
+    /// Lattice join for composite types.
+    ///
+    /// `Type::Primitive(Unknown)` is the bottom element (joins with anything
+    /// → that thing). Structs join only with themselves (same name) — DWARF
+    /// gives us nominal typing, not structural. Two arrays join when their
+    /// element types join cleanly. Mismatched composites collapse back to
+    /// `Type::Primitive(PrimitiveType::Unknown)`.
+    pub fn join(self, other: Self) -> Self {
+        let unknown = Type::Primitive(PrimitiveType::Unknown);
+        match (self, other) {
+            (a, b) if a == b => a,
+            (Type::Primitive(PrimitiveType::Unknown), t)
+            | (t, Type::Primitive(PrimitiveType::Unknown)) => t,
+            (Type::Primitive(p1), Type::Primitive(p2)) => Type::Primitive(p1.join(p2)),
+            (
+                Type::Struct { name: n1, fields: f1 },
+                Type::Struct { name: n2, fields: f2 },
+            ) if n1 == n2 && f1 == f2 => Type::Struct { name: n1, fields: f1 },
+            (Type::Ptr(a), Type::Ptr(b)) => {
+                let joined = a.join(*b);
+                if joined == unknown {
+                    unknown
+                } else {
+                    Type::Ptr(Box::new(joined))
+                }
+            }
+            (
+                Type::Array { element: e1, size: s1 },
+                Type::Array { element: e2, size: s2 },
+            ) if s1 == s2 => {
+                let joined = e1.join(*e2);
+                if joined == unknown {
+                    unknown
+                } else {
+                    Type::Array { element: Box::new(joined), size: s1 }
+                }
+            }
+            _ => unknown,
+        }
+    }
 }
 
 fn primitive_size(p: PrimitiveType) -> Option<u8> {

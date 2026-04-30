@@ -1,0 +1,8 @@
+F4: Regression Check — APPROVE
+Date: 2026-04-30
+medium.elf: 947 lines
+debug_structs.elf: 199 lines
+debug_calls.elf: 697 lines
+debug_hello.elf: 108 lines
+Test failures: 0
+Invalid input: exit code 1 (correct)

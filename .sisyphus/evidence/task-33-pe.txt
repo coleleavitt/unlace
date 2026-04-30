@@ -1,0 +1,25 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/unlace_loader-a29e78a02390eefb)
+
+running 12 tests
+test elf::tests::test_reject_non_elf ... ok
+test elf::tests::test_text_section_is_executable ... ok
+test elf::tests::test_load_hello_world ... ok
+test pe::tests::test_load_pe32 ... ok
+test pe::tests::test_pe_entry_is_absolute_va ... ok
+test pe::tests::test_can_load_minimal_pe ... ok
+test elf::tests::test_stripped_binary_has_few_symbols ... ok
+test pe::tests::test_load_minimal_pe64 ... ok
+test pe::tests::test_pe_text_section_flags ... ok
+test pe::tests::test_pe_sections_have_data ... ok
+test elf::tests::test_symbol_at_lookup ... ok
+test pe::tests::test_reject_non_pe ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests unlace_loader
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

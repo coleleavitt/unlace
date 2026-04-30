@@ -1,0 +1,10 @@
+[package]
+name = "unlace-plugin"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+libloading = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

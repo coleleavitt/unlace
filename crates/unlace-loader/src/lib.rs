@@ -8,6 +8,7 @@ pub mod dwarf;
 pub mod eh_frame;
 pub mod elf;
 pub mod error;
+pub mod gcc_except_table;
 pub mod image;
 pub mod pdb;
 pub mod pe;
@@ -20,6 +21,7 @@ pub use dwarf::{
 pub use eh_frame::{parse_eh_frame, EhFrameInfo, FunctionExtent, LsdaEntry};
 pub use elf::ElfLoader;
 pub use error::LoadError;
+pub use gcc_except_table::{parse_gcc_except_table, FunctionLsda, GccExceptTableInfo, TryRegion};
 pub use pe::PeLoader;
 pub use image::{
     ArchId, BinaryImage, Endian, RelocKind, Relocation, Section, SectionFlags, Symbol, SymbolKind,

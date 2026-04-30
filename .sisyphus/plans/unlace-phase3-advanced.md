@@ -100,7 +100,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
 
 ### Wave 1 — Pass Quality
 
-- [ ] P3-1. Compiler division idiom recovery
+- [x] P3-1. Compiler division idiom recovery
   **What to do**: Recognize `(x * magic_constant) >> shift` as `x / N`. GCC and Clang generate these for ALL integer divisions by constants. Add `DivisionIdiomPass` to unlace-passes. Read references/hexrays/ida_dump/hexx64/all/ for examples — IDA always shows `x / N` not the multiply-shift pattern.
   **IDA reference**: Search for division patterns in hexx64 decompiled output. IDA's Ghidra equivalent is `RuleDivTermAdd`.
   **Tests**: Lift `imul rax, rcx, 0x2AAAAAAB; shr rax, 33` → assert output shows `/ 3`.
@@ -116,7 +116,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
   ```
   **Commit**: `feat(passes): compiler division idiom recovery`
 
-- [ ] P3-2. Compiler modulo idiom recovery
+- [x] P3-2. Compiler modulo idiom recovery
   **What to do**: Recognize modulo patterns: `x - (x / N) * N` → `x % N`. Also: `x & (2^n - 1)` → `x % 2^n` for unsigned. Add to the DivisionIdiomPass or create `ModuloIdiomPass`.
   **Tests**: `x & 0x7` → `x % 8` for unsigned; `x - (x / 3) * 3` → `x % 3`.
   **QA Scenarios**:
@@ -131,7 +131,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
   ```
   **Commit**: `feat(passes): compiler modulo idiom recovery`
 
-- [ ] P3-3. Dead store elimination
+- [x] P3-3. Dead store elimination
   **What to do**: Separate from DCE. Remove writes to variables that are never subsequently read. DCE removes dead computations; DSE removes dead STORES. E.g., `v1 = 5; v1 = 10; return v1;` → remove `v1 = 5`.
   **Tests**: Synthetic IR with redundant stores → assert first store removed.
   **QA Scenarios**:
@@ -146,7 +146,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
   ```
   **Commit**: `feat(passes): dead store elimination`
 
-- [ ] P3-4. Sparse conditional constant propagation (SCCP)
+- [x] P3-4. Sparse conditional constant propagation (SCCP)
   **What to do**: Replace basic constant folding with SCCP. Propagate constants only along feasible paths. `if (x == 5) { y = x + 1; }` → `if (x == 5) { y = 6; }`. This is Ghidra's `ActionConditionalConst`.
   **Tests**: Synthetic IR with conditional paths → assert constants propagated correctly through branches.
   **QA Scenarios**:
@@ -161,7 +161,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
   ```
   **Commit**: `feat(passes): sparse conditional constant propagation (SCCP)`
 
-- [ ] P3-5. Negative constant normalization
+- [x] P3-5. Negative constant normalization
   **What to do**: In C printer, detect two's complement constants and emit as negative numbers. `0xfffffffffffffff8ULL` → `-8`. `0xfffffffc` (32-bit) → `-4`. Apply when: constant has MSB set AND is used in subtraction/comparison context.
   **IDA reference**: IDA always normalizes to negative form when the context implies signed arithmetic.
   **Tests**: C output for `INT_ADD(v1, 0xfffffffffffffff8)` → `v1 + (-8)` or `v1 - 8`.
@@ -177,7 +177,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
   ```
   **Commit**: `feat(output): negative constant normalization`
 
-- [ ] P3-6. IDA-style type casts
+- [x] P3-6. IDA-style type casts
   **What to do**: In C printer, use IDA-style type annotations. 8-byte pointer → `(_QWORD *)`, 4-byte → `(_DWORD *)`, 2-byte → `(_WORD *)`, 1-byte → `(_BYTE *)`. Also add `(__int64)`, `(unsigned __int64)` for explicit integer casts. Define these as typedefs at the top of output.
   **Tests**: Load/Store of 8-byte value → `*(_QWORD *)addr` in output.
   **QA Scenarios**:
@@ -194,7 +194,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
 
 ### Wave 2 — Structuring Quality
 
-- [ ] P3-7. For-loop recovery
+- [x] P3-7. For-loop recovery
   **What to do**: In structurer, detect `init; while (cond) { body; increment }` → `for (init; cond; increment)`. Add `HirNode::For { init, cond, increment, body }` to HIR. Detect: last statement before While is an assignment (init), last statement in While body modifies the induction variable (increment).
   **Tests**: Synthetic HIR with while pattern → for-loop in output.
   **QA Scenarios**:
@@ -209,7 +209,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
   ```
   **Commit**: `feat(struct): for-loop recovery from while + init + increment pattern`
 
-- [ ] P3-8. Do-while recovery improvement
+- [x] P3-8. Do-while recovery improvement
   **What to do**: Improve the existing do-while detection. Currently basic back-edge detection. Add proper loop-condition-at-bottom detection where the CBRANCH is at the end of the loop body, not the header.
   **Commit**: `feat(struct): improved do-while recovery`
   **QA Scenarios**:
@@ -223,7 +223,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-8-do-while.txt
   ```
 
-- [ ] P3-9. Continue statement recovery
+- [x] P3-9. Continue statement recovery
   **What to do**: In structured loops, detect `if (!cond) { rest_of_body }` at the END of a loop body → emit `if (cond) continue; rest_of_body`. This reduces nesting depth.
   **Commit**: `feat(struct): continue statement recovery in loops`
   **QA Scenarios**:
@@ -237,7 +237,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-9-continue.txt
   ```
 
-- [ ] P3-10. Improved variable coalescence
+- [x] P3-10. Improved variable coalescence
   **What to do**: After out-of-SSA (variable merge), additionally merge variables that have non-overlapping live ranges AND compatible types, even if they have different base Varnodes. E.g., two distinct temp registers used in sequence can share a name.
   **Commit**: `feat(passes): improved variable coalescence across base varnodes`
   **QA Scenarios**:
@@ -251,7 +251,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-10-coalescence.txt
   ```
 
-- [ ] P3-11. Common subexpression elimination (CSE)
+- [x] P3-11. Common subexpression elimination (CSE)
   **What to do**: Detect identical expressions computed multiple times across blocks. Replace second+ computation with reference to first. `v1 = a + b; ...; v5 = a + b;` → `v5 = v1;`
   **Commit**: `feat(passes): common subexpression elimination`
   **QA Scenarios**:
@@ -267,7 +267,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
 
 ### Wave 3 — SSE/AVX + Exception Handling
 
-- [ ] P3-12. XMM register file expansion
+- [x] P3-12. XMM register file expansion
   **What to do**: Add XMM0-XMM15 (128-bit, 16 bytes each) to x86 register file at offsets 384-639 (16 regs × 16 bytes). Update iced-x86 register mapping.
   **Commit**: `feat(lift-x86): XMM0-XMM15 register file expansion`
   **QA Scenarios**:
@@ -281,7 +281,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-12-xmm.txt
   ```
 
-- [ ] P3-13. SSE/AVX intrinsic registry
+- [x] P3-13. SSE/AVX intrinsic registry
   **What to do**: Create `crates/unlace-lift-x86/src/intrinsics.rs` with a registry mapping SSE/AVX mnemonics to intrinsic IDs. Use CALLOTHER to emit them. Define 50 most common intrinsic IDs. Update C printer to render CALLOTHER with intrinsic names.
   **Commit**: `feat(lift-x86): SSE/AVX intrinsic registry for CALLOTHER`
   **QA Scenarios**:
@@ -295,7 +295,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-13-intrinsics.txt
   ```
 
-- [ ] P3-14. MOVDQA/MOVDQU + PADDB-PADDQ lifting
+- [x] P3-14. MOVDQA/MOVDQU + PADDB-PADDQ lifting
   **What to do**: Lift the 6 most common SSE instructions via CALLOTHER + intrinsic registry: MOVDQA, MOVDQU, PADDB, PADDW, PADDD, PADDQ. Read/write XMM registers. Test with real SSE byte sequences.
   **Commit**: `feat(lift-x86): SSE MVP — MOVDQA, MOVDQU, PADDB-PADDQ`
   **QA Scenarios**:
@@ -310,7 +310,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-14-sse.txt
   ```
 
-- [ ] P3-15. .eh_frame parsing + exception edges
+- [x] P3-15. .eh_frame parsing + exception edges
   **What to do**: Extend DWARF loader to parse .eh_frame section. Extract landing pad addresses. Add `EdgeKind::Exception` to CFG. Mark blocks with landing pads.
   **Commit**: `feat(loader): .eh_frame parsing + exception edges in CFG`
   **QA Scenarios**:
@@ -324,7 +324,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-15-ehframe.txt
   ```
 
-- [ ] P3-16. Basic try/catch structuring
+- [x] P3-16. Basic try/catch structuring
   **What to do**: In structurer, detect exception handler patterns: blocks preceded by calls to `__cxa_begin_catch` are catch blocks; preceding code is try block. Emit `HirNode::TryCatch { try_body, catches }`.
   **Commit**: `feat(struct): basic try/catch structuring from exception metadata`
   **QA Scenarios**:
@@ -340,7 +340,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
 
 ### Wave 4 — Rust-Specific
 
-- [ ] P3-17. Rust panic path annotation
+- [x] P3-17. Rust panic path annotation
   **What to do**: Detect calls to `core::panicking::panic`, `core::panicking::panic_fmt`, `rust_begin_unwind` etc. in decompiled output. Add `/* panic: ... */` comment before the call. Mark the path as unlikely/cold in the structurer.
   **Commit**: `feat(passes): Rust panic path annotation`
   **QA Scenarios**:
@@ -354,7 +354,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-17-panic.txt
   ```
 
-- [ ] P3-18. Rust enum discriminant detection
+- [x] P3-18. Rust enum discriminant detection
   **What to do**: Detect patterns where a small integer field at a struct offset is used as a switch discriminant. Annotate with `/* enum discriminant */` comment. Works for Option, Result, and user-defined enums.
   **Commit**: `feat(passes): Rust enum discriminant detection`
   **QA Scenarios**:
@@ -368,7 +368,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-18-enum.txt
   ```
 
-- [ ] P3-19. Rust trait object vtable detection
+- [x] P3-19. Rust trait object vtable detection
   **What to do**: Detect `(data_ptr, vtable_ptr)` fat pointer patterns. Verify vtable points to read-only section. First vtable entry is destructor. Annotate indirect calls through vtable as `/* dyn Trait::method */`.
   **Commit**: `feat(passes): Rust trait object vtable detection`
   **QA Scenarios**:
@@ -384,7 +384,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
 
 ### Wave 5 — Infrastructure
 
-- [ ] P3-20. Batch decompilation mode
+- [x] P3-20. Batch decompilation mode
   **What to do**: Add `unlace decompile --batch BINARY --output-dir DIR --jobs N` that decompiles ALL functions in a binary, writes one `.c` file per function, parallelized across N threads using rayon.
   **Commit**: `feat(cli): batch decompilation mode (--batch --jobs N)`
   **QA Scenarios**:
@@ -400,7 +400,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-20-batch.txt
   ```
 
-- [ ] P3-21. Plugin API
+- [x] P3-21. Plugin API
   **What to do**: Create `unlace-plugin-api` crate exposing the Pass trait as a stable C ABI. Allow `unlace decompile --plugin ./libmy_pass.so BINARY` to load and run custom passes. Use `libloading` crate for dynamic library loading.
   **Commit**: `feat(cli): plugin API for custom analysis passes`
   **QA Scenarios**:
@@ -414,7 +414,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-21-plugin.txt
   ```
 
-- [ ] P3-22. Function header comments
+- [x] P3-22. Function header comments
   **What to do**: Add IDA-style header comments to C output: function address, size, name, calling convention, stack frame size.
   **Commit**: `feat(output): function header comments (address, size, name)`
   **QA Scenarios**:
@@ -431,7 +431,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
 
 ### Wave 6 — Integration
 
-- [ ] P3-23. Re-baseline golden tests
+- [x] P3-23. Re-baseline golden tests
   **QA Scenarios**:
   ```
   Scenario: Goldens re-baselined
@@ -444,7 +444,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
   ```
   **Commit**: `test: re-baseline golden tests after Phase 3`
 
-- [ ] P3-24. Parity measurement
+- [x] P3-24. Parity measurement
   **QA Scenarios**:
   ```
   Scenario: Parity measured
@@ -457,7 +457,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
   ```
   **Commit**: `docs: Phase 3 parity measurement`
 
-- [ ] P3-25. Performance regression check
+- [x] P3-25. Performance regression check
   **QA Scenarios**:
   ```
   Scenario: No perf regression

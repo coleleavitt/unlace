@@ -378,6 +378,17 @@ fn infer_insn(
             }
         }
 
+        IrOp::Cast => {
+            if let Some(out) = output_sv {
+                let in_ty = input_sv(0).map(|sv| current_type(var_types, &sv));
+                let out_ty = current_type(var_types, &out);
+                let inferred = cast_output_type(in_ty, out_ty, out.base.size);
+                if inferred != PrimitiveType::Unknown {
+                    changed |= set_type(var_types, out, inferred);
+                }
+            }
+        }
+
         _ => {}
     }
 
@@ -388,6 +399,29 @@ fn float_type_for_size(size: u8) -> PrimitiveType {
     match size {
         4 => PrimitiveType::Float,
         _ => PrimitiveType::Double,
+    }
+}
+
+fn cast_output_type(
+    input_ty: Option<PrimitiveType>,
+    output_existing: PrimitiveType,
+    output_size: u8,
+) -> PrimitiveType {
+    if output_existing != PrimitiveType::Unknown {
+        return output_existing;
+    }
+
+    match input_ty {
+        Some(PrimitiveType::UnsignedInt(_)) => PrimitiveType::UnsignedInt(output_size),
+        Some(PrimitiveType::Bool) if output_size == 1 => PrimitiveType::Bool,
+        Some(PrimitiveType::Float) | Some(PrimitiveType::Double) => match output_size {
+            4 => PrimitiveType::Float,
+            8 => PrimitiveType::Double,
+            _ => PrimitiveType::Int(output_size),
+        },
+        Some(PrimitiveType::Ptr) if output_size == 8 => PrimitiveType::Ptr,
+        Some(_) => PrimitiveType::Int(output_size),
+        None => PrimitiveType::Int(output_size),
     }
 }
 
@@ -690,6 +724,75 @@ mod tests {
 
         let target_ty = lookup_input_type(&ssa, BlockId(0), 0, 0);
         assert_eq!(target_ty, Some(PrimitiveType::Ptr));
+    }
+
+    #[test]
+    fn test_cast_truncation_to_smaller_size() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 4);
+        let r16 = Varnode::reg(16, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("cast_trunc", BlockId(0), 0xb000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r16, c1], 0xb000));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::Cast, r8, smallvec![r0], 0xb008));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0xb010));
+        func.insert_block(bb0);
+
+        let ssa = run_type_infer(func);
+
+        let cast_out = lookup_output_type(&ssa, BlockId(0), 1);
+        assert_eq!(cast_out, Some(PrimitiveType::Int(4)));
+    }
+
+    #[test]
+    fn test_cast_extension_to_larger_size() {
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 8);
+        let r16 = Varnode::reg(16, 4);
+        let c1 = Varnode::constant(1, 4);
+
+        let mut func = Function::new("cast_ext", BlockId(0), 0xc000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r16, c1], 0xc000));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::Cast, r8, smallvec![r0], 0xc008));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0xc010));
+        func.insert_block(bb0);
+
+        let ssa = run_type_infer(func);
+
+        let cast_out = lookup_output_type(&ssa, BlockId(0), 1);
+        assert_eq!(cast_out, Some(PrimitiveType::Int(8)));
+    }
+
+    #[test]
+    fn test_cast_unsigned_input_preserves_signedness() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 4);
+        let c2 = Varnode::constant(2, 8);
+        let r16 = Varnode::reg(16, 8);
+
+        let mut func = Function::new("cast_unsigned", BlockId(0), 0xd000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::IntDiv, r0, smallvec![r16, c2], 0xd000));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::Cast, r8, smallvec![r0], 0xd008));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0xd010));
+        func.insert_block(bb0);
+
+        let ssa = run_type_infer(func);
+
+        let cast_out = lookup_output_type(&ssa, BlockId(0), 1);
+        assert_eq!(cast_out, Some(PrimitiveType::UnsignedInt(4)));
     }
 
     #[test]

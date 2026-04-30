@@ -34,7 +34,7 @@ use unlace_ir::{BasicBlock, BlockId, Function};
 
 use crate::irreducible::{detect_irreducible_regions_in_cfg, IrreducibleRegion};
 
-const MAX_SPLIT_ROUNDS: usize = 4;
+const MAX_SPLIT_ROUNDS: usize = 16;
 
 /// Split entry nodes of irreducible regions until the CFG is reducible or
 /// the iteration cap is hit. Returns the number of duplications performed.
@@ -63,33 +63,55 @@ fn split_one_round(func: &mut Function, regions: &[IrreducibleRegion]) -> usize 
     let mut splits = 0;
 
     for region in regions {
-        for &entry in &region.entry_blocks {
-            let preds = predecessors(func, entry);
-            let (external, internal) = partition_preds(&preds, &region.body_blocks);
+        let Some((entry, external)) = pick_split_target(func, region) else {
+            continue;
+        };
 
-            if external.is_empty() || internal.is_empty() {
-                continue;
-            }
+        let Some(orig) = func.blocks.get(&entry) else {
+            continue;
+        };
+        let copy_id = BlockId(next_id);
+        next_id += 1;
 
-            let Some(orig) = func.blocks.get(&entry) else {
-                continue;
-            };
-            let copy_id = BlockId(next_id);
-            next_id += 1;
+        let mut copy_block = BasicBlock::new(copy_id);
+        copy_block.insns = orig.insns.clone();
+        copy_block.successors = orig.successors.clone();
+        func.insert_block(copy_block);
 
-            let mut copy_block = BasicBlock::new(copy_id);
-            copy_block.insns = orig.insns.clone();
-            copy_block.successors = orig.successors.clone();
-            func.insert_block(copy_block);
-
-            for ext in external {
-                redirect_successors(func, ext, entry, copy_id);
-            }
-            splits += 1;
+        for ext in external {
+            redirect_successors(func, ext, entry, copy_id);
         }
+        splits += 1;
     }
 
     splits
+}
+
+/// Choose one entry per region — the one with the most external predecessors,
+/// breaking ties by `BlockId`. Returns `(entry, external_preds)`.
+///
+/// Splitting a single entry per round (rather than all simultaneously) is
+/// essential for convergence: simultaneous splitting creates new copy nodes
+/// whose outgoing edges re-introduce external entries via the cycle.
+fn pick_split_target(
+    func: &Function,
+    region: &IrreducibleRegion,
+) -> Option<(BlockId, Vec<BlockId>)> {
+    let mut best: Option<(BlockId, Vec<BlockId>, Vec<BlockId>)> = None;
+    for &entry in &region.entry_blocks {
+        let preds = predecessors(func, entry);
+        let (external, internal) = partition_preds(&preds, &region.body_blocks);
+        if external.is_empty() || internal.is_empty() {
+            continue;
+        }
+        let candidate = (entry, external, internal);
+        match &best {
+            None => best = Some(candidate),
+            Some((_, ext, _)) if candidate.1.len() > ext.len() => best = Some(candidate),
+            _ => {}
+        }
+    }
+    best.map(|(e, ext, _)| (e, ext))
 }
 
 fn predecessors(func: &Function, target: BlockId) -> Vec<BlockId> {

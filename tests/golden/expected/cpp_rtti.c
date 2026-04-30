@@ -57,7 +57,6 @@ void main(void) {
     *(_QWORD *)(0LL) = 0x111fLL;
     __printf_chk();
     v1 = __readfsqword(0x28u);
-    v11 = 1;
     v12 = 0;
     if (v12) {
     } else {
@@ -153,23 +152,19 @@ void identify(void) {
     v2 = 0;
     if (v2) {
     } else {
-        result = -24LL;
         *(_QWORD *)(0LL) = 0x125bLL;
         __dynamic_cast();
         v8 = *(_QWORD *)(0LL);
-        v2 = 1;
         if (v2) {
         label_0:;
         } else {
             result = *(_QWORD *)(0LL);
             result = v11 + 0x1300LL;
             result = *(_QWORD *)(0LL);
-            v2 = 1;
             v13 = 0;
             if (v13) {
             label_1:;
             } else {
-                result = 0x10LL;
                 result = *(_QWORD *)(0LL);
                 return result;
             }

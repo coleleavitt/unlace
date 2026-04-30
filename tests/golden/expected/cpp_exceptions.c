@@ -42,6 +42,7 @@ void __aapcs may_throw(void * a1) {
     *(_QWORD *)(0LL) = v3;
     *(_QWORD *)(0LL) = v3;
     *(_QWORD *)(0LL) = 0x114eLL;
+    /* allocate exception */
     __cxa_allocate_exception();
     v4 = v3;
     *(_QWORD *)(0LL) = 0x1160LL;
@@ -49,6 +50,7 @@ void __aapcs may_throw(void * a1) {
     v1 = v5 + 0x3fe0LL;
     v6 = *(_QWORD *)(0LL);
     *(_QWORD *)(0LL) = 0x1176LL;
+    /* throw */
     __cxa_throw();
     v7 = v3;
     *(_QWORD *)(0LL) = 0x1185LL;
@@ -106,14 +108,15 @@ __int32 safe_call(void) {
 
     *(_QWORD *)(8LL) = 8LL;
     *(_QWORD *)(0LL) = 0x119cLL;
+    /* allocate exception */
     __cxa_allocate_exception();
     result = v3 + "negative";
     *(_QWORD *)(0LL) = 0x11aeLL;
     std_runtime_error_runtime_error();
     result = v3 + 0x3fe0LL;
     v5 = *(_QWORD *)(0LL);
-    v6 = 8LL;
     *(_QWORD *)(8LL) = 0x11c4LL;
+    /* throw */
     __cxa_throw();
     *(_QWORD *)(8LL) = 8LL;
     *(_QWORD *)(8LL) = 8LL;
@@ -123,20 +126,16 @@ __int32 safe_call(void) {
     if (v9) {
     } else {
         *(_QWORD *)(0LL) = 0x11edLL;
+        /* catch */
         __cxa_begin_catch();
         result = *(_QWORD *)(0LL);
         *(_QWORD *)(0LL) = 0x11f6LL;
-        v5 = 0x10LL;
         pfn = *(_QWORD *)(8LL);
         ((void (*)())pfn)();
         v12 = LOBYTE(0);
         v13 = 0;
         *(_QWORD *)(8LL) = 0x1211LL;
-        result = 8LL;
-        v2 = 8LL;
         result = *(_QWORD *)(8LL);
-        v5 = 8LL;
-        v2 = 8LL;
         result = *(_QWORD *)(8LL);
         return result;
     }

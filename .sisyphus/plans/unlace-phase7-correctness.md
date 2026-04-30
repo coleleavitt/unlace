@@ -118,7 +118,7 @@ Wave FINAL (Verification — 3 tasks):
 
 ## TODOs
 
-- [ ] P7-0. Investigate debug_calls.elf 0-ifs root cause
+- [x] P7-0. Investigate debug_calls.elf 0-ifs root cause
 
   **What to do**:
   - Run `./target/debug/unlace decompile fixtures/debug_calls.elf 2>/dev/null` and examine output for each function
@@ -142,7 +142,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `chore: investigate 0-ifs root cause on debug fixtures`
 
-- [ ] P7-1. Create fixture-based golden test infrastructure
+- [x] P7-1. Create fixture-based golden test infrastructure
 
   **What to do**:
   - In `crates/unlace-test-harness/` or `tests/`:
@@ -166,7 +166,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `feat(tests): fixture-based golden test infrastructure`
 
-- [ ] P7-2. Capture baseline golden snapshots
+- [x] P7-2. Capture baseline golden snapshots
 
   **What to do**:
   - Run unlace on all 4 fixtures, capture output as golden snapshots
@@ -190,7 +190,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `chore: capture baseline golden snapshots for all fixtures`
 
-- [ ] P7-3. Capture baseline metrics
+- [x] P7-3. Capture baseline metrics
 
   **What to do**:
   - For each fixture, record:
@@ -322,7 +322,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: NO (measurement only)
 
-- [ ] P7-9. Global copy propagation
+- [x] P7-9. Global copy propagation
 
   **What to do**:
   - WRITE `crates/unlace-passes/src/global_copy_prop.rs` (new pass)
@@ -347,7 +347,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `feat(passes): global copy propagation (cross-block value equivalence)`
 
-- [ ] P7-10. Global value numbering
+- [x] P7-10. Global value numbering
 
   **What to do**:
   - WRITE `crates/unlace-passes/src/gvn.rs` (new pass)
@@ -373,7 +373,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `feat(passes): global value numbering (GVN)`
 
-- [ ] P7-11. Dead store elimination improvements
+- [x] P7-11. Dead store elimination improvements
 
   **What to do**:
   - Extend `crates/unlace-passes/src/dead_store_elim.rs`:
@@ -394,7 +394,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `feat(passes): alias-aware dead store elimination for stack slots`
 
-- [ ] P7-12. Measure Wave 2 optimization impact
+- [x] P7-12. Measure Wave 2 optimization impact
 
   **QA Scenarios**:
   ```
@@ -409,7 +409,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: NO (measurement only)
 
-- [ ] P7-13. Integrate DWARF local variable names into stack_vars
+- [x] P7-13. Integrate DWARF local variable names into stack_vars
 
   **What to do**:
   - In `crates/unlace-passes/src/stack_vars.rs`:
@@ -431,7 +431,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `feat(passes): DWARF local variable names in stack_vars recovery`
 
-- [ ] P7-14. Struct field layout inference from adjacent stack offsets
+- [x] P7-14. Struct field layout inference from adjacent stack offsets
 
   **What to do**:
   - In `crates/unlace-passes/src/stack_vars.rs` or new pass:
@@ -453,7 +453,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `feat(passes): struct field layout inference from adjacent stack offsets`
 
-- [ ] P7-15. Propagate Type enum through type inference
+- [x] P7-15. Propagate Type enum through type inference
 
   **What to do**:
   - Currently TypeInferPass only works with PrimitiveType
@@ -475,7 +475,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `feat(passes): propagate composite Type enum through type inference lattice`
 
-- [ ] P7-16. Array stride detection
+- [x] P7-16. Array stride detection
 
   **What to do**:
   - In type inference or a new pass:
@@ -497,7 +497,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `feat(passes): array stride detection for type inference`
 
-- [ ] P7-17. Variable naming heuristics
+- [x] P7-17. Variable naming heuristics
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -523,7 +523,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `feat(output): variable naming heuristics (type-based: ptr, idx, result)`
 
-- [ ] P7-18. Complex cast emission
+- [x] P7-18. Complex cast emission
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -548,7 +548,7 @@ Wave FINAL (Verification — 3 tasks):
 
   **Commit**: `feat(output): complex cast emission (struct pointers, function pointers)`
 
-- [ ] P7-19. Final golden file updates and measurement
+- [x] P7-19. Final golden file updates and measurement
 
   **What to do**:
   - Re-capture golden snapshots with all improvements
@@ -574,7 +574,7 @@ Wave FINAL (Verification — 3 tasks):
 
 ## Final Verification Wave
 
-- [ ] P7-F1. **Code Quality Review** — `general`
+- [x] P7-F1. **Code Quality Review** — `general`
 
   **QA Scenarios**:
   ```
@@ -601,7 +601,7 @@ Wave FINAL (Verification — 3 tasks):
     Evidence: .sisyphus/evidence/p7-f2-golden.txt
   ```
 
-- [ ] P7-F3. **Regression Check** — `general`
+- [x] P7-F3. **Regression Check** — `general`
 
   **QA Scenarios**:
   ```

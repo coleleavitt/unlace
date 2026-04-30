@@ -9,8 +9,9 @@ use unlace_ir::{BasicBlock, BlockId, Function, IrOp, Lifter};
 use unlace_loader::{BinaryImage, DwarfInfo, SymbolKind};
 use unlace_passes::{
     CallingConventionDetectPass, ConstantFoldPass, CopyPropagationPass, CsePass,
-    DeadCodeElimPass, ExpressionTreePass, ParamInferPass, ReturnTypeInferPass, SccpPass,
-    VariableMergePass, Pass, run_to_fixedpoint,
+    DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass, ExpressionTreePass,
+    ParamInferPass, ReturnTypeInferPass, SccpPass, VariableMergePass, Pass,
+    run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -360,6 +361,12 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
 
     let changes = run_to_fixedpoint(passes, ssa)
         .context("pass pipeline failed")?;
+
+    // Single-run passes (after fixedpoint stabilizes)
+    DeadStoreElimPass.run(ssa)
+        .context("dead store elimination failed")?;
+    DeadFlagElimPass.run(ssa)
+        .context("dead flag elimination failed")?;
 
     CallingConventionDetectPass.run(ssa)
         .context("calling convention detection failed")?;

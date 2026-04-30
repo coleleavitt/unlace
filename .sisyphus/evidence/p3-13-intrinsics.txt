@@ -1,0 +1,63 @@
+P3-13: SSE/AVX intrinsic registry
+==================================
+
+Created: crates/unlace-lift-x86/src/intrinsics.rs
+Updated: crates/unlace-lift-x86/src/lib.rs (added `pub mod intrinsics;`)
+
+Structures:
+  - IntrinsicCategory enum: SseArith, SseLogic, SseMove, SseShuffle, SseCompare, SseConvert, AvxArith, AvxMove, Other
+  - IntrinsicInfo struct: c_name, input_count, output_size, category
+  - IntrinsicRegistry: BTreeMap<&'static str, IntrinsicInfo> with lookup(), iter(), len(), is_empty()
+
+Registry entries: 83 total (71 SSE + 12 AVX)
+  - SSE moves: MOVDQA, MOVDQU, MOVAPS, MOVUPS, MOVAPD, MOVUPD, MOVD, MOVQ
+  - SSE integer arith: PADDB/W/D/Q, PSUBB/W/D/Q, PMULLW, PMULLD, PMADDWD
+  - SSE float arith: ADDPS/PD, SUBPS/PD, MULPS/PD, DIVPS/PD, MINPS, MAXPS
+  - SSE scalar arith: ADDSS/SD, SUBSS/SD, MULSS/SD, DIVSS/SD
+  - SSE logic: PAND, PANDN, POR, PXOR, ANDPS, ANDNPS, ORPS, XORPS
+  - SSE compare: PCMPEQB/W/D, PCMPGTB/W/D
+  - SSE shuffle: PSHUFD, PSHUFB, PSHUFLW, PSHUFHW, PUNPCKL/H{BW,WD,DQ,QDQ}, SHUFPS
+  - SSE convert: CVTSI2SD/SS, CVTSD2SI, CVTSS2SI, CVTSD2SS, CVTSS2SD, CVTDQ2PS, CVTPS2DQ
+  - SSE shift: PSLLW/D/Q, PSRLW/D/Q, PSRAW/D
+  - SSE misc: PMOVMSKB, MOVMSKPS
+  - AVX moves: VMOVDQA, VMOVDQU, VMOVAPS, VMOVUPS
+  - AVX arith: VPADDB/W/D/Q, VPSUBB/W/D/Q, VPAND, VPOR, VPXOR
+
+Tests (11 passing):
+  - test_lookup_paddb: "PADDB" → _mm_add_epi8, 2 inputs, 16 output
+  - test_lookup_movdqa: "MOVDQA" → _mm_load_si128, 1 input, 16 output
+  - test_lookup_unknown: "FOOBAR" → None
+  - test_all_entries_have_c_name: all entries have non-empty c_name
+  - test_category_classification: PADDB=SseArith, PAND=SseLogic, MOVDQA=SseMove, PSHUFD=SseShuffle, PCMPEQB=SseCompare, CVTSI2SD=SseConvert, VPADDB=AvxArith, VMOVDQA=AvxMove
+  - test_at_least_20_sse2_entries: 71 SSE entries (>= 20)
+  - test_avx_output_size_32: all AVX entries have 32-byte output
+  - test_mulps: MULPS → _mm_mul_ps
+  - test_addps: ADDPS → _mm_add_ps
+  - test_registry_not_empty: len() >= 20
+  - test_sorted_iteration: BTreeMap iteration is sorted
+
+Lint:
+  cargo xtask lint-determinism → OK (no HashMap/HashSet)
+
+Test output:
+  $ cargo test -p unlace-lift-x86 -- intrinsics
+  running 11 tests
+  test intrinsics::tests::test_at_least_20_sse2_entries ... ok
+  test intrinsics::tests::test_lookup_movdqa ... ok
+  test intrinsics::tests::test_all_entries_have_c_name ... ok
+  test intrinsics::tests::test_category_classification ... ok
+  test intrinsics::tests::test_registry_not_empty ... ok
+  test intrinsics::tests::test_lookup_unknown ... ok
+  test intrinsics::tests::test_addps ... ok
+  test intrinsics::tests::test_lookup_paddb ... ok
+  test intrinsics::tests::test_mulps ... ok
+  test intrinsics::tests::test_avx_output_size_32 ... ok
+  test intrinsics::tests::test_sorted_iteration ... ok
+  test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out
+
+  $ cargo test -p unlace-lift-x86
+  test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+
+Note: Fixed pre-existing compilation issue where HirNode::TryCatch variant was
+referenced in structurer.rs but not defined in hir.rs (incomplete P3-16 commit).
+Added the variant and two missing match arms.

@@ -81,6 +81,52 @@ const PUSH_R13: [u8; 2] = [0x41, 0x55];
 const PUSH_R12: [u8; 2] = [0x41, 0x54];
 const PUSH_RBX: u8 = 0x53;
 
+/// Returns `true` if the byte at `data[idx]` looks like a function-boundary
+/// marker — a `ret`, `int3`, or x86 NOP padding byte. Used to confirm that a
+/// `push r12/r13/r14/r15/rbx` at the next aligned address is a real function
+/// start and not a callee-saved register save inside another function.
+fn is_function_boundary_byte(b: u8) -> bool {
+    matches!(
+        b,
+        // C3 = ret near, CB = ret far, C2/CA = ret imm16
+        0xC3 | 0xCB | 0xC2 | 0xCA
+        // CC = int3 (debugger trap, common alignment padding from compilers)
+        | 0xCC
+        // 90 = nop, the canonical x86 NOP byte
+        | 0x90
+        // 66 = operand-size prefix; commonly the leading byte of a multi-byte NOP
+        // (e.g. `66 90`, `66 66 ... 90`); also the start of `nopw`-style padding.
+        | 0x66
+        // 0F = the leading byte of `0F 1F /0` multi-byte NOPs
+        | 0x0F
+    )
+}
+
+/// Returns `true` if a `push` at `data[idx]` is preceded by an instruction that
+/// looks like a function boundary (or is at the very start of the section).
+fn preceded_by_boundary(data: &[u8], idx: usize) -> bool {
+    if idx == 0 {
+        // Start-of-section is implicitly a boundary.
+        return true;
+    }
+    is_function_boundary_byte(data[idx - 1])
+}
+
+/// Returns `true` if `idx` immediately follows a `push` instruction encoded
+/// in the previous one or two bytes. A `push r12..r15` (`41 5C..5F`) right
+/// after a `push rbp/rbx/...` is callee-saved register save, NOT a prologue.
+fn preceded_by_push(data: &[u8], idx: usize) -> bool {
+    // Single-byte push immediately before us.
+    if idx >= 1 && (0x50..=0x57).contains(&data[idx - 1]) {
+        return true;
+    }
+    // Two-byte REX-prefixed push (`41 5C..5F`) ending one byte before us.
+    if idx >= 2 && data[idx - 2] == 0x41 && (0x50..=0x57).contains(&data[idx - 1]) {
+        return true;
+    }
+    false
+}
+
 fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
     let text = match image.section_by_name(".text") {
         Some(s) => s,
@@ -99,12 +145,20 @@ fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
             continue;
         }
         if idx + 4 <= data.len() && data[idx..idx + 4] == PUSH_RBP_MOV_RBP_RSP {
+            // `push rbp; mov rbp, rsp` — definitive prologue, accept unconditionally.
             addrs.insert(base + idx as u64);
             idx += 4;
             continue;
         }
         if idx + 3 <= data.len() && data[idx..idx + 3] == SUB_RSP_IMM8 {
-            addrs.insert(base + idx as u64);
+            // Bare `sub rsp, imm8` — only accept at 16-byte-aligned address
+            // preceded by a function-boundary marker. Mid-function stack
+            // adjustments use the same encoding and would otherwise produce
+            // spurious function entries.
+            let addr = base + idx as u64;
+            if addr % 16 == 0 && preceded_by_boundary(data, idx) {
+                addrs.insert(addr);
+            }
             idx += 3;
             continue;
         }
@@ -113,12 +167,29 @@ fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
             if pair == PUSH_R15 || pair == PUSH_R14
                 || pair == PUSH_R13 || pair == PUSH_R12
             {
-                addrs.insert(base + idx as u64);
+                // `push r12..r15` is most often a callee-saved register save
+                // *inside* a function. Accept as a function start ONLY when:
+                //   1. the address is 16-byte aligned (typical function alignment), AND
+                //   2. the previous byte is a function-boundary marker
+                //      (ret/int3/nop) or we're at the start of the section, AND
+                //   3. it is not immediately preceded by another `push`
+                //      (which would indicate a chain of callee-saved pushes).
+                let addr = base + idx as u64;
+                let aligned = addr % 16 == 0;
+                let boundary = preceded_by_boundary(data, idx);
+                let chained = preceded_by_push(data, idx);
+                if aligned && boundary && !chained {
+                    addrs.insert(addr);
+                }
                 idx += 2;
                 continue;
             }
         }
-        if data[idx] == PUSH_RBX && (base + idx as u64) % 16 == 0 {
+        if data[idx] == PUSH_RBX
+            && (base + idx as u64) % 16 == 0
+            && preceded_by_boundary(data, idx)
+            && !preceded_by_push(data, idx)
+        {
             addrs.insert(base + idx as u64);
             idx += 1;
             continue;
@@ -815,5 +886,132 @@ mod tests {
         assert!(addrs.contains(&(base + 0x80)), "push rbx aligned: {addrs:?}");
         assert!(!addrs.contains(&(base + 0x83)), "push rbx unaligned should not match: {addrs:?}");
         assert!(addrs.contains(&(base + 0xA0)), "endbr64: {addrs:?}");
+    }
+
+    /// Regression test for P6-3: callee-saved `push r15` immediately following
+    /// a `push rbp; mov rbp, rsp` prologue must NOT be treated as a separate
+    /// function start. This is the root cause of `sub_2436e0` lifting only
+    /// 4 bytes instead of hundreds.
+    #[test]
+    fn test_prologue_no_false_positive_after_push_rbp_mov() {
+        let base: u64 = 0x1000;
+        let mut code = vec![0xCC; 0x40];
+
+        // Real function at 0x1000: push rbp; mov rbp, rsp; push r15; push r14; push r13; push r12; ret
+        code[0x00] = 0x55;             // push rbp
+        code[0x01] = 0x48;             // mov rbp, rsp (rex.w)
+        code[0x02] = 0x89;
+        code[0x03] = 0xe5;
+        code[0x04] = 0x41;             // push r15  ← would have been a false positive
+        code[0x05] = 0x57;
+        code[0x06] = 0x41;             // push r14
+        code[0x07] = 0x56;
+        code[0x08] = 0x41;             // push r13
+        code[0x09] = 0x55;
+        code[0x0A] = 0x41;             // push r12
+        code[0x0B] = 0x54;
+        code[0x0C] = 0xC3;             // ret
+
+        let image = make_text_image(code, base);
+        let result = scan_for_prologues(&image);
+        let addrs: BTreeSet<u64> = result.iter().map(|f| f.addr).collect();
+
+        assert!(
+            addrs.contains(&base),
+            "real prologue at {base:#x} must be detected; got: {addrs:?}",
+        );
+        for off in [0x04u64, 0x06, 0x08, 0x0A] {
+            assert!(
+                !addrs.contains(&(base + off)),
+                "push at offset {off:#x} (callee-saved register save) must NOT be a function start; got: {addrs:?}",
+            );
+        }
+
+        let real_func = result.iter().find(|f| f.addr == base).expect("real func");
+        assert!(
+            real_func.size >= 0xD,
+            "function size must extend through callee-saved pushes (got {})",
+            real_func.size,
+        );
+    }
+
+    /// Regression test for P6-3: a bare `push r12` in the middle of a function
+    /// (not aligned, not preceded by a boundary) must NOT be treated as a
+    /// function start. This was causing `sub_7b710` to be cut at offset 32.
+    #[test]
+    fn test_prologue_no_false_positive_for_misaligned_push_r12() {
+        let base: u64 = 0x7B710;
+        let mut code = vec![0xCC; 0x40];
+
+        // sub rsp, 8 at offset 0 (16-byte aligned, valid prologue)
+        code[0x00] = 0x48;
+        code[0x01] = 0x83;
+        code[0x02] = 0xEC;
+        code[0x03] = 0x08;
+
+        // ret at offset 0x12
+        code[0x12] = 0xC3;
+
+        // NOPL padding  at 0x13–0x1F (not a valid alignment slot for our test)
+        // push r12 at offset 0x20 — preceded by 0xCC (boundary), 16-byte aligned
+        code[0x20] = 0x41;
+        code[0x21] = 0x54;
+
+        // push r12 at offset 0x24 — NOT aligned, preceded by a push (chain)
+        code[0x22] = 0x41;
+        code[0x23] = 0x55;
+        code[0x24] = 0x41;
+        code[0x25] = 0x54;
+
+        let image = make_text_image(code, base);
+        let result = scan_for_prologues(&image);
+        let addrs: BTreeSet<u64> = result.iter().map(|f| f.addr).collect();
+
+        assert!(addrs.contains(&base), "sub rsp prologue at base must match");
+        assert!(
+            addrs.contains(&(base + 0x20)),
+            "push r12 aligned + boundary should match: {addrs:?}",
+        );
+        assert!(
+            !addrs.contains(&(base + 0x22)),
+            "push r13 misaligned & after push must NOT match: {addrs:?}",
+        );
+        assert!(
+            !addrs.contains(&(base + 0x24)),
+            "push r12 misaligned & after push must NOT match: {addrs:?}",
+        );
+    }
+
+    /// Regression test for P6-3: with the false positive removed, a function
+    /// that starts with `push rbp; ...; push r15..r12` must lift to its full
+    /// size (next function start), not be cut off after 4 bytes.
+    #[test]
+    fn test_prologue_function_size_extends_through_callee_saved() {
+        let base: u64 = 0x2436E0;
+        let mut code = vec![0xCC; 0x100];
+
+        // Function 1: push rbp; mov rbp, rsp; push r15..r12; ... ret
+        code[0x00] = 0x55;
+        code[0x01] = 0x48;
+        code[0x02] = 0x89;
+        code[0x03] = 0xe5;
+        code[0x04] = 0x41; code[0x05] = 0x57;
+        code[0x06] = 0x41; code[0x07] = 0x56;
+        code[0x08] = 0x41; code[0x09] = 0x55;
+        code[0x0A] = 0x41; code[0x0B] = 0x54;
+        code[0x80] = 0xC3;
+
+        // Function 2: starts at 0xA0 (16-byte aligned, preceded by 0xCC)
+        code[0xA0] = 0xF3; code[0xA1] = 0x0F; code[0xA2] = 0x1E; code[0xA3] = 0xFA;
+
+        let image = make_text_image(code, base);
+        let result = scan_for_prologues(&image);
+
+        let f1 = result.iter().find(|f| f.addr == base).expect("function 1");
+        assert!(
+            f1.size >= 0xA0,
+            "function 1 size must reach next function start (got {})",
+            f1.size,
+        );
     }
 }

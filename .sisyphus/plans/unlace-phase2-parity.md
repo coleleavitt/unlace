@@ -274,7 +274,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
   ```
   **Commit**: `feat(loader): DWARF struct/enum/union recovery from debug info`
 
-- [ ] P2-9. SSA→C variable merging
+- [x] P2-9. SSA→C variable merging
   **What to do**: Create `VariableMergePass` that combines multiple SSA versions of the same base varnode into a single C variable when safe. `v1_0 = 5; v1_1 = v1_0 + 1; return v1_1;` → `v1 = 5; v1 = v1 + 1; return v1;`
   **IDA reference**: Read 5 functions from `references/hexrays/ida_dump/hexx64/all/` — note IDA declares ~20 local variables per function, not 200.
   **Implementation**: After expression tree folding (P2-7), many SSA intermediates are gone. For remaining variables: merge versions that don't interfere (live ranges don't overlap). Use liveness analysis on the structured HIR.
@@ -293,7 +293,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
   ```
   **Commit**: `feat(passes): SSA→C variable merging via liveness analysis`
 
-- [ ] P2-10. Struct field access recovery
+- [x] P2-10. Struct field access recovery
   **What to do**: When DWARF types are available (P2-8), detect memory accesses that match struct field offsets. Replace `*(ptr + 48)` with `ptr->field_name`. Integrate DWARF struct definitions with pointer arithmetic in the C printer.
   **IDA reference**: Read `references/hexrays/ida_dump/hexx64/all/sub_1DB100.c` — note patterns like `*(_QWORD *)(a1 + 64)` which IDA converts to field accesses when types are known.
   **Implementation**: In C printer, when emitting a LOAD/STORE with address = `INT_ADD(base, const_offset)`, check if `base` has a known pointer-to-struct type (from DWARF). If offset matches a field, emit `base->field` instead.
@@ -329,7 +329,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
 
 ### Wave 3 — Polish
 
-- [ ] P2-12. Idiom recognition — basic subset
+- [x] P2-12. Idiom recognition — basic subset
   **What to do**: Create `IdiomRecognitionPass` detecting common instruction patterns:
   - `XOR reg, reg` → constant 0
   - `TEST reg, reg; JZ/JNZ` → comparison with zero
@@ -350,7 +350,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
     Evidence: .sisyphus/evidence/p2-12-idioms.txt
   ```
 
-- [ ] P2-13. String operation recognition
+- [x] P2-13. String operation recognition
   **What to do**: In x86 lifter, handle REP MOVSB/STOSB/CMPSB. Lift REP MOVSB as `Callother("memcpy", dst, src, count)` or equivalent.
   **IDA reference**: Read `references/ida/processors/pc/all/` — find string operation handling.
   **Tests**: Assemble `rep movsb` bytes, lift, assert IR contains memcpy-equivalent.
@@ -366,7 +366,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
     Evidence: .sisyphus/evidence/p2-13-string-ops.txt
   ```
 
-- [ ] P2-14. Tail call detection
+- [x] P2-14. Tail call detection
   **What to do**: Detect `JMP` at function end (after function epilogue) as a tail call, not a branch. Emit as `return func()` instead of `goto`.
   **IDA reference**: Read `references/hexrays/ida_dump/hexx64/all/` — note IDA detects tail calls and emits `return callee(args)`.
   **Tests**: Create fixture with tail-call-optimized function. Assert C output shows `return callee()` not `goto`.
@@ -382,7 +382,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
     Evidence: .sisyphus/evidence/p2-14-tailcall.txt
   ```
 
-- [ ] P2-15. Noreturn function marking
+- [x] P2-15. Noreturn function marking
   **What to do**: Detect functions that never return (call to `exit`, `abort`, `__stack_chk_fail`, `__assert_fail`, `panic`, etc.). Mark them so downstream analysis doesn't expect a return.
   **IDA reference**: Read functions from `references/hexrays/ida_dump/hexx64/all/` — note `__noreturn` attribute annotations.
   **Implementation**: Maintain a list of known noreturn function names. When a CALL targets one, mark the function. Propagate: if ALL paths through a function end in noreturn calls, the function itself is noreturn.
@@ -399,7 +399,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
     Evidence: .sisyphus/evidence/p2-15-noreturn.txt
   ```
 
-- [ ] P2-16. Wire DWARF types into C printer
+- [x] P2-16. Wire DWARF types into C printer
   **What to do**: When DWARF types are available, use them in the C printer: function parameter names and types from DWARF, local variable names from DWARF, struct type definitions in output header.
   **Tests**: Decompile `fixtures/debug_calls.elf`, assert parameter names match source code names.
   **Commit**: `feat(output): use DWARF function signatures and variable names in C output`
@@ -417,7 +417,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
 
 ### Wave 4 — Integration
 
-- [ ] P2-17. Re-baseline golden tests
+- [x] P2-17. Re-baseline golden tests
   **What to do**: Expression trees and variable merging will change output structure. Re-run golden tests, update expected outputs, document pass rate changes.
   **QA Scenarios**:
   ```
@@ -431,7 +431,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
   ```
   **Commit**: `test: re-baseline golden tests after Phase 2 expression/variable improvements`
 
-- [ ] P2-18. Parity measurement
+- [x] P2-18. Parity measurement
   **What to do**: For 10 representative functions from `fixtures/medium.elf`, manually compare unlace output vs IDA reference output. Document parity score per function. Target: ≥70% structural similarity.
   **QA Scenarios**:
   ```
@@ -446,7 +446,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
   ```
   **Commit**: `docs: Phase 2 parity measurement — N% structural match vs IDA`
 
-- [ ] P2-19. Performance regression check
+- [x] P2-19. Performance regression check
   **What to do**: Run benchmarks on medium.elf. Ensure performance hasn't regressed >2x from Phase 1 baseline.
   **QA Scenarios**:
   ```
@@ -461,7 +461,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
   ```
   **Commit**: `perf: Phase 2 performance validation`
 
-- [ ] P2-20. Push to GitHub
+- [x] P2-20. Push to GitHub
   **What to do**: `git push origin master` with all Phase 2 changes.
   **QA Scenarios**:
   ```
@@ -478,7 +478,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
 
 ## Final Verification Wave
 
-- [ ] F1. **Plan Compliance Audit** — oracle
+- [x] F1. **Plan Compliance Audit** — oracle
   **QA Scenarios**:
   ```
   Scenario: All Phase 2 features work
@@ -493,7 +493,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
     Evidence: .sisyphus/evidence/p2-f1-compliance.txt
   ```
 
-- [ ] F2. **Code Quality Review** — general
+- [x] F2. **Code Quality Review** — general
   **QA Scenarios**:
   ```
   Scenario: Build + test + lint
@@ -506,7 +506,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
     Evidence: .sisyphus/evidence/p2-f2-quality.txt
   ```
 
-- [ ] F3. **Parity QA** — general
+- [x] F3. **Parity QA** — general
   Decompile each fixture, compare output quality vs IDA reference patterns.
   **QA Scenarios**:
   ```
@@ -523,7 +523,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
     Evidence: .sisyphus/evidence/p2-f3-parity.txt
   ```
 
-- [ ] F4. **Regression Check** — general
+- [x] F4. **Regression Check** — general
   Verify Phase 1 functionality hasn't regressed.
   **QA Scenarios**:
   ```

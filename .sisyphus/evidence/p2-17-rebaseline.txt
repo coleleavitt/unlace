@@ -1,0 +1,6 @@
+test golden_corpus_all_files_parse ... ok
+test e2e_medium_all_functions_parse_as_c ... ok
+test e2e_stripped_all_functions_parse_as_c ... ok
+
+test result: ok. 160 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+

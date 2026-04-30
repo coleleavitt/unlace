@@ -558,3 +558,73 @@ fn mux_select(
     ));
     result
 }
+
+/// XADD dst, src (operands are usually `[mem], reg` or `reg, reg`).
+///
+/// Intel SDM pseudocode:
+///   temp := dst + src
+///   src  := dst        (the original dst is moved into src register)
+///   dst  := temp
+///
+/// LOCK form lowers to `Callother(XADD, dst, src)`; the intrinsic captures the
+/// atomic read-modify-write and returns the original dst, which is written
+/// back into the src register. Add-flags are emitted from the captured values
+/// for both forms.
+pub fn lift_xadd(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let dst_loc = ctx.operand_write(insn, 0);
+    let src_loc = ctx.operand_write(insn, 1);
+    let dst_val = ctx.operand_read(insn, 0);
+    let src_val = ctx.operand_read(insn, 1);
+    let (dst_loc, src_loc, dst_val, src_val) = match (dst_loc, src_loc, dst_val, src_val) {
+        (Some(a), Some(b), Some(c), Some(d)) => (a, b, c, d),
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+
+    let op_size = dst_val.size;
+
+    if insn.has_lock_prefix() {
+        let tag = Varnode::constant(atomic_tag::XADD, 8);
+        let original_dst = Varnode::unique(ctx.alloc_unique(), op_size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            original_dst,
+            smallvec![tag, dst_val, src_val],
+            ctx.addr,
+        ));
+
+        let sum = Varnode::unique(ctx.alloc_unique(), op_size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntAdd,
+            sum,
+            smallvec![original_dst, src_val],
+            ctx.addr,
+        ));
+        emit_add_flags(ctx, original_dst, src_val, sum, op_size);
+
+        ctx.write_operand_insn(insn, 1, src_loc, original_dst);
+        return;
+    }
+
+    let saved_dst = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        saved_dst,
+        smallvec![dst_val],
+        ctx.addr,
+    ));
+
+    let sum = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAdd,
+        sum,
+        smallvec![saved_dst, src_val],
+        ctx.addr,
+    ));
+    emit_add_flags(ctx, saved_dst, src_val, sum, op_size);
+
+    ctx.write_operand_insn(insn, 0, dst_loc, sum);
+    ctx.write_operand_insn(insn, 1, src_loc, saved_dst);
+}

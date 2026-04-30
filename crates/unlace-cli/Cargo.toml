@@ -3,7 +3,12 @@ name = "unlace-cli"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "unlace"
+path = "src/main.rs"
+
 [dependencies]
+unlace-ir = { workspace = true }
 unlace-loader = { workspace = true }
 unlace-lift = { workspace = true }
 unlace-passes = { workspace = true }
@@ -12,3 +17,7 @@ unlace-output = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+smallvec = { workspace = true }
+
+[dev-dependencies]

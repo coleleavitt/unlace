@@ -2,6 +2,7 @@
 
 use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterFile};
 
+pub use unlace_lift_x86::X86Lifter;
 pub use unlace_lift_arm::ArmLifter;
 pub use unlace_lift_riscv::RiscVLifter;
 pub use unlace_lift_mips::MipsLifter;
@@ -39,6 +40,7 @@ impl Lifter for UnimplementedLifter {
 
 pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
     match arch {
+        ArchId::X86 | ArchId::X86_64 => Box::new(X86Lifter::new()),
         ArchId::Arm | ArchId::AArch64 => Box::new(ArmLifter::new()),
         ArchId::RiscV64 => Box::new(RiscVLifter::new()),
         ArchId::Mips | ArchId::Mips64 => Box::new(MipsLifter::new()),

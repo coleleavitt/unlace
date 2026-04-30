@@ -1,0 +1,17 @@
+=== All fixtures decompile cleanly ===
+  ✅ hello_world.elf: 58 lines
+  ✅ branches.elf: 73 lines
+  ✅ loops.elf: 239 lines
+  ✅ calls.elf: 68 lines
+  ✅ medium.elf: 421 lines
+  ✅ debug_structs.elf: 92 lines
+  ✅ debug_calls.elf: 389 lines
+  ✅ debug_hello.elf: 54 lines
+  ✅ empty.elf: 53 lines
+  ✅ stripped.elf: 354 lines
+
+=== Phase 2 quality indicators ===
+  Struct fields (->): 1
+  DWARF function names: 11
+
+F3: APPROVE — Phase 2 features visible in output

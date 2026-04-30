@@ -1,0 +1,10 @@
+Total test failures: 0
+  ✅ No regressions
+
+unlace 0.1.0
+
+Error: '/dev/null' is not a valid ELF binary
+
+lint-determinism: OK — no HashMap/HashSet in enforced crates
+
+F4: APPROVE — Phase 1 features intact, no regressions

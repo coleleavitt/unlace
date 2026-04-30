@@ -28,6 +28,36 @@ pub const ZF: u64 = 259;
 pub const SF: u64 = 260;
 pub const OF: u64 = 261;
 
+// ── x87 FPU stack registers ───────────────────────────────────────────
+//
+// `ST(0)..ST(7)` are 80-bit extended-precision floats. We pack each one into
+// a 16-byte slot starting at `FPU_BASE` so the offsets remain 16-byte aligned
+// and don't collide with the GP/flag region above (highest used flag is OF
+// at offset 261).
+const FPU_BASE: u64 = 0x300;
+const FPU_STRIDE: u64 = 16;
+
+const fn fpu_offset(index: u64) -> u64 {
+    FPU_BASE + index * FPU_STRIDE
+}
+
+pub const ST0: u64 = fpu_offset(0);
+pub const ST1: u64 = fpu_offset(1);
+pub const ST2: u64 = fpu_offset(2);
+pub const ST3: u64 = fpu_offset(3);
+pub const ST4: u64 = fpu_offset(4);
+pub const ST5: u64 = fpu_offset(5);
+pub const ST6: u64 = fpu_offset(6);
+pub const ST7: u64 = fpu_offset(7);
+
+/// Returns a 10-byte (80-bit extended) varnode for FPU stack register `ST(i)`.
+///
+/// Panics if `i >= 8`.
+pub fn st_reg(i: u64) -> Varnode {
+    assert!(i < 8, "x87 stack register index out of range: {i}");
+    Varnode::new(SpaceId::Register, fpu_offset(i), 10)
+}
+
 // ── SSE/AVX vector registers ──────────────────────────────────────────
 //
 // Layout: base offset 0x400, stride 32 bytes per register slot.
@@ -175,6 +205,14 @@ pub fn x86_64_register_file() -> RegisterFile {
             RegisterDef { name: "YMM13", varnode: reg256(YMM13) },
             RegisterDef { name: "YMM14", varnode: reg256(YMM14) },
             RegisterDef { name: "YMM15", varnode: reg256(YMM15) },
+            RegisterDef { name: "ST0", varnode: st_reg(0) },
+            RegisterDef { name: "ST1", varnode: st_reg(1) },
+            RegisterDef { name: "ST2", varnode: st_reg(2) },
+            RegisterDef { name: "ST3", varnode: st_reg(3) },
+            RegisterDef { name: "ST4", varnode: st_reg(4) },
+            RegisterDef { name: "ST5", varnode: st_reg(5) },
+            RegisterDef { name: "ST6", varnode: st_reg(6) },
+            RegisterDef { name: "ST7", varnode: st_reg(7) },
         ],
     }
 }
@@ -291,6 +329,15 @@ pub fn iced_reg_to_varnode(reg: iced_x86::Register) -> Option<(u64, u8)> {
         R::YMM14 => Some((YMM14, 32)),
         R::YMM15 => Some((YMM15, 32)),
 
+        R::ST0 => Some((ST0, 10)),
+        R::ST1 => Some((ST1, 10)),
+        R::ST2 => Some((ST2, 10)),
+        R::ST3 => Some((ST3, 10)),
+        R::ST4 => Some((ST4, 10)),
+        R::ST5 => Some((ST5, 10)),
+        R::ST6 => Some((ST6, 10)),
+        R::ST7 => Some((ST7, 10)),
+
         _ => None,
     }
 }
@@ -396,6 +443,52 @@ mod tests {
                 "stride between XMM{i} and XMM{} should be {VEC_STRIDE}", i + 1
             );
         }
+    }
+
+    #[test]
+    fn test_st_reg_size_10() {
+        let st0 = st_reg(0);
+        assert_eq!(st0.size, 10);
+        assert_eq!(st0.space, SpaceId::Register);
+        assert_eq!(st0.offset, ST0);
+    }
+
+    #[test]
+    fn test_st_reg_iced_mapping() {
+        use iced_x86::Register as R;
+        let (off0, sz0) = iced_reg_to_varnode(R::ST0).expect("ST0 should map");
+        assert_eq!(off0, ST0);
+        assert_eq!(sz0, 10);
+        let (off7, sz7) = iced_reg_to_varnode(R::ST7).expect("ST7 should map");
+        assert_eq!(off7, ST7);
+        assert_eq!(sz7, 10);
+    }
+
+    #[test]
+    fn test_st_offsets_do_not_collide_with_vec() {
+        let st_max = ST7 + 10;
+        assert!(
+            st_max <= VEC_BASE,
+            "FPU region ends at {st_max:#x} but VEC_BASE is {VEC_BASE:#x}"
+        );
+    }
+
+    #[test]
+    fn test_st_offsets_do_not_collide_with_gp() {
+        let gp_end = OF + 1;
+        assert!(
+            ST0 >= gp_end,
+            "ST0 {ST0:#x} would overlap GP/flag region ending at {gp_end:#x}"
+        );
+    }
+
+    #[test]
+    fn test_register_file_contains_st() {
+        let rf = x86_64_register_file();
+        assert!(rf.registers.iter().any(|r| r.name == "ST0"));
+        assert!(rf.registers.iter().any(|r| r.name == "ST7"));
+        let st0 = rf.registers.iter().find(|r| r.name == "ST0").unwrap();
+        assert_eq!(st0.varnode.size, 10);
     }
 
     #[test]

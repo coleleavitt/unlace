@@ -2,7 +2,20 @@ use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
 use crate::lift::LiftCtx;
-use crate::register_file::{CF, OF, PF, SF, ZF};
+use crate::register_file::{CF, OF, PF, RAX, SF, ZF};
+
+/// Tag identifiers for atomic / byte-swap Callother intrinsics.
+///
+/// Distinct from `bit_tag::*` and the string-op tags so a downstream consumer
+/// can dispatch on the constant in `inputs[0]` without ambiguity.
+pub mod atomic_tag {
+    /// `_InterlockedCompareExchange(dst, src, expected)` — LOCK CMPXCHG.
+    pub const CMPXCHG: u64 = 0x400;
+    /// `_InterlockedExchangeAdd(dst, src)` — LOCK XADD.
+    pub const XADD: u64 = 0x401;
+    /// `__builtin_bswap{32,64}(src)` — BSWAP / MOVBE byte reversal.
+    pub const BSWAP: u64 = 0x402;
+}
 
 fn emit_result_flags(ctx: &mut LiftCtx, result: Varnode, op_size: u8) {
     let zero = Varnode::constant(0, op_size);
@@ -400,4 +413,148 @@ pub fn lift_cqo(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
     let result = Varnode::unique(ctx.alloc_unique(), 8);
     ctx.emit(IrInsn::with_output(IrOp::IntSright, result, smallvec![rax, shift], ctx.addr));
     ctx.emit(IrInsn::with_output(IrOp::Copy, rdx, smallvec![result], ctx.addr));
+}
+
+/// CMPXCHG dst, src
+///
+/// Intel SDM pseudocode:
+///   IF (RAX == dst) THEN ZF = 1; dst = src
+///   ELSE              ZF = 0; RAX = dst
+///
+/// LOCK form lowers to `Callother(CMPXCHG, dst_value, src, RAX)`; the intrinsic
+/// returns the *original* dst, which is used to set ZF and to update RAX in the
+/// mismatch case (the equal case is a no-op for RAX since `original == RAX`).
+///
+/// Non-LOCK form uses a branchless mux: ZF is sign-extended into a full-width
+/// mask, then `dst' = (mask & src) | (~mask & original)` selects between src
+/// (if equal) and original (if not), and the symmetric expression updates RAX.
+pub fn lift_cmpxchg(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let dst_loc = ctx.operand_write(insn, 0);
+    let dst_val = ctx.operand_read(insn, 0);
+    let src_val = ctx.operand_read(insn, 1);
+    let (dst_loc, dst_val, src_val) = match (dst_loc, dst_val, src_val) {
+        (Some(a), Some(b), Some(c)) => (a, b, c),
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+
+    let op_size = dst_val.size;
+    let rax_acc = Varnode::new(unlace_ir::SpaceId::Register, RAX, op_size);
+
+    if insn.has_lock_prefix() {
+        let tag = Varnode::constant(atomic_tag::CMPXCHG, 8);
+        let original = Varnode::unique(ctx.alloc_unique(), op_size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            original,
+            smallvec![tag, dst_val, src_val, rax_acc],
+            ctx.addr,
+        ));
+
+        let zf = Varnode::new(unlace_ir::SpaceId::Register, ZF, 1);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntEqual,
+            zf,
+            smallvec![original, rax_acc],
+            ctx.addr,
+        ));
+
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            rax_acc,
+            smallvec![original],
+            ctx.addr,
+        ));
+        return;
+    }
+
+    let original = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        original,
+        smallvec![dst_val],
+        ctx.addr,
+    ));
+
+    let cmp_result = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntSub,
+        cmp_result,
+        smallvec![rax_acc, original],
+        ctx.addr,
+    ));
+    emit_sub_flags(ctx, rax_acc, original, cmp_result, op_size);
+
+    let zf = Varnode::new(unlace_ir::SpaceId::Register, ZF, 1);
+    let mask = build_zf_mask(ctx, zf, op_size);
+    let inv_mask = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntNegate,
+        inv_mask,
+        smallvec![mask],
+        ctx.addr,
+    ));
+
+    let new_dst = mux_select(ctx, mask, inv_mask, src_val, original, op_size);
+    ctx.write_operand_insn(insn, 0, dst_loc, new_dst);
+
+    let new_rax = mux_select(ctx, mask, inv_mask, rax_acc, original, op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rax_acc,
+        smallvec![new_rax],
+        ctx.addr,
+    ));
+}
+
+fn build_zf_mask(ctx: &mut LiftCtx, zf: Varnode, op_size: u8) -> Varnode {
+    let zf_ext = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntZext,
+        zf_ext,
+        smallvec![zf],
+        ctx.addr,
+    ));
+    let mask = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntSub,
+        mask,
+        smallvec![Varnode::constant(0, op_size), zf_ext],
+        ctx.addr,
+    ));
+    mask
+}
+
+fn mux_select(
+    ctx: &mut LiftCtx,
+    mask_true: Varnode,
+    mask_false: Varnode,
+    val_true: Varnode,
+    val_false: Varnode,
+    op_size: u8,
+) -> Varnode {
+    let t = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAnd,
+        t,
+        smallvec![val_true, mask_true],
+        ctx.addr,
+    ));
+    let f = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAnd,
+        f,
+        smallvec![val_false, mask_false],
+        ctx.addr,
+    ));
+    let result = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        result,
+        smallvec![t, f],
+        ctx.addr,
+    ));
+    result
 }

@@ -162,6 +162,8 @@ mod tests {
             noreturn: false,
             tail_call_map: BTreeMap::new(),
             merged_names: BTreeMap::new(),
+            enum_discriminants: Vec::new(),
+            panic_sites: BTreeMap::new(),
         }
     }
 

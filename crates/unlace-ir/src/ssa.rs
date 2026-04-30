@@ -151,6 +151,25 @@ pub struct StackVar {
     pub accesses: Vec<SsaVarnode>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PanicKind {
+    Panic,
+    BoundsCheck,
+    UnwrapFailed,
+    Abort,
+}
+
+impl std::fmt::Display for PanicKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Panic => f.write_str("panic"),
+            Self::BoundsCheck => f.write_str("index out of bounds"),
+            Self::UnwrapFailed => f.write_str("unwrap on Err/None"),
+            Self::Abort => f.write_str("abort"),
+        }
+    }
+}
+
 pub struct SsaFunction {
     pub function: Function,
     pub cfg: ControlFlowGraph,
@@ -178,6 +197,16 @@ pub struct SsaFunction {
     /// Multiple `SsaVarnode`s sharing the same base [`Varnode`] map to the
     /// same name string. Populated by `VariableMergePass`.
     pub merged_names: BTreeMap<SsaVarnode, String>,
+    pub enum_discriminants: Vec<EnumDiscriminant>,
+    pub panic_sites: BTreeMap<(BlockId, usize), PanicKind>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EnumDiscriminant {
+    pub load_sv: SsaVarnode,
+    pub load_loc: (BlockId, usize),
+    pub variants: BTreeMap<u64, String>,
+    pub comparison_locs: Vec<(BlockId, usize)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -215,6 +244,8 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         noreturn: false,
         tail_call_map: BTreeMap::new(),
         merged_names: BTreeMap::new(),
+        enum_discriminants: Vec::new(),
+        panic_sites: BTreeMap::new(),
     }
 }
 

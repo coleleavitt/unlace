@@ -12,6 +12,7 @@ pub mod dead_store_elim;
 pub mod division_idiom;
 pub mod expression_tree;
 pub mod idiom_recognition;
+pub mod libc_signatures;
 pub mod modulo_idiom;
 pub mod noreturn;
 pub mod prologue_elim;

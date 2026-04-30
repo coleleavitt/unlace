@@ -408,5 +408,145 @@ mod tests {
             "should zero RCX after REP MOVSB"
         );
     }
+
+    // -- SSE2 lifting -------------------------------------------------------
+
+    use crate::ops::sse::tag as sse_tag;
+
+    fn assert_callother_tag(bytes: &[u8], expected_tag: u64) {
+        let result = lifter()
+            .lift_insn(bytes, 0x1000)
+            .expect("should decode SSE instruction");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("should emit Callother for SSE instruction");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(expected_tag, 8),
+            "Callother tag mismatch"
+        );
+    }
+
+    #[test]
+    fn test_lift_sse_movdqa_mem_to_reg() {
+        // 66 0F 6F 07 = movdqa xmm0, [rdi]
+        assert_callother_tag(&[0x66, 0x0F, 0x6F, 0x07], sse_tag::MOVDQA);
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0x6F, 0x07], 0x1000)
+            .unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("load form should have output");
+        assert_eq!(dst.size, 16);
+        assert_eq!(dst.space, unlace_ir::SpaceId::Register);
+    }
+
+    #[test]
+    fn test_lift_sse_movdqu_mem_to_reg() {
+        // F3 0F 6F 0E = movdqu xmm1, [rsi]
+        assert_callother_tag(&[0xF3, 0x0F, 0x6F, 0x0E], sse_tag::MOVDQU);
+        let result = lifter()
+            .lift_insn(&[0xF3, 0x0F, 0x6F, 0x0E], 0x1000)
+            .unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("load form should have output");
+        assert_eq!(dst.size, 16);
+    }
+
+    #[test]
+    fn test_lift_sse_paddb() {
+        // 66 0F FC C1 = paddb xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0xFC, 0xC1], sse_tag::PADDB);
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xFC, 0xC1], 0x1000)
+            .unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs.len(), 3);
+        let dst = co.output.expect("binop should have output");
+        assert_eq!(dst.size, 16);
+    }
+
+    #[test]
+    fn test_lift_sse_pxor_self() {
+        // 66 0F EF C0 = pxor xmm0, xmm0
+        assert_callother_tag(&[0x66, 0x0F, 0xEF, 0xC0], sse_tag::PXOR);
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xEF, 0xC0], 0x1000)
+            .unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[1], co.inputs[2], "pxor xmm0,xmm0 sources should be equal");
+    }
+
+    #[test]
+    fn test_lift_sse_paddq() {
+        // 66 0F D4 D3 = paddq xmm2, xmm3
+        assert_callother_tag(&[0x66, 0x0F, 0xD4, 0xD3], sse_tag::PADDQ);
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xD4, 0xD3], 0x1000)
+            .unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("paddq should produce output");
+        assert_eq!(dst.size, 16);
+    }
+
+    #[test]
+    fn test_lift_sse_pand() {
+        // 66 0F DB C1 = pand xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0xDB, 0xC1], sse_tag::PAND);
+    }
+
+    #[test]
+    fn test_lift_sse_por() {
+        // 66 0F EB C1 = por xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0xEB, 0xC1], sse_tag::POR);
+    }
+
+    #[test]
+    fn test_lift_sse_psubb() {
+        // 66 0F F8 C1 = psubb xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0xF8, 0xC1], sse_tag::PSUBB);
+    }
+
+    #[test]
+    fn test_lift_sse_paddw() {
+        // 66 0F FD C1 = paddw xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0xFD, 0xC1], sse_tag::PADDW);
+    }
+
+    #[test]
+    fn test_lift_sse_paddd() {
+        // 66 0F FE C1 = paddd xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0xFE, 0xC1], sse_tag::PADDD);
+    }
+
+    #[test]
+    fn test_lift_sse_psubw() {
+        // 66 0F F9 C1 = psubw xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0xF9, 0xC1], sse_tag::PSUBW);
+    }
+
+    #[test]
+    fn test_lift_sse_psubd() {
+        // 66 0F FA C1 = psubd xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0xFA, 0xC1], sse_tag::PSUBD);
+    }
+
+    #[test]
+    fn test_lift_sse_psubq() {
+        // 66 0F FB C1 = psubq xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0xFB, 0xC1], sse_tag::PSUBQ);
+    }
+
+    #[test]
+    fn test_lift_sse_movdqa_store() {
+        // 66 0F 7F 07 = movdqa [rdi], xmm0
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0x7F, 0x07], 0x1000)
+            .expect("should decode movdqa store");
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert!(co.output.is_none(), "store form should have no output");
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(sse_tag::MOVDQA, 8));
+    }
 }
 

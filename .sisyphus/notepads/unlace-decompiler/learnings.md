@@ -434,3 +434,24 @@
 - BL writes return address (addr+4) to LR before calling; BLR returns via LR; BCTR branches indirect via CTR.
 - BC (conditional branch) CR field decoding is complex; simplified with placeholder condition for now — full CR bit extraction deferred.
 - `DetailsArchInsn` trait must be imported for `.operands()` on `PpcInsnDetail`.
+
+## Task 31: V850 Lifter (Custom Decoder)
+- No Rust crate exists for V850 decoding — must write custom byte-level decoder.
+- V850 is little-endian, 32-bit architecture with variable-length instructions (16-bit and 32-bit, some 48-bit).
+- Instruction length detection: bits[10:5] of first halfword = 0x3F → extended 32-bit; bits[10:7] >= 0b1100 → 32-bit format; else → 16-bit.
+- Primary dispatch key: bits[10:7] (4 bits) and bits[6:5] (2 bits) of hw0 form a 6-bit opcode index for base instructions.
+- Format I (16-bit reg-reg): [15:11]=reg2, [10:5]=opcode, [4:0]=reg1.
+- Format II (16-bit imm5-reg): [15:11]=reg2, [10:5]=opcode, [4:0]=imm5 (sign-extended).
+- Format III (16-bit Bcond): [15:11]=disp[7:3], [10:7]=0b1011, [6:4]=disp[2:0], [3:0]=cond. Displacement bit0 always 0.
+- Format VI (32-bit imm16): hw0=[reg2|opcode|reg1], hw1=imm16. ADDI/MOVEA sign-extend; ANDI/ORI/XORI zero-extend.
+- Format VII (32-bit load/store): hw1 bit0 distinguishes halfword vs word: 0=LD.H/ST.H, 1=LD.W/ST.W. LD.B uses full 16-bit displacement.
+- Format V (32-bit jump): [15:11]=reg2, [10:6]=opcode, [5:0]=disp[21:16], hw1=disp[15:0]. reg2=0→JR, reg2≠0→JARL.
+- r0 is hardwired zero: reads return constant(0), writes are silently discarded (reg_write returns None).
+- JMP [r31] is the standard V850 return sequence — lifted as IrOp::Return.
+- JARL (jump and link): saves PC+4 into link register (reg2), then calls target — V850 call convention uses register (not stack) for return address.
+- V850 PSW flags modeled as separate 1-byte varnodes: ZF(272), SF(280), OVF(288), CYF(296), SATF(304) — after r0-r31(0-248), PC(256), PSW(264).
+- 16 branch conditions (Bcond) map to PSW flag combinations: V/NV(OV), L/NL(CY), E/NE(Z), NH/H(CY||Z), N/P(S), LT/GE(S^OV), LE/GT(Z||(S^OV)), SA(SAT), R(always).
+- MVP implements ~30 instructions: MOV, MOV imm5, MOVEA, MOVHI, NOT, ADD, ADD imm5, ADDI, SUB, SUBR, CMP, CMP imm5, MULH, MULH imm5, AND, ANDI, OR, ORI, XOR, XORI, TST, SHL, SHR, SAR, LD.B/H/W, ST.B/H/W, JMP, JR, JARL, Bcond(all 16), ZXB, ZXH, SXB, SXH, NOP.
+- Extended opcodes (bits[10:5]=0x3F) and Format IV (short ep-relative loads/stores) emit Unimplemented for now.
+- Reference: Athrill V850E2M simulator (github.com/toppers/athrill-target-v850e2m) has complete opcode dispatch tables in C.
+- 74 tests total: 28 decoder tests + 46 lifter tests covering all implemented instructions.

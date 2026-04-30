@@ -39,8 +39,8 @@ pub struct CppClass {
     pub bases: Vec<BaseClass>,
     /// Address of the vtable (`_ZTV*`), if found.
     pub vtable_addr: Option<u64>,
-    /// Virtual method slots: (slot_index, method_va).
-    pub vtable_methods: Vec<(usize, u64)>,
+    /// Virtual method slots: (slot_index, method_va, optional symbol name).
+    pub vtable_methods: Vec<(usize, u64, Option<String>)>,
 }
 
 /// Inheritance kind detected for a class.
@@ -440,6 +440,10 @@ fn associate_vtables(image: &BinaryImage, classes: &mut BTreeMap<u64, CppClass>)
 ///   [+16] virtual_func_0
 ///   [+24] virtual_func_1
 ///   ...
+fn resolve_method_name(image: &BinaryImage, va: u64) -> Option<String> {
+    image.symbols.get(&va).map(|sym| sym.name.clone())
+}
+
 fn enumerate_vtable_methods(image: &BinaryImage, classes: &mut BTreeMap<u64, CppClass>) {
     // Collect (typeinfo_addr, vtable_addr, vtable_sym_size) triples to avoid
     // borrowing issues.
@@ -491,7 +495,7 @@ fn enumerate_vtable_methods(image: &BinaryImage, classes: &mut BTreeMap<u64, Cpp
                 break;
             }
 
-            methods.push((slot, method_ptr));
+            methods.push((slot, method_ptr, resolve_method_name(image, method_ptr)));
         }
 
         if let Some(cls) = classes.get_mut(&ti_addr) {
@@ -629,10 +633,19 @@ mod tests {
             "Dog should have virtual methods in its vtable",
         );
 
-        // All method VAs should be non-zero.
-        for (slot, va) in &dog.vtable_methods {
+        for (slot, va, _name) in &dog.vtable_methods {
             assert!(*va != 0, "slot {} should have non-zero VA", slot);
         }
+
+        let named_count = dog
+            .vtable_methods
+            .iter()
+            .filter(|(_, _, name)| name.is_some())
+            .count();
+        assert!(
+            named_count > 0,
+            "at least one vtable method should have a symbol name",
+        );
     }
 
     #[test]

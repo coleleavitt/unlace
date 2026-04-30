@@ -306,3 +306,54 @@ pub fn lift_dec(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
         _ => ctx.emit_unimplemented(),
     }
 }
+
+// ── Sign-extension family ─────────────────────────────────────────────
+
+/// CBW: sign-extend AL (1 byte) → AX (2 bytes)
+pub fn lift_cbw(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
+    let al = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 1);
+    let ax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 2);
+    let ext = Varnode::unique(ctx.alloc_unique(), 2);
+    ctx.emit(IrInsn::with_output(IrOp::IntSext, ext, smallvec![al], ctx.addr));
+    ctx.emit(IrInsn::with_output(IrOp::Copy, ax, smallvec![ext], ctx.addr));
+}
+
+/// CWDE: sign-extend AX (2 bytes) → EAX (4 bytes)
+pub fn lift_cwde(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
+    let ax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 2);
+    let eax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 4);
+    let ext = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(IrOp::IntSext, ext, smallvec![ax], ctx.addr));
+    ctx.emit(IrInsn::with_output(IrOp::Copy, eax, smallvec![ext], ctx.addr));
+}
+
+/// CDQE (AT&T: CLTQ): sign-extend EAX (4 bytes) → RAX (8 bytes)
+pub fn lift_cdqe(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
+    let eax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 4);
+    let rax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 8);
+    let ext = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(IrOp::IntSext, ext, smallvec![eax], ctx.addr));
+    ctx.emit(IrInsn::with_output(IrOp::Copy, rax, smallvec![ext], ctx.addr));
+}
+
+/// CDQ (AT&T: CLTD): sign-extend EAX → EDX:EAX.
+/// Fills EDX with the sign bit of EAX: `EDX = INT_SRIGHT(EAX, 31)`.
+pub fn lift_cdq(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
+    let eax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 4);
+    let edx = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RDX, 4);
+    let shift = Varnode::constant(31, 1);
+    let result = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(IrOp::IntSright, result, smallvec![eax, shift], ctx.addr));
+    ctx.emit(IrInsn::with_output(IrOp::Copy, edx, smallvec![result], ctx.addr));
+}
+
+/// CQO (AT&T: CQTO): sign-extend RAX → RDX:RAX.
+/// Fills RDX with the sign bit of RAX: `RDX = INT_SRIGHT(RAX, 63)`.
+pub fn lift_cqo(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
+    let rax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 8);
+    let rdx = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RDX, 8);
+    let shift = Varnode::constant(63, 1);
+    let result = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(IrOp::IntSright, result, smallvec![rax, shift], ctx.addr));
+    ctx.emit(IrInsn::with_output(IrOp::Copy, rdx, smallvec![result], ctx.addr));
+}

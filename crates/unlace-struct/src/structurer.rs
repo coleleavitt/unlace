@@ -792,24 +792,68 @@ impl<'a> StructureCtx<'a> {
     }
 
     fn structure_loop_body(&mut self, start: BlockId, header: BlockId) -> Vec<HirNode> {
+        let loop_blocks = self.collect_loop_blocks(header);
+        self.structure_loop_body_inner(start, header, &loop_blocks)
+    }
+
+    fn collect_loop_blocks(&self, header: BlockId) -> BTreeSet<BlockId> {
+        let latches: Vec<BlockId> = self
+            .back_edges
+            .iter()
+            .filter(|(_l, h)| *h == header)
+            .map(|(l, _)| *l)
+            .collect();
+
+        let mut loop_blocks = BTreeSet::from([header]);
+        let mut worklist: Vec<BlockId> = latches.clone();
+        for &l in &latches {
+            loop_blocks.insert(l);
+        }
+        while let Some(bid) = worklist.pop() {
+            if bid == header {
+                continue;
+            }
+            for (&src, _) in &self.func.function.blocks {
+                if loop_blocks.contains(&src) {
+                    continue;
+                }
+                let edges = self.func.cfg.edges_from(src);
+                if edges.iter().any(|(tgt, _)| *tgt == bid) {
+                    if dominates(&self.func.dom_tree, header, src) {
+                        loop_blocks.insert(src);
+                        worklist.push(src);
+                    }
+                }
+            }
+        }
+        loop_blocks
+    }
+
+    fn structure_loop_body_inner(
+        &mut self,
+        start: BlockId,
+        header: BlockId,
+        loop_blocks: &BTreeSet<BlockId>,
+    ) -> Vec<HirNode> {
         let mut nodes = Vec::new();
         let mut current = Some(start);
 
         while let Some(bid) = current {
             if self.emitted.contains(&bid) || self.synthetic.contains(&bid) {
-                // If this is a back-edge to the header, don't emit goto.
                 break;
             }
 
-            // Check for back-edge to header — this is a "continue" equivalent.
+            if !loop_blocks.contains(&bid) {
+                nodes.push(HirNode::Break);
+                break;
+            }
+
             let is_back_to_header = self.back_edges.contains(&(bid, header));
             if is_back_to_header && bid == start {
-                // The start block IS the latch — just emit its statements.
                 self.emit_block_statements(bid, &mut nodes);
                 break;
             }
 
-            // Try if/else inside the loop body.
             if let Some((if_node, join)) = self.try_structure_if(bid) {
                 nodes.push(if_node);
                 current = join;
@@ -818,7 +862,6 @@ impl<'a> StructureCtx<'a> {
 
             self.emit_block_statements(bid, &mut nodes);
 
-            // Check successors.
             let edges = self.func.cfg.edges_from(bid);
             let non_back_succs: Vec<BlockId> = edges
                 .iter()
@@ -1169,7 +1212,8 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
         | HirNode::Label(_)
         | HirNode::Ternary { .. }
         | HirNode::TailCall { .. }
-        | HirNode::Continue => {}
+        | HirNode::Continue
+        | HirNode::Break => {}
     }
 }
 
@@ -1327,7 +1371,7 @@ fn node_references_varnode(node: &HirNode, target: &Varnode) -> bool {
                 || catch_body.iter().any(|c| node_references_varnode(c, target))
         }
         HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_)
-        | HirNode::TailCall { .. } | HirNode::Continue => false,
+        | HirNode::TailCall { .. } | HirNode::Continue | HirNode::Break => false,
     }
 }
 
@@ -2303,6 +2347,144 @@ mod tests {
         assert!(
             tc_count >= 2,
             "two landing pads should produce at least 2 TryCatch nodes, got {tc_count}: {:#?}",
+            hir.body
+        );
+    }
+
+    // ── P4-13: Break statement tests ──
+
+    #[test]
+    fn test_break_in_while_loop() {
+        // while(true) with conditional exit in body:
+        // BB0: header (no cbranch), branch → BB1
+        // BB1: body + cbranch → BB2 (continue loop) or BB3 (exit)
+        // BB2: latch, branch → BB0
+        // BB3: return (exit)
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("break_while", BlockId(0), 0x20000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0x20000));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0x20008));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r0, c1], 0x20010));
+        bb1.insns.push(cbranch_insn(cond_vn, 0x20018));
+        bb1.successors = smallvec![BlockId(2), BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r0, c1], 0x20020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x20028));
+        bb2.successors = smallvec![BlockId(0)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0x20030));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn contains_break(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::Break => true,
+                HirNode::Block(inner) => contains_break(inner),
+                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                    contains_break(body)
+                }
+                HirNode::If { then_body, else_body, .. } => {
+                    contains_break(then_body)
+                        || else_body.as_ref().is_some_and(|eb| contains_break(eb))
+                }
+                _ => false,
+            })
+        }
+
+        assert!(
+            contains_break(&hir.body),
+            "loop with conditional exit should contain Break, got: {:#?}",
+            hir.body
+        );
+    }
+
+    #[test]
+    fn test_break_replaces_goto_to_exit() {
+        // Same structure as above — should use Break, not Goto.
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("break_no_goto", BlockId(0), 0x21000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0x21000));
+        bb0.insns.push(ctrl_insn(IrOp::Branch, 0x21008));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r0, c1], 0x21010));
+        bb1.insns.push(cbranch_insn(cond_vn, 0x21018));
+        bb1.successors = smallvec![BlockId(2), BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r0, c1], 0x21020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x21028));
+        bb2.successors = smallvec![BlockId(0)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0x21030));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn has_goto(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::Goto(_) => true,
+                HirNode::Block(inner) => has_goto(inner),
+                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => has_goto(body),
+                HirNode::If { then_body, else_body, .. } => {
+                    has_goto(then_body)
+                        || else_body.as_ref().is_some_and(|eb| has_goto(eb))
+                }
+                _ => false,
+            })
+        }
+
+        fn has_break(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::Break => true,
+                HirNode::Block(inner) => has_break(inner),
+                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => has_break(body),
+                HirNode::If { then_body, else_body, .. } => {
+                    has_break(then_body)
+                        || else_body.as_ref().is_some_and(|eb| has_break(eb))
+                }
+                _ => false,
+            })
+        }
+
+        assert!(
+            has_break(&hir.body),
+            "exit edge should produce Break: {:#?}",
+            hir.body
+        );
+        assert!(
+            !has_goto(&hir.body),
+            "exit edge should NOT produce Goto: {:#?}",
             hir.body
         );
     }

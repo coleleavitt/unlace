@@ -123,6 +123,12 @@ pub enum HirNode {
         target: u64,
     },
 
+    /// A `break` statement inside a loop body.
+    ///
+    /// Recovered from gotos that target the loop exit block, allowing the
+    /// structurer to emit `break` instead of a goto/label fallback.
+    Break,
+
     /// A `continue` statement inside a loop body.
     ///
     /// Recovered from gotos that target the loop header (while/for) or

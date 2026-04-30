@@ -1,0 +1,7 @@
+__int64 __fastcall sub_5985B0(__int64 a1)
+{
+  __int64 v2; // [rsp+18h] [rbp-8h] BYREF
+
+  sub_59899E(&v2, a1 + 32);
+  return v2;
+}

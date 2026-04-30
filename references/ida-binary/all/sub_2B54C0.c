@@ -1,0 +1,47 @@
+unsigned __int64 __fastcall sub_2B54C0(
+        QT::QAbstractScrollArea **a1,
+        __int64 a2,
+        unsigned int a3,
+        __int64 a4,
+        unsigned int a5)
+{
+  int v7; // r15d
+  void (*v8)(); // rax
+  unsigned int v10; // [rsp+Ch] [rbp-4Ch]
+  unsigned __int64 v11; // [rsp+28h] [rbp-30h]
+
+  v11 = __readfsqword(0x28u);
+  if ( (a5 & 0xC) != 0 )
+  {
+    v7 = 2;
+  }
+  else
+  {
+    if ( (a5 & 3) == 0 )
+    {
+      set_node_info(*(_QWORD *)(a2 + 72), a3, a4, a5);
+      return v11 - __readfsqword(0x28u);
+    }
+    v7 = 1;
+  }
+  if ( (a5 & 1) != 0 )
+  {
+    v8 = *((void (**)())*a1 + 104);
+    if ( v8 != nullsub_78 )
+    {
+      v10 = a5;
+      ((void (__fastcall *)(QT::QAbstractScrollArea **, __int64, _QWORD, _QWORD))v8)(
+        a1,
+        a2,
+        a3,
+        *(unsigned int *)(a4 + 8));
+      a5 = v10;
+    }
+  }
+  set_node_info(*(_QWORD *)(a2 + 72), a3, a4, a5);
+  if ( v7 == 1 )
+    sub_1F4880(a1[2], 0);
+  else
+    (*((void (__fastcall **)(QT::QAbstractScrollArea **, _QWORD, _QWORD))*a1 + 19))(a1, 0, 0);
+  return v11 - __readfsqword(0x28u);
+}

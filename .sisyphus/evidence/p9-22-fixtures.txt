@@ -1,0 +1,20 @@
+=== P9-22: Loader test fixtures + dead-code bug fix ===
+
+Pre-existing bug discovered: crates/unlace-loader/src/lib.rs
+did NOT declare 'pub mod macho;' \u2014 the entire MachoLoader file was
+ORPHAN code, never compiled. All macho tests + production code dead.
+
+Fix: added 'pub mod macho;' + 'pub use macho::MachoLoader;' to lib.rs.
+
+Test impact:
+  Before: 1346 tests workspace-wide (8 macho tests dead)
+  After:  1357 tests workspace-wide (+11 macho/macho-cli tests live)
+
+P9-22 fixture additions:
+- pe::tests::test_pe_no_reloc_directory_returns_empty (P9-18 coverage)
+- pe::tests::test_pe_reloc_block_parsed (P9-18 hand-crafted PE32+ with .reloc)
+- macho::tests::test_macho_function_starts_recovered (P9-20 hand-crafted Mach-O64
+  with LC_FUNCTION_STARTS, asserts sub_1100/sub_1140 synthesized)
+
+No external PE/Mach-O test binaries created (would require cross-compile
+toolchains); synthetic in-memory fixtures cover the new code paths.

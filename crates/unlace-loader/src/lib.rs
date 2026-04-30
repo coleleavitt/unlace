@@ -10,6 +10,7 @@ pub mod elf;
 pub mod error;
 pub mod gcc_except_table;
 pub mod image;
+pub mod macho;
 pub mod pdb;
 pub mod pe;
 pub mod rtti;
@@ -23,6 +24,7 @@ pub use eh_frame::{parse_eh_frame, EhFrameInfo, FunctionExtent, LsdaEntry};
 pub use elf::ElfLoader;
 pub use error::LoadError;
 pub use gcc_except_table::{parse_gcc_except_table, FunctionLsda, GccExceptTableInfo, TryRegion};
+pub use macho::MachoLoader;
 pub use pe::PeLoader;
 pub use rtti::{scan_rtti, BaseClass, CppClass, InheritanceKind, RttiInfo};
 pub use image::{

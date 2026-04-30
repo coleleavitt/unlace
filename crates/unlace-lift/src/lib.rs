@@ -72,8 +72,8 @@ mod tests {
 
     #[test]
     fn test_get_lifter_mips() {
-        let l = get_lifter(ArchId::Mips);
-        assert_eq!(l.arch(), ArchId::Mips);
+        let l = get_lifter(ArchId::Mips64);
+        assert_eq!(l.arch(), ArchId::Mips64);
         assert!(!l.register_file().registers.is_empty());
     }
 
@@ -108,21 +108,11 @@ mod tests {
     }
 
     #[test]
-    fn test_all_stubs_produce_unimplemented() {
-        let arches = [
-            ArchId::AArch64,
-            ArchId::RiscV64,
-            ArchId::Mips,
-            ArchId::Ppc,
-            ArchId::V850,
-            ArchId::Arc,
-        ];
-        for arch in arches {
-            let l = get_lifter(arch);
-            let result = l.lift_insn(&[0xDE, 0xAD, 0xBE, 0xEF], 0x1000);
-            assert!(result.is_ok(), "lifter for {arch} should not error");
-            let lifted = result.expect("lifter should succeed");
-            assert_eq!(lifted.ir_ops[0].op, IrOp::Unimplemented);
-        }
+    fn test_stub_lifters_produce_unimplemented() {
+        let l = get_lifter(ArchId::Arc);
+        let result = l.lift_insn(&[0xDE, 0xAD, 0xBE, 0xEF], 0x1000);
+        assert!(result.is_ok(), "ARC stub lifter should not error");
+        let lifted = result.expect("lifter should succeed");
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Unimplemented);
     }
 }

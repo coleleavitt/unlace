@@ -75,6 +75,11 @@ const ENDBR64: [u8; 4] = [0xf3, 0x0f, 0x1e, 0xfa];
 const PUSH_RBP_MOV_RBP_RSP: [u8; 4] = [0x55, 0x48, 0x89, 0xe5];
 // `sub rsp, imm8` encoding: REX.W + SUB r/m64, imm8
 const SUB_RSP_IMM8: [u8; 3] = [0x48, 0x83, 0xec];
+const PUSH_R15: [u8; 2] = [0x41, 0x57];
+const PUSH_R14: [u8; 2] = [0x41, 0x56];
+const PUSH_R13: [u8; 2] = [0x41, 0x55];
+const PUSH_R12: [u8; 2] = [0x41, 0x54];
+const PUSH_RBX: u8 = 0x53;
 
 fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
     let text = match image.section_by_name(".text") {
@@ -101,6 +106,21 @@ fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
         if idx + 3 <= data.len() && data[idx..idx + 3] == SUB_RSP_IMM8 {
             addrs.insert(base + idx as u64);
             idx += 3;
+            continue;
+        }
+        if idx + 2 <= data.len() {
+            let pair = [data[idx], data[idx + 1]];
+            if pair == PUSH_R15 || pair == PUSH_R14
+                || pair == PUSH_R13 || pair == PUSH_R12
+            {
+                addrs.insert(base + idx as u64);
+                idx += 2;
+                continue;
+            }
+        }
+        if data[idx] == PUSH_RBX && (base + idx as u64) % 16 == 0 {
+            addrs.insert(base + idx as u64);
+            idx += 1;
             continue;
         }
         idx += 1;
@@ -727,5 +747,51 @@ mod tests {
             addrs.contains(&0x1010),
             "recursive descent should discover call target 0x1010, got: {addrs:?}",
         );
+    }
+
+    #[test]
+    fn test_enhanced_prologue_patterns() {
+        let base: u64 = 0x1000;
+        let mut code = vec![0xCC; 0x100];
+
+        // push r15 at offset 0x00
+        code[0x00] = 0x41;
+        code[0x01] = 0x57;
+
+        // push r14 at offset 0x20
+        code[0x20] = 0x41;
+        code[0x21] = 0x56;
+
+        // push r13 at offset 0x40
+        code[0x40] = 0x41;
+        code[0x41] = 0x55;
+
+        // push r12 at offset 0x60
+        code[0x60] = 0x41;
+        code[0x61] = 0x54;
+
+        // push rbx at 16-byte aligned offset 0x80
+        code[0x80] = 0x53;
+
+        // push rbx at non-aligned offset 0x83 (should NOT match)
+        code[0x83] = 0x53;
+
+        // endbr64 at offset 0xA0
+        code[0xA0] = 0xF3;
+        code[0xA1] = 0x0F;
+        code[0xA2] = 0x1E;
+        code[0xA3] = 0xFA;
+
+        let image = make_text_image(code, base);
+        let result = scan_for_prologues(&image);
+        let addrs: BTreeSet<u64> = result.iter().map(|f| f.addr).collect();
+
+        assert!(addrs.contains(&(base + 0x00)), "push r15: {addrs:?}");
+        assert!(addrs.contains(&(base + 0x20)), "push r14: {addrs:?}");
+        assert!(addrs.contains(&(base + 0x40)), "push r13: {addrs:?}");
+        assert!(addrs.contains(&(base + 0x60)), "push r12: {addrs:?}");
+        assert!(addrs.contains(&(base + 0x80)), "push rbx aligned: {addrs:?}");
+        assert!(!addrs.contains(&(base + 0x83)), "push rbx unaligned should not match: {addrs:?}");
+        assert!(addrs.contains(&(base + 0xA0)), "endbr64: {addrs:?}");
     }
 }

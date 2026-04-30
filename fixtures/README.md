@@ -14,6 +14,8 @@ ELF binaries for golden testing of the unlace decompiler pipeline.
 | `stripped.elf` | Same as medium, symbols removed | `src/medium.c` | Function boundary detection without symbol hints |
 | `empty.elf` | `main` returning 0 | `src/empty.c` | Minimal ELF parsing, trivial function decompilation |
 | `debug_calls.elf` | `calls.c` compiled with `-g -O0` | `src/calls.c` | DWARF debug info import, function/param/type extraction |
+| `debug_structs.elf` | Nested structs with `-g -O1` | `src/debug_structs.c` | DWARF struct/member recovery, nested type parsing |
+| `debug_hello.elf` | `hello_world.c` with `-g -O1` | `src/hello_world.c` | DWARF basic type/function info on minimal binary |
 
 ## Build
 
@@ -28,6 +30,7 @@ gcc -O2 -o fixtures/X.elf fixtures/src/X.c
 No debug info (`-g` not used). Dynamically linked, x86-64 Linux ELF.
 
 Exception: `debug_calls.elf` is compiled with `gcc -g -O0` for DWARF testing.
+`debug_structs.elf` and `debug_hello.elf` are compiled with `gcc -g -O1` for DWARF struct/type testing.
 
 ## Reproduction
 

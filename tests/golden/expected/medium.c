@@ -2,6 +2,7 @@ typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
 typedef unsigned int _DWORD;
 typedef unsigned long long _QWORD;
+typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD;
 typedef unsigned char _BOOL;
 typedef signed char __int8;
 typedef signed short __int16;
@@ -17,6 +18,8 @@ typedef signed long long __int64;
 #define HIDWORD(x) ((_DWORD)((x) >> 32))
 #define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
 #define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+#define MEMORY ((volatile unsigned char *)0)
+#define JUMPOUT(addr) ((void)(addr))
 // FS-segment TLS reads (stack canary, GLIBC TCB).
 _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
@@ -43,18 +46,18 @@ void main(void) {
     long long v28; // r11
     int v9; // rip
     signed char v16; // ZF
-    int v11; // xmm0
-    int v26; // xmm1
-    int v29; // xmm2
+    __int128 v11; // xmm0
+    __int128 v26; // xmm1
+    __int128 v29; // xmm2
     int v17;
     signed char v15; // temp
     int v3; // temp
     long long v1; // temp
-    unsigned int v30; // temp
+    _OWORD v30; // temp
     signed char v31; // temp
     int v4; // temp
     long long v19; // temp
-    unsigned int v10; // temp
+    _OWORD v10; // temp
     signed char v5; // temp
     long long v20; // temp
     signed char v6; // temp
@@ -67,20 +70,20 @@ void main(void) {
     v6 = 0;
     v7 = 0;
     v1 = v9 + 0x2010LL;
-    v10 = *(_QWORD *)(0LL);
+    v10 = *(_OWORD *)(0LL);
     v11 = _mm_load_si128(v10);
     v1 = __readfsqword(0x28u);
     _mm_load_ps(0LL, v11);
     v1 = v9 + 0x2020LL;
-    v10 = *(_QWORD *)(0LL);
+    v10 = *(_OWORD *)(0LL);
     v11 = _mm_load_si128(v10);
     _mm_load_ps(0LL, v11);
     v1 = v9 + 0x2030LL;
-    v10 = *(_QWORD *)(0LL);
+    v10 = *(_OWORD *)(0LL);
     v11 = _mm_load_si128(v10);
     _mm_load_ps(0LL, v11);
     v1 = v9 + 0x2040LL;
-    v10 = *(_QWORD *)(0LL);
+    v10 = *(_OWORD *)(0LL);
     v11 = _mm_load_si128(v10);
     _mm_load_ps(0LL, v11);
     while (v15) {
@@ -175,7 +178,7 @@ void main(void) {
                             }
                             v29 = _mm_xor_si128(v29, v29);
                             while (v15) {
-                                v30 = *(_QWORD *)(0LL);
+                                v30 = *(_OWORD *)(0LL);
                                 v11 = _mm_load_si128(v30);
                                 v26 = _mm_load_si128(v11);
                                 v26 = _mm_shuffle_epi32(v26, v26);
@@ -247,6 +250,7 @@ typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
 typedef unsigned int _DWORD;
 typedef unsigned long long _QWORD;
+typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD;
 typedef unsigned char _BOOL;
 typedef signed char __int8;
 typedef signed short __int16;
@@ -262,6 +266,8 @@ typedef signed long long __int64;
 #define HIDWORD(x) ((_DWORD)((x) >> 32))
 #define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
 #define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+#define MEMORY ((volatile unsigned char *)0)
+#define JUMPOUT(addr) ((void)(addr))
 // FS-segment TLS reads (stack canary, GLIBC TCB).
 _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
@@ -291,6 +297,7 @@ typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
 typedef unsigned int _DWORD;
 typedef unsigned long long _QWORD;
+typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD;
 typedef unsigned char _BOOL;
 typedef signed char __int8;
 typedef signed short __int16;
@@ -306,6 +313,8 @@ typedef signed long long __int64;
 #define HIDWORD(x) ((_DWORD)((x) >> 32))
 #define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
 #define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+#define MEMORY ((volatile unsigned char *)0)
+#define JUMPOUT(addr) ((void)(addr))
 // FS-segment TLS reads (stack canary, GLIBC TCB).
 _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
@@ -379,6 +388,7 @@ typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
 typedef unsigned int _DWORD;
 typedef unsigned long long _QWORD;
+typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD;
 typedef unsigned char _BOOL;
 typedef signed char __int8;
 typedef signed short __int16;
@@ -394,6 +404,8 @@ typedef signed long long __int64;
 #define HIDWORD(x) ((_DWORD)((x) >> 32))
 #define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
 #define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+#define MEMORY ((volatile unsigned char *)0)
+#define JUMPOUT(addr) ((void)(addr))
 // FS-segment TLS reads (stack canary, GLIBC TCB).
 _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
@@ -441,6 +453,7 @@ typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
 typedef unsigned int _DWORD;
 typedef unsigned long long _QWORD;
+typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD;
 typedef unsigned char _BOOL;
 typedef signed char __int8;
 typedef signed short __int16;
@@ -456,6 +469,8 @@ typedef signed long long __int64;
 #define HIDWORD(x) ((_DWORD)((x) >> 32))
 #define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
 #define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+#define MEMORY ((volatile unsigned char *)0)
+#define JUMPOUT(addr) ((void)(addr))
 // FS-segment TLS reads (stack canary, GLIBC TCB).
 _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);

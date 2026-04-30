@@ -74,6 +74,15 @@ fn is_all_ones(v: &Varnode) -> bool {
     v.space == SpaceId::Const && v.offset == mask_for_size(v.size)
 }
 
+/// Check whether `shift_amt` is `(size_of(value) * 8 - 1)`, i.e. the sign-bit position.
+fn is_sign_bit_shift(value: &Varnode, shift_amt: &Varnode) -> bool {
+    if shift_amt.space != SpaceId::Const || value.space == SpaceId::Const {
+        return false;
+    }
+    let bits_minus_one = (value.size as u64) * 8 - 1;
+    shift_amt.offset == bits_minus_one
+}
+
 /// Build a `COPY` instruction that replaces `insn`'s output with `source`.
 fn make_copy(insn: &IrInsn, source: Varnode) -> IrInsn {
     IrInsn::with_output(
@@ -199,10 +208,26 @@ fn try_recognize(insn: &IrInsn) -> Option<IrInsn> {
             }
         }
 
-        // ── Shift by zero: v << 0 → v, v >> 0 → v ────────────────
-        IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright => {
+        // ── Shift by zero: v << 0 → v ─────────────────────────────
+        IrOp::IntLeft => {
             if is_const_val(&b, 0) && a.space != SpaceId::Const {
                 Some(make_copy(insn, a))
+            } else {
+                None
+            }
+        }
+
+        // ── Shift by zero or sign-bit extraction ───────────────────
+        IrOp::IntRight | IrOp::IntSright => {
+            if is_const_val(&b, 0) && a.space != SpaceId::Const {
+                Some(make_copy(insn, a))
+            } else if insn.op == IrOp::IntRight && is_sign_bit_shift(&a, &b) {
+                Some(IrInsn::with_output(
+                    IrOp::IntSless,
+                    output,
+                    smallvec::smallvec![a, Varnode::constant(0, a.size)],
+                    insn.addr,
+                ))
             } else {
                 None
             }
@@ -718,5 +743,59 @@ mod tests {
         let block = ssa.function.blocks.values().next().expect("has block");
         assert_eq!(block.insns[0].op, IrOp::Copy);
         assert_eq!(block.insns[0].inputs[0], v0);
+    }
+
+    // ── INT_RIGHT(v:4, 31) → INT_SLESS(v, 0) ──────────────────────
+
+    #[test]
+    fn test_idiom_sign_bit_extraction_32bit() {
+        let v0 = Varnode::reg(0, 4);
+        let shift = Varnode::constant(31, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntRight, out, smallvec![v0, shift], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::IntSless);
+        assert_eq!(block.insns[0].inputs[0], v0);
+        assert_eq!(block.insns[0].inputs[1].space, SpaceId::Const);
+        assert_eq!(block.insns[0].inputs[1].offset, 0);
+    }
+
+    // ── INT_RIGHT(v:8, 63) → INT_SLESS(v, 0) ──────────────────────
+
+    #[test]
+    fn test_idiom_sign_bit_extraction_64bit() {
+        let v0 = Varnode::reg(0, 8);
+        let shift = Varnode::constant(63, 4);
+        let out = Varnode::unique(0, 8);
+        let insn = IrInsn::with_output(IrOp::IntRight, out, smallvec![v0, shift], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::IntSless);
+        assert_eq!(block.insns[0].inputs[0], v0);
+        assert_eq!(block.insns[0].inputs[1].space, SpaceId::Const);
+        assert_eq!(block.insns[0].inputs[1].offset, 0);
+    }
+
+    // ── INT_SRIGHT does NOT trigger sign-bit extraction ─────────────
+
+    #[test]
+    fn test_idiom_sright_no_sign_bit_extraction() {
+        let v0 = Varnode::reg(0, 4);
+        let shift = Varnode::constant(31, 4);
+        let out = Varnode::unique(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntSright, out, smallvec![v0, shift], 0x1000);
+
+        let mut ssa = make_single_block_ssa(vec![insn]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(!changed);
     }
 }

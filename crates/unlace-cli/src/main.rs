@@ -101,8 +101,12 @@ fn run_decompile(
     let functions = pipeline::discover_functions(&image, function_filter)?;
 
     let dwarf = match import_dwarf(&image) {
-        Ok(d) if !d.structs.is_empty() => {
-            tracing::info!(structs = d.structs.len(), "loaded DWARF struct types");
+        Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
+            tracing::info!(
+                functions = d.functions.len(),
+                structs = d.structs.len(),
+                "loaded DWARF debug info",
+            );
             Some(d)
         }
         Ok(_) => None,

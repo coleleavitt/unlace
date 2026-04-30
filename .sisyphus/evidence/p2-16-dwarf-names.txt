@@ -1,0 +1,49 @@
+P2-16: Wire DWARF types into C printer
+=======================================
+
+## Changes
+
+1. crates/unlace-output/src/c_printer.rs:
+   - print_c_with_dwarf now looks up DwarfInfo.functions by HirFunction.addr
+   - Uses DWARF function name instead of sub_NNNN or HIR name
+   - Uses DWARF parameter names and types for function signatures
+   - Uses DWARF return type instead of HIR-inferred return type
+   - Falls back gracefully when DWARF info is absent
+   - Added dwarf_type_to_c helper for DWARF type string passthrough
+
+2. crates/unlace-cli/src/main.rs:
+   - DWARF loading now keeps DwarfInfo when functions OR structs are non-empty
+     (previously only kept when structs were non-empty)
+
+## Tests added (4 new tests)
+
+- test_dwarf_function_name_used: synthetic HirFunction at 0x1000 + DwarfInfo
+  with FunctionDebugInfo named "compute" -> output uses "compute(" not "sub_1000("
+- test_dwarf_param_names_used: DWARF params (a:int, b:int) -> output "int add(int a, int b)"
+- test_dwarf_return_type_used: DWARF return type "long" -> output "long get_value("
+- test_no_dwarf_falls_back: no DwarfInfo -> default "int sub_1000(void)"
+
+## Test results
+
+$ cargo test --workspace
+723 passed, 0 failed (was 719, +4 new)
+
+$ cargo xtask lint-determinism
+lint-determinism: OK — no HashMap/HashSet in enforced crates
+
+## Integration test
+
+$ ./target/debug/unlace decompile fixtures/debug_calls.elf > /tmp/p216.c
+$ grep -n "add\|mul\|square\|clamp\|compute\|sub(" /tmp/p216.c
+38:int add(int a, int b) {
+68:int sub(int a, int b) {
+96:int mul(int a, int b) {
+124:int square(int x) {
+269:int clamp(int x, int lo, int hi) {
+306:int compute(int x) {
+
+$ grep -c "sub_" /tmp/p216.c
+0   (no fallback names remain)
+
+$ grep -c "add\|mul\|square\|clamp\|compute" /tmp/p216.c
+5   (>= 3 required)

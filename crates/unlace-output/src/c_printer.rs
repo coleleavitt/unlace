@@ -36,29 +36,53 @@ pub fn print_c_with_dwarf(func: &HirFunction, dwarf: Option<&DwarfInfo>) -> Stri
 
     let mut out = String::with_capacity(1024);
 
+    let dwarf_func = dwarf.and_then(|d| d.functions.get(&func.addr));
+
     let demangled = crate::demangle::demangle(&func.name);
-    let emit_name = match &demangled {
-        Some(dr) => {
+    let emit_name = match (&dwarf_func, &demangled) {
+        (Some(df), _) => df.name.clone(),
+        (None, Some(dr)) => {
             let _ = writeln!(out, "// {}", dr.full_signature);
             crate::demangle::sanitize_for_c(&dr.short_name)
         }
-        None => func.name.clone(),
+        (None, None) => func.name.clone(),
     };
 
-    let _ = write!(
-        out,
-        "{} {}(",
-        c_type(&func.return_type),
-        emit_name,
-    );
-    for (i, (pname, pty)) in func.params.iter().enumerate() {
-        if i > 0 {
-            out.push_str(", ");
+    let return_type_str = dwarf_func
+        .and_then(|df| df.return_type.as_deref())
+        .map(|s| dwarf_type_to_c(s))
+        .unwrap_or_else(|| c_type(&func.return_type).to_string());
+
+    let _ = write!(out, "{} {}(", return_type_str, emit_name);
+
+    if let Some(df) = dwarf_func.filter(|df| !df.params.is_empty()) {
+        for (i, param) in df.params.iter().enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            let ty = param
+                .type_name
+                .as_deref()
+                .map(|s| dwarf_type_to_c(s))
+                .unwrap_or_else(|| "int".to_string());
+            let name = param
+                .name
+                .as_deref()
+                .unwrap_or("arg");
+            let _ = write!(out, "{} {}", ty, name);
         }
-        let _ = write!(out, "{} {}", c_type(pty), pname);
-    }
-    if func.params.is_empty() {
-        out.push_str("void");
+    } else {
+        for (i, (pname, pty)) in func.params.iter().enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            let _ = write!(out, "{} {}", c_type(pty), pname);
+        }
+        if func.params.is_empty()
+            && dwarf_func.map_or(true, |df| df.params.is_empty())
+        {
+            out.push_str("void");
+        }
     }
     let _ = writeln!(out, ") {{");
 
@@ -485,6 +509,14 @@ fn c_type(ty: &PrimitiveType) -> &'static str {
         PrimitiveType::Float => "float",
         PrimitiveType::Double => "double",
         PrimitiveType::Ptr => "void *",
+    }
+}
+
+fn dwarf_type_to_c(dwarf_type: &str) -> String {
+    match dwarf_type {
+        "void" => "void".to_string(),
+        "_Bool" => "_Bool".to_string(),
+        s => s.to_string(),
     }
 }
 
@@ -1484,5 +1516,123 @@ mod tests {
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(!output.contains("->"), "should NOT contain ->: {output}");
         assert!(output.contains("*(void **)"), "should fall back: {output}");
+    }
+
+    #[test]
+    fn test_dwarf_function_name_used() {
+        use std::collections::BTreeMap;
+        use unlace_loader::{DwarfInfo, FunctionDebugInfo};
+
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("sub_1000", body);
+
+        let mut functions = BTreeMap::new();
+        functions.insert(0x1000, FunctionDebugInfo {
+            name: "compute".to_string(),
+            linkage_name: None,
+            low_pc: 0x1000,
+            high_pc: Some(0x1020),
+            params: vec![],
+            return_type: Some("int".to_string()),
+            decl: None,
+        });
+        let dwarf = DwarfInfo {
+            functions,
+            source_map: BTreeMap::new(),
+            structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
+        };
+
+        let output = super::print_c_with_dwarf(&func, Some(&dwarf));
+        assert!(
+            output.contains("compute("),
+            "should use DWARF name 'compute': {output}",
+        );
+        assert!(
+            !output.contains("sub_1000"),
+            "should NOT contain fallback name: {output}",
+        );
+    }
+
+    #[test]
+    fn test_dwarf_param_names_used() {
+        use std::collections::BTreeMap;
+        use unlace_loader::{DwarfInfo, FunctionDebugInfo, ParameterInfo};
+
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("sub_1000", body);
+
+        let mut functions = BTreeMap::new();
+        functions.insert(0x1000, FunctionDebugInfo {
+            name: "add".to_string(),
+            linkage_name: None,
+            low_pc: 0x1000,
+            high_pc: Some(0x1020),
+            params: vec![
+                ParameterInfo { name: Some("a".to_string()), type_name: Some("int".to_string()) },
+                ParameterInfo { name: Some("b".to_string()), type_name: Some("int".to_string()) },
+            ],
+            return_type: Some("int".to_string()),
+            decl: None,
+        });
+        let dwarf = DwarfInfo {
+            functions,
+            source_map: BTreeMap::new(),
+            structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
+        };
+
+        let output = super::print_c_with_dwarf(&func, Some(&dwarf));
+        assert!(
+            output.contains("int add(int a, int b)"),
+            "should use DWARF param names/types: {output}",
+        );
+    }
+
+    #[test]
+    fn test_dwarf_return_type_used() {
+        use std::collections::BTreeMap;
+        use unlace_loader::{DwarfInfo, FunctionDebugInfo};
+
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("sub_1000", body);
+
+        let mut functions = BTreeMap::new();
+        functions.insert(0x1000, FunctionDebugInfo {
+            name: "get_value".to_string(),
+            linkage_name: None,
+            low_pc: 0x1000,
+            high_pc: Some(0x1020),
+            params: vec![],
+            return_type: Some("long".to_string()),
+            decl: None,
+        });
+        let dwarf = DwarfInfo {
+            functions,
+            source_map: BTreeMap::new(),
+            structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
+        };
+
+        let output = super::print_c_with_dwarf(&func, Some(&dwarf));
+        assert!(
+            output.contains("long get_value("),
+            "should use DWARF return type 'long': {output}",
+        );
+    }
+
+    #[test]
+    fn test_no_dwarf_falls_back() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("sub_1000", body);
+
+        let output = super::print_c(&func);
+        assert!(
+            output.contains("int sub_1000(void)"),
+            "should use fallback sub_NNNN naming: {output}",
+        );
     }
 }

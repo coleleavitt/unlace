@@ -11,7 +11,10 @@ pub mod image;
 pub mod pdb;
 pub mod pe;
 
-pub use dwarf::{import_dwarf, DwarfInfo, FunctionDebugInfo, ParameterInfo, SourceLocation};
+pub use dwarf::{
+    import_dwarf, DwarfInfo, EnumType, FunctionDebugInfo, ParameterInfo, SourceLocation,
+    StructField, StructType, UnionType,
+};
 pub use elf::ElfLoader;
 pub use error::LoadError;
 pub use pe::PeLoader;

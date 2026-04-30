@@ -571,6 +571,24 @@ fn try_global_var_name(addr_vn: &Varnode, access_size: u8, ctx: &PrintCtx) -> Op
     Some(format!("{}_{:X}", prefix, addr))
 }
 
+/// Recognize an x86-64 stack-canary read of the form `*(FS:0x28)` and emit
+/// the corresponding IDA-style intrinsic.
+///
+/// The Ghidra/iced lifters model FS-relative TLS access as a `Load` whose
+/// address operand is a small constant (the segment offset). The canonical
+/// canary location is `fs:0x28` for 64-bit and `fs:0x14` for 32-bit; we
+/// also accept `0x14` as a `__readfsdword` site since some variants use it.
+fn try_fs_canary_load(addr_vn: &Varnode, access_size: u8) -> Option<String> {
+    if addr_vn.space != SpaceId::Const {
+        return None;
+    }
+    match (addr_vn.offset, access_size) {
+        (0x28, 8) => Some("__readfsqword(0x28u)".to_string()),
+        (0x14, 4) => Some("__readfsdword(0x14u)".to_string()),
+        _ => None,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Varnode collection — pre-walk to assign names deterministically
 // ---------------------------------------------------------------------------
@@ -1463,6 +1481,9 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
             let load_size = insn.output.map_or(8, |o| o.size);
             let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
             if addr_idx < insn.inputs.len() {
+                if let Some(canary) = try_fs_canary_load(&insn.inputs[addr_idx], load_size) {
+                    return canary;
+                }
                 if let Some(global) = try_global_var_name(&insn.inputs[addr_idx], load_size, ctx) {
                     return global;
                 }
@@ -2231,6 +2252,9 @@ typedef signed long long __int64;
 #define HIDWORD(x) ((_DWORD)((x) >> 32))
 #define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
 #define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+// FS-segment TLS reads (stack canary, GLIBC TCB).
+_QWORD __readfsqword(unsigned int offset);
+_DWORD __readfsdword(unsigned int offset);
 ";
 
 #[cfg(test)]
@@ -4210,6 +4234,85 @@ mod tests {
         assert!(
             output.contains("word_602000"),
             "2-byte load from 0x602000 should emit word_602000: {output}",
+        );
+    }
+
+    #[test]
+    fn test_fs_canary_qword_emitted_as_intrinsic() {
+        let space = con(0, 8);
+        let addr = con(0x28, 8);
+        let r8 = reg(8, 8);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("canary_qword", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("__readfsqword(0x28u)"),
+            "8-byte load from constant 0x28 should emit __readfsqword(0x28u): {output}",
+        );
+        assert!(
+            !output.contains("*(_QWORD *)"),
+            "canary load must not fall back to raw pointer cast: {output}",
+        );
+        assert!(
+            output.contains("__readfsqword(unsigned int offset)"),
+            "prelude must declare __readfsqword: {output}",
+        );
+    }
+
+    #[test]
+    fn test_fs_canary_dword_emitted_as_intrinsic() {
+        let space = con(0, 8);
+        let addr = con(0x14, 8);
+        let r8 = reg(8, 4);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("canary_dword", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("__readfsdword(0x14u)"),
+            "4-byte load from 0x14 should emit __readfsdword: {output}",
+        );
+    }
+
+    #[test]
+    fn test_non_canary_small_const_load_unchanged() {
+        let space = con(0, 8);
+        let addr = con(0x28, 8);
+        let r8 = reg(8, 4);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("not_canary", body);
+        let output = print_c(&func);
+
+        assert!(
+            !output.contains("__readfsqword(0x28u)"),
+            "4-byte load from 0x28 must NOT emit a qword canary call: {output}",
+        );
+        assert!(
+            !output.contains("__readfsdword(0x14u)"),
+            "4-byte load from 0x28 must NOT emit a dword canary call: {output}",
+        );
+        assert!(
+            output.contains("0x28"),
+            "raw cast load should still reference the address 0x28: {output}",
         );
     }
 

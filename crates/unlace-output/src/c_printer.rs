@@ -36,6 +36,9 @@ pub fn print_c_with_dwarf(func: &HirFunction, dwarf: Option<&DwarfInfo>) -> Stri
 
     let mut out = String::with_capacity(1024);
 
+    out.push_str(IDA_TYPEDEFS);
+    out.push('\n');
+
     let dwarf_func = dwarf.and_then(|d| d.functions.get(&func.addr));
 
     let demangled = crate::demangle::demangle(&func.name);
@@ -472,7 +475,8 @@ fn infer_type_from_insn(insn: &IrInsn, output_sv: &SsaVarnode, ctx: &mut PrintCt
         }
         Some('i') | Some(_) | None => {
             match insn.op {
-                IrOp::Ptradd | IrOp::Ptrsub | IrOp::Load => PrimitiveType::Ptr,
+                IrOp::Ptradd | IrOp::Ptrsub => PrimitiveType::Ptr,
+                IrOp::Load => PrimitiveType::UnsignedInt(output_sv.base.size),
                 IrOp::IntDiv | IrOp::IntRem | IrOp::IntZext | IrOp::IntLess
                 | IrOp::IntLessequal | IrOp::IntCarry => {
                     PrimitiveType::UnsignedInt(output_sv.base.size)
@@ -684,7 +688,8 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                         let _ = writeln!(out, "{} = {};", field_expr, val);
                     } else {
                         let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
-                        let _ = writeln!(out, "*(void **)({}) = {};", addr, val);
+                        let cast = ida_ptr_type(store_size);
+                        let _ = writeln!(out, "*({})({}) = {};", cast, addr, val);
                     }
                 } else {
                     let _ = writeln!(out, "/* STORE (bad arity) */;");
@@ -761,7 +766,8 @@ fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
                     return resolved;
                 }
                 let addr = emit_operand_resolved(&insn.inputs[addr_idx], addr_idx, stmt_idx, ctx);
-                format!("*(void **)({})", addr)
+                let cast = ida_ptr_type(load_size);
+                format!("*({})({})", cast, addr)
             } else {
                 "/* LOAD (bad arity) */ 0".to_string()
             }
@@ -914,16 +920,42 @@ fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
 }
 
 fn emit_binop(insn: &IrInsn, op: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    let const_ctx = const_context_for_op(insn.op);
     let lhs = if !insn.inputs.is_empty() {
-        emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx)
+        emit_operand_with_context(&insn.inputs[0], 0, stmt_idx, const_ctx, ctx)
     } else {
         "0".to_string()
     };
     let rhs = if insn.inputs.len() >= 2 {
-        emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx)
+        emit_operand_with_context(&insn.inputs[1], 1, stmt_idx, const_ctx, ctx)
     } else {
         "0".to_string()
     };
+
+    if const_ctx == ConstContext::Signed
+        && op == "+"
+        && insn.inputs.len() >= 2
+        && insn.inputs[1].space == SpaceId::Const
+    {
+        let v = insn.inputs[1].offset;
+        let sz = insn.inputs[1].size;
+        let msb = match sz {
+            1 => 0x80u64,
+            2 => 0x8000,
+            4 => 0x8000_0000,
+            8 => 0x8000_0000_0000_0000,
+            _ => u64::MAX,
+        };
+        if sz <= 8 && v >= msb {
+            let signed = sign_extend(v, sz);
+            let abs_val = signed.unsigned_abs();
+            let should_negate = sz >= 4 || (sz == 2 && abs_val <= 128);
+            if should_negate {
+                return format!("{} - {}", lhs, abs_val);
+            }
+        }
+    }
+
     format!("{} {} {}", lhs, op, rhs)
 }
 
@@ -955,8 +987,18 @@ fn emit_operand_resolved(
     stmt_idx: u32,
     ctx: &mut PrintCtx,
 ) -> String {
+    emit_operand_with_context(vn, _raw_idx, stmt_idx, ConstContext::Signed, ctx)
+}
+
+fn emit_operand_with_context(
+    vn: &unlace_ir::Varnode,
+    _raw_idx: usize,
+    stmt_idx: u32,
+    const_ctx: ConstContext,
+    ctx: &mut PrintCtx,
+) -> String {
     if vn.space == SpaceId::Const {
-        return format_constant(vn.offset, vn.size);
+        return format_constant_ctx(vn.offset, vn.size, const_ctx);
     }
 
     let resolved_sv = if let Some(inputs) = ctx.stmt_inputs.get(&stmt_idx).cloned() {
@@ -978,20 +1020,63 @@ fn emit_operand_resolved(
 }
 
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ConstContext {
+    Signed,
+    Bitwise,
+}
+
+fn const_context_for_op(op: IrOp) -> ConstContext {
+    match op {
+        IrOp::IntAnd | IrOp::IntOr | IrOp::IntXor
+        | IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright => ConstContext::Bitwise,
+        _ => ConstContext::Signed,
+    }
+}
+
+#[cfg(test)]
 fn format_constant(value: u64, size: u8) -> String {
-    let threshold = match size {
+    format_constant_ctx(value, size, ConstContext::Signed)
+}
+
+fn format_constant_ctx(value: u64, size: u8, context: ConstContext) -> String {
+    let msb_threshold = match size {
         1 => 0x80u64,
         2 => 0x8000,
         4 => 0x8000_0000,
         8 => 0x8000_0000_0000_0000,
         _ => u64::MAX,
     };
-    if size <= 8 && value >= threshold {
+
+    let has_msb = size <= 8 && value >= msb_threshold;
+
+    if has_msb && context == ConstContext::Signed {
+        let signed = sign_extend(value, size);
+        let abs_val = signed.unsigned_abs();
+        // For 1-2 byte operands, keep hex to avoid turning bitmasks like
+        // 0xFF into -1.  For 4/8 byte, always negate.
+        let should_negate = size >= 4 || (size == 2 && abs_val <= 128);
+        if should_negate {
+            return format!("{}", signed);
+        }
+    }
+
+    if has_msb {
         format!("0x{:x}ULL", value)
     } else if value < 10 {
         format!("{}", value)
     } else {
         format!("0x{:x}", value)
+    }
+}
+
+fn sign_extend(value: u64, size: u8) -> i64 {
+    match size {
+        1 => value as u8 as i8 as i64,
+        2 => value as u16 as i16 as i64,
+        4 => value as u32 as i32 as i64,
+        8 => value as i64,
+        _ => value as i64,
     }
 }
 
@@ -1008,22 +1093,47 @@ fn indent(depth: usize, out: &mut String) {
 fn type_for_size(size: u8, signed: bool) -> &'static str {
     if signed {
         match size {
-            1 => "signed char",
-            2 => "short",
-            4 => "int",
-            8 => "long long",
-            _ => "int",
+            1 => "__int8",
+            2 => "__int16",
+            4 => "__int32",
+            8 => "__int64",
+            _ => "__int32",
         }
     } else {
         match size {
-            1 => "unsigned char",
-            2 => "unsigned short",
-            4 => "unsigned int",
-            8 => "unsigned long long",
-            _ => "unsigned int",
+            1 => "unsigned __int8",
+            2 => "unsigned __int16",
+            4 => "unsigned __int32",
+            8 => "unsigned __int64",
+            _ => "unsigned __int32",
         }
     }
 }
+
+/// IDA-style pointer cast for memory dereference based on access size.
+///
+/// Returns e.g. `_QWORD *` for 8-byte access, `_DWORD *` for 4-byte, etc.
+fn ida_ptr_type(size: u8) -> &'static str {
+    match size {
+        1 => "_BYTE *",
+        2 => "_WORD *",
+        4 => "_DWORD *",
+        8 => "_QWORD *",
+        _ => "_QWORD *",
+    }
+}
+
+/// IDA-style typedefs emitted at the top of decompiled output.
+const IDA_TYPEDEFS: &str = "\
+typedef unsigned char _BYTE;
+typedef unsigned short _WORD;
+typedef unsigned int _DWORD;
+typedef unsigned long long _QWORD;
+typedef signed char __int8;
+typedef signed short __int16;
+typedef signed int __int32;
+typedef signed long long __int64;
+";
 
 #[cfg(test)]
 mod tests {
@@ -1515,7 +1625,7 @@ mod tests {
         let dwarf = DwarfInfo { functions: BTreeMap::new(), source_map: BTreeMap::new(), structs, enums: BTreeMap::new(), unions: BTreeMap::new() };
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(!output.contains("->"), "should NOT contain ->: {output}");
-        assert!(output.contains("*(void **)"), "should fall back: {output}");
+        assert!(output.contains("*(_DWORD *)"), "should fall back to typed cast: {output}");
     }
 
     #[test]
@@ -1633,6 +1743,399 @@ mod tests {
         assert!(
             output.contains("int sub_1000(void)"),
             "should use fallback sub_NNNN naming: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // IDA-style type cast tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_type_casts_qword_load() {
+        let space = con(0, 8);
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 8);
+
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            r8,
+            smallvec![space, r0],
+            0x1000,
+        );
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("qword_load", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("*(_QWORD *)"),
+            "8-byte load should use _QWORD *: {output}",
+        );
+    }
+
+    #[test]
+    fn test_type_casts_dword_load() {
+        let space = con(0, 8);
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 4);
+
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            r8,
+            smallvec![space, r0],
+            0x1000,
+        );
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("dword_load", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("*(_DWORD *)"),
+            "4-byte load should use _DWORD *: {output}",
+        );
+    }
+
+    #[test]
+    fn test_type_casts_byte_load() {
+        let space = con(0, 8);
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 1);
+
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            r8,
+            smallvec![space, r0],
+            0x1000,
+        );
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 1))),
+        ];
+
+        let func = make_func("byte_load", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("*(_BYTE *)"),
+            "1-byte load should use _BYTE *: {output}",
+        );
+    }
+
+    #[test]
+    fn test_type_casts_word_load() {
+        let space = con(0, 8);
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 2);
+
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            r8,
+            smallvec![space, r0],
+            0x1000,
+        );
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 2))),
+        ];
+
+        let func = make_func("word_load", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("*(_WORD *)"),
+            "2-byte load should use _WORD *: {output}",
+        );
+    }
+
+    #[test]
+    fn test_type_casts_typedefs_in_output() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("typedef_test", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("typedef unsigned char _BYTE;"),
+            "should contain _BYTE typedef: {output}",
+        );
+        assert!(
+            output.contains("typedef unsigned short _WORD;"),
+            "should contain _WORD typedef: {output}",
+        );
+        assert!(
+            output.contains("typedef unsigned int _DWORD;"),
+            "should contain _DWORD typedef: {output}",
+        );
+        assert!(
+            output.contains("typedef unsigned long long _QWORD;"),
+            "should contain _QWORD typedef: {output}",
+        );
+        assert!(
+            output.contains("typedef signed char __int8;"),
+            "should contain __int8 typedef: {output}",
+        );
+        assert!(
+            output.contains("typedef signed short __int16;"),
+            "should contain __int16 typedef: {output}",
+        );
+        assert!(
+            output.contains("typedef signed int __int32;"),
+            "should contain __int32 typedef: {output}",
+        );
+        assert!(
+            output.contains("typedef signed long long __int64;"),
+            "should contain __int64 typedef: {output}",
+        );
+
+        let typedef_pos = output.find("typedef").unwrap();
+        let func_pos = output.find("typedef_test").unwrap();
+        assert!(
+            typedef_pos < func_pos,
+            "typedefs should appear before function: {output}",
+        );
+    }
+
+    #[test]
+    fn test_type_casts_signed_int64_cast() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 8);
+
+        let sext = IrInsn::with_output(
+            IrOp::IntSext,
+            r8,
+            smallvec![r0],
+            0x1000,
+        );
+        let body = vec![
+            HirNode::Statement(sext),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("signed_cast", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("(__int64)"),
+            "signed extension to 8 bytes should use __int64: {output}",
+        );
+    }
+
+    #[test]
+    fn test_type_casts_unsigned_zext() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 8);
+
+        let zext = IrInsn::with_output(
+            IrOp::IntZext,
+            r8,
+            smallvec![r0],
+            0x1000,
+        );
+        let body = vec![
+            HirNode::Statement(zext),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("unsigned_cast", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("(unsigned __int64)"),
+            "unsigned extension to 8 bytes should use unsigned __int64: {output}",
+        );
+    }
+
+    #[test]
+    fn test_type_casts_compiles() {
+        let gcc_available = std::process::Command::new("gcc")
+            .arg("--version")
+            .output()
+            .is_ok();
+        if !gcc_available {
+            eprintln!("gcc not found, skipping test_type_casts_compiles");
+            return;
+        }
+
+        let space = con(0, 8);
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 8);
+        let r16 = reg(16, 4);
+        let r24 = reg(24, 1);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::Load, r8, smallvec![space, r0], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::Load, r16, smallvec![space, r0], 0x1004)),
+            HirNode::Statement(IrInsn::with_output(IrOp::Load, r24, smallvec![space, r0], 0x1008)),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("type_cast_compile", body);
+        let source = print_c(&func);
+
+        let result = std::process::Command::new("gcc")
+            .args(["-fsyntax-only", "-x", "c", "-", "-std=c11"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn();
+
+        let Ok(mut child) = result else {
+            eprintln!("Failed to spawn gcc, skipping");
+            return;
+        };
+
+        {
+            use std::io::Write;
+            let stdin = child.stdin.as_mut().expect("stdin pipe");
+            stdin.write_all(source.as_bytes()).expect("write to stdin");
+        }
+
+        let output = child.wait_with_output().expect("wait for gcc");
+        assert!(
+            output.status.success(),
+            "gcc -fsyntax-only failed on type casts:\n--- source ---\n{}\n--- stderr ---\n{}",
+            source,
+            String::from_utf8_lossy(&output.stderr),
+        );
+    }
+
+    #[test]
+    fn test_negative_const_8byte() {
+        let r0 = reg(0, 8);
+        let neg8 = con(0xffff_ffff_ffff_fff8, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, neg8],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: Varnode::reg(0, 8), version: 0 })),
+        ];
+
+        let func = make_func("neg8", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("- 8"),
+            "8-byte 0xfffffffffffffff8 in INT_ADD should render as `- 8`: {output}",
+        );
+        assert!(
+            !output.contains("0xfffffffffffffff8"),
+            "should NOT contain raw hex: {output}",
+        );
+    }
+
+    #[test]
+    fn test_negative_const_4byte() {
+        let r0 = reg(0, 4);
+        let neg4 = con(0xfffffffc, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, neg4],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: Varnode::reg(0, 4), version: 0 })),
+        ];
+
+        let func = make_func("neg4", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("- 4"),
+            "4-byte 0xfffffffc in INT_ADD should render as `- 4`: {output}",
+        );
+    }
+
+    #[test]
+    fn test_negative_const_copy_minus1() {
+        let r0 = reg(0, 4);
+        let neg1 = con(0xffffffff, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                r0,
+                smallvec![neg1],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: Varnode::reg(0, 4), version: 0 })),
+        ];
+
+        let func = make_func("neg1_copy", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("-1"),
+            "COPY of 0xffffffff (4-byte) should render as -1: {output}",
+        );
+    }
+
+    #[test]
+    fn test_negative_const_small_unsigned_kept() {
+        assert_eq!(
+            super::format_constant(0xFF, 1),
+            "0xffULL",
+            "0xFF in 1-byte should stay hex (byte-sized constants are not negated)",
+        );
+    }
+
+    #[test]
+    fn test_negative_const_bitwise_kept_hex() {
+        let r0 = reg(0, 8);
+        let mask = con(0xffff_ffff_ffff_fffc, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAnd,
+                r0,
+                smallvec![r0, mask],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: Varnode::reg(0, 8), version: 0 })),
+        ];
+
+        let func = make_func("bitwise_mask", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("0x"),
+            "bitwise AND constant should stay as hex: {output}",
+        );
+    }
+
+    #[test]
+    fn test_negative_const_comparison() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 1);
+        let neg1 = con(0xffffffff, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntEqual,
+                r8,
+                smallvec![r0, neg1],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: Varnode::reg(8, 1), version: 0 })),
+        ];
+
+        let func = make_func("cmp_neg1", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("== -1"),
+            "comparison with 0xffffffff (4-byte) should render as `== -1`: {output}",
         );
     }
 }

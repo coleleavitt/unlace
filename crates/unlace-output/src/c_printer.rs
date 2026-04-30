@@ -5356,4 +5356,30 @@ mod tests {
             "foldable_exprs varnode should not appear in variable declarations:\n{output}",
         );
     }
+
+    #[test]
+    fn test_internal_call_resolved() {
+        let target_addr: u64 = 0x4020;
+        let call_target = Varnode::constant(target_addr, 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Call,
+                smallvec![call_target],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(target_addr, "sub_4020".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("sub_4020();"),
+            "internal call should resolve to sub_4020: {output}",
+        );
+    }
 }

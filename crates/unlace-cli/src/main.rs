@@ -158,7 +158,7 @@ fn run_decompile(
     for func_entry in &functions {
         tracing::info!(name = %func_entry.name, addr = %format_args!("{:#x}", func_entry.addr), "decompiling");
 
-        match pipeline::decompile_function(&image, lifter.as_ref(), func_entry, emit, config, dwarf.as_ref()) {
+        match pipeline::decompile_function_with_symbols(&image, lifter.as_ref(), func_entry, emit, config, dwarf.as_ref(), &functions) {
             Ok(text) => all_output.push_str(&text),
             Err(e) => {
                 tracing::warn!(name = %func_entry.name, err = %e, "function decompilation failed");

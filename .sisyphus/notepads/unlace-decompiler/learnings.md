@@ -455,3 +455,26 @@
 - Extended opcodes (bits[10:5]=0x3F) and Format IV (short ep-relative loads/stores) emit Unimplemented for now.
 - Reference: Athrill V850E2M simulator (github.com/toppers/athrill-target-v850e2m) has complete opcode dispatch tables in C.
 - 74 tests total: 28 decoder tests + 46 lifter tests covering all implemented instructions.
+
+## Task 29: MIPS64 Lifter via Capstone
+- `Capstone::new().mips().mode(ArchMode::Mips64).endian(Endian::Big).detail(true).build()` for MIPS64 big-endian.
+- Capstone `Capstone` is `!Send + !Sync` — wrapped in `Mutex<SendCapstone>` with `unsafe impl Send for SendCapstone` to satisfy `Lifter: Send + Sync` trait bounds. Each call locks the mutex.
+- MIPS register IDs in capstone-sys: MIPS_REG_0=2, MIPS_REG_1=3, ..., MIPS_REG_31=33 (contiguous, starting at 2). MIPS_REG_INVALID=0.
+- `MipsOperand` variants: `Reg(RegId)`, `Imm(i64)`, `Mem(MipsOpMem { base: RegId, disp: i64 })`, `Invalid`.
+- Capstone normalizes pseudo-instructions: `BEQ rs, $zero, target` → `BEQZ rs, target` (MIPS_INS_BEQZ=135), `BNE rs, $zero, target` → `BNEZ rs, target` (MIPS_INS_BNEZ=137), `BEQ $zero, $zero, target` → `B target` (MIPS_INS_B=136). Must handle all alias IDs.
+- Additional pseudo-IDs: `NEGU` (MIPS_INS_NEGU=623), `BAL` (MIPS_INS_BAL=44), `BGEZAL` (MIPS_INS_BGEZAL=83), `BLTZAL` (MIPS_INS_BLTZAL=106).
+- Register file: 35 registers — $zero-$ra at offsets 0-248 (step 8), HI at 256, LO at 264, PC at 272. All 8-byte wide (MIPS64).
+- $zero register hardwired to zero: reads return `Varnode::constant(0, 8)`, writes return `None` (silently discarded).
+- MULT/MULTU write result to LO only (simplified — full 128-bit result into HI:LO deferred). DIV/DIVU write quotient to LO, remainder to HI.
+- MFHI/MFLO read from HI/LO register-space varnodes.
+- LUI lifts as `IntLeft(imm, 16)` — shift immediate left by 16 bits.
+- SLT/SLTU lift as comparison (`IntSless`/`IntLess`) → `IntZext` to 8 bytes (result is 0 or 1 in GP register).
+- Load instructions (LW/LD/LH/LB etc.) use `IntZext` for sub-8-byte loads. Store instructions use `Subpiece` to truncate.
+- JR $ra specifically maps to `IrOp::Return`; other JR targets map to `IrOp::Branchind`.
+- JAL/JALR write return address (addr+8, accounting for delay slot) to $ra before call.
+- Delay slots: MVP lifts sequentially (each instruction independently, len=4). Full delay-slot semantics deferred.
+- NOR lifted as `IntOr` followed by `IntNegate` (bitwise NOT of OR result).
+- Dispatch uses `insn.id().0` matched against `MipsInsn::MIPS_INS_*` constants cast to u32.
+- Source layout: lib.rs (re-exports), lift.rs (MipsLifter + LiftCtx + dispatch + tests), register_file.rs (offsets + capstone reg mapping), ops/{mod,arithmetic,bitwise,control_flow,data_move,memory}.rs.
+- 19 tests: arch_id, register_file, short_buffer, nop, addiu, addu, lw, sw, beq, j, jal, jr_ra, lui, and, sll, slt, mult, zero_hardwired, unknown_insn.
+- Facade test `test_all_stubs_produce_unimplemented` was outdated — ARM, RISC-V, PPC, V850 lifters were all already implemented. Reduced to only ARC stub.

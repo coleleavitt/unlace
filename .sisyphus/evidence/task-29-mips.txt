@@ -1,0 +1,32 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/unlace_lift_mips-294c9656fcdda5b6)
+
+running 19 tests
+test lift::tests::test_addiu_immediate ... ok
+test lift::tests::test_arch_is_mips64 ... ok
+test lift::tests::test_and ... ok
+test lift::tests::test_jal ... ok
+test lift::tests::test_jr_ra ... ok
+test lift::tests::test_addu ... ok
+test lift::tests::test_lui ... ok
+test lift::tests::test_lw ... ok
+test lift::tests::test_j ... ok
+test lift::tests::test_beq ... ok
+test lift::tests::test_mult ... ok
+test lift::tests::test_register_file ... ok
+test lift::tests::test_sll ... ok
+test lift::tests::test_slt ... ok
+test lift::tests::test_sw ... ok
+test lift::tests::test_nop ... ok
+test lift::tests::test_unknown_insn ... ok
+test lift::tests::test_zero_hardwired ... ok
+test lift::tests::test_short_buffer ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests unlace_lift_mips
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

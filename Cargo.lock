@@ -1325,6 +1325,8 @@ dependencies = [
  "thiserror",
  "tree-sitter",
  "tree-sitter-c",
+ "unlace-ir",
+ "unlace-lift-arm",
 ]
 
 [[package]]

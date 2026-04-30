@@ -72,7 +72,7 @@ mod tests {
 
         let result = lifter.lift_insn(&[0x00, 0x00], 0x0000_1000);
         assert!(result.is_ok());
-        let lifted = result.unwrap();
+        let lifted = result.expect("lift should succeed");
         assert_eq!(lifted.len, 2);
         assert_eq!(lifted.ir_ops[0].op, IrOp::Unimplemented);
     }

@@ -476,7 +476,7 @@ mod tests {
         let r0_phi = phis_at_3.iter().find(|p| p.output.base == r0);
         assert!(r0_phi.is_some(), "phi for r0 expected at BB3");
 
-        let phi = r0_phi.unwrap();
+        let phi = r0_phi.expect("phi for r0 at BB3");
         assert_eq!(phi.inputs.len(), 2, "diamond phi must have 2 inputs");
     }
 

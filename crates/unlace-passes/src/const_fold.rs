@@ -296,10 +296,10 @@ mod tests {
 
         let mut ssa = make_single_block_ssa(vec![insn]);
         let pass = ConstantFoldPass;
-        let changed = pass.run(&mut ssa).unwrap();
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
         assert!(changed);
 
-        let folded = &ssa.function.blocks.values().next().unwrap().insns[0];
+        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
         assert_eq!(folded.op, IrOp::Copy);
         assert_eq!(folded.inputs[0].space, SpaceId::Const);
         assert_eq!(folded.inputs[0].offset, 8);
@@ -314,10 +314,10 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntSub, out, smallvec![c10, c3], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConstantFoldPass.run(&mut ssa).unwrap();
+        let changed = ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
         assert!(changed);
 
-        let folded = &ssa.function.blocks.values().next().unwrap().insns[0];
+        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
         assert_eq!(folded.op, IrOp::Copy);
         assert_eq!(folded.inputs[0].offset, 7);
     }
@@ -330,10 +330,10 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolAnd, out, smallvec![c1, c0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConstantFoldPass.run(&mut ssa).unwrap();
+        let changed = ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
         assert!(changed);
 
-        let folded = &ssa.function.blocks.values().next().unwrap().insns[0];
+        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
         assert_eq!(folded.op, IrOp::Copy);
         assert_eq!(folded.inputs[0].space, SpaceId::Const);
         assert_eq!(folded.inputs[0].offset, 0);
@@ -347,9 +347,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntAdd, out, smallvec![max, c1], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        ConstantFoldPass.run(&mut ssa).unwrap();
+        ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
 
-        let folded = &ssa.function.blocks.values().next().unwrap().insns[0];
+        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
         assert_eq!(folded.inputs[0].offset, 0);
     }
 
@@ -361,7 +361,7 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntAdd, out, smallvec![r0, c5], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConstantFoldPass.run(&mut ssa).unwrap();
+        let changed = ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
         assert!(!changed);
     }
 
@@ -373,7 +373,7 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntDiv, out, smallvec![c10, c0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConstantFoldPass.run(&mut ssa).unwrap();
+        let changed = ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
         assert!(!changed);
     }
 
@@ -384,9 +384,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntNegate, out, smallvec![c0xff], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        ConstantFoldPass.run(&mut ssa).unwrap();
+        ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
 
-        let folded = &ssa.function.blocks.values().next().unwrap().insns[0];
+        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
         assert_eq!(folded.inputs[0].offset, 0xFFFF_FF00);
     }
 
@@ -398,9 +398,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolOr, out, smallvec![c0, c1], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        ConstantFoldPass.run(&mut ssa).unwrap();
+        ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
 
-        let folded = &ssa.function.blocks.values().next().unwrap().insns[0];
+        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
         assert_eq!(folded.inputs[0].offset, 1);
     }
 
@@ -412,9 +412,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntCarry, out, smallvec![max, c1], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        ConstantFoldPass.run(&mut ssa).unwrap();
+        ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
 
-        let folded = &ssa.function.blocks.values().next().unwrap().insns[0];
+        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
         assert_eq!(folded.inputs[0].offset, 1);
     }
 }

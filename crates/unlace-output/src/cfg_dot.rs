@@ -41,10 +41,11 @@ pub fn emit_cfg_dot(func: &SsaFunction) -> String {
         .collect();
 
     let mut out = String::with_capacity(1024);
-    writeln!(out, "digraph CFG {{").unwrap();
-    writeln!(out, "  rankdir=TB;").unwrap();
-    writeln!(out, "  node [shape=box, fontname=\"monospace\"];").unwrap();
-    writeln!(out, "  edge [fontname=\"monospace\", fontsize=10];").unwrap();
+    // `writeln!` to `String` is infallible; ignore the result.
+    let _ = writeln!(out, "digraph CFG {{");
+    let _ = writeln!(out, "  rankdir=TB;");
+    let _ = writeln!(out, "  node [shape=box, fontname=\"monospace\"];");
+    let _ = writeln!(out, "  edge [fontname=\"monospace\", fontsize=10];");
 
     // --- Nodes ---
     for &bid in &block_ids {
@@ -52,13 +53,12 @@ pub fn emit_cfg_dot(func: &SsaFunction) -> String {
         let fill = node_fill(bid, entry, &loop_headers, cfg);
 
         if let Some(color) = fill {
-            writeln!(
+            let _ = writeln!(
                 out,
                 "  {bid} [label=\"{label}\", fillcolor={color}, style=filled];",
-            )
-            .unwrap();
+            );
         } else {
-            writeln!(out, "  {bid} [label=\"{label}\"];").unwrap();
+            let _ = writeln!(out, "  {bid} [label=\"{label}\"];");
         }
     }
 
@@ -78,13 +78,13 @@ pub fn emit_cfg_dot(func: &SsaFunction) -> String {
     for (src, dst, kind) in &edges {
         let label = edge_label(*kind);
         if label.is_empty() {
-            writeln!(out, "  {src} -> {dst};").unwrap();
+            let _ = writeln!(out, "  {src} -> {dst};");
         } else {
-            writeln!(out, "  {src} -> {dst} [label=\"{label}\"];").unwrap();
+            let _ = writeln!(out, "  {src} -> {dst} [label=\"{label}\"];");
         }
     }
 
-    writeln!(out, "}}").unwrap();
+    let _ = writeln!(out, "}}");
     out
 }
 
@@ -103,7 +103,7 @@ fn build_node_label(func: &SsaFunction, bid: BlockId) -> String {
             label.push_str(&escaped);
         }
         if block.insns.len() > MAX_INSNS_PER_LABEL {
-            write!(label, "\\l... ({} more)", block.insns.len() - MAX_INSNS_PER_LABEL).unwrap();
+            let _ = write!(label, "\\l... ({} more)", block.insns.len() - MAX_INSNS_PER_LABEL);
         }
     }
 

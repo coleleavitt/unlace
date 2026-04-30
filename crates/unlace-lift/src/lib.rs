@@ -121,7 +121,7 @@ mod tests {
             let l = get_lifter(arch);
             let result = l.lift_insn(&[0xDE, 0xAD, 0xBE, 0xEF], 0x1000);
             assert!(result.is_ok(), "lifter for {arch} should not error");
-            let lifted = result.unwrap();
+            let lifted = result.expect("lifter should succeed");
             assert_eq!(lifted.ir_ops[0].op, IrOp::Unimplemented);
         }
     }

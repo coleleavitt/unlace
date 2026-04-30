@@ -413,7 +413,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
 
 ### Wave 3 — SSA + Analysis Pipeline
 
-- [ ] 12. CFG construction from LIR
+- [x] 12. CFG construction from LIR
   **What to do**: Add petgraph to unlace-ir. `fn build_cfg(func) -> ControlFlowGraph` using `StableDiGraph<BlockId, EdgeKind>`. Identify edges from BRANCH/CBRANCH/CALL/RETURN ops. Entry/exit block detection. Indirect jumps → unknown sink. `EdgeKind` enum. `fn dot_export(cfg) -> String`.
   **Must NOT do**: SSA, optimization, dominator tree.
   **Parallelization**: Wave 3. Depends: 7. Blocks: 13, 17, 20.
@@ -437,7 +437,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(ir): CFG construction via petgraph + dot export`
 
-- [ ] 13. SSA construction
+- [x] 13. SSA construction
   **What to do**: Dominator tree via `petgraph::algo::dominators::simple_fast`. Dominance frontier computation (Cytron et al. 1991). Phi-function placement. Variable renaming (SSA numbering). `SsaFunction` wrapping Function + CFG + dom tree. `SsaVarnode { base, version: u32 }`. MULTIEQUAL ops at block entries. Tests: straight-line (no phis), diamond (phis at merge), loop (phis at header).
   **Must NOT do**: SSA destruction, optimization.
   **Parallelization**: Wave 3. Depends: 12. Blocks: 14, 15, 16.
@@ -461,7 +461,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(ir): SSA — dominator tree, dominance frontiers, phi insertion`
 
-- [ ] 14. Constant folding + copy propagation
+- [x] 14. Constant folding + copy propagation
   **What to do**: `trait Pass { fn name() -> &str; fn run(&self, func: &mut SsaFunction) -> Result<bool>; }`. `ConstantFoldPass`: constant inputs → computed result. `CopyPropagationPass`: `v2 = COPY v1` → replace v2 uses with v1. Both iterate to fixed point.
   **Must NOT do**: DCE (Task 15), type inference.
   **Parallelization**: Wave 3. Depends: 13. Blocks: 17.
@@ -478,7 +478,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(passes): constant folding + copy propagation`
 
-- [ ] 15. Dead code elimination
+- [x] 15. Dead code elimination
   **What to do**: `DeadCodeElimPass`: remove insns whose output has no uses. Preserve side effects (STORE, CALL). Iterate to fixed point. Cascading removal.
   **Parallelization**: Wave 3. Depends: 13. Blocks: 17.
   **QA Scenarios**:
@@ -493,7 +493,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(passes): dead code elimination`
 
-- [ ] 16. Primitive type inference
+- [x] 16. Primitive type inference
   **What to do**: `TypeInferPass`: INT_ADD/SUB operands → int, FLOAT_* → float/double, LOAD/STORE addr → void*, CBRANCH cond → bool, CALL target → func ptr. Type lattice: Unknown → {int, float, ptr, bool}. Store on SsaVarnode.
   **Must NOT do**: Struct recovery, RTTI, DWARF/PDB.
   **Parallelization**: Wave 3. Depends: 13. Blocks: 37, 38, 39.
@@ -511,7 +511,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
 
 ### Wave 4 — Output Pipeline + Structuring
 
-- [ ] 17. Control flow structuring
+- [x] 17. Control flow structuring
   **What to do**: unlace-struct crate. Interval analysis for loops. If/else via dominator pairing. While/do-while via back-edge detection. Switch via jump table pattern. Irreducible CFG → goto. `HirNode` enum: Block, If, While, DoWhile, Switch, Return, Goto, Label. `HirFunction { name, params, return_type, body }`. "No More Gotos" (Yakdan 2015) as baseline.
   **Must NOT do**: Perfect structuring. Goto is OK for irreducible.
   **Parallelization**: Wave 4. Depends: 12, 14, 15. Blocks: 18.
@@ -528,7 +528,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(struct): control flow structuring — if/while/switch/goto`
 
-- [ ] 18. C pretty-printer
+- [x] 18. C pretty-printer
   **What to do**: unlace-output crate. `fn print_c(func: &HirFunction) -> String`. Valid C syntax (gcc -fsyntax-only). 4-space indent. Variables: v1, v2, ... (monotonic, deterministic). Types: int, unsigned int, char, void *, etc. Expressions + statements.
   **Must NOT do**: Semantic correctness. Just syntax.
   **Parallelization**: Wave 4. Depends: 17. Blocks: 21.
@@ -552,7 +552,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(output): C pretty-printer from HIR`
 
-- [ ] 19. IR dump formatter
+- [x] 19. IR dump formatter
   **What to do**: `fn dump_ir(func: &SsaFunction) -> String` in unlace-output. Canonical text form from spec. One insn/line: `v3:i32 = INT_ADD v1:i32, v2:i32`. Block headers: `BB_0 [entry]:`. Phi: `v5:i32 = MULTIEQUAL v3:i32(BB_1), v4:i32(BB_2)`.
   **Parallelization**: Wave 4. Depends: 7. Blocks: 21.
   **QA Scenarios**:
@@ -567,7 +567,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(output): IR dump formatter`
 
-- [ ] 20. CFG dot graph output
+- [x] 20. CFG dot graph output
   **What to do**: `fn emit_cfg_dot(func: &SsaFunction) -> String`. Block labels with IR, edge labels T/F/fallthrough. Entry=green, exit=red, loop headers=blue. Renders with `dot -Tpng`.
   **Parallelization**: Wave 4. Depends: 12. Blocks: 21.
   **QA Scenarios**:
@@ -582,7 +582,7 @@ Critical Path: 1 → 7 → 9 → 12 → 13 → 14 → 17 → 18 → 21 → 22 �
   ```
   **Commit**: `feat(output): CFG dot graph`
 
-- [ ] 21. CLI integration via clap
+- [x] 21. CLI integration via clap
   **What to do**: unlace-cli binary. `unlace decompile [--function NAME|ADDR] [--emit c|ir|cfg-dot] [--arch ARCH] [--output FILE] [--all] [-v] BINARY`. `unlace --version`. Wire loader → lift → SSA → passes → struct → output. x86-64 ELF only for now. tracing for diagnostics.
   **Parallelization**: Wave 4. Depends: 8, 18, 19, 20. Blocks: 22.
   **QA Scenarios**:

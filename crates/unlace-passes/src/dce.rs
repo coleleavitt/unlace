@@ -121,7 +121,11 @@ impl Pass for DeadCodeElimPass {
                             .insert((bid, new_idx, VarnodeSlot::Output), sv);
                     }
 
-                    let input_count = block.insns.last().unwrap().inputs.len();
+                    let input_count = block.insns.last()
+                        .ok_or_else(|| PassError::InvariantViolation {
+                            message: "block has no instructions after compaction".into(),
+                        })?
+                        .inputs.len();
                     for i in 0..input_count {
                         if let Some(sv) = func
                             .var_map
@@ -165,7 +169,7 @@ mod tests {
         var_map: std::collections::BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
         phi_map: std::collections::BTreeMap<BlockId, Vec<PhiNode>>,
     ) -> SsaFunction {
-        let entry = blocks.first().unwrap().id;
+        let entry = blocks.first().expect("blocks non-empty").id;
         let mut func = Function::new("test", entry, 0x1000);
         for bb in blocks {
             func.insert_block(bb);
@@ -183,7 +187,7 @@ mod tests {
         use petgraph::algo::dominators::simple_fast;
         use std::collections::BTreeMap;
 
-        let entry_ni = cfg.node_index(cfg.entry_block()).unwrap();
+        let entry_ni = cfg.node_index(cfg.entry_block()).expect("entry block in cfg");
         let dominators = simple_fast(cfg.inner(), entry_ni);
 
         let mut idom = BTreeMap::new();
@@ -243,7 +247,7 @@ mod tests {
         );
 
         let pass = DeadCodeElimPass;
-        let changed = pass.run(&mut ssa).unwrap();
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
 
         assert!(changed, "should have removed the dead INT_ADD");
         let insns = &ssa.function.blocks[&BlockId(0)].insns;
@@ -279,7 +283,7 @@ mod tests {
         );
 
         let pass = DeadCodeElimPass;
-        let changed = pass.run(&mut ssa).unwrap();
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
 
         assert!(!changed, "STORE must not be removed");
         assert_eq!(ssa.function.blocks[&BlockId(0)].insns.len(), 2);
@@ -314,7 +318,7 @@ mod tests {
         );
 
         let pass = DeadCodeElimPass;
-        let changed = pass.run(&mut ssa).unwrap();
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
 
         assert!(!changed, "CALL must not be removed even when output is unused");
         assert_eq!(ssa.function.blocks[&BlockId(0)].insns.len(), 2);
@@ -360,7 +364,7 @@ mod tests {
 
         let pass = DeadCodeElimPass;
 
-        let changed1 = pass.run(&mut ssa).unwrap();
+        let changed1 = pass.run(&mut ssa).expect("pass should succeed");
         assert!(changed1, "pass 1 should remove INT_ADD");
         assert_eq!(
             ssa.function.blocks[&BlockId(0)].insns.len(),
@@ -368,7 +372,7 @@ mod tests {
             "COPY + RETURN after pass 1"
         );
 
-        let changed2 = pass.run(&mut ssa).unwrap();
+        let changed2 = pass.run(&mut ssa).expect("pass should succeed");
         assert!(changed2, "pass 2 should remove COPY (cascade)");
         assert_eq!(
             ssa.function.blocks[&BlockId(0)].insns.len(),
@@ -377,7 +381,7 @@ mod tests {
         );
         assert_eq!(ssa.function.blocks[&BlockId(0)].insns[0].op, IrOp::Return);
 
-        let changed3 = pass.run(&mut ssa).unwrap();
+        let changed3 = pass.run(&mut ssa).expect("pass should succeed");
         assert!(!changed3, "pass 3 should be a no-op (fixed point)");
     }
 }

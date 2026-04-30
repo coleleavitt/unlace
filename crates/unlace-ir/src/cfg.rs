@@ -286,10 +286,11 @@ pub fn dot_export(cfg: &ControlFlowGraph) -> String {
     use std::fmt::Write;
 
     let mut out = String::with_capacity(512);
-    writeln!(out, "digraph CFG {{").unwrap();
-    writeln!(out, "    rankdir=TB;").unwrap();
-    writeln!(out, "    node [shape=box, fontname=\"monospace\"];").unwrap();
-    writeln!(out, "    edge [fontname=\"monospace\", fontsize=10];").unwrap();
+    // `writeln!` to `String` is infallible; ignore the result.
+    let _ = writeln!(out, "digraph CFG {{");
+    let _ = writeln!(out, "    rankdir=TB;");
+    let _ = writeln!(out, "    node [shape=box, fontname=\"monospace\"];");
+    let _ = writeln!(out, "    edge [fontname=\"monospace\", fontsize=10];");
 
     for (&bid, &ni) in &cfg.node_map {
         let shape = if bid == cfg.exit {
@@ -301,7 +302,7 @@ pub fn dot_export(cfg: &ControlFlowGraph) -> String {
         } else {
             "box"
         };
-        writeln!(out, "    {} [label=\"{}\", shape={}];", ni.index(), bid, shape).unwrap();
+        let _ = writeln!(out, "    {} [label=\"{}\", shape={}];", ni.index(), bid, shape);
     }
 
     for edge in cfg.graph.edge_references() {
@@ -315,18 +316,17 @@ pub fn dot_export(cfg: &ControlFlowGraph) -> String {
             EdgeKind::Call => "color=blue",
             EdgeKind::Return => "color=purple",
         };
-        writeln!(
+        let _ = writeln!(
             out,
             "    {} -> {} [label=\"{}\", {}];",
             edge.source().index(),
             edge.target().index(),
             kind,
             style,
-        )
-        .unwrap();
+        );
     }
 
-    writeln!(out, "}}").unwrap();
+    let _ = writeln!(out, "}}");
     out
 }
 

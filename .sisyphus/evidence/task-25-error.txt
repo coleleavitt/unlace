@@ -1,0 +1,9 @@
+Unwrap count: 0
+
+=== /dev/null test ===
+Error: '/dev/null' is not a valid ELF binary
+Exit: 1
+
+=== Missing file test ===
+Error: failed to read '/nonexistent': No such file or directory (os error 2)
+Exit: 1

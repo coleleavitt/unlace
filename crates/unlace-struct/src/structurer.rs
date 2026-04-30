@@ -231,7 +231,7 @@ impl<'a> StructureCtx<'a> {
         result.push(if_node);
 
         let combined = if result.len() == 1 {
-            result.pop().unwrap()
+            result.pop().expect("len == 1")
         } else {
             HirNode::Block(result)
         };
@@ -295,7 +295,7 @@ impl<'a> StructureCtx<'a> {
             })
         } else if latch_has_cbranch {
             // Do-while loop: condition at latch.
-            let latch = single_latch.unwrap();
+            let latch = single_latch.expect("guarded by is_some_and check");
             let cond = self.find_cbranch_cond(latch);
 
             self.emitted.insert(header);

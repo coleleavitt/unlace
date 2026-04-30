@@ -136,10 +136,10 @@ mod tests {
         );
 
         let mut ssa = make_single_block_ssa(vec![copy_insn, use_insn]);
-        let changed = CopyPropagationPass.run(&mut ssa).unwrap();
+        let changed = CopyPropagationPass.run(&mut ssa).expect("pass should succeed");
         assert!(changed);
 
-        let add_insn = &ssa.function.blocks.values().next().unwrap().insns[1];
+        let add_insn = &ssa.function.blocks.values().next().expect("has block").insns[1];
         assert_eq!(add_insn.inputs[0], v1);
     }
 
@@ -160,10 +160,10 @@ mod tests {
         );
 
         let mut ssa = make_single_block_ssa(vec![copy1, copy2, use_insn]);
-        let changed = CopyPropagationPass.run(&mut ssa).unwrap();
+        let changed = CopyPropagationPass.run(&mut ssa).expect("pass should succeed");
         assert!(changed);
 
-        let add_insn = &ssa.function.blocks.values().next().unwrap().insns[2];
+        let add_insn = &ssa.function.blocks.values().next().expect("has block").insns[2];
         assert_eq!(add_insn.inputs[0], v1, "v3 should resolve through v2 to v1");
     }
 
@@ -181,7 +181,7 @@ mod tests {
         );
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = CopyPropagationPass.run(&mut ssa).unwrap();
+        let changed = CopyPropagationPass.run(&mut ssa).expect("pass should succeed");
         assert!(!changed);
     }
 }

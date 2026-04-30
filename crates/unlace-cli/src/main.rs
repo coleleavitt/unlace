@@ -16,10 +16,10 @@ use unlace_lift::get_lifter;
 use crate::args::{Args, Cmd};
 use crate::pipeline::PipelineConfig;
 
-fn main() -> Result<()> {
+fn main() {
     let args = Args::parse();
 
-    match args.cmd {
+    let result = match args.cmd {
         Cmd::Decompile {
             binary,
             function,
@@ -36,6 +36,11 @@ fn main() -> Result<()> {
             };
             run_decompile(&binary, function.as_deref(), emit, arch.as_deref(), output.as_deref(), &config)
         }
+    };
+
+    if let Err(e) = result {
+        eprintln!("Error: {e:#}");
+        std::process::exit(1);
     }
 }
 

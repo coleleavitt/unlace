@@ -270,6 +270,12 @@ pub struct SsaFunction {
     /// like [`TypeInferPass`](https://docs.rs/unlace-passes) can preserve
     /// the richer information end-to-end.
     pub composite_var_types: BTreeMap<SsaVarnode, crate::types::Type>,
+    /// Detected array stride for an `INT_ADD` / `PTRADD` instruction whose
+    /// second operand is `idx * stride`. Keyed by `(BlockId, insn_idx)` of
+    /// the addition. Stride values 1/2/4/8 imply byte / word / dword /
+    /// qword element sizes respectively. The C printer uses this to recover
+    /// `base[idx]` array subscripts in place of raw pointer arithmetic.
+    pub array_strides: BTreeMap<(BlockId, usize), u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -326,6 +332,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         dwarf_local_names: BTreeMap::new(),
         inferred_structs: BTreeMap::new(),
         composite_var_types: BTreeMap::new(),
+        array_strides: BTreeMap::new(),
     }
 }
 

@@ -1,58 +1,60 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
-pub mod pass;
 pub mod calling_convention;
 pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
+pub mod cpp_vtable;
 pub mod cse;
 pub mod dce;
 pub mod dead_flag_elim;
 pub mod dead_store_elim;
 pub mod division_idiom;
+pub mod expression_tree;
 pub mod global_copy_prop;
 pub mod gvn;
-pub mod expression_tree;
 pub mod idiom_recognition;
 pub mod libc_signatures;
 pub mod modulo_idiom;
 pub mod noreturn;
+pub mod pass;
 pub mod prologue_elim;
 pub mod rust_enum;
 pub mod rust_panic;
+pub mod rust_vtable;
 pub mod sccp;
 pub mod stack_vars;
+pub mod struct_field_detect;
 pub mod tail_call;
 pub mod type_infer;
 pub mod variable_merge;
-pub mod rust_vtable;
-pub mod cpp_vtable;
 
-pub use pass::{Pass, PassError, run_to_fixedpoint};
 pub use calling_convention::{CallingConventionDetectPass, ParamInferPass, ReturnTypeInferPass};
 pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;
+pub use cpp_vtable::CppVtablePass;
 pub use cse::CsePass;
 pub use dce::DeadCodeElimPass;
 pub use dead_flag_elim::DeadFlagElimPass;
 pub use dead_store_elim::DeadStoreElimPass;
 pub use division_idiom::DivisionIdiomPass;
+pub use expression_tree::ExpressionTreePass;
 pub use global_copy_prop::GlobalCopyPropPass;
 pub use gvn::GvnPass;
-pub use expression_tree::ExpressionTreePass;
 pub use idiom_recognition::IdiomRecognitionPass;
 pub use modulo_idiom::ModuloIdiomPass;
 pub use noreturn::NoreturnDetectPass;
+pub use pass::{Pass, PassError, run_to_fixedpoint};
 pub use prologue_elim::PrologueElimPass;
 pub use rust_enum::RustEnumPass;
 pub use rust_panic::RustPanicPass;
+pub use rust_vtable::RustVtablePass;
 pub use sccp::SccpPass;
 pub use stack_vars::StackVarRecoveryPass;
+pub use struct_field_detect::StructFieldDetectPass;
 pub use tail_call::TailCallDetectPass;
 pub use variable_merge::VariableMergePass;
-pub use rust_vtable::RustVtablePass;
-pub use cpp_vtable::CppVtablePass;
 
 #[cfg(test)]
 mod tests {

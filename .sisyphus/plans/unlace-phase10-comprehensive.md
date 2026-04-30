@@ -270,7 +270,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `chore(boulder): P10-0 capture pre-Phase-10 fixture baseline metrics`
 
-- [ ] P10-1. Synthetic PE fixture with .pdata + debug + load_config
+- [x] P10-1. Synthetic PE fixture with .pdata + debug + load_config
 
   **What to do**:
   - Add a new test in `crates/unlace-loader/src/pe.rs::tests`: `pe64_with_pdata_and_debug()` (matches the convention of `pe64_with_reloc()` from P9-18).

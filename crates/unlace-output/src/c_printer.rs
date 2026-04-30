@@ -59,8 +59,12 @@ pub fn print_c(func: &HirFunction) -> String {
 
     let foldable_svs: BTreeSet<SsaVarnode> = ctx.sv_defining_stmt.keys().copied().collect();
     let mut has_decl = false;
+    let mut declared_names: BTreeSet<&str> = BTreeSet::new();
     for (sv, name) in &ctx.var_names {
         if foldable_svs.contains(sv) {
+            continue;
+        }
+        if !declared_names.insert(name.as_str()) {
             continue;
         }
         let ty = ctx.var_types.get(sv).copied().unwrap_or(PrimitiveType::Unknown);
@@ -85,7 +89,7 @@ struct PrintCtx {
     next_var: u32,
     var_names: BTreeMap<SsaVarnode, String>,
     var_types: BTreeMap<SsaVarnode, PrimitiveType>,
-    /// SSA version counter per base varnode. Stores the next version to assign.
+    base_names: BTreeMap<Varnode, String>,
     ssa_next_version: BTreeMap<Varnode, u32>,
     /// The most recently assigned version per base varnode.
     ssa_current: BTreeMap<Varnode, u32>,
@@ -115,6 +119,7 @@ impl PrintCtx {
             next_var: 1,
             var_names: BTreeMap::new(),
             var_types: BTreeMap::new(),
+            base_names: BTreeMap::new(),
             ssa_next_version: BTreeMap::new(),
             ssa_current: BTreeMap::new(),
             stmt_outputs: BTreeMap::new(),
@@ -134,8 +139,14 @@ impl PrintCtx {
         if let Some(n) = self.var_names.get(sv) {
             return n.clone();
         }
-        let name = format!("v{}", self.next_var);
-        self.next_var += 1;
+        let name = if let Some(existing) = self.base_names.get(&sv.base) {
+            existing.clone()
+        } else {
+            let fresh = format!("v{}", self.next_var);
+            self.next_var += 1;
+            self.base_names.insert(sv.base, fresh.clone());
+            fresh
+        };
         self.var_names.insert(*sv, name.clone());
         name
     }
@@ -293,7 +304,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.stmt_outputs.insert(else_idx, else_out_sv);
             }
 
-            HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_) => {}
+            HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_)
+            | HirNode::TailCall { .. } => {}
         }
     }
 }
@@ -546,6 +558,11 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 
             indent(depth, out);
             let _ = writeln!(out, "{} = {} ? {} : {};", lhs, cond_name, then_expr, else_expr);
+        }
+
+        HirNode::TailCall { target } => {
+            indent(depth, out);
+            let _ = writeln!(out, "return ((unsigned long long (*)(void))0x{:x})();", target);
         }
     }
 }
@@ -1262,22 +1279,19 @@ mod tests {
         let func = make_func("ssa_test", body);
         let output = print_c(&func);
 
-        // Single-use intermediates (v1, v2) are folded into the final expression.
-        // Only v3 (used by return) should have a declaration.
         assert!(
-            output.contains("int v3;"),
-            "v3 declaration expected: {output}",
+            output.contains("int v1;"),
+            "v1 declaration expected: {output}",
         );
 
-        // The folded expression should appear in v3's assignment.
         assert!(
-            output.contains("v3 = ((1) + 2) + 3;"),
+            output.contains("v1 = ((1) + 2) + 3;"),
             "folded expression expected: {output}",
         );
 
         assert!(
-            output.contains("return v3;"),
-            "return v3 expected: {output}",
+            output.contains("return v1;"),
+            "return v1 expected: {output}",
         );
     }
 

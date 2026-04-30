@@ -1,0 +1,2 @@
+=== Phase 9 P9-2: Aggregate Parity Score (post-fix) ===
+Aggregate Parity: 59.6%

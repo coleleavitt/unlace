@@ -15,6 +15,7 @@ use unlace_ir::cfg::EdgeKind;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
+use crate::eager_returns::eager_returns;
 use crate::hir::{HirFunction, HirNode, LabelId, SwitchCase};
 
 /// Errors that can occur during control-flow structuring.
@@ -75,6 +76,28 @@ pub fn structure_with_landing_pads(
         }
     }
     Ok(hir)
+}
+
+/// Apply [`eager_returns`] before structuring, so functions with multiple
+/// returns produce one [`HirNode::Return`] per return point.
+///
+/// Without this pre-pass, a shared return block fed by N predecessors collapses
+/// into a single `HirNode::Return` after the if/else, hiding the fact that
+/// the source had N early-return statements.
+pub fn structure_preserve_returns(
+    func: &mut SsaFunction,
+) -> Result<HirFunction, StructureError> {
+    eager_returns(func);
+    structure(func)
+}
+
+/// [`structure_preserve_returns`] + landing-pad wrapping.
+pub fn structure_preserve_returns_with_landing_pads(
+    func: &mut SsaFunction,
+    landing_pad_addrs: &BTreeSet<u64>,
+) -> Result<HirFunction, StructureError> {
+    eager_returns(func);
+    structure_with_landing_pads(func, landing_pad_addrs)
 }
 
 fn resolve_landing_pad_addrs(
@@ -2789,5 +2812,116 @@ mod tests {
 
         let hir = structure(&ssa).expect("structuring should succeed");
         assert!(!hir.body.is_empty());
+    }
+
+    fn count_returns(nodes: &[HirNode]) -> usize {
+        nodes
+            .iter()
+            .map(|n| match n {
+                HirNode::Return(_) => 1,
+                HirNode::Block(inner) => count_returns(inner),
+                HirNode::If { then_body, else_body, .. } => {
+                    count_returns(then_body)
+                        + else_body.as_ref().map_or(0, |eb| count_returns(eb))
+                }
+                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                    count_returns(body)
+                }
+                HirNode::For { body, .. } => count_returns(body),
+                HirNode::Switch { cases, default, .. } => {
+                    cases.iter().map(|(_, b, _)| count_returns(b)).sum::<usize>()
+                        + default.as_ref().map_or(0, |d| count_returns(d))
+                }
+                HirNode::TryCatch { try_body, catch_body } => {
+                    count_returns(try_body) + count_returns(catch_body)
+                }
+                _ => 0,
+            })
+            .sum()
+    }
+
+    #[test]
+    fn test_multiple_returns_preserved() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+        let c3 = Varnode::constant(3, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("multi_ret_shared", BlockId(0), 0x80000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(cbranch_insn(cond_vn, 0x80000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0x80010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0x80014));
+        bb1.successors = smallvec![BlockId(4)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(cbranch_insn(cond_vn, 0x80020));
+        bb2.successors = smallvec![BlockId(3), BlockId(4)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(arith_insn(r0, &[r8, c2], 0x80030));
+        bb3.insns.push(ctrl_insn(IrOp::Branch, 0x80034));
+        bb3.successors = smallvec![BlockId(4)];
+
+        let mut bb4 = BasicBlock::new(BlockId(4));
+        bb4.insns.push(arith_insn(r0, &[r0, c3], 0x80040));
+        bb4.insns.push(ctrl_insn(IrOp::Return, 0x80048));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+        func.insert_block(bb4);
+
+        let mut ssa = build_ssa(func);
+        assert_eq!(ssa.cfg.predecessors(BlockId(4)).len(), 3);
+
+        let hir_collapsed = structure(&ssa).expect("structuring should succeed");
+        assert_eq!(
+            count_returns(&hir_collapsed.body),
+            1,
+            "without eager_returns, shared exit collapses to 1 return"
+        );
+
+        let hir = structure_preserve_returns(&mut ssa)
+            .expect("structuring should succeed");
+
+        assert_eq!(
+            count_returns(&hir.body),
+            3,
+            "3 predecessors of shared return block must each emit a Return: {:#?}",
+            hir.body,
+        );
+    }
+
+    #[test]
+    fn test_single_return_unchanged() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("single_ret", BlockId(0), 0x90000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0x90000));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0x90008));
+
+        func.insert_block(bb0);
+
+        let mut ssa = build_ssa(func);
+        let hir = structure_preserve_returns(&mut ssa).expect("ok");
+
+        assert_eq!(
+            count_returns(&hir.body),
+            1,
+            "single return remains a single return: {:#?}",
+            hir.body,
+        );
     }
 }

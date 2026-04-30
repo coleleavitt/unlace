@@ -20,5 +20,8 @@ pub use structurer::{
     recover_for_loops, structure, structure_preserve_returns,
     structure_preserve_returns_with_landing_pads, structure_with_landing_pads, StructureError,
 };
-pub use switch_recovery::recover_switches;
+pub use switch_recovery::{
+    find_default_target, read_jump_table, recover_switches, refine_switches_with_tables,
+    validate_table_base, JumpTable, JumpTableKind, SectionPerms, SectionView, TableEndian,
+};
 pub use ternary_recovery::ternary_recovery;

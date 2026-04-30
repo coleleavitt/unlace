@@ -10,7 +10,7 @@ use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use unlace_ir::ArchId;
-use unlace_loader::{ElfLoader, Loader};
+use unlace_loader::{ElfLoader, Loader, import_dwarf};
 use unlace_lift::get_lifter;
 
 use crate::args::{Args, Cmd};
@@ -100,6 +100,18 @@ fn run_decompile(
     let lifter = get_lifter(image.arch);
     let functions = pipeline::discover_functions(&image, function_filter)?;
 
+    let dwarf = match import_dwarf(&image) {
+        Ok(d) if !d.structs.is_empty() => {
+            tracing::info!(structs = d.structs.len(), "loaded DWARF struct types");
+            Some(d)
+        }
+        Ok(_) => None,
+        Err(e) => {
+            tracing::debug!(err = %e, "DWARF import failed; continuing without type info");
+            None
+        }
+    };
+
     tracing::info!(count = functions.len(), "discovered functions");
 
     let mut all_output = String::new();
@@ -107,7 +119,7 @@ fn run_decompile(
     for func_entry in &functions {
         tracing::info!(name = %func_entry.name, addr = %format_args!("{:#x}", func_entry.addr), "decompiling");
 
-        match pipeline::decompile_function(&image, lifter.as_ref(), func_entry, emit, config) {
+        match pipeline::decompile_function(&image, lifter.as_ref(), func_entry, emit, config, dwarf.as_ref()) {
             Ok(text) => all_output.push_str(&text),
             Err(e) => {
                 tracing::warn!(name = %func_entry.name, err = %e, "function decompilation failed");

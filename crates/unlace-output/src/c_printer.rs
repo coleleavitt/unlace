@@ -9,6 +9,7 @@ use std::fmt::Write;
 
 use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
+use unlace_loader::DwarfInfo;
 use unlace_struct::{HirFunction, HirNode, SwitchCase};
 
 // ---------------------------------------------------------------------------
@@ -24,7 +25,11 @@ use unlace_struct::{HirFunction, HirNode, SwitchCase};
 /// emitted name is the demangled short form (sanitized for C) and a
 /// comment with the full demangled signature is prepended.
 pub fn print_c(func: &HirFunction) -> String {
-    let mut ctx = PrintCtx::new();
+    print_c_with_dwarf(func, None)
+}
+
+pub fn print_c_with_dwarf(func: &HirFunction, dwarf: Option<&DwarfInfo>) -> String {
+    let mut ctx = PrintCtx::new(dwarf);
 
     collect_varnodes(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
@@ -111,10 +116,12 @@ struct PrintCtx {
     cond_uses: Vec<SsaVarnode>,
     collect_depth: u32,
     stmt_depths: BTreeMap<u32, u32>,
+    field_by_offset: BTreeMap<u64, Vec<(String, String, u64)>>,
 }
 
 impl PrintCtx {
-    fn new() -> Self {
+    fn new(dwarf: Option<&DwarfInfo>) -> Self {
+        let field_by_offset = build_field_offset_map(dwarf);
         Self {
             next_var: 1,
             var_names: BTreeMap::new(),
@@ -132,6 +139,7 @@ impl PrintCtx {
             cond_uses: Vec::new(),
             collect_depth: 0,
             stmt_depths: BTreeMap::new(),
+            field_by_offset,
         }
     }
 
@@ -163,6 +171,55 @@ impl PrintCtx {
         self.ssa_current.insert(*base, v);
         v
     }
+}
+
+fn build_field_offset_map(dwarf: Option<&DwarfInfo>) -> BTreeMap<u64, Vec<(String, String, u64)>> {
+    let mut map: BTreeMap<u64, Vec<(String, String, u64)>> = BTreeMap::new();
+    let dwarf = match dwarf { Some(d) => d, None => return map };
+    for st in dwarf.structs.values() {
+        for field in &st.fields {
+            map.entry(field.offset).or_default().push((st.name.clone(), field.name.clone(), field.size));
+        }
+    }
+    map
+}
+
+fn try_resolve_struct_field(addr_insn: &IrInsn, addr_stmt_idx: u32, _load_size: u8, ctx: &mut PrintCtx) -> Option<String> {
+    if ctx.field_by_offset.is_empty() { return None; }
+    if addr_insn.op != IrOp::IntAdd || addr_insn.inputs.len() < 2 { return None; }
+    let (base_input, const_offset) = if addr_insn.inputs[1].space == SpaceId::Const {
+        (&addr_insn.inputs[0], addr_insn.inputs[1].offset)
+    } else if addr_insn.inputs[0].space == SpaceId::Const {
+        (&addr_insn.inputs[1], addr_insn.inputs[0].offset)
+    } else { return None; };
+    if base_input.space == SpaceId::Const { return None; }
+    let entries = ctx.field_by_offset.get(&const_offset)?;
+    let field_name = entries.first()?.1.clone();
+    let base_sv = ctx.stmt_inputs.get(&addr_stmt_idx).cloned()
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_input).copied());
+    let base_expr = match base_sv {
+        Some(sv) => {
+            if let Some(&ds) = ctx.sv_defining_stmt.get(&sv) {
+                if let Some(di) = ctx.stmt_insns.get(&ds).cloned() {
+                    format!("({})", emit_expr(&di, ds, ctx))
+                } else { ctx.name_of(&sv) }
+            } else { ctx.name_of(&sv) }
+        }
+        None => { let sv = SsaVarnode { base: *base_input, version: 0 }; ctx.name_of(&sv) }
+    };
+    Some(format!("{}->{}",  base_expr, field_name))
+}
+
+fn try_resolve_field_from_addr(addr_vn: &Varnode, _idx: usize, stmt_idx: u32, access_size: u8, ctx: &mut PrintCtx) -> Option<String> {
+    eprintln!("FIELD_RESOLVE: space={:?} off={} sz={} map_len={}", addr_vn.space, addr_vn.offset, access_size, ctx.field_by_offset.len());
+    if ctx.field_by_offset.is_empty() || addr_vn.space == SpaceId::Const { return None; }
+    eprintln!("  stmt_inputs for {}: {:?}", stmt_idx, ctx.stmt_inputs.get(&stmt_idx));
+    let addr_sv = ctx.stmt_inputs.get(&stmt_idx).cloned()
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
+    eprintln!("  sv_defining_stmt for {:?}: {:?}", addr_sv, ctx.sv_defining_stmt.get(&addr_sv));
+    let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
+    let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
+    try_resolve_struct_field(&def_insn, def_stmt, access_size, ctx)
 }
 
 // ---------------------------------------------------------------------------
@@ -589,9 +646,14 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
         match insn.op {
             IrOp::Store => {
                 if insn.inputs.len() >= 3 {
-                    let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
+                    let store_size = insn.inputs[2].size;
                     let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
-                    let _ = writeln!(out, "*(void **)({}) = {};", addr, val);
+                    if let Some(field_expr) = try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx) {
+                        let _ = writeln!(out, "{} = {};", field_expr, val);
+                    } else {
+                        let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
+                        let _ = writeln!(out, "*(void **)({}) = {};", addr, val);
+                    }
                 } else {
                     let _ = writeln!(out, "/* STORE (bad arity) */;");
                 }
@@ -660,11 +722,13 @@ fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
 
         // -- Load --
         IrOp::Load => {
-            if insn.inputs.len() >= 2 {
-                let addr = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
-                format!("*(void **)({})", addr)
-            } else if !insn.inputs.is_empty() {
-                let addr = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
+            let load_size = insn.output.map_or(8, |o| o.size);
+            let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
+            if addr_idx < insn.inputs.len() {
+                if let Some(resolved) = try_resolve_field_from_addr(&insn.inputs[addr_idx], addr_idx, stmt_idx, load_size, ctx) {
+                    return resolved;
+                }
+                let addr = emit_operand_resolved(&insn.inputs[addr_idx], addr_idx, stmt_idx, ctx);
                 format!("*(void **)({})", addr)
             } else {
                 "/* LOAD (bad arity) */ 0".to_string()
@@ -1383,4 +1447,42 @@ mod tests {
         );
     }
 
+
+    #[test]
+    fn test_struct_field_access() {
+        use std::collections::BTreeMap;
+        use unlace_loader::{DwarfInfo, StructField, StructType};
+        let r0 = reg(0, 8); let r8 = reg(8, 4); let c8 = con(8, 8); let space = con(0, 8);
+        let addr_add = IrInsn::with_output(IrOp::IntAdd, Varnode::unique(0, 8), smallvec![r0, c8], 0x1000);
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, Varnode::unique(0, 8)], 0x1004);
+        let body = vec![HirNode::Statement(addr_add), HirNode::Statement(load), HirNode::Return(Some(sv(8, 4)))];
+        let func = make_func("test_field", body);
+        let mut structs = BTreeMap::new();
+        structs.insert("Rect".to_string(), StructType { name: "Rect".to_string(), size: 16, fields: vec![
+            StructField { name: "origin".to_string(), offset: 0, size: 8, type_name: "Point".to_string() },
+            StructField { name: "size".to_string(), offset: 8, size: 4, type_name: "int".to_string() },
+        ]});
+        let dwarf = DwarfInfo { functions: BTreeMap::new(), source_map: BTreeMap::new(), structs, enums: BTreeMap::new(), unions: BTreeMap::new() };
+        let output = super::print_c_with_dwarf(&func, Some(&dwarf));
+        assert!(output.contains("->size"), "should contain ->size: {output}");
+    }
+    #[test]
+    fn test_struct_field_no_match() {
+        use std::collections::BTreeMap;
+        use unlace_loader::{DwarfInfo, StructField, StructType};
+        let r0 = reg(0, 8); let r8 = reg(8, 4); let c48 = con(48, 8); let space = con(0, 8);
+        let addr_add = IrInsn::with_output(IrOp::IntAdd, Varnode::unique(0, 8), smallvec![r0, c48], 0x1000);
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, Varnode::unique(0, 8)], 0x1004);
+        let body = vec![HirNode::Statement(addr_add), HirNode::Statement(load), HirNode::Return(Some(sv(8, 4)))];
+        let func = make_func("test_no_field", body);
+        let mut structs = BTreeMap::new();
+        structs.insert("Point".to_string(), StructType { name: "Point".to_string(), size: 8, fields: vec![
+            StructField { name: "x".to_string(), offset: 0, size: 4, type_name: "int".to_string() },
+            StructField { name: "y".to_string(), offset: 4, size: 4, type_name: "int".to_string() },
+        ]});
+        let dwarf = DwarfInfo { functions: BTreeMap::new(), source_map: BTreeMap::new(), structs, enums: BTreeMap::new(), unions: BTreeMap::new() };
+        let output = super::print_c_with_dwarf(&func, Some(&dwarf));
+        assert!(!output.contains("->"), "should NOT contain ->: {output}");
+        assert!(output.contains("*(void **)"), "should fall back: {output}");
+    }
 }

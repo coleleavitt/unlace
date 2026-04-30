@@ -1,0 +1,8 @@
+F3: Parity QA — APPROVE
+Date: 2026-04-30
+medium.elf: 873 lines (decompiles successfully)
+debug_structs.elf: 161 lines (decompiles successfully)
+debug_calls.elf: 598 lines (decompiles successfully)
+debug_hello.elf: 89 lines (decompiles successfully)
+Parity measurement: 49.4% (28 functions compared)
+All fixtures produce improved output with Phase 3 features.

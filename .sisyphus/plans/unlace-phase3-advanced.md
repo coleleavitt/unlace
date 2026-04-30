@@ -471,7 +471,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
   ```
   **Commit**: `perf: Phase 3 performance validation`
 
-- [ ] P3-26. Push to GitHub
+- [x] P3-26. Push to GitHub
   **QA Scenarios**:
   ```
   Scenario: Push succeeds
@@ -487,7 +487,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
 
 ## Final Verification Wave
 
-- [ ] F1. **Plan Compliance Audit** — oracle
+- [x] F1. **Plan Compliance Audit** — oracle
   **QA Scenarios**:
   ```
   Scenario: All features work
@@ -500,7 +500,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-f1-compliance.txt
   ```
 
-- [ ] F2. **Code Quality Review** — general
+- [x] F2. **Code Quality Review** — general
   **QA Scenarios**:
   ```
   Scenario: Build + test + lint
@@ -513,7 +513,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-f2-quality.txt
   ```
 
-- [ ] F3. **Parity QA** — general
+- [x] F3. **Parity QA** — general
   **QA Scenarios**:
   ```
   Scenario: Output quality improved
@@ -525,7 +525,7 @@ Critical Path: P3-1 → P3-4 → P3-7 → P3-10 → P3-23
     Evidence: .sisyphus/evidence/p3-f3-parity.txt
   ```
 
-- [ ] F4. **Regression Check** — general
+- [x] F4. **Regression Check** — general
   **QA Scenarios**:
   ```
   Scenario: No regressions

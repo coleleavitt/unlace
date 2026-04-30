@@ -961,8 +961,15 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
 
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
         let lhs = ctx.name_of(&sv);
-        let rhs = emit_expr(insn, idx, ctx);
-        let _ = writeln!(out, "{} = {};", lhs, rhs);
+
+        if let Some(short) = try_emit_increment_form(insn, &lhs) {
+            let _ = writeln!(out, "{};", short);
+        } else if let Some(short) = try_emit_compound_assign(insn, idx, &lhs, ctx) {
+            let _ = writeln!(out, "{};", short);
+        } else {
+            let rhs = emit_expr(insn, idx, ctx);
+            let _ = writeln!(out, "{} = {};", lhs, rhs);
+        }
     } else {
         match insn.op {
             IrOp::Store => {
@@ -1094,13 +1101,16 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
         IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", stmt_idx, parent_prec, ctx),
         IrOp::IntSub | IrOp::FloatSub => emit_binop(insn, "-", stmt_idx, parent_prec, ctx),
         IrOp::IntMult | IrOp::FloatMult => emit_binop(insn, "*", stmt_idx, parent_prec, ctx),
-        IrOp::IntDiv | IrOp::IntSdiv | IrOp::FloatDiv => emit_binop(insn, "/", stmt_idx, parent_prec, ctx),
-        IrOp::IntRem | IrOp::IntSrem => emit_binop(insn, "%", stmt_idx, parent_prec, ctx),
+        IrOp::IntSdiv | IrOp::FloatDiv => emit_binop(insn, "/", stmt_idx, parent_prec, ctx),
+        IrOp::IntDiv => emit_unsigned_binop(insn, "/", stmt_idx, parent_prec, ctx),
+        IrOp::IntSrem => emit_binop(insn, "%", stmt_idx, parent_prec, ctx),
+        IrOp::IntRem => emit_unsigned_binop(insn, "%", stmt_idx, parent_prec, ctx),
         IrOp::IntAnd => emit_binop(insn, "&", stmt_idx, parent_prec, ctx),
         IrOp::IntOr => emit_binop(insn, "|", stmt_idx, parent_prec, ctx),
         IrOp::IntXor => emit_binop(insn, "^", stmt_idx, parent_prec, ctx),
         IrOp::IntLeft => emit_binop(insn, "<<", stmt_idx, parent_prec, ctx),
-        IrOp::IntRight | IrOp::IntSright => emit_binop(insn, ">>", stmt_idx, parent_prec, ctx),
+        IrOp::IntSright => emit_binop(insn, ">>", stmt_idx, parent_prec, ctx),
+        IrOp::IntRight => emit_unsigned_binop(insn, ">>", stmt_idx, parent_prec, ctx),
 
         // -- Boolean ops --
         IrOp::BoolAnd => emit_binop(insn, "&&", stmt_idx, parent_prec, ctx),
@@ -1110,13 +1120,16 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
         // -- Comparisons --
         IrOp::IntEqual | IrOp::FloatEqual => emit_binop(insn, "==", stmt_idx, parent_prec, ctx),
         IrOp::IntNotequal | IrOp::FloatNotequal => emit_binop(insn, "!=", stmt_idx, parent_prec, ctx),
-        IrOp::IntLess | IrOp::IntSless | IrOp::FloatLess => emit_binop(insn, "<", stmt_idx, parent_prec, ctx),
-        IrOp::IntLessequal | IrOp::IntSlessequal | IrOp::FloatLessequal => {
+        IrOp::IntSless | IrOp::FloatLess => emit_binop(insn, "<", stmt_idx, parent_prec, ctx),
+        IrOp::IntLess => emit_unsigned_binop(insn, "<", stmt_idx, parent_prec, ctx),
+        IrOp::IntSlessequal | IrOp::FloatLessequal => {
             emit_binop(insn, "<=", stmt_idx, parent_prec, ctx)
         }
+        IrOp::IntLessequal => emit_unsigned_binop(insn, "<=", stmt_idx, parent_prec, ctx),
 
         // -- Unary ops --
-        IrOp::IntNegate | IrOp::BoolNegate => emit_unaryop(insn, "!", stmt_idx, parent_prec, ctx),
+        IrOp::IntNegate => emit_unaryop(insn, "~", stmt_idx, parent_prec, ctx),
+        IrOp::BoolNegate => emit_bool_negate(insn, stmt_idx, parent_prec, ctx),
         IrOp::Int2comp | IrOp::FloatNeg => emit_unaryop(insn, "-", stmt_idx, parent_prec, ctx),
 
         // -- Copy / move --
@@ -1246,12 +1259,9 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
         IrOp::Subpiece => {
             if insn.inputs.len() >= 2 {
                 let src = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
-                let shift_bytes = insn.inputs[1].offset;
-                if shift_bytes == 0 {
-                    src
-                } else {
-                    format!("({}) >> {}", src, shift_bytes * 8)
-                }
+                let byte_offset = insn.inputs[1].offset;
+                let output_size = insn.output.map_or(0, |v| v.size);
+                emit_subpiece_macro(&src, byte_offset, output_size)
             } else {
                 "0".to_string()
             }
@@ -1359,13 +1369,75 @@ fn emit_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut
     }
 }
 
-fn emit_unaryop(insn: &IrInsn, op: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+fn emit_unsigned_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
+    let my_prec = c_precedence(insn.op);
+    let const_ctx = ConstContext::Bitwise;
+    let lhs = if !insn.inputs.is_empty() {
+        let raw = emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, const_ctx, my_prec, ctx);
+        let sz = insn.inputs[0].size;
+        let ty = type_for_size(sz, false);
+        format!("({}){}", ty, raw)
+    } else {
+        "0".to_string()
+    };
+    let rhs = if insn.inputs.len() >= 2 {
+        let raw = emit_operand_with_prec(&insn.inputs[1], 1, stmt_idx, const_ctx, my_prec, ctx);
+        let sz = insn.inputs[1].size;
+        let ty = type_for_size(sz, false);
+        format!("({}){}", ty, raw)
+    } else {
+        "0".to_string()
+    };
+    let expr = format!("{} {} {}", lhs, op, rhs);
+    if my_prec > 0 && my_prec < parent_prec {
+        format!("({})", expr)
+    } else {
+        expr
+    }
+}
+
+fn emit_unaryop(insn: &IrInsn, op: &str, stmt_idx: u32, _parent_prec: u8, ctx: &mut PrintCtx) -> String {
+    let my_prec = c_precedence(insn.op);
     let operand = if !insn.inputs.is_empty() {
-        emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx)
+        emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, ConstContext::Signed, my_prec, ctx)
     } else {
         "0".to_string()
     };
     format!("{}{}", op, operand)
+}
+
+fn negate_comparison(op: IrOp) -> Option<&'static str> {
+    match op {
+        IrOp::IntLess => Some(">="),
+        IrOp::IntLessequal => Some(">"),
+        IrOp::IntEqual | IrOp::FloatEqual => Some("!="),
+        IrOp::IntNotequal | IrOp::FloatNotequal => Some("=="),
+        IrOp::IntSless | IrOp::FloatLess => Some(">="),
+        IrOp::IntSlessequal | IrOp::FloatLessequal => Some(">"),
+        _ => None,
+    }
+}
+
+fn emit_bool_negate(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
+    if !insn.inputs.is_empty() && insn.inputs[0].space != SpaceId::Const {
+        let input_vn = &insn.inputs[0];
+        let resolved_sv = ctx
+            .stmt_inputs
+            .get(&stmt_idx)
+            .cloned()
+            .and_then(|inputs| inputs.iter().find(|sv| sv.base == *input_vn).copied());
+        let sv = resolved_sv.unwrap_or(SsaVarnode { base: *input_vn, version: 0 });
+
+        if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
+            if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
+                if let Some(negated_op) = negate_comparison(def_insn.op) {
+                    return emit_binop(&def_insn, negated_op, def_stmt, parent_prec, ctx);
+                }
+            }
+        }
+    }
+
+    emit_unaryop(insn, "!", stmt_idx, parent_prec, ctx)
 }
 
 fn emit_call1(insn: &IrInsn, func: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
@@ -1375,6 +1447,34 @@ fn emit_call1(insn: &IrInsn, func: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> S
         "0".to_string()
     };
     format!("{}({})", func, arg)
+}
+
+fn emit_unsigned_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
+    let my_prec = c_precedence(insn.op);
+    let lhs = if !insn.inputs.is_empty() {
+        let raw = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
+        let cast = unsigned_cast(insn.inputs[0].size);
+        format!("{}{}", cast, raw)
+    } else {
+        "0".to_string()
+    };
+    let rhs = if insn.inputs.len() >= 2 {
+        let raw = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
+        if op == ">>" {
+            raw
+        } else {
+            let cast = unsigned_cast(insn.inputs[1].size);
+            format!("{}{}", cast, raw)
+        }
+    } else {
+        "0".to_string()
+    };
+    let expr = format!("{} {} {}", lhs, op, rhs);
+    if my_prec > 0 && my_prec < parent_prec {
+        format!("({})", expr)
+    } else {
+        expr
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1387,7 +1487,7 @@ fn emit_operand_resolved(
     stmt_idx: u32,
     ctx: &mut PrintCtx,
 ) -> String {
-    emit_operand_with_context(vn, _raw_idx, stmt_idx, ConstContext::Signed, ctx)
+    emit_operand_with_prec(vn, _raw_idx, stmt_idx, ConstContext::Signed, 0, ctx)
 }
 
 fn emit_operand_with_context(
@@ -1395,6 +1495,17 @@ fn emit_operand_with_context(
     _raw_idx: usize,
     stmt_idx: u32,
     const_ctx: ConstContext,
+    ctx: &mut PrintCtx,
+) -> String {
+    emit_operand_with_prec(vn, _raw_idx, stmt_idx, const_ctx, 0, ctx)
+}
+
+fn emit_operand_with_prec(
+    vn: &unlace_ir::Varnode,
+    _raw_idx: usize,
+    stmt_idx: u32,
+    const_ctx: ConstContext,
+    parent_prec: u8,
     ctx: &mut PrintCtx,
 ) -> String {
     if vn.space == SpaceId::Const {
@@ -1411,8 +1522,7 @@ fn emit_operand_with_context(
 
     if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
         if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
-            let inner = emit_expr(&def_insn, def_stmt, ctx);
-            return format!("({})", inner);
+            return emit_expr_with_prec(&def_insn, def_stmt, parent_prec, ctx);
         }
     }
 
@@ -1484,6 +1594,38 @@ fn sign_extend(value: u64, size: u8) -> i64 {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Emit an IDA-style SUBPIECE macro based on output size and byte offset.
+///
+/// Known patterns map to named macros (LOBYTE, BYTE1, LOWORD, etc.);
+/// anything else falls back to `(cast)((x) >> shift)`.
+fn emit_subpiece_macro(src: &str, byte_offset: u64, output_size: u8) -> String {
+    match (output_size, byte_offset) {
+        (1, 0) => format!("LOBYTE({})", src),
+        (1, 1) => format!("BYTE1({})", src),
+        (1, 2) => format!("BYTE2({})", src),
+        (1, 3) => format!("BYTE3({})", src),
+        (2, 0) => format!("LOWORD({})", src),
+        (2, 2) => format!("HIWORD({})", src),
+        (4, 0) => format!("LODWORD({})", src),
+        (4, 4) => format!("HIDWORD({})", src),
+        _ => {
+            let cast = match output_size {
+                1 => "(_BYTE)",
+                2 => "(_WORD)",
+                4 => "(_DWORD)",
+                8 => "(_QWORD)",
+                _ => "(_DWORD)",
+            };
+            if byte_offset == 0 {
+                format!("{}({})", cast, src)
+            } else {
+                format!("{}(({}) >> {})", cast, src, byte_offset * 8)
+            }
+        }
+    }
+}
+// ---------------------------------------------------------------------------
+
 fn indent(depth: usize, out: &mut String) {
     for _ in 0..depth {
         out.push_str("    ");
@@ -1491,9 +1633,6 @@ fn indent(depth: usize, out: &mut String) {
 }
 
 /// Returns a C unsigned cast appropriate for the given operand byte size.
-///
-/// Used to distinguish unsigned ops (IntDiv, IntRight, IntLess, etc.) from
-/// their signed counterparts in emitted C code.
 fn unsigned_cast(size: u8) -> &'static str {
     match size {
         1 => "(unsigned char)",
@@ -1547,6 +1686,14 @@ typedef signed char __int8;
 typedef signed short __int16;
 typedef signed int __int32;
 typedef signed long long __int64;
+#define LOBYTE(x)  ((_BYTE)(x))
+#define BYTE1(x)   ((_BYTE)((x) >> 8))
+#define BYTE2(x)   ((_BYTE)((x) >> 16))
+#define BYTE3(x)   ((_BYTE)((x) >> 24))
+#define LOWORD(x)  ((_WORD)(x))
+#define HIWORD(x)  ((_WORD)((x) >> 16))
+#define LODWORD(x) ((_DWORD)(x))
+#define HIDWORD(x) ((_DWORD)((x) >> 32))
 #define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
 #define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
 ";
@@ -2856,5 +3003,92 @@ mod tests {
             !output.contains("~"),
             "BoolNegate must not emit ~: {output}",
         );
+    }
+
+    #[test]
+    fn test_subpiece_lobyte() {
+        let src = reg(0, 8);
+        let out = reg(16, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Subpiece,
+                out,
+                smallvec![src, con(0, 4)],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 1))),
+        ];
+        let func = make_func("lobyte", body);
+        let output = print_c(&func);
+        assert!(output.contains("LOBYTE("), "SUBPIECE(x,0) size=1 should emit LOBYTE: {output}");
+    }
+
+    #[test]
+    fn test_subpiece_byte1() {
+        let src = reg(0, 8);
+        let out = reg(16, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Subpiece,
+                out,
+                smallvec![src, con(1, 4)],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 1))),
+        ];
+        let func = make_func("byte1", body);
+        let output = print_c(&func);
+        assert!(output.contains("BYTE1("), "SUBPIECE(x,1) size=1 should emit BYTE1: {output}");
+    }
+
+    #[test]
+    fn test_subpiece_lodword() {
+        let src = reg(0, 8);
+        let out = reg(16, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Subpiece,
+                out,
+                smallvec![src, con(0, 4)],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 4))),
+        ];
+        let func = make_func("lodword", body);
+        let output = print_c(&func);
+        assert!(output.contains("LODWORD("), "SUBPIECE(x,0) size=4 should emit LODWORD: {output}");
+    }
+
+    #[test]
+    fn test_subpiece_hidword() {
+        let src = reg(0, 8);
+        let out = reg(16, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Subpiece,
+                out,
+                smallvec![src, con(4, 4)],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(16, 4))),
+        ];
+        let func = make_func("hidword", body);
+        let output = print_c(&func);
+        assert!(output.contains("HIDWORD("), "SUBPIECE(x,4) size=4 should emit HIDWORD: {output}");
+    }
+
+    #[test]
+    fn test_subpiece_macros_in_prelude() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("prelude_test", body);
+        let output = print_c(&func);
+        assert!(output.contains("#define LOBYTE"), "prelude should contain LOBYTE macro: {output}");
+        assert!(output.contains("#define BYTE1"), "prelude should contain BYTE1 macro: {output}");
+        assert!(output.contains("#define BYTE2"), "prelude should contain BYTE2 macro: {output}");
+        assert!(output.contains("#define BYTE3"), "prelude should contain BYTE3 macro: {output}");
+        assert!(output.contains("#define LOWORD"), "prelude should contain LOWORD macro: {output}");
+        assert!(output.contains("#define HIWORD"), "prelude should contain HIWORD macro: {output}");
+        assert!(output.contains("#define LODWORD"), "prelude should contain LODWORD macro: {output}");
+        assert!(output.contains("#define HIDWORD"), "prelude should contain HIDWORD macro: {output}");
     }
 }

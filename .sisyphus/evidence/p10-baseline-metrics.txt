@@ -1,0 +1,16 @@
+Phase 10 Baseline Metrics (Wave 0)
+====================================
+Date: 2026-04-30
+
+Per-fixture goto/if/var counts from tests/golden/expected/*.c:
+
+cpp_exceptions: gotos=0 ifs=1 vars=30
+cpp_rtti: gotos=2 ifs=4 vars=26
+cpp_vtable: gotos=0 ifs=0 vars=13
+debug_calls: gotos=0 ifs=0 vars=48
+debug_hello: gotos=0 ifs=0 vars=9
+debug_structs: gotos=0 ifs=0 vars=13
+medium: gotos=30 ifs=39 vars=82
+x87_math: gotos=0 ifs=1 vars=14
+
+Aggregate Parity (Wave 0): 52.9%

@@ -22,10 +22,18 @@
 //!
 //! # Metrics
 //!
-//! The suite also reports per-fixture metrics (line count, `if` count, `return`
-//! count, variable-declaration count) so reviewers can track output quality
-//! over time. Metrics are printed to stderr; pipe through `--nocapture` to see
-//! them.
+//! The suite also reports per-fixture metrics (line count, `if`/`for`/`while`/
+//! `return`/`goto` counts, variable-declaration count) so reviewers can track
+//! output quality over time. Metrics are printed to stderr; pipe through
+//! `--nocapture` to see them.
+//!
+//! # Quality scoring
+//!
+//! Each fixture is also scored against an IDA/Hex-Rays reference profile (see
+//! `tests/golden/reference_metrics.toml`). The score is a weighted blend of
+//! per-feature recovery ratios capped at 1.0, with penalties for `goto`s and
+//! excess variables. Scores are printed in the format
+//! `[score] <value> <fixture>` so the aggregate-parity script can sum them.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -98,27 +106,30 @@ fn decompile(name: &str) -> String {
 /// These are intentionally crude (substring scans, not AST visits) so the
 /// harness has zero dependency on parser correctness; if metrics regress, the
 /// number is meaningful regardless of whether the output is well-formed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Metrics {
     lines: usize,
     if_count: usize,
+    for_count: usize,
+    while_count: usize,
     return_count: usize,
+    goto_count: usize,
     variable_count: usize,
 }
 
 impl Metrics {
     fn collect(source: &str) -> Self {
-        let mut lines = 0usize;
-        let mut if_count = 0usize;
-        let mut return_count = 0usize;
-        let mut variable_count = 0usize;
+        let mut m = Metrics::default();
 
         for line in source.lines() {
-            lines += 1;
+            m.lines += 1;
             let trimmed = line.trim_start();
 
-            if_count += count_keyword(trimmed, "if");
-            return_count += count_keyword(trimmed, "return");
+            m.if_count += count_keyword(trimmed, "if");
+            m.for_count += count_keyword(trimmed, "for");
+            m.while_count += count_keyword(trimmed, "while");
+            m.return_count += count_keyword(trimmed, "return");
+            m.goto_count += count_keyword(trimmed, "goto");
 
             if !trimmed.starts_with("typedef") && !trimmed.starts_with("#define") {
                 for ty in [
@@ -126,21 +137,65 @@ impl Metrics {
                     "__int8 ", "__int16 ", "__int32 ", "__int64 ",
                 ] {
                     if trimmed.starts_with(ty) && trimmed.contains(';') {
-                        variable_count += 1;
+                        m.variable_count += 1;
                         break;
                     }
                 }
             }
         }
 
-        Metrics { lines, if_count, return_count, variable_count }
+        m
     }
 
     fn report(&self, label: &str) {
         eprintln!(
-            "[metrics] {label}: lines={} if={} return={} vars={}",
-            self.lines, self.if_count, self.return_count, self.variable_count,
+            "[metrics] {label}: lines={} if={} for={} while={} return={} goto={} vars={}",
+            self.lines,
+            self.if_count,
+            self.for_count,
+            self.while_count,
+            self.return_count,
+            self.goto_count,
+            self.variable_count,
         );
+    }
+
+    /// Quality score against an IDA/Hex-Rays reference profile, in `[0, 100]`.
+    ///
+    /// Each control-flow feature contributes `min(actual / reference, 1.0)`
+    /// (cap prevents over-recovery from inflating the score). Weights:
+    /// `if`/`for`/`while` = 3.0, `return` = 2.0. Penalties subtract from the
+    /// numerator: `-2.0` per spurious `goto`, `-0.1` per variable above the
+    /// reference. The final score is `numerator / total_weight * 100`, clamped
+    /// to `[0.0, 100.0]`.
+    fn score(&self, reference: &Metrics) -> f64 {
+        const W_IF: f64 = 3.0;
+        const W_FOR: f64 = 3.0;
+        const W_WHILE: f64 = 3.0;
+        const W_RETURN: f64 = 2.0;
+        const PENALTY_GOTO: f64 = 2.0;
+        const PENALTY_EXCESS_VAR: f64 = 0.1;
+
+        let ratio = |actual: usize, reference: usize| -> f64 {
+            if reference == 0 {
+                1.0
+            } else {
+                (actual as f64 / reference as f64).min(1.0)
+            }
+        };
+
+        let weighted = W_IF * ratio(self.if_count, reference.if_count)
+            + W_FOR * ratio(self.for_count, reference.for_count)
+            + W_WHILE * ratio(self.while_count, reference.while_count)
+            + W_RETURN * ratio(self.return_count, reference.return_count);
+
+        let goto_penalty = PENALTY_GOTO * self.goto_count as f64;
+        let excess_vars = self.variable_count.saturating_sub(reference.variable_count);
+        let var_penalty = PENALTY_EXCESS_VAR * excess_vars as f64;
+
+        let total_weight = W_IF + W_FOR + W_WHILE + W_RETURN;
+        let raw = (weighted - goto_penalty - var_penalty) / total_weight * 100.0;
+        raw.clamp(0.0, 100.0)
     }
 }
 
@@ -218,6 +273,10 @@ impl DiffResult {
     }
 }
 
+fn reference_metrics(_name: &str) -> Option<Metrics> {
+    None
+}
+
 fn write_golden(path: &Path, contents: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).expect("create golden dir");
     std::fs::write(path, contents).expect("write golden");
@@ -232,6 +291,10 @@ fn run_golden(name: &str) {
     let actual = decompile(name);
     let metrics = Metrics::collect(&actual);
     metrics.report(name);
+    if let Some(reference) = reference_metrics(name) {
+        let score = metrics.score(&reference);
+        eprintln!("[score] {score:.1} {name}");
+    }
 
     let path = golden_path(name);
 
@@ -307,7 +370,7 @@ fn golden_fixtures_metrics_summary() {
         "cpp_exceptions",
         "cpp_rtti",
     ];
-    let mut total = Metrics { lines: 0, if_count: 0, return_count: 0, variable_count: 0 };
+    let mut total = Metrics::default();
 
     eprintln!();
     eprintln!("=== fixture metrics summary ===");
@@ -321,9 +384,15 @@ fn golden_fixtures_metrics_summary() {
             .unwrap_or_else(|e| panic!("failed to read {path:?}: {e}"));
         let m = Metrics::collect(&source);
         m.report(name);
+        if let Some(reference) = reference_metrics(name) {
+            eprintln!("[score] {:.1} {name}", m.score(&reference));
+        }
         total.lines += m.lines;
         total.if_count += m.if_count;
+        total.for_count += m.for_count;
+        total.while_count += m.while_count;
         total.return_count += m.return_count;
+        total.goto_count += m.goto_count;
         total.variable_count += m.variable_count;
     }
     total.report("TOTAL");
@@ -356,6 +425,87 @@ int main() {
     assert_eq!(m.return_count, 2);
     assert_eq!(m.variable_count, 2);
     assert!(m.lines >= 8);
+}
+
+#[test]
+fn metrics_collect_counts_loops_and_goto() {
+    let src = "\
+void f() {
+    for (int i = 0; i < 10; i++) {}
+    while (cond) { goto end; }
+    do_x();
+end:
+    return;
+}
+";
+    let m = Metrics::collect(src);
+    assert_eq!(m.for_count, 1);
+    assert_eq!(m.while_count, 1);
+    assert_eq!(m.goto_count, 1);
+    assert_eq!(m.return_count, 1);
+}
+
+#[test]
+fn score_perfect_match_caps_at_one_hundred() {
+    let reference = Metrics {
+        if_count: 10, for_count: 2, while_count: 1, return_count: 3,
+        variable_count: 5, ..Default::default()
+    };
+    let actual = reference;
+    assert!((actual.score(&reference) - 100.0).abs() < 1e-9);
+}
+
+#[test]
+fn score_caps_recovery_ratio_at_one() {
+    let reference = Metrics {
+        if_count: 4, return_count: 1,
+        ..Default::default()
+    };
+    let inflated = Metrics {
+        if_count: 100, return_count: 100,
+        ..Default::default()
+    };
+    let baseline = inflated.score(&Metrics {
+        if_count: 100, return_count: 100, ..Default::default()
+    });
+    assert!((inflated.score(&reference) - baseline).abs() < 1e-9);
+}
+
+#[test]
+fn score_partial_recovery() {
+    let reference = Metrics {
+        if_count: 10, for_count: 2, while_count: 2, return_count: 4,
+        ..Default::default()
+    };
+    let actual = Metrics {
+        if_count: 5, for_count: 1, while_count: 1, return_count: 2,
+        ..Default::default()
+    };
+    let s = actual.score(&reference);
+    assert!((s - 50.0).abs() < 1e-9, "expected ~50, got {s}");
+}
+
+#[test]
+fn score_penalizes_goto_and_excess_vars() {
+    let reference = Metrics {
+        if_count: 10, return_count: 4, variable_count: 5,
+        ..Default::default()
+    };
+    let clean = Metrics {
+        if_count: 10, return_count: 4, variable_count: 5,
+        ..Default::default()
+    };
+    let with_goto = Metrics { goto_count: 3, ..clean };
+    let with_excess = Metrics { variable_count: 25, ..clean };
+    assert!(with_goto.score(&reference) < clean.score(&reference));
+    assert!(with_excess.score(&reference) < clean.score(&reference));
+}
+
+#[test]
+fn score_clamped_to_non_negative() {
+    let reference = Metrics { if_count: 1, ..Default::default() };
+    let bad = Metrics { goto_count: 1000, ..Default::default() };
+    assert_eq!(bad.score(&reference), 0.0);
 }
 
 #[test]

@@ -283,6 +283,7 @@ mod tests {
             inferred_return_type: PrimitiveType::Unknown,
             frame_setup_insns: BTreeSet::new(),
             dwarf_local_names: BTreeMap::new(),
+            inferred_structs: BTreeMap::new(),
         }
     }
 

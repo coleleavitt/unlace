@@ -55,10 +55,10 @@ mod tests {
         let prop = CopyPropagationPass;
         let passes: &[&dyn crate::Pass] = &[&fold, &prop];
 
-        let total = run_to_fixedpoint(passes, &mut ssa).unwrap();
+        let total = run_to_fixedpoint(passes, &mut ssa).expect("fixedpoint should succeed");
         assert!(total >= 2, "expected at least 2 change-rounds, got {total}");
 
-        let block = ssa.function.blocks.values().next().unwrap();
+        let block = ssa.function.blocks.values().next().expect("has block");
 
         // insn1 should be folded: COPY c8
         assert_eq!(block.insns[0].op, IrOp::Copy);
@@ -84,7 +84,7 @@ mod tests {
         let prop = CopyPropagationPass;
         let passes: &[&dyn crate::Pass] = &[&fold, &prop];
 
-        let total = run_to_fixedpoint(passes, &mut ssa).unwrap();
+        let total = run_to_fixedpoint(passes, &mut ssa).expect("fixedpoint should succeed");
         assert_eq!(total, 0);
     }
 }

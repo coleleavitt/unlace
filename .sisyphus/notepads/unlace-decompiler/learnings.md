@@ -391,3 +391,18 @@
 - Previous Task 10 stub had 150 `#[ignore]`d self-compare tests — all replaced with real non-ignored tests
 - `CARGO_BIN_EXE_unlace` env var not available because unlace-cli has no lib target; binary located via filesystem path instead
 - To enable true golden comparison, need to compile each reference function to an ELF and decompile it
+
+## [Task 25] Error handling + graceful degradation
+- Production code had 19 `.unwrap()` calls across 5 files: cfg.rs (7, writeln to String), cfg_dot.rs (12, writeln to String), dce.rs (1, logic invariant), structurer.rs (2, logic invariants)
+- `writeln!` to `String` is infallible (`fmt::Write` impl for `String` never errors) — replaced with `let _ = writeln!(...)` pattern
+- Logic-invariant `.unwrap()` in `Option`-returning methods replaced with `.expect("descriptive message")` — using `?` would silently propagate `None` with wrong semantics
+- Production `.unwrap()` in `Result`-returning `dce.rs` function replaced with `.ok_or_else(|| PassError::InvariantViolation {...})?`
+- Test code `.unwrap()` (46 calls across 11 files) replaced with `.expect("descriptive")` for better panic messages
+- `IrOp::Unimplemented` now emits `__unknown_insn_0x{ADDR}()` in C output (both statement and expression position) instead of silent `/* UNIMPLEMENTED */` comment
+- CLI `main()` changed from `fn main() -> Result<()>` to explicit error handling with `eprintln!`/`process::exit(1)` to suppress anyhow backtraces
+- `/dev/null` produces: `Error: '/dev/null' is not a valid ELF binary` with exit 1, no panic, no backtrace
+- Missing file produces: `Error: failed to read '...': No such file or directory` with exit 1
+- Timeout comment format: `/* decompilation failed for 'FUNCNAME': timeout exceeded for function 'FUNCNAME' */` (from Task 22)
+- Error type coverage: unlace-ir (LiftError via thiserror), unlace-loader (LoadError), unlace-passes (PassError), unlace-struct (StructureError) — all already existed before this task
+- Stub lifters (ARM, RISC-V, MIPS, PPC, V850, ARC) don't need own Error types — they use `LiftError` from unlace-ir
+- Created missing bench stub `crates/unlace-cli/benches/decompile_medium.rs` to fix build

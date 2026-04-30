@@ -582,9 +582,9 @@ mod tests {
         let output = dump_ir(&ssa);
 
         // BB_0 must appear before BB_1, BB_1 before BB_2.
-        let pos_0 = output.find("BB_0").unwrap();
-        let pos_1 = output.find("BB_1").unwrap();
-        let pos_2 = output.find("BB_2").unwrap();
+        let pos_0 = output.find("BB_0").expect("BB_0 in output");
+        let pos_1 = output.find("BB_1").expect("BB_1 in output");
+        let pos_2 = output.find("BB_2").expect("BB_2 in output");
         assert!(pos_0 < pos_1, "BB_0 must appear before BB_1");
         assert!(pos_1 < pos_2, "BB_1 must appear before BB_2");
     }

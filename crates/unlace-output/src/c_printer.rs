@@ -333,6 +333,9 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 };
                 let _ = writeln!(out, "{}();", target);
             }
+            IrOp::Unimplemented => {
+                let _ = writeln!(out, "__unknown_insn_0x{:X}();", insn.addr);
+            }
             _ => {
                 let _ = writeln!(out, "/* {} */;", insn.op.name());
             }
@@ -534,6 +537,9 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
             };
             format!("{}()", target)
         }
+
+        // -- Unknown / unimplemented instruction --
+        IrOp::Unimplemented => format!("__unknown_insn_0x{:X}()", insn.addr),
 
         // -- Fallback --
         _ => format!("/* {} */ 0", insn.op.name()),
@@ -822,11 +828,11 @@ mod tests {
 
         {
             use std::io::Write;
-            let stdin = child.stdin.as_mut().unwrap();
-            stdin.write_all(source.as_bytes()).unwrap();
+            let stdin = child.stdin.as_mut().expect("stdin pipe");
+            stdin.write_all(source.as_bytes()).expect("write to stdin");
         }
 
-        let output = child.wait_with_output().unwrap();
+        let output = child.wait_with_output().expect("wait for gcc");
         assert!(
             output.status.success(),
             "gcc -fsyntax-only failed:\n--- source ---\n{}\n--- stderr ---\n{}",

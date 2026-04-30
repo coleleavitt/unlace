@@ -704,6 +704,25 @@ fn try_fs_canary_load(addr_vn: &Varnode, access_size: u8) -> Option<String> {
     }
 }
 
+/// Hex-Rays-style `MEMORY[addr]` annotation for absolute addresses that the
+/// rest of the pipeline (string table, globals, struct fields, arrays) failed
+/// to give a name to. Limited to constant addresses outside the canonical
+/// stack-canary range to avoid stomping on `__readfsqword(0x28u)`. Skipped
+/// when the address is in the string table — string inlining must win.
+fn try_emit_memory_annotation(addr_vn: &Varnode, ctx: &PrintCtx) -> Option<String> {
+    if addr_vn.space != SpaceId::Const {
+        return None;
+    }
+    let addr = addr_vn.offset;
+    if addr < 0x1000 {
+        return None;
+    }
+    if ctx.string_table.contains_key(&addr) {
+        return None;
+    }
+    Some(format!("MEMORY[0x{addr:X}]"))
+}
+
 // ---------------------------------------------------------------------------
 // Varnode collection — pre-walk to assign names deterministically
 // ---------------------------------------------------------------------------
@@ -1986,6 +2005,14 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 let expr = emit_callother(insn, idx, ctx);
                 let _ = writeln!(out, "{};", expr);
             }
+            IrOp::Branchind => {
+                let target = if !insn.inputs.is_empty() {
+                    emit_operand_resolved(&insn.inputs[0], 0, idx, ctx)
+                } else {
+                    "0".to_string()
+                };
+                let _ = writeln!(out, "JUMPOUT({});", target);
+            }
             _ => {
                 let _ = writeln!(out, "/* {} */;", insn.op.name());
             }
@@ -2171,6 +2198,9 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
                 }
                 if let Some(sub) = try_array_subscript(&insn.inputs[addr_idx], stmt_idx, load_size, ctx) {
                     return format!("{}[{}]", sub.base, sub.index);
+                }
+                if let Some(memory) = try_emit_memory_annotation(&insn.inputs[addr_idx], ctx) {
+                    return memory;
                 }
                 let addr = emit_operand_resolved(&insn.inputs[addr_idx], addr_idx, stmt_idx, ctx);
                 let cast = ida_ptr_type(load_size);
@@ -3044,6 +3074,8 @@ typedef signed long long __int64;
 #define HIDWORD(x) ((_DWORD)((x) >> 32))
 #define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
 #define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+#define MEMORY ((volatile unsigned char *)0)
+#define JUMPOUT(addr) ((void)(addr))
 // FS-segment TLS reads (stack canary, GLIBC TCB).
 _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
@@ -3295,6 +3327,27 @@ mod tests {
         assert_eq!(super::c_type(&PrimitiveType::Int(16)), "__int128");
         assert_eq!(super::ida_ptr_type(16), "_OWORD *");
     }
+
+    #[test]
+    fn test_branchind_emits_jumpout() {
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Branchind,
+                smallvec![reg(0, 8)],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("indirect_jump", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("JUMPOUT("),
+            "unresolved indirect branch must emit JUMPOUT(): {output}"
+        );
+    }
+
+
 
     #[test]
     fn test_print_indentation() {

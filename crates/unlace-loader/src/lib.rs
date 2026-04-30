@@ -7,9 +7,11 @@
 pub mod elf;
 pub mod error;
 pub mod image;
+pub mod pe;
 
 pub use elf::ElfLoader;
 pub use error::LoadError;
+pub use pe::PeLoader;
 pub use image::{ArchId, BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind};
 
 /// Trait for binary format loaders.

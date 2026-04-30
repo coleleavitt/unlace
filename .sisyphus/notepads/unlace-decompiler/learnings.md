@@ -488,3 +488,38 @@
 - No ARM ELF fixtures exist yet — end-to-end decompilation tests blocked on fixture availability.
 - 30 tests total: 25 per-file self-parse + 1 bulk corpus scan + 3 lifter smoke + 1 harness validation.
 - Pass rate: 30/30 (100%). All ARM golden files parse cleanly with tree-sitter-c.
+
+## Task 35: C++/Rust/Swift Demangling via symbolic-demangle
+- New module: `crates/unlace-output/src/demangle.rs` — public module (`pub mod demangle;` in lib.rs)
+- `symbolic-demangle = "12"` already in workspace deps with all default features (cpp, msvc, rust, swift) enabled.
+- `symbolic-demangle` re-exports only `Demangle` trait, `DemangleOptions`, and `demangle()` fn — does NOT re-export `symbolic_common::Name` or `Language`. To avoid adding `symbolic-common` as an explicit dependency, use `symbolic_demangle::demangle()` convenience function and custom prefix-based language detection.
+- `pub fn demangle(name: &str) -> Option<DemangleResult>` returns `DemangleResult { short_name, full_signature, language: SymbolLanguage }`.
+- `SymbolLanguage` enum: Cpp, Rust, Swift, ObjC.
+- Language detection by mangled symbol prefix: `?` → MSVC (Cpp), `$s`/`$S`/`_$s`/`_$S`/`_T` → Swift, `_R[A-Z]` → Rust v0, `_ZN`/`__ZN` with `17h...E` → Rust legacy, `_Z`/`__Z` → Itanium C++.
+- `extract_short_name()` strips parameters from demangled full signature by finding first `(` and taking everything before it, then stripping return type by rfind on space.
+- `sanitize_for_c()` converts demangled names to valid C identifiers by replacing non-alnum/underscore chars with `_`, collapsing runs, handling digit-start and empty-string edge cases.
+- Integration in `c_printer.rs::print_c()`: if `demangle(&func.name)` returns `Some(dr)`, prepends `// <full_signature>` comment and uses `sanitize_for_c(&dr.short_name)` as the emitted function name. Unmangled names pass through unchanged.
+- 8 unit tests: demangle_cpp_itanium, demangle_rust_v0 (legacy `_ZN...17h...E` form), demangle_msvc (`?foo@bar@@YAHXZ`), demangle_swift (gracefully skips if cc build dep unavailable), demangle_not_mangled, demangle_invalid_mangled, sanitize_cpp_name, sanitize_edge_cases.
+- Pre-existing issue: `SsaFunction` gained `calling_convention: CallingConvention` field (from another task) that `ir_dump.rs` test helper was missing. Fixed by adding the field with `CallingConvention::Unknown`.
+- Total: 31 tests pass in unlace-output (8 new demangle + 10 c_printer + 5 cfg_dot + 8 ir_dump).
+
+## Task 33: PE Loader via `object` crate
+- New file: `crates/unlace-loader/src/pe.rs` — `PeLoader` struct implementing `Loader` trait.
+- Handles both PE32 (32-bit, `ImageNtHeaders32`) and PE32+ (64-bit, `ImageNtHeaders64`) via generic `load_pe::<Pe: ImageNtHeaders>()`.
+- `can_load()` checks: DOS magic "MZ" at offset 0, reads `e_lfanew` at offset 0x3C, verifies "PE\0\0" signature at NT headers offset.
+- PE32 vs PE32+ dispatch: reads optional header magic at nt_offset+24 — `IMAGE_NT_OPTIONAL_HDR64_MAGIC` (0x020B) vs `IMAGE_NT_OPTIONAL_HDR32_MAGIC` (0x010B).
+- Arch mapping: `IMAGE_FILE_MACHINE_AMD64` → X86_64, `IMAGE_FILE_MACHINE_I386` → X86, `IMAGE_FILE_MACHINE_ARM64`/`ARM64EC` → AArch64, `IMAGE_FILE_MACHINE_ARMNT`/`ARM` → Arm, `IMAGE_FILE_MACHINE_RISCV64` → RiscV64, `IMAGE_FILE_MACHINE_POWERPC`/`POWERPCFP`/`POWERPCBE` → Ppc, MIPS variants → Mips, others → `Unknown(machine)`.
+- PE is always little-endian — hardcoded `Endian::Little`.
+- Section flags: `SectionFlags::Coff { characteristics }` — maps `IMAGE_SCN_MEM_READ/WRITE/EXECUTE` to `SectionFlags::READ/WRITE/EXEC`.
+- Symbols from 3 sources: COFF symbol table (via `file.symbol_table()`), PE exports (via `file.exports()`), PE imports (via `file.imports()`).
+- Exports carry fully-resolved VAs (image_base + RVA), matching `object` crate's `Export.address()` semantics.
+- Imports stored at address 0 with DLL-qualified names (`dll!function`) — true IAT addresses depend on runtime loader.
+- Machine field access: `file.nt_headers().file_header().machine.get(LittleEndian)` — returns raw u16.
+- Entry point from `file.entry()` is absolute VA (image_base + AddressOfEntryPoint).
+- `object` crate v0.39 includes PE support in default features — no feature flag change needed.
+- No PE fixture binaries — tests construct minimal PE32/PE32+ binaries inline (hand-crafted byte arrays).
+- Minimal PE structure: DOS header (64 bytes) + NT headers at 0x80 + COFF file header + optional header + 1 section header + section data at 0x200.
+- PE32+ optional header size: 112 bytes (minimum without data directories); PE32: 96 bytes.
+- 7 PE tests: can_load, load_pe64, reject_non_pe, section_flags, entry_is_absolute_va, load_pe32, sections_have_data.
+- Total: 12 tests pass (5 ELF + 7 PE). `cargo check --workspace` clean.
+- `pub mod pe; pub use pe::PeLoader;` added to lib.rs alongside ElfLoader.

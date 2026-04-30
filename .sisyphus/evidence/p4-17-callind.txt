@@ -1,0 +1,20 @@
+P4-17: CALLIND distinction
+===========================
+
+Implementation in: crates/unlace-output/src/c_printer.rs
+
+Changed CALLIND emission to use (*fptr)(args) syntax instead of fptr(args).
+This distinguishes indirect calls (through function pointers) from direct calls.
+
+Modified two paths:
+1. emit_statement (no-output calls): CALLIND → (*target)();
+2. emit_expr (calls with output):    CALLIND → (*target)()
+
+Direct CALL remains unchanged: target()
+
+Tests added:
+  - test_callind_star_syntax: CALLIND without output → (*v1)();
+  - test_call_direct_no_star: CALL to constant addr → sub_401000(); (no star)
+  - test_callind_with_output_star_syntax: CALLIND with output → v1 = (*fptr)();
+
+All 115 unlace-output tests pass. No regressions.

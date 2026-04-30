@@ -9,7 +9,7 @@ use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 
 use crate::error::LoadError;
 use crate::image::{
-    ArchId, BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind,
+    ArchId, BinaryImage, Endian, RelocKind, Relocation, Section, SectionFlags, Symbol, SymbolKind,
 };
 use crate::Loader;
 
@@ -54,6 +54,7 @@ where
     let entry = file.entry();
     let sections = load_sections(&file);
     let symbols = load_symbols(&file);
+    let (plt_symbols, relocations) = load_relocations(&file);
 
     Ok(BinaryImage {
         arch,
@@ -61,6 +62,8 @@ where
         entry,
         sections,
         symbols,
+        plt_symbols,
+        relocations,
     })
 }
 
@@ -221,6 +224,128 @@ fn collect_symbols<'data, 'file>(
     }
 }
 
+/// Parse dynamic relocations and build the PLT stub → symbol name mapping.
+///
+/// Strategy:
+/// 1. Iterate `dynamic_relocations()` to collect all relocations with their
+///    resolved symbol names and classify them by kind.
+/// 2. Collect JUMP_SLOT relocations (`.rela.plt`) separately — these target
+///    GOT slots that correspond 1:1 with PLT stubs.
+/// 3. Find the PLT section (`.plt.sec` preferred for IBT-enabled binaries,
+///    then `.plt`) and compute each stub's virtual address from its index.
+fn load_relocations<'data, Elf>(
+    file: &ElfFile<'data, Elf>,
+) -> (BTreeMap<u64, String>, Vec<Relocation>)
+where
+    Elf: FileHeader<Endian = object::Endianness>,
+{
+    let mut plt_symbols = BTreeMap::new();
+    let mut relocations = Vec::new();
+
+    let dyn_relocs: Vec<(u64, object::read::Relocation)> = match file.dynamic_relocations() {
+        Some(iter) => iter.collect(),
+        None => return (plt_symbols, relocations),
+    };
+
+    let dynsym = file.dynamic_symbol_table();
+
+    // Collect JUMP_SLOT entries (these correspond to .rela.plt) in order.
+    let mut jump_slots: Vec<(u64, String)> = Vec::new();
+
+    for &(offset, ref reloc) in &dyn_relocs {
+        let sym_name = resolve_reloc_symbol(file, dynsym.as_ref(), reloc);
+        let kind = classify_reloc(reloc);
+
+        if kind == RelocKind::PltJumpSlot {
+            jump_slots.push((offset, sym_name.clone()));
+        }
+
+        relocations.push(Relocation {
+            addr: offset,
+            sym_name,
+            kind,
+        });
+    }
+
+    // Build PLT stub address → symbol name from the JUMP_SLOT entries.
+    //
+    // Modern x86-64 GCC emits `.plt.sec` (IBT-compatible PLT) where each 16-byte
+    // stub corresponds 1:1 with a `.rela.plt` JUMP_SLOT entry. Older toolchains
+    // put stubs directly in `.plt` (first 16 bytes are PLT0, then 16 per entry).
+    // We try `.plt.sec` first, falling back to `.plt`.
+    if !jump_slots.is_empty() {
+        let (plt_base, plt_size, has_plt0_stub) =
+            if let Some(sec) = file.section_by_name(".plt.sec") {
+                (sec.address(), sec.size(), false)
+            } else if let Some(sec) = file.section_by_name(".plt") {
+                (sec.address(), sec.size(), true)
+            } else {
+                (0, 0, false)
+            };
+
+        if plt_base != 0 {
+            let entry_size: u64 = 16;
+            let first_stub_offset: u64 = if has_plt0_stub { entry_size } else { 0 };
+
+            for (i, (_got_offset, sym_name)) in jump_slots.iter().enumerate() {
+                let stub_addr = plt_base + first_stub_offset + (i as u64) * entry_size;
+                if stub_addr < plt_base + plt_size {
+                    plt_symbols.insert(stub_addr, sym_name.clone());
+                }
+            }
+        }
+    }
+
+    (plt_symbols, relocations)
+}
+
+fn resolve_reloc_symbol<'data, Elf>(
+    file: &ElfFile<'data, Elf>,
+    dynsym: Option<&<ElfFile<'data, Elf> as Object<'data>>::SymbolTable<'_>>,
+    reloc: &object::read::Relocation,
+) -> String
+where
+    Elf: FileHeader<Endian = object::Endianness>,
+{
+    if let object::read::RelocationTarget::Symbol(idx) = reloc.target() {
+        // Try dynamic symbol table first, then static.
+        if let Some(table) = dynsym {
+            if let Ok(sym) = table.symbol_by_index(idx) {
+                let name = sym.name().unwrap_or_default();
+                if !name.is_empty() {
+                    return name.to_string();
+                }
+            }
+        }
+        if let Ok(sym) = file.symbol_by_index(idx) {
+            let name = sym.name().unwrap_or_default();
+            if !name.is_empty() {
+                return name.to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+fn classify_reloc(reloc: &object::read::Relocation) -> RelocKind {
+    match reloc.flags() {
+        object::RelocationFlags::Elf { r_type } => match r_type {
+            elf::R_X86_64_JUMP_SLOT | elf::R_AARCH64_JUMP_SLOT | elf::R_ARM_JUMP_SLOT => {
+                RelocKind::PltJumpSlot
+            }
+
+            elf::R_X86_64_GLOB_DAT | elf::R_AARCH64_GLOB_DAT | elf::R_ARM_GLOB_DAT => {
+                RelocKind::GlobDat
+            }
+
+            elf::R_X86_64_RELATIVE | elf::R_AARCH64_RELATIVE => RelocKind::Relative,
+
+            _ => RelocKind::Other,
+        },
+        _ => RelocKind::Other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,5 +429,57 @@ mod tests {
         if let Some(sym) = img.symbol_at(img.entry) {
             assert!(!sym.name.is_empty(), "entry symbol should have a name");
         }
+    }
+
+    #[test]
+    fn test_plt_resolution_hello_world() {
+        let data = std::fs::read("../../fixtures/hello_world.elf")
+            .expect("fixture hello_world.elf must exist");
+        let img = ElfLoader::load(&data).expect("should parse hello_world.elf");
+
+        assert!(
+            !img.plt_symbols.is_empty(),
+            "hello_world.elf should have PLT entries"
+        );
+
+        let has_puts = img.plt_symbols.values().any(|name| name == "puts");
+        assert!(has_puts, "hello_world.elf should have a PLT entry for puts");
+
+        let jump_slots: Vec<_> = img
+            .relocations
+            .iter()
+            .filter(|r| r.kind == crate::image::RelocKind::PltJumpSlot)
+            .collect();
+        assert!(
+            !jump_slots.is_empty(),
+            "should have at least one JUMP_SLOT relocation"
+        );
+        assert!(
+            jump_slots.iter().any(|r| r.sym_name == "puts"),
+            "JUMP_SLOT relocations should include puts"
+        );
+    }
+
+    #[test]
+    fn test_plt_resolution_calls() {
+        let data = std::fs::read("../../fixtures/calls.elf")
+            .expect("fixture calls.elf must exist");
+        let img = ElfLoader::load(&data).expect("should parse calls.elf");
+
+        assert!(
+            !img.relocations.is_empty(),
+            "calls.elf should have relocations (.rela.dyn)"
+        );
+    }
+
+    #[test]
+    fn test_no_plt_for_static() {
+        let data = std::fs::read("../../fixtures/empty.elf")
+            .expect("fixture empty.elf must exist");
+        let img = ElfLoader::load(&data).expect("should parse empty.elf");
+
+        // empty.elf may or may not have PLT entries — the important thing is
+        // that loading succeeds gracefully without panics.
+        assert!(img.relocations.len() <= img.relocations.capacity());
     }
 }

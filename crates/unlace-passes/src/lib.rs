@@ -2,17 +2,21 @@
 
 pub mod pass;
 pub mod calling_convention;
+pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
 pub mod dce;
+pub mod dead_flag_elim;
 pub mod stack_vars;
 pub mod type_infer;
 
 pub use pass::{Pass, PassError, run_to_fixedpoint};
 pub use calling_convention::CallingConventionDetectPass;
+pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;
 pub use dce::DeadCodeElimPass;
+pub use dead_flag_elim::DeadFlagElimPass;
 pub use stack_vars::StackVarRecoveryPass;
 
 #[cfg(test)]

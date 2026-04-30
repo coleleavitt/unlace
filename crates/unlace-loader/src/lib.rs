@@ -15,7 +15,9 @@ pub use dwarf::{import_dwarf, DwarfInfo, FunctionDebugInfo, ParameterInfo, Sourc
 pub use elf::ElfLoader;
 pub use error::LoadError;
 pub use pe::PeLoader;
-pub use image::{ArchId, BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind};
+pub use image::{
+    ArchId, BinaryImage, Endian, RelocKind, Relocation, Section, SectionFlags, Symbol, SymbolKind,
+};
 
 /// Trait for binary format loaders.
 ///

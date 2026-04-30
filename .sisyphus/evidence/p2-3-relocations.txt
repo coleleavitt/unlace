@@ -1,0 +1,38 @@
+P2-3: ELF relocation processing — PLT/GOT → symbol names
+=========================================================
+
+Implementation Date: 2026-04-29
+
+Changes:
+- crates/unlace-loader/src/image.rs: Added RelocKind enum, Relocation struct,
+  plt_symbols (BTreeMap<u64, String>) and relocations (Vec<Relocation>) fields
+  to BinaryImage.
+- crates/unlace-loader/src/elf.rs: Added load_relocations(), resolve_reloc_symbol(),
+  and classify_reloc() functions. load_elf() now calls load_relocations() and
+  populates plt_symbols and relocations in BinaryImage.
+- crates/unlace-loader/src/pe.rs: Updated BinaryImage construction with empty defaults.
+- crates/unlace-loader/src/macho.rs: Updated BinaryImage construction with empty defaults.
+- crates/unlace-loader/src/lib.rs: Exported RelocKind, Relocation.
+
+PLT Resolution Strategy:
+1. Iterate object::Object::dynamic_relocations() for all dynamic relocs.
+2. Classify each reloc by r_type (JUMP_SLOT, GLOB_DAT, RELATIVE, Other).
+3. Resolve symbol names via dynamic symbol table (dynsym), falling back to symtab.
+4. For JUMP_SLOT entries, correlate with .plt.sec (IBT-enabled) or .plt section
+   to compute stub virtual addresses: base + (index * 16).
+5. .plt.sec has no PLT0 stub; .plt has a 16-byte PLT0 stub before entries.
+
+Tests Added:
+- test_plt_resolution_hello_world: Verifies puts is in plt_symbols for hello_world.elf
+- test_plt_resolution_calls: Verifies calls.elf has relocations (.rela.dyn)
+- test_no_plt_for_static: Verifies empty.elf loads gracefully
+
+Test Results:
+- cargo test -p unlace-loader: 31 passed, 0 failed, 1 ignored
+- cargo test --workspace: 653 passed, 0 failed, 1 ignored (pre-existing PDB ignore)
+
+Fixture Analysis:
+- hello_world.elf: .rela.plt has 1 JUMP_SLOT for puts@GLIBC_2.2.5,
+  .plt.sec at 0x1050 contains puts@plt stub. PLT resolution confirmed.
+- calls.elf: No .rela.plt, only .rela.dyn with GLOB_DAT entries. No PLT stubs.
+- empty.elf: Same as calls.elf. Loads gracefully with empty plt_symbols.

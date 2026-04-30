@@ -82,6 +82,41 @@ pub struct Section {
     pub flags: SectionFlags,
 }
 
+/// Classification of a relocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RelocKind {
+    /// PLT jump slot (R_X86_64_JUMP_SLOT, etc.).
+    PltJumpSlot,
+    /// GOT global data entry (R_X86_64_GLOB_DAT, etc.).
+    GlobDat,
+    /// Relative relocation (R_X86_64_RELATIVE, etc.).
+    Relative,
+    /// Any other relocation type.
+    Other,
+}
+
+impl fmt::Display for RelocKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PltJumpSlot => f.write_str("plt_jump_slot"),
+            Self::GlobDat => f.write_str("glob_dat"),
+            Self::Relative => f.write_str("relative"),
+            Self::Other => f.write_str("other"),
+        }
+    }
+}
+
+/// A resolved relocation entry from `.rela.plt` or `.rela.dyn`.
+#[derive(Debug, Clone)]
+pub struct Relocation {
+    /// Virtual address targeted by this relocation (GOT slot address).
+    pub addr: u64,
+    /// Resolved symbol name, if any.
+    pub sym_name: String,
+    /// Classification of the relocation.
+    pub kind: RelocKind,
+}
+
 /// Classification of a symbol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SymbolKind {
@@ -126,6 +161,10 @@ pub struct BinaryImage {
     pub sections: Vec<Section>,
     /// Symbols indexed by address (merged from all symbol tables).
     pub symbols: BTreeMap<u64, Symbol>,
+    /// PLT stub virtual address → dynamic symbol name.
+    pub plt_symbols: BTreeMap<u64, String>,
+    /// Resolved relocations from `.rela.plt` and `.rela.dyn` (or equivalent).
+    pub relocations: Vec<Relocation>,
 }
 
 impl BinaryImage {

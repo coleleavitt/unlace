@@ -115,6 +115,8 @@ where
         entry,
         sections,
         symbols,
+        plt_symbols: BTreeMap::new(),
+        relocations: Vec::new(),
     })
 }
 

@@ -67,9 +67,33 @@ def extract_features(source: str) -> FunctionFeatures:
     feats.return_count = len(re.findall(r'\breturn\b', code))
     feats.goto_count = len(re.findall(r'\bgoto\b', code))
 
-    keywords = {'if', 'for', 'while', 'switch', 'return', 'sizeof', 'typeof'}
+    keywords = {
+        # C keywords with parens
+        'if', 'for', 'while', 'switch', 'return', 'sizeof', 'typeof',
+        # IDA byte/word/dword extraction macros
+        'LOBYTE', 'HIBYTE', 'BYTE0', 'BYTE1', 'BYTE2', 'BYTE3', 'BYTE4', 'BYTE5', 'BYTE6', 'BYTE7',
+        'LOWORD', 'HIWORD', 'WORD0', 'WORD1', 'WORD2', 'WORD3',
+        'LODWORD', 'HIDWORD', 'DWORD0', 'DWORD1',
+        'SLOBYTE', 'SHIBYTE', 'SBYTE0', 'SBYTE1', 'SBYTE2', 'SBYTE3',
+        'SLOWORD', 'SHIWORD', 'SWORD0', 'SWORD1',
+        'SLODWORD', 'SHIDWORD',
+        # IDA overflow/carry macros
+        '__OFADD__', '__OFSUB__', '__SETP__', '__SETO__', '__SETS__', '__SETZ__',
+        '__CFADD__', '__CFSUB__', '__SCFADD__', '__SCFSUB__',
+        # Compiler builtins
+        '__builtin_trap', '__builtin_unreachable', '__builtin_expect',
+        '__builtin_clz', '__builtin_ctz', '__builtin_popcount',
+        '__readfsqword', '__readfsdword', '__readgsqword', '__rdtsc',
+        # C type casts that look like calls
+        'unsigned', 'signed', 'const', 'volatile',
+    }
+    # Also exclude _mm_* / _mm256_* / __builtin_* prefixed identifiers
     call_matches = re.findall(r'\b([a-zA-Z_]\w*)\s*\(', code)
-    feats.calls = sorted(set(c for c in call_matches if c not in keywords))
+    feats.calls = sorted(set(c for c in call_matches
+                              if c not in keywords
+                              and not c.startswith('_mm_')
+                              and not c.startswith('_mm256_')
+                              and not c.startswith('__builtin_')))
 
     sig_match = re.search(r'\w+\s+\w+\s*\(([^)]*)\)', code)
     if sig_match:

@@ -9,6 +9,12 @@
 //! call site and drive `noreturn`/variadic decisions. Full type information
 //! (`size_t`, `FILE*`, etc.) is encoded as plain strings since the printer
 //! is allowed to splice them into the C output verbatim.
+//!
+//! In addition to standard libc, the database includes a small overlay of
+//! IDA SDK helpers (`qfree`, `qalloc`, `qvector_reserve`, `get_func`, ...)
+//! that appear in the parity target binary's reference traces. They share
+//! the same lookup function so call-site resolution does not need to know
+//! which catalog a name came from.
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
@@ -77,6 +83,17 @@ const LIBC_TABLE: &[LibcSignature] = &[
 
     sig("abs",      1, "int",       false, false),
     sig("labs",     1, "long",      false, false),
+
+    // `qalloc_or_throw` is intentionally NOT marked noreturn: it can throw,
+    // but exception handling is opaque to the lifter and noreturn would
+    // prune live successor blocks at every call site.
+    sig("get_func",            1, "func_t *",    false, false),
+    sig("get_inf_structure",   0, "idainfo *",   false, false),
+    sig("getseg",              1, "segment_t *", false, false),
+    sig("qalloc",              1, "void *",      false, false),
+    sig("qalloc_or_throw",     1, "void *",      false, false),
+    sig("qfree",               1, "void",        false, false),
+    sig("qvector_reserve",     3, "void",        false, false),
 ];
 
 fn table() -> &'static BTreeMap<&'static str, &'static LibcSignature> {
@@ -155,6 +172,40 @@ mod tests {
     fn database_has_at_least_thirty_entries() {
         let n = len();
         assert!(n >= 30, "expected at least 30 signatures, got {n}");
+    }
+
+    #[test]
+    fn ida_sdk_overlay_is_present() {
+        let names = [
+            "qfree",
+            "qalloc",
+            "qalloc_or_throw",
+            "qvector_reserve",
+            "get_func",
+            "getseg",
+            "get_inf_structure",
+        ];
+        for name in names {
+            assert!(
+                lookup_libc(name).is_some(),
+                "IDA SDK overlay should include {name}",
+            );
+        }
+        let qfree = lookup_libc("qfree").unwrap();
+        assert_eq!(qfree.return_type, "void");
+        assert_eq!(qfree.param_count, 1);
+        assert!(!qfree.noreturn);
+
+        let qalloc = lookup_libc("qalloc").unwrap();
+        assert_eq!(qalloc.return_type, "void *");
+        assert!(!qalloc.noreturn);
+
+        let qalloc_or_throw = lookup_libc("qalloc_or_throw").unwrap();
+        assert!(
+            !qalloc_or_throw.noreturn,
+            "qalloc_or_throw must NOT be noreturn (it throws but the lifter \
+             still needs successor blocks)",
+        );
     }
 
     #[test]

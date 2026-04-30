@@ -236,7 +236,7 @@ fn write_type_tag(family: char, size_bytes: u8, out: &mut String) {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     use smallvec::smallvec;
 
@@ -261,6 +261,7 @@ mod tests {
             var_types: BTreeMap::new(),
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
+            foldable_exprs: BTreeSet::new(),
         }
     }
 

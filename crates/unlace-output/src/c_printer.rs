@@ -27,6 +27,7 @@ pub fn print_c(func: &HirFunction) -> String {
     let mut ctx = PrintCtx::new();
 
     collect_varnodes(&func.body, &mut ctx);
+    compute_foldable(&mut ctx);
 
     let mut out = String::with_capacity(1024);
 
@@ -56,11 +57,17 @@ pub fn print_c(func: &HirFunction) -> String {
     }
     let _ = writeln!(out, ") {{");
 
+    let foldable_svs: BTreeSet<SsaVarnode> = ctx.sv_defining_stmt.keys().copied().collect();
+    let mut has_decl = false;
     for (sv, name) in &ctx.var_names {
+        if foldable_svs.contains(sv) {
+            continue;
+        }
         let ty = ctx.var_types.get(sv).copied().unwrap_or(PrimitiveType::Unknown);
         let _ = writeln!(out, "    {} {};", c_type(&ty), name);
+        has_decl = true;
     }
-    if !ctx.var_names.is_empty() {
+    if has_decl {
         out.push('\n');
     }
 
@@ -97,6 +104,9 @@ struct PrintCtx {
     foldable_stmts: BTreeSet<u32>,
     /// Maps a foldable SsaVarnode to the statement index that defines it.
     sv_defining_stmt: BTreeMap<SsaVarnode, u32>,
+    cond_uses: Vec<SsaVarnode>,
+    collect_depth: u32,
+    stmt_depths: BTreeMap<u32, u32>,
 }
 
 impl PrintCtx {
@@ -114,6 +124,9 @@ impl PrintCtx {
             stmt_insns: BTreeMap::new(),
             foldable_stmts: BTreeSet::new(),
             sv_defining_stmt: BTreeMap::new(),
+            cond_uses: Vec::new(),
+            collect_depth: 0,
+            stmt_depths: BTreeMap::new(),
         }
     }
 
@@ -153,6 +166,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             HirNode::Statement(insn) => {
                 let idx = ctx.next_stmt;
                 ctx.next_stmt += 1;
+                ctx.stmt_depths.insert(idx, ctx.collect_depth);
 
                 let mut input_svs = Vec::new();
                 for input in &insn.inputs {
@@ -181,41 +195,56 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
             HirNode::If { cond, then_body, else_body } => {
                 ctx.name_of(cond);
+                ctx.cond_uses.push(*cond);
+                ctx.collect_depth += 1;
                 collect_varnodes(then_body, ctx);
                 if let Some(eb) = else_body {
                     collect_varnodes(eb, ctx);
                 }
+                ctx.collect_depth -= 1;
             }
 
             HirNode::While { cond, body } => {
                 ctx.name_of(cond);
+                ctx.cond_uses.push(*cond);
+                ctx.collect_depth += 1;
                 collect_varnodes(body, ctx);
+                ctx.collect_depth -= 1;
             }
 
             HirNode::DoWhile { body, cond } => {
+                ctx.collect_depth += 1;
                 collect_varnodes(body, ctx);
+                ctx.collect_depth -= 1;
                 ctx.name_of(cond);
+                ctx.cond_uses.push(*cond);
             }
 
             HirNode::Switch { cond, cases, default } => {
                 ctx.name_of(cond);
+                ctx.cond_uses.push(*cond);
+                ctx.collect_depth += 1;
                 for (_case, body) in cases {
                     collect_varnodes(body, ctx);
                 }
                 if let Some(def) = default {
                     collect_varnodes(def, ctx);
                 }
+                ctx.collect_depth -= 1;
             }
 
             HirNode::Return(Some(sv)) => {
                 ctx.name_of(sv);
+                ctx.cond_uses.push(*sv);
             }
 
             HirNode::Ternary { cond, then_insn, else_insn, output: _ } => {
                 ctx.name_of(cond);
+                ctx.cond_uses.push(*cond);
 
                 let then_idx = ctx.next_stmt;
                 ctx.next_stmt += 1;
+                ctx.stmt_depths.insert(then_idx, ctx.collect_depth);
                 let mut then_inputs = Vec::new();
                 for input in &then_insn.inputs {
                     if input.space == SpaceId::Const {
@@ -240,6 +269,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
                 let else_idx = ctx.next_stmt;
                 ctx.next_stmt += 1;
+                ctx.stmt_depths.insert(else_idx, ctx.collect_depth);
                 let mut else_inputs = Vec::new();
                 for input in &else_insn.inputs {
                     if input.space == SpaceId::Const {
@@ -265,6 +295,74 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
             HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_) => {}
         }
+    }
+}
+
+const fn is_never_foldable_op(op: IrOp) -> bool {
+    matches!(
+        op,
+        IrOp::Store
+            | IrOp::Load
+            | IrOp::Call
+            | IrOp::Callind
+            | IrOp::Branch
+            | IrOp::Cbranch
+            | IrOp::Branchind
+            | IrOp::Return
+            | IrOp::New
+            | IrOp::Callother
+            | IrOp::Cpoolref
+            | IrOp::Indirect
+            | IrOp::Multiequal
+    )
+}
+
+fn compute_foldable(ctx: &mut PrintCtx) {
+    let mut use_counts: BTreeMap<SsaVarnode, usize> = BTreeMap::new();
+    let mut sv_consumer_stmt: BTreeMap<SsaVarnode, u32> = BTreeMap::new();
+
+    for (&stmt_idx, inputs) in &ctx.stmt_inputs {
+        for sv in inputs {
+            *use_counts.entry(*sv).or_insert(0) += 1;
+            sv_consumer_stmt.insert(*sv, stmt_idx);
+        }
+    }
+
+    for sv in &ctx.cond_uses {
+        *use_counts.entry(*sv).or_insert(0) += 1;
+    }
+
+    for (&stmt_idx, output_sv_opt) in &ctx.stmt_outputs {
+        let output_sv = match output_sv_opt {
+            Some(sv) => *sv,
+            None => continue,
+        };
+
+        let insn = match ctx.stmt_insns.get(&stmt_idx) {
+            Some(insn) => insn,
+            None => continue,
+        };
+
+        if is_never_foldable_op(insn.op) {
+            continue;
+        }
+
+        if use_counts.get(&output_sv).copied().unwrap_or(0) != 1 {
+            continue;
+        }
+
+        let def_depth = ctx.stmt_depths.get(&stmt_idx).copied().unwrap_or(0);
+        let consumer_depth = sv_consumer_stmt
+            .get(&output_sv)
+            .and_then(|&cid| ctx.stmt_depths.get(&cid).copied())
+            .unwrap_or(u32::MAX);
+
+        if def_depth != consumer_depth {
+            continue;
+        }
+
+        ctx.foldable_stmts.insert(stmt_idx);
+        ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
     }
 }
 
@@ -331,6 +429,15 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
     }
 }
 
+fn resolve_sv_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
+    if let Some(&def_stmt) = ctx.sv_defining_stmt.get(sv) {
+        if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
+            return emit_expr(&def_insn, def_stmt, ctx);
+        }
+    }
+    ctx.name_of(sv)
+}
+
 fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
     match node {
         HirNode::Block(children) => emit_nodes(children, depth, ctx, out),
@@ -338,9 +445,9 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
         HirNode::Statement(insn) => emit_statement(insn, depth, ctx, out),
 
         HirNode::If { cond, then_body, else_body } => {
-            let cond_name = ctx.name_of(cond);
+            let cond_expr = resolve_sv_expr(cond, ctx);
             indent(depth, out);
-            let _ = writeln!(out, "if ({}) {{", cond_name);
+            let _ = writeln!(out, "if ({}) {{", cond_expr);
             emit_nodes(then_body, depth + 1, ctx, out);
             if let Some(eb) = else_body {
                 indent(depth, out);
@@ -352,9 +459,9 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
         }
 
         HirNode::While { cond, body } => {
-            let cond_name = ctx.name_of(cond);
+            let cond_expr = resolve_sv_expr(cond, ctx);
             indent(depth, out);
-            let _ = writeln!(out, "while ({}) {{", cond_name);
+            let _ = writeln!(out, "while ({}) {{", cond_expr);
             emit_nodes(body, depth + 1, ctx, out);
             indent(depth, out);
             let _ = writeln!(out, "}}");
@@ -364,15 +471,15 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             indent(depth, out);
             let _ = writeln!(out, "do {{");
             emit_nodes(body, depth + 1, ctx, out);
-            let cond_name = ctx.name_of(cond);
+            let cond_expr = resolve_sv_expr(cond, ctx);
             indent(depth, out);
-            let _ = writeln!(out, "}} while ({});", cond_name);
+            let _ = writeln!(out, "}} while ({});", cond_expr);
         }
 
         HirNode::Switch { cond, cases, default } => {
-            let cond_name = ctx.name_of(cond);
+            let cond_expr = resolve_sv_expr(cond, ctx);
             indent(depth, out);
-            let _ = writeln!(out, "switch ({}) {{", cond_name);
+            let _ = writeln!(out, "switch ({}) {{", cond_expr);
             for (case, body) in cases {
                 indent(depth, out);
                 match case {
@@ -399,7 +506,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
         }
 
         HirNode::Return(Some(sv)) => {
-            let name = ctx.name_of(sv);
+            let name = resolve_sv_expr(sv, ctx);
             indent(depth, out);
             let _ = writeln!(out, "return {};", name);
         }
@@ -435,7 +542,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 
             let then_expr = emit_expr(then_insn, then_idx, ctx);
             let else_expr = emit_expr(else_insn, else_idx, ctx);
-            let cond_name = ctx.name_of(cond);
+            let cond_name = resolve_sv_expr(cond, ctx);
 
             indent(depth, out);
             let _ = writeln!(out, "{} = {} ? {} : {};", lhs, cond_name, then_expr, else_expr);
@@ -450,6 +557,10 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
     let idx = ctx.emit_stmt;
     ctx.emit_stmt += 1;
+
+    if ctx.foldable_stmts.contains(&idx) {
+        return;
+    }
 
     indent(depth, out);
 
@@ -734,14 +845,22 @@ fn emit_operand_resolved(
     if vn.space == SpaceId::Const {
         return format_constant(vn.offset, vn.size);
     }
-    if let Some(inputs) = ctx.stmt_inputs.get(&stmt_idx).cloned() {
-        for sv in &inputs {
-            if sv.base == *vn {
-                return ctx.name_of(sv);
-            }
+
+    let resolved_sv = if let Some(inputs) = ctx.stmt_inputs.get(&stmt_idx).cloned() {
+        inputs.iter().find(|sv| sv.base == *vn).copied()
+    } else {
+        None
+    };
+
+    let sv = resolved_sv.unwrap_or(SsaVarnode { base: *vn, version: 0 });
+
+    if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
+        if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
+            let inner = emit_expr(&def_insn, def_stmt, ctx);
+            return format!("({})", inner);
         }
     }
-    let sv = SsaVarnode { base: *vn, version: 0 };
+
     ctx.name_of(&sv)
 }
 
@@ -1143,54 +1262,22 @@ mod tests {
         let func = make_func("ssa_test", body);
         let output = print_c(&func);
 
-        let var_decls: Vec<&str> = output
-            .lines()
-            .filter(|l| l.trim_start().starts_with("int v") && l.trim_end().ends_with(';'))
-            .collect();
-
+        // Single-use intermediates (v1, v2) are folded into the final expression.
+        // Only v3 (used by return) should have a declaration.
         assert!(
-            var_decls.len() >= 3,
-            "expected at least 3 variable declarations, got {}: {var_decls:?}\n\nfull output:\n{output}",
-            var_decls.len(),
+            output.contains("int v3;"),
+            "v3 declaration expected: {output}",
         );
 
-        let assignment_lhs: Vec<&str> = output
-            .lines()
-            .filter_map(|l| {
-                let trimmed = l.trim();
-                if trimmed.contains(" = ") && !trimmed.starts_with("if") {
-                    trimmed.split(" = ").next()
-                } else {
-                    None
-                }
-            })
-            .collect();
-
+        // The folded expression should appear in v3's assignment.
         assert!(
-            assignment_lhs.len() >= 3,
-            "expected at least 3 assignments, got {}: {assignment_lhs:?}\n\nfull output:\n{output}",
-            assignment_lhs.len(),
+            output.contains("v3 = ((1) + 2) + 3;"),
+            "folded expression expected: {output}",
         );
 
-        let unique: std::collections::BTreeSet<&&str> = assignment_lhs.iter().collect();
-        assert_eq!(
-            unique.len(),
-            assignment_lhs.len(),
-            "expected all assignment LHS names to be distinct: {assignment_lhs:?}\n\nfull output:\n{output}",
-        );
-
-        // Second statement should read the first's output, not its own.
-        let second_line = output
-            .lines()
-            .find(|l| l.contains(" + 2;"))
-            .expect("should find second add line");
-        let parts: Vec<&str> = second_line.trim().splitn(2, " = ").collect();
-        assert_eq!(parts.len(), 2);
-        let lhs_name = parts[0];
-        let rhs = parts[1];
         assert!(
-            !rhs.starts_with(lhs_name),
-            "RHS should read a different variable than LHS: {second_line}\n\nfull output:\n{output}",
+            output.contains("return v3;"),
+            "return v3 expected: {output}",
         );
     }
 

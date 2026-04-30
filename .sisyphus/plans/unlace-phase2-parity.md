@@ -105,7 +105,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
 
 ### Wave 1 — Foundation
 
-- [ ] P2-1. Fix SSA version bug in C printer
+- [x] P2-1. Fix SSA version bug in C printer
   **What to do**: The C printer currently hardcodes `version: 0` for all SSA varnodes. Fix it to use actual SSA versions when generating variable names. This is a PREREQUISITE for variable merging and expression trees.
   **Must do**: Read `crates/unlace-output/src/c_printer.rs`, find where SSA versions are ignored, fix to produce `v1_0`, `v1_1` etc. for different versions of the same base varnode. Write tests comparing output before/after.
   **IDA reference**: Read 5 functions from `references/hexrays/ida_dump/hexx64/all/` — note how IDA reuses variable names across assignments (`v1 = ...; v1 = ...;` not `v1_0 = ...; v1_1 = ...;`).
@@ -122,7 +122,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
   ```
   **Commit**: `fix(output): use actual SSA versions in C printer variable naming`
 
-- [ ] P2-2. Debug fixture binaries (with DWARF)
+- [x] P2-2. Debug fixture binaries (with DWARF)
   **What to do**: Compile new fixtures WITH debug info (`-g`) for DWARF type testing. Create:
   - `fixtures/debug_hello.elf` — same as hello_world but with `-g`
   - `fixtures/debug_structs.elf` — C program with struct definitions, field accesses, nested structs
@@ -148,7 +148,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
   ```
   **Commit**: `test: debug fixture binaries with DWARF struct info`
 
-- [ ] P2-3. ELF relocation processing
+- [x] P2-3. ELF relocation processing
   **What to do**: Extend `unlace-loader/src/elf.rs` to process relocations. Resolve PLT/GOT entries to symbol names. When a `call [rip+offset]` targets a PLT entry, resolve to the dynamic symbol name (e.g., `printf`, `malloc`).
   **IDA reference**: Read `references/loaders/elf/all/` — sample 5 files showing relocation handling. Look for `sub_21430.c` (reloc processing), `sub_280C0.c` (segment loading with fixups).
   **Implementation**:
@@ -169,7 +169,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
   ```
   **Commit**: `feat(loader): ELF relocation processing — PLT/GOT → symbol names`
 
-- [ ] P2-4. Cross-reference database
+- [x] P2-4. Cross-reference database
   **What to do**: Create new crate `unlace-xref` (or module in `unlace-ir`) with a call graph builder. Scan lifted IR for CALL/CALLIND ops, build bidirectional caller↔callee map. Integrate with PLT resolution from P2-3.
   **IDA reference**: Read `references/ida/metadata/hexx64_function_list.txt` — note xrefblk_t functions. Read 3 files from `references/ida/binary/dump-9.3sp1/all/` showing xref usage.
   **Implementation**:
@@ -190,7 +190,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
   ```
   **Commit**: `feat(ir): cross-reference database — call graph builder`
 
-- [ ] P2-5. Dead flag elimination pass
+- [x] P2-5. Dead flag elimination pass
   **What to do**: Add `DeadFlagElimPass` to `unlace-passes`. After lifting, many flag-setting operations are unused (e.g., ADD sets CF/ZF/SF/OF but only ZF is read by subsequent JE). Eliminate unused flag computations.
   **IDA reference**: Read 5 functions from `references/hexrays/ida_dump/hexx64/all/` — note that IDA output has NO flag variables. All flags are folded into conditions.
   **Implementation**: Walk SSA function, for each flag-setting IrInsn (INT_CARRY, INT_SCARRY, INT_SBORROW, POPCOUNT on flags), check if the output varnode has any uses. If not, mark for removal. Run after existing DCE.
@@ -207,7 +207,7 @@ Critical Path: P2-1 → P2-7 → P2-9 → P2-10 → P2-16 → P2-17
   ```
   **Commit**: `feat(passes): dead flag elimination`
 
-- [ ] P2-6. Condition simplification pass
+- [x] P2-6. Condition simplification pass
   **What to do**: Add `ConditionSimplifyPass` that simplifies boolean expressions. `(x < 5) && (x < 10)` → `x < 5`. `!(x == 0)` → `x != 0`. Double negation elimination.
   **IDA reference**: Read 5 branchy functions from `references/hexrays/ida_dump/hexx64/all/` — note IDA's simplified conditions.
   **Tests**: Synthetic IR with redundant conditions → simplified output.

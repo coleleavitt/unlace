@@ -161,6 +161,10 @@ pub struct SsaFunction {
     pub calling_convention: CallingConvention,
     /// Recovered stack variables keyed by RSP-relative offset.
     pub stack_vars: BTreeMap<i64, StackVar>,
+    /// SSA varnodes whose defining instruction can be folded inline as a
+    /// sub-expression rather than emitted as a standalone statement.
+    /// Populated by [`ExpressionTreePass`](https://docs.rs/unlace-passes).
+    pub foldable_exprs: BTreeSet<SsaVarnode>,
 }
 
 /// Identifies which varnode slot of an instruction an SSA version refers to.
@@ -195,6 +199,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         var_types: BTreeMap::new(),
         calling_convention: CallingConvention::Unknown,
         stack_vars: BTreeMap::new(),
+        foldable_exprs: BTreeSet::new(),
     }
 }
 

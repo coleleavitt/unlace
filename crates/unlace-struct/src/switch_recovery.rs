@@ -77,6 +77,7 @@ mod tests {
                 },
             ],
             addr: 0x1000,
+            foldable_exprs: std::collections::BTreeSet::new(),
         }
     }
 
@@ -99,6 +100,7 @@ mod tests {
             return_type: PrimitiveType::Unknown,
             body: vec![HirNode::Statement(branchind)],
             addr: 0x2000,
+            foldable_exprs: std::collections::BTreeSet::new(),
         };
 
         recover_switches(&mut func);

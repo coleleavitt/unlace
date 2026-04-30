@@ -1,0 +1,51 @@
+P2-7 Expression Tree Building — Evidence
+=========================================
+
+## Implementation
+
+### New files
+- crates/unlace-passes/src/expression_tree.rs — ExpressionTreePass implementing Pass trait
+
+### Modified files
+- crates/unlace-ir/src/ssa.rs — Added `foldable_exprs: BTreeSet<SsaVarnode>` field to SsaFunction
+- crates/unlace-struct/src/hir.rs — Added `foldable_exprs: BTreeSet<SsaVarnode>` field to HirFunction
+- crates/unlace-struct/src/structurer.rs — Passes foldable_exprs from SsaFunction to HirFunction
+- crates/unlace-passes/src/lib.rs — Registered expression_tree module and ExpressionTreePass
+- crates/unlace-output/src/c_printer.rs — Major changes:
+  - Added compute_foldable() to identify single-use, non-side-effecting instructions
+  - Added resolve_sv_expr() for recursive inline expansion of foldable sub-expressions
+  - Updated emit_statement() to skip foldable statements
+  - Updated emit_operand_resolved() to inline foldable expressions with parentheses
+  - Updated all condition/return emission to use resolve_sv_expr()
+  - Skips variable declarations for foldable intermediates
+  - Tracks nesting depth to avoid folding across control-flow boundaries
+- crates/unlace-cli/src/pipeline.rs — Integrated ExpressionTreePass after fixedpoint optimization
+
+### Side-effecting ops NEVER folded
+STORE, LOAD, CALL, CALLIND, BRANCH, CBRANCH, BRANCHIND, RETURN, NEW, CALLOTHER, CPOOLREF, INDIRECT, MULTIEQUAL
+
+### Safety constraints
+- Only folds single-use outputs (use_count == 1 from all consumers)
+- Uses from control-flow conditions and return values count toward use_count
+- Only folds when definition and consumer are at the same nesting depth
+- Phi nodes (MULTIEQUAL) never folded
+
+## Test results
+
+### Unit tests (3 new in expression_tree.rs)
+- test_expr_tree_simple_fold: 4-instruction chain (LOAD→ADD→MUL→RETURN) — LOAD not foldable, ADD+MUL marked foldable
+- test_expr_tree_multiple_uses_kept: instruction used by 2 consumers stays as statement
+- test_expr_tree_side_effect_kept: CALL never folded even with single use
+
+### Updated test
+- test_ssa_version_names: Updated to verify expression tree folding behavior (v1=1, v2=v1+2, v3=v2+3 → v3=((1)+2)+3)
+
+### Full test suite
+690 tests passed, 0 failed (workspace-wide)
+
+### Lint
+cargo xtask lint-determinism: OK — no HashMap/HashSet in enforced crates
+
+### Smoke test on fixtures/medium.elf
+Successfully decompiled main function with expression folding active.
+Example folded expression: ((__builtin_popcount(0)) & 1) == 0

@@ -20,4 +20,16 @@ pub enum LoadError {
     /// A section referenced by index or name was expected but missing.
     #[error("missing section: {0}")]
     MissingSection(String),
+
+    /// The PDB parser failed.
+    #[error("PDB error: {0}")]
+    Pdb(#[from] pdb::Error),
+
+    /// The DWARF parser failed.
+    #[error("DWARF error: {0}")]
+    Dwarf(#[from] gimli::Error),
+
+    /// I/O error while reading a file.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
 }

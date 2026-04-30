@@ -303,6 +303,8 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Cqo => arithmetic::lift_cqo(ctx, insn),
         M::Cmpxchg => arithmetic::lift_cmpxchg(ctx, insn),
         M::Xadd => arithmetic::lift_xadd(ctx, insn),
+        M::Bswap => data_move::lift_bswap(ctx, insn),
+        M::Movbe => data_move::lift_movbe(ctx, insn),
 
         M::And => bitwise::lift_and(ctx, insn),
         M::Or => bitwise::lift_or(ctx, insn),
@@ -381,6 +383,10 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
 
         M::Blendps => sse::lift_sse_blend(ctx, insn, sse::tag::BLENDPS),
         M::Pblendvb => sse::lift_sse_blend(ctx, insn, sse::tag::PBLENDVB),
+
+        M::Fld => fpu::lift_fld(ctx, insn),
+        M::Fst => fpu::lift_fst(ctx, insn),
+        M::Fstp => fpu::lift_fstp(ctx, insn),
 
         _ => ctx.emit_unimplemented(),
     }

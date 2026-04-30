@@ -53,8 +53,24 @@ impl Pass for IdiomRecognitionPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        const MAX_INNER: usize = 100;
+        let func_name = func.function.name.clone();
         let mut changed_any = false;
+        let mut iter = 0;
         loop {
+            iter += 1;
+            if iter > MAX_INNER {
+                tracing::error!(
+                    func = %func_name,
+                    iters = MAX_INNER,
+                    "idiom_recognition did not converge"
+                );
+                return Err(PassError::InvariantViolation {
+                    message: format!(
+                        "idiom_recognition did not converge on '{func_name}' after {MAX_INNER} iters",
+                    ),
+                });
+            }
             let def_map = build_def_map(func);
             let mut changed = false;
 
@@ -67,6 +83,9 @@ impl Pass for IdiomRecognitionPass {
                 }
             }
 
+            if changed {
+                tracing::trace!(func = %func_name, iter, "idiom_recognition iter");
+            }
             changed_any |= changed;
             if !changed {
                 break;

@@ -143,6 +143,7 @@ pub fn print_c_full(
     collect_varnodes(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
     compute_byref_bases(&mut ctx);
+    compute_heuristic_names(&func.body, &mut ctx);
 
     let mut out = String::with_capacity(1024);
 
@@ -1067,6 +1068,275 @@ fn compute_loop_counter_names(nodes: &[HirNode], depth: usize, ctx: &mut PrintCt
             }
             _ => {}
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Heuristic variable naming (P7-17)
+// ---------------------------------------------------------------------------
+
+/// Roles a variable can play in the source HIR, used to derive a semantic name
+/// when no DWARF / loop-counter override is available.
+///
+/// The order matters: when a variable matches multiple roles, the highest-priority
+/// role wins (variants are matched in declaration order in the apply step).
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
+enum VarRole {
+    /// Returned via `HirNode::Return(Some(_))` somewhere in the body.
+    Result,
+    /// Output of a comparison op (`type_family == Some('b')`) consumed as a
+    /// branch / loop / switch condition.
+    Cond,
+    /// Used as the target operand of an indirect call (`CALLIND`).
+    Pfn,
+    /// Passed as the first non-target argument to a string-handling libc call
+    /// (`strlen`, `strcmp`, `strcpy`, `printf`, `puts`, `fprintf`, ...).
+    Str,
+    /// Pointer-typed (per [`PrimitiveType::Ptr`] in `var_types`) without any
+    /// other matching role. Numbered `ptr`, `p1`, `p2`, ...
+    Ptr,
+}
+
+/// Function names treated as string-handling callees for the `Str` heuristic.
+const STRING_FUNCS: &[&str] = &[
+    "strlen", "strcmp", "strncmp", "strcpy", "strncpy", "strcat", "strncat",
+    "strchr", "strrchr", "strstr", "strdup", "strtok",
+    "puts", "printf", "fprintf", "sprintf", "snprintf", "perror",
+    "fputs", "fopen", "system",
+];
+
+/// Walk the HIR and assign role-based names to base [`Varnode`]s that would
+/// otherwise be displayed as `vN`.
+///
+/// Runs after [`collect_varnodes`] so that `stmt_inputs`, `stmt_outputs`,
+/// `stmt_insns`, and `var_types` are populated.
+///
+/// Priority (highest first): `Result` → `Cond` → `Pfn` → `Str` → `Ptr`.
+///
+/// Existing entries in `name_overrides` (from DWARF or loop-counter detection)
+/// are never replaced.
+fn compute_heuristic_names(nodes: &[HirNode], ctx: &mut PrintCtx) {
+    let mut roles: BTreeMap<Varnode, VarRole> = BTreeMap::new();
+
+    walk_collect_roles(nodes, ctx, &mut roles);
+    collect_statement_level_roles(ctx, &mut roles);
+
+    let mut by_role: BTreeMap<VarRole, Vec<Varnode>> = BTreeMap::new();
+    for (base, role) in &roles {
+        by_role.entry(*role).or_default().push(*base);
+    }
+
+    let mut ptr_idx: u32 = 0;
+    for role in [VarRole::Result, VarRole::Cond, VarRole::Pfn, VarRole::Str, VarRole::Ptr] {
+        let bases = match by_role.get(&role) {
+            Some(b) => b.clone(),
+            None => continue,
+        };
+        for base in bases {
+            if ctx.name_overrides.contains_key(&base) {
+                continue;
+            }
+            let name = match role {
+                VarRole::Result => "result".to_string(),
+                VarRole::Cond => "cond".to_string(),
+                VarRole::Pfn => "pfn".to_string(),
+                VarRole::Str => "str".to_string(),
+                VarRole::Ptr => {
+                    ptr_idx += 1;
+                    if ptr_idx == 1 { "ptr".to_string() } else { format!("p{}", ptr_idx - 1) }
+                }
+            };
+            apply_override(ctx, &base, name);
+        }
+    }
+}
+
+/// Set `name_overrides[base] = name` and rewrite any cached `vN` entries in
+/// `var_names` / `base_names` so subsequent [`PrintCtx::name_of`] calls see
+/// the new name.
+///
+/// Cached entries that don't start with `v` followed by digits are left alone:
+/// they were placed by an earlier higher-priority pass (DWARF, loop counter,
+/// or another heuristic role) and must be preserved.
+fn apply_override(ctx: &mut PrintCtx, base: &Varnode, name: String) {
+    if !is_synthetic_vn_name(ctx.base_names.get(base).map(String::as_str)) {
+        return;
+    }
+    ctx.name_overrides.insert(*base, name.clone());
+    ctx.base_names.insert(*base, name.clone());
+    let to_update: Vec<SsaVarnode> = ctx
+        .var_names
+        .iter()
+        .filter_map(|(sv, n)| {
+            if sv.base == *base && is_synthetic_vn_name(Some(n.as_str())) {
+                Some(*sv)
+            } else {
+                None
+            }
+        })
+        .collect();
+    for sv in to_update {
+        ctx.var_names.insert(sv, name.clone());
+    }
+}
+
+fn is_synthetic_vn_name(name: Option<&str>) -> bool {
+    let n = match name {
+        Some(s) => s,
+        None => return true,
+    };
+    let rest = match n.strip_prefix('v') {
+        Some(r) => r,
+        None => return false,
+    };
+    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn record_role(roles: &mut BTreeMap<Varnode, VarRole>, base: Varnode, role: VarRole) {
+    use std::collections::btree_map::Entry;
+    match roles.entry(base) {
+        Entry::Vacant(v) => {
+            v.insert(role);
+        }
+        Entry::Occupied(mut o) => {
+            if role < *o.get() {
+                o.insert(role);
+            }
+        }
+    }
+}
+
+/// HIR walker — collects roles that need the structured tree (Return, If/While
+/// conditions, switch, etc.).
+fn walk_collect_roles(
+    nodes: &[HirNode],
+    ctx: &PrintCtx,
+    roles: &mut BTreeMap<Varnode, VarRole>,
+) {
+    for node in nodes {
+        match node {
+            HirNode::Block(children) => walk_collect_roles(children, ctx, roles),
+            HirNode::Return(Some(sv)) => {
+                record_role(roles, sv.base, VarRole::Result);
+            }
+            HirNode::If { cond, then_body, else_body } => {
+                if cond_is_comparison(cond, ctx) {
+                    record_role(roles, cond.base, VarRole::Cond);
+                }
+                walk_collect_roles(then_body, ctx, roles);
+                if let Some(eb) = else_body {
+                    walk_collect_roles(eb, ctx, roles);
+                }
+            }
+            HirNode::While { cond, body } => {
+                if cond_is_comparison(cond, ctx) {
+                    record_role(roles, cond.base, VarRole::Cond);
+                }
+                walk_collect_roles(body, ctx, roles);
+            }
+            HirNode::DoWhile { body, cond } => {
+                if cond_is_comparison(cond, ctx) {
+                    record_role(roles, cond.base, VarRole::Cond);
+                }
+                walk_collect_roles(body, ctx, roles);
+            }
+            HirNode::For { cond, body, .. } => {
+                if cond_is_comparison(cond, ctx) {
+                    record_role(roles, cond.base, VarRole::Cond);
+                }
+                walk_collect_roles(body, ctx, roles);
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (_case, body, _) in cases {
+                    walk_collect_roles(body, ctx, roles);
+                }
+                if let Some(d) = default {
+                    walk_collect_roles(d, ctx, roles);
+                }
+            }
+            HirNode::TryCatch { try_body, catch_body } => {
+                walk_collect_roles(try_body, ctx, roles);
+                walk_collect_roles(catch_body, ctx, roles);
+            }
+            HirNode::Ternary { cond, .. } => {
+                if cond_is_comparison(cond, ctx) {
+                    record_role(roles, cond.base, VarRole::Cond);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// `true` when the SSA varnode is the output of a boolean-producing op.
+///
+/// We require an actual comparison op so we don't paint a generic register
+/// as `cond` just because it happens to feed a CBRANCH (it might already be
+/// `_Bool`-typed via Phase 4 inference, but the source semantics could still
+/// be e.g. a load of a flag byte).
+fn cond_is_comparison(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
+    let &def_stmt = match ctx.sv_defining_stmt.get(sv) {
+        Some(s) => s,
+        None => {
+            return ctx.var_types.get(sv).copied() == Some(PrimitiveType::Bool);
+        }
+    };
+    match ctx.stmt_insns.get(&def_stmt) {
+        Some(insn) => insn.op.type_family() == Some('b'),
+        None => false,
+    }
+}
+
+/// Statement-level walker — collects roles requiring access to IR ops:
+/// CALLIND targets, comparison outputs, string-call arguments, pointer types.
+fn collect_statement_level_roles(
+    ctx: &PrintCtx,
+    roles: &mut BTreeMap<Varnode, VarRole>,
+) {
+    let stmt_indices: Vec<u32> = ctx.stmt_insns.keys().copied().collect();
+    for idx in stmt_indices {
+        let insn = match ctx.stmt_insns.get(&idx) {
+            Some(i) => i,
+            None => continue,
+        };
+
+        if insn.op == IrOp::Callind && !insn.inputs.is_empty() {
+            let target = &insn.inputs[0];
+            if target.space != SpaceId::Const {
+                record_role(roles, *target, VarRole::Pfn);
+            }
+        }
+
+        if insn.op == IrOp::Call && !insn.inputs.is_empty() {
+            let target = &insn.inputs[0];
+            if target.space == SpaceId::Const {
+                let callee = ctx.symbols.get(&target.offset).map(String::as_str);
+                if matches!(callee, Some(name) if STRING_FUNCS.contains(&name)) {
+                    for arg in insn.inputs.iter().skip(1) {
+                        if arg.space != SpaceId::Const {
+                            record_role(roles, *arg, VarRole::Str);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if insn.op.type_family() == Some('b') {
+            if let Some(out) = insn.output {
+                record_role(roles, out, VarRole::Cond);
+            }
+        }
+    }
+
+    let mut ptr_bases: BTreeSet<Varnode> = BTreeSet::new();
+    for (sv, ty) in &ctx.var_types {
+        if *ty == PrimitiveType::Ptr {
+            ptr_bases.insert(sv.base);
+        }
+    }
+    for base in ptr_bases {
+        record_role(roles, base, VarRole::Ptr);
     }
 }
 
@@ -2554,7 +2824,7 @@ mod tests {
 
         assert!(output.contains("if (v1)"), "if: {output}");
         assert!(output.contains("} else {"), "else: {output}");
-        assert!(output.contains("return v2;"), "return: {output}");
+        assert!(output.contains("return result;"), "return: {output}");
     }
 
     #[test]
@@ -2819,18 +3089,18 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("int v1;"),
-            "v1 declaration expected: {output}",
+            output.contains("int result;"),
+            "result declaration expected: {output}",
         );
 
         assert!(
-            output.contains("v1 = 1 + 2 + 3;"),
+            output.contains("result = 1 + 2 + 3;"),
             "folded expression expected: {output}",
         );
 
         assert!(
-            output.contains("return v1;"),
-            "return v1 expected: {output}",
+            output.contains("return result;"),
+            "return result expected: {output}",
         );
     }
 
@@ -4046,7 +4316,7 @@ mod tests {
         ];
         let func = make_func("mul_assign", body);
         let output = print_c(&func);
-        assert!(output.contains("v1 *= 3;"), "should emit v1 *= 3: {output}");
+        assert!(output.contains("result *= 3;"), "should emit result *= 3: {output}");
     }
 
     #[test]
@@ -4061,7 +4331,7 @@ mod tests {
         ];
         let func = make_func("shl_assign", body);
         let output = print_c(&func);
-        assert!(output.contains("v1 <<= 2;"), "should emit v1 <<= 2: {output}");
+        assert!(output.contains("result <<= 2;"), "should emit result <<= 2: {output}");
     }
 
     #[test]
@@ -4076,7 +4346,7 @@ mod tests {
         ];
         let func = make_func("and_assign", body);
         let output = print_c(&func);
-        assert!(output.contains("v1 &= v2;"), "should emit v1 &= v2: {output}");
+        assert!(output.contains("result &= v2;"), "should emit result &= v2: {output}");
     }
 
     #[test]
@@ -4091,7 +4361,7 @@ mod tests {
         ];
         let func = make_func("or_assign", body);
         let output = print_c(&func);
-        assert!(output.contains("v1 |= v2;"), "should emit v1 |= v2: {output}");
+        assert!(output.contains("result |= v2;"), "should emit result |= v2: {output}");
     }
 
     // -------------------------------------------------------------------
@@ -4160,7 +4430,7 @@ mod tests {
         let func = make_func("negate_plain", body);
         let output = print_c(&func);
         assert!(
-            output.contains("!v1"),
+            output.contains("!result"),
             "!flag should remain as !flag: {output}",
         );
     }
@@ -5273,8 +5543,8 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("(*v1)();"),
-            "CALLIND should emit (*fptr)(): {output}",
+            output.contains("(*pfn)();"),
+            "CALLIND should emit (*pfn)(): {output}",
         );
     }
 
@@ -5318,8 +5588,8 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("(*v1)()"),
-            "CALLIND with output should emit (*fptr)(): {output}",
+            output.contains("(*pfn)()"),
+            "CALLIND with output should emit (*pfn)(): {output}",
         );
     }
 
@@ -5418,10 +5688,10 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("v2 = 0;"),
+            output.contains("result = 0;"),
             "XOR(v, v) should fold to 0: {output}",
         );
-        let xor_line = output.lines().find(|l| l.contains("v2 ="));
+        let xor_line = output.lines().find(|l| l.contains("result ="));
         assert!(
             xor_line.map_or(false, |l| !l.contains("^")),
             "XOR-self should not contain ^ in assignment: {output}",
@@ -5444,7 +5714,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("v1 = 0;"),
+            output.contains("result = 0;"),
             "popcount(0) should fold to 0: {output}",
         );
         assert!(
@@ -5470,7 +5740,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("v2 = 0;"),
+            output.contains("result = 0;"),
             "v & 0 should fold to 0: {output}",
         );
     }
@@ -5492,10 +5762,10 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("v2 = v1;"),
+            output.contains("result = v1;"),
             "v | 0 should fold to v: {output}",
         );
-        let or_line = output.lines().find(|l| l.contains("v2 ="));
+        let or_line = output.lines().find(|l| l.contains("result ="));
         assert!(
             or_line.map_or(false, |l| !l.contains("|")),
             "or-zero should not contain | in assignment: {output}",
@@ -5691,8 +5961,8 @@ mod tests {
 
         let decl_line = output
             .lines()
-            .find(|l| l.contains("v1;") || l.contains("v1 ;"))
-            .expect("should find v1 declaration");
+            .find(|l| l.contains("result;") || l.contains("result ;"))
+            .expect("should find result declaration");
         assert!(
             decl_line.contains("// rax"),
             "register var at offset 0, size 8 should have `// rax` comment: {decl_line}",
@@ -5716,8 +5986,8 @@ mod tests {
 
         let decl_line = output
             .lines()
-            .find(|l| l.contains("v1;") || l.contains("v1 ;"))
-            .expect("should find v1 declaration");
+            .find(|l| l.contains("result;") || l.contains("result ;"))
+            .expect("should find result declaration");
         assert!(
             decl_line.contains("// [rsp+20h]"),
             "stack var at offset 0x20 should have `// [rsp+20h]` comment: {decl_line}",
@@ -5862,8 +6132,8 @@ mod tests {
 
         let decl_line = output
             .lines()
-            .find(|l| l.contains("v1;") || l.contains("v1 ;"))
-            .expect("should find v1 declaration");
+            .find(|l| l.contains("result;") || l.contains("result ;"))
+            .expect("should find result declaration");
         assert!(
             decl_line.contains("// [rsp+10h] [rbp-50h]"),
             "stack var at rsp+10h with frame 60h should annotate [rbp-50h]: {decl_line}",
@@ -5918,8 +6188,8 @@ mod tests {
 
         let decl_line = output
             .lines()
-            .find(|l| l.contains("v1;") || l.contains("v1 ;"))
-            .expect("should find v1 declaration");
+            .find(|l| l.contains("result;") || l.contains("result ;"))
+            .expect("should find result declaration");
         assert!(
             decl_line.contains("// ecx"),
             "register var at offset 8, size 4 should have `// ecx` comment: {decl_line}",
@@ -6118,6 +6388,126 @@ mod tests {
         assert!(
             output.contains("sub_4020();"),
             "internal call should resolve to sub_4020: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P7-17: Heuristic variable naming (result, cond, pfn, ptr)
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_heuristic_result_for_returned_var() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, r0, smallvec![r8, c1], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: r0, version: 0 })),
+        ];
+        let func = make_func("returns_result", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("return result;"),
+            "returned varnode should be named 'result': {output}",
+        );
+        assert!(
+            output.contains("result = "),
+            "definition of returned var should be 'result =': {output}",
+        );
+    }
+
+    #[test]
+    fn test_heuristic_cond_for_comparison_output() {
+        let a = reg(0, 4);
+        let b = reg(8, 4);
+        let cmp_out = reg(16, 1);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntEqual, cmp_out, smallvec![a, b], 0x1000,
+            )),
+            HirNode::If {
+                cond: SsaVarnode { base: cmp_out, version: 0 },
+                then_body: vec![HirNode::Return(None)],
+                else_body: None,
+            },
+            HirNode::Return(None),
+        ];
+        let func = make_func("uses_cond", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("_Bool cond;") || output.contains("_BOOL cond;"),
+            "comparison output should be declared as 'cond': {output}",
+        );
+    }
+
+    #[test]
+    fn test_heuristic_pfn_for_callind_target() {
+        let fptr = reg(0, 8);
+        let ret = reg(8, 4);
+
+        let callind = IrInsn::with_output(IrOp::Callind, ret, smallvec![fptr], 0x1000);
+        let body = vec![
+            HirNode::Statement(callind),
+            HirNode::Return(Some(SsaVarnode { base: ret, version: 0 })),
+        ];
+        let func = make_func("uses_pfn", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("(*pfn)()"),
+            "CALLIND target should be named 'pfn': {output}",
+        );
+        assert!(
+            output.contains("return result;"),
+            "returned varnode should be named 'result': {output}",
+        );
+    }
+
+    #[test]
+    fn test_heuristic_does_not_override_loop_counter() {
+        let i_reg = reg(0, 4);
+        let zero = con(0, 4);
+        let one = con(1, 4);
+        let cmp_out = reg(16, 1);
+        let n = reg(8, 4);
+
+        let init = IrInsn::with_output(
+            IrOp::Copy, i_reg, smallvec![zero], 0x0FF0,
+        );
+        let update = IrInsn::with_output(
+            IrOp::IntAdd, i_reg, smallvec![i_reg, one], 0x1010,
+        );
+        let cond_insn = IrInsn::with_output(
+            IrOp::IntLess, cmp_out, smallvec![i_reg, n], 0x1000,
+        );
+
+        let body = vec![
+            HirNode::For {
+                init,
+                cond: SsaVarnode { base: cmp_out, version: 0 },
+                update,
+                body: vec![
+                    HirNode::Statement(cond_insn),
+                ],
+            },
+            HirNode::Return(Some(SsaVarnode { base: i_reg, version: 0 })),
+        ];
+        let func = make_func("loop_with_return", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("for (i = 0;"),
+            "loop counter must remain 'i': {output}",
+        );
+        assert!(
+            !output.contains("for (result"),
+            "result heuristic must not override loop counter: {output}",
         );
     }
 }

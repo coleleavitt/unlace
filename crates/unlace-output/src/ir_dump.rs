@@ -272,6 +272,9 @@ mod tests {
             inferred_params: Vec::new(),
             inferred_return_type: unlace_ir::ssa::PrimitiveType::Unknown,
             frame_setup_insns: BTreeSet::new(),
+            dwarf_local_names: BTreeMap::new(),
+            inferred_structs: BTreeMap::new(),
+            composite_var_types: BTreeMap::new(),
         }
     }
 

@@ -8,11 +8,11 @@ use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BasicBlock, BlockId, Function, IrOp, Lifter};
 use unlace_loader::{BinaryImage, DwarfInfo, SymbolKind};
 use unlace_passes::{
-    CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
+    CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass, CopyPropagationPass,
+    CppVtablePass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
     DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
-    ModuloIdiomPass, ParamInferPass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
-    VariableMergePass, CppVtablePass, Pass, run_to_fixedpoint,
+    ModuloIdiomPass, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
+    StructFieldDetectPass, VariableMergePass, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -26,10 +26,7 @@ pub struct FunctionEntry {
     pub size: u64,
 }
 
-pub fn discover_functions(
-    image: &BinaryImage,
-    filter: Option<&str>,
-) -> Result<Vec<FunctionEntry>> {
+pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<Vec<FunctionEntry>> {
     let mut funcs: Vec<FunctionEntry> = image
         .symbols
         .values()
@@ -164,9 +161,7 @@ fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
         }
         if idx + 2 <= data.len() {
             let pair = [data[idx], data[idx + 1]];
-            if pair == PUSH_R15 || pair == PUSH_R14
-                || pair == PUSH_R13 || pair == PUSH_R12
-            {
+            if pair == PUSH_R15 || pair == PUSH_R14 || pair == PUSH_R13 || pair == PUSH_R12 {
                 // `push r12..r15` is most often a callee-saved register save
                 // *inside* a function. Accept as a function start ONLY when:
                 //   1. the address is 16-byte aligned (typical function alignment), AND
@@ -299,11 +294,7 @@ fn recompute_sizes(funcs: &mut [FunctionEntry], text_end: u64) {
     addrs.sort_unstable();
     addrs.dedup();
 
-    let addr_set: BTreeMap<u64, usize> = addrs
-        .iter()
-        .enumerate()
-        .map(|(i, &a)| (a, i))
-        .collect();
+    let addr_set: BTreeMap<u64, usize> = addrs.iter().enumerate().map(|(i, &a)| (a, i)).collect();
 
     for func in funcs.iter_mut() {
         if func.size > 0 {
@@ -370,10 +361,7 @@ pub fn lift_function(
     Ok(function)
 }
 
-fn function_bounds(
-    entry: &FunctionEntry,
-    text: &unlace_loader::Section,
-) -> (u64, u64) {
+fn function_bounds(entry: &FunctionEntry, text: &unlace_loader::Section) -> (u64, u64) {
     let start = entry.addr;
     let end = if entry.size > 0 {
         start + entry.size
@@ -414,9 +402,9 @@ fn lift_instructions(
                 });
                 offset += lifted.len;
                 if is_term
-                    && records.last().map_or(false, |r| {
-                        r.ir_ops.iter().any(|op| op.op == IrOp::Return)
-                    })
+                    && records
+                        .last()
+                        .map_or(false, |r| r.ir_ops.iter().any(|op| op.op == IrOp::Return))
                 {
                     break;
                 }
@@ -438,11 +426,7 @@ fn is_terminator(op: IrOp) -> bool {
     )
 }
 
-fn build_function_from_insns(
-    name: &str,
-    entry_addr: u64,
-    insns: &[LiftedInsnRecord],
-) -> Function {
+fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRecord]) -> Function {
     if insns.is_empty() {
         return Function::new(name, BlockId(0), entry_addr);
     }
@@ -526,7 +510,14 @@ fn build_function_from_insns(
                                     }
                                 }
                             }
-                            if let Some(next) = insns.get(start_pos + 1 + (&insns[start_pos..]).iter().position(|r| std::ptr::eq(r, rec)).unwrap_or(0)) {
+                            if let Some(next) = insns.get(
+                                start_pos
+                                    + 1
+                                    + (&insns[start_pos..])
+                                        .iter()
+                                        .position(|r| std::ptr::eq(r, rec))
+                                        .unwrap_or(0),
+                            ) {
                                 if let Some(&fid) = block_starts.get(&next.addr) {
                                     let fall_bid = BlockId(fid);
                                     if !bb.successors.contains(&fall_bid) {
@@ -561,38 +552,52 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     let cond = ConditionSimplifyPass;
     let passes: &[&dyn Pass] = &[&fold, &prop, &gprop, &dce, &sccp, &cse, &gvn, &idiom, &cond];
 
-    let changes = run_to_fixedpoint(passes, ssa)
-        .context("pass pipeline failed")?;
+    let changes = run_to_fixedpoint(passes, ssa).context("pass pipeline failed")?;
 
     // Single-run passes (after fixedpoint stabilizes)
-    DeadStoreElimPass.run(ssa)
+    DeadStoreElimPass
+        .run(ssa)
         .context("dead store elimination failed")?;
-    DeadFlagElimPass.run(ssa)
+    DeadFlagElimPass
+        .run(ssa)
         .context("dead flag elimination failed")?;
-    DivisionIdiomPass.run(ssa)
+    DivisionIdiomPass
+        .run(ssa)
         .context("division idiom recovery failed")?;
-    ModuloIdiomPass.run(ssa)
+    ModuloIdiomPass
+        .run(ssa)
         .context("modulo idiom recovery failed")?;
 
-    PrologueElimPass.run(ssa)
+    PrologueElimPass
+        .run(ssa)
         .context("prologue/epilogue detection failed")?;
 
-    CppVtablePass.run(ssa)
+    CppVtablePass
+        .run(ssa)
         .context("C++ vtable dispatch detection failed")?;
 
-    CallingConventionDetectPass.run(ssa)
+    CallingConventionDetectPass
+        .run(ssa)
         .context("calling convention detection failed")?;
-    ParamInferPass.run(ssa)
+    ParamInferPass
+        .run(ssa)
         .context("parameter inference failed")?;
-    ReturnTypeInferPass.run(ssa)
+    ReturnTypeInferPass
+        .run(ssa)
         .context("return type inference failed")?;
 
-    ExpressionTreePass.run(ssa)
+    ExpressionTreePass
+        .run(ssa)
         .context("expression tree pass failed")?;
+
+    StructFieldDetectPass
+        .run(ssa)
+        .context("struct field detection failed")?;
 
     run_type_infer_bounded(ssa);
 
-    VariableMergePass.run(ssa)
+    VariableMergePass
+        .run(ssa)
         .context("variable merge pass failed")?;
 
     tracing::debug!(changes, "pass pipeline complete");
@@ -600,8 +605,8 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
 }
 
 fn run_type_infer_bounded(ssa: &mut SsaFunction) {
-    use unlace_ir::ssa::{PrimitiveType, SsaVarnode, VarnodeSlot};
     use unlace_ir::SpaceId;
+    use unlace_ir::ssa::{PrimitiveType, SsaVarnode, VarnodeSlot};
 
     let max_iterations = 50;
     for _ in 0..max_iterations {
@@ -611,7 +616,8 @@ fn run_type_infer_bounded(ssa: &mut SsaFunction) {
 
         for (&bid, block) in &ssa.function.blocks {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
-                let output_sv = ssa.var_map
+                let output_sv = ssa
+                    .var_map
                     .get(&(bid, insn_idx, VarnodeSlot::Output))
                     .copied();
                 let input_sv = |idx: usize| -> Option<SsaVarnode> {
@@ -624,8 +630,11 @@ fn run_type_infer_bounded(ssa: &mut SsaFunction) {
                     let ty = match insn.op.type_family() {
                         Some('b') => PrimitiveType::Bool,
                         Some('f') => {
-                            if out.base.size == 4 { PrimitiveType::Float }
-                            else { PrimitiveType::Double }
+                            if out.base.size == 4 {
+                                PrimitiveType::Float
+                            } else {
+                                PrimitiveType::Double
+                            }
                         }
                         Some('i') | Some(_) => PrimitiveType::Int(out.base.size),
                         None => continue,
@@ -634,13 +643,18 @@ fn run_type_infer_bounded(ssa: &mut SsaFunction) {
                 }
 
                 for (idx, inp) in insn.inputs.iter().enumerate() {
-                    if inp.space == SpaceId::Const { continue; }
+                    if inp.space == SpaceId::Const {
+                        continue;
+                    }
                     if let Some(sv) = input_sv(idx) {
                         let ty = match insn.op.input_type_family(idx) {
                             'b' => PrimitiveType::Bool,
                             'f' => {
-                                if sv.base.size == 4 { PrimitiveType::Float }
-                                else { PrimitiveType::Double }
+                                if sv.base.size == 4 {
+                                    PrimitiveType::Float
+                                } else {
+                                    PrimitiveType::Double
+                                }
                             }
                             _ => PrimitiveType::Int(sv.base.size),
                         };
@@ -657,11 +671,7 @@ fn run_type_infer_bounded(ssa: &mut SsaFunction) {
 }
 
 pub fn ir_node_count(ssa: &SsaFunction) -> usize {
-    ssa.function
-        .blocks
-        .values()
-        .map(|b| b.insns.len())
-        .sum()
+    ssa.function.blocks.values().map(|b| b.insns.len()).sum()
 }
 
 pub fn warn_if_large_ir(func_name: &str, ssa: &SsaFunction) {
@@ -739,23 +749,38 @@ pub fn decompile_function_with_symbols(
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         blocks = ir_func.blocks.len(),
-        insns = ir_func.blocks.values().map(|b| b.insns.len()).sum::<usize>(),
+        insns = ir_func
+            .blocks
+            .values()
+            .map(|b| b.insns.len())
+            .sum::<usize>(),
         "lift done"
     );
 
     let t = Instant::now();
     let merges = unlace_struct::merge_linear_blocks(&mut ir_func);
-    tracing::trace!(elapsed_us = t.elapsed().as_micros() as u64, merges, "merge_linear_blocks done");
+    tracing::trace!(
+        elapsed_us = t.elapsed().as_micros() as u64,
+        merges,
+        "merge_linear_blocks done"
+    );
 
     let t = Instant::now();
     let splits = unlace_struct::split_irreducible_entries(&mut ir_func);
-    tracing::trace!(elapsed_us = t.elapsed().as_micros() as u64, splits, "split_irreducible_entries done");
+    tracing::trace!(
+        elapsed_us = t.elapsed().as_micros() as u64,
+        splits,
+        "split_irreducible_entries done"
+    );
 
     check_timeout(deadline, &entry.name)?;
 
     let t = Instant::now();
     let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
-    tracing::trace!(elapsed_us = t.elapsed().as_micros() as u64, "build_ssa done");
+    tracing::trace!(
+        elapsed_us = t.elapsed().as_micros() as u64,
+        "build_ssa done"
+    );
 
     warn_if_large_ir(&entry.name, &ssa);
     check_timeout(deadline, &entry.name)?;
@@ -764,14 +789,20 @@ pub fn decompile_function_with_symbols(
     if let Err(e) = run_passes(&mut ssa) {
         tracing::warn!(err = %e, "pass pipeline failed; emitting unoptimized");
     }
-    tracing::trace!(elapsed_us = t.elapsed().as_micros() as u64, "run_passes done");
+    tracing::trace!(
+        elapsed_us = t.elapsed().as_micros() as u64,
+        "run_passes done"
+    );
 
     check_timeout(deadline, &entry.name)?;
 
     let t = Instant::now();
     let symbols = build_symbol_table_with_functions(image, discovered);
     let result = emit_output(emit, &ssa, dwarf, &symbols, &image.string_table);
-    tracing::trace!(elapsed_us = t.elapsed().as_micros() as u64, "emit_output done");
+    tracing::trace!(
+        elapsed_us = t.elapsed().as_micros() as u64,
+        "emit_output done"
+    );
     result
 }
 
@@ -793,8 +824,8 @@ pub fn emit_output(
         EmitFormat::Ir => Ok(unlace_output::dump_ir(ssa)),
         EmitFormat::CfgDot => Ok(unlace_output::emit_cfg_dot(ssa)),
         EmitFormat::C => {
-            let mut hir = unlace_struct::structure(ssa)
-                .context("control-flow structuring failed")?;
+            let mut hir =
+                unlace_struct::structure(ssa).context("control-flow structuring failed")?;
             unlace_struct::ternary_recovery(&mut hir);
             unlace_struct::short_circuit_recovery(&mut hir);
             unlace_struct::flatten_if_else_chains(&mut hir);
@@ -815,8 +846,8 @@ pub fn emit_output(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unlace_loader::{BinaryImage, Section, SectionFlags, Endian};
     use unlace_ir::ArchId;
+    use unlace_loader::{BinaryImage, Endian, Section, SectionFlags};
 
     fn make_text_image(code: Vec<u8>, base: u64) -> BinaryImage {
         let size = code.len() as u64;
@@ -914,8 +945,14 @@ mod tests {
         assert!(addrs.contains(&(base + 0x20)), "push r14: {addrs:?}");
         assert!(addrs.contains(&(base + 0x40)), "push r13: {addrs:?}");
         assert!(addrs.contains(&(base + 0x60)), "push r12: {addrs:?}");
-        assert!(addrs.contains(&(base + 0x80)), "push rbx aligned: {addrs:?}");
-        assert!(!addrs.contains(&(base + 0x83)), "push rbx unaligned should not match: {addrs:?}");
+        assert!(
+            addrs.contains(&(base + 0x80)),
+            "push rbx aligned: {addrs:?}"
+        );
+        assert!(
+            !addrs.contains(&(base + 0x83)),
+            "push rbx unaligned should not match: {addrs:?}"
+        );
         assert!(addrs.contains(&(base + 0xA0)), "endbr64: {addrs:?}");
     }
 
@@ -929,19 +966,19 @@ mod tests {
         let mut code = vec![0xCC; 0x40];
 
         // Real function at 0x1000: push rbp; mov rbp, rsp; push r15; push r14; push r13; push r12; ret
-        code[0x00] = 0x55;             // push rbp
-        code[0x01] = 0x48;             // mov rbp, rsp (rex.w)
+        code[0x00] = 0x55; // push rbp
+        code[0x01] = 0x48; // mov rbp, rsp (rex.w)
         code[0x02] = 0x89;
         code[0x03] = 0xe5;
-        code[0x04] = 0x41;             // push r15  ← would have been a false positive
+        code[0x04] = 0x41; // push r15  ← would have been a false positive
         code[0x05] = 0x57;
-        code[0x06] = 0x41;             // push r14
+        code[0x06] = 0x41; // push r14
         code[0x07] = 0x56;
-        code[0x08] = 0x41;             // push r13
+        code[0x08] = 0x41; // push r13
         code[0x09] = 0x55;
-        code[0x0A] = 0x41;             // push r12
+        code[0x0A] = 0x41; // push r12
         code[0x0B] = 0x54;
-        code[0x0C] = 0xC3;             // ret
+        code[0x0C] = 0xC3; // ret
 
         let image = make_text_image(code, base);
         let result = scan_for_prologues(&image);
@@ -1026,14 +1063,21 @@ mod tests {
         code[0x01] = 0x48;
         code[0x02] = 0x89;
         code[0x03] = 0xe5;
-        code[0x04] = 0x41; code[0x05] = 0x57;
-        code[0x06] = 0x41; code[0x07] = 0x56;
-        code[0x08] = 0x41; code[0x09] = 0x55;
-        code[0x0A] = 0x41; code[0x0B] = 0x54;
+        code[0x04] = 0x41;
+        code[0x05] = 0x57;
+        code[0x06] = 0x41;
+        code[0x07] = 0x56;
+        code[0x08] = 0x41;
+        code[0x09] = 0x55;
+        code[0x0A] = 0x41;
+        code[0x0B] = 0x54;
         code[0x80] = 0xC3;
 
         // Function 2: starts at 0xA0 (16-byte aligned, preceded by 0xCC)
-        code[0xA0] = 0xF3; code[0xA1] = 0x0F; code[0xA2] = 0x1E; code[0xA3] = 0xFA;
+        code[0xA0] = 0xF3;
+        code[0xA1] = 0x0F;
+        code[0xA2] = 0x1E;
+        code[0xA3] = 0xFA;
 
         let image = make_text_image(code, base);
         let result = scan_for_prologues(&image);

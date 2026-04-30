@@ -180,3 +180,15 @@ Refreshed all 8 golden fixtures capturing combined effect of Wave 1 changes (P10
 | P10-7 memcpy/memset idiom | Unrolled memory operation detection |
 
 Evidence: `.sisyphus/evidence/p10-8-delta.txt`
+
+## P10-9: Struct Field Detection from base+const Load/Store (2026-04-30)
+
+Added `StructFieldDetectPass`, a single-function SSA analysis that groups `LOAD`/`STORE` memory accesses by common SSA base varnode.
+
+### Key Decisions
+- Recognizes both direct `LOAD(ram, base)` as offset 0 and `LOAD/STORE(ram, INT_ADD(base, const), ...)` as field accesses at the constant offset.
+- Uses only `BTreeMap` for deterministic grouping: `base → offset → access_size`.
+- Emits `Type::Struct { name, fields: Vec<StructFieldType> }` into `SsaFunction::composite_var_types` when a base has 2–32 distinct offsets.
+- Field names are intentionally mechanical (`field_<offset>`); struct names use the base varnode offset (`struct_<base_offset_hex>`).
+- Access size maps to unsigned primitives, with 16-byte fields represented as `PrimitiveType::UnsignedInt(16)` so the C printer can render `_OWORD`.
+- Wired before type inference and variable merging so composite types seed primitive pointer inference and survive to C output.

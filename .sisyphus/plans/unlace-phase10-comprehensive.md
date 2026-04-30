@@ -661,7 +661,7 @@ Max Concurrent: 5 (Wave 4)
 
 > Per Metis: existing `type_infer.rs` (1115 lines), `detect_array_strides()`, `composite_var_types`, `dwarf.rs` struct recovery, `variable_merge.rs` (891 lines) all live. Wave 2 capped at Tier 1+2: struct fields from access patterns, bitfield extraction, 1-level pointer-chain. NO union discrimination, NO function pointer tables, NO interprocedural propagation.
 
-- [ ] P10-9. Struct field detection from base + const_offset Load patterns
+- [x] P10-9. Struct field detection from base + const_offset Load patterns
 
   **What to do**:
   - WRITE `crates/unlace-passes/src/struct_field_detect.rs` (new pass).

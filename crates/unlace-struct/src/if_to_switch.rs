@@ -185,8 +185,9 @@ fn try_extract_chain(
                         if arms.len() < MIN_CASES {
                             return None;
                         }
+                        // `?` over `unwrap()`: malformed AST → `None` not panic.
                         return Some(IfChain {
-                            switch_expr: switch_expr.unwrap(),
+                            switch_expr: switch_expr?,
                             arms,
                             default: Some(else_nodes.clone()),
                         });
@@ -197,7 +198,7 @@ fn try_extract_chain(
                             return None;
                         }
                         return Some(IfChain {
-                            switch_expr: switch_expr.unwrap(),
+                            switch_expr: switch_expr?,
                             arms,
                             default: Some(else_nodes.clone()),
                         });
@@ -208,7 +209,7 @@ fn try_extract_chain(
                             return None;
                         }
                         return Some(IfChain {
-                            switch_expr: switch_expr.unwrap(),
+                            switch_expr: switch_expr?,
                             arms,
                             default: None,
                         });
@@ -562,6 +563,40 @@ mod tests {
                 assert_eq!(default_body.len(), 1);
             }
             other => panic!("expected Switch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn malformed_if_chain_with_empty_def_map_does_not_panic() {
+        // Simulates a C++ exception edge: HIR has If nodes whose conditions
+        // reference SsaVarnodes that aren't in the SSA def_map. The pass must
+        // gracefully decline the rewrite instead of panicking on
+        // `switch_expr.unwrap()`.
+        let cond = sv(256, 1, 1);
+        let body = vec![HirNode::If {
+            cond,
+            then_body: vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2000)],
+            else_body: Some(vec![HirNode::If {
+                cond,
+                then_body: vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2010)],
+                else_body: Some(vec![HirNode::If {
+                    cond,
+                    then_body: vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2020)],
+                    else_body: None,
+                }]),
+            }]),
+        }];
+
+        let mut func = make_hir(body);
+        let empty_map: BTreeMap<SsaVarnode, IrInsn> = BTreeMap::new();
+        func.body = rewrite_nodes(std::mem::take(&mut func.body), &empty_map);
+
+        match &func.body[0] {
+            HirNode::Switch { .. } => {
+                panic!("should not produce Switch when def_map can't resolve the expression")
+            }
+            HirNode::If { .. } => {}
+            other => panic!("expected If preserved, got {other:?}"),
         }
     }
 }

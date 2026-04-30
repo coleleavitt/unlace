@@ -54,9 +54,10 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
         panic_sites: func
             .panic_sites
             .iter()
-            .map(|(&(_bid, idx), kind)| {
-                let block = &func.function.blocks[&_bid];
-                (block.insns[idx].addr, kind.clone())
+            .filter_map(|(&(bid, idx), kind)| {
+                let block = func.function.blocks.get(&bid)?;
+                let insn = block.insns.get(idx)?;
+                Some((insn.addr, kind.clone()))
             })
             .collect(),
         noreturn: func.noreturn,
@@ -700,13 +701,11 @@ impl<'a> StructureCtx<'a> {
             else_body,
         };
 
-        let mut result = Vec::new();
-        result.append(&mut pre_stmts);
-        result.push(if_node);
-
-        let combined = if result.len() == 1 {
-            result.pop().expect("len == 1")
+        let combined = if pre_stmts.is_empty() {
+            if_node
         } else {
+            let mut result = pre_stmts;
+            result.push(if_node);
             HirNode::Block(result)
         };
 
@@ -770,10 +769,7 @@ impl<'a> StructureCtx<'a> {
                 cond,
                 body: body_nodes,
             })
-        } else if latch_has_cbranch {
-            // ── Pattern: do-while ──
-            let latch = single_latch.expect("guarded by is_some_and check");
-
+        } else if let (true, Some(latch)) = (latch_has_cbranch, single_latch) {
             // Verify latch has back-edge to header and an exit edge.
             let latch_edges = self.func.cfg.edges_from(latch);
             let has_back_to_header = latch_edges.iter().any(|(tgt, _)| *tgt == header);
@@ -1437,7 +1433,7 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
 }
 
 fn try_recover_for_at(nodes: &[HirNode], idx: usize) -> Option<HirNode> {
-    let init_insn = match &nodes[idx] {
+    let init_insn = match nodes.get(idx)? {
         HirNode::Statement(insn) => insn.clone(),
         _ => return None,
     };
@@ -1447,7 +1443,7 @@ fn try_recover_for_at(nodes: &[HirNode], idx: usize) -> Option<HirNode> {
         return None;
     }
 
-    let (cond, body) = match &nodes[idx + 1] {
+    let (cond, body) = match nodes.get(idx + 1)? {
         HirNode::While { cond, body } => (*cond, body.clone()),
         _ => return None,
     };
@@ -3310,5 +3306,38 @@ mod tests {
                 hir.body,
             );
         }
+    }
+
+    #[test]
+    fn structure_does_not_panic_on_stale_panic_site_indices() {
+        // Regression: panic_sites populated by an earlier pass may reference
+        // (BlockId, idx) pairs that a later pass has removed (e.g. block
+        // dropped or instructions truncated). The structurer must not index
+        // unconditionally — out-of-range entries are silently dropped.
+        use unlace_ir::ssa::PanicKind;
+
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("stale_panic_sites", BlockId(0), 0x1000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0x1000));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0x1008));
+        func.insert_block(bb0);
+
+        let mut ssa = build_ssa(func);
+        ssa.panic_sites.insert((BlockId(0), 99), PanicKind::Panic);
+        ssa.panic_sites.insert((BlockId(42), 0), PanicKind::Abort);
+        ssa.panic_sites.insert((BlockId(0), 0), PanicKind::BoundsCheck);
+
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        assert_eq!(
+            hir.panic_sites.len(),
+            1,
+            "only the valid (BlockId(0), 0) entry should survive"
+        );
+        assert!(hir.panic_sites.contains_key(&0x1000));
     }
 }

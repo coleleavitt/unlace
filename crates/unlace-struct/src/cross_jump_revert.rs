@@ -66,14 +66,19 @@ pub fn cross_jump_revert(func: &mut SsaFunction) {
     }
 
     for (a_bid, b_bid, tail_len) in splits {
-        let a_block = &func.function.blocks[&a_bid];
-        let b_block = &func.function.blocks[&b_bid];
+        let Some(a_block) = func.function.blocks.get(&a_bid) else {
+            tracing::warn!(?a_bid, "cross_jump_revert: block disappeared mid-pass");
+            continue;
+        };
+        let Some(b_block) = func.function.blocks.get(&b_bid) else {
+            tracing::warn!(?b_bid, "cross_jump_revert: block disappeared mid-pass");
+            continue;
+        };
 
         if a_block.insns.len() < tail_len || b_block.insns.len() < tail_len {
             continue;
         }
 
-        // Don't split if the tail IS the entire block (nothing left to truncate).
         if a_block.insns.len() == tail_len || b_block.insns.len() == tail_len {
             continue;
         }
@@ -96,12 +101,16 @@ pub fn cross_jump_revert(func: &mut SsaFunction) {
         b_tail_block.insns = a_tail_insns;
         b_tail_block.successors = b_succs;
 
-        let a_block = func.function.blocks.get_mut(&a_bid).unwrap();
+        let Some(a_block) = func.function.blocks.get_mut(&a_bid) else {
+            continue;
+        };
         a_block.insns.truncate(a_block.insns.len() - tail_len);
         a_block.insns.push(IrInsn::without_output(IrOp::Branch, smallvec![], 0));
         a_block.successors = smallvec![a_tail_id];
 
-        let b_block = func.function.blocks.get_mut(&b_bid).unwrap();
+        let Some(b_block) = func.function.blocks.get_mut(&b_bid) else {
+            continue;
+        };
         b_block.insns.truncate(b_block.insns.len() - tail_len);
         b_block.insns.push(IrInsn::without_output(IrOp::Branch, smallvec![], 0));
         b_block.successors = smallvec![b_tail_id];

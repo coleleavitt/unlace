@@ -812,6 +812,79 @@ mod tests {
         assert!(text.flags.contains(SectionFlags::EXEC));
     }
 
+    /// Mach-O 64-bit with one LC_FUNCTION_STARTS pointing at two synthetic
+    /// function entries (text vmaddr + 0x100, +0x140).
+    fn macho64_with_function_starts() -> Vec<u8> {
+        let mut buf = vec![0u8; 0x300];
+
+        let seg_cmdsize: u32 = 152;
+        let symtab_cmdsize: u32 = 24;
+        let funcstarts_cmdsize: u32 = 16;
+        let sizeofcmds: u32 = seg_cmdsize + symtab_cmdsize + funcstarts_cmdsize;
+        let funcstarts_dataoff: u32 = 0x180;
+        let funcstarts_datasize: u32 = 4;
+
+        buf[0..4].copy_from_slice(&macho::MH_MAGIC_64.to_le_bytes());
+        buf[4..8].copy_from_slice(&(macho::CPU_TYPE_X86_64 as i32).to_le_bytes());
+        buf[8..12].copy_from_slice(&3u32.to_le_bytes());
+        buf[12..16].copy_from_slice(&2u32.to_le_bytes());
+        buf[16..20].copy_from_slice(&3u32.to_le_bytes());
+        buf[20..24].copy_from_slice(&sizeofcmds.to_le_bytes());
+
+        let seg = 0x20usize;
+        buf[seg..seg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[seg + 4..seg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        buf[seg + 24..seg + 32].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 32..seg + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 48..seg + 56].copy_from_slice(&0x200u64.to_le_bytes());
+        buf[seg + 56..seg + 60].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 60..seg + 64].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 64..seg + 68].copy_from_slice(&1u32.to_le_bytes());
+
+        let sec = seg + 72;
+        buf[sec..sec + 6].copy_from_slice(b"__text");
+        buf[sec + 16..sec + 22].copy_from_slice(b"__TEXT");
+        buf[sec + 32..sec + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes());
+        buf[sec + 48..sec + 52].copy_from_slice(&0x100u32.to_le_bytes());
+        buf[sec + 64..sec + 68]
+            .copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+
+        let sym_cmd = seg + seg_cmdsize as usize;
+        buf[sym_cmd..sym_cmd + 4].copy_from_slice(&0x02u32.to_le_bytes());
+        buf[sym_cmd + 4..sym_cmd + 8].copy_from_slice(&symtab_cmdsize.to_le_bytes());
+
+        let fs_cmd = sym_cmd + symtab_cmdsize as usize;
+        buf[fs_cmd..fs_cmd + 4].copy_from_slice(&macho::LC_FUNCTION_STARTS.to_le_bytes());
+        buf[fs_cmd + 4..fs_cmd + 8].copy_from_slice(&funcstarts_cmdsize.to_le_bytes());
+        buf[fs_cmd + 8..fs_cmd + 12].copy_from_slice(&funcstarts_dataoff.to_le_bytes());
+        buf[fs_cmd + 12..fs_cmd + 16].copy_from_slice(&funcstarts_datasize.to_le_bytes());
+
+        buf[0x100] = 0xC3;
+
+        let fs = funcstarts_dataoff as usize;
+        buf[fs] = 0x80;
+        buf[fs + 1] = 0x02;
+        buf[fs + 2] = 0x40;
+        buf[fs + 3] = 0x00;
+
+        buf
+    }
+
+    #[test]
+    fn test_macho_function_starts_recovered() {
+        let bin = macho64_with_function_starts();
+        let img = MachoLoader::load(&bin).expect("Mach-O with LC_FUNCTION_STARTS must load");
+
+        let entry_a = img.symbols.get(&0x1100).expect("first function recovered");
+        assert_eq!(entry_a.kind, SymbolKind::Function);
+        assert_eq!(entry_a.name, "sub_1100");
+
+        let entry_b = img.symbols.get(&0x1140).expect("second function recovered");
+        assert_eq!(entry_b.name, "sub_1140");
+    }
+
     #[test]
     fn test_text_section_not_writable() {
         let data = minimal_macho64();

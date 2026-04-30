@@ -731,43 +731,48 @@ pub fn decompile_function_with_symbols(
     dwarf: Option<&DwarfInfo>,
     discovered: &[FunctionEntry],
 ) -> Result<String> {
+    let _span = tracing::debug_span!("decompile_function", func = %entry.name).entered();
     let deadline = Instant::now() + config.timeout;
 
+    let t = Instant::now();
     let mut ir_func = lift_function(image, lifter, entry)?;
+    tracing::trace!(
+        elapsed_us = t.elapsed().as_micros() as u64,
+        blocks = ir_func.blocks.len(),
+        insns = ir_func.blocks.values().map(|b| b.insns.len()).sum::<usize>(),
+        "lift done"
+    );
 
+    let t = Instant::now();
     let merges = unlace_struct::merge_linear_blocks(&mut ir_func);
-    if merges > 0 {
-        tracing::debug!(
-            func = %entry.name,
-            merges,
-            "block-merge collapsed linear chains pre-SSA"
-        );
-    }
+    tracing::trace!(elapsed_us = t.elapsed().as_micros() as u64, merges, "merge_linear_blocks done");
 
+    let t = Instant::now();
     let splits = unlace_struct::split_irreducible_entries(&mut ir_func);
-    if splits > 0 {
-        tracing::debug!(
-            func = %entry.name,
-            splits,
-            "node-split broke irreducible regions pre-SSA"
-        );
-    }
+    tracing::trace!(elapsed_us = t.elapsed().as_micros() as u64, splits, "split_irreducible_entries done");
 
     check_timeout(deadline, &entry.name)?;
 
+    let t = Instant::now();
     let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
+    tracing::trace!(elapsed_us = t.elapsed().as_micros() as u64, "build_ssa done");
 
     warn_if_large_ir(&entry.name, &ssa);
     check_timeout(deadline, &entry.name)?;
 
+    let t = Instant::now();
     if let Err(e) = run_passes(&mut ssa) {
-        tracing::warn!(name = %entry.name, err = %e, "pass pipeline failed; emitting unoptimized");
+        tracing::warn!(err = %e, "pass pipeline failed; emitting unoptimized");
     }
+    tracing::trace!(elapsed_us = t.elapsed().as_micros() as u64, "run_passes done");
 
     check_timeout(deadline, &entry.name)?;
 
+    let t = Instant::now();
     let symbols = build_symbol_table_with_functions(image, discovered);
-    emit_output(emit, &ssa, dwarf, &symbols, &image.string_table)
+    let result = emit_output(emit, &ssa, dwarf, &symbols, &image.string_table);
+    tracing::trace!(elapsed_us = t.elapsed().as_micros() as u64, "emit_output done");
+    result
 }
 
 fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {

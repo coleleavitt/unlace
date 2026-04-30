@@ -170,6 +170,8 @@ pub struct BinaryImage {
     /// Built by scanning `.rodata` and `.data` sections for null-terminated
     /// printable ASCII sequences (minimum 4 characters).
     pub string_table: BTreeMap<u64, String>,
+    /// TLS callback function virtual addresses (PE only). Empty for ELF/Mach-O.
+    pub tls_callbacks: Vec<u64>,
 }
 
 impl BinaryImage {

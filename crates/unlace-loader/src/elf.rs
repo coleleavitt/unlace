@@ -66,6 +66,7 @@ where
         plt_symbols,
         relocations,
         string_table,
+        tls_callbacks: Vec::new(),
     })
 }
 

@@ -76,8 +76,10 @@ where
 
     load_exports(&file, &mut symbols);
     load_imports(&file, &mut symbols);
+    load_delay_imports::<Pe>(&file, data, &mut symbols);
 
     let relocations = load_base_relocations(&file, data);
+    let tls_callbacks = load_tls_callbacks::<Pe>(&file, data);
 
     Ok(BinaryImage {
         arch,
@@ -88,7 +90,157 @@ where
         plt_symbols: BTreeMap::new(),
         relocations,
         string_table: BTreeMap::new(),
+        tls_callbacks,
     })
+}
+
+/// Walk `IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT` and merge each delay-bound thunk
+/// into `out` as `dll!function` (mirroring [`load_imports`]'s convention).
+///
+/// The delay-load mechanism defers DLL resolution until first call; the IAT
+/// stays empty at load time and the runtime delay loader patches it on demand.
+/// Like the eager IAT, we record names at addr=0 because the true VA depends
+/// on runtime fixup. Ordinal-only imports use the literal `#<n>` form.
+fn load_delay_imports<Pe>(file: &PeFile<Pe>, data: &[u8], out: &mut BTreeMap<u64, Symbol>)
+where
+    Pe: ImageNtHeaders,
+{
+    let table = match file.data_directories().delay_load_import_table(data, &file.section_table()) {
+        Ok(Some(t)) => t,
+        Ok(None) => return,
+        Err(err) => {
+            tracing::debug!(?err, "PE delay-load directory unreadable");
+            return;
+        }
+    };
+
+    let mut descriptors = match table.descriptors() {
+        Ok(d) => d,
+        Err(err) => {
+            tracing::debug!(?err, "PE delay-load descriptors unreadable");
+            return;
+        }
+    };
+
+    while let Ok(Some(desc)) = descriptors.next() {
+        let lib = match table.name(desc.dll_name_rva.get(object::endian::LittleEndian)) {
+            Ok(name) => String::from_utf8_lossy(name).to_string(),
+            Err(_) => continue,
+        };
+
+        let int_rva = desc.import_name_table_rva.get(object::endian::LittleEndian);
+        let mut thunks = match table.thunks(int_rva) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+
+        loop {
+            let thunk = match thunks.next::<Pe>() {
+                Ok(Some(t)) => t,
+                Ok(None) | Err(_) => break,
+            };
+            let name = match table.import::<Pe>(thunk) {
+                Ok(object::read::pe::Import::Name(_, n)) => String::from_utf8_lossy(n).to_string(),
+                Ok(object::read::pe::Import::Ordinal(n)) => format!("#{n}"),
+                Err(_) => continue,
+            };
+            if name.is_empty() {
+                continue;
+            }
+            let qualified = format!("{lib}!{name}");
+            out.entry(0).or_insert(Symbol {
+                name: qualified,
+                addr: 0,
+                size: 0,
+                kind: SymbolKind::Unknown,
+            });
+        }
+    }
+}
+
+/// Read `IMAGE_DIRECTORY_ENTRY_TLS` and return the TLS callback VAs.
+///
+/// The TLS directory's `AddressOfCallBacks` field points to a null-terminated
+/// array of absolute VA pointers (PE32: 4 bytes each, PE32+: 8 bytes). These
+/// run before the entry point on thread create/destroy and are a popular
+/// anti-debugging / packer-stub injection vector.
+fn load_tls_callbacks<Pe>(file: &PeFile<Pe>, data: &[u8]) -> Vec<u64>
+where
+    Pe: ImageNtHeaders,
+{
+    let dir = match file.data_directories().get(pe::IMAGE_DIRECTORY_ENTRY_TLS) {
+        Some(d) => d,
+        None => return Vec::new(),
+    };
+    let dir_data = match dir.data(data, &file.section_table()) {
+        Ok(d) => d,
+        Err(err) => {
+            tracing::debug!(?err, "PE TLS directory unreadable");
+            return Vec::new();
+        }
+    };
+
+    let image_base = file.nt_headers().optional_header().image_base();
+    let is_pe64 = std::mem::size_of::<Pe::ImageOptionalHeader>() > 96;
+    let callbacks_va = if is_pe64 {
+        if dir_data.len() < 24 {
+            return Vec::new();
+        }
+        u64::from_le_bytes(dir_data[24..32].try_into().unwrap_or([0; 8]))
+    } else {
+        if dir_data.len() < 16 {
+            return Vec::new();
+        }
+        u64::from(u32::from_le_bytes(dir_data[12..16].try_into().unwrap_or([0; 4])))
+    };
+
+    if callbacks_va == 0 {
+        return Vec::new();
+    }
+
+    let callbacks_rva = callbacks_va.saturating_sub(image_base);
+    let section_with_cb = match find_section_for_rva(file, callbacks_rva) {
+        Some(s) => s,
+        None => return Vec::new(),
+    };
+
+    let mut out = Vec::new();
+    let stride: usize = if is_pe64 { 8 } else { 4 };
+    let section_offset = (callbacks_rva - section_with_cb.0) as usize;
+    let section_data = &section_with_cb.1[section_offset..];
+    for chunk in section_data.chunks_exact(stride) {
+        let cb = if stride == 8 {
+            u64::from_le_bytes(chunk.try_into().unwrap_or([0; 8]))
+        } else {
+            u64::from(u32::from_le_bytes(chunk.try_into().unwrap_or([0; 4])))
+        };
+        if cb == 0 {
+            break;
+        }
+        out.push(cb);
+        if out.len() >= 256 {
+            break;
+        }
+    }
+    out
+}
+
+fn find_section_for_rva<'data, Pe>(
+    file: &PeFile<'data, Pe>,
+    rva: u64,
+) -> Option<(u64, &'data [u8])>
+where
+    Pe: ImageNtHeaders,
+{
+    for sec in file.sections() {
+        let start = sec.address() - file.nt_headers().optional_header().image_base();
+        let size = sec.size();
+        if rva >= start && rva < start + size {
+            let data = sec.data().ok()?;
+            return Some((start, data));
+        }
+    }
+    None
 }
 
 /// Parse the PE base relocation directory into resolved [`Relocation`] entries.

@@ -835,6 +835,7 @@ mod tests {
             plt_symbols: BTreeMap::new(),
             relocations: Vec::new(),
             string_table: BTreeMap::new(),
+            tls_callbacks: Vec::new(),
         }
     }
 

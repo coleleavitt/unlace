@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
-use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaVarnode};
+use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::DwarfInfo;
 use unlace_struct::{HirFunction, HirNode, SwitchCase};
@@ -15,6 +15,89 @@ use unlace_struct::{HirFunction, HirNode, SwitchCase};
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/// Metadata for the block comment emitted above each decompiled function.
+///
+/// Built from [`SsaFunction`] via [`FunctionHeaderInfo::from_ssa`], or
+/// constructed manually for testing.
+#[derive(Clone, Debug, Default)]
+pub struct FunctionHeaderInfo {
+    /// Function name (e.g. `sub_401000`).
+    pub name: String,
+    /// Machine address of the function entry point.
+    pub address: u64,
+    /// Approximate code size in bytes (last instruction addr − first + est. insn size).
+    pub size: u64,
+    /// Detected calling convention.
+    pub convention: String,
+    /// Stack frame size in bytes (sum of stack variable sizes or frame extent).
+    pub stack_frame: u64,
+    /// Sorted list of callee names/addresses referenced by CALL instructions.
+    pub callees: Vec<String>,
+}
+
+impl FunctionHeaderInfo {
+    /// Build header metadata from an [`SsaFunction`].
+    pub fn from_ssa(ssa: &SsaFunction) -> Self {
+        let name = ssa.function.name.clone();
+        let address = ssa.function.addr;
+        let convention = ssa.calling_convention.to_string();
+
+        // Approximate size: span from lowest to highest instruction address.
+        let (mut min_addr, mut max_addr) = (u64::MAX, 0u64);
+        for block in ssa.function.blocks.values() {
+            for insn in &block.insns {
+                if insn.addr != 0 {
+                    min_addr = min_addr.min(insn.addr);
+                    max_addr = max_addr.max(insn.addr);
+                }
+            }
+        }
+        // Add estimated last-instruction size (conservative 4 bytes).
+        let size = if min_addr <= max_addr {
+            (max_addr - min_addr).saturating_add(4)
+        } else {
+            0
+        };
+
+        // Stack frame: compute span from lowest to highest stack var offset + size.
+        let stack_frame = if ssa.stack_vars.is_empty() {
+            0
+        } else {
+            let mut lo = i64::MAX;
+            let mut hi = i64::MIN;
+            for sv in ssa.stack_vars.values() {
+                let access_size = match sv.ty {
+                    PrimitiveType::Int(w) | PrimitiveType::UnsignedInt(w) => w as i64,
+                    PrimitiveType::Bool => 1,
+                    PrimitiveType::Float => 4,
+                    PrimitiveType::Double => 8,
+                    PrimitiveType::Ptr => 8,
+                    PrimitiveType::Unknown => 8,
+                };
+                lo = lo.min(sv.offset);
+                hi = hi.max(sv.offset + access_size);
+            }
+            (hi - lo).unsigned_abs()
+        };
+
+        // Collect unique callee targets from CALL instructions (deterministic order).
+        let mut callees_set = BTreeSet::new();
+        for block in ssa.function.blocks.values() {
+            for insn in &block.insns {
+                if insn.op == IrOp::Call && !insn.inputs.is_empty() {
+                    let target = &insn.inputs[0];
+                    if target.space == SpaceId::Const {
+                        callees_set.insert(format!("sub_{:x}", target.offset));
+                    }
+                }
+            }
+        }
+        let callees: Vec<String> = callees_set.into_iter().collect();
+
+        Self { name, address, size, convention, stack_frame, callees }
+    }
+}
 
 /// Render a [`HirFunction`] as valid C source.
 ///
@@ -29,6 +112,18 @@ pub fn print_c(func: &HirFunction) -> String {
 }
 
 pub fn print_c_with_dwarf(func: &HirFunction, dwarf: Option<&DwarfInfo>) -> String {
+    print_c_full(func, dwarf, None)
+}
+
+/// Render a [`HirFunction`] with optional DWARF info and function header metadata.
+///
+/// When `header` is `Some`, a block comment with function metadata is emitted
+/// before the function signature (after the typedefs).
+pub fn print_c_full(
+    func: &HirFunction,
+    dwarf: Option<&DwarfInfo>,
+    header: Option<&FunctionHeaderInfo>,
+) -> String {
     let mut ctx = PrintCtx::new(dwarf, func.panic_sites.clone());
 
     collect_varnodes(&func.body, &mut ctx);
@@ -38,6 +133,10 @@ pub fn print_c_with_dwarf(func: &HirFunction, dwarf: Option<&DwarfInfo>) -> Stri
 
     out.push_str(IDA_TYPEDEFS);
     out.push('\n');
+
+    if let Some(hdr) = header {
+        emit_function_header(hdr, &mut out);
+    }
 
     let dwarf_func = dwarf.and_then(|d| d.functions.get(&func.addr));
 
@@ -111,6 +210,32 @@ pub fn print_c_with_dwarf(func: &HirFunction, dwarf: Option<&DwarfInfo>) -> Stri
 
     out.push_str("}\n");
     out
+}
+
+// ---------------------------------------------------------------------------
+// Function header comment
+// ---------------------------------------------------------------------------
+
+fn emit_function_header(hdr: &FunctionHeaderInfo, out: &mut String) {
+    let _ = writeln!(out, "/*");
+    let _ = writeln!(out, " * Function:   {}", hdr.name);
+    let _ = writeln!(out, " * Address:    0x{:x}", hdr.address);
+    let _ = writeln!(
+        out,
+        " * Size:       0x{:x} ({} bytes)",
+        hdr.size, hdr.size,
+    );
+    let _ = writeln!(out, " * Convention: {}", hdr.convention);
+    let _ = writeln!(
+        out,
+        " * Stack frame: 0x{:x} ({} bytes)",
+        hdr.stack_frame, hdr.stack_frame,
+    );
+    if !hdr.callees.is_empty() {
+        let _ = writeln!(out, " * Xrefs to:   {}", hdr.callees.join(", "));
+    }
+    let _ = writeln!(out, " * Xrefs from: unknown");
+    let _ = writeln!(out, " */");
 }
 
 // ---------------------------------------------------------------------------

@@ -10,9 +10,9 @@ use unlace_loader::{BinaryImage, DwarfInfo, SymbolKind};
 use unlace_passes::{
     CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
     CopyPropagationPass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
-    DivisionIdiomPass, ExpressionTreePass, IdiomRecognitionPass, ModuloIdiomPass,
-    ParamInferPass, PrologueElimPass, ReturnTypeInferPass, SccpPass, VariableMergePass, Pass,
-    run_to_fixedpoint,
+    DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, IdiomRecognitionPass,
+    ModuloIdiomPass, ParamInferPass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
+    VariableMergePass, Pass, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -552,12 +552,13 @@ fn build_function_from_insns(
 pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     let fold = ConstantFoldPass;
     let prop = CopyPropagationPass;
+    let gprop = GlobalCopyPropPass;
     let dce = DeadCodeElimPass;
     let sccp = SccpPass;
     let cse = CsePass;
     let idiom = IdiomRecognitionPass;
     let cond = ConditionSimplifyPass;
-    let passes: &[&dyn Pass] = &[&fold, &prop, &dce, &sccp, &cse, &idiom, &cond];
+    let passes: &[&dyn Pass] = &[&fold, &prop, &gprop, &dce, &sccp, &cse, &idiom, &cond];
 
     let changes = run_to_fixedpoint(passes, ssa)
         .context("pass pipeline failed")?;

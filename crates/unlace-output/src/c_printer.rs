@@ -430,7 +430,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             }
 
             HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_)
-            | HirNode::TailCall { .. } => {}
+            | HirNode::TailCall { .. } | HirNode::Continue => {}
         }
     }
 }
@@ -718,6 +718,11 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
         HirNode::TailCall { target } => {
             indent(depth, out);
             let _ = writeln!(out, "return ((unsigned long long (*)(void))0x{:x})();", target);
+        }
+
+        HirNode::Continue => {
+            indent(depth, out);
+            let _ = writeln!(out, "continue;");
         }
     }
 }

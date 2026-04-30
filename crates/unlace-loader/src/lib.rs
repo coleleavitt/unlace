@@ -4,15 +4,16 @@
 //! uniform [`BinaryImage`] representation, plus concrete implementations
 //! starting with [`ElfLoader`].
 
+pub mod dwarf;
 pub mod elf;
 pub mod error;
 pub mod image;
-pub mod macho;
+pub mod pdb;
 pub mod pe;
 
+pub use dwarf::{import_dwarf, DwarfInfo, FunctionDebugInfo, ParameterInfo, SourceLocation};
 pub use elf::ElfLoader;
 pub use error::LoadError;
-pub use macho::MachoLoader;
 pub use pe::PeLoader;
 pub use image::{ArchId, BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind};
 

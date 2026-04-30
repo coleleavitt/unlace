@@ -190,45 +190,71 @@ fn find_dead_ssa_defs(
 ///
 /// A STORE(addr, val1) is dead if a subsequent STORE to the same address
 /// occurs without an intervening LOAD from that address, CALL, or CALLIND.
+///
+/// Two distinct address varnodes are also treated as aliasing when both
+/// can be resolved to the same RSP/RBP-relative stack offset (e.g.
+/// `STORE [rsp+8], v1` followed by `STORE [rsp+8], v2` even when each
+/// address is computed by a separate `INT_ADD(rsp, 8)`).
 fn find_dead_stores(
     func: &SsaFunction,
 ) -> Vec<(unlace_ir::BlockId, usize)> {
     let mut dead = Vec::new();
 
     for (&bid, block) in &func.function.blocks {
-        // Map: address SsaVarnode -> insn_idx of last STORE to that address.
-        // We use the SSA varnode of the address operand for equality.
-        let mut last_store: BTreeMap<SsaVarnode, usize> = BTreeMap::new();
+        // SSA-varnode-keyed map: STOREs whose address is exactly the same
+        // SSA varnode (catches the case where the address was already
+        // hoisted into a single shared definition).
+        let mut last_store_sv: BTreeMap<SsaVarnode, usize> = BTreeMap::new();
+        // Stack-offset-keyed map: STOREs whose address resolves to the same
+        // RSP/RBP-relative offset.  Catches the case where two distinct
+        // varnodes encode the same stack location.
+        let mut last_store_stack: BTreeMap<i64, usize> = BTreeMap::new();
 
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             match insn.op {
                 IrOp::Store => {
-                    // STORE inputs: [addr_space (or addr), value]
-                    // In p-code STORE: input0 = space id, input1 = address, input2 = value
-                    // But our IR may vary — the address is the varnode we
-                    // compare for equality.  Use the SSA varnode at input(0)
-                    // as the address key.
-                    let addr_sv = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0)));
+                    let (addr_slot, raw_addr) = store_address_slot(insn);
+                    let addr_sv = func.var_map.get(&(bid, insn_idx, addr_slot)).copied();
 
-                    if let Some(&addr) = addr_sv {
-                        if let Some(prev_idx) = last_store.get(&addr).copied() {
-                            dead.push((bid, prev_idx));
+                    let stack_off = raw_addr.and_then(|a| stack_offset_of(&a, func));
+
+                    let mut prev: Option<usize> = None;
+                    if let Some(addr) = addr_sv {
+                        prev = last_store_sv.get(&addr).copied();
+                    }
+                    if prev.is_none() {
+                        if let Some(off) = stack_off {
+                            prev = last_store_stack.get(&off).copied();
                         }
-                        last_store.insert(addr, insn_idx);
+                    }
+                    if let Some(idx) = prev {
+                        dead.push((bid, idx));
+                    }
+
+                    if let Some(addr) = addr_sv {
+                        last_store_sv.insert(addr, insn_idx);
+                    }
+                    if let Some(off) = stack_off {
+                        last_store_stack.insert(off, insn_idx);
                     }
                 }
                 IrOp::Load => {
-                    // A LOAD from an address invalidates the pending store to
-                    // that address (the stored value is read).
-                    let addr_sv = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0)));
-                    if let Some(&addr) = addr_sv {
-                        last_store.remove(&addr);
+                    let (addr_slot, raw_addr) = load_address_slot(insn);
+                    let addr_sv = func.var_map.get(&(bid, insn_idx, addr_slot)).copied();
+                    let stack_off = raw_addr.and_then(|a| stack_offset_of(&a, func));
+
+                    if let Some(addr) = addr_sv {
+                        last_store_sv.remove(&addr);
+                    }
+                    if let Some(off) = stack_off {
+                        last_store_stack.remove(&off);
                     }
                 }
                 IrOp::Call | IrOp::Callind | IrOp::Callother => {
                     // Any call may read any memory — conservatively
                     // invalidate all pending stores.
-                    last_store.clear();
+                    last_store_sv.clear();
+                    last_store_stack.clear();
                 }
                 _ => {}
             }
@@ -236,6 +262,117 @@ fn find_dead_stores(
     }
 
     dead
+}
+
+/// The input slot holding the address operand of a STORE, plus the raw
+/// [`Varnode`] for stack-offset analysis.  Handles both the canonical
+/// 3-input form `[space, addr, value]` (lifter output) and the legacy
+/// 2-input form `[addr, value]` used by some test fixtures.
+fn store_address_slot(insn: &unlace_ir::IrInsn) -> (VarnodeSlot, Option<Varnode>) {
+    if insn.inputs.len() >= 3 {
+        (VarnodeSlot::Input(1), Some(insn.inputs[1]))
+    } else if !insn.inputs.is_empty() {
+        (VarnodeSlot::Input(0), Some(insn.inputs[0]))
+    } else {
+        (VarnodeSlot::Input(0), None)
+    }
+}
+
+/// The input slot holding the address operand of a LOAD.  Handles the
+/// canonical 2-input form `[space, addr]` and the legacy 1-input form
+/// `[addr]`.
+fn load_address_slot(insn: &unlace_ir::IrInsn) -> (VarnodeSlot, Option<Varnode>) {
+    if insn.inputs.len() >= 2 {
+        (VarnodeSlot::Input(1), Some(insn.inputs[1]))
+    } else if !insn.inputs.is_empty() {
+        (VarnodeSlot::Input(0), Some(insn.inputs[0]))
+    } else {
+        (VarnodeSlot::Input(0), None)
+    }
+}
+
+/// Returns the RSP/RBP-relative offset of `addr`, if it can be statically
+/// recognised as a stack-relative address.
+///
+/// Recognises:
+///   * `addr == RSP` or `addr == RBP` directly  → offset 0
+///   * `addr` produced by `INT_ADD(stack_reg, const)` → +const
+///   * `addr` produced by `INT_SUB(stack_reg, const)` → -const
+///   * `addr` produced by `COPY(stack_reg-relative)` → recursive
+///
+/// Resolution chases definitions through the `var_map` for at most a
+/// fixed depth to defeat any pathological cycles.
+fn stack_offset_of(addr: &Varnode, func: &SsaFunction) -> Option<i64> {
+    stack_offset_recursive(addr, func, 8)
+}
+
+fn stack_offset_recursive(addr: &Varnode, func: &SsaFunction, depth: u32) -> Option<i64> {
+    if depth == 0 {
+        return None;
+    }
+
+    if is_rsp_or_rbp(addr) {
+        return Some(0);
+    }
+    if addr.space != SpaceId::Unique && addr.space != SpaceId::Register {
+        return None;
+    }
+
+    for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
+        if !matches!(slot, VarnodeSlot::Output) || sv.base != *addr {
+            continue;
+        }
+
+        let block = func.function.blocks.get(&bid)?;
+        let def_insn = block.insns.get(insn_idx)?;
+
+        match def_insn.op {
+            IrOp::IntAdd if def_insn.inputs.len() >= 2 => {
+                let (a, b) = (&def_insn.inputs[0], &def_insn.inputs[1]);
+                if is_rsp_or_rbp(a) && b.space == SpaceId::Const {
+                    return Some(b.offset as i64);
+                }
+                if is_rsp_or_rbp(b) && a.space == SpaceId::Const {
+                    return Some(a.offset as i64);
+                }
+                if b.space == SpaceId::Const {
+                    if let Some(off) = stack_offset_recursive(a, func, depth - 1) {
+                        return Some(off.wrapping_add(b.offset as i64));
+                    }
+                }
+                if a.space == SpaceId::Const {
+                    if let Some(off) = stack_offset_recursive(b, func, depth - 1) {
+                        return Some(off.wrapping_add(a.offset as i64));
+                    }
+                }
+            }
+            IrOp::IntSub if def_insn.inputs.len() >= 2 => {
+                let (a, b) = (&def_insn.inputs[0], &def_insn.inputs[1]);
+                if is_rsp_or_rbp(a) && b.space == SpaceId::Const {
+                    return Some(-(b.offset as i64));
+                }
+                if b.space == SpaceId::Const {
+                    if let Some(off) = stack_offset_recursive(a, func, depth - 1) {
+                        return Some(off.wrapping_sub(b.offset as i64));
+                    }
+                }
+            }
+            IrOp::Copy if !def_insn.inputs.is_empty() => {
+                let src = &def_insn.inputs[0];
+                if is_rsp_or_rbp(src) {
+                    return Some(0);
+                }
+                return stack_offset_recursive(src, func, depth - 1);
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn is_rsp_or_rbp(v: &Varnode) -> bool {
+    v.space == SpaceId::Register && (v.offset == RSP_OFFSET || v.offset == RBP_OFFSET)
 }
 
 /// Returns `true` for ops whose *execution* has side effects — these
@@ -312,6 +449,7 @@ mod tests {
             frame_setup_insns: std::collections::BTreeSet::new(),
             dwarf_local_names: BTreeMap::new(),
             inferred_structs: BTreeMap::new(),
+            composite_var_types: BTreeMap::new(),
         }
     }
 
@@ -715,5 +853,235 @@ mod tests {
         let pass = DeadStoreElimPass;
         let changed = pass.run(&mut ssa).expect("pass should succeed");
         assert!(!changed);
+    }
+
+    // ── Stack-alias-aware DSE tests ─────────────────────────────────────
+
+    fn rsp() -> Varnode {
+        Varnode::reg(super::RSP_OFFSET, 8)
+    }
+
+    /// Two STOREs whose addresses are computed by separate
+    /// `INT_ADD(rsp, c8)` instructions resolve to the same stack offset
+    /// and the first must be eliminated.
+    #[test]
+    fn test_dse_stack_alias_distinct_addr_varnodes() {
+        let addr1 = sv(64, 0);
+        let addr2 = sv(72, 0);
+        let c8 = Varnode::constant(8, 8);
+        let val1 = Varnode::constant(0xAA, 8);
+        let val2 = Varnode::constant(0xBB, 8);
+        let space_ram = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let rsp_v = rsp();
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        // 0: addr1 = INT_ADD rsp, c8
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr1.base,
+            smallvec![rsp_v, c8],
+            0x1000,
+        ));
+        // 1: STORE [ram, addr1, val1]
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr1.base, val1],
+            0x1004,
+        ));
+        // 2: addr2 = INT_ADD rsp, c8 (same offset, different varnode)
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr2.base,
+            smallvec![rsp_v, c8],
+            0x1008,
+        ));
+        // 3: STORE [ram, addr2, val2] — overwrites the same stack slot
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr2.base, val2],
+            0x100C,
+        ));
+        // 4: RETURN
+        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
+
+        let mut var_map = BTreeMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), addr1);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(1)), addr1);
+        var_map.insert((BlockId(0), 2, VarnodeSlot::Output), addr2);
+        var_map.insert((BlockId(0), 3, VarnodeSlot::Input(1)), addr2);
+
+        let mut ssa = make_ssa(vec![bb], var_map, BTreeMap::new());
+
+        let pass = DeadStoreElimPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+        assert!(
+            changed,
+            "two stores to rsp+8 via distinct varnodes — first must be eliminated"
+        );
+
+        // Result block: [INT_ADD addr1, INT_ADD addr2, STORE val2, RETURN]
+        // The first STORE (insn 1) is removed.
+        let block = &ssa.function.blocks[&BlockId(0)];
+        assert_eq!(
+            block.insns.len(),
+            4,
+            "first STORE should be gone, leaving 4 insns"
+        );
+        let stores: Vec<_> = block
+            .insns
+            .iter()
+            .filter(|i| i.op == IrOp::Store)
+            .collect();
+        assert_eq!(stores.len(), 1, "exactly one STORE must remain");
+        assert_eq!(
+            stores[0].inputs[2], val2,
+            "the surviving STORE must carry val2"
+        );
+    }
+
+    /// Stores to *different* stack offsets must be kept.
+    #[test]
+    fn test_dse_stack_distinct_offsets_kept() {
+        let addr1 = sv(64, 0);
+        let addr2 = sv(72, 0);
+        let c8 = Varnode::constant(8, 8);
+        let c16 = Varnode::constant(16, 8);
+        let val1 = Varnode::constant(0xAA, 8);
+        let val2 = Varnode::constant(0xBB, 8);
+        let space_ram = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let rsp_v = rsp();
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        // 0: addr1 = INT_ADD rsp, c8 (offset +8)
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr1.base,
+            smallvec![rsp_v, c8],
+            0x1000,
+        ));
+        // 1: STORE [ram, addr1, val1]
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr1.base, val1],
+            0x1004,
+        ));
+        // 2: addr2 = INT_ADD rsp, c16 (offset +16)
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr2.base,
+            smallvec![rsp_v, c16],
+            0x1008,
+        ));
+        // 3: STORE [ram, addr2, val2]
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr2.base, val2],
+            0x100C,
+        ));
+        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
+
+        let mut var_map = BTreeMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), addr1);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(1)), addr1);
+        var_map.insert((BlockId(0), 2, VarnodeSlot::Output), addr2);
+        var_map.insert((BlockId(0), 3, VarnodeSlot::Input(1)), addr2);
+
+        let mut ssa = make_ssa(vec![bb], var_map, BTreeMap::new());
+
+        let pass = DeadStoreElimPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+        assert!(
+            !changed,
+            "stores to different stack offsets must NOT be merged"
+        );
+        assert_eq!(
+            ssa.function.blocks[&BlockId(0)].insns.len(),
+            5,
+            "all instructions must remain"
+        );
+    }
+
+    /// Intervening LOAD from the same stack offset prevents elimination.
+    #[test]
+    fn test_dse_stack_load_between_stores() {
+        let addr1 = sv(64, 0);
+        let addr2 = sv(72, 0);
+        let load_addr = sv(80, 0);
+        let load_out = Varnode::unique(0, 8);
+        let c8 = Varnode::constant(8, 8);
+        let val1 = Varnode::constant(0xAA, 8);
+        let val2 = Varnode::constant(0xBB, 8);
+        let space_ram = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let rsp_v = rsp();
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        // 0: addr1 = rsp + 8
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr1.base,
+            smallvec![rsp_v, c8],
+            0x1000,
+        ));
+        // 1: STORE rsp+8 = val1
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr1.base, val1],
+            0x1004,
+        ));
+        // 2: load_addr = rsp + 8 (third varnode for same offset)
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            load_addr.base,
+            smallvec![rsp_v, c8],
+            0x1008,
+        ));
+        // 3: load_out = LOAD rsp+8  (intervening read)
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            load_out,
+            smallvec![space_ram, load_addr.base],
+            0x100C,
+        ));
+        // 4: addr2 = rsp + 8
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr2.base,
+            smallvec![rsp_v, c8],
+            0x1010,
+        ));
+        // 5: STORE rsp+8 = val2
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr2.base, val2],
+            0x1014,
+        ));
+        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1018));
+
+        let mut var_map = BTreeMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), addr1);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(1)), addr1);
+        var_map.insert((BlockId(0), 2, VarnodeSlot::Output), load_addr);
+        var_map.insert((BlockId(0), 3, VarnodeSlot::Input(1)), load_addr);
+        var_map.insert(
+            (BlockId(0), 3, VarnodeSlot::Output),
+            SsaVarnode { base: load_out, version: 0 },
+        );
+        var_map.insert((BlockId(0), 4, VarnodeSlot::Output), addr2);
+        var_map.insert((BlockId(0), 5, VarnodeSlot::Input(1)), addr2);
+
+        let mut ssa = make_ssa(vec![bb], var_map, BTreeMap::new());
+
+        let pass = DeadStoreElimPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+        assert!(
+            !changed,
+            "LOAD from same stack slot between stores prevents elimination"
+        );
+        let store_count = ssa.function.blocks[&BlockId(0)]
+            .insns
+            .iter()
+            .filter(|i| i.op == IrOp::Store)
+            .count();
+        assert_eq!(store_count, 2, "both STOREs must survive");
     }
 }

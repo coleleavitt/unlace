@@ -1001,5 +1001,43 @@ mod tests {
             "LOCK CMPXCHG should set ZF from intrinsic result"
         );
     }
+
+    #[test]
+    fn test_xadd_no_lock_reg_reg() {
+        // 48 0F C1 D8 = xadd rax, rbx
+        let result = lifter()
+            .lift_insn(&[0x48, 0x0F, 0xC1, 0xD8], 0x1000)
+            .expect("should decode xadd rax, rbx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
+            "non-LOCK XADD should not emit Callother"
+        );
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntCarry),
+            "XADD should set CF like ADD");
+    }
+
+    #[test]
+    fn test_xadd_lock_emits_callother() {
+        // F0 48 0F C1 1F = lock xadd [rdi], rbx
+        let result = lifter()
+            .lift_insn(&[0xF0, 0x48, 0x0F, 0xC1, 0x1F], 0x1000)
+            .expect("should decode lock xadd");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("LOCK XADD should emit Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(atomic_tag::XADD, 8),
+            "tag should be XADD"
+        );
+        assert_eq!(co.inputs.len(), 3, "Callother XADD takes (tag, dst, src)");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd),
+            "LOCK XADD still updates flags via add of original + src");
+    }
 }
 

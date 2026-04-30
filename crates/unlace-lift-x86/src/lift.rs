@@ -4,7 +4,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
-use crate::ops::{arithmetic, bitwise, control_flow, data_move, stack, string_ops, sse};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, fpu, stack, string_ops, sse};
 use crate::register_file::{iced_reg_to_varnode, x86_64_register_file};
 
 pub struct X86Lifter {
@@ -302,6 +302,7 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Cdq => arithmetic::lift_cdq(ctx, insn),
         M::Cqo => arithmetic::lift_cqo(ctx, insn),
         M::Cmpxchg => arithmetic::lift_cmpxchg(ctx, insn),
+        M::Xadd => arithmetic::lift_xadd(ctx, insn),
 
         M::And => bitwise::lift_and(ctx, insn),
         M::Or => bitwise::lift_or(ctx, insn),

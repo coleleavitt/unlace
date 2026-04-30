@@ -5,10 +5,11 @@
 //! these nodes in a recursive descent, falling back to [`Goto`]/[`Label`] pairs
 //! for irreducible regions.
 
+use std::collections::BTreeSet;
 use std::fmt;
 
 use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
-use unlace_ir::IrInsn;
+use unlace_ir::{IrInsn, Varnode};
 
 /// Opaque label identifier for goto/label fallback.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -85,6 +86,18 @@ pub enum HirNode {
 
     /// A label target for goto (irreducible fallback).
     Label(LabelId),
+
+    /// A ternary conditional expression: `output = cond ? then_val : else_val`.
+    ///
+    /// Recovered from `If { then_body: [Statement(copy → V)], else_body: [Statement(copy → V)] }`
+    /// patterns where both branches are single COPY assignments to the same output varnode.
+    Ternary {
+        cond: SsaVarnode,
+        then_insn: IrInsn,
+        else_insn: IrInsn,
+        /// The output varnode that both branches write to.
+        output: Varnode,
+    },
 }
 
 /// A structured function in the HIR.
@@ -96,4 +109,5 @@ pub struct HirFunction {
     pub body: Vec<HirNode>,
     /// Machine address of the function entry point.
     pub addr: u64,
+    pub foldable_exprs: BTreeSet<SsaVarnode>,
 }

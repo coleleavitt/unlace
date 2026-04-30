@@ -4,7 +4,7 @@
 //! `gcc -fsyntax-only`. Output is deterministic: identical input produces
 //! byte-identical output.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
@@ -91,6 +91,12 @@ struct PrintCtx {
     next_stmt: u32,
     /// Current statement index during emission.
     emit_stmt: u32,
+    /// The IrInsn for each statement, stored during collection for inline folding.
+    stmt_insns: BTreeMap<u32, IrInsn>,
+    /// Statements whose output is single-use and non-side-effecting → fold inline.
+    foldable_stmts: BTreeSet<u32>,
+    /// Maps a foldable SsaVarnode to the statement index that defines it.
+    sv_defining_stmt: BTreeMap<SsaVarnode, u32>,
 }
 
 impl PrintCtx {
@@ -105,6 +111,9 @@ impl PrintCtx {
             stmt_inputs: BTreeMap::new(),
             next_stmt: 0,
             emit_stmt: 0,
+            stmt_insns: BTreeMap::new(),
+            foldable_stmts: BTreeSet::new(),
+            sv_defining_stmt: BTreeMap::new(),
         }
     }
 
@@ -167,6 +176,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                     None
                 };
                 ctx.stmt_outputs.insert(idx, output_sv);
+                ctx.stmt_insns.insert(idx, insn.clone());
             }
 
             HirNode::If { cond, then_body, else_body } => {
@@ -199,6 +209,58 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
             HirNode::Return(Some(sv)) => {
                 ctx.name_of(sv);
+            }
+
+            HirNode::Ternary { cond, then_insn, else_insn, output: _ } => {
+                ctx.name_of(cond);
+
+                let then_idx = ctx.next_stmt;
+                ctx.next_stmt += 1;
+                let mut then_inputs = Vec::new();
+                for input in &then_insn.inputs {
+                    if input.space == SpaceId::Const {
+                        continue;
+                    }
+                    let ver = ctx.current_version(input);
+                    let sv = SsaVarnode { base: *input, version: ver };
+                    ctx.name_of(&sv);
+                    then_inputs.push(sv);
+                }
+                ctx.stmt_inputs.insert(then_idx, then_inputs);
+                let then_out_sv = if let Some(output) = then_insn.output {
+                    let ver = ctx.next_version(&output);
+                    let sv = SsaVarnode { base: output, version: ver };
+                    ctx.name_of(&sv);
+                    infer_type_from_insn(then_insn, &sv, ctx);
+                    Some(sv)
+                } else {
+                    None
+                };
+                ctx.stmt_outputs.insert(then_idx, then_out_sv);
+
+                let else_idx = ctx.next_stmt;
+                ctx.next_stmt += 1;
+                let mut else_inputs = Vec::new();
+                for input in &else_insn.inputs {
+                    if input.space == SpaceId::Const {
+                        continue;
+                    }
+                    let ver = ctx.current_version(input);
+                    let sv = SsaVarnode { base: *input, version: ver };
+                    ctx.name_of(&sv);
+                    else_inputs.push(sv);
+                }
+                ctx.stmt_inputs.insert(else_idx, else_inputs);
+                let else_out_sv = if let Some(output) = else_insn.output {
+                    let ver = ctx.next_version(&output);
+                    let sv = SsaVarnode { base: output, version: ver };
+                    ctx.name_of(&sv);
+                    infer_type_from_insn(else_insn, &sv, ctx);
+                    Some(sv)
+                } else {
+                    None
+                };
+                ctx.stmt_outputs.insert(else_idx, else_out_sv);
             }
 
             HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_) => {}
@@ -357,6 +419,26 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 indent(depth - 1, out);
             }
             let _ = writeln!(out, "{}:;", label);
+        }
+
+        HirNode::Ternary { cond, then_insn, else_insn, output: _ } => {
+            let then_idx = ctx.emit_stmt;
+            ctx.emit_stmt += 1;
+            let else_idx = ctx.emit_stmt;
+            ctx.emit_stmt += 1;
+
+            let lhs = if let Some(Some(sv)) = ctx.stmt_outputs.get(&then_idx).cloned() {
+                ctx.name_of(&sv)
+            } else {
+                "/* ternary */".to_string()
+            };
+
+            let then_expr = emit_expr(then_insn, then_idx, ctx);
+            let else_expr = emit_expr(else_insn, else_idx, ctx);
+            let cond_name = ctx.name_of(cond);
+
+            indent(depth, out);
+            let _ = writeln!(out, "{} = {} ? {} : {};", lhs, cond_name, then_expr, else_expr);
         }
     }
 }
@@ -728,6 +810,7 @@ mod tests {
             return_type: PrimitiveType::Int(4),
             body,
             addr: 0x1000,
+            foldable_exprs: std::collections::BTreeSet::new(),
         }
     }
 
@@ -1015,6 +1098,7 @@ mod tests {
             return_type: PrimitiveType::Ptr,
             body: vec![HirNode::Return(None)],
             addr: 0x2000,
+            foldable_exprs: std::collections::BTreeSet::new(),
         };
 
         let output = print_c(&func);
@@ -1107,6 +1191,94 @@ mod tests {
         assert!(
             !rhs.starts_with(lhs_name),
             "RHS should read a different variable than LHS: {second_line}\n\nfull output:\n{output}",
+        );
+    }
+
+    #[test]
+    fn test_print_ternary() {
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+        let c2 = con(2, 4);
+
+        let body = vec![
+            HirNode::Ternary {
+                cond: sv(0, 4),
+                then_insn: IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000),
+                else_insn: IrInsn::with_output(IrOp::Copy, r0, smallvec![c2], 0x1010),
+                output: r0,
+            },
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let func = make_func("ternary_func", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("?") && output.contains(":"),
+            "should contain ternary operator: {output}"
+        );
+        let ternary_line = output
+            .lines()
+            .find(|l| l.contains("?"))
+            .expect("should find ternary line");
+        assert!(
+            ternary_line.contains(" = ") && ternary_line.contains(" ? ") && ternary_line.contains(" : "),
+            "ternary should be `lhs = cond ? a : b;`, got: {ternary_line}"
+        );
+    }
+
+    #[test]
+    fn test_print_ternary_compiles() {
+        let gcc_available = std::process::Command::new("gcc")
+            .arg("--version")
+            .output()
+            .is_ok();
+        if !gcc_available {
+            eprintln!("gcc not found, skipping test_print_ternary_compiles");
+            return;
+        }
+
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+        let c2 = con(2, 4);
+
+        let body = vec![
+            HirNode::Ternary {
+                cond: sv(0, 4),
+                then_insn: IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000),
+                else_insn: IrInsn::with_output(IrOp::Copy, r0, smallvec![c2], 0x1010),
+                output: r0,
+            },
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let func = make_func("ternary_compile_test", body);
+        let source = print_c(&func);
+
+        let result = std::process::Command::new("gcc")
+            .args(["-fsyntax-only", "-x", "c", "-", "-std=c11"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn();
+
+        let Ok(mut child) = result else {
+            eprintln!("Failed to spawn gcc, skipping");
+            return;
+        };
+
+        {
+            use std::io::Write;
+            let stdin = child.stdin.as_mut().expect("stdin pipe");
+            stdin.write_all(source.as_bytes()).expect("write to stdin");
+        }
+
+        let output = child.wait_with_output().expect("wait for gcc");
+        assert!(
+            output.status.success(),
+            "gcc -fsyntax-only failed on ternary:\n--- source ---\n{}\n--- stderr ---\n{}",
+            source,
+            String::from_utf8_lossy(&output.stderr),
         );
     }
 }

@@ -494,8 +494,9 @@ pub fn emit_output(
         EmitFormat::Ir => Ok(unlace_output::dump_ir(ssa)),
         EmitFormat::CfgDot => Ok(unlace_output::emit_cfg_dot(ssa)),
         EmitFormat::C => {
-            let hir = unlace_struct::structure(ssa)
+            let mut hir = unlace_struct::structure(ssa)
                 .context("control-flow structuring failed")?;
+            unlace_struct::ternary_recovery(&mut hir);
             Ok(unlace_output::print_c(&hir))
         }
     }

@@ -55,6 +55,7 @@ where
     let sections = load_sections(&file);
     let symbols = load_symbols(&file);
     let (plt_symbols, relocations) = load_relocations(&file);
+    let string_table = crate::strings::scan_strings(&sections);
 
     Ok(BinaryImage {
         arch,
@@ -64,6 +65,7 @@ where
         symbols,
         plt_symbols,
         relocations,
+        string_table,
     })
 }
 

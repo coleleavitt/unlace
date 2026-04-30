@@ -459,6 +459,19 @@ impl Default for PipelineConfig {
     }
 }
 
+pub fn build_symbol_table(image: &BinaryImage) -> BTreeMap<u64, String> {
+    let mut table = BTreeMap::new();
+    for (addr, sym) in &image.symbols {
+        if sym.kind == SymbolKind::Function {
+            table.insert(*addr, sym.name.clone());
+        }
+    }
+    for (addr, name) in &image.plt_symbols {
+        table.insert(*addr, name.clone());
+    }
+    table
+}
+
 pub fn decompile_function(
     image: &BinaryImage,
     lifter: &dyn Lifter,
@@ -484,7 +497,8 @@ pub fn decompile_function(
 
     check_timeout(deadline, &entry.name)?;
 
-    emit_output(emit, &ssa, dwarf)
+    let symbols = build_symbol_table(image);
+    emit_output(emit, &ssa, dwarf, &symbols, &image.string_table)
 }
 
 fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
@@ -498,6 +512,8 @@ pub fn emit_output(
     format: EmitFormat,
     ssa: &SsaFunction,
     dwarf: Option<&DwarfInfo>,
+    symbols: &BTreeMap<u64, String>,
+    string_table: &BTreeMap<u64, String>,
 ) -> Result<String> {
     match format {
         EmitFormat::Ir => Ok(unlace_output::dump_ir(ssa)),
@@ -506,8 +522,14 @@ pub fn emit_output(
             let mut hir = unlace_struct::structure(ssa)
                 .context("control-flow structuring failed")?;
             unlace_struct::ternary_recovery(&mut hir);
-            let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa);
-            Ok(unlace_output::print_c_full(&hir, dwarf, Some(&header)))
+            let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
+            Ok(unlace_output::print_c_full(
+                &hir,
+                dwarf,
+                Some(&header),
+                Some(symbols),
+                Some(string_table),
+            ))
         }
     }
 }

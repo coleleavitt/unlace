@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
-use unlace_ir::{IrInsn, IrOp, SpaceId};
+use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_struct::{HirFunction, HirNode, SwitchCase};
 
 // ---------------------------------------------------------------------------
@@ -78,6 +78,19 @@ struct PrintCtx {
     next_var: u32,
     var_names: BTreeMap<SsaVarnode, String>,
     var_types: BTreeMap<SsaVarnode, PrimitiveType>,
+    /// SSA version counter per base varnode. Stores the next version to assign.
+    ssa_next_version: BTreeMap<Varnode, u32>,
+    /// The most recently assigned version per base varnode.
+    ssa_current: BTreeMap<Varnode, u32>,
+    /// Pre-computed output SsaVarnode per statement (keyed by walk-order index).
+    stmt_outputs: BTreeMap<u32, Option<SsaVarnode>>,
+    /// Pre-computed input SsaVarnodes per statement (keyed by walk-order index).
+    /// One entry per non-const input, in order.
+    stmt_inputs: BTreeMap<u32, Vec<SsaVarnode>>,
+    /// Next statement index (incremented during collection).
+    next_stmt: u32,
+    /// Current statement index during emission.
+    emit_stmt: u32,
 }
 
 impl PrintCtx {
@@ -86,6 +99,12 @@ impl PrintCtx {
             next_var: 1,
             var_names: BTreeMap::new(),
             var_types: BTreeMap::new(),
+            ssa_next_version: BTreeMap::new(),
+            ssa_current: BTreeMap::new(),
+            stmt_outputs: BTreeMap::new(),
+            stmt_inputs: BTreeMap::new(),
+            next_stmt: 0,
+            emit_stmt: 0,
         }
     }
 
@@ -97,6 +116,19 @@ impl PrintCtx {
         self.next_var += 1;
         self.var_names.insert(*sv, name.clone());
         name
+    }
+
+    /// Return the current SSA version for a base varnode (0 if never defined).
+    fn current_version(&self, base: &Varnode) -> u32 {
+        self.ssa_current.get(base).copied().unwrap_or(0)
+    }
+
+    fn next_version(&mut self, base: &Varnode) -> u32 {
+        let ver = self.ssa_next_version.entry(*base).or_insert(0);
+        let v = *ver;
+        *ver += 1;
+        self.ssa_current.insert(*base, v);
+        v
     }
 }
 
@@ -110,18 +142,31 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             HirNode::Block(children) => collect_varnodes(children, ctx),
 
             HirNode::Statement(insn) => {
-                if let Some(output) = insn.output {
-                    let sv = SsaVarnode { base: output, version: 0 };
-                    ctx.name_of(&sv);
-                    infer_type_from_insn(insn, &sv, ctx);
-                }
+                let idx = ctx.next_stmt;
+                ctx.next_stmt += 1;
+
+                let mut input_svs = Vec::new();
                 for input in &insn.inputs {
                     if input.space == SpaceId::Const {
                         continue;
                     }
-                    let sv = SsaVarnode { base: *input, version: 0 };
+                    let ver = ctx.current_version(input);
+                    let sv = SsaVarnode { base: *input, version: ver };
                     ctx.name_of(&sv);
+                    input_svs.push(sv);
                 }
+                ctx.stmt_inputs.insert(idx, input_svs);
+
+                let output_sv = if let Some(output) = insn.output {
+                    let ver = ctx.next_version(&output);
+                    let sv = SsaVarnode { base: output, version: ver };
+                    ctx.name_of(&sv);
+                    infer_type_from_insn(insn, &sv, ctx);
+                    Some(sv)
+                } else {
+                    None
+                };
+                ctx.stmt_outputs.insert(idx, output_sv);
             }
 
             HirNode::If { cond, then_body, else_body } => {
@@ -321,19 +366,21 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 // ---------------------------------------------------------------------------
 
 fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
+    let idx = ctx.emit_stmt;
+    ctx.emit_stmt += 1;
+
     indent(depth, out);
 
-    if let Some(output) = insn.output {
-        let sv = SsaVarnode { base: output, version: 0 };
+    if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
         let lhs = ctx.name_of(&sv);
-        let rhs = emit_expr(insn, ctx);
+        let rhs = emit_expr(insn, idx, ctx);
         let _ = writeln!(out, "{} = {};", lhs, rhs);
     } else {
         match insn.op {
             IrOp::Store => {
                 if insn.inputs.len() >= 3 {
-                    let addr = emit_operand(&insn.inputs[1], ctx);
-                    let val = emit_operand(&insn.inputs[2], ctx);
+                    let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
+                    let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
                     let _ = writeln!(out, "*(void **)({}) = {};", addr, val);
                 } else {
                     let _ = writeln!(out, "/* STORE (bad arity) */;");
@@ -341,7 +388,7 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             }
             IrOp::Call | IrOp::Callind => {
                 let target = if !insn.inputs.is_empty() {
-                    emit_operand(&insn.inputs[0], ctx)
+                    emit_operand_resolved(&insn.inputs[0], 0, idx, ctx)
                 } else {
                     "/* unknown */".to_string()
                 };
@@ -361,53 +408,53 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
 // Expression emission
 // ---------------------------------------------------------------------------
 
-fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
+fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     match insn.op {
         // -- Binary arithmetic/bitwise --
-        IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", ctx),
-        IrOp::IntSub | IrOp::FloatSub => emit_binop(insn, "-", ctx),
-        IrOp::IntMult | IrOp::FloatMult => emit_binop(insn, "*", ctx),
-        IrOp::IntDiv | IrOp::IntSdiv | IrOp::FloatDiv => emit_binop(insn, "/", ctx),
-        IrOp::IntRem | IrOp::IntSrem => emit_binop(insn, "%", ctx),
-        IrOp::IntAnd => emit_binop(insn, "&", ctx),
-        IrOp::IntOr => emit_binop(insn, "|", ctx),
-        IrOp::IntXor => emit_binop(insn, "^", ctx),
-        IrOp::IntLeft => emit_binop(insn, "<<", ctx),
-        IrOp::IntRight | IrOp::IntSright => emit_binop(insn, ">>", ctx),
+        IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", stmt_idx, ctx),
+        IrOp::IntSub | IrOp::FloatSub => emit_binop(insn, "-", stmt_idx, ctx),
+        IrOp::IntMult | IrOp::FloatMult => emit_binop(insn, "*", stmt_idx, ctx),
+        IrOp::IntDiv | IrOp::IntSdiv | IrOp::FloatDiv => emit_binop(insn, "/", stmt_idx, ctx),
+        IrOp::IntRem | IrOp::IntSrem => emit_binop(insn, "%", stmt_idx, ctx),
+        IrOp::IntAnd => emit_binop(insn, "&", stmt_idx, ctx),
+        IrOp::IntOr => emit_binop(insn, "|", stmt_idx, ctx),
+        IrOp::IntXor => emit_binop(insn, "^", stmt_idx, ctx),
+        IrOp::IntLeft => emit_binop(insn, "<<", stmt_idx, ctx),
+        IrOp::IntRight | IrOp::IntSright => emit_binop(insn, ">>", stmt_idx, ctx),
 
         // -- Boolean ops --
-        IrOp::BoolAnd => emit_binop(insn, "&&", ctx),
-        IrOp::BoolOr => emit_binop(insn, "||", ctx),
-        IrOp::BoolXor => emit_binop(insn, "!=", ctx),
+        IrOp::BoolAnd => emit_binop(insn, "&&", stmt_idx, ctx),
+        IrOp::BoolOr => emit_binop(insn, "||", stmt_idx, ctx),
+        IrOp::BoolXor => emit_binop(insn, "!=", stmt_idx, ctx),
 
         // -- Comparisons --
-        IrOp::IntEqual | IrOp::FloatEqual => emit_binop(insn, "==", ctx),
-        IrOp::IntNotequal | IrOp::FloatNotequal => emit_binop(insn, "!=", ctx),
-        IrOp::IntLess | IrOp::IntSless | IrOp::FloatLess => emit_binop(insn, "<", ctx),
+        IrOp::IntEqual | IrOp::FloatEqual => emit_binop(insn, "==", stmt_idx, ctx),
+        IrOp::IntNotequal | IrOp::FloatNotequal => emit_binop(insn, "!=", stmt_idx, ctx),
+        IrOp::IntLess | IrOp::IntSless | IrOp::FloatLess => emit_binop(insn, "<", stmt_idx, ctx),
         IrOp::IntLessequal | IrOp::IntSlessequal | IrOp::FloatLessequal => {
-            emit_binop(insn, "<=", ctx)
+            emit_binop(insn, "<=", stmt_idx, ctx)
         }
 
         // -- Unary ops --
-        IrOp::IntNegate | IrOp::BoolNegate => emit_unaryop(insn, "!", ctx),
-        IrOp::Int2comp | IrOp::FloatNeg => emit_unaryop(insn, "-", ctx),
+        IrOp::IntNegate | IrOp::BoolNegate => emit_unaryop(insn, "!", stmt_idx, ctx),
+        IrOp::Int2comp | IrOp::FloatNeg => emit_unaryop(insn, "-", stmt_idx, ctx),
 
         // -- Copy / move --
         IrOp::Copy => {
             if insn.inputs.is_empty() {
                 "0".to_string()
             } else {
-                emit_operand(&insn.inputs[0], ctx)
+                emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx)
             }
         }
 
         // -- Load --
         IrOp::Load => {
             if insn.inputs.len() >= 2 {
-                let addr = emit_operand(&insn.inputs[1], ctx);
+                let addr = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
                 format!("*(void **)({})", addr)
             } else if !insn.inputs.is_empty() {
-                let addr = emit_operand(&insn.inputs[0], ctx);
+                let addr = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 format!("*(void **)({})", addr)
             } else {
                 "/* LOAD (bad arity) */ 0".to_string()
@@ -417,7 +464,7 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
         // -- Extensions --
         IrOp::IntZext | IrOp::IntSext => {
             if !insn.inputs.is_empty() {
-                let op = emit_operand(&insn.inputs[0], ctx);
+                let op = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 if let Some(output) = insn.output {
                     let ty = type_for_size(output.size, insn.op == IrOp::IntSext);
                     format!("({})({})", ty, op)
@@ -432,7 +479,7 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
         // -- Cast --
         IrOp::Cast => {
             if !insn.inputs.is_empty() {
-                let op = emit_operand(&insn.inputs[0], ctx);
+                let op = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 if let Some(output) = insn.output {
                     let ty = type_for_size(output.size, true);
                     format!("({})({})", ty, op)
@@ -445,13 +492,13 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
         }
 
         // -- Pointer arithmetic --
-        IrOp::Ptradd => emit_binop(insn, "+", ctx),
-        IrOp::Ptrsub => emit_binop(insn, "-", ctx),
+        IrOp::Ptradd => emit_binop(insn, "+", stmt_idx, ctx),
+        IrOp::Ptrsub => emit_binop(insn, "-", stmt_idx, ctx),
 
         // -- Float conversions --
         IrOp::FloatInt2float => {
             if !insn.inputs.is_empty() {
-                let op = emit_operand(&insn.inputs[0], ctx);
+                let op = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 if let Some(output) = insn.output {
                     let ty = if output.size == 4 { "float" } else { "double" };
                     format!("({})({})", ty, op)
@@ -464,7 +511,7 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
         }
         IrOp::FloatFloat2float => {
             if !insn.inputs.is_empty() {
-                let op = emit_operand(&insn.inputs[0], ctx);
+                let op = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 if let Some(output) = insn.output {
                     let ty = if output.size == 4 { "float" } else { "double" };
                     format!("({})({})", ty, op)
@@ -477,7 +524,7 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
         }
         IrOp::FloatFloat2int => {
             if !insn.inputs.is_empty() {
-                let op = emit_operand(&insn.inputs[0], ctx);
+                let op = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 if let Some(output) = insn.output {
                     let ty = type_for_size(output.size, true);
                     format!("({})({})", ty, op)
@@ -490,23 +537,23 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
         }
 
         // -- Float unary --
-        IrOp::FloatAbs => emit_call1(insn, "fabs", ctx),
-        IrOp::FloatSqrt => emit_call1(insn, "sqrt", ctx),
-        IrOp::FloatCeil => emit_call1(insn, "ceil", ctx),
-        IrOp::FloatFloor => emit_call1(insn, "floor", ctx),
-        IrOp::FloatRound => emit_call1(insn, "round", ctx),
-        IrOp::FloatTrunc => emit_call1(insn, "trunc", ctx),
-        IrOp::FloatNan => emit_call1(insn, "isnan", ctx),
+        IrOp::FloatAbs => emit_call1(insn, "fabs", stmt_idx, ctx),
+        IrOp::FloatSqrt => emit_call1(insn, "sqrt", stmt_idx, ctx),
+        IrOp::FloatCeil => emit_call1(insn, "ceil", stmt_idx, ctx),
+        IrOp::FloatFloor => emit_call1(insn, "floor", stmt_idx, ctx),
+        IrOp::FloatRound => emit_call1(insn, "round", stmt_idx, ctx),
+        IrOp::FloatTrunc => emit_call1(insn, "trunc", stmt_idx, ctx),
+        IrOp::FloatNan => emit_call1(insn, "isnan", stmt_idx, ctx),
 
         // -- Bit manipulation --
-        IrOp::Popcount => emit_call1(insn, "__builtin_popcount", ctx),
-        IrOp::Lzcount => emit_call1(insn, "__builtin_clz", ctx),
+        IrOp::Popcount => emit_call1(insn, "__builtin_popcount", stmt_idx, ctx),
+        IrOp::Lzcount => emit_call1(insn, "__builtin_clz", stmt_idx, ctx),
 
         // -- Piece/Subpiece --
         IrOp::Piece => {
             if insn.inputs.len() >= 2 {
-                let hi = emit_operand(&insn.inputs[0], ctx);
-                let lo = emit_operand(&insn.inputs[1], ctx);
+                let hi = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
+                let lo = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
                 let shift = (insn.inputs[1].size as u32) * 8;
                 format!("(({}) << {}) | ({})", hi, shift, lo)
             } else {
@@ -515,7 +562,7 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
         }
         IrOp::Subpiece => {
             if insn.inputs.len() >= 2 {
-                let src = emit_operand(&insn.inputs[0], ctx);
+                let src = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 let shift_bytes = insn.inputs[1].offset;
                 if shift_bytes == 0 {
                     src
@@ -530,8 +577,8 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
         // -- Carry / borrow (emit as comparison) --
         IrOp::IntCarry => {
             if insn.inputs.len() >= 2 {
-                let a = emit_operand(&insn.inputs[0], ctx);
-                let b = emit_operand(&insn.inputs[1], ctx);
+                let a = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
+                let b = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
                 format!("({} + {}) < {}", a, b, a)
             } else {
                 "0".to_string()
@@ -545,7 +592,7 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
         // -- Call with output --
         IrOp::Call | IrOp::Callind => {
             let target = if !insn.inputs.is_empty() {
-                emit_operand(&insn.inputs[0], ctx)
+                emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx)
             } else {
                 "/* unknown */".to_string()
             };
@@ -560,32 +607,32 @@ fn emit_expr(insn: &IrInsn, ctx: &mut PrintCtx) -> String {
     }
 }
 
-fn emit_binop(insn: &IrInsn, op: &str, ctx: &mut PrintCtx) -> String {
+fn emit_binop(insn: &IrInsn, op: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     let lhs = if !insn.inputs.is_empty() {
-        emit_operand(&insn.inputs[0], ctx)
+        emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx)
     } else {
         "0".to_string()
     };
     let rhs = if insn.inputs.len() >= 2 {
-        emit_operand(&insn.inputs[1], ctx)
+        emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx)
     } else {
         "0".to_string()
     };
     format!("{} {} {}", lhs, op, rhs)
 }
 
-fn emit_unaryop(insn: &IrInsn, op: &str, ctx: &mut PrintCtx) -> String {
+fn emit_unaryop(insn: &IrInsn, op: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     let operand = if !insn.inputs.is_empty() {
-        emit_operand(&insn.inputs[0], ctx)
+        emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx)
     } else {
         "0".to_string()
     };
     format!("{}{}", op, operand)
 }
 
-fn emit_call1(insn: &IrInsn, func: &str, ctx: &mut PrintCtx) -> String {
+fn emit_call1(insn: &IrInsn, func: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     let arg = if !insn.inputs.is_empty() {
-        emit_operand(&insn.inputs[0], ctx)
+        emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx)
     } else {
         "0".to_string()
     };
@@ -596,13 +643,26 @@ fn emit_call1(insn: &IrInsn, func: &str, ctx: &mut PrintCtx) -> String {
 // Operand rendering
 // ---------------------------------------------------------------------------
 
-fn emit_operand(vn: &unlace_ir::Varnode, ctx: &mut PrintCtx) -> String {
+fn emit_operand_resolved(
+    vn: &unlace_ir::Varnode,
+    _raw_idx: usize,
+    stmt_idx: u32,
+    ctx: &mut PrintCtx,
+) -> String {
     if vn.space == SpaceId::Const {
         return format_constant(vn.offset, vn.size);
+    }
+    if let Some(inputs) = ctx.stmt_inputs.get(&stmt_idx).cloned() {
+        for sv in &inputs {
+            if sv.base == *vn {
+                return ctx.name_of(sv);
+            }
+        }
     }
     let sv = SsaVarnode { base: *vn, version: 0 };
     ctx.name_of(&sv)
 }
+
 
 fn format_constant(value: u64, size: u8) -> String {
     let threshold = match size {
@@ -961,6 +1021,92 @@ mod tests {
         assert!(
             output.contains("void * with_params(int a, void * b)"),
             "params: {output}"
+        );
+    }
+
+    #[test]
+    fn test_ssa_version_names() {
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+        let c2 = con(2, 4);
+        let c3 = con(3, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                r0,
+                smallvec![c1],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, c2],
+                0x1004,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, c3],
+                0x1008,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r0,
+                version: 2,
+            })),
+        ];
+
+        let func = make_func("ssa_test", body);
+        let output = print_c(&func);
+
+        let var_decls: Vec<&str> = output
+            .lines()
+            .filter(|l| l.trim_start().starts_with("int v") && l.trim_end().ends_with(';'))
+            .collect();
+
+        assert!(
+            var_decls.len() >= 3,
+            "expected at least 3 variable declarations, got {}: {var_decls:?}\n\nfull output:\n{output}",
+            var_decls.len(),
+        );
+
+        let assignment_lhs: Vec<&str> = output
+            .lines()
+            .filter_map(|l| {
+                let trimmed = l.trim();
+                if trimmed.contains(" = ") && !trimmed.starts_with("if") {
+                    trimmed.split(" = ").next()
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert!(
+            assignment_lhs.len() >= 3,
+            "expected at least 3 assignments, got {}: {assignment_lhs:?}\n\nfull output:\n{output}",
+            assignment_lhs.len(),
+        );
+
+        let unique: std::collections::BTreeSet<&&str> = assignment_lhs.iter().collect();
+        assert_eq!(
+            unique.len(),
+            assignment_lhs.len(),
+            "expected all assignment LHS names to be distinct: {assignment_lhs:?}\n\nfull output:\n{output}",
+        );
+
+        // Second statement should read the first's output, not its own.
+        let second_line = output
+            .lines()
+            .find(|l| l.contains(" + 2;"))
+            .expect("should find second add line");
+        let parts: Vec<&str> = second_line.trim().splitn(2, " = ").collect();
+        assert_eq!(parts.len(), 2);
+        let lhs_name = parts[0];
+        let rhs = parts[1];
+        assert!(
+            !rhs.starts_with(lhs_name),
+            "RHS should read a different variable than LHS: {second_line}\n\nfull output:\n{output}",
         );
     }
 }

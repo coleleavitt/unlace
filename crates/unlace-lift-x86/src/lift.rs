@@ -4,7 +4,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
-use crate::ops::{arithmetic, bitwise, control_flow, data_move, stack, string_ops};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, stack, string_ops, sse};
 use crate::register_file::{iced_reg_to_varnode, x86_64_register_file};
 
 pub struct X86Lifter {
@@ -315,6 +315,23 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
 
         M::Push => stack::lift_push(ctx, insn),
         M::Pop => stack::lift_pop(ctx, insn),
+
+        M::Movdqa => sse::lift_sse_mov(ctx, insn, sse::tag::MOVDQA),
+        M::Movdqu => sse::lift_sse_mov(ctx, insn, sse::tag::MOVDQU),
+
+        M::Paddb => sse::lift_sse_binop(ctx, insn, sse::tag::PADDB),
+        M::Paddw => sse::lift_sse_binop(ctx, insn, sse::tag::PADDW),
+        M::Paddd => sse::lift_sse_binop(ctx, insn, sse::tag::PADDD),
+        M::Paddq => sse::lift_sse_binop(ctx, insn, sse::tag::PADDQ),
+
+        M::Psubb => sse::lift_sse_binop(ctx, insn, sse::tag::PSUBB),
+        M::Psubw => sse::lift_sse_binop(ctx, insn, sse::tag::PSUBW),
+        M::Psubd => sse::lift_sse_binop(ctx, insn, sse::tag::PSUBD),
+        M::Psubq => sse::lift_sse_binop(ctx, insn, sse::tag::PSUBQ),
+
+        M::Pand => sse::lift_sse_binop(ctx, insn, sse::tag::PAND),
+        M::Por  => sse::lift_sse_binop(ctx, insn, sse::tag::POR),
+        M::Pxor => sse::lift_sse_binop(ctx, insn, sse::tag::PXOR),
 
         _ => ctx.emit_unimplemented(),
     }

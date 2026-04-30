@@ -164,7 +164,7 @@ pub fn print_c_full(
     let return_type_str = dwarf_func
         .and_then(|df| df.return_type.as_deref())
         .map(|s| dwarf_type_to_c(s))
-        .unwrap_or_else(|| c_type(&func.return_type).to_string());
+        .unwrap_or_else(|| c_return_type(&func.return_type).to_string());
 
     let conv_annotation = header.and_then(|h| calling_convention_annotation(&h.convention));
     if let Some(conv) = conv_annotation {
@@ -215,7 +215,11 @@ pub fn print_c_full(
             continue;
         }
         let ty = ctx.var_types.get(sv).copied().unwrap_or(PrimitiveType::Unknown);
-        let _ = writeln!(out, "    {} {};", c_type(&ty), name);
+        if let Some(comment) = varnode_location_comment(&sv.base) {
+            let _ = writeln!(out, "    {} {}; // {}", c_type(&ty), name, comment);
+        } else {
+            let _ = writeln!(out, "    {} {};", c_type(&ty), name);
+        }
         has_decl = true;
     }
     if has_decl {
@@ -876,6 +880,13 @@ fn c_type(ty: &PrimitiveType) -> &'static str {
         PrimitiveType::Float => "float",
         PrimitiveType::Double => "double",
         PrimitiveType::Ptr => "void *",
+    }
+}
+
+fn c_return_type(ty: &PrimitiveType) -> &'static str {
+    match ty {
+        PrimitiveType::Unknown => "void",
+        other => c_type(other),
     }
 }
 
@@ -2021,6 +2032,100 @@ fn emit_subpiece_macro(src: &str, byte_offset: u64, output_size: u8) -> String {
         }
     }
 }
+// ---------------------------------------------------------------------------
+// Variable location comments (IDA-style)
+// ---------------------------------------------------------------------------
+
+/// Return an IDA-style location comment for a variable declaration.
+///
+/// - Register-backed: `"rax"`, `"xmm0"`, etc.
+/// - Stack variable: `"[rsp+20h]"`
+/// - Unique/temporary: `"temp"`
+/// - Other spaces (Const, Ram): `None`
+fn varnode_location_comment(vn: &Varnode) -> Option<String> {
+    match vn.space {
+        SpaceId::Register => {
+            let name = x86_64_register_name(vn.offset, vn.size);
+            Some(name.to_string())
+        }
+        SpaceId::Stack => {
+            let offset = vn.offset;
+            Some(format!("[rsp+{:x}h]", offset))
+        }
+        SpaceId::Unique => Some("temp".to_string()),
+        _ => None,
+    }
+}
+
+/// Map a register-space (offset, size) pair to a human-readable x86-64 name.
+///
+/// Uses the same layout as `unlace-lift-x86/src/register_file.rs`.
+fn x86_64_register_name(offset: u64, size: u8) -> &'static str {
+    // Vector register file: base 0x400, stride 32
+    const VEC_BASE: u64 = 0x400;
+    const VEC_STRIDE: u64 = 32;
+
+    if offset >= VEC_BASE {
+        let idx = (offset - VEC_BASE) / VEC_STRIDE;
+        if idx <= 15 && (offset - VEC_BASE) % VEC_STRIDE == 0 {
+            if size <= 16 {
+                return match idx {
+                    0 => "xmm0", 1 => "xmm1", 2 => "xmm2", 3 => "xmm3",
+                    4 => "xmm4", 5 => "xmm5", 6 => "xmm6", 7 => "xmm7",
+                    8 => "xmm8", 9 => "xmm9", 10 => "xmm10", 11 => "xmm11",
+                    12 => "xmm12", 13 => "xmm13", 14 => "xmm14", 15 => "xmm15",
+                    _ => "xmm?",
+                };
+            } else {
+                return match idx {
+                    0 => "ymm0", 1 => "ymm1", 2 => "ymm2", 3 => "ymm3",
+                    4 => "ymm4", 5 => "ymm5", 6 => "ymm6", 7 => "ymm7",
+                    8 => "ymm8", 9 => "ymm9", 10 => "ymm10", 11 => "ymm11",
+                    12 => "ymm12", 13 => "ymm13", 14 => "ymm14", 15 => "ymm15",
+                    _ => "ymm?",
+                };
+            }
+        }
+    }
+
+    // RFLAGS individual bits at 256+
+    match offset {
+        256 => return "CF",
+        257 => return "PF",
+        258 => return "AF",
+        259 => return "ZF",
+        260 => return "SF",
+        261 => return "OF",
+        _ => {}
+    }
+
+    // General-purpose registers: offset → (8-byte name, 4-byte, 2-byte, 1-byte)
+    match (offset, size) {
+        (0, 8) => "rax", (0, 4) => "eax", (0, 2) => "ax", (0, 1) => "al",
+        (1, 1) => "ah",
+        (8, 8) => "rcx", (8, 4) => "ecx", (8, 2) => "cx", (8, 1) => "cl",
+        (9, 1) => "ch",
+        (16, 8) => "rdx", (16, 4) => "edx", (16, 2) => "dx", (16, 1) => "dl",
+        (17, 1) => "dh",
+        (24, 8) => "rbx", (24, 4) => "ebx", (24, 2) => "bx", (24, 1) => "bl",
+        (25, 1) => "bh",
+        (32, 8) => "rsp", (32, 4) => "esp", (32, 2) => "sp", (32, 1) => "spl",
+        (40, 8) => "rbp", (40, 4) => "ebp", (40, 2) => "bp", (40, 1) => "bpl",
+        (48, 8) => "rsi", (48, 4) => "esi", (48, 2) => "si", (48, 1) => "sil",
+        (56, 8) => "rdi", (56, 4) => "edi", (56, 2) => "di", (56, 1) => "dil",
+        (64, 8) => "r8",  (64, 4) => "r8d",  (64, 2) => "r8w",  (64, 1) => "r8b",
+        (72, 8) => "r9",  (72, 4) => "r9d",  (72, 2) => "r9w",  (72, 1) => "r9b",
+        (80, 8) => "r10", (80, 4) => "r10d", (80, 2) => "r10w", (80, 1) => "r10b",
+        (88, 8) => "r11", (88, 4) => "r11d", (88, 2) => "r11w", (88, 1) => "r11b",
+        (96, 8) => "r12", (96, 4) => "r12d", (96, 2) => "r12w", (96, 1) => "r12b",
+        (104, 8) => "r13", (104, 4) => "r13d", (104, 2) => "r13w", (104, 1) => "r13b",
+        (112, 8) => "r14", (112, 4) => "r14d", (112, 2) => "r14w", (112, 1) => "r14b",
+        (120, 8) => "r15", (120, 4) => "r15d", (120, 2) => "r15w", (120, 1) => "r15b",
+        (128, 8) => "rip", (128, 4) => "eip",
+        _ => "reg?",
+    }
+}
+
 // ---------------------------------------------------------------------------
 
 fn indent(depth: usize, out: &mut String) {
@@ -4940,6 +5045,116 @@ mod tests {
         assert!(
             !between.iter().any(|l| l.trim() == "break;"),
             "fall-through case 0 should NOT have break; between case labels:\n{output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-22: Register/stack variable comment tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_register_comment_rax() {
+        let r0 = reg(0, 8);
+        let c1 = con(1, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, r0, smallvec![r0, c1], 0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 8))),
+        ];
+
+        let func = make_func("reg_comment", body);
+        let output = print_c(&func);
+
+        let decl_line = output
+            .lines()
+            .find(|l| l.contains("v1;") || l.contains("v1 ;"))
+            .expect("should find v1 declaration");
+        assert!(
+            decl_line.contains("// rax"),
+            "register var at offset 0, size 8 should have `// rax` comment: {decl_line}",
+        );
+    }
+
+    #[test]
+    fn test_stack_comment() {
+        let stk = Varnode::stack(0x20, 8);
+        let c1 = con(1, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, stk, smallvec![stk, c1], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: stk, version: 0 })),
+        ];
+
+        let func = make_func("stack_comment", body);
+        let output = print_c(&func);
+
+        let decl_line = output
+            .lines()
+            .find(|l| l.contains("v1;") || l.contains("v1 ;"))
+            .expect("should find v1 declaration");
+        assert!(
+            decl_line.contains("// [rsp+20h]"),
+            "stack var at offset 0x20 should have `// [rsp+20h]` comment: {decl_line}",
+        );
+    }
+
+    #[test]
+    fn test_unique_temp_comment() {
+        let u0 = Varnode::unique(0x1000, 8);
+        let c1 = con(1, 8);
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 8);
+
+        // Use u0 twice so it won't be folded inline
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, u0, smallvec![r0, c1], 0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, r0, smallvec![u0, c1], 0x1004,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, r8, smallvec![u0, c1], 0x1008,
+            )),
+            HirNode::Return(Some(sv(0, 8))),
+        ];
+
+        let func = make_func("unique_comment", body);
+        let output = print_c(&func);
+
+        let has_temp = output.lines().any(|l| l.contains("// temp"));
+        assert!(
+            has_temp,
+            "unique-space var should have `// temp` comment: {output}",
+        );
+    }
+
+    #[test]
+    fn test_register_comment_ecx() {
+        let r8 = Varnode::reg(8, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, r8, smallvec![r8, c1], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: r8, version: 0 })),
+        ];
+
+        let func = make_func("ecx_comment", body);
+        let output = print_c(&func);
+
+        let decl_line = output
+            .lines()
+            .find(|l| l.contains("v1;") || l.contains("v1 ;"))
+            .expect("should find v1 declaration");
+        assert!(
+            decl_line.contains("// ecx"),
+            "register var at offset 8, size 4 should have `// ecx` comment: {decl_line}",
         );
     }
 }

@@ -204,7 +204,10 @@ pub fn print_c_full(
     }
     let _ = writeln!(out, ") {{");
 
-    let foldable_svs: BTreeSet<SsaVarnode> = ctx.sv_defining_stmt.keys().copied().collect();
+    let mut foldable_svs: BTreeSet<SsaVarnode> = ctx.sv_defining_stmt.keys().copied().collect();
+    // Also suppress variables that the expression tree pass marked as
+    // single-use temporaries — these are inlined at their use site.
+    foldable_svs.extend(&func.foldable_exprs);
     let mut has_decl = false;
     let mut declared_names: BTreeSet<&str> = BTreeSet::new();
     for (sv, name) in &ctx.var_names {
@@ -5290,6 +5293,67 @@ mod tests {
         assert!(
             output.contains("_BOOL sub_403000(__int32 a1)"),
             "Bool return type should emit _BOOL: {output}",
+        );
+    }
+
+    #[test]
+    fn test_foldable_expr_not_declared() {
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 8);
+        let c1 = con(1, 8);
+        let c2 = con(2, 8);
+
+        let temp_sv = sv(0, 8);
+
+        let mut foldable = std::collections::BTreeSet::new();
+        foldable.insert(temp_sv);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, c1],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r8,
+                smallvec![r0, c2],
+                0x1004,
+            )),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = HirFunction {
+            name: "fold_test".to_string(),
+            params: vec![],
+            return_type: PrimitiveType::Int(8),
+            body,
+            addr: 0x1000,
+            foldable_exprs: foldable,
+            panic_sites: std::collections::BTreeMap::new(),
+        };
+
+        let output = print_c(&func);
+
+        let decl_section: String = output
+            .lines()
+            .skip_while(|l| !l.contains(") {"))
+            .skip(1)
+            .take_while(|l| !l.trim().is_empty() && !l.contains("v1"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let declares_v1 = output
+            .lines()
+            .any(|l| {
+                let trimmed = l.trim();
+                trimmed.starts_with("__int64 v1;")
+                    || trimmed.starts_with("__int64 v1; //")
+            });
+        assert!(
+            !declares_v1,
+            "foldable_exprs varnode should not appear in variable declarations:\n{output}",
         );
     }
 }

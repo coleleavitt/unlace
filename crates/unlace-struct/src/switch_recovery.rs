@@ -37,7 +37,7 @@ fn walk_node(node: HirNode) -> HirNode {
             cond,
             cases: cases
                 .into_iter()
-                .map(|(c, body)| (c, walk_nodes(body)))
+                .map(|(c, body, ft)| (c, walk_nodes(body), ft))
                 .collect(),
             default: default.map(walk_nodes),
         },
@@ -70,8 +70,8 @@ mod tests {
                 HirNode::Switch {
                     cond,
                     cases: vec![
-                        (SwitchCase::Value(0), vec![HirNode::Return(None)]),
-                        (SwitchCase::Value(1), vec![HirNode::Return(None)]),
+                        (SwitchCase::Value(0), vec![HirNode::Return(None)], false),
+                        (SwitchCase::Value(1), vec![HirNode::Return(None)], false),
                     ],
                     default: Some(vec![HirNode::Return(None)]),
                 },

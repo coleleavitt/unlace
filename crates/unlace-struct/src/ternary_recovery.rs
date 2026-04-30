@@ -61,7 +61,7 @@ fn recover_node(node: HirNode) -> HirNode {
             cond,
             cases: cases
                 .into_iter()
-                .map(|(c, body)| (c, recover_ternaries(body)))
+                .map(|(c, body, ft)| (c, recover_ternaries(body), ft))
                 .collect(),
             default: default.map(recover_ternaries),
         },

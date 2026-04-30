@@ -1,70 +1,30 @@
-//! PowerPC → IR lifter (stub).
+//! PowerPC PPC64 → IR lifter (via capstone).
 
-use unlace_ir::{
-    ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterDef, RegisterFile, Varnode,
-};
+pub mod lift;
+mod ops;
+pub mod register_file;
 
-const PPC_GPR_NAMES: [&str; 32] = [
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
-    "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
-    "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
-];
-
-pub struct PpcLifter {
-    register_file: RegisterFile,
-}
-
-impl PpcLifter {
-    pub fn new() -> Self {
-        let mut regs = Vec::with_capacity(37);
-        // r0–r31: offsets 0..248 step 8
-        for (i, name) in PPC_GPR_NAMES.iter().enumerate() {
-            regs.push(RegisterDef { name, varnode: Varnode::reg((i as u64) * 8, 8) });
-        }
-        // CR at 256, LR at 264, CTR at 272, XER at 280, PC at 288
-        regs.push(RegisterDef { name: "CR", varnode: Varnode::reg(256, 4) });
-        regs.push(RegisterDef { name: "LR", varnode: Varnode::reg(264, 8) });
-        regs.push(RegisterDef { name: "CTR", varnode: Varnode::reg(272, 8) });
-        regs.push(RegisterDef { name: "XER", varnode: Varnode::reg(280, 4) });
-        regs.push(RegisterDef { name: "PC", varnode: Varnode::reg(288, 8) });
-        Self { register_file: RegisterFile { registers: regs } }
-    }
-}
-
-impl Default for PpcLifter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Lifter for PpcLifter {
-    fn arch(&self) -> ArchId {
-        ArchId::Ppc
-    }
-
-    fn lift_insn(&self, _bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
-        Ok(LiftedInsn {
-            ir_ops: vec![IrInsn::without_output(IrOp::Unimplemented, Vec::<Varnode>::new(), addr)],
-            len: 4,
-        })
-    }
-
-    fn register_file(&self) -> &RegisterFile {
-        &self.register_file
-    }
-}
+pub use lift::PpcLifter;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use unlace_ir::{ArchId, IrOp, Lifter};
+
+    use crate::PpcLifter;
+
+    fn lifter() -> PpcLifter {
+        PpcLifter::new()
+    }
 
     #[test]
-    fn test_stub_lifter_ppc() {
-        let lifter = PpcLifter::new();
-        assert_eq!(lifter.arch(), ArchId::Ppc);
+    fn test_arch() {
+        assert_eq!(lifter().arch(), ArchId::Ppc);
+    }
 
-        let rf = lifter.register_file();
+    #[test]
+    fn test_register_file() {
+        let l = lifter();
+        let rf = l.register_file();
         // r0–r31 + CR + LR + CTR + XER + PC = 37
         assert_eq!(rf.registers.len(), 37);
         assert_eq!(rf.registers[0].name, "r0");
@@ -74,11 +34,257 @@ mod tests {
         assert_eq!(rf.registers[34].name, "CTR");
         assert_eq!(rf.registers[35].name, "XER");
         assert_eq!(rf.registers[36].name, "PC");
+    }
 
-        let result = lifter.lift_insn(&[0x60, 0x00, 0x00, 0x00], 0x1000_0000);
+    // PPC is big-endian; all test bytes are BE-encoded PPC instructions.
+
+    #[test]
+    fn test_nop() {
+        // 60 00 00 00 = ori r0, r0, 0 (canonical NOP)
+        let result = lifter()
+            .lift_insn(&[0x60, 0x00, 0x00, 0x00], 0x1000_0000)
+            .expect("should decode NOP");
+        assert_eq!(result.len, 4);
+        assert!(!result.ir_ops.is_empty());
+    }
+
+    #[test]
+    fn test_li() {
+        // 38 60 00 2a = li r3, 42  (addi r3, 0, 42)
+        let result = lifter()
+            .lift_insn(&[0x38, 0x60, 0x00, 0x2a], 0x1000_0000)
+            .expect("should decode LI");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_lis() {
+        // 3c 60 00 01 = lis r3, 1  → r3 = 0x10000
+        let result = lifter()
+            .lift_insn(&[0x3c, 0x60, 0x00, 0x01], 0x1000_0000)
+            .expect("should decode LIS");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_add() {
+        // 7c 63 22 14 = add r3, r3, r4
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x63, 0x22, 0x14], 0x1000_0000)
+            .expect("should decode ADD");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
+    }
+
+    #[test]
+    fn test_addi() {
+        // 38 63 00 01 = addi r3, r3, 1
+        let result = lifter()
+            .lift_insn(&[0x38, 0x63, 0x00, 0x01], 0x1000_0000)
+            .expect("should decode ADDI");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
+    }
+
+    #[test]
+    fn test_subf() {
+        // 7c 64 18 50 = subf r3, r4, r3  → r3 = r3 - r4
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x64, 0x18, 0x50], 0x1000_0000)
+            .expect("should decode SUBF");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
+    }
+
+    #[test]
+    fn test_and() {
+        // 7c 63 20 38 = and r3, r3, r4
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x63, 0x20, 0x38], 0x1000_0000)
+            .expect("should decode AND");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
+    }
+
+    #[test]
+    fn test_or() {
+        // 7c 63 23 78 = or r3, r3, r4
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x63, 0x23, 0x78], 0x1000_0000)
+            .expect("should decode OR");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
+    }
+
+    #[test]
+    fn test_xor() {
+        // 7c 63 22 78 = xor r3, r3, r4
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x63, 0x22, 0x78], 0x1000_0000)
+            .expect("should decode XOR");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntXor));
+    }
+
+    #[test]
+    fn test_slw() {
+        // 7c 63 20 30 = slw r3, r3, r4
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x63, 0x20, 0x30], 0x1000_0000)
+            .expect("should decode SLW");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
+    }
+
+    #[test]
+    fn test_srw() {
+        // 7c 63 24 30 = srw r3, r3, r4
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x63, 0x24, 0x30], 0x1000_0000)
+            .expect("should decode SRW");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRight));
+    }
+
+    #[test]
+    fn test_sraw() {
+        // 7c 63 26 30 = sraw r3, r3, r4
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x63, 0x26, 0x30], 0x1000_0000)
+            .expect("should decode SRAW");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSright));
+    }
+
+    #[test]
+    fn test_lwz() {
+        // 80 61 00 08 = lwz r3, 8(r1)
+        let result = lifter()
+            .lift_insn(&[0x80, 0x61, 0x00, 0x08], 0x1000_0000)
+            .expect("should decode LWZ");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
+    }
+
+    #[test]
+    fn test_ld() {
+        // e8 61 00 08 = ld r3, 8(r1)
+        let result = lifter()
+            .lift_insn(&[0xe8, 0x61, 0x00, 0x08], 0x1000_0000)
+            .expect("should decode LD");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
+    }
+
+    #[test]
+    fn test_stw() {
+        // 90 61 00 08 = stw r3, 8(r1)
+        let result = lifter()
+            .lift_insn(&[0x90, 0x61, 0x00, 0x08], 0x1000_0000)
+            .expect("should decode STW");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
+    }
+
+    #[test]
+    fn test_std() {
+        // f8 61 00 08 = std r3, 8(r1)
+        let result = lifter()
+            .lift_insn(&[0xf8, 0x61, 0x00, 0x08], 0x1000_0000)
+            .expect("should decode STD");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
+    }
+
+    #[test]
+    fn test_mr() {
+        // 7c 83 23 78 = mr r3, r4  (or r3, r4, r4)
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x83, 0x23, 0x78], 0x1000_0000)
+            .expect("should decode MR");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_b() {
+        // 48 00 00 10 = b +0x10  (target = 0x10000010)
+        let result = lifter()
+            .lift_insn(&[0x48, 0x00, 0x00, 0x10], 0x1000_0000)
+            .expect("should decode B");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Branch));
+    }
+
+    #[test]
+    fn test_bl() {
+        // 48 00 00 11 = bl +0x10  (target = 0x10000010, LR = 0x10000004)
+        let result = lifter()
+            .lift_insn(&[0x48, 0x00, 0x00, 0x11], 0x1000_0000)
+            .expect("should decode BL");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Call));
+    }
+
+    #[test]
+    fn test_blr() {
+        // 4e 80 00 20 = blr
+        let result = lifter()
+            .lift_insn(&[0x4e, 0x80, 0x00, 0x20], 0x1000_0000)
+            .expect("should decode BLR");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Return));
+    }
+
+    #[test]
+    fn test_bctr() {
+        // 4e 80 04 20 = bctr
+        let result = lifter()
+            .lift_insn(&[0x4e, 0x80, 0x04, 0x20], 0x1000_0000)
+            .expect("should decode BCTR");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Branchind));
+    }
+
+    #[test]
+    fn test_cmpw() {
+        // 7c 03 20 00 = cmpw cr0, r3, r4
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x03, 0x20, 0x00], 0x1000_0000)
+            .expect("should decode CMPW");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSless));
+    }
+
+    #[test]
+    fn test_cmplw() {
+        // 7c 03 20 40 = cmplw cr0, r3, r4
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x03, 0x20, 0x40], 0x1000_0000)
+            .expect("should decode CMPLW");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLess));
+    }
+
+    #[test]
+    fn test_mfspr_lr() {
+        // 7c 68 02 a6 = mflr r3  (MFSPR r3, LR)
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x68, 0x02, 0xa6], 0x1000_0000)
+            .expect("should decode MFLR");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_mtspr_lr() {
+        // 7c 68 03 a6 = mtlr r3  (MTSPR LR, r3)
+        let result = lifter()
+            .lift_insn(&[0x7c, 0x68, 0x03, 0xa6], 0x1000_0000)
+            .expect("should decode MTLR");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_empty_buffer() {
+        let result = lifter().lift_insn(&[], 0x1000);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_short_buffer() {
+        let result = lifter().lift_insn(&[0x60, 0x00], 0x1000);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_unknown_insn_no_panic() {
+        // FC 00 00 00 = floating point (fadd or similar)
+        let result = lifter().lift_insn(&[0xfc, 0x00, 0x00, 0x00], 0x1000_0000);
         assert!(result.is_ok());
-        let lifted = result.expect("lift should succeed");
-        assert_eq!(lifted.len, 4);
-        assert_eq!(lifted.ir_ops[0].op, IrOp::Unimplemented);
+        let lifted = result.expect("should not panic");
+        assert!(!lifted.ir_ops.is_empty());
     }
 }

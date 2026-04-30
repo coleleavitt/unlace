@@ -5,5 +5,7 @@ edition.workspace = true
 
 [dependencies]
 unlace-ir = { workspace = true }
+capstone = { workspace = true }
+smallvec = { workspace = true }
 
 [dev-dependencies]

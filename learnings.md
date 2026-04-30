@@ -76,3 +76,28 @@ Reads from x0 produce `Varnode::constant(0, 8)`. Writes to x0 are silently dropp
 
 `Capstone` does not impl `Send + Sync` by default, but each `disasm_count` call is
 self-contained, so `unsafe impl Send/Sync` is safe for the lifter struct.
+
+## Task 36: Switch Table Recovery
+
+### Pattern Detection
+- Switch tables in decompiled code manifest as `BRANCHIND` terminators with ≥2
+  `IndirectJump` successors in the CFG. A single `IndirectJump` to the unknown
+  sink means the targets were not resolved — skip it.
+- The canonical jump table access pattern is:
+  `target = LOAD(base_const + index * entry_size)` where `entry_size` ∈ {1,2,4,8}.
+  Scaling may use `INT_MULT(index, size)` or `INT_LEFT(index, log2(size))`.
+
+### Implementation Notes
+- Primary detection lives in `structurer.rs` as `try_structure_switch()` on
+  `StructureCtx`, checked before `try_structure_if()` in both `structure_region()`
+  and `structure_until()`.
+- `recover_switch_index()` traces backwards from `BRANCHIND.input[0]` through
+  `LOAD` → `INT_ADD` → `INT_MULT`/`INT_LEFT` to find the index variable. If
+  tracing fails, the BRANCHIND input itself becomes the switch condition.
+- `find_switch_join()` intersects reachable sets from all case targets to find
+  the common post-dominator.
+- Last case target is treated as `default` when there are >2 targets.
+- `switch_recovery.rs` provides a post-pass `recover_switches()` that walks
+  HIR to catch any residual BRANCHIND statements not caught during structuring.
+- `var_map` key `(BlockId, insn_index, VarnodeSlot)` is used for SSA lookups;
+  constants identified via `SpaceId::Const`.

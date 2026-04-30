@@ -13,9 +13,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::cfg::EdgeKind;
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::{BlockId, IrOp};
+use unlace_ir::{BlockId, IrOp, Varnode};
 
-use crate::hir::{HirFunction, HirNode, LabelId};
+use crate::hir::{HirFunction, HirNode, LabelId, SwitchCase};
 
 /// Errors that can occur during control-flow structuring.
 #[derive(Debug, thiserror::Error)]
@@ -126,6 +126,13 @@ impl<'a> StructureCtx<'a> {
                 }
             }
 
+            // Try switch pattern: BRANCHIND with multiple IndirectJump targets.
+            if let Some((switch_node, join)) = self.try_structure_switch(bid) {
+                nodes.push(switch_node);
+                current = join;
+                continue;
+            }
+
             // Try if/else pattern.
             if let Some((if_node, join)) = self.try_structure_if(bid) {
                 nodes.push(if_node);
@@ -169,6 +176,218 @@ impl<'a> StructureCtx<'a> {
                 }
             }
         }
+    }
+
+    fn try_structure_switch(&mut self, bid: BlockId) -> Option<(HirNode, Option<BlockId>)> {
+        if self.emitted.contains(&bid) {
+            return None;
+        }
+
+        let block = self.func.function.blocks.get(&bid)?;
+        let last = block.insns.last()?;
+        if last.op != IrOp::Branchind {
+            return None;
+        }
+
+        let edges = self.func.cfg.edges_from(bid);
+        let targets: Vec<BlockId> = edges
+            .iter()
+            .filter(|(tgt, kind)| *kind == EdgeKind::IndirectJump && !self.synthetic.contains(tgt))
+            .map(|(tgt, _)| *tgt)
+            .collect();
+
+        if targets.len() < 2 {
+            return None;
+        }
+
+        let cond = self.recover_switch_index(bid);
+        self.emitted.insert(bid);
+
+        let mut pre_stmts = Vec::new();
+        for insn in &block.insns {
+            match insn.op {
+                IrOp::Branchind | IrOp::Branch | IrOp::Cbranch | IrOp::Return => {}
+                _ => pre_stmts.push(HirNode::Statement(insn.clone())),
+            }
+        }
+
+        let join = self.find_switch_join(&targets);
+
+        let mut cases = Vec::new();
+        let mut default_body = None;
+        for (i, &tgt) in targets.iter().enumerate() {
+            let body = self.structure_until(tgt, join);
+            if i == targets.len() - 1 && targets.len() > 2 {
+                default_body = Some(body);
+            } else {
+                cases.push((SwitchCase::Value(i as u64), body));
+            }
+        }
+
+        let switch_node = HirNode::Switch {
+            cond,
+            cases,
+            default: default_body,
+        };
+
+        let combined = if pre_stmts.is_empty() {
+            switch_node
+        } else {
+            pre_stmts.push(switch_node);
+            HirNode::Block(pre_stmts)
+        };
+
+        Some((combined, join))
+    }
+
+    fn recover_switch_index(&self, bid: BlockId) -> SsaVarnode {
+        let block = match self.func.function.blocks.get(&bid) {
+            Some(b) => b,
+            None => return self.fallback_switch_cond(),
+        };
+
+        let branchind_idx = match block.insns.iter().rposition(|i| i.op == IrOp::Branchind) {
+            Some(i) => i,
+            None => return self.fallback_switch_cond(),
+        };
+
+        // BRANCHIND input[0] = target address. Trace back through LOAD(base + index * scale).
+        let target_sv = match self.resolve_ssa_varnode(bid, branchind_idx, VarnodeSlot::Input(0)) {
+            Some(sv) => sv,
+            None => return self.fallback_switch_cond(),
+        };
+
+        // Search backwards for the LOAD whose output feeds BRANCHIND.
+        if let Some(index_sv) = self.trace_table_index(bid, &target_sv) {
+            return index_sv;
+        }
+
+        target_sv
+    }
+
+    fn trace_table_index(&self, bid: BlockId, target: &SsaVarnode) -> Option<SsaVarnode> {
+        let block = self.func.function.blocks.get(&bid)?;
+
+        // Find the instruction that defines `target` in this block.
+        for (i, insn) in block.insns.iter().enumerate().rev() {
+            let output_sv = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output)?;
+            if output_sv.base != target.base || output_sv.version != target.version {
+                continue;
+            }
+
+            // Pattern: LOAD(space, addr) — addr is computed from base + index * scale
+            if insn.op == IrOp::Load {
+                if let Some(addr_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1)) {
+                    return self.trace_scaled_index(bid, &addr_sv);
+                }
+            }
+            break;
+        }
+
+        None
+    }
+
+    fn trace_scaled_index(&self, bid: BlockId, addr: &SsaVarnode) -> Option<SsaVarnode> {
+        let block = self.func.function.blocks.get(&bid)?;
+
+        for (i, insn) in block.insns.iter().enumerate().rev() {
+            let output_sv = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output)?;
+            if output_sv.base != addr.base || output_sv.version != addr.version {
+                continue;
+            }
+
+            // Pattern: INT_ADD(base_const, scaled_index) or INT_ADD(scaled_index, base_const)
+            if insn.op == IrOp::IntAdd && insn.inputs.len() >= 2 {
+                let lhs = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0));
+                let rhs = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1));
+
+                // One side should be the constant base, the other the scaled index.
+                if let (Some(lhs_sv), Some(rhs_sv)) = (lhs, rhs) {
+                    if is_const(&rhs_sv) {
+                        return self.extract_index_from_scale(bid, &lhs_sv);
+                    }
+                    if is_const(&lhs_sv) {
+                        return self.extract_index_from_scale(bid, &rhs_sv);
+                    }
+                }
+            }
+
+            break;
+        }
+
+        None
+    }
+
+    fn extract_index_from_scale(&self, bid: BlockId, scaled: &SsaVarnode) -> Option<SsaVarnode> {
+        let block = self.func.function.blocks.get(&bid)?;
+
+        for (i, insn) in block.insns.iter().enumerate().rev() {
+            let out = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output)?;
+            if out.base != scaled.base || out.version != scaled.version {
+                continue;
+            }
+
+            // Pattern: INT_MULT(index, scale_const) or INT_LEFT(index, shift_const)
+            match insn.op {
+                IrOp::IntMult if insn.inputs.len() >= 2 => {
+                    let lhs = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0));
+                    let rhs = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1));
+                    if let (Some(lhs_sv), Some(rhs_sv)) = (lhs, rhs) {
+                        if is_scale_const(&rhs_sv) {
+                            return Some(lhs_sv);
+                        }
+                        if is_scale_const(&lhs_sv) {
+                            return Some(rhs_sv);
+                        }
+                    }
+                }
+                IrOp::IntLeft if insn.inputs.len() >= 2 => {
+                    let index = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0));
+                    let shift = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1));
+                    if let (Some(index_sv), Some(shift_sv)) = (index, shift) {
+                        if is_const(&shift_sv) {
+                            return Some(index_sv);
+                        }
+                        let _ = shift_sv;
+                    }
+                }
+                _ => {}
+            }
+            break;
+        }
+
+        // The scaled value itself might be the index (scale == 1).
+        Some(*scaled)
+    }
+
+    fn fallback_switch_cond(&self) -> SsaVarnode {
+        SsaVarnode {
+            base: Varnode::constant(0, 8),
+            version: 0,
+        }
+    }
+
+    fn find_switch_join(&self, targets: &[BlockId]) -> Option<BlockId> {
+        if targets.is_empty() {
+            return None;
+        }
+
+        let mut reachable_sets: Vec<BTreeSet<BlockId>> = targets
+            .iter()
+            .map(|&t| self.collect_reachable(t, 16))
+            .collect();
+
+        // Intersect all reachable sets to find the common join point.
+        let mut common = reachable_sets.pop()?;
+        for set in &reachable_sets {
+            common = common.intersection(set).copied().collect();
+        }
+
+        // Exclude the targets themselves — the join is *after* all cases.
+        let target_set: BTreeSet<BlockId> = targets.iter().copied().collect();
+        common.retain(|b| !target_set.contains(b));
+
+        common.into_iter().next()
     }
 
     fn try_structure_if(&mut self, bid: BlockId) -> Option<(HirNode, Option<BlockId>)> {
@@ -454,6 +673,13 @@ impl<'a> StructureCtx<'a> {
                 }
             }
 
+            // Nested switch.
+            if let Some((switch_node, join)) = self.try_structure_switch(bid) {
+                nodes.push(switch_node);
+                current = join;
+                continue;
+            }
+
             // Nested if/else.
             if let Some((if_node, join)) = self.try_structure_if(bid) {
                 nodes.push(if_node);
@@ -672,6 +898,17 @@ fn dominates(
     false
 }
 
+fn is_const(sv: &SsaVarnode) -> bool {
+    sv.base.space == unlace_ir::SpaceId::Const
+}
+
+fn is_scale_const(sv: &SsaVarnode) -> bool {
+    if sv.base.space != unlace_ir::SpaceId::Const {
+        return false;
+    }
+    matches!(sv.base.offset, 1 | 2 | 4 | 8)
+}
+
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
@@ -868,5 +1105,208 @@ mod tests {
 
         // The function body should not be empty.
         assert!(!hir.body.is_empty(), "irreducible CFG should produce some HIR nodes");
+    }
+
+    #[test]
+    fn test_structure_switch_simple() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("switch_simple", BlockId(0), 0x5000);
+
+        // BB0: BRANCHIND → BB1, BB2, BB3
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(arith_insn(r0, &[r8, c1], 0x5000));
+        bb0.insns.push(ctrl_insn(IrOp::Branchind, 0x5004));
+        bb0.successors = smallvec![BlockId(1), BlockId(2), BlockId(3)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0x5010));
+        bb1.insns.push(ctrl_insn(IrOp::Return, 0x5014));
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r0, c1], 0x5020));
+        bb2.insns.push(ctrl_insn(IrOp::Return, 0x5024));
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0x5030));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        assert_eq!(hir.name, "switch_simple");
+
+        fn contains_switch(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::Switch { .. } => true,
+                HirNode::Block(inner) => contains_switch(inner),
+                _ => false,
+            })
+        }
+        assert!(contains_switch(&hir.body), "BRANCHIND with 3 targets should produce a Switch node");
+    }
+
+    #[test]
+    fn test_structure_switch_with_join() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+
+        let mut func = Function::new("switch_join", BlockId(0), 0x6000);
+
+        // BB0: BRANCHIND → BB1, BB2, BB3; all cases merge at BB4
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(ctrl_insn(IrOp::Branchind, 0x6000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2), BlockId(3)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0x6010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0x6014));
+        bb1.successors = smallvec![BlockId(4)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r8, c2], 0x6020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0x6024));
+        bb2.successors = smallvec![BlockId(4)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(arith_insn(r0, &[r0, c1], 0x6030));
+        bb3.insns.push(ctrl_insn(IrOp::Branch, 0x6034));
+        bb3.successors = smallvec![BlockId(4)];
+
+        let mut bb4 = BasicBlock::new(BlockId(4));
+        bb4.insns.push(ctrl_insn(IrOp::Return, 0x6040));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+        func.insert_block(bb4);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn contains_switch(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::Switch { .. } => true,
+                HirNode::Block(inner) => contains_switch(inner),
+                _ => false,
+            })
+        }
+        assert!(contains_switch(&hir.body), "switch with join point should produce Switch node");
+
+        let has_return = hir.body.iter().any(|n| matches!(n, HirNode::Return(_)));
+        assert!(has_return, "code after the switch join should be structured");
+    }
+
+    #[test]
+    fn test_non_switch_branchind_unchanged() {
+        let mut func = Function::new("single_indirect", BlockId(0), 0x7000);
+
+        // BRANCHIND with only 1 known successor — not a switch
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(ctrl_insn(IrOp::Branchind, 0x7000));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(ctrl_insn(IrOp::Return, 0x7010));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn contains_switch(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::Switch { .. } => true,
+                HirNode::Block(inner) => contains_switch(inner),
+                _ => false,
+            })
+        }
+        assert!(!contains_switch(&hir.body), "single-target BRANCHIND should NOT produce a Switch");
+    }
+
+    #[test]
+    fn test_structure_switch_with_table_pattern() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c4 = Varnode::constant(4, 8);
+        let table_base = Varnode::constant(0x10000, 8);
+        let unique_scaled = Varnode::unique(100, 8);
+        let unique_addr = Varnode::unique(200, 8);
+        let unique_target = Varnode::unique(300, 8);
+        let ram_space = Varnode::constant(1, 8);
+
+        let mut func = Function::new("switch_table", BlockId(0), 0x8000);
+
+        // BB0: index * 4, base + scaled, load, branchind
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        // unique_scaled = INT_MULT(r8, 4)
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntMult, unique_scaled, smallvec![r8, c4], 0x8000,
+        ));
+        // unique_addr = INT_ADD(table_base, unique_scaled)
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd, unique_addr, smallvec![table_base, unique_scaled], 0x8004,
+        ));
+        // unique_target = LOAD(ram_space, unique_addr)
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load, unique_target, smallvec![ram_space, unique_addr], 0x8008,
+        ));
+        // BRANCHIND(unique_target)
+        bb0.insns.push(IrInsn::without_output(
+            IrOp::Branchind, smallvec![unique_target], 0x800c,
+        ));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd, r0, smallvec![r8, Varnode::constant(1, 8)], 0x8010,
+        ));
+        bb1.insns.push(ctrl_insn(IrOp::Return, 0x8014));
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(IrInsn::with_output(
+            IrOp::IntAdd, r0, smallvec![r8, Varnode::constant(2, 8)], 0x8020,
+        ));
+        bb2.insns.push(ctrl_insn(IrOp::Return, 0x8024));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn find_switch(nodes: &[HirNode]) -> Option<&HirNode> {
+            for n in nodes {
+                match n {
+                    HirNode::Switch { .. } => return Some(n),
+                    HirNode::Block(inner) => {
+                        if let Some(s) = find_switch(inner) {
+                            return Some(s);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        let switch = find_switch(&hir.body).expect("table pattern should produce Switch");
+        if let HirNode::Switch { cond, .. } = switch {
+            assert_ne!(
+                cond.base,
+                Varnode::constant(0, 8),
+                "switch cond should be recovered from table pattern, not fallback"
+            );
+        }
     }
 }

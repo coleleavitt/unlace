@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use object::macho;
-use object::read::macho::{FatArch, MachHeader, MachOFatFile, MachOFile};
+use object::read::macho::{FatArch, LoadCommandVariant, MachHeader, MachOFatFile, MachOFile};
 use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 
 use crate::error::LoadError;
@@ -107,7 +107,9 @@ where
     let endian = map_endian(&file);
     let entry = file.entry();
     let sections = load_sections(&file);
-    let symbols = load_symbols(&file);
+    let mut symbols = load_symbols(&file);
+
+    merge_function_starts::<Mach>(&file, data, &mut symbols);
 
     Ok(BinaryImage {
         arch,
@@ -120,6 +122,89 @@ where
         string_table: BTreeMap::new(),
         tls_callbacks: Vec::new(),
     })
+}
+
+/// Merge function entry addresses from `LC_FUNCTION_STARTS` into `out`.
+///
+/// `LC_FUNCTION_STARTS` is a `LinkeditDataCommand` whose payload is a stream
+/// of ULEB128 deltas relative to the `__TEXT` segment's `vmaddr`. The first
+/// delta is added to `vmaddr` to yield the first function start; each
+/// subsequent delta accumulates from the previous address. A zero delta
+/// terminates the list.
+///
+/// We synthesize `sub_<addr:x>` named symbols for any address not already
+/// covered by the symbol table. Existing symbols win — the symbol table
+/// has type info and aliases that LC_FUNCTION_STARTS lacks.
+fn merge_function_starts<Mach>(
+    file: &MachOFile<Mach>,
+    data: &[u8],
+    out: &mut BTreeMap<u64, Symbol>,
+) where
+    Mach: MachHeader<Endian = object::Endianness>,
+{
+    let endian = match file.macho_header().endian() {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    let text_vmaddr = match find_text_segment_vmaddr::<Mach>(file, endian) {
+        Some(v) => v,
+        None => return,
+    };
+
+    let mut cmds = match file.macho_header().load_commands(endian, data, 0) {
+        Ok(c) => c,
+        Err(err) => {
+            tracing::debug!(?err, "Mach-O load commands unreadable");
+            return;
+        }
+    };
+
+    while let Ok(Some(cmd)) = cmds.next() {
+        let variant = match cmd.variant() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let LoadCommandVariant::LinkeditData(linkedit) = variant else {
+            continue;
+        };
+        if linkedit.cmd.get(endian) != macho::LC_FUNCTION_STARTS {
+            continue;
+        }
+        let mut iter = match linkedit.function_starts(endian, data, text_vmaddr) {
+            Ok(i) => i,
+            Err(err) => {
+                tracing::debug!(?err, "LC_FUNCTION_STARTS payload unreadable");
+                return;
+            }
+        };
+        while let Ok(Some(addr)) = iter.next() {
+            out.entry(addr).or_insert_with(|| Symbol {
+                name: format!("sub_{addr:x}"),
+                addr,
+                size: 0,
+                kind: SymbolKind::Function,
+            });
+        }
+        return;
+    }
+}
+
+fn find_text_segment_vmaddr<Mach>(
+    file: &MachOFile<Mach>,
+    endian: object::Endianness,
+) -> Option<u64>
+where
+    Mach: MachHeader<Endian = object::Endianness>,
+{
+    for sec in file.sections() {
+        let name = sec.name().ok()?;
+        if name == "__text" || name.starts_with("__TEXT,__text") {
+            return Some(sec.address() & !0xFFFu64);
+        }
+    }
+    let _ = endian;
+    None
 }
 
 /// Map the Mach-O `cputype` value to our [`ArchId`].

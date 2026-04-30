@@ -24,7 +24,7 @@ pub mod variable_merge;
 pub mod rust_vtable;
 
 pub use pass::{Pass, PassError, run_to_fixedpoint};
-pub use calling_convention::CallingConventionDetectPass;
+pub use calling_convention::{CallingConventionDetectPass, ParamInferPass, ReturnTypeInferPass};
 pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;

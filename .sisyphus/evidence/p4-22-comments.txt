@@ -1,0 +1,48 @@
+P4-22: Register/stack variable comments in declarations
+========================================================
+
+WHAT CHANGED
+------------
+- crates/unlace-output/src/c_printer.rs:
+  - Variable declaration loop (line ~207) now emits IDA-style location comments
+  - Added `varnode_location_comment()`: maps Varnode space to comment string
+    - SpaceId::Register → register name (e.g., "rax", "ecx", "xmm0")
+    - SpaceId::Stack → "[rsp+XXh]" format
+    - SpaceId::Unique → "temp"
+    - SpaceId::Const/Ram → None (no comment)
+  - Added `x86_64_register_name()`: full offset+size → name mapping for:
+    - GP registers (RAX..R15 at all widths: 64/32/16/8-bit)
+    - High bytes (AH, BH, CH, DH)
+    - RFLAGS (CF, PF, AF, ZF, SF, OF)
+    - XMM0-XMM15 (128-bit) and YMM0-YMM15 (256-bit)
+
+- crates/unlace-output/src/ir_dump.rs:
+  - Fixed pre-existing missing fields (inferred_params, inferred_return_type)
+
+- crates/unlace-passes/src/lib.rs:
+  - Removed pre-existing broken re-exports (ParamInferPass, ReturnTypeInferPass)
+
+OUTPUT EXAMPLES
+---------------
+Before:
+    long long v1;
+    int v2;
+
+After:
+    long long v1; // rax
+    int v2; // ecx
+    long long v3; // [rsp+20h]
+    long long v4; // temp
+
+TESTS ADDED (4)
+---------------
+- test_register_comment_rax: reg offset 0, size 8 → `// rax`
+- test_register_comment_ecx: reg offset 8, size 4 → `// ecx`
+- test_stack_comment: stack offset 0x20 → `// [rsp+20h]`
+- test_unique_temp_comment: unique space → `// temp`
+
+TEST RESULTS
+------------
+cargo test -p unlace-output --lib: 132 passed, 0 failed
+cargo test -p unlace-ir: all passed
+cargo test -p unlace-struct: all passed

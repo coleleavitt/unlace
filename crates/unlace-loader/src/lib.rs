@@ -14,8 +14,8 @@ pub mod pe;
 pub mod strings;
 
 pub use dwarf::{
-    import_dwarf, DwarfInfo, EnumType, FunctionDebugInfo, ParameterInfo, SourceLocation,
-    StructField, StructType, UnionType,
+    import_dwarf, DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo,
+    SourceLocation, StructField, StructType, UnionType,
 };
 pub use eh_frame::{parse_eh_frame, EhFrameInfo, FunctionExtent, LsdaEntry};
 pub use elf::ElfLoader;

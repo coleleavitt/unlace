@@ -137,6 +137,8 @@ pub fn print_c_full(
     let str_owned = string_table.cloned().unwrap_or_default();
     let mut ctx = PrintCtx::new(dwarf, func.panic_sites.clone(), sym_owned, str_owned);
 
+    let dwarf_func = dwarf.and_then(|d| d.functions.get(&func.addr));
+    compute_dwarf_local_names(dwarf_func, header, &mut ctx);
     compute_loop_counter_names(&func.body, 0, &mut ctx);
     collect_varnodes(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
@@ -150,8 +152,6 @@ pub fn print_c_full(
     if let Some(hdr) = header {
         emit_function_header(hdr, &mut out);
     }
-
-    let dwarf_func = dwarf.and_then(|d| d.functions.get(&func.addr));
 
     let demangled = crate::demangle::demangle(&func.name);
     let emit_name = match (&dwarf_func, &demangled) {
@@ -941,6 +941,45 @@ fn compute_byref_bases(ctx: &mut PrintCtx) {
                     ctx.byref_bases.insert(stk);
                 }
             }
+        }
+    }
+}
+
+/// Map DWARF local variable names onto stack-backed Varnode bases.
+///
+/// For each `LocalVariable` with a known `frame_offset`, derive the
+/// equivalent positive RSP offset using the recovered frame size and
+/// register the DWARF name in `ctx.name_overrides` for the matching
+/// `SpaceId::Stack` Varnode. Stack variables that DWARF does not name
+/// keep their generated `vN`/`local_X` identifier.
+fn compute_dwarf_local_names(
+    dwarf_func: Option<&unlace_loader::FunctionDebugInfo>,
+    header: Option<&FunctionHeaderInfo>,
+    ctx: &mut PrintCtx,
+) {
+    let dwarf_func = match dwarf_func {
+        Some(df) => df,
+        None => return,
+    };
+    let frame_size = match header.map(|h| h.stack_frame).filter(|fs| *fs > 0) {
+        Some(fs) => fs as i64,
+        None => return,
+    };
+
+    for local in &dwarf_func.locals {
+        let frame_off = match local.frame_offset {
+            Some(o) => o,
+            None => continue,
+        };
+        let rsp_off = frame_size + frame_off;
+        if rsp_off < 0 {
+            continue;
+        }
+        for size in [1u8, 2, 4, 8] {
+            let stk = Varnode::stack(rsp_off as u64, size);
+            ctx.name_overrides
+                .entry(stk)
+                .or_insert_with(|| local.name.clone());
         }
     }
 }
@@ -2994,6 +3033,7 @@ mod tests {
             params: vec![],
             return_type: Some("int".to_string()),
             decl: None,
+            locals: vec![],
         });
         let dwarf = DwarfInfo {
             functions,
@@ -3034,6 +3074,7 @@ mod tests {
             ],
             return_type: Some("int".to_string()),
             decl: None,
+            locals: vec![],
         });
         let dwarf = DwarfInfo {
             functions,
@@ -3082,6 +3123,7 @@ mod tests {
             ],
             return_type: Some("int".to_string()),
             decl: None,
+            locals: vec![],
         });
         let dwarf = DwarfInfo {
             functions,
@@ -3119,6 +3161,7 @@ mod tests {
             params: vec![],
             return_type: Some("long".to_string()),
             decl: None,
+            locals: vec![],
         });
         let dwarf = DwarfInfo {
             functions,
@@ -5678,6 +5721,72 @@ mod tests {
         assert!(
             decl_line.contains("// [rsp+20h]"),
             "stack var at offset 0x20 should have `// [rsp+20h]` comment: {decl_line}",
+        );
+    }
+
+    #[test]
+    fn test_dwarf_local_name_used_for_stack_var() {
+        use std::collections::BTreeMap;
+        use unlace_loader::{DwarfInfo, FunctionDebugInfo, LocalVariable};
+
+        let stk = Varnode::stack(0x10, 8);
+        let one = con(1, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, stk, smallvec![stk, one], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: stk, version: 0 })),
+        ];
+
+        let func = make_func("with_named_local", body);
+        let header = super::FunctionHeaderInfo {
+            name: "with_named_local".to_string(),
+            address: 0x1000,
+            size: 0x40,
+            convention: "System V AMD64".to_string(),
+            stack_frame: 0x60,
+            callees: vec![],
+        };
+
+        let mut functions = BTreeMap::new();
+        functions.insert(0x1000, FunctionDebugInfo {
+            name: "with_named_local".to_string(),
+            linkage_name: None,
+            low_pc: 0x1000,
+            high_pc: Some(0x1040),
+            params: vec![],
+            return_type: Some("long long".to_string()),
+            decl: None,
+            locals: vec![LocalVariable {
+                name: "counter".to_string(),
+                type_name: Some("long long".to_string()),
+                frame_offset: Some(-0x50),
+            }],
+        });
+        let dwarf = DwarfInfo {
+            functions,
+            source_map: BTreeMap::new(),
+            structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
+        };
+
+        let output = super::print_c_full(
+            &func,
+            Some(&dwarf),
+            Some(&header),
+            None,
+            None,
+        );
+
+        assert!(
+            output.contains(" counter;") || output.contains(" counter "),
+            "DWARF local name 'counter' should be used: {output}",
+        );
+        assert!(
+            !output.contains(" v1;") && !output.contains(" v1 "),
+            "should not fall back to vN when DWARF supplies a name: {output}",
         );
     }
 

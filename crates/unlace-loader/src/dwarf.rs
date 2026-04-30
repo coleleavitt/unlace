@@ -3,11 +3,11 @@ use std::collections::BTreeMap;
 
 use gimli::{
     AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_data_member_location, DW_AT_high_pc,
-    DW_AT_linkage_name, DW_AT_low_pc, DW_AT_name, DW_AT_type, DW_TAG_base_type,
+    DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_type, DW_TAG_base_type,
     DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter,
     DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type,
-    DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_volatile_type, EndianSlice,
-    RunTimeEndian,
+    DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable,
+    DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
 };
 
 use crate::error::LoadError;
@@ -33,12 +33,27 @@ pub struct FunctionDebugInfo {
     pub params: Vec<ParameterInfo>,
     pub return_type: Option<String>,
     pub decl: Option<SourceLocation>,
+    pub locals: Vec<LocalVariable>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParameterInfo {
     pub name: Option<String>,
     pub type_name: Option<String>,
+}
+
+/// A local variable extracted from `DW_TAG_variable` inside a subprogram.
+///
+/// `frame_offset` is the signed offset relative to the canonical frame
+/// pointer (negative = below saved RBP, the common case for stack locals)
+/// when the variable's `DW_AT_location` is a single `DW_OP_fbreg` opcode.
+/// Other location forms (registers, complex DWARF expressions) are
+/// preserved without `frame_offset` so callers can still surface the name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalVariable {
+    pub name: String,
+    pub type_name: Option<String>,
+    pub frame_offset: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,7 +182,7 @@ fn extract_functions_from_unit(
         };
 
         let decl = extract_decl_location(dwarf, unit, entry)?;
-        let params = extract_parameters(dwarf, unit, child)?;
+        let (params, locals) = extract_params_and_locals(dwarf, unit, child)?;
 
         functions.insert(
             low_pc,
@@ -179,6 +194,7 @@ fn extract_functions_from_unit(
                 params,
                 return_type,
                 decl,
+                locals,
             },
         );
     }
@@ -403,30 +419,87 @@ fn resolve_type_size(
         .and_then(|v| v.udata_value())
 }
 
-fn extract_parameters(
+fn extract_params_and_locals(
     dwarf: &gimli::Dwarf<R<'_>>,
     unit: &gimli::Unit<R<'_>>,
     func_node: gimli::EntriesTreeNode<'_, '_, R<'_>>,
-) -> Result<Vec<ParameterInfo>, gimli::Error> {
+) -> Result<(Vec<ParameterInfo>, Vec<LocalVariable>), gimli::Error> {
     let mut params = Vec::new();
+    let mut locals = Vec::new();
     let mut children = func_node.children();
 
     while let Some(child) = children.next()? {
-        if child.entry().tag() != DW_TAG_formal_parameter {
-            continue;
-        }
+        let tag = child.entry().tag();
         let entry = child.entry();
 
-        let name = attr_string(dwarf, unit, entry, DW_AT_name)?;
-        let type_name = match entry.attr_value(DW_AT_type) {
-            Some(val) => resolve_type_name(dwarf, unit, val)?,
-            None => None,
-        };
-
-        params.push(ParameterInfo { name, type_name });
+        if tag == DW_TAG_formal_parameter {
+            let name = attr_string(dwarf, unit, entry, DW_AT_name)?;
+            let type_name = match entry.attr_value(DW_AT_type) {
+                Some(val) => resolve_type_name(dwarf, unit, val)?,
+                None => None,
+            };
+            params.push(ParameterInfo { name, type_name });
+        } else if tag == DW_TAG_variable {
+            let name = match attr_string(dwarf, unit, entry, DW_AT_name)? {
+                Some(n) => n,
+                None => continue,
+            };
+            let type_name = match entry.attr_value(DW_AT_type) {
+                Some(val) => resolve_type_name(dwarf, unit, val)?,
+                None => None,
+            };
+            let frame_offset = entry
+                .attr_value(DW_AT_location)
+                .and_then(decode_fbreg_offset);
+            locals.push(LocalVariable {
+                name,
+                type_name,
+                frame_offset,
+            });
+        }
     }
 
-    Ok(params)
+    Ok((params, locals))
+}
+
+/// Decode a `DW_AT_location` value as a single `DW_OP_fbreg <sleb>` opcode.
+///
+/// Returns `Some(offset)` when the location is exactly a `DW_OP_fbreg`
+/// expression and `None` otherwise. The opcode constant is `0x91` and the
+/// operand is an SLEB128. Compilers commonly emit this single-opcode form
+/// for stack-allocated locals.
+fn decode_fbreg_offset(value: AttributeValue<R<'_>>) -> Option<i64> {
+    let bytes: &[u8] = match value {
+        AttributeValue::Block(b) | AttributeValue::Exprloc(gimli::Expression(b)) => b.slice(),
+        _ => return None,
+    };
+    if bytes.first().copied() != Some(0x91) {
+        return None;
+    }
+    let mut cursor = &bytes[1..];
+    let mut result: i64 = 0;
+    let mut shift: u32 = 0;
+    let mut last: u8;
+    loop {
+        let byte = *cursor.first()?;
+        cursor = &cursor[1..];
+        last = byte;
+        result |= ((byte & 0x7f) as i64) << shift;
+        shift += 7;
+        if byte & 0x80 == 0 {
+            break;
+        }
+        if shift >= 64 {
+            return None;
+        }
+    }
+    if shift < 64 && (last & 0x40) != 0 {
+        result |= -(1i64 << shift);
+    }
+    if !cursor.is_empty() {
+        return None;
+    }
+    Some(result)
 }
 
 fn resolve_type_name(

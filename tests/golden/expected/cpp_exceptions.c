@@ -1,0 +1,389 @@
+typedef unsigned char _BYTE;
+typedef unsigned short _WORD;
+typedef unsigned int _DWORD;
+typedef unsigned long long _QWORD;
+typedef unsigned char _BOOL;
+typedef signed char __int8;
+typedef signed short __int16;
+typedef signed int __int32;
+typedef signed long long __int64;
+#define LOBYTE(x)  ((_BYTE)(x))
+#define BYTE1(x)   ((_BYTE)((x) >> 8))
+#define BYTE2(x)   ((_BYTE)((x) >> 16))
+#define BYTE3(x)   ((_BYTE)((x) >> 24))
+#define LOWORD(x)  ((_WORD)(x))
+#define HIWORD(x)  ((_WORD)((x) >> 16))
+#define LODWORD(x) ((_DWORD)(x))
+#define HIDWORD(x) ((_DWORD)((x) >> 32))
+#define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
+#define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+// FS-segment TLS reads (stack canary, GLIBC TCB).
+_QWORD __readfsqword(unsigned int offset);
+_DWORD __readfsdword(unsigned int offset);
+
+/*
+ * Function:   _Z9may_throwi.cold
+ * Address:    0x1140
+ * Size:       0x4c (76 bytes)
+ * Convention: AArch64 AAPCS64
+ * Stack frame: 0x0 (0 bytes)
+ * Xrefs to:   _Unwind_Resume, _ZNSt13runtime_errorC1EPKc, __cxa_allocate_exception, __cxa_free_exception, __cxa_throw
+ * Xrefs from: unknown
+ */
+// may_throw(int) [clone .cold]
+void __aapcs may_throw(void * a1) {
+    int v3; // rax
+    long long v2; // rsp
+    int v5; // rip
+    long long v1; // temp
+    unsigned long long v6; // temp
+
+    v1 = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(0LL) = v3;
+    v1 = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(0LL) = v3;
+    v1 = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(0LL) = v3;
+    v1 = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(0LL) = 0x114eLL;
+    __cxa_allocate_exception();
+    v4 = v3;
+    v1 = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(0LL) = 0x1160LL;
+    _ZNSt13runtime_errorC1EPKc();
+    v1 = v5 + 0x3fe0LL;
+    v6 = *(_QWORD *)(0LL);
+    v1 = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(0LL) = 0x1176LL;
+    __cxa_throw();
+    v7 = v3;
+    v1 = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(0LL) = 0x1185LL;
+    __cxa_free_exception();
+    v1 = 0LL;
+    *(_QWORD *)(0LL) = 0x118dLL;
+    _Unwind_Resume();
+}
+typedef unsigned char _BYTE;
+typedef unsigned short _WORD;
+typedef unsigned int _DWORD;
+typedef unsigned long long _QWORD;
+typedef unsigned char _BOOL;
+typedef signed char __int8;
+typedef signed short __int16;
+typedef signed int __int32;
+typedef signed long long __int64;
+#define LOBYTE(x)  ((_BYTE)(x))
+#define BYTE1(x)   ((_BYTE)((x) >> 8))
+#define BYTE2(x)   ((_BYTE)((x) >> 16))
+#define BYTE3(x)   ((_BYTE)((x) >> 24))
+#define LOWORD(x)  ((_WORD)(x))
+#define HIWORD(x)  ((_WORD)((x) >> 16))
+#define LODWORD(x) ((_DWORD)(x))
+#define HIDWORD(x) ((_DWORD)((x) >> 32))
+#define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
+#define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+// FS-segment TLS reads (stack canary, GLIBC TCB).
+_QWORD __readfsqword(unsigned int offset);
+_DWORD __readfsdword(unsigned int offset);
+
+/*
+ * Function:   _Z9safe_calli.cold
+ * Address:    0x118d
+ * Size:       0x92 (146 bytes)
+ * Convention: unknown
+ * Stack frame: 0x0 (0 bytes)
+ * Xrefs to:   _ZNSt13runtime_errorC1EPKc, __cxa_allocate_exception, __cxa_begin_catch, __cxa_free_exception, __cxa_throw
+ * Xrefs from: unknown
+ */
+// safe_call(int) [clone .cold]
+__int32 safe_call(void) {
+    int v15; // eax
+    long long v7; // rax
+    long long v4; // rbx
+    long long v2; // rsp
+    int v3; // rip
+    signed char v8; // ZF
+    int v11; // temp
+    long long result; // temp
+    unsigned long long v5; // temp
+    unsigned long long pfn; // temp
+    signed char v12; // temp
+    signed char v13; // temp
+    signed char v14; // temp
+
+    result = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(8LL) = 8LL;
+    result = 0LL;
+    v2 = 0LL;
+    result = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(0LL) = 0x119cLL;
+    __cxa_allocate_exception();
+    result = v3 + "negative";
+    v4 = 0LL;
+    result = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(0LL) = 0x11aeLL;
+    _ZNSt13runtime_errorC1EPKc();
+    result = v3 + 0x3fe0LL;
+    v5 = *(_QWORD *)(0LL);
+    v6 = 8LL;
+    result = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(8LL) = 0x11c4LL;
+    __cxa_throw();
+    *(_QWORD *)(8LL) = 8LL;
+    result = 0LL;
+    *(_QWORD *)(8LL) = 8LL;
+    result = 0LL;
+    v2 = 0LL;
+    *(_QWORD *)(8LL) = 0x11d9LL;
+    __cxa_free_exception();
+    result = 0LL;
+    v5 = 0LL;
+    v7 = 0LL;
+    result = 0LL;
+    v8 = 0;
+    v7 = 0LL;
+    v9 = 0;
+    if (v9) {
+    } else {
+        result = 0LL;
+        v2 = 0LL;
+        *(_QWORD *)(0LL) = 0x11edLL;
+        __cxa_begin_catch();
+        result = *(_QWORD *)(0LL);
+        v6 = 0LL;
+        result = 0LL;
+        v2 = 0LL;
+        *(_QWORD *)(0LL) = 0x11f6LL;
+        v5 = 0x10LL;
+        pfn = *(_QWORD *)(8LL);
+        ((void (*)())pfn)();
+        v11 = 0;
+        v12 = LOBYTE(0);
+        v13 = 0;
+        v14 = 0;
+        v15 = 0;
+        result = 0LL;
+        v2 = 0LL;
+        result = 0LL;
+        v2 = 0LL;
+        *(_QWORD *)(8LL) = 0x1211LL;
+        result = 8LL;
+        v2 = 8LL;
+        result = *(_QWORD *)(8LL);
+        v5 = 8LL;
+        v2 = 8LL;
+        result = *(_QWORD *)(8LL);
+        return result;
+    }
+}
+typedef unsigned char _BYTE;
+typedef unsigned short _WORD;
+typedef unsigned int _DWORD;
+typedef unsigned long long _QWORD;
+typedef unsigned char _BOOL;
+typedef signed char __int8;
+typedef signed short __int16;
+typedef signed int __int32;
+typedef signed long long __int64;
+#define LOBYTE(x)  ((_BYTE)(x))
+#define BYTE1(x)   ((_BYTE)((x) >> 8))
+#define BYTE2(x)   ((_BYTE)((x) >> 16))
+#define BYTE3(x)   ((_BYTE)((x) >> 24))
+#define LOWORD(x)  ((_WORD)(x))
+#define HIWORD(x)  ((_WORD)((x) >> 16))
+#define LODWORD(x) ((_DWORD)(x))
+#define HIDWORD(x) ((_DWORD)((x) >> 32))
+#define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
+#define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+// FS-segment TLS reads (stack canary, GLIBC TCB).
+_QWORD __readfsqword(unsigned int offset);
+_DWORD __readfsdword(unsigned int offset);
+
+/*
+ * Function:   main
+ * Address:    0x1250
+ * Size:       0x0 (0 bytes)
+ * Convention: unknown
+ * Stack frame: 0x0 (0 bytes)
+ * Xrefs from: unknown
+ */
+void main(void) {
+}
+typedef unsigned char _BYTE;
+typedef unsigned short _WORD;
+typedef unsigned int _DWORD;
+typedef unsigned long long _QWORD;
+typedef unsigned char _BOOL;
+typedef signed char __int8;
+typedef signed short __int16;
+typedef signed int __int32;
+typedef signed long long __int64;
+#define LOBYTE(x)  ((_BYTE)(x))
+#define BYTE1(x)   ((_BYTE)((x) >> 8))
+#define BYTE2(x)   ((_BYTE)((x) >> 16))
+#define BYTE3(x)   ((_BYTE)((x) >> 24))
+#define LOWORD(x)  ((_WORD)(x))
+#define HIWORD(x)  ((_WORD)((x) >> 16))
+#define LODWORD(x) ((_DWORD)(x))
+#define HIDWORD(x) ((_DWORD)((x) >> 32))
+#define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
+#define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+// FS-segment TLS reads (stack canary, GLIBC TCB).
+_QWORD __readfsqword(unsigned int offset);
+_DWORD __readfsdword(unsigned int offset);
+
+/*
+ * Function:   _start
+ * Address:    0x1260
+ * Size:       0x1f (31 bytes)
+ * Convention: unknown
+ * Stack frame: 0x0 (0 bytes)
+ * Xrefs from: unknown
+ */
+void _start(void) {
+    int v8; // ecx
+    long long v4; // rsp
+    int v9; // rip
+    int v1; // temp
+    long long v5; // temp
+    signed char v6; // temp
+    unsigned long long v10; // temp
+
+    v1 = 0;
+    v2 = 0;
+    v3 = 0LL;
+    v4 = 0LL;
+    v5 = 0LL;
+    v3 = 0LL;
+    v6 = 0;
+    v4 = 0LL;
+    v5 = 0LL;
+    v4 = 0LL;
+    v5 = 0LL;
+    v4 = 0LL;
+    v1 = 0;
+    v7 = 0;
+    v1 = 0;
+    v8 = 0;
+    v5 = 0LL;
+    *(_QWORD *)(0LL) = 0x1285LL;
+    v3 = v9 + 0x3fd8LL;
+    v10 = *(_QWORD *)(0LL);
+}
+typedef unsigned char _BYTE;
+typedef unsigned short _WORD;
+typedef unsigned int _DWORD;
+typedef unsigned long long _QWORD;
+typedef unsigned char _BOOL;
+typedef signed char __int8;
+typedef signed short __int16;
+typedef signed int __int32;
+typedef signed long long __int64;
+#define LOBYTE(x)  ((_BYTE)(x))
+#define BYTE1(x)   ((_BYTE)((x) >> 8))
+#define BYTE2(x)   ((_BYTE)((x) >> 16))
+#define BYTE3(x)   ((_BYTE)((x) >> 24))
+#define LOWORD(x)  ((_WORD)(x))
+#define HIWORD(x)  ((_WORD)((x) >> 16))
+#define LODWORD(x) ((_DWORD)(x))
+#define HIDWORD(x) ((_DWORD)((x) >> 32))
+#define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
+#define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+// FS-segment TLS reads (stack canary, GLIBC TCB).
+_QWORD __readfsqword(unsigned int offset);
+_DWORD __readfsdword(unsigned int offset);
+
+/*
+ * Function:   _Z9may_throwi
+ * Address:    0x1350
+ * Size:       0xc (12 bytes)
+ * Convention: unknown
+ * Stack frame: 0x0 (0 bytes)
+ * Xrefs from: unknown
+ */
+// may_throw(int)
+void may_throw(void) {
+    int v1; // edi
+    _Bool cond; // PF
+    signed char v6; // SF
+    int v2; // temp
+
+    do {
+        v2 = v1;
+        cond = v1 == 0;
+        v6 = LOBYTE(v1 < 0);
+        cond = (__builtin_popcount(LOBYTE(v1)) & 1) == 0;
+    } while (v6);
+    result = 0LL;
+    v12 = 0LL;
+    v13 = 0LL;
+    return result;
+}
+typedef unsigned char _BYTE;
+typedef unsigned short _WORD;
+typedef unsigned int _DWORD;
+typedef unsigned long long _QWORD;
+typedef unsigned char _BOOL;
+typedef signed char __int8;
+typedef signed short __int16;
+typedef signed int __int32;
+typedef signed long long __int64;
+#define LOBYTE(x)  ((_BYTE)(x))
+#define BYTE1(x)   ((_BYTE)((x) >> 8))
+#define BYTE2(x)   ((_BYTE)((x) >> 16))
+#define BYTE3(x)   ((_BYTE)((x) >> 24))
+#define LOWORD(x)  ((_WORD)(x))
+#define HIWORD(x)  ((_WORD)((x) >> 16))
+#define LODWORD(x) ((_DWORD)(x))
+#define HIDWORD(x) ((_DWORD)((x) >> 32))
+#define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
+#define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
+// FS-segment TLS reads (stack canary, GLIBC TCB).
+_QWORD __readfsqword(unsigned int offset);
+_DWORD __readfsdword(unsigned int offset);
+
+/*
+ * Function:   _Z9safe_calli
+ * Address:    0x1360
+ * Size:       0xe (14 bytes)
+ * Convention: unknown
+ * Stack frame: 0x0 (0 bytes)
+ * Xrefs from: unknown
+ */
+// safe_call(int)
+void safe_call(void) {
+    int v1; // edi
+    signed char v5; // SF
+    int v2; // temp
+    long long v9; // temp
+    int v3; // temp
+    signed char v6; // temp
+    signed char v7; // temp
+
+    do {
+        v2 = v1;
+        v3 = 0;
+        v5 = 0;
+        v6 = LOBYTE(0);
+        v7 = 0;
+    } while (v5);
+    v2 = 0;
+    v6 = 0;
+    v7 = 0;
+    v8 = 0;
+    v9 = 0LL;
+    v10 = 0LL;
+    v11 = 0LL;
+}

@@ -6,8 +6,9 @@
 //! `golden_arm.rs` (which smoke-tests the ARM lifter), this suite stores the
 //! actual `unlace decompile` output for our own ELF fixtures and diffs against
 //! it on every run. Any change to the decompiler that alters output for
-//! `medium.elf`, `debug_structs.elf`, `debug_calls.elf`, or `debug_hello.elf`
-//! will fail this test.
+//! `medium.elf`, `debug_structs.elf`, `debug_calls.elf`, `debug_hello.elf`,
+//! `cpp_vtable.elf`, `cpp_exceptions.elf`, or `cpp_rtti.elf` will fail
+//! this test.
 //!
 //! # Running
 //!
@@ -281,8 +282,31 @@ fn golden_debug_hello() {
 }
 
 #[test]
+fn golden_cpp_vtable() {
+    run_golden("cpp_vtable");
+}
+
+#[test]
+fn golden_cpp_exceptions() {
+    run_golden("cpp_exceptions");
+}
+
+#[test]
+fn golden_cpp_rtti() {
+    run_golden("cpp_rtti");
+}
+
+#[test]
 fn golden_fixtures_metrics_summary() {
-    let fixtures = ["medium", "debug_structs", "debug_calls", "debug_hello"];
+    let fixtures = [
+        "medium",
+        "debug_structs",
+        "debug_calls",
+        "debug_hello",
+        "cpp_vtable",
+        "cpp_exceptions",
+        "cpp_rtti",
+    ];
     let mut total = Metrics { lines: 0, if_count: 0, return_count: 0, variable_count: 0 };
 
     eprintln!();

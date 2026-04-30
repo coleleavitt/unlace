@@ -7,3 +7,7 @@ edition.workspace = true
 tree-sitter = "0.24"
 tree-sitter-c = "0.23"
 thiserror = { workspace = true }
+
+[dev-dependencies]
+unlace-lift-arm = { workspace = true }
+unlace-ir = { workspace = true }

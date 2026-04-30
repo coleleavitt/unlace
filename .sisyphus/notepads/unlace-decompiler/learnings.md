@@ -478,3 +478,13 @@
 - Source layout: lib.rs (re-exports), lift.rs (MipsLifter + LiftCtx + dispatch + tests), register_file.rs (offsets + capstone reg mapping), ops/{mod,arithmetic,bitwise,control_flow,data_move,memory}.rs.
 - 19 tests: arch_id, register_file, short_buffer, nop, addiu, addu, lw, sw, beq, j, jal, jr_ra, lui, and, sll, slt, mult, zero_hardwired, unknown_insn.
 - Facade test `test_all_stubs_produce_unimplemented` was outdated — ARM, RISC-V, PPC, V850 lifters were all already implemented. Reduced to only ARC stub.
+
+## Task 27: ARM Golden Suite
+- Created `crates/unlace-test-harness/tests/golden_arm.rs` mirroring the x86-64 golden suite structure.
+- 25 ARM golden .c files in `tests/golden/arm/` — all 25 self-parse as valid C via tree-sitter.
+- Complexity breakdown: 8 trivial, 8 simple, 5 branchy, 4 complex.
+- Added `unlace-lift-arm` and `unlace-ir` as dev-dependencies to `unlace-test-harness`.
+- Synthetic ARM lifter smoke tests: `mov x0, #42` (0xD2800540) and `ret` (0xD65F03C0) both lift successfully.
+- No ARM ELF fixtures exist yet — end-to-end decompilation tests blocked on fixture availability.
+- 30 tests total: 25 per-file self-parse + 1 bulk corpus scan + 3 lifter smoke + 1 harness validation.
+- Pass rate: 30/30 (100%). All ARM golden files parse cleanly with tree-sitter-c.

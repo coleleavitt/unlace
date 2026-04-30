@@ -43,6 +43,10 @@ pub enum Cmd {
         /// Increase verbosity (-v, -vv, -vvv).
         #[arg(long, short, action = clap::ArgAction::Count)]
         verbose: u8,
+
+        /// Per-function decompilation timeout in seconds (default: 30).
+        #[arg(long, default_value = "30")]
+        timeout: u64,
     },
 }
 

@@ -1,4 +1,6 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
@@ -10,6 +12,8 @@ use unlace_passes::{
 };
 
 use crate::args::EmitFormat;
+
+const IR_NODE_WARN_THRESHOLD: usize = 100_000;
 
 #[derive(Clone, Debug)]
 pub struct FunctionEntry {
@@ -34,7 +38,12 @@ pub fn discover_functions(
         .collect();
 
     if funcs.is_empty() {
-        tracing::info!("no function symbols found; falling back to entry point");
+        tracing::info!("no function symbols found; attempting prologue scan");
+        funcs = scan_for_prologues(image);
+    }
+
+    if funcs.is_empty() {
+        tracing::info!("prologue scan found nothing; falling back to entry point");
         funcs.push(FunctionEntry {
             name: "entry".into(),
             addr: image.entry,
@@ -54,6 +63,59 @@ pub fn discover_functions(
     }
 
     Ok(funcs)
+}
+
+const ENDBR64: [u8; 4] = [0xf3, 0x0f, 0x1e, 0xfa];
+const PUSH_RBP_MOV_RBP_RSP: [u8; 4] = [0x55, 0x48, 0x89, 0xe5];
+// `sub rsp, imm8` encoding: REX.W + SUB r/m64, imm8
+const SUB_RSP_IMM8: [u8; 3] = [0x48, 0x83, 0xec];
+
+fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
+    let text = match image.section_by_name(".text") {
+        Some(s) => s,
+        None => return Vec::new(),
+    };
+
+    let data = &text.data;
+    let base = text.vaddr;
+    let mut addrs = BTreeSet::new();
+    let mut idx = 0;
+
+    while idx < data.len() {
+        if idx + 4 <= data.len() && data[idx..idx + 4] == ENDBR64 {
+            addrs.insert(base + idx as u64);
+            idx += 4;
+            continue;
+        }
+        if idx + 4 <= data.len() && data[idx..idx + 4] == PUSH_RBP_MOV_RBP_RSP {
+            addrs.insert(base + idx as u64);
+            idx += 4;
+            continue;
+        }
+        if idx + 3 <= data.len() && data[idx..idx + 3] == SUB_RSP_IMM8 {
+            addrs.insert(base + idx as u64);
+            idx += 3;
+            continue;
+        }
+        idx += 1;
+    }
+
+    let sorted: Vec<u64> = addrs.iter().copied().collect();
+    let text_end = base + text.size;
+
+    sorted
+        .iter()
+        .enumerate()
+        .map(|(i, &addr)| {
+            let next = sorted.get(i + 1).copied().unwrap_or(text_end);
+            let size = next - addr;
+            FunctionEntry {
+                name: format!("sub_{addr:x}"),
+                addr,
+                size,
+            }
+        })
+        .collect()
 }
 
 enum FunctionTarget {
@@ -187,8 +249,6 @@ fn build_function_from_insns(
     let mut block_starts: BTreeMap<u64, u32> = BTreeMap::new();
     block_starts.insert(entry_addr, 0);
 
-    // Pass 1: identify block boundaries — new block after each terminator
-    // and at each branch target address.
     for (i, rec) in insns.iter().enumerate() {
         if rec.is_terminator {
             if let Some(next) = insns.get(i + 1) {
@@ -207,7 +267,6 @@ fn build_function_from_insns(
         }
     }
 
-    // Assign sequential BlockId values.
     let sorted_addrs: Vec<u64> = block_starts.keys().copied().collect();
     for (idx, addr) in sorted_addrs.iter().enumerate() {
         block_starts.insert(*addr, idx as u32);
@@ -215,7 +274,6 @@ fn build_function_from_insns(
 
     let insn_addrs: Vec<u64> = insns.iter().map(|r| r.addr).collect();
 
-    // Pass 2: populate blocks with instructions and wire successor edges.
     let mut function = Function::new(name, BlockId(0), entry_addr);
 
     for (block_idx, &block_addr) in sorted_addrs.iter().enumerate() {
@@ -299,9 +357,6 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     let changes = run_to_fixedpoint(passes, ssa)
         .context("pass pipeline failed")?;
 
-    // TypeInferPass has an internal fixedpoint loop that can diverge on
-    // real-world IR produced by the x86 lifter. Run it with a bounded
-    // iteration count until the root cause is fixed in unlace-passes.
     run_type_infer_bounded(ssa);
 
     tracing::debug!(changes, "pass pipeline complete");
@@ -363,6 +418,72 @@ fn run_type_infer_bounded(ssa: &mut SsaFunction) {
             break;
         }
     }
+}
+
+pub fn ir_node_count(ssa: &SsaFunction) -> usize {
+    ssa.function
+        .blocks
+        .values()
+        .map(|b| b.insns.len())
+        .sum()
+}
+
+pub fn warn_if_large_ir(func_name: &str, ssa: &SsaFunction) {
+    let count = ir_node_count(ssa);
+    if count > IR_NODE_WARN_THRESHOLD {
+        tracing::warn!(
+            func = %func_name,
+            ir_nodes = count,
+            threshold = IR_NODE_WARN_THRESHOLD,
+            "function exceeds IR node threshold"
+        );
+    }
+}
+
+pub struct PipelineConfig {
+    pub timeout: Duration,
+}
+
+impl Default for PipelineConfig {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(30),
+        }
+    }
+}
+
+pub fn decompile_function(
+    image: &BinaryImage,
+    lifter: &dyn Lifter,
+    entry: &FunctionEntry,
+    emit: EmitFormat,
+    config: &PipelineConfig,
+) -> Result<String> {
+    let deadline = Instant::now() + config.timeout;
+
+    let ir_func = lift_function(image, lifter, entry)?;
+
+    check_timeout(deadline, &entry.name)?;
+
+    let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
+
+    warn_if_large_ir(&entry.name, &ssa);
+    check_timeout(deadline, &entry.name)?;
+
+    if let Err(e) = run_passes(&mut ssa) {
+        tracing::warn!(name = %entry.name, err = %e, "pass pipeline failed; emitting unoptimized");
+    }
+
+    check_timeout(deadline, &entry.name)?;
+
+    emit_output(emit, &ssa)
+}
+
+fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
+    if Instant::now() >= deadline {
+        bail!("timeout exceeded for function '{func_name}'");
+    }
+    Ok(())
 }
 
 pub fn emit_output(

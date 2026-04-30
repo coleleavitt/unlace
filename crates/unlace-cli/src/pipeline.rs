@@ -11,7 +11,7 @@ use unlace_passes::{
     CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
     CopyPropagationPass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
     DivisionIdiomPass, ExpressionTreePass, IdiomRecognitionPass, ModuloIdiomPass,
-    ParamInferPass, ReturnTypeInferPass, SccpPass, VariableMergePass, Pass,
+    ParamInferPass, PrologueElimPass, ReturnTypeInferPass, SccpPass, VariableMergePass, Pass,
     run_to_fixedpoint,
 };
 
@@ -374,6 +374,9 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
         .context("division idiom recovery failed")?;
     ModuloIdiomPass.run(ssa)
         .context("modulo idiom recovery failed")?;
+
+    PrologueElimPass.run(ssa)
+        .context("prologue/epilogue detection failed")?;
 
     CallingConventionDetectPass.run(ssa)
         .context("calling convention detection failed")?;

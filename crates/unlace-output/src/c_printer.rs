@@ -99,7 +99,14 @@ impl FunctionHeaderInfo {
         }
         let callees: Vec<String> = callees_set.into_iter().collect();
 
-        Self { name, address, size, convention, stack_frame, callees }
+        Self {
+            name,
+            address,
+            size,
+            convention,
+            stack_frame,
+            callees,
+        }
     }
 }
 
@@ -191,7 +198,11 @@ pub fn print_c_with_rtti(
     let conv_annotation = header.and_then(|h| calling_convention_annotation(&h.convention));
     let noreturn_mod = if func.noreturn { " __noreturn" } else { "" };
     if let Some(conv) = conv_annotation {
-        let _ = write!(out, "{}{} {} {}(", return_type_str, noreturn_mod, conv, emit_name);
+        let _ = write!(
+            out,
+            "{}{} {} {}(",
+            return_type_str, noreturn_mod, conv, emit_name
+        );
     } else {
         let _ = write!(out, "{}{} {}(", return_type_str, noreturn_mod, emit_name);
     }
@@ -206,10 +217,7 @@ pub fn print_c_with_rtti(
                 .as_deref()
                 .map(|s| dwarf_type_to_c(s))
                 .unwrap_or_else(|| "int".to_string());
-            let name = param
-                .name
-                .as_deref()
-                .unwrap_or("arg");
+            let name = param.name.as_deref().unwrap_or("arg");
             let _ = write!(out, "{} {}", ty, name);
         }
     } else {
@@ -226,9 +234,7 @@ pub fn print_c_with_rtti(
             let _ = write!(out, "{} {}", c_sig_type(pty), pname);
             param_idx += 1;
         }
-        if param_idx == 0
-            && dwarf_func.map_or(true, |df| df.params.is_empty())
-        {
+        if param_idx == 0 && dwarf_func.map_or(true, |df| df.params.is_empty()) {
             out.push_str("void");
         }
     }
@@ -247,7 +253,11 @@ pub fn print_c_with_rtti(
         if !declared_names.insert(name.as_str()) {
             continue;
         }
-        let ty = ctx.var_types.get(sv).copied().unwrap_or(PrimitiveType::Unknown);
+        let ty = ctx
+            .var_types
+            .get(sv)
+            .copied()
+            .unwrap_or(PrimitiveType::Unknown);
         let frame_size = header.map(|h| h.stack_frame);
         let byref_suffix = if ctx.byref_bases.contains(&sv.base) {
             " BYREF"
@@ -292,11 +302,7 @@ fn emit_function_header(hdr: &FunctionHeaderInfo, out: &mut String) {
     };
     let _ = writeln!(out, " * Function:   {}", display_name);
     let _ = writeln!(out, " * Address:    0x{:x}", hdr.address);
-    let _ = writeln!(
-        out,
-        " * Size:       0x{:x} ({} bytes)",
-        hdr.size, hdr.size,
-    );
+    let _ = writeln!(out, " * Size:       0x{:x} ({} bytes)", hdr.size, hdr.size,);
     let _ = writeln!(out, " * Convention: {}", hdr.convention);
     let _ = writeln!(
         out,
@@ -479,46 +485,88 @@ impl PrintCtx {
 
 fn build_field_offset_map(dwarf: Option<&DwarfInfo>) -> BTreeMap<u64, Vec<(String, String, u64)>> {
     let mut map: BTreeMap<u64, Vec<(String, String, u64)>> = BTreeMap::new();
-    let dwarf = match dwarf { Some(d) => d, None => return map };
+    let dwarf = match dwarf {
+        Some(d) => d,
+        None => return map,
+    };
     for st in dwarf.structs.values() {
         for field in &st.fields {
-            map.entry(field.offset).or_default().push((st.name.clone(), field.name.clone(), field.size));
+            map.entry(field.offset).or_default().push((
+                st.name.clone(),
+                field.name.clone(),
+                field.size,
+            ));
         }
     }
     map
 }
 
-fn try_resolve_struct_field(addr_insn: &IrInsn, addr_stmt_idx: u32, _load_size: u8, ctx: &mut PrintCtx) -> Option<String> {
-    if ctx.field_by_offset.is_empty() { return None; }
-    if addr_insn.op != IrOp::IntAdd || addr_insn.inputs.len() < 2 { return None; }
+fn try_resolve_struct_field(
+    addr_insn: &IrInsn,
+    addr_stmt_idx: u32,
+    _load_size: u8,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    if ctx.field_by_offset.is_empty() {
+        return None;
+    }
+    if addr_insn.op != IrOp::IntAdd || addr_insn.inputs.len() < 2 {
+        return None;
+    }
     let (base_input, const_offset) = if addr_insn.inputs[1].space == SpaceId::Const {
         (&addr_insn.inputs[0], addr_insn.inputs[1].offset)
     } else if addr_insn.inputs[0].space == SpaceId::Const {
         (&addr_insn.inputs[1], addr_insn.inputs[0].offset)
-    } else { return None; };
-    if base_input.space == SpaceId::Const { return None; }
+    } else {
+        return None;
+    };
+    if base_input.space == SpaceId::Const {
+        return None;
+    }
     let entries = ctx.field_by_offset.get(&const_offset)?;
     let field_name = entries.first()?.1.clone();
-    let base_sv = ctx.stmt_inputs.get(&addr_stmt_idx).cloned()
+    let base_sv = ctx
+        .stmt_inputs
+        .get(&addr_stmt_idx)
+        .cloned()
         .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_input).copied());
     let base_expr = match base_sv {
         Some(sv) => {
             if let Some(&ds) = ctx.sv_defining_stmt.get(&sv) {
                 if let Some(di) = ctx.stmt_insns.get(&ds).cloned() {
                     format!("({})", emit_expr(&di, ds, ctx))
-                } else { ctx.name_of(&sv) }
-            } else { ctx.name_of(&sv) }
+                } else {
+                    ctx.name_of(&sv)
+                }
+            } else {
+                ctx.name_of(&sv)
+            }
         }
-        None => { let sv = SsaVarnode { base: *base_input, version: 0 }; ctx.name_of(&sv) }
+        None => {
+            let sv = SsaVarnode {
+                base: *base_input,
+                version: 0,
+            };
+            ctx.name_of(&sv)
+        }
     };
-    Some(format!("{}->{}",  base_expr, field_name))
+    Some(format!("{}->{}", base_expr, field_name))
 }
 
-fn try_resolve_field_from_addr(addr_vn: &Varnode, _idx: usize, stmt_idx: u32, access_size: u8, ctx: &mut PrintCtx) -> Option<String> {
+fn try_resolve_field_from_addr(
+    addr_vn: &Varnode,
+    _idx: usize,
+    stmt_idx: u32,
+    access_size: u8,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
     if ctx.field_by_offset.is_empty() || addr_vn.space == SpaceId::Const {
         return None;
     }
-    let addr_sv = ctx.stmt_inputs.get(&stmt_idx).cloned()
+    let addr_sv = ctx
+        .stmt_inputs
+        .get(&stmt_idx)
+        .cloned()
         .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
     let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
     let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
@@ -624,7 +672,10 @@ fn try_array_subscript(
                 let idx_expr = emit_operand_resolved(idx_vn, 0, mult_def, ctx);
                 let base_expr = emit_operand_resolved(base_vn, base_pos, def_stmt, ctx);
 
-                return Some(ArraySubscript { base: base_expr, index: idx_expr });
+                return Some(ArraySubscript {
+                    base: base_expr,
+                    index: idx_expr,
+                });
             }
 
             // Pattern 3: INT_ADD(base, Const(offset)) → base[offset / stride]
@@ -644,7 +695,10 @@ fn try_array_subscript(
             }
             let computed_idx = offset / stride;
             let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
-            Some(ArraySubscript { base: base_expr, index: format!("{}", computed_idx) })
+            Some(ArraySubscript {
+                base: base_expr,
+                index: format!("{}", computed_idx),
+            })
         }
 
         // Pattern 2: PTRADD(base, index, Const(stride))
@@ -655,7 +709,10 @@ fn try_array_subscript(
             }
             let base_expr = emit_operand_resolved(&def_insn.inputs[0], 0, def_stmt, ctx);
             let idx_expr = emit_operand_resolved(&def_insn.inputs[1], 1, def_stmt, ctx);
-            Some(ArraySubscript { base: base_expr, index: idx_expr })
+            Some(ArraySubscript {
+                base: base_expr,
+                index: idx_expr,
+            })
         }
 
         _ => None,
@@ -738,7 +795,10 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
             continue;
         }
         let ver = ctx.current_version(input);
-        let sv = SsaVarnode { base: *input, version: ver };
+        let sv = SsaVarnode {
+            base: *input,
+            version: ver,
+        };
         ctx.name_of(&sv);
         input_svs.push(sv);
     }
@@ -746,7 +806,10 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
 
     let output_sv = if let Some(output) = insn.output {
         let ver = ctx.next_version(&output);
-        let sv = SsaVarnode { base: output, version: ver };
+        let sv = SsaVarnode {
+            base: output,
+            version: ver,
+        };
         ctx.name_of(&sv);
         infer_type_from_insn(insn, &sv, ctx);
         Some(sv)
@@ -774,7 +837,10 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                         continue;
                     }
                     let ver = ctx.current_version(input);
-                    let sv = SsaVarnode { base: *input, version: ver };
+                    let sv = SsaVarnode {
+                        base: *input,
+                        version: ver,
+                    };
                     ctx.name_of(&sv);
                     input_svs.push(sv);
                 }
@@ -782,7 +848,10 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
                 let output_sv = if let Some(output) = insn.output {
                     let ver = ctx.next_version(&output);
-                    let sv = SsaVarnode { base: output, version: ver };
+                    let sv = SsaVarnode {
+                        base: output,
+                        version: ver,
+                    };
                     ctx.name_of(&sv);
                     infer_type_from_insn(insn, &sv, ctx);
                     Some(sv)
@@ -793,7 +862,11 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.stmt_insns.insert(idx, insn.clone());
             }
 
-            HirNode::If { cond, then_body, else_body } => {
+            HirNode::If {
+                cond,
+                then_body,
+                else_body,
+            } => {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
                 ctx.collect_depth += 1;
@@ -820,7 +893,12 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.cond_uses.push(*cond);
             }
 
-            HirNode::For { init, cond, update, body } => {
+            HirNode::For {
+                init,
+                cond,
+                update,
+                body,
+            } => {
                 collect_insn_as_stmt(init, ctx);
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
@@ -830,7 +908,11 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.collect_depth -= 1;
             }
 
-            HirNode::Switch { cond, cases, default } => {
+            HirNode::Switch {
+                cond,
+                cases,
+                default,
+            } => {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
                 ctx.collect_depth += 1;
@@ -848,7 +930,12 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.cond_uses.push(*sv);
             }
 
-            HirNode::Ternary { cond, then_insn, else_insn, output: _ } => {
+            HirNode::Ternary {
+                cond,
+                then_insn,
+                else_insn,
+                output: _,
+            } => {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
 
@@ -861,14 +948,20 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                         continue;
                     }
                     let ver = ctx.current_version(input);
-                    let sv = SsaVarnode { base: *input, version: ver };
+                    let sv = SsaVarnode {
+                        base: *input,
+                        version: ver,
+                    };
                     ctx.name_of(&sv);
                     then_inputs.push(sv);
                 }
                 ctx.stmt_inputs.insert(then_idx, then_inputs);
                 let then_out_sv = if let Some(output) = then_insn.output {
                     let ver = ctx.next_version(&output);
-                    let sv = SsaVarnode { base: output, version: ver };
+                    let sv = SsaVarnode {
+                        base: output,
+                        version: ver,
+                    };
                     ctx.name_of(&sv);
                     infer_type_from_insn(then_insn, &sv, ctx);
                     Some(sv)
@@ -886,14 +979,20 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                         continue;
                     }
                     let ver = ctx.current_version(input);
-                    let sv = SsaVarnode { base: *input, version: ver };
+                    let sv = SsaVarnode {
+                        base: *input,
+                        version: ver,
+                    };
                     ctx.name_of(&sv);
                     else_inputs.push(sv);
                 }
                 ctx.stmt_inputs.insert(else_idx, else_inputs);
                 let else_out_sv = if let Some(output) = else_insn.output {
                     let ver = ctx.next_version(&output);
-                    let sv = SsaVarnode { base: output, version: ver };
+                    let sv = SsaVarnode {
+                        base: output,
+                        version: ver,
+                    };
                     ctx.name_of(&sv);
                     infer_type_from_insn(else_insn, &sv, ctx);
                     Some(sv)
@@ -903,10 +1002,17 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.stmt_outputs.insert(else_idx, else_out_sv);
             }
 
-            HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_)
-            | HirNode::TailCall { .. } | HirNode::Continue | HirNode::Break => {}
+            HirNode::Return(None)
+            | HirNode::Goto(_)
+            | HirNode::Label(_)
+            | HirNode::TailCall { .. }
+            | HirNode::Continue
+            | HirNode::Break => {}
 
-            HirNode::TryCatch { try_body, catch_body } => {
+            HirNode::TryCatch {
+                try_body,
+                catch_body,
+            } => {
                 ctx.collect_depth += 1;
                 collect_varnodes(try_body, ctx);
                 collect_varnodes(catch_body, ctx);
@@ -1141,9 +1247,7 @@ fn compute_loop_counter_names(nodes: &[HirNode], depth: usize, ctx: &mut PrintCt
         if init_out != update_out {
             return None;
         }
-        if init.op != IrOp::Copy
-            || init.inputs.len() != 1
-            || init.inputs[0].space != SpaceId::Const
+        if init.op != IrOp::Copy || init.inputs.len() != 1 || init.inputs[0].space != SpaceId::Const
         {
             return None;
         }
@@ -1164,7 +1268,9 @@ fn compute_loop_counter_names(nodes: &[HirNode], depth: usize, ctx: &mut PrintCt
 
     for node in nodes {
         match node {
-            HirNode::For { init, update, body, .. } => {
+            HirNode::For {
+                init, update, body, ..
+            } => {
                 if let Some(counter) = detect(init, update) {
                     ctx.name_overrides
                         .entry(counter)
@@ -1175,7 +1281,11 @@ fn compute_loop_counter_names(nodes: &[HirNode], depth: usize, ctx: &mut PrintCt
             HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
                 compute_loop_counter_names(body, depth + 1, ctx);
             }
-            HirNode::If { then_body, else_body, .. } => {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 compute_loop_counter_names(then_body, depth, ctx);
                 if let Some(eb) = else_body {
                     compute_loop_counter_names(eb, depth, ctx);
@@ -1190,7 +1300,10 @@ fn compute_loop_counter_names(nodes: &[HirNode], depth: usize, ctx: &mut PrintCt
                 }
             }
             HirNode::Block(children) => compute_loop_counter_names(children, depth, ctx),
-            HirNode::TryCatch { try_body, catch_body } => {
+            HirNode::TryCatch {
+                try_body,
+                catch_body,
+            } => {
                 compute_loop_counter_names(try_body, depth, ctx);
                 compute_loop_counter_names(catch_body, depth, ctx);
             }
@@ -1227,9 +1340,8 @@ enum VarRole {
 
 /// Function names treated as string-handling callees for the `Str` heuristic.
 const STRING_FUNCS: &[&str] = &[
-    "strlen", "strcmp", "strncmp", "strcpy", "strncpy", "strcat", "strncat",
-    "strchr", "strrchr", "strstr", "strdup", "strtok",
-    "puts", "printf", "fprintf", "sprintf", "snprintf", "perror",
+    "strlen", "strcmp", "strncmp", "strcpy", "strncpy", "strcat", "strncat", "strchr", "strrchr",
+    "strstr", "strdup", "strtok", "puts", "printf", "fprintf", "sprintf", "snprintf", "perror",
     "fputs", "fopen", "system",
 ];
 
@@ -1255,7 +1367,13 @@ fn compute_heuristic_names(nodes: &[HirNode], ctx: &mut PrintCtx) {
     }
 
     let mut ptr_idx: u32 = 0;
-    for role in [VarRole::Result, VarRole::Cond, VarRole::Pfn, VarRole::Str, VarRole::Ptr] {
+    for role in [
+        VarRole::Result,
+        VarRole::Cond,
+        VarRole::Pfn,
+        VarRole::Str,
+        VarRole::Ptr,
+    ] {
         let bases = match by_role.get(&role) {
             Some(b) => b.clone(),
             None => continue,
@@ -1271,7 +1389,11 @@ fn compute_heuristic_names(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 VarRole::Str => "str".to_string(),
                 VarRole::Ptr => {
                     ptr_idx += 1;
-                    if ptr_idx == 1 { "ptr".to_string() } else { format!("p{}", ptr_idx - 1) }
+                    if ptr_idx == 1 {
+                        "ptr".to_string()
+                    } else {
+                        format!("p{}", ptr_idx - 1)
+                    }
                 }
             };
             apply_override(ctx, &base, name);
@@ -1336,18 +1458,18 @@ fn record_role(roles: &mut BTreeMap<Varnode, VarRole>, base: Varnode, role: VarR
 
 /// HIR walker — collects roles that need the structured tree (Return, If/While
 /// conditions, switch, etc.).
-fn walk_collect_roles(
-    nodes: &[HirNode],
-    ctx: &PrintCtx,
-    roles: &mut BTreeMap<Varnode, VarRole>,
-) {
+fn walk_collect_roles(nodes: &[HirNode], ctx: &PrintCtx, roles: &mut BTreeMap<Varnode, VarRole>) {
     for node in nodes {
         match node {
             HirNode::Block(children) => walk_collect_roles(children, ctx, roles),
             HirNode::Return(Some(sv)) => {
                 record_role(roles, sv.base, VarRole::Result);
             }
-            HirNode::If { cond, then_body, else_body } => {
+            HirNode::If {
+                cond,
+                then_body,
+                else_body,
+            } => {
                 if cond_is_comparison(cond, ctx) {
                     record_role(roles, cond.base, VarRole::Cond);
                 }
@@ -1382,7 +1504,10 @@ fn walk_collect_roles(
                     walk_collect_roles(d, ctx, roles);
                 }
             }
-            HirNode::TryCatch { try_body, catch_body } => {
+            HirNode::TryCatch {
+                try_body,
+                catch_body,
+            } => {
                 walk_collect_roles(try_body, ctx, roles);
                 walk_collect_roles(catch_body, ctx, roles);
             }
@@ -1417,10 +1542,7 @@ fn cond_is_comparison(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
 
 /// Statement-level walker — collects roles requiring access to IR ops:
 /// CALLIND targets, comparison outputs, string-call arguments, pointer types.
-fn collect_statement_level_roles(
-    ctx: &PrintCtx,
-    roles: &mut BTreeMap<Varnode, VarRole>,
-) {
+fn collect_statement_level_roles(ctx: &PrintCtx, roles: &mut BTreeMap<Varnode, VarRole>) {
     let stmt_indices: Vec<u32> = ctx.stmt_insns.keys().copied().collect();
     for idx in stmt_indices {
         let insn = match ctx.stmt_insns.get(&idx) {
@@ -1479,17 +1601,17 @@ fn infer_type_from_insn(insn: &IrInsn, output_sv: &SsaVarnode, ctx: &mut PrintCt
                 PrimitiveType::Double
             }
         }
-        Some('i') | Some(_) | None => {
-            match insn.op {
-                IrOp::Ptradd | IrOp::Ptrsub => PrimitiveType::Ptr,
-                IrOp::Load => PrimitiveType::UnsignedInt(output_sv.base.size),
-                IrOp::IntDiv | IrOp::IntRem | IrOp::IntZext | IrOp::IntLess
-                | IrOp::IntLessequal | IrOp::IntCarry => {
-                    PrimitiveType::UnsignedInt(output_sv.base.size)
-                }
-                _ => PrimitiveType::Int(output_sv.base.size),
-            }
-        }
+        Some('i') | Some(_) | None => match insn.op {
+            IrOp::Ptradd | IrOp::Ptrsub => PrimitiveType::Ptr,
+            IrOp::Load => PrimitiveType::UnsignedInt(output_sv.base.size),
+            IrOp::IntDiv
+            | IrOp::IntRem
+            | IrOp::IntZext
+            | IrOp::IntLess
+            | IrOp::IntLessequal
+            | IrOp::IntCarry => PrimitiveType::UnsignedInt(output_sv.base.size),
+            _ => PrimitiveType::Int(output_sv.base.size),
+        },
     };
     ctx.var_types.entry(*output_sv).or_insert(ty);
 }
@@ -1596,7 +1718,11 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 
         HirNode::Statement(insn) => emit_statement(insn, depth, ctx, out),
 
-        HirNode::If { cond, then_body, else_body } => {
+        HirNode::If {
+            cond,
+            then_body,
+            else_body,
+        } => {
             let cond_expr = resolve_sv_expr(cond, ctx);
             indent(depth, out);
             let _ = writeln!(out, "if ({}) {{", cond_expr);
@@ -1628,7 +1754,12 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let _ = writeln!(out, "}} while ({});", cond_expr);
         }
 
-        HirNode::For { init, cond, update, body } => {
+        HirNode::For {
+            init,
+            cond,
+            update,
+            body,
+        } => {
             let init_idx = ctx.emit_stmt;
             ctx.emit_stmt += 1;
             let init_str = emit_for_clause(init, init_idx, ctx);
@@ -1649,7 +1780,11 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let _ = writeln!(out, "}}");
         }
 
-        HirNode::Switch { cond, cases, default } => {
+        HirNode::Switch {
+            cond,
+            cases,
+            default,
+        } => {
             let cond_expr = resolve_sv_expr(cond, ctx);
             indent(depth, out);
             let _ = writeln!(out, "switch ({}) {{", cond_expr);
@@ -1709,7 +1844,12 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let _ = writeln!(out, "{}:;", label);
         }
 
-        HirNode::Ternary { cond, then_insn, else_insn, output: _ } => {
+        HirNode::Ternary {
+            cond,
+            then_insn,
+            else_insn,
+            output: _,
+        } => {
             let then_idx = ctx.emit_stmt;
             ctx.emit_stmt += 1;
             let else_idx = ctx.emit_stmt;
@@ -1726,12 +1866,20 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let cond_name = resolve_sv_expr(cond, ctx);
 
             indent(depth, out);
-            let _ = writeln!(out, "{} = {} ? {} : {};", lhs, cond_name, then_expr, else_expr);
+            let _ = writeln!(
+                out,
+                "{} = {} ? {} : {};",
+                lhs, cond_name, then_expr, else_expr
+            );
         }
 
         HirNode::TailCall { target } => {
             indent(depth, out);
-            let _ = writeln!(out, "return ((unsigned long long (*)(void))0x{:x})();", target);
+            let _ = writeln!(
+                out,
+                "return ((unsigned long long (*)(void))0x{:x})();",
+                target
+            );
         }
 
         HirNode::Continue => {
@@ -1744,7 +1892,10 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let _ = writeln!(out, "break;");
         }
 
-        HirNode::TryCatch { try_body, catch_body } => {
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => {
             indent(depth, out);
             let _ = writeln!(out, "__try {{");
             emit_nodes(try_body, depth + 1, ctx, out);
@@ -1871,7 +2022,13 @@ fn try_emit_compound_assign(
     let counter_is_first = Some(insn.inputs[0]) == insn.output;
     let counter_is_second = Some(insn.inputs[1]) == insn.output;
 
-    let counter_idx = if counter_is_first { 0 } else if counter_is_second { 1 } else { return None; };
+    let counter_idx = if counter_is_first {
+        0
+    } else if counter_is_second {
+        1
+    } else {
+        return None;
+    };
 
     // If the counter input has a foldable definition, its expression expands
     // inline and compound form would be wrong (e.g. `((1) + 2) += 3`).
@@ -1905,7 +2062,14 @@ fn try_emit_compound_assign(
     };
     let other_idx = if counter_is_first { 1 } else { 0 };
     let const_ctx = const_context_for_op(insn.op);
-    let other = emit_operand_with_prec(&insn.inputs[other_idx], other_idx, stmt_idx, const_ctx, 0, ctx);
+    let other = emit_operand_with_prec(
+        &insn.inputs[other_idx],
+        other_idx,
+        stmt_idx,
+        const_ctx,
+        0,
+        ctx,
+    );
     Some(format!("{} {} {}", lhs, op_str, other))
 }
 
@@ -1967,9 +2131,13 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
                     if let Some(global) = try_global_var_name(&insn.inputs[1], store_size, ctx) {
                         let _ = writeln!(out, "{} = {};", global, val);
-                    } else if let Some(field_expr) = try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx) {
+                    } else if let Some(field_expr) =
+                        try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx)
+                    {
                         let _ = writeln!(out, "{} = {};", field_expr, val);
-                    } else if let Some(sub) = try_array_subscript(&insn.inputs[1], idx, store_size, ctx) {
+                    } else if let Some(sub) =
+                        try_array_subscript(&insn.inputs[1], idx, store_size, ctx)
+                    {
                         let _ = writeln!(out, "{}[{}] = {};", sub.base, sub.index, val);
                     } else {
                         let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
@@ -2031,26 +2199,35 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
 fn c_precedence(op: IrOp) -> u8 {
     match op {
         // Multiply / divide / mod — 54
-        IrOp::IntMult | IrOp::FloatMult
-        | IrOp::IntDiv | IrOp::IntSdiv | IrOp::FloatDiv
-        | IrOp::IntRem | IrOp::IntSrem => 54,
+        IrOp::IntMult
+        | IrOp::FloatMult
+        | IrOp::IntDiv
+        | IrOp::IntSdiv
+        | IrOp::FloatDiv
+        | IrOp::IntRem
+        | IrOp::IntSrem => 54,
 
         // Add / subtract — 50
-        IrOp::IntAdd | IrOp::FloatAdd
-        | IrOp::IntSub | IrOp::FloatSub
-        | IrOp::Ptradd | IrOp::Ptrsub => 50,
+        IrOp::IntAdd
+        | IrOp::FloatAdd
+        | IrOp::IntSub
+        | IrOp::FloatSub
+        | IrOp::Ptradd
+        | IrOp::Ptrsub => 50,
 
         // Shifts — 46
         IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright => 46,
 
         // Relational — 42
-        IrOp::IntLess | IrOp::IntLessequal
-        | IrOp::IntSless | IrOp::IntSlessequal
-        | IrOp::FloatLess | IrOp::FloatLessequal => 42,
+        IrOp::IntLess
+        | IrOp::IntLessequal
+        | IrOp::IntSless
+        | IrOp::IntSlessequal
+        | IrOp::FloatLess
+        | IrOp::FloatLessequal => 42,
 
         // Equality — 38
-        IrOp::IntEqual | IrOp::IntNotequal
-        | IrOp::FloatEqual | IrOp::FloatNotequal => 38,
+        IrOp::IntEqual | IrOp::IntNotequal | IrOp::FloatEqual | IrOp::FloatNotequal => 38,
 
         // Bitwise AND — 34
         IrOp::IntAnd => 34,
@@ -2068,8 +2245,7 @@ fn c_precedence(op: IrOp) -> u8 {
         IrOp::BoolOr => 18,
 
         // Unary prefix (!, ~, -, *, &, casts) — 62
-        IrOp::IntNegate | IrOp::BoolNegate
-        | IrOp::Int2comp | IrOp::FloatNeg => 62,
+        IrOp::IntNegate | IrOp::BoolNegate | IrOp::Int2comp | IrOp::FloatNeg => 62,
 
         // Function call, subscript, member access — 70
         IrOp::Call | IrOp::Callind => 70,
@@ -2082,20 +2258,40 @@ fn c_precedence(op: IrOp) -> u8 {
 /// Return `true` if `op` is a binary operator that we emit via `emit_binop`.
 #[allow(dead_code)]
 fn is_binop(op: IrOp) -> bool {
-    matches!(op,
-        IrOp::IntAdd | IrOp::FloatAdd
-        | IrOp::IntSub | IrOp::FloatSub
-        | IrOp::IntMult | IrOp::FloatMult
-        | IrOp::IntDiv | IrOp::IntSdiv | IrOp::FloatDiv
-        | IrOp::IntRem | IrOp::IntSrem
-        | IrOp::IntAnd | IrOp::IntOr | IrOp::IntXor
-        | IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright
-        | IrOp::BoolAnd | IrOp::BoolOr | IrOp::BoolXor
-        | IrOp::IntEqual | IrOp::FloatEqual
-        | IrOp::IntNotequal | IrOp::FloatNotequal
-        | IrOp::IntLess | IrOp::IntSless | IrOp::FloatLess
-        | IrOp::IntLessequal | IrOp::IntSlessequal | IrOp::FloatLessequal
-        | IrOp::Ptradd | IrOp::Ptrsub
+    matches!(
+        op,
+        IrOp::IntAdd
+            | IrOp::FloatAdd
+            | IrOp::IntSub
+            | IrOp::FloatSub
+            | IrOp::IntMult
+            | IrOp::FloatMult
+            | IrOp::IntDiv
+            | IrOp::IntSdiv
+            | IrOp::FloatDiv
+            | IrOp::IntRem
+            | IrOp::IntSrem
+            | IrOp::IntAnd
+            | IrOp::IntOr
+            | IrOp::IntXor
+            | IrOp::IntLeft
+            | IrOp::IntRight
+            | IrOp::IntSright
+            | IrOp::BoolAnd
+            | IrOp::BoolOr
+            | IrOp::BoolXor
+            | IrOp::IntEqual
+            | IrOp::FloatEqual
+            | IrOp::IntNotequal
+            | IrOp::FloatNotequal
+            | IrOp::IntLess
+            | IrOp::IntSless
+            | IrOp::FloatLess
+            | IrOp::IntLessequal
+            | IrOp::IntSlessequal
+            | IrOp::FloatLessequal
+            | IrOp::Ptradd
+            | IrOp::Ptrsub
     )
 }
 
@@ -2107,7 +2303,12 @@ fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     emit_expr_with_prec(insn, stmt_idx, 0, ctx)
 }
 
-fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
+fn emit_expr_with_prec(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    parent_prec: u8,
+    ctx: &mut PrintCtx,
+) -> String {
     match insn.op {
         // -- Binary arithmetic/bitwise --
         IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", stmt_idx, parent_prec, ctx),
@@ -2118,19 +2319,26 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
         IrOp::IntSrem => emit_binop(insn, "%", stmt_idx, parent_prec, ctx),
         IrOp::IntRem => emit_unsigned_binop(insn, "%", stmt_idx, parent_prec, ctx),
         IrOp::IntAnd => {
-            if insn.inputs.len() >= 2 && insn.inputs[1].space == SpaceId::Const && insn.inputs[1].offset == 0 {
+            if insn.inputs.len() >= 2
+                && insn.inputs[1].space == SpaceId::Const
+                && insn.inputs[1].offset == 0
+            {
                 return "0".to_string();
             }
             emit_binop(insn, "&", stmt_idx, parent_prec, ctx)
         }
         IrOp::IntOr => {
-            if insn.inputs.len() >= 2 && insn.inputs[1].space == SpaceId::Const && insn.inputs[1].offset == 0 {
+            if insn.inputs.len() >= 2
+                && insn.inputs[1].space == SpaceId::Const
+                && insn.inputs[1].offset == 0
+            {
                 return emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
             }
             emit_binop(insn, "|", stmt_idx, parent_prec, ctx)
         }
         IrOp::IntXor => {
-            if insn.inputs.len() >= 2 && insn.inputs[0] == insn.inputs[1]
+            if insn.inputs.len() >= 2
+                && insn.inputs[0] == insn.inputs[1]
                 && insn.inputs[0].space != SpaceId::Const
             {
                 return "0".to_string();
@@ -2148,7 +2356,9 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
 
         // -- Comparisons --
         IrOp::IntEqual | IrOp::FloatEqual => emit_binop(insn, "==", stmt_idx, parent_prec, ctx),
-        IrOp::IntNotequal | IrOp::FloatNotequal => emit_binop(insn, "!=", stmt_idx, parent_prec, ctx),
+        IrOp::IntNotequal | IrOp::FloatNotequal => {
+            emit_binop(insn, "!=", stmt_idx, parent_prec, ctx)
+        }
         IrOp::IntSless | IrOp::FloatLess => emit_binop(insn, "<", stmt_idx, parent_prec, ctx),
         IrOp::IntLess => emit_unsigned_binop(insn, "<", stmt_idx, parent_prec, ctx),
         IrOp::IntSlessequal | IrOp::FloatLessequal => {
@@ -2166,18 +2376,19 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
             if insn.inputs.is_empty() {
                 "0".to_string()
             } else {
-                let copy_ctx = if insn.inputs[0].space == SpaceId::Const
-                    && insn.inputs[0].offset == 0
-                {
-                    let out_sv = ctx.stmt_outputs.get(&stmt_idx).cloned().flatten();
-                    if out_sv.and_then(|sv| ctx.var_types.get(&sv).copied()) == Some(PrimitiveType::Ptr) {
-                        ConstContext::Pointer
+                let copy_ctx =
+                    if insn.inputs[0].space == SpaceId::Const && insn.inputs[0].offset == 0 {
+                        let out_sv = ctx.stmt_outputs.get(&stmt_idx).cloned().flatten();
+                        if out_sv.and_then(|sv| ctx.var_types.get(&sv).copied())
+                            == Some(PrimitiveType::Ptr)
+                        {
+                            ConstContext::Pointer
+                        } else {
+                            ConstContext::Signed
+                        }
                     } else {
                         ConstContext::Signed
-                    }
-                } else {
-                    ConstContext::Signed
-                };
+                    };
                 emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, copy_ctx, 0, ctx)
             }
         }
@@ -2193,10 +2404,18 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
                 if let Some(global) = try_global_var_name(&insn.inputs[addr_idx], load_size, ctx) {
                     return global;
                 }
-                if let Some(resolved) = try_resolve_field_from_addr(&insn.inputs[addr_idx], addr_idx, stmt_idx, load_size, ctx) {
+                if let Some(resolved) = try_resolve_field_from_addr(
+                    &insn.inputs[addr_idx],
+                    addr_idx,
+                    stmt_idx,
+                    load_size,
+                    ctx,
+                ) {
                     return resolved;
                 }
-                if let Some(sub) = try_array_subscript(&insn.inputs[addr_idx], stmt_idx, load_size, ctx) {
+                if let Some(sub) =
+                    try_array_subscript(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
+                {
                     return format!("{}[{}]", sub.base, sub.index);
                 }
                 if let Some(memory) = try_emit_memory_annotation(&insn.inputs[addr_idx], ctx) {
@@ -2388,7 +2607,13 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
     }
 }
 
-fn emit_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
+fn emit_binop(
+    insn: &IrInsn,
+    op: &str,
+    stmt_idx: u32,
+    parent_prec: u8,
+    ctx: &mut PrintCtx,
+) -> String {
     let my_prec = c_precedence(insn.op);
     let const_ctx = const_context_for_op(insn.op);
     let lhs_ctx = if insn.inputs.len() >= 2 {
@@ -2450,10 +2675,23 @@ fn emit_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut
     }
 }
 
-fn emit_unaryop(insn: &IrInsn, op: &str, stmt_idx: u32, _parent_prec: u8, ctx: &mut PrintCtx) -> String {
+fn emit_unaryop(
+    insn: &IrInsn,
+    op: &str,
+    stmt_idx: u32,
+    _parent_prec: u8,
+    ctx: &mut PrintCtx,
+) -> String {
     let my_prec = c_precedence(insn.op);
     let operand = if !insn.inputs.is_empty() {
-        emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, ConstContext::Signed, my_prec, ctx)
+        emit_operand_with_prec(
+            &insn.inputs[0],
+            0,
+            stmt_idx,
+            ConstContext::Signed,
+            my_prec,
+            ctx,
+        )
     } else {
         "0".to_string()
     };
@@ -2480,14 +2718,23 @@ fn emit_bool_negate(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut Pri
             .get(&stmt_idx)
             .cloned()
             .and_then(|inputs| inputs.iter().find(|sv| sv.base == *input_vn).copied());
-        let sv = resolved_sv.unwrap_or(SsaVarnode { base: *input_vn, version: 0 });
+        let sv = resolved_sv.unwrap_or(SsaVarnode {
+            base: *input_vn,
+            version: 0,
+        });
 
         if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
             if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
                 if let Some(negated_op) = negate_comparison(def_insn.op) {
                     let is_unsigned = matches!(def_insn.op, IrOp::IntLess | IrOp::IntLessequal);
                     if is_unsigned {
-                        return emit_unsigned_binop(&def_insn, negated_op, def_stmt, parent_prec, ctx);
+                        return emit_unsigned_binop(
+                            &def_insn,
+                            negated_op,
+                            def_stmt,
+                            parent_prec,
+                            ctx,
+                        );
                     }
                     return emit_binop(&def_insn, negated_op, def_stmt, parent_prec, ctx);
                 }
@@ -2521,37 +2768,37 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x3 => Some("__builtin_memcmp"),
 
         // ── SSE/SSE2 moves (0x100..0x10F) ──────────────────────
-        0x100 => Some("_mm_load_si128"),    // MOVDQA
-        0x101 => Some("_mm_loadu_si128"),   // MOVDQU
-        0x102 => Some("_mm_load_ps"),       // MOVAPS
-        0x103 => Some("_mm_loadu_ps"),      // MOVUPS
-        0x104 => Some("_mm_load_sd"),       // MOVSD
+        0x100 => Some("_mm_load_si128"),  // MOVDQA
+        0x101 => Some("_mm_loadu_si128"), // MOVDQU
+        0x102 => Some("_mm_load_ps"),     // MOVAPS
+        0x103 => Some("_mm_loadu_ps"),    // MOVUPS
+        0x104 => Some("_mm_load_sd"),     // MOVSD
 
         // ── SSE2 packed integer add (0x110..0x113) ─────────────
-        0x110 => Some("_mm_add_epi8"),      // PADDB
-        0x111 => Some("_mm_add_epi16"),     // PADDW
-        0x112 => Some("_mm_add_epi32"),     // PADDD
-        0x113 => Some("_mm_add_epi64"),     // PADDQ
+        0x110 => Some("_mm_add_epi8"),  // PADDB
+        0x111 => Some("_mm_add_epi16"), // PADDW
+        0x112 => Some("_mm_add_epi32"), // PADDD
+        0x113 => Some("_mm_add_epi64"), // PADDQ
 
         // ── SSE2 packed integer sub (0x118..0x11B) ─────────────
-        0x118 => Some("_mm_sub_epi8"),      // PSUBB
-        0x119 => Some("_mm_sub_epi16"),     // PSUBW
-        0x11A => Some("_mm_sub_epi32"),     // PSUBD
-        0x11B => Some("_mm_sub_epi64"),     // PSUBQ
+        0x118 => Some("_mm_sub_epi8"),  // PSUBB
+        0x119 => Some("_mm_sub_epi16"), // PSUBW
+        0x11A => Some("_mm_sub_epi32"), // PSUBD
+        0x11B => Some("_mm_sub_epi64"), // PSUBQ
 
         // ── SSE2 packed bitwise logic (0x120..0x122) ───────────
-        0x120 => Some("_mm_and_si128"),     // PAND
-        0x121 => Some("_mm_or_si128"),      // POR
-        0x122 => Some("_mm_xor_si128"),     // PXOR
+        0x120 => Some("_mm_and_si128"), // PAND
+        0x121 => Some("_mm_or_si128"),  // POR
+        0x122 => Some("_mm_xor_si128"), // PXOR
 
         // ── SSE packed float arithmetic (0x130..0x136) ─────────
-        0x130 => Some("_mm_add_ps"),        // ADDPS
-        0x131 => Some("_mm_sub_ps"),        // SUBPS
-        0x132 => Some("_mm_mul_ps"),        // MULPS
-        0x133 => Some("_mm_div_ps"),        // DIVPS
-        0x134 => Some("_mm_min_ps"),        // MINPS
-        0x135 => Some("_mm_max_ps"),        // MAXPS
-        0x136 => Some("_mm_sqrt_ps"),       // SQRTPS
+        0x130 => Some("_mm_add_ps"),  // ADDPS
+        0x131 => Some("_mm_sub_ps"),  // SUBPS
+        0x132 => Some("_mm_mul_ps"),  // MULPS
+        0x133 => Some("_mm_div_ps"),  // DIVPS
+        0x134 => Some("_mm_min_ps"),  // MINPS
+        0x135 => Some("_mm_max_ps"),  // MAXPS
+        0x136 => Some("_mm_sqrt_ps"), // SQRTPS
 
         // ── SSE2 shuffle/unpack (0x140..0x142) ─────────────────
         0x140 => Some("_mm_shuffle_epi32"), // PSHUFD
@@ -2562,22 +2809,26 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x150 => Some("_mm_movemask_epi8"), // PMOVMSKB
 
         // ── SSE2 pack-with-saturation (0x160..0x161) ───────────
-        0x160 => Some("_mm_packs_epi16"),   // PACKSSWB
-        0x161 => Some("_mm_packus_epi16"),  // PACKUSWB
+        0x160 => Some("_mm_packs_epi16"),  // PACKSSWB
+        0x161 => Some("_mm_packus_epi16"), // PACKUSWB
 
         // ── SSE4.1 blend/select (0x170..0x171) ─────────────────
-        0x170 => Some("_mm_blend_ps"),      // BLENDPS
-        0x171 => Some("_mm_blendv_epi8"),   // PBLENDVB
+        0x170 => Some("_mm_blend_ps"),    // BLENDPS
+        0x171 => Some("_mm_blendv_epi8"), // PBLENDVB
 
         // ── Bit-manipulation builtins (0x200..0x204) ───────────
-        0x200 => Some("__builtin_ctz"),     // BSF
-        0x201 => Some("__bsr"),             // BSR
-        0x202 => Some("__builtin_ctz"),     // TZCNT
-        0x203 => Some("__builtin_clz"),     // LZCNT
-        0x204 => Some("__builtin_popcount"),// POPCNT
+        0x200 => Some("__builtin_ctz"),      // BSF
+        0x201 => Some("__bsr"),              // BSR
+        0x202 => Some("__builtin_ctz"),      // TZCNT
+        0x203 => Some("__builtin_clz"),      // LZCNT
+        0x204 => Some("__builtin_popcount"), // POPCNT
 
         // ── Trap (0x300) ───────────────────────────────────────
-        0x300 => Some("__builtin_trap"),    // UD2 / INT3
+        0x300 => Some("__builtin_trap"), // UD2 / INT3
+
+        // ── Idiom-recognized intrinsics (0x325..0x326) ─────────
+        0x325 => Some("__memcpy__"),
+        0x326 => Some("__memset__"),
 
         _ => None,
     }
@@ -2607,7 +2858,13 @@ fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     }
 }
 
-fn emit_unsigned_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
+fn emit_unsigned_binop(
+    insn: &IrInsn,
+    op: &str,
+    stmt_idx: u32,
+    parent_prec: u8,
+    ctx: &mut PrintCtx,
+) -> String {
     let my_prec = c_precedence(insn.op);
     let const_ctx = ConstContext::Bitwise;
     let lhs = if !insn.inputs.is_empty() {
@@ -2657,11 +2914,19 @@ fn is_pointer_typed_input(vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> bool {
         .stmt_inputs
         .get(&stmt_idx)
         .and_then(|inputs| inputs.iter().find(|sv| sv.base == *vn).copied());
-    let sv = resolved_sv.unwrap_or(SsaVarnode { base: *vn, version: 0 });
+    let sv = resolved_sv.unwrap_or(SsaVarnode {
+        base: *vn,
+        version: 0,
+    });
     ctx.var_types.get(&sv).copied() == Some(PrimitiveType::Ptr)
 }
 
-fn const_context_for_binop_pair(insn: &IrInsn, this_idx: usize, stmt_idx: u32, ctx: &PrintCtx) -> ConstContext {
+fn const_context_for_binop_pair(
+    insn: &IrInsn,
+    this_idx: usize,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> ConstContext {
     let base_ctx = const_context_for_op(insn.op);
     if insn.inputs.len() < 2 {
         return base_ctx;
@@ -2697,7 +2962,10 @@ fn emit_operand_with_prec(
         None
     };
 
-    let sv = resolved_sv.unwrap_or(SsaVarnode { base: *vn, version: 0 });
+    let sv = resolved_sv.unwrap_or(SsaVarnode {
+        base: *vn,
+        version: 0,
+    });
 
     if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
         if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
@@ -2707,7 +2975,6 @@ fn emit_operand_with_prec(
 
     ctx.name_of(&sv)
 }
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ConstContext {
@@ -2719,8 +2986,12 @@ enum ConstContext {
 
 fn const_context_for_op(op: IrOp) -> ConstContext {
     match op {
-        IrOp::IntAnd | IrOp::IntOr | IrOp::IntXor
-        | IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright => ConstContext::Bitwise,
+        IrOp::IntAnd
+        | IrOp::IntOr
+        | IrOp::IntXor
+        | IrOp::IntLeft
+        | IrOp::IntRight
+        | IrOp::IntSright => ConstContext::Bitwise,
         _ => ConstContext::Signed,
     }
 }
@@ -2909,18 +3180,42 @@ fn x86_64_register_name(offset: u64, size: u8) -> &'static str {
         if idx <= 15 && (offset - VEC_BASE) % VEC_STRIDE == 0 {
             if size <= 16 {
                 return match idx {
-                    0 => "xmm0", 1 => "xmm1", 2 => "xmm2", 3 => "xmm3",
-                    4 => "xmm4", 5 => "xmm5", 6 => "xmm6", 7 => "xmm7",
-                    8 => "xmm8", 9 => "xmm9", 10 => "xmm10", 11 => "xmm11",
-                    12 => "xmm12", 13 => "xmm13", 14 => "xmm14", 15 => "xmm15",
+                    0 => "xmm0",
+                    1 => "xmm1",
+                    2 => "xmm2",
+                    3 => "xmm3",
+                    4 => "xmm4",
+                    5 => "xmm5",
+                    6 => "xmm6",
+                    7 => "xmm7",
+                    8 => "xmm8",
+                    9 => "xmm9",
+                    10 => "xmm10",
+                    11 => "xmm11",
+                    12 => "xmm12",
+                    13 => "xmm13",
+                    14 => "xmm14",
+                    15 => "xmm15",
                     _ => "xmm?",
                 };
             } else {
                 return match idx {
-                    0 => "ymm0", 1 => "ymm1", 2 => "ymm2", 3 => "ymm3",
-                    4 => "ymm4", 5 => "ymm5", 6 => "ymm6", 7 => "ymm7",
-                    8 => "ymm8", 9 => "ymm9", 10 => "ymm10", 11 => "ymm11",
-                    12 => "ymm12", 13 => "ymm13", 14 => "ymm14", 15 => "ymm15",
+                    0 => "ymm0",
+                    1 => "ymm1",
+                    2 => "ymm2",
+                    3 => "ymm3",
+                    4 => "ymm4",
+                    5 => "ymm5",
+                    6 => "ymm6",
+                    7 => "ymm7",
+                    8 => "ymm8",
+                    9 => "ymm9",
+                    10 => "ymm10",
+                    11 => "ymm11",
+                    12 => "ymm12",
+                    13 => "ymm13",
+                    14 => "ymm14",
+                    15 => "ymm15",
                     _ => "ymm?",
                 };
             }
@@ -2940,27 +3235,76 @@ fn x86_64_register_name(offset: u64, size: u8) -> &'static str {
 
     // General-purpose registers: offset → (8-byte name, 4-byte, 2-byte, 1-byte)
     match (offset, size) {
-        (0, 8) => "rax", (0, 4) => "eax", (0, 2) => "ax", (0, 1) => "al",
+        (0, 8) => "rax",
+        (0, 4) => "eax",
+        (0, 2) => "ax",
+        (0, 1) => "al",
         (1, 1) => "ah",
-        (8, 8) => "rcx", (8, 4) => "ecx", (8, 2) => "cx", (8, 1) => "cl",
+        (8, 8) => "rcx",
+        (8, 4) => "ecx",
+        (8, 2) => "cx",
+        (8, 1) => "cl",
         (9, 1) => "ch",
-        (16, 8) => "rdx", (16, 4) => "edx", (16, 2) => "dx", (16, 1) => "dl",
+        (16, 8) => "rdx",
+        (16, 4) => "edx",
+        (16, 2) => "dx",
+        (16, 1) => "dl",
         (17, 1) => "dh",
-        (24, 8) => "rbx", (24, 4) => "ebx", (24, 2) => "bx", (24, 1) => "bl",
+        (24, 8) => "rbx",
+        (24, 4) => "ebx",
+        (24, 2) => "bx",
+        (24, 1) => "bl",
         (25, 1) => "bh",
-        (32, 8) => "rsp", (32, 4) => "esp", (32, 2) => "sp", (32, 1) => "spl",
-        (40, 8) => "rbp", (40, 4) => "ebp", (40, 2) => "bp", (40, 1) => "bpl",
-        (48, 8) => "rsi", (48, 4) => "esi", (48, 2) => "si", (48, 1) => "sil",
-        (56, 8) => "rdi", (56, 4) => "edi", (56, 2) => "di", (56, 1) => "dil",
-        (64, 8) => "r8",  (64, 4) => "r8d",  (64, 2) => "r8w",  (64, 1) => "r8b",
-        (72, 8) => "r9",  (72, 4) => "r9d",  (72, 2) => "r9w",  (72, 1) => "r9b",
-        (80, 8) => "r10", (80, 4) => "r10d", (80, 2) => "r10w", (80, 1) => "r10b",
-        (88, 8) => "r11", (88, 4) => "r11d", (88, 2) => "r11w", (88, 1) => "r11b",
-        (96, 8) => "r12", (96, 4) => "r12d", (96, 2) => "r12w", (96, 1) => "r12b",
-        (104, 8) => "r13", (104, 4) => "r13d", (104, 2) => "r13w", (104, 1) => "r13b",
-        (112, 8) => "r14", (112, 4) => "r14d", (112, 2) => "r14w", (112, 1) => "r14b",
-        (120, 8) => "r15", (120, 4) => "r15d", (120, 2) => "r15w", (120, 1) => "r15b",
-        (128, 8) => "rip", (128, 4) => "eip",
+        (32, 8) => "rsp",
+        (32, 4) => "esp",
+        (32, 2) => "sp",
+        (32, 1) => "spl",
+        (40, 8) => "rbp",
+        (40, 4) => "ebp",
+        (40, 2) => "bp",
+        (40, 1) => "bpl",
+        (48, 8) => "rsi",
+        (48, 4) => "esi",
+        (48, 2) => "si",
+        (48, 1) => "sil",
+        (56, 8) => "rdi",
+        (56, 4) => "edi",
+        (56, 2) => "di",
+        (56, 1) => "dil",
+        (64, 8) => "r8",
+        (64, 4) => "r8d",
+        (64, 2) => "r8w",
+        (64, 1) => "r8b",
+        (72, 8) => "r9",
+        (72, 4) => "r9d",
+        (72, 2) => "r9w",
+        (72, 1) => "r9b",
+        (80, 8) => "r10",
+        (80, 4) => "r10d",
+        (80, 2) => "r10w",
+        (80, 1) => "r10b",
+        (88, 8) => "r11",
+        (88, 4) => "r11d",
+        (88, 2) => "r11w",
+        (88, 1) => "r11b",
+        (96, 8) => "r12",
+        (96, 4) => "r12d",
+        (96, 2) => "r12w",
+        (96, 1) => "r12b",
+        (104, 8) => "r13",
+        (104, 4) => "r13d",
+        (104, 2) => "r13w",
+        (104, 1) => "r13b",
+        (112, 8) => "r14",
+        (112, 4) => "r14d",
+        (112, 2) => "r14w",
+        (112, 1) => "r14b",
+        (120, 8) => "r15",
+        (120, 4) => "r15d",
+        (120, 2) => "r15w",
+        (120, 1) => "r15b",
+        (128, 8) => "rip",
+        (128, 4) => "eip",
         _ => "reg?",
     }
 }
@@ -3012,11 +3356,7 @@ fn is_redundant_widen(op: IrOp, input: &Varnode, output_size: u8) -> bool {
     if input.size == output_size {
         return true;
     }
-    if op == IrOp::IntZext
-        && input.size == 4
-        && output_size == 8
-        && input.space != SpaceId::Const
-    {
+    if op == IrOp::IntZext && input.size == 4 && output_size == 8 && input.space != SpaceId::Const {
         return true;
     }
     false
@@ -3115,7 +3455,10 @@ mod tests {
     }
 
     fn sv(offset: u64, size: u8) -> SsaVarnode {
-        SsaVarnode { base: Varnode::reg(offset, size), version: 0 }
+        SsaVarnode {
+            base: Varnode::reg(offset, size),
+            version: 0,
+        }
     }
 
     #[test]
@@ -3313,8 +3656,14 @@ mod tests {
         assert_eq!(super::c_type(&PrimitiveType::Int(2)), "short");
         assert_eq!(super::c_type(&PrimitiveType::Int(4)), "int");
         assert_eq!(super::c_type(&PrimitiveType::Int(8)), "long long");
-        assert_eq!(super::c_type(&PrimitiveType::UnsignedInt(1)), "unsigned char");
-        assert_eq!(super::c_type(&PrimitiveType::UnsignedInt(4)), "unsigned int");
+        assert_eq!(
+            super::c_type(&PrimitiveType::UnsignedInt(1)),
+            "unsigned char"
+        );
+        assert_eq!(
+            super::c_type(&PrimitiveType::UnsignedInt(4)),
+            "unsigned int"
+        );
         assert_eq!(super::c_type(&PrimitiveType::Float), "float");
         assert_eq!(super::c_type(&PrimitiveType::Double), "double");
         assert_eq!(super::c_type(&PrimitiveType::Ptr), "void *");
@@ -3346,8 +3695,6 @@ mod tests {
             "unresolved indirect branch must emit JUMPOUT(): {output}"
         );
     }
-
-
 
     #[test]
     fn test_print_indentation() {
@@ -3414,12 +3761,7 @@ mod tests {
         let c3 = con(3, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(
-                IrOp::Copy,
-                r0,
-                smallvec![c1],
-                0x1000,
-            )),
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000)),
             HirNode::Statement(IrInsn::with_output(
                 IrOp::IntAdd,
                 r0,
@@ -3485,7 +3827,9 @@ mod tests {
             .find(|l| l.contains("?"))
             .expect("should find ternary line");
         assert!(
-            ternary_line.contains(" = ") && ternary_line.contains(" ? ") && ternary_line.contains(" : "),
+            ternary_line.contains(" = ")
+                && ternary_line.contains(" ? ")
+                && ternary_line.contains(" : "),
             "ternary should be `lhs = cond ? a : b;`, got: {ternary_line}"
         );
     }
@@ -3545,22 +3889,61 @@ mod tests {
         );
     }
 
-
     #[test]
     fn test_struct_field_access() {
         use std::collections::BTreeMap;
         use unlace_loader::{DwarfInfo, StructField, StructType};
-        let r0 = reg(0, 8); let r8 = reg(8, 4); let c8 = con(8, 8); let space = con(0, 8);
-        let addr_add = IrInsn::with_output(IrOp::IntAdd, Varnode::unique(0, 8), smallvec![r0, c8], 0x1000);
-        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, Varnode::unique(0, 8)], 0x1004);
-        let body = vec![HirNode::Statement(addr_add), HirNode::Statement(load), HirNode::Return(Some(sv(8, 4)))];
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 4);
+        let c8 = con(8, 8);
+        let space = con(0, 8);
+        let addr_add = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(0, 8),
+            smallvec![r0, c8],
+            0x1000,
+        );
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            r8,
+            smallvec![space, Varnode::unique(0, 8)],
+            0x1004,
+        );
+        let body = vec![
+            HirNode::Statement(addr_add),
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
         let func = make_func("test_field", body);
         let mut structs = BTreeMap::new();
-        structs.insert("Rect".to_string(), StructType { name: "Rect".to_string(), size: 16, fields: vec![
-            StructField { name: "origin".to_string(), offset: 0, size: 8, type_name: "Point".to_string() },
-            StructField { name: "size".to_string(), offset: 8, size: 4, type_name: "int".to_string() },
-        ]});
-        let dwarf = DwarfInfo { functions: BTreeMap::new(), source_map: BTreeMap::new(), structs, enums: BTreeMap::new(), unions: BTreeMap::new() };
+        structs.insert(
+            "Rect".to_string(),
+            StructType {
+                name: "Rect".to_string(),
+                size: 16,
+                fields: vec![
+                    StructField {
+                        name: "origin".to_string(),
+                        offset: 0,
+                        size: 8,
+                        type_name: "Point".to_string(),
+                    },
+                    StructField {
+                        name: "size".to_string(),
+                        offset: 8,
+                        size: 4,
+                        type_name: "int".to_string(),
+                    },
+                ],
+            },
+        );
+        let dwarf = DwarfInfo {
+            functions: BTreeMap::new(),
+            source_map: BTreeMap::new(),
+            structs,
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
+        };
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(output.contains("->size"), "should contain ->size: {output}");
     }
@@ -3598,8 +3981,18 @@ mod tests {
                 name: "Point".to_string(),
                 size: 8,
                 fields: vec![
-                    StructField { name: "x".to_string(), offset: 0, size: 4, type_name: "int".to_string() },
-                    StructField { name: "y".to_string(), offset: 4, size: 4, type_name: "int".to_string() },
+                    StructField {
+                        name: "x".to_string(),
+                        offset: 0,
+                        size: 4,
+                        type_name: "int".to_string(),
+                    },
+                    StructField {
+                        name: "y".to_string(),
+                        offset: 4,
+                        size: 4,
+                        type_name: "int".to_string(),
+                    },
                 ],
             },
         );
@@ -3622,21 +4015,64 @@ mod tests {
     fn test_struct_field_no_match() {
         use std::collections::BTreeMap;
         use unlace_loader::{DwarfInfo, StructField, StructType};
-        let r0 = reg(0, 8); let r8 = reg(8, 4); let c48 = con(48, 8); let space = con(0, 8);
-        let addr_add = IrInsn::with_output(IrOp::IntAdd, Varnode::unique(0, 8), smallvec![r0, c48], 0x1000);
-        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, Varnode::unique(0, 8)], 0x1004);
-        let body = vec![HirNode::Statement(addr_add), HirNode::Statement(load), HirNode::Return(Some(sv(8, 4)))];
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 4);
+        let c48 = con(48, 8);
+        let space = con(0, 8);
+        let addr_add = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(0, 8),
+            smallvec![r0, c48],
+            0x1000,
+        );
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            r8,
+            smallvec![space, Varnode::unique(0, 8)],
+            0x1004,
+        );
+        let body = vec![
+            HirNode::Statement(addr_add),
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
         let func = make_func("test_no_field", body);
         let mut structs = BTreeMap::new();
-        structs.insert("Point".to_string(), StructType { name: "Point".to_string(), size: 8, fields: vec![
-            StructField { name: "x".to_string(), offset: 0, size: 4, type_name: "int".to_string() },
-            StructField { name: "y".to_string(), offset: 4, size: 4, type_name: "int".to_string() },
-        ]});
-        let dwarf = DwarfInfo { functions: BTreeMap::new(), source_map: BTreeMap::new(), structs, enums: BTreeMap::new(), unions: BTreeMap::new() };
+        structs.insert(
+            "Point".to_string(),
+            StructType {
+                name: "Point".to_string(),
+                size: 8,
+                fields: vec![
+                    StructField {
+                        name: "x".to_string(),
+                        offset: 0,
+                        size: 4,
+                        type_name: "int".to_string(),
+                    },
+                    StructField {
+                        name: "y".to_string(),
+                        offset: 4,
+                        size: 4,
+                        type_name: "int".to_string(),
+                    },
+                ],
+            },
+        );
+        let dwarf = DwarfInfo {
+            functions: BTreeMap::new(),
+            source_map: BTreeMap::new(),
+            structs,
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
+        };
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(!output.contains("->"), "should NOT contain ->: {output}");
         // With array subscript recovery: INT_ADD(base, 48) with 4-byte load → base[12]
-        assert!(output.contains("v1[12]"), "should recover array subscript v1[12]: {output}");
+        assert!(
+            output.contains("v1[12]"),
+            "should recover array subscript v1[12]: {output}"
+        );
     }
 
     #[test]
@@ -3648,16 +4084,19 @@ mod tests {
         let func = make_func("sub_1000", body);
 
         let mut functions = BTreeMap::new();
-        functions.insert(0x1000, FunctionDebugInfo {
-            name: "compute".to_string(),
-            linkage_name: None,
-            low_pc: 0x1000,
-            high_pc: Some(0x1020),
-            params: vec![],
-            return_type: Some("int".to_string()),
-            decl: None,
-            locals: vec![],
-        });
+        functions.insert(
+            0x1000,
+            FunctionDebugInfo {
+                name: "compute".to_string(),
+                linkage_name: None,
+                low_pc: 0x1000,
+                high_pc: Some(0x1020),
+                params: vec![],
+                return_type: Some("int".to_string()),
+                decl: None,
+                locals: vec![],
+            },
+        );
         let dwarf = DwarfInfo {
             functions,
             source_map: BTreeMap::new(),
@@ -3686,19 +4125,28 @@ mod tests {
         let func = make_func("sub_1000", body);
 
         let mut functions = BTreeMap::new();
-        functions.insert(0x1000, FunctionDebugInfo {
-            name: "add".to_string(),
-            linkage_name: None,
-            low_pc: 0x1000,
-            high_pc: Some(0x1020),
-            params: vec![
-                ParameterInfo { name: Some("a".to_string()), type_name: Some("int".to_string()) },
-                ParameterInfo { name: Some("b".to_string()), type_name: Some("int".to_string()) },
-            ],
-            return_type: Some("int".to_string()),
-            decl: None,
-            locals: vec![],
-        });
+        functions.insert(
+            0x1000,
+            FunctionDebugInfo {
+                name: "add".to_string(),
+                linkage_name: None,
+                low_pc: 0x1000,
+                high_pc: Some(0x1020),
+                params: vec![
+                    ParameterInfo {
+                        name: Some("a".to_string()),
+                        type_name: Some("int".to_string()),
+                    },
+                    ParameterInfo {
+                        name: Some("b".to_string()),
+                        type_name: Some("int".to_string()),
+                    },
+                ],
+                return_type: Some("int".to_string()),
+                decl: None,
+                locals: vec![],
+            },
+        );
         let dwarf = DwarfInfo {
             functions,
             source_map: BTreeMap::new(),
@@ -3735,19 +4183,28 @@ mod tests {
         };
 
         let mut functions = BTreeMap::new();
-        functions.insert(0x2000, FunctionDebugInfo {
-            name: "process".to_string(),
-            linkage_name: None,
-            low_pc: 0x2000,
-            high_pc: Some(0x2020),
-            params: vec![
-                ParameterInfo { name: Some("count".to_string()), type_name: Some("int".to_string()) },
-                ParameterInfo { name: Some("buf".to_string()), type_name: Some("char *".to_string()) },
-            ],
-            return_type: Some("int".to_string()),
-            decl: None,
-            locals: vec![],
-        });
+        functions.insert(
+            0x2000,
+            FunctionDebugInfo {
+                name: "process".to_string(),
+                linkage_name: None,
+                low_pc: 0x2000,
+                high_pc: Some(0x2020),
+                params: vec![
+                    ParameterInfo {
+                        name: Some("count".to_string()),
+                        type_name: Some("int".to_string()),
+                    },
+                    ParameterInfo {
+                        name: Some("buf".to_string()),
+                        type_name: Some("char *".to_string()),
+                    },
+                ],
+                return_type: Some("int".to_string()),
+                decl: None,
+                locals: vec![],
+            },
+        );
         let dwarf = DwarfInfo {
             functions,
             source_map: BTreeMap::new(),
@@ -3776,16 +4233,19 @@ mod tests {
         let func = make_func("sub_1000", body);
 
         let mut functions = BTreeMap::new();
-        functions.insert(0x1000, FunctionDebugInfo {
-            name: "get_value".to_string(),
-            linkage_name: None,
-            low_pc: 0x1000,
-            high_pc: Some(0x1020),
-            params: vec![],
-            return_type: Some("long".to_string()),
-            decl: None,
-            locals: vec![],
-        });
+        functions.insert(
+            0x1000,
+            FunctionDebugInfo {
+                name: "get_value".to_string(),
+                linkage_name: None,
+                low_pc: 0x1000,
+                high_pc: Some(0x1020),
+                params: vec![],
+                return_type: Some("long".to_string()),
+                decl: None,
+                locals: vec![],
+            },
+        );
         let dwarf = DwarfInfo {
             functions,
             source_map: BTreeMap::new(),
@@ -3865,16 +4325,8 @@ mod tests {
         let r0 = reg(0, 8);
         let r8 = reg(8, 8);
 
-        let load = IrInsn::with_output(
-            IrOp::Load,
-            r8,
-            smallvec![space, r0],
-            0x1000,
-        );
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 8))),
-        ];
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, r0], 0x1000);
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 8)))];
 
         let func = make_func("qword_load", body);
         let output = print_c(&func);
@@ -3891,16 +4343,8 @@ mod tests {
         let r0 = reg(0, 8);
         let r8 = reg(8, 4);
 
-        let load = IrInsn::with_output(
-            IrOp::Load,
-            r8,
-            smallvec![space, r0],
-            0x1000,
-        );
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 4))),
-        ];
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, r0], 0x1000);
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 4)))];
 
         let func = make_func("dword_load", body);
         let output = print_c(&func);
@@ -3917,16 +4361,8 @@ mod tests {
         let r0 = reg(0, 8);
         let r8 = reg(8, 1);
 
-        let load = IrInsn::with_output(
-            IrOp::Load,
-            r8,
-            smallvec![space, r0],
-            0x1000,
-        );
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 1))),
-        ];
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, r0], 0x1000);
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 1)))];
 
         let func = make_func("byte_load", body);
         let output = print_c(&func);
@@ -3943,16 +4379,8 @@ mod tests {
         let r0 = reg(0, 8);
         let r8 = reg(8, 2);
 
-        let load = IrInsn::with_output(
-            IrOp::Load,
-            r8,
-            smallvec![space, r0],
-            0x1000,
-        );
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 2))),
-        ];
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, r0], 0x1000);
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 2)))];
 
         let func = make_func("word_load", body);
         let output = print_c(&func);
@@ -4015,16 +4443,8 @@ mod tests {
         let r0 = reg(0, 4);
         let r8 = reg(8, 8);
 
-        let sext = IrInsn::with_output(
-            IrOp::IntSext,
-            r8,
-            smallvec![r0],
-            0x1000,
-        );
-        let body = vec![
-            HirNode::Statement(sext),
-            HirNode::Return(Some(sv(8, 8))),
-        ];
+        let sext = IrInsn::with_output(IrOp::IntSext, r8, smallvec![r0], 0x1000);
+        let body = vec![HirNode::Statement(sext), HirNode::Return(Some(sv(8, 8)))];
 
         let func = make_func("signed_cast", body);
         let output = print_c(&func);
@@ -4040,16 +4460,8 @@ mod tests {
         let r0 = reg(0, 4);
         let r8 = reg(8, 8);
 
-        let zext = IrInsn::with_output(
-            IrOp::IntZext,
-            r8,
-            smallvec![r0],
-            0x1000,
-        );
-        let body = vec![
-            HirNode::Statement(zext),
-            HirNode::Return(Some(sv(8, 8))),
-        ];
+        let zext = IrInsn::with_output(IrOp::IntZext, r8, smallvec![r0], 0x1000);
+        let body = vec![HirNode::Statement(zext), HirNode::Return(Some(sv(8, 8)))];
 
         let func = make_func("unsigned_cast", body);
         let output = print_c(&func);
@@ -4065,16 +4477,8 @@ mod tests {
         let r0 = reg(0, 8);
         let r8 = reg(8, 8);
 
-        let zext = IrInsn::with_output(
-            IrOp::IntZext,
-            r8,
-            smallvec![r0],
-            0x1000,
-        );
-        let body = vec![
-            HirNode::Statement(zext),
-            HirNode::Return(Some(sv(8, 8))),
-        ];
+        let zext = IrInsn::with_output(IrOp::IntZext, r8, smallvec![r0], 0x1000);
+        let body = vec![HirNode::Statement(zext), HirNode::Return(Some(sv(8, 8)))];
 
         let func = make_func("same_size_widen", body);
         let output = print_c(&func);
@@ -4103,9 +4507,24 @@ mod tests {
         let r24 = reg(24, 1);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::Load, r8, smallvec![space, r0], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::Load, r16, smallvec![space, r0], 0x1004)),
-            HirNode::Statement(IrInsn::with_output(IrOp::Load, r24, smallvec![space, r0], 0x1008)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r8,
+                smallvec![space, r0],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r16,
+                smallvec![space, r0],
+                0x1004,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r24,
+                smallvec![space, r0],
+                0x1008,
+            )),
             HirNode::Return(Some(sv(8, 8))),
         ];
 
@@ -4151,7 +4570,10 @@ mod tests {
                 smallvec![r0, neg8],
                 0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: Varnode::reg(0, 8), version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: Varnode::reg(0, 8),
+                version: 0,
+            })),
         ];
 
         let func = make_func("neg8", body);
@@ -4179,7 +4601,10 @@ mod tests {
                 smallvec![r0, neg4],
                 0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: Varnode::reg(0, 4), version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: Varnode::reg(0, 4),
+                version: 0,
+            })),
         ];
 
         let func = make_func("neg4", body);
@@ -4197,13 +4622,11 @@ mod tests {
         let neg1 = con(0xffffffff, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(
-                IrOp::Copy,
-                r0,
-                smallvec![neg1],
-                0x1000,
-            )),
-            HirNode::Return(Some(SsaVarnode { base: Varnode::reg(0, 4), version: 0 })),
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, r0, smallvec![neg1], 0x1000)),
+            HirNode::Return(Some(SsaVarnode {
+                base: Varnode::reg(0, 4),
+                version: 0,
+            })),
         ];
 
         let func = make_func("neg1_copy", body);
@@ -4247,10 +4670,7 @@ mod tests {
         let func = make_func("for_simple", body);
         let output = print_c(&func);
 
-        assert!(
-            output.contains("for ("),
-            "should contain 'for (': {output}",
-        );
+        assert!(output.contains("for ("), "should contain 'for (': {output}",);
         assert!(
             output.contains("i++"),
             "increment should be rendered as i++ (loop counter renamed): {output}",
@@ -4296,14 +4716,18 @@ mod tests {
         let body = vec![
             HirNode::For {
                 init: IrInsn::with_output(IrOp::Copy, outer, smallvec![zero], 0x1000),
-                cond: SsaVarnode { base: outer, version: 0 },
+                cond: SsaVarnode {
+                    base: outer,
+                    version: 0,
+                },
                 update: IrInsn::with_output(IrOp::IntAdd, outer, smallvec![outer, one], 0x1020),
                 body: vec![HirNode::For {
                     init: IrInsn::with_output(IrOp::Copy, inner, smallvec![zero], 0x1004),
-                    cond: SsaVarnode { base: inner, version: 0 },
-                    update: IrInsn::with_output(
-                        IrOp::IntAdd, inner, smallvec![inner, one], 0x1018,
-                    ),
+                    cond: SsaVarnode {
+                        base: inner,
+                        version: 0,
+                    },
+                    update: IrInsn::with_output(IrOp::IntAdd, inner, smallvec![inner, one], 0x1018),
                     body: vec![],
                 }],
             },
@@ -4350,10 +4774,7 @@ mod tests {
             output.contains("--)"),
             "decrement should render as `<var>--`: {output}",
         );
-        assert!(
-            output.contains("for ("),
-            "should be a for-loop: {output}",
-        );
+        assert!(output.contains("for ("), "should be a for-loop: {output}",);
     }
 
     #[test]
@@ -4373,16 +4794,27 @@ mod tests {
         let one = con(1, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::Copy, acc, smallvec![zero], 0x0FFC)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                acc,
+                smallvec![zero],
+                0x0FFC,
+            )),
             HirNode::For {
                 init: IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000),
                 cond: sv(0, 4),
                 update: IrInsn::with_output(IrOp::IntAdd, i, smallvec![i, one], 0x1018),
                 body: vec![HirNode::Statement(IrInsn::with_output(
-                    IrOp::IntAdd, acc, smallvec![acc, one], 0x1014,
+                    IrOp::IntAdd,
+                    acc,
+                    smallvec![acc, one],
+                    0x1014,
                 ))],
             },
-            HirNode::Return(Some(SsaVarnode { base: acc, version: 1 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: acc,
+                version: 1,
+            })),
         ];
 
         let func = make_func("for_compile", body);
@@ -4428,7 +4860,10 @@ mod tests {
                 smallvec![r0, neg1],
                 0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: Varnode::reg(8, 1), version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: Varnode::reg(8, 1),
+                version: 0,
+            })),
         ];
 
         let func = make_func("cmp_neg1", body);
@@ -4451,10 +4886,16 @@ mod tests {
         let body = vec![
             HirNode::TryCatch {
                 try_body: vec![HirNode::Statement(IrInsn::with_output(
-                    IrOp::IntAdd, r0, smallvec![r0, c1], 0x1000,
+                    IrOp::IntAdd,
+                    r0,
+                    smallvec![r0, c1],
+                    0x1000,
                 ))],
                 catch_body: vec![HirNode::Statement(IrInsn::with_output(
-                    IrOp::Copy, r8, smallvec![con(0, 4)], 0x1010,
+                    IrOp::Copy,
+                    r8,
+                    smallvec![con(0, 4)],
+                    0x1010,
                 ))],
             },
             HirNode::Return(Some(sv(0, 4))),
@@ -4474,7 +4915,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, r0, smallvec![r0, c1], 0x1000,
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, c1],
+                0x1000,
             )),
             HirNode::Return(Some(sv(0, 4))),
         ];
@@ -4482,8 +4926,14 @@ mod tests {
         let func = make_func("no_try_catch", body);
         let output = print_c(&func);
 
-        assert!(!output.contains("__try"), "no TryCatch node → no __try: {output}");
-        assert!(!output.contains("__except"), "no TryCatch node → no __except: {output}");
+        assert!(
+            !output.contains("__try"),
+            "no TryCatch node → no __try: {output}"
+        );
+        assert!(
+            !output.contains("__except"),
+            "no TryCatch node → no __except: {output}"
+        );
     }
 
     #[test]
@@ -4495,10 +4945,16 @@ mod tests {
         let body = vec![
             HirNode::TryCatch {
                 try_body: vec![HirNode::Statement(IrInsn::with_output(
-                    IrOp::IntAdd, r8, smallvec![r0, c1], 0x1000,
+                    IrOp::IntAdd,
+                    r8,
+                    smallvec![r0, c1],
+                    0x1000,
                 ))],
                 catch_body: vec![HirNode::Statement(IrInsn::with_output(
-                    IrOp::IntAdd, r0, smallvec![r0, c1], 0x1010,
+                    IrOp::IntAdd,
+                    r0,
+                    smallvec![r0, c1],
+                    0x1010,
                 ))],
             },
             HirNode::Return(Some(sv(8, 4))),
@@ -4507,13 +4963,19 @@ mod tests {
         let func = make_func("try_indent", body);
         let output = print_c(&func);
 
-        let try_line = output.lines().find(|l| l.contains("__try")).expect("__try line");
+        let try_line = output
+            .lines()
+            .find(|l| l.contains("__try"))
+            .expect("__try line");
         assert!(
             try_line.starts_with("    __try"),
             "try should be indented one level: {try_line:?}",
         );
 
-        let except_line = output.lines().find(|l| l.contains("__except")).expect("__except line");
+        let except_line = output
+            .lines()
+            .find(|l| l.contains("__except"))
+            .expect("__except line");
         assert!(
             except_line.starts_with("    }"),
             "except should be at depth 1: {except_line:?}",
@@ -4539,10 +5001,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(output.contains("^"), "BoolXor should emit ^: {output}");
-        assert!(
-            !output.contains("!="),
-            "BoolXor must not emit !=: {output}",
-        );
+        assert!(!output.contains("!="), "BoolXor must not emit !=: {output}",);
     }
 
     #[test]
@@ -4563,7 +5022,10 @@ mod tests {
         let output = print_c(&func);
 
         assert!(output.contains("~"), "IntNegate should emit ~: {output}");
-        let rhs = output.lines().find(|l| l.contains("~")).expect("line with ~");
+        let rhs = output
+            .lines()
+            .find(|l| l.contains("~"))
+            .expect("line with ~");
         assert!(!rhs.contains("!="), "should not contain !=: {rhs}");
     }
 
@@ -4606,7 +5068,10 @@ mod tests {
         ];
         let func = make_func("lobyte", body);
         let output = print_c(&func);
-        assert!(output.contains("LOBYTE("), "SUBPIECE(x,0) size=1 should emit LOBYTE: {output}");
+        assert!(
+            output.contains("LOBYTE("),
+            "SUBPIECE(x,0) size=1 should emit LOBYTE: {output}"
+        );
     }
 
     #[test]
@@ -4624,7 +5089,10 @@ mod tests {
         ];
         let func = make_func("byte1", body);
         let output = print_c(&func);
-        assert!(output.contains("BYTE1("), "SUBPIECE(x,1) size=1 should emit BYTE1: {output}");
+        assert!(
+            output.contains("BYTE1("),
+            "SUBPIECE(x,1) size=1 should emit BYTE1: {output}"
+        );
     }
 
     #[test]
@@ -4642,7 +5110,10 @@ mod tests {
         ];
         let func = make_func("lodword", body);
         let output = print_c(&func);
-        assert!(output.contains("LODWORD("), "SUBPIECE(x,0) size=4 should emit LODWORD: {output}");
+        assert!(
+            output.contains("LODWORD("),
+            "SUBPIECE(x,0) size=4 should emit LODWORD: {output}"
+        );
     }
 
     #[test]
@@ -4660,7 +5131,10 @@ mod tests {
         ];
         let func = make_func("hidword", body);
         let output = print_c(&func);
-        assert!(output.contains("HIDWORD("), "SUBPIECE(x,4) size=4 should emit HIDWORD: {output}");
+        assert!(
+            output.contains("HIDWORD("),
+            "SUBPIECE(x,4) size=4 should emit HIDWORD: {output}"
+        );
     }
 
     #[test]
@@ -4668,14 +5142,38 @@ mod tests {
         let body = vec![HirNode::Return(None)];
         let func = make_func("prelude_test", body);
         let output = print_c(&func);
-        assert!(output.contains("#define LOBYTE"), "prelude should contain LOBYTE macro: {output}");
-        assert!(output.contains("#define BYTE1"), "prelude should contain BYTE1 macro: {output}");
-        assert!(output.contains("#define BYTE2"), "prelude should contain BYTE2 macro: {output}");
-        assert!(output.contains("#define BYTE3"), "prelude should contain BYTE3 macro: {output}");
-        assert!(output.contains("#define LOWORD"), "prelude should contain LOWORD macro: {output}");
-        assert!(output.contains("#define HIWORD"), "prelude should contain HIWORD macro: {output}");
-        assert!(output.contains("#define LODWORD"), "prelude should contain LODWORD macro: {output}");
-        assert!(output.contains("#define HIDWORD"), "prelude should contain HIDWORD macro: {output}");
+        assert!(
+            output.contains("#define LOBYTE"),
+            "prelude should contain LOBYTE macro: {output}"
+        );
+        assert!(
+            output.contains("#define BYTE1"),
+            "prelude should contain BYTE1 macro: {output}"
+        );
+        assert!(
+            output.contains("#define BYTE2"),
+            "prelude should contain BYTE2 macro: {output}"
+        );
+        assert!(
+            output.contains("#define BYTE3"),
+            "prelude should contain BYTE3 macro: {output}"
+        );
+        assert!(
+            output.contains("#define LOWORD"),
+            "prelude should contain LOWORD macro: {output}"
+        );
+        assert!(
+            output.contains("#define HIWORD"),
+            "prelude should contain HIWORD macro: {output}"
+        );
+        assert!(
+            output.contains("#define LODWORD"),
+            "prelude should contain LODWORD macro: {output}"
+        );
+        assert!(
+            output.contains("#define HIDWORD"),
+            "prelude should contain HIDWORD macro: {output}"
+        );
     }
 
     // -------------------------------------------------------------------
@@ -4688,13 +5186,19 @@ mod tests {
         let c3 = con(3, 4);
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntMult, v, smallvec![v, c3], 0x1000,
+                IrOp::IntMult,
+                v,
+                smallvec![v, c3],
+                0x1000,
             )),
             HirNode::Return(Some(sv(0, 4))),
         ];
         let func = make_func("mul_assign", body);
         let output = print_c(&func);
-        assert!(output.contains("result *= 3;"), "should emit result *= 3: {output}");
+        assert!(
+            output.contains("result *= 3;"),
+            "should emit result *= 3: {output}"
+        );
     }
 
     #[test]
@@ -4703,13 +5207,19 @@ mod tests {
         let c2 = con(2, 4);
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntLeft, v, smallvec![v, c2], 0x1000,
+                IrOp::IntLeft,
+                v,
+                smallvec![v, c2],
+                0x1000,
             )),
             HirNode::Return(Some(sv(0, 4))),
         ];
         let func = make_func("shl_assign", body);
         let output = print_c(&func);
-        assert!(output.contains("result <<= 2;"), "should emit result <<= 2: {output}");
+        assert!(
+            output.contains("result <<= 2;"),
+            "should emit result <<= 2: {output}"
+        );
     }
 
     #[test]
@@ -4718,13 +5228,19 @@ mod tests {
         let mask = reg(8, 4);
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAnd, v, smallvec![v, mask], 0x1000,
+                IrOp::IntAnd,
+                v,
+                smallvec![v, mask],
+                0x1000,
             )),
             HirNode::Return(Some(sv(0, 4))),
         ];
         let func = make_func("and_assign", body);
         let output = print_c(&func);
-        assert!(output.contains("result &= v2;"), "should emit result &= v2: {output}");
+        assert!(
+            output.contains("result &= v2;"),
+            "should emit result &= v2: {output}"
+        );
     }
 
     #[test]
@@ -4733,13 +5249,19 @@ mod tests {
         let flag = reg(8, 4);
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntOr, v, smallvec![v, flag], 0x1000,
+                IrOp::IntOr,
+                v,
+                smallvec![v, flag],
+                0x1000,
             )),
             HirNode::Return(Some(sv(0, 4))),
         ];
         let func = make_func("or_assign", body);
         let output = print_c(&func);
-        assert!(output.contains("result |= v2;"), "should emit result |= v2: {output}");
+        assert!(
+            output.contains("result |= v2;"),
+            "should emit result |= v2: {output}"
+        );
     }
 
     // -------------------------------------------------------------------
@@ -4754,12 +5276,21 @@ mod tests {
         let neg_out = reg(24, 1);
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntSless, cmp_out, smallvec![a, b], 0x1000,
+                IrOp::IntSless,
+                cmp_out,
+                smallvec![a, b],
+                0x1000,
             )),
             HirNode::Statement(IrInsn::with_output(
-                IrOp::BoolNegate, neg_out, smallvec![cmp_out], 0x1004,
+                IrOp::BoolNegate,
+                neg_out,
+                smallvec![cmp_out],
+                0x1004,
             )),
-            HirNode::Return(Some(SsaVarnode { base: neg_out, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: neg_out,
+                version: 0,
+            })),
         ];
         let func = make_func("negate_less", body);
         let output = print_c(&func);
@@ -4781,12 +5312,21 @@ mod tests {
         let neg_out = reg(24, 1);
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntEqual, cmp_out, smallvec![a, b], 0x1000,
+                IrOp::IntEqual,
+                cmp_out,
+                smallvec![a, b],
+                0x1000,
             )),
             HirNode::Statement(IrInsn::with_output(
-                IrOp::BoolNegate, neg_out, smallvec![cmp_out], 0x1004,
+                IrOp::BoolNegate,
+                neg_out,
+                smallvec![cmp_out],
+                0x1004,
             )),
-            HirNode::Return(Some(SsaVarnode { base: neg_out, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: neg_out,
+                version: 0,
+            })),
         ];
         let func = make_func("negate_equal", body);
         let output = print_c(&func);
@@ -4801,7 +5341,10 @@ mod tests {
         let r0 = reg(0, 4);
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::BoolNegate, r0, smallvec![r0], 0x1000,
+                IrOp::BoolNegate,
+                r0,
+                smallvec![r0],
+                0x1000,
             )),
             HirNode::Return(Some(sv(0, 4))),
         ];
@@ -4825,7 +5368,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntCarry, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntCarry,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 1))),
         ];
@@ -4845,7 +5391,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntScarry, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntScarry,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 1))),
         ];
@@ -4865,7 +5414,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntSborrow, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntSborrow,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 1))),
         ];
@@ -4904,7 +5456,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntDiv, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntDiv,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 4))),
         ];
@@ -4924,7 +5479,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntSdiv, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntSdiv,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 4))),
         ];
@@ -4935,7 +5493,8 @@ mod tests {
             "IntSdiv should NOT cast to unsigned: {output}",
         );
         let div_line = output.lines().find(|l| l.contains("/")).expect("div line");
-        let body_output: String = output.lines()
+        let body_output: String = output
+            .lines()
             .skip_while(|l| !l.contains("signed_div"))
             .collect::<Vec<_>>()
             .join("\n");
@@ -4953,7 +5512,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntRight, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntRight,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 4))),
         ];
@@ -4973,7 +5535,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntSright, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntSright,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 4))),
         ];
@@ -4993,7 +5558,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntLess, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntLess,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 1))),
         ];
@@ -5013,7 +5581,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntSless, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntSless,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 1))),
         ];
@@ -5033,7 +5604,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntRem, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntRem,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 8))),
         ];
@@ -5053,7 +5627,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntLessequal, out, smallvec![r0, r8], 0x1000,
+                IrOp::IntLessequal,
+                out,
+                smallvec![r0, r8],
+                0x1000,
             )),
             HirNode::Return(Some(sv(16, 1))),
         ];
@@ -5078,8 +5655,18 @@ mod tests {
         let out = reg(32, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::IntLeft, tmp, smallvec![a, b], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, out, smallvec![tmp, c], 0x1004)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntLeft,
+                tmp,
+                smallvec![a, b],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                out,
+                smallvec![tmp, c],
+                0x1004,
+            )),
             HirNode::Return(Some(sv(32, 4))),
         ];
 
@@ -5101,8 +5688,18 @@ mod tests {
         let out = reg(32, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, tmp, smallvec![a, b], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntMult, out, smallvec![tmp, c], 0x1004)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                tmp,
+                smallvec![a, b],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntMult,
+                out,
+                smallvec![tmp, c],
+                0x1004,
+            )),
             HirNode::Return(Some(sv(32, 4))),
         ];
 
@@ -5124,8 +5721,18 @@ mod tests {
         let out = reg(32, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, tmp, smallvec![a, b], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, out, smallvec![tmp, c], 0x1004)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                tmp,
+                smallvec![a, b],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                out,
+                smallvec![tmp, c],
+                0x1004,
+            )),
             HirNode::Return(Some(sv(32, 4))),
         ];
 
@@ -5151,8 +5758,18 @@ mod tests {
         let out = reg(32, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::IntOr, tmp, smallvec![a, b], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAnd, out, smallvec![tmp, c], 0x1004)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntOr,
+                tmp,
+                smallvec![a, b],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAnd,
+                out,
+                smallvec![tmp, c],
+                0x1004,
+            )),
             HirNode::Return(Some(sv(32, 4))),
         ];
 
@@ -5173,8 +5790,18 @@ mod tests {
         let out = reg(24, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, tmp, smallvec![a, b], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::Int2comp, out, smallvec![tmp], 0x1004)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                tmp,
+                smallvec![a, b],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Int2comp,
+                out,
+                smallvec![tmp],
+                0x1004,
+            )),
             HirNode::Return(Some(sv(24, 4))),
         ];
 
@@ -5198,10 +5825,7 @@ mod tests {
         let r8 = reg(8, 4);
 
         let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 4))),
-        ];
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 4)))];
 
         let func = make_func("global_dword", body);
         let output = print_c(&func);
@@ -5223,10 +5847,7 @@ mod tests {
         let r8 = reg(8, 8);
 
         let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 8))),
-        ];
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 8)))];
 
         let func = make_func("global_qword", body);
         let output = print_c(&func);
@@ -5246,10 +5867,7 @@ mod tests {
         let r8 = reg(8, 4);
 
         let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 4))),
-        ];
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 4)))];
 
         let func = make_func("global_sym", body);
         let mut symbols = BTreeMap::new();
@@ -5274,10 +5892,7 @@ mod tests {
         let r8 = reg(8, 1);
 
         let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 1))),
-        ];
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 1)))];
 
         let func = make_func("global_byte", body);
         let output = print_c(&func);
@@ -5295,10 +5910,7 @@ mod tests {
         let r8 = reg(8, 2);
 
         let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 2))),
-        ];
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 2)))];
 
         let func = make_func("global_word", body);
         let output = print_c(&func);
@@ -5316,10 +5928,7 @@ mod tests {
         let r8 = reg(8, 8);
 
         let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 8))),
-        ];
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 8)))];
 
         let func = make_func("canary_qword", body);
         let output = print_c(&func);
@@ -5345,10 +5954,7 @@ mod tests {
         let r8 = reg(8, 4);
 
         let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 4))),
-        ];
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 4)))];
 
         let func = make_func("canary_dword", body);
         let output = print_c(&func);
@@ -5366,10 +5972,7 @@ mod tests {
         let r8 = reg(8, 4);
 
         let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 4))),
-        ];
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 4)))];
 
         let func = make_func("not_canary", body);
         let output = print_c(&func);
@@ -5395,10 +5998,7 @@ mod tests {
         let r0 = reg(0, 4);
 
         let store = IrInsn::without_output(IrOp::Store, smallvec![space, addr, r0], 0x1000);
-        let body = vec![
-            HirNode::Statement(store),
-            HirNode::Return(None),
-        ];
+        let body = vec![HirNode::Statement(store), HirNode::Return(None)];
 
         let func = make_func("global_store", body);
         let output = print_c(&func);
@@ -5416,10 +6016,7 @@ mod tests {
         let r8 = reg(8, 4);
 
         let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, r0], 0x1000);
-        let body = vec![
-            HirNode::Statement(load),
-            HirNode::Return(Some(sv(8, 4))),
-        ];
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 4)))];
 
         let func = make_func("no_global", body);
         let output = print_c(&func);
@@ -5543,10 +6140,7 @@ mod tests {
         let target_addr = con(0x401030, 8);
 
         let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(call_insn),
-            HirNode::Return(None),
-        ];
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
 
         let func = make_func("caller", body);
         let mut symbols = BTreeMap::new();
@@ -5569,10 +6163,7 @@ mod tests {
         let target_addr = con(0x402000, 8);
 
         let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(call_insn),
-            HirNode::Return(None),
-        ];
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
 
         let func = make_func("caller", body);
         let symbols = BTreeMap::new();
@@ -5615,10 +6206,7 @@ mod tests {
 
         let target_addr = con(0x401030, 8);
         let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(call_insn),
-            HirNode::Return(None),
-        ];
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
 
         let func = make_func("caller", body);
 
@@ -5695,7 +6283,10 @@ mod tests {
             !output.contains("__cdecl"),
             "System V should NOT have __cdecl: {output}",
         );
-        let sig_line = output.lines().find(|l| l.contains("sub_401000(")).expect("function sig");
+        let sig_line = output
+            .lines()
+            .find(|l| l.contains("sub_401000("))
+            .expect("function sig");
         assert!(
             sig_line.starts_with("__int32 sub_401000("),
             "SysV should have no convention annotation: {sig_line}",
@@ -5721,7 +6312,10 @@ mod tests {
             !output.contains("__fastcall"),
             "unknown convention should NOT have __fastcall: {output}",
         );
-        let sig_line = output.lines().find(|l| l.contains("sub_500000(")).expect("function sig");
+        let sig_line = output
+            .lines()
+            .find(|l| l.contains("sub_500000("))
+            .expect("function sig");
         assert!(
             sig_line.starts_with("__int32 sub_500000("),
             "unknown convention should have no annotation: {sig_line}",
@@ -5803,10 +6397,28 @@ mod tests {
         let load_out = reg(16, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::IntMult, mult_out, smallvec![idx, stride], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, add_out, smallvec![base, mult_out], 0x1004)),
-            HirNode::Statement(IrInsn::with_output(IrOp::Load, load_out, smallvec![space, add_out], 0x1008)),
-            HirNode::Return(Some(SsaVarnode { base: load_out, version: 0 })),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntMult,
+                mult_out,
+                smallvec![idx, stride],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                add_out,
+                smallvec![base, mult_out],
+                0x1004,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                load_out,
+                smallvec![space, add_out],
+                0x1008,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: load_out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("array_basic", body);
@@ -5833,9 +6445,22 @@ mod tests {
         let load_out = reg(16, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::Ptradd, ptradd_out, smallvec![base, idx, stride], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::Load, load_out, smallvec![space, ptradd_out], 0x1004)),
-            HirNode::Return(Some(SsaVarnode { base: load_out, version: 0 })),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Ptradd,
+                ptradd_out,
+                smallvec![base, idx, stride],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                load_out,
+                smallvec![space, ptradd_out],
+                0x1004,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: load_out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("array_ptradd", body);
@@ -5857,9 +6482,22 @@ mod tests {
         let load_out = reg(8, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, add_out, smallvec![base, offset], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::Load, load_out, smallvec![space, add_out], 0x1004)),
-            HirNode::Return(Some(SsaVarnode { base: load_out, version: 0 })),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                add_out,
+                smallvec![base, offset],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                load_out,
+                smallvec![space, add_out],
+                0x1004,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: load_out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("array_const_idx", body);
@@ -5883,10 +6521,28 @@ mod tests {
         let load_out = reg(16, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::IntMult, mult_out, smallvec![idx, stride], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, add_out, smallvec![base, mult_out], 0x1004)),
-            HirNode::Statement(IrInsn::with_output(IrOp::Load, load_out, smallvec![space, add_out], 0x1008)),
-            HirNode::Return(Some(SsaVarnode { base: load_out, version: 0 })),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntMult,
+                mult_out,
+                smallvec![idx, stride],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                add_out,
+                smallvec![base, mult_out],
+                0x1004,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                load_out,
+                smallvec![space, add_out],
+                0x1008,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: load_out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("stride_mismatch", body);
@@ -5912,10 +6568,7 @@ mod tests {
         let fptr = reg(0, 8);
 
         let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr], 0x1000);
-        let body = vec![
-            HirNode::Statement(callind),
-            HirNode::Return(None),
-        ];
+        let body = vec![HirNode::Statement(callind), HirNode::Return(None)];
 
         let func = make_func("callind_test", body);
         let output = print_c(&func);
@@ -5932,10 +6585,7 @@ mod tests {
         let target = con(0x401000, 8);
 
         let call = IrInsn::without_output(IrOp::Call, smallvec![target], 0x1000);
-        let body = vec![
-            HirNode::Statement(call),
-            HirNode::Return(None),
-        ];
+        let body = vec![HirNode::Statement(call), HirNode::Return(None)];
 
         let func = make_func("call_direct", body);
         let output = print_c(&func);
@@ -5959,7 +6609,10 @@ mod tests {
         let callind = IrInsn::with_output(IrOp::Callind, ret, smallvec![fptr], 0x1000);
         let body = vec![
             HirNode::Statement(callind),
-            HirNode::Return(Some(SsaVarnode { base: ret, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: ret,
+                version: 0,
+            })),
         ];
 
         let func = make_func("callind_output", body);
@@ -5984,9 +6637,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::Callother, out, smallvec![tag, r0, r16], 0x1000,
+                IrOp::Callother,
+                out,
+                smallvec![tag, r0, r16],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("sse_add", body);
@@ -6010,9 +6669,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::Callother, out, smallvec![tag, r0], 0x1000,
+                IrOp::Callother,
+                out,
+                smallvec![tag, r0],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("sse_unknown", body);
@@ -6032,7 +6697,9 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::without_output(
-                IrOp::Callother, smallvec![tag, r0, r16], 0x1000,
+                IrOp::Callother,
+                smallvec![tag, r0, r16],
+                0x1000,
             )),
             HirNode::Return(None),
         ];
@@ -6054,9 +6721,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::Callother, out, smallvec![tag, r0], 0x1000,
+                IrOp::Callother,
+                out,
+                smallvec![tag, r0],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("sse_movaps", body);
@@ -6077,9 +6750,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::Callother, out, smallvec![tag, r0, r16], 0x1000,
+                IrOp::Callother,
+                out,
+                smallvec![tag, r0, r16],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("sse_mulps", body);
@@ -6102,9 +6781,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntXor, out, smallvec![r0, r0], 0x1000,
+                IrOp::IntXor,
+                out,
+                smallvec![r0, r0],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("xor_self", body);
@@ -6128,7 +6813,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::Popcount, r0, smallvec![zero], 0x1000,
+                IrOp::Popcount,
+                r0,
+                smallvec![zero],
+                0x1000,
             )),
             HirNode::Return(Some(sv(0, 4))),
         ];
@@ -6154,9 +6842,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAnd, out, smallvec![r0, zero], 0x1000,
+                IrOp::IntAnd,
+                out,
+                smallvec![r0, zero],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("and_zero", body);
@@ -6176,9 +6870,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntOr, out, smallvec![r0, zero], 0x1000,
+                IrOp::IntOr,
+                out,
+                smallvec![r0, zero],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: out,
+                version: 0,
+            })),
         ];
 
         let func = make_func("or_zero", body);
@@ -6205,15 +6905,19 @@ mod tests {
         let r8 = reg(8, 1);
         let zero = con(0, 8);
 
-        let cmp = IrInsn::with_output(
-            IrOp::IntEqual, r8, smallvec![r0, zero], 0x1000,
-        );
+        let cmp = IrInsn::with_output(IrOp::IntEqual, r8, smallvec![r0, zero], 0x1000);
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::Ptradd, r0, smallvec![r0, zero], 0x0FF0,
+                IrOp::Ptradd,
+                r0,
+                smallvec![r0, zero],
+                0x0FF0,
             )),
             HirNode::Statement(cmp),
-            HirNode::Return(Some(SsaVarnode { base: r8, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: r8,
+                version: 0,
+            })),
         ];
 
         let func = make_func("nullptr_test", body);
@@ -6232,7 +6936,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, r0, smallvec![r0, big], 0x1000,
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, big],
+                0x1000,
             )),
             HirNode::Return(Some(sv(0, 8))),
         ];
@@ -6273,10 +6980,16 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::Ptradd, ptr_vn, smallvec![ptr_vn, zero], 0x0FF0,
+                IrOp::Ptradd,
+                ptr_vn,
+                smallvec![ptr_vn, zero],
+                0x0FF0,
             )),
             HirNode::Statement(IrInsn::with_output(
-                IrOp::Copy, ptr_vn, smallvec![zero], 0x1000,
+                IrOp::Copy,
+                ptr_vn,
+                smallvec![zero],
+                0x1000,
             )),
             HirNode::Return(Some(sv(0, 8))),
         ];
@@ -6297,16 +7010,8 @@ mod tests {
         let body = vec![HirNode::Switch {
             cond: sv(0, 8),
             cases: vec![
-                (
-                    SwitchCase::Value(0),
-                    vec![HirNode::Return(None)],
-                    false,
-                ),
-                (
-                    SwitchCase::Value(1),
-                    vec![HirNode::Return(None)],
-                    false,
-                ),
+                (SwitchCase::Value(0), vec![HirNode::Return(None)], false),
+                (SwitchCase::Value(1), vec![HirNode::Return(None)], false),
             ],
             default: None,
         }];
@@ -6330,16 +7035,8 @@ mod tests {
         let body = vec![HirNode::Switch {
             cond: sv(0, 8),
             cases: vec![
-                (
-                    SwitchCase::Value(0),
-                    vec![],
-                    true,
-                ),
-                (
-                    SwitchCase::Value(1),
-                    vec![HirNode::Return(None)],
-                    false,
-                ),
+                (SwitchCase::Value(0), vec![], true),
+                (SwitchCase::Value(1), vec![HirNode::Return(None)], false),
             ],
             default: None,
         }];
@@ -6374,7 +7071,10 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, r0, smallvec![r0, c1], 0x1000,
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, c1],
+                0x1000,
             )),
             HirNode::Return(Some(sv(0, 8))),
         ];
@@ -6399,9 +7099,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, stk, smallvec![stk, c1], 0x1000,
+                IrOp::IntAdd,
+                stk,
+                smallvec![stk, c1],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: stk, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: stk,
+                version: 0,
+            })),
         ];
 
         let func = make_func("stack_comment", body);
@@ -6427,9 +7133,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, stk, smallvec![stk, one], 0x1000,
+                IrOp::IntAdd,
+                stk,
+                smallvec![stk, one],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: stk, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: stk,
+                version: 0,
+            })),
         ];
 
         let func = make_func("with_named_local", body);
@@ -6443,20 +7155,23 @@ mod tests {
         };
 
         let mut functions = BTreeMap::new();
-        functions.insert(0x1000, FunctionDebugInfo {
-            name: "with_named_local".to_string(),
-            linkage_name: None,
-            low_pc: 0x1000,
-            high_pc: Some(0x1040),
-            params: vec![],
-            return_type: Some("long long".to_string()),
-            decl: None,
-            locals: vec![LocalVariable {
-                name: "counter".to_string(),
-                type_name: Some("long long".to_string()),
-                frame_offset: Some(-0x50),
-            }],
-        });
+        functions.insert(
+            0x1000,
+            FunctionDebugInfo {
+                name: "with_named_local".to_string(),
+                linkage_name: None,
+                low_pc: 0x1000,
+                high_pc: Some(0x1040),
+                params: vec![],
+                return_type: Some("long long".to_string()),
+                decl: None,
+                locals: vec![LocalVariable {
+                    name: "counter".to_string(),
+                    type_name: Some("long long".to_string()),
+                    frame_offset: Some(-0x50),
+                }],
+            },
+        );
         let dwarf = DwarfInfo {
             functions,
             source_map: BTreeMap::new(),
@@ -6465,13 +7180,7 @@ mod tests {
             unions: BTreeMap::new(),
         };
 
-        let output = super::print_c_full(
-            &func,
-            Some(&dwarf),
-            Some(&header),
-            None,
-            None,
-        );
+        let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
 
         assert!(
             output.contains(" counter;") || output.contains(" counter "),
@@ -6493,14 +7202,17 @@ mod tests {
         let one = con(1, 8);
 
         let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, stk, smallvec![one], 0x0FFC)),
             HirNode::Statement(IrInsn::with_output(
-                IrOp::Copy, stk, smallvec![one], 0x0FFC,
-            )),
-            HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, addr, smallvec![rsp, off], 0x1000,
+                IrOp::IntAdd,
+                addr,
+                smallvec![rsp, off],
+                0x1000,
             )),
             HirNode::Statement(IrInsn::without_output(
-                IrOp::Call, smallvec![target, addr], 0x1004,
+                IrOp::Call,
+                smallvec![target, addr],
+                0x1004,
             )),
             HirNode::Return(None),
         ];
@@ -6537,9 +7249,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, stk, smallvec![stk, c1], 0x1000,
+                IrOp::IntAdd,
+                stk,
+                smallvec![stk, c1],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: stk, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: stk,
+                version: 0,
+            })),
         ];
 
         let func = make_func("stack_rbp_comment", body);
@@ -6573,13 +7291,22 @@ mod tests {
         // Use u0 twice so it won't be folded inline
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, u0, smallvec![r0, c1], 0x1000,
+                IrOp::IntAdd,
+                u0,
+                smallvec![r0, c1],
+                0x1000,
             )),
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, r0, smallvec![u0, c1], 0x1004,
+                IrOp::IntAdd,
+                r0,
+                smallvec![u0, c1],
+                0x1004,
             )),
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, r8, smallvec![u0, c1], 0x1008,
+                IrOp::IntAdd,
+                r8,
+                smallvec![u0, c1],
+                0x1008,
             )),
             HirNode::Return(Some(sv(0, 8))),
         ];
@@ -6601,9 +7328,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, r8, smallvec![r8, c1], 0x1000,
+                IrOp::IntAdd,
+                r8,
+                smallvec![r8, c1],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: r8, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: r8,
+                version: 0,
+            })),
         ];
 
         let func = make_func("ecx_comment", body);
@@ -6775,13 +7508,10 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
 
-        let declares_v1 = output
-            .lines()
-            .any(|l| {
-                let trimmed = l.trim();
-                trimmed.starts_with("__int64 v1;")
-                    || trimmed.starts_with("__int64 v1; //")
-            });
+        let declares_v1 = output.lines().any(|l| {
+            let trimmed = l.trim();
+            trimmed.starts_with("__int64 v1;") || trimmed.starts_with("__int64 v1; //")
+        });
         assert!(
             !declares_v1,
             "foldable_exprs varnode should not appear in variable declarations:\n{output}",
@@ -6826,9 +7556,15 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd, r0, smallvec![r8, c1], 0x1000,
+                IrOp::IntAdd,
+                r0,
+                smallvec![r8, c1],
+                0x1000,
             )),
-            HirNode::Return(Some(SsaVarnode { base: r0, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: r0,
+                version: 0,
+            })),
         ];
         let func = make_func("returns_result", body);
         let output = print_c(&func);
@@ -6851,10 +7587,16 @@ mod tests {
 
         let body = vec![
             HirNode::Statement(IrInsn::with_output(
-                IrOp::IntEqual, cmp_out, smallvec![a, b], 0x1000,
+                IrOp::IntEqual,
+                cmp_out,
+                smallvec![a, b],
+                0x1000,
             )),
             HirNode::If {
-                cond: SsaVarnode { base: cmp_out, version: 0 },
+                cond: SsaVarnode {
+                    base: cmp_out,
+                    version: 0,
+                },
                 then_body: vec![HirNode::Return(None)],
                 else_body: None,
             },
@@ -6877,7 +7619,10 @@ mod tests {
         let callind = IrInsn::with_output(IrOp::Callind, ret, smallvec![fptr], 0x1000);
         let body = vec![
             HirNode::Statement(callind),
-            HirNode::Return(Some(SsaVarnode { base: ret, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: ret,
+                version: 0,
+            })),
         ];
         let func = make_func("uses_pfn", body);
         let output = print_c(&func);
@@ -6900,26 +7645,24 @@ mod tests {
         let cmp_out = reg(16, 1);
         let n = reg(8, 4);
 
-        let init = IrInsn::with_output(
-            IrOp::Copy, i_reg, smallvec![zero], 0x0FF0,
-        );
-        let update = IrInsn::with_output(
-            IrOp::IntAdd, i_reg, smallvec![i_reg, one], 0x1010,
-        );
-        let cond_insn = IrInsn::with_output(
-            IrOp::IntLess, cmp_out, smallvec![i_reg, n], 0x1000,
-        );
+        let init = IrInsn::with_output(IrOp::Copy, i_reg, smallvec![zero], 0x0FF0);
+        let update = IrInsn::with_output(IrOp::IntAdd, i_reg, smallvec![i_reg, one], 0x1010);
+        let cond_insn = IrInsn::with_output(IrOp::IntLess, cmp_out, smallvec![i_reg, n], 0x1000);
 
         let body = vec![
             HirNode::For {
                 init,
-                cond: SsaVarnode { base: cmp_out, version: 0 },
+                cond: SsaVarnode {
+                    base: cmp_out,
+                    version: 0,
+                },
                 update,
-                body: vec![
-                    HirNode::Statement(cond_insn),
-                ],
+                body: vec![HirNode::Statement(cond_insn)],
             },
-            HirNode::Return(Some(SsaVarnode { base: i_reg, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: i_reg,
+                version: 0,
+            })),
         ];
         let func = make_func("loop_with_return", body);
         let output = print_c(&func);
@@ -6945,12 +7688,13 @@ mod tests {
         let arg2 = reg(16, 4);
         let ret = reg(24, 4);
 
-        let callind = IrInsn::with_output(
-            IrOp::Callind, ret, smallvec![fptr, arg1, arg2], 0x1000,
-        );
+        let callind = IrInsn::with_output(IrOp::Callind, ret, smallvec![fptr, arg1, arg2], 0x1000);
         let body = vec![
             HirNode::Statement(callind),
-            HirNode::Return(Some(SsaVarnode { base: ret, version: 0 })),
+            HirNode::Return(Some(SsaVarnode {
+                base: ret,
+                version: 0,
+            })),
         ];
         let func = make_func("callind_with_args", body);
         let output = print_c(&func);
@@ -6966,13 +7710,8 @@ mod tests {
         let fptr = reg(0, 8);
         let arg1 = reg(8, 8);
 
-        let callind = IrInsn::without_output(
-            IrOp::Callind, smallvec![fptr, arg1], 0x1000,
-        );
-        let body = vec![
-            HirNode::Statement(callind),
-            HirNode::Return(None),
-        ];
+        let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr, arg1], 0x1000);
+        let body = vec![HirNode::Statement(callind), HirNode::Return(None)];
         let func = make_func("callind_void", body);
         let output = print_c(&func);
 
@@ -7009,10 +7748,7 @@ mod tests {
     fn test_demangled_cpp_call_target() {
         let target_addr = con(0x401200, 8);
         let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(call_insn),
-            HirNode::Return(None),
-        ];
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
 
         let func = make_func("caller", body);
         let mut symbols = BTreeMap::new();
@@ -7034,10 +7770,7 @@ mod tests {
     fn test_demangled_cpp_method_call_target() {
         let target_addr = con(0x401300, 8);
         let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(call_insn),
-            HirNode::Return(None),
-        ];
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
 
         let func = make_func("caller", body);
         let mut symbols = BTreeMap::new();
@@ -7055,10 +7788,7 @@ mod tests {
     fn test_non_mangled_call_target_unchanged() {
         let target_addr = con(0x401030, 8);
         let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
-        let body = vec![
-            HirNode::Statement(call_insn),
-            HirNode::Return(None),
-        ];
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
 
         let func = make_func("caller", body);
         let mut symbols = BTreeMap::new();
@@ -7079,13 +7809,19 @@ mod tests {
         let catch_addr = con(0x402200, 8);
         let body = vec![
             HirNode::Statement(IrInsn::without_output(
-                IrOp::Call, smallvec![alloc_addr], 0x1000,
+                IrOp::Call,
+                smallvec![alloc_addr],
+                0x1000,
             )),
             HirNode::Statement(IrInsn::without_output(
-                IrOp::Call, smallvec![throw_addr], 0x1008,
+                IrOp::Call,
+                smallvec![throw_addr],
+                0x1008,
             )),
             HirNode::Statement(IrInsn::without_output(
-                IrOp::Call, smallvec![catch_addr], 0x1010,
+                IrOp::Call,
+                smallvec![catch_addr],
+                0x1010,
             )),
             HirNode::Return(None),
         ];
@@ -7120,34 +7856,36 @@ mod tests {
         let func = make_func("_ZN3Dog5speakEv", body);
 
         let mut classes = BTreeMap::new();
-        classes.insert(0x3d40, CppClass {
-            mangled_name: "6Animal".to_string(),
-            demangled_name: "Animal".to_string(),
-            typeinfo_addr: 0x3d40,
-            bases: vec![],
-            vtable_addr: None,
-            vtable_methods: vec![],
-        });
-        classes.insert(0x3d50, CppClass {
-            mangled_name: "3Dog".to_string(),
-            demangled_name: "Dog".to_string(),
-            typeinfo_addr: 0x3d50,
-            bases: vec![unlace_loader::BaseClass {
+        classes.insert(
+            0x3d40,
+            CppClass {
+                mangled_name: "6Animal".to_string(),
+                demangled_name: "Animal".to_string(),
                 typeinfo_addr: 0x3d40,
-                offset: 0,
-                is_virtual: false,
-                is_public: true,
-            }],
-            vtable_addr: Some(0x3cf0),
-            vtable_methods: vec![
-                (0, 0x1300, Some("_ZN3Dog5speakEv".to_string())),
-            ],
-        });
+                bases: vec![],
+                vtable_addr: None,
+                vtable_methods: vec![],
+            },
+        );
+        classes.insert(
+            0x3d50,
+            CppClass {
+                mangled_name: "3Dog".to_string(),
+                demangled_name: "Dog".to_string(),
+                typeinfo_addr: 0x3d50,
+                bases: vec![unlace_loader::BaseClass {
+                    typeinfo_addr: 0x3d40,
+                    offset: 0,
+                    is_virtual: false,
+                    is_public: true,
+                }],
+                vtable_addr: Some(0x3cf0),
+                vtable_methods: vec![(0, 0x1300, Some("_ZN3Dog5speakEv".to_string()))],
+            },
+        );
         let rtti = RttiInfo { classes };
 
-        let output = super::print_c_with_rtti(
-            &func, None, None, None, None, Some(&rtti),
-        );
+        let output = super::print_c_with_rtti(&func, None, None, None, None, Some(&rtti));
 
         assert!(
             output.contains("C++ Class Hierarchy"),
@@ -7175,19 +7913,20 @@ mod tests {
         let func = make_func("_ZN3Dog5speakEv", body);
 
         let mut classes = BTreeMap::new();
-        classes.insert(0x3d50, CppClass {
-            mangled_name: "3Dog".to_string(),
-            demangled_name: "Dog".to_string(),
-            typeinfo_addr: 0x3d50,
-            bases: vec![],
-            vtable_addr: None,
-            vtable_methods: vec![],
-        });
+        classes.insert(
+            0x3d50,
+            CppClass {
+                mangled_name: "3Dog".to_string(),
+                demangled_name: "Dog".to_string(),
+                typeinfo_addr: 0x3d50,
+                bases: vec![],
+                vtable_addr: None,
+                vtable_methods: vec![],
+            },
+        );
         let rtti = RttiInfo { classes };
 
-        let output = super::print_c_with_rtti(
-            &func, None, None, None, None, Some(&rtti),
-        );
+        let output = super::print_c_with_rtti(&func, None, None, None, None, Some(&rtti));
 
         assert!(
             output.contains("Dog *this"),

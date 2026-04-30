@@ -33,6 +33,8 @@
 //! - `INT_SEXT(INT_SEXT(x))` → `INT_SEXT(x)` (chained sign extension)
 //! - `INT_ZEXT(INT_ZEXT(x))` → `INT_ZEXT(x)` (chained zero extension)
 //! - `SUBPIECE(ZEXT/SEXT(x), 0)` with output size ≤ source size → `COPY x` or `SUBPIECE(x, 0)`
+//! - N consecutive `LOAD(ram, src+i*w)` + `STORE(ram, dst+i*w, loaded)` pairs → `Callother(__memcpy__, dst, src, N*w)`
+//! - N consecutive `STORE(ram, dst+i*w, const)` with same const → `Callother(__memset__, dst, const, N*w)`
 //!
 //! Iterates internally to a fixed point.
 
@@ -42,6 +44,33 @@ use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
+
+/// Callother tag for rotate-left: `__ROL__(x, n)`.
+///
+/// Sits above the x87 FPU range (`0x310..0x318`) and below `0x400`.
+const CALLOTHER_ROL: u64 = 0x320;
+
+/// Callother tag for rotate-right: `__ROR__(x, n)`.
+const CALLOTHER_ROR: u64 = 0x321;
+
+/// Callother tag for absolute value: `__abs__(x)`.
+const CALLOTHER_ABS: u64 = 0x322;
+
+/// Callother tag for signed minimum: `__min__(a, b)`.
+const CALLOTHER_MIN: u64 = 0x323;
+
+/// Callother tag for signed maximum: `__max__(a, b)`.
+const CALLOTHER_MAX: u64 = 0x324;
+
+/// Callother tag for unrolled memcpy: `__memcpy__(dst, src, size)`.
+const CALLOTHER_MEMCPY: u64 = 0x325;
+
+/// Callother tag for unrolled memset: `__memset__(dst, val, size)`.
+const CALLOTHER_MEMSET: u64 = 0x326;
+
+/// Maximum number of consecutive Load+Store pairs (memcpy) or Store
+/// instructions (memset) we will collapse. Prevents pathological matching.
+const MAX_UNROLLED_OPS: usize = 64;
 
 /// Recognizes common instruction idioms and replaces them with simpler
 /// semantic equivalents (typically `COPY`).
@@ -81,6 +110,7 @@ impl Pass for IdiomRecognitionPass {
                         changed = true;
                     }
                 }
+                changed |= try_recognize_sequences(&mut block.insns);
             }
 
             if changed {
@@ -99,7 +129,11 @@ impl Pass for IdiomRecognitionPass {
 ///
 /// `mask_for_size(4)` → `0xFFFF_FFFF`, `mask_for_size(8)` → `u64::MAX`.
 fn mask_for_size(size: u8) -> u64 {
-    if size >= 8 { u64::MAX } else { (1u64 << (size as u32 * 8)) - 1 }
+    if size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (size as u32 * 8)) - 1
+    }
 }
 
 /// Check whether a Varnode is a constant with the given value.
@@ -145,9 +179,7 @@ fn is_twos_complement_of(
         return false;
     }
     if let Some(def_insn) = def_map.get(candidate) {
-        def_insn.op == IrOp::Int2comp
-            && def_insn.inputs.len() == 1
-            && def_insn.inputs[0] == *target
+        def_insn.op == IrOp::Int2comp && def_insn.inputs.len() == 1 && def_insn.inputs[0] == *target
     } else {
         false
     }
@@ -157,7 +189,8 @@ fn is_twos_complement_of(
 fn make_copy(insn: &IrInsn, source: Varnode) -> IrInsn {
     IrInsn::with_output(
         IrOp::Copy,
-        insn.output.expect("idiom-recognizable insn always has output"),
+        insn.output
+            .expect("idiom-recognizable insn always has output"),
         smallvec::smallvec![source],
         insn.addr,
     )
@@ -211,10 +244,7 @@ fn try_subpiece_from_and(
                     return Some(IrInsn::with_output(
                         IrOp::Subpiece,
                         output,
-                        smallvec::smallvec![
-                            shift_src,
-                            Varnode::constant(byte_offset, 4),
-                        ],
+                        smallvec::smallvec![shift_src, Varnode::constant(byte_offset, 4),],
                         insn.addr,
                     ));
                 }
@@ -234,21 +264,14 @@ fn try_subpiece_from_and(
     None
 }
 
-fn def_of<'a>(
-    v: &Varnode,
-    def_map: &'a BTreeMap<Varnode, IrInsn>,
-) -> Option<&'a IrInsn> {
+fn def_of<'a>(v: &Varnode, def_map: &'a BTreeMap<Varnode, IrInsn>) -> Option<&'a IrInsn> {
     if v.space == SpaceId::Const {
         return None;
     }
     def_map.get(v)
 }
 
-fn def_unary(
-    v: &Varnode,
-    op: IrOp,
-    def_map: &BTreeMap<Varnode, IrInsn>,
-) -> Option<Varnode> {
+fn def_unary(v: &Varnode, op: IrOp, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<Varnode> {
     let def = def_of(v, def_map)?;
     if def.op == op && def.inputs.len() == 1 {
         Some(def.inputs[0])
@@ -280,14 +303,11 @@ fn power_of_two_log(value: u64) -> Option<u8> {
     Some(value.trailing_zeros() as u8)
 }
 
-fn make_replacement(
-    insn: &IrInsn,
-    op: IrOp,
-    inputs: smallvec::SmallVec<[Varnode; 3]>,
-) -> IrInsn {
+fn make_replacement(insn: &IrInsn, op: IrOp, inputs: smallvec::SmallVec<[Varnode; 3]>) -> IrInsn {
     IrInsn::with_output(
         op,
-        insn.output.expect("idiom-recognizable insn always has output"),
+        insn.output
+            .expect("idiom-recognizable insn always has output"),
         inputs,
         insn.addr,
     )
@@ -336,10 +356,18 @@ fn try_add_simplify(
     }
 
     if let Some(y) = def_unary(b, IrOp::Int2comp, def_map) {
-        return Some(make_replacement(insn, IrOp::IntSub, smallvec::smallvec![*a, y]));
+        return Some(make_replacement(
+            insn,
+            IrOp::IntSub,
+            smallvec::smallvec![*a, y],
+        ));
     }
     if let Some(y) = def_unary(a, IrOp::Int2comp, def_map) {
-        return Some(make_replacement(insn, IrOp::IntSub, smallvec::smallvec![*b, y]));
+        return Some(make_replacement(
+            insn,
+            IrOp::IntSub,
+            smallvec::smallvec![*b, y],
+        ));
     }
 
     None
@@ -361,7 +389,11 @@ fn try_sub_simplify(
     }
 
     if let Some(y) = def_unary(b, IrOp::Int2comp, def_map) {
-        return Some(make_replacement(insn, IrOp::IntAdd, smallvec::smallvec![*a, y]));
+        return Some(make_replacement(
+            insn,
+            IrOp::IntAdd,
+            smallvec::smallvec![*a, y],
+        ));
     }
 
     None
@@ -595,6 +627,118 @@ fn try_subpiece_simplify(
     ))
 }
 
+fn make_callother(insn: &IrInsn, tag: u64, args: smallvec::SmallVec<[Varnode; 3]>) -> IrInsn {
+    let mut inputs = smallvec::SmallVec::<[Varnode; 3]>::new();
+    inputs.push(Varnode::constant(tag, 8));
+    inputs.extend(args);
+    IrInsn::with_output(
+        IrOp::Callother,
+        insn.output.expect("idiom-recognizable insn always has output"),
+        inputs,
+        insn.addr,
+    )
+}
+
+/// Branchless abs: `INT_SUB(INT_XOR(x, s), s)` where `s = INT_SRIGHT(x, bits-1)`.
+fn try_abs_idiom(
+    insn: &IrInsn,
+    a: &Varnode,
+    b: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    // insn is INT_SUB(xor_result, s)
+    // a = INT_XOR(x, s), b = s, s = INT_SRIGHT(x, bits-1)
+    let (xor_l, xor_r) = def_binary(a, IrOp::IntXor, def_map)?;
+    let (sright_src, sright_amt) = def_binary(b, IrOp::IntSright, def_map)?;
+
+    // s must be the same as one of the XOR operands
+    // and the other XOR operand must be the SRIGHT source
+    let x = if xor_r == *b && xor_l == sright_src && is_sign_bit_shift(&sright_src, &sright_amt) {
+        xor_l
+    } else if xor_l == *b && xor_r == sright_src && is_sign_bit_shift(&sright_src, &sright_amt) {
+        xor_r
+    } else {
+        return None;
+    };
+
+    Some(make_callother(insn, CALLOTHER_ABS, smallvec::smallvec![x]))
+}
+
+/// Branchless min: `INT_ADD(b, INT_AND(d, s))` where `d = INT_SUB(a, b)`,
+/// `s = INT_SRIGHT(d, bits-1)`.
+fn try_min_idiom(
+    insn: &IrInsn,
+    lhs: &Varnode,
+    rhs: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    // insn is INT_ADD(b_val, and_result)
+    // Try both orderings: ADD(b, AND(d,s)) or ADD(AND(d,s), b)
+    try_min_idiom_ordered(insn, lhs, rhs, def_map)
+        .or_else(|| try_min_idiom_ordered(insn, rhs, lhs, def_map))
+}
+
+fn try_min_idiom_ordered(
+    insn: &IrInsn,
+    b_val: &Varnode,
+    and_vn: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    let (and_l, and_r) = def_binary(and_vn, IrOp::IntAnd, def_map)?;
+
+    // One of and_l/and_r is d = INT_SUB(a, b), the other is s = INT_SRIGHT(d, bits-1)
+    let (d_vn, s_vn) = if def_binary(&and_r, IrOp::IntSright, def_map).is_some() {
+        (and_l, and_r)
+    } else if def_binary(&and_l, IrOp::IntSright, def_map).is_some() {
+        (and_r, and_l)
+    } else {
+        return None;
+    };
+
+    let (sub_a, sub_b) = def_binary(&d_vn, IrOp::IntSub, def_map)?;
+    if sub_b != *b_val {
+        return None;
+    }
+
+    let (sr_src, sr_amt) = def_binary(&s_vn, IrOp::IntSright, def_map)?;
+    if sr_src != d_vn || !is_sign_bit_shift(&d_vn, &sr_amt) {
+        return None;
+    }
+
+    Some(make_callother(insn, CALLOTHER_MIN, smallvec::smallvec![sub_a, sub_b]))
+}
+
+/// Branchless max: `INT_SUB(a, INT_AND(d, s))` where `d = INT_SUB(a, b)`,
+/// `s = INT_SRIGHT(d, bits-1)`.
+fn try_max_idiom(
+    insn: &IrInsn,
+    a_val: &Varnode,
+    and_vn: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    let (and_l, and_r) = def_binary(and_vn, IrOp::IntAnd, def_map)?;
+
+    let (d_vn, s_vn) = if def_binary(&and_r, IrOp::IntSright, def_map).is_some() {
+        (and_l, and_r)
+    } else if def_binary(&and_l, IrOp::IntSright, def_map).is_some() {
+        (and_r, and_l)
+    } else {
+        return None;
+    };
+
+    let (sub_a, sub_b) = def_binary(&d_vn, IrOp::IntSub, def_map)?;
+    if sub_a != *a_val {
+        return None;
+    }
+
+    let (sr_src, sr_amt) = def_binary(&s_vn, IrOp::IntSright, def_map)?;
+    if sr_src != d_vn || !is_sign_bit_shift(&d_vn, &sr_amt) {
+        return None;
+    }
+
+    Some(make_callother(insn, CALLOTHER_MAX, smallvec::smallvec![sub_a, sub_b]))
+}
+
 fn try_recognize_unary(
     insn: &IrInsn,
     _output: Varnode,
@@ -646,6 +790,232 @@ fn try_recognize_unary(
         _ => {}
     }
     None
+}
+
+fn is_side_effecting(op: IrOp) -> bool {
+    matches!(op, IrOp::Call | IrOp::Callind | IrOp::Callother | IrOp::Branchind)
+}
+
+fn is_ram_load(insn: &IrInsn) -> bool {
+    insn.op == IrOp::Load
+        && insn.inputs.len() >= 2
+        && insn.inputs[0].space == SpaceId::Const
+        && insn.inputs[0].offset == SpaceId::Ram as u64
+        && insn.output.is_some()
+}
+
+fn is_ram_store(insn: &IrInsn) -> bool {
+    insn.op == IrOp::Store
+        && insn.inputs.len() >= 3
+        && insn.inputs[0].space == SpaceId::Const
+        && insn.inputs[0].offset == SpaceId::Ram as u64
+}
+
+fn const_addr(vn: &Varnode) -> Option<u64> {
+    if vn.space == SpaceId::Const { Some(vn.offset) } else { None }
+}
+
+fn try_recognize_sequences(insns: &mut Vec<IrInsn>) -> bool {
+    let mut changed = false;
+    let mut i = 0;
+    while i < insns.len() {
+        if let Some((count, replacement)) = try_memcpy_sequence(insns, i) {
+            let remove_count = count * 2;
+            let addr = insns[i].addr;
+            insns.splice(i..i + remove_count, std::iter::once(replacement));
+            tracing::trace!(addr = %format!("0x{:x}", addr), pairs = count, "memcpy sequence collapsed");
+            changed = true;
+            continue;
+        }
+        if let Some((count, replacement)) = try_memset_sequence(insns, i) {
+            let addr = insns[i].addr;
+            insns.splice(i..i + count, std::iter::once(replacement));
+            tracing::trace!(addr = %format!("0x{:x}", addr), stores = count, "memset sequence collapsed");
+            changed = true;
+            continue;
+        }
+        i += 1;
+    }
+    changed
+}
+
+fn try_memcpy_sequence(insns: &[IrInsn], start: usize) -> Option<(usize, IrInsn)> {
+    if start + 1 >= insns.len() {
+        return None;
+    }
+    let load0 = &insns[start];
+    let store0 = &insns[start + 1];
+    if !is_ram_load(load0) || !is_ram_store(store0) {
+        return None;
+    }
+
+    let width = load0.output.unwrap().size;
+    let src_base = const_addr(&load0.inputs[1])?;
+    let dst_base = const_addr(&store0.inputs[1])?;
+    let loaded_vn = load0.output.unwrap();
+
+    if store0.inputs[2] != loaded_vn {
+        return None;
+    }
+
+    let mut count = 1usize;
+    let mut idx = start + 2;
+    while count < MAX_UNROLLED_OPS && idx + 1 < insns.len() {
+        let load_n = &insns[idx];
+        let store_n = &insns[idx + 1];
+
+        if is_side_effecting(load_n.op) || is_side_effecting(store_n.op) {
+            break;
+        }
+        if !is_ram_load(load_n) || !is_ram_store(store_n) {
+            break;
+        }
+
+        let expected_src = src_base.checked_add((count as u64) * (width as u64))?;
+        let expected_dst = dst_base.checked_add((count as u64) * (width as u64))?;
+
+        if load_n.output.unwrap().size != width {
+            break;
+        }
+        if const_addr(&load_n.inputs[1])? != expected_src {
+            break;
+        }
+        if const_addr(&store_n.inputs[1])? != expected_dst {
+            break;
+        }
+        if store_n.inputs[2] != load_n.output.unwrap() {
+            break;
+        }
+
+        count += 1;
+        idx += 2;
+    }
+
+    if count < 2 {
+        return None;
+    }
+
+    let total_bytes = (count as u64) * (width as u64);
+    let addr = insns[start].addr;
+    let callother = IrInsn::without_output(
+        IrOp::Callother,
+        smallvec::smallvec![
+            Varnode::constant(CALLOTHER_MEMCPY, 8),
+            Varnode::constant(dst_base, 8),
+            Varnode::constant(src_base, 8),
+            Varnode::constant(total_bytes, 8),
+        ],
+        addr,
+    );
+    Some((count, callother))
+}
+
+fn try_memset_sequence(insns: &[IrInsn], start: usize) -> Option<(usize, IrInsn)> {
+    let store0 = &insns[start];
+    if !is_ram_store(store0) {
+        return None;
+    }
+
+    let val = store0.inputs[2];
+    if val.space != SpaceId::Const {
+        return None;
+    }
+
+    let width = val.size;
+    let dst_base = const_addr(&store0.inputs[1])?;
+
+    let mut count = 1usize;
+    let mut idx = start + 1;
+    while count < MAX_UNROLLED_OPS && idx < insns.len() {
+        let store_n = &insns[idx];
+
+        if is_side_effecting(store_n.op) {
+            break;
+        }
+        if !is_ram_store(store_n) {
+            break;
+        }
+
+        let expected_dst = dst_base.checked_add((count as u64) * (width as u64))?;
+        if const_addr(&store_n.inputs[1])? != expected_dst {
+            break;
+        }
+        if store_n.inputs[2] != val {
+            break;
+        }
+
+        count += 1;
+        idx += 1;
+    }
+
+    if count < 2 {
+        return None;
+    }
+
+    let total_bytes = (count as u64) * (width as u64);
+    let addr = insns[start].addr;
+    let callother = IrInsn::without_output(
+        IrOp::Callother,
+        smallvec::smallvec![
+            Varnode::constant(CALLOTHER_MEMSET, 8),
+            Varnode::constant(dst_base, 8),
+            val,
+            Varnode::constant(total_bytes, 8),
+        ],
+        addr,
+    );
+    Some((count, callother))
+}
+
+fn try_rotate(
+    insn: &IrInsn,
+    a: &Varnode,
+    b: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    let output = insn.output?;
+
+    let (ls, ln, rs, rn) = def_binary(a, IrOp::IntLeft, def_map)
+        .and_then(|(ls, ln)| {
+            let (rs, rn) = def_binary(b, IrOp::IntRight, def_map)?;
+            Some((ls, ln, rs, rn))
+        })
+        .or_else(|| {
+            let (ls, ln) = def_binary(b, IrOp::IntLeft, def_map)?;
+            let (rs, rn) = def_binary(a, IrOp::IntRight, def_map)?;
+            Some((ls, ln, rs, rn))
+        })?;
+
+    if ls != rs || ls.space == SpaceId::Const {
+        return None;
+    }
+    if ln.space != SpaceId::Const || rn.space != SpaceId::Const {
+        return None;
+    }
+    let bits = (ls.size as u64) * 8;
+    if ln.offset + rn.offset != bits {
+        return None;
+    }
+
+    // (x << n) | (x >> (bits-n)) → ROL(x, n)
+    // (x >> n) | (x << (bits-n)) → ROR(x, n)  ≡  ROL(x, bits-n)
+    // Disambiguate: smaller shift = rotate amount; equal → ROL.
+    let (tag, n) = if ln.offset <= rn.offset {
+        (CALLOTHER_ROL, ln.offset)
+    } else {
+        (CALLOTHER_ROR, rn.offset)
+    };
+
+    Some(IrInsn::with_output(
+        IrOp::Callother,
+        output,
+        smallvec::smallvec![
+            Varnode::constant(tag, 8),
+            ls,
+            Varnode::constant(n, ls.size),
+        ],
+        insn.addr,
+    ))
 }
 
 fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<IrInsn> {
@@ -700,15 +1070,21 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
             } else if is_const_val(&a, 0) && b.space != SpaceId::Const {
                 Some(make_copy(insn, b))
             } else if is_all_ones(&b) {
-                Some(make_copy(insn, Varnode::constant(mask_for_size(output.size), output.size)))
+                Some(make_copy(
+                    insn,
+                    Varnode::constant(mask_for_size(output.size), output.size),
+                ))
             } else if is_all_ones(&a) {
-                Some(make_copy(insn, Varnode::constant(mask_for_size(output.size), output.size)))
+                Some(make_copy(
+                    insn,
+                    Varnode::constant(mask_for_size(output.size), output.size),
+                ))
             } else if a == b && a.space != SpaceId::Const {
                 Some(make_copy(insn, a))
             } else if let Some(r) = try_or_simplify(insn, &a, &b, def_map) {
                 Some(r)
             } else {
-                None
+                try_rotate(insn, &a, &b, def_map)
             }
         }
 
@@ -718,6 +1094,8 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
                 Some(make_copy(insn, a))
             } else if is_const_val(&a, 0) && b.space != SpaceId::Const {
                 Some(make_copy(insn, b))
+            } else if let Some(min) = try_min_idiom(insn, &a, &b, def_map) {
+                Some(min)
             } else {
                 try_add_simplify(insn, &a, &b, def_map)
             }
@@ -738,6 +1116,10 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
         IrOp::IntSub => {
             if is_const_val(&b, 0) && a.space != SpaceId::Const {
                 Some(make_copy(insn, a))
+            } else if let Some(abs) = try_abs_idiom(insn, &a, &b, def_map) {
+                Some(abs)
+            } else if let Some(max) = try_max_idiom(insn, &a, &b, def_map) {
+                Some(max)
             } else {
                 try_sub_simplify(insn, &a, &b, def_map)
             }
@@ -861,7 +1243,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntXor, out, smallvec![v0, v0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -880,7 +1264,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntSub, out, smallvec![v0, v0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -900,7 +1286,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntAnd, out, smallvec![v0, all_ones], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -918,7 +1306,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntOr, out, smallvec![v0, zero], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -936,7 +1326,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntAdd, out, smallvec![v0, zero], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -954,7 +1346,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntMult, out, smallvec![v0, one], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -971,7 +1365,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolAnd, out, smallvec![v0, v0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -988,7 +1384,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolOr, out, smallvec![v0, v0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1006,7 +1404,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntAnd, out, smallvec![all_ones, v0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1024,7 +1424,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntAdd, out, smallvec![zero, v0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1042,7 +1444,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntXor, out, smallvec![r0, r8], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(!changed);
     }
 
@@ -1055,7 +1459,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntXor, out, smallvec![c5, c5], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         // Const-const should be handled by constant folding, not idiom recognition
         assert!(!changed);
     }
@@ -1069,7 +1475,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntXor, out, smallvec![v0, v0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1089,7 +1497,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntAnd, out, smallvec![v0, all_ones], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1107,7 +1517,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntSub, out, smallvec![v0, zero], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1125,7 +1537,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntDiv, out, smallvec![v0, one], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1143,7 +1557,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntSdiv, out, smallvec![v0, one], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1161,7 +1577,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntRem, out, smallvec![v0, one], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1180,7 +1598,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntSrem, out, smallvec![v0, one], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1199,7 +1619,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntXor, out, smallvec![v0, zero], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1217,7 +1639,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntLeft, out, smallvec![v0, zero], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1235,7 +1659,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntRight, out, smallvec![v0, zero], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1253,7 +1679,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntSright, out, smallvec![v0, zero], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1271,7 +1699,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntAnd, out, smallvec![v0, zero], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1290,7 +1720,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntOr, out, smallvec![v0, all_ones], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1308,7 +1740,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntAnd, out, smallvec![v0, v0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1325,7 +1759,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntOr, out, smallvec![v0, v0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1343,7 +1779,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntRight, out, smallvec![v0, shift], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1363,7 +1801,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntRight, out, smallvec![v0, shift], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1383,7 +1823,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntSright, out, smallvec![v0, shift], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(!changed);
     }
 
@@ -1397,7 +1839,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntCarry, out, smallvec![v0, zero], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1418,7 +1862,9 @@ mod tests {
         let and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![shifted, mask], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![shift, and]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1439,7 +1885,9 @@ mod tests {
         let and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![shifted, mask], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![shift, and]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1457,7 +1905,9 @@ mod tests {
         let and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![r0, mask], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![and]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1478,7 +1928,9 @@ mod tests {
         let and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![shifted, mask], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![shift, and]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(!changed);
     }
 
@@ -1492,7 +1944,9 @@ mod tests {
         let n2 = IrInsn::with_output(IrOp::Int2comp, neg2, smallvec![neg1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![n1, n2]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1510,7 +1964,9 @@ mod tests {
         let n2 = IrInsn::with_output(IrOp::IntNegate, n2v, smallvec![n1v], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![n1, n2]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1529,7 +1985,9 @@ mod tests {
         let sub = IrInsn::with_output(IrOp::IntSub, v2, smallvec![v1, c5], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![add, sub]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1548,7 +2006,9 @@ mod tests {
         let add = IrInsn::with_output(IrOp::IntAdd, v2, smallvec![v1, c5], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![sub, add]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1568,7 +2028,9 @@ mod tests {
         let add2 = IrInsn::with_output(IrOp::IntAdd, v2, smallvec![v1, c5], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![add1, add2]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1590,7 +2052,9 @@ mod tests {
         let m2 = IrInsn::with_output(IrOp::IntMult, v2, smallvec![v1, c5], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![m1, m2]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1611,7 +2075,9 @@ mod tests {
         let add = IrInsn::with_output(IrOp::IntAdd, out, smallvec![r0, neg], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![n, add]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1631,7 +2097,9 @@ mod tests {
         let sub = IrInsn::with_output(IrOp::IntSub, out, smallvec![r0, neg], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![n, sub]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1649,7 +2117,9 @@ mod tests {
         let m = IrInsn::with_output(IrOp::IntMult, out, smallvec![r0, c2], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![m]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1667,7 +2137,9 @@ mod tests {
         let m = IrInsn::with_output(IrOp::IntMult, out, smallvec![r0, c4], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![m]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1684,7 +2156,9 @@ mod tests {
         let m = IrInsn::with_output(IrOp::IntMult, out, smallvec![r0, c8], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![m]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1701,7 +2175,9 @@ mod tests {
         let m = IrInsn::with_output(IrOp::IntMult, out, smallvec![r0, c16], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![m]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1718,7 +2194,9 @@ mod tests {
         let d = IrInsn::with_output(IrOp::IntDiv, out, smallvec![r0, c2], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![d]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1735,7 +2213,9 @@ mod tests {
         let d = IrInsn::with_output(IrOp::IntDiv, out, smallvec![r0, c4], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![d]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1752,7 +2232,9 @@ mod tests {
         let d = IrInsn::with_output(IrOp::IntSdiv, out, smallvec![r0, c2], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![d]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(!changed);
     }
 
@@ -1765,7 +2247,9 @@ mod tests {
         let r = IrInsn::with_output(IrOp::IntRem, out, smallvec![r0, c2], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![r]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1782,7 +2266,9 @@ mod tests {
         let r = IrInsn::with_output(IrOp::IntRem, out, smallvec![r0, c4], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![r]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1799,7 +2285,9 @@ mod tests {
         let r = IrInsn::with_output(IrOp::IntRem, out, smallvec![r0, c8], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![r]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1818,7 +2306,9 @@ mod tests {
         let xor2 = IrInsn::with_output(IrOp::IntXor, v2, smallvec![v1, r8], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![xor1, xor2]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1837,7 +2327,9 @@ mod tests {
         let or = IrInsn::with_output(IrOp::IntOr, v2, smallvec![r0, v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![and, or]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1856,7 +2348,9 @@ mod tests {
         let and = IrInsn::with_output(IrOp::IntAnd, v2, smallvec![r0, v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![or, and]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1874,7 +2368,9 @@ mod tests {
         let and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![r0, neg], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![n, and]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1893,7 +2389,9 @@ mod tests {
         let or = IrInsn::with_output(IrOp::IntOr, out, smallvec![r0, neg], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![n, or]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1913,7 +2411,9 @@ mod tests {
         let neg = IrInsn::with_output(IrOp::IntNegate, out, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![sub, neg]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1932,7 +2432,9 @@ mod tests {
         let r = IrInsn::with_output(IrOp::IntRight, out, smallvec![v1, c8], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![l, r]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1953,7 +2455,9 @@ mod tests {
         let carry = IrInsn::with_output(IrOp::IntCarry, out, smallvec![v0, neg_v0], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![negate, carry]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1973,7 +2477,9 @@ mod tests {
         let s2 = IrInsn::with_output(IrOp::IntSext, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![s1, s2]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1992,7 +2498,9 @@ mod tests {
         let z2 = IrInsn::with_output(IrOp::IntZext, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![z1, z2]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -2016,7 +2524,9 @@ mod tests {
         );
 
         let mut ssa = make_single_block_ssa(vec![z, s]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -2039,7 +2549,9 @@ mod tests {
         );
 
         let mut ssa = make_single_block_ssa(vec![s1, s2]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -2062,7 +2574,9 @@ mod tests {
         );
 
         let mut ssa = make_single_block_ssa(vec![z, s]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -2086,7 +2600,217 @@ mod tests {
         );
 
         let mut ssa = make_single_block_ssa(vec![z, s]);
-        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        let changed = IdiomRecognitionPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(!changed);
+    }
+
+    // ── (x << 5) | (x >> 27) → Callother(__ROL__, x, 5) for 32-bit ──
+
+    #[test]
+    fn test_idiom_rotate_left() {
+        let r0 = Varnode::reg(0, 4);
+        let c5 = Varnode::constant(5, 4);
+        let c27 = Varnode::constant(27, 4);
+        let shl = Varnode::unique(0, 4);
+        let shr = Varnode::unique(8, 4);
+        let out = Varnode::unique(16, 4);
+
+        let i_shl = IrInsn::with_output(IrOp::IntLeft, shl, smallvec![r0, c5], 0x1000);
+        let i_shr = IrInsn::with_output(IrOp::IntRight, shr, smallvec![r0, c27], 0x1004);
+        let i_or = IrInsn::with_output(IrOp::IntOr, out, smallvec![shl, shr], 0x1008);
+
+        let mut ssa = make_single_block_ssa(vec![i_shl, i_shr, i_or]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let result = &block.insns[2];
+        assert_eq!(result.op, IrOp::Callother);
+        assert_eq!(result.inputs[0].offset, super::CALLOTHER_ROL);
+        assert_eq!(result.inputs[1], r0);
+        assert_eq!(result.inputs[2].offset, 5);
+    }
+
+    // ── (x >> 5) | (x << 27) → Callother(__ROR__, x, 5) for 32-bit ──
+
+    #[test]
+    fn test_idiom_rotate_right() {
+        let r0 = Varnode::reg(0, 4);
+        let c5 = Varnode::constant(5, 4);
+        let c27 = Varnode::constant(27, 4);
+        let shr = Varnode::unique(0, 4);
+        let shl = Varnode::unique(8, 4);
+        let out = Varnode::unique(16, 4);
+
+        let i_shr = IrInsn::with_output(IrOp::IntRight, shr, smallvec![r0, c5], 0x1000);
+        let i_shl = IrInsn::with_output(IrOp::IntLeft, shl, smallvec![r0, c27], 0x1004);
+        let i_or = IrInsn::with_output(IrOp::IntOr, out, smallvec![shr, shl], 0x1008);
+
+        let mut ssa = make_single_block_ssa(vec![i_shr, i_shl, i_or]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let result = &block.insns[2];
+        assert_eq!(result.op, IrOp::Callother);
+        assert_eq!(result.inputs[0].offset, super::CALLOTHER_ROR);
+        assert_eq!(result.inputs[1], r0);
+        assert_eq!(result.inputs[2].offset, 5);
+    }
+
+    // ── Branchless abs: SUB(XOR(x, s), s) where s = SRIGHT(x, 31) ──
+
+    #[test]
+    fn test_idiom_branchless_abs() {
+        let x = Varnode::reg(0, 4);
+        let s = Varnode::unique(0, 4);
+        let xored = Varnode::unique(8, 4);
+        let out = Varnode::unique(16, 4);
+
+        let sright = IrInsn::with_output(
+            IrOp::IntSright, s, smallvec![x, Varnode::constant(31, 4)], 0x1000,
+        );
+        let xor = IrInsn::with_output(IrOp::IntXor, xored, smallvec![x, s], 0x1004);
+        let sub = IrInsn::with_output(IrOp::IntSub, out, smallvec![xored, s], 0x1008);
+
+        let mut ssa = make_single_block_ssa(vec![sright, xor, sub]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let result = &block.insns[2];
+        assert_eq!(result.op, IrOp::Callother);
+        assert_eq!(result.inputs[0].offset, super::CALLOTHER_ABS);
+        assert_eq!(result.inputs[1], x);
+    }
+
+    // ── Branchless min: ADD(b, AND(d, s)) where d=SUB(a,b), s=SRIGHT(d,31) ──
+
+    #[test]
+    fn test_idiom_branchless_min() {
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let d = Varnode::unique(0, 4);
+        let s = Varnode::unique(8, 4);
+        let masked = Varnode::unique(16, 4);
+        let out = Varnode::unique(24, 4);
+
+        let sub = IrInsn::with_output(IrOp::IntSub, d, smallvec![a, b], 0x1000);
+        let sright = IrInsn::with_output(
+            IrOp::IntSright, s, smallvec![d, Varnode::constant(31, 4)], 0x1004,
+        );
+        let and = IrInsn::with_output(IrOp::IntAnd, masked, smallvec![d, s], 0x1008);
+        let add = IrInsn::with_output(IrOp::IntAdd, out, smallvec![b, masked], 0x100C);
+
+        let mut ssa = make_single_block_ssa(vec![sub, sright, and, add]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let result = &block.insns[3];
+        assert_eq!(result.op, IrOp::Callother);
+        assert_eq!(result.inputs[0].offset, super::CALLOTHER_MIN);
+        assert_eq!(result.inputs[1], a);
+        assert_eq!(result.inputs[2], b);
+    }
+
+    // ── Branchless max: SUB(a, AND(d, s)) where d=SUB(a,b), s=SRIGHT(d,31) ──
+
+    #[test]
+    fn test_idiom_branchless_max() {
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let d = Varnode::unique(0, 4);
+        let s = Varnode::unique(8, 4);
+        let masked = Varnode::unique(16, 4);
+        let out = Varnode::unique(24, 4);
+
+        let sub_d = IrInsn::with_output(IrOp::IntSub, d, smallvec![a, b], 0x1000);
+        let sright = IrInsn::with_output(
+            IrOp::IntSright, s, smallvec![d, Varnode::constant(31, 4)], 0x1004,
+        );
+        let and = IrInsn::with_output(IrOp::IntAnd, masked, smallvec![d, s], 0x1008);
+        let sub_out = IrInsn::with_output(IrOp::IntSub, out, smallvec![a, masked], 0x100C);
+
+        let mut ssa = make_single_block_ssa(vec![sub_d, sright, and, sub_out]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let result = &block.insns[3];
+        assert_eq!(result.op, IrOp::Callother);
+        assert_eq!(result.inputs[0].offset, super::CALLOTHER_MAX);
+        assert_eq!(result.inputs[1], a);
+        assert_eq!(result.inputs[2], b);
+    }
+
+    // ── Unrolled memcpy: 4 consecutive Load+Store pairs at stride 8 ──
+
+    #[test]
+    fn test_idiom_unrolled_memcpy() {
+        let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+        let src_base: u64 = 0x2000;
+        let dst_base: u64 = 0x3000;
+        let width: u8 = 8;
+
+        let mut insns = Vec::new();
+        for i in 0u64..4 {
+            let loaded = Varnode::unique(i * 16, width);
+            let src_addr = Varnode::constant(src_base + i * (width as u64), 8);
+            let dst_addr = Varnode::constant(dst_base + i * (width as u64), 8);
+
+            insns.push(IrInsn::with_output(
+                IrOp::Load, loaded, smallvec![ram_space, src_addr], 0x1000 + i * 8,
+            ));
+            insns.push(IrInsn::without_output(
+                IrOp::Store, smallvec![ram_space, dst_addr, loaded], 0x1004 + i * 8,
+            ));
+        }
+
+        let mut ssa = make_single_block_ssa(insns);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let co = block.insns.iter().find(|i| i.op == IrOp::Callother)
+            .expect("should have Callother");
+        assert_eq!(co.inputs[0].offset, super::CALLOTHER_MEMCPY);
+        assert_eq!(co.inputs[1].offset, dst_base);
+        assert_eq!(co.inputs[2].offset, src_base);
+        assert_eq!(co.inputs[3].offset, 4 * (width as u64));
+        assert!(co.output.is_none());
+    }
+
+    // ── Unrolled memset: 4 consecutive Stores of same constant at stride 4 ──
+
+    #[test]
+    fn test_idiom_unrolled_memset() {
+        let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+        let dst_base: u64 = 0x4000;
+        let fill_val = Varnode::constant(0, 4);
+        let width: u8 = 4;
+
+        let mut insns = Vec::new();
+        for i in 0u64..4 {
+            let dst_addr = Varnode::constant(dst_base + i * (width as u64), 8);
+            insns.push(IrInsn::without_output(
+                IrOp::Store, smallvec![ram_space, dst_addr, fill_val], 0x1000 + i * 4,
+            ));
+        }
+
+        let mut ssa = make_single_block_ssa(insns);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let co = block.insns.iter().find(|i| i.op == IrOp::Callother)
+            .expect("should have Callother");
+        assert_eq!(co.inputs[0].offset, super::CALLOTHER_MEMSET);
+        assert_eq!(co.inputs[1].offset, dst_base);
+        assert_eq!(co.inputs[2], fill_val);
+        assert_eq!(co.inputs[3].offset, 4 * (width as u64));
+        assert!(co.output.is_none());
     }
 }

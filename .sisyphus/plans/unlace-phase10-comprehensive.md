@@ -470,7 +470,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `fix(struct): retune node_split pick_split_target to minimize post-split SCC size`
 
-- [ ] P10-5. Idiom recognition: rotate (ROL/ROR) detection
+- [x] P10-5. Idiom recognition: rotate (ROL/ROR) detection
 
   **What to do**:
   - Extend `crates/unlace-passes/src/idiom_recognition.rs` (2092 lines, 35+ existing patterns) with two new patterns:

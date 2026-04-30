@@ -260,7 +260,11 @@ pub fn print_c_full(
 
 fn emit_function_header(hdr: &FunctionHeaderInfo, out: &mut String) {
     let _ = writeln!(out, "/*");
-    let _ = writeln!(out, " * Function:   {}", hdr.name);
+    let display_name = match crate::demangle::demangle(&hdr.name) {
+        Some(d) => d.full_signature,
+        None => hdr.name.clone(),
+    };
+    let _ = writeln!(out, " * Function:   {}", display_name);
     let _ = writeln!(out, " * Address:    0x{:x}", hdr.address);
     let _ = writeln!(
         out,
@@ -274,7 +278,15 @@ fn emit_function_header(hdr: &FunctionHeaderInfo, out: &mut String) {
         hdr.stack_frame, hdr.stack_frame,
     );
     if !hdr.callees.is_empty() {
-        let _ = writeln!(out, " * Xrefs to:   {}", hdr.callees.join(", "));
+        let demangled_callees: Vec<String> = hdr
+            .callees
+            .iter()
+            .map(|c| match crate::demangle::demangle(c) {
+                Some(d) => d.full_signature,
+                None => c.clone(),
+            })
+            .collect();
+        let _ = writeln!(out, " * Xrefs to:   {}", demangled_callees.join(", "));
     }
     let _ = writeln!(out, " * Xrefs from: unknown");
     let _ = writeln!(out, " */");
@@ -307,6 +319,11 @@ struct PrintCtx {
     foldable_stmts: BTreeSet<u32>,
     /// Maps a foldable SsaVarnode to the statement index that defines it.
     sv_defining_stmt: BTreeMap<SsaVarnode, u32>,
+    /// Number of times each SSA varnode is read as an input.  Populated by
+    /// [`compute_foldable`] and consulted by `is_dead_zero_init` to suppress
+    /// `vN = 0` writes whose final SSA version is never read (cross-block
+    /// dead stores that DSE cannot eliminate within a single block).
+    sv_use_counts: BTreeMap<SsaVarnode, usize>,
     cond_uses: Vec<SsaVarnode>,
     collect_depth: u32,
     stmt_depths: BTreeMap<u32, u32>,
@@ -345,6 +362,7 @@ impl PrintCtx {
             stmt_insns: BTreeMap::new(),
             foldable_stmts: BTreeSet::new(),
             sv_defining_stmt: BTreeMap::new(),
+            sv_use_counts: BTreeMap::new(),
             cond_uses: Vec::new(),
             collect_depth: 0,
             stmt_depths: BTreeMap::new(),
@@ -875,6 +893,27 @@ fn compute_foldable(ctx: &mut PrintCtx) {
         ctx.foldable_stmts.insert(stmt_idx);
         ctx.sv_defining_stmt.insert(output_sv, stmt_idx);
     }
+
+    ctx.sv_use_counts = use_counts;
+}
+
+/// Recognise `vN = 0` whose result is never read.
+///
+/// Conservatively limited to plain `COPY` of a constant 0 — extending to
+/// other ops (e.g. `IntAnd x, 0`) is unsafe because the source operand may
+/// have side effects via memory aliasing.
+fn is_dead_zero_init(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if insn.op != IrOp::Copy || insn.inputs.len() != 1 {
+        return false;
+    }
+    let rhs = &insn.inputs[0];
+    if rhs.space != SpaceId::Const || rhs.offset != 0 {
+        return false;
+    }
+    let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx) else {
+        return false;
+    };
+    ctx.sv_use_counts.get(out_sv).copied().unwrap_or(0) == 0
 }
 
 /// Mark stack variables whose address is passed to a CALL as BYREF.
@@ -1634,11 +1673,18 @@ fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Stri
     let target_vn = &insn.inputs[0];
     if target_vn.space == SpaceId::Const {
         if let Some(name) = ctx.symbols.get(&target_vn.offset) {
-            return name.clone();
+            return demangle_callee_name(name);
         }
         return format!("sub_{:x}", target_vn.offset);
     }
     emit_operand_resolved(target_vn, 0, stmt_idx, ctx)
+}
+
+fn demangle_callee_name(raw: &str) -> String {
+    match crate::demangle::demangle(raw) {
+        Some(d) => crate::demangle::sanitize_for_c(&d.short_name),
+        None => raw.to_string(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1777,6 +1823,10 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
     ctx.emit_stmt += 1;
 
     if ctx.foldable_stmts.contains(&idx) {
+        return;
+    }
+
+    if is_dead_zero_init(insn, idx, ctx) {
         return;
     }
 
@@ -6593,6 +6643,96 @@ mod tests {
         assert!(
             output.contains("((void (*)(__int64))pfn)("),
             "CALLIND with no output should emit void return: {output}",
+        );
+    }
+
+    // P8-12: Demangled C++ names in C output
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_demangled_cpp_function_signature() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_Z8use_baseP4Base", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("// use_base(Base*)"),
+            "should emit demangled signature as comment, got: {output}",
+        );
+        assert!(
+            output.contains(" use_base("),
+            "should emit sanitized short name as C identifier, got: {output}",
+        );
+        assert!(
+            !output.contains(" _Z8use_baseP4Base("),
+            "should NOT emit raw mangled name as function name: {output}",
+        );
+    }
+
+    #[test]
+    fn test_demangled_cpp_call_target() {
+        let target_addr = con(0x401200, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(call_insn),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401200, "_Z8use_baseP4Base".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("use_base();"),
+            "CALL to mangled symbol should emit demangled callee, got: {output}",
+        );
+        assert!(
+            !output.contains("_Z8use_baseP4Base();"),
+            "should NOT emit raw mangled name as call target: {output}",
+        );
+    }
+
+    #[test]
+    fn test_demangled_cpp_method_call_target() {
+        let target_addr = con(0x401300, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(call_insn),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401300, "_ZN4Base5valueEv".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("Base_value();"),
+            "CALL to method symbol should emit sanitized Class_method form, got: {output}",
+        );
+    }
+
+    #[test]
+    fn test_non_mangled_call_target_unchanged() {
+        let target_addr = con(0x401030, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(call_insn),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "printf".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("printf();"),
+            "non-mangled callee should pass through, got: {output}",
         );
     }
 }

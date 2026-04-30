@@ -1,0 +1,82 @@
+# IDA/Hex-Rays reference metrics per fixture.
+#
+# Each section corresponds to a fixture under fixtures/<name>.elf and lists
+# the approximate counts produced by IDA Hex-Rays for the same binary.
+# unlace's output is scored against these via Metrics::score(); see
+# crates/unlace-test-harness/tests/golden_fixtures.rs.
+#
+# Counts are intentionally coarse — they are recovery targets, not
+# bit-exact expectations. Adjust them when the reference profile is
+# re-measured against a newer Hex-Rays release.
+
+[medium]
+if_count = 60
+for_count = 5
+while_count = 3
+return_count = 8
+goto_count = 0
+var_count = 30
+line_count = 500
+
+[debug_calls]
+if_count = 5
+for_count = 0
+while_count = 0
+return_count = 5
+goto_count = 0
+var_count = 10
+line_count = 50
+
+[debug_structs]
+if_count = 0
+for_count = 0
+while_count = 0
+return_count = 3
+goto_count = 0
+var_count = 8
+line_count = 30
+
+[debug_hello]
+if_count = 0
+for_count = 0
+while_count = 0
+return_count = 1
+goto_count = 0
+var_count = 3
+line_count = 15
+
+[branches]
+if_count = 4
+for_count = 0
+while_count = 0
+return_count = 3
+goto_count = 0
+var_count = 5
+line_count = 20
+
+[cpp_vtable]
+if_count = 2
+for_count = 0
+while_count = 0
+return_count = 3
+goto_count = 0
+var_count = 5
+line_count = 30
+
+[cpp_exceptions]
+if_count = 3
+for_count = 0
+while_count = 0
+return_count = 2
+goto_count = 0
+var_count = 8
+line_count = 40
+
+[cpp_rtti]
+if_count = 5
+for_count = 0
+while_count = 0
+return_count = 3
+goto_count = 0
+var_count = 10
+line_count = 50

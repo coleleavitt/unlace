@@ -273,8 +273,92 @@ impl DiffResult {
     }
 }
 
-fn reference_metrics(_name: &str) -> Option<Metrics> {
-    None
+fn reference_metrics_path() -> PathBuf {
+    workspace_root().join("tests/golden/reference_metrics.toml")
+}
+
+fn reference_metrics(name: &str) -> Option<Metrics> {
+    static REFS: std::sync::OnceLock<std::collections::HashMap<String, Metrics>> =
+        std::sync::OnceLock::new();
+    let table = REFS.get_or_init(|| {
+        let path = reference_metrics_path();
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("failed to read {path:?}: {e}"));
+        parse_reference_metrics(&text)
+            .unwrap_or_else(|e| panic!("failed to parse {path:?}: {e}"))
+    });
+    table.get(name).copied()
+}
+
+/// Parse the simple TOML schema used by `reference_metrics.toml`.
+///
+/// Supports only `[section]` headers and `key = <unsigned integer>` lines;
+/// anything else (comments after `#`, blank lines) is skipped. Keeping this
+/// inline avoids pulling a `toml` dev-dep into the harness for a static
+/// config file.
+fn parse_reference_metrics(
+    text: &str,
+) -> Result<std::collections::HashMap<String, Metrics>, String> {
+    let mut out: std::collections::HashMap<String, Metrics> = std::collections::HashMap::new();
+    let mut current: Option<String> = None;
+    let mut current_metrics = Metrics::default();
+
+    let flush = |name: &Option<String>,
+                 metrics: &Metrics,
+                 out: &mut std::collections::HashMap<String, Metrics>| {
+        if let Some(n) = name {
+            out.insert(n.clone(), *metrics);
+        }
+    };
+
+    for (idx, raw) in text.lines().enumerate() {
+        let line_no = idx + 1;
+        let line = match raw.find('#') {
+            Some(i) => &raw[..i],
+            None => raw,
+        };
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        if let Some(rest) = line.strip_prefix('[') {
+            let name = rest
+                .strip_suffix(']')
+                .ok_or_else(|| format!("line {line_no}: missing ']' in section header"))?
+                .trim()
+                .to_string();
+            flush(&current, &current_metrics, &mut out);
+            current = Some(name);
+            current_metrics = Metrics::default();
+            continue;
+        }
+
+        let (key, value) = line
+            .split_once('=')
+            .ok_or_else(|| format!("line {line_no}: expected 'key = value'"))?;
+        let key = key.trim();
+        let value: usize = value
+            .trim()
+            .parse()
+            .map_err(|e| format!("line {line_no}: value for '{key}' is not an unsigned integer: {e}"))?;
+
+        let target = match key {
+            "if_count" => &mut current_metrics.if_count,
+            "for_count" => &mut current_metrics.for_count,
+            "while_count" => &mut current_metrics.while_count,
+            "return_count" => &mut current_metrics.return_count,
+            "goto_count" => &mut current_metrics.goto_count,
+            "var_count" => &mut current_metrics.variable_count,
+            "line_count" => &mut current_metrics.lines,
+            other => {
+                return Err(format!("line {line_no}: unknown key '{other}'"));
+            }
+        };
+        *target = value;
+    }
+    flush(&current, &current_metrics, &mut out);
+    Ok(out)
 }
 
 fn write_golden(path: &Path, contents: &str) {
@@ -506,6 +590,64 @@ fn score_clamped_to_non_negative() {
     let reference = Metrics { if_count: 1, ..Default::default() };
     let bad = Metrics { goto_count: 1000, ..Default::default() };
     assert_eq!(bad.score(&reference), 0.0);
+}
+
+#[test]
+fn parse_reference_metrics_basic() {
+    let text = "\
+# Header comment
+[medium]
+if_count = 60
+for_count = 5
+while_count = 3
+return_count = 8
+goto_count = 0
+var_count = 30
+line_count = 500
+
+[debug_hello]  # inline comment
+if_count = 0
+return_count = 1
+var_count = 3
+line_count = 15
+";
+    let table = parse_reference_metrics(text).expect("parse ok");
+    let medium = table.get("medium").expect("medium present");
+    assert_eq!(medium.if_count, 60);
+    assert_eq!(medium.for_count, 5);
+    assert_eq!(medium.return_count, 8);
+    assert_eq!(medium.variable_count, 30);
+    assert_eq!(medium.lines, 500);
+
+    let hello = table.get("debug_hello").expect("debug_hello present");
+    assert_eq!(hello.if_count, 0);
+    assert_eq!(hello.return_count, 1);
+    assert_eq!(hello.variable_count, 3);
+}
+
+#[test]
+fn parse_reference_metrics_rejects_unknown_key() {
+    let text = "[s]\nbogus = 1\n";
+    assert!(parse_reference_metrics(text).is_err());
+}
+
+#[test]
+fn parse_reference_metrics_rejects_malformed_header() {
+    let text = "[unterminated\nif_count = 1\n";
+    assert!(parse_reference_metrics(text).is_err());
+}
+
+#[test]
+fn reference_metrics_file_loads_for_all_fixtures() {
+    for name in [
+        "medium", "debug_calls", "debug_structs", "debug_hello",
+        "branches", "cpp_vtable", "cpp_exceptions", "cpp_rtti",
+    ] {
+        assert!(
+            reference_metrics(name).is_some(),
+            "missing reference profile for {name}",
+        );
+    }
 }
 
 #[test]

@@ -1,0 +1,30 @@
+P4-3: SUBPIECE → IDA-style macros (LOBYTE/BYTE1/LOWORD/HIWORD/LODWORD/HIDWORD)
+
+Changes:
+  crates/unlace-output/src/c_printer.rs
+
+1. Replaced SUBPIECE emission (was raw bit-shift) with IDA-style named macros:
+   - (output_size=1, offset=0) → LOBYTE(x)
+   - (output_size=1, offset=1) → BYTE1(x)
+   - (output_size=1, offset=2) → BYTE2(x)
+   - (output_size=1, offset=3) → BYTE3(x)
+   - (output_size=2, offset=0) → LOWORD(x)
+   - (output_size=2, offset=2) → HIWORD(x)
+   - (output_size=4, offset=0) → LODWORD(x)
+   - (output_size=4, offset=4) → HIDWORD(x)
+   - Fallback: (cast)((x) >> shift) for non-standard combinations
+
+2. Added #define macros to IDA_TYPEDEFS prelude (8 macros total).
+
+3. Added emit_subpiece_macro() helper function.
+
+Tests added (5 new, all pass):
+  - test_subpiece_lobyte: SUBPIECE(v,0) size=1 → LOBYTE(v)
+  - test_subpiece_byte1: SUBPIECE(v,1) size=1 → BYTE1(v)
+  - test_subpiece_lodword: SUBPIECE(v,0) size=4 → LODWORD(v)
+  - test_subpiece_hidword: SUBPIECE(v,4) size=4 → HIDWORD(v)
+  - test_subpiece_macros_in_prelude: all 8 #define macros present
+
+Test results:
+  cargo test --workspace: 61 passed, 8 failed (all 8 pre-existing)
+  cargo test -p unlace-output -- subpiece: 5 passed, 0 failed

@@ -1,0 +1,31 @@
+P2-4: Cross-reference database — call graph builder
+====================================================
+
+Date: 2026-04-29
+
+Files created:
+  - crates/unlace-ir/src/xref.rs (new module)
+
+Files modified:
+  - crates/unlace-ir/src/lib.rs (added `pub mod xref;`)
+
+Implementation:
+  - CallGraph struct with BTreeMap<u64, BTreeSet<u64>> for callers/callees
+  - build_call_graph() scans all Function blocks/insns for IrOp::Call and IrOp::Callind
+  - Direct calls: input[0].space == SpaceId::Const → edge added both directions
+  - Indirect calls (Callind or non-const Call target) → counter incremented, no edge
+  - Methods: callers_of, callees_of, is_leaf, call_count, edge_count, indirect_call_count
+  - Static empty BTreeSet for graceful missing-key returns
+
+Tests (6/6 pass):
+  - test_empty_graph: no functions → empty graph, 0 edges, 0 indirect
+  - test_single_direct_call: main→helper → 1 edge, bidirectional
+  - test_bidirectionality: A→{B,C} → callees/callers agree, 2 edges
+  - test_leaf_function: callee with no calls → is_leaf true
+  - test_call_count: 3 callers of same target → call_count = 3
+  - test_indirect_call_counted: CALLIND counted, no edge added
+
+Verification:
+  cargo test -p unlace-ir -- xref       → 6 passed
+  cargo xtask lint-determinism           → OK (no HashMap/HashSet)
+  cargo test --workspace                 → all tests pass (0 failures)

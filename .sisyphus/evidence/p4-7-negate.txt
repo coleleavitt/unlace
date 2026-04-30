@@ -1,0 +1,24 @@
+P4-7: Negation folding — !(a<b) → a>=b
+========================================
+
+STATUS: DONE
+
+Changes in crates/unlace-output/src/c_printer.rs:
+- BoolNegate handler delegates to emit_bool_negate instead of emit_unaryop
+- emit_bool_negate resolves the input SsaVarnode's defining instruction;
+  if it's a comparison, emits the negated comparison directly
+- negate_comparison maps:
+  IntLess → ">=", IntLessequal → ">",
+  IntEqual/FloatEqual → "!=", IntNotequal/FloatNotequal → "==",
+  IntSless/FloatLess → ">=", IntSlessequal/FloatLessequal → ">"
+- Unsigned comparisons (IntLess, IntLessequal) use emit_unsigned_binop
+  to preserve the unsigned cast on operands
+- Non-comparison inputs fall through to !expr as before
+- IntNegate correctly emits ~ (bitwise NOT), not ! (logical NOT)
+
+Tests added (3):
+- test_negate_less_to_geq: !(a < b) → a >= b
+- test_negate_equal_to_neq: !(a == b) → a != b
+- test_negate_non_comparison_kept: !flag → !flag (no folding)
+
+Workspace: 910 tests, 0 failures

@@ -1,0 +1,29 @@
+P4-11: Global variable naming
+=============================
+
+Implementation in crates/unlace-output/src/c_printer.rs:
+
+1. Added `try_global_var_name()` helper:
+   - Checks if address varnode is Const with value > 0x10000 (GLOBAL_ADDR_THRESHOLD)
+   - First checks `ctx.symbols` for a symbol name at that address
+   - Otherwise generates IDA-style name: byte_XXXX, word_XXXX, dword_XXXX, qword_XXXX
+   - Where XXXX is uppercase hex address
+
+2. Integrated into LOAD expression emission (emit_expr_with_prec, IrOp::Load arm):
+   - Checks before struct field resolution and pointer cast fallback
+   - Returns global name directly instead of *(cast)(addr)
+
+3. Integrated into STORE statement emission (emit_statement, IrOp::Store arm):
+   - Checks before struct field resolution and pointer cast fallback
+   - Emits `global_name = val;` instead of `*(cast)(addr) = val;`
+
+Tests added (7 tests):
+  - test_global_dword_naming: LOAD 4 bytes from 0x604000 → dword_604000       PASS
+  - test_global_qword_naming: LOAD 8 bytes from 0x604008 → qword_604008       PASS
+  - test_global_with_symbol:  0x604000 with symbol "g_counter" → g_counter     PASS
+  - test_global_byte_naming:  LOAD 1 byte from 0x601000 → byte_601000         PASS
+  - test_global_word_naming:  LOAD 2 bytes from 0x602000 → word_602000        PASS
+  - test_global_store_naming: STORE 4 bytes to 0x604000 → dword_604000 = v1;  PASS
+  - test_no_global_for_small_addr: register addr → no global name             PASS
+
+Full workspace: 944 tests pass, 0 failures.

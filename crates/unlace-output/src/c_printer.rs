@@ -38,7 +38,7 @@ pub struct FunctionHeaderInfo {
 
 impl FunctionHeaderInfo {
     /// Build header metadata from an [`SsaFunction`].
-    pub fn from_ssa(ssa: &SsaFunction) -> Self {
+    pub fn from_ssa(ssa: &SsaFunction, symbols: &BTreeMap<u64, String>) -> Self {
         let name = ssa.function.name.clone();
         let address = ssa.function.addr;
         let convention = ssa.calling_convention.to_string();
@@ -88,7 +88,11 @@ impl FunctionHeaderInfo {
                 if insn.op == IrOp::Call && !insn.inputs.is_empty() {
                     let target = &insn.inputs[0];
                     if target.space == SpaceId::Const {
-                        callees_set.insert(format!("sub_{:x}", target.offset));
+                        let callee_name = symbols
+                            .get(&target.offset)
+                            .cloned()
+                            .unwrap_or_else(|| format!("sub_{:x}", target.offset));
+                        callees_set.insert(callee_name);
                     }
                 }
             }
@@ -112,19 +116,26 @@ pub fn print_c(func: &HirFunction) -> String {
 }
 
 pub fn print_c_with_dwarf(func: &HirFunction, dwarf: Option<&DwarfInfo>) -> String {
-    print_c_full(func, dwarf, None)
+    print_c_full(func, dwarf, None, None, None)
 }
 
 /// Render a [`HirFunction`] with optional DWARF info and function header metadata.
 ///
 /// When `header` is `Some`, a block comment with function metadata is emitted
 /// before the function signature (after the typedefs).
+///
+/// When `symbols` is `Some`, CALL targets are resolved against the symbol table
+/// before falling back to `sub_XXXX` names.
 pub fn print_c_full(
     func: &HirFunction,
     dwarf: Option<&DwarfInfo>,
     header: Option<&FunctionHeaderInfo>,
+    symbols: Option<&BTreeMap<u64, String>>,
+    string_table: Option<&BTreeMap<u64, String>>,
 ) -> String {
-    let mut ctx = PrintCtx::new(dwarf, func.panic_sites.clone());
+    let sym_owned = symbols.cloned().unwrap_or_default();
+    let str_owned = string_table.cloned().unwrap_or_default();
+    let mut ctx = PrintCtx::new(dwarf, func.panic_sites.clone(), sym_owned, str_owned);
 
     collect_varnodes(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
@@ -270,10 +281,19 @@ struct PrintCtx {
     stmt_depths: BTreeMap<u32, u32>,
     field_by_offset: BTreeMap<u64, Vec<(String, String, u64)>>,
     panic_sites: BTreeMap<u64, PanicKind>,
+    /// Merged symbol table: address → symbol name (PLT + function symbols).
+    symbols: BTreeMap<u64, String>,
+    /// Recovered string literals: virtual address → string content.
+    string_table: BTreeMap<u64, String>,
 }
 
 impl PrintCtx {
-    fn new(dwarf: Option<&DwarfInfo>, panic_sites: BTreeMap<u64, PanicKind>) -> Self {
+    fn new(
+        dwarf: Option<&DwarfInfo>,
+        panic_sites: BTreeMap<u64, PanicKind>,
+        symbols: BTreeMap<u64, String>,
+        string_table: BTreeMap<u64, String>,
+    ) -> Self {
         let field_by_offset = build_field_offset_map(dwarf);
         Self {
             next_var: 1,
@@ -294,6 +314,8 @@ impl PrintCtx {
             stmt_depths: BTreeMap::new(),
             field_by_offset,
             panic_sites,
+            symbols,
+            string_table,
         }
     }
 
@@ -374,6 +396,30 @@ fn try_resolve_field_from_addr(addr_vn: &Varnode, _idx: usize, stmt_idx: u32, ac
     let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
     let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
     try_resolve_struct_field(&def_insn, def_stmt, access_size, ctx)
+}
+
+/// Minimum address to consider as a global (below this is likely stack-relative).
+const GLOBAL_ADDR_THRESHOLD: u64 = 0x10000;
+
+fn try_global_var_name(addr_vn: &Varnode, access_size: u8, ctx: &PrintCtx) -> Option<String> {
+    if addr_vn.space != SpaceId::Const {
+        return None;
+    }
+    let addr = addr_vn.offset;
+    if addr < GLOBAL_ADDR_THRESHOLD {
+        return None;
+    }
+    if let Some(sym) = ctx.symbols.get(&addr) {
+        return Some(sym.clone());
+    }
+    let prefix = match access_size {
+        1 => "byte",
+        2 => "word",
+        4 => "dword",
+        8 => "qword",
+        _ => "unk",
+    };
+    Some(format!("{}_{:X}", prefix, addr))
 }
 
 // ---------------------------------------------------------------------------
@@ -872,6 +918,20 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
     }
 }
 
+fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    if insn.inputs.is_empty() {
+        return "/* unknown */".to_string();
+    }
+    let target_vn = &insn.inputs[0];
+    if target_vn.space == SpaceId::Const {
+        if let Some(name) = ctx.symbols.get(&target_vn.offset) {
+            return name.clone();
+        }
+        return format!("sub_{:x}", target_vn.offset);
+    }
+    emit_operand_resolved(target_vn, 0, stmt_idx, ctx)
+}
+
 // ---------------------------------------------------------------------------
 // Statement emission (single IR instruction)
 // ---------------------------------------------------------------------------
@@ -994,7 +1054,9 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 if insn.inputs.len() >= 3 {
                     let store_size = insn.inputs[2].size;
                     let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
-                    if let Some(field_expr) = try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx) {
+                    if let Some(global) = try_global_var_name(&insn.inputs[1], store_size, ctx) {
+                        let _ = writeln!(out, "{} = {};", global, val);
+                    } else if let Some(field_expr) = try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx) {
                         let _ = writeln!(out, "{} = {};", field_expr, val);
                     } else {
                         let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
@@ -1010,11 +1072,7 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     let _ = writeln!(out, "/* PANIC: {} */", kind);
                     indent(depth, out);
                 }
-                let target = if !insn.inputs.is_empty() {
-                    emit_operand_resolved(&insn.inputs[0], 0, idx, ctx)
-                } else {
-                    "/* unknown */".to_string()
-                };
+                let target = resolve_call_target(insn, idx, ctx);
                 let _ = writeln!(out, "{}();", target);
             }
             IrOp::Unimplemented => {
@@ -1165,6 +1223,10 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
             let load_size = insn.output.map_or(8, |o| o.size);
             let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
             if addr_idx < insn.inputs.len() {
+                // Global variable naming: constant absolute address → dword_XXXX etc.
+                if let Some(global) = try_global_var_name(&insn.inputs[addr_idx], load_size, ctx) {
+                    return global;
+                }
                 if let Some(resolved) = try_resolve_field_from_addr(&insn.inputs[addr_idx], addr_idx, stmt_idx, load_size, ctx) {
                     return resolved;
                 }
@@ -1320,11 +1382,7 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
 
         // -- Call with output --
         IrOp::Call | IrOp::Callind => {
-            let target = if !insn.inputs.is_empty() {
-                emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx)
-            } else {
-                "/* unknown */".to_string()
-            };
+            let target = resolve_call_target(insn, stmt_idx, ctx);
             format!("{}()", target)
         }
 
@@ -1496,6 +1554,9 @@ fn emit_operand_with_prec(
     ctx: &mut PrintCtx,
 ) -> String {
     if vn.space == SpaceId::Const {
+        if let Some(s) = ctx.string_table.get(&vn.offset) {
+            return format!("\"{}\"", escape_c_string(s));
+        }
         return format_constant_ctx(vn.offset, vn.size, const_ctx);
     }
 
@@ -1580,6 +1641,27 @@ fn sign_extend(value: u64, size: u8) -> i64 {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+fn escape_c_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            '\0' => out.push_str("\\0"),
+            c if c.is_ascii_graphic() || c == ' ' => out.push(c),
+            c => {
+                for b in c.to_string().bytes() {
+                    let _ = write!(out, "\\x{:02x}", b);
+                }
+            }
+        }
+    }
+    out
+}
 
 /// Emit an IDA-style SUBPIECE macro based on output size and byte offset.
 ///
@@ -1676,6 +1758,8 @@ typedef signed long long __int64;
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
@@ -3574,6 +3658,381 @@ mod tests {
         assert!(
             output.contains("-(v1 + v2)"),
             "unary minus on binop should parenthesize the add: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-11: Global variable naming tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_global_dword_naming() {
+        let space = con(0, 8);
+        let addr = con(0x604000, 8);
+        let r8 = reg(8, 4);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("global_dword", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("dword_604000"),
+            "4-byte load from 0x604000 should emit dword_604000: {output}",
+        );
+        assert!(
+            !output.contains("*(_DWORD *)"),
+            "should not fall back to pointer cast: {output}",
+        );
+    }
+
+    #[test]
+    fn test_global_qword_naming() {
+        let space = con(0, 8);
+        let addr = con(0x604008, 8);
+        let r8 = reg(8, 8);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("global_qword", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("qword_604008"),
+            "8-byte load from 0x604008 should emit qword_604008: {output}",
+        );
+    }
+
+    #[test]
+    fn test_global_with_symbol() {
+        use std::collections::BTreeMap;
+
+        let space = con(0, 8);
+        let addr = con(0x604000, 8);
+        let r8 = reg(8, 4);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("global_sym", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x604000u64, "g_counter".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("g_counter"),
+            "should use symbol name 'g_counter': {output}",
+        );
+        assert!(
+            !output.contains("dword_604000"),
+            "should NOT fall back to generic name: {output}",
+        );
+    }
+
+    #[test]
+    fn test_global_byte_naming() {
+        let space = con(0, 8);
+        let addr = con(0x601000, 8);
+        let r8 = reg(8, 1);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 1))),
+        ];
+
+        let func = make_func("global_byte", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("byte_601000"),
+            "1-byte load from 0x601000 should emit byte_601000: {output}",
+        );
+    }
+
+    #[test]
+    fn test_global_word_naming() {
+        let space = con(0, 8);
+        let addr = con(0x602000, 8);
+        let r8 = reg(8, 2);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 2))),
+        ];
+
+        let func = make_func("global_word", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("word_602000"),
+            "2-byte load from 0x602000 should emit word_602000: {output}",
+        );
+    }
+
+    #[test]
+    fn test_global_store_naming() {
+        let space = con(0, 8);
+        let addr = con(0x604000, 8);
+        let r0 = reg(0, 4);
+
+        let store = IrInsn::without_output(IrOp::Store, smallvec![space, addr, r0], 0x1000);
+        let body = vec![
+            HirNode::Statement(store),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("global_store", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("dword_604000 = v1;"),
+            "STORE to 0x604000 should emit dword_604000: {output}",
+        );
+    }
+
+    #[test]
+    fn test_no_global_for_small_addr() {
+        let space = con(0, 8);
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 4);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, r0], 0x1000);
+        let body = vec![
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("no_global", body);
+        let output = print_c(&func);
+
+        assert!(
+            !output.contains("dword_"),
+            "register address should NOT be named as global: {output}",
+        );
+        assert!(
+            output.contains("*(_DWORD *)"),
+            "should use pointer dereference: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-10: String literal inlining tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_string_inlined_in_output() {
+        let r0 = reg(0, 8);
+        let string_addr = con(0x2004, 8);
+        let space = con(0, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Call,
+                smallvec![string_addr],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r0,
+                smallvec![space, string_addr],
+                0x1004,
+            )),
+            HirNode::Return(Some(sv(0, 8))),
+        ];
+
+        let func = make_func("string_test", body);
+        let mut string_table = BTreeMap::new();
+        string_table.insert(0x2004u64, "Hello".to_string());
+
+        let output = super::print_c_full(&func, None, None, None, Some(&string_table));
+
+        assert!(
+            output.contains("\"Hello\""),
+            "string address should be replaced with \"Hello\": {output}",
+        );
+        assert!(
+            !output.contains("0x2004"),
+            "raw address 0x2004 should NOT appear: {output}",
+        );
+    }
+
+    #[test]
+    fn test_non_string_address_unchanged() {
+        let r0 = reg(0, 8);
+        let addr = con(0x3000, 8);
+        let space = con(0, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r0,
+                smallvec![space, addr],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 8))),
+        ];
+
+        let func = make_func("no_string", body);
+        let mut string_table = BTreeMap::new();
+        string_table.insert(0x2004u64, "Hello".to_string());
+
+        let output = super::print_c_full(&func, None, None, None, Some(&string_table));
+
+        assert!(
+            !output.contains("\"Hello\""),
+            "non-matching address should NOT produce string: {output}",
+        );
+        assert!(
+            output.contains("0x3000"),
+            "raw address 0x3000 should remain: {output}",
+        );
+    }
+
+    #[test]
+    fn test_string_escape_special_chars() {
+        let string_addr = con(0x2000, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Call,
+                smallvec![string_addr],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("escape_test", body);
+        let mut string_table = BTreeMap::new();
+        string_table.insert(0x2000u64, "Hello\nWorld\t\"test\"".to_string());
+
+        let output = super::print_c_full(&func, None, None, None, Some(&string_table));
+
+        assert!(
+            output.contains(r#"Hello\nWorld\t\"test\""#),
+            "special chars should be escaped: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-8/P4-9: Symbol table threading + CALL resolution tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_call_with_symbol_resolved() {
+        let target_addr = con(0x401030, 8);
+
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(call_insn),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "printf".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("printf();"),
+            "CALL to known symbol should emit 'printf()': {output}",
+        );
+        assert!(
+            !output.contains("sub_401030"),
+            "should NOT contain fallback sub_401030: {output}",
+        );
+    }
+
+    #[test]
+    fn test_call_without_symbol_keeps_sub() {
+        let target_addr = con(0x402000, 8);
+
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(call_insn),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("caller", body);
+        let symbols = BTreeMap::new();
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("sub_402000();"),
+            "CALL to unknown address should emit 'sub_402000()': {output}",
+        );
+    }
+
+    #[test]
+    fn test_call_with_output_resolves_symbol() {
+        let r0 = reg(0, 8);
+        let target_addr = con(0x401030, 8);
+
+        let call_insn = IrInsn::with_output(IrOp::Call, r0, smallvec![target_addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(call_insn),
+            HirNode::Return(Some(sv(0, 8))),
+        ];
+
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "malloc".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("malloc()"),
+            "CALL with output to known symbol should emit 'malloc()': {output}",
+        );
+    }
+
+    #[test]
+    fn test_symbols_passed_through_pipeline_header() {
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "printf".to_string());
+
+        let target_addr = con(0x401030, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
+        let body = vec![
+            HirNode::Statement(call_insn),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("caller", body);
+
+        let header = super::FunctionHeaderInfo {
+            name: "caller".to_string(),
+            address: 0x1000,
+            size: 0x20,
+            convention: "unknown".to_string(),
+            stack_frame: 0,
+            callees: vec!["printf".to_string()],
+        };
+
+        let output = super::print_c_full(&func, None, Some(&header), Some(&symbols), None);
+
+        assert!(
+            output.contains("Xrefs to:   printf"),
+            "header should show resolved callee name: {output}",
+        );
+        assert!(
+            output.contains("printf();"),
+            "body should show resolved call: {output}",
         );
     }
 }

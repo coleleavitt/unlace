@@ -14,6 +14,8 @@ use crate::pass::{Pass, PassError};
 /// - Double negation: `BoolNegate(BoolNegate(x))` → `x`
 /// - And/Or absorption with constants
 /// - Negated comparisons: `BoolNegate(IntEqual(a, b))` → `IntNotequal(a, b)`
+/// - De Morgan: `BoolNegate(BoolOr(a, b))` → `BoolAnd(BoolNegate(a), BoolNegate(b))`
+/// - De Morgan: `BoolNegate(BoolAnd(a, b))` → `BoolOr(BoolNegate(a), BoolNegate(b))`
 /// - Xor with false: `BoolXor(x, false)` → `x`
 ///
 /// Iterates internally to a fixed point.
@@ -26,17 +28,32 @@ impl Pass for ConditionSimplifyPass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut changed_any = false;
+        let mut next_unique = find_max_unique_offset(func) + 8;
         loop {
             let def_map = build_def_map(func);
             let mut changed = false;
 
             for block in func.function.blocks.values_mut() {
-                for insn in &mut block.insns {
-                    if let Some(replacement) = try_simplify(insn, &def_map) {
-                        *insn = replacement;
-                        changed = true;
+                let mut new_insns: Vec<IrInsn> = Vec::with_capacity(block.insns.len());
+
+                for insn in &block.insns {
+                    match try_simplify(insn, &def_map, &mut next_unique) {
+                        Some(Simplification::Replace(replacement)) => {
+                            new_insns.push(replacement);
+                            changed = true;
+                        }
+                        Some(Simplification::InsertAndReplace { prefix, replacement }) => {
+                            new_insns.extend(prefix);
+                            new_insns.push(replacement);
+                            changed = true;
+                        }
+                        None => {
+                            new_insns.push(insn.clone());
+                        }
                     }
                 }
+
+                block.insns = new_insns;
             }
 
             changed_any |= changed;
@@ -63,6 +80,33 @@ fn build_def_map(func: &SsaFunction) -> BTreeMap<Varnode, IrInsn> {
         }
     }
     map
+}
+
+fn find_max_unique_offset(func: &SsaFunction) -> u64 {
+    let mut max_offset = 0u64;
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            if let Some(output) = insn.output {
+                if output.space == SpaceId::Unique {
+                    max_offset = max_offset.max(output.offset);
+                }
+            }
+            for input in &insn.inputs {
+                if input.space == SpaceId::Unique {
+                    max_offset = max_offset.max(input.offset);
+                }
+            }
+        }
+    }
+    max_offset
+}
+
+enum Simplification {
+    Replace(IrInsn),
+    InsertAndReplace {
+        prefix: Vec<IrInsn>,
+        replacement: IrInsn,
+    },
 }
 
 fn is_bool_const(v: &Varnode, val: u64) -> bool {
@@ -97,7 +141,11 @@ fn replace_op(insn: &IrInsn, new_op: IrOp, inputs: smallvec::SmallVec<[Varnode; 
     )
 }
 
-fn try_simplify(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<IrInsn> {
+fn try_simplify(
+    insn: &IrInsn,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+    next_unique: &mut u64,
+) -> Option<Simplification> {
     let output = insn.output?;
 
     match insn.op {
@@ -105,33 +153,49 @@ fn try_simplify(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<Ir
         IrOp::BoolNegate => {
             let inner = insn.inputs.first()?;
 
-            // Pattern 1: BoolNegate(BoolNegate(x)) → x
-            // Pattern 6: BoolNegate(IntEqual(a, b)) → IntNotequal(a, b)
-            // Pattern 7: BoolNegate(IntNotequal(a, b)) → IntEqual(a, b)
-            // Pattern 8: BoolNegate(IntLess(a, b)) → IntLessequal(b, a)
             if let Some(inner_insn) = def_map.get(inner) {
                 match inner_insn.op {
-                    // Double negation
                     IrOp::BoolNegate => {
                         let x = inner_insn.inputs.first()?;
-                        return Some(make_copy(insn, *x));
+                        return Some(Simplification::Replace(make_copy(insn, *x)));
                     }
-                    // !(a == b) → a != b
                     IrOp::IntEqual => {
-                        return Some(replace_op(insn, IrOp::IntNotequal, inner_insn.inputs.clone()));
+                        return Some(Simplification::Replace(replace_op(
+                            insn,
+                            IrOp::IntNotequal,
+                            inner_insn.inputs.clone(),
+                        )));
                     }
-                    // !(a != b) → a == b
                     IrOp::IntNotequal => {
-                        return Some(replace_op(insn, IrOp::IntEqual, inner_insn.inputs.clone()));
+                        return Some(Simplification::Replace(replace_op(
+                            insn,
+                            IrOp::IntEqual,
+                            inner_insn.inputs.clone(),
+                        )));
                     }
-                    // !(a < b) → b <= a  (swap operands and invert to <=)
                     IrOp::IntLess => {
                         let a = inner_insn.inputs.first()?;
                         let b = inner_insn.inputs.get(1)?;
-                        return Some(replace_op(
+                        return Some(Simplification::Replace(replace_op(
                             insn,
                             IrOp::IntLessequal,
                             smallvec::smallvec![*b, *a],
+                        )));
+                    }
+                    // !(a || b) → (!a) && (!b)
+                    IrOp::BoolOr => {
+                        let a = *inner_insn.inputs.first()?;
+                        let b = *inner_insn.inputs.get(1)?;
+                        return Some(demorgan(
+                            insn, a, b, IrOp::BoolAnd, output, next_unique,
+                        ));
+                    }
+                    // !(a && b) → (!a) || (!b)
+                    IrOp::BoolAnd => {
+                        let a = *inner_insn.inputs.first()?;
+                        let b = *inner_insn.inputs.get(1)?;
+                        return Some(demorgan(
+                            insn, a, b, IrOp::BoolOr, output, next_unique,
                         ));
                     }
                     _ => {}
@@ -145,20 +209,24 @@ fn try_simplify(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<Ir
         IrOp::BoolAnd => {
             let (x, y) = two(&insn.inputs)?;
 
-            // Pattern 2: BoolAnd(x, true) → x  /  BoolAnd(true, x) → x
             if is_const_true(&y) {
-                return Some(make_copy(insn, x));
+                return Some(Simplification::Replace(make_copy(insn, x)));
             }
             if is_const_true(&x) {
-                return Some(make_copy(insn, y));
+                return Some(Simplification::Replace(make_copy(insn, y)));
             }
 
-            // Pattern 3: BoolAnd(x, false) → false  /  BoolAnd(false, x) → false
             if is_const_false(&y) {
-                return Some(make_copy(insn, Varnode::constant(0, output.size)));
+                return Some(Simplification::Replace(make_copy(
+                    insn,
+                    Varnode::constant(0, output.size),
+                )));
             }
             if is_const_false(&x) {
-                return Some(make_copy(insn, Varnode::constant(0, output.size)));
+                return Some(Simplification::Replace(make_copy(
+                    insn,
+                    Varnode::constant(0, output.size),
+                )));
             }
 
             None
@@ -168,17 +236,18 @@ fn try_simplify(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<Ir
         IrOp::BoolOr => {
             let (x, y) = two(&insn.inputs)?;
 
-            // Pattern 4: BoolOr(x, true) → true  /  BoolOr(true, x) → true
             if is_const_true(&y) || is_const_true(&x) {
-                return Some(make_copy(insn, Varnode::constant(1, output.size)));
+                return Some(Simplification::Replace(make_copy(
+                    insn,
+                    Varnode::constant(1, output.size),
+                )));
             }
 
-            // Pattern 5: BoolOr(x, false) → x  /  BoolOr(false, x) → x
             if is_const_false(&y) {
-                return Some(make_copy(insn, x));
+                return Some(Simplification::Replace(make_copy(insn, x)));
             }
             if is_const_false(&x) {
-                return Some(make_copy(insn, y));
+                return Some(Simplification::Replace(make_copy(insn, y)));
             }
 
             None
@@ -188,18 +257,45 @@ fn try_simplify(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<Ir
         IrOp::BoolXor => {
             let (x, y) = two(&insn.inputs)?;
 
-            // Pattern 9: BoolXor(x, false) → x  /  BoolXor(false, x) → x
             if is_const_false(&y) {
-                return Some(make_copy(insn, x));
+                return Some(Simplification::Replace(make_copy(insn, x)));
             }
             if is_const_false(&x) {
-                return Some(make_copy(insn, y));
+                return Some(Simplification::Replace(make_copy(insn, y)));
             }
 
             None
         }
 
         _ => None,
+    }
+}
+
+fn demorgan(
+    insn: &IrInsn,
+    a: Varnode,
+    b: Varnode,
+    result_op: IrOp,
+    output: Varnode,
+    next_unique: &mut u64,
+) -> Simplification {
+    let neg_a_out = Varnode::unique(*next_unique, output.size);
+    *next_unique += 8;
+    let neg_b_out = Varnode::unique(*next_unique, output.size);
+    *next_unique += 8;
+
+    let neg_a = IrInsn::with_output(IrOp::BoolNegate, neg_a_out, smallvec::smallvec![a], insn.addr);
+    let neg_b = IrInsn::with_output(IrOp::BoolNegate, neg_b_out, smallvec::smallvec![b], insn.addr);
+    let combined = IrInsn::with_output(
+        result_op,
+        insn.output.expect("simplifiable insn has output"),
+        smallvec::smallvec![neg_a_out, neg_b_out],
+        insn.addr,
+    );
+
+    Simplification::InsertAndReplace {
+        prefix: vec![neg_a, neg_b],
+        replacement: combined,
     }
 }
 
@@ -523,5 +619,63 @@ mod tests {
         let block = ssa.function.blocks.values().next().expect("has block");
         assert_eq!(block.insns[0].op, IrOp::Copy);
         assert_eq!(block.insns[0].inputs[0], r0);
+    }
+
+    // ── De Morgan: !(a || b) → (!a) && (!b) ────────────────────────
+
+    #[test]
+    fn test_demorgan_negate_or() {
+        // v1 = BoolOr(r0, r8)
+        // v2 = BoolNegate(v1) → neg_a = BoolNegate(r0), neg_b = BoolNegate(r8), v2 = BoolAnd(neg_a, neg_b)
+        let r0 = Varnode::reg(0, 1);
+        let r8 = Varnode::reg(8, 1);
+        let v1 = Varnode::unique(0, 1);
+        let v2 = Varnode::unique(8, 1);
+
+        let or_insn = IrInsn::with_output(IrOp::BoolOr, v1, smallvec![r0, r8], 0x1000);
+        let neg_insn = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![or_insn, neg_insn]);
+        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        // insn[0] = BoolOr (unchanged)
+        assert_eq!(block.insns[0].op, IrOp::BoolOr);
+        // insn[1] = BoolNegate(r0)
+        assert_eq!(block.insns[1].op, IrOp::BoolNegate);
+        assert_eq!(block.insns[1].inputs[0], r0);
+        // insn[2] = BoolNegate(r8)
+        assert_eq!(block.insns[2].op, IrOp::BoolNegate);
+        assert_eq!(block.insns[2].inputs[0], r8);
+        // insn[3] = BoolAnd(neg_a, neg_b)
+        assert_eq!(block.insns[3].op, IrOp::BoolAnd);
+        assert_eq!(block.insns[3].output, Some(v2));
+    }
+
+    // ── De Morgan: !(a && b) → (!a) || (!b) ────────────────────────
+
+    #[test]
+    fn test_demorgan_negate_and() {
+        let r0 = Varnode::reg(0, 1);
+        let r8 = Varnode::reg(8, 1);
+        let v1 = Varnode::unique(0, 1);
+        let v2 = Varnode::unique(8, 1);
+
+        let and_insn = IrInsn::with_output(IrOp::BoolAnd, v1, smallvec![r0, r8], 0x1000);
+        let neg_insn = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![and_insn, neg_insn]);
+        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::BoolAnd);
+        assert_eq!(block.insns[1].op, IrOp::BoolNegate);
+        assert_eq!(block.insns[1].inputs[0], r0);
+        assert_eq!(block.insns[2].op, IrOp::BoolNegate);
+        assert_eq!(block.insns[2].inputs[0], r8);
+        assert_eq!(block.insns[3].op, IrOp::BoolOr);
+        assert_eq!(block.insns[3].output, Some(v2));
     }
 }

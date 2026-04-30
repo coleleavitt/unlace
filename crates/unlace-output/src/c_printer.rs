@@ -5157,4 +5157,45 @@ mod tests {
             "register var at offset 8, size 4 should have `// ecx` comment: {decl_line}",
         );
     }
+
+    #[test]
+    fn test_params_in_c_output() {
+        let func = HirFunction {
+            name: "add_two".to_string(),
+            params: vec![
+                ("a1".to_string(), PrimitiveType::Int(8)),
+                ("a2".to_string(), PrimitiveType::Int(8)),
+            ],
+            return_type: PrimitiveType::Int(8),
+            body: vec![],
+            addr: 0x1000,
+            foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
+        };
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("long long add_two(long long a1, long long a2)"),
+            "should emit typed params: {output}",
+        );
+    }
+
+    #[test]
+    fn test_void_return_type() {
+        let func = HirFunction {
+            name: "void_func".to_string(),
+            params: vec![],
+            return_type: PrimitiveType::Unknown,
+            body: vec![HirNode::Return(None)],
+            addr: 0x1000,
+            foldable_exprs: std::collections::BTreeSet::new(),
+            panic_sites: std::collections::BTreeMap::new(),
+        };
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("void void_func(void)"),
+            "Unknown return type should emit void: {output}",
+        );
+    }
 }

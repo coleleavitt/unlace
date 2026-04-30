@@ -12,7 +12,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::cfg::EdgeKind;
-use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::hir::{HirFunction, HirNode, LabelId, SwitchCase};
@@ -44,8 +44,8 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
 
     Ok(HirFunction {
         name: func.function.name.clone(),
-        params: Vec::new(),
-        return_type: PrimitiveType::Unknown,
+        params: func.inferred_params.clone(),
+        return_type: func.inferred_return_type,
         body,
         addr: func.function.addr,
         foldable_exprs: func.foldable_exprs.clone(),

@@ -2,11 +2,15 @@
 //!
 //! Detects System V AMD64 vs Microsoft x64 by examining which registers are
 //! read before being written in the function entry block.
+//!
+//! Also provides [`ParamInferPass`] for parameter inference and
+//! [`ReturnTypeInferPass`] for return type inference based on the detected
+//! calling convention.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_ir::ssa::{CallingConvention, SsaFunction};
-use unlace_ir::{IrOp, SpaceId};
+use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaFunction, SsaVarnode};
+use unlace_ir::{BlockId, IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
 
@@ -159,6 +163,262 @@ fn has_shadow_space_stores(func: &SsaFunction) -> bool {
         }
     }
     shadow_stores >= 2
+}
+
+// ---------------------------------------------------------------------------
+// XMM register offsets (must match unlace-lift-x86 register_file.rs)
+// ---------------------------------------------------------------------------
+
+const VEC_BASE: u64 = 0x400;
+const VEC_STRIDE: u64 = 32;
+const fn xmm_offset(n: u64) -> u64 { VEC_BASE + n * VEC_STRIDE }
+
+const XMM0: u64 = xmm_offset(0);
+const XMM1: u64 = xmm_offset(1);
+const XMM2: u64 = xmm_offset(2);
+const XMM3: u64 = xmm_offset(3);
+const XMM4: u64 = xmm_offset(4);
+const XMM5: u64 = xmm_offset(5);
+const XMM6: u64 = xmm_offset(6);
+const XMM7: u64 = xmm_offset(7);
+
+const SYSV_FLOAT_REGS: &[u64] = &[XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7];
+const MSX64_FLOAT_REGS: &[u64] = &[XMM0, XMM1, XMM2, XMM3];
+
+// ---------------------------------------------------------------------------
+// Parameter inference
+// ---------------------------------------------------------------------------
+
+pub struct ParamInferPass;
+
+impl Pass for ParamInferPass {
+    fn name(&self) -> &str {
+        "param-infer"
+    }
+
+    fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        let params = infer_params(func);
+        if params != func.inferred_params {
+            func.inferred_params = params;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
+    let cc = func.calling_convention;
+    if cc == CallingConvention::Unknown {
+        return Vec::new();
+    }
+
+    let entry = func.function.entry;
+    let Some(entry_block) = func.function.blocks.get(&entry) else {
+        return Vec::new();
+    };
+
+    // Collect registers read-before-write in the entry block.
+    let mut defined: BTreeSet<u64> = BTreeSet::new();
+    let mut read_before_write: BTreeSet<u64> = BTreeSet::new();
+
+    for insn in &entry_block.insns {
+        match insn.op {
+            IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
+            _ => {}
+        }
+        for inp in &insn.inputs {
+            if inp.space == SpaceId::Register && !defined.contains(&inp.offset) {
+                read_before_write.insert(inp.offset);
+            }
+        }
+        if let Some(output) = insn.output {
+            if output.space == SpaceId::Register {
+                defined.insert(output.offset);
+            }
+        }
+    }
+
+    let (int_regs, float_regs): (&[u64], &[u64]) = match cc {
+        CallingConvention::SystemV => (SYSV_ARG_REGS, SYSV_FLOAT_REGS),
+        CallingConvention::MicrosoftX64 => (MSX64_ARG_REGS, MSX64_FLOAT_REGS),
+        CallingConvention::AArch64 => (AARCH64_ARG_REGS, &[]),
+        CallingConvention::Unknown => return Vec::new(),
+    };
+
+    // Build a map of which registers feed into which ops in the entry block,
+    // for type inference of each parameter.
+    let reg_consumer_ops = collect_reg_consumer_ops(func, entry);
+
+    let mut params = Vec::new();
+    let mut param_idx = 1u32;
+
+    // Count consecutive integer parameter registers that are used.
+    for &reg_off in int_regs {
+        if !read_before_write.contains(&reg_off) {
+            break;
+        }
+        let ty = infer_param_type(reg_off, &reg_consumer_ops);
+        params.push((format!("a{}", param_idx), ty));
+        param_idx += 1;
+    }
+
+    // Float parameters (XMM registers).
+    for &reg_off in float_regs {
+        if !read_before_write.contains(&reg_off) {
+            break;
+        }
+        params.push((format!("a{}", param_idx), PrimitiveType::Double));
+        param_idx += 1;
+    }
+
+    params
+}
+
+fn collect_reg_consumer_ops(func: &SsaFunction, entry: BlockId) -> BTreeMap<u64, Vec<IrOp>> {
+    let Some(block) = func.function.blocks.get(&entry) else {
+        return BTreeMap::new();
+    };
+    let mut map: BTreeMap<u64, Vec<IrOp>> = BTreeMap::new();
+    for insn in &block.insns {
+        for inp in &insn.inputs {
+            if inp.space == SpaceId::Register {
+                map.entry(inp.offset).or_default().push(insn.op);
+            }
+        }
+    }
+    map
+}
+
+fn infer_param_type(reg_off: u64, consumer_ops: &BTreeMap<u64, Vec<IrOp>>) -> PrimitiveType {
+    let Some(ops) = consumer_ops.get(&reg_off) else {
+        return PrimitiveType::Int(8);
+    };
+    for &op in ops {
+        match op {
+            IrOp::FloatAdd | IrOp::FloatSub | IrOp::FloatMult | IrOp::FloatDiv
+            | IrOp::FloatNeg | IrOp::FloatAbs | IrOp::FloatSqrt
+            | IrOp::FloatInt2float | IrOp::FloatFloat2float | IrOp::FloatFloat2int
+            | IrOp::FloatEqual | IrOp::FloatNotequal | IrOp::FloatLess
+            | IrOp::FloatLessequal => {
+                return PrimitiveType::Double;
+            }
+            IrOp::Ptradd | IrOp::Ptrsub | IrOp::Load | IrOp::Store => {
+                return PrimitiveType::Ptr;
+            }
+            _ => {}
+        }
+    }
+    PrimitiveType::Int(8)
+}
+
+// ---------------------------------------------------------------------------
+// Return type inference
+// ---------------------------------------------------------------------------
+
+pub struct ReturnTypeInferPass;
+
+impl Pass for ReturnTypeInferPass {
+    fn name(&self) -> &str {
+        "return-type-infer"
+    }
+
+    fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        let ret_ty = infer_return_type(func);
+        if ret_ty != func.inferred_return_type {
+            func.inferred_return_type = ret_ty;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+fn infer_return_type(func: &SsaFunction) -> PrimitiveType {
+    // Scan all blocks for RETURN instructions.
+    let mut has_return = false;
+    let mut has_rax_at_return = false;
+    let mut has_xmm0_at_return = false;
+    let mut rax_size: u8 = 8;
+
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            if insn.op != IrOp::Return {
+                continue;
+            }
+            has_return = true;
+
+            // Look backwards from the RETURN to find the last write to RAX or XMM0
+            // in this block.
+            let mut found_rax = false;
+            let mut found_xmm0 = false;
+            for prev_insn in block.insns[..insn_idx].iter().rev() {
+                if let Some(out) = prev_insn.output {
+                    if out.space == SpaceId::Register && out.offset == RAX {
+                        found_rax = true;
+                        rax_size = out.size;
+                        // Check what op produced the RAX value.
+                        let ret_ty = classify_return_op(prev_insn.op, &func.var_types, bid, func);
+                        if ret_ty != PrimitiveType::Unknown {
+                            return ret_ty;
+                        }
+                        break;
+                    }
+                    if out.space == SpaceId::Register && out.offset == XMM0 {
+                        found_xmm0 = true;
+                        break;
+                    }
+                }
+            }
+            if found_xmm0 {
+                has_xmm0_at_return = true;
+            }
+            if found_rax {
+                has_rax_at_return = true;
+            }
+        }
+    }
+
+    if !has_return {
+        return PrimitiveType::Unknown;
+    }
+
+    if has_xmm0_at_return {
+        return PrimitiveType::Double;
+    }
+
+    if has_rax_at_return {
+        return match rax_size {
+            1 => PrimitiveType::Bool,
+            4 => PrimitiveType::Int(4),
+            _ => PrimitiveType::Int(8),
+        };
+    }
+
+    // RETURN exists but no RAX/XMM0 write found — likely void.
+    PrimitiveType::Unknown
+}
+
+fn classify_return_op(
+    op: IrOp,
+    _var_types: &BTreeMap<SsaVarnode, PrimitiveType>,
+    _bid: BlockId,
+    _func: &SsaFunction,
+) -> PrimitiveType {
+    match op {
+        IrOp::FloatAdd | IrOp::FloatSub | IrOp::FloatMult | IrOp::FloatDiv
+        | IrOp::FloatNeg | IrOp::FloatAbs | IrOp::FloatSqrt
+        | IrOp::FloatInt2float | IrOp::FloatFloat2float => PrimitiveType::Double,
+
+        IrOp::IntEqual | IrOp::IntNotequal | IrOp::IntLess | IrOp::IntLessequal
+        | IrOp::IntSless | IrOp::IntSlessequal | IrOp::BoolAnd | IrOp::BoolOr
+        | IrOp::BoolNegate | IrOp::FloatEqual | IrOp::FloatNotequal
+        | IrOp::FloatLess | IrOp::FloatLessequal => PrimitiveType::Bool,
+
+        IrOp::Ptradd | IrOp::Ptrsub => PrimitiveType::Ptr,
+
+        _ => PrimitiveType::Unknown,
+    }
 }
 
 #[cfg(test)]
@@ -416,5 +676,166 @@ mod tests {
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
         assert_eq!(ssa.calling_convention, CallingConvention::SystemV);
+    }
+
+    // -------------------------------------------------------------------
+    // Parameter inference tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_param_count_sysv() {
+        let out = Varnode::unique(0, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, out, smallvec![rdi(), rsi()], 0x1000),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ParamInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_params.len(), 2);
+        assert_eq!(ssa.inferred_params[0].0, "a1");
+        assert_eq!(ssa.inferred_params[1].0, "a2");
+        assert_eq!(ssa.inferred_params[0].1, PrimitiveType::Int(8));
+        assert_eq!(ssa.inferred_params[1].1, PrimitiveType::Int(8));
+    }
+
+    #[test]
+    fn test_param_count_zero() {
+        let insns = vec![];
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ParamInferPass.run(&mut ssa).unwrap();
+
+        assert!(ssa.inferred_params.is_empty());
+    }
+
+    #[test]
+    fn test_param_ptr_type() {
+        let out = Varnode::unique(0, 8);
+        let space = Varnode::constant(0, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::Load, out, smallvec![space, rdi()], 0x1000),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ParamInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_params.len(), 1);
+        assert_eq!(ssa.inferred_params[0].1, PrimitiveType::Ptr);
+    }
+
+    #[test]
+    fn test_param_six_sysv() {
+        let out1 = Varnode::unique(0, 8);
+        let out2 = Varnode::unique(8, 8);
+        let out3 = Varnode::unique(16, 8);
+        let out4 = Varnode::unique(24, 8);
+        let out5 = Varnode::unique(32, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, out1, smallvec![rdi(), rsi()], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, out2, smallvec![rdx(), rcx()], 0x1004),
+            IrInsn::with_output(IrOp::IntAdd, out3, smallvec![r8(), r9()], 0x1008),
+            IrInsn::with_output(IrOp::IntAdd, out4, smallvec![out1, out2], 0x100c),
+            IrInsn::with_output(IrOp::IntAdd, out5, smallvec![out4, out3], 0x1010),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ParamInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_params.len(), 6);
+        assert_eq!(ssa.inferred_params[5].0, "a6");
+    }
+
+    #[test]
+    fn test_param_msx64_four() {
+        let out1 = Varnode::unique(0, 8);
+        let out2 = Varnode::unique(8, 8);
+        let out3 = Varnode::unique(16, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, out1, smallvec![rcx(), rdx()], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, out2, smallvec![r8(), r9()], 0x1004),
+            IrInsn::with_output(IrOp::IntAdd, out3, smallvec![out1, out2], 0x1008),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ParamInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.calling_convention, CallingConvention::MicrosoftX64);
+        assert_eq!(ssa.inferred_params.len(), 4);
+    }
+
+    // -------------------------------------------------------------------
+    // Return type inference tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_return_void() {
+        let insns = vec![];
+        let mut ssa = make_entry_block_ssa(insns);
+        ReturnTypeInferPass.run(&mut ssa).unwrap();
+
+        // No RAX write before RETURN → Unknown (void in C output)
+        assert_eq!(ssa.inferred_return_type, PrimitiveType::Unknown);
+    }
+
+    #[test]
+    fn test_return_int64() {
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, rax(), smallvec![rdi(), rsi()], 0x1000),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ReturnTypeInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_return_type, PrimitiveType::Int(8));
+    }
+
+    #[test]
+    fn test_return_int32() {
+        let eax = Varnode::reg(RAX, 4);
+        let edi = Varnode::reg(RDI, 4);
+        let esi = Varnode::reg(RSI, 4);
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, eax, smallvec![edi, esi], 0x1000),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ReturnTypeInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_return_type, PrimitiveType::Int(4));
+    }
+
+    #[test]
+    fn test_return_bool_from_comparison() {
+        let out = Varnode::reg(RAX, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntEqual, out, smallvec![rdi(), rsi()], 0x1000),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ReturnTypeInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_return_type, PrimitiveType::Bool);
+    }
+
+    #[test]
+    fn test_return_double_from_float_op() {
+        let xmm0_vn = Varnode::reg(XMM0, 16);
+        let xmm1_vn = Varnode::reg(xmm_offset(1), 16);
+        let insns = vec![
+            IrInsn::with_output(IrOp::FloatAdd, xmm0_vn, smallvec![xmm0_vn, xmm1_vn], 0x1000),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        ReturnTypeInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_return_type, PrimitiveType::Double);
     }
 }

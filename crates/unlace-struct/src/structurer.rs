@@ -41,6 +41,7 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
     }
 
     let mut body = ctx.structure_region(entry);
+    strip_unused_labels(&mut body);
     recover_for_loops(&mut body);
 
     Ok(HirFunction {
@@ -238,6 +239,12 @@ struct StructureCtx<'a> {
     next_label: u32,
     /// Synthetic blocks to skip (exit, unknown).
     synthetic: BTreeSet<BlockId>,
+    /// Blocks pre-identified as `goto` targets in irreducible CFG regions.
+    /// Populated in `new()`: any block with two-or-more real predecessors
+    /// that is not a loop header is a join point reachable from multiple
+    /// non-structured paths and gets a pre-allocated label so a `goto`
+    /// emitted later can refer to it.
+    goto_targets: BTreeSet<BlockId>,
 }
 
 impl<'a> StructureCtx<'a> {
@@ -259,6 +266,27 @@ impl<'a> StructureCtx<'a> {
             }
         }
 
+        // Pre-identify candidate `goto` targets: non-loop-header blocks with
+        // two or more real predecessors. These are the join points of
+        // irreducible CFG regions where the structurer's `if`/`while`
+        // patterns cannot encode all incoming control edges.
+        let mut goto_targets = BTreeSet::new();
+        for (&bid, _block) in &func.function.blocks {
+            if loop_headers.contains(&bid) {
+                continue;
+            }
+            let real_preds: Vec<BlockId> = func
+                .cfg
+                .edges_to(bid)
+                .into_iter()
+                .map(|(src, _)| src)
+                .filter(|src| !synthetic.contains(src))
+                .collect();
+            if real_preds.len() >= 2 {
+                goto_targets.insert(bid);
+            }
+        }
+
         Self {
             func,
             emitted: BTreeSet::new(),
@@ -267,6 +295,7 @@ impl<'a> StructureCtx<'a> {
             block_labels: BTreeMap::new(),
             next_label: 0,
             synthetic,
+            goto_targets,
         }
     }
 
@@ -289,7 +318,14 @@ impl<'a> StructureCtx<'a> {
         let mut current = Some(start);
 
         while let Some(bid) = current {
-            if self.emitted.contains(&bid) || self.synthetic.contains(&bid) {
+            if self.synthetic.contains(&bid) {
+                break;
+            }
+            if self.emitted.contains(&bid) {
+                if self.goto_targets.contains(&bid) {
+                    let label = self.alloc_label(bid);
+                    nodes.push(HirNode::Goto(label));
+                }
                 break;
             }
 
@@ -331,6 +367,12 @@ impl<'a> StructureCtx<'a> {
             return;
         }
         self.emitted.insert(bid);
+
+        // Pre-identified `goto` target → ensure a label is allocated before
+        // we emit this block's body, so any later `goto` can land here.
+        if self.goto_targets.contains(&bid) {
+            self.alloc_label(bid);
+        }
 
         // Emit label if this block was targeted by a goto.
         if let Some(&label) = self.block_labels.get(&bid) {
@@ -625,6 +667,12 @@ impl<'a> StructureCtx<'a> {
 
         // Emit pre-branch statements from the header.
         let mut pre_stmts = Vec::new();
+        if self.goto_targets.contains(&bid) {
+            self.alloc_label(bid);
+        }
+        if let Some(&label) = self.block_labels.get(&bid) {
+            pre_stmts.push(HirNode::Label(label));
+        }
         if let Some(block) = self.func.function.blocks.get(&bid) {
             for (i, insn) in block.insns.iter().enumerate() {
                 if self.is_frame_setup(bid, i) {
@@ -823,6 +871,13 @@ impl<'a> StructureCtx<'a> {
         }
         self.emitted.insert(bid);
 
+        if self.goto_targets.contains(&bid) {
+            self.alloc_label(bid);
+        }
+        if let Some(&label) = self.block_labels.get(&bid) {
+            nodes.push(HirNode::Label(label));
+        }
+
         let Some(block) = self.func.function.blocks.get(&bid) else {
             return;
         };
@@ -942,9 +997,16 @@ impl<'a> StructureCtx<'a> {
             if Some(bid) == stop {
                 break;
             }
-            if self.emitted.contains(&bid) || self.synthetic.contains(&bid) {
-                // Emit goto if needed.
-                if !self.synthetic.contains(&bid) && !self.emitted.contains(&bid) {
+            if self.synthetic.contains(&bid) {
+                break;
+            }
+            if self.emitted.contains(&bid) {
+                // Already-emitted target: candidate `goto` site. Only emit
+                // a goto when this block was pre-flagged as a goto target
+                // (irreducible CFG region: 2+ preds, not a loop header).
+                // For loop headers / structured joins, the existing
+                // structurer logic handles control transfer via while/break.
+                if self.goto_targets.contains(&bid) {
                     let label = self.alloc_label(bid);
                     nodes.push(HirNode::Goto(label));
                 }
@@ -1232,6 +1294,86 @@ fn is_scale_const(sv: &SsaVarnode) -> bool {
         return false;
     }
     matches!(sv.base.offset, 1 | 2 | 4 | 8)
+}
+
+/// Strip `Label` nodes whose `LabelId` has no corresponding `Goto` in the
+/// HIR tree. The structurer eagerly emits a label for every `goto_targets`
+/// block, but only blocks actually reached via an irreducible path get a
+/// matching `Goto`. Unreferenced labels would otherwise produce dead
+/// `LABEL_N:` lines in the C output.
+fn strip_unused_labels(nodes: &mut Vec<HirNode>) {
+    let mut used = BTreeSet::new();
+    collect_used_labels(nodes, &mut used);
+    remove_labels_not_in(nodes, &used);
+}
+
+fn collect_used_labels(nodes: &[HirNode], used: &mut BTreeSet<LabelId>) {
+    for n in nodes {
+        match n {
+            HirNode::Goto(label) => {
+                used.insert(*label);
+            }
+            HirNode::Block(inner) => collect_used_labels(inner, used),
+            HirNode::If { then_body, else_body, .. } => {
+                collect_used_labels(then_body, used);
+                if let Some(eb) = else_body {
+                    collect_used_labels(eb, used);
+                }
+            }
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                collect_used_labels(body, used);
+            }
+            HirNode::For { body, .. } => collect_used_labels(body, used),
+            HirNode::Switch { cases, default, .. } => {
+                for (_, b, _) in cases {
+                    collect_used_labels(b, used);
+                }
+                if let Some(d) = default {
+                    collect_used_labels(d, used);
+                }
+            }
+            HirNode::TryCatch { try_body, catch_body } => {
+                collect_used_labels(try_body, used);
+                collect_used_labels(catch_body, used);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn remove_labels_not_in(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
+    nodes.retain(|n| match n {
+        HirNode::Label(label) => used.contains(label),
+        _ => true,
+    });
+    for n in nodes.iter_mut() {
+        match n {
+            HirNode::Block(inner) => remove_labels_not_in(inner, used),
+            HirNode::If { then_body, else_body, .. } => {
+                remove_labels_not_in(then_body, used);
+                if let Some(eb) = else_body {
+                    remove_labels_not_in(eb, used);
+                }
+            }
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                remove_labels_not_in(body, used);
+            }
+            HirNode::For { body, .. } => remove_labels_not_in(body, used),
+            HirNode::Switch { cases, default, .. } => {
+                for (_, b, _) in cases {
+                    remove_labels_not_in(b, used);
+                }
+                if let Some(d) = default {
+                    remove_labels_not_in(d, used);
+                }
+            }
+            HirNode::TryCatch { try_body, catch_body } => {
+                remove_labels_not_in(try_body, used);
+                remove_labels_not_in(catch_body, used);
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Post-pass: convert eligible `[init; while (cond) { body; update }]` patterns
@@ -2923,5 +3065,249 @@ mod tests {
             "single return remains a single return: {:#?}",
             hir.body,
         );
+    }
+
+    fn count_gotos(nodes: &[HirNode]) -> usize {
+        nodes.iter().map(|n| match n {
+            HirNode::Goto(_) => 1,
+            HirNode::Block(inner) => count_gotos(inner),
+            HirNode::If { then_body, else_body, .. } => {
+                count_gotos(then_body)
+                    + else_body.as_ref().map_or(0, |eb| count_gotos(eb))
+            }
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => count_gotos(body),
+            HirNode::Switch { cases, default, .. } => {
+                cases.iter().map(|(_, b, _)| count_gotos(b)).sum::<usize>()
+                    + default.as_ref().map_or(0, |d| count_gotos(d))
+            }
+            HirNode::TryCatch { try_body, catch_body } => {
+                count_gotos(try_body) + count_gotos(catch_body)
+            }
+            HirNode::For { body, .. } => count_gotos(body),
+            _ => 0,
+        }).sum()
+    }
+
+    fn count_labels(nodes: &[HirNode]) -> usize {
+        nodes.iter().map(|n| match n {
+            HirNode::Label(_) => 1,
+            HirNode::Block(inner) => count_labels(inner),
+            HirNode::If { then_body, else_body, .. } => {
+                count_labels(then_body)
+                    + else_body.as_ref().map_or(0, |eb| count_labels(eb))
+            }
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => count_labels(body),
+            HirNode::Switch { cases, default, .. } => {
+                cases.iter().map(|(_, b, _)| count_labels(b)).sum::<usize>()
+                    + default.as_ref().map_or(0, |d| count_labels(d))
+            }
+            HirNode::TryCatch { try_body, catch_body } => {
+                count_labels(try_body) + count_labels(catch_body)
+            }
+            HirNode::For { body, .. } => count_labels(body),
+            _ => 0,
+        }).sum()
+    }
+
+    /// P6-5 regression: a clean diamond CFG (BB0 → BB1/BB2 → BB3 → return)
+    /// must NOT emit any goto/label. This ensures the new goto-emission path
+    /// doesn't fire on every multi-pred join point — only irreducible ones.
+    #[test]
+    fn test_no_goto_for_clean_diamond() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("clean_diamond", BlockId(0), 0xC0000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(cbranch_insn(cond_vn, 0xC0000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0xC0010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0xC0018));
+        bb1.successors = smallvec![BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r8, c2], 0xC0020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0xC0028));
+        bb2.successors = smallvec![BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0xC0030));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        assert_eq!(
+            count_gotos(&hir.body),
+            0,
+            "clean diamond must not emit any goto: {:#?}",
+            hir.body,
+        );
+        assert_eq!(
+            count_labels(&hir.body),
+            0,
+            "clean diamond must not emit any label: {:#?}",
+            hir.body,
+        );
+    }
+
+    /// P6-5: an irreducible CFG (two predecessors entering a non-loop-header
+    /// join along independent paths that have already been linearized) must
+    /// emit at least one goto + label pair. Construct: BB0 → BB1 → BB3,
+    /// BB0 → BB2 → BB3, then BB3's other predecessor is reached via a path
+    /// the structurer cannot express with `if`/`while`. We force this by
+    /// having BB3 reachable via BB1 *and* via a back-edge BB2 → BB1
+    /// (creating an irreducible component).
+    #[test]
+    fn test_goto_emitted_for_irreducible_cycle() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("irreducible_goto", BlockId(0), 0xD0000);
+
+        // BB0: cbranch → BB1 / BB2 (both enter the irreducible loop)
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(cbranch_insn(cond_vn, 0xD0000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        // BB1: arith, cbranch → BB2 / BB3
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0xD0010));
+        bb1.insns.push(cbranch_insn(cond_vn, 0xD0018));
+        bb1.successors = smallvec![BlockId(2), BlockId(3)];
+
+        // BB2: arith, cbranch → BB1 / BB3 (BB2 → BB1 makes BB1 multi-entry)
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r0, c1], 0xD0020));
+        bb2.insns.push(cbranch_insn(cond_vn, 0xD0028));
+        bb2.successors = smallvec![BlockId(1), BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0xD0030));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("irreducible CFG must not panic");
+
+        let gotos = count_gotos(&hir.body);
+        let labels = count_labels(&hir.body);
+        assert!(
+            gotos >= 1,
+            "irreducible CFG must emit at least one goto, got {gotos}: {:#?}",
+            hir.body,
+        );
+        assert!(
+            labels >= 1,
+            "irreducible CFG must emit a matching label, got {labels}: {:#?}",
+            hir.body,
+        );
+    }
+
+    /// P6-5: every emitted goto must have a matching label in the same HIR
+    /// tree. Otherwise a downstream C-printer would produce code that
+    /// references an undefined label.
+    #[test]
+    fn test_goto_label_pairs_match() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("paired_goto_label", BlockId(0), 0xE0000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(cbranch_insn(cond_vn, 0xE0000));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0xE0010));
+        bb1.insns.push(cbranch_insn(cond_vn, 0xE0018));
+        bb1.successors = smallvec![BlockId(2), BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(arith_insn(r0, &[r0, c1], 0xE0020));
+        bb2.insns.push(cbranch_insn(cond_vn, 0xE0028));
+        bb2.successors = smallvec![BlockId(1), BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0xE0030));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn collect_label_ids(nodes: &[HirNode], labels: &mut BTreeSet<u32>) {
+            for n in nodes {
+                match n {
+                    HirNode::Label(LabelId(id)) => {
+                        labels.insert(*id);
+                    }
+                    HirNode::Block(inner) => collect_label_ids(inner, labels),
+                    HirNode::If { then_body, else_body, .. } => {
+                        collect_label_ids(then_body, labels);
+                        if let Some(eb) = else_body {
+                            collect_label_ids(eb, labels);
+                        }
+                    }
+                    HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                        collect_label_ids(body, labels);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        fn collect_goto_ids(nodes: &[HirNode], gotos: &mut BTreeSet<u32>) {
+            for n in nodes {
+                match n {
+                    HirNode::Goto(LabelId(id)) => {
+                        gotos.insert(*id);
+                    }
+                    HirNode::Block(inner) => collect_goto_ids(inner, gotos),
+                    HirNode::If { then_body, else_body, .. } => {
+                        collect_goto_ids(then_body, gotos);
+                        if let Some(eb) = else_body {
+                            collect_goto_ids(eb, gotos);
+                        }
+                    }
+                    HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                        collect_goto_ids(body, gotos);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut labels = BTreeSet::new();
+        let mut gotos = BTreeSet::new();
+        collect_label_ids(&hir.body, &mut labels);
+        collect_goto_ids(&hir.body, &mut gotos);
+
+        for goto_id in &gotos {
+            assert!(
+                labels.contains(goto_id),
+                "goto {goto_id} has no matching label; labels={labels:?}, gotos={gotos:?}, hir={:#?}",
+                hir.body,
+            );
+        }
     }
 }

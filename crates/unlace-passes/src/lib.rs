@@ -26,6 +26,7 @@ pub mod tail_call;
 pub mod type_infer;
 pub mod variable_merge;
 pub mod rust_vtable;
+pub mod cpp_vtable;
 
 pub use pass::{Pass, PassError, run_to_fixedpoint};
 pub use calling_convention::{CallingConventionDetectPass, ParamInferPass, ReturnTypeInferPass};
@@ -51,6 +52,7 @@ pub use stack_vars::StackVarRecoveryPass;
 pub use tail_call::TailCallDetectPass;
 pub use variable_merge::VariableMergePass;
 pub use rust_vtable::RustVtablePass;
+pub use cpp_vtable::CppVtablePass;
 
 #[cfg(test)]
 mod tests {

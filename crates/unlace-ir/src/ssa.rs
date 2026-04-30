@@ -239,6 +239,10 @@ pub struct SsaFunction {
     /// Keyed by `(BlockId, insn_index)` of the `CALLIND` instruction.
     /// Populated by [`RustVtablePass`](https://docs.rs/unlace-passes).
     pub vtable_calls: BTreeMap<(BlockId, usize), VtableCallInfo>,
+    /// Indirect calls resolved as C++ virtual method dispatches.
+    /// Pattern: `CALLIND(LOAD(LOAD(this + 0) + N))` — vptr at offset 0.
+    /// Populated by `CppVtablePass`.
+    pub cpp_vtable_calls: BTreeMap<(BlockId, usize), VtableCallInfo>,
     /// Inferred function parameters from calling convention register usage.
     /// Each entry is `(name, type)` — e.g. `("a1", PrimitiveType::Int(8))`.
     /// Populated by [`ParamInferPass`](https://docs.rs/unlace-passes).
@@ -326,6 +330,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         enum_discriminants: Vec::new(),
         panic_sites: BTreeMap::new(),
         vtable_calls: BTreeMap::new(),
+        cpp_vtable_calls: BTreeMap::new(),
         inferred_params: Vec::new(),
         inferred_return_type: PrimitiveType::Unknown,
         frame_setup_insns: BTreeSet::new(),

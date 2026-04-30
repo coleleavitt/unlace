@@ -19,6 +19,20 @@
 //! - `INT_CARRY(v, 0)` → `COPY 0` (carry of zero)
 //! - `INT_AND(INT_RIGHT(x, N*8), (1<<(K*8))-1)` → `SUBPIECE(x, N)` (byte extraction)
 //! - `INT_AND(x, (1<<(K*8))-1)` → `SUBPIECE(x, 0)` (low-byte extraction)
+//! - `INT_2COMP(INT_2COMP(x))` → `x` (double negation)
+//! - `INT_NEGATE(INT_NEGATE(x))` → `x` (double bitwise NOT)
+//! - `(x + a) - a → x`, `(x - a) + a → x` (additive cancellation)
+//! - `(x op a) op b → x op (a*b)` for `+`, `*` constant fold
+//! - `x + (-y) → x - y`, `x - (-y) → x + y` (negation absorption)
+//! - `x * 2^n → x << n`, `x / 2^n → x >> n`, `x % 2^n → x & (2^n-1)` (strength reduction; unsigned div/rem only)
+//! - `(x ^ y) ^ y → x` (XOR cancellation)
+//! - `x | (x & y) → x`, `x & (x | y) → x` (absorption)
+//! - `x & ~x → 0`, `x | ~x → all_ones`
+//! - `~(x - 1) → -x`
+//! - `(x << n) >> n → x & ((1 << (bits-n)) - 1)` (shift round-trip)
+//! - `INT_SEXT(INT_SEXT(x))` → `INT_SEXT(x)` (chained sign extension)
+//! - `INT_ZEXT(INT_ZEXT(x))` → `INT_ZEXT(x)` (chained zero extension)
+//! - `SUBPIECE(ZEXT/SEXT(x), 0)` with output size ≤ source size → `COPY x` or `SUBPIECE(x, 0)`
 //!
 //! Iterates internally to a fixed point.
 
@@ -528,6 +542,40 @@ fn try_shift_round_trip(
     ))
 }
 
+fn try_subpiece_simplify(
+    insn: &IrInsn,
+    a: &Varnode,
+    b: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    let output = insn.output?;
+    if b.space != SpaceId::Const || b.offset != 0 {
+        return None;
+    }
+    let def = def_of(a, def_map)?;
+    if def.inputs.len() != 1 {
+        return None;
+    }
+    if !matches!(def.op, IrOp::IntZext | IrOp::IntSext) {
+        return None;
+    }
+    let source = def.inputs[0];
+
+    if (output.size as u64) > (source.size as u64) {
+        return None;
+    }
+
+    if output.size == source.size {
+        return Some(make_copy(insn, source));
+    }
+
+    Some(make_replacement(
+        insn,
+        IrOp::Subpiece,
+        smallvec::smallvec![source, Varnode::constant(0, 4)],
+    ))
+}
+
 fn try_recognize_unary(
     insn: &IrInsn,
     _output: Varnode,
@@ -556,6 +604,24 @@ fn try_recognize_unary(
                         smallvec::smallvec![x],
                     ));
                 }
+            }
+        }
+        IrOp::IntSext => {
+            if let Some(x) = def_unary(&inner, IrOp::IntSext, def_map) {
+                return Some(make_replacement(
+                    insn,
+                    IrOp::IntSext,
+                    smallvec::smallvec![x],
+                ));
+            }
+        }
+        IrOp::IntZext => {
+            if let Some(x) = def_unary(&inner, IrOp::IntZext, def_map) {
+                return Some(make_replacement(
+                    insn,
+                    IrOp::IntZext,
+                    smallvec::smallvec![x],
+                ));
             }
         }
         _ => {}
@@ -738,6 +804,8 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
                 None
             }
         }
+
+        IrOp::Subpiece => try_subpiece_simplify(insn, &a, &b, def_map),
 
         _ => None,
     }
@@ -1874,5 +1942,132 @@ mod tests {
         assert_eq!(block.insns[1].inputs[0], v0);
         assert_eq!(block.insns[1].inputs[1].space, SpaceId::Const);
         assert_eq!(block.insns[1].inputs[1].offset, 0);
+    }
+
+    #[test]
+    fn test_idiom_chained_sign_extension() {
+        let r0 = Varnode::reg(0, 1);
+        let v1 = Varnode::unique(0, 4);
+        let v2 = Varnode::unique(8, 8);
+
+        let s1 = IrInsn::with_output(IrOp::IntSext, v1, smallvec![r0], 0x1000);
+        let s2 = IrInsn::with_output(IrOp::IntSext, v2, smallvec![v1], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![s1, s2]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[1].op, IrOp::IntSext);
+        assert_eq!(block.insns[1].inputs[0], r0);
+        assert_eq!(block.insns[1].output.expect("has output").size, 8);
+    }
+
+    #[test]
+    fn test_idiom_chained_zero_extension() {
+        let r0 = Varnode::reg(0, 1);
+        let v1 = Varnode::unique(0, 4);
+        let v2 = Varnode::unique(8, 8);
+
+        let z1 = IrInsn::with_output(IrOp::IntZext, v1, smallvec![r0], 0x1000);
+        let z2 = IrInsn::with_output(IrOp::IntZext, v2, smallvec![v1], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![z1, z2]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[1].op, IrOp::IntZext);
+        assert_eq!(block.insns[1].inputs[0], r0);
+        assert_eq!(block.insns[1].output.expect("has output").size, 8);
+    }
+
+    #[test]
+    fn test_idiom_subpiece_of_zext_to_copy() {
+        let r0 = Varnode::reg(0, 4);
+        let zext = Varnode::unique(0, 8);
+        let out = Varnode::unique(8, 4);
+
+        let z = IrInsn::with_output(IrOp::IntZext, zext, smallvec![r0], 0x1000);
+        let s = IrInsn::with_output(
+            IrOp::Subpiece,
+            out,
+            smallvec![zext, Varnode::constant(0, 4)],
+            0x1004,
+        );
+
+        let mut ssa = make_single_block_ssa(vec![z, s]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[1].op, IrOp::Copy);
+        assert_eq!(block.insns[1].inputs[0], r0);
+    }
+
+    #[test]
+    fn test_idiom_subpiece_of_sext_to_copy() {
+        let r0 = Varnode::reg(0, 4);
+        let sext = Varnode::unique(0, 8);
+        let out = Varnode::unique(8, 4);
+
+        let s1 = IrInsn::with_output(IrOp::IntSext, sext, smallvec![r0], 0x1000);
+        let s2 = IrInsn::with_output(
+            IrOp::Subpiece,
+            out,
+            smallvec![sext, Varnode::constant(0, 4)],
+            0x1004,
+        );
+
+        let mut ssa = make_single_block_ssa(vec![s1, s2]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[1].op, IrOp::Copy);
+        assert_eq!(block.insns[1].inputs[0], r0);
+    }
+
+    #[test]
+    fn test_idiom_subpiece_of_zext_smaller_to_subpiece() {
+        let r0 = Varnode::reg(0, 4);
+        let zext = Varnode::unique(0, 8);
+        let out = Varnode::unique(8, 2);
+
+        let z = IrInsn::with_output(IrOp::IntZext, zext, smallvec![r0], 0x1000);
+        let s = IrInsn::with_output(
+            IrOp::Subpiece,
+            out,
+            smallvec![zext, Varnode::constant(0, 4)],
+            0x1004,
+        );
+
+        let mut ssa = make_single_block_ssa(vec![z, s]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[1].op, IrOp::Subpiece);
+        assert_eq!(block.insns[1].inputs[0], r0);
+        assert_eq!(block.insns[1].inputs[1].offset, 0);
+    }
+
+    #[test]
+    fn test_idiom_subpiece_of_zext_with_nonzero_offset_no_match() {
+        let r0 = Varnode::reg(0, 4);
+        let zext = Varnode::unique(0, 8);
+        let out = Varnode::unique(8, 4);
+
+        let z = IrInsn::with_output(IrOp::IntZext, zext, smallvec![r0], 0x1000);
+        let s = IrInsn::with_output(
+            IrOp::Subpiece,
+            out,
+            smallvec![zext, Varnode::constant(4, 4)],
+            0x1004,
+        );
+
+        let mut ssa = make_single_block_ssa(vec![z, s]);
+        let changed = IdiomRecognitionPass.run(&mut ssa).expect("pass should succeed");
+        assert!(!changed);
     }
 }

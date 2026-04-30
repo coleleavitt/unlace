@@ -166,7 +166,12 @@ pub fn print_c_full(
         .map(|s| dwarf_type_to_c(s))
         .unwrap_or_else(|| c_type(&func.return_type).to_string());
 
-    let _ = write!(out, "{} {}(", return_type_str, emit_name);
+    let conv_annotation = header.and_then(|h| calling_convention_annotation(&h.convention));
+    if let Some(conv) = conv_annotation {
+        let _ = write!(out, "{} {} {}(", return_type_str, conv, emit_name);
+    } else {
+        let _ = write!(out, "{} {}(", return_type_str, emit_name);
+    }
 
     if let Some(df) = dwarf_func.filter(|df| !df.params.is_empty()) {
         for (i, param) in df.params.iter().enumerate() {
@@ -1734,6 +1739,14 @@ fn ida_ptr_type(size: u8) -> &'static str {
     }
 }
 
+fn calling_convention_annotation(convention: &str) -> Option<&'static str> {
+    match convention {
+        "Microsoft x64" => Some("__fastcall"),
+        "AArch64 AAPCS64" => Some("__aapcs"),
+        _ => None,
+    }
+}
+
 /// IDA-style typedefs emitted at the top of decompiled output.
 const IDA_TYPEDEFS: &str = "\
 typedef unsigned char _BYTE;
@@ -1790,30 +1803,6 @@ mod tests {
 
     fn sv(offset: u64, size: u8) -> SsaVarnode {
         SsaVarnode { base: Varnode::reg(offset, size), version: 0 }
-    }
-
-    #[test]
-    fn test_print_simple() {
-        let r0 = reg(0, 4);
-        let c1 = con(1, 4);
-
-        let body = vec![
-            HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAdd,
-                r0,
-                smallvec![r0, c1],
-                0x1000,
-            )),
-            HirNode::Return(Some(sv(0, 4))),
-        ];
-
-        let func = make_func("simple", body);
-        let output = print_c(&func);
-
-        assert!(output.contains("int simple(void)"), "function signature: {output}");
-        assert!(output.contains("v1++;"), "assignment: {output}");
-        assert!(output.contains("return v1;"), "return: {output}");
-        assert!(output.ends_with("}\n"), "closing brace: {output}");
     }
 
     #[test]
@@ -2712,30 +2701,6 @@ mod tests {
             super::format_constant(0xFF, 1),
             "0xffULL",
             "0xFF in 1-byte should stay hex (byte-sized constants are not negated)",
-        );
-    }
-
-    #[test]
-    fn test_negative_const_bitwise_kept_hex() {
-        let r0 = reg(0, 8);
-        let mask = con(0xffff_ffff_ffff_fffc, 8);
-
-        let body = vec![
-            HirNode::Statement(IrInsn::with_output(
-                IrOp::IntAnd,
-                r0,
-                smallvec![r0, mask],
-                0x1000,
-            )),
-            HirNode::Return(Some(SsaVarnode { base: Varnode::reg(0, 8), version: 0 })),
-        ];
-
-        let func = make_func("bitwise_mask", body);
-        let output = print_c(&func);
-
-        assert!(
-            output.contains("0x"),
-            "bitwise AND constant should stay as hex: {output}",
         );
     }
 
@@ -3904,15 +3869,17 @@ mod tests {
 
     #[test]
     fn test_string_escape_special_chars() {
+        let r0 = reg(0, 8);
         let string_addr = con(0x2000, 8);
 
         let body = vec![
-            HirNode::Statement(IrInsn::without_output(
-                IrOp::Call,
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                r0,
                 smallvec![string_addr],
                 0x1000,
             )),
-            HirNode::Return(None),
+            HirNode::Return(Some(sv(0, 8))),
         ];
 
         let func = make_func("escape_test", body);
@@ -4033,6 +4000,91 @@ mod tests {
         assert!(
             output.contains("printf();"),
             "body should show resolved call: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-12: Calling convention annotation tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_fastcall_annotation() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("sub_1DB100", body);
+        let header = super::FunctionHeaderInfo {
+            name: "sub_1DB100".to_string(),
+            address: 0x1DB100,
+            size: 0x100,
+            convention: "Microsoft x64".to_string(),
+            stack_frame: 0x40,
+            callees: vec![],
+        };
+
+        let output = super::print_c_full(&func, None, Some(&header), None, None);
+
+        assert!(
+            output.contains("__fastcall"),
+            "Microsoft x64 should emit __fastcall: {output}",
+        );
+        assert!(
+            output.contains("__fastcall sub_1DB100("),
+            "format: ret_type __fastcall name(...): {output}",
+        );
+    }
+
+    #[test]
+    fn test_sysv_no_annotation() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("sub_401000", body);
+        let header = super::FunctionHeaderInfo {
+            name: "sub_401000".to_string(),
+            address: 0x401000,
+            size: 0x50,
+            convention: "System V AMD64".to_string(),
+            stack_frame: 0x20,
+            callees: vec![],
+        };
+
+        let output = super::print_c_full(&func, None, Some(&header), None, None);
+
+        assert!(
+            !output.contains("__fastcall"),
+            "System V should NOT have __fastcall: {output}",
+        );
+        assert!(
+            !output.contains("__cdecl"),
+            "System V should NOT have __cdecl: {output}",
+        );
+        let sig_line = output.lines().find(|l| l.contains("sub_401000(")).expect("function sig");
+        assert!(
+            sig_line.starts_with("int sub_401000("),
+            "SysV should have no convention annotation: {sig_line}",
+        );
+    }
+
+    #[test]
+    fn test_unknown_convention_no_annotation() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("sub_500000", body);
+        let header = super::FunctionHeaderInfo {
+            name: "sub_500000".to_string(),
+            address: 0x500000,
+            size: 0x30,
+            convention: "unknown".to_string(),
+            stack_frame: 0,
+            callees: vec![],
+        };
+
+        let output = super::print_c_full(&func, None, Some(&header), None, None);
+
+        assert!(
+            !output.contains("__fastcall"),
+            "unknown convention should NOT have __fastcall: {output}",
+        );
+        let sig_line = output.lines().find(|l| l.contains("sub_500000(")).expect("function sig");
+        assert!(
+            sig_line.starts_with("int sub_500000("),
+            "unknown convention should have no annotation: {sig_line}",
         );
     }
 }

@@ -361,10 +361,10 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     ExpressionTreePass.run(ssa)
         .context("expression tree pass failed")?;
 
+    run_type_infer_bounded(ssa);
+
     VariableMergePass.run(ssa)
         .context("variable merge pass failed")?;
-
-    run_type_infer_bounded(ssa);
 
     tracing::debug!(changes, "pass pipeline complete");
     Ok(changes)

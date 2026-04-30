@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BasicBlock, BlockId, Function, IrOp, Lifter};
-use unlace_loader::{BinaryImage, SymbolKind};
+use unlace_loader::{BinaryImage, DwarfInfo, SymbolKind};
 use unlace_passes::{
     ConstantFoldPass, CopyPropagationPass, DeadCodeElimPass, ExpressionTreePass, VariableMergePass, Pass,
     run_to_fixedpoint,
@@ -465,6 +465,7 @@ pub fn decompile_function(
     entry: &FunctionEntry,
     emit: EmitFormat,
     config: &PipelineConfig,
+    dwarf: Option<&DwarfInfo>,
 ) -> Result<String> {
     let deadline = Instant::now() + config.timeout;
 
@@ -483,7 +484,7 @@ pub fn decompile_function(
 
     check_timeout(deadline, &entry.name)?;
 
-    emit_output(emit, &ssa)
+    emit_output(emit, &ssa, dwarf)
 }
 
 fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
@@ -496,6 +497,7 @@ fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
 pub fn emit_output(
     format: EmitFormat,
     ssa: &SsaFunction,
+    dwarf: Option<&DwarfInfo>,
 ) -> Result<String> {
     match format {
         EmitFormat::Ir => Ok(unlace_output::dump_ir(ssa)),
@@ -504,7 +506,7 @@ pub fn emit_output(
             let mut hir = unlace_struct::structure(ssa)
                 .context("control-flow structuring failed")?;
             unlace_struct::ternary_recovery(&mut hir);
-            Ok(unlace_output::print_c(&hir))
+            Ok(unlace_output::print_c_with_dwarf(&hir, dwarf))
         }
     }
 }

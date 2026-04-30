@@ -1345,5 +1345,35 @@ mod tests {
         let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
         assert_eq!(co.inputs[2].offset, crate::register_file::ST3);
     }
+
+    #[test]
+    fn test_lift_x87_sequence_no_unimplemented() {
+        // Synthetic prologue/body of an x87-using function — every instruction
+        // should reach a recognised handler (no Unimplemented residue).
+        let stream: &[(&str, &[u8])] = &[
+            ("fld dword [rax]",  &[0xD9, 0x00]),
+            ("fld st(1)",        &[0xD9, 0xC1]),
+            ("fmul st0,st0",     &[0xD8, 0xC8]),
+            ("fxch st1",         &[0xD9, 0xC9]),
+            ("faddp st1,st0",    &[0xDE, 0xC1]),
+            ("fmulp st1,st0",    &[0xDE, 0xC9]),
+            ("fsub st0,st1",     &[0xD8, 0xE1]),
+            ("fdivr st0,st1",    &[0xD8, 0xF9]),
+            ("fcom st1",         &[0xD8, 0xD1]),
+            ("fcompp",           &[0xDE, 0xD9]),
+            ("fstp qword [rax]", &[0xDD, 0x18]),
+            ("fst st2",          &[0xDD, 0xD2]),
+        ];
+
+        let l = lifter();
+        for (label, bytes) in stream {
+            let lifted = l.lift_insn(bytes, 0x1000)
+                .unwrap_or_else(|e| panic!("{label}: lift failed: {e:?}"));
+            let unimpl = lifted.ir_ops.iter().filter(|i| i.op == IrOp::Unimplemented).count();
+            assert_eq!(unimpl, 0, "{label}: emitted Unimplemented");
+            let callother = lifted.ir_ops.iter().filter(|i| i.op == IrOp::Callother).count();
+            assert!(callother > 0, "{label}: no Callother emitted");
+        }
+    }
 }
 

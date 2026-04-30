@@ -416,3 +416,21 @@
 - Capstone's `insn_detail().arch_detail().arm64().cc()` provides the condition code for B.cond instructions (both B and B.cond have `ARM64_INS_B` as their ID).
 - STP/LDP pair instructions: capstone reports operands as [reg1, reg2, mem]. Second store/load at base+size offset.
 - The `Arm64Insn::from(insn.id().0)` conversion maps capstone instruction IDs to the typed enum.
+
+## Task 30: PowerPC PPC64 Lifter via Capstone
+- Capstone PPC Mode64 with big-endian: `Capstone::new().ppc().mode(ArchMode::Mode64).endian(Endian::Big).detail(true).build()`.
+- Capstone `Capstone` is `!Send + !Sync` (same as ARM task 26) — must create per `lift_insn` call, not store in struct.
+- PPC register IDs: r0=87..r31=118 (contiguous), LR=5, CTR=3, CR0=12..CR7=19 in capstone-sys.
+- `PpcOperand` variants: `Reg(RegId)`, `Imm(i64)`, `Mem(PpcOpMem { base: RegId, disp: i32 })`, `Crx(PpcOpCrx)`, `Invalid`.
+- Capstone aliases SPR instructions: `mflr r3` decodes as `PPC_INS_MFLR` (not `PPC_INS_MFSPR`), with only 1 operand (the GPR). Similarly `mtlr`→`PPC_INS_MTLR`, `mfctr`→`PPC_INS_MFCTR`, `mtctr`→`PPC_INS_MTCTR`.
+- `PpcInsn::PPC_INS_NOP` corresponds to `ori r0, r0, 0` (0x60000000). Capstone recognizes this as a distinct instruction ID.
+- `PpcInsn::PPC_INS_SUB` is a simplified mnemonic (rD = rA - rB); `PPC_INS_SUBF` is the real instruction (rD = rB - rA, reversed operands). Both need handling.
+- `PpcInsn::PPC_INS_MR` is the `or rA, rS, rS` alias. Capstone decodes it as a separate instruction ID.
+- CMPW/CMPLW: capstone may emit 2 or 3 operands depending on whether CR field is explicit or CR0 is implied.
+- LIS/ADDIS shift the 16-bit immediate left by 16 before use. LI is just ADDI with rA=0.
+- PPC is fixed-width 4-byte instruction set; `bytes.len() < 4` → `LiftError::ShortBuffer`.
+- LWZ (load word and zero) requires `IntZext` from 4→8 bytes; LD loads full 8 bytes directly.
+- STW requires `Subpiece` to truncate 8→4 bytes before storing; STD stores full 8 bytes.
+- BL writes return address (addr+4) to LR before calling; BLR returns via LR; BCTR branches indirect via CTR.
+- BC (conditional branch) CR field decoding is complex; simplified with placeholder condition for now — full CR bit extraction deferred.
+- `DetailsArchInsn` trait must be imported for `.operands()` on `PpcInsnDetail`.

@@ -1,0 +1,35 @@
+P2-14: Tail Call Detection
+==========================
+
+Implementation Summary:
+- Created crates/unlace-passes/src/tail_call.rs with TailCallDetectPass
+- Added tail_call_map: BTreeMap<BlockId, u64> to SsaFunction (ssa.rs)
+- Added HirNode::TailCall { target: u64 } variant to HIR (hir.rs)
+- Updated structurer to emit TailCall nodes when a block has a tail call annotation
+- Updated C printer to render tail calls as return ((unsigned long long (*)(void))0xaddr)();
+
+Detection Logic:
+- For each block, check if the last instruction is IrOp::Branch
+- Check if the branch target (first input, SpaceId::Const) is outside the function range
+- Function range: [func.addr, max_insn_addr] where max_insn_addr is the highest IrInsn.addr
+- If outside range: insert into tail_call_map as (BlockId -> target address)
+
+Tests (4):
+- test_tail_call_detected: BRANCH to 0x5000 from func at 0x1000 -> detected
+- test_normal_branch_not_tail_call: BRANCH to 0x1010 within func range -> NOT detected
+- test_cbranch_not_detected: CBRANCH is conditional, not a tail call
+- test_return_not_detected: RETURN instruction is not a tail call
+
+Verification:
+- cargo test -p unlace-passes -- tail_call: 4/4 pass
+- cargo test --workspace: 714 passed, 0 failed
+- cargo xtask lint-determinism: OK (no HashMap/HashSet)
+- cargo build --workspace: success
+
+Files Modified:
+- crates/unlace-ir/src/ssa.rs (added tail_call_map field + initialization)
+- crates/unlace-passes/src/tail_call.rs (NEW - TailCallDetectPass + 4 tests)
+- crates/unlace-passes/src/lib.rs (added module + re-export)
+- crates/unlace-struct/src/hir.rs (added HirNode::TailCall variant)
+- crates/unlace-struct/src/structurer.rs (emit TailCall for tail-call blocks)
+- crates/unlace-output/src/c_printer.rs (render TailCall as return cast-call)

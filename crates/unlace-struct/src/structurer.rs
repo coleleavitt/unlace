@@ -167,7 +167,12 @@ impl<'a> StructureCtx<'a> {
         for (i, insn) in block.insns.iter().enumerate() {
             match insn.op {
                 // Skip control-flow terminators — they're handled structurally.
-                IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
+                IrOp::Branch => {
+                    if let Some(&target) = self.func.tail_call_map.get(&bid) {
+                        nodes.push(HirNode::TailCall { target });
+                    }
+                }
+                IrOp::Cbranch | IrOp::Branchind => continue,
                 IrOp::Return => {
                     let ret_val = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0));
                     nodes.push(HirNode::Return(ret_val));
@@ -594,7 +599,12 @@ impl<'a> StructureCtx<'a> {
 
         for (i, insn) in block.insns.iter().enumerate() {
             match insn.op {
-                IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
+                IrOp::Branch => {
+                    if let Some(&target) = self.func.tail_call_map.get(&bid) {
+                        nodes.push(HirNode::TailCall { target });
+                    }
+                }
+                IrOp::Cbranch | IrOp::Branchind => continue,
                 IrOp::Return => {
                     let ret_val = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0));
                     nodes.push(HirNode::Return(ret_val));

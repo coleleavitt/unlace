@@ -878,4 +878,220 @@ mod tests {
         assert_eq!(highlow.addr, image_base + page_rva + 0x200);
         assert_eq!(highlow.kind, RelocKind::Relative);
     }
+
+    /// Build a PE32+ binary with `.pdata`, `.xdata`, `.rdata` sections containing:
+    /// - 1 RUNTIME_FUNCTION entry in .pdata (exception directory)
+    /// - 1 UNWIND_INFO record with 1 unwind code in .xdata
+    /// - 1 IMAGE_DEBUG_DIRECTORY with CodeView RSDS record in .rdata
+    /// - 1 minimal IMAGE_LOAD_CONFIG_DIRECTORY64 in .rdata
+    fn pe64_with_pdata_and_debug() -> Vec<u8> {
+        // ---- Layout constants ----
+        let nt: usize = 0x80;
+        let opt_hdr_size: u16 = 112 + 16 * 8; // 240 bytes (PE32+ base + 16 data dirs)
+        let oh = nt + 24;
+        let sh = oh + opt_hdr_size as usize; // section headers start
+        let section_count: u16 = 4;
+        let _section_table_end = sh + (section_count as usize) * 40;
+
+        // File offsets (FileAlignment = 0x200)
+        let headers_end: u32 = 0x400; // covers NT + optional + 4 section headers
+        let text_foff: u32 = 0x400;
+        let pdata_foff: u32 = 0x600;
+        let xdata_foff: u32 = 0x800;
+        let rdata_foff: u32 = 0xA00;
+        let total_size: u32 = rdata_foff + 0x200; // 0xC00 = 3072 bytes
+
+        // RVAs (SectionAlignment = 0x1000)
+        let text_rva: u32 = 0x1000;
+        let pdata_rva: u32 = 0x2000;
+        let xdata_rva: u32 = 0x3000;
+        let rdata_rva: u32 = 0x4000;
+
+        let mut buf = vec![0u8; total_size as usize];
+
+        // ---- DOS Header ----
+        buf[0] = b'M';
+        buf[1] = b'Z';
+        buf[0x3C..0x40].copy_from_slice(&(nt as u32).to_le_bytes());
+
+        // ---- PE Signature ----
+        buf[nt..nt + 4].copy_from_slice(&[b'P', b'E', 0, 0]);
+
+        // ---- COFF File Header (20 bytes) ----
+        let fh = nt + 4;
+        buf[fh..fh + 2].copy_from_slice(&pe::IMAGE_FILE_MACHINE_AMD64.to_le_bytes());
+        buf[fh + 2..fh + 4].copy_from_slice(&section_count.to_le_bytes());
+        buf[fh + 16..fh + 18].copy_from_slice(&opt_hdr_size.to_le_bytes());
+        buf[fh + 18..fh + 20].copy_from_slice(&pe::IMAGE_FILE_EXECUTABLE_IMAGE.to_le_bytes());
+
+        // ---- Optional Header (PE32+, 240 bytes) ----
+        buf[oh..oh + 2].copy_from_slice(&pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC.to_le_bytes());
+        // AddressOfEntryPoint
+        buf[oh + 16..oh + 20].copy_from_slice(&text_rva.to_le_bytes());
+        // ImageBase
+        let image_base: u64 = 0x0040_0000;
+        buf[oh + 24..oh + 32].copy_from_slice(&image_base.to_le_bytes());
+        // SectionAlignment
+        buf[oh + 32..oh + 36].copy_from_slice(&0x1000u32.to_le_bytes());
+        // FileAlignment
+        buf[oh + 36..oh + 40].copy_from_slice(&0x200u32.to_le_bytes());
+        // SizeOfImage (last section RVA + aligned size)
+        buf[oh + 56..oh + 60].copy_from_slice(&0x5000u32.to_le_bytes());
+        // SizeOfHeaders
+        buf[oh + 60..oh + 64].copy_from_slice(&headers_end.to_le_bytes());
+        // NumberOfRvaAndSizes
+        buf[oh + 108..oh + 112].copy_from_slice(&16u32.to_le_bytes());
+
+        // ---- Data Directories (16 × 8 bytes at oh+112) ----
+        let dirs = oh + 112;
+
+        // [3] IMAGE_DIRECTORY_ENTRY_EXCEPTION → .pdata
+        let pdata_dir_size: u32 = 12; // 1 RUNTIME_FUNCTION = 12 bytes
+        let exc_dir = dirs + pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION * 8;
+        buf[exc_dir..exc_dir + 4].copy_from_slice(&pdata_rva.to_le_bytes());
+        buf[exc_dir + 4..exc_dir + 8].copy_from_slice(&pdata_dir_size.to_le_bytes());
+
+        // [6] IMAGE_DIRECTORY_ENTRY_DEBUG → debug directory in .rdata
+        // Debug directory entry is at rdata_rva+0, size = 28 bytes (1 entry)
+        let debug_dir_entry = dirs + pe::IMAGE_DIRECTORY_ENTRY_DEBUG * 8;
+        buf[debug_dir_entry..debug_dir_entry + 4].copy_from_slice(&rdata_rva.to_le_bytes());
+        buf[debug_dir_entry + 4..debug_dir_entry + 8].copy_from_slice(&28u32.to_le_bytes());
+
+        // [10] IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG → load config in .rdata at offset 0x80
+        let load_cfg_rva = rdata_rva + 0x80;
+        let load_cfg_size: u32 = 112; // minimal IMAGE_LOAD_CONFIG_DIRECTORY64
+        let lc_dir = dirs + pe::IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG * 8;
+        buf[lc_dir..lc_dir + 4].copy_from_slice(&load_cfg_rva.to_le_bytes());
+        buf[lc_dir + 4..lc_dir + 8].copy_from_slice(&load_cfg_size.to_le_bytes());
+
+        // ---- Section Headers (4 × 40 bytes) ----
+        // .text
+        let s0 = sh;
+        buf[s0..s0 + 5].copy_from_slice(b".text");
+        buf[s0 + 8..s0 + 12].copy_from_slice(&0x200u32.to_le_bytes()); // VirtualSize
+        buf[s0 + 12..s0 + 16].copy_from_slice(&text_rva.to_le_bytes());
+        buf[s0 + 16..s0 + 20].copy_from_slice(&0x200u32.to_le_bytes()); // SizeOfRawData
+        buf[s0 + 20..s0 + 24].copy_from_slice(&text_foff.to_le_bytes());
+        buf[s0 + 36..s0 + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_MEM_EXECUTE | pe::IMAGE_SCN_CNT_CODE)
+                .to_le_bytes(),
+        );
+
+        // .pdata
+        let s1 = sh + 40;
+        buf[s1..s1 + 6].copy_from_slice(b".pdata");
+        buf[s1 + 8..s1 + 12].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[s1 + 12..s1 + 16].copy_from_slice(&pdata_rva.to_le_bytes());
+        buf[s1 + 16..s1 + 20].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[s1 + 20..s1 + 24].copy_from_slice(&pdata_foff.to_le_bytes());
+        buf[s1 + 36..s1 + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_CNT_INITIALIZED_DATA).to_le_bytes(),
+        );
+
+        // .xdata
+        let s2 = sh + 80;
+        buf[s2..s2 + 6].copy_from_slice(b".xdata");
+        buf[s2 + 8..s2 + 12].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[s2 + 12..s2 + 16].copy_from_slice(&xdata_rva.to_le_bytes());
+        buf[s2 + 16..s2 + 20].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[s2 + 20..s2 + 24].copy_from_slice(&xdata_foff.to_le_bytes());
+        buf[s2 + 36..s2 + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_CNT_INITIALIZED_DATA).to_le_bytes(),
+        );
+
+        // .rdata (debug dir + RSDS + load_config)
+        let s3 = sh + 120;
+        buf[s3..s3 + 6].copy_from_slice(b".rdata");
+        buf[s3 + 8..s3 + 12].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[s3 + 12..s3 + 16].copy_from_slice(&rdata_rva.to_le_bytes());
+        buf[s3 + 16..s3 + 20].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[s3 + 20..s3 + 24].copy_from_slice(&rdata_foff.to_le_bytes());
+        buf[s3 + 36..s3 + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_CNT_INITIALIZED_DATA).to_le_bytes(),
+        );
+
+        // ---- .text section data at text_foff ----
+        buf[text_foff as usize] = 0xC3; // RET
+
+        // ---- .pdata section data at pdata_foff ----
+        // 1 RUNTIME_FUNCTION: begin_address(u32), end_address(u32), unwind_info_address(u32)
+        let p = pdata_foff as usize;
+        buf[p..p + 4].copy_from_slice(&text_rva.to_le_bytes()); // BeginAddress
+        buf[p + 4..p + 8].copy_from_slice(&(text_rva + 0x10).to_le_bytes()); // EndAddress
+        buf[p + 8..p + 12].copy_from_slice(&xdata_rva.to_le_bytes()); // UnwindInfoAddress
+
+        // ---- .xdata section data at xdata_foff ----
+        // UNWIND_INFO: version(3 bits)=1, flags(5 bits)=0 → byte 0 = 0x01
+        // SizeOfProlog = 4, CountOfCodes = 1
+        // FrameRegister(4 bits)=0, FrameOffset(4 bits)=0 → byte 3 = 0x00
+        // UnwindCode[0]: offset_in_prolog=4, unwind_op(4 bits)=2 (ALLOC_SMALL), op_info(4 bits)=0
+        //   → 2 bytes: [0x04, 0x02]
+        let x = xdata_foff as usize;
+        buf[x] = 0x01; // Version=1, Flags=0
+        buf[x + 1] = 0x04; // SizeOfProlog
+        buf[x + 2] = 0x01; // CountOfCodes
+        buf[x + 3] = 0x00; // FrameRegister=0, FrameOffset=0
+        buf[x + 4] = 0x04; // UnwindCode: OffsetInProlog=4
+        buf[x + 5] = 0x02; // UnwindCode: UnwindOp=ALLOC_SMALL(2), OpInfo=0
+
+        // ---- .rdata section data at rdata_foff ----
+        let r = rdata_foff as usize;
+
+        // IMAGE_DEBUG_DIRECTORY (28 bytes) at rdata_foff+0
+        // Characteristics (4) = 0
+        // TimeDateStamp (4) = 0
+        // MajorVersion (2) = 0, MinorVersion (2) = 0
+        // Type (4) = IMAGE_DEBUG_TYPE_CODEVIEW = 2
+        buf[r + 12..r + 16].copy_from_slice(&2u32.to_le_bytes());
+        // SizeOfData (4) = size of RSDS record
+        let pdb_path = b"test.pdb\0";
+        let rsds_size: u32 = 4 + 16 + 4 + pdb_path.len() as u32; // sig + guid + age + path
+        buf[r + 16..r + 20].copy_from_slice(&rsds_size.to_le_bytes());
+        // AddressOfRawData (RVA) — RSDS record at rdata_rva + 0x20
+        let rsds_rva = rdata_rva + 0x20;
+        buf[r + 20..r + 24].copy_from_slice(&rsds_rva.to_le_bytes());
+        // PointerToRawData (file offset)
+        let rsds_foff = rdata_foff + 0x20;
+        buf[r + 24..r + 28].copy_from_slice(&rsds_foff.to_le_bytes());
+
+        // CodeView RSDS record at rdata_foff + 0x20
+        let cv = r + 0x20;
+        buf[cv..cv + 4].copy_from_slice(&[0x52, 0x53, 0x44, 0x53]); // "RSDS"
+        // GUID (16 bytes) — arbitrary non-zero
+        buf[cv + 4..cv + 20].copy_from_slice(&[
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x10,
+        ]);
+        // Age (4 bytes)
+        buf[cv + 20..cv + 24].copy_from_slice(&1u32.to_le_bytes());
+        // PDB path (NUL-terminated)
+        buf[cv + 24..cv + 24 + pdb_path.len()].copy_from_slice(pdb_path);
+
+        // IMAGE_LOAD_CONFIG_DIRECTORY64 at rdata_foff + 0x80
+        let lc = r + 0x80;
+        // Size field (4 bytes at offset 0)
+        buf[lc..lc + 4].copy_from_slice(&load_cfg_size.to_le_bytes());
+        // SecurityCookie at offset 0x58 (88) in the struct — 8 bytes (VA)
+        let cookie_va = image_base + rdata_rva as u64 + 0x100;
+        buf[lc + 0x58..lc + 0x60].copy_from_slice(&cookie_va.to_le_bytes());
+        buf
+    }
+
+    #[test]
+    fn test_pe_pdata_fixture_loads() {
+        let pe = pe64_with_pdata_and_debug();
+        assert!(pe.len() <= 4096, "fixture must be < 4 KB, got {}", pe.len());
+        assert!(PeLoader::can_load(&pe), "fixture must be recognized as PE");
+
+        let img = PeLoader::load(&pe).expect("PE with .pdata/.xdata/.debug/load_config must load");
+
+        assert_eq!(img.arch, ArchId::X86_64);
+        assert_eq!(img.endian, Endian::Little);
+        assert_eq!(img.entry, 0x0040_0000 + 0x1000);
+
+        assert!(img.section_by_name(".text").is_some(), ".text missing");
+        assert!(img.section_by_name(".pdata").is_some(), ".pdata missing");
+        assert!(img.section_by_name(".xdata").is_some(), ".xdata missing");
+        assert!(img.section_by_name(".rdata").is_some(), ".rdata missing");
+    }
 }

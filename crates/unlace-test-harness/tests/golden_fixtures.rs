@@ -444,6 +444,11 @@ fn golden_cpp_rtti() {
 }
 
 #[test]
+fn golden_x87_math() {
+    run_golden("x87_math");
+}
+
+#[test]
 fn golden_fixtures_metrics_summary() {
     let fixtures = [
         "medium",

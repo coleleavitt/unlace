@@ -267,6 +267,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             enum_discriminants: Vec::new(),
             panic_sites: BTreeMap::new(),
+            vtable_calls: BTreeMap::new(),
         }
     }
 

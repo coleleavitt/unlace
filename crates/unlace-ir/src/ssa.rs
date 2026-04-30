@@ -156,6 +156,7 @@ pub enum PanicKind {
     Panic,
     BoundsCheck,
     UnwrapFailed,
+    ExpectFailed,
     Abort,
 }
 
@@ -165,9 +166,31 @@ impl std::fmt::Display for PanicKind {
             Self::Panic => f.write_str("panic"),
             Self::BoundsCheck => f.write_str("index out of bounds"),
             Self::UnwrapFailed => f.write_str("unwrap on Err/None"),
+            Self::ExpectFailed => f.write_str("expect failed"),
             Self::Abort => f.write_str("abort"),
         }
     }
+}
+
+/// Metadata for an indirect call resolved as a Rust trait object vtable dispatch.
+///
+/// Rust trait objects are fat pointers `(data_ptr, vtable_ptr)`. The vtable
+/// is a struct `{ drop_fn, size, align, method_0, method_1, ... }`. A vtable
+/// dispatch loads the vtable pointer from `[obj + 8]`, then loads a method
+/// pointer from `[vtable + offset]`, then calls it indirectly.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VtableCallInfo {
+    /// The SSA varnode holding the base of the fat pointer (the trait object).
+    pub base_varnode: SsaVarnode,
+    /// Byte offset into the vtable from which the method pointer was loaded.
+    pub vtable_offset: u64,
+    /// Vtable slot index (`vtable_offset / 8`).
+    ///
+    /// - Slot 0: `drop_in_place` (destructor)
+    /// - Slot 1: `size`
+    /// - Slot 2: `align`
+    /// - Slot 3+: trait methods in declaration order
+    pub slot_index: usize,
 }
 
 pub struct SsaFunction {
@@ -199,6 +222,10 @@ pub struct SsaFunction {
     pub merged_names: BTreeMap<SsaVarnode, String>,
     pub enum_discriminants: Vec<EnumDiscriminant>,
     pub panic_sites: BTreeMap<(BlockId, usize), PanicKind>,
+    /// Indirect calls resolved as Rust trait object vtable dispatches.
+    /// Keyed by `(BlockId, insn_index)` of the `CALLIND` instruction.
+    /// Populated by [`RustVtablePass`](https://docs.rs/unlace-passes).
+    pub vtable_calls: BTreeMap<(BlockId, usize), VtableCallInfo>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -246,6 +273,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         merged_names: BTreeMap::new(),
         enum_discriminants: Vec::new(),
         panic_sites: BTreeMap::new(),
+        vtable_calls: BTreeMap::new(),
     }
 }
 

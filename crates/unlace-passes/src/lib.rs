@@ -14,11 +14,14 @@ pub mod expression_tree;
 pub mod idiom_recognition;
 pub mod modulo_idiom;
 pub mod noreturn;
+pub mod rust_enum;
+pub mod rust_panic;
 pub mod sccp;
 pub mod stack_vars;
 pub mod tail_call;
 pub mod type_infer;
 pub mod variable_merge;
+pub mod rust_vtable;
 
 pub use pass::{Pass, PassError, run_to_fixedpoint};
 pub use calling_convention::CallingConventionDetectPass;
@@ -34,10 +37,13 @@ pub use expression_tree::ExpressionTreePass;
 pub use idiom_recognition::IdiomRecognitionPass;
 pub use modulo_idiom::ModuloIdiomPass;
 pub use noreturn::NoreturnDetectPass;
+pub use rust_enum::RustEnumPass;
+pub use rust_panic::RustPanicPass;
 pub use sccp::SccpPass;
 pub use stack_vars::StackVarRecoveryPass;
 pub use tail_call::TailCallDetectPass;
 pub use variable_merge::VariableMergePass;
+pub use rust_vtable::RustVtablePass;
 
 #[cfg(test)]
 mod tests {

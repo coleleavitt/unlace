@@ -140,6 +140,7 @@ mod tests {
             function: func,
             cfg,
             dom_tree,
+            post_dom_tree: None,
             phi_map: BTreeMap::new(),
             var_map,
             var_types: BTreeMap::new(),

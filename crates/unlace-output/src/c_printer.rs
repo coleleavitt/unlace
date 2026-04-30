@@ -165,6 +165,10 @@ pub fn print_c_with_rtti(
     out.push_str(IDA_TYPEDEFS);
     out.push('\n');
 
+    if let Some(rtti) = rtti.filter(|r| !r.is_empty()) {
+        emit_rtti_hierarchy(rtti, &mut out);
+    }
+
     if let Some(hdr) = header {
         emit_function_header(hdr, &mut out);
     }
@@ -209,13 +213,20 @@ pub fn print_c_with_rtti(
             let _ = write!(out, "{} {}", ty, name);
         }
     } else {
+        let rtti_this_type = rtti_this_param_type(&demangled, rtti);
+        let mut param_idx = 0;
+        if let Some(ref this_ty) = rtti_this_type {
+            let _ = write!(out, "{} *this", this_ty);
+            param_idx = 1;
+        }
         for (i, (pname, pty)) in func.params.iter().enumerate() {
-            if i > 0 {
+            if param_idx > 0 || i > 0 {
                 out.push_str(", ");
             }
             let _ = write!(out, "{} {}", c_sig_type(pty), pname);
+            param_idx += 1;
         }
-        if func.params.is_empty()
+        if param_idx == 0
             && dwarf_func.map_or(true, |df| df.params.is_empty())
         {
             out.push_str("void");
@@ -305,6 +316,50 @@ fn emit_function_header(hdr: &FunctionHeaderInfo, out: &mut String) {
     }
     let _ = writeln!(out, " * Xrefs from: unknown");
     let _ = writeln!(out, " */");
+}
+
+fn emit_rtti_hierarchy(rtti: &unlace_loader::RttiInfo, out: &mut String) {
+    let hierarchy = rtti.format_hierarchy();
+    if hierarchy.is_empty() {
+        return;
+    }
+    let _ = writeln!(out, "/*");
+    let _ = writeln!(out, " * C++ Class Hierarchy (from RTTI):");
+    for line in hierarchy.lines() {
+        let _ = writeln!(out, " *   {}", line);
+    }
+
+    for cls in rtti.classes.values() {
+        if cls.vtable_methods.is_empty() {
+            continue;
+        }
+        let _ = writeln!(out, " *");
+        let _ = writeln!(out, " * {}::vtable:", cls.demangled_name);
+        for (slot, _va, name) in &cls.vtable_methods {
+            let display = match name {
+                Some(n) => match crate::demangle::demangle(n) {
+                    Some(d) => d.full_signature,
+                    None => n.clone(),
+                },
+                None => format!("sub_{:x}", _va),
+            };
+            let _ = writeln!(out, " *   [{}] {}", slot, display);
+        }
+    }
+
+    let _ = writeln!(out, " */");
+    out.push('\n');
+}
+
+fn rtti_this_param_type(
+    demangled: &Option<crate::demangle::DemangleResult>,
+    rtti: Option<&unlace_loader::RttiInfo>,
+) -> Option<String> {
+    let dr = demangled.as_ref()?;
+    let class_name = dr.class_name.as_ref()?;
+    let rtti = rtti?;
+    rtti.class_by_name(class_name)?;
+    Some(class_name.clone())
 }
 
 // ---------------------------------------------------------------------------
@@ -6989,6 +7044,89 @@ mod tests {
         assert!(
             output.contains("/* catch */"),
             "should annotate __cxa_begin_catch, got: {output}",
+        );
+    }
+
+    #[test]
+    fn test_rtti_hierarchy_in_output() {
+        use unlace_loader::rtti::{CppClass, RttiInfo};
+
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_ZN3Dog5speakEv", body);
+
+        let mut classes = BTreeMap::new();
+        classes.insert(0x3d40, CppClass {
+            mangled_name: "6Animal".to_string(),
+            demangled_name: "Animal".to_string(),
+            typeinfo_addr: 0x3d40,
+            bases: vec![],
+            vtable_addr: None,
+            vtable_methods: vec![],
+        });
+        classes.insert(0x3d50, CppClass {
+            mangled_name: "3Dog".to_string(),
+            demangled_name: "Dog".to_string(),
+            typeinfo_addr: 0x3d50,
+            bases: vec![unlace_loader::BaseClass {
+                typeinfo_addr: 0x3d40,
+                offset: 0,
+                is_virtual: false,
+                is_public: true,
+            }],
+            vtable_addr: Some(0x3cf0),
+            vtable_methods: vec![
+                (0, 0x1300, Some("_ZN3Dog5speakEv".to_string())),
+            ],
+        });
+        let rtti = RttiInfo { classes };
+
+        let output = super::print_c_with_rtti(
+            &func, None, None, None, None, Some(&rtti),
+        );
+
+        assert!(
+            output.contains("C++ Class Hierarchy"),
+            "should contain hierarchy header: {output}",
+        );
+        assert!(
+            output.contains("Animal"),
+            "should mention Animal in hierarchy: {output}",
+        );
+        assert!(
+            output.contains("Dog"),
+            "should mention Dog in hierarchy: {output}",
+        );
+        assert!(
+            output.contains("Dog::vtable:"),
+            "should list Dog vtable: {output}",
+        );
+    }
+
+    #[test]
+    fn test_rtti_this_param_type() {
+        use unlace_loader::rtti::{CppClass, RttiInfo};
+
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_ZN3Dog5speakEv", body);
+
+        let mut classes = BTreeMap::new();
+        classes.insert(0x3d50, CppClass {
+            mangled_name: "3Dog".to_string(),
+            demangled_name: "Dog".to_string(),
+            typeinfo_addr: 0x3d50,
+            bases: vec![],
+            vtable_addr: None,
+            vtable_methods: vec![],
+        });
+        let rtti = RttiInfo { classes };
+
+        let output = super::print_c_with_rtti(
+            &func, None, None, None, None, Some(&rtti),
+        );
+
+        assert!(
+            output.contains("Dog *this"),
+            "member function should have 'Dog *this' param: {output}",
         );
     }
 }

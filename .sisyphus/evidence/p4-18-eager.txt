@@ -1,0 +1,19 @@
+P4-18: EagerReturns pre-structuring pass
+
+Implementation: crates/unlace-struct/src/eager_returns.rs
+
+Algorithm (from SAILR paper, USENIX 2024):
+- Find return blocks with ≥ 2 predecessors and ≤ 3 instructions
+- Duplicate the return block into each predecessor that ends with Branch
+- Remove the original shared return block if no predecessors remain
+- Rebuild CFG after modifications
+
+Tests (2 new):
+- test_eager_return_duplicated: 2-insn return block with 2 preds → duplicated, BB3 removed
+- test_large_return_not_duplicated: 10-insn return block → unchanged
+
+Test output:
+  running 40 tests
+  test eager_returns::tests::test_eager_return_duplicated ... ok
+  test eager_returns::tests::test_large_return_not_duplicated ... ok
+  test result: ok. 40 passed; 0 failed; 0 ignored

@@ -94,6 +94,16 @@ const LIBC_TABLE: &[LibcSignature] = &[
     sig("qalloc_or_throw",     1, "void *",      false, false),
     sig("qfree",               1, "void",        false, false),
     sig("qvector_reserve",     3, "void",        false, false),
+
+    // C++ exception handling (Itanium ABI)
+    sig("__cxa_allocate_exception", 1, "void *",  false, false),
+    sig("__cxa_throw",              3, "void",     true,  false),
+    sig("__cxa_begin_catch",        1, "void *",  false, false),
+    sig("__cxa_end_catch",          0, "void",    false, false),
+    sig("__cxa_rethrow",            0, "void",     true,  false),
+    sig("__cxa_free_exception",     1, "void",    false, false),
+    sig("__dynamic_cast",           4, "void *",  false, false),
+    sig("_Unwind_Resume",           1, "void",     true,  false),
 ];
 
 fn table() -> &'static BTreeMap<&'static str, &'static LibcSignature> {
@@ -214,5 +224,53 @@ mod tests {
         let mut sorted = names.clone();
         sorted.sort_unstable();
         assert_eq!(names, sorted, "BTreeMap iteration must be sorted");
+    }
+
+    #[test]
+    fn cxa_throw_and_rethrow_are_noreturn() {
+        let throw = lookup_libc("__cxa_throw").expect("__cxa_throw");
+        assert!(throw.noreturn, "__cxa_throw must be marked noreturn");
+        assert_eq!(throw.param_count, 3);
+        assert_eq!(throw.return_type, "void");
+
+        let rethrow = lookup_libc("__cxa_rethrow").expect("__cxa_rethrow");
+        assert!(rethrow.noreturn, "__cxa_rethrow must be marked noreturn");
+        assert_eq!(rethrow.param_count, 0);
+    }
+
+    #[test]
+    fn cxa_exception_functions_present() {
+        let names = [
+            "__cxa_allocate_exception",
+            "__cxa_throw",
+            "__cxa_begin_catch",
+            "__cxa_end_catch",
+            "__cxa_rethrow",
+            "__cxa_free_exception",
+            "__dynamic_cast",
+            "_Unwind_Resume",
+        ];
+        for name in names {
+            assert!(
+                lookup_libc(name).is_some(),
+                "C++ exception function {name} must be in the database",
+            );
+        }
+
+        let alloc = lookup_libc("__cxa_allocate_exception").unwrap();
+        assert_eq!(alloc.param_count, 1);
+        assert_eq!(alloc.return_type, "void *");
+        assert!(!alloc.noreturn);
+
+        let begin_catch = lookup_libc("__cxa_begin_catch").unwrap();
+        assert_eq!(begin_catch.param_count, 1);
+        assert_eq!(begin_catch.return_type, "void *");
+
+        let end_catch = lookup_libc("__cxa_end_catch").unwrap();
+        assert_eq!(end_catch.param_count, 0);
+        assert_eq!(end_catch.return_type, "void");
+
+        let resume = lookup_libc("_Unwind_Resume").unwrap();
+        assert!(resume.noreturn);
     }
 }

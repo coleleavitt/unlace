@@ -27,144 +27,220 @@ _DWORD __readfsdword(unsigned int offset);
  * Size:       0x3e1 (993 bytes)
  * Convention: unknown
  * Stack frame: 0x0 (0 bytes)
- * Xrefs to:   f_rec_fib, f_rec_power.constprop.0
+ * Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0
  * Xrefs from: unknown
  */
 void main(void) {
-    int v15; // eax
-    long long v13; // rax
-    int v9; // ecx
+    int v14; // eax
+    long long v12; // rax
+    int v21; // edx
     long long v2; // rsp
-    long long v26; // rsi
-    long long v22; // rdi
-    long long v20; // r8
+    int v23; // esi
+    long long v27; // rdi
+    long long v25; // r8
+    long long v24; // r9
     int v18; // r10d
-    int v10; // rip
-    signed char v14; // ZF
-    signed char v28; // SF
-    int v12; // xmm0
-    int v21; // xmm1
-    int v27; // xmm2
-    int v16;
-    signed char v17; // temp
+    long long v28; // r11
+    int v9; // rip
+    signed char v16; // ZF
+    int v11; // xmm0
+    int v26; // xmm1
+    int v29; // xmm2
+    int v17;
+    signed char v15; // temp
     int v3; // temp
     long long v1; // temp
-    signed char v29; // temp
+    unsigned int v30; // temp
+    signed char v31; // temp
     int v4; // temp
-    long long v24; // temp
-    unsigned int v11; // temp
+    long long v19; // temp
+    unsigned int v10; // temp
     signed char v5; // temp
+    long long v20; // temp
     signed char v6; // temp
     signed char v7; // temp
-    signed char v8; // temp
-    signed char v30; // temp
-    signed char v31; // temp
+    signed char v13; // temp
+    signed char v22; // temp
 
-    *(_QWORD *)(0x48LL) = 0x48LL;
-    v5 = 0;
-    v8 = 0;
-    v1 = v10 + 0x2010LL;
-    v11 = *(_QWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
+    *(_QWORD *)(0LL) = 0LL;
+    v5 = LOBYTE(0);
+    v6 = 0;
+    v7 = 0;
+    v1 = v9 + 0x2010LL;
+    v10 = *(_QWORD *)(0LL);
+    v11 = _mm_load_si128(v10);
     v1 = __readfsqword(0x28u);
-    v1 = v10 + 0x2020LL;
-    v11 = *(_QWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
-    _mm_load_ps(0LL, v12);
-    v1 = v10 + 0x2030LL;
-    v11 = *(_QWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
-    _mm_load_ps(0LL, v12);
-    v1 = v10 + 0x2040LL;
-    v11 = *(_QWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
-    _mm_load_ps(0LL, v12);
-    while (v16) {
-        break;
-    }
-    while (v16) {
-        break;
+    _mm_load_ps(0LL, v11);
+    v1 = v9 + 0x2020LL;
+    v10 = *(_QWORD *)(0LL);
+    v11 = _mm_load_si128(v10);
+    _mm_load_ps(0LL, v11);
+    v1 = v9 + 0x2030LL;
+    v10 = *(_QWORD *)(0LL);
+    v11 = _mm_load_si128(v10);
+    _mm_load_ps(0LL, v11);
+    v1 = v9 + 0x2040LL;
+    v10 = *(_QWORD *)(0LL);
+    v11 = _mm_load_si128(v10);
+    _mm_load_ps(0LL, v11);
+    while (v15) {
     }
     while (v17) {
-    }
-    while (v16) {
         break;
     }
-    v20 = 0LL;
-    v12 = _mm_xor_si128(v12, v12);
-    while (v16) {
-        break;
-    }
-    v21 = _mm_load_si128(v12);
-    v12 = _mm_add_epi32(v12, v21);
-    v21 = _mm_load_si128(v12);
-    v12 = _mm_add_epi32(v12, v21);
-    if (v12) {
-        while (v16) {
-            break;
-        }
+    if (v15) {
+        v20 = 1LL;
     } else {
-        v3 = *(_DWORD *)(0LL);
-        v7 = 0;
+        v15 = 1;
         if (v14) {
-        }
-    }
-    if (v20) {
-        while (v16) {
-            break;
-        }
-    } else {
-        v3 = *(_DWORD *)(0x48LL);
-        if (v14) {
-        }
-    }
-    while (v16) {
-        break;
-    }
-    v12 = _mm_load_si128(0);
-    v27 = _mm_add_epi32(0, v12);
-    v12 = _mm_load_si128(0);
-    while (v14) {
-        v3 = *(_DWORD *)(0x48LL);
-        break;
-    }
-    if (v5) {
-        while (v16) {
-            break;
-        }
-    label_5:;
-        if (v8) {
-        }
-    }
-    if (v18) {
-        goto label_5;
-    }
-    while (v16) {
-        break;
-    }
-    while (v16) {
-        if (v29) {
-        } else {
-            if (v5) {
-            label_7:;
-            }
-        label_8:;
-            while (v5) {
-            }
-            while (v16) {
-                break;
-            }
-        }
-        if (v14) {
-        } else {
             if (v14) {
+                v20 = v20;
+            label_0:;
+                if (v5) {
+                label_1:;
+                label_2:;
+                    if (v15) {
+                    label_4:;
+                        v15 = 1;
+                        if (v22) {
+                        label_5:;
+                            if (v5) {
+                            label_6:;
+                                if (v22) {
+                                label_7:;
+                                    if (v15) {
+                                    label_8:;
+                                        v15 = 1;
+                                        if (v5) {
+                                        } else {
+                                            goto label_7;
+                                        }
+                                    } else {
+                                        goto label_6;
+                                    }
+                                }
+                            label_9:;
+                                if (v5) {
+                                    goto label_6;
+                                }
+                            }
+                        } else {
+                        label_10:;
+                            if (v15) {
+                                goto label_8;
+                            } else {
+                                goto label_6;
+                            }
+                            goto label_9;
+                        }
+                    } else {
+                    label_11:;
+                        if (v23) {
+                            goto label_10;
+                        } else {
+                        label_12:;
+                            if (v14) {
+                                while (v15) {
+                                    v20 = v20;
+                                }
+                            }
+                            while (v17) {
+                                break;
+                            }
+                            v11 = _mm_xor_si128(v11, v11);
+                            while (v17) {
+                                break;
+                            }
+                            v26 = _mm_load_si128(v11);
+                            v11 = _mm_add_epi32(v11, v26);
+                            v26 = _mm_load_si128(v11);
+                            v11 = _mm_add_epi32(v11, v26);
+                            if (v16) {
+                                while (v17) {
+                                    break;
+                                }
+                            } else {
+                                v3 = *(_DWORD *)(0LL);
+                                if (v16) {
+                                }
+                            }
+                            if (v6) {
+                                while (v17) {
+                                    break;
+                                }
+                            } else {
+                                v3 = *(_DWORD *)(0LL);
+                                if (v16) {
+                                }
+                            }
+                            v29 = _mm_xor_si128(v29, v29);
+                            while (v15) {
+                                v30 = *(_QWORD *)(0LL);
+                                v11 = _mm_load_si128(v30);
+                                v26 = _mm_load_si128(v11);
+                                v26 = _mm_shuffle_epi32(v26, v26);
+                                v11 = _mm_shuffle_epi32(v11, v11);
+                                v29 = _mm_add_epi32(v29, v26);
+                            }
+                            v11 = _mm_load_si128(v29);
+                            v29 = _mm_add_epi32(v29, v11);
+                            v11 = _mm_load_si128(v29);
+                            v29 = _mm_add_epi32(v29, v11);
+                            while (v16) {
+                                v3 = *(_DWORD *)(0LL);
+                                break;
+                            }
+                            if (v6) {
+                                if (v15) {
+                                    goto label_4;
+                                } else {
+                                    goto label_11;
+                                }
+                            } else {
+                                if (v18) {
+                                    goto label_11;
+                                } else {
+                                    goto label_2;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                label_18:;
+                    goto label_5;
+                }
             } else {
-                goto label_7;
+                goto label_12;
             }
-            goto label_8;
+        } else {
+            goto label_1;
         }
-        break;
-        break;
+    label_19:;
+        while (v17) {
+            break;
+        }
+        v3 = *(_DWORD *)(0LL);
+        if (v16) {
+            if (v5) {
+                goto label_11;
+            } else {
+                goto label_2;
+            }
+            goto label_19;
+        }
+        if (v31) {
+        } else {
+            goto label_0;
+        }
+    }
+    if (v16) {
+    } else {
+        if (v16) {
+            goto label_18;
+        } else {
+            goto label_10;
+        }
+        goto label_19;
     }
 }
 typedef unsigned char _BYTE;

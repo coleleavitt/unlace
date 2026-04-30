@@ -2083,6 +2083,9 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
             if !insn.inputs.is_empty() {
                 let op = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 if let Some(output) = insn.output {
+                    if is_redundant_widen(insn.op, &insn.inputs[0], output.size) {
+                        return op;
+                    }
                     let ty = type_for_size(output.size, insn.op == IrOp::IntSext);
                     format!("({})({})", ty, op)
                 } else {
@@ -2098,6 +2101,9 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
             if !insn.inputs.is_empty() {
                 let op = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 if let Some(output) = insn.output {
+                    if is_redundant_same_size_cast(&insn.inputs[0], output.size) {
+                        return op;
+                    }
                     let ty = type_for_size(output.size, true);
                     format!("({})({})", ty, op)
                 } else {
@@ -2190,7 +2196,8 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
                 let src = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 let byte_offset = insn.inputs[1].offset;
                 let output_size = insn.output.map_or(0, |v| v.size);
-                emit_subpiece_macro(&src, byte_offset, output_size)
+                let input_size = insn.inputs[0].size;
+                emit_subpiece_macro(&src, byte_offset, output_size, input_size)
             } else {
                 "0".to_string()
             }
@@ -2639,7 +2646,13 @@ fn escape_c_string(s: &str) -> String {
 ///
 /// Known patterns map to named macros (LOBYTE, BYTE1, LOWORD, etc.);
 /// anything else falls back to `(cast)((x) >> shift)`.
-fn emit_subpiece_macro(src: &str, byte_offset: u64, output_size: u8) -> String {
+///
+/// `input_size` enables size-equality elision: a SUBPIECE that takes the full
+/// width of its source at offset 0 is the identity, so we skip the cast.
+fn emit_subpiece_macro(src: &str, byte_offset: u64, output_size: u8, input_size: u8) -> String {
+    if byte_offset == 0 && output_size == input_size && output_size != 0 {
+        return src.to_string();
+    }
     match (output_size, byte_offset) {
         (1, 0) => format!("LOBYTE({})", src),
         (1, 1) => format!("BYTE1({})", src),
@@ -2791,6 +2804,40 @@ fn type_for_size(size: u8, signed: bool) -> &'static str {
             _ => "unsigned __int32",
         }
     }
+}
+
+/// Decide whether `(type)(operand)` is redundant for an `INT_ZEXT` / `INT_SEXT`.
+///
+/// Two cases qualify:
+///
+/// * **Same size** – the lifter sometimes emits a degenerate widen where the
+///   operand is already the target width.  This produces noise like
+///   `(__int64)(v)` over an already-`__int64` `v` and contributes nothing.
+///
+/// * **Implicit C widening to `long long`** – any narrower integer source
+///   widens to `long long` automatically when assigned or passed.  `_QWORD`
+///   targets (size==8) reading from a 4-byte source therefore do not need an
+///   explicit cast in expression position; the surrounding context performs
+///   the same conversion.  We elide only when the source is itself a
+///   non-constant operand (constants get their own width suffix and would
+///   change semantics if we dropped a sign- vs zero-extending cast).
+fn is_redundant_widen(op: IrOp, input: &Varnode, output_size: u8) -> bool {
+    if input.size == output_size {
+        return true;
+    }
+    if op == IrOp::IntZext
+        && input.size == 4
+        && output_size == 8
+        && input.space != SpaceId::Const
+    {
+        return true;
+    }
+    false
+}
+
+/// `(type)(x)` is redundant when the operand already has the target width.
+fn is_redundant_same_size_cast(input: &Varnode, output_size: u8) -> bool {
+    input.size == output_size
 }
 
 /// IDA-style pointer cast for memory dereference based on access size.
@@ -3789,8 +3836,33 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("(unsigned __int64)"),
-            "unsigned extension to 8 bytes should use unsigned __int64: {output}",
+            !output.contains("(unsigned __int64)"),
+            "i32 -> i64 IntZext should be elided as implicit C widening: {output}",
+        );
+    }
+
+    #[test]
+    fn test_type_casts_same_size_widen_elided() {
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 8);
+
+        let zext = IrInsn::with_output(
+            IrOp::IntZext,
+            r8,
+            smallvec![r0],
+            0x1000,
+        );
+        let body = vec![
+            HirNode::Statement(zext),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("same_size_widen", body);
+        let output = print_c(&func);
+
+        assert!(
+            !output.contains("(unsigned __int64)") && !output.contains("(__int64)"),
+            "same-size IntZext must not emit a cast: {output}",
         );
     }
 

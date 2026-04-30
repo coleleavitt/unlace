@@ -35,9 +35,25 @@ impl Pass for ConditionSimplifyPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        const MAX_INNER: usize = 100;
+        let func_name = func.function.name.clone();
         let mut changed_any = false;
         let mut next_unique = find_max_unique_offset(func) + 8;
+        let mut iter = 0;
         loop {
+            iter += 1;
+            if iter > MAX_INNER {
+                tracing::error!(
+                    func = %func_name,
+                    iters = MAX_INNER,
+                    "condition_simplify did not converge"
+                );
+                return Err(PassError::InvariantViolation {
+                    message: format!(
+                        "condition_simplify did not converge on '{func_name}' after {MAX_INNER} iters",
+                    ),
+                });
+            }
             let def_map = build_def_map(func);
             let mut changed = false;
 
@@ -64,6 +80,9 @@ impl Pass for ConditionSimplifyPass {
                 block.insns = new_insns;
             }
 
+            if changed {
+                tracing::trace!(func = %func_name, iter, "condition_simplify iter");
+            }
             changed_any |= changed;
             if !changed {
                 break;
@@ -177,11 +196,13 @@ fn simplify_eq(
             if inner.op == IrOp::IntSub && inner.inputs.len() == 2 {
                 let x = inner.inputs[0];
                 let y = inner.inputs[1];
-                return Some(Simplification::Replace(replace_op(
-                    insn,
-                    insn.op,
-                    smallvec::smallvec![x, y],
-                )));
+                if is_safe_offset_fold_target(&a, &x, inner) {
+                    return Some(Simplification::Replace(replace_op(
+                        insn,
+                        insn.op,
+                        smallvec::smallvec![x, y],
+                    )));
+                }
             }
         }
     }
@@ -190,6 +211,9 @@ fn simplify_eq(
         if let Some(inner) = def_map.get(&a) {
             if inner.inputs.len() == 2 && inner.inputs[1].space == SpaceId::Const {
                 let x = inner.inputs[0];
+                if !is_safe_offset_fold_target(&a, &x, inner) {
+                    return None;
+                }
                 let c1 = inner.inputs[1].offset;
                 let size = b.size;
                 let mask = if size >= 8 {
@@ -214,6 +238,21 @@ fn simplify_eq(
     }
 
     None
+}
+
+fn is_safe_offset_fold_target(a: &Varnode, x: &Varnode, inner: &IrInsn) -> bool {
+    if inner.output.as_ref() != Some(a) {
+        return false;
+    }
+    if x == a {
+        return false;
+    }
+    if let Some(out) = inner.output {
+        if inner.inputs.iter().any(|v| *v == out) {
+            return false;
+        }
+    }
+    true
 }
 
 fn simplify_less(
@@ -1106,5 +1145,58 @@ mod tests {
 
         let block = ssa.function.blocks.values().next().expect("has block");
         assert_eq!(block.insns[0].op, IrOp::IntEqual);
+    }
+
+    #[test]
+    fn test_offset_fold_skips_self_referential_def() {
+        // Regression: pre-SSA loop counter `u0 = IntSub u0, c` aliases its own output;
+        // rebuilding def_map on every inner iteration would re-fire the offset-fold rule
+        // forever, shifting the constant by `c` each round. The is_safe_offset_fold_target
+        // guard rejects definitions whose first input equals their output.
+        let u0 = Varnode::unique(0, 4);
+        let r0 = Varnode::reg(0, 1);
+        let c10 = Varnode::constant(10, 4);
+        let c100 = Varnode::constant(100, 4);
+        let self_sub = IrInsn::with_output(IrOp::IntSub, u0, smallvec![u0, c10], 0x1000);
+        let cmp = IrInsn::with_output(IrOp::IntEqual, r0, smallvec![u0, c100], 0x1004);
+        let mut ssa = make_single_block_ssa(vec![self_sub, cmp]);
+
+        let _ = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass must terminate without invariant violation");
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let cmp = block
+            .insns
+            .iter()
+            .find(|i| i.op == IrOp::IntEqual)
+            .expect("comparison preserved");
+        assert_eq!(cmp.inputs[1], c100, "constant must not have shifted");
+    }
+
+    #[test]
+    fn test_offset_fold_applies_to_normal_def() {
+        let u0 = Varnode::unique(0, 4);
+        let u1 = Varnode::unique(8, 4);
+        let r0 = Varnode::reg(0, 1);
+        let c10 = Varnode::constant(10, 4);
+        let c100 = Varnode::constant(100, 4);
+        let add = IrInsn::with_output(IrOp::IntAdd, u1, smallvec![u0, c10], 0x1000);
+        let cmp = IrInsn::with_output(IrOp::IntEqual, r0, smallvec![u1, c100], 0x1004);
+        let mut ssa = make_single_block_ssa(vec![add, cmp]);
+
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed, "offset fold must fire on non-self-referential def");
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let cmp = block
+            .insns
+            .iter()
+            .find(|i| i.op == IrOp::IntEqual)
+            .expect("comparison preserved");
+        assert_eq!(cmp.inputs[0], u0, "first operand collapses to original input");
+        assert_eq!(cmp.inputs[1], Varnode::constant(90, 4), "constant folded to c2 - c1");
     }
 }

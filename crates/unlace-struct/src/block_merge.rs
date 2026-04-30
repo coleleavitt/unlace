@@ -31,9 +31,33 @@ use unlace_ir::{BasicBlock, BlockId, Function, IrOp};
 /// Run block-merging to a fixed point on `func`, returning the number of
 /// merges performed across all iterations.
 pub fn merge_linear_blocks(func: &mut Function) -> usize {
+    let max_iters = func.blocks.len().saturating_mul(2).max(64);
+    let func_name = func.name.clone();
     let mut total = 0;
+    let mut iter = 0;
     loop {
+        iter += 1;
+        if iter > max_iters {
+            tracing::error!(
+                func = %func_name,
+                blocks = func.blocks.len(),
+                max_iters,
+                "merge_linear_blocks did not converge"
+            );
+            panic!(
+                "merge_linear_blocks did not converge on '{func_name}' after {max_iters} iters",
+            );
+        }
         let merges = merge_one_pass(func);
+        if merges > 0 {
+            tracing::trace!(
+                func = %func_name,
+                iter,
+                merges,
+                blocks = func.blocks.len(),
+                "merge_linear_blocks iter"
+            );
+        }
         if merges == 0 {
             return total;
         }

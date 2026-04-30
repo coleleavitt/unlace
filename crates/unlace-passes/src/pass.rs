@@ -49,19 +49,62 @@ pub fn run_to_fixedpoint(
     passes: &[&dyn Pass],
     func: &mut SsaFunction,
 ) -> Result<usize, PassError> {
+    const MAX_ROUNDS: usize = 200;
     let mut total_changes = 0usize;
+    let func_name = func.function.name.clone();
+    let mut round = 0usize;
     loop {
+        round += 1;
+        if round > MAX_ROUNDS {
+            tracing::error!(
+                func = %func_name,
+                rounds = MAX_ROUNDS,
+                "run_to_fixedpoint did not converge — passes are oscillating"
+            );
+            return Err(PassError::InvariantViolation {
+                message: format!(
+                    "run_to_fixedpoint exceeded {MAX_ROUNDS} rounds on '{func_name}' — passes oscillating",
+                ),
+            });
+        }
         let mut changed_this_round = false;
+        let mut changed_passes: Vec<&str> = Vec::new();
         for pass in passes {
+            let pass_start = std::time::Instant::now();
             let changed = pass.run(func)?;
+            let elapsed = pass_start.elapsed();
+            if elapsed >= std::time::Duration::from_millis(500) {
+                tracing::warn!(
+                    func = %func_name,
+                    pass = pass.name(),
+                    round,
+                    elapsed_ms = elapsed.as_millis(),
+                    "slow pass"
+                );
+            }
             if changed {
                 changed_this_round = true;
                 total_changes += 1;
+                changed_passes.push(pass.name());
             }
+        }
+        if changed_this_round {
+            tracing::trace!(
+                func = %func_name,
+                round,
+                ?changed_passes,
+                "fixedpoint round"
+            );
         }
         if !changed_this_round {
             break;
         }
     }
+    tracing::debug!(
+        func = %func_name,
+        rounds = round,
+        total_changes,
+        "run_to_fixedpoint converged"
+    );
     Ok(total_changes)
 }

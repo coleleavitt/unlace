@@ -403,6 +403,143 @@ fn try_resolve_field_from_addr(addr_vn: &Varnode, _idx: usize, stmt_idx: u32, ac
     try_resolve_struct_field(&def_insn, def_stmt, access_size, ctx)
 }
 
+// ---------------------------------------------------------------------------
+// Array subscript recovery
+// ---------------------------------------------------------------------------
+
+/// Result of array subscript pattern matching on an address expression.
+struct ArraySubscript {
+    /// The base expression (already rendered as a C string).
+    base: String,
+    /// The index expression (already rendered as a C string).
+    index: String,
+}
+
+/// Try to recognise an array subscript pattern in the address computation of a
+/// LOAD or STORE instruction.
+///
+/// Patterns recognised (all single-level only):
+///
+/// 1. `INT_ADD(base, INT_MULT(index, Const(stride)))` where `stride == access_size`
+/// 2. `PTRADD(base, index, Const(stride))` where `stride == access_size`
+/// 3. `INT_ADD(base, Const(offset))` where `offset % access_size == 0` (constant index)
+///
+/// Returns `None` if no pattern matches or if the stride doesn't match the
+/// access size (keeping the existing pointer dereference form).
+fn try_array_subscript(
+    addr_vn: &Varnode,
+    stmt_idx: u32,
+    access_size: u8,
+    ctx: &mut PrintCtx,
+) -> Option<ArraySubscript> {
+    if access_size == 0 || addr_vn.space == SpaceId::Const {
+        return None;
+    }
+
+    // Resolve the SSA varnode for the address operand.
+    let addr_sv = ctx
+        .stmt_inputs
+        .get(&stmt_idx)
+        .cloned()
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
+
+    // The address must be defined by a foldable statement.
+    let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
+    let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
+
+    let stride = access_size as u64;
+
+    match def_insn.op {
+        // Pattern 1: INT_ADD(base, INT_MULT(index, Const(stride)))
+        IrOp::IntAdd if def_insn.inputs.len() == 2 => {
+            // One operand must be an INT_MULT producing index*stride.
+            // Check which operand is the multiply (it could be either).
+            for (mult_pos, base_pos) in [(0, 1), (1, 0)] {
+                let mult_vn = &def_insn.inputs[mult_pos];
+                let base_vn = &def_insn.inputs[base_pos];
+
+                // The multiply operand must not be a constant and must have
+                // a foldable defining statement.
+                if mult_vn.space == SpaceId::Const {
+                    continue;
+                }
+
+                let mult_sv = ctx
+                    .stmt_inputs
+                    .get(&def_stmt)
+                    .cloned()
+                    .and_then(|inputs| inputs.iter().find(|sv| sv.base == *mult_vn).copied());
+                let mult_sv = match mult_sv {
+                    Some(sv) => sv,
+                    None => continue,
+                };
+                let mult_def = match ctx.sv_defining_stmt.get(&mult_sv) {
+                    Some(&s) => s,
+                    None => continue,
+                };
+                let mult_insn = match ctx.stmt_insns.get(&mult_def) {
+                    Some(i) => i.clone(),
+                    None => continue,
+                };
+
+                if mult_insn.op != IrOp::IntMult || mult_insn.inputs.len() != 2 {
+                    continue;
+                }
+
+                // One operand of the multiply must be Const(stride).
+                let (idx_vn, const_vn) = if mult_insn.inputs[1].space == SpaceId::Const {
+                    (&mult_insn.inputs[0], &mult_insn.inputs[1])
+                } else if mult_insn.inputs[0].space == SpaceId::Const {
+                    (&mult_insn.inputs[1], &mult_insn.inputs[0])
+                } else {
+                    continue;
+                };
+
+                if const_vn.offset != stride {
+                    continue;
+                }
+
+                let idx_expr = emit_operand_resolved(idx_vn, 0, mult_def, ctx);
+                let base_expr = emit_operand_resolved(base_vn, base_pos, def_stmt, ctx);
+
+                return Some(ArraySubscript { base: base_expr, index: idx_expr });
+            }
+
+            // Pattern 3: INT_ADD(base, Const(offset)) → base[offset / stride]
+            let (base_vn, const_vn) = if def_insn.inputs[1].space == SpaceId::Const {
+                (&def_insn.inputs[0], &def_insn.inputs[1])
+            } else if def_insn.inputs[0].space == SpaceId::Const {
+                (&def_insn.inputs[1], &def_insn.inputs[0])
+            } else {
+                return None;
+            };
+            if base_vn.space == SpaceId::Const {
+                return None;
+            }
+            let offset = const_vn.offset;
+            if offset == 0 || offset % stride != 0 {
+                return None;
+            }
+            let computed_idx = offset / stride;
+            let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
+            Some(ArraySubscript { base: base_expr, index: format!("{}", computed_idx) })
+        }
+
+        // Pattern 2: PTRADD(base, index, Const(stride))
+        IrOp::Ptradd if def_insn.inputs.len() >= 3 => {
+            let stride_vn = &def_insn.inputs[2];
+            if stride_vn.space != SpaceId::Const || stride_vn.offset != stride {
+                return None;
+            }
+            let base_expr = emit_operand_resolved(&def_insn.inputs[0], 0, def_stmt, ctx);
+            let idx_expr = emit_operand_resolved(&def_insn.inputs[1], 1, def_stmt, ctx);
+            Some(ArraySubscript { base: base_expr, index: idx_expr })
+        }
+
+        _ => None,
+    }
+}
+
 /// Minimum address to consider as a global (below this is likely stack-relative).
 const GLOBAL_ADDR_THRESHOLD: u64 = 0x10000;
 
@@ -608,7 +745,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             }
 
             HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_)
-            | HirNode::TailCall { .. } | HirNode::Continue => {}
+            | HirNode::TailCall { .. } | HirNode::Continue | HirNode::Break => {}
 
             HirNode::TryCatch { try_body, catch_body } => {
                 ctx.collect_depth += 1;
@@ -910,6 +1047,11 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let _ = writeln!(out, "continue;");
         }
 
+        HirNode::Break => {
+            indent(depth, out);
+            let _ = writeln!(out, "break;");
+        }
+
         HirNode::TryCatch { try_body, catch_body } => {
             indent(depth, out);
             let _ = writeln!(out, "__try {{");
@@ -1063,6 +1205,8 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                         let _ = writeln!(out, "{} = {};", global, val);
                     } else if let Some(field_expr) = try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx) {
                         let _ = writeln!(out, "{} = {};", field_expr, val);
+                    } else if let Some(sub) = try_array_subscript(&insn.inputs[1], idx, store_size, ctx) {
+                        let _ = writeln!(out, "{}[{}] = {};", sub.base, sub.index, val);
                     } else {
                         let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
                         let cast = ida_ptr_type(store_size);
@@ -1082,6 +1226,10 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             }
             IrOp::Unimplemented => {
                 let _ = writeln!(out, "__unknown_insn_0x{:X}();", insn.addr);
+            }
+            IrOp::Callother => {
+                let expr = emit_callother(insn, idx, ctx);
+                let _ = writeln!(out, "{};", expr);
             }
             _ => {
                 let _ = writeln!(out, "/* {} */;", insn.op.name());
@@ -1187,9 +1335,26 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
         IrOp::IntDiv => emit_unsigned_binop(insn, "/", stmt_idx, parent_prec, ctx),
         IrOp::IntSrem => emit_binop(insn, "%", stmt_idx, parent_prec, ctx),
         IrOp::IntRem => emit_unsigned_binop(insn, "%", stmt_idx, parent_prec, ctx),
-        IrOp::IntAnd => emit_binop(insn, "&", stmt_idx, parent_prec, ctx),
-        IrOp::IntOr => emit_binop(insn, "|", stmt_idx, parent_prec, ctx),
-        IrOp::IntXor => emit_binop(insn, "^", stmt_idx, parent_prec, ctx),
+        IrOp::IntAnd => {
+            if insn.inputs.len() >= 2 && insn.inputs[1].space == SpaceId::Const && insn.inputs[1].offset == 0 {
+                return "0".to_string();
+            }
+            emit_binop(insn, "&", stmt_idx, parent_prec, ctx)
+        }
+        IrOp::IntOr => {
+            if insn.inputs.len() >= 2 && insn.inputs[1].space == SpaceId::Const && insn.inputs[1].offset == 0 {
+                return emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
+            }
+            emit_binop(insn, "|", stmt_idx, parent_prec, ctx)
+        }
+        IrOp::IntXor => {
+            if insn.inputs.len() >= 2 && insn.inputs[0] == insn.inputs[1]
+                && insn.inputs[0].space != SpaceId::Const
+            {
+                return "0".to_string();
+            }
+            emit_binop(insn, "^", stmt_idx, parent_prec, ctx)
+        }
         IrOp::IntLeft => emit_binop(insn, "<<", stmt_idx, parent_prec, ctx),
         IrOp::IntSright => emit_binop(insn, ">>", stmt_idx, parent_prec, ctx),
         IrOp::IntRight => emit_unsigned_binop(insn, ">>", stmt_idx, parent_prec, ctx),
@@ -1219,7 +1384,19 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
             if insn.inputs.is_empty() {
                 "0".to_string()
             } else {
-                emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx)
+                let copy_ctx = if insn.inputs[0].space == SpaceId::Const
+                    && insn.inputs[0].offset == 0
+                {
+                    let out_sv = ctx.stmt_outputs.get(&stmt_idx).cloned().flatten();
+                    if out_sv.and_then(|sv| ctx.var_types.get(&sv).copied()) == Some(PrimitiveType::Ptr) {
+                        ConstContext::Pointer
+                    } else {
+                        ConstContext::Signed
+                    }
+                } else {
+                    ConstContext::Signed
+                };
+                emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, copy_ctx, 0, ctx)
             }
         }
 
@@ -1228,12 +1405,14 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
             let load_size = insn.output.map_or(8, |o| o.size);
             let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
             if addr_idx < insn.inputs.len() {
-                // Global variable naming: constant absolute address → dword_XXXX etc.
                 if let Some(global) = try_global_var_name(&insn.inputs[addr_idx], load_size, ctx) {
                     return global;
                 }
                 if let Some(resolved) = try_resolve_field_from_addr(&insn.inputs[addr_idx], addr_idx, stmt_idx, load_size, ctx) {
                     return resolved;
+                }
+                if let Some(sub) = try_array_subscript(&insn.inputs[addr_idx], stmt_idx, load_size, ctx) {
+                    return format!("{}[{}]", sub.base, sub.index);
                 }
                 let addr = emit_operand_resolved(&insn.inputs[addr_idx], addr_idx, stmt_idx, ctx);
                 let cast = ida_ptr_type(load_size);
@@ -1328,7 +1507,15 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
         IrOp::FloatNan => emit_call1(insn, "isnan", stmt_idx, ctx),
 
         // -- Bit manipulation --
-        IrOp::Popcount => emit_call1(insn, "__builtin_popcount", stmt_idx, ctx),
+        IrOp::Popcount => {
+            if !insn.inputs.is_empty()
+                && insn.inputs[0].space == SpaceId::Const
+                && insn.inputs[0].offset == 0
+            {
+                return "0".to_string();
+            }
+            emit_call1(insn, "__builtin_popcount", stmt_idx, ctx)
+        }
         IrOp::Lzcount => emit_call1(insn, "__builtin_clz", stmt_idx, ctx),
 
         // -- Piece/Subpiece --
@@ -1394,6 +1581,9 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
         // -- Unknown / unimplemented instruction --
         IrOp::Unimplemented => format!("__unknown_insn_0x{:X}()", insn.addr),
 
+        // -- CALLOTHER: resolve to intrinsic name if known --
+        IrOp::Callother => emit_callother(insn, stmt_idx, ctx),
+
         // -- Fallback --
         _ => format!("/* {} */ 0", insn.op.name()),
     }
@@ -1402,13 +1592,23 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
 fn emit_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
     let my_prec = c_precedence(insn.op);
     let const_ctx = const_context_for_op(insn.op);
+    let lhs_ctx = if insn.inputs.len() >= 2 {
+        const_context_for_binop_pair(insn, 0, stmt_idx, ctx)
+    } else {
+        const_ctx
+    };
+    let rhs_ctx = if insn.inputs.len() >= 2 {
+        const_context_for_binop_pair(insn, 1, stmt_idx, ctx)
+    } else {
+        const_ctx
+    };
     let lhs = if !insn.inputs.is_empty() {
-        emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, const_ctx, my_prec, ctx)
+        emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, lhs_ctx, my_prec, ctx)
     } else {
         "0".to_string()
     };
     let rhs = if insn.inputs.len() >= 2 {
-        emit_operand_with_prec(&insn.inputs[1], 1, stmt_idx, const_ctx, my_prec, ctx)
+        emit_operand_with_prec(&insn.inputs[1], 1, stmt_idx, rhs_ctx, my_prec, ctx)
     } else {
         "0".to_string()
     };
@@ -1508,6 +1708,52 @@ fn emit_call1(insn: &IrInsn, func: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> S
     format!("{}({})", func, arg)
 }
 
+fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
+    match tag {
+        0x1 => Some("__builtin_memcpy"),
+        0x2 => Some("__builtin_memset"),
+        0x3 => Some("__builtin_memcmp"),
+        0x100 => Some("_mm_load_si128"),
+        0x101 => Some("_mm_loadu_si128"),
+        0x110 => Some("_mm_add_epi8"),
+        0x111 => Some("_mm_add_epi16"),
+        0x112 => Some("_mm_add_epi32"),
+        0x113 => Some("_mm_add_epi64"),
+        0x118 => Some("_mm_sub_epi8"),
+        0x119 => Some("_mm_sub_epi16"),
+        0x11A => Some("_mm_sub_epi32"),
+        0x11B => Some("_mm_sub_epi64"),
+        0x120 => Some("_mm_and_si128"),
+        0x121 => Some("_mm_or_si128"),
+        0x122 => Some("_mm_xor_si128"),
+        _ => None,
+    }
+}
+
+fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    if insn.inputs.is_empty() {
+        return "/* CALLOTHER (no tag) */ 0".to_string();
+    }
+
+    let tag_vn = &insn.inputs[0];
+    if tag_vn.space != SpaceId::Const {
+        return "/* CALLOTHER (dynamic tag) */ 0".to_string();
+    }
+
+    let tag = tag_vn.offset;
+    match callother_intrinsic_name(tag) {
+        Some(name) => {
+            let args: Vec<String> = insn.inputs[1..]
+                .iter()
+                .enumerate()
+                .map(|(i, vn)| emit_operand_resolved(vn, i + 1, stmt_idx, ctx))
+                .collect();
+            format!("{}({})", name, args.join(", "))
+        }
+        None => format!("/* CALLOTHER {} */ 0", tag),
+    }
+}
+
 fn emit_unsigned_binop(insn: &IrInsn, op: &str, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
     let my_prec = c_precedence(insn.op);
     let const_ctx = ConstContext::Bitwise;
@@ -1550,6 +1796,33 @@ fn emit_operand_resolved(
     emit_operand_with_prec(vn, _raw_idx, stmt_idx, ConstContext::Signed, 0, ctx)
 }
 
+fn is_pointer_typed_input(vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if vn.space == SpaceId::Const {
+        return false;
+    }
+    let resolved_sv = ctx
+        .stmt_inputs
+        .get(&stmt_idx)
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *vn).copied());
+    let sv = resolved_sv.unwrap_or(SsaVarnode { base: *vn, version: 0 });
+    ctx.var_types.get(&sv).copied() == Some(PrimitiveType::Ptr)
+}
+
+fn const_context_for_binop_pair(insn: &IrInsn, this_idx: usize, stmt_idx: u32, ctx: &PrintCtx) -> ConstContext {
+    let base_ctx = const_context_for_op(insn.op);
+    if insn.inputs.len() < 2 {
+        return base_ctx;
+    }
+    let other_idx = 1 - this_idx;
+    if insn.inputs[this_idx].space == SpaceId::Const
+        && insn.inputs[this_idx].offset == 0
+        && is_pointer_typed_input(&insn.inputs[other_idx], stmt_idx, ctx)
+    {
+        return ConstContext::Pointer;
+    }
+    base_ctx
+}
+
 fn emit_operand_with_prec(
     vn: &unlace_ir::Varnode,
     _raw_idx: usize,
@@ -1587,6 +1860,8 @@ fn emit_operand_with_prec(
 enum ConstContext {
     Signed,
     Bitwise,
+    Pointer,
+    Unsigned,
 }
 
 fn const_context_for_op(op: IrOp) -> ConstContext {
@@ -1603,6 +1878,10 @@ fn format_constant(value: u64, size: u8) -> String {
 }
 
 fn format_constant_ctx(value: u64, size: u8, context: ConstContext) -> String {
+    if context == ConstContext::Pointer && value == 0 {
+        return "nullptr".to_string();
+    }
+
     let msb_threshold = match size {
         1 => 0x80u64,
         2 => 0x8000,
@@ -1616,18 +1895,46 @@ fn format_constant_ctx(value: u64, size: u8, context: ConstContext) -> String {
     if has_msb && context == ConstContext::Signed {
         let signed = sign_extend(value, size);
         let abs_val = signed.unsigned_abs();
-        // For 1-2 byte operands, keep hex to avoid turning bitmasks like
-        // 0xFF into -1.  For 4/8 byte, always negate.
         let should_negate = size >= 4 || (size == 2 && abs_val <= 128);
         if should_negate {
-            return format!("{}", signed);
+            return if size == 8 {
+                format!("{}LL", signed)
+            } else {
+                format!("{}", signed)
+            };
         }
     }
 
     if has_msb {
-        format!("0x{:x}ULL", value)
-    } else if value < 10 {
-        format!("{}", value)
+        return format!("0x{:x}ULL", value);
+    }
+
+    if context == ConstContext::Unsigned {
+        return if value < 10 {
+            if size == 8 {
+                format!("{}ULL", value)
+            } else if size == 4 {
+                format!("{}u", value)
+            } else {
+                format!("{}", value)
+            }
+        } else if size == 8 {
+            format!("0x{:x}ULL", value)
+        } else if size == 4 {
+            format!("0x{:x}u", value)
+        } else {
+            format!("0x{:x}", value)
+        };
+    }
+
+    if value < 10 {
+        if size == 8 {
+            format!("{}LL", value)
+        } else {
+            format!("{}", value)
+        }
+    } else if size == 8 {
+        format!("0x{:x}LL", value)
     } else {
         format!("0x{:x}", value)
     }
@@ -2239,7 +2546,8 @@ mod tests {
         let dwarf = DwarfInfo { functions: BTreeMap::new(), source_map: BTreeMap::new(), structs, enums: BTreeMap::new(), unions: BTreeMap::new() };
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(!output.contains("->"), "should NOT contain ->: {output}");
-        assert!(output.contains("*(_DWORD *)"), "should fall back to typed cast: {output}");
+        // With array subscript recovery: INT_ADD(base, 48) with 4-byte load → base[12]
+        assert!(output.contains("v1[12]"), "should recover array subscript v1[12]: {output}");
     }
 
     #[test]
@@ -4085,6 +4393,395 @@ mod tests {
         assert!(
             sig_line.starts_with("int sub_500000("),
             "unknown convention should have no annotation: {sig_line}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-16: Array subscript recovery tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_array_subscript_basic() {
+        // LOAD with INT_ADD(base, INT_MULT(i, 4)), size=4 → base[i]
+        let space = con(0, 8);
+        let base = reg(0, 8);
+        let idx = reg(8, 8);
+        let stride = con(4, 8);
+        let mult_out = Varnode::unique(100, 8);
+        let add_out = Varnode::unique(200, 8);
+        let load_out = reg(16, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::IntMult, mult_out, smallvec![idx, stride], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, add_out, smallvec![base, mult_out], 0x1004)),
+            HirNode::Statement(IrInsn::with_output(IrOp::Load, load_out, smallvec![space, add_out], 0x1008)),
+            HirNode::Return(Some(SsaVarnode { base: load_out, version: 0 })),
+        ];
+
+        let func = make_func("array_basic", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("v3[v1]"),
+            "should emit base[index] (base=v3, idx=v1): {output}",
+        );
+        assert!(
+            !output.contains("*(_DWORD *)"),
+            "should NOT fall back to pointer dereference: {output}",
+        );
+    }
+
+    #[test]
+    fn test_array_subscript_ptradd() {
+        // PTRADD(base, i, 4) used as LOAD address, size=4 → base[i]
+        let space = con(0, 8);
+        let base = reg(0, 8);
+        let idx = reg(8, 8);
+        let stride = con(4, 8);
+        let ptradd_out = Varnode::unique(100, 8);
+        let load_out = reg(16, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::Ptradd, ptradd_out, smallvec![base, idx, stride], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::Load, load_out, smallvec![space, ptradd_out], 0x1004)),
+            HirNode::Return(Some(SsaVarnode { base: load_out, version: 0 })),
+        ];
+
+        let func = make_func("array_ptradd", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("v1[v2]"),
+            "PTRADD should emit base[index]: {output}",
+        );
+    }
+
+    #[test]
+    fn test_array_constant_index() {
+        // *(base + 16) load 4 bytes → base[4]
+        let space = con(0, 8);
+        let base = reg(0, 8);
+        let offset = con(16, 8);
+        let add_out = Varnode::unique(100, 8);
+        let load_out = reg(8, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, add_out, smallvec![base, offset], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::Load, load_out, smallvec![space, add_out], 0x1004)),
+            HirNode::Return(Some(SsaVarnode { base: load_out, version: 0 })),
+        ];
+
+        let func = make_func("array_const_idx", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("v1[4]"),
+            "constant offset 16 / stride 4 should emit base[4]: {output}",
+        );
+    }
+
+    #[test]
+    fn test_array_stride_mismatch_keeps_deref() {
+        // INT_ADD(base, INT_MULT(i, 8)) but load size=4 → stride mismatch, keep deref
+        let space = con(0, 8);
+        let base = reg(0, 8);
+        let idx = reg(8, 8);
+        let stride = con(8, 8);
+        let mult_out = Varnode::unique(100, 8);
+        let add_out = Varnode::unique(200, 8);
+        let load_out = reg(16, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::IntMult, mult_out, smallvec![idx, stride], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, add_out, smallvec![base, mult_out], 0x1004)),
+            HirNode::Statement(IrInsn::with_output(IrOp::Load, load_out, smallvec![space, add_out], 0x1008)),
+            HirNode::Return(Some(SsaVarnode { base: load_out, version: 0 })),
+        ];
+
+        let func = make_func("stride_mismatch", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("*(_DWORD *)"),
+            "stride mismatch should keep pointer dereference: {output}",
+        );
+        assert!(
+            !output.contains("["),
+            "should NOT emit array subscript: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-23: CALLOTHER resolution tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_callother_resolved() {
+        let r0 = reg(0, 16);
+        let r16 = reg(16, 16);
+        let out = reg(32, 16);
+        let tag = con(0x110, 8); // PADDB
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother, out, smallvec![tag, r0, r16], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+        ];
+
+        let func = make_func("sse_add", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("_mm_add_epi8("),
+            "CALLOTHER with PADDB tag should emit _mm_add_epi8: {output}",
+        );
+        assert!(
+            !output.contains("/* CALLOTHER"),
+            "known tag should NOT have fallback comment: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_unknown_annotated() {
+        let r0 = reg(0, 16);
+        let out = reg(32, 16);
+        let tag = con(0xDEAD, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother, out, smallvec![tag, r0], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+        ];
+
+        let func = make_func("sse_unknown", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("/* CALLOTHER 57005 */"),
+            "unknown tag should have CALLOTHER comment with decimal tag: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_no_output_resolved() {
+        let r0 = reg(0, 16);
+        let r16 = reg(16, 16);
+        let tag = con(0x100, 8); // MOVDQA store form
+
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother, smallvec![tag, r0, r16], 0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("sse_mov_store", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("_mm_load_si128("),
+            "CALLOTHER store-form MOVDQA should still emit intrinsic: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-24: Constant folding tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_xor_self_becomes_zero() {
+        let r0 = reg(0, 4);
+        let out = reg(8, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntXor, out, smallvec![r0, r0], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+        ];
+
+        let func = make_func("xor_self", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("v2 = 0;"),
+            "XOR(v, v) should fold to 0: {output}",
+        );
+        let xor_line = output.lines().find(|l| l.contains("v2 ="));
+        assert!(
+            xor_line.map_or(false, |l| !l.contains("^")),
+            "XOR-self should not contain ^ in assignment: {output}",
+        );
+    }
+
+    #[test]
+    fn test_popcount_zero_folded() {
+        let r0 = reg(0, 4);
+        let zero = con(0, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Popcount, r0, smallvec![zero], 0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let func = make_func("popcount_zero", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("v1 = 0;"),
+            "popcount(0) should fold to 0: {output}",
+        );
+        assert!(
+            !output.contains("__builtin_popcount"),
+            "should NOT emit __builtin_popcount call: {output}",
+        );
+    }
+
+    #[test]
+    fn test_and_zero_folded() {
+        let r0 = reg(0, 4);
+        let out = reg(8, 4);
+        let zero = con(0, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAnd, out, smallvec![r0, zero], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+        ];
+
+        let func = make_func("and_zero", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("v2 = 0;"),
+            "v & 0 should fold to 0: {output}",
+        );
+    }
+
+    #[test]
+    fn test_or_zero_identity() {
+        let r0 = reg(0, 4);
+        let out = reg(8, 4);
+        let zero = con(0, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntOr, out, smallvec![r0, zero], 0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode { base: out, version: 0 })),
+        ];
+
+        let func = make_func("or_zero", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("v2 = v1;"),
+            "v | 0 should fold to v: {output}",
+        );
+        let or_line = output.lines().find(|l| l.contains("v2 ="));
+        assert!(
+            or_line.map_or(false, |l| !l.contains("|")),
+            "or-zero should not contain | in assignment: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P4-25: nullptr and literal suffix tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_nullptr_in_pointer_context() {
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 1);
+        let zero = con(0, 8);
+
+        let cmp = IrInsn::with_output(
+            IrOp::IntEqual, r8, smallvec![r0, zero], 0x1000,
+        );
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Ptradd, r0, smallvec![r0, zero], 0x0FF0,
+            )),
+            HirNode::Statement(cmp),
+            HirNode::Return(Some(SsaVarnode { base: r8, version: 0 })),
+        ];
+
+        let func = make_func("nullptr_test", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("nullptr"),
+            "comparison of pointer with 0 should emit nullptr: {output}",
+        );
+    }
+
+    #[test]
+    fn test_64bit_literal_suffix() {
+        let r0 = reg(0, 8);
+        let big = con(0x1000, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd, r0, smallvec![r0, big], 0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 8))),
+        ];
+
+        let func = make_func("ll_suffix", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("0x1000LL"),
+            "64-bit literal should have LL suffix: {output}",
+        );
+    }
+
+    #[test]
+    fn test_unsigned_literal_suffix() {
+        assert_eq!(
+            super::format_constant_ctx(5, 8, super::ConstContext::Unsigned),
+            "5ULL",
+        );
+        assert_eq!(
+            super::format_constant_ctx(5, 4, super::ConstContext::Unsigned),
+            "5u",
+        );
+        assert_eq!(
+            super::format_constant_ctx(0x100, 8, super::ConstContext::Unsigned),
+            "0x100ULL",
+        );
+        assert_eq!(
+            super::format_constant_ctx(0x100, 4, super::ConstContext::Unsigned),
+            "0x100u",
+        );
+    }
+
+    #[test]
+    fn test_nullptr_copy_to_pointer() {
+        let ptr_vn = reg(0, 8);
+        let zero = con(0, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Ptradd, ptr_vn, smallvec![ptr_vn, zero], 0x0FF0,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy, ptr_vn, smallvec![zero], 0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 8))),
+        ];
+
+        let func = make_func("nullptr_copy", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("nullptr"),
+            "COPY of 0 to pointer variable should emit nullptr: {output}",
         );
     }
 }

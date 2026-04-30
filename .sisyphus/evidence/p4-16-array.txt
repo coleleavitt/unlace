@@ -1,0 +1,30 @@
+P4-16: Array subscript recovery
+================================
+
+Implementation in: crates/unlace-output/src/c_printer.rs
+
+Added `try_array_subscript()` that detects three patterns in LOAD/STORE address:
+
+1. INT_ADD(base, INT_MULT(index, Const(stride))) where stride == access_size
+   → Emits base[index]
+
+2. PTRADD(base, index, Const(stride)) where stride == access_size
+   → Emits base[index]
+
+3. INT_ADD(base, Const(offset)) where offset % access_size == 0
+   → Emits base[offset/access_size]
+
+Stride mismatch → falls back to pointer dereference form.
+
+Applied to both LOAD (emit_expr) and STORE (emit_statement) paths.
+
+Tests added:
+  - test_array_subscript_basic: INT_ADD(base, INT_MULT(i, 4)) + LOAD 4 → base[i]
+  - test_array_subscript_ptradd: PTRADD(base, i, 4) + LOAD 4 → base[i]
+  - test_array_constant_index: INT_ADD(base, 16) + LOAD 4 → base[4]
+  - test_array_stride_mismatch_keeps_deref: stride 8, load 4 → keeps *(_DWORD *)
+
+Updated test_struct_field_no_match: INT_ADD(base, 48) + LOAD 4 now correctly
+recovers as base[12] instead of *(_DWORD *) cast.
+
+All 115 unlace-output tests pass. No regressions.

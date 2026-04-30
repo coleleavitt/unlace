@@ -1,0 +1,141 @@
+P3-7 For-loop Recovery — Evidence
+==================================
+
+TASK: Detect canonical for-loop pattern (init + condition + update + body)
+from existing while-loop structuring in crates/unlace-struct/src/structurer.rs.
+Convert eligible while-loops into `for (init; cond; update) { body }`.
+
+DELIVERABLES
+============
+
+1. New HirNode variant `For { init, cond, update, body }`
+   File: crates/unlace-struct/src/hir.rs (lines 80-99)
+
+2. Post-pass `recover_for_loops()` in structurer.rs
+   File: crates/unlace-struct/src/structurer.rs (lines 922-1129)
+   - Walks HIR tree post-structuring
+   - Detects [Statement(init), While{cond, body}] pattern
+   - Validates eligibility:
+     * init defines a base varnode V (Copy/IntAdd/IntSub/IntZext/IntSext/Cast/Load)
+     * cond.base == V
+     * Last Statement in body is V = V op const (IntAdd/IntSub)
+     * V is not referenced in any HirNode following the loop in the same scope
+   - Recurses into nested If/While/DoWhile/For/Switch/Block bodies
+   - Re-exported via crates/unlace-struct/src/lib.rs
+
+3. Wired into `structure()` entry point so all SsaFunction → HirFunction
+   paths benefit automatically.
+   File: crates/unlace-struct/src/structurer.rs (line 43)
+
+4. C printer support
+   File: crates/unlace-output/src/c_printer.rs
+   - collect_varnodes (HirNode::For arm): assigns SSA versions to init,
+     body, then update in walk-order
+   - emit_node (HirNode::For arm): renders body into a temp buffer first,
+     then composes `for (init_str; cond; update_str) { body_str }`
+   - Helper emit_for_clause + try_emit_increment_form +
+     try_emit_compound_assign for short forms (`i++`, `i--`, `i += 2`)
+
+CONSERVATISM RULES
+==================
+- Init must be a Statement IrInsn directly preceding the While in the same scope
+- Init's output base varnode V identifies the induction variable
+- Loop condition's base varnode must equal V
+- Update IrInsn must:
+  - Be the last Statement in the loop body
+  - Have output == V
+  - Be IntAdd or IntSub
+  - Read V as an input
+  - Have a constant step
+- V must NOT appear in any HirNode following the loop in the same scope
+- If any rule fails, the original [init; While] pair is preserved as-is.
+
+TESTS — STRUCTURER (8 tests, all passing)
+=========================================
+
+  $ cargo test -p unlace-struct -- for_loop
+  test structurer::tests::test_for_loop_simple_increment ... ok
+  test structurer::tests::test_for_loop_with_step ... ok
+  test structurer::tests::test_for_loop_decrement ... ok
+  test structurer::tests::test_for_loop_no_init_keeps_while ... ok
+  test structurer::tests::test_for_loop_counter_used_after_loop_keeps_while ... ok
+  test structurer::tests::test_for_loop_no_update_keeps_while ... ok
+  test structurer::tests::test_for_loop_recurses_into_nested ... ok
+  test structurer::tests::test_for_loop_cond_must_reference_counter ... ok
+
+  test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out
+
+Coverage:
+- test_for_loop_simple_increment   → `i = 0; while (i) { body; i++ }` → For
+- test_for_loop_with_step          → step=2 (i += 2) recovered
+- test_for_loop_decrement          → IntSub update (i--) recovered
+- test_for_loop_no_init_keeps_while → no preceding init → stays While
+- test_for_loop_counter_used_after_loop_keeps_while → V referenced after → stays While
+- test_for_loop_no_update_keeps_while → body update writes a different var → stays While
+- test_for_loop_recurses_into_nested → outer + inner both recovered as For
+- test_for_loop_cond_must_reference_counter → cond on unrelated var → stays While
+
+TESTS — C PRINTER (4 tests, all passing)
+========================================
+
+  $ cargo test -p unlace-output -- for_loop
+  test c_printer::tests::test_for_loop_simple_emit ... ok
+  test c_printer::tests::test_for_loop_compound_step_emit ... ok
+  test c_printer::tests::test_for_loop_decrement_emit ... ok
+  test c_printer::tests::test_for_loop_compiles ... ok
+
+Coverage:
+- test_for_loop_simple_emit        → emits `for (...; v1; v1++)` and not `while`
+- test_for_loop_compound_step_emit → emits `v1 += 2` for step != 1
+- test_for_loop_decrement_emit     → emits `v?--` for IntSub-by-1
+- test_for_loop_compiles           → gcc -fsyntax-only accepts the output
+
+WORKSPACE TESTS — REGRESSION CHECK
+==================================
+
+  $ cargo test --workspace 2>&1 | grep "test result.*passed" | awk '{sum += $4} END {print sum}'
+  805
+
+  Wave 1 baseline (per task brief):  766 tests
+  After P3-7:                         805 tests   (+39 net,
+                                                   incl. 8 structurer + 4 c_printer tests
+                                                   from this task; remainder from Wave 1.)
+
+DETERMINISM — BTreeMap discipline
+=================================
+
+  $ cargo xtask lint-determinism
+  lint-determinism: OK — no HashMap/HashSet in enforced crates
+
+  No HashMap/HashSet introduced. New code uses plain Vec walks
+  and SsaVarnode/Varnode value comparisons (no hash-based collections).
+
+CLI SANITY CHECK
+================
+
+  $ ./target/debug/unlace decompile fixtures/loops.elf
+  (decompiles cleanly, no crashes)
+  $ ./target/debug/unlace decompile fixtures/medium.elf
+  (decompiles cleanly, no crashes)
+
+  Note: Real-binary for-loop emission depends on upstream SSA shape
+  (preceding statement is the init, single Statement update at body end,
+  cond on the same base varnode, no use after the loop). On loops.elf
+  the pattern is masked by phi unification and intermediate flag-tracking
+  blocks; the conservative rules correctly leave those as while-loops
+  rather than mis-recovering. Future passes (variable coalescence,
+  CSE) in this Phase 3 wave should expose more for-loop candidates.
+
+FILES MODIFIED
+==============
+- crates/unlace-struct/src/hir.rs           (+20 lines)  — HirNode::For variant
+- crates/unlace-struct/src/lib.rs           (+1 line)    — re-export recover_for_loops
+- crates/unlace-struct/src/structurer.rs    (+209 lines) — recovery pass + 8 tests
+- crates/unlace-output/src/c_printer.rs     (+187 lines) — emission + helpers + 4 tests
+
+NO files outside the assigned scope were modified
+(no touches to crates/unlace-passes/ — that's other Wave-2 territory).
+
+COMMIT
+======
+feat(struct): for-loop recovery from while-loop pattern

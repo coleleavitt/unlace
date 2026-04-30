@@ -1,0 +1,20 @@
+P5-9: LEAVE Instruction
+=======================
+
+IMPLEMENTATION
+- stack.rs: Added lift_leave
+  - LEAVE = MOV RSP, RBP; POP RBP — 3 IR instructions:
+    1. RSP = Copy(RBP)
+    2. RBP = Load(RAM, RSP) — pop old frame pointer
+    3. RSP = IntAdd(RSP, 8) — adjust stack after pop
+- lift.rs: Match arm for M::Leave
+
+TESTS (1 new)
+- test_leave: 0xC9 → Load + IntAdd + 3× Copy
+
+VERIFICATION
+- cargo test -p unlace-lift-x86: 96 passed, 0 failed
+- cargo test --workspace: all pass, 0 failures
+
+COMMIT
+- 44ebcd48e feat(lift-x86): lift LEAVE instruction

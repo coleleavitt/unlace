@@ -163,7 +163,7 @@ Wave FINAL (Verification):
 
 ## TODOs
 
-- [ ] P5-1. Enable SCCP in pipeline
+- [x] P5-1. Enable SCCP in pipeline
 
   **What to do**:
   - In `crates/unlace-cli/src/pipeline.rs`:
@@ -185,7 +185,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(pipeline): enable SCCP in optimization pipeline`
 
-- [ ] P5-2. Enable CSE in pipeline
+- [x] P5-2. Enable CSE in pipeline
 
   **What to do**:
   - Add `CsePass` to the fixedpoint pass list in pipeline.rs
@@ -204,7 +204,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(pipeline): enable CSE in optimization pipeline`
 
-- [ ] P5-3. Enable DeadStoreElim + DeadFlagElim in pipeline
+- [x] P5-3. Enable DeadStoreElim + DeadFlagElim in pipeline
 
   **What to do**:
   - Add `DeadStoreElimPass` and `DeadFlagElimPass` to pipeline.rs
@@ -224,7 +224,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(pipeline): enable DeadStoreElim + DeadFlagElim`
 
-- [ ] P5-4. Enable IdiomRecognition + DivisionIdiom + ModuloIdiom + ConditionSimplify
+- [x] P5-4. Enable IdiomRecognition + DivisionIdiom + ModuloIdiom + ConditionSimplify
 
   **What to do**:
   - Add `IdiomRecognitionPass`, `DivisionIdiomPass`, `ModuloIdiomPass`, `ConditionSimplifyPass` to pipeline.rs
@@ -245,7 +245,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(pipeline): enable IdiomRecognition, DivisionIdiom, ModuloIdiom, ConditionSimplify`
 
-- [ ] P5-5. Wire inferred_params + inferred_return_type to C printer
+- [x] P5-5. Wire inferred_params + inferred_return_type to C printer
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -269,7 +269,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(output): wire inferred_params and return type to C printer signatures`
 
-- [ ] P5-6. Measure parity after Wave 0 enables
+- [x] P5-6. Measure parity after Wave 0 enables
 
   **What to do**:
   - Run full parity measurement: `python3 scripts/measure_parity.py --json > .sisyphus/evidence/p5-wave0.json`
@@ -291,7 +291,7 @@ Wave FINAL (Verification):
 
   **Commit**: NO (measurement only)
 
-- [ ] P5-7. Lift SETcc family (16 variants)
+- [x] P5-7. Lift SETcc family (16 variants)
 
   **What to do**:
   - In `crates/unlace-lift-x86/src/lift.rs`:
@@ -317,7 +317,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(lift-x86): lift SETcc family (16 conditional byte-set variants)`
 
-- [ ] P5-8. Lift CLTQ/CLTD/CQTO (sign extension family)
+- [x] P5-8. Lift CLTQ/CLTD/CQTO (sign extension family)
 
   **What to do**:
   - In `crates/unlace-lift-x86/src/lift.rs` and `ops/arithmetic.rs`:
@@ -341,7 +341,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(lift-x86): lift CLTQ/CLTD/CQTO sign extension instructions`
 
-- [ ] P5-9. Lift LEAVE instruction
+- [x] P5-9. Lift LEAVE instruction
 
   **What to do**:
   - LEAVE = `mov rsp, rbp; pop rbp` — two operations in one instruction
@@ -362,7 +362,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(lift-x86): lift LEAVE instruction`
 
-- [ ] P5-10. Measure parity after Wave 1
+- [x] P5-10. Measure parity after Wave 1
 
   **QA Scenarios**:
   ```
@@ -378,7 +378,7 @@ Wave FINAL (Verification):
 
   **Commit**: NO (measurement only)
 
-- [ ] P5-11. Lift MOVAPS/MOVUPS/MOVSD
+- [x] P5-11. Lift MOVAPS/MOVUPS/MOVSD
 
   **What to do**:
   - In `crates/unlace-lift-x86/src/ops/sse.rs`:
@@ -401,7 +401,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(lift-x86): lift MOVAPS/MOVUPS/MOVSD SSE move instructions`
 
-- [ ] P5-12. Lift ADC/SBB
+- [x] P5-12. Lift ADC/SBB
 
   **What to do**:
   - ADC: `dst = src1 + src2 + CF` (add with carry)
@@ -424,7 +424,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(lift-x86): lift ADC/SBB carry arithmetic instructions`
 
-- [ ] P5-13. Lift ROL/ROR
+- [x] P5-13. Lift ROL/ROR
 
   **What to do**:
   - ROL: `dst = (src << count) | (src >> (bits - count))`
@@ -445,7 +445,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(lift-x86): lift ROL/ROR rotation instructions`
 
-- [ ] P5-14. Lift BT/BSF/BSR/TZCNT/LZCNT/POPCNT
+- [x] P5-14. Lift BT/BSF/BSR/TZCNT/LZCNT/POPCNT
 
   **What to do**:
   - BT: `CF = (src >> bit_index) & 1` (bit test, sets CF)
@@ -470,7 +470,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(lift-x86): lift BT/BSF/BSR/TZCNT/LZCNT/POPCNT bit operations`
 
-- [ ] P5-15. Lift UD2 as unreachable/trap
+- [x] P5-15. Lift UD2 as unreachable/trap
 
   **What to do**:
   - UD2 is an intentional undefined instruction used as a trap/breakpoint
@@ -491,7 +491,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(lift-x86): lift UD2 as __builtin_trap`
 
-- [ ] P5-16. Measure parity after Wave 2
+- [x] P5-16. Measure parity after Wave 2
 
   **QA Scenarios**:
   ```
@@ -506,7 +506,7 @@ Wave FINAL (Verification):
 
   **Commit**: NO (measurement only)
 
-- [ ] P5-17. Add identity elimination rules to IdiomRecognition
+- [x] P5-17. Add identity elimination rules to IdiomRecognition
 
   **What to do**:
   - In `crates/unlace-passes/src/idiom_recognition.rs`:
@@ -527,7 +527,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(passes): add identity elimination rules (x+0→x, x*1→x, x&0→0, etc.)`
 
-- [ ] P5-18. Add De Morgan's law rules
+- [x] P5-18. Add De Morgan's law rules
 
   **What to do**:
   - In `crates/unlace-passes/src/condition_simplify.rs`:
@@ -548,7 +548,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(passes): De Morgan's law simplification`
 
-- [ ] P5-19. Add sign-bit extraction rule
+- [x] P5-19. Add sign-bit extraction rule
 
   **What to do**:
   - In `crates/unlace-passes/src/idiom_recognition.rs`:
@@ -570,7 +570,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(passes): sign-bit extraction idiom (x>>31 → x<0)`
 
-- [ ] P5-20. Add carry elimination rules
+- [x] P5-20. Add carry elimination rules
 
   **What to do**:
   - In `crates/unlace-passes/src/idiom_recognition.rs`:
@@ -591,7 +591,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(passes): carry elimination rules`
 
-- [ ] P5-21. Prologue/epilogue detection and suppression
+- [x] P5-21. Prologue/epilogue detection and suppression
 
   **What to do**:
   - WRITE `crates/unlace-passes/src/prologue_elim.rs` (new pass)
@@ -617,7 +617,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(passes): prologue/epilogue detection and suppression`
 
-- [ ] P5-22. Measure parity after Wave 3
+- [x] P5-22. Measure parity after Wave 3
 
   **QA Scenarios**:
   ```
@@ -632,7 +632,7 @@ Wave FINAL (Verification):
 
   **Commit**: NO (measurement only)
 
-- [ ] P5-23. Implement post-dominator tree
+- [x] P5-23. Implement post-dominator tree
 
   **What to do**:
   - In `crates/unlace-ir/src/cfg.rs` or `ssa.rs`:
@@ -654,7 +654,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(ir): post-dominator tree computation`
 
-- [ ] P5-24. Replace BFS join detection with post-dom (feature flag)
+- [x] P5-24. Replace BFS join detection with post-dom (feature flag)
 
   **What to do**:
   - In `crates/unlace-struct/src/structurer.rs`:
@@ -677,7 +677,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(struct): post-dominator join detection (behind feature flag)`
 
-- [ ] P5-25. Short-circuit boolean recovery
+- [x] P5-25. Short-circuit boolean recovery
 
   **What to do**:
   - WRITE `crates/unlace-struct/src/short_circuit.rs` (new post-structuring pass)
@@ -706,7 +706,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(struct): short-circuit boolean recovery (a && b, a || b)`
 
-- [ ] P5-26. Validate structurer changes on fixtures
+- [x] P5-26. Validate structurer changes on fixtures
 
   **What to do**:
   - Decompile all 4 fixtures with post-dom enabled vs disabled
@@ -727,7 +727,7 @@ Wave FINAL (Verification):
 
   **Commit**: `chore: validate post-dom structurer against fixtures`
 
-- [ ] P5-27. Measure parity after Wave 4
+- [x] P5-27. Measure parity after Wave 4
 
   **QA Scenarios**:
   ```
@@ -742,7 +742,7 @@ Wave FINAL (Verification):
 
   **Commit**: NO (measurement only)
 
-- [ ] P5-28. Expression folding: suppress single-use temporaries
+- [x] P5-28. Expression folding: suppress single-use temporaries
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -763,7 +763,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(output): suppress single-use temporaries from variable declarations`
 
-- [ ] P5-29. Recursive descent function discovery
+- [x] P5-29. Recursive descent function discovery
 
   **What to do**:
   - In `crates/unlace-cli/src/pipeline.rs` or `crates/unlace-loader/src/`:
@@ -785,7 +785,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(loader): recursive descent function discovery from CALL targets`
 
-- [ ] P5-30. Enhanced prologue scanning
+- [x] P5-30. Enhanced prologue scanning
 
   **What to do**:
   - In `crates/unlace-cli/src/pipeline.rs` (or loader):
@@ -808,7 +808,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(loader): enhanced prologue scanning (push r15/r14/r13/r12/rbx patterns)`
 
-- [ ] P5-31. Internal symbol resolution
+- [x] P5-31. Internal symbol resolution
 
   **What to do**:
   - After function discovery, build internal symbol table: `BTreeMap<u64, String>` mapping function entry address → `sub_XXXX` name
@@ -829,7 +829,7 @@ Wave FINAL (Verification):
 
   **Commit**: `feat(output): internal symbol resolution for cross-function calls`
 
-- [ ] P5-32. Measure parity after Wave 5
+- [x] P5-32. Measure parity after Wave 5
 
   **QA Scenarios**:
   ```
@@ -849,7 +849,7 @@ Wave FINAL (Verification):
 
 ## Final Verification Wave
 
-- [ ] P5-F1. **Plan Compliance Audit** — `oracle`
+- [x] P5-F1. **Plan Compliance Audit** — `oracle`
 
   **QA Scenarios**:
   ```
@@ -863,7 +863,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p5-f1-compliance.txt
   ```
 
-- [ ] P5-F2. **Code Quality Review** — `general`
+- [x] P5-F2. **Code Quality Review** — `general`
 
   **QA Scenarios**:
   ```
@@ -877,7 +877,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p5-f2-quality.txt
   ```
 
-- [ ] P5-F3. **Parity Measurement** — `general`
+- [x] P5-F3. **Parity Measurement** — `general`
 
   **QA Scenarios**:
   ```
@@ -891,7 +891,7 @@ Wave FINAL (Verification):
     Evidence: .sisyphus/evidence/p5-f3-parity.json
   ```
 
-- [ ] P5-F4. **Regression Check** — `general`
+- [x] P5-F4. **Regression Check** — `general`
 
   **QA Scenarios**:
   ```

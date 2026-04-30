@@ -1,0 +1,17 @@
+P5-18: De Morgan's law simplification
+======================================
+
+Commit: feat(passes): De Morgan's law simplification
+
+Rules added to condition_simplify.rs:
+  - BoolNegate(BoolOr(a, b)) → BoolAnd(BoolNegate(a), BoolNegate(b))
+  - BoolNegate(BoolAnd(a, b)) → BoolOr(BoolNegate(a), BoolNegate(b))
+
+Implementation:
+  - Refactored pass to support inserting new instructions (prefix + replacement)
+  - Added Simplification enum (Replace vs InsertAndReplace)
+  - Added find_max_unique_offset to allocate fresh unique varnodes
+  - Added demorgan() helper to construct the 3-instruction expansion
+
+Tests: 2 new tests (test_demorgan_negate_or, test_demorgan_negate_and)
+All 16 condition_simplify tests pass.

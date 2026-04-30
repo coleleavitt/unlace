@@ -1,0 +1,12 @@
+{
+  "active_plan": "/home/cole/RustProjects/active/unlace/.sisyphus/plans/unlace-phase5-full-parity.md",
+  "started_at": "2026-04-30T12:36:20.095Z",
+  "session_ids": [
+    "ses_2259eea58ffekd42HVWKymUkpb"
+  ],
+  "session_origins": {
+    "ses_2259eea58ffekd42HVWKymUkpb": "direct"
+  },
+  "plan_name": "unlace-phase5-full-parity",
+  "agent": "atlas"
+}

@@ -1,0 +1,18 @@
+P5-19: Sign-bit extraction idiom
+=================================
+
+Commit: feat(passes): sign-bit extraction idiom (x>>31 → x<0)
+
+Rule added to idiom_recognition.rs:
+  - INT_RIGHT(x, bits-1) → INT_SLESS(x, 0) for any size
+  - Only logical right shift (INT_RIGHT), NOT arithmetic (INT_SRIGHT)
+  - INT_SRIGHT(x, 31) produces 0xFFFFFFFF or 0, not 0/1, so it's excluded
+
+Helper: is_sign_bit_shift() checks if shift amount == (size * 8 - 1)
+
+Tests: 3 tests
+  - test_idiom_sign_bit_extraction_32bit: INT_RIGHT(x:4, 31) → INT_SLESS(x, 0)
+  - test_idiom_sign_bit_extraction_64bit: INT_RIGHT(x:8, 63) → INT_SLESS(x, 0)
+  - test_idiom_sright_no_sign_bit_extraction: INT_SRIGHT does NOT match
+
+All tests pass.

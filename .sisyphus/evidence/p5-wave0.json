@@ -1,0 +1,3003 @@
+{
+  "binary": "hexrays/ida-9.1/hexx64.so",
+  "refs": "references/hexrays/ida_dump/hexx64/all",
+  "overall_parity": 52.45246207404199,
+  "functions": [
+    {
+      "name": "sub_12cba0",
+      "score": 55.40308747855918,
+      "notes": "else-branches: unlace has 1, IDA has 0; while-loops: unlace has 1, IDA has 0; calls: missing: sub_11B9A0,sub_12C760,sub_12CBA0; extra: BYTE1,BYTE2,BYTE3",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 1,
+          "unlace_val": 2,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['sub_11B9A0', 'sub_12C760', 'sub_12CBA0']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', '__builtin_popcount', 'sub_12cba0', 'sub_2e4e70']",
+          "score": 0.0,
+          "note": "missing: sub_11B9A0,sub_12C760,sub_12CBA0; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 2,
+          "unlace_val": 11,
+          "score": 0.18181818181818182,
+          "note": "IDA=2 unlace=11"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 2,
+          "unlace_val": 2,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 0,
+          "unlace_val": 7,
+          "score": 0.0,
+          "note": "unlace has 7, IDA has 0"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 7,
+      "unlace_lines": 90
+    },
+    {
+      "name": "sub_136860",
+      "score": 69.99032414126754,
+      "notes": "calls: missing: j__qfree,sub_136640; extra: BYTE1,BYTE2,BYTE3; type-casts: IDA=1 unlace=15; ptr-derefs: IDA=1 unlace=6",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['j__qfree', 'sub_136640', 'sub_136860']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_136860']",
+          "score": 0.07692307692307693,
+          "note": "missing: j__qfree,sub_136640; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 1,
+          "unlace_val": 15,
+          "score": 0.06666666666666667,
+          "note": "IDA=1 unlace=15"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 1,
+          "unlace_val": 6,
+          "score": 0.16666666666666666,
+          "note": "IDA=1 unlace=6"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 0,
+          "unlace_val": 7,
+          "score": 0.0,
+          "note": "unlace has 7, IDA has 0"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 8,
+      "unlace_lines": 47
+    },
+    {
+      "name": "sub_1944b0",
+      "score": 55.917667238421956,
+      "notes": "if-branches: IDA=3 unlace=0; returns: IDA=2 unlace=0; calls: missing: __cxa_allocate_exception,__cxa_throw,_mm_loadl_epi64; extra: BYTE1,BYTE2,BYTE3",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 3,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=3 unlace=0"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 2,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=2 unlace=0"
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['__cxa_allocate_exception', '__cxa_throw', '_mm_loadl_epi64', '_mm_loadu_si128', '_mm_unpacklo_epi64', 'memcpy', 'qalloc', 'qalloc_or_throw', 'sub_1944B0', 'void']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_1944b0']",
+          "score": 0.0,
+          "note": "missing: __cxa_allocate_exception,__cxa_throw,_mm_loadl_epi64; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 22,
+          "unlace_val": 12,
+          "score": 0.5454545454545454,
+          "note": "IDA=22 unlace=12"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 22,
+          "unlace_val": 4,
+          "score": 0.18181818181818182,
+          "note": "IDA=22 unlace=4"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 9,
+          "unlace_val": 7,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 48,
+      "unlace_lines": 41
+    },
+    {
+      "name": "sub_1a2060",
+      "score": 58.46776119401945,
+      "notes": "if-branches: IDA=66 unlace=19; else-branches: IDA=14 unlace=18; while-loops: IDA=3 unlace=1",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 66,
+          "unlace_val": 19,
+          "score": 0.2878787878787879,
+          "note": "IDA=66 unlace=19"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 14,
+          "unlace_val": 18,
+          "score": 0.7777777777777778,
+          "note": "IDA=14 unlace=18"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 3,
+          "unlace_val": 1,
+          "score": 0.3333333333333333,
+          "note": "IDA=3 unlace=1"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 22,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=22 unlace=0"
+        },
+        {
+          "name": "calls",
+          "ida_val": "['BUG', 'LODWORD', '__int64', '__readfsqword', '_mm_load_si128', '_mm_unpacklo_epi64', 'qfree', 'sub_19AAC0', 'sub_19B550', 'sub_1A15A0', 'sub_1A1B40', 'sub_1A1D70', 'sub_1A2060', 'sub_383060', 'sub_F2D80', 'v15', 'void']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'cleanup_argloc', 'sub_175a40', 'sub_195f60', 'sub_196d60', 'sub_1a18f0', 'sub_1a1d30', 'sub_1a2060', 'sub_2e4e70']",
+          "score": 0.029411764705882353,
+          "note": "missing: BUG,__int64,__readfsqword; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 92,
+          "unlace_val": 80,
+          "score": 0.8695652173913043,
+          "note": "IDA=92 unlace=80"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 80,
+          "unlace_val": 71,
+          "score": 0.8875,
+          "note": "IDA=80 unlace=71"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 11,
+          "score": 0.0,
+          "note": "unlace has 11, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 14,
+          "unlace_val": 11,
+          "score": 0.7857142857142857,
+          "note": "IDA=14 unlace=11"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 2,
+          "score": 0.0,
+          "note": "unlace has 2, IDA has 0"
+        }
+      ],
+      "ida_lines": 437,
+      "unlace_lines": 408
+    },
+    {
+      "name": "sub_1e2580",
+      "score": 26.706906307566875,
+      "notes": "if-branches: IDA=59 unlace=0; else-branches: IDA=4 unlace=0; while-loops: IDA=7 unlace=1",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 59,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=59 unlace=0"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 4,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=4 unlace=0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 7,
+          "unlace_val": 1,
+          "score": 0.14285714285714285,
+          "note": "IDA=7 unlace=1"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 5,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=5 unlace=0"
+        },
+        {
+          "name": "returns",
+          "ida_val": 6,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=6 unlace=0"
+        },
+        {
+          "name": "gotos",
+          "ida_val": 13,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=13 unlace=0"
+        },
+        {
+          "name": "calls",
+          "ida_val": "['BYTE1', 'LOBYTE', 'LODWORD', '__readfsqword', '_mm_load_si128', '_mm_loadl_epi64', '_mm_loadu_si128', '_mm_unpacklo_epi64', 'memcpy', 'memmove', 'qfree', 'qvector_reserve', 'strcmp', 'strcpy', 'sub_11CDA0', 'sub_11D5A0', 'sub_122440', 'sub_159B40', 'sub_1DF580', 'sub_1DFF30', 'sub_1E0180', 'sub_1E2580', 'sub_312B80', 'sub_312C40', 'sub_313200', 'sub_3147B0', 'sub_315890', 'sub_3166B0', 'sub_3311F0', 'sub_6B870']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_1dba00', 'sub_1dd9e0', 'sub_1e2580']",
+          "score": 0.075,
+          "note": "missing: __readfsqword,_mm_load_si128,_mm_loadl_epi64; extra: BYTE2,BYTE3,HIDWORD"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 142,
+          "unlace_val": 12,
+          "score": 0.08450704225352113,
+          "note": "IDA=142 unlace=12"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 98,
+          "unlace_val": 3,
+          "score": 0.030612244897959183,
+          "note": "IDA=98 unlace=3"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 1,
+          "unlace_val": 5,
+          "score": 0.2,
+          "note": "IDA=1 unlace=5"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 75,
+          "unlace_val": 7,
+          "score": 0.09333333333333334,
+          "note": "IDA=75 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        }
+      ],
+      "ida_lines": 625,
+      "unlace_lines": 69
+    },
+    {
+      "name": "sub_1ecd00",
+      "score": 54.8888140161725,
+      "notes": "if-branches: IDA=14 unlace=1; returns: IDA=2 unlace=0; gotos: IDA=8 unlace=0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 14,
+          "unlace_val": 1,
+          "score": 0.07142857142857142,
+          "note": "IDA=14 unlace=1"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 2,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=2 unlace=0"
+        },
+        {
+          "name": "gotos",
+          "ida_val": 8,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=8 unlace=0"
+        },
+        {
+          "name": "calls",
+          "ida_val": "['qfree', 'sub_1ECD00']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'copy_tinfo_t', 'sub_1ecd00']",
+          "score": 0.0,
+          "note": "missing: qfree,sub_1ECD00; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 16,
+          "unlace_val": 20,
+          "score": 0.8,
+          "note": "IDA=16 unlace=20"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 16,
+          "unlace_val": 11,
+          "score": 0.6875,
+          "note": "IDA=16 unlace=11"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 14,
+          "unlace_val": 7,
+          "score": 0.5,
+          "note": "IDA=14 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 70,
+      "unlace_lines": 79
+    },
+    {
+      "name": "sub_1f20c0",
+      "score": 47.740749816221516,
+      "notes": "if-branches: IDA=10 unlace=4; else-branches: IDA=1 unlace=4; while-loops: IDA=2 unlace=0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 10,
+          "unlace_val": 4,
+          "score": 0.4,
+          "note": "IDA=10 unlace=4"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 1,
+          "unlace_val": 4,
+          "score": 0.25,
+          "note": "IDA=1 unlace=4"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 2,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=2 unlace=0"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 2,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=2 unlace=0"
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['BUG', 'BYTE4', 'LOBYTE', 'LODWORD', '__readfsqword', '_mm_load_si128', '_mm_loadu_si128', 'qfree', 'qvector_reserve', 'sub_1F20C0', 'sub_383060', 'sub_64000']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '_ZSt18_Rb_tree_decrementPSt18_Rb_tree_node_base', '__OFADD__', '__OFSUB__', 'sub_1f20c0']",
+          "score": 0.09090909090909091,
+          "note": "missing: BUG,BYTE4,__readfsqword; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 18,
+          "unlace_val": 20,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 14,
+          "unlace_val": 11,
+          "score": 0.7857142857142857,
+          "note": "IDA=14 unlace=11"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 9,
+          "score": 0.0,
+          "note": "unlace has 9, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 14,
+          "unlace_val": 7,
+          "score": 0.5,
+          "note": "IDA=14 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 190,
+      "unlace_lines": 116
+    },
+    {
+      "name": "sub_1f72c0",
+      "score": 60.6994937873907,
+      "notes": "if-branches: IDA=30 unlace=5; gotos: IDA=16 unlace=0; calls: missing: BUG,interr,sub_1F72C0; extra: BYTE1,BYTE2,BYTE3",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 30,
+          "unlace_val": 5,
+          "score": 0.16666666666666666,
+          "note": "IDA=30 unlace=5"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 6,
+          "unlace_val": 5,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 2,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 16,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=16 unlace=0"
+        },
+        {
+          "name": "calls",
+          "ida_val": "['BUG', 'interr', 'sub_1F72C0']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'get_item_end', 'qfree', 'sub_1f7040', 'sub_1f72c0']",
+          "score": 0.0,
+          "note": "missing: BUG,interr,sub_1F72C0; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 68,
+          "unlace_val": 40,
+          "score": 0.5882352941176471,
+          "note": "IDA=68 unlace=40"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 51,
+          "unlace_val": 31,
+          "score": 0.6078431372549019,
+          "note": "IDA=51 unlace=31"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 82,
+          "unlace_val": 7,
+          "score": 0.08536585365853659,
+          "note": "IDA=82 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 230,
+      "unlace_lines": 189
+    },
+    {
+      "name": "sub_225f80",
+      "score": 67.31446540880503,
+      "notes": "if-branches: IDA=18 unlace=5; else-branches: IDA=1 unlace=4; gotos: IDA=6 unlace=0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 18,
+          "unlace_val": 5,
+          "score": 0.2777777777777778,
+          "note": "IDA=18 unlace=5"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 1,
+          "unlace_val": 4,
+          "score": 0.25,
+          "note": "IDA=1 unlace=4"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 2,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 2,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 6,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=6 unlace=0"
+        },
+        {
+          "name": "calls",
+          "ida_val": "['BUG', 'LOBYTE', '__readfsqword', 'cleanup_argloc', 'qfree', 'sub_1C37C0', 'sub_225530', 'sub_225F80', 'sub_32F770', 'sub_3311F0', 'sub_383060']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'get_tinfo_property', 'sub_1ede60', 'sub_225f80', 'sub_2e4e70']",
+          "score": 0.041666666666666664,
+          "note": "missing: BUG,__readfsqword,cleanup_argloc; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 22,
+          "unlace_val": 25,
+          "score": 0.88,
+          "note": "IDA=22 unlace=25"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 15,
+          "unlace_val": 16,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 8,
+          "unlace_val": 8,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        }
+      ],
+      "ida_lines": 152,
+      "unlace_lines": 130
+    },
+    {
+      "name": "sub_2418b0",
+      "score": 41.1835334476844,
+      "notes": "if-branches: IDA=3 unlace=5; else-branches: unlace has 5, IDA has 0; while-loops: unlace has 2, IDA has 0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 3,
+          "unlace_val": 5,
+          "score": 0.6,
+          "note": "IDA=3 unlace=5"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 2,
+          "score": 0.0,
+          "note": "unlace has 2, IDA has 0"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 3,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=3 unlace=0"
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['sub_2418B0']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'qfree', 'sub_1eb840', 'sub_1f12a0', 'sub_2418b0', 'sub_29a670', 'switch_dbctx']",
+          "score": 0.0,
+          "note": "missing: sub_2418B0; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 12,
+          "unlace_val": 33,
+          "score": 0.36363636363636365,
+          "note": "IDA=12 unlace=33"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 12,
+          "unlace_val": 24,
+          "score": 0.5,
+          "note": "IDA=12 unlace=24"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 6,
+          "score": 0.0,
+          "note": "unlace has 6, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 0,
+          "unlace_val": 8,
+          "score": 0.0,
+          "note": "unlace has 8, IDA has 0"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 22,
+      "unlace_lines": 158
+    },
+    {
+      "name": "sub_2436e0",
+      "score": 41.41976971145844,
+      "notes": "if-branches: IDA=35 unlace=0; else-branches: IDA=4 unlace=0; returns: IDA=17 unlace=0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 35,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=35 unlace=0"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 4,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=4 unlace=0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 17,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=17 unlace=0"
+        },
+        {
+          "name": "gotos",
+          "ida_val": 23,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=23 unlace=0"
+        },
+        {
+          "name": "calls",
+          "ida_val": "['BUG', 'LOBYTE', '__readfsqword', 'clear_tinfo_t', 'compare_tinfo', 'copy_tinfo_t', 'create_tinfo', 'get_tinfo_details', 'get_tinfo_property', 'get_tinfo_size', 'sub_23E280', 'sub_23FA30', 'sub_242920', 'sub_2436E0', 'sub_29D090', 'sub_32C270', 'sub_32C430', 'sub_32C540', 'sub_383060']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_2436e0']",
+          "score": 0.034482758620689655,
+          "note": "missing: BUG,__readfsqword,clear_tinfo_t; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 40,
+          "unlace_val": 14,
+          "score": 0.35,
+          "note": "IDA=40 unlace=14"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 25,
+          "unlace_val": 6,
+          "score": 0.24,
+          "note": "IDA=25 unlace=6"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 43,
+          "unlace_val": 7,
+          "score": 0.16279069767441862,
+          "note": "IDA=43 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 348,
+      "unlace_lines": 49
+    },
+    {
+      "name": "sub_24fab0",
+      "score": 41.15168561271925,
+      "notes": "if-branches: IDA=25 unlace=1; while-loops: IDA=2 unlace=0; returns: IDA=4 unlace=1",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 25,
+          "unlace_val": 1,
+          "score": 0.04,
+          "note": "IDA=25 unlace=1"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 2,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 2,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=2 unlace=0"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 4,
+          "unlace_val": 1,
+          "score": 0.25,
+          "note": "IDA=4 unlace=1"
+        },
+        {
+          "name": "gotos",
+          "ida_val": 8,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=8 unlace=0"
+        },
+        {
+          "name": "calls",
+          "ida_val": "['BUG', 'LODWORD', '__readfsqword', 'clear_tinfo_t', 'j__qfree', 'sub_23E3A0', 'sub_2413C0', 'sub_246080', 'sub_24EE70', 'sub_24FAB0', 'sub_255630', 'sub_383060']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_24f650', 'sub_24fab0']",
+          "score": 0.043478260869565216,
+          "note": "missing: BUG,__readfsqword,clear_tinfo_t; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 48,
+          "unlace_val": 16,
+          "score": 0.3333333333333333,
+          "note": "IDA=48 unlace=16"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 42,
+          "unlace_val": 7,
+          "score": 0.16666666666666666,
+          "note": "IDA=42 unlace=7"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 4,
+          "unlace_val": 7,
+          "score": 0.5714285714285714,
+          "note": "IDA=4 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 164,
+      "unlace_lines": 75
+    },
+    {
+      "name": "sub_2a8a20",
+      "score": 39.04680225434942,
+      "notes": "if-branches: unlace has 8, IDA has 0; else-branches: unlace has 7, IDA has 0; while-loops: unlace has 2, IDA has 0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 0,
+          "unlace_val": 8,
+          "score": 0.0,
+          "note": "unlace has 8, IDA has 0"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 7,
+          "score": 0.0,
+          "note": "unlace has 7, IDA has 0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 2,
+          "score": 0.0,
+          "note": "unlace has 2, IDA has 0"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['__readfsqword', 'copy_tinfo_t', 'sub_29EC30', 'sub_29F770', 'sub_2A0060', 'sub_2A8310', 'sub_2A8A20']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', '_mm_loadu_si128', 'strcmp', 'sub_2a8860', 'sub_2a8a10', 'sub_2a8a20']",
+          "score": 0.0,
+          "note": "missing: __readfsqword,copy_tinfo_t,sub_29EC30; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 9,
+          "unlace_val": 44,
+          "score": 0.20454545454545456,
+          "note": "IDA=9 unlace=44"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 0,
+          "unlace_val": 35,
+          "score": 0.0,
+          "note": "unlace has 35, IDA has 0"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 6,
+          "score": 0.0,
+          "note": "unlace has 6, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 1,
+          "unlace_val": 7,
+          "score": 0.14285714285714285,
+          "note": "IDA=1 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 39,
+      "unlace_lines": 199
+    },
+    {
+      "name": "sub_2ad4c0",
+      "score": 46.79245283018868,
+      "notes": "if-branches: IDA=9 unlace=1; else-branches: unlace has 1, IDA has 0; returns: IDA=5 unlace=1",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 9,
+          "unlace_val": 1,
+          "score": 0.1111111111111111,
+          "note": "IDA=9 unlace=1"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 5,
+          "unlace_val": 1,
+          "score": 0.2,
+          "note": "IDA=5 unlace=1"
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['BUG', 'HIWORD', 'sub_2AD4C0', 'sub_383060']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'get_module_data', 'sub_2ad4c0']",
+          "score": 0.06666666666666667,
+          "note": "missing: BUG,sub_2AD4C0,sub_383060; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 3,
+          "unlace_val": 18,
+          "score": 0.16666666666666666,
+          "note": "IDA=3 unlace=18"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 2,
+          "unlace_val": 10,
+          "score": 0.2,
+          "note": "IDA=2 unlace=10"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 0,
+          "unlace_val": 7,
+          "score": 0.0,
+          "note": "unlace has 7, IDA has 0"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 57,
+      "unlace_lines": 99
+    },
+    {
+      "name": "sub_2b0490",
+      "score": 37.07696323364904,
+      "notes": "if-branches: IDA=7 unlace=11; else-branches: IDA=1 unlace=10; while-loops: unlace has 3, IDA has 0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 7,
+          "unlace_val": 11,
+          "score": 0.6363636363636364,
+          "note": "IDA=7 unlace=11"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 1,
+          "unlace_val": 10,
+          "score": 0.1,
+          "note": "IDA=1 unlace=10"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 3,
+          "score": 0.0,
+          "note": "unlace has 3, IDA has 0"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 5,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=5 unlace=0"
+        },
+        {
+          "name": "calls",
+          "ida_val": "['__int8', 'sub_257C40', 'sub_2ADE40', 'sub_2B0490', 'switch_dbctx', 'v7', 'v9']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', '__builtin_popcount', 'memcpy', 'memmove', 'qalloc_or_throw', 'qfree', 'qstrtok', 'qvector_reserve', 'strlen', 'sub_2af7f0', 'sub_2af8e0', 'sub_2afd80', 'sub_2b0490']",
+          "score": 0.0,
+          "note": "missing: __int8,sub_257C40,sub_2ADE40; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 27,
+          "unlace_val": 69,
+          "score": 0.391304347826087,
+          "note": "IDA=27 unlace=69"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 13,
+          "unlace_val": 60,
+          "score": 0.21666666666666667,
+          "note": "IDA=13 unlace=60"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 0,
+          "unlace_val": 8,
+          "score": 0.0,
+          "note": "unlace has 8, IDA has 0"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 45,
+      "unlace_lines": 329
+    },
+    {
+      "name": "sub_311f90",
+      "score": 59.81132075471698,
+      "notes": "if-branches: IDA=3 unlace=0; calls: missing: __readfsqword,check_process_exit,qpipe_close; extra: BYTE1,BYTE2,BYTE3; type-casts: IDA=6 unlace=10",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 3,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=3 unlace=0"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['__readfsqword', 'check_process_exit', 'qpipe_close', 'sub_311F90']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_311f90']",
+          "score": 0.0,
+          "note": "missing: __readfsqword,check_process_exit,qpipe_close; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 6,
+          "unlace_val": 10,
+          "score": 0.6,
+          "note": "IDA=6 unlace=10"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 6,
+          "unlace_val": 1,
+          "score": 0.16666666666666666,
+          "note": "IDA=6 unlace=1"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 0,
+          "unlace_val": 7,
+          "score": 0.0,
+          "note": "unlace has 7, IDA has 0"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 24,
+      "unlace_lines": 41
+    },
+    {
+      "name": "sub_312a40",
+      "score": 52.83018867924528,
+      "notes": "returns: unlace has 1, IDA has 0; calls: missing: BUG,sub_312A40,sub_383060; extra: BYTE1,BYTE2,BYTE3; has-params: IDA=False unlace=True",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['BUG', 'sub_312A40', 'sub_383060']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_312a40']",
+          "score": 0.0,
+          "note": "missing: BUG,sub_312A40,sub_383060; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": false,
+          "unlace_val": true,
+          "score": 0.0,
+          "note": "IDA=False unlace=True"
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 0,
+          "unlace_val": 10,
+          "score": 0.0,
+          "note": "unlace has 10, IDA has 0"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 0,
+          "unlace_val": 7,
+          "score": 0.0,
+          "note": "unlace has 7, IDA has 0"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 6,
+      "unlace_lines": 37
+    },
+    {
+      "name": "sub_312a60",
+      "score": 65.76819407008085,
+      "notes": "if-branches: IDA=5 unlace=0; calls: missing: BUG,sub_312A60,sub_383060; extra: BYTE1,BYTE2,BYTE3; type-casts: IDA=1 unlace=10",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 5,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=5 unlace=0"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['BUG', 'sub_312A60', 'sub_383060']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_312a60']",
+          "score": 0.0,
+          "note": "missing: BUG,sub_312A60,sub_383060; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 1,
+          "unlace_val": 10,
+          "score": 0.1,
+          "note": "IDA=1 unlace=10"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 2,
+          "unlace_val": 5,
+          "score": 0.4,
+          "note": "IDA=2 unlace=5"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 3,
+          "unlace_val": 7,
+          "score": 0.42857142857142855,
+          "note": "IDA=3 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 32,
+      "unlace_lines": 37
+    },
+    {
+      "name": "sub_329c10",
+      "score": 73.58490566037736,
+      "notes": "else-branches: unlace has 1, IDA has 0; calls: missing: sub_329C10; extra: BYTE1,BYTE2,BYTE3; type-casts: unlace has 9, IDA has 0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['sub_329C10']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_329c10']",
+          "score": 0.0,
+          "note": "missing: sub_329C10; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 0,
+          "unlace_val": 9,
+          "score": 0.0,
+          "note": "unlace has 9, IDA has 0"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 3,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 6,
+          "unlace_val": 5,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 7,
+          "unlace_val": 7,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 12,
+      "unlace_lines": 48
+    },
+    {
+      "name": "sub_32d810",
+      "score": 54.128889977946585,
+      "notes": "if-branches: IDA=3 unlace=0; while-loops: unlace has 1, IDA has 0; calls: missing: __readfsqword,clear_tinfo_t,find_tinfo_udt_member; extra: BYTE1,BYTE2,BYTE3",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 3,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=3 unlace=0"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['__readfsqword', 'clear_tinfo_t', 'find_tinfo_udt_member', 'qfree', 'sub_32D810']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_329c70', 'sub_32d810']",
+          "score": 0.0,
+          "note": "missing: __readfsqword,clear_tinfo_t,find_tinfo_udt_member; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 3,
+          "unlace_val": 11,
+          "score": 0.2727272727272727,
+          "note": "IDA=3 unlace=11"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 3,
+          "unlace_val": 2,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 4,
+          "unlace_val": 7,
+          "score": 0.5714285714285714,
+          "note": "IDA=4 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 42,
+      "unlace_lines": 42
+    },
+    {
+      "name": "sub_32f0d0",
+      "score": 59.11949685534591,
+      "notes": "while-loops: unlace has 1, IDA has 0; calls: missing: copy_tinfo_t,sub_11CDA0,sub_32F0D0; extra: BYTE1,BYTE2,BYTE3; type-casts: IDA=3 unlace=18",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['copy_tinfo_t', 'sub_11CDA0', 'sub_32F0D0']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', '__builtin_popcount', 'sub_329c70', 'sub_32f0d0']",
+          "score": 0.0,
+          "note": "missing: copy_tinfo_t,sub_11CDA0,sub_32F0D0; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 3,
+          "unlace_val": 18,
+          "score": 0.16666666666666666,
+          "note": "IDA=3 unlace=18"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 3,
+          "unlace_val": 9,
+          "score": 0.3333333333333333,
+          "note": "IDA=3 unlace=9"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 6,
+          "score": 0.0,
+          "note": "unlace has 6, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 0,
+          "unlace_val": 8,
+          "score": 0.0,
+          "note": "unlace has 8, IDA has 0"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 8,
+      "unlace_lines": 60
+    },
+    {
+      "name": "sub_33f1a0",
+      "score": 55.9748427672956,
+      "notes": "if-branches: unlace has 1, IDA has 0; else-branches: unlace has 1, IDA has 0; calls: missing: qstrncpy,sub_33F1A0; extra: BYTE1,BYTE2,BYTE3",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['qstrncpy', 'sub_33F1A0']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_33f1a0']",
+          "score": 0.0,
+          "note": "missing: qstrncpy,sub_33F1A0; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 3,
+          "unlace_val": 9,
+          "score": 0.3333333333333333,
+          "note": "IDA=3 unlace=9"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 3,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 0,
+          "unlace_val": 8,
+          "score": 0.0,
+          "note": "unlace has 8, IDA has 0"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 4,
+      "unlace_lines": 50
+    },
+    {
+      "name": "sub_7b710",
+      "score": 40.44811320754717,
+      "notes": "if-branches: IDA=20 unlace=0; else-branches: IDA=2 unlace=0; returns: IDA=3 unlace=0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 20,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=20 unlace=0"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 2,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=2 unlace=0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 3,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=3 unlace=0"
+        },
+        {
+          "name": "gotos",
+          "ida_val": 12,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=12 unlace=0"
+        },
+        {
+          "name": "calls",
+          "ida_val": "['qfree', 'sub_7B5E0', 'sub_7B710']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_7b710']",
+          "score": 0.0,
+          "note": "missing: qfree,sub_7B5E0,sub_7B710; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 32,
+          "unlace_val": 9,
+          "score": 0.28125,
+          "note": "IDA=32 unlace=9"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 32,
+          "unlace_val": 0,
+          "score": 0.0,
+          "note": "IDA=32 unlace=0"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 16,
+          "unlace_val": 7,
+          "score": 0.4375,
+          "note": "IDA=16 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 115,
+      "unlace_lines": 43
+    },
+    {
+      "name": "sub_8b490",
+      "score": 47.12379199263691,
+      "notes": "if-branches: IDA=5 unlace=18; else-branches: IDA=2 unlace=16; while-loops: unlace has 3, IDA has 0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 5,
+          "unlace_val": 18,
+          "score": 0.2777777777777778,
+          "note": "IDA=5 unlace=18"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 2,
+          "unlace_val": 16,
+          "score": 0.125,
+          "note": "IDA=2 unlace=16"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 3,
+          "score": 0.0,
+          "note": "unlace has 3, IDA has 0"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['__cxa_allocate_exception', '__cxa_throw', '_mm_loadl_epi64', '_mm_loadu_si128', '_mm_unpacklo_epi64', 'qalloc', 'sub_312C40', 'sub_8B1C0', 'sub_8B490', 'void']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '_ZSt18_Rb_tree_incrementPSt18_Rb_tree_node_base', '_ZSt28_Rb_tree_rebalance_for_erasePSt18_Rb_tree_node_baseRS_', '_ZdlPv', '__OFADD__', '__OFSUB__', 'qfree', 'sub_128360', 'sub_29ea60', 'sub_7eb30', 'sub_7f2c0', 'sub_8b0b0', 'sub_8b400', 'sub_8b490', 'sub_dfd90', 'sub_e12f0', 'sub_e5a50', 'sub_ea8a0', 'sub_f56d0', 'sub_f5bf0']",
+          "score": 0.0,
+          "note": "missing: __cxa_allocate_exception,__cxa_throw,_mm_loadl_epi64; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 19,
+          "unlace_val": 123,
+          "score": 0.15447154471544716,
+          "note": "IDA=19 unlace=123"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 19,
+          "unlace_val": 114,
+          "score": 0.16666666666666666,
+          "note": "IDA=19 unlace=114"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 10,
+          "score": 0.0,
+          "note": "unlace has 10, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 16,
+          "unlace_val": 15,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 61,
+      "unlace_lines": 533
+    },
+    {
+      "name": "sub_b7be0",
+      "score": 50.901537973680036,
+      "notes": "if-branches: IDA=7 unlace=2; else-branches: unlace has 2, IDA has 0; returns: IDA=4 unlace=1",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 7,
+          "unlace_val": 2,
+          "score": 0.2857142857142857,
+          "note": "IDA=7 unlace=2"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 2,
+          "score": 0.0,
+          "note": "unlace has 2, IDA has 0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 4,
+          "unlace_val": 1,
+          "score": 0.25,
+          "note": "IDA=4 unlace=1"
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['JUMPOUT', 'sub_1255D0', 'sub_383060', 'sub_B7BE0']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'copy_argloc', 'copy_tinfo_t', 'sub_b7be0']",
+          "score": 0.0,
+          "note": "missing: JUMPOUT,sub_1255D0,sub_383060; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 14,
+          "unlace_val": 34,
+          "score": 0.4117647058823529,
+          "note": "IDA=14 unlace=34"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 12,
+          "unlace_val": 25,
+          "score": 0.48,
+          "note": "IDA=12 unlace=25"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 0,
+          "unlace_val": 7,
+          "score": 0.0,
+          "note": "unlace has 7, IDA has 0"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 42,
+      "unlace_lines": 129
+    },
+    {
+      "name": "sub_d1010",
+      "score": 46.82185738789512,
+      "notes": "if-branches: IDA=3 unlace=6; else-branches: IDA=1 unlace=4; while-loops: unlace has 2, IDA has 0",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 3,
+          "unlace_val": 6,
+          "score": 0.5,
+          "note": "IDA=3 unlace=6"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 1,
+          "unlace_val": 4,
+          "score": 0.25,
+          "note": "IDA=1 unlace=4"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 2,
+          "score": 0.0,
+          "note": "unlace has 2, IDA has 0"
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['__int64', 'get_custom_callcnv', 'sub_CFF70', 'sub_D0DA0', 'sub_D0F50', 'sub_D1010', 'void']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', '__builtin_popcount', 'sub_2e4e70', 'sub_d1010']",
+          "score": 0.0,
+          "note": "missing: __int64,get_custom_callcnv,sub_CFF70; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 6,
+          "unlace_val": 44,
+          "score": 0.13636363636363635,
+          "note": "IDA=6 unlace=44"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 3,
+          "unlace_val": 35,
+          "score": 0.08571428571428572,
+          "note": "IDA=3 unlace=35"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 1,
+          "unlace_val": 7,
+          "score": 0.14285714285714285,
+          "note": "IDA=1 unlace=7"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 25,
+      "unlace_lines": 224
+    },
+    {
+      "name": "sub_db200",
+      "score": 55.59748427672956,
+      "notes": "if-branches: IDA=2 unlace=8; else-branches: IDA=1 unlace=8; calls: missing: __int64,__readfsqword,sub_6F590; extra: BYTE1,BYTE2,BYTE3",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 2,
+          "unlace_val": 8,
+          "score": 0.25,
+          "note": "IDA=2 unlace=8"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 1,
+          "unlace_val": 8,
+          "score": 0.125,
+          "note": "IDA=1 unlace=8"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 2,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['__int64', '__readfsqword', 'qfree', 'sub_6F590', 'sub_DB040', 'sub_DB200']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'qfree', 'sub_814f0', 'sub_db200', 'sub_e5a50', 'sub_ea2b0']",
+          "score": 0.05,
+          "note": "missing: __int64,__readfsqword,sub_6F590; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 3,
+          "unlace_val": 18,
+          "score": 0.16666666666666666,
+          "note": "IDA=3 unlace=18"
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 1,
+          "unlace_val": 9,
+          "score": 0.1111111111111111,
+          "note": "IDA=1 unlace=9"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 2,
+          "unlace_val": 8,
+          "score": 0.25,
+          "note": "IDA=2 unlace=8"
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 35,
+      "unlace_lines": 187
+    },
+    {
+      "name": "sub_e59f0",
+      "score": 62.757837991204426,
+      "notes": "if-branches: IDA=7 unlace=2; else-branches: unlace has 2, IDA has 0; calls: missing: __readfsqword,calc_retloc,cleanup_argloc; extra: BYTE1,BYTE2,BYTE3",
+      "feature_scores": [
+        {
+          "name": "if-branches",
+          "ida_val": 7,
+          "unlace_val": 2,
+          "score": 0.2857142857142857,
+          "note": "IDA=7 unlace=2"
+        },
+        {
+          "name": "else-branches",
+          "ida_val": 0,
+          "unlace_val": 2,
+          "score": 0.0,
+          "note": "unlace has 2, IDA has 0"
+        },
+        {
+          "name": "for-loops",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "while-loops",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "do-while",
+          "ida_val": 1,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "returns",
+          "ida_val": 1,
+          "unlace_val": 1,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "gotos",
+          "ida_val": 0,
+          "unlace_val": 0,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "calls",
+          "ida_val": "['HIDWORD', 'LOBYTE', 'LODWORD', '__readfsqword', 'calc_retloc', 'cleanup_argloc', 'clear_tinfo_t', 'copy_tinfo_t', 'qfree', 'sub_E59F0']",
+          "unlace_val": "['BYTE1', 'BYTE2', 'BYTE3', 'HIDWORD', 'HIWORD', 'LOBYTE', 'LODWORD', 'LOWORD', '__OFADD__', '__OFSUB__', 'sub_e51b0', 'sub_e59f0']",
+          "score": 0.15789473684210525,
+          "note": "missing: __readfsqword,calc_retloc,cleanup_argloc; extra: BYTE1,BYTE2,BYTE3"
+        },
+        {
+          "name": "has-params",
+          "ida_val": true,
+          "unlace_val": true,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "type-casts",
+          "ida_val": 8,
+          "unlace_val": 10,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "ptr-derefs",
+          "ida_val": 5,
+          "unlace_val": 1,
+          "score": 0.2,
+          "note": "IDA=5 unlace=1"
+        },
+        {
+          "name": "shift-ops",
+          "ida_val": 0,
+          "unlace_val": 5,
+          "score": 0.0,
+          "note": "unlace has 5, IDA has 0"
+        },
+        {
+          "name": "bitwise-ops",
+          "ida_val": 8,
+          "unlace_val": 7,
+          "score": 1.0,
+          "note": ""
+        },
+        {
+          "name": "neg-consts",
+          "ida_val": 0,
+          "unlace_val": 1,
+          "score": 0.0,
+          "note": "unlace has 1, IDA has 0"
+        }
+      ],
+      "ida_lines": 89,
+      "unlace_lines": 75
+    }
+  ]
+}

@@ -158,3 +158,25 @@ Retuned `pick_split_target` to simulate candidate splits and choose only entries
 ### Fixture Regression Check
 - `cpp_exceptions=0`, `cpp_rtti=2`, `cpp_vtable=0`, `debug_calls=0`, `debug_hello=0`, `debug_structs=0`, `medium=12`, `x87_math=0` gotos.
 - No fixture increased by more than 2 gotos versus `.sisyphus/evidence/p10-baseline-metrics.txt`.
+
+## P10-8: Wave 1 Golden Refresh + Delta Report (2026-04-30)
+
+Refreshed all 8 golden fixtures capturing combined effect of Wave 1 changes (P10-4 node_split retune + P10-5/6/7 idiom recognition).
+
+### Results
+- **medium.c gotos**: 30 → 12 (−60%) ✅ target ≤15 met
+- **medium.c ifs**: 39 → 24 (−38%) ⚠️ below ≥35 target
+  - Cause: node_split retune converted goto+if patterns into while-loops (16 while-loops in output), reducing discrete if count
+  - Net quality improvement: fewer gotos + more structured loops = better readability
+- **Regression check**: No fixture's goto count increased (all deltas ≤ 0)
+- **Tests**: 23/23 golden_fixtures passed
+
+### Wave 1 Summary
+| Change | Impact |
+|--------|--------|
+| P10-4 node_split retune | gotos 30→12, ifs 39→24, +16 while-loops |
+| P10-5 rotate idiom | ROL/ROR detection (no medium.c impact) |
+| P10-6 abs/min/max idiom | Branchless conditional patterns |
+| P10-7 memcpy/memset idiom | Unrolled memory operation detection |
+
+Evidence: `.sisyphus/evidence/p10-8-delta.txt`

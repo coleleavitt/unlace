@@ -1,0 +1,42 @@
+P3-12: XMM0-XMM15 register file expansion — EVIDENCE
+
+Date: 2026-04-29
+File modified: crates/unlace-lift-x86/src/register_file.rs
+
+WHAT WAS DONE
+=============
+1. Added XMM0-XMM15 (16 registers × 16 bytes = 128-bit SSE) register constants.
+2. Added YMM0-YMM15 (16 registers × 32 bytes = 256-bit AVX) register constants.
+3. XMM/YMM share base offsets (lower 128 bits alias), stride 32 bytes.
+4. Vector registers start at offset 0x400, well clear of GP (0-136) and flags (256-261).
+5. Added reg128() and reg256() helper functions.
+6. Updated x86_64_register_file() with all 32 XMM + YMM RegisterDef entries.
+7. Updated iced_reg_to_varnode() to map iced_x86::Register::XMM0-XMM15 and YMM0-YMM15.
+8. Added 9 unit tests in register_file::tests module.
+
+LAYOUT
+======
+  GP regs:    0x000 - 0x088 (RAX through RIP+8)
+  Flags:      0x100 - 0x105 (CF through OF)
+  XMM/YMM:    0x400 - 0x5FF (16 slots × 32-byte stride)
+    XMMn  = offset 0x400 + n*32, size 16
+    YMMn  = offset 0x400 + n*32, size 32
+
+TESTS (9 new, all pass)
+=======================
+  test_xmm0_size_16                       — XMM0 varnode has size=16
+  test_xmm15_unique_offset                — XMM15 != XMM0 offset
+  test_xmm_no_overlap_with_gp             — all XMM offsets above GP/flag range
+  test_xmm_iced_mapping                   — iced_x86::Register::XMM{0,5,15} maps correctly
+  test_ymm0_size_32                        — YMM0 varnode has size=32
+  test_ymm_iced_mapping                    — iced_x86::Register::YMM{0,7,15} maps correctly
+  test_ymm_xmm_share_base_offset          — XMMn and YMMn share base offset
+  test_xmm_consecutive_stride             — 32-byte stride between consecutive XMM slots
+  test_register_file_contains_xmm_and_ymm — register file includes XMM0/15 and YMM0/15
+
+VERIFICATION
+============
+  cargo test -p unlace-lift-x86:          48/48 passed (39 existing + 9 new)
+  cargo test --workspace:                 726 passed, 0 failed, 1 ignored
+  cargo build --workspace:                OK (clean)
+  cargo xtask lint-determinism:           OK — no HashMap/HashSet in enforced crates

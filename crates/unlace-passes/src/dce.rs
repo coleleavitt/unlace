@@ -178,7 +178,7 @@ mod tests {
         let cfg = unlace_ir::cfg::build_cfg(&func);
         let dom_tree = build_trivial_dom(&cfg);
 
-        SsaFunction { function: func, cfg, dom_tree, phi_map, var_map, var_types: std::collections::BTreeMap::new(), calling_convention: unlace_ir::ssa::CallingConvention::Unknown, stack_vars: std::collections::BTreeMap::new(), foldable_exprs: std::collections::BTreeSet::new(), noreturn: false, tail_call_map: std::collections::BTreeMap::new(), merged_names: std::collections::BTreeMap::new(), enum_discriminants: Vec::new(), panic_sites: std::collections::BTreeMap::new() }
+        SsaFunction { function: func, cfg, dom_tree, phi_map, var_map, var_types: std::collections::BTreeMap::new(), calling_convention: unlace_ir::ssa::CallingConvention::Unknown, stack_vars: std::collections::BTreeMap::new(), foldable_exprs: std::collections::BTreeSet::new(), noreturn: false, tail_call_map: std::collections::BTreeMap::new(), merged_names: std::collections::BTreeMap::new(), enum_discriminants: Vec::new(), panic_sites: std::collections::BTreeMap::new(), vtable_calls: std::collections::BTreeMap::new() }
     }
 
     fn build_trivial_dom(

@@ -55,6 +55,8 @@ pub fn discover_functions(
         });
     }
 
+    funcs = recursive_descent_discovery(image, funcs);
+
     if let Some(filter) = filter {
         let target = parse_function_filter(filter);
         funcs.retain(|f| match &target {
@@ -120,6 +122,110 @@ fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
             }
         })
         .collect()
+}
+
+fn recursive_descent_discovery(
+    image: &BinaryImage,
+    mut funcs: Vec<FunctionEntry>,
+) -> Vec<FunctionEntry> {
+    let text = match image.section_by_name(".text") {
+        Some(s) => s,
+        None => return funcs,
+    };
+
+    let data = &text.data;
+    let base = text.vaddr;
+    let text_end = base + text.size;
+
+    let mut known: BTreeSet<u64> = funcs.iter().map(|f| f.addr).collect();
+
+    loop {
+        let mut new_targets = Vec::new();
+
+        for func in &funcs {
+            let func_start = func.addr;
+            let func_end = if func.size > 0 {
+                func_start + func.size
+            } else {
+                text_end
+            };
+
+            let start_off = func_start.saturating_sub(base) as usize;
+            let end_off = (func_end.saturating_sub(base) as usize).min(data.len());
+            if start_off >= data.len() || start_off >= end_off {
+                continue;
+            }
+
+            let region = &data[start_off..end_off];
+            let mut i = 0;
+            while i + 5 <= region.len() {
+                if region[i] == 0xE8 {
+                    let rel = i32::from_le_bytes([
+                        region[i + 1],
+                        region[i + 2],
+                        region[i + 3],
+                        region[i + 4],
+                    ]);
+                    let call_site = base + (start_off + i) as u64;
+                    let target = call_site.wrapping_add(5).wrapping_add(rel as i64 as u64);
+
+                    if target >= base && target < text_end && !known.contains(&target) {
+                        new_targets.push(target);
+                    }
+                    i += 5;
+                } else {
+                    i += 1;
+                }
+            }
+        }
+
+        if new_targets.is_empty() {
+            break;
+        }
+
+        new_targets.sort_unstable();
+        new_targets.dedup();
+
+        for addr in new_targets {
+            if known.insert(addr) {
+                funcs.push(FunctionEntry {
+                    name: format!("sub_{addr:x}"),
+                    addr,
+                    size: 0,
+                });
+            }
+        }
+
+        recompute_sizes(&mut funcs, text_end);
+    }
+
+    recompute_sizes(&mut funcs, text_end);
+    funcs
+}
+
+fn recompute_sizes(funcs: &mut [FunctionEntry], text_end: u64) {
+    let mut addrs: Vec<u64> = funcs.iter().map(|f| f.addr).collect();
+    addrs.sort_unstable();
+    addrs.dedup();
+
+    let addr_set: BTreeMap<u64, usize> = addrs
+        .iter()
+        .enumerate()
+        .map(|(i, &a)| (a, i))
+        .collect();
+
+    for func in funcs.iter_mut() {
+        if func.size > 0 {
+            continue;
+        }
+        if let Some(&idx) = addr_set.get(&func.addr) {
+            func.size = addrs
+                .get(idx + 1)
+                .copied()
+                .unwrap_or(text_end)
+                .saturating_sub(func.addr);
+        }
+    }
 }
 
 enum FunctionTarget {
@@ -560,5 +666,66 @@ pub fn emit_output(
                 Some(string_table),
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use unlace_loader::{BinaryImage, Section, SectionFlags, Endian};
+    use unlace_ir::ArchId;
+
+    fn make_text_image(code: Vec<u8>, base: u64) -> BinaryImage {
+        let size = code.len() as u64;
+        BinaryImage {
+            arch: ArchId::X86_64,
+            endian: Endian::Little,
+            entry: base,
+            sections: vec![Section {
+                name: ".text".to_string(),
+                vaddr: base,
+                size,
+                data: code,
+                flags: SectionFlags::READ | SectionFlags::EXEC,
+            }],
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: Vec::new(),
+            string_table: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn test_recursive_discovery_finds_call_targets() {
+        let base: u64 = 0x1000;
+        // target = call_site + 5 + rel32
+        let rel: i32 = 0x1010_i64.wrapping_sub(0x1005) as i32;
+        let rel_bytes = rel.to_le_bytes();
+        let mut code = Vec::new();
+        code.push(0xE8);
+        code.extend_from_slice(&rel_bytes);
+        code.push(0xC3);
+
+        while code.len() < 0x10 {
+            code.push(0xCC);
+        }
+
+        code.push(0xC3);
+
+        let image = make_text_image(code, base);
+
+        let initial = vec![FunctionEntry {
+            name: "func_a".into(),
+            addr: base,
+            size: 6,
+        }];
+
+        let result = recursive_descent_discovery(&image, initial);
+
+        let addrs: BTreeSet<u64> = result.iter().map(|f| f.addr).collect();
+        assert!(
+            addrs.contains(&0x1010),
+            "recursive descent should discover call target 0x1010, got: {addrs:?}",
+        );
     }
 }

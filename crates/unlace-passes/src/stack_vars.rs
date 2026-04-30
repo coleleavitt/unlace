@@ -127,8 +127,14 @@ impl Pass for StackVarRecoveryPass {
         }
 
         for (offset, access_list) in &accesses {
-            let abs_offset = offset.unsigned_abs();
-            let name = format!("local_{abs_offset:x}");
+            let name = func
+                .dwarf_local_names
+                .get(offset)
+                .cloned()
+                .unwrap_or_else(|| {
+                    let abs_offset = offset.unsigned_abs();
+                    format!("local_{abs_offset:x}")
+                });
 
             let ty = infer_stack_var_type(access_list, &func.var_types);
 
@@ -531,6 +537,50 @@ mod tests {
             PrimitiveType::Unknown,
             "type should be inferred from TypeInferPass"
         );
+    }
+
+    #[test]
+    fn test_dwarf_local_name_overrides_synthetic() {
+        let u0 = Varnode::unique(0, 8);
+        let val = Varnode::reg(0, 8);
+        let c8 = Varnode::constant(8, 8);
+        let space_ram = Varnode::constant(1, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), c8], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![space_ram, u0, val], 0x1004),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.dwarf_local_names.insert(-8, "user_count".to_string());
+
+        let pass = StackVarRecoveryPass;
+        pass.run(&mut ssa).expect("pass should succeed");
+
+        let sv = &ssa.stack_vars[&-8];
+        assert_eq!(sv.name, "user_count");
+    }
+
+    #[test]
+    fn test_no_dwarf_keeps_synthetic_name() {
+        let u0 = Varnode::unique(0, 8);
+        let val = Varnode::reg(0, 8);
+        let c16 = Varnode::constant(16, 8);
+        let space_ram = Varnode::constant(1, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), c16], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![space_ram, u0, val], 0x1004),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        assert!(ssa.dwarf_local_names.is_empty());
+
+        let pass = StackVarRecoveryPass;
+        pass.run(&mut ssa).expect("pass should succeed");
+
+        let sv = &ssa.stack_vars[&-16];
+        assert_eq!(sv.name, "local_10");
     }
 
     #[test]

@@ -303,6 +303,7 @@ mod tests {
             inferred_params: Vec::new(),
             inferred_return_type: PrimitiveType::Unknown,
             frame_setup_insns: std::collections::BTreeSet::new(),
+            dwarf_local_names: BTreeMap::new(),
         }
     }
 

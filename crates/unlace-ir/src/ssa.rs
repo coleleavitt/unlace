@@ -250,6 +250,13 @@ pub struct SsaFunction {
     /// Keyed by `(BlockId, insn_index)`. Populated by
     /// [`PrologueElimPass`](https://docs.rs/unlace-passes).
     pub frame_setup_insns: BTreeSet<(BlockId, usize)>,
+    /// Optional DWARF-provided names for stack variables, keyed by
+    /// frame-pointer-relative offset (matches
+    /// `LocalVariable::frame_offset` from the loader). Populated by the
+    /// pipeline when DWARF info is available; consumed by
+    /// [`StackVarRecoveryPass`](https://docs.rs/unlace-passes) to override
+    /// the synthesised `local_X` names.
+    pub dwarf_local_names: BTreeMap<i64, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -303,6 +310,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         inferred_params: Vec::new(),
         inferred_return_type: PrimitiveType::Unknown,
         frame_setup_insns: BTreeSet::new(),
+        dwarf_local_names: BTreeMap::new(),
     }
 }
 

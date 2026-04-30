@@ -298,6 +298,11 @@ struct PrintCtx {
     symbols: BTreeMap<u64, String>,
     /// Recovered string literals: virtual address → string content.
     string_table: BTreeMap<u64, String>,
+    /// Base varnodes whose address is taken and passed to a CALL ("BYREF").
+    byref_bases: BTreeSet<Varnode>,
+    /// Override map: when present, [`PrintCtx::name_of`] returns the override
+    /// for the matching base instead of the cached `vN` name.
+    name_overrides: BTreeMap<Varnode, String>,
 }
 
 impl PrintCtx {
@@ -329,10 +334,15 @@ impl PrintCtx {
             panic_sites,
             symbols,
             string_table,
+            byref_bases: BTreeSet::new(),
+            name_overrides: BTreeMap::new(),
         }
     }
 
     fn name_of(&mut self, sv: &SsaVarnode) -> String {
+        if let Some(override_name) = self.name_overrides.get(&sv.base) {
+            return override_name.clone();
+        }
         if let Some(n) = self.var_names.get(sv) {
             return n.clone();
         }
@@ -400,12 +410,11 @@ fn try_resolve_struct_field(addr_insn: &IrInsn, addr_stmt_idx: u32, _load_size: 
 }
 
 fn try_resolve_field_from_addr(addr_vn: &Varnode, _idx: usize, stmt_idx: u32, access_size: u8, ctx: &mut PrintCtx) -> Option<String> {
-    eprintln!("FIELD_RESOLVE: space={:?} off={} sz={} map_len={}", addr_vn.space, addr_vn.offset, access_size, ctx.field_by_offset.len());
-    if ctx.field_by_offset.is_empty() || addr_vn.space == SpaceId::Const { return None; }
-    eprintln!("  stmt_inputs for {}: {:?}", stmt_idx, ctx.stmt_inputs.get(&stmt_idx));
+    if ctx.field_by_offset.is_empty() || addr_vn.space == SpaceId::Const {
+        return None;
+    }
     let addr_sv = ctx.stmt_inputs.get(&stmt_idx).cloned()
         .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
-    eprintln!("  sv_defining_stmt for {:?}: {:?}", addr_sv, ctx.sv_defining_stmt.get(&addr_sv));
     let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
     let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
     try_resolve_struct_field(&def_insn, def_stmt, access_size, ctx)
@@ -2720,6 +2729,60 @@ mod tests {
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(output.contains("->size"), "should contain ->size: {output}");
     }
+    #[test]
+    fn test_struct_field_store_writes_arrow_syntax() {
+        use std::collections::BTreeMap;
+        use unlace_loader::{DwarfInfo, StructField, StructType};
+
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 4);
+        let c4 = con(4, 8);
+        let space = con(0, 8);
+        let addr_add = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(0, 8),
+            smallvec![r0, c4],
+            0x1000,
+        );
+        let store = IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space, Varnode::unique(0, 8), r8],
+            0x1004,
+        );
+        let body = vec![
+            HirNode::Statement(addr_add),
+            HirNode::Statement(store),
+            HirNode::Return(None),
+        ];
+        let func = make_func("test_store_field", body);
+
+        let mut structs = BTreeMap::new();
+        structs.insert(
+            "Point".to_string(),
+            StructType {
+                name: "Point".to_string(),
+                size: 8,
+                fields: vec![
+                    StructField { name: "x".to_string(), offset: 0, size: 4, type_name: "int".to_string() },
+                    StructField { name: "y".to_string(), offset: 4, size: 4, type_name: "int".to_string() },
+                ],
+            },
+        );
+        let dwarf = DwarfInfo {
+            functions: BTreeMap::new(),
+            source_map: BTreeMap::new(),
+            structs,
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
+        };
+
+        let output = super::print_c_with_dwarf(&func, Some(&dwarf));
+        assert!(
+            output.contains("->y"),
+            "STORE at offset 4 should resolve to ->y field: {output}",
+        );
+    }
+
     #[test]
     fn test_struct_field_no_match() {
         use std::collections::BTreeMap;

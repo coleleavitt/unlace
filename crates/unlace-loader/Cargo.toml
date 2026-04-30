@@ -6,7 +6,6 @@ edition.workspace = true
 [dependencies]
 object = { workspace = true }
 gimli = { workspace = true }
-addr2line = { workspace = true }
 pdb = { workspace = true }
 fallible-iterator = { workspace = true }
 thiserror = { workspace = true }

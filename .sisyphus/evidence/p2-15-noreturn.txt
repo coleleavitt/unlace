@@ -1,0 +1,29 @@
+P2-15: Noreturn function detection and marking
+================================================
+
+Pass: NoreturnDetectPass (crates/unlace-passes/src/noreturn.rs)
+
+Functionality:
+- Hardcoded list of 14 known noreturn function names (exit, abort, panic, etc.)
+- Walks all blocks looking for CALL instructions with SpaceId::Const targets
+- Resolves addresses to names via caller-provided closure (run_with_resolver)
+- Marks SsaFunction.noreturn = true when a noreturn call is found
+- Removes unreachable instructions after noreturn call in the same block
+- Cleans up var_map entries for removed instructions
+- Pass trait fallback (run) uses no-op resolver for pipeline compatibility
+
+SsaFunction changes:
+- Added `pub noreturn: bool` field (default false in build_ssa)
+
+Tests (6 passing):
+- test_noreturn_exit_detected: CALL to exit → noreturn=true
+- test_noreturn_abort_detected: CALL to abort → noreturn=true
+- test_noreturn_normal_function: CALL to printf → noreturn=false
+- test_noreturn_unreachable_after_call: instructions after CALL exit removed
+- test_noreturn_no_change_on_rerun: idempotent on second run
+- test_noreturn_pass_trait_without_resolver: no-op resolver → no change
+
+Verification:
+- cargo test -p unlace-passes -- noreturn: 6/6 pass
+- cargo xtask lint-determinism: OK (no HashMap/HashSet)
+- cargo test --workspace: 714 tests pass, 0 failures

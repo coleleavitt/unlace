@@ -957,5 +957,49 @@ mod tests {
         assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::TRAP, 8));
         assert!(co.output.is_none(), "UD2 should have no output");
     }
+
+    use crate::ops::arithmetic::atomic_tag;
+
+    #[test]
+    fn test_cmpxchg_no_lock_branchless() {
+        // 48 0F B1 D8 = cmpxchg rax, rbx
+        let result = lifter()
+            .lift_insn(&[0x48, 0x0F, 0xB1, 0xD8], 0x1000)
+            .expect("should decode cmpxchg rax, rbx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
+            "non-LOCK CMPXCHG should not emit Callother"
+        );
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSub),
+            "non-LOCK CMPXCHG should compute RAX - dst for ZF");
+    }
+
+    #[test]
+    fn test_cmpxchg_lock_emits_callother() {
+        // F0 48 0F B1 1F = lock cmpxchg [rdi], rbx
+        let result = lifter()
+            .lift_insn(&[0xF0, 0x48, 0x0F, 0xB1, 0x1F], 0x1000)
+            .expect("should decode lock cmpxchg");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("LOCK CMPXCHG should emit Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(atomic_tag::CMPXCHG, 8),
+            "tag should be CMPXCHG"
+        );
+        assert_eq!(co.inputs.len(), 4, "Callother CMPXCHG takes (tag, dst, src, RAX)");
+        let zf = unlace_ir::Varnode::reg(259, 1);
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::IntEqual && i.output == Some(zf)
+            }),
+            "LOCK CMPXCHG should set ZF from intrinsic result"
+        );
+    }
 }
 

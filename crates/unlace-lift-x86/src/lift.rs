@@ -301,6 +301,7 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Cdqe => arithmetic::lift_cdqe(ctx, insn),
         M::Cdq => arithmetic::lift_cdq(ctx, insn),
         M::Cqo => arithmetic::lift_cqo(ctx, insn),
+        M::Cmpxchg => arithmetic::lift_cmpxchg(ctx, insn),
 
         M::And => bitwise::lift_and(ctx, insn),
         M::Or => bitwise::lift_or(ctx, insn),

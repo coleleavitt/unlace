@@ -1,0 +1,18 @@
+P4-19: CrossJumpRevert pre-structuring pass
+
+Algorithm:
+- Group blocks by common successors
+- For each pair sharing a successor, compare trailing instructions
+- If ≥ 2 identical instructions match: split into separate tail blocks
+- Truncate the originals, create new tail blocks with the shared insns + Branch
+- Rebuild CFG after modifications
+
+Tests (2 new):
+- test_cross_jump_split: 3-insn identical tails → split into separate tail blocks
+- test_different_tails_unchanged: different tails → no changes
+
+Test output:
+  running 40 tests
+  test cross_jump_revert::tests::test_cross_jump_split ... ok
+  test cross_jump_revert::tests::test_different_tails_unchanged ... ok
+  test result: ok. 40 passed; 0 failed; 0 ignored

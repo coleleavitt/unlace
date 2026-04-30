@@ -21,3 +21,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 smallvec = { workspace = true }
 
 [dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "decompile_medium"
+harness = false

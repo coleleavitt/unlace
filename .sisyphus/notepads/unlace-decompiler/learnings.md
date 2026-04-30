@@ -366,3 +366,28 @@
 - No HashMap — BTreeSet for prologue scan deduplication, BTreeMap for block construction
 - `sub rsp, imm8` prologue included as third pattern — catches functions without frame pointer that start with stack allocation
 - PipelineConfig uses Default trait for ergonomic construction with overrides
+
+## [Task 24] Benchmarks
+- Benchmark file: `crates/unlace-cli/benches/decompile_medium.rs` with `criterion = "0.5"` (html_reports feature)
+- `[[bench]] name = "decompile_medium", harness = false` in unlace-cli Cargo.toml
+- Two criterion groups: `per_stage` (6 benches: load, lift, ssa, passes, structure, output) and `end_to_end` (1 bench: decompile_medium_e2e)
+- Per-stage benches isolate each pipeline phase; passes bench includes SSA rebuild per iteration since SsaFunction doesn't derive Clone
+- Pipeline logic inlined in bench file because unlace-cli is a binary crate (can't link against its modules from a bench)
+- Sample size = 10, measurement time = 30s, warm up = 3s (configured per group)
+- Memory budget: CI uses `/usr/bin/time -v` on release binary to measure RSS; warns if >= 2GB (2,097,152 KB)
+- CI job: `.github/workflows/ci.yml` `bench` job after `test`, `continue-on-error: true` so regressions don't block the pipeline
+- medium.elf is 15KB with ~3 functions; E2E decompiles in ~13ms on dev machine (well under 60s budget)
+- No HashMap — BTreeMap/BTreeSet used in inlined pipeline helpers
+
+## [Task 23] Golden test suite: x86-64
+- Test file: `crates/unlace-test-harness/tests/golden_x86_64.rs` — 160 tests, 0 ignored, all pass
+- Three test layers:
+  1. Golden corpus integrity: 150 self-parse tests (one per golden .c file) + 1 bulk scan — validates corpus not corrupted and tree-sitter-c handles Hex-Rays dialect
+  2. E2E fixture decompilation: 7 tests invoking `unlace decompile --emit c` on each fixture ELF, verifying output parses as valid C
+  3. Harness validation: 2 tests confirming ast_equiv match/divergence detection works
+- KEY LIMITATION: No golden-vs-actual AST comparison — the golden .c files came from IDA/Hex-Rays on binaries we don't redistribute; our fixtures are different binaries from different source code; no function-address correspondence exists
+- Binary resolution: `unlace_bin()` finds the binary via CARGO_TARGET_DIR or workspace_root/target/debug/unlace; requires `cargo build -p unlace-cli` before running tests
+- Path resolution: `workspace_root()` computed from CARGO_MANIFEST_DIR (crates/unlace-test-harness → workspace root); `golden_dir()` returns absolute path to tests/golden/x86_64/
+- Previous Task 10 stub had 150 `#[ignore]`d self-compare tests — all replaced with real non-ignored tests
+- `CARGO_BIN_EXE_unlace` env var not available because unlace-cli has no lib target; binary located via filesystem path instead
+- To enable true golden comparison, need to compile each reference function to an ELF and decompile it

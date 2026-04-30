@@ -58,3 +58,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo xtask lint-determinism
+
+  bench:
+    name: benchmarks
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binary
+        run: cargo build --release -p unlace-cli
+      - name: Run criterion benchmarks
+        run: cargo bench -p unlace-cli
+      - name: Check RSS budget (< 2 GB)
+        run: |
+          /usr/bin/time -v ./target/release/unlace decompile fixtures/medium.elf > /dev/null 2> /tmp/time.txt
+          RSS_KB=$(grep "Maximum resident" /tmp/time.txt | awk '{print $NF}')
+          echo "RSS: ${RSS_KB} KB"
+          grep -E "Elapsed|Maximum resident" /tmp/time.txt
+          if [ "$RSS_KB" -ge 2097152 ]; then
+            echo "::warning::RSS ${RSS_KB} KB exceeds 2 GB budget"
+          fi

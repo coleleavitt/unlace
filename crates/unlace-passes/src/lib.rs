@@ -1,12 +1,14 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
 pub mod pass;
+pub mod calling_convention;
 pub mod const_fold;
 pub mod copy_prop;
 pub mod dce;
 pub mod type_infer;
 
 pub use pass::{Pass, PassError, run_to_fixedpoint};
+pub use calling_convention::CallingConventionDetectPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;
 pub use dce::DeadCodeElimPass;

@@ -1642,6 +1642,42 @@ fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Stri
 }
 
 // ---------------------------------------------------------------------------
+// CALLIND complex cast emission (P7-18)
+// ---------------------------------------------------------------------------
+
+/// Render a CALLIND in IDA-style function-pointer cast form:
+///
+/// ```text
+/// ((return_type (*)(param_types))target)(args)
+/// ```
+///
+/// `return_type` is taken from the output varnode size (or `void` when no
+/// output exists). `param_types` and `args` are derived from `inputs[1..]`.
+/// When there are no extra inputs the cast still surfaces the inferred
+/// return type, e.g. `((__int64 (*)())pfn)()`.
+fn emit_callind_cast(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    let target = resolve_call_target(insn, stmt_idx, ctx);
+    let return_ty = match insn.output {
+        Some(out) => type_for_size(out.size, true).to_string(),
+        None => "void".to_string(),
+    };
+
+    let mut params: Vec<String> = Vec::new();
+    let mut args: Vec<String> = Vec::new();
+    for (i, vn) in insn.inputs.iter().enumerate().skip(1) {
+        params.push(type_for_size(vn.size, true).to_string());
+        args.push(emit_operand_resolved(vn, i, stmt_idx, ctx));
+    }
+    let params_str = params.join(", ");
+    let args_str = args.join(", ");
+
+    format!(
+        "(({} (*)({})){})({})",
+        return_ty, params_str, target, args_str,
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Statement emission (single IR instruction)
 // ---------------------------------------------------------------------------
 
@@ -1783,10 +1819,11 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     let _ = writeln!(out, "/* PANIC: {} */", kind);
                     indent(depth, out);
                 }
-                let target = resolve_call_target(insn, idx, ctx);
                 if insn.op == IrOp::Callind {
-                    let _ = writeln!(out, "(*{})();", target);
+                    let expr = emit_callind_cast(insn, idx, ctx);
+                    let _ = writeln!(out, "{};", expr);
                 } else {
+                    let target = resolve_call_target(insn, idx, ctx);
                     let _ = writeln!(out, "{}();", target);
                 }
             }
@@ -2143,10 +2180,10 @@ fn emit_expr_with_prec(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut 
 
         // -- Call with output --
         IrOp::Call | IrOp::Callind => {
-            let target = resolve_call_target(insn, stmt_idx, ctx);
             if insn.op == IrOp::Callind {
-                format!("(*{})()", target)
+                emit_callind_cast(insn, stmt_idx, ctx)
             } else {
+                let target = resolve_call_target(insn, stmt_idx, ctx);
                 format!("{}()", target)
             }
         }
@@ -5543,8 +5580,8 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("(*pfn)();"),
-            "CALLIND should emit (*pfn)(): {output}",
+            output.contains("((void (*)())pfn)();"),
+            "CALLIND should emit IDA-style cast: {output}",
         );
     }
 
@@ -5588,8 +5625,8 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("(*pfn)()"),
-            "CALLIND with output should emit (*pfn)(): {output}",
+            output.contains("((__int64 (*)())pfn)()"),
+            "CALLIND with output should emit IDA-style cast: {output}",
         );
     }
 
@@ -6460,8 +6497,8 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("(*pfn)()"),
-            "CALLIND target should be named 'pfn': {output}",
+            output.contains("((__int32 (*)())pfn)()"),
+            "CALLIND target should be named 'pfn' with cast: {output}",
         );
         assert!(
             output.contains("return result;"),
@@ -6508,6 +6545,54 @@ mod tests {
         assert!(
             !output.contains("for (result"),
             "result heuristic must not override loop counter: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // P7-18: Complex CALLIND cast emission
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_callind_cast_with_args() {
+        let fptr = reg(0, 8);
+        let arg1 = reg(8, 4);
+        let arg2 = reg(16, 4);
+        let ret = reg(24, 4);
+
+        let callind = IrInsn::with_output(
+            IrOp::Callind, ret, smallvec![fptr, arg1, arg2], 0x1000,
+        );
+        let body = vec![
+            HirNode::Statement(callind),
+            HirNode::Return(Some(SsaVarnode { base: ret, version: 0 })),
+        ];
+        let func = make_func("callind_with_args", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("((__int32 (*)(__int32, __int32))pfn)("),
+            "CALLIND with two int32 args should emit param-typed cast: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callind_cast_void_return() {
+        let fptr = reg(0, 8);
+        let arg1 = reg(8, 8);
+
+        let callind = IrInsn::without_output(
+            IrOp::Callind, smallvec![fptr, arg1], 0x1000,
+        );
+        let body = vec![
+            HirNode::Statement(callind),
+            HirNode::Return(None),
+        ];
+        let func = make_func("callind_void", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("((void (*)(__int64))pfn)("),
+            "CALLIND with no output should emit void return: {output}",
         );
     }
 }

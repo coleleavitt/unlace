@@ -1,0 +1,24 @@
+P4-25: nullptr keyword and integer literal suffixes
+=====================================================
+
+Implementation:
+- Added ConstContext::Pointer and ConstContext::Unsigned variants
+- format_constant_ctx updated:
+  - Pointer context with value 0 → "nullptr"
+  - Size 8, Signed → LL suffix (e.g., "0x1000LL", "5LL", "-8LL")
+  - Size 8, Unsigned → ULL suffix (e.g., "0x100ULL", "5ULL")
+  - Size 4, Unsigned → u suffix (e.g., "0x100u", "5u")
+  - MSB-set values → ULL suffix (preserved existing behavior)
+- Added is_pointer_typed_input() helper: checks var_types for PrimitiveType::Ptr
+- Added const_context_for_binop_pair(): detects when const 0 is compared/operated
+  with a pointer-typed variable → returns ConstContext::Pointer
+- emit_binop updated to use per-operand pointer context detection
+- Copy handler updated: const 0 → nullptr when output is Ptr-typed
+
+Tests added:
+- test_nullptr_in_pointer_context: ptr == 0 → "ptr == nullptr"
+- test_64bit_literal_suffix: 64-bit constant → LL suffix
+- test_unsigned_literal_suffix: unit tests for u/ULL suffixes
+- test_nullptr_copy_to_pointer: Copy(0) to ptr var → "nullptr"
+
+All 973 workspace tests pass.

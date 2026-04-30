@@ -242,7 +242,7 @@ Max Concurrent: 7 (Wave 1)
 
   **Commit**: NO (measurement only)
 
-- [ ] P4-1. Fix BoolXor + IntNegate + BoolNegate semantic bugs
+- [x] P4-1. Fix BoolXor + IntNegate + BoolNegate semantic bugs
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -284,7 +284,7 @@ Max Concurrent: 7 (Wave 1)
 
   **Commit**: `fix(output): BoolXor emits ^ not !=, IntNegate emits ~ not !`
 
-- [ ] P4-2. Operator precedence table with auto-parenthesization
+- [x] P4-2. Operator precedence table with auto-parenthesization
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -327,7 +327,7 @@ Max Concurrent: 7 (Wave 1)
 
   **Commit**: `fix(output): operator precedence table with auto-parenthesization`
 
-- [ ] P4-3. SUBPIECE mask + LODWORD/HIDWORD/BYTE1 macros
+- [x] P4-3. SUBPIECE mask + LODWORD/HIDWORD/BYTE1 macros
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -389,7 +389,7 @@ Max Concurrent: 7 (Wave 1)
 
   **Commit**: `feat(output): SUBPIECE → LODWORD/HIDWORD/BYTE1/LOBYTE macros`
 
-- [ ] P4-4. Fix IntCarry/IntScarry/IntSborrow emission
+- [x] P4-4. Fix IntCarry/IntScarry/IntSborrow emission
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -416,7 +416,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-4-carry.txt
   ```
 
-- [ ] P4-5. Fix signed/unsigned operator distinction
+- [x] P4-5. Fix signed/unsigned operator distinction
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -442,7 +442,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-5-signed.txt
   ```
 
-- [ ] P4-6. Expand compound assignment operators
+- [x] P4-6. Expand compound assignment operators
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -471,7 +471,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-6-compound.txt
   ```
 
-- [ ] P4-7. Negation folding in C printer
+- [x] P4-7. Negation folding in C printer
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -506,7 +506,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-7-negate.txt
   ```
 
-- [ ] P4-8. Pass symbol table through decompilation pipeline
+- [x] P4-8. Pass symbol table through decompilation pipeline
 
   **What to do**:
   - In `crates/unlace-cli/src/pipeline.rs` (or wherever decompilation is orchestrated):
@@ -533,7 +533,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-8-pipeline.txt
   ```
 
-- [ ] P4-9. PLT symbol resolution in CALL emission
+- [x] P4-9. PLT symbol resolution in CALL emission
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -566,7 +566,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-9-plt.txt
   ```
 
-- [ ] P4-10. String literal recovery from .rodata
+- [x] P4-10. String literal recovery from .rodata
 
   **What to do**:
   - In `crates/unlace-loader/src/elf.rs` (or new file `crates/unlace-loader/src/strings.rs`):
@@ -600,7 +600,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-10-strings.txt
   ```
 
-- [ ] P4-11. Global variable naming
+- [x] P4-11. Global variable naming
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -630,7 +630,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-11-globals.txt
   ```
 
-- [ ] P4-12. Calling convention annotation in function signature
+- [x] P4-12. Calling convention annotation in function signature
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -661,7 +661,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-12-convention.txt
   ```
 
-- [ ] P4-13. Add Break to HIR + emit in C printer
+- [x] P4-13. Add Break to HIR + emit in C printer
 
   **What to do**:
   - In `crates/unlace-struct/src/hir.rs`:
@@ -696,7 +696,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-13-break.txt
   ```
 
-- [ ] P4-14. Switch fall-through support
+- [x] P4-14. Switch fall-through support
 
   **What to do**:
   - In `crates/unlace-struct/src/hir.rs`:
@@ -729,7 +729,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-14-fallthrough.txt
   ```
 
-- [ ] P4-15. If-chain → switch conversion pass
+- [x] P4-15. If-chain → switch conversion pass
 
   **What to do**:
   - WRITE `crates/unlace-struct/src/if_to_switch.rs` (new post-structuring pass)
@@ -763,7 +763,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-15-if-switch.txt
   ```
 
-- [ ] P4-16. Array subscript recovery
+- [x] P4-16. Array subscript recovery
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -794,7 +794,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-16-array.txt
   ```
 
-- [ ] P4-17. CALLIND distinction in C output
+- [x] P4-17. CALLIND distinction in C output
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -821,7 +821,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-17-callind.txt
   ```
 
-- [ ] P4-18. Goto reduction — EagerReturns
+- [x] P4-18. Goto reduction — EagerReturns
 
   **What to do**:
   - WRITE `crates/unlace-struct/src/eager_returns.rs` (pre-structuring CFG pass)
@@ -853,7 +853,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-18-eager.txt
   ```
 
-- [ ] P4-19. Goto reduction — CrossJumpRevert
+- [x] P4-19. Goto reduction — CrossJumpRevert
 
   **What to do**:
   - WRITE `crates/unlace-struct/src/cross_jump_revert.rs` (pre-structuring CFG pass)
@@ -882,7 +882,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-19-crossjump.txt
   ```
 
-- [ ] P4-20. Parameter type inference from calling convention
+- [x] P4-20. Parameter type inference from calling convention
 
   **What to do**:
   - Extend `crates/unlace-passes/src/calling_convention.rs`:
@@ -910,7 +910,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-20-params.txt
   ```
 
-- [ ] P4-21. Return type inference
+- [x] P4-21. Return type inference
 
   **What to do**:
   - Extend `crates/unlace-passes/src/calling_convention.rs` or new pass:
@@ -941,7 +941,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-21-return.txt
   ```
 
-- [ ] P4-22. Register/stack variable comments
+- [x] P4-22. Register/stack variable comments
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -971,7 +971,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-22-comments.txt
   ```
 
-- [ ] P4-23. CALLOTHER resolution to intrinsic/function names
+- [x] P4-23. CALLOTHER resolution to intrinsic/function names
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -1003,7 +1003,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-23-callother.txt
   ```
 
-- [ ] P4-24. Constant folding cleanup in C output
+- [x] P4-24. Constant folding cleanup in C output
 
   **What to do**:
   - Address the 31 occurrences of `__builtin_popcount(0)` and similar dead-code constants in output
@@ -1036,7 +1036,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-24-constfold.txt
   ```
 
-- [ ] P4-25. nullptr keyword + integer literal suffixes
+- [x] P4-25. nullptr keyword + integer literal suffixes
 
   **What to do**:
   - In `crates/unlace-output/src/c_printer.rs`:
@@ -1069,7 +1069,7 @@ Max Concurrent: 7 (Wave 1)
 
 ## Final Verification Wave
 
-- [ ] P4-F1. **Plan Compliance Audit** — `oracle`
+- [x] P4-F1. **Plan Compliance Audit** — `oracle`
   Read the plan end-to-end. For each "Must Have": verify implementation exists. For each "Must NOT Have": search codebase for forbidden patterns. Check evidence files exist. Compare deliverables against plan.
   Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
@@ -1086,7 +1086,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-f1-compliance.txt
   ```
 
-- [ ] P4-F2. **Code Quality Review** — `general`
+- [x] P4-F2. **Code Quality Review** — `general`
   Run `cargo test --workspace` + `cargo xtask lint-determinism` + `cargo clippy --workspace`. Review all changed files for semantic correctness. Check for empty error handling, commented-out code.
   Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | VERDICT`
 
@@ -1102,7 +1102,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-f2-quality.txt
   ```
 
-- [ ] P4-F3. **Parity Measurement** — `general`
+- [x] P4-F3. **Parity Measurement** — `general`
   Run `python3 scripts/measure_parity.py --json` and verify overall_parity ≥ 85.0%. Compare per-feature scores against Wave 0 baseline. Identify any features that regressed.
   Output: `Parity [X%] | vs Baseline [+Y%] | Regressions [NONE/list] | VERDICT`
 
@@ -1118,7 +1118,7 @@ Max Concurrent: 7 (Wave 1)
     Evidence: .sisyphus/evidence/p4-f3-parity.txt
   ```
 
-- [ ] P4-F4. **Regression Check** — `general`
+- [x] P4-F4. **Regression Check** — `general`
   Run all fixtures: medium.elf, debug_structs.elf, debug_calls.elf, debug_hello.elf. Verify each decompiles. Verify test count ≥ 920. Verify no FAILED tests.
   Output: `Fixtures [N/N] | Tests [N pass] | VERDICT`
 

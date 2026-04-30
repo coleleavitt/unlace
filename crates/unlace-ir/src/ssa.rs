@@ -138,6 +138,19 @@ impl std::fmt::Display for PrimitiveType {
     }
 }
 
+/// A recovered stack variable at a fixed RSP-relative offset.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StackVar {
+    /// RSP-relative offset (negative = below entry RSP, e.g. -8 for first push).
+    pub offset: i64,
+    /// Human-readable name (e.g. `local_8`, `local_10`).
+    pub name: String,
+    /// Inferred primitive type from accesses.
+    pub ty: PrimitiveType,
+    /// SSA varnodes that access this stack slot (loads and stores).
+    pub accesses: Vec<SsaVarnode>,
+}
+
 pub struct SsaFunction {
     pub function: Function,
     pub cfg: ControlFlowGraph,
@@ -146,6 +159,8 @@ pub struct SsaFunction {
     pub var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
     pub var_types: BTreeMap<SsaVarnode, PrimitiveType>,
     pub calling_convention: CallingConvention,
+    /// Recovered stack variables keyed by RSP-relative offset.
+    pub stack_vars: BTreeMap<i64, StackVar>,
 }
 
 /// Identifies which varnode slot of an instruction an SSA version refers to.
@@ -179,6 +194,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         var_map,
         var_types: BTreeMap::new(),
         calling_convention: CallingConvention::Unknown,
+        stack_vars: BTreeMap::new(),
     }
 }
 

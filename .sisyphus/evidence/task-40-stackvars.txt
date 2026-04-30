@@ -1,0 +1,65 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/unlace_passes-bd11cfbc919d870f)
+
+running 52 tests
+test calling_convention::tests::test_const_inputs_ignored ... ok
+test calling_convention::tests::test_empty_function_unknown ... ok
+test calling_convention::tests::test_msx64_rcx_rdx_reads ... ok
+test calling_convention::tests::test_msx64_rcx_rdx_r8_r9 ... ok
+test calling_convention::tests::test_return_value_in_rax_not_argument ... ok
+test calling_convention::tests::test_rsp_read_not_argument ... ok
+test calling_convention::tests::test_register_written_then_read_not_counted ... ok
+test calling_convention::tests::test_no_change_on_rerun ... ok
+test calling_convention::tests::test_sysv_all_six_arg_regs ... ok
+test calling_convention::tests::test_stack_reads_not_arg_regs ... ok
+test calling_convention::tests::test_sysv_rdi_rdx_rcx ... ok
+test calling_convention::tests::test_sysv_rdi_rsi_reads ... ok
+test const_fold::tests::test_const_fold_bool_and ... ok
+test const_fold::tests::test_const_fold_div_by_zero_skipped ... ok
+test const_fold::tests::test_const_fold_no_change_on_non_const_input ... ok
+test const_fold::tests::test_const_fold_wrapping_32bit ... ok
+test copy_prop::tests::test_copy_prop_chain ... ok
+test const_fold::tests::test_const_fold_int_carry ... ok
+test stack_vars::tests::test_multiple_accesses_same_offset_grouped ... ok
+test stack_vars::tests::test_no_change_on_rerun ... ok
+test stack_vars::tests::test_store_rsp_sub_const ... ok
+test stack_vars::tests::test_rbp_relative_access ... ok
+test tests::test_fixedpoint_iteration ... ok
+test stack_vars::tests::test_type_from_type_infer ... ok
+test stack_vars::tests::test_load_rsp_add_const ... ok
+test dce::tests::test_dce_remove_unused_add ... ok
+test stack_vars::tests::test_no_stack_access_no_change ... ok
+test const_fold::tests::test_const_fold_bool_or ... ok
+test calling_convention::tests::test_aarch64_x0_only ... ok
+test copy_prop::tests::test_copy_prop_no_change ... ok
+test copy_prop::tests::test_copy_prop_simple ... ok
+test const_fold::tests::test_const_fold_int_add ... ok
+test tests::test_fixedpoint_terminates_with_no_change ... ok
+test type_infer::tests::test_call_const_target_no_crash ... ok
+test type_infer::tests::test_bool_ops ... ok
+test type_infer::tests::test_callind_target_ptr ... ok
+test type_infer::tests::test_cbranch_cond_bool ... ok
+test type_infer::tests::test_float_add ... ok
+test type_infer::tests::test_comparison_output_bool ... ok
+test type_infer::tests::test_float_double_size ... ok
+test type_infer::tests::test_lattice_join ... ok
+test type_infer::tests::test_int_add_typed_int ... ok
+test type_infer::tests::test_store_addr_ptr ... ok
+test type_infer::tests::test_load_addr_typed_ptr ... ok
+test dce::tests::test_dce_preserve_store ... ok
+test stack_vars::tests::test_direct_stack_space_varnode ... ok
+test calling_convention::tests::test_aarch64_x0_x1 ... ok
+test stack_vars::tests::test_chained_rsp_sub_then_add ... ok
+test dce::tests::test_dce_cascade ... ok
+test const_fold::tests::test_const_fold_int_sub ... ok
+test dce::tests::test_dce_preserve_call ... ok
+test const_fold::tests::test_const_fold_int_negate ... ok
+
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests unlace_passes
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

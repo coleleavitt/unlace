@@ -1,0 +1,20 @@
+P4-8: Thread symbol table through decompilation pipeline
+========================================================
+
+CHANGES:
+- Added `symbols: BTreeMap<u64, String>` field to `PrintCtx` in c_printer.rs
+- Updated `print_c_full()` signature: added `symbols: Option<&BTreeMap<u64, String>>` parameter
+- Updated `print_c_with_dwarf()` to chain through with `None` for symbols
+- Updated `FunctionHeaderInfo::from_ssa()` to accept `&BTreeMap<u64, String>` for callee resolution
+- Added `build_symbol_table()` in pipeline.rs: merges BinaryImage.symbols (functions) + plt_symbols
+- Updated `decompile_function()` and `emit_output()` to build and pass symbol table
+
+FILES MODIFIED:
+- crates/unlace-output/src/c_printer.rs (PrintCtx, print_c_full, from_ssa)
+- crates/unlace-cli/src/pipeline.rs (build_symbol_table, decompile_function, emit_output)
+
+VERIFICATION:
+- cargo check --workspace: passes
+- cargo check --workspace --benches: passes
+- cargo test --workspace: 949 tests pass, 0 failures
+- All existing call sites (print_c, print_c_with_dwarf, benchmarks) continue to work via None defaults

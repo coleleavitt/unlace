@@ -675,7 +675,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
                 ctx.collect_depth += 1;
-                for (_case, body) in cases {
+                for (_case, body, _) in cases {
                     collect_varnodes(body, ctx);
                 }
                 if let Some(def) = default {
@@ -969,7 +969,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let cond_expr = resolve_sv_expr(cond, ctx);
             indent(depth, out);
             let _ = writeln!(out, "switch ({}) {{", cond_expr);
-            for (case, body) in cases {
+            for (case, body, fall_through) in cases {
                 indent(depth, out);
                 match case {
                     SwitchCase::Value(v) => {
@@ -979,9 +979,17 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                         let _ = writeln!(out, "case {} ... {}:", lo, hi);
                     }
                 }
-                emit_nodes(body, depth + 1, ctx, out);
-                indent(depth + 1, out);
-                let _ = writeln!(out, "break;");
+                if *fall_through {
+                    if !body.is_empty() {
+                        emit_nodes(body, depth + 1, ctx, out);
+                    }
+                    indent(depth + 1, out);
+                    let _ = writeln!(out, "/* fall through */");
+                } else {
+                    emit_nodes(body, depth + 1, ctx, out);
+                    indent(depth + 1, out);
+                    let _ = writeln!(out, "break;");
+                }
             }
             if let Some(def) = default {
                 indent(depth, out);
@@ -2092,7 +2100,7 @@ mod tests {
 
     use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
     use unlace_ir::{IrInsn, IrOp, Varnode};
-    use unlace_struct::{HirFunction, HirNode, LabelId};
+    use unlace_struct::{HirFunction, HirNode, LabelId, SwitchCase};
 
     use super::print_c;
 
@@ -4859,6 +4867,79 @@ mod tests {
         assert!(
             output.contains("nullptr"),
             "COPY of 0 to pointer variable should emit nullptr: {output}",
+        );
+    }
+
+    // ── P4-14: Switch fall-through tests ──
+
+    #[test]
+    fn test_switch_normal_has_break() {
+        let body = vec![HirNode::Switch {
+            cond: sv(0, 8),
+            cases: vec![
+                (
+                    SwitchCase::Value(0),
+                    vec![HirNode::Return(None)],
+                    false,
+                ),
+                (
+                    SwitchCase::Value(1),
+                    vec![HirNode::Return(None)],
+                    false,
+                ),
+            ],
+            default: None,
+        }];
+
+        let func = make_func("switch_break", body);
+        let output = print_c(&func);
+
+        let break_count = output.matches("break;").count();
+        assert!(
+            break_count >= 2,
+            "each non-fallthrough case should have break;, got {break_count} in:\n{output}",
+        );
+        assert!(
+            !output.contains("fall through"),
+            "normal cases should not have fall-through comment:\n{output}",
+        );
+    }
+
+    #[test]
+    fn test_switch_fallthrough_no_break() {
+        let body = vec![HirNode::Switch {
+            cond: sv(0, 8),
+            cases: vec![
+                (
+                    SwitchCase::Value(0),
+                    vec![],
+                    true,
+                ),
+                (
+                    SwitchCase::Value(1),
+                    vec![HirNode::Return(None)],
+                    false,
+                ),
+            ],
+            default: None,
+        }];
+
+        let func = make_func("switch_ft", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("fall through"),
+            "fall-through case should have /* fall through */ comment:\n{output}",
+        );
+
+        let lines: Vec<&str> = output.lines().collect();
+        let case0_line = lines.iter().position(|l| l.contains("case 0:")).unwrap();
+        let case1_line = lines.iter().position(|l| l.contains("case 1:")).unwrap();
+
+        let between = &lines[case0_line..case1_line];
+        assert!(
+            !between.iter().any(|l| l.trim() == "break;"),
+            "fall-through case 0 should NOT have break; between case labels:\n{output}",
         );
     }
 }

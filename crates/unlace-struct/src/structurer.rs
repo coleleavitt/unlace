@@ -185,8 +185,8 @@ fn recurse_try_catch_children(
         HirNode::Switch { cond, cases, default } => {
             HirNode::Switch {
                 cond,
-                cases: cases.into_iter().map(|(c, body)| {
-                    (c, wrap_try_catch(body, landing_pad_addrs, func))
+                cases: cases.into_iter().map(|(c, body, ft)| {
+                    (c, wrap_try_catch(body, landing_pad_addrs, func), ft)
                 }).collect(),
                 default: default.map(|d| wrap_try_catch(d, landing_pad_addrs, func)),
             }
@@ -369,14 +369,21 @@ impl<'a> StructureCtx<'a> {
 
         let join = self.find_switch_join(&targets);
 
+        let num_cases = if targets.len() > 2 { targets.len() - 1 } else { targets.len() };
         let mut cases = Vec::new();
         let mut default_body = None;
         for (i, &tgt) in targets.iter().enumerate() {
-            let body = self.structure_until(tgt, join);
             if i == targets.len() - 1 && targets.len() > 2 {
+                let body = self.structure_until(tgt, join);
                 default_body = Some(body);
             } else {
-                cases.push((SwitchCase::Value(i as u64), body));
+                let is_fall_through = i + 1 < num_cases && targets[i] == targets[i + 1];
+                let body = if is_fall_through {
+                    vec![]
+                } else {
+                    self.structure_until(tgt, join)
+                };
+                cases.push((SwitchCase::Value(i as u64), body, is_fall_through));
             }
         }
 
@@ -1195,7 +1202,7 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
         }
         HirNode::For { body, .. } => recover_for_loops(body),
         HirNode::Switch { cases, default, .. } => {
-            for (_case, body) in cases {
+            for (_case, body, _) in cases {
                 recover_for_loops(body);
             }
             if let Some(def) = default {
@@ -1352,7 +1359,7 @@ fn node_references_varnode(node: &HirNode, target: &Varnode) -> bool {
         }
         HirNode::Switch { cond, cases, default } => {
             cond.base == *target
-                || cases.iter().any(|(_, b)| {
+                || cases.iter().any(|(_, b, _)| {
                     b.iter().any(|c| node_references_varnode(c, target))
                 })
                 || default

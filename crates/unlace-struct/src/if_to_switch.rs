@@ -244,6 +244,7 @@ fn rewrite_node(
                 (
                     SwitchCase::Value(arm.value),
                     rewrite_nodes(arm.body, def_map),
+                    false,
                 )
             })
             .collect();
@@ -281,7 +282,7 @@ fn rewrite_node(
             cond,
             cases: cases
                 .into_iter()
-                .map(|(c, body)| (c, rewrite_nodes(body, def_map)))
+                .map(|(c, body, ft)| (c, rewrite_nodes(body, def_map), ft))
                 .collect(),
             default: default.map(|d| rewrite_nodes(d, def_map)),
         },

@@ -94,7 +94,7 @@ pub enum HirNode {
     /// A switch/case construct.
     Switch {
         cond: SsaVarnode,
-        cases: Vec<(SwitchCase, Vec<HirNode>)>,
+        cases: Vec<(SwitchCase, Vec<HirNode>, bool)>,
         default: Option<Vec<HirNode>>,
     },
 

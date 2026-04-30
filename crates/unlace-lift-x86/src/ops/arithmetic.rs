@@ -113,6 +113,50 @@ pub fn lift_sub(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     }
 }
 
+pub fn lift_adc(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let dst = ctx.operand_write(insn, 0);
+    let a = ctx.operand_read(insn, 0);
+    let b = ctx.operand_read(insn, 1);
+    match (dst, a, b) {
+        (Some(dst), Some(a), Some(b)) => {
+            let cf_in = Varnode::new(unlace_ir::SpaceId::Register, CF, 1);
+            let cf_ext = Varnode::unique(ctx.alloc_unique(), dst.size);
+            ctx.emit(IrInsn::with_output(IrOp::IntZext, cf_ext, smallvec![cf_in], ctx.addr));
+
+            let tmp = Varnode::unique(ctx.alloc_unique(), dst.size);
+            ctx.emit(IrInsn::with_output(IrOp::IntAdd, tmp, smallvec![a, b], ctx.addr));
+            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            ctx.emit(IrInsn::with_output(IrOp::IntAdd, result, smallvec![tmp, cf_ext], ctx.addr));
+
+            emit_add_flags(ctx, a, b, result, dst.size);
+            ctx.write_operand_insn(insn, 0, dst, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_sbb(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let dst = ctx.operand_write(insn, 0);
+    let a = ctx.operand_read(insn, 0);
+    let b = ctx.operand_read(insn, 1);
+    match (dst, a, b) {
+        (Some(dst), Some(a), Some(b)) => {
+            let cf_in = Varnode::new(unlace_ir::SpaceId::Register, CF, 1);
+            let cf_ext = Varnode::unique(ctx.alloc_unique(), dst.size);
+            ctx.emit(IrInsn::with_output(IrOp::IntZext, cf_ext, smallvec![cf_in], ctx.addr));
+
+            let tmp = Varnode::unique(ctx.alloc_unique(), dst.size);
+            ctx.emit(IrInsn::with_output(IrOp::IntSub, tmp, smallvec![a, b], ctx.addr));
+            let result = Varnode::unique(ctx.alloc_unique(), dst.size);
+            ctx.emit(IrInsn::with_output(IrOp::IntSub, result, smallvec![tmp, cf_ext], ctx.addr));
+
+            emit_sub_flags(ctx, a, b, result, dst.size);
+            ctx.write_operand_insn(insn, 0, dst, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
 pub fn lift_cmp(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let a = ctx.operand_read(insn, 0);
     let b = ctx.operand_read(insn, 1);

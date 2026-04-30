@@ -285,6 +285,8 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
 
         M::Add => arithmetic::lift_add(ctx, insn),
         M::Sub => arithmetic::lift_sub(ctx, insn),
+        M::Adc => arithmetic::lift_adc(ctx, insn),
+        M::Sbb => arithmetic::lift_sbb(ctx, insn),
         M::Cmp => arithmetic::lift_cmp(ctx, insn),
         M::Test => arithmetic::lift_test(ctx, insn),
         M::Imul => arithmetic::lift_imul(ctx, insn),
@@ -307,6 +309,14 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Shl => bitwise::lift_shl(ctx, insn),
         M::Shr => bitwise::lift_shr(ctx, insn),
         M::Sar => bitwise::lift_sar(ctx, insn),
+        M::Bt => bitwise::lift_bt(ctx, insn),
+        M::Bsf => bitwise::lift_bsf(ctx, insn),
+        M::Bsr => bitwise::lift_bsr(ctx, insn),
+        M::Tzcnt => bitwise::lift_tzcnt(ctx, insn),
+        M::Lzcnt => bitwise::lift_lzcnt(ctx, insn),
+        M::Popcnt => bitwise::lift_popcnt(ctx, insn),
+
+        M::Ud2 => bitwise::lift_ud2(ctx, insn),
 
         M::Jmp => control_flow::lift_jmp(ctx, insn),
 

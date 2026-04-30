@@ -15,6 +15,9 @@ use crate::lift::LiftCtx;
 pub mod tag {
     pub const MOVDQA: u64 = 0x100;
     pub const MOVDQU: u64 = 0x101;
+    pub const MOVAPS: u64 = 0x102;
+    pub const MOVUPS: u64 = 0x103;
+    pub const MOVSD:  u64 = 0x104;
 
     pub const PADDB: u64 = 0x110;
     pub const PADDW: u64 = 0x111;
@@ -91,6 +94,48 @@ pub fn lift_sse_binop(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother
         IrOp::Callother,
         dst,
         smallvec![tag_vn, src0, src1],
+        ctx.addr,
+    ));
+}
+
+/// MOVSD (scalar double): 8-byte move in the low half of an XMM register.
+///
+/// Unlike the 16-byte MOVDQA/MOVUPS family, MOVSD operates on only 8 bytes.
+/// We emit a Callother with `tag::MOVSD` so the semantics are recoverable.
+pub fn lift_sse_mov_scalar(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    use iced_x86::OpKind;
+
+    let tag_vn = Varnode::constant(callother_tag, 8);
+
+    if insn.op_kind(0) == OpKind::Memory {
+        let Some(dst_addr) = ctx.memory_address(insn) else {
+            ctx.emit_unimplemented();
+            return;
+        };
+        let Some(src) = ctx.operand_read(insn, 1) else {
+            ctx.emit_unimplemented();
+            return;
+        };
+        ctx.emit(IrInsn::without_output(
+            IrOp::Callother,
+            smallvec![tag_vn, dst_addr, src],
+            ctx.addr,
+        ));
+        return;
+    }
+
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![tag_vn, src],
         ctx.addr,
     ));
 }

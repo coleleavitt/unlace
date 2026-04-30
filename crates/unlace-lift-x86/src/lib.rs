@@ -777,5 +777,43 @@ mod tests {
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
     }
+
+    // -- MOVAPS / MOVUPS / MOVSD lifting ------------------------------------
+
+    #[test]
+    fn test_lift_movaps_reg_to_reg() {
+        // 0F 28 C1 = movaps xmm0, xmm1
+        assert_callother_tag(&[0x0F, 0x28, 0xC1], sse_tag::MOVAPS);
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x28, 0xC1], 0x1000)
+            .unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("reg form should have output");
+        assert_eq!(dst.size, 16);
+    }
+
+    #[test]
+    fn test_lift_movups_mem_to_reg() {
+        // 0F 10 07 = movups xmm0, [rdi]
+        assert_callother_tag(&[0x0F, 0x10, 0x07], sse_tag::MOVUPS);
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x10, 0x07], 0x1000)
+            .unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("load form should have output");
+        assert_eq!(dst.size, 16);
+    }
+
+    #[test]
+    fn test_lift_movsd_reg_to_reg() {
+        // F2 0F 10 C1 = movsd xmm0, xmm1
+        assert_callother_tag(&[0xF2, 0x0F, 0x10, 0xC1], sse_tag::MOVSD);
+        let result = lifter()
+            .lift_insn(&[0xF2, 0x0F, 0x10, 0xC1], 0x1000)
+            .unwrap();
+        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let dst = co.output.expect("reg form should have output");
+        assert_eq!(dst.size, 16);
+    }
 }
 

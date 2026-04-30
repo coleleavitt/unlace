@@ -53,6 +53,34 @@ impl DominatorTree {
     }
 }
 
+/// Detected calling convention for a function.
+///
+/// Determined by [`CallingConventionDetectPass`](https://docs.rs/unlace-passes)
+/// examining which argument registers are read before being written in the
+/// function entry block.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum CallingConvention {
+    /// System V AMD64 ABI: args in RDI, RSI, RDX, RCX, R8, R9; return in RAX.
+    SystemV,
+    /// Microsoft x64 ABI: args in RCX, RDX, R8, R9; return in RAX; 32-byte shadow space.
+    MicrosoftX64,
+    /// AArch64 (AAPCS64): args in X0–X7; return in X0.
+    AArch64,
+    /// Could not determine (insufficient evidence or unsupported architecture).
+    Unknown,
+}
+
+impl std::fmt::Display for CallingConvention {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SystemV => f.write_str("System V AMD64"),
+            Self::MicrosoftX64 => f.write_str("Microsoft x64"),
+            Self::AArch64 => f.write_str("AArch64 AAPCS64"),
+            Self::Unknown => f.write_str("unknown"),
+        }
+    }
+}
+
 /// Inferred primitive type for an SSA varnode.
 ///
 /// The type lattice starts at [`Unknown`](Self::Unknown) and is refined by
@@ -110,15 +138,14 @@ impl std::fmt::Display for PrimitiveType {
     }
 }
 
-/// The SSA form of a function.
 pub struct SsaFunction {
     pub function: Function,
     pub cfg: ControlFlowGraph,
     pub dom_tree: DominatorTree,
     pub phi_map: BTreeMap<BlockId, Vec<PhiNode>>,
     pub var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
-    /// Inferred types for SSA varnodes, populated by [`TypeInferPass`].
     pub var_types: BTreeMap<SsaVarnode, PrimitiveType>,
+    pub calling_convention: CallingConvention,
 }
 
 /// Identifies which varnode slot of an instruction an SSA version refers to.
@@ -144,7 +171,15 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         &phi_locations,
     );
 
-    SsaFunction { function: func, cfg, dom_tree, phi_map, var_map, var_types: BTreeMap::new() }
+    SsaFunction {
+        function: func,
+        cfg,
+        dom_tree,
+        phi_map,
+        var_map,
+        var_types: BTreeMap::new(),
+        calling_convention: CallingConvention::Unknown,
+    }
 }
 
 fn build_dominator_tree(cfg: &ControlFlowGraph) -> DominatorTree {

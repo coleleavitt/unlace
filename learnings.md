@@ -101,3 +101,27 @@ self-contained, so `unsafe impl Send/Sync` is safe for the lifter struct.
   HIR to catch any residual BRANCHIND statements not caught during structuring.
 - `var_map` key `(BlockId, insn_index, VarnodeSlot)` is used for SSA lookups;
   constants identified via `SpaceId::Const`.
+
+## Task 39: Calling Convention Detection
+
+### Detection Algorithm
+- Walk the entry block and track which register-space varnodes are READ before
+  being WRITTEN. A read-before-write register is presumed to be a parameter.
+- Disambiguation uses the observation that RDI (offset 56) and RSI (offset 48)
+  are argument registers **only** in System V AMD64; Microsoft x64 never uses them.
+  If either is read -> System V. If RCX/RDX/R8/R9 are read without RDI/RSI -> MS x64.
+- AArch64 detected when offset 0 (X0/RAX) is read and no x86-specific arg regs
+  are present. RAX is never an argument register in either x86 calling convention.
+
+### Register Offset Map (x86-64)
+- RAX=0, RCX=8, RDX=16, RBX=24, RSP=32, RBP=40, RSI=48, RDI=56
+- R8=64, R9=72, R10=80, R11=88, R12=96, R13=104, R14=112, R15=120
+
+### Implementation Notes
+- `CallingConvention` enum lives in `unlace-ir/src/ssa.rs` alongside `SsaFunction`.
+- `CallingConventionDetectPass` in `unlace-passes/src/calling_convention.rs`.
+- The pass is stateless (zero-sized struct), stores result in `SsaFunction::calling_convention`.
+- `has_shadow_space_stores()` helper reserved for future MS x64 refinement (detects
+  32-byte shadow space stores at [RSP+8..+32] in entry block).
+- Adding a field to `SsaFunction` requires updating all struct-literal construction
+  sites across the workspace (dce.rs tests, ir_dump.rs tests, etc.).

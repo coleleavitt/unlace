@@ -247,6 +247,10 @@ impl<'a> StructureCtx<'a> {
         }
     }
 
+    fn is_frame_setup(&self, bid: BlockId, insn_idx: usize) -> bool {
+        self.func.frame_setup_insns.contains(&(bid, insn_idx))
+    }
+
     fn alloc_label(&mut self, block: BlockId) -> LabelId {
         if let Some(&label) = self.block_labels.get(&block) {
             return label;
@@ -315,6 +319,9 @@ impl<'a> StructureCtx<'a> {
         };
 
         for (i, insn) in block.insns.iter().enumerate() {
+            if self.is_frame_setup(bid, i) {
+                continue;
+            }
             match insn.op {
                 // Skip control-flow terminators — they're handled structurally.
                 IrOp::Branch => {
@@ -360,7 +367,10 @@ impl<'a> StructureCtx<'a> {
         self.emitted.insert(bid);
 
         let mut pre_stmts = Vec::new();
-        for insn in &block.insns {
+        for (i, insn) in block.insns.iter().enumerate() {
+            if self.is_frame_setup(bid, i) {
+                continue;
+            }
             match insn.op {
                 IrOp::Branchind | IrOp::Branch | IrOp::Cbranch | IrOp::Return => {}
                 _ => pre_stmts.push(HirNode::Statement(insn.clone())),
@@ -586,7 +596,10 @@ impl<'a> StructureCtx<'a> {
         // Emit pre-branch statements from the header.
         let mut pre_stmts = Vec::new();
         if let Some(block) = self.func.function.blocks.get(&bid) {
-            for insn in &block.insns {
+            for (i, insn) in block.insns.iter().enumerate() {
+                if self.is_frame_setup(bid, i) {
+                    continue;
+                }
                 match insn.op {
                     IrOp::Cbranch | IrOp::Branch | IrOp::Branchind | IrOp::Return => {}
                     _ => pre_stmts.push(HirNode::Statement(insn.clone())),
@@ -658,7 +671,10 @@ impl<'a> StructureCtx<'a> {
             // Emit header's non-control-flow statements first, then recurse into body.
             let mut body_nodes = Vec::new();
             if let Some(block) = self.func.function.blocks.get(&header) {
-                for insn in &block.insns {
+                for (i, insn) in block.insns.iter().enumerate() {
+                    if self.is_frame_setup(header, i) {
+                        continue;
+                    }
                     match insn.op {
                         IrOp::Cbranch | IrOp::Branch | IrOp::Branchind | IrOp::Return => {}
                         _ => body_nodes.push(HirNode::Statement(insn.clone())),
@@ -782,6 +798,9 @@ impl<'a> StructureCtx<'a> {
         };
 
         for (i, insn) in block.insns.iter().enumerate() {
+            if self.is_frame_setup(bid, i) {
+                continue;
+            }
             match insn.op {
                 IrOp::Branch => {
                     if let Some(&target) = self.func.tail_call_map.get(&bid) {

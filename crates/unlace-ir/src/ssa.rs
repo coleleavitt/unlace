@@ -233,6 +233,10 @@ pub struct SsaFunction {
     /// Inferred return type from RETURN instruction analysis.
     /// Populated by [`ReturnTypeInferPass`](https://docs.rs/unlace-passes).
     pub inferred_return_type: PrimitiveType,
+    /// Instructions identified as prologue/epilogue frame setup code.
+    /// Keyed by `(BlockId, insn_index)`. Populated by
+    /// [`PrologueElimPass`](https://docs.rs/unlace-passes).
+    pub frame_setup_insns: BTreeSet<(BlockId, usize)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -283,6 +287,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         vtable_calls: BTreeMap::new(),
         inferred_params: Vec::new(),
         inferred_return_type: PrimitiveType::Unknown,
+        frame_setup_insns: BTreeSet::new(),
     }
 }
 

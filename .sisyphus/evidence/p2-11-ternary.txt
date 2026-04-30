@@ -1,0 +1,43 @@
+P2-11: Ternary operator generation
+===================================
+
+Implementation
+--------------
+1. Added HirNode::Ternary variant to crates/unlace-struct/src/hir.rs
+   Fields: cond (SsaVarnode), then_insn (IrInsn), else_insn (IrInsn), output (Varnode)
+
+2. Created crates/unlace-struct/src/ternary_recovery.rs
+   Post-structuring pass that walks the HIR tree and converts eligible If nodes:
+   - Pattern: If { then_body: [Statement(Copy→V)], else_body: Some([Statement(Copy→V)]) }
+   - Both branches must be single COPY statements writing the same output varnode
+   - Recursively walks Block, While, DoWhile, Switch to find nested ternary candidates
+
+3. Updated crates/unlace-struct/src/lib.rs
+   Exported ternary_recovery module and function
+
+4. Updated crates/unlace-output/src/c_printer.rs
+   - collect_varnodes: handles Ternary node's then_insn/else_insn statement indexing
+   - emit_node: renders as `lhs = cond ? then_expr : else_expr;`
+
+5. Wired into pipeline: crates/unlace-cli/src/pipeline.rs
+   Called ternary_recovery(&mut hir) after structure() in the C emit path
+
+Tests
+-----
+unlace-struct (5 new ternary tests):
+  - test_ternary_simple_assignment: If with matching COPY outputs → Ternary node
+  - test_ternary_not_for_complex_bodies: multi-statement then_body stays as If
+  - test_ternary_not_for_different_outputs: different output varnodes stays as If
+  - test_ternary_not_for_non_copy_ops: non-COPY instructions stay as If
+  - test_ternary_nested_recovery: If inside While body gets recovered
+
+unlace-output (2 new ternary tests):
+  - test_print_ternary: verifies `? :` syntax in output
+  - test_print_ternary_compiles: gcc -fsyntax-only validates output
+
+Verification
+------------
+  cargo test -p unlace-struct -- ternary       → 5/5 pass
+  cargo test -p unlace-output -- ternary       → 2/2 pass
+  cargo test --workspace                       → 653 pass, 0 fail
+  cargo xtask lint-determinism                 → OK (no HashMap/HashSet)

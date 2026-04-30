@@ -1,0 +1,16 @@
+P4-24: Constant folding cleanup in C output
+=============================================
+
+Implementation in emit_expr_with_prec:
+- IntXor: if inputs[0] == inputs[1] and both are non-const → emit "0" (XOR-self)
+- IntAnd: if inputs[1] is const 0 → emit "0" (AND with zero)
+- IntOr: if inputs[1] is const 0 → emit inputs[0] (OR with zero identity)
+- Popcount: if inputs[0] is const 0 → emit "0" (popcount of zero)
+
+Tests added:
+- test_xor_self_becomes_zero: IntXor(v, v) → "v2 = 0;"
+- test_popcount_zero_folded: Popcount(0) → "v1 = 0;" (no __builtin_popcount call)
+- test_and_zero_folded: v & 0 → "v2 = 0;"
+- test_or_zero_identity: v | 0 → "v2 = v1;"
+
+All 973 workspace tests pass.

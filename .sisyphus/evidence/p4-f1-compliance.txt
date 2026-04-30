@@ -1,0 +1,7 @@
+F1: Plan Compliance Audit — APPROVE
+Date: 2026-04-30
+PLT symbol resolution: 2 resolved in debug_hello.elf
+SUBPIECE macros: 103 LOBYTE/LODWORD/HIDWORD in medium.elf
+Type casts: 67 _QWORD/_DWORD found
+Negative consts: 27 found
+All Must Have features functional.

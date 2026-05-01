@@ -324,6 +324,41 @@ mod tests {
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 
+    fn assert_callother_tag(bytes: &[u8], tag: u64) {
+        let result = lifter().lift_insn(bytes, 0x1000).expect("should decode");
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("should emit Callother");
+        assert_eq!(call.inputs[0].offset, tag);
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm64_csel_lifts_to_callother() {
+        // CSEL X2, X0, X1, LT  →  9a81b002
+        assert_callother_tag(&[0x02, 0xb0, 0x81, 0x9a], 0x330);
+    }
+
+    #[test]
+    fn arm64_csinc_lifts_to_callother() {
+        // CSINC X3, X0, X1, EQ  →  9a810403
+        assert_callother_tag(&[0x03, 0x04, 0x81, 0x9a], 0x331);
+    }
+
+    #[test]
+    fn arm64_csinv_lifts_to_callother() {
+        // CSINV X4, X0, X1, NE  →  da811004
+        assert_callother_tag(&[0x04, 0x10, 0x81, 0xda], 0x332);
+    }
+
+    #[test]
+    fn arm64_csneg_lifts_to_callother() {
+        // CSNEG X5, X0, X1, GE  →  da81a405
+        assert_callother_tag(&[0x05, 0xa4, 0x81, 0xda], 0x333);
+    }
+
     #[test]
     fn test_no_panic_on_various() {
         let cases: Vec<&[u8]> = vec![

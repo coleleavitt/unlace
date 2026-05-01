@@ -34,7 +34,6 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void _start(void) {
     int v9; // rip
-    unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x1085LL;
     v3 = v9 + 0x3fd8LL;

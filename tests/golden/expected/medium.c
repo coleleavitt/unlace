@@ -42,41 +42,26 @@ void main(void) {
     long long v21; // r8
     int v19; // r10d
     int v10; // rip
-    signed char v14; // ZF
-    int v35; // OF
     __int128 v12; // xmm0
     __int128 v22; // xmm1
     __int128 v32; // xmm2
     int result;
     int v18;
-    signed char v16; // temp
-    int v3; // temp
-    signed char v29; // temp
-    int v4; // temp
-    long long v25; // temp
-    _OWORD v11; // temp
-    signed char v5; // temp
-    signed char v6; // temp
-    signed char v7; // temp
 
     *(_QWORD *)(0x48LL) = 0x48LL;
     result = v10 + 0x2010LL;
-    v11 = *(_OWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
+    v12 = _mm_load_si128(*(_OWORD *)(0LL));
     result = __readfsqword(0x28u);
     v5 = LOBYTE(1);
     _mm_load_ps(0LL, v12);
     result = v10 + 0x2020LL;
-    v11 = *(_OWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
+    v12 = _mm_load_si128(*(_OWORD *)(0LL));
     _mm_load_ps(0LL, v12);
     result = v10 + 0x2030LL;
-    v11 = *(_OWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
+    v12 = _mm_load_si128(*(_OWORD *)(0LL));
     _mm_load_ps(0LL, v12);
     result = v10 + 0x2040LL;
-    v11 = *(_OWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
+    v12 = _mm_load_si128(*(_OWORD *)(0LL));
     _mm_load_ps(0LL, v12);
     while (v16) {
     }
@@ -212,7 +197,6 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void _start(void) {
     int v9; // rip
-    unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x14a5LL;
     v3 = v9 + 0x3fd8LL;
@@ -258,10 +242,6 @@ void f_rec_fib(void) {
     int v9; // edi
     int v13; // rdi
     signed char v16; // temp
-    long long result; // temp
-    signed char v8; // temp
-    signed char v4; // temp
-    signed char v5; // temp
 
     if (v9) {
     } else {
@@ -337,8 +317,6 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void f_ackermann(void) {
     int v7; // rdx
-    signed char v6; // temp
-    long long result; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_QWORD *)(0LL) = 0LL;
@@ -389,14 +367,8 @@ _DWORD __readfsdword(unsigned int offset);
 void f_rec_power.constprop.0(__int64 a1) {
     long long v20; // rsp
     int v1; // dil
-    signed char v3; // ZF
     int v12;
-    signed char v2; // temp
-    int v8; // temp
-    long long result; // temp
-    int v9; // temp
     int v18; // temp
-    signed char v5; // temp
 
     v2 = v1 & 1;
     v3 = 0;

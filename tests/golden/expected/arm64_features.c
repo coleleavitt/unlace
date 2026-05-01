@@ -176,15 +176,13 @@ void bitfield_test(void) {
     long long result; // reg?
     int v1; // reg?
     long long v2; // temp
-    long long v3; // temp
     unsigned long long v4; // temp
 
     v2 = v1 - 16;
     *(_QWORD *)(v2) = v2;
     v2[1] = v4;
     v3 = v5 << 0x30;
-    v2 = *(_QWORD *)(v1);
-    v6 = v2;
+    v6 = *(_QWORD *)(v1);
     v4 = v1->field_8;
     result = v4;
     __dmb__();

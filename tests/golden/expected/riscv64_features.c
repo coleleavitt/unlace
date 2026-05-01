@@ -152,7 +152,6 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void memory_test(void) {
     long long result; // rcx
-    unsigned int v5; // temp
     unsigned long long v3; // temp
 
     *(_QWORD *)(0x42LL) = v3;
@@ -161,7 +160,6 @@ void memory_test(void) {
     v5 = *(_DWORD *)(0x42LL);
     v3 = *(_QWORD *)(0x42LL);
     v6 = v3;
-    v3 = *(_QWORD *)(0x42LL);
-    result = v3;
+    result = *(_QWORD *)(0x42LL);
     return result;
 }

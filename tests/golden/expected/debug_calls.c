@@ -34,7 +34,6 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void _start(void) {
     int v9; // rip
-    unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x1065LL;
     v3 = v9 + 0x3fd8LL;
@@ -161,7 +160,6 @@ _DWORD __readfsdword(unsigned int offset);
 int mul(int a, int b) {
     int v5; // esi
     int v4; // edi
-    long long result; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
@@ -204,8 +202,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int square(int x) {
-    long long result; // temp
-
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = 0;
     *(_QWORD *)(0LL) = 0x118cLL;
@@ -248,8 +244,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int cube(int x) {
-    long long result; // temp
-
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = 0;
     *(_QWORD *)(0LL) = 0x11a7LL;
@@ -296,7 +290,6 @@ int abs_val(int x) {
     int v6; // eax
     int v4; // edi
     int v8; // temp
-    long long result; // temp
     unsigned int cond; // temp
 
     *(_QWORD *)(0LL) = 0LL;
@@ -351,8 +344,6 @@ _DWORD __readfsdword(unsigned int offset);
 int max(int a, int b) {
     int v5; // esi
     int v4; // edi
-    long long result; // temp
-    unsigned int v6; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
@@ -403,8 +394,6 @@ _DWORD __readfsdword(unsigned int offset);
 int min(int a, int b) {
     int v5; // esi
     int v4; // edi
-    long long result; // temp
-    unsigned int v6; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
@@ -450,8 +439,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int clamp(int x, int lo, int hi) {
-    long long result; // temp
-
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = 0;
     *(_DWORD *)(0LL) = 0;
@@ -498,8 +485,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int compute(int x) {
-    long long result; // temp
-
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = 0;
     *(_QWORD *)(0LL) = 0x1256LL;
@@ -559,8 +544,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int main(void) {
-    long long result; // temp
-
     *(_QWORD *)(0LL) = 0LL;
     *(_QWORD *)(0LL) = 0x12c6LL;
     compute();

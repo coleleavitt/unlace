@@ -1,5 +1,7 @@
 //! AArch64 lifting context and top-level mnemonic dispatch.
 
+use std::cell::RefCell;
+
 use capstone::Insn;
 use capstone::arch::arm64::{Arm64Insn, Arm64OpMem, Arm64OperandType, Arm64Shift};
 use capstone::prelude::*;
@@ -10,6 +12,10 @@ use unlace_ir::{
 
 use crate::ops::{arithmetic, bitwise, control_flow, data_move};
 use crate::register_file::{aarch64_register_file, reg_varnode};
+
+thread_local! {
+    static ARM64_CS: RefCell<Option<Capstone>> = const { RefCell::new(None) };
+}
 
 pub struct ArmLifter {
     reg_file: RegisterFile,
@@ -48,27 +54,32 @@ impl Lifter for ArmLifter {
             return Err(LiftError::ShortBuffer);
         }
 
-        let cs = Self::make_capstone();
+        ARM64_CS.with(|cell| {
+            let mut slot = cell.borrow_mut();
+            if slot.is_none() {
+                *slot = Some(Self::make_capstone());
+            }
+            let cs = slot.as_ref().expect("thread-local Capstone initialized");
 
-        let insns = cs
-            .disasm_count(bytes, addr, 1)
-            .map_err(|e| LiftError::Decode(format!("{e}")))?;
+            let insns = cs
+                .disasm_count(bytes, addr, 1)
+                .map_err(|e| LiftError::Decode(format!("{e}")))?;
 
-        let insn = insns
-            .as_ref()
-            .first()
-            .ok_or_else(|| LiftError::Decode(format!("no instruction decoded at {addr:#x}")))?;
+            let insn = insns.as_ref().first().ok_or_else(|| {
+                LiftError::Decode(format!("no instruction decoded at {addr:#x}"))
+            })?;
 
-        let detail = cs
-            .insn_detail(insn)
-            .map_err(|e| LiftError::Decode(format!("{e}")))?;
+            let detail = cs
+                .insn_detail(insn)
+                .map_err(|e| LiftError::Decode(format!("{e}")))?;
 
-        let mut ctx = LiftCtx::new(addr);
-        dispatch_mnemonic(&mut ctx, insn, &detail);
+            let mut ctx = LiftCtx::new(addr);
+            dispatch_mnemonic(&mut ctx, insn, &detail);
 
-        Ok(LiftedInsn {
-            ir_ops: ctx.ops,
-            len: insn.len(),
+            Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: insn.len(),
+            })
         })
     }
 

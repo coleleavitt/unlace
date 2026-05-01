@@ -1,6 +1,7 @@
 //! Control-flow structuring: recover `if`/`while`/`switch` from SSA CFGs.
 
 pub mod block_merge;
+pub mod condition_dup;
 pub mod cross_jump_revert;
 pub mod eager_returns;
 pub mod flatten_if_else;
@@ -21,6 +22,7 @@ pub mod ternary_recovery;
 pub mod while_to_for;
 
 pub use block_merge::merge_linear_blocks;
+pub use condition_dup::duplicate_goto_conditions;
 pub use cross_jump_revert::cross_jump_revert;
 pub use eager_returns::eager_returns;
 pub use flatten_if_else::{flatten_if_else_chains, simplify_chain_conditions};

@@ -198,7 +198,15 @@ fn compute_rewrites(func: &SsaFunction) -> Vec<Rewrite> {
                 continue;
             }
 
-            let key = match build_key(func, bid, insn_idx, insn, &mut sv_vn, &mut const_vn, &mut alloc) {
+            let key = match build_key(
+                func,
+                bid,
+                insn_idx,
+                insn,
+                &mut sv_vn,
+                &mut const_vn,
+                &mut alloc,
+            ) {
                 Some(k) => k,
                 None => {
                     ensure_vn(&mut sv_vn, &mut alloc, out_sv);
@@ -379,10 +387,8 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
         // has only one Output entry per definition site.
         if rw.canonical.space != SpaceId::Const {
             if let Some(sv) = find_output_ssa_for_base(func, &rw.canonical) {
-                func.var_map.insert(
-                    (rw.block, rw.insn_idx, VarnodeSlot::Input(0)),
-                    sv,
-                );
+                func.var_map
+                    .insert((rw.block, rw.insn_idx, VarnodeSlot::Input(0)), sv);
             }
         }
     }
@@ -470,15 +476,23 @@ mod tests {
         bb0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, v3, smallvec![a, b], 0x2010));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            v3,
+            smallvec![a, b],
+            0x2010,
+        ));
         bb1.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x2014));
         bb1.successors = smallvec![BlockId(3)];
 
         let mut bb2 = BasicBlock::new(BlockId(2));
-        bb2.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, v7, smallvec![a, b], 0x2020));
+        bb2.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            v7,
+            smallvec![a, b],
+            0x2020,
+        ));
         bb2.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x2024));
         bb2.successors = smallvec![BlockId(3)];
@@ -563,7 +577,10 @@ mod tests {
 
         let mut ssa = make_single_block_ssa(vec![l1, l2]);
         let changed = GvnPass.run(&mut ssa).expect("pass should succeed");
-        assert!(!changed, "two LOADs from the same address must not be merged");
+        assert!(
+            !changed,
+            "two LOADs from the same address must not be merged"
+        );
 
         let block = ssa.function.blocks.values().next().expect("has block");
         assert_eq!(block.insns[0].op, IrOp::Load);

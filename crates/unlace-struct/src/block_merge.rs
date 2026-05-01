@@ -44,9 +44,7 @@ pub fn merge_linear_blocks(func: &mut Function) -> usize {
                 max_iters,
                 "merge_linear_blocks did not converge"
             );
-            panic!(
-                "merge_linear_blocks did not converge on '{func_name}' after {max_iters} iters",
-            );
+            panic!("merge_linear_blocks did not converge on '{func_name}' after {max_iters} iters",);
         }
         let merges = merge_one_pass(func);
         if merges > 0 {

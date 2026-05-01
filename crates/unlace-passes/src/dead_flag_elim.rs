@@ -14,8 +14,8 @@
 
 use std::collections::BTreeSet;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::SpaceId;
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 
 use crate::pass::{Pass, PassError};
 
@@ -46,9 +46,9 @@ impl Pass for DeadFlagElimPass {
         for (&bid, block) in &func.function.blocks {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
                 for input_idx in 0..insn.inputs.len() {
-                    if let Some(&sv) = func
-                        .var_map
-                        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+                    if let Some(&sv) =
+                        func.var_map
+                            .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
                     {
                         used.insert(sv);
                     }
@@ -70,9 +70,7 @@ impl Pass for DeadFlagElimPass {
             let mut keep = Vec::with_capacity(block.insns.len());
 
             for (insn_idx, _insn) in block.insns.iter().enumerate() {
-                let output_sv = func
-                    .var_map
-                    .get(&(bid, insn_idx, VarnodeSlot::Output));
+                let output_sv = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output));
 
                 let is_dead_flag = match output_sv {
                     Some(sv) => is_flag_varnode(sv) && !used.contains(sv),
@@ -99,24 +97,22 @@ impl Pass for DeadFlagElimPass {
 
                 if new_idx != old_idx {
                     // Re-key output
-                    if let Some(sv) = func
-                        .var_map
-                        .remove(&(bid, old_idx, VarnodeSlot::Output))
-                    {
-                        func.var_map
-                            .insert((bid, new_idx, VarnodeSlot::Output), sv);
+                    if let Some(sv) = func.var_map.remove(&(bid, old_idx, VarnodeSlot::Output)) {
+                        func.var_map.insert((bid, new_idx, VarnodeSlot::Output), sv);
                     }
 
                     // Re-key inputs
-                    let input_count = block.insns.last()
+                    let input_count = block
+                        .insns
+                        .last()
                         .ok_or_else(|| PassError::InvariantViolation {
                             message: "block has no instructions after compaction".into(),
                         })?
-                        .inputs.len();
+                        .inputs
+                        .len();
                     for i in 0..input_count {
-                        if let Some(sv) = func
-                            .var_map
-                            .remove(&(bid, old_idx, VarnodeSlot::Input(i)))
+                        if let Some(sv) =
+                            func.var_map.remove(&(bid, old_idx, VarnodeSlot::Input(i)))
                         {
                             func.var_map
                                 .insert((bid, new_idx, VarnodeSlot::Input(i)), sv);
@@ -198,9 +194,7 @@ mod tests {
         }
     }
 
-    fn build_trivial_dom(
-        cfg: &unlace_ir::cfg::ControlFlowGraph,
-    ) -> unlace_ir::ssa::DominatorTree {
+    fn build_trivial_dom(cfg: &unlace_ir::cfg::ControlFlowGraph) -> unlace_ir::ssa::DominatorTree {
         use petgraph::algo::dominators::simple_fast;
 
         let entry_ni = cfg.node_index(cfg.entry_block()).expect("entry in cfg");
@@ -230,12 +224,18 @@ mod tests {
 
     /// GP register SSA varnode (offset < 256).
     fn gp_sv(offset: u64, version: u32) -> SsaVarnode {
-        SsaVarnode { base: Varnode::reg(offset, 8), version }
+        SsaVarnode {
+            base: Varnode::reg(offset, 8),
+            version,
+        }
     }
 
     /// Flag register SSA varnode (offset >= 256, size 1).
     fn flag_sv(offset: u64, version: u32) -> SsaVarnode {
-        SsaVarnode { base: Varnode::reg(offset, 1), version }
+        SsaVarnode {
+            base: Varnode::reg(offset, 1),
+            version,
+        }
     }
 
     // CF=256, ZF=259, SF=260, OF=261 (from register_file.rs)
@@ -262,11 +262,8 @@ mod tests {
             smallvec![rax.base, rbx.base],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rax);
@@ -446,11 +443,8 @@ mod tests {
             smallvec![rax.base, rbx.base],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rax);

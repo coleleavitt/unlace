@@ -54,7 +54,10 @@ impl ProgramPoint {
     }
 
     fn phi(block: BlockId) -> Self {
-        Self { block, insn: Self::PHI }
+        Self {
+            block,
+            insn: Self::PHI,
+        }
     }
 }
 
@@ -369,14 +372,14 @@ fn merge_key_for_base(
         let svt = var_types.get(sv).copied().unwrap_or(PrimitiveType::Unknown);
         ty = ty.join(svt);
     }
-    MergeKey { size: base.size, ty }
+    MergeKey {
+        size: base.size,
+        ty,
+    }
 }
 
 /// Two ranges interfere iff they share at least one program point.
-fn ranges_interfere(
-    a: &BTreeSet<ProgramPoint>,
-    b: &BTreeSet<ProgramPoint>,
-) -> bool {
+fn ranges_interfere(a: &BTreeSet<ProgramPoint>, b: &BTreeSet<ProgramPoint>) -> bool {
     let (small, big) = if a.len() <= b.len() { (a, b) } else { (b, a) };
     small.iter().any(|p| big.contains(p))
 }
@@ -410,8 +413,7 @@ fn coalesce_clusters(
 
     let mut clusters: Vec<Vec<SsaVarnode>> = Vec::new();
 
-    let mut unique_clusters: Vec<(Vec<SsaVarnode>, BTreeSet<ProgramPoint>, MergeKey)> =
-        Vec::new();
+    let mut unique_clusters: Vec<(Vec<SsaVarnode>, BTreeSet<ProgramPoint>, MergeKey)> = Vec::new();
 
     for (base, members) in by_base {
         match base.space {
@@ -427,12 +429,8 @@ fn coalesce_clusters(
                 let mkey = merge_key_for_base(base, &members, var_types);
 
                 let mut placed = false;
-                for (cluster_members, cluster_range, cluster_mkey) in
-                    unique_clusters.iter_mut()
-                {
-                    if *cluster_mkey == mkey
-                        && !ranges_interfere(&union_range, cluster_range)
-                    {
+                for (cluster_members, cluster_range, cluster_mkey) in unique_clusters.iter_mut() {
+                    if *cluster_mkey == mkey && !ranges_interfere(&union_range, cluster_range) {
                         cluster_members.extend(members.iter().copied());
                         for p in &union_range {
                             cluster_range.insert(*p);
@@ -576,15 +574,23 @@ mod tests {
         bb0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r8, c1], 0x2010));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            r0,
+            smallvec![r8, c1],
+            0x2010,
+        ));
         bb1.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x2014));
         bb1.successors = smallvec![BlockId(3)];
 
         let mut bb2 = BasicBlock::new(BlockId(2));
-        bb2.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r8, c2], 0x2020));
+        bb2.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            r0,
+            smallvec![r8, c2],
+            0x2020,
+        ));
         bb2.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x2024));
         bb2.successors = smallvec![BlockId(3)];
@@ -764,7 +770,7 @@ mod tests {
         let insns = vec![
             IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000),
             IrInsn::with_output(IrOp::Copy, r16, smallvec![r0], 0x1004), // r0 last use
-            IrInsn::with_output(IrOp::Copy, r8, smallvec![c2], 0x1008), // r8 born after r0 dies
+            IrInsn::with_output(IrOp::Copy, r8, smallvec![c2], 0x1008),  // r8 born after r0 dies
             IrInsn::with_output(IrOp::Copy, r16, smallvec![r8], 0x100C),
         ];
 

@@ -37,10 +37,9 @@ pub const LO: u64 = 264;
 pub const PC: u64 = 272;
 
 const MIPS_REG_NAMES: [&str; 32] = [
-    "$zero", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3",
-    "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7",
-    "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
-    "$t8", "$t9", "$k0", "$k1", "$gp", "$sp", "$fp", "$ra",
+    "$zero", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3", "$t0", "$t1", "$t2", "$t3", "$t4",
+    "$t5", "$t6", "$t7", "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7", "$t8", "$t9",
+    "$k0", "$k1", "$gp", "$sp", "$fp", "$ra",
 ];
 
 pub fn reg64(offset: u64) -> Varnode {
@@ -55,9 +54,18 @@ pub fn mips64_register_file() -> RegisterFile {
             varnode: Varnode::reg((i as u64) * 8, 8),
         });
     }
-    regs.push(RegisterDef { name: "HI", varnode: reg64(HI) });
-    regs.push(RegisterDef { name: "LO", varnode: reg64(LO) });
-    regs.push(RegisterDef { name: "PC", varnode: reg64(PC) });
+    regs.push(RegisterDef {
+        name: "HI",
+        varnode: reg64(HI),
+    });
+    regs.push(RegisterDef {
+        name: "LO",
+        varnode: reg64(LO),
+    });
+    regs.push(RegisterDef {
+        name: "PC",
+        varnode: reg64(PC),
+    });
     RegisterFile { registers: regs }
 }
 

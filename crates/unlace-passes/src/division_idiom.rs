@@ -27,15 +27,11 @@ impl Pass for DivisionIdiomPass {
         for block in func.function.blocks.values_mut() {
             let len = block.insns.len();
             for i in 0..len {
-                if let Some((mult_idx, div_insn)) =
-                    try_match_unsigned(&block.insns, i)
-                {
+                if let Some((mult_idx, div_insn)) = try_match_unsigned(&block.insns, i) {
                     block.insns[i] = div_insn;
                     neutralize_mult(&mut block.insns[mult_idx]);
                     changed = true;
-                } else if let Some((mult_idx, div_insn)) =
-                    try_match_signed(&block.insns, i)
-                {
+                } else if let Some((mult_idx, div_insn)) = try_match_signed(&block.insns, i) {
                     block.insns[i] = div_insn;
                     neutralize_mult(&mut block.insns[mult_idx]);
                     changed = true;
@@ -198,8 +194,13 @@ fn verify_unsigned_divisor(magic: u64, shift: u64, _size: u8, n: u64) -> bool {
     let magic128 = magic as u128;
 
     let test_values: &[u64] = &[
-        0, 1, n - 1, n, n + 1,
-        n * 2, n * 2 + 1,
+        0,
+        1,
+        n - 1,
+        n,
+        n + 1,
+        n * 2,
+        n * 2 + 1,
         n * 100,
         u32::MAX as u64,
     ];
@@ -278,8 +279,11 @@ fn verify_signed_divisor(magic: u64, shift: u64, size: u8, n: u64) -> bool {
     // floor(x/N) which equals trunc(x/N) for x >= 0. The negative
     // correction (`x >> (bits-1)`) is a separate IR operation.
     let test_values: &[i64] = &[
-        0, 1,
-        n_signed - 1, n_signed, n_signed + 1,
+        0,
+        1,
+        n_signed - 1,
+        n_signed,
+        n_signed + 1,
         n_signed * 2,
         n_signed * 100,
         max_pos,
@@ -333,16 +337,22 @@ mod tests {
         let out = Varnode::unique(4, 4);
 
         let mult = IrInsn::with_output(
-            IrOp::IntMult, tmp,
-            smallvec![v0, Varnode::constant(0xAAAAAAAB, 4)], 0x1000,
+            IrOp::IntMult,
+            tmp,
+            smallvec![v0, Varnode::constant(0xAAAAAAAB, 4)],
+            0x1000,
         );
         let shr = IrInsn::with_output(
-            IrOp::IntRight, out,
-            smallvec![tmp, Varnode::constant(33, 4)], 0x1004,
+            IrOp::IntRight,
+            out,
+            smallvec![tmp, Varnode::constant(33, 4)],
+            0x1004,
         );
 
         let mut ssa = make_single_block_ssa(vec![mult, shr]);
-        let changed = DivisionIdiomPass.run(&mut ssa).expect("pass should succeed");
+        let changed = DivisionIdiomPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -364,16 +374,22 @@ mod tests {
         let out = Varnode::unique(4, 4);
 
         let mult = IrInsn::with_output(
-            IrOp::IntMult, tmp,
-            smallvec![v0, Varnode::constant(0xCCCCCCCD, 4)], 0x1000,
+            IrOp::IntMult,
+            tmp,
+            smallvec![v0, Varnode::constant(0xCCCCCCCD, 4)],
+            0x1000,
         );
         let shr = IrInsn::with_output(
-            IrOp::IntRight, out,
-            smallvec![tmp, Varnode::constant(34, 4)], 0x1004,
+            IrOp::IntRight,
+            out,
+            smallvec![tmp, Varnode::constant(34, 4)],
+            0x1004,
         );
 
         let mut ssa = make_single_block_ssa(vec![mult, shr]);
-        let changed = DivisionIdiomPass.run(&mut ssa).expect("pass should succeed");
+        let changed = DivisionIdiomPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -392,16 +408,22 @@ mod tests {
         let out = Varnode::unique(4, 4);
 
         let mult = IrInsn::with_output(
-            IrOp::IntMult, tmp,
-            smallvec![v0, Varnode::constant(0x24924925, 4)], 0x1000,
+            IrOp::IntMult,
+            tmp,
+            smallvec![v0, Varnode::constant(0x24924925, 4)],
+            0x1000,
         );
         let shr = IrInsn::with_output(
-            IrOp::IntRight, out,
-            smallvec![tmp, Varnode::constant(32, 4)], 0x1004,
+            IrOp::IntRight,
+            out,
+            smallvec![tmp, Varnode::constant(32, 4)],
+            0x1004,
         );
 
         let mut ssa = make_single_block_ssa(vec![mult, shr]);
-        let changed = DivisionIdiomPass.run(&mut ssa).expect("pass should succeed");
+        let changed = DivisionIdiomPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -420,16 +442,22 @@ mod tests {
         let out = Varnode::unique(4, 4);
 
         let mult = IrInsn::with_output(
-            IrOp::IntMult, tmp,
-            smallvec![v0, Varnode::constant(0x66666667, 4)], 0x1000,
+            IrOp::IntMult,
+            tmp,
+            smallvec![v0, Varnode::constant(0x66666667, 4)],
+            0x1000,
         );
         let shr = IrInsn::with_output(
-            IrOp::IntSright, out,
-            smallvec![tmp, Varnode::constant(33, 4)], 0x1004,
+            IrOp::IntSright,
+            out,
+            smallvec![tmp, Varnode::constant(33, 4)],
+            0x1004,
         );
 
         let mut ssa = make_single_block_ssa(vec![mult, shr]);
-        let changed = DivisionIdiomPass.run(&mut ssa).expect("pass should succeed");
+        let changed = DivisionIdiomPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -449,16 +477,22 @@ mod tests {
         let out = Varnode::unique(4, 4);
 
         let mult = IrInsn::with_output(
-            IrOp::IntMult, tmp,
-            smallvec![v0, Varnode::constant(0x55555556, 4)], 0x1000,
+            IrOp::IntMult,
+            tmp,
+            smallvec![v0, Varnode::constant(0x55555556, 4)],
+            0x1000,
         );
         let shr = IrInsn::with_output(
-            IrOp::IntSright, out,
-            smallvec![tmp, Varnode::constant(32, 4)], 0x1004,
+            IrOp::IntSright,
+            out,
+            smallvec![tmp, Varnode::constant(32, 4)],
+            0x1004,
         );
 
         let mut ssa = make_single_block_ssa(vec![mult, shr]);
-        let changed = DivisionIdiomPass.run(&mut ssa).expect("pass should succeed");
+        let changed = DivisionIdiomPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -476,16 +510,22 @@ mod tests {
         let out = Varnode::unique(4, 4);
 
         let mult = IrInsn::with_output(
-            IrOp::IntMult, tmp,
-            smallvec![v0, Varnode::constant(0x12345678, 4)], 0x1000,
+            IrOp::IntMult,
+            tmp,
+            smallvec![v0, Varnode::constant(0x12345678, 4)],
+            0x1000,
         );
         let shr = IrInsn::with_output(
-            IrOp::IntRight, out,
-            smallvec![tmp, Varnode::constant(5, 4)], 0x1004,
+            IrOp::IntRight,
+            out,
+            smallvec![tmp, Varnode::constant(5, 4)],
+            0x1004,
         );
 
         let mut ssa = make_single_block_ssa(vec![mult, shr]);
-        let changed = DivisionIdiomPass.run(&mut ssa).expect("pass should succeed");
+        let changed = DivisionIdiomPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(!changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -501,12 +541,16 @@ mod tests {
         let out = Varnode::unique(0, 4);
 
         let shr = IrInsn::with_output(
-            IrOp::IntRight, out,
-            smallvec![v0, Varnode::constant(3, 4)], 0x1000,
+            IrOp::IntRight,
+            out,
+            smallvec![v0, Varnode::constant(3, 4)],
+            0x1000,
         );
 
         let mut ssa = make_single_block_ssa(vec![shr]);
-        let changed = DivisionIdiomPass.run(&mut ssa).expect("pass should succeed");
+        let changed = DivisionIdiomPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(!changed);
     }
 
@@ -520,16 +564,22 @@ mod tests {
         let out = Varnode::unique(4, 4);
 
         let mult = IrInsn::with_output(
-            IrOp::IntMult, tmp,
-            smallvec![v0, Varnode::constant(0xCCCCCCCD, 4)], 0x1000,
+            IrOp::IntMult,
+            tmp,
+            smallvec![v0, Varnode::constant(0xCCCCCCCD, 4)],
+            0x1000,
         );
         let shr = IrInsn::with_output(
-            IrOp::IntRight, out,
-            smallvec![tmp, Varnode::constant(35, 4)], 0x1004,
+            IrOp::IntRight,
+            out,
+            smallvec![tmp, Varnode::constant(35, 4)],
+            0x1004,
         );
 
         let mut ssa = make_single_block_ssa(vec![mult, shr]);
-        let changed = DivisionIdiomPass.run(&mut ssa).expect("pass should succeed");
+        let changed = DivisionIdiomPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -547,16 +597,22 @@ mod tests {
         let out = Varnode::unique(4, 4);
 
         let mult = IrInsn::with_output(
-            IrOp::IntMult, tmp,
-            smallvec![Varnode::constant(0xAAAAAAAB, 4), v0], 0x1000,
+            IrOp::IntMult,
+            tmp,
+            smallvec![Varnode::constant(0xAAAAAAAB, 4), v0],
+            0x1000,
         );
         let shr = IrInsn::with_output(
-            IrOp::IntRight, out,
-            smallvec![tmp, Varnode::constant(33, 4)], 0x1004,
+            IrOp::IntRight,
+            out,
+            smallvec![tmp, Varnode::constant(33, 4)],
+            0x1004,
         );
 
         let mut ssa = make_single_block_ssa(vec![mult, shr]);
-        let changed = DivisionIdiomPass.run(&mut ssa).expect("pass should succeed");
+        let changed = DivisionIdiomPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");

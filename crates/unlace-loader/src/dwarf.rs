@@ -6,8 +6,8 @@ use gimli::{
     DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_type, DW_TAG_base_type,
     DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter,
     DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type,
-    DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable,
-    DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
+    DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable, DW_TAG_volatile_type,
+    EndianSlice, RunTimeEndian,
 };
 
 use crate::error::LoadError;
@@ -309,7 +309,10 @@ fn extract_enum_type(
 
         let value = child_entry
             .attr_value(DW_AT_const_value)
-            .and_then(|v| v.sdata_value().or_else(|| v.udata_value().map(|u| u as i64)))
+            .and_then(|v| {
+                v.sdata_value()
+                    .or_else(|| v.udata_value().map(|u| u as i64))
+            })
             .unwrap_or(0);
 
         variants.push((variant_name, value));
@@ -716,7 +719,11 @@ mod tests {
         let info = import_dwarf(&img).expect("should parse DWARF");
 
         for (addr, func) in &info.functions {
-            assert!(*addr > 0, "function {} should have non-zero address", func.name);
+            assert!(
+                *addr > 0,
+                "function {} should have non-zero address",
+                func.name
+            );
             assert_eq!(*addr, func.low_pc);
             if let Some(high) = func.high_pc {
                 assert!(
@@ -740,7 +747,11 @@ mod tests {
             .find(|f| f.name == "add")
             .expect("should find add function");
 
-        assert_eq!(add_fn.params.len(), 2, "add(int a, int b) should have 2 params");
+        assert_eq!(
+            add_fn.params.len(),
+            2,
+            "add(int a, int b) should have 2 params"
+        );
         assert_eq!(add_fn.params[0].name.as_deref(), Some("a"));
         assert_eq!(add_fn.params[1].name.as_deref(), Some("b"));
         assert_eq!(add_fn.params[0].type_name.as_deref(), Some("int"));
@@ -772,7 +783,10 @@ mod tests {
             .find(|f| f.name == "compute")
             .expect("should find compute function");
 
-        let decl = compute_fn.decl.as_ref().expect("compute should have source location");
+        let decl = compute_fn
+            .decl
+            .as_ref()
+            .expect("compute should have source location");
         assert!(
             decl.file.contains("calls.c"),
             "compute should be declared in calls.c, got: {}",
@@ -800,8 +814,8 @@ mod tests {
 
     #[test]
     fn no_dwarf_returns_empty() {
-        let data = std::fs::read("../../fixtures/stripped.elf")
-            .expect("fixture stripped.elf must exist");
+        let data =
+            std::fs::read("../../fixtures/stripped.elf").expect("fixture stripped.elf must exist");
         let img = ElfLoader::load(&data).expect("should parse stripped.elf");
         let info = import_dwarf(&img).expect("should succeed even without DWARF");
 
@@ -822,7 +836,11 @@ mod tests {
             .find(|f| f.name == "clamp")
             .expect("should find clamp function");
 
-        assert_eq!(clamp_fn.params.len(), 3, "clamp(int x, int lo, int hi) has 3 params");
+        assert_eq!(
+            clamp_fn.params.len(),
+            3,
+            "clamp(int x, int lo, int hi) has 3 params"
+        );
         assert_eq!(clamp_fn.params[0].name.as_deref(), Some("x"));
         assert_eq!(clamp_fn.params[1].name.as_deref(), Some("lo"));
         assert_eq!(clamp_fn.params[2].name.as_deref(), Some("hi"));

@@ -34,24 +34,23 @@ pub const X25: u64 = 200;
 pub const X26: u64 = 208;
 pub const X27: u64 = 216;
 pub const X28: u64 = 224;
-pub const X29: u64 = 232;  // FP (frame pointer)
-pub const X30: u64 = 240;  // LR (link register)
+pub const X29: u64 = 232; // FP (frame pointer)
+pub const X30: u64 = 240; // LR (link register)
 pub const SP: u64 = 248;
 pub const PC: u64 = 256;
 pub const NZCV: u64 = 264;
 
 // Individual flag bits within NZCV (1-byte each, at sub-offsets after NZCV).
-pub const NF: u64 = 264;  // Negative flag (byte 0 of NZCV)
-pub const ZF: u64 = 265;  // Zero flag (byte 1 of NZCV)
-pub const CF: u64 = 266;  // Carry flag (byte 2 of NZCV)
-pub const VF: u64 = 267;  // oVerflow flag (byte 3 of NZCV)
+pub const NF: u64 = 264; // Negative flag (byte 0 of NZCV)
+pub const ZF: u64 = 265; // Zero flag (byte 1 of NZCV)
+pub const CF: u64 = 266; // Carry flag (byte 2 of NZCV)
+pub const VF: u64 = 267; // oVerflow flag (byte 3 of NZCV)
 
 /// Names for X0..X30.
 const XREG_NAMES: [&str; 31] = [
-    "X0", "X1", "X2", "X3", "X4", "X5", "X6", "X7",
-    "X8", "X9", "X10", "X11", "X12", "X13", "X14", "X15",
-    "X16", "X17", "X18", "X19", "X20", "X21", "X22", "X23",
-    "X24", "X25", "X26", "X27", "X28", "X29", "X30",
+    "X0", "X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8", "X9", "X10", "X11", "X12", "X13", "X14",
+    "X15", "X16", "X17", "X18", "X19", "X20", "X21", "X22", "X23", "X24", "X25", "X26", "X27",
+    "X28", "X29", "X30",
 ];
 
 /// Build the full AArch64 register file.
@@ -63,16 +62,25 @@ pub fn aarch64_register_file() -> RegisterFile {
             varnode: Varnode::reg(i * 8, 8),
         });
     }
-    regs.push(RegisterDef { name: "SP", varnode: Varnode::reg(SP, 8) });
-    regs.push(RegisterDef { name: "PC", varnode: Varnode::reg(PC, 8) });
-    regs.push(RegisterDef { name: "NZCV", varnode: Varnode::reg(NZCV, 4) });
+    regs.push(RegisterDef {
+        name: "SP",
+        varnode: Varnode::reg(SP, 8),
+    });
+    regs.push(RegisterDef {
+        name: "PC",
+        varnode: Varnode::reg(PC, 8),
+    });
+    regs.push(RegisterDef {
+        name: "NZCV",
+        varnode: Varnode::reg(NZCV, 4),
+    });
     RegisterFile { registers: regs }
 }
 
 // Capstone ARM64 register IDs (from capstone-sys).
 // These are the raw u16 values capstone uses.
-const ARM64_REG_FP: u16 = 2;   // X29 alias
-const ARM64_REG_LR: u16 = 3;   // X30 alias
+const ARM64_REG_FP: u16 = 2; // X29 alias
+const ARM64_REG_LR: u16 = 3; // X30 alias
 const ARM64_REG_SP: u16 = 5;
 const ARM64_REG_WZR: u16 = 8;
 const ARM64_REG_XZR: u16 = 9;

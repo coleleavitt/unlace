@@ -35,7 +35,7 @@ impl Pass for RustEnumPass {
         let mut new_discriminants = Vec::new();
 
         for (load_sv, load_loc) in &loads {
-        let mut variants: BTreeMap<u64, String> = BTreeMap::new();
+            let mut variants: BTreeMap<u64, String> = BTreeMap::new();
             let mut comparison_locs: Vec<(BlockId, usize)> = Vec::new();
 
             if let Some(cmp_set) = comparisons.get(load_sv) {
@@ -76,9 +76,7 @@ impl Pass for RustEnumPass {
 
 /// Find all LOAD instructions that read from offset 0 of a pointer with
 /// size 1, 2, 4, or 8.  Returns `(ssa_varnode_of_output, (block, insn_idx))`.
-fn find_discriminant_loads(
-    func: &SsaFunction,
-) -> Vec<(SsaVarnode, (BlockId, usize))> {
+fn find_discriminant_loads(func: &SsaFunction) -> Vec<(SsaVarnode, (BlockId, usize))> {
     let mut loads = Vec::new();
 
     for (&bid, block) in &func.function.blocks {
@@ -158,9 +156,7 @@ fn is_offset_zero(
 /// Scan all INT_EQUAL instructions.  For each, resolve both SSA inputs;
 /// if exactly one is a constant and the other is an SSA varnode, record
 /// `(ssa_varnode, constant, block, insn_idx)`.
-fn find_comparisons(
-    func: &SsaFunction,
-) -> BTreeMap<SsaVarnode, Vec<(u64, BlockId, usize)>> {
+fn find_comparisons(func: &SsaFunction) -> BTreeMap<SsaVarnode, Vec<(u64, BlockId, usize)>> {
     let mut result: BTreeMap<SsaVarnode, Vec<(u64, BlockId, usize)>> = BTreeMap::new();
 
     for (&bid, block) in &func.function.blocks {
@@ -186,8 +182,7 @@ fn find_comparisons(
                         .or_default()
                         .push((b.offset, bid, insn_idx));
                 }
-            }
-            else if a.space == SpaceId::Const && b.space != SpaceId::Const {
+            } else if a.space == SpaceId::Const && b.space != SpaceId::Const {
                 if let Some(&sv) = sv1 {
                     result
                         .entry(sv)
@@ -207,9 +202,7 @@ mod tests {
 
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{
-        PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot,
-    };
+    use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
 
     use super::*;
@@ -217,9 +210,7 @@ mod tests {
 
     // ── Helpers ─────────────────────────────────────────────────────
 
-    fn build_trivial_dom(
-        cfg: &unlace_ir::cfg::ControlFlowGraph,
-    ) -> unlace_ir::ssa::DominatorTree {
+    fn build_trivial_dom(cfg: &unlace_ir::cfg::ControlFlowGraph) -> unlace_ir::ssa::DominatorTree {
         use petgraph::algo::dominators::simple_fast;
 
         let entry_ni = cfg
@@ -293,11 +284,13 @@ mod tests {
     fn build_enum_pattern(
         constants: &[u64],
         load_size: u8,
-    ) -> (Vec<BasicBlock>, BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>) {
+    ) -> (
+        Vec<BasicBlock>,
+        BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    ) {
         let bid = BlockId(0);
         let mut bb = BasicBlock::new(bid);
-        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> =
-            BTreeMap::new();
+        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> = BTreeMap::new();
 
         let ptr_reg = Varnode::reg(0, 8);
         let ptr_sv = SsaVarnode {
@@ -404,18 +397,26 @@ mod tests {
     fn test_no_enum_different_loads() {
         let bid = BlockId(0);
         let mut bb = BasicBlock::new(bid);
-        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> =
-            BTreeMap::new();
+        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> = BTreeMap::new();
 
         let ptr1 = Varnode::reg(0, 8);
-        let ptr1_sv = SsaVarnode { base: ptr1, version: 0 };
+        let ptr1_sv = SsaVarnode {
+            base: ptr1,
+            version: 0,
+        };
         let ptr2 = Varnode::reg(8, 8);
-        let ptr2_sv = SsaVarnode { base: ptr2, version: 0 };
+        let ptr2_sv = SsaVarnode {
+            base: ptr2,
+            version: 0,
+        };
 
         let space_vn = Varnode::constant(SpaceId::Ram as u64, 8);
 
         let load1_out = Varnode::unique(0, 4);
-        let load1_sv = SsaVarnode { base: load1_out, version: 0 };
+        let load1_sv = SsaVarnode {
+            base: load1_out,
+            version: 0,
+        };
         bb.insns.push(IrInsn::with_output(
             IrOp::Load,
             load1_out,
@@ -426,7 +427,10 @@ mod tests {
         var_map.insert((bid, 0, VarnodeSlot::Input(1)), ptr1_sv);
 
         let load2_out = Varnode::unique(8, 4);
-        let load2_sv = SsaVarnode { base: load2_out, version: 0 };
+        let load2_sv = SsaVarnode {
+            base: load2_out,
+            version: 0,
+        };
         bb.insns.push(IrInsn::with_output(
             IrOp::Load,
             load2_out,
@@ -437,7 +441,10 @@ mod tests {
         var_map.insert((bid, 1, VarnodeSlot::Input(1)), ptr2_sv);
 
         let cmp1_out = Varnode::unique(16, 1);
-        let cmp1_sv = SsaVarnode { base: cmp1_out, version: 0 };
+        let cmp1_sv = SsaVarnode {
+            base: cmp1_out,
+            version: 0,
+        };
         bb.insns.push(IrInsn::with_output(
             IrOp::IntEqual,
             cmp1_out,
@@ -448,7 +455,10 @@ mod tests {
         var_map.insert((bid, 2, VarnodeSlot::Input(0)), load1_sv);
 
         let cmp2_out = Varnode::unique(24, 1);
-        let cmp2_sv = SsaVarnode { base: cmp2_out, version: 0 };
+        let cmp2_sv = SsaVarnode {
+            base: cmp2_out,
+            version: 0,
+        };
         bb.insns.push(IrInsn::with_output(
             IrOp::IntEqual,
             cmp2_out,
@@ -505,14 +515,19 @@ mod tests {
     fn test_enum_no_load_non_zero_offset() {
         let bid = BlockId(0);
         let mut bb = BasicBlock::new(bid);
-        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> =
-            BTreeMap::new();
+        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> = BTreeMap::new();
 
         let ptr_reg = Varnode::reg(0, 8);
-        let ptr_sv = SsaVarnode { base: ptr_reg, version: 0 };
+        let ptr_sv = SsaVarnode {
+            base: ptr_reg,
+            version: 0,
+        };
 
         let addr_vn = Varnode::unique(0, 8);
-        let addr_sv = SsaVarnode { base: addr_vn, version: 0 };
+        let addr_sv = SsaVarnode {
+            base: addr_vn,
+            version: 0,
+        };
         bb.insns.push(IrInsn::with_output(
             IrOp::IntAdd,
             addr_vn,
@@ -524,7 +539,10 @@ mod tests {
 
         let space_vn = Varnode::constant(SpaceId::Ram as u64, 8);
         let load_out = Varnode::unique(8, 4);
-        let load_sv = SsaVarnode { base: load_out, version: 0 };
+        let load_sv = SsaVarnode {
+            base: load_out,
+            version: 0,
+        };
         bb.insns.push(IrInsn::with_output(
             IrOp::Load,
             load_out,
@@ -541,7 +559,10 @@ mod tests {
             smallvec![load_out, Varnode::constant(0, 4)],
             0x1008,
         ));
-        let cmp1_sv = SsaVarnode { base: cmp1_out, version: 0 };
+        let cmp1_sv = SsaVarnode {
+            base: cmp1_out,
+            version: 0,
+        };
         var_map.insert((bid, 2, VarnodeSlot::Output), cmp1_sv);
         var_map.insert((bid, 2, VarnodeSlot::Input(0)), load_sv);
 
@@ -552,7 +573,10 @@ mod tests {
             smallvec![load_out, Varnode::constant(1, 4)],
             0x100c,
         ));
-        let cmp2_sv = SsaVarnode { base: cmp2_out, version: 0 };
+        let cmp2_sv = SsaVarnode {
+            base: cmp2_out,
+            version: 0,
+        };
         var_map.insert((bid, 3, VarnodeSlot::Output), cmp2_sv);
         var_map.insert((bid, 3, VarnodeSlot::Input(0)), load_sv);
 

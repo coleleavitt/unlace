@@ -25,15 +25,21 @@ impl IrInsn {
         inputs: impl Into<SmallVec<[Varnode; 3]>>,
         addr: u64,
     ) -> Self {
-        Self { op, output: Some(output), inputs: inputs.into(), addr }
+        Self {
+            op,
+            output: Some(output),
+            inputs: inputs.into(),
+            addr,
+        }
     }
 
     /// Construct an instruction without output (e.g. STORE, BRANCH).
-    pub fn without_output(
-        op: IrOp,
-        inputs: impl Into<SmallVec<[Varnode; 3]>>,
-        addr: u64,
-    ) -> Self {
-        Self { op, output: None, inputs: inputs.into(), addr }
+    pub fn without_output(op: IrOp, inputs: impl Into<SmallVec<[Varnode; 3]>>, addr: u64) -> Self {
+        Self {
+            op,
+            output: None,
+            inputs: inputs.into(),
+            addr,
+        }
     }
 }

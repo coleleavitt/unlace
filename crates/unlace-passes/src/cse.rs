@@ -132,7 +132,10 @@ fn encode_input(
     raw: &Varnode,
 ) -> Option<SsaVarnode> {
     if raw.space == SpaceId::Const {
-        return Some(SsaVarnode { base: *raw, version: 0 });
+        return Some(SsaVarnode {
+            base: *raw,
+            version: 0,
+        });
     }
     func.var_map
         .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
@@ -142,12 +145,7 @@ fn encode_input(
 /// Build the [`CseKey`] for an instruction at `(bid, insn_idx)`.  Returns
 /// `None` if the instruction is ineligible or if any input cannot be
 /// resolved (which would make CSE unsafe).
-fn build_key(
-    func: &SsaFunction,
-    bid: BlockId,
-    insn_idx: usize,
-    insn: &IrInsn,
-) -> Option<CseKey> {
+fn build_key(func: &SsaFunction, bid: BlockId, insn_idx: usize, insn: &IrInsn) -> Option<CseKey> {
     if !is_eligible(insn.op) {
         return None;
     }
@@ -296,12 +294,7 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
 
         let original_input_count = insn.inputs.len();
 
-        *insn = IrInsn::with_output(
-            IrOp::Copy,
-            out,
-            smallvec::smallvec![rw.earlier],
-            insn.addr,
-        );
+        *insn = IrInsn::with_output(IrOp::Copy, out, smallvec::smallvec![rw.earlier], insn.addr);
 
         // Purge stale input mappings that no longer correspond to a real
         // input slot, then map the new sole input.
@@ -315,10 +308,8 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
         // points at the right SSA version.
         if rw.earlier.space != SpaceId::Const {
             if let Some(earlier_sv) = find_ssa_for_base(func, &rw.earlier) {
-                func.var_map.insert(
-                    (rw.block, rw.insn_idx, VarnodeSlot::Input(0)),
-                    earlier_sv,
-                );
+                func.var_map
+                    .insert((rw.block, rw.insn_idx, VarnodeSlot::Input(0)), earlier_sv);
             }
         }
     }
@@ -534,8 +525,12 @@ mod tests {
         let mut func = Function::new("dom_yes", BlockId(0), 0x2000);
 
         let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, v3, smallvec![a, b], 0x2000));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            v3,
+            smallvec![a, b],
+            0x2000,
+        ));
         bb0.insns.push(IrInsn::without_output(
             IrOp::Cbranch,
             smallvec![Varnode::constant(0, 8), cond],
@@ -544,20 +539,18 @@ mod tests {
         bb0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, v7, smallvec![a, b], 0x2010));
-        bb1.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![v7],
-            0x2014,
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            v7,
+            smallvec![a, b],
+            0x2010,
         ));
+        bb1.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![v7], 0x2014));
 
         let mut bb2 = BasicBlock::new(BlockId(2));
-        bb2.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![v3],
-            0x2020,
-        ));
+        bb2.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![v3], 0x2020));
 
         func.insert_block(bb0);
         func.insert_block(bb1);
@@ -604,15 +597,23 @@ mod tests {
         bb0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, v3, smallvec![a, b], 0x3010));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            v3,
+            smallvec![a, b],
+            0x3010,
+        ));
         bb1.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x3014));
         bb1.successors = smallvec![BlockId(3)];
 
         let mut bb2 = BasicBlock::new(BlockId(2));
-        bb2.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, v7, smallvec![a, b], 0x3020));
+        bb2.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            v7,
+            smallvec![a, b],
+            0x3020,
+        ));
         bb2.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x3024));
         bb2.successors = smallvec![BlockId(3)];

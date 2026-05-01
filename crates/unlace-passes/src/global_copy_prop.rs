@@ -136,9 +136,7 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
                 // through any existing equivalence so chains collapse to their
                 // ultimate origin in one pass.
                 if insn.op == IrOp::Copy {
-                    if let (Some(out), Some(&raw_src)) =
-                        (insn.output, insn.inputs.first())
-                    {
+                    if let (Some(out), Some(&raw_src)) = (insn.output, insn.inputs.first()) {
                         if out.space != SpaceId::Const && out != raw_src {
                             let resolved_src = resolve_chain(&equiv, raw_src);
                             // Avoid trivial self-loops introduced by chasing.
@@ -287,12 +285,8 @@ mod tests {
         let mut func = Function::new("dom_yes", BlockId(0), 0x2000);
 
         let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns.push(IrInsn::with_output(
-            IrOp::Copy,
-            v3,
-            smallvec![a],
-            0x2000,
-        ));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::Copy, v3, smallvec![a], 0x2000));
         bb0.insns.push(IrInsn::without_output(
             IrOp::Cbranch,
             smallvec![Varnode::constant(0, 8), cond],
@@ -319,8 +313,13 @@ mod tests {
         func.insert_block(bb2);
 
         let mut ssa = build_ssa(func);
-        let changed = GlobalCopyPropPass.run(&mut ssa).expect("pass should succeed");
-        assert!(changed, "BB0 dominates BB1; v3 use in BB1 must be rewritten to a");
+        let changed = GlobalCopyPropPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(
+            changed,
+            "BB0 dominates BB1; v3 use in BB1 must be rewritten to a"
+        );
 
         let bb1_after = &ssa.function.blocks[&BlockId(1)];
         assert_eq!(bb1_after.insns[0].op, IrOp::IntAdd);
@@ -350,12 +349,8 @@ mod tests {
         bb0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns.push(IrInsn::with_output(
-            IrOp::Copy,
-            v3,
-            smallvec![a],
-            0x3010,
-        ));
+        bb1.insns
+            .push(IrInsn::with_output(IrOp::Copy, v3, smallvec![a], 0x3010));
         bb1.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x3014));
         bb1.successors = smallvec![BlockId(3)];
@@ -377,7 +372,9 @@ mod tests {
         func.insert_block(bb3);
 
         let mut ssa = build_ssa(func);
-        let _ = GlobalCopyPropPass.run(&mut ssa).expect("pass should succeed");
+        let _ = GlobalCopyPropPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
 
         // v3 in BB2 must still be v3 (BB1 does not dominate BB2).
         let bb2_after = &ssa.function.blocks[&BlockId(2)];
@@ -401,23 +398,15 @@ mod tests {
         let mut func = Function::new("chain", BlockId(0), 0x4000);
 
         let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns.push(IrInsn::with_output(
-            IrOp::Copy,
-            v3,
-            smallvec![a],
-            0x4000,
-        ));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::Copy, v3, smallvec![a], 0x4000));
         bb0.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x4004));
         bb0.successors = smallvec![BlockId(1)];
 
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns.push(IrInsn::with_output(
-            IrOp::Copy,
-            v7,
-            smallvec![v3],
-            0x4010,
-        ));
+        bb1.insns
+            .push(IrInsn::with_output(IrOp::Copy, v7, smallvec![v3], 0x4010));
         bb1.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x4014));
         bb1.successors = smallvec![BlockId(2)];
@@ -437,7 +426,9 @@ mod tests {
         func.insert_block(bb2);
 
         let mut ssa = build_ssa(func);
-        let changed = GlobalCopyPropPass.run(&mut ssa).expect("pass should succeed");
+        let changed = GlobalCopyPropPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let bb2_after = &ssa.function.blocks[&BlockId(2)];
@@ -467,7 +458,9 @@ mod tests {
         func.insert_block(bb0);
 
         let mut ssa = build_ssa(func);
-        let changed = GlobalCopyPropPass.run(&mut ssa).expect("pass should succeed");
+        let changed = GlobalCopyPropPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(!changed, "no COPYs => nothing to propagate");
     }
 
@@ -483,12 +476,8 @@ mod tests {
 
         let mut func = Function::new("single", BlockId(0), 0x6000);
         let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns.push(IrInsn::with_output(
-            IrOp::Copy,
-            v3,
-            smallvec![a],
-            0x6000,
-        ));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::Copy, v3, smallvec![a], 0x6000));
         bb0.insns.push(IrInsn::with_output(
             IrOp::IntAdd,
             v7,
@@ -500,7 +489,9 @@ mod tests {
         func.insert_block(bb0);
 
         let mut ssa = build_ssa(func);
-        let changed = GlobalCopyPropPass.run(&mut ssa).expect("pass should succeed");
+        let changed = GlobalCopyPropPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let bb0 = &ssa.function.blocks[&BlockId(0)];

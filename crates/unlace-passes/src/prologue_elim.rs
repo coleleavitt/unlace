@@ -72,10 +72,7 @@ impl Pass for PrologueElimPass {
 /// 3. Callee-saved pushes: `STORE(RSP-8, Rxx); RSP = RSP - 8` for callee-saved
 ///    registers (R15, R14, R13, R12, RBX).
 /// 4. Stack canary: `tmp = LOAD(FS_BASE + 0x28); STORE(RBP-offset, tmp)`.
-fn detect_prologue(
-    func: &SsaFunction,
-    marked: &mut std::collections::BTreeSet<(BlockId, usize)>,
-) {
+fn detect_prologue(func: &SsaFunction, marked: &mut std::collections::BTreeSet<(BlockId, usize)>) {
     let entry = func.function.entry;
     let block = match func.function.blocks.get(&entry) {
         Some(b) => b,
@@ -164,9 +161,8 @@ fn scan_mov_rbp_rsp(
         let output_is_rbp = insn.output.map_or(false, |o| is_reg(&o, RBP));
 
         if output_is_rbp {
-            let is_copy_rsp = insn.op == IrOp::Copy
-                && !insn.inputs.is_empty()
-                && is_reg(&insn.inputs[0], RSP);
+            let is_copy_rsp =
+                insn.op == IrOp::Copy && !insn.inputs.is_empty() && is_reg(&insn.inputs[0], RSP);
 
             let is_sub_zero = insn.op == IrOp::IntSub
                 && insn.inputs.len() == 2
@@ -176,8 +172,12 @@ fn scan_mov_rbp_rsp(
 
             let is_add_zero = insn.op == IrOp::IntAdd
                 && insn.inputs.len() == 2
-                && ((is_reg(&insn.inputs[0], RSP) && is_const(&insn.inputs[1]) && insn.inputs[1].offset == 0)
-                 || (is_reg(&insn.inputs[1], RSP) && is_const(&insn.inputs[0]) && insn.inputs[0].offset == 0));
+                && ((is_reg(&insn.inputs[0], RSP)
+                    && is_const(&insn.inputs[1])
+                    && insn.inputs[1].offset == 0)
+                    || (is_reg(&insn.inputs[1], RSP)
+                        && is_const(&insn.inputs[0])
+                        && insn.inputs[0].offset == 0));
 
             if is_copy_rsp || is_sub_zero || is_add_zero {
                 marked.insert((bid, idx));
@@ -207,7 +207,9 @@ fn scan_stack_alloc(
         let insn = &insns[idx];
         let output_is_rsp = insn.output.map_or(false, |o| is_reg(&o, RSP));
 
-        if output_is_rsp && insn.op == IrOp::IntSub && insn.inputs.len() == 2
+        if output_is_rsp
+            && insn.op == IrOp::IntSub
+            && insn.inputs.len() == 2
             && is_reg(&insn.inputs[0], RSP)
             && is_const(&insn.inputs[1])
         {
@@ -312,10 +314,7 @@ fn is_canary_load(insn: &unlace_ir::IrInsn) -> bool {
 }
 
 /// Detect epilogue patterns in exit blocks (blocks with RETURN).
-fn detect_epilogues(
-    func: &SsaFunction,
-    marked: &mut std::collections::BTreeSet<(BlockId, usize)>,
-) {
+fn detect_epilogues(func: &SsaFunction, marked: &mut std::collections::BTreeSet<(BlockId, usize)>) {
     let blocks_with_return: Vec<BlockId> = func
         .function
         .blocks
@@ -461,9 +460,7 @@ fn mark_pop_rbp_after(
         }
 
         // Any RSP adjustment via INT_ADD.
-        if insn.output.map_or(false, |o| is_reg(&o, RSP))
-            && insn.op == IrOp::IntAdd
-        {
+        if insn.output.map_or(false, |o| is_reg(&o, RSP)) && insn.op == IrOp::IntAdd {
             marked.insert((bid, idx));
             continue;
         }
@@ -590,7 +587,9 @@ fn find_rsp_decrement(insns: &[unlace_ir::IrInsn], start: usize, expected: u64) 
     for idx in start..window {
         let insn = &insns[idx];
         let output_is_rsp = insn.output.map_or(false, |o| is_reg(&o, RSP));
-        if output_is_rsp && insn.op == IrOp::IntSub && insn.inputs.len() == 2
+        if output_is_rsp
+            && insn.op == IrOp::IntSub
+            && insn.inputs.len() == 2
             && is_reg(&insn.inputs[0], RSP)
             && is_const(&insn.inputs[1])
         {
@@ -608,8 +607,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use unlace_ir::ssa::{
-        CallingConvention, PhiNode, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot,
-        build_ssa,
+        CallingConvention, PhiNode, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot, build_ssa,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
@@ -630,14 +628,30 @@ mod tests {
         build_ssa(func)
     }
 
-    fn rsp() -> Varnode { Varnode::reg(RSP, 8) }
-    fn rbp() -> Varnode { Varnode::reg(RBP, 8) }
-    fn r15() -> Varnode { Varnode::reg(R15, 8) }
-    fn r14() -> Varnode { Varnode::reg(R14, 8) }
-    fn rbx() -> Varnode { Varnode::reg(RBX, 8) }
-    fn c8() -> Varnode { Varnode::constant(8, 8) }
-    fn c48() -> Varnode { Varnode::constant(48, 8) }
-    fn addr() -> Varnode { Varnode::ram(0x7fff0000, 8) }
+    fn rsp() -> Varnode {
+        Varnode::reg(RSP, 8)
+    }
+    fn rbp() -> Varnode {
+        Varnode::reg(RBP, 8)
+    }
+    fn r15() -> Varnode {
+        Varnode::reg(R15, 8)
+    }
+    fn r14() -> Varnode {
+        Varnode::reg(R14, 8)
+    }
+    fn rbx() -> Varnode {
+        Varnode::reg(RBX, 8)
+    }
+    fn c8() -> Varnode {
+        Varnode::constant(8, 8)
+    }
+    fn c48() -> Varnode {
+        Varnode::constant(48, 8)
+    }
+    fn addr() -> Varnode {
+        Varnode::ram(0x7fff0000, 8)
+    }
 
     /// Simulate `push rbp`: STORE(ram, addr, RBP); RSP = RSP - 8
     fn push_rbp_insns() -> Vec<IrInsn> {
@@ -647,12 +661,7 @@ mod tests {
                 smallvec![Varnode::ram(0, 8), addr(), rbp()],
                 0x1000,
             ),
-            IrInsn::with_output(
-                IrOp::IntSub,
-                rsp(),
-                smallvec![rsp(), c8()],
-                0x1000,
-            ),
+            IrInsn::with_output(IrOp::IntSub, rsp(), smallvec![rsp(), c8()], 0x1000),
         ]
     }
 
@@ -676,7 +685,10 @@ mod tests {
         let r0 = Varnode::reg(0, 8);
         let c1 = Varnode::constant(1, 8);
         insns.push(IrInsn::with_output(
-            IrOp::IntAdd, r0, smallvec![r0, c1], 0x1010,
+            IrOp::IntAdd,
+            r0,
+            smallvec![r0, c1],
+            0x1010,
         ));
 
         let mut ssa = make_single_block_ssa(insns);
@@ -717,7 +729,10 @@ mod tests {
         let r0 = Varnode::reg(0, 8);
         let c1 = Varnode::constant(1, 8);
         insns.push(IrInsn::with_output(
-            IrOp::IntAdd, r0, smallvec![r0, c1], 0x1010,
+            IrOp::IntAdd,
+            r0,
+            smallvec![r0, c1],
+            0x1010,
         ));
 
         let mut ssa = make_single_block_ssa(insns);
@@ -774,7 +789,10 @@ mod tests {
             0x1008,
         ));
         insns.push(IrInsn::with_output(
-            IrOp::IntSub, rsp(), smallvec![rsp(), c8()], 0x1008,
+            IrOp::IntSub,
+            rsp(),
+            smallvec![rsp(), c8()],
+            0x1008,
         ));
 
         // push r14: STORE(..., R14); RSP -= 8
@@ -784,14 +802,20 @@ mod tests {
             0x100a,
         ));
         insns.push(IrInsn::with_output(
-            IrOp::IntSub, rsp(), smallvec![rsp(), c8()], 0x100a,
+            IrOp::IntSub,
+            rsp(),
+            smallvec![rsp(), c8()],
+            0x100a,
         ));
 
         // Real instruction after pushes.
         let r0 = Varnode::reg(0, 8);
         let c1 = Varnode::constant(1, 8);
         insns.push(IrInsn::with_output(
-            IrOp::IntAdd, r0, smallvec![r0, c1], 0x1020,
+            IrOp::IntAdd,
+            r0,
+            smallvec![r0, c1],
+            0x1020,
         ));
 
         let mut ssa = make_single_block_ssa(insns);

@@ -140,10 +140,12 @@ mod tests {
         bb0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
+        bb1.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
 
         let mut bb2 = BasicBlock::new(BlockId(2));
-        bb2.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1020));
+        bb2.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1020));
 
         func.insert_block(bb0);
         func.insert_block(bb1);

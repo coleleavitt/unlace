@@ -63,7 +63,9 @@ fn unlace_bin() -> PathBuf {
 }
 
 fn fixture_path(name: &str) -> PathBuf {
-    workspace_root().join("fixtures").join(format!("{name}.elf"))
+    workspace_root()
+        .join("fixtures")
+        .join(format!("{name}.elf"))
 }
 
 fn golden_path(name: &str) -> PathBuf {
@@ -97,8 +99,7 @@ fn decompile(name: &str) -> String {
         String::from_utf8_lossy(&output.stderr),
     );
 
-    String::from_utf8(output.stdout)
-        .unwrap_or_else(|e| panic!("non-UTF8 output from {name}: {e}"))
+    String::from_utf8(output.stdout).unwrap_or_else(|e| panic!("non-UTF8 output from {name}: {e}"))
 }
 
 /// Surface-level metrics scraped from decompiler output.
@@ -133,8 +134,8 @@ impl Metrics {
 
             if !trimmed.starts_with("typedef") && !trimmed.starts_with("#define") {
                 for ty in [
-                    "_BYTE ", "_WORD ", "_DWORD ", "_QWORD ", "_BOOL ",
-                    "__int8 ", "__int16 ", "__int32 ", "__int64 ",
+                    "_BYTE ", "_WORD ", "_DWORD ", "_QWORD ", "_BOOL ", "__int8 ", "__int16 ",
+                    "__int32 ", "__int64 ",
                 ] {
                     if trimmed.starts_with(ty) && trimmed.contains(';') {
                         m.variable_count += 1;
@@ -227,7 +228,10 @@ fn count_keyword(line: &str, kw: &str) -> usize {
 /// Result of comparing actual decompiler output against the stored golden.
 enum DiffResult {
     Match,
-    Mismatch { first_diff_line: usize, summary: String },
+    Mismatch {
+        first_diff_line: usize,
+        summary: String,
+    },
 }
 
 impl DiffResult {
@@ -269,7 +273,10 @@ impl DiffResult {
             }
         }
 
-        DiffResult::Mismatch { first_diff_line, summary }
+        DiffResult::Mismatch {
+            first_diff_line,
+            summary,
+        }
     }
 }
 
@@ -284,8 +291,7 @@ fn reference_metrics(name: &str) -> Option<Metrics> {
         let path = reference_metrics_path();
         let text = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("failed to read {path:?}: {e}"));
-        parse_reference_metrics(&text)
-            .unwrap_or_else(|e| panic!("failed to parse {path:?}: {e}"))
+        parse_reference_metrics(&text).unwrap_or_else(|e| panic!("failed to parse {path:?}: {e}"))
     });
     table.get(name).copied()
 }
@@ -338,10 +344,9 @@ fn parse_reference_metrics(
             .split_once('=')
             .ok_or_else(|| format!("line {line_no}: expected 'key = value'"))?;
         let key = key.trim();
-        let value: usize = value
-            .trim()
-            .parse()
-            .map_err(|e| format!("line {line_no}: value for '{key}' is not an unsigned integer: {e}"))?;
+        let value: usize = value.trim().parse().map_err(|e| {
+            format!("line {line_no}: value for '{key}' is not an unsigned integer: {e}")
+        })?;
 
         let target = match key {
             "if_count" => &mut current_metrics.if_count,
@@ -368,7 +373,11 @@ fn write_golden(path: &Path, contents: &str) {
 
 fn bootstrap_golden(path: &Path, contents: &str) {
     write_golden(path, contents);
-    eprintln!("[bootstrap] created {} ({} bytes)", path.display(), contents.len());
+    eprintln!(
+        "[bootstrap] created {} ({} bytes)",
+        path.display(),
+        contents.len()
+    );
 }
 
 fn run_golden(name: &str) {
@@ -398,7 +407,10 @@ fn run_golden(name: &str) {
 
     match DiffResult::compare(&actual, &expected) {
         DiffResult::Match => {}
-        DiffResult::Mismatch { first_diff_line, summary } => {
+        DiffResult::Mismatch {
+            first_diff_line,
+            summary,
+        } => {
             panic!(
                 "golden mismatch for {name}.elf at line {first_diff_line}\n\
                  Re-run with UPDATE_GOLDEN=1 if the change is intentional.\n\n\
@@ -537,8 +549,12 @@ end:
 #[test]
 fn score_perfect_match_caps_at_one_hundred() {
     let reference = Metrics {
-        if_count: 10, for_count: 2, while_count: 1, return_count: 3,
-        variable_count: 5, ..Default::default()
+        if_count: 10,
+        for_count: 2,
+        while_count: 1,
+        return_count: 3,
+        variable_count: 5,
+        ..Default::default()
     };
     let actual = reference;
     assert!((actual.score(&reference) - 100.0).abs() < 1e-9);
@@ -547,15 +563,19 @@ fn score_perfect_match_caps_at_one_hundred() {
 #[test]
 fn score_caps_recovery_ratio_at_one() {
     let reference = Metrics {
-        if_count: 4, return_count: 1,
+        if_count: 4,
+        return_count: 1,
         ..Default::default()
     };
     let inflated = Metrics {
-        if_count: 100, return_count: 100,
+        if_count: 100,
+        return_count: 100,
         ..Default::default()
     };
     let baseline = inflated.score(&Metrics {
-        if_count: 100, return_count: 100, ..Default::default()
+        if_count: 100,
+        return_count: 100,
+        ..Default::default()
     });
     assert!((inflated.score(&reference) - baseline).abs() < 1e-9);
 }
@@ -563,11 +583,17 @@ fn score_caps_recovery_ratio_at_one() {
 #[test]
 fn score_partial_recovery() {
     let reference = Metrics {
-        if_count: 10, for_count: 2, while_count: 2, return_count: 4,
+        if_count: 10,
+        for_count: 2,
+        while_count: 2,
+        return_count: 4,
         ..Default::default()
     };
     let actual = Metrics {
-        if_count: 5, for_count: 1, while_count: 1, return_count: 2,
+        if_count: 5,
+        for_count: 1,
+        while_count: 1,
+        return_count: 2,
         ..Default::default()
     };
     let s = actual.score(&reference);
@@ -577,23 +603,39 @@ fn score_partial_recovery() {
 #[test]
 fn score_penalizes_goto_and_excess_vars() {
     let reference = Metrics {
-        if_count: 10, return_count: 4, variable_count: 5,
+        if_count: 10,
+        return_count: 4,
+        variable_count: 5,
         ..Default::default()
     };
     let clean = Metrics {
-        if_count: 10, return_count: 4, variable_count: 5,
+        if_count: 10,
+        return_count: 4,
+        variable_count: 5,
         ..Default::default()
     };
-    let with_goto = Metrics { goto_count: 3, ..clean };
-    let with_excess = Metrics { variable_count: 25, ..clean };
+    let with_goto = Metrics {
+        goto_count: 3,
+        ..clean
+    };
+    let with_excess = Metrics {
+        variable_count: 25,
+        ..clean
+    };
     assert!(with_goto.score(&reference) < clean.score(&reference));
     assert!(with_excess.score(&reference) < clean.score(&reference));
 }
 
 #[test]
 fn score_clamped_to_non_negative() {
-    let reference = Metrics { if_count: 1, ..Default::default() };
-    let bad = Metrics { goto_count: 1000, ..Default::default() };
+    let reference = Metrics {
+        if_count: 1,
+        ..Default::default()
+    };
+    let bad = Metrics {
+        goto_count: 1000,
+        ..Default::default()
+    };
     assert_eq!(bad.score(&reference), 0.0);
 }
 
@@ -645,8 +687,14 @@ fn parse_reference_metrics_rejects_malformed_header() {
 #[test]
 fn reference_metrics_file_loads_for_all_fixtures() {
     for name in [
-        "medium", "debug_calls", "debug_structs", "debug_hello",
-        "branches", "cpp_vtable", "cpp_exceptions", "cpp_rtti",
+        "medium",
+        "debug_calls",
+        "debug_structs",
+        "debug_hello",
+        "branches",
+        "cpp_vtable",
+        "cpp_exceptions",
+        "cpp_rtti",
     ] {
         assert!(
             reference_metrics(name).is_some(),
@@ -666,7 +714,9 @@ fn diff_result_locates_first_difference() {
     let a = "line 1\nline 2\nline 3\n";
     let b = "line 1\nline X\nline 3\n";
     match DiffResult::compare(a, b) {
-        DiffResult::Mismatch { first_diff_line, .. } => assert_eq!(first_diff_line, 2),
+        DiffResult::Mismatch {
+            first_diff_line, ..
+        } => assert_eq!(first_diff_line, 2),
         DiffResult::Match => panic!("expected mismatch"),
     }
 }

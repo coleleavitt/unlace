@@ -171,7 +171,9 @@ fn has_shadow_space_stores(func: &SsaFunction) -> bool {
 
 const VEC_BASE: u64 = 0x400;
 const VEC_STRIDE: u64 = 32;
-const fn xmm_offset(n: u64) -> u64 { VEC_BASE + n * VEC_STRIDE }
+const fn xmm_offset(n: u64) -> u64 {
+    VEC_BASE + n * VEC_STRIDE
+}
 
 const XMM0: u64 = xmm_offset(0);
 const XMM1: u64 = xmm_offset(1);
@@ -244,9 +246,9 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
         CallingConvention::MicrosoftX64 => (MSX64_ARG_REGS, MSX64_FLOAT_REGS),
         CallingConvention::AArch64 => (AARCH64_ARG_REGS, &[]),
         CallingConvention::Thiscall => (&[8], &[]),
-        CallingConvention::Cdecl
-        | CallingConvention::Stdcall
-        | CallingConvention::Unknown => return Vec::new(),
+        CallingConvention::Cdecl | CallingConvention::Stdcall | CallingConvention::Unknown => {
+            return Vec::new();
+        }
     };
 
     // Build a map of which registers feed into which ops in the entry block,
@@ -299,10 +301,19 @@ fn infer_param_type(reg_off: u64, consumer_ops: &BTreeMap<u64, Vec<IrOp>>) -> Pr
     };
     for &op in ops {
         match op {
-            IrOp::FloatAdd | IrOp::FloatSub | IrOp::FloatMult | IrOp::FloatDiv
-            | IrOp::FloatNeg | IrOp::FloatAbs | IrOp::FloatSqrt
-            | IrOp::FloatInt2float | IrOp::FloatFloat2float | IrOp::FloatFloat2int
-            | IrOp::FloatEqual | IrOp::FloatNotequal | IrOp::FloatLess
+            IrOp::FloatAdd
+            | IrOp::FloatSub
+            | IrOp::FloatMult
+            | IrOp::FloatDiv
+            | IrOp::FloatNeg
+            | IrOp::FloatAbs
+            | IrOp::FloatSqrt
+            | IrOp::FloatInt2float
+            | IrOp::FloatFloat2float
+            | IrOp::FloatFloat2int
+            | IrOp::FloatEqual
+            | IrOp::FloatNotequal
+            | IrOp::FloatLess
             | IrOp::FloatLessequal => {
                 return PrimitiveType::Double;
             }
@@ -409,14 +420,29 @@ fn classify_return_op(
     _func: &SsaFunction,
 ) -> PrimitiveType {
     match op {
-        IrOp::FloatAdd | IrOp::FloatSub | IrOp::FloatMult | IrOp::FloatDiv
-        | IrOp::FloatNeg | IrOp::FloatAbs | IrOp::FloatSqrt
-        | IrOp::FloatInt2float | IrOp::FloatFloat2float => PrimitiveType::Double,
+        IrOp::FloatAdd
+        | IrOp::FloatSub
+        | IrOp::FloatMult
+        | IrOp::FloatDiv
+        | IrOp::FloatNeg
+        | IrOp::FloatAbs
+        | IrOp::FloatSqrt
+        | IrOp::FloatInt2float
+        | IrOp::FloatFloat2float => PrimitiveType::Double,
 
-        IrOp::IntEqual | IrOp::IntNotequal | IrOp::IntLess | IrOp::IntLessequal
-        | IrOp::IntSless | IrOp::IntSlessequal | IrOp::BoolAnd | IrOp::BoolOr
-        | IrOp::BoolNegate | IrOp::FloatEqual | IrOp::FloatNotequal
-        | IrOp::FloatLess | IrOp::FloatLessequal => PrimitiveType::Bool,
+        IrOp::IntEqual
+        | IrOp::IntNotequal
+        | IrOp::IntLess
+        | IrOp::IntLessequal
+        | IrOp::IntSless
+        | IrOp::IntSlessequal
+        | IrOp::BoolAnd
+        | IrOp::BoolOr
+        | IrOp::BoolNegate
+        | IrOp::FloatEqual
+        | IrOp::FloatNotequal
+        | IrOp::FloatLess
+        | IrOp::FloatLessequal => PrimitiveType::Bool,
 
         IrOp::Ptradd | IrOp::Ptrsub => PrimitiveType::Ptr,
 
@@ -428,7 +454,7 @@ fn classify_return_op(
 mod tests {
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{build_ssa, CallingConvention};
+    use unlace_ir::ssa::{CallingConvention, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -447,21 +473,38 @@ mod tests {
     }
 
     // --- Register helpers (x86-64 offsets) ---
-    fn rdi() -> Varnode { Varnode::reg(RDI, 8) }
-    fn rsi() -> Varnode { Varnode::reg(RSI, 8) }
-    fn rdx() -> Varnode { Varnode::reg(RDX, 8) }
-    fn rcx() -> Varnode { Varnode::reg(RCX, 8) }
-    fn r8() -> Varnode  { Varnode::reg(R8, 8) }
-    fn r9() -> Varnode  { Varnode::reg(R9, 8) }
-    fn rax() -> Varnode { Varnode::reg(RAX, 8) }
+    fn rdi() -> Varnode {
+        Varnode::reg(RDI, 8)
+    }
+    fn rsi() -> Varnode {
+        Varnode::reg(RSI, 8)
+    }
+    fn rdx() -> Varnode {
+        Varnode::reg(RDX, 8)
+    }
+    fn rcx() -> Varnode {
+        Varnode::reg(RCX, 8)
+    }
+    fn r8() -> Varnode {
+        Varnode::reg(R8, 8)
+    }
+    fn r9() -> Varnode {
+        Varnode::reg(R9, 8)
+    }
+    fn rax() -> Varnode {
+        Varnode::reg(RAX, 8)
+    }
 
     #[test]
     fn test_sysv_rdi_rsi_reads() {
         // Function reads RDI and RSI -> System V
         let out = Varnode::unique(0, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, out, smallvec![rdi(), rsi()], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rdi(), rsi()],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         let pass = CallingConventionDetectPass;
@@ -490,9 +533,12 @@ mod tests {
     fn test_msx64_rcx_rdx_reads() {
         // Function reads RCX and RDX (but NOT RDI/RSI) -> Microsoft x64
         let out = Varnode::unique(0, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, out, smallvec![rcx(), rdx()], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rcx(), rdx()],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         let pass = CallingConventionDetectPass;
@@ -555,9 +601,12 @@ mod tests {
     fn test_no_change_on_rerun() {
         // Running the pass twice should report no change the second time.
         let out = Varnode::unique(0, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, out, smallvec![rdi(), rsi()], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rdi(), rsi()],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         let pass = CallingConventionDetectPass;
@@ -605,9 +654,12 @@ mod tests {
         let x0 = Varnode::reg(0, 8);
         let x1 = Varnode::reg(8, 8);
         let out = Varnode::unique(0, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, out, smallvec![x0, x1], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![x0, x1],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
@@ -627,9 +679,12 @@ mod tests {
         let x0 = Varnode::reg(0, 8);
         let c1 = Varnode::constant(1, 8);
         let out = Varnode::unique(0, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, out, smallvec![x0, c1], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![x0, c1],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
@@ -642,9 +697,12 @@ mod tests {
         let c1 = Varnode::constant(1, 8);
         let c2 = Varnode::constant(2, 8);
         let out = Varnode::unique(0, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, out, smallvec![c1, c2], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![c1, c2],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
@@ -657,9 +715,12 @@ mod tests {
         let s0 = Varnode::stack(0, 8);
         let s8 = Varnode::stack(8, 8);
         let out = Varnode::unique(0, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, out, smallvec![s0, s8], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![s0, s8],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
@@ -672,9 +733,12 @@ mod tests {
         // Combined with RDI -> still System V, RSP is just incidental.
         let rsp = Varnode::reg(RSP, 8);
         let out = Varnode::unique(0, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, out, smallvec![rdi(), rsp], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rdi(), rsp],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
@@ -688,9 +752,12 @@ mod tests {
     #[test]
     fn test_param_count_sysv() {
         let out = Varnode::unique(0, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, out, smallvec![rdi(), rsi()], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rdi(), rsi()],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
@@ -717,9 +784,12 @@ mod tests {
     fn test_param_ptr_type() {
         let out = Varnode::unique(0, 8);
         let space = Varnode::constant(0, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::Load, out, smallvec![space, rdi()], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::Load,
+            out,
+            smallvec![space, rdi()],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
@@ -787,9 +857,12 @@ mod tests {
 
     #[test]
     fn test_return_int64() {
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, rax(), smallvec![rdi(), rsi()], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            rax(),
+            smallvec![rdi(), rsi()],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
@@ -803,9 +876,12 @@ mod tests {
         let eax = Varnode::reg(RAX, 4);
         let edi = Varnode::reg(RDI, 4);
         let esi = Varnode::reg(RSI, 4);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, eax, smallvec![edi, esi], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            eax,
+            smallvec![edi, esi],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
@@ -817,9 +893,12 @@ mod tests {
     #[test]
     fn test_return_bool_from_comparison() {
         let out = Varnode::reg(RAX, 8);
-        let insns = vec![
-            IrInsn::with_output(IrOp::IntEqual, out, smallvec![rdi(), rsi()], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntEqual,
+            out,
+            smallvec![rdi(), rsi()],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         CallingConventionDetectPass.run(&mut ssa).unwrap();
@@ -832,9 +911,12 @@ mod tests {
     fn test_return_double_from_float_op() {
         let xmm0_vn = Varnode::reg(XMM0, 16);
         let xmm1_vn = Varnode::reg(xmm_offset(1), 16);
-        let insns = vec![
-            IrInsn::with_output(IrOp::FloatAdd, xmm0_vn, smallvec![xmm0_vn, xmm1_vn], 0x1000),
-        ];
+        let insns = vec![IrInsn::with_output(
+            IrOp::FloatAdd,
+            xmm0_vn,
+            smallvec![xmm0_vn, xmm1_vn],
+            0x1000,
+        )];
 
         let mut ssa = make_entry_block_ssa(insns);
         ReturnTypeInferPass.run(&mut ssa).unwrap();

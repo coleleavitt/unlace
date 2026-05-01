@@ -2,7 +2,7 @@ use capstone::arch::ppc::PpcOperand;
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
-use crate::lift::{operand_imm, operand_mem_addr, operand_reg, LiftCtx};
+use crate::lift::{LiftCtx, operand_imm, operand_mem_addr, operand_reg};
 use crate::register_file::lr;
 
 pub fn lift_lwz(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
@@ -16,10 +16,25 @@ pub fn lift_lwz(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     };
     let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
     let loaded = Varnode::unique(ctx.alloc_unique(), 4);
-    ctx.emit(IrInsn::with_output(IrOp::Load, loaded, smallvec![ram_space, mem_addr], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Load,
+        loaded,
+        smallvec![ram_space, mem_addr],
+        ctx.addr,
+    ));
     let extended = Varnode::unique(ctx.alloc_unique(), 8);
-    ctx.emit(IrInsn::with_output(IrOp::IntZext, extended, smallvec![loaded], ctx.addr));
-    ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![extended], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntZext,
+        extended,
+        smallvec![loaded],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![extended],
+        ctx.addr,
+    ));
 }
 
 pub fn lift_ld(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
@@ -33,8 +48,18 @@ pub fn lift_ld(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     };
     let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
     let loaded = Varnode::unique(ctx.alloc_unique(), 8);
-    ctx.emit(IrInsn::with_output(IrOp::Load, loaded, smallvec![ram_space, mem_addr], ctx.addr));
-    ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![loaded], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Load,
+        loaded,
+        smallvec![ram_space, mem_addr],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![loaded],
+        ctx.addr,
+    ));
 }
 
 pub fn lift_stw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
@@ -78,7 +103,12 @@ pub fn lift_li(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
         None => return ctx.emit_unimplemented(),
     };
     let imm_vn = Varnode::constant(imm as u64, 8);
-    ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![imm_vn], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![imm_vn],
+        ctx.addr,
+    ));
 }
 
 pub fn lift_lis(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
@@ -93,7 +123,12 @@ pub fn lift_lis(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     // LIS rD, imm  →  rD = imm << 16
     let shifted = (imm as i16 as i64) << 16;
     let imm_vn = Varnode::constant(shifted as u64, 8);
-    ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![imm_vn], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![imm_vn],
+        ctx.addr,
+    ));
 }
 
 pub fn lift_mr(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
@@ -118,7 +153,12 @@ pub fn lift_mfspr(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
         Some(v) => v,
         None => lr(),
     };
-    ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![spr], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![spr],
+        ctx.addr,
+    ));
 }
 
 pub fn lift_mtspr(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
@@ -132,13 +172,23 @@ pub fn lift_mtspr(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
             Some(v) => v,
             None => return ctx.emit_unimplemented(),
         };
-        ctx.emit(IrInsn::with_output(IrOp::Copy, spr, smallvec![rs], ctx.addr));
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            spr,
+            smallvec![rs],
+            ctx.addr,
+        ));
     } else {
         let rs = match ops.first().and_then(operand_reg) {
             Some(v) => v,
             None => return ctx.emit_unimplemented(),
         };
-        ctx.emit(IrInsn::with_output(IrOp::Copy, lr(), smallvec![rs], ctx.addr));
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            lr(),
+            smallvec![rs],
+            ctx.addr,
+        ));
     }
 }
 

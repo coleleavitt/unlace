@@ -45,10 +45,7 @@ pub trait Pass: Send + Sync {
 /// Each iteration runs every pass in order. If *any* pass reports a
 /// change the whole sequence is re-run. The loop terminates when a full
 /// sweep produces no changes.
-pub fn run_to_fixedpoint(
-    passes: &[&dyn Pass],
-    func: &mut SsaFunction,
-) -> Result<usize, PassError> {
+pub fn run_to_fixedpoint(passes: &[&dyn Pass], func: &mut SsaFunction) -> Result<usize, PassError> {
     const MAX_ROUNDS: usize = 200;
     let mut total_changes = 0usize;
     let func_name = func.function.name.clone();

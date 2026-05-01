@@ -66,7 +66,10 @@ impl Pass for ConditionSimplifyPass {
                             new_insns.push(replacement);
                             changed = true;
                         }
-                        Some(Simplification::InsertAndReplace { prefix, replacement }) => {
+                        Some(Simplification::InsertAndReplace {
+                            prefix,
+                            replacement,
+                        }) => {
                             new_insns.extend(prefix);
                             new_insns.push(replacement);
                             changed = true;
@@ -375,17 +378,13 @@ fn try_simplify(
                     IrOp::BoolOr => {
                         let a = *inner_insn.inputs.first()?;
                         let b = *inner_insn.inputs.get(1)?;
-                        return Some(demorgan(
-                            insn, a, b, IrOp::BoolAnd, output, next_unique,
-                        ));
+                        return Some(demorgan(insn, a, b, IrOp::BoolAnd, output, next_unique));
                     }
                     // !(a && b) → (!a) || (!b)
                     IrOp::BoolAnd => {
                         let a = *inner_insn.inputs.first()?;
                         let b = *inner_insn.inputs.get(1)?;
-                        return Some(demorgan(
-                            insn, a, b, IrOp::BoolOr, output, next_unique,
-                        ));
+                        return Some(demorgan(insn, a, b, IrOp::BoolOr, output, next_unique));
                     }
                     _ => {}
                 }
@@ -479,8 +478,18 @@ fn demorgan(
     let neg_b_out = Varnode::unique(*next_unique, output.size);
     *next_unique += 8;
 
-    let neg_a = IrInsn::with_output(IrOp::BoolNegate, neg_a_out, smallvec::smallvec![a], insn.addr);
-    let neg_b = IrInsn::with_output(IrOp::BoolNegate, neg_b_out, smallvec::smallvec![b], insn.addr);
+    let neg_a = IrInsn::with_output(
+        IrOp::BoolNegate,
+        neg_a_out,
+        smallvec::smallvec![a],
+        insn.addr,
+    );
+    let neg_b = IrInsn::with_output(
+        IrOp::BoolNegate,
+        neg_b_out,
+        smallvec::smallvec![b],
+        insn.addr,
+    );
     let combined = IrInsn::with_output(
         result_op,
         insn.output.expect("simplifiable insn has output"),
@@ -538,7 +547,9 @@ mod tests {
         let insn2 = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![insn1, insn2]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -558,7 +569,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolAnd, out, smallvec![r0, c_true], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -577,7 +590,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolAnd, out, smallvec![r0, c_false], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -597,7 +612,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolOr, out, smallvec![r0, c_true], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -617,7 +634,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolOr, out, smallvec![r0, c_false], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -638,7 +657,9 @@ mod tests {
         let neg = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![cmp, neg]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -660,7 +681,9 @@ mod tests {
         let neg = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![cmp, neg]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -682,7 +705,9 @@ mod tests {
         let neg = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![cmp, neg]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -703,7 +728,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolXor, out, smallvec![r0, c_false], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -732,7 +759,9 @@ mod tests {
         let insn3 = IrInsn::with_output(IrOp::BoolNegate, v3, smallvec![v2], 0x1008);
 
         let mut ssa = make_single_block_ssa(vec![insn1, insn2, insn3]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -755,7 +784,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::IntAdd, out, smallvec![r0, r8], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(!changed);
     }
 
@@ -770,7 +801,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolAnd, out, smallvec![c_true, r0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -789,7 +822,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolOr, out, smallvec![c_false, r0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -808,7 +843,9 @@ mod tests {
         let insn = IrInsn::with_output(IrOp::BoolXor, out, smallvec![c_false, r0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -831,7 +868,9 @@ mod tests {
         let neg_insn = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![or_insn, neg_insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -861,7 +900,9 @@ mod tests {
         let neg_insn = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![and_insn, neg_insn]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -886,7 +927,9 @@ mod tests {
         let eq = IrInsn::with_output(IrOp::IntEqual, v2, smallvec![v1, zero], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![sub, eq]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -907,7 +950,9 @@ mod tests {
         let neq = IrInsn::with_output(IrOp::IntNotequal, v2, smallvec![v1, zero], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![sub, neq]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -924,7 +969,9 @@ mod tests {
         let eq = IrInsn::with_output(IrOp::IntEqual, out, smallvec![r0, r0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![eq]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -941,7 +988,9 @@ mod tests {
         let neq = IrInsn::with_output(IrOp::IntNotequal, out, smallvec![r0, r0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![neq]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -958,7 +1007,9 @@ mod tests {
         let less = IrInsn::with_output(IrOp::IntLess, out, smallvec![r0, r0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![less]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -974,7 +1025,9 @@ mod tests {
         let sless = IrInsn::with_output(IrOp::IntSless, out, smallvec![r0, r0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![sless]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -990,7 +1043,9 @@ mod tests {
         let le = IrInsn::with_output(IrOp::IntLessequal, out, smallvec![r0, r0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![le]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1007,7 +1062,9 @@ mod tests {
         let less = IrInsn::with_output(IrOp::IntLess, out, smallvec![r0, zero], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![less]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1024,7 +1081,9 @@ mod tests {
         let le = IrInsn::with_output(IrOp::IntLessequal, out, smallvec![zero, r0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![le]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1041,7 +1100,9 @@ mod tests {
         let eq = IrInsn::with_output(IrOp::IntEqual, out, smallvec![c5, r0], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![eq]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1062,7 +1123,9 @@ mod tests {
         let eq = IrInsn::with_output(IrOp::IntEqual, out, smallvec![v1, c10], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![add, eq]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1083,7 +1146,9 @@ mod tests {
         let eq = IrInsn::with_output(IrOp::IntEqual, out, smallvec![v1, c10], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![sub, eq]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1103,7 +1168,9 @@ mod tests {
         let neg = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![cmp, neg]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1123,7 +1190,9 @@ mod tests {
         let neg = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![cmp, neg]);
-        let changed = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
@@ -1141,7 +1210,9 @@ mod tests {
         let eq = IrInsn::with_output(IrOp::IntEqual, out, smallvec![c1, c2], 0x1000);
 
         let mut ssa = make_single_block_ssa(vec![eq]);
-        let _ = ConditionSimplifyPass.run(&mut ssa).expect("pass should succeed");
+        let _ = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
 
         let block = ssa.function.blocks.values().next().expect("has block");
         assert_eq!(block.insns[0].op, IrOp::IntEqual);
@@ -1196,7 +1267,14 @@ mod tests {
             .iter()
             .find(|i| i.op == IrOp::IntEqual)
             .expect("comparison preserved");
-        assert_eq!(cmp.inputs[0], u0, "first operand collapses to original input");
-        assert_eq!(cmp.inputs[1], Varnode::constant(90, 4), "constant folded to c2 - c1");
+        assert_eq!(
+            cmp.inputs[0], u0,
+            "first operand collapses to original input"
+        );
+        assert_eq!(
+            cmp.inputs[1],
+            Varnode::constant(90, 4),
+            "constant folded to c2 - c1"
+        );
     }
 }

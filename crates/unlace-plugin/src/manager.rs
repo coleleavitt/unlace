@@ -70,20 +70,19 @@ impl PluginManager {
     /// Only load libraries you trust.
     pub fn load_library(&mut self, path: &Path) -> Result<(), PluginError> {
         // SAFETY: Caller is responsible for only loading trusted libraries.
-        let lib = unsafe { libloading::Library::new(path) }.map_err(|e| {
-            PluginError::LoadFailed {
+        let lib =
+            unsafe { libloading::Library::new(path) }.map_err(|e| PluginError::LoadFailed {
                 path: path.to_path_buf(),
                 source: e,
-            }
-        })?;
-
-        let create_fn: libloading::Symbol<'_, PluginCreateFn> =
-            unsafe { lib.get(PLUGIN_ENTRY.as_bytes()) }.map_err(|e| {
-                PluginError::EntryPointNotFound {
-                    path: path.to_path_buf(),
-                    source: e,
-                }
             })?;
+
+        let create_fn: libloading::Symbol<'_, PluginCreateFn> = unsafe {
+            lib.get(PLUGIN_ENTRY.as_bytes())
+        }
+        .map_err(|e| PluginError::EntryPointNotFound {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
 
         let raw = unsafe { create_fn() };
         if raw.is_null() {

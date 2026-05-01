@@ -11,8 +11,8 @@ use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use unlace_ir::ArchId;
-use unlace_loader::{ElfLoader, Loader, import_dwarf};
 use unlace_lift::get_lifter;
+use unlace_loader::{ElfLoader, Loader, import_dwarf};
 use unlace_plugin::PluginManager;
 
 use crate::args::{Args, Cmd};
@@ -38,8 +38,17 @@ fn main() {
             let config = PipelineConfig {
                 timeout: Duration::from_secs(timeout),
             };
-            load_plugins(plugin_dir.as_deref())
-                .and_then(|mgr| run_decompile(&binary, function.as_deref(), emit, arch.as_deref(), output.as_deref(), &config, &mgr))
+            load_plugins(plugin_dir.as_deref()).and_then(|mgr| {
+                run_decompile(
+                    &binary,
+                    function.as_deref(),
+                    emit,
+                    arch.as_deref(),
+                    output.as_deref(),
+                    &config,
+                    &mgr,
+                )
+            })
         }
         Cmd::Batch {
             binary,
@@ -125,10 +134,7 @@ fn run_decompile(
         }
     }
 
-    if !matches!(
-        image.arch,
-        ArchId::X86_64 | ArchId::X86 | ArchId::AArch64
-    ) {
+    if !matches!(image.arch, ArchId::X86_64 | ArchId::X86 | ArchId::AArch64) {
         bail!(
             "architecture {} is not yet supported for decompilation",
             image.arch,
@@ -161,7 +167,15 @@ fn run_decompile(
     for func_entry in &functions {
         tracing::info!(name = %func_entry.name, addr = %format_args!("{:#x}", func_entry.addr), "decompiling");
 
-        match pipeline::decompile_function_with_symbols(&image, lifter.as_ref(), func_entry, emit, config, dwarf.as_ref(), &functions) {
+        match pipeline::decompile_function_with_symbols(
+            &image,
+            lifter.as_ref(),
+            func_entry,
+            emit,
+            config,
+            dwarf.as_ref(),
+            &functions,
+        ) {
             Ok(text) => all_output.push_str(&text),
             Err(e) => {
                 tracing::warn!(name = %func_entry.name, err = %e, "function decompilation failed");

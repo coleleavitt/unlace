@@ -2,7 +2,9 @@ use capstone::arch::ppc::{PpcInsn, PpcOperand};
 use capstone::prelude::*;
 use capstone::{Capstone, Endian, Insn, InsnDetail};
 use smallvec::smallvec;
-use unlace_ir::{ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode};
+use unlace_ir::{
+    ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
+};
 
 use crate::ops;
 use crate::register_file::{cs_reg_to_varnode, ppc64_register_file};
@@ -51,9 +53,10 @@ impl Lifter for PpcLifter {
             .disasm_count(bytes, addr, 1)
             .map_err(|e| LiftError::Decode(format!("{e}")))?;
 
-        let insn = insns.as_ref().first().ok_or_else(|| {
-            LiftError::Decode(format!("no instruction decoded at {addr:#x}"))
-        })?;
+        let insn = insns
+            .as_ref()
+            .first()
+            .ok_or_else(|| LiftError::Decode(format!("no instruction decoded at {addr:#x}")))?;
 
         let detail = cs
             .insn_detail(insn)

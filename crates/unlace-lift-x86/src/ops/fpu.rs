@@ -220,7 +220,11 @@ pub fn lift_fpu_binop(
         }
     };
 
-    let (a, b) = if swap_operands { (rhs, lhs) } else { (lhs, rhs) };
+    let (a, b) = if swap_operands {
+        (rhs, lhs)
+    } else {
+        (lhs, rhs)
+    };
 
     match dst {
         FpuDst::Register(dst_vn) => {

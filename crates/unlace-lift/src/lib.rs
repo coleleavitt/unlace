@@ -2,13 +2,13 @@
 
 use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterFile};
 
-pub use unlace_lift_x86::X86Lifter;
+pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
-pub use unlace_lift_riscv::RiscVLifter;
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_ppc::PpcLifter;
+pub use unlace_lift_riscv::RiscVLifter;
 pub use unlace_lift_v850::V850Lifter;
-pub use unlace_lift_arc::ArcLifter;
+pub use unlace_lift_x86::X86Lifter;
 
 struct UnimplementedLifter {
     arch_id: ArchId,
@@ -19,7 +19,9 @@ impl UnimplementedLifter {
     fn new(arch_id: ArchId) -> Self {
         Self {
             arch_id,
-            register_file: RegisterFile { registers: Vec::new() },
+            register_file: RegisterFile {
+                registers: Vec::new(),
+            },
         }
     }
 }

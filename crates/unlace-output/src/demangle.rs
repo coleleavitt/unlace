@@ -130,9 +130,7 @@ fn parse_signature(full: &str) -> (Vec<String>, Option<String>, Vec<String>) {
             .iter()
             .map(|s| s.trim().to_string())
             .collect();
-        let class = ns
-            .last()
-            .map(|s| strip_template_args(s).to_string());
+        let class = ns.last().map(|s| strip_template_args(s).to_string());
         ns = ns.into_iter().filter(|s| !s.is_empty()).collect();
         (ns, class)
     };
@@ -447,8 +445,10 @@ fn detect_language(name: &str) -> Option<SymbolLanguage> {
         return Some(SymbolLanguage::Cpp);
     }
 
-    if name.starts_with("$s") || name.starts_with("$S")
-        || name.starts_with("_$s") || name.starts_with("_$S")
+    if name.starts_with("$s")
+        || name.starts_with("$S")
+        || name.starts_with("_$s")
+        || name.starts_with("_$S")
         || name.starts_with("_T")
     {
         return Some(SymbolLanguage::Swift);
@@ -590,7 +590,10 @@ mod tests {
 
     #[test]
     fn sanitize_cpp_name() {
-        assert_eq!(sanitize_for_c("std::io::Read::read_to_end"), "std_io_Read_read_to_end");
+        assert_eq!(
+            sanitize_for_c("std::io::Read::read_to_end"),
+            "std_io_Read_read_to_end"
+        );
         assert_eq!(sanitize_for_c("foo::bar()"), "foo_bar");
         assert_eq!(sanitize_for_c("std::vector<int>"), "std_vector_int");
     }
@@ -606,15 +609,27 @@ mod tests {
     fn detect_vtable_typeinfo_typeinfoname() {
         let v = demangle("_ZTV4Base").expect("vtable demangles");
         assert_eq!(v.symbol_kind, SymbolKind::Vtable);
-        assert!(v.full_signature.contains("Base"), "got: {}", v.full_signature);
+        assert!(
+            v.full_signature.contains("Base"),
+            "got: {}",
+            v.full_signature
+        );
 
         let i = demangle("_ZTI4Base").expect("typeinfo demangles");
         assert_eq!(i.symbol_kind, SymbolKind::TypeInfo);
-        assert!(i.full_signature.contains("typeinfo for Base"), "got: {}", i.full_signature);
+        assert!(
+            i.full_signature.contains("typeinfo for Base"),
+            "got: {}",
+            i.full_signature
+        );
 
         let s = demangle("_ZTS4Base").expect("typeinfo name demangles");
         assert_eq!(s.symbol_kind, SymbolKind::TypeInfoName);
-        assert!(s.full_signature.contains("typeinfo name for Base"), "got: {}", s.full_signature);
+        assert!(
+            s.full_signature.contains("typeinfo name for Base"),
+            "got: {}",
+            s.full_signature
+        );
     }
 
     #[test]
@@ -658,7 +673,9 @@ mod tests {
             r.namespaces
         );
         assert!(
-            r.namespaces.last().map_or(false, |s| s.starts_with("vector<")),
+            r.namespaces
+                .last()
+                .map_or(false, |s| s.starts_with("vector<")),
             "last ns segment should be templated vector<…>, got: {:?}",
             r.namespaces
         );
@@ -684,7 +701,11 @@ mod tests {
         let segs = split_top_level_scope("std::map<int, std::string>::find");
         assert_eq!(
             segs,
-            vec!["std".to_string(), "map<int, std::string>".to_string(), "find".to_string()],
+            vec![
+                "std".to_string(),
+                "map<int, std::string>".to_string(),
+                "find".to_string()
+            ],
         );
     }
 

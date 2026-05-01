@@ -2,7 +2,7 @@ use capstone::arch::ppc::PpcOperand;
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
-use crate::lift::{operand_reg, LiftCtx};
+use crate::lift::{LiftCtx, operand_reg};
 use crate::register_file::cr;
 
 /// CMPW: signed 32-bit compare → set CR field.
@@ -14,10 +14,25 @@ pub fn lift_cmpw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     };
     let cr_vn = cr();
     let result = Varnode::unique(ctx.alloc_unique(), 1);
-    ctx.emit(IrInsn::with_output(IrOp::IntSless, result, smallvec![ra, rb], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntSless,
+        result,
+        smallvec![ra, rb],
+        ctx.addr,
+    ));
     let eq_result = Varnode::unique(ctx.alloc_unique(), 1);
-    ctx.emit(IrInsn::with_output(IrOp::IntEqual, eq_result, smallvec![ra, rb], ctx.addr));
-    ctx.emit(IrInsn::with_output(IrOp::Copy, cr_vn, smallvec![Varnode::constant(0, 4)], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntEqual,
+        eq_result,
+        smallvec![ra, rb],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        cr_vn,
+        smallvec![Varnode::constant(0, 4)],
+        ctx.addr,
+    ));
 }
 
 /// CMPLW: unsigned 32-bit compare.
@@ -28,10 +43,25 @@ pub fn lift_cmplw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     };
     let cr_vn = cr();
     let result = Varnode::unique(ctx.alloc_unique(), 1);
-    ctx.emit(IrInsn::with_output(IrOp::IntLess, result, smallvec![ra, rb], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntLess,
+        result,
+        smallvec![ra, rb],
+        ctx.addr,
+    ));
     let eq_result = Varnode::unique(ctx.alloc_unique(), 1);
-    ctx.emit(IrInsn::with_output(IrOp::IntEqual, eq_result, smallvec![ra, rb], ctx.addr));
-    ctx.emit(IrInsn::with_output(IrOp::Copy, cr_vn, smallvec![Varnode::constant(0, 4)], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntEqual,
+        eq_result,
+        smallvec![ra, rb],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        cr_vn,
+        smallvec![Varnode::constant(0, 4)],
+        ctx.addr,
+    ));
 }
 
 fn extract_cmp_operands(ops: &[PpcOperand]) -> Option<(Varnode, Varnode)> {

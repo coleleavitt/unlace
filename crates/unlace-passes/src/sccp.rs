@@ -117,13 +117,22 @@ impl<'a> SccpSolver<'a> {
     /// SSA varnodes that are used but never defined within the function
     /// (version 0 registers, parameters) are external inputs — mark them Bottom.
     fn init_external_inputs(&mut self) {
-        let defined: BTreeSet<SsaVarnode> = self.func.var_map.iter()
+        let defined: BTreeSet<SsaVarnode> = self
+            .func
+            .var_map
+            .iter()
             .filter_map(|((_, _, slot), sv)| {
-                if *slot == VarnodeSlot::Output { Some(*sv) } else { None }
+                if *slot == VarnodeSlot::Output {
+                    Some(*sv)
+                } else {
+                    None
+                }
             })
             .chain(
-                self.func.phi_map.values()
-                    .flat_map(|phis| phis.iter().map(|p| p.output))
+                self.func
+                    .phi_map
+                    .values()
+                    .flat_map(|phis| phis.iter().map(|p| p.output)),
             )
             .collect();
 
@@ -144,7 +153,10 @@ impl<'a> SccpSolver<'a> {
     fn get_value(&self, sv: &SsaVarnode) -> LatticeValue {
         // Constants are always known.
         if sv.base.space == SpaceId::Const {
-            return LatticeValue::Constant { value: sv.base.offset, size: sv.base.size };
+            return LatticeValue::Constant {
+                value: sv.base.offset,
+                size: sv.base.size,
+            };
         }
         self.values.get(sv).copied().unwrap_or(LatticeValue::Top)
     }
@@ -170,9 +182,18 @@ impl<'a> SccpSolver<'a> {
     }
 
     /// Resolve a raw Varnode at (block, insn_idx, input_slot) to its lattice value.
-    fn resolve_input(&self, bid: BlockId, insn_idx: usize, input_idx: usize, raw: &Varnode) -> LatticeValue {
+    fn resolve_input(
+        &self,
+        bid: BlockId,
+        insn_idx: usize,
+        input_idx: usize,
+        raw: &Varnode,
+    ) -> LatticeValue {
         if raw.space == SpaceId::Const {
-            return LatticeValue::Constant { value: raw.offset, size: raw.size };
+            return LatticeValue::Constant {
+                value: raw.offset,
+                size: raw.size,
+            };
         }
         let key = (bid, insn_idx, VarnodeSlot::Input(input_idx));
         match self.func.var_map.get(&key) {
@@ -235,7 +256,10 @@ impl<'a> SccpSolver<'a> {
             .collect();
 
         match evaluate(insn.op, &const_varnodes, out.size) {
-            Some(result_val) => LatticeValue::Constant { value: result_val, size: out.size },
+            Some(result_val) => LatticeValue::Constant {
+                value: result_val,
+                size: out.size,
+            },
             None => LatticeValue::Bottom,
         }
     }
@@ -286,7 +310,10 @@ impl<'a> SccpSolver<'a> {
                 }
             } else {
                 // No SSA mapping — use base varnode with version 0 as fallback.
-                let sv = SsaVarnode { base: out, version: 0 };
+                let sv = SsaVarnode {
+                    base: out,
+                    version: 0,
+                };
                 if self.set_value(sv, val) {
                     self.propagate_to_uses(sv);
                 }
@@ -498,7 +525,11 @@ impl<'a> SccpSolver<'a> {
 // ---------------------------------------------------------------------------
 
 fn mask_for_size(size: u8) -> u64 {
-    if size >= 8 { u64::MAX } else { (1u64 << (size as u32 * 8)) - 1 }
+    if size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (size as u32 * 8)) - 1
+    }
 }
 
 fn sign_extend(val: u64, size: u8) -> i64 {
@@ -529,32 +560,44 @@ fn evaluate(op: IrOp, inputs: &[Varnode], out_size: u8) -> Option<u64> {
         }
         IrOp::IntDiv => {
             let (a, b) = two(inputs)?;
-            if b.offset == 0 { return None; }
+            if b.offset == 0 {
+                return None;
+            }
             let av = a.offset & mask_for_size(a.size);
             let bv = b.offset & mask_for_size(b.size);
             Some(av / bv)
         }
         IrOp::IntSdiv => {
             let (a, b) = two(inputs)?;
-            if b.offset == 0 { return None; }
+            if b.offset == 0 {
+                return None;
+            }
             let av = sign_extend(a.offset, a.size);
             let bv = sign_extend(b.offset, b.size);
-            if av == i64::MIN && bv == -1 { return None; }
+            if av == i64::MIN && bv == -1 {
+                return None;
+            }
             Some((av.wrapping_div(bv) as u64) & mask)
         }
         IrOp::IntRem => {
             let (a, b) = two(inputs)?;
-            if b.offset == 0 { return None; }
+            if b.offset == 0 {
+                return None;
+            }
             let av = a.offset & mask_for_size(a.size);
             let bv = b.offset & mask_for_size(b.size);
             Some(av % bv)
         }
         IrOp::IntSrem => {
             let (a, b) = two(inputs)?;
-            if b.offset == 0 { return None; }
+            if b.offset == 0 {
+                return None;
+            }
             let av = sign_extend(a.offset, a.size);
             let bv = sign_extend(b.offset, b.size);
-            if av == i64::MIN && bv == -1 { return None; }
+            if av == i64::MIN && bv == -1 {
+                return None;
+            }
             Some((av.wrapping_rem(bv) as u64) & mask)
         }
         IrOp::IntNegate => {
@@ -590,14 +633,22 @@ fn evaluate(op: IrOp, inputs: &[Varnode], out_size: u8) -> Option<u64> {
             let (a, b) = two(inputs)?;
             let bits = out_size as u32 * 8;
             let shift = b.offset & mask_for_size(b.size);
-            if shift >= bits as u64 { Some(0) } else { Some((a.offset << shift as u32) & mask) }
+            if shift >= bits as u64 {
+                Some(0)
+            } else {
+                Some((a.offset << shift as u32) & mask)
+            }
         }
         IrOp::IntRight => {
             let (a, b) = two(inputs)?;
             let bits = out_size as u32 * 8;
             let shift = b.offset & mask_for_size(b.size);
             let av = a.offset & mask;
-            if shift >= bits as u64 { Some(0) } else { Some(av >> shift as u32) }
+            if shift >= bits as u64 {
+                Some(0)
+            } else {
+                Some(av >> shift as u32)
+            }
         }
         IrOp::IntSright => {
             let (a, b) = two(inputs)?;
@@ -690,11 +741,19 @@ fn evaluate(op: IrOp, inputs: &[Varnode], out_size: u8) -> Option<u64> {
 }
 
 fn one(inputs: &[Varnode]) -> Option<Varnode> {
-    if inputs.len() == 1 { Some(inputs[0]) } else { None }
+    if inputs.len() == 1 {
+        Some(inputs[0])
+    } else {
+        None
+    }
 }
 
 fn two(inputs: &[Varnode]) -> Option<(Varnode, Varnode)> {
-    if inputs.len() == 2 { Some((inputs[0], inputs[1])) } else { None }
+    if inputs.len() == 2 {
+        Some((inputs[0], inputs[1]))
+    } else {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -710,7 +769,10 @@ struct SccpResults {
 impl SccpResults {
     fn get_value(&self, sv: &SsaVarnode) -> LatticeValue {
         if sv.base.space == SpaceId::Const {
-            return LatticeValue::Constant { value: sv.base.offset, size: sv.base.size };
+            return LatticeValue::Constant {
+                value: sv.base.offset,
+                size: sv.base.size,
+            };
         }
         self.values.get(sv).copied().unwrap_or(LatticeValue::Top)
     }
@@ -879,31 +941,24 @@ mod tests {
 
         // BB1: v1 = 5
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns.push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c5_4], 0x2010));
-        bb1.insns.push(IrInsn::without_output(
-            IrOp::Branch,
-            smallvec![],
-            0x2014,
-        ));
+        bb1.insns
+            .push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c5_4], 0x2010));
+        bb1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x2014));
         bb1.successors = smallvec![BlockId(3)];
 
         // BB2: v1 = 10
         let mut bb2 = BasicBlock::new(BlockId(2));
-        bb2.insns.push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c10], 0x2020));
-        bb2.insns.push(IrInsn::without_output(
-            IrOp::Branch,
-            smallvec![],
-            0x2024,
-        ));
+        bb2.insns
+            .push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c10], 0x2020));
+        bb2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x2024));
         bb2.successors = smallvec![BlockId(3)];
 
         // BB3: use v1 (phi merge point), return.
         let mut bb3 = BasicBlock::new(BlockId(3));
-        bb3.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![v1],
-            0x2030,
-        ));
+        bb3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![v1], 0x2030));
 
         func.insert_block(bb0);
         func.insert_block(bb1);
@@ -1011,9 +1066,15 @@ mod tests {
         solver.solve();
 
         // BB2 should be unreachable.
-        assert!(!solver.reachable.contains(&BlockId(2)), "BB2 should be unreachable");
+        assert!(
+            !solver.reachable.contains(&BlockId(2)),
+            "BB2 should be unreachable"
+        );
         // BB1 should be reachable.
-        assert!(solver.reachable.contains(&BlockId(1)), "BB1 should be reachable");
+        assert!(
+            solver.reachable.contains(&BlockId(1)),
+            "BB1 should be reachable"
+        );
     }
 
     /// Phi with two reachable inputs (5 and 10) → Bottom (not constant).
@@ -1037,23 +1098,24 @@ mod tests {
 
         // BB1: v1 = 5
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns.push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c5], 0x4010));
-        bb1.insns.push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x4014));
+        bb1.insns
+            .push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c5], 0x4010));
+        bb1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x4014));
         bb1.successors = smallvec![BlockId(3)];
 
         // BB2: v1 = 10
         let mut bb2 = BasicBlock::new(BlockId(2));
-        bb2.insns.push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c10], 0x4020));
-        bb2.insns.push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x4024));
+        bb2.insns
+            .push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c10], 0x4020));
+        bb2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x4024));
         bb2.successors = smallvec![BlockId(3)];
 
         // BB3: phi(v1) → should be Bottom since both branches contribute different values.
         let mut bb3 = BasicBlock::new(BlockId(3));
-        bb3.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![v1],
-            0x4030,
-        ));
+        bb3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![v1], 0x4030));
 
         func.insert_block(bb0);
         func.insert_block(bb1);
@@ -1105,23 +1167,24 @@ mod tests {
 
         // BB1: v1 = 5
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns.push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c5], 0x5010));
-        bb1.insns.push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x5014));
+        bb1.insns
+            .push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c5], 0x5010));
+        bb1.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x5014));
         bb1.successors = smallvec![BlockId(3)];
 
         // BB2: v1 = 10 (unreachable)
         let mut bb2 = BasicBlock::new(BlockId(2));
-        bb2.insns.push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c10], 0x5020));
-        bb2.insns.push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x5024));
+        bb2.insns
+            .push(IrInsn::with_output(IrOp::Copy, v1, smallvec![c10], 0x5020));
+        bb2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x5024));
         bb2.successors = smallvec![BlockId(3)];
 
         // BB3: phi(v1) → should resolve to 5.
         let mut bb3 = BasicBlock::new(BlockId(3));
-        bb3.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![v1],
-            0x5030,
-        ));
+        bb3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![v1], 0x5030));
 
         func.insert_block(bb0);
         func.insert_block(bb1);
@@ -1134,7 +1197,10 @@ mod tests {
         solver.solve();
 
         // BB2 should be unreachable.
-        assert!(!solver.reachable.contains(&BlockId(2)), "BB2 should be unreachable");
+        assert!(
+            !solver.reachable.contains(&BlockId(2)),
+            "BB2 should be unreachable"
+        );
 
         // The phi at BB3 for v1 should resolve to Constant(5).
         if let Some(phis) = ssa.phi_map.get(&BlockId(3)) {

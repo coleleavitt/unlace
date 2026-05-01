@@ -118,59 +118,59 @@ pub enum V850Op {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BranchCond {
     /// BV:  OV == 1
-    V   = 0,
+    V = 0,
     /// BL:  CY == 1  (unsigned below)
-    L   = 1,
+    L = 1,
     /// BE:  Z == 1
-    E   = 2,
+    E = 2,
     /// BNH: CY == 1 || Z == 1  (unsigned not higher)
-    Nh  = 3,
+    Nh = 3,
     /// BN:  S == 1
-    N   = 4,
+    N = 4,
     /// BR:  always (unconditional short branch)
-    R   = 5,
+    R = 5,
     /// BLT: S != OV  (signed less)
-    Lt  = 6,
+    Lt = 6,
     /// BLE: Z == 1 || S != OV  (signed less or equal)
-    Le  = 7,
+    Le = 7,
     /// BNV: OV == 0
-    Nv  = 8,
+    Nv = 8,
     /// BNL: CY == 0  (unsigned above or equal)
-    Nl  = 9,
+    Nl = 9,
     /// BNE: Z == 0
-    Ne  = 10,
+    Ne = 10,
     /// BH:  CY == 0 && Z == 0  (unsigned higher)
-    H   = 11,
+    H = 11,
     /// BP:  S == 0
-    P   = 12,
+    P = 12,
     /// BSA: SAT == 1
-    Sa  = 13,
+    Sa = 13,
     /// BGE: S == OV  (signed greater or equal)
-    Ge  = 14,
+    Ge = 14,
     /// BGT: Z == 0 && S == OV  (signed greater)
-    Gt  = 15,
+    Gt = 15,
 }
 
 impl BranchCond {
     fn from_bits(bits: u8) -> Self {
         match bits & 0xF {
-            0  => Self::V,
-            1  => Self::L,
-            2  => Self::E,
-            3  => Self::Nh,
-            4  => Self::N,
-            5  => Self::R,
-            6  => Self::Lt,
-            7  => Self::Le,
-            8  => Self::Nv,
-            9  => Self::Nl,
+            0 => Self::V,
+            1 => Self::L,
+            2 => Self::E,
+            3 => Self::Nh,
+            4 => Self::N,
+            5 => Self::R,
+            6 => Self::Lt,
+            7 => Self::Le,
+            8 => Self::Nv,
+            9 => Self::Nl,
             10 => Self::Ne,
             11 => Self::H,
             12 => Self::P,
             13 => Self::Sa,
             14 => Self::Ge,
             15 => Self::Gt,
-            _  => unreachable!(),
+            _ => unreachable!(),
         }
     }
 }
@@ -208,7 +208,10 @@ pub fn decode(bytes: &[u8], _addr: u64) -> Option<V850Insn> {
     // We skip these for MVP — emit Unknown
     if opcode_10_5 == 0x3F {
         let len = if bytes.len() >= 4 { 4 } else { 2 };
-        return Some(V850Insn { op: V850Op::Unknown { hw0 }, len });
+        return Some(V850Insn {
+            op: V850Op::Unknown { hw0 },
+            len,
+        });
     }
 
     // -----------------------------------------------------------------
@@ -240,10 +243,16 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
             if reg1 == 0 && reg2 == 0 {
                 V850Op::Nop
             } else {
-                V850Op::Mov { dst: reg2, src: reg1 }
+                V850Op::Mov {
+                    dst: reg2,
+                    src: reg1,
+                }
             }
         }
-        (0b0000, 0b01) => V850Op::Not { dst: reg2, src: reg1 },
+        (0b0000, 0b01) => V850Op::Not {
+            dst: reg2,
+            src: reg1,
+        },
         (0b0000, 0b10) => {
             // DIVH / SWITCH / FETRAP / RIE — complex dispatch, emit Unknown for MVP
             V850Op::Unknown { hw0 }
@@ -283,51 +292,93 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
             if reg2 == 0 {
                 V850Op::Sxh { reg: reg1 }
             } else {
-                V850Op::Mulh { dst: reg2, src: reg1 }
+                V850Op::Mulh {
+                    dst: reg2,
+                    src: reg1,
+                }
             }
         }
 
         // Format I: bitwise
-        (0b0010, 0b00) => V850Op::Or { dst: reg2, src: reg1 },
-        (0b0010, 0b01) => V850Op::Xor { dst: reg2, src: reg1 },
-        (0b0010, 0b10) => V850Op::And { dst: reg2, src: reg1 },
+        (0b0010, 0b00) => V850Op::Or {
+            dst: reg2,
+            src: reg1,
+        },
+        (0b0010, 0b01) => V850Op::Xor {
+            dst: reg2,
+            src: reg1,
+        },
+        (0b0010, 0b10) => V850Op::And {
+            dst: reg2,
+            src: reg1,
+        },
         (0b0010, 0b11) => V850Op::Tst { reg1, reg2 },
 
         // Format I: arithmetic
-        (0b0011, 0b00) => V850Op::Subr { dst: reg2, src: reg1 },
-        (0b0011, 0b01) => V850Op::Sub { dst: reg2, src: reg1 },
-        (0b0011, 0b10) => V850Op::Add { dst: reg2, src: reg1 },
+        (0b0011, 0b00) => V850Op::Subr {
+            dst: reg2,
+            src: reg1,
+        },
+        (0b0011, 0b01) => V850Op::Sub {
+            dst: reg2,
+            src: reg1,
+        },
+        (0b0011, 0b10) => V850Op::Add {
+            dst: reg2,
+            src: reg1,
+        },
         (0b0011, 0b11) => V850Op::Cmp { reg1, reg2 },
 
         // Format II: immediate operations
         (0b0100, 0b00) => {
             if reg2 != 0 {
-                V850Op::MovImm5 { dst: reg2, imm: sign_ext(reg1 as u32, 5) }
+                V850Op::MovImm5 {
+                    dst: reg2,
+                    imm: sign_ext(reg1 as u32, 5),
+                }
             } else {
                 V850Op::Unknown { hw0 } // CALLT
             }
         }
         (0b0100, 0b01) => V850Op::Unknown { hw0 }, // SATADD imm5 / CALLT
-        (0b0100, 0b10) => V850Op::AddImm5 { dst: reg2, imm: sign_ext(reg1 as u32, 5) },
-        (0b0100, 0b11) => V850Op::CmpImm5 { reg2, imm: sign_ext(reg1 as u32, 5) },
+        (0b0100, 0b10) => V850Op::AddImm5 {
+            dst: reg2,
+            imm: sign_ext(reg1 as u32, 5),
+        },
+        (0b0100, 0b11) => V850Op::CmpImm5 {
+            reg2,
+            imm: sign_ext(reg1 as u32, 5),
+        },
 
         // Format II: shifts
-        (0b0101, 0b00) => V850Op::ShrImm { dst: reg2, shift: reg1 },
-        (0b0101, 0b01) => V850Op::SarImm { dst: reg2, shift: reg1 },
-        (0b0101, 0b10) => V850Op::ShlImm { dst: reg2, shift: reg1 },
+        (0b0101, 0b00) => V850Op::ShrImm {
+            dst: reg2,
+            shift: reg1,
+        },
+        (0b0101, 0b01) => V850Op::SarImm {
+            dst: reg2,
+            shift: reg1,
+        },
+        (0b0101, 0b10) => V850Op::ShlImm {
+            dst: reg2,
+            shift: reg1,
+        },
         (0b0101, 0b11) => {
             // MULH imm5 / JR 16-bit / JARL 16-bit
             if reg2 != 0 {
-                V850Op::MulhImm5 { dst: reg2, imm: sign_ext(reg1 as u32, 5) }
+                V850Op::MulhImm5 {
+                    dst: reg2,
+                    imm: sign_ext(reg1 as u32, 5),
+                }
             } else {
                 V850Op::Unknown { hw0 }
             }
         }
 
         // Format IV: short load/store (ep-relative) — skip for MVP
-        (0b0110, _) | (0b0111, _) |
-        (0b1000, _) | (0b1001, _) |
-        (0b1010, _) => V850Op::Unknown { hw0 },
+        (0b0110, _) | (0b0111, _) | (0b1000, _) | (0b1001, _) | (0b1010, _) => {
+            V850Op::Unknown { hw0 }
+        }
 
         // Format III: conditional branch
         (0b1011, _) => {
@@ -352,22 +403,26 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
 // 32-bit instruction decoder
 // ---------------------------------------------------------------------------
 
-fn decode_32bit(
-    hw0: u16, hw1: u16,
-    bits_10_7: u16, bits_6_5: u16,
-    reg1: u8, reg2: u8,
-) -> V850Insn {
+fn decode_32bit(hw0: u16, hw1: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> V850Insn {
     let op = match (bits_10_7, bits_6_5) {
         // Format VI: ADDI imm16, reg1, reg2
         (0b1100, 0b00) => {
             let imm = sign_ext(hw1 as u32, 16);
-            V850Op::Addi { dst: reg2, src: reg1, imm }
+            V850Op::Addi {
+                dst: reg2,
+                src: reg1,
+                imm,
+            }
         }
         // Format VI: MOVEA imm16, reg1, reg2
         (0b1100, 0b01) => {
             if reg2 != 0 {
                 let imm = sign_ext(hw1 as u32, 16);
-                V850Op::Movea { dst: reg2, src: reg1, imm }
+                V850Op::Movea {
+                    dst: reg2,
+                    src: reg1,
+                    imm,
+                }
             } else {
                 V850Op::Unknown { hw0 } // MOV imm32
             }
@@ -375,7 +430,11 @@ fn decode_32bit(
         // Format VI: MOVHI imm16, reg1, reg2
         (0b1100, 0b10) => {
             if reg2 != 0 {
-                V850Op::Movhi { dst: reg2, src: reg1, imm: hw1 }
+                V850Op::Movhi {
+                    dst: reg2,
+                    src: reg1,
+                    imm: hw1,
+                }
             } else {
                 V850Op::Unknown { hw0 } // DISPOSE
             }
@@ -384,42 +443,78 @@ fn decode_32bit(
         (0b1100, 0b11) => V850Op::Unknown { hw0 },
 
         // Format VI: ORI imm16, reg1, reg2
-        (0b1101, 0b00) => V850Op::Ori { dst: reg2, src: reg1, imm: hw1 },
+        (0b1101, 0b00) => V850Op::Ori {
+            dst: reg2,
+            src: reg1,
+            imm: hw1,
+        },
         // Format VI: XORI imm16, reg1, reg2
-        (0b1101, 0b01) => V850Op::Xori { dst: reg2, src: reg1, imm: hw1 },
+        (0b1101, 0b01) => V850Op::Xori {
+            dst: reg2,
+            src: reg1,
+            imm: hw1,
+        },
         // Format VI: ANDI imm16, reg1, reg2
-        (0b1101, 0b10) => V850Op::Andi { dst: reg2, src: reg1, imm: hw1 },
+        (0b1101, 0b10) => V850Op::Andi {
+            dst: reg2,
+            src: reg1,
+            imm: hw1,
+        },
         // MULHI / JMP disp32
         (0b1101, 0b11) => V850Op::Unknown { hw0 },
 
         // Format VII: LD.B disp16[reg1], reg2
         (0b1110, 0b00) => {
             let disp = sign_ext(hw1 as u32, 16);
-            V850Op::LdB { dst: reg2, base: reg1, disp }
+            V850Op::LdB {
+                dst: reg2,
+                base: reg1,
+                disp,
+            }
         }
         // Format VII: LD.H / LD.W
         (0b1110, 0b01) => {
             let disp_raw = ((hw1 >> 1) & 0x7FFF) as u32;
             let disp = sign_ext(disp_raw << 1, 16);
             if hw1 & 1 == 0 {
-                V850Op::LdH { dst: reg2, base: reg1, disp }
+                V850Op::LdH {
+                    dst: reg2,
+                    base: reg1,
+                    disp,
+                }
             } else {
-                V850Op::LdW { dst: reg2, base: reg1, disp }
+                V850Op::LdW {
+                    dst: reg2,
+                    base: reg1,
+                    disp,
+                }
             }
         }
         // Format VII: ST.B reg2, disp16[reg1]
         (0b1110, 0b10) => {
             let disp = sign_ext(hw1 as u32, 16);
-            V850Op::StB { src: reg2, base: reg1, disp }
+            V850Op::StB {
+                src: reg2,
+                base: reg1,
+                disp,
+            }
         }
         // Format VII: ST.H / ST.W
         (0b1110, 0b11) => {
             let disp_raw = ((hw1 >> 1) & 0x7FFF) as u32;
             let disp = sign_ext(disp_raw << 1, 16);
             if hw1 & 1 == 0 {
-                V850Op::StH { src: reg2, base: reg1, disp }
+                V850Op::StH {
+                    src: reg2,
+                    base: reg1,
+                    disp,
+                }
             } else {
-                V850Op::StW { src: reg2, base: reg1, disp }
+                V850Op::StW {
+                    src: reg2,
+                    base: reg1,
+                    disp,
+                }
             }
         }
 
@@ -433,7 +528,10 @@ fn decode_32bit(
                 if reg2 == 0 {
                     V850Op::Jr { offset: disp22 }
                 } else {
-                    V850Op::Jarl { link: reg2, offset: disp22 }
+                    V850Op::Jarl {
+                        link: reg2,
+                        offset: disp22,
+                    }
                 }
             } else {
                 V850Op::Unknown { hw0 } // Format XIV (48-bit)
@@ -592,7 +690,13 @@ mod tests {
         let hw: u16 = (disp_hi << 11) | (0b1011 << 7) | (disp_lo << 4) | cond;
         let bytes = hw.to_le_bytes();
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::Bcond { cond: BranchCond::Ne, offset: 8 });
+        assert_eq!(
+            insn.op,
+            V850Op::Bcond {
+                cond: BranchCond::Ne,
+                offset: 8
+            }
+        );
     }
 
     #[test]
@@ -606,7 +710,14 @@ mod tests {
         bytes.extend_from_slice(&hw0.to_le_bytes());
         bytes.extend_from_slice(&hw1.to_le_bytes());
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::Addi { dst: 5, src: 3, imm: 256 });
+        assert_eq!(
+            insn.op,
+            V850Op::Addi {
+                dst: 5,
+                src: 3,
+                imm: 256
+            }
+        );
         assert_eq!(insn.len, 4);
     }
 
@@ -621,7 +732,14 @@ mod tests {
         bytes.extend_from_slice(&hw0.to_le_bytes());
         bytes.extend_from_slice(&hw1.to_le_bytes());
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::LdW { dst: 5, base: 3, disp: 0x10 });
+        assert_eq!(
+            insn.op,
+            V850Op::LdW {
+                dst: 5,
+                base: 3,
+                disp: 0x10
+            }
+        );
         assert_eq!(insn.len, 4);
     }
 
@@ -634,7 +752,14 @@ mod tests {
         bytes.extend_from_slice(&hw0.to_le_bytes());
         bytes.extend_from_slice(&hw1.to_le_bytes());
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::StW { src: 5, base: 3, disp: 0x20 });
+        assert_eq!(
+            insn.op,
+            V850Op::StW {
+                src: 5,
+                base: 3,
+                disp: 0x20
+            }
+        );
     }
 
     #[test]
@@ -646,7 +771,14 @@ mod tests {
         bytes.extend_from_slice(&hw0.to_le_bytes());
         bytes.extend_from_slice(&hw1.to_le_bytes());
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::LdB { dst: 2, base: 1, disp: 10 });
+        assert_eq!(
+            insn.op,
+            V850Op::LdB {
+                dst: 2,
+                base: 1,
+                disp: 10
+            }
+        );
     }
 
     #[test]
@@ -677,7 +809,13 @@ mod tests {
         bytes.extend_from_slice(&hw0.to_le_bytes());
         bytes.extend_from_slice(&hw1.to_le_bytes());
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::Jarl { link: 31, offset: 0x200 });
+        assert_eq!(
+            insn.op,
+            V850Op::Jarl {
+                link: 31,
+                offset: 0x200
+            }
+        );
     }
 
     #[test]
@@ -697,7 +835,14 @@ mod tests {
         bytes.extend_from_slice(&hw0.to_le_bytes());
         bytes.extend_from_slice(&hw1.to_le_bytes());
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::Movea { dst: 5, src: 3, imm: -256 });
+        assert_eq!(
+            insn.op,
+            V850Op::Movea {
+                dst: 5,
+                src: 3,
+                imm: -256
+            }
+        );
     }
 
     #[test]
@@ -709,7 +854,14 @@ mod tests {
         bytes.extend_from_slice(&hw0.to_le_bytes());
         bytes.extend_from_slice(&hw1.to_le_bytes());
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::Movhi { dst: 5, src: 0, imm: 0x1234 });
+        assert_eq!(
+            insn.op,
+            V850Op::Movhi {
+                dst: 5,
+                src: 0,
+                imm: 0x1234
+            }
+        );
     }
 
     #[test]
@@ -726,7 +878,14 @@ mod tests {
         bytes.extend_from_slice(&hw0.to_le_bytes());
         bytes.extend_from_slice(&hw1.to_le_bytes());
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::Andi { dst: 5, src: 3, imm: 0x00FF });
+        assert_eq!(
+            insn.op,
+            V850Op::Andi {
+                dst: 5,
+                src: 3,
+                imm: 0x00FF
+            }
+        );
     }
 
     #[test]
@@ -737,7 +896,14 @@ mod tests {
         bytes.extend_from_slice(&hw0.to_le_bytes());
         bytes.extend_from_slice(&hw1.to_le_bytes());
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::Ori { dst: 5, src: 3, imm: 0xFF00 });
+        assert_eq!(
+            insn.op,
+            V850Op::Ori {
+                dst: 5,
+                src: 3,
+                imm: 0xFF00
+            }
+        );
     }
 
     #[test]
@@ -748,6 +914,13 @@ mod tests {
         bytes.extend_from_slice(&hw0.to_le_bytes());
         bytes.extend_from_slice(&hw1.to_le_bytes());
         let insn = decode(&bytes, 0).unwrap();
-        assert_eq!(insn.op, V850Op::Xori { dst: 5, src: 3, imm: 0x1234 });
+        assert_eq!(
+            insn.op,
+            V850Op::Xori {
+                dst: 5,
+                src: 3,
+                imm: 0x1234
+            }
+        );
     }
 }

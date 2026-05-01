@@ -25,8 +25,8 @@ pub use elf::ElfLoader;
 pub use error::LoadError;
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
 pub use image::{
-    ArchId, BinaryImage, DebugRecord, Endian, LoadConfig, RelocKind, Relocation, Section,
-    SectionFlags, Symbol, SymbolKind,
+    ArchId, BinaryImage, BoundImport, DebugRecord, Endian, LoadConfig, RelocKind, Relocation,
+    ResourceEntry, RichHeader, RichRecord, Section, SectionFlags, Symbol, SymbolKind,
 };
 pub use macho::MachoLoader;
 pub use pe::PeLoader;

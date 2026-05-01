@@ -18,9 +18,9 @@ use unlace_ir::{
 // ---------------------------------------------------------------------------
 
 const RV_REG_NAMES: [&str; 32] = [
-    "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13",
-    "x14", "x15", "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26",
-    "x27", "x28", "x29", "x30", "x31",
+    "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14",
+    "x15", "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27",
+    "x28", "x29", "x30", "x31",
 ];
 
 /// Offset of the pc register in the register file.
@@ -312,8 +312,11 @@ impl LiftCtx {
 
 /// Extract (rd, rs1, rs2) from a 3-operand R-type instruction.
 fn ops_rrr(operands: &[RiscVOperand]) -> Option<(RegId, RegId, RegId)> {
-    if let [RiscVOperand::Reg(rd), RiscVOperand::Reg(rs1), RiscVOperand::Reg(rs2)] =
-        operands
+    if let [
+        RiscVOperand::Reg(rd),
+        RiscVOperand::Reg(rs1),
+        RiscVOperand::Reg(rs2),
+    ] = operands
     {
         Some((*rd, *rs1, *rs2))
     } else {
@@ -323,8 +326,11 @@ fn ops_rrr(operands: &[RiscVOperand]) -> Option<(RegId, RegId, RegId)> {
 
 /// Extract (rd, rs1, imm) from a 3-operand I-type instruction.
 fn ops_rri(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
-    if let [RiscVOperand::Reg(rd), RiscVOperand::Reg(rs1), RiscVOperand::Imm(imm)] =
-        operands
+    if let [
+        RiscVOperand::Reg(rd),
+        RiscVOperand::Reg(rs1),
+        RiscVOperand::Imm(imm),
+    ] = operands
     {
         Some((*rd, *rs1, *imm))
     } else {
@@ -344,8 +350,11 @@ fn ops_ri(operands: &[RiscVOperand]) -> Option<(RegId, i64)> {
 /// Extract (rs1, rs2, imm) from a B-type branch instruction.
 /// capstone encodes branches as: rs1, rs2, imm (branch target offset already resolved).
 fn ops_branch(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
-    if let [RiscVOperand::Reg(rs1), RiscVOperand::Reg(rs2), RiscVOperand::Imm(target)] =
-        operands
+    if let [
+        RiscVOperand::Reg(rs1),
+        RiscVOperand::Reg(rs2),
+        RiscVOperand::Imm(target),
+    ] = operands
     {
         Some((*rs1, *rs2, *target))
     } else {
@@ -356,9 +365,7 @@ fn ops_branch(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
 /// Extract (rd, mem(base, offset)) from a load instruction.
 fn ops_load(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
     match operands {
-        [RiscVOperand::Reg(rd), RiscVOperand::Mem(mem)] => {
-            Some((*rd, mem.base(), mem.disp()))
-        }
+        [RiscVOperand::Reg(rd), RiscVOperand::Mem(mem)] => Some((*rd, mem.base(), mem.disp())),
         _ => None,
     }
 }
@@ -366,9 +373,7 @@ fn ops_load(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
 /// Extract (src, mem(base, offset)) from a store instruction.
 fn ops_store(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
     match operands {
-        [RiscVOperand::Reg(src), RiscVOperand::Mem(mem)] => {
-            Some((*src, mem.base(), mem.disp()))
-        }
+        [RiscVOperand::Reg(src), RiscVOperand::Mem(mem)] => Some((*src, mem.base(), mem.disp())),
         _ => None,
     }
 }
@@ -431,9 +436,10 @@ impl Lifter for RiscVLifter {
             .disasm_count(bytes, addr, 1)
             .map_err(|e| LiftError::Decode(format!("capstone: {e}")))?;
 
-        let insn = insns.as_ref().first().ok_or_else(|| {
-            LiftError::Decode(format!("no instruction decoded at {addr:#x}"))
-        })?;
+        let insn = insns
+            .as_ref()
+            .first()
+            .ok_or_else(|| LiftError::Decode(format!("no instruction decoded at {addr:#x}")))?;
 
         let detail = self
             .cs
@@ -474,7 +480,13 @@ unsafe impl Sync for RiscVLifter {}
 // Instruction dispatch
 // ---------------------------------------------------------------------------
 
-fn dispatch_insn(ctx: &mut LiftCtx, insn_id: u32, operands: &[RiscVOperand], addr: u64, mnemonic: &str) {
+fn dispatch_insn(
+    ctx: &mut LiftCtx,
+    insn_id: u32,
+    operands: &[RiscVOperand],
+    addr: u64,
+    mnemonic: &str,
+) {
     use RiscVInsn::*;
 
     let id = insn_id;
@@ -549,7 +561,11 @@ fn dispatch_insn(ctx: &mut LiftCtx, insn_id: u32, operands: &[RiscVOperand], add
                     ctx.write_reg(*rd, src);
                 }
                 // addi/li rd, rs, imm: 3 operands
-                [RiscVOperand::Reg(rd), RiscVOperand::Reg(rs1), RiscVOperand::Imm(imm)] => {
+                [
+                    RiscVOperand::Reg(rd),
+                    RiscVOperand::Reg(rs1),
+                    RiscVOperand::Imm(imm),
+                ] => {
                     ctx.lift_alu_ri(IrOp::IntAdd, *rd, *rs1, *imm);
                 }
                 _ => ctx.emit_unimplemented(),
@@ -753,11 +769,7 @@ fn dispatch_insn(ctx: &mut LiftCtx, insn_id: u32, operands: &[RiscVOperand], add
                 // ret: 0 operands (jalr x0, 0(x1))
                 [] => {
                     let ra_vn = read_reg(RegId(RiscVReg::RISCV_REG_X1 as u16));
-                    ctx.emit(IrInsn::without_output(
-                        IrOp::Return,
-                        smallvec![ra_vn],
-                        addr,
-                    ));
+                    ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![ra_vn], addr));
                 }
                 // jr rs or jalr rs: 1 register operand
                 // "jr" → rd=x0 (branch), "jalr" → rd=ra (call)
@@ -790,7 +802,11 @@ fn dispatch_insn(ctx: &mut LiftCtx, insn_id: u32, operands: &[RiscVOperand], add
                     }
                 }
                 // jalr rd, rs, imm: 3 operands (full form)
-                [RiscVOperand::Reg(rd), RiscVOperand::Reg(rs1), RiscVOperand::Imm(imm)] => {
+                [
+                    RiscVOperand::Reg(rd),
+                    RiscVOperand::Reg(rs1),
+                    RiscVOperand::Imm(imm),
+                ] => {
                     let ret_addr = Varnode::constant(addr.wrapping_add(4), 8);
                     ctx.write_reg(*rd, ret_addr);
 
@@ -1165,14 +1181,18 @@ mod tests {
     #[test]
     fn test_add() {
         let bytes = 0x003100B3u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode ADD");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode ADD");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
         // Should write to x1 (register offset 8)
-        assert!(result.ir_ops.iter().any(|i| {
-            i.op == IrOp::Copy
-                && i.output == Some(Varnode::reg(8, 8))
-        }));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 8)) })
+        );
     }
 
     // -- ADDI rd, rs1, imm -----------------------------------------------
@@ -1180,7 +1200,9 @@ mod tests {
     #[test]
     fn test_addi() {
         let bytes = 0x00310093u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode ADDI");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode ADDI");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
     }
@@ -1190,7 +1212,9 @@ mod tests {
     #[test]
     fn test_sub() {
         let bytes = 0x403100B3u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SUB");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SUB");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
     }
@@ -1200,7 +1224,9 @@ mod tests {
     #[test]
     fn test_and() {
         let bytes = 0x003170B3u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode AND");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode AND");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
     }
@@ -1210,7 +1236,9 @@ mod tests {
     #[test]
     fn test_andi() {
         let bytes = 0x00717093u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode ANDI");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode ANDI");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
     }
@@ -1220,7 +1248,9 @@ mod tests {
     #[test]
     fn test_or() {
         let bytes = 0x003160B3u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode OR");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode OR");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
     }
@@ -1230,7 +1260,9 @@ mod tests {
     #[test]
     fn test_ori() {
         let bytes = 0x00716093u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode ORI");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode ORI");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
     }
@@ -1240,7 +1272,9 @@ mod tests {
     #[test]
     fn test_xor() {
         let bytes = 0x003140B3u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode XOR");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode XOR");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntXor));
     }
@@ -1250,7 +1284,9 @@ mod tests {
     #[test]
     fn test_xori() {
         let bytes = 0x00714093u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode XORI");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode XORI");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntXor));
     }
@@ -1260,7 +1296,9 @@ mod tests {
     #[test]
     fn test_sll() {
         let bytes = 0x003110B3u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SLL");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SLL");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
     }
@@ -1270,7 +1308,9 @@ mod tests {
     #[test]
     fn test_srl() {
         let bytes = 0x003150B3u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SRL");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SRL");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRight));
     }
@@ -1280,7 +1320,9 @@ mod tests {
     #[test]
     fn test_sra() {
         let bytes = 0x403150B3u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SRA");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SRA");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSright));
     }
@@ -1290,7 +1332,9 @@ mod tests {
     #[test]
     fn test_slt() {
         let bytes = 0x003120B3u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SLT");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SLT");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSless));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
@@ -1301,7 +1345,9 @@ mod tests {
     #[test]
     fn test_sltu() {
         let bytes = 0x003130B3u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SLTU");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SLTU");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLess));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
@@ -1312,7 +1358,9 @@ mod tests {
     #[test]
     fn test_beq() {
         let bytes = 0x00208463u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode BEQ");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode BEQ");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntEqual));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Cbranch));
@@ -1323,7 +1371,9 @@ mod tests {
     #[test]
     fn test_bne() {
         let bytes = 0x00209463u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode BNE");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode BNE");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntNotequal));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Cbranch));
@@ -1334,7 +1384,9 @@ mod tests {
     #[test]
     fn test_blt() {
         let bytes = 0x0020C463u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode BLT");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode BLT");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSless));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Cbranch));
@@ -1345,7 +1397,9 @@ mod tests {
     #[test]
     fn test_bge() {
         let bytes = 0x0020D463u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode BGE");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode BGE");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSless));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate));
@@ -1357,21 +1411,27 @@ mod tests {
     #[test]
     fn test_jal() {
         let bytes = 0x008000EFu32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode JAL");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode JAL");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Branch));
         // Saves return address in x1 (ra, offset=8)
-        assert!(result.ir_ops.iter().any(|i| {
-            i.op == IrOp::Copy
-                && i.output == Some(Varnode::reg(8, 8))
-        }));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 8)) })
+        );
     }
 
     // jalr x1, 0(x2) → 0x000100E7 (capstone pseudo: jalr sp, implicit rd=ra)
     #[test]
     fn test_jalr_call() {
         let bytes = 0x000100E7u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode JALR");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode JALR");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callind));
     }
@@ -1380,7 +1440,9 @@ mod tests {
     #[test]
     fn test_jalr_ret() {
         let bytes = 0x00008067u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode RET");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode RET");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Return));
     }
@@ -1390,7 +1452,9 @@ mod tests {
     #[test]
     fn test_lw() {
         let bytes = 0x00012083u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode LW");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode LW");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
         // LW sign-extends 4->8
@@ -1402,11 +1466,18 @@ mod tests {
     #[test]
     fn test_ld() {
         let bytes = 0x00013083u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode LD");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode LD");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
         // LD loads 8 bytes, no extension needed
-        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::IntSext || i.op == IrOp::IntZext));
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntSext || i.op == IrOp::IntZext)
+        );
     }
 
     // -- SW rs2, offset(rs1) ---------------------------------------------
@@ -1414,7 +1485,9 @@ mod tests {
     #[test]
     fn test_sw() {
         let bytes = 0x00112023u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SW");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SW");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
         // SW truncates to 4 bytes
@@ -1426,7 +1499,9 @@ mod tests {
     #[test]
     fn test_sd() {
         let bytes = 0x00113023u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SD");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SD");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
         // SD stores 8 bytes, no truncation
@@ -1438,12 +1513,13 @@ mod tests {
     #[test]
     fn test_lui() {
         let bytes = 0x123450B7u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode LUI");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode LUI");
         assert_eq!(result.len, 4);
         // LUI writes immediate to rd
         assert!(result.ir_ops.iter().any(|i| {
-            i.op == IrOp::Copy
-                && i.output == Some(Varnode::reg(8, 8)) // x1
+            i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 8)) // x1
         }));
     }
 
@@ -1452,14 +1528,18 @@ mod tests {
     #[test]
     fn test_auipc() {
         let bytes = 0x12345097u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode AUIPC");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode AUIPC");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
         // Should write to x1
-        assert!(result.ir_ops.iter().any(|i| {
-            i.op == IrOp::Copy
-                && i.output == Some(Varnode::reg(8, 8))
-        }));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 8)) })
+        );
     }
 
     // -- ECALL -----------------------------------------------------------
@@ -1467,7 +1547,9 @@ mod tests {
     #[test]
     fn test_ecall() {
         let bytes = 0x00000073u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode ECALL");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode ECALL");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
     }
@@ -1477,7 +1559,9 @@ mod tests {
     #[test]
     fn test_ebreak() {
         let bytes = 0x00100073u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode EBREAK");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode EBREAK");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
     }
@@ -1492,9 +1576,12 @@ mod tests {
         assert_eq!(result.len, 4);
         // Should have IntAdd but no Copy to x0 (offset 0)
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
-        assert!(!result.ir_ops.iter().any(|i| {
-            i.op == IrOp::Copy && i.output == Some(Varnode::reg(0, 8))
-        }));
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::Copy && i.output == Some(Varnode::reg(0, 8)) })
+        );
     }
 
     // -- x0 read produces constant zero ----------------------------------
@@ -1508,7 +1595,12 @@ mod tests {
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
         // One of the inputs should be constant 0
         let add_insn = result.ir_ops.iter().find(|i| i.op == IrOp::IntAdd).unwrap();
-        assert!(add_insn.inputs.iter().any(|v| *v == Varnode::constant(0, 8)));
+        assert!(
+            add_insn
+                .inputs
+                .iter()
+                .any(|v| *v == Varnode::constant(0, 8))
+        );
     }
 
     // -- Unknown instruction produces Unimplemented ----------------------
@@ -1517,7 +1609,9 @@ mod tests {
         // FENCE instruction (not in our dispatch table)
         // fence  → 0x0ff0000f
         let bytes = 0x0ff0000fu32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should not panic");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should not panic");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 
@@ -1526,7 +1620,9 @@ mod tests {
     fn test_lw_with_offset() {
         // lw x1, 16(x2)  → 0x01012083
         let bytes = 0x01012083u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode LW");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode LW");
         assert_eq!(result.len, 4);
         // Should have address computation (IntAdd for offset)
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
@@ -1538,7 +1634,9 @@ mod tests {
     fn test_sw_with_offset() {
         // sw x1, 16(x2) → 0x00112823
         let bytes = 0x00112823u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SW");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SW");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
     }
@@ -1548,7 +1646,9 @@ mod tests {
     #[test]
     fn test_slli() {
         let bytes = 0x00411093u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SLLI");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SLLI");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
     }
@@ -1557,7 +1657,9 @@ mod tests {
     #[test]
     fn test_srli() {
         let bytes = 0x00415093u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SRLI");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SRLI");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRight));
     }
@@ -1566,7 +1668,9 @@ mod tests {
     #[test]
     fn test_srai() {
         let bytes = 0x40415093u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SRAI");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SRAI");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSright));
     }
@@ -1576,7 +1680,9 @@ mod tests {
     #[test]
     fn test_slti() {
         let bytes = 0x00512093u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SLTI");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SLTI");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSless));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
@@ -1586,7 +1692,9 @@ mod tests {
     #[test]
     fn test_sltiu() {
         let bytes = 0x00513093u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode SLTIU");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SLTIU");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLess));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
@@ -1596,7 +1704,9 @@ mod tests {
     #[test]
     fn test_nop() {
         let bytes = 0x00000013u32.to_le_bytes();
-        let result = lifter().lift_insn(&bytes, 0x1000).expect("should decode NOP");
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode NOP");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.is_empty());
     }

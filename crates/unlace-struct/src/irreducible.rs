@@ -30,9 +30,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use unlace_ir::BlockId;
 use unlace_ir::cfg::ControlFlowGraph;
 use unlace_ir::ssa::SsaFunction;
-use unlace_ir::BlockId;
 
 /// A maximal irreducible CFG region.
 #[derive(Clone, Debug, PartialEq, Eq)]

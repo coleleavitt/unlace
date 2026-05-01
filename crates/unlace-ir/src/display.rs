@@ -31,11 +31,7 @@ fn fmt_type_tag(family: char, size_bytes: u8, f: &mut fmt::Formatter<'_>) -> fmt
 }
 
 /// Format a typed Varnode for output position: `<literal>:<type>`.
-fn fmt_typed_output(
-    vn: &Varnode,
-    op: IrOp,
-    f: &mut fmt::Formatter<'_>,
-) -> fmt::Result {
+fn fmt_typed_output(vn: &Varnode, op: IrOp, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     fmt_varnode_literal(vn, f)?;
     if let Some(family) = op.type_family() {
         fmt_type_tag(family, vn.size, f)?;

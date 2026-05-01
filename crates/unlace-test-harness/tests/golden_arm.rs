@@ -68,64 +68,114 @@ fn golden_self_compare(stem: &str) {
 // -- trivial (block_count=1): identity/return-constant stubs --
 
 #[test]
-fn golden_self_sub_101320() { golden_self_compare("sub_101320"); }
+fn golden_self_sub_101320() {
+    golden_self_compare("sub_101320");
+}
 #[test]
-fn golden_self_sub_101330() { golden_self_compare("sub_101330"); }
+fn golden_self_sub_101330() {
+    golden_self_compare("sub_101330");
+}
 #[test]
-fn golden_self_sub_101340() { golden_self_compare("sub_101340"); }
+fn golden_self_sub_101340() {
+    golden_self_compare("sub_101340");
+}
 #[test]
-fn golden_self_sub_101350() { golden_self_compare("sub_101350"); }
+fn golden_self_sub_101350() {
+    golden_self_compare("sub_101350");
+}
 #[test]
-fn golden_self_sub_101370() { golden_self_compare("sub_101370"); }
+fn golden_self_sub_101370() {
+    golden_self_compare("sub_101370");
+}
 #[test]
-fn golden_self_sub_101380() { golden_self_compare("sub_101380"); }
+fn golden_self_sub_101380() {
+    golden_self_compare("sub_101380");
+}
 #[test]
-fn golden_self_sub_1013A0() { golden_self_compare("sub_1013A0"); }
+fn golden_self_sub_1013A0() {
+    golden_self_compare("sub_1013A0");
+}
 #[test]
-fn golden_self_sub_1013C0() { golden_self_compare("sub_1013C0"); }
+fn golden_self_sub_1013C0() {
+    golden_self_compare("sub_1013C0");
+}
 
 // -- simple (block_count 1-4): small functions with locals --
 
 #[test]
-fn golden_self_sub_1016B0() { golden_self_compare("sub_1016B0"); }
+fn golden_self_sub_1016B0() {
+    golden_self_compare("sub_1016B0");
+}
 #[test]
-fn golden_self_sub_101750() { golden_self_compare("sub_101750"); }
+fn golden_self_sub_101750() {
+    golden_self_compare("sub_101750");
+}
 #[test]
-fn golden_self_sub_101770() { golden_self_compare("sub_101770"); }
+fn golden_self_sub_101770() {
+    golden_self_compare("sub_101770");
+}
 #[test]
-fn golden_self_sub_101790() { golden_self_compare("sub_101790"); }
+fn golden_self_sub_101790() {
+    golden_self_compare("sub_101790");
+}
 #[test]
-fn golden_self_sub_1017B0() { golden_self_compare("sub_1017B0"); }
+fn golden_self_sub_1017B0() {
+    golden_self_compare("sub_1017B0");
+}
 #[test]
-fn golden_self_sub_1017D0() { golden_self_compare("sub_1017D0"); }
+fn golden_self_sub_1017D0() {
+    golden_self_compare("sub_1017D0");
+}
 #[test]
-fn golden_self_sub_101850() { golden_self_compare("sub_101850"); }
+fn golden_self_sub_101850() {
+    golden_self_compare("sub_101850");
+}
 #[test]
-fn golden_self_sub_102090() { golden_self_compare("sub_102090"); }
+fn golden_self_sub_102090() {
+    golden_self_compare("sub_102090");
+}
 
 // -- branchy (block_count 2-5): control flow --
 
 #[test]
-fn golden_self_sub_101540() { golden_self_compare("sub_101540"); }
+fn golden_self_sub_101540() {
+    golden_self_compare("sub_101540");
+}
 #[test]
-fn golden_self_sub_1015C0() { golden_self_compare("sub_1015C0"); }
+fn golden_self_sub_1015C0() {
+    golden_self_compare("sub_1015C0");
+}
 #[test]
-fn golden_self_sub_1017F0() { golden_self_compare("sub_1017F0"); }
+fn golden_self_sub_1017F0() {
+    golden_self_compare("sub_1017F0");
+}
 #[test]
-fn golden_self_sub_1018D0() { golden_self_compare("sub_1018D0"); }
+fn golden_self_sub_1018D0() {
+    golden_self_compare("sub_1018D0");
+}
 #[test]
-fn golden_self_sub_102100() { golden_self_compare("sub_102100"); }
+fn golden_self_sub_102100() {
+    golden_self_compare("sub_102100");
+}
 
 // -- complex (block_count >= 7): large functions --
 
 #[test]
-fn golden_self_func() { golden_self_compare("func"); }
+fn golden_self_func() {
+    golden_self_compare("func");
+}
 #[test]
-fn golden_self_sub_100A70() { golden_self_compare("sub_100A70"); }
+fn golden_self_sub_100A70() {
+    golden_self_compare("sub_100A70");
+}
 #[test]
-fn golden_self_sub_101950() { golden_self_compare("sub_101950"); }
+fn golden_self_sub_101950() {
+    golden_self_compare("sub_101950");
+}
 #[test]
-fn golden_self_sub_101A40() { golden_self_compare("sub_101A40"); }
+fn golden_self_sub_101A40() {
+    golden_self_compare("sub_101A40");
+}
 
 // ---------------------------------------------------------------------------
 // Bulk golden corpus scan -- single test that iterates all 25 files.

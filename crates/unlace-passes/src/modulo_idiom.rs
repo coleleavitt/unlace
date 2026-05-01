@@ -152,12 +152,7 @@ fn apply_sub_rewrite(insns: &mut [IrInsn], sub_idx: usize, rw: SubRewrite) {
 fn neutralize_to_copy(insn: &mut IrInsn) {
     if let Some(out) = insn.output {
         let first_in = insn.inputs[0];
-        *insn = IrInsn::with_output(
-            IrOp::Copy,
-            out,
-            smallvec::smallvec![first_in],
-            insn.addr,
-        );
+        *insn = IrInsn::with_output(IrOp::Copy, out, smallvec::smallvec![first_in], insn.addr);
     }
 }
 
@@ -304,7 +299,12 @@ mod tests {
     }
 
     fn block_insns(ssa: &SsaFunction) -> &[IrInsn] {
-        &ssa.function.blocks.values().next().expect("has block").insns
+        &ssa.function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns
     }
 
     // ── Pattern 1: x - (x / 5) * 5 -> x % 5 ────────────────────────
@@ -317,18 +317,9 @@ mod tests {
         let sub_out = Varnode::unique(8, 4);
         let c5 = Varnode::constant(5, 4);
 
-        let div = IrInsn::with_output(
-            IrOp::IntDiv, div_out,
-            smallvec![v0, c5], 0x1000,
-        );
-        let mult = IrInsn::with_output(
-            IrOp::IntMult, mult_out,
-            smallvec![div_out, c5], 0x1004,
-        );
-        let sub = IrInsn::with_output(
-            IrOp::IntSub, sub_out,
-            smallvec![v0, mult_out], 0x1008,
-        );
+        let div = IrInsn::with_output(IrOp::IntDiv, div_out, smallvec![v0, c5], 0x1000);
+        let mult = IrInsn::with_output(IrOp::IntMult, mult_out, smallvec![div_out, c5], 0x1004);
+        let sub = IrInsn::with_output(IrOp::IntSub, sub_out, smallvec![v0, mult_out], 0x1008);
 
         let mut ssa = make_single_block_ssa(vec![div, mult, sub]);
         let changed = ModuloIdiomPass.run(&mut ssa).expect("pass should succeed");
@@ -356,18 +347,9 @@ mod tests {
         let sub_out = Varnode::unique(8, 4);
         let c5 = Varnode::constant(5, 4);
 
-        let sdiv = IrInsn::with_output(
-            IrOp::IntSdiv, div_out,
-            smallvec![v0, c5], 0x1000,
-        );
-        let mult = IrInsn::with_output(
-            IrOp::IntMult, mult_out,
-            smallvec![div_out, c5], 0x1004,
-        );
-        let sub = IrInsn::with_output(
-            IrOp::IntSub, sub_out,
-            smallvec![v0, mult_out], 0x1008,
-        );
+        let sdiv = IrInsn::with_output(IrOp::IntSdiv, div_out, smallvec![v0, c5], 0x1000);
+        let mult = IrInsn::with_output(IrOp::IntMult, mult_out, smallvec![div_out, c5], 0x1004);
+        let sub = IrInsn::with_output(IrOp::IntSub, sub_out, smallvec![v0, mult_out], 0x1008);
 
         let mut ssa = make_single_block_ssa(vec![sdiv, mult, sub]);
         let changed = ModuloIdiomPass.run(&mut ssa).expect("pass should succeed");
@@ -389,19 +371,10 @@ mod tests {
         let sub_out = Varnode::unique(8, 4);
         let c5 = Varnode::constant(5, 4);
 
-        let div = IrInsn::with_output(
-            IrOp::IntDiv, div_out,
-            smallvec![v0, c5], 0x1000,
-        );
+        let div = IrInsn::with_output(IrOp::IntDiv, div_out, smallvec![v0, c5], 0x1000);
         // const-first ordering on the multiply
-        let mult = IrInsn::with_output(
-            IrOp::IntMult, mult_out,
-            smallvec![c5, div_out], 0x1004,
-        );
-        let sub = IrInsn::with_output(
-            IrOp::IntSub, sub_out,
-            smallvec![v0, mult_out], 0x1008,
-        );
+        let mult = IrInsn::with_output(IrOp::IntMult, mult_out, smallvec![c5, div_out], 0x1004);
+        let sub = IrInsn::with_output(IrOp::IntSub, sub_out, smallvec![v0, mult_out], 0x1008);
 
         let mut ssa = make_single_block_ssa(vec![div, mult, sub]);
         let changed = ModuloIdiomPass.run(&mut ssa).expect("pass should succeed");
@@ -422,14 +395,8 @@ mod tests {
         let add_out = Varnode::unique(8, 8);
         let c7 = Varnode::constant(7, 8);
 
-        let and = IrInsn::with_output(
-            IrOp::IntAnd, and_out,
-            smallvec![v0, c7], 0x1000,
-        );
-        let add = IrInsn::with_output(
-            IrOp::IntAdd, add_out,
-            smallvec![base_ptr, and_out], 0x1004,
-        );
+        let and = IrInsn::with_output(IrOp::IntAnd, and_out, smallvec![v0, c7], 0x1000);
+        let add = IrInsn::with_output(IrOp::IntAdd, add_out, smallvec![base_ptr, and_out], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![and, add]);
         let changed = ModuloIdiomPass.run(&mut ssa).expect("pass should succeed");
@@ -453,15 +420,9 @@ mod tests {
         let or_out = Varnode::unique(4, 4);
         let c7 = Varnode::constant(7, 4);
 
-        let and = IrInsn::with_output(
-            IrOp::IntAnd, and_out,
-            smallvec![v0, c7], 0x1000,
-        );
+        let and = IrInsn::with_output(IrOp::IntAnd, and_out, smallvec![v0, c7], 0x1000);
         // Consumed by INT_OR — clearly a bitmask, not an index.
-        let or = IrInsn::with_output(
-            IrOp::IntOr, or_out,
-            smallvec![and_out, v1], 0x1004,
-        );
+        let or = IrInsn::with_output(IrOp::IntOr, or_out, smallvec![and_out, v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![and, or]);
         let changed = ModuloIdiomPass.run(&mut ssa).expect("pass should succeed");
@@ -483,17 +444,13 @@ mod tests {
         let sub_out = Varnode::unique(8, 4);
         let c5 = Varnode::constant(5, 4);
 
-        let div = IrInsn::with_output(
-            IrOp::IntDiv, div_out,
-            smallvec![v2, c5], 0x1000,
-        );
-        let mult = IrInsn::with_output(
-            IrOp::IntMult, mult_out,
-            smallvec![div_out, c5], 0x1004,
-        );
+        let div = IrInsn::with_output(IrOp::IntDiv, div_out, smallvec![v2, c5], 0x1000);
+        let mult = IrInsn::with_output(IrOp::IntMult, mult_out, smallvec![div_out, c5], 0x1004);
         let sub = IrInsn::with_output(
-            IrOp::IntSub, sub_out,
-            smallvec![v1, mult_out], 0x1008, // v1 != v2
+            IrOp::IntSub,
+            sub_out,
+            smallvec![v1, mult_out],
+            0x1008, // v1 != v2
         );
 
         let mut ssa = make_single_block_ssa(vec![div, mult, sub]);
@@ -515,18 +472,14 @@ mod tests {
         let c5 = Varnode::constant(5, 4);
         let c7 = Varnode::constant(7, 4);
 
-        let div = IrInsn::with_output(
-            IrOp::IntDiv, div_out,
-            smallvec![v0, c5], 0x1000,
-        );
+        let div = IrInsn::with_output(IrOp::IntDiv, div_out, smallvec![v0, c5], 0x1000);
         let mult = IrInsn::with_output(
-            IrOp::IntMult, mult_out,
-            smallvec![div_out, c7], 0x1004, // 7 != 5
+            IrOp::IntMult,
+            mult_out,
+            smallvec![div_out, c7],
+            0x1004, // 7 != 5
         );
-        let sub = IrInsn::with_output(
-            IrOp::IntSub, sub_out,
-            smallvec![v0, mult_out], 0x1008,
-        );
+        let sub = IrInsn::with_output(IrOp::IntSub, sub_out, smallvec![v0, mult_out], 0x1008);
 
         let mut ssa = make_single_block_ssa(vec![div, mult, sub]);
         let changed = ModuloIdiomPass.run(&mut ssa).expect("pass should succeed");
@@ -546,14 +499,8 @@ mod tests {
         let cmp_out = Varnode::unique(4, 1);
         let c_f = Varnode::constant(0xF, 4);
 
-        let and = IrInsn::with_output(
-            IrOp::IntAnd, and_out,
-            smallvec![v0, c_f], 0x1000,
-        );
-        let cmp = IrInsn::with_output(
-            IrOp::IntLess, cmp_out,
-            smallvec![and_out, limit], 0x1004,
-        );
+        let and = IrInsn::with_output(IrOp::IntAnd, and_out, smallvec![v0, c_f], 0x1000);
+        let cmp = IrInsn::with_output(IrOp::IntLess, cmp_out, smallvec![and_out, limit], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![and, cmp]);
         let changed = ModuloIdiomPass.run(&mut ssa).expect("pass should succeed");
@@ -574,14 +521,8 @@ mod tests {
         let add_out = Varnode::unique(4, 4);
         let c6 = Varnode::constant(6, 4); // not 2^k - 1
 
-        let and = IrInsn::with_output(
-            IrOp::IntAnd, and_out,
-            smallvec![v0, c6], 0x1000,
-        );
-        let add = IrInsn::with_output(
-            IrOp::IntAdd, add_out,
-            smallvec![base, and_out], 0x1004,
-        );
+        let and = IrInsn::with_output(IrOp::IntAnd, and_out, smallvec![v0, c6], 0x1000);
+        let add = IrInsn::with_output(IrOp::IntAdd, add_out, smallvec![base, and_out], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![and, add]);
         let changed = ModuloIdiomPass.run(&mut ssa).expect("pass should succeed");

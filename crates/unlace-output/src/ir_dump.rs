@@ -17,7 +17,11 @@ pub fn dump_ir(func: &SsaFunction) -> String {
 }
 
 fn write_function(func: &SsaFunction, out: &mut String) {
-    let _ = writeln!(out, "func {} @ 0x{:x} {{", func.function.name, func.function.addr);
+    let _ = writeln!(
+        out,
+        "func {} @ 0x{:x} {{",
+        func.function.name, func.function.addr
+    );
 
     for (&bid, block) in &func.function.blocks {
         write_block_header(func, bid, out);
@@ -74,7 +78,10 @@ fn collect_annotations(func: &SsaFunction, bid: BlockId) -> Vec<&'static str> {
     }
 
     if let Some(block) = func.function.blocks.get(&bid) {
-        let ends_with_return = block.insns.last().is_some_and(|insn| insn.op == IrOp::Return);
+        let ends_with_return = block
+            .insns
+            .last()
+            .is_some_and(|insn| insn.op == IrOp::Return);
         let has_no_successors = block.successors.is_empty()
             && !block.insns.last().is_some_and(|insn| {
                 matches!(
@@ -241,9 +248,7 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::cfg::build_cfg;
-    use unlace_ir::ssa::{
-        DominatorTree, PhiNode, SsaFunction, SsaVarnode, VarnodeSlot,
-    };
+    use unlace_ir::ssa::{DominatorTree, PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::dump_ir;
@@ -281,7 +286,6 @@ mod tests {
     }
 
     #[test]
-
     #[test]
     fn test_dump_with_phi() {
         let r0 = Varnode::reg(0, 4);
@@ -343,10 +347,25 @@ mod tests {
 
         // Insert phi node at BB_3 for r0.
         let phi = PhiNode {
-            output: SsaVarnode { base: r0, version: 3 },
+            output: SsaVarnode {
+                base: r0,
+                version: 3,
+            },
             inputs: vec![
-                (BlockId(1), SsaVarnode { base: r0, version: 1 }),
-                (BlockId(2), SsaVarnode { base: r0, version: 2 }),
+                (
+                    BlockId(1),
+                    SsaVarnode {
+                        base: r0,
+                        version: 1,
+                    },
+                ),
+                (
+                    BlockId(2),
+                    SsaVarnode {
+                        base: r0,
+                        version: 2,
+                    },
+                ),
             ],
         };
         ssa.phi_map.insert(BlockId(3), vec![phi]);

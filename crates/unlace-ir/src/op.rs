@@ -267,10 +267,7 @@ impl IrOp {
             | Self::IntSborrow => 'i',
 
             // Float comparisons: inputs are float, output is boolean
-            Self::FloatEqual
-            | Self::FloatNotequal
-            | Self::FloatLess
-            | Self::FloatLessequal => 'f',
+            Self::FloatEqual | Self::FloatNotequal | Self::FloatLess | Self::FloatLessequal => 'f',
 
             // FLOAT_NAN: input is float, output is boolean
             Self::FloatNan => 'f',

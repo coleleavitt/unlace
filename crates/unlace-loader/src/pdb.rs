@@ -98,21 +98,12 @@ fn collect_module_symbols(
             match data {
                 SymbolData::Procedure(proc) => {
                     if let Some(rva) = proc.offset.to_rva(&address_map) {
-                        insert_symbol(
-                            out,
-                            rva,
-                            proc.name.to_string().to_string(),
-                            proc.len as u64,
-                        );
+                        insert_symbol(out, rva, proc.name.to_string().to_string(), proc.len as u64);
                     }
                 }
                 SymbolData::Data(data_sym) if data_sym.global => {
                     if let Some(rva) = data_sym.offset.to_rva(&address_map) {
-                        insert_data_symbol(
-                            out,
-                            rva,
-                            data_sym.name.to_string().to_string(),
-                        );
+                        insert_data_symbol(out, rva, data_sym.name.to_string().to_string());
                     }
                 }
                 _ => {}
@@ -192,11 +183,7 @@ fn rva_to_u64(rva: Rva) -> u64 {
 ///
 /// PDB symbols are RVAs; `image_base` is added to convert to absolute VAs
 /// matching the PE image's address space.
-pub fn merge_pdb_symbols(
-    target: &mut BTreeMap<u64, Symbol>,
-    pdb_info: &PdbInfo,
-    image_base: u64,
-) {
+pub fn merge_pdb_symbols(target: &mut BTreeMap<u64, Symbol>, pdb_info: &PdbInfo, image_base: u64) {
     for (rva, sym) in &pdb_info.symbols {
         let va = rva + image_base;
         let adjusted = Symbol {

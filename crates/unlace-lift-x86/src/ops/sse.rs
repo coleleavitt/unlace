@@ -17,7 +17,7 @@ pub mod tag {
     pub const MOVDQU: u64 = 0x101;
     pub const MOVAPS: u64 = 0x102;
     pub const MOVUPS: u64 = 0x103;
-    pub const MOVSD:  u64 = 0x104;
+    pub const MOVSD: u64 = 0x104;
 
     pub const PADDB: u64 = 0x110;
     pub const PADDW: u64 = 0x111;
@@ -158,7 +158,9 @@ pub fn lift_sse_blend(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother
         ctx.emit_unimplemented();
         return;
     };
-    let mask = ctx.operand_read(insn, 2).unwrap_or_else(|| Varnode::constant(0, 1));
+    let mask = ctx
+        .operand_read(insn, 2)
+        .unwrap_or_else(|| Varnode::constant(0, 1));
     let Some(dst) = ctx.operand_write(insn, 0) else {
         ctx.emit_unimplemented();
         return;

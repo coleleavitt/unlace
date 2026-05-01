@@ -114,7 +114,10 @@ impl Type {
             // Pointer width is target-dependent; assume 64-bit (8 bytes) since
             // every architecture this crate targets is 64-bit.
             Type::Ptr(_) | Type::FuncPtr { .. } => Some(8),
-            Type::Array { element, size: Some(n) } => {
+            Type::Array {
+                element,
+                size: Some(n),
+            } => {
                 let elem = element.size()? as u64;
                 let total = elem.checked_mul(*n)?;
                 u8::try_from(total).ok()
@@ -157,9 +160,18 @@ impl Type {
             | (t, Type::Primitive(PrimitiveType::Unknown)) => t,
             (Type::Primitive(p1), Type::Primitive(p2)) => Type::Primitive(p1.join(p2)),
             (
-                Type::Struct { name: n1, fields: f1 },
-                Type::Struct { name: n2, fields: f2 },
-            ) if n1 == n2 && f1 == f2 => Type::Struct { name: n1, fields: f1 },
+                Type::Struct {
+                    name: n1,
+                    fields: f1,
+                },
+                Type::Struct {
+                    name: n2,
+                    fields: f2,
+                },
+            ) if n1 == n2 && f1 == f2 => Type::Struct {
+                name: n1,
+                fields: f1,
+            },
             (Type::Ptr(a), Type::Ptr(b)) => {
                 let joined = a.join(*b);
                 if joined == unknown {
@@ -169,14 +181,23 @@ impl Type {
                 }
             }
             (
-                Type::Array { element: e1, size: s1 },
-                Type::Array { element: e2, size: s2 },
+                Type::Array {
+                    element: e1,
+                    size: s1,
+                },
+                Type::Array {
+                    element: e2,
+                    size: s2,
+                },
             ) if s1 == s2 => {
                 let joined = e1.join(*e2);
                 if joined == unknown {
                     unknown
                 } else {
-                    Type::Array { element: Box::new(joined), size: s1 }
+                    Type::Array {
+                        element: Box::new(joined),
+                        size: s1,
+                    }
                 }
             }
             _ => unknown,
@@ -250,7 +271,11 @@ impl fmt::Display for Type {
                 None => write!(f, "{element}[]"),
             },
             Type::Struct { name, .. } => write!(f, "struct {name}"),
-            Type::FuncPtr { params, return_type, variadic } => {
+            Type::FuncPtr {
+                params,
+                return_type,
+                variadic,
+            } => {
                 write!(f, "{return_type} (*)(")?;
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {
@@ -277,7 +302,10 @@ mod tests {
     #[test]
     fn construct_int_uint() {
         assert_eq!(Type::int(4), Type::Primitive(PrimitiveType::Int(4)));
-        assert_eq!(Type::uint(8), Type::Primitive(PrimitiveType::UnsignedInt(8)));
+        assert_eq!(
+            Type::uint(8),
+            Type::Primitive(PrimitiveType::UnsignedInt(8))
+        );
     }
 
     #[test]
@@ -297,11 +325,18 @@ mod tests {
     fn struct_and_array_are_composite() {
         let s = Type::Struct {
             name: "Foo".into(),
-            fields: vec![StructFieldType { name: "x".into(), ty: Type::int(4), offset: 0 }],
+            fields: vec![StructFieldType {
+                name: "x".into(),
+                ty: Type::int(4),
+                offset: 0,
+            }],
         };
         assert!(s.is_composite());
 
-        let a = Type::Array { element: Box::new(Type::int(4)), size: Some(8) };
+        let a = Type::Array {
+            element: Box::new(Type::int(4)),
+            size: Some(8),
+        };
         assert!(a.is_composite());
     }
 
@@ -345,16 +380,25 @@ mod tests {
 
     #[test]
     fn display_array() {
-        let a = Type::Array { element: Box::new(Type::int(4)), size: Some(8) };
+        let a = Type::Array {
+            element: Box::new(Type::int(4)),
+            size: Some(8),
+        };
         assert_eq!(a.to_string(), "__int32[8]");
 
-        let a_unsized = Type::Array { element: Box::new(Type::int(4)), size: None };
+        let a_unsized = Type::Array {
+            element: Box::new(Type::int(4)),
+            size: None,
+        };
         assert_eq!(a_unsized.to_string(), "__int32[]");
     }
 
     #[test]
     fn display_struct() {
-        let s = Type::Struct { name: "Point".into(), fields: vec![] };
+        let s = Type::Struct {
+            name: "Point".into(),
+            fields: vec![],
+        };
         assert_eq!(s.to_string(), "struct Point");
     }
 
@@ -376,13 +420,19 @@ mod tests {
 
     #[test]
     fn size_sized_array() {
-        let a = Type::Array { element: Box::new(Type::int(4)), size: Some(8) };
+        let a = Type::Array {
+            element: Box::new(Type::int(4)),
+            size: Some(8),
+        };
         assert_eq!(a.size(), Some(32));
     }
 
     #[test]
     fn size_unsized_array_is_none() {
-        let a = Type::Array { element: Box::new(Type::int(4)), size: None };
+        let a = Type::Array {
+            element: Box::new(Type::int(4)),
+            size: None,
+        };
         assert_eq!(a.size(), None);
     }
 
@@ -391,8 +441,16 @@ mod tests {
         let s = Type::Struct {
             name: "S".into(),
             fields: vec![
-                StructFieldType { name: "x".into(), ty: Type::int(4), offset: 0 },
-                StructFieldType { name: "y".into(), ty: Type::int(4), offset: 4 },
+                StructFieldType {
+                    name: "x".into(),
+                    ty: Type::int(4),
+                    offset: 0,
+                },
+                StructFieldType {
+                    name: "y".into(),
+                    ty: Type::int(4),
+                    offset: 4,
+                },
             ],
         };
         assert_eq!(s.size(), Some(8));

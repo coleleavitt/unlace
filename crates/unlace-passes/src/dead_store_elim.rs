@@ -73,24 +73,22 @@ impl Pass for DeadStoreElimPass {
 
                 if new_idx != old_idx {
                     // Re-key output
-                    if let Some(sv) = func
-                        .var_map
-                        .remove(&(bid, old_idx, VarnodeSlot::Output))
-                    {
-                        func.var_map
-                            .insert((bid, new_idx, VarnodeSlot::Output), sv);
+                    if let Some(sv) = func.var_map.remove(&(bid, old_idx, VarnodeSlot::Output)) {
+                        func.var_map.insert((bid, new_idx, VarnodeSlot::Output), sv);
                     }
 
                     // Re-key inputs
-                    let input_count = block.insns.last()
+                    let input_count = block
+                        .insns
+                        .last()
                         .ok_or_else(|| PassError::InvariantViolation {
                             message: "block empty after compaction".into(),
                         })?
-                        .inputs.len();
+                        .inputs
+                        .len();
                     for i in 0..input_count {
-                        if let Some(sv) = func
-                            .var_map
-                            .remove(&(bid, old_idx, VarnodeSlot::Input(i)))
+                        if let Some(sv) =
+                            func.var_map.remove(&(bid, old_idx, VarnodeSlot::Input(i)))
                         {
                             func.var_map
                                 .insert((bid, new_idx, VarnodeSlot::Input(i)), sv);
@@ -123,9 +121,7 @@ impl Pass for DeadStoreElimPass {
 /// index for each `(base Varnode)`.  When a new definition of the same base
 /// appears, check whether the previous version was used between its
 /// definition and this new definition.  If not, the old definition is dead.
-fn find_dead_ssa_defs(
-    func: &SsaFunction,
-) -> Vec<(unlace_ir::BlockId, usize)> {
+fn find_dead_ssa_defs(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
     // First, collect the set of all SSA varnodes that are *used* (appear as
     // an input anywhere in the function, or as a phi input).
     let mut globally_used: BTreeSet<SsaVarnode> = BTreeSet::new();
@@ -195,9 +191,7 @@ fn find_dead_ssa_defs(
 /// can be resolved to the same RSP/RBP-relative stack offset (e.g.
 /// `STORE [rsp+8], v1` followed by `STORE [rsp+8], v2` even when each
 /// address is computed by a separate `INT_ADD(rsp, 8)`).
-fn find_dead_stores(
-    func: &SsaFunction,
-) -> Vec<(unlace_ir::BlockId, usize)> {
+fn find_dead_stores(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
     let mut dead = Vec::new();
 
     for (&bid, block) in &func.function.blocks {
@@ -405,7 +399,8 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{
-        CallingConvention, DominatorTree, PhiNode, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot,
+        CallingConvention, DominatorTree, PhiNode, PrimitiveType, SsaFunction, SsaVarnode,
+        VarnodeSlot,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
@@ -455,12 +450,12 @@ mod tests {
         }
     }
 
-    fn build_trivial_dom(
-        cfg: &unlace_ir::cfg::ControlFlowGraph,
-    ) -> DominatorTree {
+    fn build_trivial_dom(cfg: &unlace_ir::cfg::ControlFlowGraph) -> DominatorTree {
         use petgraph::algo::dominators::simple_fast;
 
-        let entry_ni = cfg.node_index(cfg.entry_block()).expect("entry block in cfg");
+        let entry_ni = cfg
+            .node_index(cfg.entry_block())
+            .expect("entry block in cfg");
         let dominators = simple_fast(cfg.inner(), entry_ni);
 
         let mut idom = BTreeMap::new();
@@ -578,15 +573,18 @@ mod tests {
             0x1008,
         ));
         // insn 3: RETURN
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x100c,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), v0);
-        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(0)), SsaVarnode { base: call_target, version: 0 });
+        var_map.insert(
+            (BlockId(0), 1, VarnodeSlot::Input(0)),
+            SsaVarnode {
+                base: call_target,
+                version: 0,
+            },
+        );
         var_map.insert((BlockId(0), 1, VarnodeSlot::Input(1)), v0); // v0 is used here
         var_map.insert((BlockId(0), 2, VarnodeSlot::Output), v1);
 
@@ -626,11 +624,8 @@ mod tests {
             0x1004,
         ));
         // insn 2: RETURN
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1008,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
 
         let mut var_map = BTreeMap::new();
         // Both stores use the same SSA varnode for the address.
@@ -678,11 +673,8 @@ mod tests {
             0x1008,
         ));
         // insn 3: RETURN
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x100c,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), addr);
@@ -726,11 +718,8 @@ mod tests {
             0x1008,
         ));
         // insn 3: RETURN
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x100c,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), addr);
@@ -769,11 +758,8 @@ mod tests {
             smallvec![addr.base, c10],
             0x1008,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x100c,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), addr);
@@ -808,11 +794,8 @@ mod tests {
             smallvec![addr2.base, c10],
             0x1004,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1008,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), addr1);
@@ -904,7 +887,8 @@ mod tests {
             0x100C,
         ));
         // 4: RETURN
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), addr1);
@@ -929,11 +913,7 @@ mod tests {
             4,
             "first STORE should be gone, leaving 4 insns"
         );
-        let stores: Vec<_> = block
-            .insns
-            .iter()
-            .filter(|i| i.op == IrOp::Store)
-            .collect();
+        let stores: Vec<_> = block.insns.iter().filter(|i| i.op == IrOp::Store).collect();
         assert_eq!(stores.len(), 1, "exactly one STORE must remain");
         assert_eq!(
             stores[0].inputs[2], val2,
@@ -980,7 +960,8 @@ mod tests {
             smallvec![space_ram, addr2.base, val2],
             0x100C,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1010));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), addr1);
@@ -1057,7 +1038,8 @@ mod tests {
             smallvec![space_ram, addr2.base, val2],
             0x1014,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1018));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1018));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), addr1);
@@ -1066,7 +1048,10 @@ mod tests {
         var_map.insert((BlockId(0), 3, VarnodeSlot::Input(1)), load_addr);
         var_map.insert(
             (BlockId(0), 3, VarnodeSlot::Output),
-            SsaVarnode { base: load_out, version: 0 },
+            SsaVarnode {
+                base: load_out,
+                version: 0,
+            },
         );
         var_map.insert((BlockId(0), 4, VarnodeSlot::Output), addr2);
         var_map.insert((BlockId(0), 5, VarnodeSlot::Input(1)), addr2);

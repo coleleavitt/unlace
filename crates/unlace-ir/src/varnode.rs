@@ -20,7 +20,11 @@ impl Varnode {
     /// Construct a new Varnode.
     #[inline]
     pub const fn new(space: SpaceId, offset: u64, size: u8) -> Self {
-        Self { space, offset, size }
+        Self {
+            space,
+            offset,
+            size,
+        }
     }
 
     /// Shorthand for a register-space Varnode.

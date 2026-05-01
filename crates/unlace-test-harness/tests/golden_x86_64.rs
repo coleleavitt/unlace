@@ -127,314 +127,614 @@ fn golden_self_compare(stem: &str) {
 // -- trivial (block_count=1): identity/return-constant stubs --
 
 #[test]
-fn golden_self_sub_1018E0() { golden_self_compare("sub_1018E0"); }
+fn golden_self_sub_1018E0() {
+    golden_self_compare("sub_1018E0");
+}
 #[test]
-fn golden_self_sub_1018F0() { golden_self_compare("sub_1018F0"); }
+fn golden_self_sub_1018F0() {
+    golden_self_compare("sub_1018F0");
+}
 #[test]
-fn golden_self_sub_101900() { golden_self_compare("sub_101900"); }
+fn golden_self_sub_101900() {
+    golden_self_compare("sub_101900");
+}
 #[test]
-fn golden_self_sub_101910() { golden_self_compare("sub_101910"); }
+fn golden_self_sub_101910() {
+    golden_self_compare("sub_101910");
+}
 #[test]
-fn golden_self_sub_101930() { golden_self_compare("sub_101930"); }
+fn golden_self_sub_101930() {
+    golden_self_compare("sub_101930");
+}
 #[test]
-fn golden_self_sub_101940() { golden_self_compare("sub_101940"); }
+fn golden_self_sub_101940() {
+    golden_self_compare("sub_101940");
+}
 #[test]
-fn golden_self_sub_101960() { golden_self_compare("sub_101960"); }
+fn golden_self_sub_101960() {
+    golden_self_compare("sub_101960");
+}
 #[test]
-fn golden_self_sub_101980() { golden_self_compare("sub_101980"); }
+fn golden_self_sub_101980() {
+    golden_self_compare("sub_101980");
+}
 #[test]
-fn golden_self_sub_1019A0() { golden_self_compare("sub_1019A0"); }
+fn golden_self_sub_1019A0() {
+    golden_self_compare("sub_1019A0");
+}
 #[test]
-fn golden_self_sub_1019F0() { golden_self_compare("sub_1019F0"); }
+fn golden_self_sub_1019F0() {
+    golden_self_compare("sub_1019F0");
+}
 #[test]
-fn golden_self_sub_101A20() { golden_self_compare("sub_101A20"); }
+fn golden_self_sub_101A20() {
+    golden_self_compare("sub_101A20");
+}
 #[test]
-fn golden_self_sub_101A30() { golden_self_compare("sub_101A30"); }
+fn golden_self_sub_101A30() {
+    golden_self_compare("sub_101A30");
+}
 #[test]
-fn golden_self_sub_101A40() { golden_self_compare("sub_101A40"); }
+fn golden_self_sub_101A40() {
+    golden_self_compare("sub_101A40");
+}
 #[test]
-fn golden_self_sub_101A50() { golden_self_compare("sub_101A50"); }
+fn golden_self_sub_101A50() {
+    golden_self_compare("sub_101A50");
+}
 #[test]
-fn golden_self_sub_101A60() { golden_self_compare("sub_101A60"); }
+fn golden_self_sub_101A60() {
+    golden_self_compare("sub_101A60");
+}
 #[test]
-fn golden_self_sub_101A70() { golden_self_compare("sub_101A70"); }
+fn golden_self_sub_101A70() {
+    golden_self_compare("sub_101A70");
+}
 #[test]
-fn golden_self_sub_101AA0() { golden_self_compare("sub_101AA0"); }
+fn golden_self_sub_101AA0() {
+    golden_self_compare("sub_101AA0");
+}
 #[test]
-fn golden_self_sub_101AB0() { golden_self_compare("sub_101AB0"); }
+fn golden_self_sub_101AB0() {
+    golden_self_compare("sub_101AB0");
+}
 #[test]
-fn golden_self_sub_101C10() { golden_self_compare("sub_101C10"); }
+fn golden_self_sub_101C10() {
+    golden_self_compare("sub_101C10");
+}
 #[test]
-fn golden_self_sub_101C30() { golden_self_compare("sub_101C30"); }
+fn golden_self_sub_101C30() {
+    golden_self_compare("sub_101C30");
+}
 #[test]
-fn golden_self_sub_101C50() { golden_self_compare("sub_101C50"); }
+fn golden_self_sub_101C50() {
+    golden_self_compare("sub_101C50");
+}
 #[test]
-fn golden_self_sub_101C60() { golden_self_compare("sub_101C60"); }
+fn golden_self_sub_101C60() {
+    golden_self_compare("sub_101C60");
+}
 #[test]
-fn golden_self_sub_101CA0() { golden_self_compare("sub_101CA0"); }
+fn golden_self_sub_101CA0() {
+    golden_self_compare("sub_101CA0");
+}
 #[test]
-fn golden_self_sub_103540() { golden_self_compare("sub_103540"); }
+fn golden_self_sub_103540() {
+    golden_self_compare("sub_103540");
+}
 #[test]
-fn golden_self_sub_103D60() { golden_self_compare("sub_103D60"); }
+fn golden_self_sub_103D60() {
+    golden_self_compare("sub_103D60");
+}
 #[test]
-fn golden_self_sub_103D80() { golden_self_compare("sub_103D80"); }
+fn golden_self_sub_103D80() {
+    golden_self_compare("sub_103D80");
+}
 #[test]
-fn golden_self_sub_103E50() { golden_self_compare("sub_103E50"); }
+fn golden_self_sub_103E50() {
+    golden_self_compare("sub_103E50");
+}
 #[test]
-fn golden_self_sub_106C60() { golden_self_compare("sub_106C60"); }
+fn golden_self_sub_106C60() {
+    golden_self_compare("sub_106C60");
+}
 #[test]
-fn golden_self_sub_107BC0() { golden_self_compare("sub_107BC0"); }
+fn golden_self_sub_107BC0() {
+    golden_self_compare("sub_107BC0");
+}
 #[test]
-fn golden_self_sub_1107E0() { golden_self_compare("sub_1107E0"); }
+fn golden_self_sub_1107E0() {
+    golden_self_compare("sub_1107E0");
+}
 #[test]
-fn golden_self_sub_110970() { golden_self_compare("sub_110970"); }
+fn golden_self_sub_110970() {
+    golden_self_compare("sub_110970");
+}
 #[test]
-fn golden_self_sub_111030() { golden_self_compare("sub_111030"); }
+fn golden_self_sub_111030() {
+    golden_self_compare("sub_111030");
+}
 #[test]
-fn golden_self_sub_119460() { golden_self_compare("sub_119460"); }
+fn golden_self_sub_119460() {
+    golden_self_compare("sub_119460");
+}
 #[test]
-fn golden_self_sub_11B400() { golden_self_compare("sub_11B400"); }
+fn golden_self_sub_11B400() {
+    golden_self_compare("sub_11B400");
+}
 #[test]
-fn golden_self_sub_11B410() { golden_self_compare("sub_11B410"); }
+fn golden_self_sub_11B410() {
+    golden_self_compare("sub_11B410");
+}
 #[test]
-fn golden_self_sub_11B420() { golden_self_compare("sub_11B420"); }
+fn golden_self_sub_11B420() {
+    golden_self_compare("sub_11B420");
+}
 #[test]
-fn golden_self_sub_11B430() { golden_self_compare("sub_11B430"); }
+fn golden_self_sub_11B430() {
+    golden_self_compare("sub_11B430");
+}
 #[test]
-fn golden_self_sub_11B5D0() { golden_self_compare("sub_11B5D0"); }
+fn golden_self_sub_11B5D0() {
+    golden_self_compare("sub_11B5D0");
+}
 #[test]
-fn golden_self_sub_11B600() { golden_self_compare("sub_11B600"); }
+fn golden_self_sub_11B600() {
+    golden_self_compare("sub_11B600");
+}
 #[test]
-fn golden_self_sub_11B650() { golden_self_compare("sub_11B650"); }
+fn golden_self_sub_11B650() {
+    golden_self_compare("sub_11B650");
+}
 #[test]
-fn golden_self_sub_11B8F0() { golden_self_compare("sub_11B8F0"); }
+fn golden_self_sub_11B8F0() {
+    golden_self_compare("sub_11B8F0");
+}
 #[test]
-fn golden_self_sub_11CA10() { golden_self_compare("sub_11CA10"); }
+fn golden_self_sub_11CA10() {
+    golden_self_compare("sub_11CA10");
+}
 #[test]
-fn golden_self_sub_11CA60() { golden_self_compare("sub_11CA60"); }
+fn golden_self_sub_11CA60() {
+    golden_self_compare("sub_11CA60");
+}
 #[test]
-fn golden_self_sub_11CB40() { golden_self_compare("sub_11CB40"); }
+fn golden_self_sub_11CB40() {
+    golden_self_compare("sub_11CB40");
+}
 #[test]
-fn golden_self_sub_11D4A0() { golden_self_compare("sub_11D4A0"); }
+fn golden_self_sub_11D4A0() {
+    golden_self_compare("sub_11D4A0");
+}
 
 // -- simple (block_count 1-4): small functions with locals --
 
 #[test]
-fn golden_self_sub_101C70() { golden_self_compare("sub_101C70"); }
+fn golden_self_sub_101C70() {
+    golden_self_compare("sub_101C70");
+}
 #[test]
-fn golden_self_sub_101D10() { golden_self_compare("sub_101D10"); }
+fn golden_self_sub_101D10() {
+    golden_self_compare("sub_101D10");
+}
 #[test]
-fn golden_self_sub_101D30() { golden_self_compare("sub_101D30"); }
+fn golden_self_sub_101D30() {
+    golden_self_compare("sub_101D30");
+}
 #[test]
-fn golden_self_sub_101D50() { golden_self_compare("sub_101D50"); }
+fn golden_self_sub_101D50() {
+    golden_self_compare("sub_101D50");
+}
 #[test]
-fn golden_self_sub_101D70() { golden_self_compare("sub_101D70"); }
+fn golden_self_sub_101D70() {
+    golden_self_compare("sub_101D70");
+}
 #[test]
-fn golden_self_sub_101D90() { golden_self_compare("sub_101D90"); }
+fn golden_self_sub_101D90() {
+    golden_self_compare("sub_101D90");
+}
 #[test]
-fn golden_self_sub_101E10() { golden_self_compare("sub_101E10"); }
+fn golden_self_sub_101E10() {
+    golden_self_compare("sub_101E10");
+}
 #[test]
-fn golden_self_sub_102650() { golden_self_compare("sub_102650"); }
+fn golden_self_sub_102650() {
+    golden_self_compare("sub_102650");
+}
 #[test]
-fn golden_self_sub_102810() { golden_self_compare("sub_102810"); }
+fn golden_self_sub_102810() {
+    golden_self_compare("sub_102810");
+}
 #[test]
-fn golden_self_sub_102850() { golden_self_compare("sub_102850"); }
+fn golden_self_sub_102850() {
+    golden_self_compare("sub_102850");
+}
 #[test]
-fn golden_self_sub_103B50() { golden_self_compare("sub_103B50"); }
+fn golden_self_sub_103B50() {
+    golden_self_compare("sub_103B50");
+}
 #[test]
-fn golden_self_sub_103BC0() { golden_self_compare("sub_103BC0"); }
+fn golden_self_sub_103BC0() {
+    golden_self_compare("sub_103BC0");
+}
 #[test]
-fn golden_self_sub_103C40() { golden_self_compare("sub_103C40"); }
+fn golden_self_sub_103C40() {
+    golden_self_compare("sub_103C40");
+}
 #[test]
-fn golden_self_sub_103C70() { golden_self_compare("sub_103C70"); }
+fn golden_self_sub_103C70() {
+    golden_self_compare("sub_103C70");
+}
 #[test]
-fn golden_self_sub_103CE0() { golden_self_compare("sub_103CE0"); }
+fn golden_self_sub_103CE0() {
+    golden_self_compare("sub_103CE0");
+}
 #[test]
-fn golden_self_sub_103EF0() { golden_self_compare("sub_103EF0"); }
+fn golden_self_sub_103EF0() {
+    golden_self_compare("sub_103EF0");
+}
 #[test]
-fn golden_self_sub_103FB0() { golden_self_compare("sub_103FB0"); }
+fn golden_self_sub_103FB0() {
+    golden_self_compare("sub_103FB0");
+}
 #[test]
-fn golden_self_sub_104DF0() { golden_self_compare("sub_104DF0"); }
+fn golden_self_sub_104DF0() {
+    golden_self_compare("sub_104DF0");
+}
 #[test]
-fn golden_self_sub_104E10() { golden_self_compare("sub_104E10"); }
+fn golden_self_sub_104E10() {
+    golden_self_compare("sub_104E10");
+}
 #[test]
-fn golden_self_sub_105300() { golden_self_compare("sub_105300"); }
+fn golden_self_sub_105300() {
+    golden_self_compare("sub_105300");
+}
 #[test]
-fn golden_self_sub_105380() { golden_self_compare("sub_105380"); }
+fn golden_self_sub_105380() {
+    golden_self_compare("sub_105380");
+}
 #[test]
-fn golden_self_sub_106EE0() { golden_self_compare("sub_106EE0"); }
+fn golden_self_sub_106EE0() {
+    golden_self_compare("sub_106EE0");
+}
 #[test]
-fn golden_self_sub_106F70() { golden_self_compare("sub_106F70"); }
+fn golden_self_sub_106F70() {
+    golden_self_compare("sub_106F70");
+}
 #[test]
-fn golden_self_sub_107060() { golden_self_compare("sub_107060"); }
+fn golden_self_sub_107060() {
+    golden_self_compare("sub_107060");
+}
 #[test]
-fn golden_self_sub_10A810() { golden_self_compare("sub_10A810"); }
+fn golden_self_sub_10A810() {
+    golden_self_compare("sub_10A810");
+}
 #[test]
-fn golden_self_sub_10BCE0() { golden_self_compare("sub_10BCE0"); }
+fn golden_self_sub_10BCE0() {
+    golden_self_compare("sub_10BCE0");
+}
 #[test]
-fn golden_self_sub_10CA80() { golden_self_compare("sub_10CA80"); }
+fn golden_self_sub_10CA80() {
+    golden_self_compare("sub_10CA80");
+}
 #[test]
-fn golden_self_sub_10EC70() { golden_self_compare("sub_10EC70"); }
+fn golden_self_sub_10EC70() {
+    golden_self_compare("sub_10EC70");
+}
 #[test]
-fn golden_self_sub_10EE00() { golden_self_compare("sub_10EE00"); }
+fn golden_self_sub_10EE00() {
+    golden_self_compare("sub_10EE00");
+}
 #[test]
-fn golden_self_sub_110F20() { golden_self_compare("sub_110F20"); }
+fn golden_self_sub_110F20() {
+    golden_self_compare("sub_110F20");
+}
 #[test]
-fn golden_self_sub_110FD0() { golden_self_compare("sub_110FD0"); }
+fn golden_self_sub_110FD0() {
+    golden_self_compare("sub_110FD0");
+}
 #[test]
-fn golden_self_sub_111110() { golden_self_compare("sub_111110"); }
+fn golden_self_sub_111110() {
+    golden_self_compare("sub_111110");
+}
 #[test]
-fn golden_self_sub_111130() { golden_self_compare("sub_111130"); }
+fn golden_self_sub_111130() {
+    golden_self_compare("sub_111130");
+}
 #[test]
-fn golden_self_sub_113680() { golden_self_compare("sub_113680"); }
+fn golden_self_sub_113680() {
+    golden_self_compare("sub_113680");
+}
 #[test]
-fn golden_self_sub_118F20() { golden_self_compare("sub_118F20"); }
+fn golden_self_sub_118F20() {
+    golden_self_compare("sub_118F20");
+}
 #[test]
-fn golden_self_sub_11B530() { golden_self_compare("sub_11B530"); }
+fn golden_self_sub_11B530() {
+    golden_self_compare("sub_11B530");
+}
 #[test]
-fn golden_self_sub_11B570() { golden_self_compare("sub_11B570"); }
+fn golden_self_sub_11B570() {
+    golden_self_compare("sub_11B570");
+}
 #[test]
-fn golden_self_sub_11B620() { golden_self_compare("sub_11B620"); }
+fn golden_self_sub_11B620() {
+    golden_self_compare("sub_11B620");
+}
 #[test]
-fn golden_self_sub_11B670() { golden_self_compare("sub_11B670"); }
+fn golden_self_sub_11B670() {
+    golden_self_compare("sub_11B670");
+}
 #[test]
-fn golden_self_sub_11B6F0() { golden_self_compare("sub_11B6F0"); }
+fn golden_self_sub_11B6F0() {
+    golden_self_compare("sub_11B6F0");
+}
 #[test]
-fn golden_self_sub_11B900() { golden_self_compare("sub_11B900"); }
+fn golden_self_sub_11B900() {
+    golden_self_compare("sub_11B900");
+}
 #[test]
-fn golden_self_sub_11B920() { golden_self_compare("sub_11B920"); }
+fn golden_self_sub_11B920() {
+    golden_self_compare("sub_11B920");
+}
 #[test]
-fn golden_self_sub_11B980() { golden_self_compare("sub_11B980"); }
+fn golden_self_sub_11B980() {
+    golden_self_compare("sub_11B980");
+}
 #[test]
-fn golden_self_sub_11B9A0() { golden_self_compare("sub_11B9A0"); }
+fn golden_self_sub_11B9A0() {
+    golden_self_compare("sub_11B9A0");
+}
 #[test]
-fn golden_self_sub_11B9C0() { golden_self_compare("sub_11B9C0"); }
+fn golden_self_sub_11B9C0() {
+    golden_self_compare("sub_11B9C0");
+}
 
 // -- branchy (block_count 3-12): control flow --
 
 #[test]
-fn golden_self_sub_101B00() { golden_self_compare("sub_101B00"); }
+fn golden_self_sub_101B00() {
+    golden_self_compare("sub_101B00");
+}
 #[test]
-fn golden_self_sub_101B80() { golden_self_compare("sub_101B80"); }
+fn golden_self_sub_101B80() {
+    golden_self_compare("sub_101B80");
+}
 #[test]
-fn golden_self_sub_101DB0() { golden_self_compare("sub_101DB0"); }
+fn golden_self_sub_101DB0() {
+    golden_self_compare("sub_101DB0");
+}
 #[test]
-fn golden_self_sub_101E90() { golden_self_compare("sub_101E90"); }
+fn golden_self_sub_101E90() {
+    golden_self_compare("sub_101E90");
+}
 #[test]
-fn golden_self_sub_1026C0() { golden_self_compare("sub_1026C0"); }
+fn golden_self_sub_1026C0() {
+    golden_self_compare("sub_1026C0");
+}
 #[test]
-fn golden_self_sub_1028D0() { golden_self_compare("sub_1028D0"); }
+fn golden_self_sub_1028D0() {
+    golden_self_compare("sub_1028D0");
+}
 #[test]
-fn golden_self_sub_102950() { golden_self_compare("sub_102950"); }
+fn golden_self_sub_102950() {
+    golden_self_compare("sub_102950");
+}
 #[test]
-fn golden_self_sub_1029D0() { golden_self_compare("sub_1029D0"); }
+fn golden_self_sub_1029D0() {
+    golden_self_compare("sub_1029D0");
+}
 #[test]
-fn golden_self_sub_104080() { golden_self_compare("sub_104080"); }
+fn golden_self_sub_104080() {
+    golden_self_compare("sub_104080");
+}
 #[test]
-fn golden_self_sub_106CC0() { golden_self_compare("sub_106CC0"); }
+fn golden_self_sub_106CC0() {
+    golden_self_compare("sub_106CC0");
+}
 #[test]
-fn golden_self_sub_1070F0() { golden_self_compare("sub_1070F0"); }
+fn golden_self_sub_1070F0() {
+    golden_self_compare("sub_1070F0");
+}
 #[test]
-fn golden_self_sub_1071B0() { golden_self_compare("sub_1071B0"); }
+fn golden_self_sub_1071B0() {
+    golden_self_compare("sub_1071B0");
+}
 #[test]
-fn golden_self_sub_107270() { golden_self_compare("sub_107270"); }
+fn golden_self_sub_107270() {
+    golden_self_compare("sub_107270");
+}
 #[test]
-fn golden_self_sub_1073D0() { golden_self_compare("sub_1073D0"); }
+fn golden_self_sub_1073D0() {
+    golden_self_compare("sub_1073D0");
+}
 #[test]
-fn golden_self_sub_107730() { golden_self_compare("sub_107730"); }
+fn golden_self_sub_107730() {
+    golden_self_compare("sub_107730");
+}
 #[test]
-fn golden_self_sub_10AB80() { golden_self_compare("sub_10AB80"); }
+fn golden_self_sub_10AB80() {
+    golden_self_compare("sub_10AB80");
+}
 #[test]
-fn golden_self_sub_10AC40() { golden_self_compare("sub_10AC40"); }
+fn golden_self_sub_10AC40() {
+    golden_self_compare("sub_10AC40");
+}
 #[test]
-fn golden_self_sub_10AD00() { golden_self_compare("sub_10AD00"); }
+fn golden_self_sub_10AD00() {
+    golden_self_compare("sub_10AD00");
+}
 #[test]
-fn golden_self_sub_10AE60() { golden_self_compare("sub_10AE60"); }
+fn golden_self_sub_10AE60() {
+    golden_self_compare("sub_10AE60");
+}
 #[test]
-fn golden_self_sub_10AFA0() { golden_self_compare("sub_10AFA0"); }
+fn golden_self_sub_10AFA0() {
+    golden_self_compare("sub_10AFA0");
+}
 #[test]
-fn golden_self_sub_10B360() { golden_self_compare("sub_10B360"); }
+fn golden_self_sub_10B360() {
+    golden_self_compare("sub_10B360");
+}
 #[test]
-fn golden_self_sub_10B410() { golden_self_compare("sub_10B410"); }
+fn golden_self_sub_10B410() {
+    golden_self_compare("sub_10B410");
+}
 #[test]
-fn golden_self_sub_10B640() { golden_self_compare("sub_10B640"); }
+fn golden_self_sub_10B640() {
+    golden_self_compare("sub_10B640");
+}
 #[test]
-fn golden_self_sub_10B720() { golden_self_compare("sub_10B720"); }
+fn golden_self_sub_10B720() {
+    golden_self_compare("sub_10B720");
+}
 #[test]
-fn golden_self_sub_10B9C0() { golden_self_compare("sub_10B9C0"); }
+fn golden_self_sub_10B9C0() {
+    golden_self_compare("sub_10B9C0");
+}
 #[test]
-fn golden_self_sub_10BF10() { golden_self_compare("sub_10BF10"); }
+fn golden_self_sub_10BF10() {
+    golden_self_compare("sub_10BF10");
+}
 #[test]
-fn golden_self_sub_10FFB0() { golden_self_compare("sub_10FFB0"); }
+fn golden_self_sub_10FFB0() {
+    golden_self_compare("sub_10FFB0");
+}
 #[test]
-fn golden_self_sub_110340() { golden_self_compare("sub_110340"); }
+fn golden_self_sub_110340() {
+    golden_self_compare("sub_110340");
+}
 #[test]
-fn golden_self_sub_1108E0() { golden_self_compare("sub_1108E0"); }
+fn golden_self_sub_1108E0() {
+    golden_self_compare("sub_1108E0");
+}
 #[test]
-fn golden_self_sub_110EB0() { golden_self_compare("sub_110EB0"); }
+fn golden_self_sub_110EB0() {
+    golden_self_compare("sub_110EB0");
+}
 
 // -- complex (block_count >= 5): large functions --
 
 #[test]
-fn golden_self_func() { golden_self_compare("func"); }
+fn golden_self_func() {
+    golden_self_compare("func");
+}
 #[test]
-fn golden_self_sub_100140() { golden_self_compare("sub_100140"); }
+fn golden_self_sub_100140() {
+    golden_self_compare("sub_100140");
+}
 #[test]
-fn golden_self_sub_101030() { golden_self_compare("sub_101030"); }
+fn golden_self_sub_101030() {
+    golden_self_compare("sub_101030");
+}
 #[test]
-fn golden_self_sub_101F10() { golden_self_compare("sub_101F10"); }
+fn golden_self_sub_101F10() {
+    golden_self_compare("sub_101F10");
+}
 #[test]
-fn golden_self_sub_102000() { golden_self_compare("sub_102000"); }
+fn golden_self_sub_102000() {
+    golden_self_compare("sub_102000");
+}
 #[test]
-fn golden_self_sub_102130() { golden_self_compare("sub_102130"); }
+fn golden_self_sub_102130() {
+    golden_self_compare("sub_102130");
+}
 #[test]
-fn golden_self_sub_102260() { golden_self_compare("sub_102260"); }
+fn golden_self_sub_102260() {
+    golden_self_compare("sub_102260");
+}
 #[test]
-fn golden_self_sub_102500() { golden_self_compare("sub_102500"); }
+fn golden_self_sub_102500() {
+    golden_self_compare("sub_102500");
+}
 #[test]
-fn golden_self_sub_102B40() { golden_self_compare("sub_102B40"); }
+fn golden_self_sub_102B40() {
+    golden_self_compare("sub_102B40");
+}
 #[test]
-fn golden_self_sub_102BB0() { golden_self_compare("sub_102BB0"); }
+fn golden_self_sub_102BB0() {
+    golden_self_compare("sub_102BB0");
+}
 #[test]
-fn golden_self_sub_102D00() { golden_self_compare("sub_102D00"); }
+fn golden_self_sub_102D00() {
+    golden_self_compare("sub_102D00");
+}
 #[test]
-fn golden_self_sub_102EE0() { golden_self_compare("sub_102EE0"); }
+fn golden_self_sub_102EE0() {
+    golden_self_compare("sub_102EE0");
+}
 #[test]
-fn golden_self_sub_1030B0() { golden_self_compare("sub_1030B0"); }
+fn golden_self_sub_1030B0() {
+    golden_self_compare("sub_1030B0");
+}
 #[test]
-fn golden_self_sub_1031F0() { golden_self_compare("sub_1031F0"); }
+fn golden_self_sub_1031F0() {
+    golden_self_compare("sub_1031F0");
+}
 #[test]
-fn golden_self_sub_103560() { golden_self_compare("sub_103560"); }
+fn golden_self_sub_103560() {
+    golden_self_compare("sub_103560");
+}
 #[test]
-fn golden_self_sub_103DA0() { golden_self_compare("sub_103DA0"); }
+fn golden_self_sub_103DA0() {
+    golden_self_compare("sub_103DA0");
+}
 #[test]
-fn golden_self_sub_1041A0() { golden_self_compare("sub_1041A0"); }
+fn golden_self_sub_1041A0() {
+    golden_self_compare("sub_1041A0");
+}
 #[test]
-fn golden_self_sub_104440() { golden_self_compare("sub_104440"); }
+fn golden_self_sub_104440() {
+    golden_self_compare("sub_104440");
+}
 #[test]
-fn golden_self_sub_1045E0() { golden_self_compare("sub_1045E0"); }
+fn golden_self_sub_1045E0() {
+    golden_self_compare("sub_1045E0");
+}
 #[test]
-fn golden_self_sub_1048A0() { golden_self_compare("sub_1048A0"); }
+fn golden_self_sub_1048A0() {
+    golden_self_compare("sub_1048A0");
+}
 #[test]
-fn golden_self_sub_104E40() { golden_self_compare("sub_104E40"); }
+fn golden_self_sub_104E40() {
+    golden_self_compare("sub_104E40");
+}
 #[test]
-fn golden_self_sub_105060() { golden_self_compare("sub_105060"); }
+fn golden_self_sub_105060() {
+    golden_self_compare("sub_105060");
+}
 #[test]
-fn golden_self_sub_105140() { golden_self_compare("sub_105140"); }
+fn golden_self_sub_105140() {
+    golden_self_compare("sub_105140");
+}
 #[test]
-fn golden_self_sub_1053D0() { golden_self_compare("sub_1053D0"); }
+fn golden_self_sub_1053D0() {
+    golden_self_compare("sub_1053D0");
+}
 #[test]
-fn golden_self_sub_105590() { golden_self_compare("sub_105590"); }
+fn golden_self_sub_105590() {
+    golden_self_compare("sub_105590");
+}
 #[test]
-fn golden_self_sub_1056B0() { golden_self_compare("sub_1056B0"); }
+fn golden_self_sub_1056B0() {
+    golden_self_compare("sub_1056B0");
+}
 #[test]
-fn golden_self_sub_106670() { golden_self_compare("sub_106670"); }
+fn golden_self_sub_106670() {
+    golden_self_compare("sub_106670");
+}
 #[test]
-fn golden_self_sub_106780() { golden_self_compare("sub_106780"); }
+fn golden_self_sub_106780() {
+    golden_self_compare("sub_106780");
+}
 #[test]
-fn golden_self_sub_106AE0() { golden_self_compare("sub_106AE0"); }
+fn golden_self_sub_106AE0() {
+    golden_self_compare("sub_106AE0");
+}
 #[test]
-fn golden_self_sub_106D30() { golden_self_compare("sub_106D30"); }
+fn golden_self_sub_106D30() {
+    golden_self_compare("sub_106D30");
+}
 
 // ---------------------------------------------------------------------------
 // Layer 2: End-to-end fixture decompilation
@@ -448,7 +748,10 @@ fn golden_self_sub_106D30() { golden_self_compare("sub_106D30"); }
 fn e2e_hello_world_parses_as_c() {
     let c_output = decompile_fixture_function("hello_world", "main");
     assert!(!c_output.is_empty(), "hello_world produced empty output");
-    assert!(c_output.contains("main("), "expected main function in output");
+    assert!(
+        c_output.contains("main("),
+        "expected main function in output"
+    );
     assert_parses_as_c(&c_output, "hello_world/main");
 }
 

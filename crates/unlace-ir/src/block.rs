@@ -29,6 +29,10 @@ pub struct BasicBlock {
 impl BasicBlock {
     /// Create a new empty basic block.
     pub fn new(id: BlockId) -> Self {
-        Self { id, insns: Vec::new(), successors: SmallVec::new() }
+        Self {
+            id,
+            insns: Vec::new(),
+            successors: SmallVec::new(),
+        }
     }
 }

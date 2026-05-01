@@ -18,7 +18,12 @@ fn lift_reg3(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
             let result = ctx.alloc_unique(8);
-            ctx.emit(IrInsn::with_output(ir_op, result, smallvec![a, b], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                ir_op,
+                result,
+                smallvec![a, b],
+                ctx.addr,
+            ));
             ctx.write_to_reg(dst, result);
         }
         (None, _, _) => {}
@@ -40,7 +45,12 @@ fn lift_reg_imm(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
             let result = ctx.alloc_unique(8);
-            ctx.emit(IrInsn::with_output(ir_op, result, smallvec![a, b], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                ir_op,
+                result,
+                smallvec![a, b],
+                ctx.addr,
+            ));
             ctx.write_to_reg(dst, result);
         }
         (None, _, _) => {}
@@ -86,9 +96,19 @@ pub fn lift_nor(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     match (dst, a, b) {
         (Some(dst), Some(a), Some(b)) => {
             let or_result = ctx.alloc_unique(8);
-            ctx.emit(IrInsn::with_output(IrOp::IntOr, or_result, smallvec![a, b], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntOr,
+                or_result,
+                smallvec![a, b],
+                ctx.addr,
+            ));
             let result = ctx.alloc_unique(8);
-            ctx.emit(IrInsn::with_output(IrOp::IntNegate, result, smallvec![or_result], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntNegate,
+                result,
+                smallvec![or_result],
+                ctx.addr,
+            ));
             ctx.write_to_reg(dst, result);
         }
         (None, _, _) => {}
@@ -114,7 +134,12 @@ fn lift_shift_imm(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
     match (dst, src, shamt) {
         (Some(dst), Some(src), Some(shamt)) => {
             let result = ctx.alloc_unique(8);
-            ctx.emit(IrInsn::with_output(ir_op, result, smallvec![src, shamt], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                ir_op,
+                result,
+                smallvec![src, shamt],
+                ctx.addr,
+            ));
             ctx.write_to_reg(dst, result);
         }
         (None, _, _) => {}

@@ -3,8 +3,8 @@ use capstone::prelude::*;
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
-use crate::lift::{operand_to_varnode, LiftCtx};
-use crate::register_file::{NF, ZF, CF, VF, X30};
+use crate::lift::{LiftCtx, operand_to_varnode};
+use crate::register_file::{CF, NF, VF, X30, ZF};
 
 type Ops = [(Arm64OperandType, Arm64Shift)];
 
@@ -199,7 +199,12 @@ fn build_condition(ctx: &mut LiftCtx, cc: Arm64CC) -> Option<Varnode> {
         // NE: Z == 0
         Arm64CC::ARM64_CC_NE => {
             let t = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, t, smallvec![zf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                t,
+                smallvec![zf],
+                ctx.addr,
+            ));
             Some(t)
         }
 
@@ -209,7 +214,12 @@ fn build_condition(ctx: &mut LiftCtx, cc: Arm64CC) -> Option<Varnode> {
         // LO/CC: C == 0
         Arm64CC::ARM64_CC_LO => {
             let t = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, t, smallvec![cf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                t,
+                smallvec![cf],
+                ctx.addr,
+            ));
             Some(t)
         }
 
@@ -219,7 +229,12 @@ fn build_condition(ctx: &mut LiftCtx, cc: Arm64CC) -> Option<Varnode> {
         // PL: N == 0
         Arm64CC::ARM64_CC_PL => {
             let t = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, t, smallvec![nf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                t,
+                smallvec![nf],
+                ctx.addr,
+            ));
             Some(t)
         }
 
@@ -229,63 +244,133 @@ fn build_condition(ctx: &mut LiftCtx, cc: Arm64CC) -> Option<Varnode> {
         // VC: V == 0
         Arm64CC::ARM64_CC_VC => {
             let t = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, t, smallvec![vf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                t,
+                smallvec![vf],
+                ctx.addr,
+            ));
             Some(t)
         }
 
         // HI: C == 1 && Z == 0
         Arm64CC::ARM64_CC_HI => {
             let not_zf = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, not_zf, smallvec![zf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                not_zf,
+                smallvec![zf],
+                ctx.addr,
+            ));
             let t = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolAnd, t, smallvec![cf, not_zf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolAnd,
+                t,
+                smallvec![cf, not_zf],
+                ctx.addr,
+            ));
             Some(t)
         }
 
         // LS: C == 0 || Z == 1
         Arm64CC::ARM64_CC_LS => {
             let not_cf = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, not_cf, smallvec![cf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                not_cf,
+                smallvec![cf],
+                ctx.addr,
+            ));
             let t = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolOr, t, smallvec![not_cf, zf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolOr,
+                t,
+                smallvec![not_cf, zf],
+                ctx.addr,
+            ));
             Some(t)
         }
 
         // GE: N == V
         Arm64CC::ARM64_CC_GE => {
             let ne = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolXor, ne, smallvec![nf, vf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolXor,
+                ne,
+                smallvec![nf, vf],
+                ctx.addr,
+            ));
             let t = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, t, smallvec![ne], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                t,
+                smallvec![ne],
+                ctx.addr,
+            ));
             Some(t)
         }
 
         // LT: N != V
         Arm64CC::ARM64_CC_LT => {
             let t = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolXor, t, smallvec![nf, vf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolXor,
+                t,
+                smallvec![nf, vf],
+                ctx.addr,
+            ));
             Some(t)
         }
 
         // GT: Z == 0 && N == V
         Arm64CC::ARM64_CC_GT => {
             let not_zf = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, not_zf, smallvec![zf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                not_zf,
+                smallvec![zf],
+                ctx.addr,
+            ));
             let n_ne_v = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolXor, n_ne_v, smallvec![nf, vf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolXor,
+                n_ne_v,
+                smallvec![nf, vf],
+                ctx.addr,
+            ));
             let n_eq_v = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, n_eq_v, smallvec![n_ne_v], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                n_eq_v,
+                smallvec![n_ne_v],
+                ctx.addr,
+            ));
             let t = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolAnd, t, smallvec![not_zf, n_eq_v], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolAnd,
+                t,
+                smallvec![not_zf, n_eq_v],
+                ctx.addr,
+            ));
             Some(t)
         }
 
         // LE: Z == 1 || N != V
         Arm64CC::ARM64_CC_LE => {
             let n_ne_v = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolXor, n_ne_v, smallvec![nf, vf], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolXor,
+                n_ne_v,
+                smallvec![nf, vf],
+                ctx.addr,
+            ));
             let t = Varnode::unique(ctx.alloc_unique(), 1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolOr, t, smallvec![zf, n_ne_v], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolOr,
+                t,
+                smallvec![zf, n_ne_v],
+                ctx.addr,
+            ));
             Some(t)
         }
 

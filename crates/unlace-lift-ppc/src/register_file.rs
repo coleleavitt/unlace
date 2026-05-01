@@ -25,10 +25,9 @@ pub const PC_OFFSET: u64 = 288;
 pub const PC_SIZE: u8 = 8;
 
 const PPC_GPR_NAMES: [&str; 32] = [
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
-    "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
-    "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
+    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14",
+    "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27",
+    "r28", "r29", "r30", "r31",
 ];
 
 pub fn ppc64_register_file() -> RegisterFile {
@@ -39,11 +38,26 @@ pub fn ppc64_register_file() -> RegisterFile {
             varnode: Varnode::reg(gpr_offset(i as u64), GPR_SIZE),
         });
     }
-    regs.push(RegisterDef { name: "CR", varnode: Varnode::reg(CR_OFFSET, CR_SIZE) });
-    regs.push(RegisterDef { name: "LR", varnode: Varnode::reg(LR_OFFSET, LR_SIZE) });
-    regs.push(RegisterDef { name: "CTR", varnode: Varnode::reg(CTR_OFFSET, CTR_SIZE) });
-    regs.push(RegisterDef { name: "XER", varnode: Varnode::reg(XER_OFFSET, XER_SIZE) });
-    regs.push(RegisterDef { name: "PC", varnode: Varnode::reg(PC_OFFSET, PC_SIZE) });
+    regs.push(RegisterDef {
+        name: "CR",
+        varnode: Varnode::reg(CR_OFFSET, CR_SIZE),
+    });
+    regs.push(RegisterDef {
+        name: "LR",
+        varnode: Varnode::reg(LR_OFFSET, LR_SIZE),
+    });
+    regs.push(RegisterDef {
+        name: "CTR",
+        varnode: Varnode::reg(CTR_OFFSET, CTR_SIZE),
+    });
+    regs.push(RegisterDef {
+        name: "XER",
+        varnode: Varnode::reg(XER_OFFSET, XER_SIZE),
+    });
+    regs.push(RegisterDef {
+        name: "PC",
+        varnode: Varnode::reg(PC_OFFSET, PC_SIZE),
+    });
     RegisterFile { registers: regs }
 }
 

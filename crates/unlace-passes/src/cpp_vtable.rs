@@ -100,7 +100,10 @@ fn try_match_cpp_vtable(insns: &[IrInsn], callind_idx: usize) -> Option<VtableCa
 
     let slot_index = (vtable_offset / PTR_SIZE) as usize;
 
-    let base_varnode = SsaVarnode { base: base_vn, version: 0 };
+    let base_varnode = SsaVarnode {
+        base: base_vn,
+        version: 0,
+    };
 
     Some(VtableCallInfo {
         base_varnode,
@@ -235,7 +238,10 @@ mod tests {
         assert!(changed, "should detect C++ vtable dispatch");
 
         let key = (BlockId(0), 3); // CALLIND at insn index 3
-        let info = ssa.cpp_vtable_calls.get(&key).expect("vtable call recorded");
+        let info = ssa
+            .cpp_vtable_calls
+            .get(&key)
+            .expect("vtable call recorded");
         assert_eq!(info.vtable_offset, 16);
         assert_eq!(info.slot_index, 2);
         assert_eq!(info.base_varnode.base, this_ptr);
@@ -272,7 +278,10 @@ mod tests {
         assert!(changed, "should detect C++ vtable slot 0");
 
         let key = (BlockId(0), 2);
-        let info = ssa.cpp_vtable_calls.get(&key).expect("vtable call recorded");
+        let info = ssa
+            .cpp_vtable_calls
+            .get(&key)
+            .expect("vtable call recorded");
         assert_eq!(info.vtable_offset, 0);
         assert_eq!(info.slot_index, 0);
     }
@@ -339,11 +348,7 @@ mod tests {
             IrInsn::with_output(
                 IrOp::Ptradd,
                 method_addr,
-                smallvec![
-                    vtable_ptr,
-                    Varnode::constant(2, 8),
-                    Varnode::constant(8, 8)
-                ],
+                smallvec![vtable_ptr, Varnode::constant(2, 8), Varnode::constant(8, 8)],
                 0x1008,
             ),
             IrInsn::with_output(

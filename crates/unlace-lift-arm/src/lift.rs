@@ -1,8 +1,8 @@
 //! AArch64 lifting context and top-level mnemonic dispatch.
 
+use capstone::Insn;
 use capstone::arch::arm64::{Arm64Insn, Arm64OpMem, Arm64OperandType, Arm64Shift};
 use capstone::prelude::*;
-use capstone::Insn;
 use smallvec::smallvec;
 use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,

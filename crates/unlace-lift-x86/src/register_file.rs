@@ -140,79 +140,292 @@ use unlace_ir::{RegisterDef, RegisterFile};
 pub fn x86_64_register_file() -> RegisterFile {
     RegisterFile {
         registers: vec![
-            RegisterDef { name: "RAX", varnode: reg64(RAX) },
-            RegisterDef { name: "RCX", varnode: reg64(RCX) },
-            RegisterDef { name: "RDX", varnode: reg64(RDX) },
-            RegisterDef { name: "RBX", varnode: reg64(RBX) },
-            RegisterDef { name: "RSP", varnode: reg64(RSP) },
-            RegisterDef { name: "RBP", varnode: reg64(RBP) },
-            RegisterDef { name: "RSI", varnode: reg64(RSI) },
-            RegisterDef { name: "RDI", varnode: reg64(RDI) },
-            RegisterDef { name: "R8",  varnode: reg64(R8) },
-            RegisterDef { name: "R9",  varnode: reg64(R9) },
-            RegisterDef { name: "R10", varnode: reg64(R10) },
-            RegisterDef { name: "R11", varnode: reg64(R11) },
-            RegisterDef { name: "R12", varnode: reg64(R12) },
-            RegisterDef { name: "R13", varnode: reg64(R13) },
-            RegisterDef { name: "R14", varnode: reg64(R14) },
-            RegisterDef { name: "R15", varnode: reg64(R15) },
-            RegisterDef { name: "RIP", varnode: reg64(RIP) },
-            RegisterDef { name: "EAX", varnode: reg32(RAX) },
-            RegisterDef { name: "ECX", varnode: reg32(RCX) },
-            RegisterDef { name: "EDX", varnode: reg32(RDX) },
-            RegisterDef { name: "EBX", varnode: reg32(RBX) },
-            RegisterDef { name: "ESP", varnode: reg32(RSP) },
-            RegisterDef { name: "EBP", varnode: reg32(RBP) },
-            RegisterDef { name: "ESI", varnode: reg32(RSI) },
-            RegisterDef { name: "EDI", varnode: reg32(RDI) },
-            RegisterDef { name: "CF",  varnode: flag_vn(CF) },
-            RegisterDef { name: "PF",  varnode: flag_vn(PF) },
-            RegisterDef { name: "AF",  varnode: flag_vn(AF) },
-            RegisterDef { name: "ZF",  varnode: flag_vn(ZF) },
-            RegisterDef { name: "SF",  varnode: flag_vn(SF) },
-            RegisterDef { name: "OF",  varnode: flag_vn(OF) },
+            RegisterDef {
+                name: "RAX",
+                varnode: reg64(RAX),
+            },
+            RegisterDef {
+                name: "RCX",
+                varnode: reg64(RCX),
+            },
+            RegisterDef {
+                name: "RDX",
+                varnode: reg64(RDX),
+            },
+            RegisterDef {
+                name: "RBX",
+                varnode: reg64(RBX),
+            },
+            RegisterDef {
+                name: "RSP",
+                varnode: reg64(RSP),
+            },
+            RegisterDef {
+                name: "RBP",
+                varnode: reg64(RBP),
+            },
+            RegisterDef {
+                name: "RSI",
+                varnode: reg64(RSI),
+            },
+            RegisterDef {
+                name: "RDI",
+                varnode: reg64(RDI),
+            },
+            RegisterDef {
+                name: "R8",
+                varnode: reg64(R8),
+            },
+            RegisterDef {
+                name: "R9",
+                varnode: reg64(R9),
+            },
+            RegisterDef {
+                name: "R10",
+                varnode: reg64(R10),
+            },
+            RegisterDef {
+                name: "R11",
+                varnode: reg64(R11),
+            },
+            RegisterDef {
+                name: "R12",
+                varnode: reg64(R12),
+            },
+            RegisterDef {
+                name: "R13",
+                varnode: reg64(R13),
+            },
+            RegisterDef {
+                name: "R14",
+                varnode: reg64(R14),
+            },
+            RegisterDef {
+                name: "R15",
+                varnode: reg64(R15),
+            },
+            RegisterDef {
+                name: "RIP",
+                varnode: reg64(RIP),
+            },
+            RegisterDef {
+                name: "EAX",
+                varnode: reg32(RAX),
+            },
+            RegisterDef {
+                name: "ECX",
+                varnode: reg32(RCX),
+            },
+            RegisterDef {
+                name: "EDX",
+                varnode: reg32(RDX),
+            },
+            RegisterDef {
+                name: "EBX",
+                varnode: reg32(RBX),
+            },
+            RegisterDef {
+                name: "ESP",
+                varnode: reg32(RSP),
+            },
+            RegisterDef {
+                name: "EBP",
+                varnode: reg32(RBP),
+            },
+            RegisterDef {
+                name: "ESI",
+                varnode: reg32(RSI),
+            },
+            RegisterDef {
+                name: "EDI",
+                varnode: reg32(RDI),
+            },
+            RegisterDef {
+                name: "CF",
+                varnode: flag_vn(CF),
+            },
+            RegisterDef {
+                name: "PF",
+                varnode: flag_vn(PF),
+            },
+            RegisterDef {
+                name: "AF",
+                varnode: flag_vn(AF),
+            },
+            RegisterDef {
+                name: "ZF",
+                varnode: flag_vn(ZF),
+            },
+            RegisterDef {
+                name: "SF",
+                varnode: flag_vn(SF),
+            },
+            RegisterDef {
+                name: "OF",
+                varnode: flag_vn(OF),
+            },
             // XMM0-XMM15 (128-bit SSE)
-            RegisterDef { name: "XMM0",  varnode: reg128(XMM0) },
-            RegisterDef { name: "XMM1",  varnode: reg128(XMM1) },
-            RegisterDef { name: "XMM2",  varnode: reg128(XMM2) },
-            RegisterDef { name: "XMM3",  varnode: reg128(XMM3) },
-            RegisterDef { name: "XMM4",  varnode: reg128(XMM4) },
-            RegisterDef { name: "XMM5",  varnode: reg128(XMM5) },
-            RegisterDef { name: "XMM6",  varnode: reg128(XMM6) },
-            RegisterDef { name: "XMM7",  varnode: reg128(XMM7) },
-            RegisterDef { name: "XMM8",  varnode: reg128(XMM8) },
-            RegisterDef { name: "XMM9",  varnode: reg128(XMM9) },
-            RegisterDef { name: "XMM10", varnode: reg128(XMM10) },
-            RegisterDef { name: "XMM11", varnode: reg128(XMM11) },
-            RegisterDef { name: "XMM12", varnode: reg128(XMM12) },
-            RegisterDef { name: "XMM13", varnode: reg128(XMM13) },
-            RegisterDef { name: "XMM14", varnode: reg128(XMM14) },
-            RegisterDef { name: "XMM15", varnode: reg128(XMM15) },
+            RegisterDef {
+                name: "XMM0",
+                varnode: reg128(XMM0),
+            },
+            RegisterDef {
+                name: "XMM1",
+                varnode: reg128(XMM1),
+            },
+            RegisterDef {
+                name: "XMM2",
+                varnode: reg128(XMM2),
+            },
+            RegisterDef {
+                name: "XMM3",
+                varnode: reg128(XMM3),
+            },
+            RegisterDef {
+                name: "XMM4",
+                varnode: reg128(XMM4),
+            },
+            RegisterDef {
+                name: "XMM5",
+                varnode: reg128(XMM5),
+            },
+            RegisterDef {
+                name: "XMM6",
+                varnode: reg128(XMM6),
+            },
+            RegisterDef {
+                name: "XMM7",
+                varnode: reg128(XMM7),
+            },
+            RegisterDef {
+                name: "XMM8",
+                varnode: reg128(XMM8),
+            },
+            RegisterDef {
+                name: "XMM9",
+                varnode: reg128(XMM9),
+            },
+            RegisterDef {
+                name: "XMM10",
+                varnode: reg128(XMM10),
+            },
+            RegisterDef {
+                name: "XMM11",
+                varnode: reg128(XMM11),
+            },
+            RegisterDef {
+                name: "XMM12",
+                varnode: reg128(XMM12),
+            },
+            RegisterDef {
+                name: "XMM13",
+                varnode: reg128(XMM13),
+            },
+            RegisterDef {
+                name: "XMM14",
+                varnode: reg128(XMM14),
+            },
+            RegisterDef {
+                name: "XMM15",
+                varnode: reg128(XMM15),
+            },
             // YMM0-YMM15 (256-bit AVX, lower 128 bits alias XMM)
-            RegisterDef { name: "YMM0",  varnode: reg256(YMM0) },
-            RegisterDef { name: "YMM1",  varnode: reg256(YMM1) },
-            RegisterDef { name: "YMM2",  varnode: reg256(YMM2) },
-            RegisterDef { name: "YMM3",  varnode: reg256(YMM3) },
-            RegisterDef { name: "YMM4",  varnode: reg256(YMM4) },
-            RegisterDef { name: "YMM5",  varnode: reg256(YMM5) },
-            RegisterDef { name: "YMM6",  varnode: reg256(YMM6) },
-            RegisterDef { name: "YMM7",  varnode: reg256(YMM7) },
-            RegisterDef { name: "YMM8",  varnode: reg256(YMM8) },
-            RegisterDef { name: "YMM9",  varnode: reg256(YMM9) },
-            RegisterDef { name: "YMM10", varnode: reg256(YMM10) },
-            RegisterDef { name: "YMM11", varnode: reg256(YMM11) },
-            RegisterDef { name: "YMM12", varnode: reg256(YMM12) },
-            RegisterDef { name: "YMM13", varnode: reg256(YMM13) },
-            RegisterDef { name: "YMM14", varnode: reg256(YMM14) },
-            RegisterDef { name: "YMM15", varnode: reg256(YMM15) },
-            RegisterDef { name: "ST0", varnode: st_reg(0) },
-            RegisterDef { name: "ST1", varnode: st_reg(1) },
-            RegisterDef { name: "ST2", varnode: st_reg(2) },
-            RegisterDef { name: "ST3", varnode: st_reg(3) },
-            RegisterDef { name: "ST4", varnode: st_reg(4) },
-            RegisterDef { name: "ST5", varnode: st_reg(5) },
-            RegisterDef { name: "ST6", varnode: st_reg(6) },
-            RegisterDef { name: "ST7", varnode: st_reg(7) },
+            RegisterDef {
+                name: "YMM0",
+                varnode: reg256(YMM0),
+            },
+            RegisterDef {
+                name: "YMM1",
+                varnode: reg256(YMM1),
+            },
+            RegisterDef {
+                name: "YMM2",
+                varnode: reg256(YMM2),
+            },
+            RegisterDef {
+                name: "YMM3",
+                varnode: reg256(YMM3),
+            },
+            RegisterDef {
+                name: "YMM4",
+                varnode: reg256(YMM4),
+            },
+            RegisterDef {
+                name: "YMM5",
+                varnode: reg256(YMM5),
+            },
+            RegisterDef {
+                name: "YMM6",
+                varnode: reg256(YMM6),
+            },
+            RegisterDef {
+                name: "YMM7",
+                varnode: reg256(YMM7),
+            },
+            RegisterDef {
+                name: "YMM8",
+                varnode: reg256(YMM8),
+            },
+            RegisterDef {
+                name: "YMM9",
+                varnode: reg256(YMM9),
+            },
+            RegisterDef {
+                name: "YMM10",
+                varnode: reg256(YMM10),
+            },
+            RegisterDef {
+                name: "YMM11",
+                varnode: reg256(YMM11),
+            },
+            RegisterDef {
+                name: "YMM12",
+                varnode: reg256(YMM12),
+            },
+            RegisterDef {
+                name: "YMM13",
+                varnode: reg256(YMM13),
+            },
+            RegisterDef {
+                name: "YMM14",
+                varnode: reg256(YMM14),
+            },
+            RegisterDef {
+                name: "YMM15",
+                varnode: reg256(YMM15),
+            },
+            RegisterDef {
+                name: "ST0",
+                varnode: st_reg(0),
+            },
+            RegisterDef {
+                name: "ST1",
+                varnode: st_reg(1),
+            },
+            RegisterDef {
+                name: "ST2",
+                varnode: st_reg(2),
+            },
+            RegisterDef {
+                name: "ST3",
+                varnode: st_reg(3),
+            },
+            RegisterDef {
+                name: "ST4",
+                varnode: st_reg(4),
+            },
+            RegisterDef {
+                name: "ST5",
+                varnode: st_reg(5),
+            },
+            RegisterDef {
+                name: "ST6",
+                varnode: st_reg(6),
+            },
+            RegisterDef {
+                name: "ST7",
+                varnode: st_reg(7),
+            },
         ],
     }
 }
@@ -228,8 +441,8 @@ pub fn iced_reg_to_varnode(reg: iced_x86::Register) -> Option<(u64, u8)> {
         R::RBP => Some((RBP, 8)),
         R::RSI => Some((RSI, 8)),
         R::RDI => Some((RDI, 8)),
-        R::R8  => Some((R8, 8)),
-        R::R9  => Some((R9, 8)),
+        R::R8 => Some((R8, 8)),
+        R::R9 => Some((R9, 8)),
         R::R10 => Some((R10, 8)),
         R::R11 => Some((R11, 8)),
         R::R12 => Some((R12, 8)),
@@ -246,8 +459,8 @@ pub fn iced_reg_to_varnode(reg: iced_x86::Register) -> Option<(u64, u8)> {
         R::EBP => Some((RBP, 4)),
         R::ESI => Some((RSI, 4)),
         R::EDI => Some((RDI, 4)),
-        R::R8D  => Some((R8, 4)),
-        R::R9D  => Some((R9, 4)),
+        R::R8D => Some((R8, 4)),
+        R::R9D => Some((R9, 4)),
         R::R10D => Some((R10, 4)),
         R::R11D => Some((R11, 4)),
         R::R12D => Some((R12, 4)),
@@ -263,8 +476,8 @@ pub fn iced_reg_to_varnode(reg: iced_x86::Register) -> Option<(u64, u8)> {
         R::BP => Some((RBP, 2)),
         R::SI => Some((RSI, 2)),
         R::DI => Some((RDI, 2)),
-        R::R8W  => Some((R8, 2)),
-        R::R9W  => Some((R9, 2)),
+        R::R8W => Some((R8, 2)),
+        R::R9W => Some((R9, 2)),
         R::R10W => Some((R10, 2)),
         R::R11W => Some((R11, 2)),
         R::R12W => Some((R12, 2)),
@@ -280,8 +493,8 @@ pub fn iced_reg_to_varnode(reg: iced_x86::Register) -> Option<(u64, u8)> {
         R::BPL => Some((RBP, 1)),
         R::SIL => Some((RSI, 1)),
         R::DIL => Some((RDI, 1)),
-        R::R8L  => Some((R8, 1)),
-        R::R9L  => Some((R9, 1)),
+        R::R8L => Some((R8, 1)),
+        R::R9L => Some((R9, 1)),
         R::R10L => Some((R10, 1)),
         R::R11L => Some((R11, 1)),
         R::R12L => Some((R12, 1)),
@@ -295,16 +508,16 @@ pub fn iced_reg_to_varnode(reg: iced_x86::Register) -> Option<(u64, u8)> {
         R::DH => Some((RDX + 1, 1)),
         R::BH => Some((RBX + 1, 1)),
 
-        R::XMM0  => Some((XMM0, 16)),
-        R::XMM1  => Some((XMM1, 16)),
-        R::XMM2  => Some((XMM2, 16)),
-        R::XMM3  => Some((XMM3, 16)),
-        R::XMM4  => Some((XMM4, 16)),
-        R::XMM5  => Some((XMM5, 16)),
-        R::XMM6  => Some((XMM6, 16)),
-        R::XMM7  => Some((XMM7, 16)),
-        R::XMM8  => Some((XMM8, 16)),
-        R::XMM9  => Some((XMM9, 16)),
+        R::XMM0 => Some((XMM0, 16)),
+        R::XMM1 => Some((XMM1, 16)),
+        R::XMM2 => Some((XMM2, 16)),
+        R::XMM3 => Some((XMM3, 16)),
+        R::XMM4 => Some((XMM4, 16)),
+        R::XMM5 => Some((XMM5, 16)),
+        R::XMM6 => Some((XMM6, 16)),
+        R::XMM7 => Some((XMM7, 16)),
+        R::XMM8 => Some((XMM8, 16)),
+        R::XMM9 => Some((XMM9, 16)),
         R::XMM10 => Some((XMM10, 16)),
         R::XMM11 => Some((XMM11, 16)),
         R::XMM12 => Some((XMM12, 16)),
@@ -312,16 +525,16 @@ pub fn iced_reg_to_varnode(reg: iced_x86::Register) -> Option<(u64, u8)> {
         R::XMM14 => Some((XMM14, 16)),
         R::XMM15 => Some((XMM15, 16)),
 
-        R::YMM0  => Some((YMM0, 32)),
-        R::YMM1  => Some((YMM1, 32)),
-        R::YMM2  => Some((YMM2, 32)),
-        R::YMM3  => Some((YMM3, 32)),
-        R::YMM4  => Some((YMM4, 32)),
-        R::YMM5  => Some((YMM5, 32)),
-        R::YMM6  => Some((YMM6, 32)),
-        R::YMM7  => Some((YMM7, 32)),
-        R::YMM8  => Some((YMM8, 32)),
-        R::YMM9  => Some((YMM9, 32)),
+        R::YMM0 => Some((YMM0, 32)),
+        R::YMM1 => Some((YMM1, 32)),
+        R::YMM2 => Some((YMM2, 32)),
+        R::YMM3 => Some((YMM3, 32)),
+        R::YMM4 => Some((YMM4, 32)),
+        R::YMM5 => Some((YMM5, 32)),
+        R::YMM6 => Some((YMM6, 32)),
+        R::YMM7 => Some((YMM7, 32)),
+        R::YMM8 => Some((YMM8, 32)),
+        R::YMM9 => Some((YMM9, 32)),
         R::YMM10 => Some((YMM10, 32)),
         R::YMM11 => Some((YMM11, 32)),
         R::YMM12 => Some((YMM12, 32)),
@@ -366,16 +579,15 @@ mod tests {
     #[test]
     fn test_xmm_no_overlap_with_gp() {
         let gp_offsets = [
-            RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI,
-            R8, R9, R10, R11, R12, R13, R14, R15, RIP,
+            RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15, RIP,
         ];
         let gp_max = gp_offsets.iter().copied().max().unwrap() + 8;
         let flag_max = OF + 1;
         let gp_end = if gp_max > flag_max { gp_max } else { flag_max };
 
         let xmm_offsets = [
-            XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7,
-            XMM8, XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15,
+            XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7, XMM8, XMM9, XMM10, XMM11, XMM12, XMM13,
+            XMM14, XMM15,
         ];
         for &xmm in &xmm_offsets {
             assert!(
@@ -439,8 +651,10 @@ mod tests {
             let curr = vec_offset(i);
             let next = vec_offset(i + 1);
             assert_eq!(
-                next - curr, VEC_STRIDE,
-                "stride between XMM{i} and XMM{} should be {VEC_STRIDE}", i + 1
+                next - curr,
+                VEC_STRIDE,
+                "stride between XMM{i} and XMM{} should be {VEC_STRIDE}",
+                i + 1
             );
         }
     }

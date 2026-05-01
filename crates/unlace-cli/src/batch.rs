@@ -7,8 +7,8 @@ use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
 
 use unlace_ir::ArchId;
-use unlace_loader::{BinaryImage, DwarfInfo, ElfLoader, Loader, import_dwarf};
 use unlace_lift::get_lifter;
+use unlace_loader::{BinaryImage, DwarfInfo, ElfLoader, Loader, import_dwarf};
 
 use crate::args::EmitFormat;
 use crate::pipeline::{self, FunctionEntry, PipelineConfig};
@@ -51,15 +51,13 @@ pub fn run_batch(
         if requested != image.arch {
             bail!(
                 "architecture mismatch: binary is {}, but --arch={} was specified",
-                image.arch, override_str,
+                image.arch,
+                override_str,
             );
         }
     }
 
-    if !matches!(
-        image.arch,
-        ArchId::X86_64 | ArchId::X86 | ArchId::AArch64
-    ) {
+    if !matches!(image.arch, ArchId::X86_64 | ArchId::X86 | ArchId::AArch64) {
         bail!(
             "architecture {} is not yet supported for decompilation",
             image.arch,
@@ -98,11 +96,14 @@ pub fn run_batch(
         .build()
         .context("failed to create thread pool")?;
 
-    tracing::info!(threads = thread_count, functions = functions.len(), "starting batch decompilation");
+    tracing::info!(
+        threads = thread_count,
+        functions = functions.len(),
+        "starting batch decompilation"
+    );
 
-    let results: Vec<BatchResult> = pool.install(|| {
-        decompile_all_parallel(&image, &functions, config, dwarf.as_ref())
-    });
+    let results: Vec<BatchResult> =
+        pool.install(|| decompile_all_parallel(&image, &functions, config, dwarf.as_ref()));
 
     if let Some(dir) = output_dir {
         write_per_file(dir, &results)?;
@@ -165,7 +166,10 @@ fn write_merged(results: &[BatchResult]) {
     let mut buf = String::new();
     for result in sorted {
         let sep: String = std::iter::repeat_n(SEPARATOR_CHAR, SEPARATOR_LEN).collect();
-        buf.push_str(&format!("// {} {} @ {:#x} {}\n", sep, result.name, result.addr, sep));
+        buf.push_str(&format!(
+            "// {} {} @ {:#x} {}\n",
+            sep, result.name, result.addr, sep
+        ));
         match &result.output {
             Ok(text) => buf.push_str(text),
             Err(e) => buf.push_str(&format!("/* FAILED: {} \u{2014} {} */\n", result.name, e)),
@@ -202,7 +206,13 @@ fn write_per_file(dir: &Path, results: &[BatchResult]) -> Result<()> {
 fn sanitize_filename(name: &str, addr: u64) -> String {
     let sanitized: String = name
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
 
     if sanitized.is_empty() {
@@ -253,10 +263,15 @@ mod tests {
         sorted.sort_by_key(|r| r.addr);
         for result in &sorted {
             let sep: String = std::iter::repeat_n(SEPARATOR_CHAR, SEPARATOR_LEN).collect();
-            output.push_str(&format!("// {} {} @ {:#x} {}\n", sep, result.name, result.addr, sep));
+            output.push_str(&format!(
+                "// {} {} @ {:#x} {}\n",
+                sep, result.name, result.addr, sep
+            ));
             match &result.output {
                 Ok(text) => output.push_str(text),
-                Err(e) => output.push_str(&format!("/* FAILED: {} \u{2014} {} */\n", result.name, e)),
+                Err(e) => {
+                    output.push_str(&format!("/* FAILED: {} \u{2014} {} */\n", result.name, e))
+                }
             }
             output.push('\n');
         }
@@ -314,7 +329,10 @@ mod tests {
 
         assert_eq!(results.len(), functions.len());
         let has_failures = results.iter().any(|r| r.output.is_err());
-        assert!(has_failures, "timeout=0 should cause at least some failures");
+        assert!(
+            has_failures,
+            "timeout=0 should cause at least some failures"
+        );
     }
 
     #[test]
@@ -331,13 +349,19 @@ mod tests {
 
         let results = decompile_all_parallel(&image, &functions, &config, None);
         let succeeded = results.iter().filter(|r| r.output.is_ok()).count();
-        assert!(succeeded > 0, "single-threaded batch should decompile at least one function");
+        assert!(
+            succeeded > 0,
+            "single-threaded batch should decompile at least one function"
+        );
     }
 
     #[test]
     fn test_sanitize_filename() {
         assert_eq!(sanitize_filename("main", 0x1000), "main.c");
-        assert_eq!(sanitize_filename("std::vector<int>", 0x2000), "std__vector_int_.c");
+        assert_eq!(
+            sanitize_filename("std::vector<int>", 0x2000),
+            "std__vector_int_.c"
+        );
         assert_eq!(sanitize_filename("", 0x3000), "func_3000.c");
     }
 }

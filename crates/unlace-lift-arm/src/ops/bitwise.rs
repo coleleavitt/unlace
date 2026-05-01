@@ -205,6 +205,36 @@ fn low_mask(width: u64) -> u64 {
     }
 }
 
+fn emit_ror(ctx: &mut LiftCtx, src: Varnode, shift: u64, size: u8) -> Varnode {
+    let bits = u64::from(size) * 8;
+    if shift == 0 {
+        return src;
+    }
+
+    let right = Varnode::unique(ctx.alloc_unique(), size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntRight,
+        right,
+        smallvec![src, Varnode::constant(shift, 1)],
+        ctx.addr,
+    ));
+    let left = Varnode::unique(ctx.alloc_unique(), size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntLeft,
+        left,
+        smallvec![src, Varnode::constant(bits - shift, 1)],
+        ctx.addr,
+    ));
+    let rotated = Varnode::unique(ctx.alloc_unique(), size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        rotated,
+        smallvec![right, left],
+        ctx.addr,
+    ));
+    rotated
+}
+
 pub fn lift_ubfm(ctx: &mut LiftCtx, ops: &Ops) {
     if ops.len() < 4 {
         ctx.emit_unimplemented();
@@ -220,6 +250,8 @@ pub fn lift_ubfm(ctx: &mut LiftCtx, ops: &Ops) {
             let width = if imms >= immr { imms - immr + 1 } else { imms + 1 };
             let value = if immr == 0 {
                 src
+            } else if imms < immr {
+                emit_ror(ctx, src, immr, size)
             } else {
                 let shifted = Varnode::unique(ctx.alloc_unique(), size);
                 ctx.emit(IrInsn::with_output(
@@ -289,7 +321,12 @@ pub fn lift_sbfm(ctx: &mut LiftCtx, ops: &Ops) {
     match (src, immr, imms) {
         (Some(src), Some(immr), Some(imms)) if immr < bits && imms < bits => {
             let width = if imms >= immr { imms - immr + 1 } else { imms + 1 };
-            emit_signed_extract(ctx, ops, src, immr, width, size);
+            if imms < immr {
+                let rotated = emit_ror(ctx, src, immr, size);
+                emit_signed_extract(ctx, ops, rotated, 0, width, size);
+            } else {
+                emit_signed_extract(ctx, ops, src, immr, width, size);
+            }
         }
         _ => ctx.emit_unimplemented(),
     }

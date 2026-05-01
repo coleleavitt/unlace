@@ -371,6 +371,16 @@ mod tests {
     }
 
     #[test]
+    fn arm64_ubfm_lsl_alias_lifts_to_left_shift() {
+        // UBFM/LSL X0, X1, #61, #60  →  d37df020 (Capstone reports LSL X0, X1, #3)
+        let result = lifter()
+            .lift_insn(&[0x20, 0xf0, 0x7d, 0xd3], 0x1000)
+            .expect("should decode");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
     fn arm64_sbfm_lifts_to_signed_extract() {
         // SBFM/SXTB X2, X3, #0, #7  →  93401c62
         let result = lifter()

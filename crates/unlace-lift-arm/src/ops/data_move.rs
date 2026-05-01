@@ -2,7 +2,7 @@ use capstone::arch::arm64::{Arm64OperandType, Arm64Shift};
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
-use crate::lift::{compute_mem_address, operand_to_varnode, LiftCtx};
+use crate::lift::{LiftCtx, compute_mem_address, operand_to_varnode};
 use crate::register_file;
 
 type Ops = [(Arm64OperandType, Arm64Shift)];
@@ -10,7 +10,11 @@ type Ops = [(Arm64OperandType, Arm64Shift)];
 fn dst_size(ops: &Ops) -> u8 {
     match ops.first() {
         Some((Arm64OperandType::Reg(reg), _)) => {
-            if register_file::is_w_reg(*reg) { 4 } else { 8 }
+            if register_file::is_w_reg(*reg) {
+                4
+            } else {
+                8
+            }
         }
         _ => 8,
     }
@@ -61,7 +65,12 @@ pub fn lift_movn(ctx: &mut LiftCtx, ops: &Ops) {
     match src {
         Some(src) => {
             let result = Varnode::unique(ctx.alloc_unique(), size);
-            ctx.emit(IrInsn::with_output(IrOp::IntNegate, result, smallvec![src], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntNegate,
+                result,
+                smallvec![src],
+                ctx.addr,
+            ));
             write_dst(ctx, ops, result);
         }
         None => ctx.emit_unimplemented(),
@@ -93,20 +102,45 @@ pub fn lift_movk(ctx: &mut LiftCtx, ops: &Ops) {
                 // Simple: mask lower 16 bits
                 let mask = Varnode::constant(!0xFFFF_u64, size);
                 let masked = Varnode::unique(ctx.alloc_unique(), size);
-                ctx.emit(IrInsn::with_output(IrOp::IntAnd, masked, smallvec![dst, mask], ctx.addr));
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntAnd,
+                    masked,
+                    smallvec![dst, mask],
+                    ctx.addr,
+                ));
                 let result = Varnode::unique(ctx.alloc_unique(), size);
-                ctx.emit(IrInsn::with_output(IrOp::IntOr, result, smallvec![masked, imm_vn], ctx.addr));
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntOr,
+                    result,
+                    smallvec![masked, imm_vn],
+                    ctx.addr,
+                ));
                 write_dst(ctx, ops, result);
             } else {
                 let shifted_imm = Varnode::unique(ctx.alloc_unique(), size);
                 let shift_vn = Varnode::constant(shift, 1);
-                ctx.emit(IrInsn::with_output(IrOp::IntLeft, shifted_imm, smallvec![imm_vn, shift_vn], ctx.addr));
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntLeft,
+                    shifted_imm,
+                    smallvec![imm_vn, shift_vn],
+                    ctx.addr,
+                ));
                 let mask_val = !(0xFFFF_u64 << shift);
                 let mask = Varnode::constant(mask_val, size);
                 let masked = Varnode::unique(ctx.alloc_unique(), size);
-                ctx.emit(IrInsn::with_output(IrOp::IntAnd, masked, smallvec![dst, mask], ctx.addr));
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntAnd,
+                    masked,
+                    smallvec![dst, mask],
+                    ctx.addr,
+                ));
                 let result = Varnode::unique(ctx.alloc_unique(), size);
-                ctx.emit(IrInsn::with_output(IrOp::IntOr, result, smallvec![masked, shifted_imm], ctx.addr));
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntOr,
+                    result,
+                    smallvec![masked, shifted_imm],
+                    ctx.addr,
+                ));
                 write_dst(ctx, ops, result);
             }
         }
@@ -171,7 +205,12 @@ pub fn lift_ldr_sized(ctx: &mut LiftCtx, ops: &Ops, load_size: u8) {
             if let Some(addr) = compute_mem_address(ctx, mem) {
                 let loaded = ctx.emit_load(load_size, addr);
                 let extended = Varnode::unique(ctx.alloc_unique(), dst_sz);
-                ctx.emit(IrInsn::with_output(IrOp::IntZext, extended, smallvec![loaded], ctx.addr));
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntZext,
+                    extended,
+                    smallvec![loaded],
+                    ctx.addr,
+                ));
                 write_dst(ctx, ops, extended);
             } else {
                 ctx.emit_unimplemented();
@@ -191,7 +230,12 @@ pub fn lift_ldrsw(ctx: &mut LiftCtx, ops: &Ops) {
             if let Some(addr) = compute_mem_address(ctx, mem) {
                 let loaded = ctx.emit_load(4, addr);
                 let extended = Varnode::unique(ctx.alloc_unique(), 8);
-                ctx.emit(IrInsn::with_output(IrOp::IntSext, extended, smallvec![loaded], ctx.addr));
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntSext,
+                    extended,
+                    smallvec![loaded],
+                    ctx.addr,
+                ));
                 write_dst(ctx, ops, extended);
             } else {
                 ctx.emit_unimplemented();
@@ -208,7 +252,11 @@ pub fn lift_ldp(ctx: &mut LiftCtx, ops: &Ops) {
     }
     let size1 = match &ops[0].0 {
         Arm64OperandType::Reg(reg) => {
-            if register_file::is_w_reg(*reg) { 4u8 } else { 8u8 }
+            if register_file::is_w_reg(*reg) {
+                4u8
+            } else {
+                8u8
+            }
         }
         _ => {
             ctx.emit_unimplemented();
@@ -237,7 +285,12 @@ pub fn lift_ldp(ctx: &mut LiftCtx, ops: &Ops) {
 
     let offset = Varnode::constant(size1 as u64, 8);
     let addr2 = Varnode::unique(ctx.alloc_unique(), 8);
-    ctx.emit(IrInsn::with_output(IrOp::IntAdd, addr2, smallvec![base_addr, offset], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAdd,
+        addr2,
+        smallvec![base_addr, offset],
+        ctx.addr,
+    ));
     let loaded2 = ctx.emit_load(size1, addr2);
     if let Some((Arm64OperandType::Reg(reg), _)) = ops.get(1) {
         if !register_file::is_zero_reg(*reg) {
@@ -300,7 +353,11 @@ pub fn lift_stp(ctx: &mut LiftCtx, ops: &Ops) {
     let src2 = operand_to_varnode(ctx, &ops[1].0);
     let size = match &ops[0].0 {
         Arm64OperandType::Reg(reg) => {
-            if register_file::is_w_reg(*reg) { 4u8 } else { 8u8 }
+            if register_file::is_w_reg(*reg) {
+                4u8
+            } else {
+                8u8
+            }
         }
         _ => 8,
     };
@@ -326,7 +383,12 @@ pub fn lift_stp(ctx: &mut LiftCtx, ops: &Ops) {
             ctx.emit_store(base_addr, s1);
             let offset = Varnode::constant(size as u64, 8);
             let addr2 = Varnode::unique(ctx.alloc_unique(), 8);
-            ctx.emit(IrInsn::with_output(IrOp::IntAdd, addr2, smallvec![base_addr, offset], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAdd,
+                addr2,
+                smallvec![base_addr, offset],
+                ctx.addr,
+            ));
             ctx.emit_store(addr2, s2);
         }
         _ => ctx.emit_unimplemented(),

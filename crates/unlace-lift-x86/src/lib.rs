@@ -35,7 +35,9 @@ mod tests {
     #[test]
     fn test_mov_reg_reg() {
         // 48 89 d8 = mov rax, rbx
-        let result = lifter().lift_insn(&[0x48, 0x89, 0xd8], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0x89, 0xd8], 0x1000)
+            .expect("should decode");
         assert_eq!(result.len, 3);
         assert_eq!(result.ir_ops.len(), 1);
         assert!(matches!(result.ir_ops[0].op, IrOp::Copy));
@@ -54,7 +56,9 @@ mod tests {
     #[test]
     fn test_add_reg_reg() {
         // 48 01 d8 = add rax, rbx
-        let result = lifter().lift_insn(&[0x48, 0x01, 0xd8], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0x01, 0xd8], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
         // Should also emit flag computations
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntCarry));
@@ -65,7 +69,9 @@ mod tests {
     #[test]
     fn test_sub_reg_reg() {
         // 48 29 d8 = sub rax, rbx
-        let result = lifter().lift_insn(&[0x48, 0x29, 0xd8], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0x29, 0xd8], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLess));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSborrow));
@@ -74,44 +80,56 @@ mod tests {
     #[test]
     fn test_cmp() {
         // 48 39 d8 = cmp rax, rbx
-        let result = lifter().lift_insn(&[0x48, 0x39, 0xd8], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0x39, 0xd8], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
         // CMP should not write to a register destination
-        assert!(result
-            .ir_ops
-            .iter()
-            .filter(|i| i.op == IrOp::Copy)
-            .all(|i| {
-                i.output
-                    .map_or(true, |o| o.space == unlace_ir::SpaceId::Register)
-            }));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .filter(|i| i.op == IrOp::Copy)
+                .all(|i| {
+                    i.output
+                        .map_or(true, |o| o.space == unlace_ir::SpaceId::Register)
+                })
+        );
     }
 
     #[test]
     fn test_test() {
         // 48 85 c0 = test rax, rax
-        let result = lifter().lift_insn(&[0x48, 0x85, 0xc0], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0x85, 0xc0], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
     }
 
     #[test]
     fn test_and() {
         // 48 21 d8 = and rax, rbx
-        let result = lifter().lift_insn(&[0x48, 0x21, 0xd8], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0x21, 0xd8], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
     }
 
     #[test]
     fn test_or() {
         // 48 09 d8 = or rax, rbx
-        let result = lifter().lift_insn(&[0x48, 0x09, 0xd8], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0x09, 0xd8], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
     }
 
     #[test]
     fn test_xor() {
         // 48 31 c0 = xor rax, rax
-        let result = lifter().lift_insn(&[0x48, 0x31, 0xc0], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0x31, 0xc0], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntXor));
     }
 
@@ -136,21 +154,27 @@ mod tests {
     #[test]
     fn test_not() {
         // 48 f7 d0 = not rax
-        let result = lifter().lift_insn(&[0x48, 0xf7, 0xd0], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0xf7, 0xd0], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntNegate));
     }
 
     #[test]
     fn test_neg() {
         // 48 f7 d8 = neg rax
-        let result = lifter().lift_insn(&[0x48, 0xf7, 0xd8], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0xf7, 0xd8], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Int2comp));
     }
 
     #[test]
     fn test_jmp() {
         // eb 10 = jmp short +0x10 (relative to next insn at 0x1002 -> target 0x1012)
-        let result = lifter().lift_insn(&[0xeb, 0x10], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0xeb, 0x10], 0x1000)
+            .expect("should decode");
         assert_eq!(result.len, 2);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Branch));
     }
@@ -158,14 +182,18 @@ mod tests {
     #[test]
     fn test_je() {
         // 74 10 = je short +0x10 (target 0x1012)
-        let result = lifter().lift_insn(&[0x74, 0x10], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x74, 0x10], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Cbranch));
     }
 
     #[test]
     fn test_jne() {
         // 75 10 = jne short +0x10
-        let result = lifter().lift_insn(&[0x75, 0x10], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x75, 0x10], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Cbranch));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate));
     }
@@ -213,7 +241,12 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0x48, 0x8d, 0x04, 0x0b], 0x1000)
             .expect("should decode");
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy || i.op == IrOp::IntAdd));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Copy || i.op == IrOp::IntAdd)
+        );
     }
 
     #[test]
@@ -230,10 +263,12 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0x66, 0x0f, 0x73, 0xd0, 0x01], 0x1000)
             .expect("should not panic");
-        assert!(result
-            .ir_ops
-            .iter()
-            .any(|i| matches!(i.op, IrOp::Unimplemented)));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| matches!(i.op, IrOp::Unimplemented))
+        );
     }
 
     #[test]
@@ -254,7 +289,9 @@ mod tests {
     #[test]
     fn test_div() {
         // 48 f7 f3 = div rbx
-        let result = lifter().lift_insn(&[0x48, 0xf7, 0xf3], 0x1000).expect("should decode");
+        let result = lifter()
+            .lift_insn(&[0x48, 0xf7, 0xf3], 0x1000)
+            .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntDiv));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRem));
     }
@@ -292,10 +329,10 @@ mod tests {
         // This is a meta-test: ensure various edge cases don't panic.
         // Decode bytes that aren't a clean instruction but still decodeable.
         let cases: Vec<&[u8]> = vec![
-            &[0xcc],             // int3
-            &[0xf4],             // hlt
-            &[0x0f, 0x05],      // syscall
-            &[0x0f, 0x0b],      // ud2
+            &[0xcc],                   // int3
+            &[0xf4],                   // hlt
+            &[0x0f, 0x05],             // syscall
+            &[0x0f, 0x0b],             // ud2
             &[0xf3, 0x0f, 0x1e, 0xfa], // endbr64
         ];
         for bytes in cases {
@@ -322,8 +359,16 @@ mod tests {
             result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
             "REP MOVSB should emit Callother"
         );
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x1, 8), "tag should be MEMCPY=0x1");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(0x1, 8),
+            "tag should be MEMCPY=0x1"
+        );
     }
 
     #[test]
@@ -333,9 +378,17 @@ mod tests {
             .lift_insn(&[0xf3, 0x48, 0xa5], 0x1000)
             .expect("should decode REP MOVSQ");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x1, 8));
-        assert_eq!(co.inputs[4], unlace_ir::Varnode::constant(8, 8), "elem_size should be 8");
+        assert_eq!(
+            co.inputs[4],
+            unlace_ir::Varnode::constant(8, 8),
+            "elem_size should be 8"
+        );
     }
 
     #[test]
@@ -349,8 +402,16 @@ mod tests {
             result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
             "REP STOSB should emit Callother"
         );
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x2, 8), "tag should be MEMSET=0x2");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(0x2, 8),
+            "tag should be MEMSET=0x2"
+        );
     }
 
     #[test]
@@ -360,9 +421,17 @@ mod tests {
             .lift_insn(&[0xf3, 0xab], 0x1000)
             .expect("should decode REP STOSD");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x2, 8));
-        assert_eq!(co.inputs[4], unlace_ir::Varnode::constant(4, 8), "elem_size should be 4");
+        assert_eq!(
+            co.inputs[4],
+            unlace_ir::Varnode::constant(4, 8),
+            "elem_size should be 4"
+        );
     }
 
     #[test]
@@ -376,9 +445,20 @@ mod tests {
             result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
             "REPE CMPSB should emit Callother"
         );
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x3, 8), "tag should be MEMCMP=0x3");
-        assert!(co.output.is_some(), "CMPS Callother should produce a result");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(0x3, 8),
+            "tag should be MEMCMP=0x3"
+        );
+        assert!(
+            co.output.is_some(),
+            "CMPS Callother should produce a result"
+        );
     }
 
     #[test]
@@ -402,9 +482,10 @@ mod tests {
         let rcx = unlace_ir::Varnode::reg(0x08, 8); // RCX offset
         let zero = unlace_ir::Varnode::constant(0, 8);
         assert!(
-            result.ir_ops.iter().any(|i| {
-                i.op == IrOp::Copy && i.output == Some(rcx) && i.inputs[0] == zero
-            }),
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::Copy && i.output == Some(rcx) && i.inputs[0] == zero }),
             "should zero RCX after REP MOVSB"
         );
     }
@@ -436,7 +517,11 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0x66, 0x0F, 0x6F, 0x07], 0x1000)
             .unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         let dst = co.output.expect("load form should have output");
         assert_eq!(dst.size, 16);
         assert_eq!(dst.space, unlace_ir::SpaceId::Register);
@@ -449,7 +534,11 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0xF3, 0x0F, 0x6F, 0x0E], 0x1000)
             .unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         let dst = co.output.expect("load form should have output");
         assert_eq!(dst.size, 16);
     }
@@ -461,7 +550,11 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0x66, 0x0F, 0xFC, 0xC1], 0x1000)
             .unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs.len(), 3);
         let dst = co.output.expect("binop should have output");
         assert_eq!(dst.size, 16);
@@ -474,8 +567,15 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0x66, 0x0F, 0xEF, 0xC0], 0x1000)
             .unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert_eq!(co.inputs[1], co.inputs[2], "pxor xmm0,xmm0 sources should be equal");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(
+            co.inputs[1], co.inputs[2],
+            "pxor xmm0,xmm0 sources should be equal"
+        );
     }
 
     #[test]
@@ -485,7 +585,11 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0x66, 0x0F, 0xD4, 0xD3], 0x1000)
             .unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         let dst = co.output.expect("paddq should produce output");
         assert_eq!(dst.size, 16);
     }
@@ -543,7 +647,9 @@ mod tests {
     #[test]
     fn test_cbw() {
         // 66 98 = CBW (sign-extend AL to AX)
-        let result = lifter().lift_insn(&[0x66, 0x98], 0x1000).expect("should decode CBW");
+        let result = lifter()
+            .lift_insn(&[0x66, 0x98], 0x1000)
+            .expect("should decode CBW");
         assert_eq!(result.len, 2);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
     }
@@ -551,7 +657,9 @@ mod tests {
     #[test]
     fn test_cwde() {
         // 98 = CWDE (sign-extend AX to EAX)
-        let result = lifter().lift_insn(&[0x98], 0x1000).expect("should decode CWDE");
+        let result = lifter()
+            .lift_insn(&[0x98], 0x1000)
+            .expect("should decode CWDE");
         assert_eq!(result.len, 1);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
     }
@@ -559,7 +667,9 @@ mod tests {
     #[test]
     fn test_cdqe() {
         // 48 98 = CDQE (sign-extend EAX to RAX)
-        let result = lifter().lift_insn(&[0x48, 0x98], 0x1000).expect("should decode CDQE");
+        let result = lifter()
+            .lift_insn(&[0x48, 0x98], 0x1000)
+            .expect("should decode CDQE");
         assert_eq!(result.len, 2);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
     }
@@ -567,7 +677,9 @@ mod tests {
     #[test]
     fn test_cdq() {
         // 99 = CDQ (sign-extend EAX to EDX:EAX)
-        let result = lifter().lift_insn(&[0x99], 0x1000).expect("should decode CDQ");
+        let result = lifter()
+            .lift_insn(&[0x99], 0x1000)
+            .expect("should decode CDQ");
         assert_eq!(result.len, 1);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSright));
     }
@@ -575,7 +687,9 @@ mod tests {
     #[test]
     fn test_cqo() {
         // 48 99 = CQO (sign-extend RAX to RDX:RAX)
-        let result = lifter().lift_insn(&[0x48, 0x99], 0x1000).expect("should decode CQO");
+        let result = lifter()
+            .lift_insn(&[0x48, 0x99], 0x1000)
+            .expect("should decode CQO");
         assert_eq!(result.len, 2);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSright));
     }
@@ -585,11 +699,16 @@ mod tests {
     #[test]
     fn test_leave() {
         // C9 = LEAVE (MOV RSP,RBP; POP RBP)
-        let result = lifter().lift_insn(&[0xc9], 0x1000).expect("should decode LEAVE");
+        let result = lifter()
+            .lift_insn(&[0xc9], 0x1000)
+            .expect("should decode LEAVE");
         assert_eq!(result.len, 1);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
-        assert_eq!(result.ir_ops.iter().filter(|i| i.op == IrOp::Copy).count(), 3);
+        assert_eq!(
+            result.ir_ops.iter().filter(|i| i.op == IrOp::Copy).count(),
+            3
+        );
     }
 
     #[test]
@@ -598,9 +717,16 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0x66, 0x0F, 0x7F, 0x07], 0x1000)
             .expect("should decode movdqa store");
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert!(co.output.is_none(), "store form should have no output");
-        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(sse_tag::MOVDQA, 8));
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(sse_tag::MOVDQA, 8)
+        );
     }
 
     // -- SETcc lifting -------------------------------------------------------
@@ -784,10 +910,12 @@ mod tests {
     fn test_lift_movaps_reg_to_reg() {
         // 0F 28 C1 = movaps xmm0, xmm1
         assert_callother_tag(&[0x0F, 0x28, 0xC1], sse_tag::MOVAPS);
-        let result = lifter()
-            .lift_insn(&[0x0F, 0x28, 0xC1], 0x1000)
+        let result = lifter().lift_insn(&[0x0F, 0x28, 0xC1], 0x1000).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
             .unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
         let dst = co.output.expect("reg form should have output");
         assert_eq!(dst.size, 16);
     }
@@ -796,10 +924,12 @@ mod tests {
     fn test_lift_movups_mem_to_reg() {
         // 0F 10 07 = movups xmm0, [rdi]
         assert_callother_tag(&[0x0F, 0x10, 0x07], sse_tag::MOVUPS);
-        let result = lifter()
-            .lift_insn(&[0x0F, 0x10, 0x07], 0x1000)
+        let result = lifter().lift_insn(&[0x0F, 0x10, 0x07], 0x1000).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
             .unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
         let dst = co.output.expect("load form should have output");
         assert_eq!(dst.size, 16);
     }
@@ -811,7 +941,11 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0xF2, 0x0F, 0x10, 0xC1], 0x1000)
             .unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         let dst = co.output.expect("reg form should have output");
         assert_eq!(dst.size, 16);
     }
@@ -825,7 +959,11 @@ mod tests {
             .lift_insn(&[0x48, 0x11, 0xD8], 0x1000)
             .expect("should decode adc rax, rbx");
         // ADC: tmp = a + b; result = tmp + zext(CF)
-        let add_count = result.ir_ops.iter().filter(|i| i.op == IrOp::IntAdd).count();
+        let add_count = result
+            .ir_ops
+            .iter()
+            .filter(|i| i.op == IrOp::IntAdd)
+            .count();
         assert!(add_count >= 2, "ADC should emit at least two IntAdd ops");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntCarry));
@@ -837,7 +975,11 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0x48, 0x19, 0xD8], 0x1000)
             .expect("should decode sbb rax, rbx");
-        let sub_count = result.ir_ops.iter().filter(|i| i.op == IrOp::IntSub).count();
+        let sub_count = result
+            .ir_ops
+            .iter()
+            .filter(|i| i.op == IrOp::IntSub)
+            .count();
         assert!(sub_count >= 2, "SBB should emit at least two IntSub ops");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLess));
@@ -880,7 +1022,10 @@ mod tests {
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
         let cf = unlace_ir::Varnode::reg(256, 1);
         assert!(
-            result.ir_ops.iter().any(|i| i.op == IrOp::Copy && i.output == Some(cf)),
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Copy && i.output == Some(cf)),
             "BT should write CF"
         );
     }
@@ -892,7 +1037,11 @@ mod tests {
             .lift_insn(&[0x0F, 0xBC, 0xC3], 0x1000)
             .expect("should decode bsf eax, ebx");
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::BSF, 8));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntEqual));
     }
@@ -904,7 +1053,11 @@ mod tests {
             .lift_insn(&[0x0F, 0xBD, 0xC3], 0x1000)
             .expect("should decode bsr eax, ebx");
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::BSR, 8));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntEqual));
     }
@@ -916,10 +1069,24 @@ mod tests {
             .lift_insn(&[0xF3, 0x0F, 0xBC, 0xC3], 0x1000)
             .expect("should decode tzcnt eax, ebx");
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::TZCNT, 8));
-        let eq_count = result.ir_ops.iter().filter(|i| i.op == IrOp::IntEqual).count();
-        assert!(eq_count >= 2, "TZCNT should set both ZF and CF via IntEqual");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(bit_tag::TZCNT, 8)
+        );
+        let eq_count = result
+            .ir_ops
+            .iter()
+            .filter(|i| i.op == IrOp::IntEqual)
+            .count();
+        assert!(
+            eq_count >= 2,
+            "TZCNT should set both ZF and CF via IntEqual"
+        );
     }
 
     #[test]
@@ -930,8 +1097,15 @@ mod tests {
             .expect("should decode lzcnt eax, ebx");
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Lzcount));
-        let eq_count = result.ir_ops.iter().filter(|i| i.op == IrOp::IntEqual).count();
-        assert!(eq_count >= 2, "LZCNT should set both ZF and CF via IntEqual");
+        let eq_count = result
+            .ir_ops
+            .iter()
+            .filter(|i| i.op == IrOp::IntEqual)
+            .count();
+        assert!(
+            eq_count >= 2,
+            "LZCNT should set both ZF and CF via IntEqual"
+        );
     }
 
     #[test]
@@ -953,7 +1127,11 @@ mod tests {
             .expect("should decode ud2");
         assert_eq!(result.len, 2);
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::TRAP, 8));
         assert!(co.output.is_none(), "UD2 should have no output");
     }
@@ -971,8 +1149,10 @@ mod tests {
             !result.ir_ops.iter().any(|i| i.op == IrOp::Callother),
             "non-LOCK CMPXCHG should not emit Callother"
         );
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSub),
-            "non-LOCK CMPXCHG should compute RAX - dst for ZF");
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::IntSub),
+            "non-LOCK CMPXCHG should compute RAX - dst for ZF"
+        );
     }
 
     #[test]
@@ -992,12 +1172,17 @@ mod tests {
             unlace_ir::Varnode::constant(atomic_tag::CMPXCHG, 8),
             "tag should be CMPXCHG"
         );
-        assert_eq!(co.inputs.len(), 4, "Callother CMPXCHG takes (tag, dst, src, RAX)");
+        assert_eq!(
+            co.inputs.len(),
+            4,
+            "Callother CMPXCHG takes (tag, dst, src, RAX)"
+        );
         let zf = unlace_ir::Varnode::reg(259, 1);
         assert!(
-            result.ir_ops.iter().any(|i| {
-                i.op == IrOp::IntEqual && i.output == Some(zf)
-            }),
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::IntEqual && i.output == Some(zf) }),
             "LOCK CMPXCHG should set ZF from intrinsic result"
         );
     }
@@ -1014,8 +1199,10 @@ mod tests {
             "non-LOCK XADD should not emit Callother"
         );
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntCarry),
-            "XADD should set CF like ADD");
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::IntCarry),
+            "XADD should set CF like ADD"
+        );
     }
 
     #[test]
@@ -1036,8 +1223,10 @@ mod tests {
             "tag should be XADD"
         );
         assert_eq!(co.inputs.len(), 3, "Callother XADD takes (tag, dst, src)");
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd),
-            "LOCK XADD still updates flags via add of original + src");
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd),
+            "LOCK XADD still updates flags via add of original + src"
+        );
     }
 
     #[test]
@@ -1082,8 +1271,10 @@ mod tests {
             .lift_insn(&[0x48, 0x0F, 0x38, 0xF0, 0x07], 0x1000)
             .expect("should decode movbe rax, [rdi]");
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load),
-            "MOVBE load form should emit a Load before swapping");
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::Load),
+            "MOVBE load form should emit a Load before swapping"
+        );
         let co = result
             .ir_ops
             .iter()
@@ -1112,16 +1303,24 @@ mod tests {
             unlace_ir::Varnode::constant(0x4, 8),
             "tag should be MEMSCAN=0x4"
         );
-        assert_eq!(co.inputs.len(), 5, "MEMSCAN takes (tag, ptr, val, count, elem_size)");
-        assert_eq!(co.inputs[4], unlace_ir::Varnode::constant(1, 8),
-            "elem_size should be 1 for SCASB");
+        assert_eq!(
+            co.inputs.len(),
+            5,
+            "MEMSCAN takes (tag, ptr, val, count, elem_size)"
+        );
+        assert_eq!(
+            co.inputs[4],
+            unlace_ir::Varnode::constant(1, 8),
+            "elem_size should be 1 for SCASB"
+        );
 
         let rcx = unlace_ir::Varnode::reg(8, 8);
         let zero = unlace_ir::Varnode::constant(0, 8);
         assert!(
-            result.ir_ops.iter().any(|i| {
-                i.op == IrOp::Copy && i.output == Some(rcx) && i.inputs[0] == zero
-            }),
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::Copy && i.output == Some(rcx) && i.inputs[0] == zero }),
             "should zero RCX after REPNE SCASB"
         );
     }
@@ -1138,12 +1337,12 @@ mod tests {
             .iter()
             .find(|i| i.op == IrOp::Callother)
             .expect("REPE SCASD should emit Callother");
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(0x4, 8),);
         assert_eq!(
-            co.inputs[0],
-            unlace_ir::Varnode::constant(0x4, 8),
+            co.inputs[4],
+            unlace_ir::Varnode::constant(4, 8),
+            "elem_size should be 4 for SCASD"
         );
-        assert_eq!(co.inputs[4], unlace_ir::Varnode::constant(4, 8),
-            "elem_size should be 4 for SCASD");
     }
 
     use crate::ops::fpu::fpu_tag;
@@ -1172,7 +1371,11 @@ mod tests {
     fn test_lift_fld_mem_dword() {
         assert_fpu_tag(&[0xD9, 0x00], fpu_tag::FLD);
         let result = lifter().lift_insn(&[0xD9, 0x00], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         let dst = co.output.expect("FLD should write to ST(0)");
         assert_eq!(dst.size, 10, "FLD output is 80-bit ST(0)");
         assert_eq!(dst.offset, crate::register_file::ST0);
@@ -1182,7 +1385,11 @@ mod tests {
     fn test_lift_fld_st_register() {
         assert_fpu_tag(&[0xD9, 0xC1], fpu_tag::FLD);
         let result = lifter().lift_insn(&[0xD9, 0xC1], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.output.unwrap().offset, crate::register_file::ST0);
     }
 
@@ -1190,8 +1397,15 @@ mod tests {
     fn test_lift_fstp_mem() {
         assert_fpu_tag(&[0xDD, 0x18], fpu_tag::FSTP);
         let result = lifter().lift_insn(&[0xDD, 0x18], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert!(co.output.is_none(), "FSTP m64fp does not write to a varnode output");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert!(
+            co.output.is_none(),
+            "FSTP m64fp does not write to a varnode output"
+        );
         assert_eq!(co.inputs.len(), 3, "FSTP m: (tag, dst_addr, src=ST0)");
     }
 
@@ -1204,7 +1418,11 @@ mod tests {
     fn test_lift_fst_st_register() {
         assert_fpu_tag(&[0xDD, 0xD2], fpu_tag::FST);
         let result = lifter().lift_insn(&[0xDD, 0xD2], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         let dst = co.output.expect("FST ST(i) writes to a register output");
         assert_eq!(dst.size, 10);
     }
@@ -1214,7 +1432,11 @@ mod tests {
         // D8 C1 = fadd st0, st1
         assert_fpu_tag(&[0xD8, 0xC1], fpu_tag::FADD);
         let result = lifter().lift_insn(&[0xD8, 0xC1], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs.len(), 3, "FADD st0,st1: (tag, st0, st1)");
         let dst = co.output.expect("FADD writes to ST(0)");
         assert_eq!(dst.offset, crate::register_file::ST0);
@@ -1225,7 +1447,11 @@ mod tests {
         // DE C1 = faddp st1, st0
         assert_fpu_tag(&[0xDE, 0xC1], fpu_tag::FADD);
         let result = lifter().lift_insn(&[0xDE, 0xC1], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         let dst = co.output.expect("FADDP writes to ST(1)");
         assert_eq!(dst.offset, crate::register_file::ST1);
     }
@@ -1235,7 +1461,11 @@ mod tests {
         // D8 E1 = fsub st0, st1
         assert_fpu_tag(&[0xD8, 0xE1], fpu_tag::FSUB);
         let result = lifter().lift_insn(&[0xD8, 0xE1], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs.len(), 3);
     }
 
@@ -1244,10 +1474,22 @@ mod tests {
         // D8 E9 = fsubr st0, st1   (st0 = st1 - st0)
         assert_fpu_tag(&[0xD8, 0xE9], fpu_tag::FSUB);
         let result = lifter().lift_insn(&[0xD8, 0xE9], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         // Forward FSUB st0,st1 emits (st0, st1); reverse FSUBR swaps -> (st1, st0).
-        assert_eq!(co.inputs[1].offset, crate::register_file::ST1, "FSUBR lhs is st1");
-        assert_eq!(co.inputs[2].offset, crate::register_file::ST0, "FSUBR rhs is st0");
+        assert_eq!(
+            co.inputs[1].offset,
+            crate::register_file::ST1,
+            "FSUBR lhs is st1"
+        );
+        assert_eq!(
+            co.inputs[2].offset,
+            crate::register_file::ST0,
+            "FSUBR rhs is st0"
+        );
     }
 
     #[test]
@@ -1255,7 +1497,11 @@ mod tests {
         // D8 00 = fadd dword [rax]
         assert_fpu_tag(&[0xD8, 0x00], fpu_tag::FADD);
         let result = lifter().lift_insn(&[0xD8, 0x00], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         let dst = co.output.expect("FADD m32 writes to ST(0)");
         assert_eq!(dst.offset, crate::register_file::ST0);
     }
@@ -1265,7 +1511,11 @@ mod tests {
         // D8 C9 = fmul st0, st1
         assert_fpu_tag(&[0xD8, 0xC9], fpu_tag::FMUL);
         let result = lifter().lift_insn(&[0xD8, 0xC9], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs.len(), 3);
         let dst = co.output.expect("FMUL writes to ST(0)");
         assert_eq!(dst.offset, crate::register_file::ST0);
@@ -1276,7 +1526,11 @@ mod tests {
         // DE C9 = fmulp st1, st0
         assert_fpu_tag(&[0xDE, 0xC9], fpu_tag::FMUL);
         let result = lifter().lift_insn(&[0xDE, 0xC9], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         let dst = co.output.expect("FMULP writes to ST(1)");
         assert_eq!(dst.offset, crate::register_file::ST1);
     }
@@ -1292,9 +1546,21 @@ mod tests {
         // D8 F9 = fdivr st0, st1   (st0 = st1 / st0)
         assert_fpu_tag(&[0xD8, 0xF9], fpu_tag::FDIV);
         let result = lifter().lift_insn(&[0xD8, 0xF9], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert_eq!(co.inputs[1].offset, crate::register_file::ST1, "FDIVR lhs is st1");
-        assert_eq!(co.inputs[2].offset, crate::register_file::ST0, "FDIVR rhs is st0");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(
+            co.inputs[1].offset,
+            crate::register_file::ST1,
+            "FDIVR lhs is st1"
+        );
+        assert_eq!(
+            co.inputs[2].offset,
+            crate::register_file::ST0,
+            "FDIVR rhs is st0"
+        );
     }
 
     #[test]
@@ -1302,8 +1568,15 @@ mod tests {
         // D8 D1 = fcom st1
         assert_fpu_tag(&[0xD8, 0xD1], fpu_tag::FCOM);
         let result = lifter().lift_insn(&[0xD8, 0xD1], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert!(co.output.is_none(), "FCOM does not produce a varnode output");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert!(
+            co.output.is_none(),
+            "FCOM does not produce a varnode output"
+        );
         assert_eq!(co.inputs.len(), 3, "FCOM: (tag, st0, st1)");
         assert_eq!(co.inputs[1].offset, crate::register_file::ST0);
         assert_eq!(co.inputs[2].offset, crate::register_file::ST1);
@@ -1314,7 +1587,11 @@ mod tests {
         // DE D9 = fcompp   (compare ST(0) with ST(1), pop both)
         assert_fpu_tag(&[0xDE, 0xD9], fpu_tag::FCOM);
         let result = lifter().lift_insn(&[0xDE, 0xD9], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs[1].offset, crate::register_file::ST0);
         assert_eq!(co.inputs[2].offset, crate::register_file::ST1);
     }
@@ -1330,8 +1607,15 @@ mod tests {
         // D9 C9 = fxch st1
         assert_fpu_tag(&[0xD9, 0xC9], fpu_tag::FXCH);
         let result = lifter().lift_insn(&[0xD9, 0xC9], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert!(co.output.is_none(), "FXCH does not produce a single-varnode output");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert!(
+            co.output.is_none(),
+            "FXCH does not produce a single-varnode output"
+        );
         assert_eq!(co.inputs.len(), 3, "FXCH: (tag, st0, st1)");
         assert_eq!(co.inputs[1].offset, crate::register_file::ST0);
         assert_eq!(co.inputs[2].offset, crate::register_file::ST1);
@@ -1342,7 +1626,11 @@ mod tests {
         // D9 CB = fxch st3
         assert_fpu_tag(&[0xD9, 0xCB], fpu_tag::FXCH);
         let result = lifter().lift_insn(&[0xD9, 0xCB], 0x1000).unwrap();
-        let co = result.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
         assert_eq!(co.inputs[2].offset, crate::register_file::ST3);
     }
 
@@ -1351,29 +1639,37 @@ mod tests {
         // Synthetic prologue/body of an x87-using function — every instruction
         // should reach a recognised handler (no Unimplemented residue).
         let stream: &[(&str, &[u8])] = &[
-            ("fld dword [rax]",  &[0xD9, 0x00]),
-            ("fld st(1)",        &[0xD9, 0xC1]),
-            ("fmul st0,st0",     &[0xD8, 0xC8]),
-            ("fxch st1",         &[0xD9, 0xC9]),
-            ("faddp st1,st0",    &[0xDE, 0xC1]),
-            ("fmulp st1,st0",    &[0xDE, 0xC9]),
-            ("fsub st0,st1",     &[0xD8, 0xE1]),
-            ("fdivr st0,st1",    &[0xD8, 0xF9]),
-            ("fcom st1",         &[0xD8, 0xD1]),
-            ("fcompp",           &[0xDE, 0xD9]),
+            ("fld dword [rax]", &[0xD9, 0x00]),
+            ("fld st(1)", &[0xD9, 0xC1]),
+            ("fmul st0,st0", &[0xD8, 0xC8]),
+            ("fxch st1", &[0xD9, 0xC9]),
+            ("faddp st1,st0", &[0xDE, 0xC1]),
+            ("fmulp st1,st0", &[0xDE, 0xC9]),
+            ("fsub st0,st1", &[0xD8, 0xE1]),
+            ("fdivr st0,st1", &[0xD8, 0xF9]),
+            ("fcom st1", &[0xD8, 0xD1]),
+            ("fcompp", &[0xDE, 0xD9]),
             ("fstp qword [rax]", &[0xDD, 0x18]),
-            ("fst st2",          &[0xDD, 0xD2]),
+            ("fst st2", &[0xDD, 0xD2]),
         ];
 
         let l = lifter();
         for (label, bytes) in stream {
-            let lifted = l.lift_insn(bytes, 0x1000)
+            let lifted = l
+                .lift_insn(bytes, 0x1000)
                 .unwrap_or_else(|e| panic!("{label}: lift failed: {e:?}"));
-            let unimpl = lifted.ir_ops.iter().filter(|i| i.op == IrOp::Unimplemented).count();
+            let unimpl = lifted
+                .ir_ops
+                .iter()
+                .filter(|i| i.op == IrOp::Unimplemented)
+                .count();
             assert_eq!(unimpl, 0, "{label}: emitted Unimplemented");
-            let callother = lifted.ir_ops.iter().filter(|i| i.op == IrOp::Callother).count();
+            let callother = lifted
+                .ir_ops
+                .iter()
+                .filter(|i| i.op == IrOp::Callother)
+                .count();
             assert!(callother > 0, "{label}: no Callother emitted");
         }
     }
 }
-

@@ -11,8 +11,9 @@ use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 use crate::Loader;
 use crate::error::LoadError;
 use crate::image::{
-    ArchId, BinaryImage, DebugRecord, Endian, LoadConfig, RelocKind, Relocation, RuntimeFunction,
-    Section, SectionFlags, Symbol, SymbolKind, UnwindInfo,
+    ArchId, BinaryImage, BoundImport, DebugRecord, Endian, LoadConfig, RelocKind, Relocation,
+    ResourceEntry, RichHeader, RichRecord, RuntimeFunction, Section, SectionFlags, Symbol,
+    SymbolKind, UnwindInfo,
 };
 
 /// DOS header magic bytes: `MZ`.
@@ -84,6 +85,9 @@ where
     let debug_records = parse_debug_directory(&file, data);
     let load_config = parse_load_config(&file, data);
     let runtime_functions = parse_pdata(&file, data);
+    let resources = parse_resources(&file, data);
+    let bound_imports = parse_bound_imports(&file, data);
+    let rich_header = parse_rich_header(data);
 
     Ok(BinaryImage {
         arch,
@@ -98,6 +102,9 @@ where
         debug_records,
         load_config,
         runtime_functions,
+        resources,
+        bound_imports,
+        rich_header,
     })
 }
 
@@ -615,6 +622,257 @@ where
         frame_register: b[3] & 0x0F,
         frame_offset: b[3] >> 4,
     })
+}
+
+/// Parse `IMAGE_DIRECTORY_ENTRY_RESOURCE` into flat [`ResourceEntry`] records.
+///
+/// Walks the 3-level resource tree (type → name → language) using the `object`
+/// crate's `ResourceDirectory` API. Recursion is capped at depth 8.
+fn parse_resources<Pe>(file: &PeFile<Pe>, data: &[u8]) -> Vec<ResourceEntry>
+where
+    Pe: ImageNtHeaders,
+{
+    let section_table = file.section_table();
+    let rsrc_dir = match file
+        .data_directories()
+        .resource_directory(data, &section_table)
+    {
+        Ok(Some(d)) => d,
+        Ok(None) => return Vec::new(),
+        Err(err) => {
+            tracing::debug!(?err, "PE resource directory unreadable");
+            return Vec::new();
+        }
+    };
+
+    let root = match rsrc_dir.root() {
+        Ok(t) => t,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut out = Vec::new();
+    walk_resource_table(&rsrc_dir, &root, 0, 0, 0, 0, &mut out);
+    out
+}
+
+fn walk_resource_table(
+    dir: &object::read::pe::ResourceDirectory<'_>,
+    table: &object::read::pe::ResourceDirectoryTable<'_>,
+    depth: u8,
+    type_id: u32,
+    name_id: u32,
+    language: u32,
+    out: &mut Vec<ResourceEntry>,
+) {
+    if depth > 8 || out.len() >= 65536 {
+        return;
+    }
+
+    for entry in table.entries {
+        let entry_id = match entry.name_or_id() {
+            object::read::pe::ResourceNameOrId::Id(id) => u32::from(id),
+            object::read::pe::ResourceNameOrId::Name(_) => 0,
+        };
+
+        let (t, n, l) = match depth {
+            0 => (entry_id, name_id, language),
+            1 => (type_id, entry_id, language),
+            _ => (type_id, name_id, entry_id),
+        };
+
+        match entry.data(*dir) {
+            Ok(object::read::pe::ResourceDirectoryEntryData::Table(sub)) => {
+                walk_resource_table(dir, &sub, depth + 1, t, n, l, out);
+            }
+            Ok(object::read::pe::ResourceDirectoryEntryData::Data(data_entry)) => {
+                let le = object::endian::LittleEndian;
+                out.push(ResourceEntry {
+                    type_id: t,
+                    name_id: n,
+                    language: l,
+                    rva: data_entry.offset_to_data.get(le),
+                    size: data_entry.size.get(le),
+                });
+            }
+            Err(_) => continue,
+        }
+    }
+}
+
+/// Parse `IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT` (index 11).
+///
+/// Each IMAGE_BOUND_IMPORT_DESCRIPTOR is 8 bytes:
+///   `time_date_stamp: u32, offset_module_name: u16, number_of_module_forwarder_refs: u16`
+/// Module names are at `bound_import_dir_base + offset_module_name`.
+/// The array terminates when all fields are zero.
+fn parse_bound_imports<Pe>(file: &PeFile<Pe>, data: &[u8]) -> Vec<BoundImport>
+where
+    Pe: ImageNtHeaders,
+{
+    let dir = match file
+        .data_directories()
+        .get(pe::IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT)
+    {
+        Some(d) => d,
+        None => return Vec::new(),
+    };
+
+    let le = object::endian::LittleEndian;
+    let dir_rva = dir.virtual_address.get(le);
+    let dir_size = dir.size.get(le);
+    if dir_rva == 0 || dir_size == 0 {
+        return Vec::new();
+    }
+
+    // Bound import directory uses raw file offsets (not RVA-mapped through sections).
+    // The RVA for bound imports is actually a file offset in practice.
+    let dir_base = dir_rva as usize;
+    if dir_base + dir_size as usize > data.len() {
+        return Vec::new();
+    }
+    let dir_data = &data[dir_base..dir_base + dir_size as usize];
+
+    let mut out = Vec::new();
+    let mut offset = 0usize;
+
+    while offset + 8 <= dir_data.len() && out.len() < 4096 {
+        let timestamp = u32::from_le_bytes(
+            dir_data[offset..offset + 4]
+                .try_into()
+                .unwrap_or([0; 4]),
+        );
+        let name_offset = u16::from_le_bytes(
+            dir_data[offset + 4..offset + 6]
+                .try_into()
+                .unwrap_or([0; 2]),
+        );
+        let forwarder_refs = u16::from_le_bytes(
+            dir_data[offset + 6..offset + 8]
+                .try_into()
+                .unwrap_or([0; 2]),
+        );
+
+        if timestamp == 0 && name_offset == 0 && forwarder_refs == 0 {
+            break;
+        }
+
+        let name_start = name_offset as usize;
+        let module_name = if name_start < dir_data.len() {
+            let name_bytes = &dir_data[name_start..];
+            match name_bytes.iter().position(|&b| b == 0) {
+                Some(nul) => String::from_utf8_lossy(&name_bytes[..nul]).into_owned(),
+                None => String::from_utf8_lossy(name_bytes).into_owned(),
+            }
+        } else {
+            String::new()
+        };
+
+        out.push(BoundImport {
+            module_name,
+            timestamp,
+        });
+
+        // Skip past this descriptor + any forwarder ref descriptors (each 8 bytes).
+        offset += 8 + (forwarder_refs as usize) * 8;
+    }
+    out
+}
+
+/// "Rich" signature in little-endian: bytes `R`, `i`, `c`, `h`.
+const RICH_SIGNATURE: u32 = 0x6863_6952;
+/// "DanS" signature in little-endian (before XOR decoding).
+const DANS_SIGNATURE: u32 = 0x536E_6144;
+
+/// Extract the Rich header from between the DOS stub and PE signature.
+///
+/// The XOR key is the u32 immediately after the "Rich" marker. Records are
+/// decoded by XOR-ing each pair of u32s with the key, skipping the "DanS"
+/// sentinel and three padding u32s.
+fn parse_rich_header(data: &[u8]) -> Option<RichHeader> {
+    if data.len() < 0x40 {
+        return None;
+    }
+
+    let nt_offset =
+        u32::from_le_bytes(data[0x3C..0x40].try_into().ok()?) as usize;
+
+    // Search region: after DOS header (0x80 is typical stub end) up to NT headers.
+    let search_start = 0x40;
+    let search_end = nt_offset.min(data.len());
+    if search_end <= search_start + 8 {
+        return None;
+    }
+    let region = &data[search_start..search_end];
+
+    // Find "Rich" signature (scan as u32 LE aligned to 4 bytes).
+    let rich_pos = region
+        .windows(4)
+        .enumerate()
+        .step_by(4)
+        .find(|(_, w)| u32::from_le_bytes([w[0], w[1], w[2], w[3]]) == RICH_SIGNATURE)
+        .map(|(i, _)| i)?;
+
+    // XOR key is the u32 immediately after "Rich".
+    if rich_pos + 8 > region.len() {
+        return None;
+    }
+    let xor_key = u32::from_le_bytes(
+        region[rich_pos + 4..rich_pos + 8]
+            .try_into()
+            .unwrap_or([0; 4]),
+    );
+
+    // Walk backwards from "Rich" to find "DanS" (XOR-encoded).
+    // "DanS" ^ key should appear at the start of the Rich block.
+    let encoded_dans = DANS_SIGNATURE ^ xor_key;
+    let mut dans_pos = None;
+    let mut pos = rich_pos.saturating_sub(4);
+    loop {
+        if pos + 4 > region.len() {
+            break;
+        }
+        let val = u32::from_le_bytes(
+            region[pos..pos + 4].try_into().unwrap_or([0; 4]),
+        );
+        if val == encoded_dans {
+            dans_pos = Some(pos);
+            break;
+        }
+        if pos < 4 {
+            break;
+        }
+        pos -= 4;
+    }
+
+    let dans_pos = dans_pos?;
+
+    // Records start after "DanS" + 3 padding u32s (each XOR'd to 0).
+    let records_start = dans_pos + 16; // DanS(4) + 3×padding(12)
+    if records_start > rich_pos {
+        return None;
+    }
+
+    let record_data = &region[records_start..rich_pos];
+    let mut records = Vec::new();
+    for chunk in record_data.chunks_exact(8) {
+        let raw_comp = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        let raw_count = u32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
+        let comp_id = raw_comp ^ xor_key;
+        let count = raw_count ^ xor_key;
+        if comp_id == 0 && count == 0 {
+            continue;
+        }
+        records.push(RichRecord { comp_id, count });
+        if records.len() >= 1024 {
+            break;
+        }
+    }
+
+    if records.is_empty() {
+        return None;
+    }
+
+    Some(RichHeader { records, xor_key })
 }
 
 /// Map the PE `IMAGE_FILE_MACHINE_*` value to our [`ArchId`].
@@ -1512,5 +1770,68 @@ mod tests {
         assert_eq!(lc.guard_cf_dispatch, 0, "fixture has no CFG dispatch pointer");
         assert_eq!(lc.guard_flags, 0, "fixture has no guard flags");
         assert!(lc.cfg_targets.is_empty(), "fixture has no CFG targets");
+    }
+
+    #[test]
+    fn test_pe_resources_empty_when_no_resource_dir() {
+        let pe = minimal_pe64();
+        let img = PeLoader::load(&pe).expect("must parse");
+        assert!(img.resources.is_empty());
+    }
+
+    #[test]
+    fn test_pe_bound_imports_empty_when_no_bound_dir() {
+        let pe = minimal_pe64();
+        let img = PeLoader::load(&pe).expect("must parse");
+        assert!(img.bound_imports.is_empty());
+    }
+
+    #[test]
+    fn test_pe_rich_header_none_when_absent() {
+        let pe = minimal_pe64();
+        let img = PeLoader::load(&pe).expect("must parse");
+        assert!(img.rich_header.is_none());
+    }
+
+    #[test]
+    fn test_pe_rich_header_decoded() {
+        let mut pe = minimal_pe64();
+        let nt_offset = 0x80usize;
+
+        // Build a Rich header between 0x40 and 0x80.
+        // Layout: DanS(4) + 3×padding(12) + records(N×8) + Rich(4) + key(4)
+        let xor_key: u32 = 0xDEAD_BEEF;
+
+        let mut rich_block = Vec::new();
+        // "DanS" XOR'd
+        rich_block.extend_from_slice(&(DANS_SIGNATURE ^ xor_key).to_le_bytes());
+        // 3 padding u32s (each XOR'd with key → key)
+        for _ in 0..3 {
+            rich_block.extend_from_slice(&xor_key.to_le_bytes());
+        }
+        // 1 record: comp_id=0x00930001, count=5
+        let comp_id: u32 = 0x0093_0001;
+        let count: u32 = 5;
+        rich_block.extend_from_slice(&(comp_id ^ xor_key).to_le_bytes());
+        rich_block.extend_from_slice(&(count ^ xor_key).to_le_bytes());
+        // "Rich" signature (plaintext)
+        rich_block.extend_from_slice(&RICH_SIGNATURE.to_le_bytes());
+        // XOR key (plaintext)
+        rich_block.extend_from_slice(&xor_key.to_le_bytes());
+
+        // Place at offset 0x40 (right after DOS header fields).
+        let start = 0x40;
+        assert!(
+            start + rich_block.len() <= nt_offset,
+            "Rich block must fit before NT headers"
+        );
+        pe[start..start + rich_block.len()].copy_from_slice(&rich_block);
+
+        let img = PeLoader::load(&pe).expect("must parse PE with Rich header");
+        let rh = img.rich_header.as_ref().expect("Rich header should be present");
+        assert_eq!(rh.xor_key, xor_key);
+        assert_eq!(rh.records.len(), 1);
+        assert_eq!(rh.records[0].comp_id, comp_id);
+        assert_eq!(rh.records[0].count, count);
     }
 }

@@ -42,19 +42,13 @@ impl Pass for StackVarRecoveryPass {
                             if let Some(&sv) =
                                 func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(2)))
                             {
-                                accesses
-                                    .entry(offset)
-                                    .or_default()
-                                    .push((sv, value_size));
+                                accesses.entry(offset).or_default().push((sv, value_size));
                             }
                             // Also record the address varnode
                             if let Some(&sv) =
                                 func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(1)))
                             {
-                                accesses
-                                    .entry(offset)
-                                    .or_default()
-                                    .push((sv, value_size));
+                                accesses.entry(offset).or_default().push((sv, value_size));
                             }
                         }
                     }
@@ -64,27 +58,18 @@ impl Pass for StackVarRecoveryPass {
                             continue;
                         }
                         if let Some(offset) = extract_stack_offset(insn, func) {
-                            let load_size = insn
-                                .output
-                                .map(|o| o.size)
-                                .unwrap_or(8);
+                            let load_size = insn.output.map(|o| o.size).unwrap_or(8);
                             // Record the output varnode
                             if let Some(&sv) =
                                 func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output))
                             {
-                                accesses
-                                    .entry(offset)
-                                    .or_default()
-                                    .push((sv, load_size));
+                                accesses.entry(offset).or_default().push((sv, load_size));
                             }
                             // Also record the address varnode
                             if let Some(&sv) =
                                 func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(1)))
                             {
-                                accesses
-                                    .entry(offset)
-                                    .or_default()
-                                    .push((sv, load_size));
+                                accesses.entry(offset).or_default().push((sv, load_size));
                             }
                         }
                     }
@@ -100,27 +85,19 @@ impl Pass for StackVarRecoveryPass {
                 if let Some(output) = insn.output {
                     if output.space == SpaceId::Stack {
                         let offset = output.offset as i64;
-                        if let Some(&sv) =
-                            func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output))
-                        {
-                            accesses
-                                .entry(offset)
-                                .or_default()
-                                .push((sv, output.size));
+                        if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output)) {
+                            accesses.entry(offset).or_default().push((sv, output.size));
                         }
                     }
                 }
                 for (inp_idx, inp) in insn.inputs.iter().enumerate() {
                     if inp.space == SpaceId::Stack {
                         let offset = inp.offset as i64;
-                        if let Some(&sv) = func
-                            .var_map
-                            .get(&(bid, insn_idx, VarnodeSlot::Input(inp_idx)))
+                        if let Some(&sv) =
+                            func.var_map
+                                .get(&(bid, insn_idx, VarnodeSlot::Input(inp_idx)))
                         {
-                            accesses
-                                .entry(offset)
-                                .or_default()
-                                .push((sv, inp.size));
+                            accesses.entry(offset).or_default().push((sv, inp.size));
                         }
                     }
                 }
@@ -225,7 +202,8 @@ fn infer_struct_layouts(func: &mut SsaFunction) {
                 offset: (off - start) as u64,
             })
             .collect();
-        func.inferred_structs.insert(start, Type::Struct { name, fields });
+        func.inferred_structs
+            .insert(start, Type::Struct { name, fields });
     }
 }
 
@@ -249,8 +227,7 @@ fn extract_stack_offset(insn: &unlace_ir::IrInsn, func: &SsaFunction) -> Option<
     }
 
     // Case 2: Address is a register that is RSP or RBP directly (offset 0).
-    if addr.space == SpaceId::Register && (addr.offset == RSP_OFFSET || addr.offset == RBP_OFFSET)
-    {
+    if addr.space == SpaceId::Register && (addr.offset == RSP_OFFSET || addr.offset == RBP_OFFSET) {
         return Some(0);
     }
 
@@ -266,10 +243,7 @@ fn extract_stack_offset(insn: &unlace_ir::IrInsn, func: &SsaFunction) -> Option<
     None
 }
 
-fn find_rsp_relative_offset(
-    addr_varnode: &unlace_ir::Varnode,
-    func: &SsaFunction,
-) -> Option<i64> {
+fn find_rsp_relative_offset(addr_varnode: &unlace_ir::Varnode, func: &SsaFunction) -> Option<i64> {
     // Find the instruction that defines this varnode by scanning var_map for an Output
     // entry that maps to an SsaVarnode with this base.
     for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
@@ -583,7 +557,10 @@ mod tests {
         let mut ssa = make_single_block_ssa(insns);
         let pass = StackVarRecoveryPass;
         assert!(pass.run(&mut ssa).unwrap());
-        assert!(!pass.run(&mut ssa).unwrap(), "second run should report no change");
+        assert!(
+            !pass.run(&mut ssa).unwrap(),
+            "second run should report no change"
+        );
     }
 
     #[test]
@@ -603,7 +580,9 @@ mod tests {
 
         // Run type inference first.
         let type_pass = crate::type_infer::TypeInferPass;
-        type_pass.run(&mut ssa).expect("TypeInferPass should succeed");
+        type_pass
+            .run(&mut ssa)
+            .expect("TypeInferPass should succeed");
 
         let stack_pass = StackVarRecoveryPass;
         stack_pass

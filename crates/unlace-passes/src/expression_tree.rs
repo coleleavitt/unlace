@@ -44,9 +44,9 @@ impl Pass for ExpressionTreePass {
         for (&bid, block) in &func.function.blocks {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
                 for input_idx in 0..insn.inputs.len() {
-                    if let Some(&sv) = func
-                        .var_map
-                        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+                    if let Some(&sv) =
+                        func.var_map
+                            .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
                     {
                         *use_counts.entry(sv).or_insert(0) += 1;
                     }
@@ -70,10 +70,7 @@ impl Pass for ExpressionTreePass {
                     continue;
                 }
 
-                let output_sv = match func
-                    .var_map
-                    .get(&(bid, insn_idx, VarnodeSlot::Output))
-                {
+                let output_sv = match func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output)) {
                     Some(&sv) => sv,
                     None => continue,
                 };
@@ -129,29 +126,10 @@ mod tests {
         let c3 = Varnode::constant(3, 4);
 
         let space_id = Varnode::constant(0, 4);
-        let load = IrInsn::with_output(
-            IrOp::Load,
-            v1,
-            smallvec![space_id, addr],
-            0x1000,
-        );
-        let add = IrInsn::with_output(
-            IrOp::IntAdd,
-            v2,
-            smallvec![v1, c5],
-            0x1004,
-        );
-        let mul = IrInsn::with_output(
-            IrOp::IntMult,
-            v3,
-            smallvec![v2, c3],
-            0x1008,
-        );
-        let ret = IrInsn::without_output(
-            IrOp::Return,
-            smallvec![v3],
-            0x100C,
-        );
+        let load = IrInsn::with_output(IrOp::Load, v1, smallvec![space_id, addr], 0x1000);
+        let add = IrInsn::with_output(IrOp::IntAdd, v2, smallvec![v1, c5], 0x1004);
+        let mul = IrInsn::with_output(IrOp::IntMult, v3, smallvec![v2, c3], 0x1008);
+        let ret = IrInsn::without_output(IrOp::Return, smallvec![v3], 0x100C);
 
         let mut ssa = make_single_block_ssa(vec![load, add, mul, ret]);
 

@@ -19,15 +19,15 @@ pub use eager_returns::eager_returns;
 pub use flatten_if_else::{flatten_if_else_chains, simplify_chain_conditions};
 pub use hir::{HirFunction, HirNode, LabelId, SwitchCase};
 pub use if_to_switch::if_chain_to_switch;
-pub use irreducible::{detect_irreducible_regions, IrreducibleRegion};
+pub use irreducible::{IrreducibleRegion, detect_irreducible_regions};
 pub use node_split::split_irreducible_entries;
 pub use short_circuit::short_circuit_recovery;
 pub use structurer::{
-    recover_for_loops, structure, structure_preserve_returns,
-    structure_preserve_returns_with_landing_pads, structure_with_landing_pads, StructureError,
+    StructureError, recover_for_loops, structure, structure_preserve_returns,
+    structure_preserve_returns_with_landing_pads, structure_with_landing_pads,
 };
 pub use switch_recovery::{
-    find_default_target, read_jump_table, recover_switches, refine_switches_with_tables,
-    validate_table_base, JumpTable, JumpTableKind, SectionPerms, SectionView, TableEndian,
+    JumpTable, JumpTableKind, SectionPerms, SectionView, TableEndian, find_default_target,
+    read_jump_table, recover_switches, refine_switches_with_tables, validate_table_base,
 };
 pub use ternary_recovery::ternary_recovery;

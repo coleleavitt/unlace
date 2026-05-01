@@ -249,3 +249,16 @@ Added `parse_load_config` to pe.rs — reads IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG (
 - CFG target table: array of u32 RVAs absolutized via `image_base + rva`, capped at 65536 entries
 - `LoadConfig` struct: `security_cookie`, `guard_cf_check`, `guard_cf_dispatch`, `guard_flags`, `cfg_targets: Vec<u64>`
 - All addresses stored as absolute VAs (not RVAs) for consistency with the rest of BinaryImage
+
+## P10-14 + P10-15: PE .pdata RUNTIME_FUNCTION + .xdata UNWIND_INFO Parsing (2026-04-30)
+
+Added `parse_pdata` and `parse_xdata` to pe.rs — walks IMAGE_DIRECTORY_ENTRY_EXCEPTION (index 3).
+
+### Key Decisions
+- `parse_pdata`: reads data directory via `file.data_directories().get(pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION)`, iterates 12-byte RUNTIME_FUNCTION entries (3 × u32: begin_rva, end_rva, unwind_info_rva), absolutizes via image_base
+- `parse_xdata`: for each RUNTIME_FUNCTION, reads 4-byte UNWIND_INFO header at unwind_info_address using `find_section_for_rva` (reuses existing helper)
+- UNWIND_INFO header: byte 0 = version (bits 0-2) + flags (bits 3-7), byte 1 = size_of_prolog, byte 2 = count_of_codes, byte 3 = frame_register (bits 0-3) + frame_offset (bits 4-7)
+- Individual unwind codes NOT decoded (just the 4-byte header) — sufficient for function boundary detection
+- `RuntimeFunction` struct stores `unwind_info: Option<UnwindInfo>` — None if xdata section unreadable
+- `runtime_functions: Vec<RuntimeFunction>` added to BinaryImage; all 7 construction sites updated (pe.rs, elf.rs, macho.rs, eh_frame.rs×2, pipeline.rs)
+- Capped at 65536 entries to prevent pathological inputs

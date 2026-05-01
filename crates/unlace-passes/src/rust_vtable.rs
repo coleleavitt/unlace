@@ -98,7 +98,10 @@ fn try_match_vtable_dispatch(
 
     let slot_index = (vtable_offset / PTR_SIZE) as usize;
 
-    let base_varnode = SsaVarnode { base: base_vn, version: 0 };
+    let base_varnode = SsaVarnode {
+        base: base_vn,
+        version: 0,
+    };
 
     Some(VtableCallInfo {
         base_varnode,
@@ -131,11 +134,7 @@ fn load_address(load: &IrInsn) -> Option<Varnode> {
 /// If `vn` is defined by INT_ADD(x, const) or PTRADD(x, const, _), returns
 /// `(x, const)`. If `vn` is defined by INT_ADD(const, x), returns `(x, const)`.
 /// Otherwise returns `(vn, 0)` — the varnode itself is the base with offset 0.
-fn resolve_offset(
-    insns: &[IrInsn],
-    before: usize,
-    vn: &Varnode,
-) -> Option<(Varnode, u64)> {
+fn resolve_offset(insns: &[IrInsn], before: usize, vn: &Varnode) -> Option<(Varnode, u64)> {
     // If the varnode is itself a constant, it can't be a pointer base
     if vn.space == SpaceId::Const {
         return None;
@@ -157,11 +156,12 @@ fn resolve_offset(
                 let (base, idx) = (def.inputs[0], def.inputs[1]);
                 if idx.space == SpaceId::Const && base.space != SpaceId::Const {
                     // PTRADD(base, idx, elem_size) — effective offset = idx * elem_size
-                    let elem_size = if def.inputs.len() >= 3 && def.inputs[2].space == SpaceId::Const {
-                        def.inputs[2].offset
-                    } else {
-                        1
-                    };
+                    let elem_size =
+                        if def.inputs.len() >= 3 && def.inputs[2].space == SpaceId::Const {
+                            def.inputs[2].offset
+                        } else {
+                            1
+                        };
                     return Some((base, idx.offset * elem_size));
                 }
             }
@@ -219,29 +219,34 @@ mod tests {
         let insns = vec![
             // vtable_addr = base + 8
             IrInsn::with_output(
-                IrOp::IntAdd, vtable_addr,
-                smallvec![base, Varnode::constant(8, 8)], 0x1000,
+                IrOp::IntAdd,
+                vtable_addr,
+                smallvec![base, Varnode::constant(8, 8)],
+                0x1000,
             ),
             // vtable_ptr = LOAD(ram, vtable_addr)
             IrInsn::with_output(
-                IrOp::Load, vtable_ptr,
-                smallvec![Varnode::constant(1, 4), vtable_addr], 0x1008,
+                IrOp::Load,
+                vtable_ptr,
+                smallvec![Varnode::constant(1, 4), vtable_addr],
+                0x1008,
             ),
             // method_addr = vtable_ptr + 24
             IrInsn::with_output(
-                IrOp::IntAdd, method_addr,
-                smallvec![vtable_ptr, Varnode::constant(24, 8)], 0x1010,
+                IrOp::IntAdd,
+                method_addr,
+                smallvec![vtable_ptr, Varnode::constant(24, 8)],
+                0x1010,
             ),
             // method_ptr = LOAD(ram, method_addr)
             IrInsn::with_output(
-                IrOp::Load, method_ptr,
-                smallvec![Varnode::constant(1, 4), method_addr], 0x1018,
+                IrOp::Load,
+                method_ptr,
+                smallvec![Varnode::constant(1, 4), method_addr],
+                0x1018,
             ),
             // CALLIND(method_ptr)
-            IrInsn::without_output(
-                IrOp::Callind,
-                smallvec![method_ptr], 0x1020,
-            ),
+            IrInsn::without_output(IrOp::Callind, smallvec![method_ptr], 0x1020),
         ];
 
         let mut ssa = make_single_block_ssa(insns);
@@ -267,24 +272,27 @@ mod tests {
         let insns = vec![
             // vtable_addr = base + 8
             IrInsn::with_output(
-                IrOp::IntAdd, vtable_addr,
-                smallvec![base, Varnode::constant(8, 8)], 0x1000,
+                IrOp::IntAdd,
+                vtable_addr,
+                smallvec![base, Varnode::constant(8, 8)],
+                0x1000,
             ),
             // vtable_ptr = LOAD(ram, vtable_addr)
             IrInsn::with_output(
-                IrOp::Load, vtable_ptr,
-                smallvec![Varnode::constant(1, 4), vtable_addr], 0x1008,
+                IrOp::Load,
+                vtable_ptr,
+                smallvec![Varnode::constant(1, 4), vtable_addr],
+                0x1008,
             ),
             // drop_fn = LOAD(ram, vtable_ptr)  — offset 0, no INT_ADD needed
             IrInsn::with_output(
-                IrOp::Load, drop_fn,
-                smallvec![Varnode::constant(1, 4), vtable_ptr], 0x1010,
+                IrOp::Load,
+                drop_fn,
+                smallvec![Varnode::constant(1, 4), vtable_ptr],
+                0x1010,
             ),
             // CALLIND(drop_fn)
-            IrInsn::without_output(
-                IrOp::Callind,
-                smallvec![drop_fn], 0x1018,
-            ),
+            IrInsn::without_output(IrOp::Callind, smallvec![drop_fn], 0x1018),
         ];
 
         let mut ssa = make_single_block_ssa(insns);
@@ -304,15 +312,15 @@ mod tests {
 
         let insns = vec![
             // CALLIND(fn_ptr) — directly from a register, no LOAD chain
-            IrInsn::without_output(
-                IrOp::Callind,
-                smallvec![fn_ptr], 0x1000,
-            ),
+            IrInsn::without_output(IrOp::Callind, smallvec![fn_ptr], 0x1000),
         ];
 
         let mut ssa = make_single_block_ssa(insns);
         let changed = RustVtablePass.run(&mut ssa).expect("pass succeeds");
-        assert!(!changed, "should not detect vtable dispatch for direct register callind");
+        assert!(
+            !changed,
+            "should not detect vtable dispatch for direct register callind"
+        );
         assert!(ssa.vtable_calls.is_empty());
     }
 
@@ -325,19 +333,21 @@ mod tests {
         let insns = vec![
             // fn_ptr = LOAD(ram, addr)
             IrInsn::with_output(
-                IrOp::Load, fn_ptr,
-                smallvec![Varnode::constant(1, 4), addr], 0x1000,
+                IrOp::Load,
+                fn_ptr,
+                smallvec![Varnode::constant(1, 4), addr],
+                0x1000,
             ),
             // CALLIND(fn_ptr)
-            IrInsn::without_output(
-                IrOp::Callind,
-                smallvec![fn_ptr], 0x1008,
-            ),
+            IrInsn::without_output(IrOp::Callind, smallvec![fn_ptr], 0x1008),
         ];
 
         let mut ssa = make_single_block_ssa(insns);
         let changed = RustVtablePass.run(&mut ssa).expect("pass succeeds");
-        assert!(!changed, "single LOAD indirection should not be detected as vtable");
+        assert!(
+            !changed,
+            "single LOAD indirection should not be detected as vtable"
+        );
         assert!(ssa.vtable_calls.is_empty());
     }
 
@@ -364,25 +374,30 @@ mod tests {
 
         let insns = vec![
             IrInsn::with_output(
-                IrOp::IntAdd, vtable_addr,
-                smallvec![base, Varnode::constant(8, 8)], 0x1000,
+                IrOp::IntAdd,
+                vtable_addr,
+                smallvec![base, Varnode::constant(8, 8)],
+                0x1000,
             ),
             IrInsn::with_output(
-                IrOp::Load, vtable_ptr,
-                smallvec![Varnode::constant(1, 4), vtable_addr], 0x1008,
+                IrOp::Load,
+                vtable_ptr,
+                smallvec![Varnode::constant(1, 4), vtable_addr],
+                0x1008,
             ),
             IrInsn::with_output(
-                IrOp::IntAdd, method_addr,
-                smallvec![vtable_ptr, Varnode::constant(32, 8)], 0x1010,
+                IrOp::IntAdd,
+                method_addr,
+                smallvec![vtable_ptr, Varnode::constant(32, 8)],
+                0x1010,
             ),
             IrInsn::with_output(
-                IrOp::Load, method_ptr,
-                smallvec![Varnode::constant(1, 4), method_addr], 0x1018,
+                IrOp::Load,
+                method_ptr,
+                smallvec![Varnode::constant(1, 4), method_addr],
+                0x1018,
             ),
-            IrInsn::without_output(
-                IrOp::Callind,
-                smallvec![method_ptr], 0x1020,
-            ),
+            IrInsn::without_output(IrOp::Callind, smallvec![method_ptr], 0x1020),
         ];
 
         let mut ssa = make_single_block_ssa(insns);
@@ -405,26 +420,31 @@ mod tests {
 
         let insns = vec![
             IrInsn::with_output(
-                IrOp::IntAdd, vtable_addr,
-                smallvec![base, Varnode::constant(8, 8)], 0x1000,
+                IrOp::IntAdd,
+                vtable_addr,
+                smallvec![base, Varnode::constant(8, 8)],
+                0x1000,
             ),
             IrInsn::with_output(
-                IrOp::Load, vtable_ptr,
-                smallvec![Varnode::constant(1, 4), vtable_addr], 0x1008,
+                IrOp::Load,
+                vtable_ptr,
+                smallvec![Varnode::constant(1, 4), vtable_addr],
+                0x1008,
             ),
             // Misaligned offset: 13 is not a multiple of 8
             IrInsn::with_output(
-                IrOp::IntAdd, method_addr,
-                smallvec![vtable_ptr, Varnode::constant(13, 8)], 0x1010,
+                IrOp::IntAdd,
+                method_addr,
+                smallvec![vtable_ptr, Varnode::constant(13, 8)],
+                0x1010,
             ),
             IrInsn::with_output(
-                IrOp::Load, method_ptr,
-                smallvec![Varnode::constant(1, 4), method_addr], 0x1018,
+                IrOp::Load,
+                method_ptr,
+                smallvec![Varnode::constant(1, 4), method_addr],
+                0x1018,
             ),
-            IrInsn::without_output(
-                IrOp::Callind,
-                smallvec![method_ptr], 0x1020,
-            ),
+            IrInsn::without_output(IrOp::Callind, smallvec![method_ptr], 0x1020),
         ];
 
         let mut ssa = make_single_block_ssa(insns);
@@ -444,26 +464,31 @@ mod tests {
 
         let insns = vec![
             IrInsn::with_output(
-                IrOp::IntAdd, vtable_addr,
-                smallvec![base, Varnode::constant(8, 8)], 0x1000,
+                IrOp::IntAdd,
+                vtable_addr,
+                smallvec![base, Varnode::constant(8, 8)],
+                0x1000,
             ),
             IrInsn::with_output(
-                IrOp::Load, vtable_ptr,
-                smallvec![Varnode::constant(1, 4), vtable_addr], 0x1008,
+                IrOp::Load,
+                vtable_ptr,
+                smallvec![Varnode::constant(1, 4), vtable_addr],
+                0x1008,
             ),
             // PTRADD(vtable_ptr, 3, 8) → offset = 3 * 8 = 24
             IrInsn::with_output(
-                IrOp::Ptradd, method_addr,
-                smallvec![vtable_ptr, Varnode::constant(3, 8), Varnode::constant(8, 8)], 0x1010,
+                IrOp::Ptradd,
+                method_addr,
+                smallvec![vtable_ptr, Varnode::constant(3, 8), Varnode::constant(8, 8)],
+                0x1010,
             ),
             IrInsn::with_output(
-                IrOp::Load, method_ptr,
-                smallvec![Varnode::constant(1, 4), method_addr], 0x1018,
+                IrOp::Load,
+                method_ptr,
+                smallvec![Varnode::constant(1, 4), method_addr],
+                0x1018,
             ),
-            IrInsn::without_output(
-                IrOp::Callind,
-                smallvec![method_ptr], 0x1020,
-            ),
+            IrInsn::without_output(IrOp::Callind, smallvec![method_ptr], 0x1020),
         ];
 
         let mut ssa = make_single_block_ssa(insns);

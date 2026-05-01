@@ -259,6 +259,9 @@ mod tests {
             debug_records: vec![],
             load_config: None,
             runtime_functions: vec![],
+            resources: vec![],
+            bound_imports: vec![],
+            rich_header: None,
         };
 
         let info = parse_eh_frame(&img).expect("missing .eh_frame should not error");
@@ -291,6 +294,9 @@ mod tests {
             debug_records: vec![],
             load_config: None,
             runtime_functions: vec![],
+            resources: vec![],
+            bound_imports: vec![],
+            rich_header: None,
         };
 
         let result = parse_eh_frame(&img);

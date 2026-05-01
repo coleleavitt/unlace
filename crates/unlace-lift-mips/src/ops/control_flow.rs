@@ -16,8 +16,17 @@ pub fn lift_beq(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     match (a, b, target) {
         (Some(a), Some(b), Some(target)) => {
             let cond = ctx.alloc_unique(1);
-            ctx.emit(IrInsn::with_output(IrOp::IntEqual, cond, smallvec![a, b], ctx.addr));
-            ctx.emit(IrInsn::without_output(IrOp::Cbranch, smallvec![target, cond], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntEqual,
+                cond,
+                smallvec![a, b],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![target, cond],
+                ctx.addr,
+            ));
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -34,8 +43,17 @@ pub fn lift_bne(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     match (a, b, target) {
         (Some(a), Some(b), Some(target)) => {
             let cond = ctx.alloc_unique(1);
-            ctx.emit(IrInsn::with_output(IrOp::IntNotequal, cond, smallvec![a, b], ctx.addr));
-            ctx.emit(IrInsn::without_output(IrOp::Cbranch, smallvec![target, cond], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntNotequal,
+                cond,
+                smallvec![a, b],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![target, cond],
+                ctx.addr,
+            ));
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -52,10 +70,24 @@ pub fn lift_bgez(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         (Some(rs), Some(target)) => {
             let zero = Varnode::constant(0, 8);
             let sless = ctx.alloc_unique(1);
-            ctx.emit(IrInsn::with_output(IrOp::IntSless, sless, smallvec![rs, zero], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntSless,
+                sless,
+                smallvec![rs, zero],
+                ctx.addr,
+            ));
             let cond = ctx.alloc_unique(1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, cond, smallvec![sless], ctx.addr));
-            ctx.emit(IrInsn::without_output(IrOp::Cbranch, smallvec![target, cond], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                cond,
+                smallvec![sless],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![target, cond],
+                ctx.addr,
+            ));
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -72,8 +104,17 @@ pub fn lift_bltz(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         (Some(rs), Some(target)) => {
             let zero = Varnode::constant(0, 8);
             let cond = ctx.alloc_unique(1);
-            ctx.emit(IrInsn::with_output(IrOp::IntSless, cond, smallvec![rs, zero], ctx.addr));
-            ctx.emit(IrInsn::without_output(IrOp::Cbranch, smallvec![target, cond], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntSless,
+                cond,
+                smallvec![rs, zero],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![target, cond],
+                ctx.addr,
+            ));
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -90,10 +131,24 @@ pub fn lift_bgtz(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         (Some(rs), Some(target)) => {
             let zero = Varnode::constant(0, 8);
             let sleq = ctx.alloc_unique(1);
-            ctx.emit(IrInsn::with_output(IrOp::IntSlessequal, sleq, smallvec![rs, zero], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntSlessequal,
+                sleq,
+                smallvec![rs, zero],
+                ctx.addr,
+            ));
             let cond = ctx.alloc_unique(1);
-            ctx.emit(IrInsn::with_output(IrOp::BoolNegate, cond, smallvec![sleq], ctx.addr));
-            ctx.emit(IrInsn::without_output(IrOp::Cbranch, smallvec![target, cond], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                cond,
+                smallvec![sleq],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![target, cond],
+                ctx.addr,
+            ));
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -116,7 +171,11 @@ pub fn lift_blez(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
                 smallvec![rs, zero],
                 ctx.addr,
             ));
-            ctx.emit(IrInsn::without_output(IrOp::Cbranch, smallvec![target, cond], ctx.addr));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![target, cond],
+                ctx.addr,
+            ));
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -133,8 +192,17 @@ pub fn lift_beqz(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         (Some(rs), Some(target)) => {
             let zero = Varnode::constant(0, 8);
             let cond = ctx.alloc_unique(1);
-            ctx.emit(IrInsn::with_output(IrOp::IntEqual, cond, smallvec![rs, zero], ctx.addr));
-            ctx.emit(IrInsn::without_output(IrOp::Cbranch, smallvec![target, cond], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntEqual,
+                cond,
+                smallvec![rs, zero],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![target, cond],
+                ctx.addr,
+            ));
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -151,8 +219,17 @@ pub fn lift_bnez(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         (Some(rs), Some(target)) => {
             let zero = Varnode::constant(0, 8);
             let cond = ctx.alloc_unique(1);
-            ctx.emit(IrInsn::with_output(IrOp::IntNotequal, cond, smallvec![rs, zero], ctx.addr));
-            ctx.emit(IrInsn::without_output(IrOp::Cbranch, smallvec![target, cond], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntNotequal,
+                cond,
+                smallvec![rs, zero],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![target, cond],
+                ctx.addr,
+            ));
         }
         _ => ctx.emit_unimplemented(),
     }
@@ -198,7 +275,11 @@ pub fn lift_j(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let target = ctx.read_operand(&ops[0]);
     match target {
         Some(target) => {
-            ctx.emit(IrInsn::without_output(IrOp::Branch, smallvec![target], ctx.addr));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![target],
+                ctx.addr,
+            ));
         }
         None => ctx.emit_unimplemented(),
     }
@@ -216,7 +297,11 @@ pub fn lift_jal(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let target = ctx.read_operand(&ops[0]);
     match target {
         Some(target) => {
-            ctx.emit(IrInsn::without_output(IrOp::Call, smallvec![target], ctx.addr));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Call,
+                smallvec![target],
+                ctx.addr,
+            ));
         }
         None => ctx.emit_unimplemented(),
     }
@@ -232,11 +317,19 @@ pub fn lift_jr(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         Some(target) => {
             if let MipsOperand::Reg(reg) = &ops[0] {
                 if register_file::capstone_reg_to_offset(*reg) == Some(RA) {
-                    ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![target], ctx.addr));
+                    ctx.emit(IrInsn::without_output(
+                        IrOp::Return,
+                        smallvec![target],
+                        ctx.addr,
+                    ));
                     return;
                 }
             }
-            ctx.emit(IrInsn::without_output(IrOp::Branchind, smallvec![target], ctx.addr));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Branchind,
+                smallvec![target],
+                ctx.addr,
+            ));
         }
         None => ctx.emit_unimplemented(),
     }
@@ -269,7 +362,11 @@ pub fn lift_jalr(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     let target = ctx.read_operand(&ops[target_idx]);
     match target {
         Some(target) => {
-            ctx.emit(IrInsn::without_output(IrOp::Callind, smallvec![target], ctx.addr));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Callind,
+                smallvec![target],
+                ctx.addr,
+            ));
         }
         None => ctx.emit_unimplemented(),
     }

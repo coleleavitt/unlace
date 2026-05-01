@@ -1,6 +1,6 @@
 use capstone::arch::mips::MipsOperand;
-use unlace_ir::IrOp;
 use smallvec::smallvec;
+use unlace_ir::IrOp;
 use unlace_ir::{IrInsn, Varnode};
 
 use crate::lift::LiftCtx;

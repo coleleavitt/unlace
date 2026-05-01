@@ -15,7 +15,9 @@ fn main() {
         }
         None => {
             eprintln!("usage: cargo xtask <command>");
-            eprintln!("available commands: scaffold, lint-determinism, regen-goldens, measure-parity");
+            eprintln!(
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity"
+            );
             process::exit(1);
         }
     }

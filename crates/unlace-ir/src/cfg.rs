@@ -9,9 +9,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use petgraph::Direction;
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use petgraph::visit::{EdgeRef, IntoEdgeReferences};
-use petgraph::Direction;
 
 use crate::{BasicBlock, BlockId, Function, IrOp};
 
@@ -302,7 +302,13 @@ pub fn dot_export(cfg: &ControlFlowGraph) -> String {
         } else {
             "box"
         };
-        let _ = writeln!(out, "    {} [label=\"{}\", shape={}];", ni.index(), bid, shape);
+        let _ = writeln!(
+            out,
+            "    {} [label=\"{}\", shape={}];",
+            ni.index(),
+            bid,
+            shape
+        );
     }
 
     for edge in cfg.graph.edge_references() {
@@ -477,8 +483,16 @@ mod tests {
 
         let edges0 = cfg.edges_from(BlockId(0));
         assert_eq!(edges0.len(), 2);
-        assert!(edges0.iter().any(|(t, k)| *t == BlockId(1) && *k == EdgeKind::ConditionalTrue));
-        assert!(edges0.iter().any(|(t, k)| *t == BlockId(2) && *k == EdgeKind::ConditionalFalse));
+        assert!(
+            edges0
+                .iter()
+                .any(|(t, k)| *t == BlockId(1) && *k == EdgeKind::ConditionalTrue)
+        );
+        assert!(
+            edges0
+                .iter()
+                .any(|(t, k)| *t == BlockId(2) && *k == EdgeKind::ConditionalFalse)
+        );
 
         let edges1 = cfg.edges_from(BlockId(1));
         assert_eq!(edges1.len(), 1);
@@ -503,8 +517,16 @@ mod tests {
 
         let edges0 = cfg.edges_from(BlockId(0));
         assert_eq!(edges0.len(), 2);
-        assert!(edges0.iter().any(|(t, k)| *t == BlockId(1) && *k == EdgeKind::ConditionalTrue));
-        assert!(edges0.iter().any(|(t, k)| *t == BlockId(2) && *k == EdgeKind::ConditionalFalse));
+        assert!(
+            edges0
+                .iter()
+                .any(|(t, k)| *t == BlockId(1) && *k == EdgeKind::ConditionalTrue)
+        );
+        assert!(
+            edges0
+                .iter()
+                .any(|(t, k)| *t == BlockId(2) && *k == EdgeKind::ConditionalFalse)
+        );
 
         let edges1 = cfg.edges_from(BlockId(1));
         assert_eq!(edges1.len(), 1);
@@ -565,8 +587,16 @@ mod tests {
         let cfg = build_cfg(&func);
         let edges0 = cfg.edges_from(BlockId(0));
         assert_eq!(edges0.len(), 2);
-        assert!(edges0.iter().any(|(t, k)| *t == BlockId(2) && *k == EdgeKind::Call));
-        assert!(edges0.iter().any(|(t, k)| *t == BlockId(1) && *k == EdgeKind::Fallthrough));
+        assert!(
+            edges0
+                .iter()
+                .any(|(t, k)| *t == BlockId(2) && *k == EdgeKind::Call)
+        );
+        assert!(
+            edges0
+                .iter()
+                .any(|(t, k)| *t == BlockId(1) && *k == EdgeKind::Fallthrough)
+        );
     }
 
     #[test]
@@ -628,7 +658,10 @@ mod tests {
                 let _ = stdin.write_all(dot.as_bytes());
             }
             if let Ok(status) = child.wait() {
-                assert!(status.success(), "graphviz `dot` rejected our output:\n{dot}");
+                assert!(
+                    status.success(),
+                    "graphviz `dot` rejected our output:\n{dot}"
+                );
             }
         }
     }

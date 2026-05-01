@@ -208,7 +208,10 @@ fn read_cstring_at_va(image: &BinaryImage, va: u64, max_len: usize) -> Option<St
         if va >= section.vaddr && va < sec_end {
             let offset = (va - section.vaddr) as usize;
             let remaining = &section.data[offset..];
-            let end = remaining.iter().position(|&b| b == 0).unwrap_or(remaining.len());
+            let end = remaining
+                .iter()
+                .position(|&b| b == 0)
+                .unwrap_or(remaining.len());
             let len = end.min(max_len);
             return String::from_utf8(remaining[..len].to_vec()).ok();
         }
@@ -303,18 +306,13 @@ fn parse_itanium_name(s: &str) -> String {
     }
 }
 
-fn parse_typeinfo_at(
-    image: &BinaryImage,
-    typeinfo_addr: u64,
-    name: &str,
-) -> Option<CppClass> {
+fn parse_typeinfo_at(image: &BinaryImage, typeinfo_addr: u64, name: &str) -> Option<CppClass> {
     // [0] vtable ptr (8 bytes)
     let vtable_ptr = read_u64_at_va(image, typeinfo_addr)?;
     // [8] name ptr (8 bytes)
     let name_ptr = read_u64_at_va(image, typeinfo_addr + 8)?;
 
-    let raw_name = read_cstring_at_va(image, name_ptr, 256)
-        .unwrap_or_else(|| name.to_string());
+    let raw_name = read_cstring_at_va(image, name_ptr, 256).unwrap_or_else(|| name.to_string());
     let demangled = demangle_typeinfo_name(&raw_name);
 
     let kind = identify_typeinfo_kind(image, vtable_ptr, typeinfo_addr);
@@ -451,11 +449,7 @@ fn enumerate_vtable_methods(image: &BinaryImage, classes: &mut BTreeMap<u64, Cpp
         .iter()
         .filter_map(|(&ti_addr, cls)| {
             cls.vtable_addr.map(|va| {
-                let size = image
-                    .symbols
-                    .get(&va)
-                    .map(|s| s.size)
-                    .unwrap_or(0);
+                let size = image.symbols.get(&va).map(|s| s.size).unwrap_or(0);
                 (ti_addr, va, size)
             })
         })
@@ -534,10 +528,7 @@ mod tests {
         let img = load_fixture("cpp_rtti.elf");
         let info = scan_rtti(&img);
 
-        assert!(
-            !info.is_empty(),
-            "cpp_rtti.elf should have RTTI classes",
-        );
+        assert!(!info.is_empty(), "cpp_rtti.elf should have RTTI classes",);
 
         // Should find Animal, Dog, Cat.
         let names: Vec<&str> = info

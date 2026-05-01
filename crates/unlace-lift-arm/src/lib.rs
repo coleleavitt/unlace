@@ -205,8 +205,7 @@ mod tests {
     #[test]
     fn test_unknown_insn() {
         // some unrecognized instruction
-        let result = lifter()
-            .lift_insn(&[0xff, 0xff, 0xff, 0xff], 0x1000);
+        let result = lifter().lift_insn(&[0xff, 0xff, 0xff, 0xff], 0x1000);
         // Could either decode to something Unimplemented or fail to decode
         match result {
             Ok(lifted) => {

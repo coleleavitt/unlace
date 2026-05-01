@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use petgraph::algo::dominators::simple_fast;
 use petgraph::stable_graph::StableDiGraph;
 
-use crate::cfg::{build_cfg, ControlFlowGraph};
+use crate::cfg::{ControlFlowGraph, build_cfg};
 use crate::{BlockId, Function, Varnode};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -38,7 +38,11 @@ impl DominatorTree {
         children: BTreeMap<BlockId, Vec<BlockId>>,
         root: BlockId,
     ) -> Self {
-        Self { idom, children, root }
+        Self {
+            idom,
+            children,
+            root,
+        }
     }
 
     pub fn root(&self) -> BlockId {
@@ -306,12 +310,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
 
     let phi_locations = place_phis(&defs_per_var, &df, &all_blocks);
 
-    let (phi_map, var_map) = rename_variables(
-        &func,
-        &cfg,
-        &dom_tree,
-        &phi_locations,
-    );
+    let (phi_map, var_map) = rename_variables(&func, &cfg, &dom_tree, &phi_locations);
 
     SsaFunction {
         function: func,
@@ -371,7 +370,11 @@ fn build_dominator_tree(cfg: &ControlFlowGraph) -> DominatorTree {
         children_list.sort();
     }
 
-    DominatorTree { idom, children, root: entry }
+    DominatorTree {
+        idom,
+        children,
+        root: entry,
+    }
 }
 
 /// Build a post-dominator tree by reversing the CFG and running the
@@ -409,10 +412,7 @@ pub fn build_post_dominator_tree(cfg: &ControlFlowGraph, _func: &Function) -> Do
         if bid == exit_bid || bid == unknown_bid {
             continue;
         }
-        let has_real_succ = cfg
-            .edges_from(bid)
-            .iter()
-            .any(|(t, _)| *t != unknown_bid);
+        let has_real_succ = cfg.edges_from(bid).iter().any(|(t, _)| *t != unknown_bid);
         if !has_real_succ {
             if let (Some(&exit_ni), Some(&bid_ni)) =
                 (rev_node_map.get(&exit_bid), rev_node_map.get(&bid))
@@ -450,7 +450,11 @@ pub fn build_post_dominator_tree(cfg: &ControlFlowGraph, _func: &Function) -> Do
         children_list.sort();
     }
 
-    DominatorTree { idom, children, root: exit_bid }
+    DominatorTree {
+        idom,
+        children,
+        root: exit_bid,
+    }
 }
 
 /// Cytron et al. 1991, Section 4.2: for each CFG edge (P → X),
@@ -574,7 +578,10 @@ fn rename_variables(
         let phis: Vec<PhiNode> = vars
             .iter()
             .map(|&var| PhiNode {
-                output: SsaVarnode { base: var, version: 0 },
+                output: SsaVarnode {
+                    base: var,
+                    version: 0,
+                },
                 inputs: Vec::new(),
             })
             .collect();
@@ -615,7 +622,10 @@ fn rename_variables(
                     let ver = current_version(*input, &var_stack);
                     var_map.insert(
                         (bid, i, VarnodeSlot::Input(idx)),
-                        SsaVarnode { base: *input, version: ver },
+                        SsaVarnode {
+                            base: *input,
+                            version: ver,
+                        },
                     );
                 }
 
@@ -624,7 +634,10 @@ fn rename_variables(
                     track_push(&mut pushed, output);
                     var_map.insert(
                         (bid, i, VarnodeSlot::Output),
-                        SsaVarnode { base: output, version: ver },
+                        SsaVarnode {
+                            base: output,
+                            version: ver,
+                        },
                     );
                 }
             }
@@ -635,10 +648,13 @@ fn rename_variables(
             if let Some(phis) = phi_map.get_mut(succ) {
                 for phi in phis.iter_mut() {
                     let ver = current_version(phi.output.base, &var_stack);
-                    phi.inputs.push((bid, SsaVarnode {
-                        base: phi.output.base,
-                        version: ver,
-                    }));
+                    phi.inputs.push((
+                        bid,
+                        SsaVarnode {
+                            base: phi.output.base,
+                            version: ver,
+                        },
+                    ));
                 }
             }
         }
@@ -674,12 +690,7 @@ mod tests {
     }
 
     fn def_insn(output: Varnode, inputs: &[Varnode], addr: u64) -> IrInsn {
-        IrInsn::with_output(
-            IrOp::IntAdd,
-            output,
-            smallvec![inputs[0], inputs[1]],
-            addr,
-        )
+        IrInsn::with_output(IrOp::IntAdd, output, smallvec![inputs[0], inputs[1]], addr)
     }
 
     #[test]
@@ -780,7 +791,10 @@ mod tests {
 
         let ssa = build_ssa(func);
 
-        let phis_at_0 = ssa.phi_map.get(&BlockId(0)).expect("phi expected at BB0 (loop header)");
+        let phis_at_0 = ssa
+            .phi_map
+            .get(&BlockId(0))
+            .expect("phi expected at BB0 (loop header)");
         assert!(!phis_at_0.is_empty(), "BB0 must have a phi (loop header)");
 
         let r0_phi = phis_at_0.iter().find(|p| p.output.base == r0);
@@ -855,7 +869,10 @@ mod tests {
         func.insert_block(bb3);
 
         let ssa = build_ssa(func);
-        let pdom = ssa.post_dom_tree.as_ref().expect("post_dom_tree should be Some");
+        let pdom = ssa
+            .post_dom_tree
+            .as_ref()
+            .expect("post_dom_tree should be Some");
 
         assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(3)));
         assert_eq!(pdom.idom(BlockId(1)), Some(BlockId(3)));
@@ -882,7 +899,10 @@ mod tests {
         func.insert_block(bb2);
 
         let ssa = build_ssa(func);
-        let pdom = ssa.post_dom_tree.as_ref().expect("post_dom_tree should be Some");
+        let pdom = ssa
+            .post_dom_tree
+            .as_ref()
+            .expect("post_dom_tree should be Some");
 
         assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(1)));
         assert_eq!(pdom.idom(BlockId(1)), Some(BlockId(2)));
@@ -917,7 +937,10 @@ mod tests {
         func.insert_block(bb3);
 
         let ssa = build_ssa(func);
-        let pdom = ssa.post_dom_tree.as_ref().expect("post_dom_tree should be Some");
+        let pdom = ssa
+            .post_dom_tree
+            .as_ref()
+            .expect("post_dom_tree should be Some");
         let exit = ssa.cfg.exit_block();
 
         assert_eq!(pdom.idom(BlockId(0)), Some(exit));
@@ -959,7 +982,10 @@ mod tests {
         func.insert_block(bb4);
 
         let ssa = build_ssa(func);
-        let pdom = ssa.post_dom_tree.as_ref().expect("post_dom_tree should be Some");
+        let pdom = ssa
+            .post_dom_tree
+            .as_ref()
+            .expect("post_dom_tree should be Some");
 
         assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(4)));
         assert_eq!(pdom.idom(BlockId(1)), Some(BlockId(4)));

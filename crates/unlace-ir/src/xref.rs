@@ -97,7 +97,11 @@ pub fn build_call_graph(functions: &BTreeMap<u64, Function>) -> CallGraph {
         }
     }
 
-    CallGraph { callers, callees, indirect_call_count }
+    CallGraph {
+        callers,
+        callees,
+        indirect_call_count,
+    }
 }
 
 #[cfg(test)]
@@ -134,11 +138,8 @@ mod tests {
     fn make_leaf(addr: u64) -> Function {
         let mut func = Function::new("leaf", BlockId(0), addr);
         let mut bb = BasicBlock::new(BlockId(0));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            addr,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], addr));
         func.insert_block(bb);
         func
     }

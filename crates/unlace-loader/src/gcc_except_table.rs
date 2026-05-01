@@ -112,7 +112,11 @@ struct Cursor<'a> {
 
 impl<'a> Cursor<'a> {
     fn new(data: &'a [u8], section_va: u64) -> Self {
-        Self { data, pos: 0, section_va }
+        Self {
+            data,
+            pos: 0,
+            section_va,
+        }
     }
 
     fn current_va(&self) -> u64 {
@@ -141,9 +145,7 @@ impl<'a> Cursor<'a> {
 
     fn read_u32_le(&mut self) -> Option<u32> {
         if self.pos + 4 <= self.data.len() {
-            let v = u32::from_le_bytes(
-                self.data[self.pos..self.pos + 4].try_into().ok()?,
-            );
+            let v = u32::from_le_bytes(self.data[self.pos..self.pos + 4].try_into().ok()?);
             self.pos += 4;
             Some(v)
         } else {
@@ -153,9 +155,7 @@ impl<'a> Cursor<'a> {
 
     fn read_u64_le(&mut self) -> Option<u64> {
         if self.pos + 8 <= self.data.len() {
-            let v = u64::from_le_bytes(
-                self.data[self.pos..self.pos + 8].try_into().ok()?,
-            );
+            let v = u64::from_le_bytes(self.data[self.pos..self.pos + 8].try_into().ok()?);
             self.pos += 8;
             Some(v)
         } else {
@@ -270,10 +270,7 @@ impl<'a> Cursor<'a> {
 // Single LSDA parser
 // ---------------------------------------------------------------------------
 
-fn parse_single_lsda(
-    cursor: &mut Cursor<'_>,
-    function_start: u64,
-) -> Option<FunctionLsda> {
+fn parse_single_lsda(cursor: &mut Cursor<'_>, function_start: u64) -> Option<FunctionLsda> {
     // -- Header --
     let lp_start_encoding = cursor.read_u8()?;
     let lp_start = if lp_start_encoding != DW_EH_PE_OMIT {
@@ -378,8 +375,7 @@ fn parse_single_lsda(
                 // Next action record is relative to the current action_pos
                 // + sizeof(SLEB128 ttypeIndex). We approximate by computing
                 // the offset from the current action position.
-                action_pos = (action_pos as i64 + action_offset) as usize
-                    + 1; // +1 because actionOffset is relative to its own start
+                action_pos = (action_pos as i64 + action_offset) as usize + 1; // +1 because actionOffset is relative to its own start
                 seen += 1;
             }
         }
@@ -473,19 +469,14 @@ mod tests {
             "cpp_exceptions.elf should have LSDA entries",
         );
 
-        let info = parse_gcc_except_table(&img, &eh.lsda_entries)
-            .expect("gcc_except_table parse");
+        let info = parse_gcc_except_table(&img, &eh.lsda_entries).expect("gcc_except_table parse");
 
         assert!(
             !info.is_empty(),
             "should parse at least one LSDA from cpp_exceptions.elf",
         );
 
-        let total_regions: usize = info
-            .functions
-            .values()
-            .map(|l| l.try_regions.len())
-            .sum();
+        let total_regions: usize = info.functions.values().map(|l| l.try_regions.len()).sum();
 
         assert!(
             total_regions > 0,
@@ -497,8 +488,7 @@ mod tests {
     fn test_lsda_try_regions_have_valid_ranges() {
         let img = load_fixture("cpp_exceptions.elf");
         let eh = parse_eh_frame(&img).expect("eh_frame");
-        let info = parse_gcc_except_table(&img, &eh.lsda_entries)
-            .expect("gcc_except_table parse");
+        let info = parse_gcc_except_table(&img, &eh.lsda_entries).expect("gcc_except_table parse");
 
         for lsda in info.functions.values() {
             for region in &lsda.try_regions {
@@ -516,8 +506,7 @@ mod tests {
     fn test_lsda_landing_pads_present() {
         let img = load_fixture("cpp_exceptions.elf");
         let eh = parse_eh_frame(&img).expect("eh_frame");
-        let info = parse_gcc_except_table(&img, &eh.lsda_entries)
-            .expect("gcc_except_table parse");
+        let info = parse_gcc_except_table(&img, &eh.lsda_entries).expect("gcc_except_table parse");
 
         let total_lpads: usize = info
             .functions
@@ -537,16 +526,14 @@ mod tests {
         let img = load_fixture("hello_world.elf");
         let eh = parse_eh_frame(&img).expect("eh_frame");
         // hello_world.elf is pure C — no LSDA entries expected from eh_frame.
-        let info = parse_gcc_except_table(&img, &eh.lsda_entries)
-            .expect("gcc_except_table parse");
+        let info = parse_gcc_except_table(&img, &eh.lsda_entries).expect("gcc_except_table parse");
         assert!(info.is_empty());
     }
 
     #[test]
     fn test_empty_lsda_entries_returns_empty() {
         let img = load_fixture("cpp_exceptions.elf");
-        let info = parse_gcc_except_table(&img, &[])
-            .expect("gcc_except_table parse");
+        let info = parse_gcc_except_table(&img, &[]).expect("gcc_except_table parse");
         assert!(info.is_empty());
     }
 }

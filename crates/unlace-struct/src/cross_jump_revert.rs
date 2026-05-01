@@ -49,10 +49,8 @@ pub fn cross_jump_revert(func: &mut SsaFunction) {
                 let a = preds[i];
                 let b = preds[j];
 
-                let shared_len = shared_tail_length(
-                    &func.function.blocks[&a],
-                    &func.function.blocks[&b],
-                );
+                let shared_len =
+                    shared_tail_length(&func.function.blocks[&a], &func.function.blocks[&b]);
 
                 if shared_len >= MIN_SHARED_TAIL {
                     splits.push((a, b, shared_len));
@@ -83,8 +81,7 @@ pub fn cross_jump_revert(func: &mut SsaFunction) {
             continue;
         }
 
-        let a_tail_insns: Vec<IrInsn> =
-            a_block.insns[a_block.insns.len() - tail_len..].to_vec();
+        let a_tail_insns: Vec<IrInsn> = a_block.insns[a_block.insns.len() - tail_len..].to_vec();
         let a_succs = a_block.successors.clone();
         let b_succs = b_block.successors.clone();
 
@@ -105,14 +102,18 @@ pub fn cross_jump_revert(func: &mut SsaFunction) {
             continue;
         };
         a_block.insns.truncate(a_block.insns.len() - tail_len);
-        a_block.insns.push(IrInsn::without_output(IrOp::Branch, smallvec![], 0));
+        a_block
+            .insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0));
         a_block.successors = smallvec![a_tail_id];
 
         let Some(b_block) = func.function.blocks.get_mut(&b_bid) else {
             continue;
         };
         b_block.insns.truncate(b_block.insns.len() - tail_len);
-        b_block.insns.push(IrInsn::without_output(IrOp::Branch, smallvec![], 0));
+        b_block
+            .insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0));
         b_block.successors = smallvec![b_tail_id];
 
         func.function.insert_block(a_tail_block);
@@ -158,12 +159,7 @@ mod tests {
     }
 
     fn arith_insn(output: Varnode, inputs: &[Varnode], addr: u64) -> IrInsn {
-        IrInsn::with_output(
-            IrOp::IntAdd,
-            output,
-            smallvec![inputs[0], inputs[1]],
-            addr,
-        )
+        IrInsn::with_output(IrOp::IntAdd, output, smallvec![inputs[0], inputs[1]], addr)
     }
 
     fn cbranch_insn(cond: Varnode, addr: u64) -> IrInsn {
@@ -233,7 +229,11 @@ mod tests {
         // The new tail blocks should contain the shared instructions.
         let bb1_tail_id = bb1.successors[0];
         let bb1_tail = &ssa.function.blocks[&bb1_tail_id];
-        assert_eq!(bb1_tail.insns.len(), 3, "tail block should have 3 shared insns");
+        assert_eq!(
+            bb1_tail.insns.len(),
+            3,
+            "tail block should have 3 shared insns"
+        );
     }
 
     #[test]

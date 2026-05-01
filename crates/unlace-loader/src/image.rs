@@ -186,6 +186,61 @@ pub struct LoadConfig {
     pub cfg_targets: Vec<u64>,
 }
 
+/// A resource entry from the PE resource directory tree.
+///
+/// The PE resource tree has three levels: type → name → language. Each leaf
+/// entry records the RVA and size of the resource data blob. We enumerate
+/// entries without interpreting their contents.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResourceEntry {
+    /// Resource type ID (level 1). Standard types: RT_ICON=3, RT_VERSION=16, etc.
+    pub type_id: u32,
+    /// Resource name/ID (level 2).
+    pub name_id: u32,
+    /// Language ID (level 3).
+    pub language: u32,
+    /// RVA of the resource data.
+    pub rva: u32,
+    /// Size of the resource data in bytes.
+    pub size: u32,
+}
+
+/// A bound import descriptor from IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT.
+///
+/// Bound imports record pre-resolved DLL timestamps so the loader can skip
+/// re-binding when the target DLL hasn't changed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundImport {
+    /// DLL module name.
+    pub module_name: String,
+    /// Timestamp of the bound DLL.
+    pub timestamp: u32,
+}
+
+/// A single record from the PE Rich header.
+///
+/// Each record encodes a build tool identifier and the number of times it was
+/// used during compilation/linking. The `comp_id` packs `(tool_id << 16) | minor_version`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RichRecord {
+    /// Composite tool identifier: `(tool_id << 16) | minor_version`.
+    pub comp_id: u32,
+    /// Number of uses of this tool during the build.
+    pub count: u32,
+}
+
+/// The decoded Rich header from a PE binary.
+///
+/// The Rich header is an undocumented Microsoft linker structure between the
+/// DOS stub and the PE signature. It is XOR-encoded with a checksum key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RichHeader {
+    /// Decoded build tool records.
+    pub records: Vec<RichRecord>,
+    /// The XOR key used to encode the header (the u32 after the "Rich" signature).
+    pub xor_key: u32,
+}
+
 /// A fully-parsed binary image ready for analysis, produced by a [`Loader`](crate::Loader).
 #[derive(Debug, Clone)]
 pub struct BinaryImage {
@@ -216,6 +271,12 @@ pub struct BinaryImage {
     pub load_config: Option<LoadConfig>,
     /// Exception handling runtime functions (PE `.pdata`). Empty for ELF/Mach-O.
     pub runtime_functions: Vec<RuntimeFunction>,
+    /// PE resource directory entries. Empty for ELF/Mach-O or if absent.
+    pub resources: Vec<ResourceEntry>,
+    /// PE bound import descriptors. Empty for ELF/Mach-O or if absent.
+    pub bound_imports: Vec<BoundImport>,
+    /// PE Rich header. `None` for ELF/Mach-O or if absent.
+    pub rich_header: Option<RichHeader>,
 }
 
 /// A PE RUNTIME_FUNCTION entry from the `.pdata` exception directory.

@@ -62,9 +62,11 @@ pub fn eager_returns(func: &mut SsaFunction) {
             changed = true;
         }
 
-        let still_referenced = func.function.blocks.iter().any(|(&bid, block)| {
-            bid != ret_bid && block.successors.contains(&ret_bid)
-        });
+        let still_referenced = func
+            .function
+            .blocks
+            .iter()
+            .any(|(&bid, block)| bid != ret_bid && block.successors.contains(&ret_bid));
 
         if !still_referenced {
             func.function.blocks.remove(&ret_bid);
@@ -90,12 +92,7 @@ mod tests {
     }
 
     fn arith_insn(output: Varnode, inputs: &[Varnode], addr: u64) -> IrInsn {
-        IrInsn::with_output(
-            IrOp::IntAdd,
-            output,
-            smallvec![inputs[0], inputs[1]],
-            addr,
-        )
+        IrInsn::with_output(IrOp::IntAdd, output, smallvec![inputs[0], inputs[1]], addr)
     }
 
     fn cbranch_insn(cond: Varnode, addr: u64) -> IrInsn {

@@ -2,7 +2,7 @@ use capstone::arch::ppc::PpcOperand;
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
-use crate::lift::{operand_imm, operand_reg, LiftCtx};
+use crate::lift::{LiftCtx, operand_imm, operand_reg};
 
 fn lift_reg_binop(ctx: &mut LiftCtx, ops: &[PpcOperand], ir_op: IrOp) {
     let (rd, ra, rb) = match (
@@ -14,8 +14,18 @@ fn lift_reg_binop(ctx: &mut LiftCtx, ops: &[PpcOperand], ir_op: IrOp) {
         _ => return ctx.emit_unimplemented(),
     };
     let result = Varnode::unique(ctx.alloc_unique(), 8);
-    ctx.emit(IrInsn::with_output(ir_op, result, smallvec![ra, rb], ctx.addr));
-    ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![result], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        ir_op,
+        result,
+        smallvec![ra, rb],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![result],
+        ctx.addr,
+    ));
 }
 
 fn lift_imm_binop(ctx: &mut LiftCtx, ops: &[PpcOperand], ir_op: IrOp) {
@@ -32,8 +42,18 @@ fn lift_imm_binop(ctx: &mut LiftCtx, ops: &[PpcOperand], ir_op: IrOp) {
     };
     let imm_vn = Varnode::constant(imm as u64, 8);
     let result = Varnode::unique(ctx.alloc_unique(), 8);
-    ctx.emit(IrInsn::with_output(ir_op, result, smallvec![ra, imm_vn], ctx.addr));
-    ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![result], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        ir_op,
+        result,
+        smallvec![ra, imm_vn],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![result],
+        ctx.addr,
+    ));
 }
 
 pub fn lift_and(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
@@ -77,9 +97,11 @@ pub fn lift_sraw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
         _ => return ctx.emit_unimplemented(),
     };
 
-    let shift = ops
-        .get(2)
-        .and_then(|o| operand_reg(o).map(ShiftSource::Reg).or_else(|| operand_imm(o).map(ShiftSource::Imm)));
+    let shift = ops.get(2).and_then(|o| {
+        operand_reg(o)
+            .map(ShiftSource::Reg)
+            .or_else(|| operand_imm(o).map(ShiftSource::Imm))
+    });
 
     let shift_vn = match shift {
         Some(ShiftSource::Reg(v)) => v,
@@ -88,8 +110,18 @@ pub fn lift_sraw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     };
 
     let result = Varnode::unique(ctx.alloc_unique(), 8);
-    ctx.emit(IrInsn::with_output(IrOp::IntSright, result, smallvec![ra, shift_vn], ctx.addr));
-    ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![result], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntSright,
+        result,
+        smallvec![ra, shift_vn],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![result],
+        ctx.addr,
+    ));
 }
 
 enum ShiftSource {

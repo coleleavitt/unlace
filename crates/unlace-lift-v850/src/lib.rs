@@ -3,15 +3,12 @@
 mod decode;
 mod lift;
 
-use unlace_ir::{
-    ArchId, LiftError, LiftedInsn, Lifter, RegisterDef, RegisterFile, Varnode,
-};
+use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterDef, RegisterFile, Varnode};
 
 const V850_REG_NAMES: [&str; 32] = [
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
-    "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
-    "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
+    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14",
+    "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27",
+    "r28", "r29", "r30", "r31",
 ];
 
 pub struct V850Lifter {
@@ -22,17 +19,43 @@ impl V850Lifter {
     pub fn new() -> Self {
         let mut regs = Vec::with_capacity(39);
         for (i, name) in V850_REG_NAMES.iter().enumerate() {
-            regs.push(RegisterDef { name, varnode: Varnode::reg((i as u64) * 8, 4) });
+            regs.push(RegisterDef {
+                name,
+                varnode: Varnode::reg((i as u64) * 8, 4),
+            });
         }
-        regs.push(RegisterDef { name: "PC", varnode: Varnode::reg(256, 4) });
-        regs.push(RegisterDef { name: "PSW", varnode: Varnode::reg(264, 4) });
+        regs.push(RegisterDef {
+            name: "PC",
+            varnode: Varnode::reg(256, 4),
+        });
+        regs.push(RegisterDef {
+            name: "PSW",
+            varnode: Varnode::reg(264, 4),
+        });
         // PSW flag sub-registers (1-byte each, used by condition evaluation)
-        regs.push(RegisterDef { name: "ZF", varnode: Varnode::reg(272, 1) });
-        regs.push(RegisterDef { name: "SF", varnode: Varnode::reg(280, 1) });
-        regs.push(RegisterDef { name: "OVF", varnode: Varnode::reg(288, 1) });
-        regs.push(RegisterDef { name: "CYF", varnode: Varnode::reg(296, 1) });
-        regs.push(RegisterDef { name: "SATF", varnode: Varnode::reg(304, 1) });
-        Self { register_file: RegisterFile { registers: regs } }
+        regs.push(RegisterDef {
+            name: "ZF",
+            varnode: Varnode::reg(272, 1),
+        });
+        regs.push(RegisterDef {
+            name: "SF",
+            varnode: Varnode::reg(280, 1),
+        });
+        regs.push(RegisterDef {
+            name: "OVF",
+            varnode: Varnode::reg(288, 1),
+        });
+        regs.push(RegisterDef {
+            name: "CYF",
+            varnode: Varnode::reg(296, 1),
+        });
+        regs.push(RegisterDef {
+            name: "SATF",
+            varnode: Varnode::reg(304, 1),
+        });
+        Self {
+            register_file: RegisterFile { registers: regs },
+        }
     }
 }
 
@@ -52,12 +75,14 @@ impl Lifter for V850Lifter {
             return Err(LiftError::ShortBuffer);
         }
 
-        let decoded = decode::decode(bytes, addr)
-            .ok_or(LiftError::ShortBuffer)?;
+        let decoded = decode::decode(bytes, addr).ok_or(LiftError::ShortBuffer)?;
 
         let ctx = lift::lift(&decoded, addr);
 
-        Ok(LiftedInsn { ir_ops: ctx.ops, len: decoded.len })
+        Ok(LiftedInsn {
+            ir_ops: ctx.ops,
+            len: decoded.len,
+        })
     }
 
     fn register_file(&self) -> &RegisterFile {
@@ -485,8 +510,14 @@ mod tests {
     #[test]
     fn short_buffer_error() {
         let lifter = V850Lifter::new();
-        assert!(matches!(lifter.lift_insn(&[0x00], 0), Err(LiftError::ShortBuffer)));
-        assert!(matches!(lifter.lift_insn(&[], 0), Err(LiftError::ShortBuffer)));
+        assert!(matches!(
+            lifter.lift_insn(&[0x00], 0),
+            Err(LiftError::ShortBuffer)
+        ));
+        assert!(matches!(
+            lifter.lift_insn(&[], 0),
+            Err(LiftError::ShortBuffer)
+        ));
     }
 
     // -- r0 writes are discarded --
@@ -529,6 +560,9 @@ mod tests {
         // ADDI needs 4 bytes — only give 2
         let hw0: u16 = (5 << 11) | (0b110000 << 5) | 3;
         let lifter = V850Lifter::new();
-        assert!(matches!(lifter.lift_insn(&hw0.to_le_bytes(), 0), Err(LiftError::ShortBuffer)));
+        assert!(matches!(
+            lifter.lift_insn(&hw0.to_le_bytes(), 0),
+            Err(LiftError::ShortBuffer)
+        ));
     }
 }

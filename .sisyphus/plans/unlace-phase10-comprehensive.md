@@ -1036,7 +1036,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): PE load_config + CFG function table parsing`
 
-- [ ] P10-18. Parse IMAGE_DIRECTORY_ENTRY_RESOURCE (tree walk)
+- [x] P10-18. Parse IMAGE_DIRECTORY_ENTRY_RESOURCE (tree walk)
 
   **What to do**:
   - Recursive walk of IMAGE_RESOURCE_DIRECTORY (3-level: type → name → language).
@@ -1076,7 +1076,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): PE resource tree walk (entries only, contents not interpreted)`
 
-- [ ] P10-19. Parse IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT
+- [x] P10-19. Parse IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT
 
   **What to do**:
   - Decode IMAGE_BOUND_IMPORT_DESCRIPTOR array.
@@ -1112,7 +1112,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): PE bound import directory parsing`
 
-- [ ] P10-20. Rich header extraction + BinaryImage field wiring
+- [x] P10-20. Rich header extraction + BinaryImage field wiring
 
   **What to do**:
   - Search bytes between DOS header (0x40) and NT headers offset (e_lfanew) for the "Rich" signature (0x68636952 LE).

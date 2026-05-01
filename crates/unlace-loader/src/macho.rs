@@ -123,6 +123,9 @@ where
         debug_records: Vec::new(),
         load_config: None,
         runtime_functions: Vec::new(),
+        resources: Vec::new(),
+        bound_imports: Vec::new(),
+        rich_header: None,
     })
 }
 

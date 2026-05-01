@@ -7,9 +7,9 @@
 use std::collections::BTreeSet;
 use std::fmt::Write;
 
+use unlace_ir::BlockId;
 use unlace_ir::cfg::{ControlFlowGraph, EdgeKind};
 use unlace_ir::ssa::{DominatorTree, SsaFunction};
-use unlace_ir::BlockId;
 
 /// Maximum number of IR instructions shown per block node.
 const MAX_INSNS_PER_LABEL: usize = 5;
@@ -103,7 +103,11 @@ fn build_node_label(func: &SsaFunction, bid: BlockId) -> String {
             label.push_str(&escaped);
         }
         if block.insns.len() > MAX_INSNS_PER_LABEL {
-            let _ = write!(label, "\\l... ({} more)", block.insns.len() - MAX_INSNS_PER_LABEL);
+            let _ = write!(
+                label,
+                "\\l... ({} more)",
+                block.insns.len() - MAX_INSNS_PER_LABEL
+            );
         }
     }
 
@@ -222,7 +226,12 @@ mod tests {
     }
 
     fn arith_insn(output: Varnode, inputs: &[Varnode], addr: u64) -> IrInsn {
-        IrInsn::with_output(op_for_inputs(inputs.len()), output, SmallVec::from(inputs), addr)
+        IrInsn::with_output(
+            op_for_inputs(inputs.len()),
+            output,
+            SmallVec::from(inputs),
+            addr,
+        )
     }
 
     /// Pick an opcode that accepts the given input count.
@@ -359,7 +368,10 @@ mod tests {
         // in our coloring (green), but let's verify the loop header was
         // detected.
         let headers = find_loop_headers(&ssa.cfg, &ssa.dom_tree);
-        assert!(headers.contains(&BlockId(0)), "BB_0 should be a loop header");
+        assert!(
+            headers.contains(&BlockId(0)),
+            "BB_0 should be a loop header"
+        );
 
         // T/F edges present.
         assert!(dot.contains("\"T\""));
@@ -369,9 +381,7 @@ mod tests {
     #[test]
     fn test_dot_renders() {
         // Skip if `dot` is not installed.
-        let which = std::process::Command::new("which")
-            .arg("dot")
-            .output();
+        let which = std::process::Command::new("which").arg("dot").output();
         match which {
             Ok(output) if output.status.success() => {}
             _ => {

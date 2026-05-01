@@ -4,7 +4,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
-use crate::ops::{arithmetic, bitwise, control_flow, data_move, fpu, stack, string_ops, sse};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, fpu, sse, stack, string_ops};
 use crate::register_file::{iced_reg_to_varnode, x86_64_register_file};
 
 pub struct X86Lifter {
@@ -84,8 +84,11 @@ impl LiftCtx {
     }
 
     pub fn emit_unimplemented(&mut self) {
-        self.ops
-            .push(IrInsn::without_output(IrOp::Unimplemented, smallvec![], self.addr));
+        self.ops.push(IrInsn::without_output(
+            IrOp::Unimplemented,
+            smallvec![],
+            self.addr,
+        ));
     }
 
     pub fn emit_store(&mut self, mem_addr: Varnode, value: Varnode) {
@@ -97,11 +100,22 @@ impl LiftCtx {
         ));
     }
 
-    pub fn write_operand_insn(&mut self, insn: &Instruction, idx: u32, dst: Varnode, value: Varnode) {
+    pub fn write_operand_insn(
+        &mut self,
+        insn: &Instruction,
+        idx: u32,
+        dst: Varnode,
+        value: Varnode,
+    ) {
         if insn.op_kind(idx) == OpKind::Memory {
             self.emit_store(dst, value);
         } else {
-            self.emit(IrInsn::with_output(IrOp::Copy, dst, smallvec![value], self.addr));
+            self.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst,
+                smallvec![value],
+                self.addr,
+            ));
         }
     }
 
@@ -117,20 +131,22 @@ impl LiftCtx {
             OpKind::Immediate16 => Some(Varnode::constant(insn.immediate16() as u64, 2)),
             OpKind::Immediate32 => {
                 let op_size = operand_size(insn, idx);
-                Some(Varnode::constant(insn.immediate32() as i32 as i64 as u64, op_size))
+                Some(Varnode::constant(
+                    insn.immediate32() as i32 as i64 as u64,
+                    op_size,
+                ))
             }
             OpKind::Immediate64 => Some(Varnode::constant(insn.immediate64(), 8)),
             OpKind::Immediate8to16 => Some(Varnode::constant(insn.immediate8to16() as u64, 2)),
             OpKind::Immediate8to32 => {
                 let op_size = operand_size(insn, idx);
-                Some(Varnode::constant(insn.immediate8to32() as i32 as i64 as u64, op_size))
+                Some(Varnode::constant(
+                    insn.immediate8to32() as i32 as i64 as u64,
+                    op_size,
+                ))
             }
-            OpKind::Immediate8to64 => {
-                Some(Varnode::constant(insn.immediate8to64() as u64, 8))
-            }
-            OpKind::Immediate32to64 => {
-                Some(Varnode::constant(insn.immediate32to64() as u64, 8))
-            }
+            OpKind::Immediate8to64 => Some(Varnode::constant(insn.immediate8to64() as u64, 8)),
+            OpKind::Immediate32to64 => Some(Varnode::constant(insn.immediate32to64() as u64, 8)),
             OpKind::Memory => {
                 let mem_size = insn.memory_size().size() as u8;
                 let addr_vn = self.compute_memory_address(insn)?;
@@ -158,9 +174,7 @@ impl LiftCtx {
                 let (offset, size) = iced_reg_to_varnode(reg)?;
                 Some(Varnode::new(SpaceId::Register, offset, size))
             }
-            OpKind::Memory => {
-                self.compute_memory_address(insn)
-            }
+            OpKind::Memory => self.compute_memory_address(insn),
             _ => None,
         }
     }
@@ -273,9 +287,22 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
     use Mnemonic as M;
 
     match insn.mnemonic() {
-        M::Mov | M::Movzx | M::Movsx | M::Movsxd | M::Cmove | M::Cmovne
-        | M::Cmovb | M::Cmovae | M::Cmova | M::Cmovbe | M::Cmovl
-        | M::Cmovge | M::Cmovg | M::Cmovle | M::Cmovs | M::Cmovns => {
+        M::Mov
+        | M::Movzx
+        | M::Movsx
+        | M::Movsxd
+        | M::Cmove
+        | M::Cmovne
+        | M::Cmovb
+        | M::Cmovae
+        | M::Cmova
+        | M::Cmovbe
+        | M::Cmovl
+        | M::Cmovge
+        | M::Cmovg
+        | M::Cmovle
+        | M::Cmovs
+        | M::Cmovns => {
             data_move::lift_mov(ctx, insn);
         }
 
@@ -326,17 +353,44 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
 
         M::Jmp => control_flow::lift_jmp(ctx, insn),
 
-        M::Je | M::Jne | M::Jb | M::Jae | M::Ja | M::Jbe | M::Jl | M::Jge
-        | M::Jg | M::Jle | M::Js | M::Jns | M::Jo | M::Jno | M::Jp | M::Jnp => {
+        M::Je
+        | M::Jne
+        | M::Jb
+        | M::Jae
+        | M::Ja
+        | M::Jbe
+        | M::Jl
+        | M::Jge
+        | M::Jg
+        | M::Jle
+        | M::Js
+        | M::Jns
+        | M::Jo
+        | M::Jno
+        | M::Jp
+        | M::Jnp => {
             control_flow::lift_jcc(ctx, insn);
         }
 
         M::Call => control_flow::lift_call(ctx, insn),
         M::Ret => control_flow::lift_ret(ctx, insn),
 
-        M::Sete | M::Setne | M::Setb | M::Setae | M::Seta | M::Setbe
-        | M::Setl | M::Setge | M::Setg | M::Setle | M::Sets | M::Setns
-        | M::Seto | M::Setno | M::Setp | M::Setnp => {
+        M::Sete
+        | M::Setne
+        | M::Setb
+        | M::Setae
+        | M::Seta
+        | M::Setbe
+        | M::Setl
+        | M::Setge
+        | M::Setg
+        | M::Setle
+        | M::Sets
+        | M::Setns
+        | M::Seto
+        | M::Setno
+        | M::Setp
+        | M::Setnp => {
             data_move::lift_setcc(ctx, insn);
         }
 
@@ -348,7 +402,7 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Movdqu => sse::lift_sse_mov(ctx, insn, sse::tag::MOVDQU),
         M::Movaps => sse::lift_sse_mov(ctx, insn, sse::tag::MOVAPS),
         M::Movups => sse::lift_sse_mov(ctx, insn, sse::tag::MOVUPS),
-        M::Movsd  => sse::lift_sse_mov_scalar(ctx, insn, sse::tag::MOVSD),
+        M::Movsd => sse::lift_sse_mov_scalar(ctx, insn, sse::tag::MOVSD),
 
         M::Paddb => sse::lift_sse_binop(ctx, insn, sse::tag::PADDB),
         M::Paddw => sse::lift_sse_binop(ctx, insn, sse::tag::PADDW),
@@ -361,7 +415,7 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Psubq => sse::lift_sse_binop(ctx, insn, sse::tag::PSUBQ),
 
         M::Pand => sse::lift_sse_binop(ctx, insn, sse::tag::PAND),
-        M::Por  => sse::lift_sse_binop(ctx, insn, sse::tag::POR),
+        M::Por => sse::lift_sse_binop(ctx, insn, sse::tag::POR),
         M::Pxor => sse::lift_sse_binop(ctx, insn, sse::tag::PXOR),
 
         M::Addps => sse::lift_sse_binop(ctx, insn, sse::tag::ADDPS),
@@ -388,27 +442,27 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Fst => fpu::lift_fst(ctx, insn),
         M::Fstp => fpu::lift_fstp(ctx, insn),
 
-        M::Fadd  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FADD, false),
+        M::Fadd => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FADD, false),
         M::Faddp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FADD, false),
-        M::Fsub  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, false),
+        M::Fsub => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, false),
         M::Fsubp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, false),
-        M::Fsubr  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, true),
+        M::Fsubr => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, true),
         M::Fsubrp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FSUB, true),
 
-        M::Fmul  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FMUL, false),
+        M::Fmul => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FMUL, false),
         M::Fmulp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FMUL, false),
-        M::Fdiv  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FDIV, false),
+        M::Fdiv => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FDIV, false),
         M::Fdivp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FDIV, false),
-        M::Fdivr  => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FDIV, true),
+        M::Fdivr => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FDIV, true),
         M::Fdivrp => fpu::lift_fpu_binop(ctx, insn, fpu::fpu_tag::FDIV, true),
 
-        M::Fcom    => fpu::lift_fcom(ctx, insn),
-        M::Fcomp   => fpu::lift_fcom(ctx, insn),
-        M::Fcompp  => fpu::lift_fcom(ctx, insn),
-        M::Fucom   => fpu::lift_fcom(ctx, insn),
-        M::Fucomp  => fpu::lift_fcom(ctx, insn),
+        M::Fcom => fpu::lift_fcom(ctx, insn),
+        M::Fcomp => fpu::lift_fcom(ctx, insn),
+        M::Fcompp => fpu::lift_fcom(ctx, insn),
+        M::Fucom => fpu::lift_fcom(ctx, insn),
+        M::Fucomp => fpu::lift_fcom(ctx, insn),
         M::Fucompp => fpu::lift_fcom(ctx, insn),
-        M::Fxch    => fpu::lift_fxch(ctx, insn),
+        M::Fxch => fpu::lift_fxch(ctx, insn),
 
         _ => ctx.emit_unimplemented(),
     }

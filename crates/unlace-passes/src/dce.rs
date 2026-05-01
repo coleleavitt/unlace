@@ -56,9 +56,9 @@ impl Pass for DeadCodeElimPass {
         for (&bid, block) in &func.function.blocks {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
                 for input_idx in 0..insn.inputs.len() {
-                    if let Some(&sv) = func
-                        .var_map
-                        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+                    if let Some(&sv) =
+                        func.var_map
+                            .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
                     {
                         used.insert(sv);
                     }
@@ -85,9 +85,7 @@ impl Pass for DeadCodeElimPass {
                     continue;
                 }
 
-                let output_sv = func
-                    .var_map
-                    .get(&(bid, insn_idx, VarnodeSlot::Output));
+                let output_sv = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output));
 
                 let is_dead = match output_sv {
                     Some(sv) => !used.contains(sv),
@@ -113,23 +111,21 @@ impl Pass for DeadCodeElimPass {
                 block.insns.push(old_insns[old_idx].clone());
 
                 if new_idx != old_idx {
-                    if let Some(sv) = func
-                        .var_map
-                        .remove(&(bid, old_idx, VarnodeSlot::Output))
-                    {
-                        func.var_map
-                            .insert((bid, new_idx, VarnodeSlot::Output), sv);
+                    if let Some(sv) = func.var_map.remove(&(bid, old_idx, VarnodeSlot::Output)) {
+                        func.var_map.insert((bid, new_idx, VarnodeSlot::Output), sv);
                     }
 
-                    let input_count = block.insns.last()
+                    let input_count = block
+                        .insns
+                        .last()
                         .ok_or_else(|| PassError::InvariantViolation {
                             message: "block has no instructions after compaction".into(),
                         })?
-                        .inputs.len();
+                        .inputs
+                        .len();
                     for i in 0..input_count {
-                        if let Some(sv) = func
-                            .var_map
-                            .remove(&(bid, old_idx, VarnodeSlot::Input(i)))
+                        if let Some(sv) =
+                            func.var_map.remove(&(bid, old_idx, VarnodeSlot::Input(i)))
                         {
                             func.var_map
                                 .insert((bid, new_idx, VarnodeSlot::Input(i)), sv);
@@ -159,8 +155,8 @@ impl Pass for DeadCodeElimPass {
 mod tests {
     use smallvec::smallvec;
 
+    use unlace_ir::ssa::{PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
-    use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, PhiNode};
 
     use super::*;
 
@@ -178,16 +174,41 @@ mod tests {
         let cfg = unlace_ir::cfg::build_cfg(&func);
         let dom_tree = build_trivial_dom(&cfg);
 
-        SsaFunction { function: func, cfg, dom_tree, post_dom_tree: None, phi_map, var_map, var_types: std::collections::BTreeMap::new(), calling_convention: unlace_ir::ssa::CallingConvention::Unknown, stack_vars: std::collections::BTreeMap::new(), foldable_exprs: std::collections::BTreeSet::new(), noreturn: false, tail_call_map: std::collections::BTreeMap::new(), merged_names: std::collections::BTreeMap::new(), enum_discriminants: Vec::new(), panic_sites: std::collections::BTreeMap::new(), vtable_calls: std::collections::BTreeMap::new(), cpp_vtable_calls: std::collections::BTreeMap::new(), inferred_params: Vec::new(), inferred_return_type: unlace_ir::ssa::PrimitiveType::Unknown, frame_setup_insns: std::collections::BTreeSet::new(), dwarf_local_names: std::collections::BTreeMap::new(), inferred_structs: std::collections::BTreeMap::new(), composite_var_types: std::collections::BTreeMap::new(), array_strides: std::collections::BTreeMap::new() }
+        SsaFunction {
+            function: func,
+            cfg,
+            dom_tree,
+            post_dom_tree: None,
+            phi_map,
+            var_map,
+            var_types: std::collections::BTreeMap::new(),
+            calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
+            stack_vars: std::collections::BTreeMap::new(),
+            foldable_exprs: std::collections::BTreeSet::new(),
+            noreturn: false,
+            tail_call_map: std::collections::BTreeMap::new(),
+            merged_names: std::collections::BTreeMap::new(),
+            enum_discriminants: Vec::new(),
+            panic_sites: std::collections::BTreeMap::new(),
+            vtable_calls: std::collections::BTreeMap::new(),
+            cpp_vtable_calls: std::collections::BTreeMap::new(),
+            inferred_params: Vec::new(),
+            inferred_return_type: unlace_ir::ssa::PrimitiveType::Unknown,
+            frame_setup_insns: std::collections::BTreeSet::new(),
+            dwarf_local_names: std::collections::BTreeMap::new(),
+            inferred_structs: std::collections::BTreeMap::new(),
+            composite_var_types: std::collections::BTreeMap::new(),
+            array_strides: std::collections::BTreeMap::new(),
+        }
     }
 
-    fn build_trivial_dom(
-        cfg: &unlace_ir::cfg::ControlFlowGraph,
-    ) -> unlace_ir::ssa::DominatorTree {
+    fn build_trivial_dom(cfg: &unlace_ir::cfg::ControlFlowGraph) -> unlace_ir::ssa::DominatorTree {
         use petgraph::algo::dominators::simple_fast;
         use std::collections::BTreeMap;
 
-        let entry_ni = cfg.node_index(cfg.entry_block()).expect("entry block in cfg");
+        let entry_ni = cfg
+            .node_index(cfg.entry_block())
+            .expect("entry block in cfg");
         let dominators = simple_fast(cfg.inner(), entry_ni);
 
         let mut idom = BTreeMap::new();
@@ -213,7 +234,10 @@ mod tests {
     }
 
     fn sv(offset: u64, version: u32) -> SsaVarnode {
-        SsaVarnode { base: Varnode::reg(offset, 8), version }
+        SsaVarnode {
+            base: Varnode::reg(offset, 8),
+            version,
+        }
     }
 
     #[test]
@@ -229,22 +253,15 @@ mod tests {
             smallvec![v1.base, v2.base],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut var_map = std::collections::BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), v1);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(1)), v2);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), v3);
 
-        let mut ssa = make_ssa(
-            vec![bb],
-            var_map,
-            std::collections::BTreeMap::new(),
-        );
+        let mut ssa = make_ssa(vec![bb], var_map, std::collections::BTreeMap::new());
 
         let pass = DeadCodeElimPass;
         let changed = pass.run(&mut ssa).expect("pass should succeed");
@@ -266,21 +283,14 @@ mod tests {
             smallvec![v1.base, v2.base],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut var_map = std::collections::BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), v1);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(1)), v2);
 
-        let mut ssa = make_ssa(
-            vec![bb],
-            var_map,
-            std::collections::BTreeMap::new(),
-        );
+        let mut ssa = make_ssa(vec![bb], var_map, std::collections::BTreeMap::new());
 
         let pass = DeadCodeElimPass;
         let changed = pass.run(&mut ssa).expect("pass should succeed");
@@ -301,26 +311,22 @@ mod tests {
             smallvec![v1.base],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut var_map = std::collections::BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), v1);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), v3);
 
-        let mut ssa = make_ssa(
-            vec![bb],
-            var_map,
-            std::collections::BTreeMap::new(),
-        );
+        let mut ssa = make_ssa(vec![bb], var_map, std::collections::BTreeMap::new());
 
         let pass = DeadCodeElimPass;
         let changed = pass.run(&mut ssa).expect("pass should succeed");
 
-        assert!(!changed, "CALL must not be removed even when output is unused");
+        assert!(
+            !changed,
+            "CALL must not be removed even when output is unused"
+        );
         assert_eq!(ssa.function.blocks[&BlockId(0)].insns.len(), 2);
     }
 
@@ -343,11 +349,8 @@ mod tests {
             smallvec![v2.base, v2.base],
             0x1004,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1008,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
 
         let mut var_map = std::collections::BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), v1);
@@ -356,11 +359,7 @@ mod tests {
         var_map.insert((BlockId(0), 1, VarnodeSlot::Input(1)), v2);
         var_map.insert((BlockId(0), 1, VarnodeSlot::Output), v3);
 
-        let mut ssa = make_ssa(
-            vec![bb],
-            var_map,
-            std::collections::BTreeMap::new(),
-        );
+        let mut ssa = make_ssa(vec![bb], var_map, std::collections::BTreeMap::new());
 
         let pass = DeadCodeElimPass;
 

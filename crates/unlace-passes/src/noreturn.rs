@@ -131,7 +131,7 @@ mod tests {
 
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot, DominatorTree};
+    use unlace_ir::ssa::{DominatorTree, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -177,12 +177,12 @@ mod tests {
         }
     }
 
-    fn build_trivial_dom(
-        cfg: &unlace_ir::cfg::ControlFlowGraph,
-    ) -> DominatorTree {
+    fn build_trivial_dom(cfg: &unlace_ir::cfg::ControlFlowGraph) -> DominatorTree {
         use petgraph::algo::dominators::simple_fast;
 
-        let entry_ni = cfg.node_index(cfg.entry_block()).expect("entry block in cfg");
+        let entry_ni = cfg
+            .node_index(cfg.entry_block())
+            .expect("entry block in cfg");
         let dominators = simple_fast(cfg.inner(), entry_ni);
 
         let mut idom = BTreeMap::new();
@@ -208,7 +208,10 @@ mod tests {
     }
 
     fn sv(offset: u64, version: u32) -> SsaVarnode {
-        SsaVarnode { base: Varnode::reg(offset, 8), version }
+        SsaVarnode {
+            base: Varnode::reg(offset, 8),
+            version,
+        }
     }
 
     fn mock_resolver(addr: u64) -> Option<&'static str> {
@@ -228,11 +231,8 @@ mod tests {
             smallvec![Varnode::constant(0xDEAD, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let var_map = BTreeMap::new();
         let mut ssa = make_ssa(vec![bb], var_map);
@@ -252,11 +252,8 @@ mod tests {
             smallvec![Varnode::constant(0xBEEF, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let var_map = BTreeMap::new();
         let mut ssa = make_ssa(vec![bb], var_map);
@@ -279,11 +276,8 @@ mod tests {
             smallvec![Varnode::constant(0x1234, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), v1);
@@ -324,11 +318,8 @@ mod tests {
             smallvec![v1.base, Varnode::constant(2, 8)],
             0x1008,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x100c,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
 
         let mut var_map = BTreeMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), v1);
@@ -350,8 +341,16 @@ mod tests {
         assert_eq!(insns[1].op, IrOp::Call);
 
         // var_map entries for removed instructions should be gone
-        assert!(ssa.var_map.get(&(BlockId(0), 2, VarnodeSlot::Input(0))).is_none());
-        assert!(ssa.var_map.get(&(BlockId(0), 2, VarnodeSlot::Output)).is_none());
+        assert!(
+            ssa.var_map
+                .get(&(BlockId(0), 2, VarnodeSlot::Input(0)))
+                .is_none()
+        );
+        assert!(
+            ssa.var_map
+                .get(&(BlockId(0), 2, VarnodeSlot::Output))
+                .is_none()
+        );
     }
 
     #[test]
@@ -380,11 +379,8 @@ mod tests {
             smallvec![Varnode::constant(0xDEAD, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Return,
-            smallvec![],
-            0x1004,
-        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let var_map = BTreeMap::new();
         let mut ssa = make_ssa(vec![bb], var_map);

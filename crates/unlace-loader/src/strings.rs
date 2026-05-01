@@ -89,7 +89,10 @@ mod tests {
 
         assert!(table.contains_key(&0x2004), "should find 'Hello' at 0x2004");
         assert_eq!(table[&0x2004], "Hello");
-        assert!(table.contains_key(&0x200A), "should find 'World!' at 0x200A");
+        assert!(
+            table.contains_key(&0x200A),
+            "should find 'World!' at 0x200A"
+        );
         assert_eq!(table[&0x200A], "World!");
     }
 
@@ -99,9 +102,18 @@ mod tests {
         let section = make_section(".rodata", 0x1000, data);
         let table = scan_strings(&[section]);
 
-        assert!(!table.values().any(|s| s == "Hi"), "2-char string should be rejected");
-        assert!(!table.values().any(|s| s == "AB"), "2-char string should be rejected");
-        assert!(table.values().any(|s| s == "ABCD"), "4-char string should be accepted");
+        assert!(
+            !table.values().any(|s| s == "Hi"),
+            "2-char string should be rejected"
+        );
+        assert!(
+            !table.values().any(|s| s == "AB"),
+            "2-char string should be rejected"
+        );
+        assert!(
+            table.values().any(|s| s == "ABCD"),
+            "4-char string should be accepted"
+        );
     }
 
     #[test]
@@ -119,7 +131,10 @@ mod tests {
         let section = make_section(".rodata", 0x1000, data);
         let table = scan_strings(&[section]);
 
-        assert!(table.is_empty(), "strings without null terminator should be rejected");
+        assert!(
+            table.is_empty(),
+            "strings without null terminator should be rejected"
+        );
     }
 
     #[test]

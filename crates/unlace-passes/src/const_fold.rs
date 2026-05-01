@@ -52,7 +52,11 @@ fn try_fold(insn: &IrInsn) -> Option<IrInsn> {
 }
 
 fn mask_for_size(size: u8) -> u64 {
-    if size >= 8 { u64::MAX } else { (1u64 << (size as u32 * 8)) - 1 }
+    if size >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (size as u32 * 8)) - 1
+    }
 }
 
 fn sign_extend(val: u64, size: u8) -> i64 {
@@ -80,32 +84,44 @@ fn evaluate(op: IrOp, inputs: &[Varnode], out_size: u8) -> Option<u64> {
         }
         IrOp::IntDiv => {
             let (a, b) = two(inputs)?;
-            if b.offset == 0 { return None; }
+            if b.offset == 0 {
+                return None;
+            }
             let av = a.offset & mask_for_size(a.size);
             let bv = b.offset & mask_for_size(b.size);
             Some(av / bv)
         }
         IrOp::IntSdiv => {
             let (a, b) = two(inputs)?;
-            if b.offset == 0 { return None; }
+            if b.offset == 0 {
+                return None;
+            }
             let av = sign_extend(a.offset, a.size);
             let bv = sign_extend(b.offset, b.size);
-            if av == i64::MIN && bv == -1 { return None; }
+            if av == i64::MIN && bv == -1 {
+                return None;
+            }
             Some((av.wrapping_div(bv) as u64) & mask)
         }
         IrOp::IntRem => {
             let (a, b) = two(inputs)?;
-            if b.offset == 0 { return None; }
+            if b.offset == 0 {
+                return None;
+            }
             let av = a.offset & mask_for_size(a.size);
             let bv = b.offset & mask_for_size(b.size);
             Some(av % bv)
         }
         IrOp::IntSrem => {
             let (a, b) = two(inputs)?;
-            if b.offset == 0 { return None; }
+            if b.offset == 0 {
+                return None;
+            }
             let av = sign_extend(a.offset, a.size);
             let bv = sign_extend(b.offset, b.size);
-            if av == i64::MIN && bv == -1 { return None; }
+            if av == i64::MIN && bv == -1 {
+                return None;
+            }
             Some((av.wrapping_rem(bv) as u64) & mask)
         }
 
@@ -262,11 +278,19 @@ fn evaluate(op: IrOp, inputs: &[Varnode], out_size: u8) -> Option<u64> {
 }
 
 fn one(inputs: &[Varnode]) -> Option<Varnode> {
-    if inputs.len() == 1 { Some(inputs[0]) } else { None }
+    if inputs.len() == 1 {
+        Some(inputs[0])
+    } else {
+        None
+    }
 }
 
 fn two(inputs: &[Varnode]) -> Option<(Varnode, Varnode)> {
-    if inputs.len() == 2 { Some((inputs[0], inputs[1])) } else { None }
+    if inputs.len() == 2 {
+        Some((inputs[0], inputs[1]))
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -282,7 +306,11 @@ mod tests {
         let mut func = Function::new("test", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns = insns;
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![Varnode::constant(0, 8)], 0x1FFF));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1FFF,
+        ));
         func.insert_block(bb);
         build_ssa(func)
     }
@@ -299,7 +327,13 @@ mod tests {
         let changed = pass.run(&mut ssa).expect("pass should succeed");
         assert!(changed);
 
-        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
+        let folded = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[0];
         assert_eq!(folded.op, IrOp::Copy);
         assert_eq!(folded.inputs[0].space, SpaceId::Const);
         assert_eq!(folded.inputs[0].offset, 8);
@@ -317,7 +351,13 @@ mod tests {
         let changed = ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
         assert!(changed);
 
-        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
+        let folded = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[0];
         assert_eq!(folded.op, IrOp::Copy);
         assert_eq!(folded.inputs[0].offset, 7);
     }
@@ -333,7 +373,13 @@ mod tests {
         let changed = ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
         assert!(changed);
 
-        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
+        let folded = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[0];
         assert_eq!(folded.op, IrOp::Copy);
         assert_eq!(folded.inputs[0].space, SpaceId::Const);
         assert_eq!(folded.inputs[0].offset, 0);
@@ -349,7 +395,13 @@ mod tests {
         let mut ssa = make_single_block_ssa(vec![insn]);
         ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
 
-        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
+        let folded = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[0];
         assert_eq!(folded.inputs[0].offset, 0);
     }
 
@@ -386,7 +438,13 @@ mod tests {
         let mut ssa = make_single_block_ssa(vec![insn]);
         ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
 
-        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
+        let folded = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[0];
         assert_eq!(folded.inputs[0].offset, 0xFFFF_FF00);
     }
 
@@ -400,7 +458,13 @@ mod tests {
         let mut ssa = make_single_block_ssa(vec![insn]);
         ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
 
-        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
+        let folded = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[0];
         assert_eq!(folded.inputs[0].offset, 1);
     }
 
@@ -414,7 +478,13 @@ mod tests {
         let mut ssa = make_single_block_ssa(vec![insn]);
         ConstantFoldPass.run(&mut ssa).expect("pass should succeed");
 
-        let folded = &ssa.function.blocks.values().next().expect("has block").insns[0];
+        let folded = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[0];
         assert_eq!(folded.inputs[0].offset, 1);
     }
 }

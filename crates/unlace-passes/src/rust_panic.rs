@@ -117,7 +117,8 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{
-        CallingConvention, DominatorTree, PanicKind, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot,
+        CallingConvention, DominatorTree, PanicKind, PrimitiveType, SsaFunction, SsaVarnode,
+        VarnodeSlot,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
@@ -167,7 +168,9 @@ mod tests {
     fn build_trivial_dom(cfg: &unlace_ir::cfg::ControlFlowGraph) -> DominatorTree {
         use petgraph::algo::dominators::simple_fast;
 
-        let entry_ni = cfg.node_index(cfg.entry_block()).expect("entry block in cfg");
+        let entry_ni = cfg
+            .node_index(cfg.entry_block())
+            .expect("entry block in cfg");
         let dominators = simple_fast(cfg.inner(), entry_ni);
 
         let mut idom = BTreeMap::new();
@@ -213,7 +216,8 @@ mod tests {
             smallvec![Varnode::constant(0xAAAA, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = RustPanicPass;
@@ -234,7 +238,8 @@ mod tests {
             smallvec![Varnode::constant(0xBBBB, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = RustPanicPass;
@@ -255,7 +260,8 @@ mod tests {
             smallvec![Varnode::constant(0xCCCC, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = RustPanicPass;
@@ -273,7 +279,8 @@ mod tests {
             smallvec![Varnode::reg(0, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = RustPanicPass;
@@ -291,7 +298,8 @@ mod tests {
             smallvec![Varnode::constant(0xDDDD, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = RustPanicPass;
@@ -312,7 +320,8 @@ mod tests {
             smallvec![Varnode::constant(0xEEEE, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = RustPanicPass;
@@ -333,7 +342,8 @@ mod tests {
             smallvec![Varnode::constant(0xFFFF, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = RustPanicPass;
@@ -354,7 +364,8 @@ mod tests {
             smallvec![Varnode::constant(0xAAAA, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = RustPanicPass;
@@ -370,7 +381,8 @@ mod tests {
             smallvec![Varnode::constant(0xAAAA, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = RustPanicPass;

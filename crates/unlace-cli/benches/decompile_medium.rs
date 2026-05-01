@@ -9,7 +9,9 @@ use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BasicBlock, BlockId, Function, IrOp, Lifter};
 use unlace_lift::get_lifter;
 use unlace_loader::{ElfLoader, Loader, SymbolKind};
-use unlace_passes::{ConstantFoldPass, CopyPropagationPass, DeadCodeElimPass, Pass, run_to_fixedpoint};
+use unlace_passes::{
+    ConstantFoldPass, CopyPropagationPass, DeadCodeElimPass, Pass, run_to_fixedpoint,
+};
 
 fn fixture_path() -> PathBuf {
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -119,7 +121,10 @@ struct LiftedInsnRecord {
 }
 
 fn is_terminator(op: IrOp) -> bool {
-    matches!(op, IrOp::Branch | IrOp::Cbranch | IrOp::Branchind | IrOp::Return)
+    matches!(
+        op,
+        IrOp::Branch | IrOp::Cbranch | IrOp::Branchind | IrOp::Return
+    )
 }
 
 fn lift_function(
@@ -129,7 +134,11 @@ fn lift_function(
 ) -> Option<Function> {
     let text = image.section_by_name(".text")?;
     let start = entry.addr;
-    let end = if entry.size > 0 { start + entry.size } else { text.vaddr + text.size };
+    let end = if entry.size > 0 {
+        start + entry.size
+    } else {
+        text.vaddr + text.size
+    };
 
     if start < text.vaddr || start >= text.vaddr + text.size {
         return None;
@@ -278,7 +287,8 @@ fn run_type_infer_bounded(ssa: &mut SsaFunction) {
 
         for (&bid, block) in &ssa.function.blocks {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
-                let output_sv = ssa.var_map
+                let output_sv = ssa
+                    .var_map
                     .get(&(bid, insn_idx, VarnodeSlot::Output))
                     .copied();
                 let input_sv = |idx: usize| -> Option<SsaVarnode> {
@@ -291,8 +301,11 @@ fn run_type_infer_bounded(ssa: &mut SsaFunction) {
                     let ty = match insn.op.type_family() {
                         Some('b') => PrimitiveType::Bool,
                         Some('f') => {
-                            if out.base.size == 4 { PrimitiveType::Float }
-                            else { PrimitiveType::Double }
+                            if out.base.size == 4 {
+                                PrimitiveType::Float
+                            } else {
+                                PrimitiveType::Double
+                            }
                         }
                         Some(_) => PrimitiveType::Int(out.base.size),
                         None => continue,
@@ -301,13 +314,18 @@ fn run_type_infer_bounded(ssa: &mut SsaFunction) {
                 }
 
                 for (idx, inp) in insn.inputs.iter().enumerate() {
-                    if inp.space == SpaceId::Const { continue; }
+                    if inp.space == SpaceId::Const {
+                        continue;
+                    }
                     if let Some(sv) = input_sv(idx) {
                         let ty = match insn.op.input_type_family(idx) {
                             'b' => PrimitiveType::Bool,
                             'f' => {
-                                if sv.base.size == 4 { PrimitiveType::Float }
-                                else { PrimitiveType::Double }
+                                if sv.base.size == 4 {
+                                    PrimitiveType::Float
+                                } else {
+                                    PrimitiveType::Double
+                                }
                             }
                             _ => PrimitiveType::Int(sv.base.size),
                         };
@@ -406,10 +424,7 @@ fn bench_structure(c: &mut Criterion) {
         .iter()
         .filter_map(|e| lift_function(&image, lifter.as_ref(), e))
         .collect();
-    let mut ssas: Vec<SsaFunction> = lifted
-        .into_iter()
-        .map(unlace_ir::ssa::build_ssa)
-        .collect();
+    let mut ssas: Vec<SsaFunction> = lifted.into_iter().map(unlace_ir::ssa::build_ssa).collect();
     for ssa in &mut ssas {
         run_passes(ssa);
         run_type_infer_bounded(ssa);
@@ -432,10 +447,7 @@ fn bench_output(c: &mut Criterion) {
         .iter()
         .filter_map(|e| lift_function(&image, lifter.as_ref(), e))
         .collect();
-    let mut ssas: Vec<SsaFunction> = lifted
-        .into_iter()
-        .map(unlace_ir::ssa::build_ssa)
-        .collect();
+    let mut ssas: Vec<SsaFunction> = lifted.into_iter().map(unlace_ir::ssa::build_ssa).collect();
     for ssa in &mut ssas {
         run_passes(ssa);
         run_type_infer_bounded(ssa);

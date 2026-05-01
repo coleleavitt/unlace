@@ -27,14 +27,11 @@ use unlace_ir::{
 // ---------------------------------------------------------------------------
 
 const ARC_CORE_REG_NAMES: [&str; 64] = [
-    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
-    "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
-    "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
-    "r32", "r33", "r34", "r35", "r36", "r37", "r38", "r39",
-    "r40", "r41", "r42", "r43", "r44", "r45", "r46", "r47",
-    "r48", "r49", "r50", "r51", "r52", "r53", "r54", "r55",
-    "r56", "r57", "r58", "r59", "r60", "r61", "r62", "r63",
+    "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14",
+    "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27",
+    "r28", "r29", "r30", "r31", "r32", "r33", "r34", "r35", "r36", "r37", "r38", "r39", "r40",
+    "r41", "r42", "r43", "r44", "r45", "r46", "r47", "r48", "r49", "r50", "r51", "r52", "r53",
+    "r54", "r55", "r56", "r57", "r58", "r59", "r60", "r61", "r62", "r63",
 ];
 
 /// Well-known register indices.
@@ -189,14 +186,14 @@ fn decode_major04(w: u32, addr: u64) -> LiftedInsn {
     let dest = reg(a_or_dest);
 
     match subop {
-        0x00 => lift_binop_sized(IrOp::IntAdd, dest, src1, src2_vn, addr, 4),    // ADD
-        0x01 => lift_binop_sized(IrOp::IntAdd, dest, src1, src2_vn, addr, 4),    // ADC → ADD for MVP
-        0x02 => lift_binop_sized(IrOp::IntSub, dest, src1, src2_vn, addr, 4),    // SUB
-        0x04 => lift_binop_sized(IrOp::IntAnd, dest, src1, src2_vn, addr, 4),    // AND
-        0x05 => lift_binop_sized(IrOp::IntOr, dest, src1, src2_vn, addr, 4),     // OR
-        0x07 => lift_binop_sized(IrOp::IntXor, dest, src1, src2_vn, addr, 4),    // XOR
-        0x08 => lift_binop_sized(IrOp::IntLeft, dest, src1, src2_vn, addr, 4),   // ASL
-        0x09 => lift_binop_sized(IrOp::IntRight, dest, src1, src2_vn, addr, 4),  // LSR
+        0x00 => lift_binop_sized(IrOp::IntAdd, dest, src1, src2_vn, addr, 4), // ADD
+        0x01 => lift_binop_sized(IrOp::IntAdd, dest, src1, src2_vn, addr, 4), // ADC → ADD for MVP
+        0x02 => lift_binop_sized(IrOp::IntSub, dest, src1, src2_vn, addr, 4), // SUB
+        0x04 => lift_binop_sized(IrOp::IntAnd, dest, src1, src2_vn, addr, 4), // AND
+        0x05 => lift_binop_sized(IrOp::IntOr, dest, src1, src2_vn, addr, 4),  // OR
+        0x07 => lift_binop_sized(IrOp::IntXor, dest, src1, src2_vn, addr, 4), // XOR
+        0x08 => lift_binop_sized(IrOp::IntLeft, dest, src1, src2_vn, addr, 4), // ASL
+        0x09 => lift_binop_sized(IrOp::IntRight, dest, src1, src2_vn, addr, 4), // LSR
         0x0A => lift_binop_sized(IrOp::IntSright, dest, src1, src2_vn, addr, 4), // ASR
         0x0B => {
             // CMP: src1 - src2, no writeback (sets flags only)
@@ -215,12 +212,7 @@ fn decode_major04(w: u32, addr: u64) -> LiftedInsn {
         0x0C => {
             // MOV: dest = src2 (b is ignored / 0)
             LiftedInsn {
-                ir_ops: vec![IrInsn::with_output(
-                    IrOp::Copy,
-                    dest,
-                    vec![src2_vn],
-                    addr,
-                )],
+                ir_ops: vec![IrInsn::with_output(IrOp::Copy, dest, vec![src2_vn], addr)],
                 len: 4,
             }
         }
@@ -341,11 +333,7 @@ fn decode_major05(w: u32, addr: u64) -> LiftedInsn {
         0x20 => {
             let c = extract_c_reg(w);
             LiftedInsn {
-                ir_ops: vec![IrInsn::without_output(
-                    IrOp::Branchind,
-                    vec![reg(c)],
-                    addr,
-                )],
+                ir_ops: vec![IrInsn::without_output(IrOp::Branchind, vec![reg(c)], addr)],
                 len: 4,
             }
         }
@@ -405,17 +393,8 @@ fn decode_branch_on_compare(w: u32, addr: u64) -> LiftedInsn {
     // Emit: cond = CMP(b, c); CBRANCH target, cond
     LiftedInsn {
         ir_ops: vec![
-            IrInsn::with_output(
-                IrOp::IntEqual,
-                cond_tmp,
-                vec![reg(b), reg(c)],
-                addr,
-            ),
-            IrInsn::without_output(
-                IrOp::Cbranch,
-                vec![ram_target(target), cond_tmp],
-                addr,
-            ),
+            IrInsn::with_output(IrOp::IntEqual, cond_tmp, vec![reg(b), reg(c)], addr),
+            IrInsn::without_output(IrOp::Cbranch, vec![ram_target(target), cond_tmp], addr),
         ],
         len: 4,
     }
@@ -439,12 +418,7 @@ fn decode_16bit(hw: u16, addr: u64) -> LiftedInsn {
             LiftedInsn {
                 ir_ops: vec![
                     IrInsn::with_output(IrOp::IntAdd, t, vec![reg(b), imm(u5)], addr),
-                    IrInsn::with_output(
-                        IrOp::Load,
-                        reg(c),
-                        vec![Varnode::constant(0, 4), t],
-                        addr,
-                    ),
+                    IrInsn::with_output(IrOp::Load, reg(c), vec![Varnode::constant(0, 4), t], addr),
                 ],
                 len: 2,
             }
@@ -478,12 +452,7 @@ fn decode_16bit(hw: u16, addr: u64) -> LiftedInsn {
                     // MOV_S b, h
                     let h = (hw & 0x1F) as u8;
                     LiftedInsn {
-                        ir_ops: vec![IrInsn::with_output(
-                            IrOp::Copy,
-                            reg(b),
-                            vec![reg(h)],
-                            addr,
-                        )],
+                        ir_ops: vec![IrInsn::with_output(IrOp::Copy, reg(b), vec![reg(h)], addr)],
                         len: 2,
                     }
                 }
@@ -532,12 +501,7 @@ fn decode_16bit(hw: u16, addr: u64) -> LiftedInsn {
             LiftedInsn {
                 ir_ops: vec![
                     IrInsn::with_output(IrOp::IntAdd, t, vec![reg(REG_SP), imm(u7)], addr),
-                    IrInsn::with_output(
-                        IrOp::Load,
-                        reg(b),
-                        vec![Varnode::constant(0, 4), t],
-                        addr,
-                    ),
+                    IrInsn::with_output(IrOp::Load, reg(b), vec![Varnode::constant(0, 4), t], addr),
                 ],
                 len: 2,
             }
@@ -606,22 +570,14 @@ fn decode_16bit_major0f(hw: u16, addr: u64) -> LiftedInsn {
         0x00 => {
             // J_S [b] — register indirect jump
             LiftedInsn {
-                ir_ops: vec![IrInsn::without_output(
-                    IrOp::Branchind,
-                    vec![reg(b)],
-                    addr,
-                )],
+                ir_ops: vec![IrInsn::without_output(IrOp::Branchind, vec![reg(b)], addr)],
                 len: 2,
             }
         }
         0x01 => {
             // J_S.D [b] — jump with delay slot (model as plain jump for MVP)
             LiftedInsn {
-                ir_ops: vec![IrInsn::without_output(
-                    IrOp::Branchind,
-                    vec![reg(b)],
-                    addr,
-                )],
+                ir_ops: vec![IrInsn::without_output(IrOp::Branchind, vec![reg(b)], addr)],
                 len: 2,
             }
         }
@@ -644,12 +600,7 @@ fn decode_16bit_major0f(hw: u16, addr: u64) -> LiftedInsn {
             // NOP_S (all zeros in b/c)
             // Emit as a Copy of zero to a discarded temp (semantically a no-op)
             LiftedInsn {
-                ir_ops: vec![IrInsn::with_output(
-                    IrOp::Copy,
-                    tmp(0),
-                    vec![imm(0)],
-                    addr,
-                )],
+                ir_ops: vec![IrInsn::with_output(IrOp::Copy, tmp(0), vec![imm(0)], addr)],
                 len: 2,
             }
         }
@@ -704,11 +655,25 @@ impl ArcLifter {
                 varnode: Varnode::reg((i as u64) * 8, 4),
             });
         }
-        regs.push(RegisterDef { name: "STATUS32", varnode: Varnode::reg(512, 4) });
-        regs.push(RegisterDef { name: "BTA", varnode: Varnode::reg(520, 4) });
-        regs.push(RegisterDef { name: "LP_START", varnode: Varnode::reg(528, 4) });
-        regs.push(RegisterDef { name: "LP_END", varnode: Varnode::reg(536, 4) });
-        Self { register_file: RegisterFile { registers: regs } }
+        regs.push(RegisterDef {
+            name: "STATUS32",
+            varnode: Varnode::reg(512, 4),
+        });
+        regs.push(RegisterDef {
+            name: "BTA",
+            varnode: Varnode::reg(520, 4),
+        });
+        regs.push(RegisterDef {
+            name: "LP_START",
+            varnode: Varnode::reg(528, 4),
+        });
+        regs.push(RegisterDef {
+            name: "LP_END",
+            varnode: Varnode::reg(536, 4),
+        });
+        Self {
+            register_file: RegisterFile { registers: regs },
+        }
     }
 
     /// Decode and lift a single ARCv2 instruction.

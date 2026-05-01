@@ -9,7 +9,7 @@ use unlace_ir::{
 };
 
 use crate::ops::{arithmetic, bitwise, control_flow, data_move, memory};
-use crate::register_file::{self, capstone_reg_to_offset, mips64_register_file, ZERO};
+use crate::register_file::{self, ZERO, capstone_reg_to_offset, mips64_register_file};
 
 // Capstone contains a raw `*mut c_void` handle to the C library.
 // The capstone C library documents that each cs_handle is independent and
@@ -124,8 +124,11 @@ impl LiftCtx {
     }
 
     pub fn emit_unimplemented(&mut self) {
-        self.ops
-            .push(IrInsn::without_output(IrOp::Unimplemented, smallvec![], self.addr));
+        self.ops.push(IrInsn::without_output(
+            IrOp::Unimplemented,
+            smallvec![],
+            self.addr,
+        ));
     }
 
     pub fn emit_load(&mut self, dst: Varnode, addr_vn: Varnode) {
@@ -196,7 +199,12 @@ impl LiftCtx {
     }
 
     pub fn write_to_reg(&mut self, dst: Varnode, value: Varnode) {
-        self.emit(IrInsn::with_output(IrOp::Copy, dst, smallvec![value], self.addr));
+        self.emit(IrInsn::with_output(
+            IrOp::Copy,
+            dst,
+            smallvec![value],
+            self.addr,
+        ));
     }
 }
 
@@ -320,7 +328,9 @@ mod tests {
     #[test]
     fn test_nop() {
         let l = lifter();
-        let result = l.lift_insn(&[0x00, 0x00, 0x00, 0x00], 0x1000).expect("should decode NOP");
+        let result = l
+            .lift_insn(&[0x00, 0x00, 0x00, 0x00], 0x1000)
+            .expect("should decode NOP");
         assert_eq!(result.len, 4);
         assert_eq!(result.ir_ops.len(), 1);
         assert_eq!(result.ir_ops[0].op, IrOp::Copy);
@@ -388,7 +398,11 @@ mod tests {
             .expect("should decode BEQ");
         assert_eq!(result.len, 4);
         let has_cbranch = result.ir_ops.iter().any(|op| op.op == IrOp::Cbranch);
-        assert!(has_cbranch, "BEQ should produce Cbranch: {:?}", result.ir_ops);
+        assert!(
+            has_cbranch,
+            "BEQ should produce Cbranch: {:?}",
+            result.ir_ops
+        );
     }
 
     // J 0x00400100 = 0x08100040 (big-endian)
@@ -426,7 +440,11 @@ mod tests {
             .expect("should decode JR");
         assert_eq!(result.len, 4);
         let has_return = result.ir_ops.iter().any(|op| op.op == IrOp::Return);
-        assert!(has_return, "JR $ra should produce Return: {:?}", result.ir_ops);
+        assert!(
+            has_return,
+            "JR $ra should produce Return: {:?}",
+            result.ir_ops
+        );
     }
 
     // LUI $at, 0x0040 = 0x3C010040 (big-endian)
@@ -439,7 +457,11 @@ mod tests {
             .expect("should decode LUI");
         assert_eq!(result.len, 4);
         let has_left = result.ir_ops.iter().any(|op| op.op == IrOp::IntLeft);
-        assert!(has_left, "LUI should produce IntLeft (shift left 16): {:?}", result.ir_ops);
+        assert!(
+            has_left,
+            "LUI should produce IntLeft (shift left 16): {:?}",
+            result.ir_ops
+        );
     }
 
     // AND $v0, $a0, $a1 = 0x00852024 (big-endian)
@@ -476,7 +498,11 @@ mod tests {
             .expect("should decode SLT");
         assert_eq!(result.len, 4);
         let has_sless = result.ir_ops.iter().any(|op| op.op == IrOp::IntSless);
-        assert!(has_sless, "SLT should produce IntSless: {:?}", result.ir_ops);
+        assert!(
+            has_sless,
+            "SLT should produce IntSless: {:?}",
+            result.ir_ops
+        );
     }
 
     // MULT $a0, $a1 = 0x00850018 (big-endian)

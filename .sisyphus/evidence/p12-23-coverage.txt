@@ -1,0 +1,28 @@
+=== Lifter Coverage Report (P12-23) ===
+Generated: 2026-05-01
+
+Fixture                           Stmts   Unimpl   Lifted  Coverage%
+------------------------------ -------- -------- -------- ----------
+arc_features                         13        0       13      100.0
+arm64_features                       36        0       36      100.0
+branches                             48        0       48      100.0
+calls                                50        0       50      100.0
+cpp_exceptions                      168        0      168      100.0
+cpp_rtti                            158        0      158      100.0
+cpp_vtable                           35        0       35      100.0
+debug_calls                         248        0      248      100.0
+debug_hello                          30        0       30      100.0
+debug_structs                        47        0       47      100.0
+empty                                28        0       28      100.0
+go_hello                            ERR        -        - Command '[
+hello_world                          32        0       32      100.0
+loops                               229        0      229      100.0
+medium                             2847        0     2847      100.0
+mips64_features                      43        0       43      100.0
+ppc64_features                        2        0        2      100.0
+riscv64_features                     29        0       29      100.0
+stripped                           4139        0     4139      100.0
+v850_features                         2        0        2      100.0
+x87_math                             55        0       55      100.0
+
+=== End Report ===

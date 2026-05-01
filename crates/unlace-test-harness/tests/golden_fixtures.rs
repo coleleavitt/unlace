@@ -8,7 +8,8 @@
 //! it on every run. Any change to the decompiler that alters output for
 //! `medium.elf`, `debug_structs.elf`, `debug_calls.elf`, `debug_hello.elf`,
 //! `cpp_vtable.elf`, `cpp_exceptions.elf`, `cpp_rtti.elf`, or
-//! `arm64_features.elf`, `mips64_features.elf`, or `riscv64_features.elf`
+//! `arm64_features.elf`, `mips64_features.elf`, `riscv64_features.elf`,
+//! `v850_features.elf`, `arc_features.elf`, or `ppc64_features.elf`
 //! will fail this test.
 //!
 //! # Running
@@ -477,6 +478,21 @@ fn golden_riscv64_features() {
 }
 
 #[test]
+fn golden_v850_features() {
+    run_golden("v850_features");
+}
+
+#[test]
+fn golden_arc_features() {
+    run_golden("arc_features");
+}
+
+#[test]
+fn golden_ppc64_features() {
+    run_golden("ppc64_features");
+}
+
+#[test]
 fn golden_fixtures_metrics_summary() {
     let fixtures = [
         "medium",
@@ -490,6 +506,9 @@ fn golden_fixtures_metrics_summary() {
         "arm64_features",
         "mips64_features",
         "riscv64_features",
+        "v850_features",
+        "arc_features",
+        "ppc64_features",
     ];
     let mut total = Metrics::default();
 
@@ -719,6 +738,9 @@ fn reference_metrics_file_loads_for_all_fixtures() {
         "mips64_features",
         "riscv64_features",
         "x87_math",
+        "v850_features",
+        "arc_features",
+        "ppc64_features",
     ] {
         assert!(
             reference_metrics(name).is_some(),

@@ -345,4 +345,35 @@ mod tests {
         assert!(names.contains(&"MyClass"));
         assert!(names.contains(&"MyOtherClass"));
     }
+
+    #[test]
+    fn test_ios_kcm_objc_scan() {
+        let path = "../../fixtures/ios_kcm.arm64.macho";
+        let data = match std::fs::read(path) {
+            Ok(d) => d,
+            Err(_) => {
+                eprintln!("Skipping: {path} not found");
+                return;
+            }
+        };
+
+        let image = <crate::macho::MachoLoader as crate::Loader>::load(&data)
+            .expect("should parse ios_kcm.arm64.macho");
+
+        let has_classlist = image
+            .sections
+            .iter()
+            .any(|s| s.name.contains("__objc_classlist"));
+
+        let info = scan_objc_classlist(&image);
+
+        eprintln!("KCM has __objc_classlist section: {has_classlist}");
+        eprintln!("KCM ObjC classes found: {}", info.classes.len());
+        for cls in info.classes.values().take(10) {
+            eprintln!("  class: {} @ {:#x}", cls.name, cls.class_addr);
+        }
+
+        // KCM may or may not have ObjC — just document the finding
+        // The test passes regardless
+    }
 }

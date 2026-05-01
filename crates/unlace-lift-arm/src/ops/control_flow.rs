@@ -186,6 +186,41 @@ pub fn lift_ret(ctx: &mut LiftCtx, ops: &Ops) {
     ));
 }
 
+pub fn lift_csel(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, tag: u64) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+
+    let cc = detail.arch_detail().arm64().map(|a| a.cc());
+    let cond = match cc.and_then(|cc| build_condition(ctx, cc)) {
+        Some(cond) => cond,
+        None => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+    let rn = operand_to_varnode(ctx, &ops[1].0);
+    let rm = operand_to_varnode(ctx, &ops[2].0);
+    let dst = match ops.first() {
+        Some((Arm64OperandType::Reg(reg), _)) if !crate::register_file::is_zero_reg(*reg) => {
+            crate::register_file::reg_varnode(*reg)
+        }
+        Some((Arm64OperandType::Reg(_), _)) => return,
+        _ => None,
+    };
+
+    match (dst, rn, rm) {
+        (Some(dst), Some(rn), Some(rm)) => ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            dst,
+            smallvec![Varnode::constant(tag, 8), cond, rn, rm],
+            ctx.addr,
+        )),
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
 fn build_condition(ctx: &mut LiftCtx, cc: Arm64CC) -> Option<Varnode> {
     let zf = Varnode::reg(ZF, 1);
     let nf = Varnode::reg(NF, 1);

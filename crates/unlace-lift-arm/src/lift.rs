@@ -247,6 +247,10 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_CBZ => control_flow::lift_cbz(ctx, &ops),
         Arm64Insn::ARM64_INS_CBNZ => control_flow::lift_cbnz(ctx, &ops),
         Arm64Insn::ARM64_INS_RET => control_flow::lift_ret(ctx, &ops),
+        Arm64Insn::ARM64_INS_CSEL => control_flow::lift_csel(ctx, &ops, detail, 0x330),
+        Arm64Insn::ARM64_INS_CSINC => control_flow::lift_csel(ctx, &ops, detail, 0x331),
+        Arm64Insn::ARM64_INS_CSINV => control_flow::lift_csel(ctx, &ops, detail, 0x332),
+        Arm64Insn::ARM64_INS_CSNEG => control_flow::lift_csel(ctx, &ops, detail, 0x333),
 
         _ => ctx.emit_unimplemented(),
     }

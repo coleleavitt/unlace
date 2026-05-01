@@ -1,0 +1,32 @@
+Phase 10 Final Metrics (P10-35 — Wave 6 Golden Refresh)
+=========================================================
+Date: 2026-04-30
+
+Golden refresh: UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures
+Result: 23 passed, 0 failed
+
+Per-fixture goto/if counts (current):
+
+cpp_exceptions: gotos=0 ifs=1
+cpp_rtti: gotos=2 ifs=4
+cpp_vtable: gotos=0 ifs=0
+debug_calls: gotos=0 ifs=0
+debug_hello: gotos=0 ifs=0
+debug_structs: gotos=0 ifs=0
+medium: gotos=12 ifs=24
+x87_math: gotos=0 ifs=1
+
+Baseline comparison (from p10-baseline-metrics.txt):
+
+Fixture          Baseline→Final  Goto Delta  If Delta
+cpp_exceptions   gotos 0→0       0           0
+cpp_rtti         gotos 2→2       0           0
+cpp_vtable       gotos 0→0       0           0
+debug_calls      gotos 0→0       0           0
+debug_hello      gotos 0→0       0           0
+debug_structs    gotos 0→0       0           0
+medium           gotos 30→12     -18         -15
+x87_math         gotos 0→0       0           0
+
+Regression check: NO fixture's goto count increased (all deltas ≤ 0).
+medium.c gotos: 12 (target ≤ 15) ✓

@@ -247,6 +247,10 @@ pub struct SsaFunction {
     /// Pattern: `CALLIND(LOAD(LOAD(this + 0) + N))` — vptr at offset 0.
     /// Populated by `CppVtablePass`.
     pub cpp_vtable_calls: BTreeMap<(BlockId, usize), VtableCallInfo>,
+    /// Indirect calls recognized as ObjC `objc_msgSend` dispatches.
+    /// Keyed by `(BlockId, insn_index)` of the `CALL`/`CALLIND` instruction.
+    /// Value is the annotation string (e.g. `"objc_msgSend(self, selector)"`).
+    pub objc_dispatch_calls: BTreeMap<(BlockId, usize), String>,
     /// Inferred function parameters from calling convention register usage.
     /// Each entry is `(name, type)` — e.g. `("a1", PrimitiveType::Int(8))`.
     /// Populated by [`ParamInferPass`](https://docs.rs/unlace-passes).
@@ -330,6 +334,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         panic_sites: BTreeMap::new(),
         vtable_calls: BTreeMap::new(),
         cpp_vtable_calls: BTreeMap::new(),
+        objc_dispatch_calls: BTreeMap::new(),
         inferred_params: Vec::new(),
         inferred_return_type: PrimitiveType::Unknown,
         frame_setup_insns: BTreeSet::new(),

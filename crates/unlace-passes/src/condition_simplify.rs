@@ -319,6 +319,10 @@ fn try_simplify(
             let inner = insn.inputs.first()?;
 
             if let Some(inner_insn) = def_map.get(inner) {
+                if let Some(folded) = simplify_negated_flag_chain(insn, inner_insn, def_map) {
+                    return Some(folded);
+                }
+
                 match inner_insn.op {
                     IrOp::BoolNegate => {
                         let x = inner_insn.inputs.first()?;
@@ -463,6 +467,35 @@ fn try_simplify(
 
         _ => None,
     }
+}
+
+fn simplify_negated_flag_chain(
+    insn: &IrInsn,
+    flag_insn: &IrInsn,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<Simplification> {
+    let (lhs, rhs) = two(&flag_insn.inputs)?;
+    if rhs.space != SpaceId::Const || rhs.offset != 0 {
+        return None;
+    }
+
+    let sub = def_map.get(&lhs)?;
+    if sub.op != IrOp::IntSub || sub.inputs.len() != 2 {
+        return None;
+    }
+    let a = sub.inputs[0];
+    let b = sub.inputs[1];
+    if !is_safe_offset_fold_target(&lhs, &a, sub) {
+        return None;
+    }
+
+    let (op, inputs) = match flag_insn.op {
+        IrOp::IntEqual => (IrOp::IntNotequal, smallvec::smallvec![a, b]),
+        IrOp::IntSless => (IrOp::IntSlessequal, smallvec::smallvec![b, a]),
+        _ => return None,
+    };
+
+    Some(Simplification::Replace(replace_op(insn, op, inputs)))
 }
 
 fn demorgan(
@@ -666,6 +699,56 @@ mod tests {
         assert_eq!(block.insns[1].op, IrOp::IntNotequal);
         assert_eq!(block.insns[1].inputs[0], r0);
         assert_eq!(block.insns[1].inputs[1], r8);
+    }
+
+    #[test]
+    fn test_negated_sub_equal_zero_to_notequal() {
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let zero = Varnode::constant(0, 4);
+        let diff = Varnode::unique(0, 4);
+        let zf = Varnode::unique(8, 1);
+        let cond = Varnode::unique(16, 1);
+
+        let sub = IrInsn::with_output(IrOp::IntSub, diff, smallvec![r0, r8], 0x1000);
+        let eq = IrInsn::with_output(IrOp::IntEqual, zf, smallvec![diff, zero], 0x1004);
+        let neg = IrInsn::with_output(IrOp::BoolNegate, cond, smallvec![zf], 0x1008);
+
+        let mut ssa = make_single_block_ssa(vec![sub, eq, neg]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[2].op, IrOp::IntNotequal);
+        assert_eq!(block.insns[2].inputs[0], r0);
+        assert_eq!(block.insns[2].inputs[1], r8);
+    }
+
+    #[test]
+    fn test_negated_sub_sless_zero_to_slessequal() {
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let zero = Varnode::constant(0, 4);
+        let diff = Varnode::unique(0, 4);
+        let sf = Varnode::unique(8, 1);
+        let cond = Varnode::unique(16, 1);
+
+        let sub = IrInsn::with_output(IrOp::IntSub, diff, smallvec![r0, r8], 0x1000);
+        let sless = IrInsn::with_output(IrOp::IntSless, sf, smallvec![diff, zero], 0x1004);
+        let neg = IrInsn::with_output(IrOp::BoolNegate, cond, smallvec![sf], 0x1008);
+
+        let mut ssa = make_single_block_ssa(vec![sub, sless, neg]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[2].op, IrOp::IntSlessequal);
+        assert_eq!(block.insns[2].inputs[0], r8);
+        assert_eq!(block.insns[2].inputs[1], r0);
     }
 
     // ── Pattern 7: BoolNegate(IntNotequal(a, b)) → IntEqual(a, b) ──

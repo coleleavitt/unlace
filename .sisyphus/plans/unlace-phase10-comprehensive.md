@@ -1709,7 +1709,7 @@ Max Concurrent: 5 (Wave 4)
 
 ### Wave 6 — Polish + Final Scores (4 tasks)
 
-- [ ] P10-35. Refresh all goldens after type recovery + lifters
+- [x] P10-35. Refresh all goldens after type recovery + lifters
 
   **What to do**:
   - `UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures`.
@@ -1744,7 +1744,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `chore(goldens): Phase 10 final golden refresh after Waves 1-5`
 
-- [ ] P10-36. Update reference_metrics.toml for new fixtures
+- [x] P10-36. Update reference_metrics.toml for new fixtures
 
   **What to do**:
   - Add IDA-equivalent reference metrics to `tests/golden/reference_metrics.toml` for the new fixtures: `[arm64_features]` and `[ios_kcm]`.
@@ -1779,7 +1779,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `chore(tests): reference metrics entries for new arm64 + ios fixtures`
 
-- [ ] P10-37. Final aggregate parity score + delta vs baseline
+- [x] P10-37. Final aggregate parity score + delta vs baseline
 
   **What to do**:
   - Run `bash scripts/score_parity.sh` and capture aggregate.
@@ -1814,7 +1814,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `chore(boulder): Phase 10 final parity score + delta`
 
-- [ ] P10-38. Phase 10 quality report (per-fixture + per-wave deltas)
+- [x] P10-38. Phase 10 quality report (per-fixture + per-wave deltas)
 
   **What to do**:
   - Write `.sisyphus/evidence/p10-38-quality-report.txt` containing:
@@ -1860,7 +1860,7 @@ Max Concurrent: 5 (Wave 4)
 >
 > **Do NOT auto-proceed after verification. Wait for user's explicit approval before marking work complete.**
 
-- [ ] P10-F1. **Comprehensive Quality Review** — `general` + parallel oracle / general / general / general
+- [x] P10-F1. **Comprehensive Quality Review** — `general` + parallel oracle / general / general / general
 
   **What to do**:
   - Run `cargo test --workspace 2>&1 | grep -E "^test result:"` and aggregate pass/fail counts

@@ -1,0 +1,32 @@
+Phase 10 Final Parity Score (P10-37)
+======================================
+Date: 2026-04-30
+
+Aggregate Parity: 59.6%
+Baseline (p10-baseline-metrics.txt): 52.9%
+Delta: +6.7 percentage points
+
+Per-fixture scores:
+  medium:          0.0%   (gotos=12 penalize heavily; IDA ref has 0 gotos)
+  debug_structs:  93.9%
+  debug_calls:    60.0%
+  debug_hello:    80.9%
+  cpp_vtable:     53.6%
+  cpp_exceptions: 78.2%
+  cpp_rtti:       50.9%
+
+Note: The 52.9% baseline was captured at Wave 0 start (p10-baseline-metrics.txt).
+The Phase 9 landing score was 59.6% (score_parity.sh header comment).
+The current score remains 59.6% — Phase 10 Waves 1-5 focused on loader/lifter
+coverage and goto reduction rather than parity-scored fixture improvements.
+
+medium.c gotos dropped 30→12 (target ≤15 ✓), but the parity formula penalizes
+any remaining gotos at -2.0 per goto, which zeroes out medium's score.
+The real quality improvement is visible in the goto delta, not the aggregate.
+
+Key improvements not captured by parity score:
+- ARM64 lifter: 33→48+ mnemonics
+- PE loader: .pdata/.xdata, debug directory, load config, resources, Rich header
+- Mach-O loader: LC_DYLD_INFO, LC_DYSYMTAB, chained fixups, stub recognition
+- Real iOS Mach-O ARM64 fixture decompiles 7 functions
+- Test count: 1359→1417 (+58 tests)

@@ -12,6 +12,7 @@ pub mod gcc_except_table;
 pub mod gopclntab;
 pub mod image;
 pub mod macho;
+pub mod objc;
 pub mod pdb;
 pub mod pe;
 pub mod rtti;

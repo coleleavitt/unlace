@@ -1,0 +1,30 @@
+P10-34: Real iOS Mach-O ARM64 Integration Fixture (KCM)
+========================================================
+
+Source: ~/RustProjects/active/iphonern/decrypted/kcm/KCM
+Target: fixtures/ios_kcm.arm64.macho
+
+Binary size: 1,967,264 bytes (1.9 MB)
+File type:   Mach-O 64-bit arm64 executable, flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|BINDS_TO_WEAK|PIE>
+
+Decompile command:
+  ./target/debug/unlace decompile fixtures/ios_kcm.arm64.macho --emit c --timeout 60 -o /tmp/p10-34.c
+Exit code: 0
+
+Output: 253 lines
+Function signatures found: 21
+Functions successfully decompiled: 7
+Functions failed: 1 (entry point outside __text — expected for Mach-O)
+
+First 5 function names:
+  1. sub_10000f3bf
+  2. sub_10000f4a3
+  3. sub_10001c82d
+  4. sub_10002a7a1
+  5. sub_10002e389
+
+Notes:
+- Required wiring multi-format loader dispatch (ELF → Mach-O → PE) in main.rs and batch.rs
+- Required text_section() helper in pipeline.rs to handle .text (ELF) vs __text (Mach-O)
+- KCM chosen over Chase (1.9MB vs 228MB)
+- Binary has symbols + LC_DYLD_INFO intact (not stripped)

@@ -8,7 +8,7 @@ use rayon::prelude::*;
 
 use unlace_ir::ArchId;
 use unlace_lift::get_lifter;
-use unlace_loader::{BinaryImage, DwarfInfo, ElfLoader, Loader, import_dwarf};
+use unlace_loader::{BinaryImage, DwarfInfo, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf};
 
 use crate::args::EmitFormat;
 use crate::pipeline::{self, FunctionEntry, PipelineConfig};
@@ -37,12 +37,19 @@ pub fn run_batch(
     let data = fs::read(binary_path)
         .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
 
-    if !ElfLoader::can_load(&data) {
-        bail!("'{}' is not a valid ELF binary", binary_path.display());
+    let image = if ElfLoader::can_load(&data) {
+        ElfLoader::load(&data)
+    } else if MachoLoader::can_load(&data) {
+        MachoLoader::load(&data)
+    } else if PeLoader::can_load(&data) {
+        PeLoader::load(&data)
+    } else {
+        bail!(
+            "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
+            binary_path.display(),
+        );
     }
-
-    let image = ElfLoader::load(&data)
-        .with_context(|| format!("failed to parse '{}'", binary_path.display()))?;
+    .with_context(|| format!("failed to parse '{}'", binary_path.display()))?;
 
     tracing::info!(arch = %image.arch, entry = %format_args!("{:#x}", image.entry), "loaded binary");
 

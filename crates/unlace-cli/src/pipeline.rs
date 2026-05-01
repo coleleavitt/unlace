@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BasicBlock, BlockId, Function, IrOp, Lifter};
-use unlace_loader::{BinaryImage, DwarfInfo, SymbolKind};
+use unlace_loader::{BinaryImage, DwarfInfo, Section, SymbolKind};
 use unlace_passes::{
     CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass, CopyPropagationPass,
     CppVtablePass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
@@ -18,6 +18,14 @@ use unlace_passes::{
 use crate::args::EmitFormat;
 
 const IR_NODE_WARN_THRESHOLD: usize = 100_000;
+
+/// Find the executable text section regardless of binary format.
+/// ELF uses `.text`, Mach-O uses `__text`.
+fn text_section(image: &BinaryImage) -> Option<&Section> {
+    image
+        .section_by_name(".text")
+        .or_else(|| image.section_by_name("__text"))
+}
 
 #[derive(Clone, Debug)]
 pub struct FunctionEntry {
@@ -125,7 +133,7 @@ fn preceded_by_push(data: &[u8], idx: usize) -> bool {
 }
 
 fn scan_for_prologues(image: &BinaryImage) -> Vec<FunctionEntry> {
-    let text = match image.section_by_name(".text") {
+    let text = match text_section(image) {
         Some(s) => s,
         None => return Vec::new(),
     };
@@ -214,7 +222,7 @@ fn recursive_descent_discovery(
     image: &BinaryImage,
     mut funcs: Vec<FunctionEntry>,
 ) -> Vec<FunctionEntry> {
-    let text = match image.section_by_name(".text") {
+    let text = match text_section(image) {
         Some(s) => s,
         None => return funcs,
     };
@@ -329,9 +337,8 @@ pub fn lift_function(
     lifter: &dyn Lifter,
     entry: &FunctionEntry,
 ) -> Result<Function> {
-    let text = image
-        .section_by_name(".text")
-        .context("binary has no .text section")?;
+    let text = text_section(image)
+        .context("binary has no text section (.text / __text)")?;
 
     let (func_start, func_end) = function_bounds(entry, text);
 

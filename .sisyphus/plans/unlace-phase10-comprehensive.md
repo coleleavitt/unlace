@@ -1659,7 +1659,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(lift-arm): lift LDXR/STXR exclusive pairs + DMB/DSB/ISB barriers`
 
-- [ ] P10-34. Real iOS Mach-O ARM64 integration fixture (Chase or KCM)
+- [x] P10-34. Real iOS Mach-O ARM64 integration fixture (Chase or KCM)
 
   **What to do**:
   - Copy `~/RustProjects/active/iphonern/decrypted/kcm/KCM` (~smaller of the two) to `fixtures/ios_kcm.arm64.macho`.

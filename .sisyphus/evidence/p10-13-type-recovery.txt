@@ -1,0 +1,29 @@
+P10-13: Wave 2 Type Recovery Golden Refresh + Struct Field Syntax Verification
+==============================================================================
+
+Date: 2026-04-30
+Command: UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures
+
+Result: 23/23 tests passed. Goldens unchanged (already up to date).
+
+Struct field syntax (->field_) verification:
+  grep -rl "\->field_" tests/golden/expected/*.c → NO MATCHES
+  grep -rl "\->" tests/golden/expected/*.c → NO MATCHES
+
+Explanation: No fixture currently exhibits ->field_ syntax because:
+1. The StructFieldDetectPass populates composite_var_types for base+const_offset
+   Load patterns, but the current test fixtures (debug_structs, debug_calls, etc.)
+   don't produce these patterns after optimization passes fold them away.
+2. The DWARF-based try_resolve_struct_field (which uses field_by_offset from DwarfInfo)
+   takes priority over the SSA-based try_struct_field_access, and the test binaries
+   were compiled without DWARF struct info that would match.
+3. The struct field access patterns in the test binaries are typically:
+   - Stack-relative accesses (handled by stack_vars)
+   - Global accesses (handled by try_global_var_name)
+   - Constant-folded accesses (no base+offset pattern remains)
+
+The try_struct_field_access function is verified by 2 unit tests:
+  - test_composite_var_types_struct_field_access: verifies ->beta emission
+  - test_composite_var_types_synthetic_field_name: verifies ->field_18 emission
+
+All 182 unlace-output tests pass including the new struct field tests.

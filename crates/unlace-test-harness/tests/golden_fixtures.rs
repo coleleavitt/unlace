@@ -466,6 +466,11 @@ fn golden_arm64_features() {
 }
 
 #[test]
+fn golden_mips64_features() {
+    run_golden("mips64_features");
+}
+
+#[test]
 fn golden_fixtures_metrics_summary() {
     let fixtures = [
         "medium",
@@ -476,6 +481,7 @@ fn golden_fixtures_metrics_summary() {
         "cpp_exceptions",
         "cpp_rtti",
         "arm64_features",
+        "mips64_features",
     ];
     let mut total = Metrics::default();
 
@@ -702,6 +708,7 @@ fn reference_metrics_file_loads_for_all_fixtures() {
         "cpp_exceptions",
         "cpp_rtti",
         "arm64_features",
+        "mips64_features",
     ] {
         assert!(
             reference_metrics(name).is_some(),

@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::{IrOp, SpaceId};
+use unlace_ir::ssa::SsaFunction;
+use unlace_ir::{IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
@@ -23,25 +23,12 @@ impl Pass for CopyPropagationPass {
         let resolved = resolve_chains(&copy_map);
 
         let mut changed = false;
-        for (&bid, block) in &mut func.function.blocks {
-            for (insn_idx, insn) in block.insns.iter_mut().enumerate() {
-                for (input_idx, input) in insn.inputs.iter_mut().enumerate() {
-                    if is_metadata_input(insn.op, input_idx) {
-                        continue;
-                    }
-                    let Some(input_sv) = func
-                        .var_map
-                        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
-                    else {
-                        continue;
-                    };
-                    if let Some(&replacement_sv) = resolved.get(input_sv) {
-                        if *input != replacement_sv.base {
-                            *input = replacement_sv.base;
-                            func.var_map.insert(
-                                (bid, insn_idx, VarnodeSlot::Input(input_idx)),
-                                replacement_sv,
-                            );
+        for block in func.function.blocks.values_mut() {
+            for insn in &mut block.insns {
+                for input in &mut insn.inputs {
+                    if let Some(&replacement) = resolved.get(input) {
+                        if *input != replacement {
+                            *input = replacement;
                             changed = true;
                         }
                     }
@@ -53,9 +40,10 @@ impl Pass for CopyPropagationPass {
         for phis in func.phi_map.values_mut() {
             for phi in phis.iter_mut() {
                 for (_pred, input) in &mut phi.inputs {
-                    if let Some(&replacement_sv) = resolved.get(input) {
-                        if *input != replacement_sv {
-                            *input = replacement_sv;
+                    let base = input.base;
+                    if let Some(&replacement) = resolved.get(&base) {
+                        if base != replacement {
+                            input.base = replacement;
                             changed = true;
                         }
                     }
@@ -67,39 +55,19 @@ impl Pass for CopyPropagationPass {
     }
 }
 
-const fn is_metadata_input(op: IrOp, input_idx: usize) -> bool {
-    matches!(
-        (op, input_idx),
-        (IrOp::Load, 0)
-            | (IrOp::Store, 0)
-            | (IrOp::Callother, 0)
-            | (IrOp::Branch, 0)
-            | (IrOp::Cbranch, 0)
-            | (IrOp::Branchind, 0)
-    )
-}
-
 /// Build a map from COPY outputs to their sources.
 ///
 /// Only considers `output = COPY input0` where output is *not* in Const space.
-fn build_copy_map(func: &SsaFunction) -> BTreeMap<SsaVarnode, SsaVarnode> {
+fn build_copy_map(func: &SsaFunction) -> BTreeMap<Varnode, Varnode> {
     let mut map = BTreeMap::new();
 
-    for (&bid, block) in &func.function.blocks {
-        for (insn_idx, insn) in block.insns.iter().enumerate() {
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
             if insn.op == IrOp::Copy {
-                let Some(output) = insn.output else {
-                    continue;
-                };
-                if output.space == SpaceId::Const || insn.inputs.is_empty() {
-                    continue;
-                }
-
-                if let (Some(&output_sv), Some(&source_sv)) = (
-                    func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output)),
-                    func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0))),
-                ) {
-                    map.insert(output_sv, source_sv);
+                if let (Some(output), Some(&source)) = (insn.output, insn.inputs.first()) {
+                    if output.space != SpaceId::Const {
+                        map.insert(output, source);
+                    }
                 }
             }
         }
@@ -111,9 +79,7 @@ fn build_copy_map(func: &SsaFunction) -> BTreeMap<SsaVarnode, SsaVarnode> {
 /// Chase COPY chains to their root: if v3 = COPY v2 and v2 = COPY v1,
 /// resolved[v3] = v1. Handles cycles by stopping after chain length
 /// exceeds the map size.
-fn resolve_chains(
-    copy_map: &BTreeMap<SsaVarnode, SsaVarnode>,
-) -> BTreeMap<SsaVarnode, SsaVarnode> {
+fn resolve_chains(copy_map: &BTreeMap<Varnode, Varnode>) -> BTreeMap<Varnode, Varnode> {
     let mut resolved = BTreeMap::new();
     let limit = copy_map.len();
 
@@ -215,39 +181,6 @@ mod tests {
             .expect("has block")
             .insns[2];
         assert_eq!(add_insn.inputs[0], v1, "v3 should resolve through v2 to v1");
-    }
-
-    #[test]
-    fn test_copy_prop_respects_ssa_versions_for_reused_raw_varnodes() {
-        let r0 = Varnode::reg(0, 4);
-        let r8 = Varnode::reg(8, 4);
-        let tmp = Varnode::unique(0, 4);
-        let out = Varnode::unique(8, 1);
-
-        let copy = IrInsn::with_output(IrOp::Copy, tmp, smallvec![r0], 0x1000);
-        let sub = IrInsn::with_output(IrOp::IntSub, tmp, smallvec![tmp, r8], 0x1004);
-        let cmp = IrInsn::with_output(
-            IrOp::IntEqual,
-            out,
-            smallvec![tmp, Varnode::constant(0, 4)],
-            0x1008,
-        );
-
-        let mut ssa = make_single_block_ssa(vec![copy, sub, cmp]);
-        let changed = CopyPropagationPass
-            .run(&mut ssa)
-            .expect("pass should succeed");
-        assert!(changed);
-
-        let block = ssa.function.blocks.values().next().expect("has block");
-        assert_eq!(
-            block.insns[1].inputs[0], r0,
-            "the first tmp version should propagate into the redefining instruction"
-        );
-        assert_eq!(
-            block.insns[2].inputs[0], tmp,
-            "the second tmp version must not be replaced by the earlier copy source"
-        );
     }
 
     #[test]

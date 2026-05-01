@@ -77,6 +77,7 @@ _DWORD __readfsdword(unsigned int offset);
 void sum_squares_x87(void) {
     int v3; // reg?
     int v4; // reg?
+    long long result; // temp
     unsigned int v2; // temp
 
     v2 = *(_QWORD *)(0LL);
@@ -129,6 +130,7 @@ void compare_floats_x87(void) {
     int v3; // reg?
     int v9; // reg?
     _Bool cond; // temp
+    long long result; // temp
     unsigned int v2; // temp
 
     v2 = *(_QWORD *)(0LL);

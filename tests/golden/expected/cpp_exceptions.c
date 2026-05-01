@@ -264,7 +264,7 @@ void may_throw(void) {
         v2 = v1;
         cond = v1 == 0;
         v6 = LOBYTE(v1 < 0);
-        cond = (__builtin_popcount(LOBYTE(v1)) & 1) == 0;
+        cond = !(__builtin_popcount(LOBYTE(v1)) & 1);
     } while (v6);
     result = 0LL;
     return result;

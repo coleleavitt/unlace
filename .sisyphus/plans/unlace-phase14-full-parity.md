@@ -173,7 +173,7 @@ Wave FINAL:
 
 ### Wave 1 — Missing IFs (8 tasks, +35 ifs across 12 fixtures)
 
-- [ ] P14-2. Study IDA condition recovery from hexx64 reference
+- [x] P14-2. Study IDA condition recovery from hexx64 reference
 
   **What to do**: Read `references/hexrays/ida_dump/hexx64/all/` — find functions with if-statements. Study how IDA recovers conditions from x86 flag patterns. Document: CMP+Jcc folding, TEST+Jcc folding, compound conditions (&&, ||), ternary from CMOVcc. Compare against our condition_simplify.rs patterns.
   **Acceptance Criteria**: Learnings with ≥5 IDA condition patterns we don't handle.
@@ -188,7 +188,7 @@ Wave FINAL:
   ```
   **Commit**: NO (research)
 
-- [ ] P14-3. Deep comparison chain recovery
+- [x] P14-3. Deep comparison chain recovery
 
   **What to do**: Read IDA reference, then extend `condition_simplify.rs`. Handle: `v1 = INT_SUB(a,b); v2 = INT_SLESS(v1, 0); CBRANCH(v2)` → `if (a < b)`. Also: `v1 = INT_AND(a, mask); v2 = INT_EQUAL(v1, 0); CBRANCH(v2)` → `if (!(a & mask))`. Trace 4+ levels through def_map.
   **Acceptance Criteria**: ≥3 new unit tests. medium.c ifs increase.
@@ -203,7 +203,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(passes): 4-level comparison chain recovery from IDA patterns`
 
-- [ ] P14-4. Nested-if-to-single-if collapse
+- [x] P14-4. Nested-if-to-single-if collapse
 
   **What to do**: Read IDA reference for compound condition patterns. Extend `short_circuit.rs`: `if (a) { if (b) { X } }` → `if (a && b) { X }`. Also handle the inverse: `if (!a) { goto L } if (!b) { goto L } X; L:` was already converted to ifs by Wave 1 — now collapse the sequential ifs into `if (a && b) { X }`.
   **Acceptance Criteria**: ≥2 unit tests. Some nested ifs collapse.
@@ -218,7 +218,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(struct): nested-if-to-compound-condition collapse from IDA patterns`
 
-- [ ] P14-5. CMOVcc full condition preservation
+- [x] P14-5. CMOVcc full condition preservation
 
   **What to do**: Read IDA reference for CMOVcc handling. The Phase 13 SCCP fix partially works but conditions still degrade in some cases. Investigate remaining `if (0)` or `if (1)` patterns in debug_calls. Fix: ensure the flag varnode feeding CMOVcc Callother survives ALL optimization passes (not just SCCP — also check copy_prop, dce, gvn).
   **Acceptance Criteria**: debug_calls has 0 occurrences of `if (0)` or `if (1)`.
@@ -234,7 +234,7 @@ Wave FINAL:
   ```
   **Commit**: `fix(passes): complete CMOVcc condition preservation across all optimization passes`
 
-- [ ] P14-6. Null-check/zero-check pattern recovery
+- [x] P14-6. Null-check/zero-check pattern recovery
 
   **What to do**: Read IDA reference for null-check patterns. Common x86: `test reg, reg; je label` = `if (reg == 0)`. Our lifter emits `INT_AND(reg, reg)` for TEST which should simplify to `reg`. Then `INT_EQUAL(reg, 0)` for JE. Verify this chain folds to `if (reg)` or `if (!reg)`. Fix gaps in condition_simplify.
   **Acceptance Criteria**: cpp_vtable ifs increase (null-checks on vtable pointers).
@@ -249,7 +249,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(passes): null-check pattern recovery from TEST+JE sequences`
 
-- [ ] P14-7. Architecture-specific branch condition recovery
+- [x] P14-7. Architecture-specific branch condition recovery
 
   **What to do**: For each non-x86 architecture (ARM64, RISC-V, V850, ARC, PPC64), check if branch conditions are being properly recovered. Profile each fixture with `--emit ir` and count CBRANCH instructions vs recovered ifs. Read IDA ARM reference at `references/ida/processors/arm/all/` for ARM64 patterns. For RISC-V/V850/ARC/PPC64 where no IDA processor reference exists, use the fixture's disassembly + the lifter's existing branch emission as the reference. Fix: ensure each lifter's condition emission matches what condition_simplify expects.
   **Acceptance Criteria**: Each arch fixture's if-count reaches its reference target.
@@ -264,7 +264,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(lift-*): architecture-specific branch condition recovery for full if-parity`
 
-- [ ] P14-8. medium.c if-count validation (target ≥55)
+- [x] P14-8. medium.c if-count validation (target ≥55)
 
   **What to do**: After P14-3..7, rebuild and measure medium.c ifs. Target ≥55 of 60.
   **Acceptance Criteria**: medium.c ifs ≥ 55.
@@ -279,7 +279,7 @@ Wave FINAL:
   ```
   **Commit**: NO (measurement)
 
-- [ ] P14-9. Golden refresh + all-fixture if validation
+- [x] P14-9. Golden refresh + all-fixture if validation
 
   **What to do**: Full golden refresh. Check ALL fixtures meet if-count targets.
   **Acceptance Criteria**: All fixtures meet or exceed if reference targets.

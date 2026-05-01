@@ -273,6 +273,58 @@ mod tests {
     }
 
     #[test]
+    fn arm64_mul_lifts_to_intmult() {
+        // MUL X0, X1, X2  →  9b027c20
+        let result = lifter()
+            .lift_insn(&[0x20, 0x7c, 0x02, 0x9b], 0x1000)
+            .expect("should decode");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntMult));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm64_sdiv_lifts_to_intsdiv() {
+        // SDIV X3, X0, X1  →  9ac10c03
+        let result = lifter()
+            .lift_insn(&[0x03, 0x0c, 0xc1, 0x9a], 0x1000)
+            .expect("should decode");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSdiv));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm64_udiv_lifts_to_intdiv() {
+        // UDIV X3, X0, X1  →  9ac10803
+        let result = lifter()
+            .lift_insn(&[0x03, 0x08, 0xc1, 0x9a], 0x1000)
+            .expect("should decode");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntDiv));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm64_madd_lifts_to_multiply_add() {
+        // MADD X4, X1, X2, X3  →  9b020c24
+        let result = lifter()
+            .lift_insn(&[0x24, 0x0c, 0x02, 0x9b], 0x1000)
+            .expect("should decode");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntMult));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm64_msub_lifts_to_multiply_sub() {
+        // MSUB X4, X1, X2, X3  →  9b028c24
+        let result = lifter()
+            .lift_insn(&[0x24, 0x8c, 0x02, 0x9b], 0x1000)
+            .expect("should decode");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntMult));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
     fn test_no_panic_on_various() {
         let cases: Vec<&[u8]> = vec![
             &[0x1f, 0x20, 0x03, 0xd5], // NOP

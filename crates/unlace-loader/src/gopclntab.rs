@@ -27,6 +27,12 @@ const MAGIC_GO_118: [u8; 4] = [0xFA, 0xFF, 0xFF, 0xFF];
 /// Magic bytes for Go 1.16–1.17 gopclntab.
 const MAGIC_GO_116: [u8; 4] = [0xFB, 0xFF, 0xFF, 0xFF];
 
+/// Magic bytes for Go 1.20–1.21 gopclntab.
+const MAGIC_GO_120: [u8; 4] = [0xF0, 0xFF, 0xFF, 0xFF];
+
+/// Magic bytes for Go 1.22+ gopclntab.
+const MAGIC_GO_122: [u8; 4] = [0xF1, 0xFF, 0xFF, 0xFF];
+
 /// A discovered Go function from the gopclntab.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GoFunc {
@@ -86,14 +92,18 @@ fn read_cstring(data: &[u8], offset: usize) -> Option<String> {
 
 /// Parse the `.gopclntab` section data.
 ///
+/// `text_base` is the VA of the `.text` section, needed for Go 1.20+ where
+/// functab entries store offsets relative to the text start.
 /// Returns `None` if the magic bytes don't match or the section is too small.
-pub fn parse_gopclntab(data: &[u8]) -> Option<GopclntabInfo> {
+pub fn parse_gopclntab(data: &[u8], text_base: u64) -> Option<GopclntabInfo> {
     if data.len() < 8 {
         return None;
     }
 
     let magic: [u8; 4] = [data[0], data[1], data[2], data[3]];
     let version = match magic {
+        MAGIC_GO_122 => 122,
+        MAGIC_GO_120 => 120,
         MAGIC_GO_118 => 118,
         MAGIC_GO_116 => 116,
         _ => return None,
@@ -107,40 +117,55 @@ pub fn parse_gopclntab(data: &[u8]) -> Option<GopclntabInfo> {
     }
 
     let ps = ptr_size as usize;
-
-    // nfunc starts at offset 8
     let nfunc = read_ptr(data, 8, ptr_size)?;
-    // nfiles at offset 8 + ps
     let _nfiles = read_ptr(data, 8 + ps, ptr_size)?;
 
-    // After nfunc and nfiles, there are 6 offset fields (each pointer-sized):
-    //   funcnametab_off, cutab_off, filetab_off, pctab_off, funcdata_off, functab_off
-    let offsets_base = 8 + 2 * ps;
-    let funcnametab_off = read_ptr(data, offsets_base, ptr_size)? as usize;
-    // cutab_off, filetab_off, pctab_off, funcdata_off — skip
-    let functab_off = read_ptr(data, offsets_base + 5 * ps, ptr_size)? as usize;
+    // Go 1.20+ added a textStart field before the 6 offset fields.
+    // Go 1.16–1.19: 6 offsets (funcnametab, cutab, filetab, pctab, funcdata, functab)
+    // Go 1.20+:     textStart + 6 offsets
+    let uses_text_start = version >= 120;
+    let offsets_base = 8 + 2 * ps + if uses_text_start { ps } else { 0 };
 
+    let _text_start_from_header = if uses_text_start {
+        read_ptr(data, 8 + 2 * ps, ptr_size)?
+    } else {
+        0
+    };
+
+    let funcnametab_off = read_ptr(data, offsets_base, ptr_size)? as usize;
+    // Go 1.20+ has 5 offsets (funcdata merged into functab); Go 1.16–1.19 has 6.
+    let functab_idx = if version >= 120 { 4 } else { 5 };
+    let functab_off = read_ptr(data, offsets_base + functab_idx * ps, ptr_size)? as usize;
+
+    let nfunc_capped = (nfunc as usize).min(1_000_000);
     let mut functions = Vec::new();
 
-    // The functab is an array of (nfunc + 1) entries, each being two pointer-sized values:
-    //   (func_entry_addr, func_offset_into_funcdata)
-    // We only need nfunc entries (the last is a sentinel).
-    let nfunc_capped = (nfunc as usize).min(1_000_000); // safety cap
+    // Go 1.20+ uses 4-byte functab entries; Go 1.16–1.19 uses pointer-sized entries.
+    let entry_size = if version >= 120 { 4 } else { ps };
 
     for i in 0..nfunc_capped {
-        let entry_off = functab_off + i * 2 * ps;
-        let func_entry = read_ptr(data, entry_off, ptr_size)?;
-        let func_off = read_ptr(data, entry_off + ps, ptr_size)? as usize;
+        let entry_off = functab_off + i * 2 * entry_size;
 
-        // The _func struct starts at funcdata + func_off (but in Go 1.16+,
-        // func_off is relative to functab, not funcdata).
-        // Actually in Go 1.16+, the _func offset is relative to the functab itself.
-        // _func layout: entry (ptr), nameoff (i32 at offset ptr_size)
+        let (func_entry, func_off) = if version >= 120 {
+            let entry_offset = read_u32_le(data, entry_off)? as u64;
+            let struct_offset = read_u32_le(data, entry_off + 4)? as usize;
+            (text_base + entry_offset, struct_offset)
+        } else {
+            let addr = read_ptr(data, entry_off, ptr_size)?;
+            let off = read_ptr(data, entry_off + ps, ptr_size)? as usize;
+            (addr, off)
+        };
+
         let func_struct_off = functab_off + func_off;
-        // nameoff is at func_struct_off + ptr_size (after the entry field)
-        let nameoff = read_u32_le(data, func_struct_off + ps)? as usize;
 
-        // Name is in funcnametab at the given offset
+        // _func layout: entryoff (u32 in 1.20+, ptr in 1.16-1.19), then nameoff (i32)
+        let nameoff_pos = if version >= 120 {
+            func_struct_off + 4
+        } else {
+            func_struct_off + ps
+        };
+        let nameoff = read_u32_le(data, nameoff_pos)? as usize;
+
         let name = read_cstring(data, funcnametab_off + nameoff)
             .unwrap_or_else(|| format!("go_func_{:#x}", func_entry));
 
@@ -184,8 +209,13 @@ pub fn discover_go_functions(image: &mut BinaryImage) {
         .section_by_name(".gopclntab")
         .map(|s| s.data.clone());
 
+    let text_base = image
+        .section_by_name(".text")
+        .map(|s| s.vaddr)
+        .unwrap_or(0);
+
     if let Some(data) = gopclntab_data {
-        if let Some(info) = parse_gopclntab(&data) {
+        if let Some(info) = parse_gopclntab(&data, text_base) {
             merge_go_symbols(image, &info);
         }
     }
@@ -303,7 +333,7 @@ mod tests {
     #[test]
     fn test_parse_synthetic_gopclntab() {
         let data = build_synthetic_gopclntab();
-        let info = parse_gopclntab(&data).expect("should parse synthetic gopclntab");
+        let info = parse_gopclntab(&data, 0x401000).expect("should parse synthetic gopclntab");
 
         assert_eq!(info.header.version, 118);
         assert_eq!(info.header.quantum, 1);
@@ -320,18 +350,18 @@ mod tests {
     #[test]
     fn test_invalid_magic_returns_none() {
         let data = vec![0x00, 0x01, 0x02, 0x03, 0x00, 0x00, 0x01, 0x08];
-        assert!(parse_gopclntab(&data).is_none());
+        assert!(parse_gopclntab(&data, 0).is_none());
     }
 
     #[test]
     fn test_too_short_returns_none() {
-        assert!(parse_gopclntab(&[0xFA, 0xFF, 0xFF]).is_none());
+        assert!(parse_gopclntab(&[0xFA, 0xFF, 0xFF], 0).is_none());
     }
 
     #[test]
     fn test_merge_go_symbols() {
         let data = build_synthetic_gopclntab();
-        let info = parse_gopclntab(&data).unwrap();
+        let info = parse_gopclntab(&data, 0x401000).unwrap();
 
         let mut image = BinaryImage {
             arch: crate::image::ArchId::X86_64,
@@ -368,6 +398,38 @@ mod tests {
     }
 
     #[test]
+    fn test_real_go_fixture() {
+        let elf_data = std::fs::read("../../fixtures/go_hello.elf")
+            .expect("fixture go_hello.elf must exist");
+        let image = <crate::elf::ElfLoader as crate::Loader>::load(&elf_data)
+            .expect("should parse go_hello.elf");
+
+        let section = image
+            .section_by_name(".gopclntab")
+            .expect("go_hello.elf should have .gopclntab");
+
+        let text_base = image
+            .section_by_name(".text")
+            .map(|s| s.vaddr)
+            .unwrap_or(0);
+
+        let info = parse_gopclntab(&section.data, text_base)
+            .expect("should parse real gopclntab");
+        assert!(
+            info.header.nfunc > 0,
+            "Go binary should have at least 1 function"
+        );
+        assert!(!info.functions.is_empty());
+
+        let has_main = info.functions.iter().any(|f| f.name.contains("main.main"));
+        assert!(
+            has_main,
+            "should find main.main, got: {:?}",
+            info.functions.iter().map(|f| &f.name).take(10).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn test_go116_magic_accepted() {
         // Build a minimal Go 1.16 header (just enough to parse header + 0 funcs)
         let mut data = Vec::new();
@@ -386,7 +448,7 @@ mod tests {
             data.extend_from_slice(&0u64.to_le_bytes());
         }
 
-        let info = parse_gopclntab(&data).expect("Go 1.16 magic should be accepted");
+        let info = parse_gopclntab(&data, 0).expect("Go 1.16 magic should be accepted");
         assert_eq!(info.header.version, 116);
         assert_eq!(info.header.nfunc, 0);
         assert!(info.functions.is_empty());

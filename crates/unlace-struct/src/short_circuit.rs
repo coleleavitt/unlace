@@ -70,8 +70,27 @@ fn recover_short_circuits(
     ctr: &mut SynthCounter,
 ) -> Vec<HirNode> {
     let mut out = Vec::with_capacity(nodes.len());
-    for node in nodes {
-        recover_into(node, func, ctr, &mut out);
+    let mut idx = 0;
+    while idx < nodes.len() {
+        if idx + 1 < nodes.len() {
+            if let (
+                Some((cond_a, then_a)),
+                Some((cond_b, then_b)),
+            ) = (
+                as_if_without_else_node(&nodes[idx]),
+                as_if_without_else_node(&nodes[idx + 1]),
+            ) {
+                if bodies_eq(&then_a, &then_b) {
+                    let then_body = recover_short_circuits(then_a, func, ctr);
+                    emit_or_if(cond_a, cond_b, then_body, None, func, ctr, &mut out);
+                    idx += 2;
+                    continue;
+                }
+            }
+        }
+
+        recover_into(nodes[idx].clone(), func, ctr, &mut out);
+        idx += 1;
     }
     out
 }
@@ -259,6 +278,31 @@ fn emit_and_if(
     );
 }
 
+fn emit_or_if(
+    cond_a: SsaVarnode,
+    cond_b: SsaVarnode,
+    then_body: Vec<HirNode>,
+    else_body: Option<Vec<HirNode>>,
+    func: &mut HirFunction,
+    ctr: &mut SynthCounter,
+    out: &mut Vec<HirNode>,
+) {
+    let (vn, sv) = ctr.next_varnode();
+    let insn = IrInsn::with_output(IrOp::BoolOr, vn, smallvec![cond_a.base, cond_b.base], 0);
+    func.foldable_exprs.insert(sv);
+    out.push(HirNode::Statement(insn));
+    recover_into(
+        HirNode::If {
+            cond: sv,
+            then_body,
+            else_body,
+        },
+        func,
+        ctr,
+        out,
+    );
+}
+
 fn emit_negated_and_if(
     cond_a: SsaVarnode,
     cond_b: SsaVarnode,
@@ -326,6 +370,17 @@ fn as_single_if_without_else(nodes: &[HirNode]) -> Option<(SsaVarnode, Vec<HirNo
             then_body,
             else_body: None,
         }] => Some((*cond, then_body.clone())),
+        _ => None,
+    }
+}
+
+fn as_if_without_else_node(node: &HirNode) -> Option<(SsaVarnode, Vec<HirNode>)> {
+    match node {
+        HirNode::If {
+            cond,
+            then_body,
+            else_body: None,
+        } => Some((*cond, then_body.clone())),
         _ => None,
     }
 }
@@ -655,6 +710,77 @@ mod tests {
             other => panic!("expected If, got {other:?}"),
         }
         assert_eq!(func.foldable_exprs.len(), 1);
+    }
+
+    #[test]
+    fn test_sequential_identical_ifs_recover_or() {
+        let cond_a = sv(0, 1, 0);
+        let cond_b = sv(8, 1, 0);
+        let true_body = vec![return_node(1)];
+
+        let body = vec![
+            HirNode::If {
+                cond: cond_a,
+                then_body: true_body.clone(),
+                else_body: None,
+            },
+            HirNode::If {
+                cond: cond_b,
+                then_body: true_body.clone(),
+                else_body: None,
+            },
+        ];
+
+        let mut func = make_func(body);
+        short_circuit_recovery(&mut func);
+
+        assert_eq!(func.body.len(), 2, "expected Statement + If");
+        match &func.body[0] {
+            HirNode::Statement(insn) => {
+                assert_eq!(insn.op, IrOp::BoolOr);
+                assert_eq!(insn.inputs[0], cond_a.base);
+                assert_eq!(insn.inputs[1], cond_b.base);
+            }
+            other => panic!("expected Statement(BoolOr), got {other:?}"),
+        }
+        match &func.body[1] {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                assert_eq!(then_body, &true_body);
+                assert!(else_body.is_none());
+            }
+            other => panic!("expected If, got {other:?}"),
+        }
+        assert_eq!(func.foldable_exprs.len(), 1);
+    }
+
+    #[test]
+    fn test_sequential_different_ifs_do_not_recover_or() {
+        let cond_a = sv(0, 1, 0);
+        let cond_b = sv(8, 1, 0);
+
+        let body = vec![
+            HirNode::If {
+                cond: cond_a,
+                then_body: vec![return_node(1)],
+                else_body: None,
+            },
+            HirNode::If {
+                cond: cond_b,
+                then_body: vec![return_node(2)],
+                else_body: None,
+            },
+        ];
+        let original = body.clone();
+
+        let mut func = make_func(body);
+        short_circuit_recovery(&mut func);
+
+        assert_eq!(func.body, original, "different bodies should not collapse");
+        assert!(func.foldable_exprs.is_empty());
     }
 
     #[test]

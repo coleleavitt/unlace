@@ -1,15 +1,13 @@
 {
-  "active_plan": "/home/cole/RustProjects/active/unlace/.sisyphus/plans/unlace-phase10-comprehensive.md",
-  "started_at": "2026-04-30T22:52:49.042Z",
+  "active_plan": "/home/cole/RustProjects/active/unlace/.sisyphus/plans/unlace-phase11-parity-push.md",
+  "started_at": "2026-05-01T01:48:43.681Z",
   "session_ids": [
-    "ses_2259eea58ffekd42HVWKymUkpb",
     "ses_21fc73baaffe36Xq0EL34ZQOL1"
   ],
   "session_origins": {
-    "ses_2259eea58ffekd42HVWKymUkpb": "direct",
     "ses_21fc73baaffe36Xq0EL34ZQOL1": "direct"
   },
-  "plan_name": "unlace-phase10-comprehensive",
+  "plan_name": "unlace-phase11-parity-push",
   "agent": "atlas",
   "task_sessions": {}
 }

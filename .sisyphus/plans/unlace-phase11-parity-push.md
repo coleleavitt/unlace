@@ -385,28 +385,28 @@ Max Concurrent: 5 (Wave 1)
 
 ### Wave 3 — Other Fixture Parity (5 tasks)
 
-- [ ] P11-18. debug_calls if-recovery
+- [x] P11-18. debug_calls if-recovery
 
   **What to do**: Profile `debug_calls.elf` — IDA expects 5 ifs, we have 0. The calls fixture likely has simple branching patterns that the structurer handles but the flag-folding from P11-12 isn't reaching. Investigate and fix the specific pattern. May need to extend the if-detection in the structurer to recognize patterns specific to call-heavy code (e.g., null-check before call).
   **Acceptance Criteria**: debug_calls if-count ≥ 2.
   **QA Scenarios**: `grep -c "\bif\b" tests/golden/expected/debug_calls.c` ≥ 2.
   **Commit**: `fix(struct): recover if-conditions in call-heavy functions`
 
-- [ ] P11-19. cpp_vtable if-recovery
+- [x] P11-19. cpp_vtable if-recovery
 
   **What to do**: Profile `cpp_vtable.elf` — IDA expects 2 ifs, we have 0. Vtable dispatch code typically has null-pointer checks and type checks. Investigate whether the missing ifs are from RTTI type checks or vtable pointer validation.
   **Acceptance Criteria**: cpp_vtable if-count ≥ 1.
   **QA Scenarios**: `grep -c "\bif\b" tests/golden/expected/cpp_vtable.c` ≥ 1.
   **Commit**: `fix(struct): recover if-conditions in C++ vtable dispatch patterns`
 
-- [ ] P11-20. cpp_rtti goto elimination
+- [x] P11-20. cpp_rtti goto elimination
 
   **What to do**: cpp_rtti has 2 gotos. Apply the same goto-to-break/forward-goto-elimination from Wave 1 and verify they resolve. If not, profile the specific pattern and add a targeted fix.
   **Acceptance Criteria**: cpp_rtti gotos = 0.
   **QA Scenarios**: `grep -c "goto" tests/golden/expected/cpp_rtti.c` = 0.
   **Commit**: `fix(struct): eliminate remaining gotos in cpp_rtti fixture`
 
-- [ ] P11-21. arm64_features golden entry
+- [x] P11-21. arm64_features golden entry
 
   **What to do**: Add `golden_arm64_features` test to `crates/unlace-test-harness/tests/golden_fixtures.rs`. Bootstrap golden with `UPDATE_GOLDEN=1`. Add reference metrics to `tests/golden/reference_metrics.toml`.
   **Acceptance Criteria**: `cargo test -p unlace-test-harness golden_arm64_features` passes.
@@ -421,7 +421,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `feat(tests): arm64_features golden fixture entry + reference metrics`
 
-- [ ] P11-22. Per-fixture parity check + golden refresh
+- [x] P11-22. Per-fixture parity check + golden refresh
 
   **What to do**: Refresh ALL goldens, run per-fixture regression check vs P11-0 baseline. Evidence to `.sisyphus/evidence/p11-22-wave3-delta.txt`.
   **Acceptance Criteria**: No fixture goto regression > 2. cpp_rtti gotos = 0.

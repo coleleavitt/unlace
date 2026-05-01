@@ -141,7 +141,10 @@ fn run_decompile(
         }
     }
 
-    if !matches!(image.arch, ArchId::X86_64 | ArchId::X86 | ArchId::AArch64) {
+    if !matches!(
+        image.arch,
+        ArchId::X86_64 | ArchId::X86 | ArchId::AArch64 | ArchId::Mips64 | ArchId::RiscV64
+    ) {
         bail!(
             "architecture {} is not yet supported for decompilation",
             image.arch,

@@ -298,6 +298,7 @@ int abs_val(int x) {
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
+    if (0) { 0 = 0; }
     return result;
 }
 typedef unsigned char _BYTE;
@@ -337,10 +338,13 @@ _DWORD __readfsdword(unsigned int offset);
 int max(int a, int b) {
     int v5; // esi
     int v4; // edi
+    long long result; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
     *(_DWORD *)(0LL) = v5;
+    if (0) { 0 = 0; }
+    return result;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
@@ -379,10 +383,12 @@ _DWORD __readfsdword(unsigned int offset);
 int min(int a, int b) {
     int v5; // esi
     int v4; // edi
+    long long result; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
     *(_DWORD *)(0LL) = v5;
+    return result;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;

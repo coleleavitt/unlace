@@ -89,3 +89,12 @@ return_count = 4
 goto_count = 0
 var_count = 8
 line_count = 80
+
+[mips64_features]
+if_count = 2
+for_count = 0
+while_count = 0
+return_count = 4
+goto_count = 0
+var_count = 8
+line_count = 60

@@ -2366,6 +2366,28 @@ mod tests {
     }
 
     #[test]
+    fn test_for_loop_no_init_decrement_to_zero_direct_cond() {
+        let i = Varnode::reg(0, 4);
+        let one = Varnode::constant(1, 4);
+
+        let mut hir_body = vec![HirNode::While {
+            cond: ssa_of(i),
+            body: vec![HirNode::Statement(sub_insn(i, i, one, 0x1018))],
+        }];
+
+        recover_for_loops(&mut hir_body);
+
+        match &hir_body[0] {
+            HirNode::For { init, cond, update, .. } => {
+                assert!(init.is_none());
+                assert_eq!(cond.base, i);
+                assert_eq!(update.op, IrOp::IntSub);
+            }
+            other => panic!("expected For, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn test_for_loop_counter_used_after_loop_still_recovers_for() {
         let i = Varnode::reg(0, 4);
         let printed = Varnode::reg(16, 4);

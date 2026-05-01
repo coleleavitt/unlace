@@ -1,0 +1,29 @@
+P11-0: Pre-Phase-11 Baseline Metrics
+=====================================
+Date: 2026-04-30
+
+Per-Fixture Metrics (tests/golden/expected/*.c):
+-------------------------------------------------
+cpp_exceptions: gotos=0 ifs=1 for=0 while=2 return=2 vars=35
+cpp_rtti:       gotos=2 ifs=4 for=0 while=2 return=5 vars=31
+cpp_vtable:     gotos=0 ifs=0 for=0 while=0 return=0 vars=15
+debug_calls:    gotos=0 ifs=0 for=0 while=0 return=7 vars=56
+debug_hello:    gotos=0 ifs=0 for=0 while=0 return=0 vars=10
+debug_structs:  gotos=0 ifs=0 for=0 while=0 return=2 vars=16
+medium:         gotos=12 ifs=24 for=0 while=16 return=3 vars=84
+x87_math:       gotos=0 ifs=1 for=0 while=0 return=4 vars=18
+
+medium.c Per-Function Goto Breakdown:
+--------------------------------------
+main:                       3 gotos (label_5, label_7, label_8)
+f_rec_fib:                  2 gotos (label_1, label_2)
+f_rec_power.constprop.0:    7 gotos (label_0..label_6)
+Total:                      12 gotos
+
+All 12 gotos are IRREDUCIBLE classification (multi-entry SCCs).
+
+Aggregate Parity Score:
+------------------------
+59.6%
+
+Test Count: 1417 tests passing

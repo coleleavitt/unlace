@@ -523,7 +523,7 @@ Max Concurrent: 5 (Wave 1)
 
 ### Wave 5 — Go + ObjC (5 tasks)
 
-- [ ] P11-28. Go gopclntab parser (function discovery)
+- [x] P11-28. Go gopclntab parser (function discovery)
 
   **What to do**: Write `crates/unlace-loader/src/gopclntab.rs`. Parse the `.gopclntab` section in Go ELF binaries. The header has: magic (4 bytes), pad (2 bytes), quantum (1 byte), pointer_size (1 byte), nfunc (u32/u64), then a function table. Each entry: `(func_addr, name_offset)`. Extract function names and addresses into BinaryImage.symbols.
   **Must NOT do**: Parse full Go runtime metadata. Only function discovery.
@@ -539,7 +539,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `feat(loader): Go gopclntab function discovery parser`
 
-- [ ] P11-29. Go ELF fixture + smoke test
+- [x] P11-29. Go ELF fixture + smoke test
 
   **What to do**: Check if a real Go binary is available (`which go && go version`). If Go toolchain exists, compile a minimal Go program. If not, hand-craft a minimal ELF with a .gopclntab section. Wire into golden_fixtures.rs if small enough.
   **Acceptance Criteria**: Fixture loads via ElfLoader. gopclntab discovers ≥1 function.
@@ -555,7 +555,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `feat(fixtures): Go ELF fixture for gopclntab testing`
 
-- [ ] P11-30. ObjC msgSend dispatch recognition
+- [x] P11-30. ObjC msgSend dispatch recognition
 
   **What to do**: Write `crates/unlace-passes/src/objc_dispatch.rs`. Recognize `CALLIND(target)` patterns where `target` is loaded from a well-known selector address pattern (objc_msgSend calling convention: X0=self, X1=selector). Emit annotation `// [ClassName methodName]` as a comment before the call.
   **Must NOT do**: Full ObjC runtime parsing. Just dispatch annotation.
@@ -571,7 +571,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `feat(passes): ObjC msgSend dispatch recognition (ARM64)`
 
-- [ ] P11-31. ObjC class/selector extraction from __objc_classlist
+- [x] P11-31. ObjC class/selector extraction from __objc_classlist
 
   **What to do**: Write `crates/unlace-loader/src/objc.rs`. Parse `__DATA.__objc_classlist` section. Store in BinaryImage as metadata.
   **Acceptance Criteria**: Unit test. `cargo test -p unlace-loader objc`.
@@ -586,7 +586,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `feat(loader): ObjC class/selector extraction from __objc_classlist`
 
-- [ ] P11-32. iOS KCM ObjC method recovery verification
+- [x] P11-32. iOS KCM ObjC method recovery verification
 
   **What to do**: Run the ObjC passes on the iOS KCM fixture. Count annotations. Evidence to `.sisyphus/evidence/p11-32-objc.txt`.
   **Acceptance Criteria**: ≥0 ObjC annotations (KCM may not have ObjC — document finding).

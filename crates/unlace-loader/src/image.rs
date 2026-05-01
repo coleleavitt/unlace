@@ -241,6 +241,46 @@ pub struct RichHeader {
     pub xor_key: u32,
 }
 
+/// Classification of a Mach-O dylib dependency.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DylibKind {
+    /// `LC_LOAD_DYLIB` — standard required dependency.
+    Load,
+    /// `LC_LOAD_WEAK_DYLIB` — optional dependency (missing at runtime is OK).
+    Weak,
+    /// `LC_REEXPORT_DYLIB` — re-exported dependency.
+    Reexport,
+    /// `LC_LAZY_LOAD_DYLIB` — loaded on first use.
+    Lazy,
+    /// `LC_LOAD_UPWARD_DYLIB` — upward dependency (breaks cycles).
+    Upward,
+}
+
+impl fmt::Display for DylibKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Load => f.write_str("load"),
+            Self::Weak => f.write_str("weak"),
+            Self::Reexport => f.write_str("reexport"),
+            Self::Lazy => f.write_str("lazy"),
+            Self::Upward => f.write_str("upward"),
+        }
+    }
+}
+
+/// A Mach-O dylib dependency extracted from `LC_LOAD_DYLIB` and related commands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DylibDep {
+    /// Install path of the dylib (e.g. `/usr/lib/libSystem.B.dylib`).
+    pub path: String,
+    /// How this dependency is loaded.
+    pub kind: DylibKind,
+    /// Packed current version (major << 16 | minor << 8 | patch).
+    pub current_version: u32,
+    /// Packed compatibility version.
+    pub compat_version: u32,
+}
+
 /// A fully-parsed binary image ready for analysis, produced by a [`Loader`](crate::Loader).
 #[derive(Debug, Clone)]
 pub struct BinaryImage {
@@ -277,6 +317,10 @@ pub struct BinaryImage {
     pub bound_imports: Vec<BoundImport>,
     /// PE Rich header. `None` for ELF/Mach-O or if absent.
     pub rich_header: Option<RichHeader>,
+    /// Mach-O dylib dependencies. Empty for ELF/PE.
+    pub dylibs: Vec<DylibDep>,
+    /// Mach-O `@rpath` search paths from `LC_RPATH`. Empty for ELF/PE.
+    pub rpaths: Vec<String>,
 }
 
 /// A PE RUNTIME_FUNCTION entry from the `.pdata` exception directory.

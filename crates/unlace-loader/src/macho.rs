@@ -118,6 +118,8 @@ where
     merge_chained_imports::<Mach>(&file, data, &mut symbols, &mut dynamic_linking.relocations);
     merge_dyld_exports(&mut symbols, &dynamic_linking.exports);
     merge_dyld_binds(&mut symbols, &dynamic_linking.relocations);
+    let (dylibs, rpaths) = load_dylibs_and_rpaths::<Mach>(&file, data);
+    let plt_symbols = resolve_stubs::<Mach>(&file, data, &sections);
 
     Ok(BinaryImage {
         arch,
@@ -125,7 +127,7 @@ where
         entry,
         sections,
         symbols,
-        plt_symbols: BTreeMap::new(),
+        plt_symbols,
         relocations: dynamic_linking.relocations,
         string_table: BTreeMap::new(),
         tls_callbacks: Vec::new(),
@@ -135,8 +137,8 @@ where
         resources: Vec::new(),
         bound_imports: Vec::new(),
         rich_header: None,
-        dylibs: Vec::new(),
-        rpaths: Vec::new(),
+        dylibs,
+        rpaths,
     })
 }
 
@@ -1214,10 +1216,10 @@ where
             Err(_) => continue,
         };
         match variant {
-            LoadCommandVariant::Segment64(seg) => {
+            LoadCommandVariant::Segment64(seg, sec_data) => {
                 let nsects = seg.nsects.get(endian) as usize;
-                let cmd_data = cmd.data;
-                let sec_start = 72usize;
+                let cmd_data = sec_data;
+                let sec_start = 0usize;
                 for i in 0..nsects {
                     let soff = sec_start + i * 80;
                     if soff + 80 > cmd_data.len() {
@@ -1231,19 +1233,19 @@ where
                     let sec_name = std::str::from_utf8(&sec_name_bytes[..nul]).unwrap_or("");
                     if sec_name == target_name {
                         let r1 = u32::from_le_bytes(
-                            cmd_data[soff + 72..soff + 76].try_into().unwrap_or([0; 4]),
+                            cmd_data[soff + 68..soff + 72].try_into().unwrap_or([0; 4]),
                         );
                         let r2 = u32::from_le_bytes(
-                            cmd_data[soff + 76..soff + 80].try_into().unwrap_or([0; 4]),
+                            cmd_data[soff + 72..soff + 76].try_into().unwrap_or([0; 4]),
                         );
                         return (r1, r2);
                     }
                 }
             }
-            LoadCommandVariant::Segment32(seg) => {
+            LoadCommandVariant::Segment32(seg, sec_data) => {
                 let nsects = seg.nsects.get(endian) as usize;
-                let cmd_data = cmd.data;
-                let sec_start = 56usize;
+                let cmd_data = sec_data;
+                let sec_start = 0usize;
                 for i in 0..nsects {
                     let soff = sec_start + i * 68;
                     if soff + 68 > cmd_data.len() {
@@ -1297,14 +1299,14 @@ where
     let mut rpaths = Vec::new();
 
     while let Ok(Some(cmd)) = cmds.next() {
+        let cmd_id = cmd.cmd();
         let variant = match cmd.variant() {
             Ok(v) => v,
             Err(_) => continue,
         };
         match variant {
             LoadCommandVariant::Dylib(dylib_cmd) => {
-                let cmd_type = cmd.cmd();
-                let kind = match cmd_type {
+                let kind = match cmd_id {
                     macho::LC_LOAD_DYLIB => DylibKind::Load,
                     macho::LC_LOAD_WEAK_DYLIB => DylibKind::Weak,
                     macho::LC_REEXPORT_DYLIB => DylibKind::Reexport,
@@ -2198,5 +2200,271 @@ mod tests {
             .section_by_name("__text")
             .expect("__text section must exist");
         assert!(!text.flags.contains(SectionFlags::WRITE));
+    }
+
+    // -----------------------------------------------------------------------
+    // P10-26: Chained fixup chain walking tests
+    // -----------------------------------------------------------------------
+
+    fn macho64_with_chained_fixups() -> Vec<u8> {
+        let mut buf = vec![0u8; 0x400];
+
+        let seg_cmdsize: u32 = 152;
+        let symtab_cmdsize: u32 = 24;
+        let chained_cmdsize: u32 = 16;
+        let sizeofcmds: u32 = seg_cmdsize * 2 + symtab_cmdsize + chained_cmdsize;
+
+        // mach_header_64
+        buf[0..4].copy_from_slice(&macho::MH_MAGIC_64.to_le_bytes());
+        buf[4..8].copy_from_slice(&(macho::CPU_TYPE_X86_64 as i32).to_le_bytes());
+        buf[8..12].copy_from_slice(&3u32.to_le_bytes());
+        buf[12..16].copy_from_slice(&2u32.to_le_bytes()); // MH_EXECUTE
+        buf[16..20].copy_from_slice(&4u32.to_le_bytes()); // ncmds
+        buf[20..24].copy_from_slice(&sizeofcmds.to_le_bytes());
+
+        // LC_SEGMENT_64 __TEXT (seg 0)
+        let seg = 0x20usize;
+        buf[seg..seg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[seg + 4..seg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        buf[seg + 24..seg + 32].copy_from_slice(&0x1000u64.to_le_bytes()); // vmaddr
+        buf[seg + 32..seg + 40].copy_from_slice(&0x1000u64.to_le_bytes()); // vmsize
+        buf[seg + 48..seg + 56].copy_from_slice(&0x200u64.to_le_bytes()); // filesize
+        buf[seg + 56..seg + 60].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 60..seg + 64].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 64..seg + 68].copy_from_slice(&1u32.to_le_bytes()); // nsects
+
+        let sec = seg + 72;
+        buf[sec..sec + 6].copy_from_slice(b"__text");
+        buf[sec + 16..sec + 22].copy_from_slice(b"__TEXT");
+        buf[sec + 32..sec + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes());
+        buf[sec + 48..sec + 52].copy_from_slice(&0x100u32.to_le_bytes());
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+
+        // LC_SEGMENT_64 __DATA (seg 1)
+        let dseg = seg + seg_cmdsize as usize;
+        buf[dseg..dseg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[dseg + 4..dseg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[dseg + 8..dseg + 14].copy_from_slice(b"__DATA");
+        buf[dseg + 24..dseg + 32].copy_from_slice(&0x2000u64.to_le_bytes()); // vmaddr
+        buf[dseg + 32..dseg + 40].copy_from_slice(&0x1000u64.to_le_bytes()); // vmsize
+        buf[dseg + 40..dseg + 48].copy_from_slice(&0x200u64.to_le_bytes()); // fileoff
+        buf[dseg + 48..dseg + 56].copy_from_slice(&0x100u64.to_le_bytes()); // filesize
+        buf[dseg + 56..dseg + 60].copy_from_slice(&0x03u32.to_le_bytes());
+        buf[dseg + 60..dseg + 64].copy_from_slice(&0x03u32.to_le_bytes());
+        buf[dseg + 64..dseg + 68].copy_from_slice(&1u32.to_le_bytes()); // nsects
+
+        let dsec = dseg + 72;
+        buf[dsec..dsec + 6].copy_from_slice(b"__data");
+        buf[dsec + 16..dsec + 22].copy_from_slice(b"__DATA");
+        buf[dsec + 32..dsec + 40].copy_from_slice(&0x2000u64.to_le_bytes());
+        buf[dsec + 40..dsec + 48].copy_from_slice(&0x100u64.to_le_bytes());
+        buf[dsec + 48..dsec + 52].copy_from_slice(&0x200u32.to_le_bytes());
+
+        // LC_SYMTAB
+        let sym_cmd = dseg + seg_cmdsize as usize;
+        buf[sym_cmd..sym_cmd + 4].copy_from_slice(&0x02u32.to_le_bytes());
+        buf[sym_cmd + 4..sym_cmd + 8].copy_from_slice(&symtab_cmdsize.to_le_bytes());
+
+        // LC_DYLD_CHAINED_FIXUPS
+        let cf_cmd = sym_cmd + symtab_cmdsize as usize;
+        buf[cf_cmd..cf_cmd + 4].copy_from_slice(&macho::LC_DYLD_CHAINED_FIXUPS.to_le_bytes());
+        buf[cf_cmd + 4..cf_cmd + 8].copy_from_slice(&chained_cmdsize.to_le_bytes());
+        let payload_off: u32 = 0x300;
+        buf[cf_cmd + 8..cf_cmd + 12].copy_from_slice(&payload_off.to_le_bytes());
+        let payload_size: u32 = 0x80;
+        buf[cf_cmd + 12..cf_cmd + 16].copy_from_slice(&payload_size.to_le_bytes());
+
+        // Chained fixups payload at 0x300
+        let p = payload_off as usize;
+        // dyld_chained_fixups_header (28 bytes)
+        buf[p..p + 4].copy_from_slice(&0u32.to_le_bytes()); // fixups_version
+        let starts_offset: u32 = 28; // starts right after header
+        buf[p + 4..p + 8].copy_from_slice(&starts_offset.to_le_bytes());
+        buf[p + 8..p + 12].copy_from_slice(&0u32.to_le_bytes()); // imports_offset (unused)
+        buf[p + 12..p + 16].copy_from_slice(&0u32.to_le_bytes()); // symbols_offset
+        buf[p + 16..p + 20].copy_from_slice(&0u32.to_le_bytes()); // imports_count
+        buf[p + 20..p + 24].copy_from_slice(&1u32.to_le_bytes()); // imports_format=1
+        buf[p + 24..p + 28].copy_from_slice(&0u32.to_le_bytes()); // symbols_format
+
+        // dyld_chained_starts_in_image at p+28
+        let si = p + starts_offset as usize;
+        buf[si..si + 4].copy_from_slice(&2u32.to_le_bytes()); // seg_count = 2
+        buf[si + 4..si + 8].copy_from_slice(&0u32.to_le_bytes()); // seg 0 offset = 0 (no fixups)
+        let seg1_info_off: u32 = 12; // offset from starts_in_image base
+        buf[si + 8..si + 12].copy_from_slice(&seg1_info_off.to_le_bytes()); // seg 1 offset
+
+        // dyld_chained_starts_in_segment for seg 1 at si+12
+        let ss = si + seg1_info_off as usize;
+        buf[ss..ss + 4].copy_from_slice(&30u32.to_le_bytes()); // size
+        buf[ss + 4..ss + 6].copy_from_slice(&0x1000u16.to_le_bytes()); // page_size = 4096
+        buf[ss + 6..ss + 8].copy_from_slice(&2u16.to_le_bytes()); // pointer_format = DYLD_CHAINED_PTR_64
+        buf[ss + 8..ss + 16].copy_from_slice(&0u64.to_le_bytes()); // segment_offset = 0
+        buf[ss + 16..ss + 20].copy_from_slice(&0u32.to_le_bytes()); // max_valid_pointer
+        buf[ss + 20..ss + 22].copy_from_slice(&1u16.to_le_bytes()); // page_count = 1
+        buf[ss + 22..ss + 24].copy_from_slice(&0u16.to_le_bytes()); // page_starts[0] = 0
+
+        // Chain data in __DATA segment file area (fileoff=0x200, segment_offset=0, page 0, start=0)
+        // Entry 1 at file offset 0x200: rebase, target=0x1234, next_delta=2 (raw delta field, *4=8 bytes)
+        let chain_base = 0x200usize;
+        let entry1: u64 = 0x1234 | (2u64 << 51); // target=0x1234, next=2 (*4=8), bind=0
+        buf[chain_base..chain_base + 8].copy_from_slice(&entry1.to_le_bytes());
+        // Entry 2 at file offset 0x208: bind, ordinal=5, next_delta=0 (end of chain)
+        let entry2: u64 = 5 | (1u64 << 62); // ordinal=5, bind=1, next=0
+        buf[chain_base + 8..chain_base + 16].copy_from_slice(&entry2.to_le_bytes());
+
+        buf[0x100] = 0xC3; // RET in __text
+
+        buf
+    }
+
+    #[test]
+    fn test_chained_fixup_chain_walking() {
+        let bin = macho64_with_chained_fixups();
+        let img = MachoLoader::load(&bin).expect("Mach-O with chained fixups must load");
+
+        let rebase = img
+            .relocations
+            .iter()
+            .find(|r| r.kind == RelocKind::Relative && r.addr == 0x2000);
+        assert!(rebase.is_some(), "rebase relocation at 0x2000 expected");
+        let rebase = rebase.unwrap();
+        assert!(
+            rebase.sym_name.contains("0x1234"),
+            "rebase target should contain 0x1234, got: {}",
+            rebase.sym_name
+        );
+
+        let bind = img
+            .relocations
+            .iter()
+            .find(|r| r.kind == RelocKind::GlobDat && r.addr == 0x2008);
+        assert!(bind.is_some(), "bind relocation at 0x2008 expected");
+        let bind = bind.unwrap();
+        assert!(
+            bind.sym_name.contains("5"),
+            "bind ordinal should contain 5, got: {}",
+            bind.sym_name
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // P10-27: Stub recognition tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_stub_recognition_la_symbol_ptr() {
+        let bin = macho64_with_dyld_info();
+        let img = MachoLoader::load(&bin).expect("Mach-O with stubs must load");
+
+        // __la_symbol_ptr at vmaddr 0x2000, 1 entry (8 bytes), reserved1=0
+        // indirect_symbols[0] = 0 → nlist[0] = "_malloc"
+        assert!(
+            !img.plt_symbols.is_empty(),
+            "plt_symbols should have entries from __la_symbol_ptr"
+        );
+        let entry = img.plt_symbols.get(&0x2000);
+        assert!(
+            entry.is_some(),
+            "plt_symbols should contain entry at 0x2000, got: {:?}",
+            img.plt_symbols
+        );
+        assert_eq!(entry.unwrap(), "_malloc");
+    }
+
+    // -----------------------------------------------------------------------
+    // P10-28: Dylib + rpath tracking tests
+    // -----------------------------------------------------------------------
+
+    fn macho64_with_dylib_and_rpath() -> Vec<u8> {
+        let mut buf = vec![0u8; 0x400];
+
+        let seg_cmdsize: u32 = 152;
+        let symtab_cmdsize: u32 = 24;
+        // LC_LOAD_DYLIB: cmdsize must be >= 24 (header) + path length, rounded to 4
+        let dylib_path = b"/usr/lib/libSystem.B.dylib\0";
+        let dylib_cmdsize: u32 = ((24 + dylib_path.len() + 3) & !3) as u32;
+        // LC_RPATH: cmdsize must be >= 12 (header) + path length, rounded to 4
+        let rpath_path = b"@executable_path/../Frameworks\0";
+        let rpath_cmdsize: u32 = ((12 + rpath_path.len() + 3) & !3) as u32;
+        let sizeofcmds: u32 = seg_cmdsize + symtab_cmdsize + dylib_cmdsize + rpath_cmdsize;
+
+        // mach_header_64
+        buf[0..4].copy_from_slice(&macho::MH_MAGIC_64.to_le_bytes());
+        buf[4..8].copy_from_slice(&(macho::CPU_TYPE_X86_64 as i32).to_le_bytes());
+        buf[8..12].copy_from_slice(&3u32.to_le_bytes());
+        buf[12..16].copy_from_slice(&2u32.to_le_bytes()); // MH_EXECUTE
+        buf[16..20].copy_from_slice(&4u32.to_le_bytes()); // ncmds
+        buf[20..24].copy_from_slice(&sizeofcmds.to_le_bytes());
+
+        // LC_SEGMENT_64 __TEXT
+        let seg = 0x20usize;
+        buf[seg..seg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[seg + 4..seg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        buf[seg + 24..seg + 32].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 32..seg + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 48..seg + 56].copy_from_slice(&0x200u64.to_le_bytes());
+        buf[seg + 56..seg + 60].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 60..seg + 64].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 64..seg + 68].copy_from_slice(&1u32.to_le_bytes());
+
+        let sec = seg + 72;
+        buf[sec..sec + 6].copy_from_slice(b"__text");
+        buf[sec + 16..sec + 22].copy_from_slice(b"__TEXT");
+        buf[sec + 32..sec + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes());
+        buf[sec + 48..sec + 52].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+
+        // LC_SYMTAB
+        let sym_cmd = seg + seg_cmdsize as usize;
+        buf[sym_cmd..sym_cmd + 4].copy_from_slice(&0x02u32.to_le_bytes());
+        buf[sym_cmd + 4..sym_cmd + 8].copy_from_slice(&symtab_cmdsize.to_le_bytes());
+
+        // LC_LOAD_DYLIB
+        let dylib_cmd = sym_cmd + symtab_cmdsize as usize;
+        buf[dylib_cmd..dylib_cmd + 4].copy_from_slice(&macho::LC_LOAD_DYLIB.to_le_bytes());
+        buf[dylib_cmd + 4..dylib_cmd + 8].copy_from_slice(&dylib_cmdsize.to_le_bytes());
+        // dylib.name offset (LcStr) = 24 (after the fixed fields)
+        buf[dylib_cmd + 8..dylib_cmd + 12].copy_from_slice(&24u32.to_le_bytes());
+        // dylib.timestamp
+        buf[dylib_cmd + 12..dylib_cmd + 16].copy_from_slice(&0u32.to_le_bytes());
+        // dylib.current_version = 0x010203 (1.2.3)
+        buf[dylib_cmd + 16..dylib_cmd + 20].copy_from_slice(&0x0001_0203u32.to_le_bytes());
+        // dylib.compatibility_version = 0x010000 (1.0.0)
+        buf[dylib_cmd + 20..dylib_cmd + 24].copy_from_slice(&0x0001_0000u32.to_le_bytes());
+        // path string
+        buf[dylib_cmd + 24..dylib_cmd + 24 + dylib_path.len()].copy_from_slice(dylib_path);
+
+        // LC_RPATH
+        let rpath_cmd = dylib_cmd + dylib_cmdsize as usize;
+        buf[rpath_cmd..rpath_cmd + 4].copy_from_slice(&macho::LC_RPATH.to_le_bytes());
+        buf[rpath_cmd + 4..rpath_cmd + 8].copy_from_slice(&rpath_cmdsize.to_le_bytes());
+        // rpath.path offset (LcStr) = 12 (after cmd + cmdsize + path_offset)
+        buf[rpath_cmd + 8..rpath_cmd + 12].copy_from_slice(&12u32.to_le_bytes());
+        // path string
+        buf[rpath_cmd + 12..rpath_cmd + 12 + rpath_path.len()].copy_from_slice(rpath_path);
+
+        buf[0x200] = 0xC3; // RET
+
+        buf
+    }
+
+    #[test]
+    fn test_dylib_and_rpath_extraction() {
+        let bin = macho64_with_dylib_and_rpath();
+        let img = MachoLoader::load(&bin).expect("Mach-O with dylib+rpath must load");
+
+        assert_eq!(img.dylibs.len(), 1, "should have 1 dylib dependency");
+        let dep = &img.dylibs[0];
+        assert_eq!(dep.path, "/usr/lib/libSystem.B.dylib");
+        assert_eq!(dep.kind, crate::image::DylibKind::Load);
+        assert_eq!(dep.current_version, 0x0001_0203);
+        assert_eq!(dep.compat_version, 0x0001_0000);
+
+        assert_eq!(img.rpaths.len(), 1, "should have 1 rpath");
+        assert_eq!(img.rpaths[0], "@executable_path/../Frameworks");
     }
 }

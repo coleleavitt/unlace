@@ -16,6 +16,7 @@ pub mod structurer;
 pub mod switch_recovery;
 pub mod tail_duplication;
 pub mod ternary_recovery;
+pub mod while_to_for;
 
 pub use block_merge::merge_linear_blocks;
 pub use cross_jump_revert::cross_jump_revert;
@@ -39,3 +40,4 @@ pub use switch_recovery::{
 };
 pub use tail_duplication::tail_duplicate_small_blocks;
 pub use ternary_recovery::ternary_recovery;
+pub use while_to_for::while_to_for;

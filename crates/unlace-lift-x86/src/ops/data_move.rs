@@ -6,6 +6,8 @@ use crate::lift::LiftCtx;
 use crate::ops::arithmetic::atomic_tag;
 use crate::register_file::*;
 
+pub const CMOV_CALLOTHER_TAG: u64 = 0x350;
+
 pub fn lift_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let is_mem_dst = insn.op0_kind() == OpKind::Memory;
     let dst = ctx.operand_write(insn, 0);
@@ -28,6 +30,25 @@ pub fn lift_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             ctx.addr,
         ));
     }
+}
+
+pub fn lift_cmov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let dst = ctx.operand_write(insn, 0);
+    let src = ctx.operand_read(insn, 1);
+    let cond = setcc_condition(ctx, insn.mnemonic());
+    let (dst, src, cond) = match (dst, src, cond) {
+        (Some(d), Some(s), Some(c)) => (d, s, c),
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(CMOV_CALLOTHER_TAG, 8), cond, src, dst,],
+        ctx.addr,
+    ));
 }
 
 pub fn lift_lea(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
@@ -133,11 +154,11 @@ fn setcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Va
     let of = Varnode::new(SpaceId::Register, OF, 1);
 
     match mnemonic {
-        // SETE/SETZ: ZF == 1
-        M::Sete => Some(zf),
+        // SETE/SETZ/CMOVE/CMOVZ: ZF == 1
+        M::Sete | M::Cmove => Some(zf),
 
-        // SETNE/SETNZ: ZF == 0
-        M::Setne => {
+        // SETNE/SETNZ/CMOVNE/CMOVNZ: ZF == 0
+        M::Setne | M::Cmovne => {
             let t = Varnode::unique(ctx.alloc_unique(), 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::BoolNegate,
@@ -148,11 +169,11 @@ fn setcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Va
             Some(t)
         }
 
-        // SETB/SETC/SETNAE: CF == 1
-        M::Setb => Some(cf),
+        // SETB/SETC/SETNAE/CMOVB/CMOVC/CMOVNAE: CF == 1
+        M::Setb | M::Cmovb => Some(cf),
 
-        // SETAE/SETNB/SETNC: CF == 0
-        M::Setae => {
+        // SETAE/SETNB/SETNC/CMOVAE/CMOVNB/CMOVNC: CF == 0
+        M::Setae | M::Cmovae => {
             let t = Varnode::unique(ctx.alloc_unique(), 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::BoolNegate,
@@ -163,8 +184,8 @@ fn setcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Va
             Some(t)
         }
 
-        // SETA/SETNBE: CF == 0 AND ZF == 0
-        M::Seta => {
+        // SETA/SETNBE/CMOVA/CMOVNBE: CF == 0 AND ZF == 0
+        M::Seta | M::Cmova => {
             let not_cf = Varnode::unique(ctx.alloc_unique(), 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::BoolNegate,
@@ -189,8 +210,8 @@ fn setcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Va
             Some(t)
         }
 
-        // SETBE/SETNA: CF == 1 OR ZF == 1
-        M::Setbe => {
+        // SETBE/SETNA/CMOVBE/CMOVNA: CF == 1 OR ZF == 1
+        M::Setbe | M::Cmovbe => {
             let t = Varnode::unique(ctx.alloc_unique(), 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::BoolOr,
@@ -201,8 +222,8 @@ fn setcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Va
             Some(t)
         }
 
-        // SETL/SETNGE: SF != OF
-        M::Setl => {
+        // SETL/SETNGE/CMOVL/CMOVNGE: SF != OF
+        M::Setl | M::Cmovl => {
             let t = Varnode::unique(ctx.alloc_unique(), 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::BoolXor,
@@ -213,8 +234,8 @@ fn setcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Va
             Some(t)
         }
 
-        // SETGE/SETNL: SF == OF
-        M::Setge => {
+        // SETGE/SETNL/CMOVGE/CMOVNL: SF == OF
+        M::Setge | M::Cmovge => {
             let ne = Varnode::unique(ctx.alloc_unique(), 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::BoolXor,
@@ -232,8 +253,8 @@ fn setcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Va
             Some(t)
         }
 
-        // SETG/SETNLE: ZF == 0 AND SF == OF
-        M::Setg => {
+        // SETG/SETNLE/CMOVG/CMOVNLE: ZF == 0 AND SF == OF
+        M::Setg | M::Cmovg => {
             let not_zf = Varnode::unique(ctx.alloc_unique(), 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::BoolNegate,
@@ -265,8 +286,8 @@ fn setcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Va
             Some(t)
         }
 
-        // SETLE/SETNG: ZF == 1 OR SF != OF
-        M::Setle => {
+        // SETLE/SETNG/CMOVLE/CMOVNG: ZF == 1 OR SF != OF
+        M::Setle | M::Cmovle => {
             let sf_ne_of = Varnode::unique(ctx.alloc_unique(), 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::BoolXor,
@@ -284,11 +305,11 @@ fn setcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Va
             Some(t)
         }
 
-        // SETS: SF == 1
-        M::Sets => Some(sf),
+        // SETS/CMOVS: SF == 1
+        M::Sets | M::Cmovs => Some(sf),
 
-        // SETNS: SF == 0
-        M::Setns => {
+        // SETNS/CMOVNS: SF == 0
+        M::Setns | M::Cmovns => {
             let t = Varnode::unique(ctx.alloc_unique(), 1);
             ctx.emit(IrInsn::with_output(
                 IrOp::BoolNegate,

@@ -17,19 +17,20 @@ pub mod rtti;
 pub mod strings;
 
 pub use dwarf::{
-    import_dwarf, DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo,
-    SourceLocation, StructField, StructType, UnionType,
+    DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo, SourceLocation,
+    StructField, StructType, UnionType, import_dwarf,
 };
-pub use eh_frame::{parse_eh_frame, EhFrameInfo, FunctionExtent, LsdaEntry};
+pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;
 pub use error::LoadError;
-pub use gcc_except_table::{parse_gcc_except_table, FunctionLsda, GccExceptTableInfo, TryRegion};
+pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
+pub use image::{
+    ArchId, BinaryImage, DebugRecord, Endian, LoadConfig, RelocKind, Relocation, Section,
+    SectionFlags, Symbol, SymbolKind,
+};
 pub use macho::MachoLoader;
 pub use pe::PeLoader;
-pub use rtti::{scan_rtti, BaseClass, CppClass, InheritanceKind, RttiInfo};
-pub use image::{
-    ArchId, BinaryImage, Endian, RelocKind, Relocation, Section, SectionFlags, Symbol, SymbolKind,
-};
+pub use rtti::{BaseClass, CppClass, InheritanceKind, RttiInfo, scan_rtti};
 
 /// Trait for binary format loaders.
 ///

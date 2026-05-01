@@ -10,11 +10,9 @@ use object::macho;
 use object::read::macho::{FatArch, LoadCommandVariant, MachHeader, MachOFatFile, MachOFile};
 use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 
-use crate::error::LoadError;
-use crate::image::{
-    ArchId, BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind,
-};
 use crate::Loader;
+use crate::error::LoadError;
+use crate::image::{ArchId, BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind};
 
 /// Mach-O single-arch magic values (native and swapped byte orders).
 const MH_MAGIC_32_LE: [u8; 4] = macho::MH_MAGIC.to_le_bytes();
@@ -122,6 +120,9 @@ where
         relocations: Vec::new(),
         string_table: BTreeMap::new(),
         tls_callbacks: Vec::new(),
+        debug_records: Vec::new(),
+        load_config: None,
+        runtime_functions: Vec::new(),
     })
 }
 
@@ -136,11 +137,8 @@ where
 /// We synthesize `sub_<addr:x>` named symbols for any address not already
 /// covered by the symbol table. Existing symbols win — the symbol table
 /// has type info and aliases that LC_FUNCTION_STARTS lacks.
-fn merge_function_starts<Mach>(
-    file: &MachOFile<Mach>,
-    data: &[u8],
-    out: &mut BTreeMap<u64, Symbol>,
-) where
+fn merge_function_starts<Mach>(file: &MachOFile<Mach>, data: &[u8], out: &mut BTreeMap<u64, Symbol>)
+where
     Mach: MachHeader<Endian = object::Endianness>,
 {
     let endian = match file.macho_header().endian() {
@@ -191,10 +189,7 @@ fn merge_function_starts<Mach>(
     }
 }
 
-fn find_text_segment_vmaddr<Mach>(
-    file: &MachOFile<Mach>,
-    endian: object::Endianness,
-) -> Option<u64>
+fn find_text_segment_vmaddr<Mach>(file: &MachOFile<Mach>, endian: object::Endianness) -> Option<u64>
 where
     Mach: MachHeader<Endian = object::Endianness>,
 {
@@ -225,11 +220,8 @@ where
 /// `imports_format` values:
 /// - 1 (`DYLD_CHAINED_IMPORT`): 4-byte entries, top 23 bits = name offset
 /// - 2/3 (`_ADDEND`/`_ADDEND64`): unsupported here — skip the table
-fn merge_chained_imports<Mach>(
-    file: &MachOFile<Mach>,
-    data: &[u8],
-    out: &mut BTreeMap<u64, Symbol>,
-) where
+fn merge_chained_imports<Mach>(file: &MachOFile<Mach>, data: &[u8], out: &mut BTreeMap<u64, Symbol>)
+where
     Mach: MachHeader<Endian = object::Endianness>,
 {
     let endian = match file.macho_header().endian() {
@@ -256,7 +248,11 @@ fn merge_chained_imports<Mach>(
         let dataoff = linkedit.dataoff.get(endian) as usize;
         let datasize = linkedit.datasize.get(endian) as usize;
         if datasize < 28 || dataoff.saturating_add(datasize) > data.len() {
-            tracing::debug!(dataoff, datasize, "LC_DYLD_CHAINED_FIXUPS payload bounds invalid");
+            tracing::debug!(
+                dataoff,
+                datasize,
+                "LC_DYLD_CHAINED_FIXUPS payload bounds invalid"
+            );
             return;
         }
         let payload = &data[dataoff..dataoff + datasize];
@@ -271,16 +267,11 @@ fn decode_chained_imports(payload: &[u8], out: &mut BTreeMap<u64, Symbol>) {
         tracing::debug!(fixups_version, "unsupported chained fixups version");
         return;
     }
-    let imports_offset =
-        u32::from_le_bytes(payload[8..12].try_into().unwrap_or([0; 4])) as usize;
-    let symbols_offset =
-        u32::from_le_bytes(payload[12..16].try_into().unwrap_or([0; 4])) as usize;
-    let imports_count =
-        u32::from_le_bytes(payload[16..20].try_into().unwrap_or([0; 4])) as usize;
-    let imports_format =
-        u32::from_le_bytes(payload[20..24].try_into().unwrap_or([0; 4]));
-    let symbols_format =
-        u32::from_le_bytes(payload[24..28].try_into().unwrap_or([0; 4]));
+    let imports_offset = u32::from_le_bytes(payload[8..12].try_into().unwrap_or([0; 4])) as usize;
+    let symbols_offset = u32::from_le_bytes(payload[12..16].try_into().unwrap_or([0; 4])) as usize;
+    let imports_count = u32::from_le_bytes(payload[16..20].try_into().unwrap_or([0; 4])) as usize;
+    let imports_format = u32::from_le_bytes(payload[20..24].try_into().unwrap_or([0; 4]));
+    let symbols_format = u32::from_le_bytes(payload[24..28].try_into().unwrap_or([0; 4]));
 
     if imports_format != 1 || symbols_format != 0 {
         tracing::debug!(
@@ -584,8 +575,7 @@ mod tests {
         // nreloc: 0
         buf[sec + 60..sec + 64].copy_from_slice(&0u32.to_le_bytes());
         // flags: S_ATTR_PURE_INSTRUCTIONS | S_REGULAR
-        buf[sec + 64..sec + 68]
-            .copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
         // reserved1, reserved2, reserved3 (12 bytes) — already zeroed.
 
         // ---- LC_SYMTAB at offset seg + 152 = 0x20 + 0x98 = 0xB8 ----
@@ -672,8 +662,7 @@ mod tests {
         // nreloc
         buf[sec + 52..sec + 56].copy_from_slice(&0u32.to_le_bytes());
         // flags: S_ATTR_PURE_INSTRUCTIONS
-        buf[sec + 56..sec + 60]
-            .copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+        buf[sec + 56..sec + 60].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
         // reserved1, reserved2 (8 bytes) — zeroed
 
         // ---- LC_SYMTAB at seg + 56 + 68 = 0x1C + 124 = 0x98 ----
@@ -720,8 +709,7 @@ mod tests {
         buf[fa + 16..fa + 20].copy_from_slice(&12u32.to_be_bytes());
 
         // ---- Embedded Mach-O at inner_offset ----
-        buf[inner_offset as usize..inner_offset as usize + inner_len]
-            .copy_from_slice(&inner);
+        buf[inner_offset as usize..inner_offset as usize + inner_len].copy_from_slice(&inner);
 
         buf
     }
@@ -848,8 +836,7 @@ mod tests {
         buf[sec + 32..sec + 40].copy_from_slice(&0x1000u64.to_le_bytes());
         buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes());
         buf[sec + 48..sec + 52].copy_from_slice(&0x100u32.to_le_bytes());
-        buf[sec + 64..sec + 68]
-            .copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
 
         let sym_cmd = seg + seg_cmdsize as usize;
         buf[sym_cmd..sym_cmd + 4].copy_from_slice(&0x02u32.to_le_bytes());
@@ -942,8 +929,7 @@ mod tests {
         buf[sec + 32..sec + 40].copy_from_slice(&0x11F0u64.to_le_bytes()); // addr
         buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes()); // size
         buf[sec + 48..sec + 52].copy_from_slice(&0x1F0u32.to_le_bytes()); // offset
-        buf[sec + 64..sec + 68]
-            .copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes()); // flags
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes()); // flags
 
         // ── LC_SEGMENT_64 __DATA (0xB8) ────────────────────────────
         let dseg = 0xB8usize;
@@ -966,8 +952,7 @@ mod tests {
         buf[dsec + 40..dsec + 48].copy_from_slice(&8u64.to_le_bytes()); // size (1 pointer)
         buf[dsec + 48..dsec + 52].copy_from_slice(&0x200u32.to_le_bytes()); // offset
         // flags: S_LAZY_SYMBOL_POINTERS = 0x7
-        buf[dsec + 64..dsec + 68]
-            .copy_from_slice(&macho::S_LAZY_SYMBOL_POINTERS.to_le_bytes());
+        buf[dsec + 64..dsec + 68].copy_from_slice(&macho::S_LAZY_SYMBOL_POINTERS.to_le_bytes());
         // reserved1 = 0 (indirect symbol table start index) — already zero
 
         // ── LC_SYMTAB (0x150) ──────────────────────────────────────

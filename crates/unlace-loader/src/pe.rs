@@ -8,11 +8,12 @@ use object::pe;
 use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile};
 use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 
+use crate::Loader;
 use crate::error::LoadError;
 use crate::image::{
-    ArchId, BinaryImage, Endian, RelocKind, Relocation, Section, SectionFlags, Symbol, SymbolKind,
+    ArchId, BinaryImage, DebugRecord, Endian, LoadConfig, RelocKind, Relocation, RuntimeFunction,
+    Section, SectionFlags, Symbol, SymbolKind, UnwindInfo,
 };
-use crate::Loader;
 
 /// DOS header magic bytes: `MZ`.
 const PE_DOS_MAGIC: [u8; 2] = [b'M', b'Z'];
@@ -80,6 +81,9 @@ where
 
     let relocations = load_base_relocations(&file, data);
     let tls_callbacks = load_tls_callbacks::<Pe>(&file, data);
+    let debug_records = parse_debug_directory(&file, data);
+    let load_config = parse_load_config(&file, data);
+    let runtime_functions = parse_pdata(&file, data);
 
     Ok(BinaryImage {
         arch,
@@ -91,6 +95,9 @@ where
         relocations,
         string_table: BTreeMap::new(),
         tls_callbacks,
+        debug_records,
+        load_config,
+        runtime_functions,
     })
 }
 
@@ -105,7 +112,10 @@ fn load_delay_imports<Pe>(file: &PeFile<Pe>, data: &[u8], out: &mut BTreeMap<u64
 where
     Pe: ImageNtHeaders,
 {
-    let table = match file.data_directories().delay_load_import_table(data, &file.section_table()) {
+    let table = match file
+        .data_directories()
+        .delay_load_import_table(data, &file.section_table())
+    {
         Ok(Some(t)) => t,
         Ok(None) => return,
         Err(err) => {
@@ -191,7 +201,9 @@ where
         if dir_data.len() < 16 {
             return Vec::new();
         }
-        u64::from(u32::from_le_bytes(dir_data[12..16].try_into().unwrap_or([0; 4])))
+        u64::from(u32::from_le_bytes(
+            dir_data[12..16].try_into().unwrap_or([0; 4]),
+        ))
     };
 
     if callbacks_va == 0 {
@@ -225,10 +237,240 @@ where
     out
 }
 
-fn find_section_for_rva<'data, Pe>(
-    file: &PeFile<'data, Pe>,
-    rva: u64,
-) -> Option<(u64, &'data [u8])>
+/// RSDS CodeView signature bytes.
+const RSDS_SIGNATURE: [u8; 4] = [0x52, 0x53, 0x44, 0x53];
+
+/// Parse `IMAGE_DIRECTORY_ENTRY_DEBUG` into [`DebugRecord`] entries.
+///
+/// Each IMAGE_DEBUG_DIRECTORY is 28 bytes. For `IMAGE_DEBUG_TYPE_CODEVIEW` (2)
+/// entries we follow `PointerToRawData` to read the RSDS record containing the
+/// PDB GUID, age, and file path.
+fn parse_debug_directory<Pe>(file: &PeFile<Pe>, data: &[u8]) -> Vec<DebugRecord>
+where
+    Pe: ImageNtHeaders,
+{
+    let dir = match file.data_directories().get(pe::IMAGE_DIRECTORY_ENTRY_DEBUG) {
+        Some(d) => d,
+        None => return Vec::new(),
+    };
+    let dir_data = match dir.data(data, &file.section_table()) {
+        Ok(d) => d,
+        Err(err) => {
+            tracing::debug!(?err, "PE debug directory unreadable");
+            return Vec::new();
+        }
+    };
+
+    const DEBUG_DIR_SIZE: usize = 28;
+    let count = dir_data.len() / DEBUG_DIR_SIZE;
+    let mut out = Vec::with_capacity(count);
+
+    for i in 0..count {
+        let entry = &dir_data[i * DEBUG_DIR_SIZE..(i + 1) * DEBUG_DIR_SIZE];
+        let time_stamp = u32::from_le_bytes(entry[4..8].try_into().unwrap_or([0; 4]));
+        let typ = u32::from_le_bytes(entry[12..16].try_into().unwrap_or([0; 4]));
+        let size_of_data = u32::from_le_bytes(entry[16..20].try_into().unwrap_or([0; 4])) as usize;
+        let pointer_to_raw_data =
+            u32::from_le_bytes(entry[24..28].try_into().unwrap_or([0; 4])) as usize;
+
+        let (pdb_path, pdb_guid, pdb_age) = if typ == pe::IMAGE_DEBUG_TYPE_CODEVIEW {
+            parse_rsds_record(data, pointer_to_raw_data, size_of_data)
+        } else {
+            (None, None, None)
+        };
+
+        out.push(DebugRecord {
+            typ,
+            time_stamp,
+            pdb_path,
+            pdb_guid,
+            pdb_age,
+        });
+    }
+    out
+}
+
+/// Try to parse an RSDS CodeView record at the given file offset.
+fn parse_rsds_record(
+    data: &[u8],
+    offset: usize,
+    size: usize,
+) -> (Option<String>, Option<[u8; 16]>, Option<u32>) {
+    // Minimum RSDS: 4 (sig) + 16 (guid) + 4 (age) = 24 bytes
+    if size < 24 || data.len() < offset + size {
+        return (None, None, None);
+    }
+    let rec = &data[offset..offset + size];
+    if rec[..4] != RSDS_SIGNATURE {
+        return (None, None, None);
+    }
+
+    let mut guid = [0u8; 16];
+    guid.copy_from_slice(&rec[4..20]);
+    let age = u32::from_le_bytes(rec[20..24].try_into().unwrap_or([0; 4]));
+
+    // PDB path is NUL-terminated after the age field.
+    let path_bytes = &rec[24..];
+    let path = match path_bytes.iter().position(|&b| b == 0) {
+        Some(nul) => String::from_utf8_lossy(&path_bytes[..nul]).into_owned(),
+        None => String::from_utf8_lossy(path_bytes).into_owned(),
+    };
+    let pdb_path = if path.is_empty() { None } else { Some(path) };
+
+    (pdb_path, Some(guid), Some(age))
+}
+
+/// Parse `IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG` into a [`LoadConfig`].
+///
+/// Reads the IMAGE_LOAD_CONFIG_DIRECTORY64 (PE32+) or the 32-bit variant,
+/// extracting the security cookie VA and CFG metadata. The guard function
+/// table is walked as an array of u32 RVAs absolutized via `image_base`.
+fn parse_load_config<Pe>(file: &PeFile<Pe>, data: &[u8]) -> Option<LoadConfig>
+where
+    Pe: ImageNtHeaders,
+{
+    let dir = file
+        .data_directories()
+        .get(pe::IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG)?;
+    let dir_data = match dir.data(data, &file.section_table()) {
+        Ok(d) => d,
+        Err(err) => {
+            tracing::debug!(?err, "PE load config directory unreadable");
+            return None;
+        }
+    };
+
+    if dir_data.len() < 4 {
+        return None;
+    }
+
+    let image_base = file.nt_headers().optional_header().image_base();
+    let is_pe64 = std::mem::size_of::<Pe::ImageOptionalHeader>() > 96;
+
+    if is_pe64 {
+        parse_load_config_64(dir_data, image_base, file, data)
+    } else {
+        parse_load_config_32(dir_data, image_base, file, data)
+    }
+}
+
+fn parse_load_config_64<Pe>(
+    lc: &[u8],
+    image_base: u64,
+    file: &PeFile<Pe>,
+    data: &[u8],
+) -> Option<LoadConfig>
+where
+    Pe: ImageNtHeaders,
+{
+    let size = u32::from_le_bytes(lc[..4].try_into().ok()?) as usize;
+
+    let read_u64 = |off: usize| -> u64 {
+        if off + 8 <= lc.len().min(size) {
+            u64::from_le_bytes(lc[off..off + 8].try_into().unwrap_or([0; 8]))
+        } else {
+            0
+        }
+    };
+    let read_u32 = |off: usize| -> u32 {
+        if off + 4 <= lc.len().min(size) {
+            u32::from_le_bytes(lc[off..off + 4].try_into().unwrap_or([0; 4]))
+        } else {
+            0
+        }
+    };
+
+    // PE32+ offsets
+    let security_cookie = read_u64(0x58);
+    let guard_cf_check = read_u64(0x70);
+    let guard_cf_dispatch = read_u64(0x78);
+    let guard_table_va = read_u64(0x80);
+    let guard_table_count = read_u64(0x88);
+    let guard_flags = read_u32(0x90);
+
+    let cfg_targets = read_cfg_targets(guard_table_va, guard_table_count, image_base, file, data);
+
+    Some(LoadConfig {
+        security_cookie,
+        guard_cf_check,
+        guard_cf_dispatch,
+        guard_flags,
+        cfg_targets,
+    })
+}
+
+fn parse_load_config_32<Pe>(
+    lc: &[u8],
+    image_base: u64,
+    file: &PeFile<Pe>,
+    data: &[u8],
+) -> Option<LoadConfig>
+where
+    Pe: ImageNtHeaders,
+{
+    let size = u32::from_le_bytes(lc[..4].try_into().ok()?) as usize;
+
+    let read_u32 = |off: usize| -> u32 {
+        if off + 4 <= lc.len().min(size) {
+            u32::from_le_bytes(lc[off..off + 4].try_into().unwrap_or([0; 4]))
+        } else {
+            0
+        }
+    };
+
+    // PE32 offsets
+    let security_cookie = u64::from(read_u32(0x3C));
+    let guard_cf_check = u64::from(read_u32(0x48));
+    let guard_cf_dispatch = u64::from(read_u32(0x4C));
+    let guard_table_va = u64::from(read_u32(0x50));
+    let guard_table_count = u64::from(read_u32(0x54));
+    let guard_flags = read_u32(0x58);
+
+    let cfg_targets = read_cfg_targets(guard_table_va, guard_table_count, image_base, file, data);
+
+    Some(LoadConfig {
+        security_cookie,
+        guard_cf_check,
+        guard_cf_dispatch,
+        guard_flags,
+        cfg_targets,
+    })
+}
+
+/// Walk the CFG guard function table (array of u32 RVAs) and absolutize each.
+fn read_cfg_targets<Pe>(
+    table_va: u64,
+    count: u64,
+    image_base: u64,
+    file: &PeFile<Pe>,
+    _data: &[u8],
+) -> Vec<u64>
+where
+    Pe: ImageNtHeaders,
+{
+    if table_va == 0 || count == 0 {
+        return Vec::new();
+    }
+
+    let table_rva = table_va.saturating_sub(image_base);
+    let section = match find_section_for_rva(file, table_rva) {
+        Some(s) => s,
+        None => return Vec::new(),
+    };
+
+    let offset = (table_rva - section.0) as usize;
+    let section_data = &section.1[offset..];
+    let count = count.min(65536) as usize; // cap to prevent OOM
+
+    let mut out = Vec::with_capacity(count);
+    for chunk in section_data.chunks_exact(4).take(count) {
+        let rva = u32::from_le_bytes(chunk.try_into().unwrap_or([0; 4]));
+        out.push(image_base + u64::from(rva));
+    }
+    out
+}
+
+fn find_section_for_rva<'data, Pe>(file: &PeFile<'data, Pe>, rva: u64) -> Option<(u64, &'data [u8])>
 where
     Pe: ImageNtHeaders,
 {
@@ -257,7 +499,10 @@ where
 {
     let image_base = file.nt_headers().optional_header().image_base();
     let section_table = file.section_table();
-    let mut blocks = match file.data_directories().relocation_blocks(data, &section_table) {
+    let mut blocks = match file
+        .data_directories()
+        .relocation_blocks(data, &section_table)
+    {
         Ok(Some(iter)) => iter,
         Ok(None) => return Vec::new(),
         Err(err) => {
@@ -299,6 +544,77 @@ fn pe_reloc_kind(typ: u16) -> RelocKind {
         | pe::IMAGE_REL_BASED_HIGHADJ => RelocKind::Relative,
         _ => RelocKind::Other,
     }
+}
+
+/// Parse the `.pdata` exception directory (IMAGE_DIRECTORY_ENTRY_EXCEPTION)
+/// into [`RuntimeFunction`] entries, each with its UNWIND_INFO header decoded.
+fn parse_pdata<Pe>(file: &PeFile<Pe>, data: &[u8]) -> Vec<RuntimeFunction>
+where
+    Pe: ImageNtHeaders,
+{
+    let dir = match file
+        .data_directories()
+        .get(pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION)
+    {
+        Some(d) => d,
+        None => return Vec::new(),
+    };
+    let dir_data = match dir.data(data, &file.section_table()) {
+        Ok(d) => d,
+        Err(err) => {
+            tracing::debug!(?err, "PE exception directory unreadable");
+            return Vec::new();
+        }
+    };
+
+    let image_base = file.nt_headers().optional_header().image_base();
+
+    // Each RUNTIME_FUNCTION is 12 bytes: 3 × u32 (begin, end, unwind_info RVA).
+    let mut out = Vec::new();
+    for chunk in dir_data.chunks_exact(12) {
+        let begin_rva = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        let end_rva = u32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
+        let unwind_rva = u32::from_le_bytes([chunk[8], chunk[9], chunk[10], chunk[11]]);
+
+        if begin_rva == 0 && end_rva == 0 {
+            break;
+        }
+
+        let unwind_info = parse_xdata(file, data, unwind_rva);
+
+        out.push(RuntimeFunction {
+            begin_address: image_base + u64::from(begin_rva),
+            end_address: image_base + u64::from(end_rva),
+            unwind_info_address: image_base + u64::from(unwind_rva),
+            unwind_info,
+        });
+
+        if out.len() >= 65536 {
+            break;
+        }
+    }
+    out
+}
+
+/// Read the 4-byte UNWIND_INFO header at the given RVA.
+fn parse_xdata<Pe>(file: &PeFile<Pe>, _data: &[u8], unwind_rva: u32) -> Option<UnwindInfo>
+where
+    Pe: ImageNtHeaders,
+{
+    let (sec_rva, sec_data) = find_section_for_rva(file, u64::from(unwind_rva))?;
+    let offset = (u64::from(unwind_rva) - sec_rva) as usize;
+    if offset + 4 > sec_data.len() {
+        return None;
+    }
+    let b = &sec_data[offset..offset + 4];
+    Some(UnwindInfo {
+        version: b[0] & 0x07,
+        flags: b[0] >> 3,
+        size_of_prolog: b[1],
+        count_of_codes: b[2],
+        frame_register: b[3] & 0x0F,
+        frame_offset: b[3] >> 4,
+    })
 }
 
 /// Map the PE `IMAGE_FILE_MACHINE_*` value to our [`ArchId`].
@@ -540,7 +856,8 @@ mod tests {
         let opt_hdr_size: u16 = 112;
         buf[fh + 16..fh + 18].copy_from_slice(&opt_hdr_size.to_le_bytes());
         // Characteristics: IMAGE_FILE_EXECUTABLE_IMAGE | IMAGE_FILE_LARGE_ADDRESS_AWARE
-        let characteristics: u16 = pe::IMAGE_FILE_EXECUTABLE_IMAGE | pe::IMAGE_FILE_LARGE_ADDRESS_AWARE;
+        let characteristics: u16 =
+            pe::IMAGE_FILE_EXECUTABLE_IMAGE | pe::IMAGE_FILE_LARGE_ADDRESS_AWARE;
         buf[fh + 18..fh + 20].copy_from_slice(&characteristics.to_le_bytes());
 
         // ---- Optional Header (PE32+, 112 bytes) at nt+24 ----
@@ -577,9 +894,8 @@ mod tests {
         // PointerToRawData at sh+20 — section data starts at file offset 0x200
         buf[sh + 20..sh + 24].copy_from_slice(&0x200u32.to_le_bytes());
         // Characteristics at sh+36: MEM_READ | MEM_EXECUTE | CNT_CODE
-        let sec_flags: u32 = pe::IMAGE_SCN_MEM_READ
-            | pe::IMAGE_SCN_MEM_EXECUTE
-            | pe::IMAGE_SCN_CNT_CODE;
+        let sec_flags: u32 =
+            pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_MEM_EXECUTE | pe::IMAGE_SCN_CNT_CODE;
         buf[sh + 36..sh + 40].copy_from_slice(&sec_flags.to_le_bytes());
 
         // ---- Section data at 0x200 ----
@@ -621,7 +937,10 @@ mod tests {
             text.flags.contains(SectionFlags::READ),
             ".text should be readable"
         );
-        assert!(!text.flags.contains(SectionFlags::WRITE), ".text should not be writable");
+        assert!(
+            !text.flags.contains(SectionFlags::WRITE),
+            ".text should not be writable"
+        );
     }
 
     #[test]
@@ -720,9 +1039,8 @@ mod tests {
         buf[sh + 12..sh + 16].copy_from_slice(&0x1000u32.to_le_bytes()); // VirtualAddress
         buf[sh + 16..sh + 20].copy_from_slice(&0x200u32.to_le_bytes()); // SizeOfRawData
         buf[sh + 20..sh + 24].copy_from_slice(&0x200u32.to_le_bytes()); // PointerToRawData
-        let sec_flags: u32 = pe::IMAGE_SCN_MEM_READ
-            | pe::IMAGE_SCN_MEM_EXECUTE
-            | pe::IMAGE_SCN_CNT_CODE;
+        let sec_flags: u32 =
+            pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_MEM_EXECUTE | pe::IMAGE_SCN_CNT_CODE;
         buf[sh + 36..sh + 40].copy_from_slice(&sec_flags.to_le_bytes());
 
         // Section data at 0x200
@@ -759,10 +1077,7 @@ mod tests {
         let text = img
             .section_by_name(".text")
             .expect(".text section must exist");
-        assert!(
-            !text.data.is_empty(),
-            ".text should have data"
-        );
+        assert!(!text.data.is_empty(), ".text should have data");
     }
 
     #[test]
@@ -836,7 +1151,9 @@ mod tests {
         buf[sh2 + 16..sh2 + 20].copy_from_slice(&reloc_size.to_le_bytes());
         buf[sh2 + 20..sh2 + 24].copy_from_slice(&reloc_offset.to_le_bytes());
         buf[sh2 + 36..sh2 + 40].copy_from_slice(
-            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_MEM_DISCARDABLE | pe::IMAGE_SCN_CNT_INITIALIZED_DATA)
+            &(pe::IMAGE_SCN_MEM_READ
+                | pe::IMAGE_SCN_MEM_DISCARDABLE
+                | pe::IMAGE_SCN_CNT_INITIALIZED_DATA)
                 .to_le_bytes(),
         );
 
@@ -1093,5 +1410,107 @@ mod tests {
         assert!(img.section_by_name(".pdata").is_some(), ".pdata missing");
         assert!(img.section_by_name(".xdata").is_some(), ".xdata missing");
         assert!(img.section_by_name(".rdata").is_some(), ".rdata missing");
+    }
+
+    #[test]
+    fn test_pe_pdata_runtime_function_parsed() {
+        let pe = pe64_with_pdata_and_debug();
+        let img = PeLoader::load(&pe).expect("must parse");
+
+        assert_eq!(img.runtime_functions.len(), 1, "fixture has 1 RUNTIME_FUNCTION");
+
+        let rf = &img.runtime_functions[0];
+        let image_base: u64 = 0x0040_0000;
+        let text_rva: u64 = 0x1000;
+        let xdata_rva: u64 = 0x3000;
+
+        assert_eq!(rf.begin_address, image_base + text_rva);
+        assert_eq!(rf.end_address, image_base + text_rva + 0x10);
+        assert_eq!(rf.unwind_info_address, image_base + xdata_rva);
+    }
+
+    #[test]
+    fn test_pe_xdata_unwind_info_decoded() {
+        let pe = pe64_with_pdata_and_debug();
+        let img = PeLoader::load(&pe).expect("must parse");
+
+        let rf = &img.runtime_functions[0];
+        let ui = rf.unwind_info.as_ref().expect("UNWIND_INFO must be parsed");
+
+        assert_eq!(ui.version, 1);
+        assert_eq!(ui.flags, 0);
+        assert_eq!(ui.size_of_prolog, 4);
+        assert_eq!(ui.count_of_codes, 1);
+        assert_eq!(ui.frame_register, 0);
+        assert_eq!(ui.frame_offset, 0);
+    }
+
+    #[test]
+    fn test_pe_pdata_empty_when_no_exception_dir() {
+        let pe = minimal_pe64();
+        let img = PeLoader::load(&pe).expect("must parse");
+        assert!(img.runtime_functions.is_empty());
+    }
+
+    #[test]
+    fn test_pe_debug_codeview_rsds_parsed() {
+        let pe = pe64_with_pdata_and_debug();
+        let img = PeLoader::load(&pe).expect("must parse");
+
+        assert_eq!(img.debug_records.len(), 1, "fixture has 1 debug directory entry");
+
+        let rec = &img.debug_records[0];
+        assert_eq!(rec.typ, 2, "type should be IMAGE_DEBUG_TYPE_CODEVIEW");
+
+        let path = rec.pdb_path.as_deref().expect("RSDS should have pdb_path");
+        assert_eq!(path, "test.pdb");
+
+        let guid = rec.pdb_guid.expect("RSDS should have guid");
+        assert_eq!(
+            guid,
+            [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10]
+        );
+
+        let age = rec.pdb_age.expect("RSDS should have age");
+        assert_eq!(age, 1);
+    }
+
+    #[test]
+    fn test_pe_debug_empty_when_no_debug_dir() {
+        let pe = minimal_pe64();
+        let img = PeLoader::load(&pe).expect("must parse");
+        assert!(img.debug_records.is_empty());
+    }
+
+    #[test]
+    fn test_pe_load_config_security_cookie() {
+        let pe = pe64_with_pdata_and_debug();
+        let img = PeLoader::load(&pe).expect("must parse");
+
+        let lc = img.load_config.as_ref().expect("fixture has load config");
+
+        let image_base: u64 = 0x0040_0000;
+        let rdata_rva: u64 = 0x4000;
+        let expected_cookie = image_base + rdata_rva + 0x100;
+        assert_eq!(lc.security_cookie, expected_cookie);
+    }
+
+    #[test]
+    fn test_pe_load_config_none_when_absent() {
+        let pe = minimal_pe64();
+        let img = PeLoader::load(&pe).expect("must parse");
+        assert!(img.load_config.is_none());
+    }
+
+    #[test]
+    fn test_pe_load_config_cfg_fields_default_zero() {
+        let pe = pe64_with_pdata_and_debug();
+        let img = PeLoader::load(&pe).expect("must parse");
+
+        let lc = img.load_config.as_ref().expect("fixture has load config");
+        assert_eq!(lc.guard_cf_check, 0, "fixture has no CFG check pointer");
+        assert_eq!(lc.guard_cf_dispatch, 0, "fixture has no CFG dispatch pointer");
+        assert_eq!(lc.guard_flags, 0, "fixture has no guard flags");
+        assert!(lc.cfg_targets.is_empty(), "fixture has no CFG targets");
     }
 }

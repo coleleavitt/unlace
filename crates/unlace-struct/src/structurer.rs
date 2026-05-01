@@ -1418,12 +1418,13 @@ fn remove_labels_not_in(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
 /// fires for canonical counted loops even when the induction variable is
 /// referenced after the loop in the same scope.
 pub fn recover_for_loops(nodes: &mut Vec<HirNode>) {
+    let defs = collect_hir_defs(nodes);
     let mut i = 0;
     while i < nodes.len() {
         recover_for_loops_in_children(&mut nodes[i]);
         if i + 1 < nodes.len() {
             recover_for_loops_in_children(&mut nodes[i + 1]);
-            if let Some(replacement) = try_recover_for_at(nodes, i) {
+            if let Some(replacement) = try_recover_for_at(nodes, i, &defs) {
                 let after_i = nodes.split_off(i + 2);
                 nodes.truncate(i);
                 nodes.push(replacement);
@@ -1431,10 +1432,60 @@ pub fn recover_for_loops(nodes: &mut Vec<HirNode>) {
             }
         }
         // Aggressive: while(cond) { body; step } → for(; cond; step) without init
-        if let Some(replacement) = try_recover_for_no_init(&nodes[i]) {
+        if let Some(replacement) = try_recover_for_no_init(&nodes[i], &defs) {
             nodes[i] = replacement;
         }
         i += 1;
+    }
+}
+
+fn collect_hir_defs(nodes: &[HirNode]) -> BTreeMap<Varnode, IrInsn> {
+    let mut defs = BTreeMap::new();
+    collect_hir_defs_inner(nodes, &mut defs);
+    defs
+}
+
+fn collect_hir_defs_inner(nodes: &[HirNode], defs: &mut BTreeMap<Varnode, IrInsn>) {
+    for node in nodes {
+        match node {
+            HirNode::Statement(insn) => {
+                if let Some(out) = insn.output {
+                    if out.space != SpaceId::Const {
+                        defs.insert(out, insn.clone());
+                    }
+                }
+            }
+            HirNode::Block(children) => collect_hir_defs_inner(children, defs),
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_hir_defs_inner(then_body, defs);
+                if let Some(eb) = else_body {
+                    collect_hir_defs_inner(eb, defs);
+                }
+            }
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+                collect_hir_defs_inner(body, defs);
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (_, body, _) in cases {
+                    collect_hir_defs_inner(body, defs);
+                }
+                if let Some(default) = default {
+                    collect_hir_defs_inner(default, defs);
+                }
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_body,
+            } => {
+                collect_hir_defs_inner(try_body, defs);
+                collect_hir_defs_inner(catch_body, defs);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -1481,7 +1532,11 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
     }
 }
 
-fn try_recover_for_at(nodes: &[HirNode], idx: usize) -> Option<HirNode> {
+fn try_recover_for_at(
+    nodes: &[HirNode],
+    idx: usize,
+    defs: &BTreeMap<Varnode, IrInsn>,
+) -> Option<HirNode> {
     let init_insn = match nodes.get(idx)? {
         HirNode::Statement(insn) => insn.clone(),
         _ => return None,
@@ -1497,6 +1552,10 @@ fn try_recover_for_at(nodes: &[HirNode], idx: usize) -> Option<HirNode> {
         _ => return None,
     };
 
+    if !condition_mentions_counter(cond.base, &counter_base, defs) {
+        return None;
+    }
+
     let (update_insn, body_without_update) = extract_update(&body, &counter_base)?;
 
     if init_writes_counter_only(&init_insn, &counter_base).not_ok() {
@@ -1511,7 +1570,7 @@ fn try_recover_for_at(nodes: &[HirNode], idx: usize) -> Option<HirNode> {
     })
 }
 
-fn try_recover_for_no_init(node: &HirNode) -> Option<HirNode> {
+fn try_recover_for_no_init(node: &HirNode, defs: &BTreeMap<Varnode, IrInsn>) -> Option<HirNode> {
     let (cond, body) = match node {
         HirNode::While { cond, body } => (*cond, body.clone()),
         _ => return None,
@@ -1533,7 +1592,7 @@ fn try_recover_for_no_init(node: &HirNode) -> Option<HirNode> {
         return None;
     }
     // The step variable must relate to the condition variable
-    if counter != cond.base {
+    if !condition_mentions_counter(cond.base, &counter, defs) {
         return None;
     }
 
@@ -1545,6 +1604,28 @@ fn try_recover_for_no_init(node: &HirNode) -> Option<HirNode> {
         update: update_insn,
         body: new_body,
     })
+}
+
+fn condition_mentions_counter(
+    cond: Varnode,
+    counter: &Varnode,
+    defs: &BTreeMap<Varnode, IrInsn>,
+) -> bool {
+    if cond == *counter {
+        return true;
+    }
+    let Some(insn) = defs.get(&cond) else {
+        return true;
+    };
+    matches!(
+        insn.op,
+        IrOp::IntLess
+            | IrOp::IntSless
+            | IrOp::IntLessequal
+            | IrOp::IntSlessequal
+            | IrOp::IntEqual
+            | IrOp::IntNotequal
+    ) && insn.inputs.iter().any(|v| v == counter)
 }
 
 #[derive(Copy, Clone)]
@@ -2140,6 +2221,43 @@ mod tests {
                 .any(|v| v.space == SpaceId::Const && v.offset == 2);
             assert!(has_step, "update should reference the step constant");
         }
+    }
+
+    #[test]
+    fn test_for_loop_condition_compare_reads_induction_var() {
+        let i = Varnode::reg(0, 4);
+        let bound = Varnode::reg(8, 4);
+        let cond = Varnode::unique(0x200, 1);
+        let zero = Varnode::constant(0, 4);
+        let one = Varnode::constant(1, 4);
+
+        let cmp = IrInsn::with_output(IrOp::IntLess, cond, smallvec![i, bound], 0x1008);
+        let mut defs = BTreeMap::new();
+        defs.insert(cond, cmp);
+
+        assert!(condition_mentions_counter(cond, &i, &defs));
+        assert!(
+            condition_mentions_counter(cond, &bound, &BTreeMap::new()),
+            "missing def preserves legacy permissive recovery"
+        );
+
+        let mut hir_body = vec![
+            HirNode::Statement(copy_insn(i, zero, 0x1000)),
+            HirNode::While {
+                cond: ssa_of(cond),
+                body: vec![HirNode::Statement(add_insn(i, i, one, 0x1018))],
+            },
+        ];
+        let mut defs = BTreeMap::new();
+        defs.insert(
+            cond,
+            IrInsn::with_output(IrOp::IntLess, cond, smallvec![i, bound], 0x1008),
+        );
+
+        let replacement = try_recover_for_at(&hir_body, 0, &defs).expect("compare cond should recover");
+        hir_body.splice(0..2, [replacement]);
+
+        assert!(matches!(hir_body[0], HirNode::For { .. }));
     }
 
     #[test]

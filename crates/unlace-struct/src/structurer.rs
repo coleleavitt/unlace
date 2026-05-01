@@ -2388,6 +2388,42 @@ mod tests {
     }
 
     #[test]
+    fn test_for_loop_from_cmp_dec_jne_chain_shape() {
+        let reg = Varnode::reg(0, 4);
+        let cond = Varnode::unique(0x240, 1);
+        let zero = Varnode::constant(0, 4);
+        let one = Varnode::constant(1, 4);
+        let body_tmp = Varnode::unique(0x300, 4);
+
+        let mut hir_body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntNotequal,
+                cond,
+                smallvec![reg, zero],
+                0x1000,
+            )),
+            HirNode::While {
+                cond: ssa_of(cond),
+                body: vec![
+                    HirNode::Statement(copy_insn(body_tmp, reg, 0x1008)),
+                    HirNode::Statement(sub_insn(reg, reg, one, 0x1010)),
+                ],
+            },
+        ];
+
+        recover_for_loops(&mut hir_body);
+
+        match &hir_body[1] {
+            HirNode::For { init, update, body, .. } => {
+                assert!(init.is_none());
+                assert_eq!(update.output, Some(reg));
+                assert_eq!(body.len(), 1, "dec step should move to for update");
+            }
+            other => panic!("expected For, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn test_for_loop_counter_used_after_loop_still_recovers_for() {
         let i = Varnode::reg(0, 4);
         let printed = Varnode::reg(16, 4);

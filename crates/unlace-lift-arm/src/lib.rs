@@ -360,6 +360,42 @@ mod tests {
     }
 
     #[test]
+    fn arm64_ubfm_lifts_to_shift_and_mask() {
+        // UBFM/UBFX X0, X1, #4, #11  →  d3442c20
+        let result = lifter()
+            .lift_insn(&[0x20, 0x2c, 0x44, 0xd3], 0x1000)
+            .expect("should decode");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRight));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm64_sbfm_lifts_to_signed_extract() {
+        // SBFM/SXTB X2, X3, #0, #7  →  93401c62
+        let result = lifter()
+            .lift_insn(&[0x62, 0x1c, 0x40, 0x93], 0x1000)
+            .expect("should decode");
+        assert!(result
+            .ir_ops
+            .iter()
+            .any(|i| i.op == IrOp::IntSright || i.op == IrOp::IntSext));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm64_extr_lifts_to_shift_or() {
+        // EXTR X4, X5, X6, #16  →  93c640a4
+        let result = lifter()
+            .lift_insn(&[0xa4, 0x40, 0xc6, 0x93], 0x1000)
+            .expect("should decode");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRight));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
     fn test_no_panic_on_various() {
         let cases: Vec<&[u8]> = vec![
             &[0x1f, 0x20, 0x03, 0xd5], // NOP

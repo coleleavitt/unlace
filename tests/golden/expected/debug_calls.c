@@ -293,12 +293,25 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int abs_val(int x) {
+    int v6; // eax
     int v4; // edi
+    int v8; // temp
     long long result; // temp
+    unsigned int cond; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
-    if (1) { 0 = 0; }
+    // source: fixtures/src/calls.c:6
+    cond = *(_DWORD *)(0LL);
+    // source: fixtures/src/calls.c:6
+    v6 = cond;
+    v7 = cond;
+    v8 = v8;
+    cond = v8 < 0;
+    v9 = LOBYTE(cond);
+    v10 = v9;
+    v7 = v8;
+    if (!v9) { cond = v8; }
     return result;
 }
 typedef unsigned char _BYTE;
@@ -339,11 +352,18 @@ int max(int a, int b) {
     int v5; // esi
     int v4; // edi
     long long result; // temp
+    unsigned int v6; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
     *(_DWORD *)(0LL) = v5;
-    if (1) { 0 = 0; }
+    // source: fixtures/src/calls.c:7
+    v6 = *(_DWORD *)(0LL);
+    v6 = *(_DWORD *)(0LL);
+    v10 = LOBYTE(0);
+    v11 = v10;
+    v12 = v10;
+    if (!v10) { 0 = 0; }
     return result;
 }
 typedef unsigned char _BYTE;
@@ -384,10 +404,14 @@ int min(int a, int b) {
     int v5; // esi
     int v4; // edi
     long long result; // temp
+    unsigned int v6; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
     *(_DWORD *)(0LL) = v5;
+    // source: fixtures/src/calls.c:8
+    v6 = *(_DWORD *)(0LL);
+    v6 = *(_DWORD *)(0LL);
     return result;
 }
 typedef unsigned char _BYTE;

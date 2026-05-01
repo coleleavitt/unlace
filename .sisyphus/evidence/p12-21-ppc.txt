@@ -1,0 +1,9 @@
+func _start @ 0x10000100 {
+BB_0 [entry, exit]:
+  RETURN v264:i64
+}
+func ppc_branch @ 0x1000011c {
+BB_0 [entry, exit]:
+  RETURN v264:i64
+}
+exit: 0

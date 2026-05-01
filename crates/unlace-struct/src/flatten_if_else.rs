@@ -63,20 +63,14 @@ fn build_def_map(ssa: &SsaFunction) -> BTreeMap<SsaVarnode, IrInsn> {
     map
 }
 
-fn simplify_nodes(
-    nodes: Vec<HirNode>,
-    def_map: &BTreeMap<SsaVarnode, IrInsn>,
-) -> Vec<HirNode> {
+fn simplify_nodes(nodes: Vec<HirNode>, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> Vec<HirNode> {
     nodes
         .into_iter()
         .map(|n| simplify_node(n, def_map))
         .collect()
 }
 
-fn simplify_node(
-    node: HirNode,
-    def_map: &BTreeMap<SsaVarnode, IrInsn>,
-) -> HirNode {
+fn simplify_node(node: HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> HirNode {
     match node {
         HirNode::If {
             cond,
@@ -338,6 +332,7 @@ mod tests {
             foldable_exprs: BTreeSet::new(),
             panic_sites: BTreeMap::new(),
             noreturn: false,
+            composite_var_types: BTreeMap::new(),
         }
     }
 
@@ -346,7 +341,10 @@ mod tests {
     /// nested If is the *only* node in its else, never wrapped in Block.
     fn else_body_block_wrap_depth(node: &HirNode) -> usize {
         match node {
-            HirNode::If { else_body: Some(eb), .. } => {
+            HirNode::If {
+                else_body: Some(eb),
+                ..
+            } => {
                 let here = match &eb[..] {
                     [HirNode::Block(_)] => 1,
                     _ => 0,
@@ -375,7 +373,11 @@ mod tests {
         let mut hir = make_hir(vec![outer]);
         flatten_if_else_chains(&mut hir);
 
-        let HirNode::If { else_body: Some(eb), .. } = &hir.body[0] else {
+        let HirNode::If {
+            else_body: Some(eb),
+            ..
+        } = &hir.body[0]
+        else {
             panic!("expected If at top, got {:?}", hir.body[0]);
         };
         assert_eq!(eb.len(), 1, "else body should have a single child");
@@ -430,8 +432,20 @@ mod tests {
 
         assert_eq!(else_body_block_wrap_depth(&hir.body[0]), 0);
 
-        let HirNode::If { else_body: Some(eb1), .. } = &hir.body[0] else { panic!() };
-        let HirNode::If { else_body: Some(eb2), .. } = &eb1[0] else { panic!() };
+        let HirNode::If {
+            else_body: Some(eb1),
+            ..
+        } = &hir.body[0]
+        else {
+            panic!()
+        };
+        let HirNode::If {
+            else_body: Some(eb2),
+            ..
+        } = &eb1[0]
+        else {
+            panic!()
+        };
         assert!(matches!(&eb2[0], HirNode::If { .. }));
     }
 
@@ -451,7 +465,13 @@ mod tests {
         let mut hir = make_hir(vec![outer.clone()]);
         flatten_if_else_chains(&mut hir);
 
-        let HirNode::If { else_body: Some(eb), .. } = &hir.body[0] else { panic!() };
+        let HirNode::If {
+            else_body: Some(eb),
+            ..
+        } = &hir.body[0]
+        else {
+            panic!()
+        };
         assert_eq!(eb.len(), 2, "two-element else must stay multi-stmt");
     }
 
@@ -550,9 +570,6 @@ mod tests {
         let def_map: BTreeMap<SsaVarnode, IrInsn> = BTreeMap::new();
         let result = simplify_node(outer.clone(), &def_map);
 
-        assert_eq!(
-            result, outer,
-            "unrelated conditions must remain untouched"
-        );
+        assert_eq!(result, outer, "unrelated conditions must remain untouched");
     }
 }

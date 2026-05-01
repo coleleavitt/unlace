@@ -144,10 +144,7 @@ struct IfChain {
 /// Try to extract an if-else-if chain from a node.
 ///
 /// Returns `None` if the node isn't an eligible if-chain.
-fn try_extract_chain(
-    node: &HirNode,
-    def_map: &BTreeMap<SsaVarnode, IrInsn>,
-) -> Option<IfChain> {
+fn try_extract_chain(node: &HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> Option<IfChain> {
     let mut arms = Vec::new();
     let mut current = node;
     let mut switch_base: Option<Varnode> = None;
@@ -155,7 +152,11 @@ fn try_extract_chain(
 
     loop {
         match current {
-            HirNode::If { cond, then_body, else_body } => {
+            HirNode::If {
+                cond,
+                then_body,
+                else_body,
+            } => {
                 let eq = extract_equality(cond, def_map)?;
 
                 // Check that the expression base varnode is the same across
@@ -225,17 +226,14 @@ fn try_extract_chain(
 // HIR rewriting
 // ---------------------------------------------------------------------------
 
-fn rewrite_nodes(
-    nodes: Vec<HirNode>,
-    def_map: &BTreeMap<SsaVarnode, IrInsn>,
-) -> Vec<HirNode> {
-    nodes.into_iter().map(|n| rewrite_node(n, def_map)).collect()
+fn rewrite_nodes(nodes: Vec<HirNode>, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> Vec<HirNode> {
+    nodes
+        .into_iter()
+        .map(|n| rewrite_node(n, def_map))
+        .collect()
 }
 
-fn rewrite_node(
-    node: HirNode,
-    def_map: &BTreeMap<SsaVarnode, IrInsn>,
-) -> HirNode {
+fn rewrite_node(node: HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> HirNode {
     // First, try to convert this node if it's an if-chain.
     if let Some(chain) = try_extract_chain(&node, def_map) {
         let cases = chain
@@ -263,7 +261,11 @@ fn rewrite_node(
     match node {
         HirNode::Block(children) => HirNode::Block(rewrite_nodes(children, def_map)),
 
-        HirNode::If { cond, then_body, else_body } => HirNode::If {
+        HirNode::If {
+            cond,
+            then_body,
+            else_body,
+        } => HirNode::If {
             cond,
             then_body: rewrite_nodes(then_body, def_map),
             else_body: else_body.map(|e| rewrite_nodes(e, def_map)),
@@ -279,7 +281,11 @@ fn rewrite_node(
             cond,
         },
 
-        HirNode::Switch { cond, cases, default } => HirNode::Switch {
+        HirNode::Switch {
+            cond,
+            cases,
+            default,
+        } => HirNode::Switch {
             cond,
             cases: cases
                 .into_iter()
@@ -288,14 +294,22 @@ fn rewrite_node(
             default: default.map(|d| rewrite_nodes(d, def_map)),
         },
 
-        HirNode::For { init, cond, update, body } => HirNode::For {
+        HirNode::For {
+            init,
+            cond,
+            update,
+            body,
+        } => HirNode::For {
             init,
             cond,
             update,
             body: rewrite_nodes(body, def_map),
         },
 
-        HirNode::TryCatch { try_body, catch_body } => HirNode::TryCatch {
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => HirNode::TryCatch {
             try_body: rewrite_nodes(try_body, def_map),
             catch_body: rewrite_nodes(catch_body, def_map),
         },
@@ -335,14 +349,13 @@ mod tests {
             foldable_exprs: BTreeSet::new(),
             panic_sites: BTreeMap::new(),
             noreturn: false,
+            composite_var_types: BTreeMap::new(),
         }
     }
 
     /// Build a minimal def_map that maps condition SsaVarnodes to IntEqual
     /// instructions comparing a given expression varnode against a constant.
-    fn make_def_map(
-        entries: Vec<(SsaVarnode, Varnode, u64)>,
-    ) -> BTreeMap<SsaVarnode, IrInsn> {
+    fn make_def_map(entries: Vec<(SsaVarnode, Varnode, u64)>) -> BTreeMap<SsaVarnode, IrInsn> {
         let mut map = BTreeMap::new();
         for (cond_sv, expr_vn, const_val) in entries {
             // The IntEqual instruction: output is the cond_sv's base, inputs
@@ -357,7 +370,10 @@ mod tests {
 
             // Also ensure the expression varnode has a def_map entry (e.g.,
             // defined by a Copy, so it's not a call/load).
-            let expr_sv = SsaVarnode { base: expr_vn, version: 0 };
+            let expr_sv = SsaVarnode {
+                base: expr_vn,
+                version: 0,
+            };
             map.entry(expr_sv).or_insert_with(|| {
                 IrInsn::with_output(
                     IrOp::Copy,
@@ -407,18 +423,18 @@ mod tests {
             }]),
         };
 
-        let def_map = make_def_map(vec![
-            (cond1, x, 1),
-            (cond2, x, 2),
-            (cond3, x, 3),
-        ]);
+        let def_map = make_def_map(vec![(cond1, x, 1), (cond2, x, 2), (cond3, x, 3)]);
 
         let mut func = make_hir(vec![if_chain]);
         func.body = rewrite_nodes(std::mem::take(&mut func.body), &def_map);
 
         assert_eq!(func.body.len(), 1);
         match &func.body[0] {
-            HirNode::Switch { cond, cases, default } => {
+            HirNode::Switch {
+                cond,
+                cases,
+                default,
+            } => {
                 // The cond should have the same base as x.
                 assert_eq!(cond.base, x);
                 assert_eq!(cases.len(), 3);
@@ -497,10 +513,7 @@ mod tests {
             }]),
         };
 
-        let def_map = make_def_map(vec![
-            (cond1, x, 1),
-            (cond2, x, 2),
-        ]);
+        let def_map = make_def_map(vec![(cond1, x, 1), (cond2, x, 2)]);
 
         let mut func = make_hir(vec![if_chain.clone()]);
         func.body = rewrite_nodes(std::mem::take(&mut func.body), &def_map);
@@ -541,18 +554,18 @@ mod tests {
             }]),
         };
 
-        let def_map = make_def_map(vec![
-            (cond1, x, 1),
-            (cond2, x, 2),
-            (cond3, x, 3),
-        ]);
+        let def_map = make_def_map(vec![(cond1, x, 1), (cond2, x, 2), (cond3, x, 3)]);
 
         let mut func = make_hir(vec![if_chain]);
         func.body = rewrite_nodes(std::mem::take(&mut func.body), &def_map);
 
         assert_eq!(func.body.len(), 1);
         match &func.body[0] {
-            HirNode::Switch { cond, cases, default } => {
+            HirNode::Switch {
+                cond,
+                cases,
+                default,
+            } => {
                 assert_eq!(cond.base, x);
                 assert_eq!(cases.len(), 3);
                 assert_eq!(cases[0].0, SwitchCase::Value(1));

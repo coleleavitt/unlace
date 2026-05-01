@@ -61,6 +61,7 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
             })
             .collect(),
         noreturn: func.noreturn,
+        composite_var_types: func.composite_var_types.clone(),
     })
 }
 
@@ -87,9 +88,7 @@ pub fn structure_with_landing_pads(
 /// Without this pre-pass, a shared return block fed by N predecessors collapses
 /// into a single `HirNode::Return` after the if/else, hiding the fact that
 /// the source had N early-return statements.
-pub fn structure_preserve_returns(
-    func: &mut SsaFunction,
-) -> Result<HirFunction, StructureError> {
+pub fn structure_preserve_returns(func: &mut SsaFunction) -> Result<HirFunction, StructureError> {
     eager_returns(func);
     structure(func)
 }
@@ -123,21 +122,23 @@ fn wrap_try_catch(
     landing_pad_addrs: &BTreeSet<u64>,
     func: &SsaFunction,
 ) -> Vec<HirNode> {
-    let split_idx = nodes.iter().position(|node| {
-        node_starts_at_landing_pad(node, landing_pad_addrs)
-    });
+    let split_idx = nodes
+        .iter()
+        .position(|node| node_starts_at_landing_pad(node, landing_pad_addrs));
 
     let Some(idx) = split_idx else {
-        return nodes.into_iter().map(|n| {
-            recurse_try_catch_children(n, landing_pad_addrs, func)
-        }).collect();
+        return nodes
+            .into_iter()
+            .map(|n| recurse_try_catch_children(n, landing_pad_addrs, func))
+            .collect();
     };
 
     let (try_nodes, catch_and_rest) = nodes.split_at(idx);
 
-    let catch_end = catch_and_rest.iter().position(|node| {
-        !node_starts_at_landing_pad(node, landing_pad_addrs)
-    }).unwrap_or(catch_and_rest.len());
+    let catch_end = catch_and_rest
+        .iter()
+        .position(|node| !node_starts_at_landing_pad(node, landing_pad_addrs))
+        .unwrap_or(catch_and_rest.len());
 
     let try_body: Vec<HirNode> = try_nodes.to_vec();
     let catch_body: Vec<HirNode> = catch_and_rest[..catch_end].to_vec();
@@ -147,7 +148,10 @@ fn wrap_try_catch(
     if try_body.is_empty() {
         result.extend(catch_body);
     } else {
-        result.push(HirNode::TryCatch { try_body, catch_body });
+        result.push(HirNode::TryCatch {
+            try_body,
+            catch_body,
+        });
     }
 
     if !rest.is_empty() {
@@ -157,17 +161,12 @@ fn wrap_try_catch(
     result
 }
 
-fn node_starts_at_landing_pad(
-    node: &HirNode,
-    landing_pad_addrs: &BTreeSet<u64>,
-) -> bool {
+fn node_starts_at_landing_pad(node: &HirNode, landing_pad_addrs: &BTreeSet<u64>) -> bool {
     match node {
         HirNode::Statement(insn) => landing_pad_addrs.contains(&insn.addr),
-        HirNode::Block(children) => {
-            children.first().is_some_and(|n| {
-                node_starts_at_landing_pad(n, landing_pad_addrs)
-            })
-        }
+        HirNode::Block(children) => children
+            .first()
+            .is_some_and(|n| node_starts_at_landing_pad(n, landing_pad_addrs)),
         _ => false,
     }
 }
@@ -181,48 +180,53 @@ fn recurse_try_catch_children(
         HirNode::Block(children) => {
             HirNode::Block(wrap_try_catch(children, landing_pad_addrs, func))
         }
-        HirNode::If { cond, then_body, else_body } => {
-            HirNode::If {
-                cond,
-                then_body: wrap_try_catch(then_body, landing_pad_addrs, func),
-                else_body: else_body.map(|eb| wrap_try_catch(eb, landing_pad_addrs, func)),
-            }
-        }
-        HirNode::While { cond, body } => {
-            HirNode::While {
-                cond,
-                body: wrap_try_catch(body, landing_pad_addrs, func),
-            }
-        }
-        HirNode::DoWhile { body, cond } => {
-            HirNode::DoWhile {
-                body: wrap_try_catch(body, landing_pad_addrs, func),
-                cond,
-            }
-        }
-        HirNode::For { init, cond, update, body } => {
-            HirNode::For {
-                init,
-                cond,
-                update,
-                body: wrap_try_catch(body, landing_pad_addrs, func),
-            }
-        }
-        HirNode::Switch { cond, cases, default } => {
-            HirNode::Switch {
-                cond,
-                cases: cases.into_iter().map(|(c, body, ft)| {
-                    (c, wrap_try_catch(body, landing_pad_addrs, func), ft)
-                }).collect(),
-                default: default.map(|d| wrap_try_catch(d, landing_pad_addrs, func)),
-            }
-        }
-        HirNode::TryCatch { try_body, catch_body } => {
-            HirNode::TryCatch {
-                try_body: wrap_try_catch(try_body, landing_pad_addrs, func),
-                catch_body: wrap_try_catch(catch_body, landing_pad_addrs, func),
-            }
-        }
+        HirNode::If {
+            cond,
+            then_body,
+            else_body,
+        } => HirNode::If {
+            cond,
+            then_body: wrap_try_catch(then_body, landing_pad_addrs, func),
+            else_body: else_body.map(|eb| wrap_try_catch(eb, landing_pad_addrs, func)),
+        },
+        HirNode::While { cond, body } => HirNode::While {
+            cond,
+            body: wrap_try_catch(body, landing_pad_addrs, func),
+        },
+        HirNode::DoWhile { body, cond } => HirNode::DoWhile {
+            body: wrap_try_catch(body, landing_pad_addrs, func),
+            cond,
+        },
+        HirNode::For {
+            init,
+            cond,
+            update,
+            body,
+        } => HirNode::For {
+            init,
+            cond,
+            update,
+            body: wrap_try_catch(body, landing_pad_addrs, func),
+        },
+        HirNode::Switch {
+            cond,
+            cases,
+            default,
+        } => HirNode::Switch {
+            cond,
+            cases: cases
+                .into_iter()
+                .map(|(c, body, ft)| (c, wrap_try_catch(body, landing_pad_addrs, func), ft))
+                .collect(),
+            default: default.map(|d| wrap_try_catch(d, landing_pad_addrs, func)),
+        },
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => HirNode::TryCatch {
+            try_body: wrap_try_catch(try_body, landing_pad_addrs, func),
+            catch_body: wrap_try_catch(catch_body, landing_pad_addrs, func),
+        },
         other => other,
     }
 }
@@ -446,7 +450,11 @@ impl<'a> StructureCtx<'a> {
 
         let join = self.find_switch_join(bid, &targets);
 
-        let num_cases = if targets.len() > 2 { targets.len() - 1 } else { targets.len() };
+        let num_cases = if targets.len() > 2 {
+            targets.len() - 1
+        } else {
+            targets.len()
+        };
         let mut cases = Vec::new();
         let mut default_body = None;
         for (i, &tgt) in targets.iter().enumerate() {
@@ -693,7 +701,11 @@ impl<'a> StructureCtx<'a> {
         let then_body = self.structure_until(true_blk, join);
         let else_body = self.structure_until(false_blk, join);
 
-        let else_body = if else_body.is_empty() { None } else { Some(else_body) };
+        let else_body = if else_body.is_empty() {
+            None
+        } else {
+            Some(else_body)
+        };
 
         let if_node = HirNode::If {
             cond,
@@ -733,7 +745,11 @@ impl<'a> StructureCtx<'a> {
         // While: header has CBRANCH (exit test at top).
         // DoWhile: header has no exit test, latch has CBRANCH.
         let header_has_cbranch = self.block_has_cbranch(header);
-        let single_latch = if latches.len() == 1 { Some(latches[0]) } else { None };
+        let single_latch = if latches.len() == 1 {
+            Some(latches[0])
+        } else {
+            None
+        };
         let latch_has_cbranch = single_latch.is_some_and(|l| self.block_has_cbranch(l));
 
         if header_has_cbranch {
@@ -797,7 +813,10 @@ impl<'a> StructureCtx<'a> {
                         body_nodes.extend(inner);
                     }
                 }
-                return Some(HirNode::While { cond, body: body_nodes });
+                return Some(HirNode::While {
+                    cond,
+                    body: body_nodes,
+                });
             }
 
             let cond = self.find_cbranch_cond(latch);
@@ -974,8 +993,7 @@ impl<'a> StructureCtx<'a> {
             let non_back_succs: Vec<BlockId> = edges
                 .iter()
                 .filter(|(tgt, _)| {
-                    !self.synthetic.contains(tgt)
-                        && !self.back_edges.contains(&(bid, *tgt))
+                    !self.synthetic.contains(tgt) && !self.back_edges.contains(&(bid, *tgt))
                 })
                 .map(|(tgt, _)| *tgt)
                 .collect();
@@ -1067,10 +1085,18 @@ impl<'a> StructureCtx<'a> {
     fn find_cbranch_cond(&self, bid: BlockId) -> SsaVarnode {
         // The CBRANCH condition is typically in input slot 1.
         // Try to resolve it from the var_map; fall back to a synthetic varnode.
-        if let Some(sv) = self.func.var_map.get(&(bid, self.cbranch_index(bid), VarnodeSlot::Input(1))) {
+        if let Some(sv) =
+            self.func
+                .var_map
+                .get(&(bid, self.cbranch_index(bid), VarnodeSlot::Input(1)))
+        {
             return *sv;
         }
-        if let Some(sv) = self.func.var_map.get(&(bid, self.cbranch_index(bid), VarnodeSlot::Input(0))) {
+        if let Some(sv) =
+            self.func
+                .var_map
+                .get(&(bid, self.cbranch_index(bid), VarnodeSlot::Input(0)))
+        {
             return *sv;
         }
         // Fallback: synthetic unknown condition.
@@ -1132,7 +1158,9 @@ impl<'a> StructureCtx<'a> {
                     }
                 }
                 EdgeKind::ConditionalFalse => {
-                    if body_entry.is_none() && (dominates(&self.func.dom_tree, header, *tgt) || *tgt == header) {
+                    if body_entry.is_none()
+                        && (dominates(&self.func.dom_tree, header, *tgt) || *tgt == header)
+                    {
                         body_entry = Some(*tgt);
                     } else {
                         exit = Some(*tgt);
@@ -1261,11 +1289,7 @@ impl<'a> StructureCtx<'a> {
 }
 
 /// Returns true if `a` dominates `b` in the dominator tree.
-fn dominates(
-    dom_tree: &unlace_ir::ssa::DominatorTree,
-    a: BlockId,
-    b: BlockId,
-) -> bool {
+fn dominates(dom_tree: &unlace_ir::ssa::DominatorTree, a: BlockId, b: BlockId) -> bool {
     if a == b {
         return true;
     }
@@ -1311,7 +1335,11 @@ fn collect_used_labels(nodes: &[HirNode], used: &mut BTreeSet<LabelId>) {
                 used.insert(*label);
             }
             HirNode::Block(inner) => collect_used_labels(inner, used),
-            HirNode::If { then_body, else_body, .. } => {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 collect_used_labels(then_body, used);
                 if let Some(eb) = else_body {
                     collect_used_labels(eb, used);
@@ -1329,7 +1357,10 @@ fn collect_used_labels(nodes: &[HirNode], used: &mut BTreeSet<LabelId>) {
                     collect_used_labels(d, used);
                 }
             }
-            HirNode::TryCatch { try_body, catch_body } => {
+            HirNode::TryCatch {
+                try_body,
+                catch_body,
+            } => {
                 collect_used_labels(try_body, used);
                 collect_used_labels(catch_body, used);
             }
@@ -1346,7 +1377,11 @@ fn remove_labels_not_in(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
     for n in nodes.iter_mut() {
         match n {
             HirNode::Block(inner) => remove_labels_not_in(inner, used),
-            HirNode::If { then_body, else_body, .. } => {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 remove_labels_not_in(then_body, used);
                 if let Some(eb) = else_body {
                     remove_labels_not_in(eb, used);
@@ -1364,7 +1399,10 @@ fn remove_labels_not_in(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
                     remove_labels_not_in(d, used);
                 }
             }
-            HirNode::TryCatch { try_body, catch_body } => {
+            HirNode::TryCatch {
+                try_body,
+                catch_body,
+            } => {
                 remove_labels_not_in(try_body, used);
                 remove_labels_not_in(catch_body, used);
             }
@@ -1399,7 +1437,11 @@ pub fn recover_for_loops(nodes: &mut Vec<HirNode>) {
 fn recover_for_loops_in_children(node: &mut HirNode) {
     match node {
         HirNode::Block(children) => recover_for_loops(children),
-        HirNode::If { then_body, else_body, .. } => {
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
             recover_for_loops(then_body);
             if let Some(eb) = else_body {
                 recover_for_loops(eb);
@@ -1417,7 +1459,10 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
                 recover_for_loops(def);
             }
         }
-        HirNode::TryCatch { try_body, catch_body } => {
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => {
             recover_for_loops(try_body);
             recover_for_loops(catch_body);
         }
@@ -1500,7 +1545,9 @@ fn init_writes_counter_only(insn: &IrInsn, counter: &Varnode) -> InitCheck {
 }
 
 fn extract_update(body: &[HirNode], counter: &Varnode) -> Option<(IrInsn, Vec<HirNode>)> {
-    let last_idx = body.iter().rposition(|n| matches!(n, HirNode::Statement(_)))?;
+    let last_idx = body
+        .iter()
+        .rposition(|n| matches!(n, HirNode::Statement(_)))?;
     let update_insn = match &body[last_idx] {
         HirNode::Statement(insn) => insn.clone(),
         _ => return None,
@@ -1524,10 +1571,7 @@ fn is_counter_update_op(insn: &IrInsn, counter: &Varnode) -> bool {
     match insn.op {
         IrOp::IntAdd | IrOp::IntSub => {
             let reads_counter = insn.inputs.iter().any(|v| v == counter);
-            let has_step_const = insn
-                .inputs
-                .iter()
-                .any(|v| v.space == SpaceId::Const);
+            let has_step_const = insn.inputs.iter().any(|v| v.space == SpaceId::Const);
             reads_counter && has_step_const
         }
         _ => false,
@@ -1535,16 +1579,20 @@ fn is_counter_update_op(insn: &IrInsn, counter: &Varnode) -> bool {
 }
 
 fn counter_used_after(counter: &Varnode, following: &[HirNode]) -> bool {
-    following.iter().any(|n| node_references_varnode(n, counter))
+    following
+        .iter()
+        .any(|n| node_references_varnode(n, counter))
 }
 
 fn node_references_varnode(node: &HirNode, target: &Varnode) -> bool {
     match node {
         HirNode::Statement(insn) => insn_references_varnode(insn, target),
-        HirNode::Block(children) => {
-            children.iter().any(|c| node_references_varnode(c, target))
-        }
-        HirNode::If { cond, then_body, else_body } => {
+        HirNode::Block(children) => children.iter().any(|c| node_references_varnode(c, target)),
+        HirNode::If {
+            cond,
+            then_body,
+            else_body,
+        } => {
             cond.base == *target
                 || then_body.iter().any(|c| node_references_varnode(c, target))
                 || else_body
@@ -1552,41 +1600,62 @@ fn node_references_varnode(node: &HirNode, target: &Varnode) -> bool {
                     .is_some_and(|eb| eb.iter().any(|c| node_references_varnode(c, target)))
         }
         HirNode::While { cond, body } => {
-            cond.base == *target
-                || body.iter().any(|c| node_references_varnode(c, target))
+            cond.base == *target || body.iter().any(|c| node_references_varnode(c, target))
         }
         HirNode::DoWhile { body, cond } => {
-            cond.base == *target
-                || body.iter().any(|c| node_references_varnode(c, target))
+            cond.base == *target || body.iter().any(|c| node_references_varnode(c, target))
         }
-        HirNode::For { init, cond, update, body } => {
+        HirNode::For {
+            init,
+            cond,
+            update,
+            body,
+        } => {
             insn_references_varnode(init, target)
                 || cond.base == *target
                 || insn_references_varnode(update, target)
                 || body.iter().any(|c| node_references_varnode(c, target))
         }
-        HirNode::Switch { cond, cases, default } => {
+        HirNode::Switch {
+            cond,
+            cases,
+            default,
+        } => {
             cond.base == *target
-                || cases.iter().any(|(_, b, _)| {
-                    b.iter().any(|c| node_references_varnode(c, target))
-                })
+                || cases
+                    .iter()
+                    .any(|(_, b, _)| b.iter().any(|c| node_references_varnode(c, target)))
                 || default
                     .as_ref()
                     .is_some_and(|d| d.iter().any(|c| node_references_varnode(c, target)))
         }
         HirNode::Return(Some(sv)) => sv.base == *target,
-        HirNode::Ternary { cond, then_insn, else_insn, output } => {
+        HirNode::Ternary {
+            cond,
+            then_insn,
+            else_insn,
+            output,
+        } => {
             cond.base == *target
                 || output == target
                 || insn_references_varnode(then_insn, target)
                 || insn_references_varnode(else_insn, target)
         }
-        HirNode::TryCatch { try_body, catch_body } => {
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => {
             try_body.iter().any(|c| node_references_varnode(c, target))
-                || catch_body.iter().any(|c| node_references_varnode(c, target))
+                || catch_body
+                    .iter()
+                    .any(|c| node_references_varnode(c, target))
         }
-        HirNode::Return(None) | HirNode::Goto(_) | HirNode::Label(_)
-        | HirNode::TailCall { .. } | HirNode::Continue | HirNode::Break => false,
+        HirNode::Return(None)
+        | HirNode::Goto(_)
+        | HirNode::Label(_)
+        | HirNode::TailCall { .. }
+        | HirNode::Continue
+        | HirNode::Break => false,
     }
 }
 
@@ -1612,16 +1681,15 @@ mod tests {
     }
 
     fn arith_insn(output: Varnode, inputs: &[Varnode], addr: u64) -> IrInsn {
-        IrInsn::with_output(
-            IrOp::IntAdd,
-            output,
-            smallvec![inputs[0], inputs[1]],
-            addr,
-        )
+        IrInsn::with_output(IrOp::IntAdd, output, smallvec![inputs[0], inputs[1]], addr)
     }
 
     fn cbranch_insn(cond: Varnode, addr: u64) -> IrInsn {
-        IrInsn::without_output(IrOp::Cbranch, smallvec![Varnode::constant(0, 8), cond], addr)
+        IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![Varnode::constant(0, 8), cond],
+            addr,
+        )
     }
 
     #[test]
@@ -1658,7 +1726,10 @@ mod tests {
                 HirNode::If { .. } | HirNode::While { .. } | HirNode::Goto(_)
             )
         });
-        assert!(!has_control, "linear function should have no control flow nodes");
+        assert!(
+            !has_control,
+            "linear function should have no control flow nodes"
+        );
     }
 
     #[test]
@@ -1707,7 +1778,10 @@ mod tests {
                 _ => false,
             })
         }
-        assert!(contains_if(&hir.body), "diamond CFG should produce an If node");
+        assert!(
+            contains_if(&hir.body),
+            "diamond CFG should produce an If node"
+        );
     }
 
     #[test]
@@ -1749,7 +1823,10 @@ mod tests {
                 _ => false,
             })
         }
-        assert!(contains_while(&hir.body), "loop CFG should produce a While node");
+        assert!(
+            contains_while(&hir.body),
+            "loop CFG should produce a While node"
+        );
     }
 
     #[test]
@@ -1792,7 +1869,10 @@ mod tests {
         assert_eq!(hir.name, "irreducible");
 
         // The function body should not be empty.
-        assert!(!hir.body.is_empty(), "irreducible CFG should produce some HIR nodes");
+        assert!(
+            !hir.body.is_empty(),
+            "irreducible CFG should produce some HIR nodes"
+        );
     }
 
     #[test]
@@ -1837,7 +1917,10 @@ mod tests {
                 _ => false,
             })
         }
-        assert!(contains_switch(&hir.body), "BRANCHIND with 3 targets should produce a Switch node");
+        assert!(
+            contains_switch(&hir.body),
+            "BRANCHIND with 3 targets should produce a Switch node"
+        );
     }
 
     #[test]
@@ -1888,10 +1971,16 @@ mod tests {
                 _ => false,
             })
         }
-        assert!(contains_switch(&hir.body), "switch with join point should produce Switch node");
+        assert!(
+            contains_switch(&hir.body),
+            "switch with join point should produce Switch node"
+        );
 
         let has_return = hir.body.iter().any(|n| matches!(n, HirNode::Return(_)));
-        assert!(has_return, "code after the switch join should be structured");
+        assert!(
+            has_return,
+            "code after the switch join should be structured"
+        );
     }
 
     #[test]
@@ -1919,7 +2008,10 @@ mod tests {
                 _ => false,
             })
         }
-        assert!(!contains_switch(&hir.body), "single-target BRANCHIND should NOT produce a Switch");
+        assert!(
+            !contains_switch(&hir.body),
+            "single-target BRANCHIND should NOT produce a Switch"
+        );
     }
 
     #[test]
@@ -1939,31 +2031,48 @@ mod tests {
         let mut bb0 = BasicBlock::new(BlockId(0));
         // unique_scaled = INT_MULT(r8, 4)
         bb0.insns.push(IrInsn::with_output(
-            IrOp::IntMult, unique_scaled, smallvec![r8, c4], 0x8000,
+            IrOp::IntMult,
+            unique_scaled,
+            smallvec![r8, c4],
+            0x8000,
         ));
         // unique_addr = INT_ADD(table_base, unique_scaled)
         bb0.insns.push(IrInsn::with_output(
-            IrOp::IntAdd, unique_addr, smallvec![table_base, unique_scaled], 0x8004,
+            IrOp::IntAdd,
+            unique_addr,
+            smallvec![table_base, unique_scaled],
+            0x8004,
         ));
         // unique_target = LOAD(ram_space, unique_addr)
         bb0.insns.push(IrInsn::with_output(
-            IrOp::Load, unique_target, smallvec![ram_space, unique_addr], 0x8008,
+            IrOp::Load,
+            unique_target,
+            smallvec![ram_space, unique_addr],
+            0x8008,
         ));
         // BRANCHIND(unique_target)
         bb0.insns.push(IrInsn::without_output(
-            IrOp::Branchind, smallvec![unique_target], 0x800c,
+            IrOp::Branchind,
+            smallvec![unique_target],
+            0x800c,
         ));
         bb0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut bb1 = BasicBlock::new(BlockId(1));
         bb1.insns.push(IrInsn::with_output(
-            IrOp::IntAdd, r0, smallvec![r8, Varnode::constant(1, 8)], 0x8010,
+            IrOp::IntAdd,
+            r0,
+            smallvec![r8, Varnode::constant(1, 8)],
+            0x8010,
         ));
         bb1.insns.push(ctrl_insn(IrOp::Return, 0x8014));
 
         let mut bb2 = BasicBlock::new(BlockId(2));
         bb2.insns.push(IrInsn::with_output(
-            IrOp::IntAdd, r0, smallvec![r8, Varnode::constant(2, 8)], 0x8020,
+            IrOp::IntAdd,
+            r0,
+            smallvec![r8, Varnode::constant(2, 8)],
+            0x8020,
         ));
         bb2.insns.push(ctrl_insn(IrOp::Return, 0x8024));
 
@@ -2011,7 +2120,10 @@ mod tests {
     }
 
     fn ssa_of(vn: Varnode) -> SsaVarnode {
-        SsaVarnode { base: vn, version: 0 }
+        SsaVarnode {
+            base: vn,
+            version: 0,
+        }
     }
 
     #[test]
@@ -2035,9 +2147,18 @@ mod tests {
 
         recover_for_loops(&mut hir_body);
 
-        assert_eq!(hir_body.len(), 1, "init+while should collapse to single For");
+        assert_eq!(
+            hir_body.len(),
+            1,
+            "init+while should collapse to single For"
+        );
         match &hir_body[0] {
-            HirNode::For { init, update, body, cond } => {
+            HirNode::For {
+                init,
+                update,
+                body,
+                cond,
+            } => {
                 assert_eq!(init.op, IrOp::Copy);
                 assert_eq!(init.output, Some(i));
                 assert_eq!(update.op, IrOp::IntAdd);
@@ -2068,7 +2189,10 @@ mod tests {
         assert!(matches!(hir_body[0], HirNode::For { .. }));
         if let HirNode::For { update, .. } = &hir_body[0] {
             assert_eq!(update.op, IrOp::IntAdd);
-            let has_step = update.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 2);
+            let has_step = update
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 2);
             assert!(has_step, "update should reference the step constant");
         }
     }
@@ -2310,8 +2434,14 @@ mod tests {
             })
         }
 
-        assert!(has_while(&hir_while.body), "while-loop should produce While");
-        assert!(!has_do_while(&hir_while.body), "while-loop should NOT produce DoWhile");
+        assert!(
+            has_while(&hir_while.body),
+            "while-loop should produce While"
+        );
+        assert!(
+            !has_do_while(&hir_while.body),
+            "while-loop should NOT produce DoWhile"
+        );
 
         let mut dw_func = Function::new("do_while_fn", BlockId(0), 0xC000);
         let mut bb0 = BasicBlock::new(BlockId(0));
@@ -2334,8 +2464,15 @@ mod tests {
         let ssa_dw = build_ssa(dw_func);
         let hir_dw = structure(&ssa_dw).expect("do-while structuring should succeed");
 
-        assert!(has_do_while(&hir_dw.body), "do-while should produce DoWhile, got: {:#?}", hir_dw.body);
-        assert!(!has_while(&hir_dw.body), "do-while should NOT produce While");
+        assert!(
+            has_do_while(&hir_dw.body),
+            "do-while should produce DoWhile, got: {:#?}",
+            hir_dw.body
+        );
+        assert!(
+            !has_while(&hir_dw.body),
+            "do-while should NOT produce While"
+        );
     }
 
     #[test]
@@ -2369,7 +2506,11 @@ mod tests {
         let hir = structure(&ssa).expect("structuring should succeed");
 
         let has_return = hir.body.iter().any(|n| matches!(n, HirNode::Return(_)));
-        assert!(has_return, "post-loop return should be structured, got: {:#?}", hir.body);
+        assert!(
+            has_return,
+            "post-loop return should be structured, got: {:#?}",
+            hir.body
+        );
     }
 
     // ── P3-16: Try/catch structuring tests ──
@@ -2452,7 +2593,10 @@ mod tests {
         fn get_try_catch(nodes: &[HirNode]) -> Option<(&[HirNode], &[HirNode])> {
             for n in nodes {
                 match n {
-                    HirNode::TryCatch { try_body, catch_body } => {
+                    HirNode::TryCatch {
+                        try_body,
+                        catch_body,
+                    } => {
                         return Some((try_body, catch_body));
                     }
                     HirNode::Block(inner) => {
@@ -2550,13 +2694,17 @@ mod tests {
             .expect("structuring should succeed");
 
         fn count_try_catch(nodes: &[HirNode]) -> usize {
-            nodes.iter().map(|n| match n {
-                HirNode::TryCatch { try_body, catch_body } => {
-                    1 + count_try_catch(try_body) + count_try_catch(catch_body)
-                }
-                HirNode::Block(inner) => count_try_catch(inner),
-                _ => 0,
-            }).sum()
+            nodes
+                .iter()
+                .map(|n| match n {
+                    HirNode::TryCatch {
+                        try_body,
+                        catch_body,
+                    } => 1 + count_try_catch(try_body) + count_try_catch(catch_body),
+                    HirNode::Block(inner) => count_try_catch(inner),
+                    _ => 0,
+                })
+                .sum()
         }
         let tc_count = count_try_catch(&hir.body);
         assert!(
@@ -2612,10 +2760,12 @@ mod tests {
             nodes.iter().any(|n| match n {
                 HirNode::Break => true,
                 HirNode::Block(inner) => contains_break(inner),
-                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
-                    contains_break(body)
-                }
-                HirNode::If { then_body, else_body, .. } => {
+                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => contains_break(body),
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
                     contains_break(then_body)
                         || else_body.as_ref().is_some_and(|eb| contains_break(eb))
                 }
@@ -2671,10 +2821,11 @@ mod tests {
                 HirNode::Goto(_) => true,
                 HirNode::Block(inner) => has_goto(inner),
                 HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => has_goto(body),
-                HirNode::If { then_body, else_body, .. } => {
-                    has_goto(then_body)
-                        || else_body.as_ref().is_some_and(|eb| has_goto(eb))
-                }
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => has_goto(then_body) || else_body.as_ref().is_some_and(|eb| has_goto(eb)),
                 _ => false,
             })
         }
@@ -2684,10 +2835,11 @@ mod tests {
                 HirNode::Break => true,
                 HirNode::Block(inner) => has_break(inner),
                 HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => has_break(body),
-                HirNode::If { then_body, else_body, .. } => {
-                    has_break(then_body)
-                        || else_body.as_ref().is_some_and(|eb| has_break(eb))
-                }
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => has_break(then_body) || else_body.as_ref().is_some_and(|eb| has_break(eb)),
                 _ => false,
             })
         }
@@ -2740,7 +2892,10 @@ mod tests {
 
         let ssa = build_ssa(func);
 
-        let pdom = ssa.post_dom_tree.as_ref().expect("should have post_dom_tree");
+        let pdom = ssa
+            .post_dom_tree
+            .as_ref()
+            .expect("should have post_dom_tree");
         assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(3)));
 
         let hir = structure(&ssa).expect("structuring should succeed");
@@ -2752,7 +2907,10 @@ mod tests {
                 _ => false,
             })
         }
-        assert!(contains_if(&hir.body), "should produce If node using post-dom join");
+        assert!(
+            contains_if(&hir.body),
+            "should produce If node using post-dom join"
+        );
 
         let has_return = hir.body.iter().any(|n| matches!(n, HirNode::Return(_)));
         assert!(has_return, "post-join code should appear after if/else");
@@ -2783,8 +2941,10 @@ mod tests {
         // Chain: BB3→BB4→...→BB21
         for i in 3..22 {
             let mut bb = BasicBlock::new(BlockId(i));
-            bb.insns.push(arith_insn(r0, &[r0, c1], 0x40000 + (i as u64) * 0x10));
-            bb.insns.push(ctrl_insn(IrOp::Branch, 0x40008 + (i as u64) * 0x10));
+            bb.insns
+                .push(arith_insn(r0, &[r0, c1], 0x40000 + (i as u64) * 0x10));
+            bb.insns
+                .push(ctrl_insn(IrOp::Branch, 0x40008 + (i as u64) * 0x10));
             bb.successors = smallvec![BlockId(i + 1)];
             func.insert_block(bb);
         }
@@ -2803,9 +2963,15 @@ mod tests {
 
         let ssa = build_ssa(func);
 
-        let pdom = ssa.post_dom_tree.as_ref().expect("should have post_dom_tree");
-        assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(22)),
-            "post-dom should find BB22 as join regardless of depth");
+        let pdom = ssa
+            .post_dom_tree
+            .as_ref()
+            .expect("should have post_dom_tree");
+        assert_eq!(
+            pdom.idom(BlockId(0)),
+            Some(BlockId(22)),
+            "post-dom should find BB22 as join regardless of depth"
+        );
 
         let hir = structure(&ssa).expect("structuring should succeed");
 
@@ -2816,8 +2982,10 @@ mod tests {
                 _ => false,
             })
         }
-        assert!(contains_if(&hir.body),
-            "deep nesting (depth > 16) should still find join via post-dom");
+        assert!(
+            contains_if(&hir.body),
+            "deep nesting (depth > 16) should still find join via post-dom"
+        );
     }
 
     #[test]
@@ -2858,7 +3026,10 @@ mod tests {
         func.insert_block(bb4);
 
         let ssa = build_ssa(func);
-        let pdom = ssa.post_dom_tree.as_ref().expect("should have post_dom_tree");
+        let pdom = ssa
+            .post_dom_tree
+            .as_ref()
+            .expect("should have post_dom_tree");
         assert_eq!(pdom.idom(BlockId(0)), Some(BlockId(4)));
 
         let hir = structure(&ssa).expect("structuring should succeed");
@@ -2870,7 +3041,10 @@ mod tests {
                 _ => false,
             })
         }
-        assert!(contains_switch(&hir.body), "switch with post-dom join should produce Switch");
+        assert!(
+            contains_switch(&hir.body),
+            "switch with post-dom join should produce Switch"
+        );
 
         let has_return = hir.body.iter().any(|n| matches!(n, HirNode::Return(_)));
         assert!(has_return, "post-switch join code should be structured");
@@ -2919,7 +3093,10 @@ mod tests {
                 _ => false,
             })
         }
-        assert!(contains_if(&hir.body), "BFS fallback should still find join point");
+        assert!(
+            contains_if(&hir.body),
+            "BFS fallback should still find join point"
+        );
     }
 
     #[test]
@@ -2944,10 +3121,16 @@ mod tests {
 
         let ssa = build_ssa(func);
 
-        let pdom = ssa.post_dom_tree.as_ref().expect("should have post_dom_tree");
+        let pdom = ssa
+            .post_dom_tree
+            .as_ref()
+            .expect("should have post_dom_tree");
         let exit = ssa.cfg.exit_block();
-        assert_eq!(pdom.idom(BlockId(0)), Some(exit),
-            "both branches return → post-dom is exit");
+        assert_eq!(
+            pdom.idom(BlockId(0)),
+            Some(exit),
+            "both branches return → post-dom is exit"
+        );
 
         let hir = structure(&ssa).expect("structuring should succeed");
         assert!(!hir.body.is_empty());
@@ -2959,21 +3142,26 @@ mod tests {
             .map(|n| match n {
                 HirNode::Return(_) => 1,
                 HirNode::Block(inner) => count_returns(inner),
-                HirNode::If { then_body, else_body, .. } => {
-                    count_returns(then_body)
-                        + else_body.as_ref().map_or(0, |eb| count_returns(eb))
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    count_returns(then_body) + else_body.as_ref().map_or(0, |eb| count_returns(eb))
                 }
-                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
-                    count_returns(body)
-                }
+                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => count_returns(body),
                 HirNode::For { body, .. } => count_returns(body),
                 HirNode::Switch { cases, default, .. } => {
-                    cases.iter().map(|(_, b, _)| count_returns(b)).sum::<usize>()
+                    cases
+                        .iter()
+                        .map(|(_, b, _)| count_returns(b))
+                        .sum::<usize>()
                         + default.as_ref().map_or(0, |d| count_returns(d))
                 }
-                HirNode::TryCatch { try_body, catch_body } => {
-                    count_returns(try_body) + count_returns(catch_body)
-                }
+                HirNode::TryCatch {
+                    try_body,
+                    catch_body,
+                } => count_returns(try_body) + count_returns(catch_body),
                 _ => 0,
             })
             .sum()
@@ -3028,8 +3216,7 @@ mod tests {
             "without eager_returns, shared exit collapses to 1 return"
         );
 
-        let hir = structure_preserve_returns(&mut ssa)
-            .expect("structuring should succeed");
+        let hir = structure_preserve_returns(&mut ssa).expect("structuring should succeed");
 
         assert_eq!(
             count_returns(&hir.body),
@@ -3065,45 +3252,55 @@ mod tests {
     }
 
     fn count_gotos(nodes: &[HirNode]) -> usize {
-        nodes.iter().map(|n| match n {
-            HirNode::Goto(_) => 1,
-            HirNode::Block(inner) => count_gotos(inner),
-            HirNode::If { then_body, else_body, .. } => {
-                count_gotos(then_body)
-                    + else_body.as_ref().map_or(0, |eb| count_gotos(eb))
-            }
-            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => count_gotos(body),
-            HirNode::Switch { cases, default, .. } => {
-                cases.iter().map(|(_, b, _)| count_gotos(b)).sum::<usize>()
-                    + default.as_ref().map_or(0, |d| count_gotos(d))
-            }
-            HirNode::TryCatch { try_body, catch_body } => {
-                count_gotos(try_body) + count_gotos(catch_body)
-            }
-            HirNode::For { body, .. } => count_gotos(body),
-            _ => 0,
-        }).sum()
+        nodes
+            .iter()
+            .map(|n| match n {
+                HirNode::Goto(_) => 1,
+                HirNode::Block(inner) => count_gotos(inner),
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => count_gotos(then_body) + else_body.as_ref().map_or(0, |eb| count_gotos(eb)),
+                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => count_gotos(body),
+                HirNode::Switch { cases, default, .. } => {
+                    cases.iter().map(|(_, b, _)| count_gotos(b)).sum::<usize>()
+                        + default.as_ref().map_or(0, |d| count_gotos(d))
+                }
+                HirNode::TryCatch {
+                    try_body,
+                    catch_body,
+                } => count_gotos(try_body) + count_gotos(catch_body),
+                HirNode::For { body, .. } => count_gotos(body),
+                _ => 0,
+            })
+            .sum()
     }
 
     fn count_labels(nodes: &[HirNode]) -> usize {
-        nodes.iter().map(|n| match n {
-            HirNode::Label(_) => 1,
-            HirNode::Block(inner) => count_labels(inner),
-            HirNode::If { then_body, else_body, .. } => {
-                count_labels(then_body)
-                    + else_body.as_ref().map_or(0, |eb| count_labels(eb))
-            }
-            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => count_labels(body),
-            HirNode::Switch { cases, default, .. } => {
-                cases.iter().map(|(_, b, _)| count_labels(b)).sum::<usize>()
-                    + default.as_ref().map_or(0, |d| count_labels(d))
-            }
-            HirNode::TryCatch { try_body, catch_body } => {
-                count_labels(try_body) + count_labels(catch_body)
-            }
-            HirNode::For { body, .. } => count_labels(body),
-            _ => 0,
-        }).sum()
+        nodes
+            .iter()
+            .map(|n| match n {
+                HirNode::Label(_) => 1,
+                HirNode::Block(inner) => count_labels(inner),
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => count_labels(then_body) + else_body.as_ref().map_or(0, |eb| count_labels(eb)),
+                HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => count_labels(body),
+                HirNode::Switch { cases, default, .. } => {
+                    cases.iter().map(|(_, b, _)| count_labels(b)).sum::<usize>()
+                        + default.as_ref().map_or(0, |d| count_labels(d))
+                }
+                HirNode::TryCatch {
+                    try_body,
+                    catch_body,
+                } => count_labels(try_body) + count_labels(catch_body),
+                HirNode::For { body, .. } => count_labels(body),
+                _ => 0,
+            })
+            .sum()
     }
 
     /// P6-5 regression: a clean diamond CFG (BB0 → BB1/BB2 → BB3 → return)
@@ -3260,7 +3457,11 @@ mod tests {
                         labels.insert(*id);
                     }
                     HirNode::Block(inner) => collect_label_ids(inner, labels),
-                    HirNode::If { then_body, else_body, .. } => {
+                    HirNode::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
                         collect_label_ids(then_body, labels);
                         if let Some(eb) = else_body {
                             collect_label_ids(eb, labels);
@@ -3280,7 +3481,11 @@ mod tests {
                         gotos.insert(*id);
                     }
                     HirNode::Block(inner) => collect_goto_ids(inner, gotos),
-                    HirNode::If { then_body, else_body, .. } => {
+                    HirNode::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
                         collect_goto_ids(then_body, gotos);
                         if let Some(eb) = else_body {
                             collect_goto_ids(eb, gotos);
@@ -3329,7 +3534,8 @@ mod tests {
         let mut ssa = build_ssa(func);
         ssa.panic_sites.insert((BlockId(0), 99), PanicKind::Panic);
         ssa.panic_sites.insert((BlockId(42), 0), PanicKind::Abort);
-        ssa.panic_sites.insert((BlockId(0), 0), PanicKind::BoundsCheck);
+        ssa.panic_sites
+            .insert((BlockId(0), 0), PanicKind::BoundsCheck);
 
         let hir = structure(&ssa).expect("structuring should succeed");
 

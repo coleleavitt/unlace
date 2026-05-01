@@ -262,3 +262,18 @@ Added `parse_pdata` and `parse_xdata` to pe.rs — walks IMAGE_DIRECTORY_ENTRY_E
 - `RuntimeFunction` struct stores `unwind_info: Option<UnwindInfo>` — None if xdata section unreadable
 - `runtime_functions: Vec<RuntimeFunction>` added to BinaryImage; all 7 construction sites updated (pe.rs, elf.rs, macho.rs, eh_frame.rs×2, pipeline.rs)
 - Capped at 65536 entries to prevent pathological inputs
+
+## P10-21..P10-25: Mach-O LC_DYLD_INFO Dynamic Linking (2026-04-30)
+
+Added legacy Mach-O dynamic linking metadata recovery in `macho.rs`.
+
+### Key Decisions
+- `LC_DYSYMTAB` indirect symbol entries are parsed via `DysymtabCommand::indirect_symbols()` into a local `Vec<u32>` for P10-27 stub/pointer recognition.
+- `LC_DYLD_INFO`/`LC_DYLD_INFO_ONLY` REBASE streams now emit `Relocation { kind: Relative }` at `segment_vmaddr + offset`; opcode loops are capped at 100000 operations.
+- BIND and LAZY_BIND streams share one VM and emit `RelocKind::GlobDat` plus merged `dylib!symbol` entries in `BinaryImage.symbols`.
+- EXPORT trie decoding uses a bounded recursive walk (depth 128), producing `SymbolKind::Function` exports from terminal nodes.
+- Relocations remain metadata-only; section data is not patched.
+
+### Pitfalls Found
+- The existing synthetic fixture leaves spare bytes after the bind stream, so feature-specific tests can set `rebase_off`, `lazy_bind_off`, and `export_off` to `0x248` without disturbing load commands.
+- `object` exposes an iterator for `LC_DYLD_EXPORTS_TRIE`, but `LC_DYLD_INFO` embeds the identical trie format in offsets inside `DyldInfoCommand`; direct range decoding is simpler here.

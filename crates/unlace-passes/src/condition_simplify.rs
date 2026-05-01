@@ -196,6 +196,25 @@ fn simplify_eq(
 
     if b.space == SpaceId::Const && b.offset == 0 {
         if let Some(inner) = def_map.get(&a) {
+            if inner.op == IrOp::IntAnd && inner.inputs.len() == 2 {
+                let x = inner.inputs[0];
+                let y = inner.inputs[1];
+                if inner.output.as_ref() == Some(&a) {
+                    if insn.op == IrOp::IntEqual {
+                        let negate_input = if x == y && x.space != SpaceId::Const { x } else { a };
+                        return Some(Simplification::Replace(replace_op(
+                            insn,
+                            IrOp::BoolNegate,
+                            smallvec::smallvec![negate_input],
+                        )));
+                    }
+
+                    if x == y && x.space != SpaceId::Const {
+                        return Some(Simplification::Replace(make_copy(insn, x)));
+                    }
+                }
+            }
+
             if inner.op == IrOp::IntSub && inner.inputs.len() == 2 {
                 let x = inner.inputs[0];
                 let y = inner.inputs[1];
@@ -261,7 +280,7 @@ fn is_safe_offset_fold_target(a: &Varnode, x: &Varnode, inner: &IrInsn) -> bool 
 fn simplify_less(
     insn: &IrInsn,
     output: Varnode,
-    _def_map: &BTreeMap<Varnode, IrInsn>,
+    def_map: &BTreeMap<Varnode, IrInsn>,
 ) -> Option<Simplification> {
     let (a, b) = two(&insn.inputs)?;
 
@@ -277,6 +296,22 @@ fn simplify_less(
             insn,
             Varnode::constant(0, output.size),
         )));
+    }
+
+    if insn.op == IrOp::IntSless && b.space == SpaceId::Const && b.offset == 0 {
+        if let Some(inner) = def_map.get(&a) {
+            if inner.op == IrOp::IntSub && inner.inputs.len() == 2 {
+                let x = inner.inputs[0];
+                let y = inner.inputs[1];
+                if is_safe_offset_fold_target(&a, &x, inner) {
+                    return Some(Simplification::Replace(replace_op(
+                        insn,
+                        IrOp::IntSless,
+                        smallvec::smallvec![x, y],
+                    )));
+                }
+            }
+        }
     }
 
     None
@@ -402,6 +437,15 @@ fn try_simplify(
         IrOp::IntLess | IrOp::IntSless => simplify_less(insn, output, def_map),
 
         IrOp::IntLessequal | IrOp::IntSlessequal => simplify_lessequal(insn, output, def_map),
+
+        IrOp::IntAnd => {
+            let (x, y) = two(&insn.inputs)?;
+            if x == y && x.space != SpaceId::Const {
+                return Some(Simplification::Replace(make_copy(insn, x)));
+            }
+
+            None
+        }
 
         // ── BoolAnd ─────────────────────────────────────────────────
         IrOp::BoolAnd => {
@@ -1436,5 +1480,74 @@ mod tests {
         assert_eq!(eq2_insn.op, IrOp::IntEqual);
         assert_eq!(eq2_insn.inputs[0], r16);
         assert_eq!(eq2_insn.inputs[1], r24);
+    }
+
+    #[test]
+    fn test_sub_sless_zero_folds_to_sless_operands() {
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let zero = Varnode::constant(0, 4);
+        let diff = Varnode::unique(0, 4);
+        let cond = Varnode::unique(8, 1);
+
+        let sub = IrInsn::with_output(IrOp::IntSub, diff, smallvec![r0, r8], 0x1000);
+        let sless = IrInsn::with_output(IrOp::IntSless, cond, smallvec![diff, zero], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![sub, sless]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let final_insn = block.insns.iter().find(|i| i.output == Some(cond)).unwrap();
+        assert_eq!(final_insn.op, IrOp::IntSless);
+        assert_eq!(final_insn.inputs[0], r0);
+        assert_eq!(final_insn.inputs[1], r8);
+    }
+
+    #[test]
+    fn test_and_equal_zero_folds_to_bool_negate() {
+        let r0 = Varnode::reg(0, 4);
+        let mask = Varnode::constant(4, 4);
+        let masked = Varnode::unique(0, 4);
+        let cond = Varnode::unique(8, 1);
+        let zero = Varnode::constant(0, 4);
+
+        let and = IrInsn::with_output(IrOp::IntAnd, masked, smallvec![r0, mask], 0x1000);
+        let eq = IrInsn::with_output(IrOp::IntEqual, cond, smallvec![masked, zero], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![and, eq]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let final_insn = block.insns.iter().find(|i| i.output == Some(cond)).unwrap();
+        assert_eq!(final_insn.op, IrOp::BoolNegate);
+        assert_eq!(final_insn.inputs[0], masked);
+    }
+
+    #[test]
+    fn test_and_self_equal_zero_folds_to_bool_negate_input() {
+        let r0 = Varnode::reg(0, 8);
+        let tested = Varnode::unique(0, 8);
+        let cond = Varnode::unique(8, 1);
+        let zero = Varnode::constant(0, 8);
+
+        let and = IrInsn::with_output(IrOp::IntAnd, tested, smallvec![r0, r0], 0x1000);
+        let eq = IrInsn::with_output(IrOp::IntEqual, cond, smallvec![tested, zero], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![and, eq]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let final_insn = block.insns.iter().find(|i| i.output == Some(cond)).unwrap();
+        assert_eq!(final_insn.op, IrOp::BoolNegate);
+        assert_eq!(final_insn.inputs[0], r0);
     }
 }

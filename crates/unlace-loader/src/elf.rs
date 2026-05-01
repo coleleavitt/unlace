@@ -73,6 +73,8 @@ where
         resources: Vec::new(),
         bound_imports: Vec::new(),
         rich_header: None,
+        dylibs: Vec::new(),
+        rpaths: Vec::new(),
     })
 }
 

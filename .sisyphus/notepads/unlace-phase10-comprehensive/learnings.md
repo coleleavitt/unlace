@@ -277,3 +277,36 @@ Added legacy Mach-O dynamic linking metadata recovery in `macho.rs`.
 ### Pitfalls Found
 - The existing synthetic fixture leaves spare bytes after the bind stream, so feature-specific tests can set `rebase_off`, `lazy_bind_off`, and `export_off` to `0x248` without disturbing load commands.
 - `object` exposes an iterator for `LC_DYLD_EXPORTS_TRIE`, but `LC_DYLD_INFO` embeds the identical trie format in offsets inside `DyldInfoCommand`; direct range decoding is simpler here.
+
+## P10-26: Per-page chained fixup chain walking (2026-04-30)
+
+Implemented DYLD_CHAINED_PTR_64 (format 2) chain walking. The chained fixups payload layout:
+1. `dyld_chained_fixups_header` (28 bytes) — `starts_offset` points to starts_in_image
+2. `dyld_chained_starts_in_image`: seg_count + per-segment offsets
+3. `dyld_chained_starts_in_segment`: page_size, pointer_format, segment_offset, page_count, page_starts[]
+4. Each page chain: 8-byte entries with bit-packed fields (target, next_delta, bind flag)
+
+DYLD_CHAINED_PTR_64 bit layout: bits[50:0]=target, bits[61:51]=next_delta/4, bit[62]=bind.
+Chain walking capped at 1024 entries per page to prevent pathological loops.
+
+### Key Insight
+- `collect_segment_vmaddrs` was extended to return `(vmaddr, fileoff, filesize)` tuples since chain walking needs file offsets to read chain data from the raw binary.
+- The `object` crate's `LoadCommandVariant::Segment64(seg, sec_data)` uses a 2-tuple pattern.
+
+## P10-27: Stub recognition (2026-04-30)
+
+Implemented stub resolution for S_SYMBOL_STUBS (0x08), S_LAZY_SYMBOL_POINTERS (0x07), S_NON_LAZY_SYMBOL_POINTERS (0x06).
+
+The resolution chain: section → reserved1 (indirect table start index) → indirect_symbols[reserved1+i] → nlist index → symbol name.
+
+### Key Insight
+- Section `reserved1` and `reserved2` fields are not exposed by the `object` crate's `ObjectSection` trait. Had to parse raw section header bytes from `LoadCommandVariant::Segment64(_, sec_data)`.
+- For section_64: reserved1 at offset 68, reserved2 at offset 72 within each 80-byte section header.
+- INDIRECT_SYMBOL_LOCAL (0x80000000) and INDIRECT_SYMBOL_ABS (0x40000000) must be filtered out.
+
+## P10-28: LC_LOAD_DYLIB + LC_RPATH dependency tracking (2026-04-30)
+
+Added `DylibDep` and `DylibKind` types to image.rs. Walks LC_LOAD_DYLIB, LC_LOAD_WEAK_DYLIB, LC_REEXPORT_DYLIB, LC_LAZY_LOAD_DYLIB, LC_LOAD_UPWARD_DYLIB, and LC_RPATH.
+
+### Pitfall
+- Synthetic fixture must ensure load command data doesn't overlap with section data offsets. The dylib path string at `cmd_offset + 24` can extend into the section data area if the section offset is too low (e.g., 0x100).

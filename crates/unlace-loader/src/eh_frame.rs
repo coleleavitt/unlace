@@ -262,6 +262,8 @@ mod tests {
             resources: vec![],
             bound_imports: vec![],
             rich_header: None,
+            dylibs: vec![],
+            rpaths: vec![],
         };
 
         let info = parse_eh_frame(&img).expect("missing .eh_frame should not error");
@@ -297,6 +299,8 @@ mod tests {
             resources: vec![],
             bound_imports: vec![],
             rich_header: None,
+            dylibs: vec![],
+            rpaths: vec![],
         };
 
         let result = parse_eh_frame(&img);

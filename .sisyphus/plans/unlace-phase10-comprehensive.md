@@ -1343,7 +1343,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): Mach-O relocation table population from REBASE+BIND streams`
 
-- [ ] P10-26. Per-page chained fixup walking (DYLD_CHAINED_PTR_64 + ARM64E)
+- [x] P10-26. Per-page chained fixup walking (DYLD_CHAINED_PTR_64 + ARM64E)
 
   **What to do**:
   - Extend P9-21's chained-fixup imports parser. Walk the per-segment `dyld_chained_starts_in_image` and per-page `dyld_chained_starts_in_segment`.
@@ -1386,7 +1386,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): Mach-O per-page chained-fixup chain walking (PTR_64 + ARM64E)`
 
-- [ ] P10-27. Stub recognition (__stubs / __la_symbol_ptr / __nl_symbol_ptr)
+- [x] P10-27. Stub recognition (__stubs / __la_symbol_ptr / __nl_symbol_ptr)
 
   **What to do**:
   - Identify Mach-O sections by name + flags:
@@ -1425,7 +1425,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): Mach-O stub recognition (__stubs / __la_symbol_ptr / __nl_symbol_ptr)`
 
-- [ ] P10-28. LC_LOAD_DYLIB + LC_RPATH dependency tracking
+- [x] P10-28. LC_LOAD_DYLIB + LC_RPATH dependency tracking
 
   **What to do**:
   - Walk load commands, capture LC_LOAD_DYLIB / LC_LOAD_WEAK_DYLIB / LC_REEXPORT_DYLIB / LC_LAZY_LOAD_DYLIB / LC_LOAD_UPWARD_DYLIB:

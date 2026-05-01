@@ -105,6 +105,8 @@ where
         resources,
         bound_imports,
         rich_header,
+        dylibs: Vec::new(),
+        rpaths: Vec::new(),
     })
 }
 

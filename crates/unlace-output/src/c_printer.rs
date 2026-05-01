@@ -1032,7 +1032,9 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 update,
                 body,
             } => {
-                collect_insn_as_stmt(init, ctx);
+                if let Some(init_insn) = init {
+                    collect_insn_as_stmt(init_insn, ctx);
+                }
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
                 ctx.collect_depth += 1;
@@ -1404,7 +1406,7 @@ fn compute_loop_counter_names(nodes: &[HirNode], depth: usize, ctx: &mut PrintCt
             HirNode::For {
                 init, update, body, ..
             } => {
-                if let Some(counter) = detect(init, update) {
+                if let Some(counter) = init.as_ref().and_then(|i| detect(i, update)) {
                     ctx.name_overrides
                         .entry(counter)
                         .or_insert_with(|| loop_counter_name(depth).to_string());
@@ -1860,33 +1862,52 @@ fn try_merge_assign_return(nodes: &[HirNode], ctx: &mut PrintCtx) -> Option<Stri
         HirNode::Statement(insn) => insn,
         _ => return None,
     };
-    let ret_sv = match &nodes[1] {
-        HirNode::Return(Some(sv)) => sv,
-        _ => return None,
-    };
-    if ret_sv.base.space != SpaceId::Register || ret_sv.base.offset != 0 {
-        return None;
+
+    match &nodes[1] {
+        HirNode::Return(Some(ret_sv)) => {
+            if ret_sv.base.space != SpaceId::Register || ret_sv.base.offset != 0 {
+                return None;
+            }
+            let stmt_idx = ctx.emit_stmt;
+            let output_sv = ctx.stmt_outputs.get(&stmt_idx).cloned().flatten()?;
+            if output_sv != *ret_sv {
+                return None;
+            }
+            if ctx.foldable_stmts.contains(&stmt_idx) {
+                return None;
+            }
+            if is_dead_zero_init(insn, stmt_idx, ctx) {
+                return None;
+            }
+            let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
+            if total_uses > 1 {
+                return None;
+            }
+            let expr = emit_expr(insn, stmt_idx, ctx);
+            Some(expr)
+        }
+        HirNode::Return(None) => {
+            let out_vn = insn.output?;
+            if out_vn.space != SpaceId::Register || out_vn.offset != 0 {
+                return None;
+            }
+            let stmt_idx = ctx.emit_stmt;
+            let output_sv = ctx.stmt_outputs.get(&stmt_idx).cloned().flatten()?;
+            if ctx.foldable_stmts.contains(&stmt_idx) {
+                return None;
+            }
+            if is_dead_zero_init(insn, stmt_idx, ctx) {
+                return None;
+            }
+            let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
+            if total_uses > 0 {
+                return None;
+            }
+            let expr = emit_expr(insn, stmt_idx, ctx);
+            Some(expr)
+        }
+        _ => None,
     }
-    let stmt_idx = ctx.emit_stmt;
-    let output_sv = ctx.stmt_outputs.get(&stmt_idx).cloned().flatten()?;
-    if output_sv != *ret_sv {
-        return None;
-    }
-    if ctx.foldable_stmts.contains(&stmt_idx) {
-        return None;
-    }
-    if is_dead_zero_init(insn, stmt_idx, ctx) {
-        return None;
-    }
-    // Only merge when the variable's sole use is this return statement.
-    // sv_use_counts includes the Return(Some(sv)) via cond_uses (adds 1).
-    // If total uses > 1, the variable is read elsewhere and needs a name.
-    let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
-    if total_uses > 1 {
-        return None;
-    }
-    let expr = emit_expr(insn, stmt_idx, ctx);
-    Some(expr)
 }
 
 fn resolve_sv_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
@@ -1946,9 +1967,13 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             update,
             body,
         } => {
-            let init_idx = ctx.emit_stmt;
-            ctx.emit_stmt += 1;
-            let init_str = emit_for_clause(init, init_idx, ctx);
+            let init_str = if let Some(init_insn) = init {
+                let init_idx = ctx.emit_stmt;
+                ctx.emit_stmt += 1;
+                emit_for_clause(init_insn, init_idx, ctx)
+            } else {
+                String::new()
+            };
 
             let mut body_buf = String::new();
             emit_nodes(body, depth + 1, ctx, &mut body_buf);
@@ -5010,7 +5035,7 @@ mod tests {
 
         let body = vec![
             HirNode::For {
-                init: IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000),
+                init: Some(IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000)),
                 cond: sv(0, 4),
                 update: IrInsn::with_output(IrOp::IntAdd, i, smallvec![i, one], 0x1018),
                 body: vec![],
@@ -5040,7 +5065,7 @@ mod tests {
 
         let body = vec![
             HirNode::For {
-                init: IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000),
+                init: Some(IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000)),
                 cond: sv(0, 4),
                 update: IrInsn::with_output(IrOp::IntAdd, i, smallvec![i, two], 0x1018),
                 body: vec![],
@@ -5066,14 +5091,14 @@ mod tests {
 
         let body = vec![
             HirNode::For {
-                init: IrInsn::with_output(IrOp::Copy, outer, smallvec![zero], 0x1000),
+                init: Some(IrInsn::with_output(IrOp::Copy, outer, smallvec![zero], 0x1000)),
                 cond: SsaVarnode {
                     base: outer,
                     version: 0,
                 },
                 update: IrInsn::with_output(IrOp::IntAdd, outer, smallvec![outer, one], 0x1020),
                 body: vec![HirNode::For {
-                    init: IrInsn::with_output(IrOp::Copy, inner, smallvec![zero], 0x1004),
+                    init: Some(IrInsn::with_output(IrOp::Copy, inner, smallvec![zero], 0x1004)),
                     cond: SsaVarnode {
                         base: inner,
                         version: 0,
@@ -5110,7 +5135,7 @@ mod tests {
 
         let body = vec![
             HirNode::For {
-                init: IrInsn::with_output(IrOp::Copy, i, smallvec![n], 0x1000),
+                init: Some(IrInsn::with_output(IrOp::Copy, i, smallvec![n], 0x1000)),
                 cond: sv(0, 4),
                 update: IrInsn::with_output(IrOp::IntSub, i, smallvec![i, one], 0x1018),
                 body: vec![],
@@ -5152,7 +5177,7 @@ mod tests {
                 0x0FFC,
             )),
             HirNode::For {
-                init: IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000),
+                init: Some(IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000)),
                 cond: sv(0, 4),
                 update: IrInsn::with_output(IrOp::IntAdd, i, smallvec![i, one], 0x1018),
                 body: vec![HirNode::Statement(IrInsn::with_output(
@@ -8028,7 +8053,7 @@ mod tests {
 
         let body = vec![
             HirNode::For {
-                init,
+                init: Some(init),
                 cond: SsaVarnode {
                     base: cmp_out,
                     version: 0,

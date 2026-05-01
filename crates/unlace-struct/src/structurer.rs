@@ -1430,6 +1430,10 @@ pub fn recover_for_loops(nodes: &mut Vec<HirNode>) {
                 nodes.extend(after_i);
             }
         }
+        // Aggressive: while(cond) { body; step } → for(; cond; step) without init
+        if let Some(replacement) = try_recover_for_no_init(&nodes[i]) {
+            nodes[i] = replacement;
+        }
         i += 1;
     }
 }
@@ -1500,10 +1504,46 @@ fn try_recover_for_at(nodes: &[HirNode], idx: usize) -> Option<HirNode> {
     }
 
     Some(HirNode::For {
-        init: init_insn,
+        init: Some(init_insn),
         cond,
         update: update_insn,
         body: body_without_update,
+    })
+}
+
+fn try_recover_for_no_init(node: &HirNode) -> Option<HirNode> {
+    let (cond, body) = match node {
+        HirNode::While { cond, body } => (*cond, body.clone()),
+        _ => return None,
+    };
+
+    let last_idx = body
+        .iter()
+        .rposition(|n| matches!(n, HirNode::Statement(_)))?;
+    let update_insn = match &body[last_idx] {
+        HirNode::Statement(insn) => insn.clone(),
+        _ => return None,
+    };
+
+    let counter = update_insn.output?;
+    if counter.space == SpaceId::Const {
+        return None;
+    }
+    if !is_counter_update_op(&update_insn, &counter) {
+        return None;
+    }
+    // The step variable must relate to the condition variable
+    if counter != cond.base {
+        return None;
+    }
+
+    let mut new_body = body;
+    new_body.remove(last_idx);
+    Some(HirNode::For {
+        init: None,
+        cond,
+        update: update_insn,
+        body: new_body,
     })
 }
 
@@ -2063,6 +2103,7 @@ mod tests {
                 body,
                 cond,
             } => {
+                let init = init.as_ref().expect("should have init");
                 assert_eq!(init.op, IrOp::Copy);
                 assert_eq!(init.output, Some(i));
                 assert_eq!(update.op, IrOp::IntAdd);
@@ -2127,7 +2168,7 @@ mod tests {
     }
 
     #[test]
-    fn test_for_loop_no_init_keeps_while() {
+    fn test_for_loop_no_init_promotes_to_for() {
         let i = Varnode::reg(0, 4);
         let one = Varnode::constant(1, 4);
 
@@ -2139,10 +2180,13 @@ mod tests {
         recover_for_loops(&mut hir_body);
 
         assert_eq!(hir_body.len(), 1);
-        assert!(
-            matches!(hir_body[0], HirNode::While { .. }),
-            "no preceding init → must remain While"
-        );
+        match &hir_body[0] {
+            HirNode::For { init, update, .. } => {
+                assert!(init.is_none(), "no preceding init → init should be None");
+                assert_eq!(update.op, IrOp::IntAdd);
+            }
+            other => panic!("expected For, got {other:?}"),
+        }
     }
 
     #[test]

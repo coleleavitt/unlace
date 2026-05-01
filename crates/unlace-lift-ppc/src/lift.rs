@@ -181,6 +181,10 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
         PpcInsn::PPC_INS_ADDIS => ops::arithmetic::lift_addis(ctx, &ops),
         PpcInsn::PPC_INS_SUBF => ops::arithmetic::lift_subf(ctx, &ops),
         PpcInsn::PPC_INS_SUB => ops::arithmetic::lift_sub(ctx, &ops),
+        PpcInsn::PPC_INS_MULLW => ops::arithmetic::lift_mullw(ctx, &ops),
+        PpcInsn::PPC_INS_MULLI => ops::arithmetic::lift_mulli(ctx, &ops),
+        PpcInsn::PPC_INS_DIVW => ops::arithmetic::lift_divw(ctx, &ops),
+        PpcInsn::PPC_INS_DIVWU => ops::arithmetic::lift_divwu(ctx, &ops),
 
         // Logical
         PpcInsn::PPC_INS_AND => ops::bitwise::lift_and(ctx, &ops),
@@ -215,10 +219,14 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
         // Loads
         PpcInsn::PPC_INS_LWZ => ops::data_move::lift_lwz(ctx, &ops),
         PpcInsn::PPC_INS_LD => ops::data_move::lift_ld(ctx, &ops),
+        PpcInsn::PPC_INS_LBZ => ops::data_move::lift_lbz(ctx, &ops),
+        PpcInsn::PPC_INS_LHZ => ops::data_move::lift_lhz(ctx, &ops),
 
         // Stores
         PpcInsn::PPC_INS_STW => ops::data_move::lift_stw(ctx, &ops),
         PpcInsn::PPC_INS_STD => ops::data_move::lift_std(ctx, &ops),
+        PpcInsn::PPC_INS_STB => ops::data_move::lift_stb(ctx, &ops),
+        PpcInsn::PPC_INS_STH => ops::data_move::lift_sth(ctx, &ops),
 
         // Load immediate
         PpcInsn::PPC_INS_LI => ops::data_move::lift_li(ctx, &ops),

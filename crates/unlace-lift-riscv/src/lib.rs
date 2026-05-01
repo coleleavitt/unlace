@@ -114,6 +114,32 @@ impl LiftCtx {
         self.write_reg(rd, tmp);
     }
 
+    fn lift_alu_rr_w(&mut self, op: IrOp, rd: RegId, rs1: RegId, rs2: RegId) {
+        let a = read_reg(rs1);
+        let b = read_reg(rs2);
+        let a32 = self.alloc_unique(4);
+        self.emit(IrInsn::with_output(IrOp::Subpiece, a32, smallvec![a, Varnode::constant(0, 4)], self.addr));
+        let b32 = self.alloc_unique(4);
+        self.emit(IrInsn::with_output(IrOp::Subpiece, b32, smallvec![b, Varnode::constant(0, 4)], self.addr));
+        let res32 = self.alloc_unique(4);
+        self.emit(IrInsn::with_output(op, res32, smallvec![a32, b32], self.addr));
+        let ext = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(IrOp::IntSext, ext, smallvec![res32], self.addr));
+        self.write_reg(rd, ext);
+    }
+
+    fn lift_alu_ri_w(&mut self, op: IrOp, rd: RegId, rs1: RegId, imm: i64) {
+        let a = read_reg(rs1);
+        let a32 = self.alloc_unique(4);
+        self.emit(IrInsn::with_output(IrOp::Subpiece, a32, smallvec![a, Varnode::constant(0, 4)], self.addr));
+        let b32 = Varnode::constant(imm as u64, 4);
+        let res32 = self.alloc_unique(4);
+        self.emit(IrInsn::with_output(op, res32, smallvec![a32, b32], self.addr));
+        let ext = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(IrOp::IntSext, ext, smallvec![res32], self.addr));
+        self.write_reg(rd, ext);
+    }
+
     // -- Comparison helpers (SLT/SLTU) ------------------------------------
 
     fn lift_slt(&mut self, rd: RegId, rs1: RegId, rs2: RegId) {
@@ -609,6 +635,71 @@ fn dispatch_insn(
         x if x == RISCV_INS_SRAI as u32 => {
             if let Some((rd, rs1, imm)) = ops_rri(operands) {
                 ctx.lift_alu_ri(IrOp::IntSright, rd, rs1, imm);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+
+        // -- RV64I W-variants: operate on lower 32 bits, sign-extend to 64 --
+        x if x == RISCV_INS_ADDW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntAdd, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_SUBW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntSub, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_ADDIW as u32 => {
+            if let Some((rd, rs1, imm)) = ops_rri(operands) {
+                ctx.lift_alu_ri_w(IrOp::IntAdd, rd, rs1, imm);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_SLLW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntLeft, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_SRLW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntRight, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_SRAW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntSright, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_SLLIW as u32 => {
+            if let Some((rd, rs1, imm)) = ops_rri(operands) {
+                ctx.lift_alu_ri_w(IrOp::IntLeft, rd, rs1, imm);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_SRLIW as u32 => {
+            if let Some((rd, rs1, imm)) = ops_rri(operands) {
+                ctx.lift_alu_ri_w(IrOp::IntRight, rd, rs1, imm);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_SRAIW as u32 => {
+            if let Some((rd, rs1, imm)) = ops_rri(operands) {
+                ctx.lift_alu_ri_w(IrOp::IntSright, rd, rs1, imm);
             } else {
                 ctx.emit_unimplemented();
             }
@@ -1136,8 +1227,68 @@ fn dispatch_insn(
             ));
         }
 
+        // -- M extension: MUL, DIV, DIVU, REM, REMU, MULW, DIVW, REMW --
+        x if x == RISCV_INS_MUL as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr(IrOp::IntMult, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_MULW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntMult, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_DIV as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr(IrOp::IntSdiv, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_DIVU as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr(IrOp::IntDiv, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_DIVW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntSdiv, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_REM as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr(IrOp::IntSrem, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_REMU as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr(IrOp::IntRem, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_REMW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntSrem, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+
         // -- Fallback: unimplemented --
-        _ => ctx.emit_unimplemented(),
+        _ => {
+            ctx.emit_unimplemented();
+        }
     }
 }
 

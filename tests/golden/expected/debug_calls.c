@@ -298,7 +298,7 @@ int abs_val(int x) {
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
-    if (0) { 0 = 0; }
+    if (1) { 0 = 0; }
     return result;
 }
 typedef unsigned char _BYTE;
@@ -343,7 +343,7 @@ int max(int a, int b) {
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
     *(_DWORD *)(0LL) = v5;
-    if (0) { 0 = 0; }
+    if (1) { 0 = 0; }
     return result;
 }
 typedef unsigned char _BYTE;

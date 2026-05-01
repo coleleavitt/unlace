@@ -116,11 +116,12 @@ void main(void) {
         if (v22) {
         }
     }
+    v31 = _mm_xor_si128(v31, v31);
     if (v17) {
     }
-    v10 = _mm_load_si128(0);
-    v31 = _mm_add_epi32(0, v10);
-    v10 = _mm_load_si128(0);
+    v10 = _mm_load_si128(v31);
+    v31 = _mm_add_epi32(v31, v10);
+    v10 = _mm_load_si128(v31);
     if (v12) {
         v3 = *(_DWORD *)(0x48LL);
     }

@@ -1,0 +1,21 @@
+Phase 13 Final Parity Score
+==========================
+
+Fixtures: 14
+Total score: 1073.6
+Aggregate parity: 76.7%
+
+  arc_features                54.5%
+  medium                      57.3%
+  cpp_vtable                  59.7%
+  riscv64_features            68.2%
+  debug_calls                 70.9%
+  v850_features               72.7%
+  ppc64_features              72.7%
+  cpp_exceptions              78.2%
+  x87_math                    81.8%
+  arm64_features              81.8%
+  cpp_rtti                    87.3%
+  debug_structs               93.9%
+  mips64_features             95.5%
+  debug_hello                 99.1%

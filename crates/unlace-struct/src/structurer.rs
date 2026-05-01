@@ -1591,8 +1591,11 @@ fn try_recover_for_no_init(node: &HirNode, defs: &BTreeMap<Varnode, IrInsn>) -> 
     if !is_counter_update_op(&update_insn, &counter) {
         return None;
     }
-    // The step variable must relate to the condition variable
-    if !condition_mentions_counter(cond.base, &counter, defs) {
+    // Without an init statement we need stronger evidence that the condition
+    // actually involves the counter.  `condition_mentions_counter` is
+    // permissive (returns true when the def is missing) which is fine when an
+    // init statement anchors the counter, but too aggressive here.
+    if !condition_mentions_counter_strict(cond.base, &counter, defs) {
         return None;
     }
 
@@ -1604,6 +1607,29 @@ fn try_recover_for_no_init(node: &HirNode, defs: &BTreeMap<Varnode, IrInsn>) -> 
         update: update_insn,
         body: new_body,
     })
+}
+
+/// Strict variant: returns `false` when the condition's definition is unknown.
+fn condition_mentions_counter_strict(
+    cond: Varnode,
+    counter: &Varnode,
+    defs: &BTreeMap<Varnode, IrInsn>,
+) -> bool {
+    if cond == *counter {
+        return true;
+    }
+    let Some(insn) = defs.get(&cond) else {
+        return false;
+    };
+    matches!(
+        insn.op,
+        IrOp::IntLess
+            | IrOp::IntSless
+            | IrOp::IntLessequal
+            | IrOp::IntSlessequal
+            | IrOp::IntEqual
+            | IrOp::IntNotequal
+    ) && insn.inputs.iter().any(|v| v == counter)
 }
 
 fn condition_mentions_counter(

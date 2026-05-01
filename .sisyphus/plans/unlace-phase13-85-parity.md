@@ -232,7 +232,7 @@ Wave 5 (Polish + Final — 5 tasks):
 
 ### Wave 2 — CMOVcc + debug_calls/cpp_vtable (5 tasks)
 
-- [ ] P13-8. Fix CMOVcc condition degradation
+- [x] P13-8. Fix CMOVcc condition degradation
 
   **What to do**: The Callother(0x350, cond, src, dst) has its condition flag varnodes constant-folded to 0 by SCCP because the flag register has no other use after the cmov. Fix: in the SCCP pass, mark flag varnodes that feed a CMOV Callother as non-constant (they carry semantic information). OR: change the cmov emission to use `with_output` so the output varnode keeps the conditional semantics alive.
   **Acceptance Criteria**: debug_calls C output shows real conditions (not `if (0)`).
@@ -248,7 +248,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `fix(passes): preserve CMOVcc condition flags from SCCP constant folding`
 
-- [ ] P13-9. CMOVcc → proper if-statement rendering
+- [x] P13-9. CMOVcc → proper if-statement rendering
 
   **What to do**: After P13-8 preserves the condition, verify the C printer renders `if (cond) { dst = src; }` correctly with the real condition variable instead of `if (0)`.
   **Acceptance Criteria**: debug_calls has ≥3 real if-statements from cmov.
@@ -263,7 +263,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(output): CMOVcc renders as proper if-statement with real condition`
 
-- [ ] P13-10. debug_calls score (target ≥80%)
+- [x] P13-10. debug_calls score (target ≥80%)
 
   **What to do**: Measure debug_calls score after CMOVcc fixes.
   **Acceptance Criteria**: debug_calls ≥ 80%.
@@ -278,7 +278,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: NO (measured in golden refresh)
 
-- [ ] P13-11. cpp_vtable null-check recovery
+- [x] P13-11. cpp_vtable null-check recovery
 
   **What to do**: Profile cpp_vtable — the missing ifs are likely from vtable pointer null-checks. These may be `test reg, reg; je label` patterns that the structurer should recover. Check if they're being lost in optimization.
   **Acceptance Criteria**: cpp_vtable if_count ≥ 1.
@@ -293,7 +293,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(struct): null-check recovery for vtable dispatch patterns` (or evidence-only)
 
-- [ ] P13-12. Golden refresh + regression check
+- [x] P13-12. Golden refresh + regression check
 
   **What to do**: Full golden refresh, check no regression >1pp.
   **Acceptance Criteria**: All pass, no regression.
@@ -311,7 +311,7 @@ Wave 5 (Polish + Final — 5 tasks):
 
 ### Wave 3 — Architecture Coverage (5 tasks)
 
-- [ ] P13-13. ARC lifter coverage extension
+- [x] P13-13. ARC lifter coverage extension
 
   **What to do**: Profile `fixtures/arc_features.elf` — count Unimplemented. Add handlers for the most common unhandled mnemonics (likely: LD, ST, ADD variants specific to ARC ISA). Target: reduce Unimplemented by 50%.
   **Acceptance Criteria**: arc_features score increases by ≥5pp.
@@ -326,7 +326,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(lift-arc): extend instruction coverage for common ARC mnemonics`
 
-- [ ] P13-14. RISC-V lifter coverage extension
+- [x] P13-14. RISC-V lifter coverage extension
 
   **What to do**: Same for RISC-V. Add MUL/DIV/REM (M extension) if not already handled. Profile and fix top unhandled mnemonics.
   **Acceptance Criteria**: riscv64_features score increases by ≥5pp.
@@ -341,7 +341,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(lift-riscv): extend M extension coverage (MUL/DIV/REM)`
 
-- [ ] P13-15. V850/PPC64 score improvement
+- [x] P13-15. V850/PPC64 score improvement
 
   **What to do**: Profile both fixtures. Fix top 3 unhandled mnemonics per arch.
   **Acceptance Criteria**: Each score increases by ≥3pp.
@@ -356,7 +356,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(lift-v850,lift-ppc): top-3 unhandled mnemonic coverage`
 
-- [ ] P13-16. Golden refresh for arch fixtures
+- [x] P13-16. Golden refresh for arch fixtures
 
   **What to do**: Refresh all goldens, measure arch fixture scores.
   **Acceptance Criteria**: arc ≥60%, riscv ≥73%, v850 ≥76%, ppc ≥76%.
@@ -371,7 +371,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `chore(goldens): Wave 3 architecture coverage refresh`
 
-- [ ] P13-17. Lifter coverage report
+- [x] P13-17. Lifter coverage report
 
   **What to do**: Update coverage report for all fixtures.
   **Acceptance Criteria**: Evidence file.
@@ -388,7 +388,7 @@ Wave 5 (Polish + Final — 5 tasks):
 
 ### Wave 4 — Performance + DWARF (5 tasks)
 
-- [ ] P13-18. Rayon parallel function decompilation
+- [x] P13-18. Rayon parallel function decompilation
 
   **What to do**: In `crates/unlace-cli/src/batch.rs`, use `rayon::par_iter()` to decompile functions in parallel. rayon is already in workspace deps. Each function is independent after lifting. Gate behind `--jobs N` flag (default: num_cpus).
   **Acceptance Criteria**: `unlace batch fixtures/medium.elf --jobs 4` succeeds. ≥2x speedup on medium.elf.
@@ -404,7 +404,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(cli): rayon parallel function decompilation in batch mode`
 
-- [ ] P13-19. DWARF struct name enrichment
+- [x] P13-19. DWARF struct name enrichment
 
   **What to do**: When DWARF info is available (via `import_dwarf`), replace synthetic `struct_<offset>` names with DWARF-recovered struct names. Replace `field_<offset>` with DWARF field names. Wire into c_printer's struct field emission.
   **Acceptance Criteria**: debug_structs output uses DWARF names when available.
@@ -420,7 +420,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(output): DWARF struct/field name enrichment in C output`
 
-- [ ] P13-20. DWARF function signature enrichment
+- [x] P13-20. DWARF function signature enrichment
 
   **What to do**: Use DWARF parameter names and types to enrich function signatures. Replace `void func(void)` with `int func(int argc, char **argv)` when DWARF provides the info.
   **Acceptance Criteria**: debug fixtures show DWARF-enriched signatures.
@@ -435,7 +435,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(output): DWARF function signature enrichment`
 
-- [ ] P13-21. DWARF source line annotation
+- [x] P13-21. DWARF source line annotation
 
   **What to do**: When DWARF source map is available, add `// source: file.c:42` comments before statements that have source location info.
   **Acceptance Criteria**: debug fixtures show source annotations.
@@ -450,7 +450,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(output): DWARF source line annotations in C output`
 
-- [ ] P13-22. Interprocedural type propagation
+- [x] P13-22. Interprocedural type propagation
 
   **What to do**: After single-function type inference, propagate return types from callees to callers (1-level). If function `foo` is inferred to return `int`, and `bar` calls `foo` and assigns the result, propagate `int` to bar's variable. Only works for resolved CALL targets (not CALLIND).
   **Acceptance Criteria**: ≥1 unit test. Type inference improves for call-heavy fixtures.
@@ -467,7 +467,7 @@ Wave 5 (Polish + Final — 5 tasks):
 
 ### Wave 5 — Polish + Final (5 tasks)
 
-- [ ] P13-23. Refresh ALL goldens
+- [x] P13-23. Refresh ALL goldens
 
   **What to do**: Full refresh.
   **Acceptance Criteria**: All pass.
@@ -482,7 +482,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `chore(goldens): Phase 13 final refresh`
 
-- [ ] P13-24. Final parity score
+- [x] P13-24. Final parity score
 
   **What to do**: `bash scripts/score_parity.sh` + per-fixture breakdown.
   **Acceptance Criteria**: Aggregate ≥ 83%.
@@ -497,7 +497,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `chore(boulder): Phase 13 final parity`
 
-- [ ] P13-25. Quality report
+- [x] P13-25. Quality report
 
   **What to do**: Write report (≥80 lines).
   **Acceptance Criteria**: Report exists.
@@ -512,7 +512,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `chore(boulder): Phase 13 quality report`
 
-- [ ] P13-26. Push to GitHub
+- [x] P13-26. Push to GitHub
 
   **What to do**: `git push origin master`.
   **QA Scenarios**:
@@ -525,7 +525,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: NO
 
-- [ ] P13-F1. Final verification
+- [x] P13-F1. Final verification
 
   **What to do**: All gates.
   **Acceptance Criteria**: ≥1490 tests, 0 fail, lint clean, parity ≥83%.

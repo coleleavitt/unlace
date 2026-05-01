@@ -116,3 +116,30 @@ return_count = 4
 goto_count = 0
 var_count = 12
 line_count = 120
+
+[v850_features]
+if_count = 1
+for_count = 0
+while_count = 0
+return_count = 2
+goto_count = 0
+var_count = 4
+line_count = 30
+
+[arc_features]
+if_count = 1
+for_count = 0
+while_count = 0
+return_count = 2
+goto_count = 0
+var_count = 4
+line_count = 30
+
+[ppc64_features]
+if_count = 1
+for_count = 0
+while_count = 0
+return_count = 2
+goto_count = 0
+var_count = 4
+line_count = 30

@@ -1,0 +1,27 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/unlace_lift_arm-800392069fc99dc6)
+
+running 20 tests
+test tests::arm64_csel_lifts_to_callother ... ok
+test tests::arm64_extr_lifts_to_shift_or ... ok
+test tests::arm64_ldaxr_lifts_to_callother ... ok
+test tests::arm64_ldxr_lifts_to_callother ... ok
+test tests::arm64_dsb_lifts_to_callother ... ok
+test tests::arm64_msub_lifts_to_multiply_sub ... ok
+test tests::arm64_ubfm_lifts_to_shift_and_mask ... ok
+test tests::arm64_csinc_lifts_to_callother ... ok
+test tests::arm64_ubfm_lsl_alias_lifts_to_left_shift ... ok
+test tests::arm64_madd_lifts_to_multiply_add ... ok
+test tests::arm64_udiv_lifts_to_intdiv ... ok
+test tests::arm64_csneg_lifts_to_callother ... ok
+test tests::arm64_dmb_lifts_to_callother ... ok
+test tests::arm64_isb_lifts_to_callother ... ok
+test tests::arm64_csinv_lifts_to_callother ... ok
+test tests::arm64_stlxr_lifts_to_callother ... ok
+test tests::arm64_sdiv_lifts_to_intsdiv ... ok
+test tests::arm64_stxr_lifts_to_callother ... ok
+test tests::arm64_mul_lifts_to_intmult ... ok
+test tests::arm64_sbfm_lifts_to_signed_extract ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+

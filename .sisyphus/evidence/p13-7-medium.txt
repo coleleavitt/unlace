@@ -1,0 +1,7 @@
+cargo build -p unlace-cli: passed
+UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures -- --nocapture: passed (29/29)
+medium metrics after Wave 1: if=41 for=0 while=6 return=5 goto=0
+medium score after Wave 1: 57.3%
+aggregate parity after Wave 1: 77.0%
+
+Note: Wave 1 implementation commits landed, but the medium.c target (>=75%) was not reached by the refreshed output.

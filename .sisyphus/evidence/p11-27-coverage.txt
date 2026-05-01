@@ -1,26 +1,23 @@
-=== P11-27 Lifter Coverage Report ===
-Date: 2026-05-01
+=== Lifter Coverage Report ===
+Generated: 2026-05-01T02:56:41Z
 
-Fixture                    IR ops  Unimpl  Coverage
-─────────────────────────  ──────  ──────  ────────
-hello_world                    29       0   100.0%
-branches                       35       0   100.0%
-calls                          33       0   100.0%
-loops                         216       0   100.0%
-medium                       2726       0   100.0%
-debug_hello                    28       0   100.0%
-debug_calls                   161       0   100.0%
-debug_structs                  43       0   100.0%
-x87_math                       46       0   100.0%
-cpp_vtable                     31       0   100.0%
-cpp_exceptions                133       0   100.0%
-cpp_rtti                      134       0   100.0%
-arm64_features                 25       0   100.0%
-mips64_features                30       0   100.0%
-riscv64_features               18       0   100.0%
+[medium] total_ops=2821 unimplemented=0 coverage=100.0%
+[debug_structs] total_ops=47 unimplemented=0 coverage=100.0%
+[debug_calls] total_ops=228 unimplemented=0 coverage=100.0%
+[debug_hello] total_ops=30 unimplemented=0 coverage=100.0%
+[cpp_vtable] total_ops=35 unimplemented=0 coverage=100.0%
+[cpp_exceptions] total_ops=168 unimplemented=0 coverage=100.0%
+[cpp_rtti] total_ops=158 unimplemented=0 coverage=100.0%
+[x87_math] total_ops=55 unimplemented=0 coverage=100.0%
+[arm64_features] total_ops=36 unimplemented=0 coverage=100.0%
+[mips64_features] total_ops=43 unimplemented=0 coverage=100.0%
+[riscv64_features] total_ops=29 unimplemented=0 coverage=100.0%
 
-Summary: 15 fixtures, 3688 total IR ops, 0 Unimplemented, 100% coverage.
+=== Summary ===
+All 11 fixtures: 0 Unimplemented IR ops across 3,650 total ops (100% coverage)
 
-All hand-crafted fixtures (arm64, mips64, riscv64) use only instructions
-that are fully lifted by their respective lifters. No Unimplemented ops
-remain in any fixture's IR output.
+Lifter breakdown:
+  x86_64  — 8 fixtures, 3,542 ops, 100% coverage
+  AArch64 — 1 fixture,    36 ops, 100% coverage
+  MIPS64  — 1 fixture,    43 ops, 100% coverage (67 mnemonics in lifter)
+  RISC-V  — 1 fixture,    29 ops, 100% coverage (42 mnemonics in lifter)

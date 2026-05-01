@@ -170,14 +170,11 @@ fn try_promote_standalone(node: &HirNode, defs: &BTreeMap<Varnode, IrInsn>) -> O
         HirNode::Statement(insn) => insn.clone(),
         _ => return None,
     };
-    let counter = update.output?;
+    let counter = condition_counter(cond.base, defs)?;
     if counter.space == SpaceId::Const {
         return None;
     }
-    if !is_decrement_update(&update, &counter) {
-        return None;
-    }
-    if counter != cond.base && !is_nonzero_condition(cond.base, &counter, defs) {
+    if !modifies_counter(&update, &counter) {
         return None;
     }
 
@@ -191,42 +188,38 @@ fn try_promote_standalone(node: &HirNode, defs: &BTreeMap<Varnode, IrInsn>) -> O
     })
 }
 
-fn is_nonzero_condition(cond: Varnode, counter: &Varnode, defs: &BTreeMap<Varnode, IrInsn>) -> bool {
-    let Some(insn) = defs.get(&cond) else {
-        return false;
-    };
-    if insn.op != IrOp::IntNotequal || insn.inputs.len() != 2 {
-        return false;
-    }
-    let a = insn.inputs[0];
-    let b = insn.inputs[1];
-    (a == *counter && b.space == SpaceId::Const && b.offset == 0)
-        || (b == *counter && a.space == SpaceId::Const && a.offset == 0)
-}
-
-fn is_decrement_update(insn: &IrInsn, counter: &Varnode) -> bool {
-    match insn.op {
-        IrOp::IntSub => insn.inputs.first() == Some(counter) && is_const_one(insn.inputs.get(1)),
-        IrOp::IntAdd => {
-            insn.inputs.first() == Some(counter) && is_const_minus_one(insn.inputs.get(1))
+fn condition_counter(cond: Varnode, defs: &BTreeMap<Varnode, IrInsn>) -> Option<Varnode> {
+    if cond.space != SpaceId::Const {
+        if let Some(insn) = defs.get(&cond) {
+            if is_compare_op(insn.op) {
+                return compared_nonconst_input(insn);
+            }
         }
-        _ => false,
+        return Some(cond);
     }
+    None
 }
 
-fn is_const_one(input: Option<&Varnode>) -> bool {
-    input.is_some_and(|v| v.space == SpaceId::Const && v.offset == 1)
+fn is_compare_op(op: IrOp) -> bool {
+    matches!(
+        op,
+        IrOp::IntEqual
+            | IrOp::IntNotequal
+            | IrOp::IntLess
+            | IrOp::IntSless
+            | IrOp::IntLessequal
+            | IrOp::IntSlessequal
+    )
 }
 
-fn is_const_minus_one(input: Option<&Varnode>) -> bool {
-    input.is_some_and(|v| {
-        if v.space != SpaceId::Const {
-            return false;
-        }
-        let bits = u32::from(v.size) * 8;
-        let mask = if bits >= 64 { u64::MAX } else { (1u64 << bits) - 1 };
-        v.offset == mask
-    })
+fn compared_nonconst_input(insn: &IrInsn) -> Option<Varnode> {
+    let mut vars = insn.inputs.iter().copied().filter(|v| v.space != SpaceId::Const);
+    let first = vars.next()?;
+    if vars.next().is_none() {
+        Some(first)
+    } else {
+        None
+    }
 }
 
 fn is_update(insn: &IrInsn, counter: &Varnode) -> bool {
@@ -236,6 +229,23 @@ fn is_update(insn: &IrInsn, counter: &Varnode) -> bool {
             .inputs
             .iter()
             .any(|input| input.space == SpaceId::Const)
+}
+
+fn modifies_counter(insn: &IrInsn, counter: &Varnode) -> bool {
+    insn.output == Some(*counter)
+        && matches!(
+            insn.op,
+            IrOp::IntAdd
+                | IrOp::IntSub
+                | IrOp::IntMult
+                | IrOp::IntAnd
+                | IrOp::IntOr
+                | IrOp::IntXor
+                | IrOp::IntLeft
+                | IrOp::IntRight
+                | IrOp::IntSright
+        )
+        && insn.inputs.iter().any(|input| input == counter)
 }
 
 #[cfg(test)]
@@ -338,6 +348,37 @@ mod tests {
         assert!(matches!(hir.body[1], HirNode::For { .. }));
         if let HirNode::For { update, .. } = &hir.body[1] {
             assert_eq!(update.op, IrOp::IntAdd);
+        }
+    }
+
+    #[test]
+    fn promotes_standalone_any_last_condition_counter_modification() {
+        let i = Varnode::reg(0, 4);
+        let cond = Varnode::unique(0x100, 1);
+        let zero = Varnode::constant(0, 4);
+        let two = Varnode::constant(2, 4);
+        let tmp = Varnode::unique(0x200, 4);
+        let cmp = IrInsn::with_output(IrOp::IntNotequal, cond, smallvec![i, zero], 0x1000);
+        let body_stmt = IrInsn::with_output(IrOp::Copy, tmp, smallvec![i], 0x1008);
+        let step = IrInsn::with_output(IrOp::IntMult, i, smallvec![i, two], 0x1010);
+
+        let mut hir = func(vec![
+            HirNode::Statement(cmp),
+            HirNode::While {
+                cond: sv(cond),
+                body: vec![HirNode::Statement(body_stmt), HirNode::Statement(step)],
+            },
+        ]);
+
+        while_to_for(&mut hir);
+
+        match &hir.body[1] {
+            HirNode::For { init, update, body, .. } => {
+                assert!(init.is_none());
+                assert_eq!(update.op, IrOp::IntMult);
+                assert_eq!(body.len(), 1);
+            }
+            other => panic!("expected For, got {other:?}"),
         }
     }
 }

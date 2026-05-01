@@ -17,9 +17,7 @@
 //!     (each pointer-sized). `func_offset` points into funcdata where
 //!     `_func` structs live; the name is at `funcnametab[nameoff]`.
 
-use std::collections::BTreeMap;
-
-use crate::image::{BinaryImage, Section, Symbol, SymbolKind};
+use crate::image::{BinaryImage, Symbol, SymbolKind};
 
 /// Magic bytes for Go 1.18+ gopclntab.
 const MAGIC_GO_118: [u8; 4] = [0xFA, 0xFF, 0xFF, 0xFF];
@@ -223,8 +221,10 @@ pub fn discover_go_functions(image: &mut BinaryImage) {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
-    use crate::image::SectionFlags;
+    use crate::image::{Section, SectionFlags};
 
     /// Build a synthetic gopclntab section (Go 1.18+ format, 8-byte pointers).
     ///

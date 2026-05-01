@@ -43,8 +43,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, VarnodeSlot};
-use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::{BlockId, IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
 
@@ -72,14 +72,14 @@ struct InputRewrite {
     block: BlockId,
     insn_idx: usize,
     input_idx: usize,
-    new_input: Varnode,
+    new_input: SsaVarnode,
 }
 
 /// Walk the dominator tree iteratively and record which input slots should
 /// be rewritten to a dominating COPY source.
 fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
-    // Live `dst → src` equivalences scoped by dominator subtree.
-    let mut equiv: BTreeMap<Varnode, Varnode> = BTreeMap::new();
+    // Live `dst → src` SSA equivalences scoped by dominator subtree.
+    let mut equiv: BTreeMap<SsaVarnode, SsaVarnode> = BTreeMap::new();
     // Per-block log of mutations to `equiv`, replayed in reverse on cleanup.
     let mut log_per_block: BTreeMap<BlockId, Vec<EquivMutation>> = BTreeMap::new();
     let mut rewrites: Vec<InputRewrite> = Vec::new();
@@ -107,13 +107,20 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
         if let Some(block) = func.function.blocks.get(&bid) {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
                 // Step 1: rewrite inputs that have a known dominating
-                // equivalent.  Skip constants and self-equivalences.
+                // equivalent.  Skip constants, metadata operands, and self-equivalences.
                 for (input_idx, raw) in insn.inputs.iter().enumerate() {
-                    if raw.space == SpaceId::Const {
+                    if raw.space == SpaceId::Const || is_metadata_input(insn.op, input_idx) {
                         continue;
                     }
-                    if let Some(&replacement) = equiv.get(raw) {
-                        if replacement != *raw {
+                    let Some(input_sv) = func
+                        .var_map
+                        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+                        .copied()
+                    else {
+                        continue;
+                    };
+                    if let Some(&replacement) = equiv.get(&input_sv) {
+                        if replacement != input_sv {
                             rewrites.push(InputRewrite {
                                 block: bid,
                                 insn_idx,
@@ -124,26 +131,32 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
                     }
                 }
 
-                // Step 2: a definition kills any equivalence whose
-                // src or dst matches the new output base.
-                if let Some(out) = insn.output {
-                    if out.space != SpaceId::Const {
-                        kill_for_def(&mut equiv, &mut local_log, out);
-                    }
-                }
-
-                // Step 3: record a new COPY equivalence.  Resolve the source
+                // Step 2: record a new COPY equivalence.  Resolve the source
                 // through any existing equivalence so chains collapse to their
                 // ultimate origin in one pass.
                 if insn.op == IrOp::Copy {
                     if let (Some(out), Some(&raw_src)) = (insn.output, insn.inputs.first()) {
                         if out.space != SpaceId::Const && out != raw_src {
-                            let resolved_src = resolve_chain(&equiv, raw_src);
+                            let Some(out_sv) = func
+                                .var_map
+                                .get(&(bid, insn_idx, VarnodeSlot::Output))
+                                .copied()
+                            else {
+                                continue;
+                            };
+                            let Some(src_sv) = func
+                                .var_map
+                                .get(&(bid, insn_idx, VarnodeSlot::Input(0)))
+                                .copied()
+                            else {
+                                continue;
+                            };
+                            let resolved_src = resolve_chain(&equiv, src_sv);
                             // Avoid trivial self-loops introduced by chasing.
-                            if resolved_src != out {
-                                let prev = equiv.insert(out, resolved_src);
+                            if resolved_src != out_sv {
+                                let prev = equiv.insert(out_sv, resolved_src);
                                 local_log.push(EquivMutation::Inserted {
-                                    key: out,
+                                    key: out_sv,
                                     previous: prev,
                                 });
                             }
@@ -151,12 +164,6 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
                     }
                 }
 
-                // We intentionally rely solely on the input slot's raw
-                // varnode for matching: var_map gives SSA versions but
-                // already-renamed bases are unique anyway, and the COPY
-                // propagation operates on raw Varnodes (matching the local
-                // pass).  The dominator walk plus per-def kill ensures
-                // soundness against raw redefinitions.
                 let _ = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output));
             }
         }
@@ -180,14 +187,12 @@ enum EquivMutation {
     /// `equiv.insert(key, _)` — restore by either re-inserting `previous`
     /// or removing `key` if there was no previous binding.
     Inserted {
-        key: Varnode,
-        previous: Option<Varnode>,
+        key: SsaVarnode,
+        previous: Option<SsaVarnode>,
     },
-    /// `equiv.remove(key)` — restore by re-inserting the removed value.
-    Removed { key: Varnode, value: Varnode },
 }
 
-fn apply_mutation_reverse(equiv: &mut BTreeMap<Varnode, Varnode>, m: EquivMutation) {
+fn apply_mutation_reverse(equiv: &mut BTreeMap<SsaVarnode, SsaVarnode>, m: EquivMutation) {
     match m {
         EquivMutation::Inserted { key, previous } => match previous {
             Some(prev) => {
@@ -197,35 +202,13 @@ fn apply_mutation_reverse(equiv: &mut BTreeMap<Varnode, Varnode>, m: EquivMutati
                 equiv.remove(&key);
             }
         },
-        EquivMutation::Removed { key, value } => {
-            equiv.insert(key, value);
-        }
-    }
-}
-
-/// Kill every equivalence whose key or value matches the redefined varnode.
-/// Recording each removal in `log` so the cleanup phase can restore them.
-fn kill_for_def(
-    equiv: &mut BTreeMap<Varnode, Varnode>,
-    log: &mut Vec<EquivMutation>,
-    def: Varnode,
-) {
-    let to_remove: Vec<Varnode> = equiv
-        .iter()
-        .filter(|(k, v)| **k == def || **v == def)
-        .map(|(k, _)| *k)
-        .collect();
-    for key in to_remove {
-        if let Some(value) = equiv.remove(&key) {
-            log.push(EquivMutation::Removed { key, value });
-        }
     }
 }
 
 /// Chase `v` through the equivalence map until we reach a varnode with no
 /// further equivalence.  Bounded by map size to defeat any pathological
-/// cycles (none should exist after `kill_for_def`, but be safe).
-fn resolve_chain(equiv: &BTreeMap<Varnode, Varnode>, start: Varnode) -> Varnode {
+/// cycles.
+fn resolve_chain(equiv: &BTreeMap<SsaVarnode, SsaVarnode>, start: SsaVarnode) -> SsaVarnode {
     let mut current = start;
     let limit = equiv.len();
     let mut depth = 0;
@@ -253,10 +236,26 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<InputRewrite>) {
         let Some(input) = insn.inputs.get_mut(rw.input_idx) else {
             continue;
         };
-        if *input != rw.new_input {
-            *input = rw.new_input;
+        if *input != rw.new_input.base {
+            *input = rw.new_input.base;
+            func.var_map.insert(
+                (rw.block, rw.insn_idx, VarnodeSlot::Input(rw.input_idx)),
+                rw.new_input,
+            );
         }
     }
+}
+
+const fn is_metadata_input(op: IrOp, input_idx: usize) -> bool {
+    matches!(
+        (op, input_idx),
+        (IrOp::Load, 0)
+            | (IrOp::Store, 0)
+            | (IrOp::Callother, 0)
+            | (IrOp::Branch, 0)
+            | (IrOp::Cbranch, 0)
+            | (IrOp::Branchind, 0)
+    )
 }
 
 // ---------------------------------------------------------------------------

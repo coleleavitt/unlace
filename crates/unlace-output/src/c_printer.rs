@@ -2933,6 +2933,17 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x327 => Some("__bitfield_get__"),
         0x328 => Some("__bitfield_set__"),
 
+        // ── AArch64 lifter callothers (0x330..0x344) ───────────
+        0x330 => Some("__csel__"),
+        0x331 => Some("__csinc__"),
+        0x332 => Some("__csinv__"),
+        0x333 => Some("__csneg__"),
+        0x340 => Some("__ldrex__"),
+        0x341 => Some("__strex__"),
+        0x342 => Some("__dmb__"),
+        0x343 => Some("__dsb__"),
+        0x344 => Some("__isb__"),
+
         _ => None,
     }
 }

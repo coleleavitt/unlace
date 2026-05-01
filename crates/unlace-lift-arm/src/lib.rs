@@ -396,6 +396,48 @@ mod tests {
     }
 
     #[test]
+    fn arm64_ldxr_lifts_to_callother() {
+        // LDXR X0, [X1]  →  c85f7c20
+        assert_callother_tag(&[0x20, 0x7c, 0x5f, 0xc8], 0x340);
+    }
+
+    #[test]
+    fn arm64_ldaxr_lifts_to_callother() {
+        // LDAXR X0, [X1]  →  c85ffc20
+        assert_callother_tag(&[0x20, 0xfc, 0x5f, 0xc8], 0x340);
+    }
+
+    #[test]
+    fn arm64_stxr_lifts_to_callother() {
+        // STXR W2, X0, [X1]  →  c8027c20
+        assert_callother_tag(&[0x20, 0x7c, 0x02, 0xc8], 0x341);
+    }
+
+    #[test]
+    fn arm64_stlxr_lifts_to_callother() {
+        // STLXR W2, X0, [X1]  →  c802fc20
+        assert_callother_tag(&[0x20, 0xfc, 0x02, 0xc8], 0x341);
+    }
+
+    #[test]
+    fn arm64_dmb_lifts_to_callother() {
+        // DMB ISH  →  d5033bbf
+        assert_callother_tag(&[0xbf, 0x3b, 0x03, 0xd5], 0x342);
+    }
+
+    #[test]
+    fn arm64_dsb_lifts_to_callother() {
+        // DSB SY  →  d5033f9f
+        assert_callother_tag(&[0x9f, 0x3f, 0x03, 0xd5], 0x343);
+    }
+
+    #[test]
+    fn arm64_isb_lifts_to_callother() {
+        // ISB SY  →  d5033fdf
+        assert_callother_tag(&[0xdf, 0x3f, 0x03, 0xd5], 0x344);
+    }
+
+    #[test]
     fn test_no_panic_on_various() {
         let cases: Vec<&[u8]> = vec![
             &[0x1f, 0x20, 0x03, 0xd5], // NOP

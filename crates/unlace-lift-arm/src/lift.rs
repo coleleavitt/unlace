@@ -247,6 +247,15 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_STRB => data_move::lift_str_sized(ctx, &ops, 1),
         Arm64Insn::ARM64_INS_STRH => data_move::lift_str_sized(ctx, &ops, 2),
         Arm64Insn::ARM64_INS_STP => data_move::lift_stp(ctx, &ops),
+        Arm64Insn::ARM64_INS_LDXR | Arm64Insn::ARM64_INS_LDAXR => {
+            data_move::lift_exclusive_load(ctx, &ops)
+        }
+        Arm64Insn::ARM64_INS_STXR | Arm64Insn::ARM64_INS_STLXR => {
+            data_move::lift_exclusive_store(ctx, &ops)
+        }
+        Arm64Insn::ARM64_INS_DMB => data_move::lift_barrier(ctx, 0x342),
+        Arm64Insn::ARM64_INS_DSB => data_move::lift_barrier(ctx, 0x343),
+        Arm64Insn::ARM64_INS_ISB => data_move::lift_barrier(ctx, 0x344),
 
         Arm64Insn::ARM64_INS_B => control_flow::lift_b(ctx, &ops, detail),
         Arm64Insn::ARM64_INS_BL => control_flow::lift_bl(ctx, &ops),

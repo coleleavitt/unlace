@@ -8,7 +8,8 @@
 //! it on every run. Any change to the decompiler that alters output for
 //! `medium.elf`, `debug_structs.elf`, `debug_calls.elf`, `debug_hello.elf`,
 //! `cpp_vtable.elf`, `cpp_exceptions.elf`, `cpp_rtti.elf`, or
-//! `arm64_features.elf` will fail this test.
+//! `arm64_features.elf`, `mips64_features.elf`, or `riscv64_features.elf`
+//! will fail this test.
 //!
 //! # Running
 //!
@@ -471,6 +472,11 @@ fn golden_mips64_features() {
 }
 
 #[test]
+fn golden_riscv64_features() {
+    run_golden("riscv64_features");
+}
+
+#[test]
 fn golden_fixtures_metrics_summary() {
     let fixtures = [
         "medium",
@@ -482,6 +488,7 @@ fn golden_fixtures_metrics_summary() {
         "cpp_rtti",
         "arm64_features",
         "mips64_features",
+        "riscv64_features",
     ];
     let mut total = Metrics::default();
 
@@ -709,6 +716,7 @@ fn reference_metrics_file_loads_for_all_fixtures() {
         "cpp_rtti",
         "arm64_features",
         "mips64_features",
+        "riscv64_features",
     ] {
         assert!(
             reference_metrics(name).is_some(),

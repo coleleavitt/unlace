@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaVarnode};
+use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, Varnode};
 
 /// Opaque label identifier for goto/label fallback.
@@ -157,4 +158,8 @@ pub struct HirFunction {
     /// `exit`/`abort`/`panic`). Mirrors [`unlace_ir::ssa::SsaFunction::noreturn`]
     /// and triggers an `__noreturn` annotation in the C output.
     pub noreturn: bool,
+    /// Composite (struct/array) type annotations for SSA varnodes, propagated
+    /// from [`SsaFunction::composite_var_types`] for use by the C printer when
+    /// emitting `base->field_<offset>` struct field access syntax.
+    pub composite_var_types: BTreeMap<SsaVarnode, Type>,
 }

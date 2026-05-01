@@ -28,18 +28,20 @@ fn recover_node(node: HirNode) -> HirNode {
             cond,
             then_body,
             else_body: Some(else_body),
-        } => {
-            match try_as_ternary(&cond, &then_body, &else_body) {
-                Some(ternary) => ternary,
-                None => HirNode::If {
-                    cond,
-                    then_body: recover_ternaries(then_body),
-                    else_body: Some(recover_ternaries(else_body)),
-                },
-            }
-        }
+        } => match try_as_ternary(&cond, &then_body, &else_body) {
+            Some(ternary) => ternary,
+            None => HirNode::If {
+                cond,
+                then_body: recover_ternaries(then_body),
+                else_body: Some(recover_ternaries(else_body)),
+            },
+        },
 
-        HirNode::If { cond, then_body, else_body: None } => HirNode::If {
+        HirNode::If {
+            cond,
+            then_body,
+            else_body: None,
+        } => HirNode::If {
             cond,
             then_body: recover_ternaries(then_body),
             else_body: None,
@@ -57,7 +59,11 @@ fn recover_node(node: HirNode) -> HirNode {
             cond,
         },
 
-        HirNode::Switch { cond, cases, default } => HirNode::Switch {
+        HirNode::Switch {
+            cond,
+            cases,
+            default,
+        } => HirNode::Switch {
             cond,
             cases: cases
                 .into_iter()
@@ -136,6 +142,7 @@ mod tests {
             foldable_exprs: BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         }
     }
 
@@ -157,7 +164,12 @@ mod tests {
 
         assert_eq!(func.body.len(), 1);
         match &func.body[0] {
-            HirNode::Ternary { cond: c, output, then_insn, else_insn } => {
+            HirNode::Ternary {
+                cond: c,
+                output,
+                then_insn,
+                else_insn,
+            } => {
                 assert_eq!(*c, cond);
                 assert_eq!(*output, r0);
                 assert_eq!(then_insn.op, IrOp::Copy);
@@ -229,8 +241,7 @@ mod tests {
         let c1 = Varnode::constant(1, 4);
         let cond = sv(256, 1, 0);
 
-        let add_insn =
-            IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r8, c1], 0x1000);
+        let add_insn = IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r8, c1], 0x1000);
 
         let body = vec![HirNode::If {
             cond,

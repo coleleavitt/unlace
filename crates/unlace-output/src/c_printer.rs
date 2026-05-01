@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
+use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::DwarfInfo;
 use unlace_struct::{HirFunction, HirNode, SwitchCase};
@@ -157,7 +158,13 @@ pub fn print_c_with_rtti(
 ) -> String {
     let sym_owned = symbols.cloned().unwrap_or_default();
     let str_owned = string_table.cloned().unwrap_or_default();
-    let mut ctx = PrintCtx::new(dwarf, func.panic_sites.clone(), sym_owned, str_owned);
+    let mut ctx = PrintCtx::new(
+        dwarf,
+        func.panic_sites.clone(),
+        sym_owned,
+        str_owned,
+        func.composite_var_types.clone(),
+    );
 
     let dwarf_func = dwarf.and_then(|d| d.functions.get(&func.addr));
     compute_dwarf_local_names(dwarf_func, header, &mut ctx);
@@ -414,6 +421,9 @@ struct PrintCtx {
     /// Override map: when present, [`PrintCtx::name_of`] returns the override
     /// for the matching base instead of the cached `vN` name.
     name_overrides: BTreeMap<Varnode, String>,
+    /// Composite (struct/array) type annotations from SSA-level type inference.
+    /// Used by `try_struct_field_access` to emit `base->field_<offset>` syntax.
+    composite_var_types: BTreeMap<SsaVarnode, Type>,
 }
 
 impl PrintCtx {
@@ -422,6 +432,7 @@ impl PrintCtx {
         panic_sites: BTreeMap<u64, PanicKind>,
         symbols: BTreeMap<u64, String>,
         string_table: BTreeMap<u64, String>,
+        composite_var_types: BTreeMap<SsaVarnode, Type>,
     ) -> Self {
         let field_by_offset = build_field_offset_map(dwarf);
         Self {
@@ -448,6 +459,7 @@ impl PrintCtx {
             string_table,
             byref_bases: BTreeSet::new(),
             name_overrides: BTreeMap::new(),
+            composite_var_types,
         }
     }
 
@@ -717,6 +729,78 @@ fn try_array_subscript(
 
         _ => None,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Struct field access recovery (from SSA composite_var_types)
+// ---------------------------------------------------------------------------
+
+/// Try to recognise a struct field access pattern: `INT_ADD(base, Const(offset))`
+/// where `base` has a `Type::Struct` in `composite_var_types`.
+///
+/// Emits `base->field_<offset>` when a matching field is found at the given
+/// offset, or `base->field_<offset>` with a synthetic name when the struct
+/// type is known but no field matches exactly.
+fn try_struct_field_access(
+    addr_vn: &Varnode,
+    stmt_idx: u32,
+    _access_size: u8,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    if ctx.composite_var_types.is_empty() || addr_vn.space == SpaceId::Const {
+        return None;
+    }
+
+    let addr_sv = ctx
+        .stmt_inputs
+        .get(&stmt_idx)
+        .cloned()
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
+
+    let &def_stmt = ctx.sv_defining_stmt.get(&addr_sv)?;
+    let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
+
+    if def_insn.op != IrOp::IntAdd || def_insn.inputs.len() < 2 {
+        return None;
+    }
+
+    let (base_vn, const_offset) = if def_insn.inputs[1].space == SpaceId::Const {
+        (&def_insn.inputs[0], def_insn.inputs[1].offset)
+    } else if def_insn.inputs[0].space == SpaceId::Const {
+        (&def_insn.inputs[1], def_insn.inputs[0].offset)
+    } else {
+        return None;
+    };
+
+    if base_vn.space == SpaceId::Const {
+        return None;
+    }
+
+    let base_sv = ctx
+        .stmt_inputs
+        .get(&def_stmt)
+        .cloned()
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *base_vn).copied())?;
+
+    let base_type = ctx.composite_var_types.get(&base_sv)?;
+
+    let struct_fields = match base_type {
+        Type::Struct { fields, .. } => fields,
+        Type::Ptr(inner) => match inner.as_ref() {
+            Type::Struct { fields, .. } => fields,
+            _ => return None,
+        },
+        _ => return None,
+    };
+
+    let field_name = struct_fields
+        .iter()
+        .find(|f| f.offset == const_offset)
+        .map(|f| f.name.clone())
+        .unwrap_or_else(|| format!("field_{:X}", const_offset));
+
+    let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
+    Some(format!("{}->{}", base_expr, field_name))
 }
 
 /// Minimum address to consider as a global (below this is likely stack-relative).
@@ -2135,6 +2219,10 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                         try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx)
                     {
                         let _ = writeln!(out, "{} = {};", field_expr, val);
+                    } else if let Some(field_expr) =
+                        try_struct_field_access(&insn.inputs[1], idx, store_size, ctx)
+                    {
+                        let _ = writeln!(out, "{} = {};", field_expr, val);
                     } else if let Some(sub) =
                         try_array_subscript(&insn.inputs[1], idx, store_size, ctx)
                     {
@@ -2412,6 +2500,14 @@ fn emit_expr_with_prec(
                     ctx,
                 ) {
                     return resolved;
+                }
+                if let Some(field) = try_struct_field_access(
+                    &insn.inputs[addr_idx],
+                    stmt_idx,
+                    load_size,
+                    ctx,
+                ) {
+                    return field;
                 }
                 if let Some(sub) =
                     try_array_subscript(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
@@ -3450,6 +3546,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         }
     }
 
@@ -3751,6 +3848,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -4083,6 +4181,117 @@ mod tests {
     }
 
     #[test]
+    fn test_composite_var_types_struct_field_access() {
+        use unlace_ir::types::{StructFieldType, Type};
+
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 4);
+        let c16 = con(16, 8);
+        let space = con(0, 8);
+
+        let addr_add = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(0, 8),
+            smallvec![r0, c16],
+            0x1000,
+        );
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            r8,
+            smallvec![space, Varnode::unique(0, 8)],
+            0x1004,
+        );
+        let body = vec![
+            HirNode::Statement(addr_add),
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let mut func = make_func("test_composite_field", body);
+
+        let base_sv = SsaVarnode {
+            base: r0,
+            version: 0,
+        };
+        func.composite_var_types.insert(
+            base_sv,
+            Type::Struct {
+                name: "MyStruct".into(),
+                fields: vec![
+                    StructFieldType {
+                        name: "alpha".into(),
+                        ty: Type::int(8),
+                        offset: 0,
+                    },
+                    StructFieldType {
+                        name: "beta".into(),
+                        ty: Type::int(4),
+                        offset: 16,
+                    },
+                ],
+            },
+        );
+
+        let output = super::print_c(&func);
+        assert!(
+            output.contains("->beta"),
+            "should emit ->beta for struct field at offset 16: {output}"
+        );
+    }
+
+    #[test]
+    fn test_composite_var_types_synthetic_field_name() {
+        use unlace_ir::types::{StructFieldType, Type};
+
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 4);
+        let c24 = con(24, 8);
+        let space = con(0, 8);
+
+        let addr_add = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(0, 8),
+            smallvec![r0, c24],
+            0x1000,
+        );
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            r8,
+            smallvec![space, Varnode::unique(0, 8)],
+            0x1004,
+        );
+        let body = vec![
+            HirNode::Statement(addr_add),
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let mut func = make_func("test_synthetic_field", body);
+
+        let base_sv = SsaVarnode {
+            base: r0,
+            version: 0,
+        };
+        func.composite_var_types.insert(
+            base_sv,
+            Type::Struct {
+                name: "Foo".into(),
+                fields: vec![StructFieldType {
+                    name: "first".into(),
+                    ty: Type::int(8),
+                    offset: 0,
+                }],
+            },
+        );
+
+        let output = super::print_c(&func);
+        assert!(
+            output.contains("->field_18"),
+            "should emit synthetic ->field_18 for unknown offset 24 (0x18): {output}"
+        );
+    }
+
+    #[test]
     fn test_dwarf_function_name_used() {
         use std::collections::BTreeMap;
         use unlace_loader::{DwarfInfo, FunctionDebugInfo};
@@ -4187,6 +4396,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let mut functions = BTreeMap::new();
@@ -4280,6 +4490,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: true,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let output = super::print_c(&func);
@@ -4301,6 +4512,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let output = super::print_c(&func);
@@ -7373,6 +7585,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -7393,6 +7606,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -7417,6 +7631,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -7437,6 +7652,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -7457,6 +7673,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -7503,6 +7720,7 @@ mod tests {
             foldable_exprs: foldable,
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let output = print_c(&func);

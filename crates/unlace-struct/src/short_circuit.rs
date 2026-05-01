@@ -45,7 +45,10 @@ impl SynthCounter {
     /// Allocate a fresh 1-byte unique-space varnode and its SSA wrapper.
     fn next_varnode(&mut self) -> (Varnode, SsaVarnode) {
         let vn = Varnode::unique(self.0, 1);
-        let sv = SsaVarnode { base: vn, version: 0 };
+        let sv = SsaVarnode {
+            base: vn,
+            version: 0,
+        };
         self.0 += 1;
         (vn, sv)
     }
@@ -91,9 +94,17 @@ fn recover_into(
             try_collapse(cond, then_body, else_body, func, ctr, out);
         }
 
-        HirNode::If { cond, then_body, else_body: None } => {
+        HirNode::If {
+            cond,
+            then_body,
+            else_body: None,
+        } => {
             let then_body = recover_short_circuits(then_body, func, ctr);
-            out.push(HirNode::If { cond, then_body, else_body: None });
+            out.push(HirNode::If {
+                cond,
+                then_body,
+                else_body: None,
+            });
         }
 
         HirNode::Block(children) => {
@@ -114,7 +125,12 @@ fn recover_into(
             });
         }
 
-        HirNode::For { init, cond, update, body } => {
+        HirNode::For {
+            init,
+            cond,
+            update,
+            body,
+        } => {
             out.push(HirNode::For {
                 init,
                 cond,
@@ -123,7 +139,11 @@ fn recover_into(
             });
         }
 
-        HirNode::Switch { cond, cases, default } => {
+        HirNode::Switch {
+            cond,
+            cases,
+            default,
+        } => {
             out.push(HirNode::Switch {
                 cond,
                 cases: cases
@@ -134,7 +154,10 @@ fn recover_into(
             });
         }
 
-        HirNode::TryCatch { try_body, catch_body } => {
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => {
             out.push(HirNode::TryCatch {
                 try_body: recover_short_circuits(try_body, func, ctr),
                 catch_body: recover_short_circuits(catch_body, func, ctr),
@@ -159,12 +182,8 @@ fn try_collapse(
     if let Some((cond_b, inner_then, inner_else)) = as_single_if_with_else(&then_body) {
         if bodies_eq(&inner_else, &else_body) {
             let (vn, sv) = ctr.next_varnode();
-            let insn = IrInsn::with_output(
-                IrOp::BoolAnd,
-                vn,
-                smallvec![cond_a.base, cond_b.base],
-                0,
-            );
+            let insn =
+                IrInsn::with_output(IrOp::BoolAnd, vn, smallvec![cond_a.base, cond_b.base], 0);
             func.foldable_exprs.insert(sv);
             out.push(HirNode::Statement(insn));
             // Recurse: the merged If may itself be collapsible (a && b && c).
@@ -178,12 +197,8 @@ fn try_collapse(
     if let Some((cond_b, inner_then, inner_else)) = as_single_if_with_else(&else_body) {
         if bodies_eq(&inner_then, &then_body) {
             let (vn, sv) = ctr.next_varnode();
-            let insn = IrInsn::with_output(
-                IrOp::BoolOr,
-                vn,
-                smallvec![cond_a.base, cond_b.base],
-                0,
-            );
+            let insn =
+                IrInsn::with_output(IrOp::BoolOr, vn, smallvec![cond_a.base, cond_b.base], 0);
             func.foldable_exprs.insert(sv);
             out.push(HirNode::Statement(insn));
             // Recurse: the merged If may itself be collapsible.
@@ -205,9 +220,13 @@ fn try_collapse(
 /// If `nodes` is exactly one `If` with an else branch, return its pieces.
 fn as_single_if_with_else(nodes: &[HirNode]) -> Option<(SsaVarnode, Vec<HirNode>, Vec<HirNode>)> {
     match nodes {
-        [HirNode::If { cond, then_body, else_body: Some(else_body) }] => {
-            Some((*cond, then_body.clone(), else_body.clone()))
-        }
+        [
+            HirNode::If {
+                cond,
+                then_body,
+                else_body: Some(else_body),
+            },
+        ] => Some((*cond, then_body.clone(), else_body.clone())),
         _ => None,
     }
 }
@@ -232,7 +251,10 @@ mod tests {
     use crate::hir::HirFunction;
 
     fn sv(offset: u64, size: u8, version: u32) -> SsaVarnode {
-        SsaVarnode { base: Varnode::reg(offset, size), version }
+        SsaVarnode {
+            base: Varnode::reg(offset, size),
+            version,
+        }
     }
 
     fn make_func(body: Vec<HirNode>) -> HirFunction {
@@ -245,6 +267,7 @@ mod tests {
             foldable_exprs: BTreeSet::new(),
             panic_sites: BTreeMap::new(),
             noreturn: false,
+            composite_var_types: BTreeMap::new(),
         }
     }
 
@@ -282,7 +305,12 @@ mod tests {
         short_circuit_recovery(&mut func);
 
         // Should be: [Statement(BoolAnd), If { cond: synth, ... }]
-        assert_eq!(func.body.len(), 2, "expected Statement + If, got {:?}", func.body);
+        assert_eq!(
+            func.body.len(),
+            2,
+            "expected Statement + If, got {:?}",
+            func.body
+        );
 
         // First node: Statement with BoolAnd
         match &func.body[0] {
@@ -296,7 +324,11 @@ mod tests {
 
         // Second node: If with merged condition
         match &func.body[1] {
-            HirNode::If { then_body, else_body, .. } => {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 assert_eq!(then_body, &true_body);
                 assert_eq!(else_body.as_deref(), Some(false_body.as_slice()));
             }
@@ -333,7 +365,12 @@ mod tests {
         let mut func = make_func(body);
         short_circuit_recovery(&mut func);
 
-        assert_eq!(func.body.len(), 2, "expected Statement + If, got {:?}", func.body);
+        assert_eq!(
+            func.body.len(),
+            2,
+            "expected Statement + If, got {:?}",
+            func.body
+        );
 
         match &func.body[0] {
             HirNode::Statement(insn) => {
@@ -345,7 +382,11 @@ mod tests {
         }
 
         match &func.body[1] {
-            HirNode::If { then_body, else_body, .. } => {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 assert_eq!(then_body, &true_body);
                 assert_eq!(else_body.as_deref(), Some(false_body.as_slice()));
             }
@@ -414,7 +455,12 @@ mod tests {
         short_circuit_recovery(&mut func);
 
         // Should produce: [Statement(BoolAnd a,b), Statement(BoolAnd ab,c), If(abc)]
-        assert_eq!(func.body.len(), 3, "expected 2 Statements + If, got {:?}", func.body);
+        assert_eq!(
+            func.body.len(),
+            3,
+            "expected 2 Statements + If, got {:?}",
+            func.body
+        );
 
         // First: BoolAnd(b, c) — inner collapse happens first during recursion
         match &func.body[0] {
@@ -430,7 +476,11 @@ mod tests {
 
         // Third: If with the final merged condition
         match &func.body[2] {
-            HirNode::If { then_body, else_body, .. } => {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 assert_eq!(then_body, &true_body);
                 assert_eq!(else_body.as_deref(), Some(false_body.as_slice()));
             }
@@ -521,13 +571,20 @@ mod tests {
         for node in &func.body {
             check_for_op(node, IrOp::BoolOr, &mut found_bool_or);
         }
-        assert!(found_bool_or, "should have at least one BoolOr from b||c collapse");
+        assert!(
+            found_bool_or,
+            "should have at least one BoolOr from b||c collapse"
+        );
     }
 
     fn check_for_op(node: &HirNode, target: IrOp, found: &mut bool) {
         match node {
             HirNode::Statement(insn) if insn.op == target => *found = true,
-            HirNode::If { then_body, else_body, .. } => {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 for n in then_body {
                     check_for_op(n, target, found);
                 }

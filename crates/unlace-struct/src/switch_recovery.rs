@@ -34,8 +34,14 @@ pub struct SectionPerms {
 }
 
 impl SectionPerms {
-    pub const RX: Self = Self { read: true, exec: true };
-    pub const RO: Self = Self { read: true, exec: false };
+    pub const RX: Self = Self {
+        read: true,
+        exec: true,
+    };
+    pub const RO: Self = Self {
+        read: true,
+        exec: false,
+    };
 }
 
 /// A read-only view of a section's bytes at a given virtual address.
@@ -66,8 +72,7 @@ impl<'a> SectionView<'a> {
         let off = addr.checked_sub(self.vaddr)? as usize;
         let bytes = self.data.get(off..off + 8)?;
         let arr = [
-            bytes[0], bytes[1], bytes[2], bytes[3],
-            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
         ];
         Some(match endian {
             TableEndian::Little => u64::from_le_bytes(arr),
@@ -114,13 +119,12 @@ pub fn validate_table_base<'s, 'b>(
 }
 
 /// Read the concrete target addresses out of a validated jump table.
-pub fn read_jump_table(
-    table: &JumpTable,
-    section: &SectionView<'_>,
-) -> Option<Vec<u64>> {
+pub fn read_jump_table(table: &JumpTable, section: &SectionView<'_>) -> Option<Vec<u64>> {
     let mut out = Vec::with_capacity(table.num_entries as usize);
     for i in 0..table.num_entries as u64 {
-        let addr = table.base.checked_add(i.checked_mul(table.entry_size as u64)?)?;
+        let addr = table
+            .base
+            .checked_add(i.checked_mul(table.entry_size as u64)?)?;
         let target = match table.entry_size {
             4 => section.read_u32(addr, table.endian)? as u64,
             8 => section.read_u64(addr, table.endian)?,
@@ -172,34 +176,73 @@ fn refine_node(
 ) -> HirNode {
     match node {
         HirNode::Block(children) => HirNode::Block(
-            children.into_iter().map(|c| refine_node(c, tables, sections)).collect(),
+            children
+                .into_iter()
+                .map(|c| refine_node(c, tables, sections))
+                .collect(),
         ),
-        HirNode::If { cond, then_body, else_body } => HirNode::If {
+        HirNode::If {
             cond,
-            then_body: then_body.into_iter().map(|c| refine_node(c, tables, sections)).collect(),
+            then_body,
+            else_body,
+        } => HirNode::If {
+            cond,
+            then_body: then_body
+                .into_iter()
+                .map(|c| refine_node(c, tables, sections))
+                .collect(),
             else_body: else_body.map(|eb| {
-                eb.into_iter().map(|c| refine_node(c, tables, sections)).collect()
+                eb.into_iter()
+                    .map(|c| refine_node(c, tables, sections))
+                    .collect()
             }),
         },
         HirNode::While { cond, body } => HirNode::While {
             cond,
-            body: body.into_iter().map(|c| refine_node(c, tables, sections)).collect(),
+            body: body
+                .into_iter()
+                .map(|c| refine_node(c, tables, sections))
+                .collect(),
         },
         HirNode::DoWhile { body, cond } => HirNode::DoWhile {
-            body: body.into_iter().map(|c| refine_node(c, tables, sections)).collect(),
+            body: body
+                .into_iter()
+                .map(|c| refine_node(c, tables, sections))
+                .collect(),
             cond,
         },
-        HirNode::For { init, cond, update, body } => HirNode::For {
+        HirNode::For {
             init,
             cond,
             update,
-            body: body.into_iter().map(|c| refine_node(c, tables, sections)).collect(),
+            body,
+        } => HirNode::For {
+            init,
+            cond,
+            update,
+            body: body
+                .into_iter()
+                .map(|c| refine_node(c, tables, sections))
+                .collect(),
         },
-        HirNode::TryCatch { try_body, catch_body } => HirNode::TryCatch {
-            try_body: try_body.into_iter().map(|c| refine_node(c, tables, sections)).collect(),
-            catch_body: catch_body.into_iter().map(|c| refine_node(c, tables, sections)).collect(),
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => HirNode::TryCatch {
+            try_body: try_body
+                .into_iter()
+                .map(|c| refine_node(c, tables, sections))
+                .collect(),
+            catch_body: catch_body
+                .into_iter()
+                .map(|c| refine_node(c, tables, sections))
+                .collect(),
         },
-        HirNode::Switch { cond, cases, default } => {
+        HirNode::Switch {
+            cond,
+            cases,
+            default,
+        } => {
             let switch_addr = first_stmt_addr(&cases);
             let refined_cases = match switch_addr.and_then(|a| tables.get(&a)) {
                 Some((table, targets)) if validate_table_base(table.base, sections).is_some() => {
@@ -212,11 +255,19 @@ fn refine_node(
                 cases: refined_cases
                     .into_iter()
                     .map(|(c, body, ft)| {
-                        (c, body.into_iter().map(|n| refine_node(n, tables, sections)).collect(), ft)
+                        (
+                            c,
+                            body.into_iter()
+                                .map(|n| refine_node(n, tables, sections))
+                                .collect(),
+                            ft,
+                        )
                     })
                     .collect(),
                 default: default.map(|d| {
-                    d.into_iter().map(|n| refine_node(n, tables, sections)).collect()
+                    d.into_iter()
+                        .map(|n| refine_node(n, tables, sections))
+                        .collect()
                 }),
             }
         }
@@ -273,7 +324,11 @@ fn walk_nodes(nodes: Vec<HirNode>) -> Vec<HirNode> {
 fn walk_node(node: HirNode) -> HirNode {
     match node {
         HirNode::Block(children) => HirNode::Block(walk_nodes(children)),
-        HirNode::If { cond, then_body, else_body } => HirNode::If {
+        HirNode::If {
+            cond,
+            then_body,
+            else_body,
+        } => HirNode::If {
             cond,
             then_body: walk_nodes(then_body),
             else_body: else_body.map(walk_nodes),
@@ -286,7 +341,11 @@ fn walk_node(node: HirNode) -> HirNode {
             body: walk_nodes(body),
             cond,
         },
-        HirNode::Switch { cond, cases, default } => HirNode::Switch {
+        HirNode::Switch {
+            cond,
+            cases,
+            default,
+        } => HirNode::Switch {
             cond,
             cases: cases
                 .into_iter()
@@ -295,7 +354,10 @@ fn walk_node(node: HirNode) -> HirNode {
             default: default.map(walk_nodes),
         },
         HirNode::Statement(ref insn) if insn.op == IrOp::Branchind => {
-            tracing::debug!(addr = insn.addr, "unresolved BRANCHIND in HIR — keeping as statement");
+            tracing::debug!(
+                addr = insn.addr,
+                "unresolved BRANCHIND in HIR — keeping as statement"
+            );
             node
         }
         other => other,
@@ -315,26 +377,28 @@ mod tests {
     use crate::hir::{HirFunction, HirNode, SwitchCase};
 
     fn make_hir_with_switch() -> HirFunction {
-        let cond = SsaVarnode { base: Varnode::reg(0, 8), version: 0 };
+        let cond = SsaVarnode {
+            base: Varnode::reg(0, 8),
+            version: 0,
+        };
 
         HirFunction {
             name: "switch_fn".into(),
             params: vec![],
             return_type: PrimitiveType::Unknown,
-            body: vec![
-                HirNode::Switch {
-                    cond,
-                    cases: vec![
-                        (SwitchCase::Value(0), vec![HirNode::Return(None)], false),
-                        (SwitchCase::Value(1), vec![HirNode::Return(None)], false),
-                    ],
-                    default: Some(vec![HirNode::Return(None)]),
-                },
-            ],
+            body: vec![HirNode::Switch {
+                cond,
+                cases: vec![
+                    (SwitchCase::Value(0), vec![HirNode::Return(None)], false),
+                    (SwitchCase::Value(1), vec![HirNode::Return(None)], false),
+                ],
+                default: Some(vec![HirNode::Return(None)]),
+            }],
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         }
     }
 
@@ -343,7 +407,10 @@ mod tests {
         let mut func = make_hir_with_switch();
         recover_switches(&mut func);
 
-        let has_switch = func.body.iter().any(|n| matches!(n, HirNode::Switch { .. }));
+        let has_switch = func
+            .body
+            .iter()
+            .any(|n| matches!(n, HirNode::Switch { .. }));
         assert!(has_switch, "existing Switch nodes must be preserved");
     }
 
@@ -360,11 +427,15 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         recover_switches(&mut func);
 
-        let has_stmt = func.body.iter().any(|n| matches!(n, HirNode::Statement(i) if i.op == IrOp::Branchind));
+        let has_stmt = func
+            .body
+            .iter()
+            .any(|n| matches!(n, HirNode::Statement(i) if i.op == IrOp::Branchind));
         assert!(has_stmt, "unresolved BRANCHIND should remain as Statement");
     }
 
@@ -410,7 +481,10 @@ mod tests {
             name: ".unrelated",
             vaddr: 0x30000,
             data: &bytes,
-            perms: SectionPerms { read: false, exec: false },
+            perms: SectionPerms {
+                read: false,
+                exec: false,
+            },
         };
         let sections = [section];
         assert!(validate_table_base(0x30010, &sections).is_none());
@@ -470,7 +544,10 @@ mod tests {
 
     #[test]
     fn test_switch_with_real_case_values() {
-        let cond = SsaVarnode { base: Varnode::reg(0, 8), version: 0 };
+        let cond = SsaVarnode {
+            base: Varnode::reg(0, 8),
+            version: 0,
+        };
         let switch_addr = 0x4100u64;
 
         let case_body = |addr: u64| {
@@ -495,6 +572,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
+            composite_var_types: std::collections::BTreeMap::new(),
         };
 
         let targets = [0x4200u64, 0x4210, 0x4220];
@@ -529,7 +607,11 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(labels, vec![10, 11, 12], "DenseWithOffset lo=10 should produce 10,11,12");
+        assert_eq!(
+            labels,
+            vec![10, 11, 12],
+            "DenseWithOffset lo=10 should produce 10,11,12"
+        );
     }
 
     #[test]

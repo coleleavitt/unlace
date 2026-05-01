@@ -36,6 +36,7 @@ _DWORD __readfsdword(unsigned int offset);
 void main(void) {
     int v6; // eax
     long long v2; // rsp
+    int result;
     int v3; // temp
     long long v1; // temp
     signed char v4; // temp
@@ -43,6 +44,7 @@ void main(void) {
 
     *(_QWORD *)(0LL) = 0x1080LL;
     __printf_chk();
+    return result;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;

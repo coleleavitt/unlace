@@ -181,6 +181,9 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void main(void) {
+    int result;
+
+    return result;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;

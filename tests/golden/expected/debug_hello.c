@@ -81,8 +81,10 @@ _DWORD __readfsdword(unsigned int offset);
  */
 int main(void) {
     long long v5; // rsp
+    int result;
     long long v1; // temp
     signed char v4; // temp
 
     *(_QWORD *)(0LL) = 0x115dLL;
+    return result;
 }

@@ -1,0 +1,31 @@
+Architecture Coverage Report - Phase 13 Wave 3
+================================================
+
+medium: 0
+N/A unimplemented
+debug_structs: 0
+N/A unimplemented
+debug_calls: 0
+N/A unimplemented
+debug_hello: 0
+N/A unimplemented
+cpp_vtable: 0
+N/A unimplemented
+cpp_exceptions: 0
+N/A unimplemented
+cpp_rtti: 0
+N/A unimplemented
+x87_math: 0
+N/A unimplemented
+arm64_features: 0
+N/A unimplemented
+mips64_features: 0
+N/A unimplemented
+riscv64_features: 0
+N/A unimplemented
+v850_features: 0
+N/A unimplemented
+arc_features: 0
+N/A unimplemented
+ppc64_features: 0
+N/A unimplemented

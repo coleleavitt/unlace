@@ -165,3 +165,104 @@ pub fn lift_sub(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
         ctx.addr,
     ));
 }
+
+pub fn lift_mullw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
+    let (rd, ra, rb) = match (
+        ops.first().and_then(operand_reg),
+        ops.get(1).and_then(operand_reg),
+        ops.get(2).and_then(operand_reg),
+    ) {
+        (Some(d), Some(a), Some(b)) => (d, a, b),
+        _ => return ctx.emit_unimplemented(),
+    };
+    let result = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntMult,
+        result,
+        smallvec![ra, rb],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![result],
+        ctx.addr,
+    ));
+}
+
+pub fn lift_mulli(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
+    let rd = match ops.first().and_then(operand_reg) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let ra = match ops.get(1).and_then(operand_reg) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let imm = match ops.get(2).and_then(|o| operand_imm(o)) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let imm_vn = Varnode::constant(imm as u64, 8);
+    let result = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntMult,
+        result,
+        smallvec![ra, imm_vn],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![result],
+        ctx.addr,
+    ));
+}
+
+pub fn lift_divw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
+    let (rd, ra, rb) = match (
+        ops.first().and_then(operand_reg),
+        ops.get(1).and_then(operand_reg),
+        ops.get(2).and_then(operand_reg),
+    ) {
+        (Some(d), Some(a), Some(b)) => (d, a, b),
+        _ => return ctx.emit_unimplemented(),
+    };
+    let result = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntSdiv,
+        result,
+        smallvec![ra, rb],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![result],
+        ctx.addr,
+    ));
+}
+
+pub fn lift_divwu(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
+    let (rd, ra, rb) = match (
+        ops.first().and_then(operand_reg),
+        ops.get(1).and_then(operand_reg),
+        ops.get(2).and_then(operand_reg),
+    ) {
+        (Some(d), Some(a), Some(b)) => (d, a, b),
+        _ => return ctx.emit_unimplemented(),
+    };
+    let result = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntDiv,
+        result,
+        smallvec![ra, rb],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![result],
+        ctx.addr,
+    ));
+}

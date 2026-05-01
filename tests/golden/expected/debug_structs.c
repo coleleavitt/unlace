@@ -78,8 +78,11 @@ __int32 area(__int64 a1) {
     int v1; // rdi
     unsigned int v3; // temp
 
+    // source: /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
     result = v1 + 8LL;
+    // source: /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
     v3 = *(_DWORD *)(0LL);
+    // source: /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
     v4 = v3;
     result = v1 + 0xcLL;
     v3 = *(_DWORD *)(0LL);

@@ -201,3 +201,105 @@ pub fn lift_nop(ctx: &mut LiftCtx) {
         ctx.addr,
     ));
 }
+
+pub fn lift_lbz(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
+    let rd = match ops.first().and_then(operand_reg) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let mem_addr = match ops.get(1).and_then(|o| operand_mem_addr(ctx, o)) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+    let loaded = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Load,
+        loaded,
+        smallvec![ram_space, mem_addr],
+        ctx.addr,
+    ));
+    let extended = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntZext,
+        extended,
+        smallvec![loaded],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![extended],
+        ctx.addr,
+    ));
+}
+
+pub fn lift_lhz(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
+    let rd = match ops.first().and_then(operand_reg) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let mem_addr = match ops.get(1).and_then(|o| operand_mem_addr(ctx, o)) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+    let loaded = Varnode::unique(ctx.alloc_unique(), 2);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Load,
+        loaded,
+        smallvec![ram_space, mem_addr],
+        ctx.addr,
+    ));
+    let extended = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntZext,
+        extended,
+        smallvec![loaded],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Copy,
+        rd,
+        smallvec![extended],
+        ctx.addr,
+    ));
+}
+
+pub fn lift_stb(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
+    let rs = match ops.first().and_then(operand_reg) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let mem_addr = match ops.get(1).and_then(|o| operand_mem_addr(ctx, o)) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let trunc = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Subpiece,
+        trunc,
+        smallvec![rs, Varnode::constant(0, 4)],
+        ctx.addr,
+    ));
+    ctx.emit_store(mem_addr, trunc);
+}
+
+pub fn lift_sth(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
+    let rs = match ops.first().and_then(operand_reg) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let mem_addr = match ops.get(1).and_then(|o| operand_mem_addr(ctx, o)) {
+        Some(v) => v,
+        None => return ctx.emit_unimplemented(),
+    };
+    let trunc = Varnode::unique(ctx.alloc_unique(), 2);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Subpiece,
+        trunc,
+        smallvec![rs, Varnode::constant(0, 4)],
+        ctx.addr,
+    ));
+    ctx.emit_store(mem_addr, trunc);
+}

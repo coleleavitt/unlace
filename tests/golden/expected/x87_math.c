@@ -69,15 +69,24 @@ _DWORD __readfsdword(unsigned int offset);
 /*
  * Function:   sum_squares_x87
  * Address:    0x1129
- * Size:       0xc (12 bytes)
+ * Size:       0x14 (20 bytes)
  * Convention: unknown
  * Stack frame: 0x0 (0 bytes)
  * Xrefs from: unknown
  */
 void sum_squares_x87(void) {
-    long long result; // temp
+    int v3; // reg?
+    int v4; // reg?
+    unsigned int v2; // temp
 
+    v2 = *(_QWORD *)(0LL);
+    v2 = *(_QWORD *)(0LL);
+    v3 = /* CALLOTHER tag=784 */ 0;
+    v3 = /* CALLOTHER tag=788 */ 0;
     /* CALLOTHER tag=791 */ 0;
+    v3 = /* CALLOTHER tag=788 */ 0;
+    v4 = /* CALLOTHER tag=786 */ 0;
+    result = 0LL;
     return result;
 }
 typedef unsigned char _BYTE;
@@ -109,26 +118,31 @@ _DWORD __readfsdword(unsigned int offset);
 /*
  * Function:   compare_floats_x87
  * Address:    0x113e
- * Size:       0x23 (35 bytes)
+ * Size:       0x27 (39 bytes)
  * Convention: unknown
  * Stack frame: 0x0 (0 bytes)
  * Xrefs from: unknown
  */
 void compare_floats_x87(void) {
-    int v2; // CF
-    int v4; // ZF
-    int v7; // reg?
+    int v4; // CF
+    int v6; // ZF
+    int v3; // reg?
+    int v9; // reg?
     _Bool cond; // temp
-    long long result; // temp
+    unsigned int v2; // temp
 
-    cond = !v2;
+    v2 = *(_QWORD *)(0LL);
+    v2 = *(_QWORD *)(0LL);
+    v3 = /* CALLOTHER tag=784 */ 0;
     cond = !v4;
+    cond = !v6;
     cond = cond && cond;
     if (cond) {
     } else {
         /* CALLOTHER tag=791 */ 0;
         cond = cond && cond;
     }
+    result = 0LL;
     return result;
 }
 typedef unsigned char _BYTE;
@@ -160,15 +174,23 @@ _DWORD __readfsdword(unsigned int offset);
 /*
  * Function:   mix_ops_x87
  * Address:    0x1166
- * Size:       0x4 (4 bytes)
+ * Size:       0x1a (26 bytes)
  * Convention: unknown
  * Stack frame: 0x0 (0 bytes)
  * Xrefs from: unknown
  */
 void mix_ops_x87(void) {
-    long long result; // temp
+    int v3; // reg?
+    int v4; // reg?
+    int v5; // reg?
+    unsigned int v2; // temp
 
-    return result;
+    v2 = *(_QWORD *)(0LL);
+    v2 = *(_QWORD *)(0LL);
+    v2 = *(_QWORD *)(0LL);
+    v3 = /* CALLOTHER tag=784 */ 0;
+    v4 = /* CALLOTHER tag=788 */ 0;
+    v5 = /* CALLOTHER tag=787 */ 0;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;

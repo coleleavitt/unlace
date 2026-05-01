@@ -473,6 +473,7 @@ struct PrintCtx {
     /// Composite (struct/array) type annotations from SSA-level type inference.
     /// Used by `try_struct_field_access` to emit `base->field_<offset>` syntax.
     composite_var_types: BTreeMap<SsaVarnode, Type>,
+    source_map: BTreeMap<u64, unlace_loader::SourceLocation>,
 }
 
 impl PrintCtx {
@@ -509,6 +510,7 @@ impl PrintCtx {
             byref_bases: BTreeSet::new(),
             name_overrides: BTreeMap::new(),
             composite_var_types,
+            source_map: dwarf.map(|d| d.source_map.clone()).unwrap_or_default(),
         }
     }
 
@@ -2312,6 +2314,11 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
 
     if is_dead_zero_init(insn, idx, ctx) {
         return;
+    }
+
+    if let Some(loc) = ctx.source_map.get(&insn.addr) {
+        indent(depth, out);
+        let _ = writeln!(out, "// source: {}:{}", loc.file, loc.line);
     }
 
     indent(depth, out);

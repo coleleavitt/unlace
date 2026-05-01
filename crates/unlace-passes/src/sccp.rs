@@ -778,8 +778,33 @@ impl SccpResults {
     }
 }
 
+fn collect_callother_input_defs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
+    let mut protected = BTreeSet::new();
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            if insn.op != IrOp::Callother {
+                continue;
+            }
+            for (input_pos, input_vn) in insn.inputs.iter().enumerate() {
+                if input_vn.space == SpaceId::Const {
+                    continue;
+                }
+                let key = (bid, insn_idx, VarnodeSlot::Input(input_pos));
+                if let Some(&sv) = func.var_map.get(&key) {
+                    protected.insert(sv);
+                }
+            }
+        }
+    }
+    protected
+}
+
 fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
     let mut changed = false;
+
+    // Collect SSA varnodes that feed Callother inputs — these carry semantic
+    // information (e.g. CMOVcc condition flags) that must not be folded away.
+    let callother_inputs = collect_callother_input_defs(func);
 
     for (&bid, block) in &mut func.function.blocks {
         for (insn_idx, insn) in block.insns.iter_mut().enumerate() {
@@ -800,6 +825,10 @@ fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
                 Some(sv) => *sv,
                 None => continue,
             };
+
+            if callother_inputs.contains(&sv) {
+                continue;
+            }
 
             match results.get_value(&sv) {
                 LatticeValue::Constant { value, size } => {

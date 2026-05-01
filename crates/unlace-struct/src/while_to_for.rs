@@ -24,6 +24,13 @@ fn promote_scope(nodes: &mut Vec<HirNode>) {
         }
         i += 1;
     }
+
+    // Second pass: standalone while(cond) { body; step } → for(; cond; step)
+    for node in nodes.iter_mut() {
+        if let Some(for_node) = try_promote_standalone(node) {
+            *node = for_node;
+        }
+    }
 }
 
 fn promote_children(node: &mut HirNode) {
@@ -78,7 +85,7 @@ fn try_promote_at(nodes: &[HirNode], idx: usize) -> Option<HirNode> {
 
     let (update, body) = extract_trailing_update(&body, &counter)?;
     Some(HirNode::For {
-        init,
+        init: Some(init),
         cond,
         update,
         body,
@@ -99,10 +106,45 @@ fn extract_trailing_update(body: &[HirNode], counter: &Varnode) -> Option<(IrIns
     Some((update, body))
 }
 
+fn try_promote_standalone(node: &HirNode) -> Option<HirNode> {
+    let (cond, body) = match node {
+        HirNode::While { cond, body } => (*cond, body.as_slice()),
+        _ => return None,
+    };
+
+    let last = body.len().checked_sub(1)?;
+    let update = match &body[last] {
+        HirNode::Statement(insn) => insn.clone(),
+        _ => return None,
+    };
+    let counter = update.output?;
+    if counter.space == SpaceId::Const {
+        return None;
+    }
+    if !is_update(&update, &counter) {
+        return None;
+    }
+    if counter != cond.base {
+        return None;
+    }
+
+    let mut new_body = body.to_vec();
+    new_body.pop();
+    Some(HirNode::For {
+        init: None,
+        cond,
+        update,
+        body: new_body,
+    })
+}
+
 fn is_update(insn: &IrInsn, counter: &Varnode) -> bool {
     matches!(insn.op, IrOp::IntAdd | IrOp::IntSub)
         && insn.inputs.iter().any(|input| input == counter)
-        && insn.inputs.iter().any(|input| input.space == SpaceId::Const)
+        && insn
+            .inputs
+            .iter()
+            .any(|input| input.space == SpaceId::Const)
 }
 
 #[cfg(test)]
@@ -130,7 +172,10 @@ mod tests {
     }
 
     fn sv(v: Varnode) -> SsaVarnode {
-        SsaVarnode { base: v, version: 0 }
+        SsaVarnode {
+            base: v,
+            version: 0,
+        }
     }
 
     #[test]

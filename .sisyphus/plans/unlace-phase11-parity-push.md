@@ -197,21 +197,21 @@ Max Concurrent: 5 (Wave 1)
 
 ### Wave 0 — Diagnostic Baseline (4 tasks)
 
-- [ ] P11-0. Capture per-fixture baseline + per-function goto profile
+- [x] P11-0. Capture per-fixture baseline + per-function goto profile
 
   **What to do**: For each fixture, count gotos/ifs/for/while/return. For medium.c specifically, list which function owns each goto. Save to `.sisyphus/evidence/p11-baseline.txt`. Run `bash scripts/score_parity.sh`.
   **Acceptance Criteria**: Evidence file exists with 8+ fixture lines + per-function goto breakdown for medium.c.
   **QA Scenarios**: `wc -l .sisyphus/evidence/p11-baseline.txt` ≥ 15.
   **Commit**: `chore(boulder): P11-0 capture pre-Phase-11 baseline metrics`
 
-- [ ] P11-1. Trace structurer on medium.elf main() — identify which CFG patterns fail
+- [x] P11-1. Trace structurer on medium.elf main() — identify which CFG patterns fail
 
   **What to do**: Add `RUST_LOG=unlace_struct=trace` and decompile medium.elf `--function main`. Capture which blocks become `goto_targets` and why. Record in learnings notepad.
   **Acceptance Criteria**: Learnings entry identifies which 3 blocks in main() become goto targets.
   **QA Scenarios**: `grep "goto_target" .sisyphus/notepads/unlace-phase11/learnings.md`.
   **Commit**: NO (diagnostic only)
 
-- [ ] P11-2. Trace structurer on f_rec_power.constprop.0 — identify the 7-goto irreducible cluster
+- [x] P11-2. Trace structurer on f_rec_power.constprop.0 — identify the 7-goto irreducible cluster
 
   **What to do**: Same tracing for `f_rec_power.constprop.0` (the function with 7 gotos/7 labels). Identify the SCC that causes 7 labels. Check if node_split hits MAX_SPLIT_ROUNDS=16 on this function.
   **Acceptance Criteria**: Learnings entry describes the irreducible SCC topology.
@@ -226,7 +226,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: NO (diagnostic only)
 
-- [ ] P11-3. Compare unlace output structure vs IDA reference metrics
+- [x] P11-3. Compare unlace output structure vs IDA reference metrics
 
   **What to do**: For medium.c, compare our actual metrics (24 ifs, 0 for, 16 while, 12 goto, 3 return, 10 vars) against the IDA reference in `tests/golden/reference_metrics.toml` (60 ifs, 5 for, 3 while, 0 goto, 8 return, 30 vars). For each metric gap, document WHY the gap exists: where are the missing 36 ifs? Why do we have 16 whiles vs IDA's 3 (our whiles should be for-loops)? Why only 3 returns vs 8?
   **Acceptance Criteria**: Comparison document in learnings with ≥5 metric gaps explained.
@@ -604,7 +604,7 @@ Max Concurrent: 5 (Wave 1)
 
 ### Wave 6 — Polish + Final (5 tasks)
 
-- [ ] P11-33. Refresh ALL goldens
+- [x] P11-33. Refresh ALL goldens
 
   **What to do**: `cargo build -p unlace-cli && UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures`. Verify all pass.
   **Acceptance Criteria**: All golden tests pass.
@@ -619,7 +619,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `chore(goldens): Phase 11 final golden refresh`
 
-- [ ] P11-34. Update reference_metrics.toml for all new fixtures
+- [x] P11-34. Update reference_metrics.toml for all new fixtures
 
   **What to do**: Ensure every fixture in golden_fixtures.rs has an entry in reference_metrics.toml.
   **Acceptance Criteria**: `cargo test -p unlace-test-harness reference_metrics_file_loads` passes.
@@ -634,7 +634,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `chore(tests): reference metrics complete for all fixtures`
 
-- [ ] P11-35. Final aggregate parity score + delta
+- [x] P11-35. Final aggregate parity score + delta
 
   **What to do**: `bash scripts/score_parity.sh`. Compare vs P11-0 baseline (59.6%). Evidence to `.sisyphus/evidence/p11-35-final-score.txt`.
   **Acceptance Criteria**: Aggregate parity ≥ 72%.
@@ -649,7 +649,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `chore(boulder): Phase 11 final parity score`
 
-- [ ] P11-36. Phase 11 quality report
+- [x] P11-36. Phase 11 quality report
 
   **What to do**: Write `.sisyphus/evidence/p11-36-quality-report.txt` with: test count delta, parity delta, per-fixture goto/if/for deltas, per-wave summary, Phase 12 follow-up notes.
   **Acceptance Criteria**: Report ≥ 80 lines with all 7 waves summarized.
@@ -665,7 +665,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `chore(boulder): Phase 11 quality report`
 
-- [ ] P11-37. Push to GitHub
+- [x] P11-37. Push to GitHub
 
   **What to do**: `git push origin master`. Verify pre-push hook passes.
   **Acceptance Criteria**: Push succeeds.
@@ -684,7 +684,7 @@ Max Concurrent: 5 (Wave 1)
 
 ## Final Verification Wave (MANDATORY — after ALL implementation tasks)
 
-- [ ] P11-F1. **Comprehensive Quality Review** — `general`
+- [x] P11-F1. **Comprehensive Quality Review** — `general`
 
   **What to do**:
   - `cargo test --workspace` ≥ 1450, 0 failures

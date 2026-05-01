@@ -267,7 +267,7 @@ Wave 5 (Polish + Final — 5 tasks):
 
 ### Wave 2 — Goto Elimination (6 tasks, HIGHEST IMPACT)
 
-- [ ] P12-8. Label hoisting post-pass
+- [x] P12-8. Label hoisting post-pass
 
   **What to do**: Write `crates/unlace-struct/src/label_hoist.rs`. Walk HIR: when a `Label(id)` is inside an if-then or if-else branch AND there exists a `Goto(id)` OUTSIDE that branch (in a sibling or parent scope), hoist the label to the nearest common ancestor scope. This makes the goto a same-scope jump that other passes can eliminate.
   **Must NOT do**: Touch structurer.rs core.
@@ -283,7 +283,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(struct): label hoisting post-pass for cross-scope goto targets`
 
-- [ ] P12-9. Condition duplication for cross-branch gotos
+- [x] P12-9. Condition duplication for cross-branch gotos
 
   **What to do**: Write `crates/unlace-struct/src/condition_dup.rs`. After label hoisting, some gotos may still target labels in a different branch. For these, duplicate the parent if-condition at the goto site: `goto L` where L is inside `if (C) { L:; ... }` → `if (C) { ... }` (duplicating C). Size budget: max 2 condition duplications per function.
   **Acceptance Criteria**: ≥1 unit test.
@@ -298,7 +298,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(struct): condition duplication for cross-branch goto elimination`
 
-- [ ] P12-10. Unreachable label cleanup
+- [x] P12-10. Unreachable label cleanup
 
   **What to do**: Write `crates/unlace-struct/src/label_cleanup.rs`. After goto elimination passes, some labels may have 0 remaining gotos targeting them. Remove these orphaned labels. Also remove consecutive `Label; Label; Label;` clusters (collapse to single label).
   **Acceptance Criteria**: ≥1 unit test.
@@ -313,7 +313,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(struct): unreachable label cleanup post-pass`
 
-- [ ] P12-11. Apply to medium.c main() — target 3→0 gotos
+- [x] P12-11. Apply to medium.c main() — target 3→0 gotos
 
   **What to do**: Rebuild, decompile main(), count gotos. If >0, investigate remaining patterns.
   **Acceptance Criteria**: main() gotos ≤ 1.
@@ -329,7 +329,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: NO (verification)
 
-- [ ] P12-12. Apply to f_rec_power.constprop.0 — target 8→≤3 gotos
+- [x] P12-12. Apply to f_rec_power.constprop.0 — target 8→≤3 gotos
 
   **What to do**: Same for f_rec_power.constprop.0.
   **Acceptance Criteria**: f_rec_power gotos ≤ 3.
@@ -345,7 +345,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: NO (verification)
 
-- [ ] P12-13. Golden refresh + medium.c score (target ≥30%)
+- [x] P12-13. Golden refresh + medium.c score (target ≥30%)
 
   **What to do**: Refresh all goldens, measure medium.c score.
   **Acceptance Criteria**: medium.c score ≥ 30%. Aggregate ≥ 75%.

@@ -127,12 +127,10 @@ void main(void) {
     if (v14) {
         while (v16) {
         }
-    label_5:;
-        if (v4) {
-        }
+    }
+    if (v4) {
     }
     if (v18) {
-        goto label_5;
     }
     if (v17) {
     }
@@ -141,39 +139,33 @@ void main(void) {
         } else {
             if (0) { 1 = -3; }
             if (v33) {
-            label_7:;
             }
-        label_8:;
-            while (v14) {
-            }
-            v16 = 1;
-            if (v16) {
+        }
+        while (v14) {
+        }
+        v16 = 1;
+        if (v16) {
+        } else {
+            *(_QWORD *)(0x48LL) = 0x13f9LL;
+            f_rec_fib();
+            *(_QWORD *)(0x48LL) = 0x1407LL;
+            f_rec_power.constprop.0();
+            *(_QWORD *)(0x48LL) = 0x1419LL;
+            v24 = *(_QWORD *)(0x48LL);
+            result = __readfsqword(0x28u);
+            if (v38) {
             } else {
-                *(_QWORD *)(0x48LL) = 0x13f9LL;
-                f_rec_fib();
-                *(_QWORD *)(0x48LL) = 0x1407LL;
-                f_rec_power.constprop.0();
-                *(_QWORD *)(0x48LL) = 0x1419LL;
-                v24 = *(_QWORD *)(0x48LL);
-                result = __readfsqword(0x28u);
-                if (v38) {
-                label_12:;
-                } else {
-                    result = *(_QWORD *)(0x48LL);
-                    result = *(_QWORD *)(0x48LL);
-                    return result;
-                }
+                result = *(_QWORD *)(0x48LL);
+                result = *(_QWORD *)(0x48LL);
+                return result;
             }
-            goto label_12;
         }
         if (v15) {
         } else {
             if (0) { 1 = 0x48LL; }
             if (v37) {
             } else {
-                goto label_7;
             }
-            goto label_8;
         }
         break;
     }
@@ -285,27 +277,23 @@ void f_rec_fib(void) {
                 } else {
                     if (v5) {
                     }
-                label_1:;
-                    v16 = v16;
-                    if (v16) {
-                    label_2:;
-                        *(_QWORD *)(0LL) = 0LL;
-                    } else {
-                        result = *(_QWORD *)(0LL);
-                        result = *(_QWORD *)(0LL);
-                        result = *(_QWORD *)(0LL);
-                        result = *(_QWORD *)(0LL);
-                        result = *(_QWORD *)(0LL);
-                        result = *(_QWORD *)(0LL);
-                        result = *(_QWORD *)(0LL);
-                        return result;
-                    }
                 }
             }
         }
-        goto label_1;
+        v16 = v16;
+        if (v16) {
+        } else {
+            result = *(_QWORD *)(0LL);
+            result = *(_QWORD *)(0LL);
+            result = *(_QWORD *)(0LL);
+            result = *(_QWORD *)(0LL);
+            result = *(_QWORD *)(0LL);
+            result = *(_QWORD *)(0LL);
+            result = *(_QWORD *)(0LL);
+            return result;
+        }
     }
-    goto label_2;
+    *(_QWORD *)(0LL) = 0LL;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
@@ -418,7 +406,6 @@ void f_rec_power.constprop.0(__int64 a1) {
             } else {
                 v3 = 1;
                 if (v12) {
-                label_0:;
                 } else {
                     if (v3) {
                     } else {
@@ -429,12 +416,6 @@ void f_rec_power.constprop.0(__int64 a1) {
                             } else {
                                 v3 = 1;
                                 if (v3) {
-                                label_1:;
-                                label_2:;
-                                label_3:;
-                                label_4:;
-                                label_5:;
-                                label_6:;
                                 } else {
                                     result = v18 - 0x18LL;
                                     v20 = v18;
@@ -459,17 +440,10 @@ void f_rec_power.constprop.0(__int64 a1) {
                                     return result;
                                 }
                             }
-                            goto label_5;
                         }
-                        goto label_2;
                     }
-                    goto label_4;
                 }
-                goto label_1;
             }
-            goto label_3;
         }
-        goto label_0;
     }
-    goto label_6;
 }

@@ -8,8 +8,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::SsaVarnode;
 use unlace_ir::Varnode;
+use unlace_ir::ssa::SsaVarnode;
 
 use crate::hir::{HirFunction, HirNode, LabelId};
 
@@ -22,7 +22,8 @@ pub fn return_merge(hir: &mut HirFunction) {
     let label_returns = collect_label_returns(&hir.body);
 
     if !label_returns.is_empty() {
-        let changed = replace_goto_with_return(&mut hir.body, &label_returns);
+        let mut changed = replace_rax_assign_goto_with_return(&mut hir.body, &label_returns);
+        changed |= replace_goto_with_return(&mut hir.body, &label_returns);
         if changed {
             strip_consumed_labels(&mut hir.body, &label_returns);
         }
@@ -39,10 +40,7 @@ fn collect_label_returns(nodes: &[HirNode]) -> BTreeMap<LabelId, Option<SsaVarno
     map
 }
 
-fn collect_label_returns_inner(
-    nodes: &[HirNode],
-    map: &mut BTreeMap<LabelId, Option<SsaVarnode>>,
-) {
+fn collect_label_returns_inner(nodes: &[HirNode], map: &mut BTreeMap<LabelId, Option<SsaVarnode>>) {
     for window in nodes.windows(2) {
         if let (HirNode::Label(label), HirNode::Return(val)) = (&window[0], &window[1]) {
             map.insert(*label, *val);
@@ -84,6 +82,88 @@ fn collect_label_returns_inner(
             _ => {}
         }
     }
+}
+
+fn replace_rax_assign_goto_with_return(
+    nodes: &mut Vec<HirNode>,
+    label_returns: &BTreeMap<LabelId, Option<SsaVarnode>>,
+) -> bool {
+    let mut changed = false;
+    let mut i = 0;
+    while i + 1 < nodes.len() {
+        let ret = match (&nodes[i], &nodes[i + 1]) {
+            (HirNode::Statement(insn), HirNode::Goto(label)) if label_returns.contains_key(label) => {
+                rax_return_value(insn, label_returns.get(label).copied().flatten())
+            }
+            _ => None,
+        };
+        if let Some(ret) = ret {
+            nodes[i + 1] = HirNode::Return(Some(ret));
+            changed = true;
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+
+    for node in nodes.iter_mut() {
+        match node {
+            HirNode::Block(children) => {
+                changed |= replace_rax_assign_goto_with_return(children, label_returns);
+            }
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                changed |= replace_rax_assign_goto_with_return(then_body, label_returns);
+                if let Some(eb) = else_body {
+                    changed |= replace_rax_assign_goto_with_return(eb, label_returns);
+                }
+            }
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                changed |= replace_rax_assign_goto_with_return(body, label_returns);
+            }
+            HirNode::For { body, .. } => {
+                changed |= replace_rax_assign_goto_with_return(body, label_returns);
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (_, body, _) in cases {
+                    changed |= replace_rax_assign_goto_with_return(body, label_returns);
+                }
+                if let Some(default) = default {
+                    changed |= replace_rax_assign_goto_with_return(default, label_returns);
+                }
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_body,
+            } => {
+                changed |= replace_rax_assign_goto_with_return(try_body, label_returns);
+                changed |= replace_rax_assign_goto_with_return(catch_body, label_returns);
+            }
+            _ => {}
+        }
+    }
+
+    changed
+}
+
+fn rax_return_value(insn: &unlace_ir::IrInsn, label_ret: Option<SsaVarnode>) -> Option<SsaVarnode> {
+    let out = insn.output?;
+    if out.space != unlace_ir::SpaceId::Register || out.offset != 0 {
+        return None;
+    }
+    if let Some(ret) = label_ret {
+        if ret.base.space == unlace_ir::SpaceId::Register && ret.base.offset == 0 {
+            return Some(ret);
+        }
+        return None;
+    }
+    Some(SsaVarnode {
+        base: out,
+        version: 0,
+    })
 }
 
 /// Replace `Goto(label)` with `Return(val)` when `label` maps to a return.
@@ -421,7 +501,10 @@ mod tests {
                 ..
             } => {
                 assert!(matches!(&then_body[0], HirNode::Return(_)));
-                assert!(matches!(&else_body.as_ref().unwrap()[0], HirNode::Return(_)));
+                assert!(matches!(
+                    &else_body.as_ref().unwrap()[0],
+                    HirNode::Return(_)
+                ));
             }
             other => panic!("expected If, got {other:?}"),
         }
@@ -429,5 +512,64 @@ mod tests {
         // Label+Return should be stripped.
         let has_label = hir.body.iter().any(|n| matches!(n, HirNode::Label(_)));
         assert!(!has_label, "all gotos replaced → label should be stripped");
+    }
+
+    #[test]
+    fn test_rax_assignment_goto_void_return_becomes_value_return() {
+        let label = LabelId(7);
+        let rax = Varnode::reg(0, 8);
+        let val = Varnode::constant(42, 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, rax, smallvec![val], 0x1000)),
+            HirNode::Goto(label),
+            HirNode::Label(label),
+            HirNode::Return(None),
+        ];
+
+        let mut hir = make_hir("test_func", body);
+        return_merge(&mut hir);
+
+        assert!(matches!(&hir.body[1], HirNode::Return(Some(sv)) if sv.base == rax));
+        assert!(!hir.body.iter().any(|n| matches!(n, HirNode::Label(_))));
+    }
+
+    #[test]
+    fn test_nested_rax_assignment_goto_return_block() {
+        let label = LabelId(8);
+        let rax = Varnode::reg(0, 8);
+        let val = Varnode::constant(1, 8);
+        let body = vec![
+            HirNode::If {
+                cond: SsaVarnode {
+                    base: Varnode::reg(32, 1),
+                    version: 0,
+                },
+                then_body: vec![
+                    HirNode::Statement(IrInsn::with_output(
+                        IrOp::Copy,
+                        rax,
+                        smallvec![val],
+                        0x1000,
+                    )),
+                    HirNode::Goto(label),
+                ],
+                else_body: None,
+            },
+            HirNode::Label(label),
+            HirNode::Return(Some(SsaVarnode {
+                base: rax,
+                version: 0,
+            })),
+        ];
+
+        let mut hir = make_hir("test_func", body);
+        return_merge(&mut hir);
+
+        match &hir.body[0] {
+            HirNode::If { then_body, .. } => {
+                assert!(matches!(&then_body[1], HirNode::Return(Some(sv)) if sv.base == rax));
+            }
+            other => panic!("expected If, got {other:?}"),
+        }
     }
 }

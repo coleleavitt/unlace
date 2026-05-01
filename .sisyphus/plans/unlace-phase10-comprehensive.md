@@ -1465,7 +1465,7 @@ Max Concurrent: 5 (Wave 4)
 
 > Per Metis Discovery #1: lifter has 33 mnemonics already (NOT a stub). Wave 5 EXTENDS to ~48. Per Metis G1: cap at ARMv8.0 + ARMv8.1 atomics. NO NEON/SVE/Thumb/PACIA. Real iOS Mach-O ARM64 binary (Chase or KCM) is the integration fixture.
 
-- [ ] P10-29. Capstone instance caching via thread_local! (perf fix)
+- [x] P10-29. Capstone instance caching via thread_local! (perf fix)
 
   **What to do**:
   - Refactor `crates/unlace-lift-arm/src/lift.rs::lift_insn` to use a `thread_local!` Capstone instance instead of constructing one per instruction.
@@ -1506,7 +1506,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `perf(lift-arm): cache Capstone instance via thread_local for ARM64 lifter`
 
-- [ ] P10-30. Lift MUL / SDIV / UDIV / MADD / MSUB
+- [x] P10-30. Lift MUL / SDIV / UDIV / MADD / MSUB
 
   **What to do**:
   - Add match arms in `crates/unlace-lift-arm/src/lift.rs` for `Arm64Insn::ARM64_INS_MUL`, `ARM64_INS_SDIV`, `ARM64_INS_UDIV`, `ARM64_INS_MADD`, `ARM64_INS_MSUB`.
@@ -1543,7 +1543,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(lift-arm): lift MUL/SDIV/UDIV/MADD/MSUB`
 
-- [ ] P10-31. Lift CSEL / CSINC / CSINV / CSNEG conditional select family
+- [x] P10-31. Lift CSEL / CSINC / CSINV / CSNEG conditional select family
 
   **What to do**:
   - Add match arms for ARM64_INS_CSEL, CSINC, CSINV, CSNEG.
@@ -1583,7 +1583,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(lift-arm): lift CSEL/CSINC/CSINV/CSNEG conditional-select family`
 
-- [ ] P10-32. Lift UBFM / SBFM / EXTR bitfield ops
+- [x] P10-32. Lift UBFM / SBFM / EXTR bitfield ops
 
   **What to do**:
   - Add match arms for ARM64_INS_UBFM, SBFM, EXTR.
@@ -1621,7 +1621,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(lift-arm): lift UBFM/SBFM/EXTR bitfield operations`
 
-- [ ] P10-33. Lift LDXR/STXR exclusive pairs + DMB/DSB/ISB barriers
+- [x] P10-33. Lift LDXR/STXR exclusive pairs + DMB/DSB/ISB barriers
 
   **What to do**:
   - Add match arms for ARM64_INS_LDXR/LDAXR/STXR/STLXR (exclusive load/store) and DMB/DSB/ISB (memory barriers).

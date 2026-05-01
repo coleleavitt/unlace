@@ -780,6 +780,27 @@ impl SccpResults {
 
 fn collect_callother_input_defs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
     let mut protected = BTreeSet::new();
+    let mut def_inputs: BTreeMap<SsaVarnode, Vec<SsaVarnode>> = BTreeMap::new();
+
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            let Some(output_sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output)).copied()
+            else {
+                continue;
+            };
+
+            let inputs = (0..insn.inputs.len())
+                .filter_map(|input_pos| {
+                    func.var_map
+                        .get(&(bid, insn_idx, VarnodeSlot::Input(input_pos)))
+                        .copied()
+                })
+                .collect();
+            def_inputs.insert(output_sv, inputs);
+        }
+    }
+
+    let mut worklist = Vec::new();
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             if insn.op != IrOp::Callother {
@@ -791,11 +812,28 @@ fn collect_callother_input_defs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
                 }
                 let key = (bid, insn_idx, VarnodeSlot::Input(input_pos));
                 if let Some(&sv) = func.var_map.get(&key) {
-                    protected.insert(sv);
+                    if protected.insert(sv) {
+                        worklist.push(sv);
+                    }
                 }
             }
         }
     }
+
+    while let Some(sv) = worklist.pop() {
+        let Some(inputs) = def_inputs.get(&sv) else {
+            continue;
+        };
+        for input_sv in inputs {
+            if input_sv.base.space == SpaceId::Const {
+                continue;
+            }
+            if protected.insert(*input_sv) {
+                worklist.push(*input_sv);
+            }
+        }
+    }
+
     protected
 }
 
@@ -935,6 +973,36 @@ mod tests {
         assert_eq!(block.insns[1].op, IrOp::Copy);
         assert_eq!(block.insns[1].inputs[0].space, SpaceId::Const);
         assert_eq!(block.insns[1].inputs[0].offset, 8);
+    }
+
+    #[test]
+    fn test_sccp_preserves_callother_condition_dependency_chain() {
+        let src = Varnode::reg(0, 4);
+        let dst = Varnode::reg(8, 4);
+        let zero = Varnode::constant(0, 4);
+        let diff = Varnode::unique(0, 4);
+        let zf = Varnode::unique(8, 1);
+        let cond = Varnode::unique(16, 1);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntSub, diff, smallvec![src, dst], 0x1000),
+            IrInsn::with_output(IrOp::IntEqual, zf, smallvec![diff, zero], 0x1004),
+            IrInsn::with_output(IrOp::BoolNegate, cond, smallvec![zf], 0x1008),
+            IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![Varnode::constant(0x350, 8), cond, src, dst],
+                0x100C,
+            ),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let changed = SccpPass.run(&mut ssa).expect("pass should succeed");
+        assert!(!changed, "runtime condition chain must not be rewritten to constants");
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::IntSub);
+        assert_eq!(block.insns[1].op, IrOp::IntEqual);
+        assert_eq!(block.insns[2].op, IrOp::BoolNegate);
     }
 
     /// SCCP through a taken branch: `if (true) v1 = 5; else v1 = 10; return v1;`

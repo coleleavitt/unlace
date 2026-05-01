@@ -2393,7 +2393,7 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             }
             IrOp::Callother => {
                 let expr = emit_callother(insn, idx, ctx);
-                if is_callother_tag(insn, 0x350) {
+                if is_cmov_callother(insn) {
                     let _ = writeln!(out, "{}", expr);
                 } else {
                     let _ = writeln!(out, "{};", expr);
@@ -3086,12 +3086,13 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
     }
 }
 
-fn is_callother_tag(insn: &IrInsn, tag: u64) -> bool {
+fn is_cmov_callother(insn: &IrInsn) -> bool {
     insn.op == IrOp::Callother
+        && insn.inputs.len() >= 4
         && insn
             .inputs
             .first()
-            .is_some_and(|vn| vn.space == SpaceId::Const && vn.offset == tag)
+            .is_some_and(|vn| vn.space != SpaceId::Const || vn.offset == 0x350)
 }
 
 fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
@@ -3100,18 +3101,18 @@ fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     }
 
     let tag_vn = &insn.inputs[0];
-    if tag_vn.space != SpaceId::Const {
-        return "/* CALLOTHER (dynamic tag) */ 0".to_string();
-    }
-
-    let tag = tag_vn.offset;
-    if tag == 0x350 && insn.inputs.len() >= 4 {
+    if is_cmov_callother(insn) {
         let cond = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
         let src = emit_operand_resolved(&insn.inputs[2], 2, stmt_idx, ctx);
         let dst = emit_operand_resolved(&insn.inputs[3], 3, stmt_idx, ctx);
         return format!("if ({}) {{ {} = {}; }}", cond, dst, src);
     }
 
+    if tag_vn.space != SpaceId::Const {
+        return "/* CALLOTHER (dynamic tag) */ 0".to_string();
+    }
+
+    let tag = tag_vn.offset;
     match callother_intrinsic_name(tag) {
         Some(name) => {
             let args: Vec<String> = insn.inputs[1..]
@@ -7097,6 +7098,31 @@ mod tests {
         assert!(
             !output.contains("__cmov__("),
             "CMOV Callother should not emit call syntax: {output}",
+        );
+    }
+
+    #[test]
+    fn test_dynamic_four_input_callother_preserves_cmov_shape() {
+        let dynamic_tag = reg(64, 8);
+        let cond = reg(259, 1);
+        let src = reg(16, 8);
+        let dst = reg(0, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![dynamic_tag, cond, src, dst],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("cmov_dynamic_tag", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("if (") && !output.contains("dynamic tag"),
+            "corrupted CMOV tags should still emit an if-assignment: {output}",
         );
     }
 

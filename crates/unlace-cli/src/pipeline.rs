@@ -850,6 +850,7 @@ pub fn emit_output(
             unlace_struct::while_to_for(&mut hir);
             unlace_struct::eliminate_forward_gotos(&mut hir);
             unlace_struct::hoist_cross_branch_labels(&mut hir);
+            unlace_struct::duplicate_goto_conditions(&mut hir);
             unlace_struct::return_merge(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
             Ok(unlace_output::print_c_full(

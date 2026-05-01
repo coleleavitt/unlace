@@ -798,7 +798,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(passes): 1-level pointer-chain type propagation in type_infer`
 
-- [ ] P10-12. Array stride C-output emission (existing detection → field syntax)
+- [x] P10-12. Array stride C-output emission (existing detection → field syntax)
 
   **What to do**:
   - `detect_array_strides()` already exists in `type_infer.rs` (Metis Discovery #3). It detects `idx * stride` and `idx << log2(stride)` for stride ∈ {1,2,4,8,16}.
@@ -839,7 +839,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(output): emit array subscript syntax for known-stride accesses`
 
-- [ ] P10-13. Validation pass: at least one golden has ->field_<n> syntax
+- [x] P10-13. Validation pass: at least one golden has ->field_<n> syntax
 
   **What to do**:
   - Run `UPDATE_GOLDEN=1 cargo test -p unlace-test-harness --test golden_fixtures` to refresh after Wave 2.
@@ -881,7 +881,7 @@ Max Concurrent: 5 (Wave 4)
 
 > Per Metis: PE loader already handles base relocations (P9-18), exports/imports (Phase 9), delay-load (P9-19), TLS callbacks (P9-19). Wave 3 closes the IDA P0 gaps captured in Phase 9 librarian agent: .pdata/.xdata, debug, load_config, resources, bound imports, Rich header.
 
-- [ ] P10-14. Parse .pdata RUNTIME_FUNCTION array
+- [x] P10-14. Parse .pdata RUNTIME_FUNCTION array
 
   **What to do**:
   - Extend `crates/unlace-loader/src/pe.rs` with `parse_pdata<Pe>(file, data) -> Vec<RuntimeFunction>`.
@@ -925,7 +925,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): PE .pdata RUNTIME_FUNCTION array parsing`
 
-- [ ] P10-15. Decode .xdata UNWIND_INFO records
+- [x] P10-15. Decode .xdata UNWIND_INFO records
 
   **What to do**:
   - For each RuntimeFunction from P10-14, parse the UNWIND_INFO at `unwind_info_address`.
@@ -962,7 +962,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): PE .xdata UNWIND_INFO decoding`
 
-- [ ] P10-16. Parse IMAGE_DIRECTORY_ENTRY_DEBUG
+- [x] P10-16. Parse IMAGE_DIRECTORY_ENTRY_DEBUG
 
   **What to do**:
   - Walk the IMAGE_DEBUG_DIRECTORY array.
@@ -1000,7 +1000,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): PE IMAGE_DIRECTORY_ENTRY_DEBUG parsing (CodeView/PDB references)`
 
-- [ ] P10-17. Parse IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG
+- [x] P10-17. Parse IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG
 
   **What to do**:
   - Decode IMAGE_LOAD_CONFIG_DIRECTORY64 (PE32+) or IMAGE_LOAD_CONFIG_DIRECTORY32 (PE32) at the directory's RVA.

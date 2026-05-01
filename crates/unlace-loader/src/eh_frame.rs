@@ -230,9 +230,9 @@ mod tests {
         let overlapping = symtab_func_addrs
             .iter()
             .filter(|&&addr| {
-                info.function_extents.values().any(|ext| {
-                    addr >= ext.start && addr < ext.end
-                })
+                info.function_extents
+                    .values()
+                    .any(|ext| addr >= ext.start && addr < ext.end)
             })
             .count();
 
@@ -256,6 +256,9 @@ mod tests {
             relocations: vec![],
             string_table: BTreeMap::new(),
             tls_callbacks: vec![],
+            debug_records: vec![],
+            load_config: None,
+            runtime_functions: vec![],
         };
 
         let info = parse_eh_frame(&img).expect("missing .eh_frame should not error");
@@ -274,10 +277,9 @@ mod tests {
                 vaddr: 0x2000,
                 size: 64,
                 data: vec![
-                    0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0xFF, 0x01, 0x02,
-                    0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A,
-                    0xCA, 0xFE, 0xBA, 0xBE, 0x00, 0x00, 0x00, 0x00,
-                    0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
+                    0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0xFF, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                    0x08, 0x09, 0x0A, 0xCA, 0xFE, 0xBA, 0xBE, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF,
+                    0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
                 ],
                 flags: crate::image::SectionFlags::READ,
             }],
@@ -286,10 +288,16 @@ mod tests {
             relocations: vec![],
             string_table: BTreeMap::new(),
             tls_callbacks: vec![],
+            debug_records: vec![],
+            load_config: None,
+            runtime_functions: vec![],
         };
 
         let result = parse_eh_frame(&img);
-        assert!(result.is_ok(), "corrupt .eh_frame should not return Err: {result:?}");
+        assert!(
+            result.is_ok(),
+            "corrupt .eh_frame should not return Err: {result:?}"
+        );
     }
 
     #[test]

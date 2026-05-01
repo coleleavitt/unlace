@@ -7,11 +7,11 @@ use object::elf;
 use object::read::elf::{ElfFile, FileHeader};
 use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 
+use crate::Loader;
 use crate::error::LoadError;
 use crate::image::{
     ArchId, BinaryImage, Endian, RelocKind, Relocation, Section, SectionFlags, Symbol, SymbolKind,
 };
-use crate::Loader;
 
 /// ELF magic bytes: `\x7fELF`.
 const ELF_MAGIC: [u8; 4] = [0x7f, b'E', b'L', b'F'];
@@ -67,6 +67,9 @@ where
         relocations,
         string_table,
         tls_callbacks: Vec::new(),
+        debug_records: Vec::new(),
+        load_config: None,
+        runtime_functions: Vec::new(),
     })
 }
 
@@ -407,14 +410,14 @@ mod tests {
 
     #[test]
     fn test_stripped_binary_has_few_symbols() {
-        let data = std::fs::read("../../fixtures/stripped.elf")
-            .expect("fixture stripped.elf must exist");
+        let data =
+            std::fs::read("../../fixtures/stripped.elf").expect("fixture stripped.elf must exist");
         let img = ElfLoader::load(&data).expect("should parse stripped binary");
         assert_eq!(img.arch, ArchId::X86_64);
         // A stripped binary might still have dynamic symbols, but far fewer
         // than the non-stripped version.
-        let non_stripped = std::fs::read("../../fixtures/medium.elf")
-            .expect("fixture medium.elf must exist");
+        let non_stripped =
+            std::fs::read("../../fixtures/medium.elf").expect("fixture medium.elf must exist");
         let full_img = ElfLoader::load(&non_stripped).expect("should parse medium binary");
         assert!(
             img.symbols.len() < full_img.symbols.len(),
@@ -465,8 +468,7 @@ mod tests {
 
     #[test]
     fn test_plt_resolution_calls() {
-        let data = std::fs::read("../../fixtures/calls.elf")
-            .expect("fixture calls.elf must exist");
+        let data = std::fs::read("../../fixtures/calls.elf").expect("fixture calls.elf must exist");
         let img = ElfLoader::load(&data).expect("should parse calls.elf");
 
         assert!(
@@ -477,8 +479,7 @@ mod tests {
 
     #[test]
     fn test_no_plt_for_static() {
-        let data = std::fs::read("../../fixtures/empty.elf")
-            .expect("fixture empty.elf must exist");
+        let data = std::fs::read("../../fixtures/empty.elf").expect("fixture empty.elf must exist");
         let img = ElfLoader::load(&data).expect("should parse empty.elf");
 
         // empty.elf may or may not have PLT entries — the important thing is

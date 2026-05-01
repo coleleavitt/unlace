@@ -225,3 +225,27 @@ Added pointer-chain propagation to `type_infer.rs`: when a Load's address input 
 
 ### Pitfall Found
 - `PrimitiveType::join(Ptr, Int(8)) = Unknown` — the lattice treats Ptr and Int as conflicting types. Without `force_set_type`, a varnode used as both IntAdd output (→ Int) and Load address (→ Ptr) oscillates between Int(8) and Unknown indefinitely. The fix: address operands use `force_set_type` which bypasses the lattice join.
+
+## P10-16: PE Debug Directory Parsing (2026-04-30)
+
+Added `parse_debug_directory` to pe.rs — walks IMAGE_DIRECTORY_ENTRY_DEBUG (index 6) array of 28-byte IMAGE_DEBUG_DIRECTORY entries.
+
+### Key Decisions
+- For IMAGE_DEBUG_TYPE_CODEVIEW (type=2): follows PointerToRawData (file offset, not RVA) to read RSDS record
+- RSDS record: 4-byte signature [0x52,0x53,0x44,0x53] + 16-byte GUID + 4-byte age + NUL-terminated PDB path
+- Non-CodeView types stored with `pdb_path=None, pdb_guid=None, pdb_age=None` — graceful skip
+- `DebugRecord` struct added to image.rs with `typ`, `time_stamp`, `pdb_path`, `pdb_guid`, `pdb_age`
+- Uses `PointerToRawData` (file offset at entry bytes 24..28), NOT `AddressOfRawData` (RVA at 20..24) — the file offset is what we need for raw data access
+
+## P10-17: PE Load Config / CFG Parsing (2026-04-30)
+
+Added `parse_load_config` to pe.rs — reads IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG (index 10).
+
+### Key Decisions
+- Separate `parse_load_config_64` / `parse_load_config_32` for PE32+ vs PE32 offset differences
+- PE32+ offsets: security_cookie=0x58, guard_cf_check=0x70, guard_cf_dispatch=0x78, guard_table=0x80, guard_count=0x88, guard_flags=0x90
+- PE32 offsets: security_cookie=0x3C, guard_cf_check=0x48, guard_cf_dispatch=0x4C, guard_table=0x50, guard_count=0x54, guard_flags=0x58
+- `read_u64`/`read_u32` closures check `min(lc.len(), size)` to handle truncated load config directories
+- CFG target table: array of u32 RVAs absolutized via `image_base + rva`, capped at 65536 entries
+- `LoadConfig` struct: `security_cookie`, `guard_cf_check`, `guard_cf_dispatch`, `guard_flags`, `cfg_targets: Vec<u64>`
+- All addresses stored as absolute VAs (not RVAs) for consistency with the rest of BinaryImage

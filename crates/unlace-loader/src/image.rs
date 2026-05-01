@@ -148,6 +148,44 @@ pub struct Symbol {
     pub kind: SymbolKind,
 }
 
+/// A debug directory record from the PE IMAGE_DIRECTORY_ENTRY_DEBUG table.
+///
+/// Each entry describes one debug data stream embedded in (or referenced by)
+/// the PE file. The most common type is CodeView (type 2), which carries a
+/// PDB path, GUID, and age for symbol-server lookup.
+#[derive(Debug, Clone)]
+pub struct DebugRecord {
+    /// Debug data type (e.g. `IMAGE_DEBUG_TYPE_CODEVIEW` = 2).
+    pub typ: u32,
+    /// Timestamp from the debug directory entry.
+    pub time_stamp: u32,
+    /// PDB file path (NUL-terminated UTF-8 from the RSDS record). `None` for
+    /// non-CodeView entries or if the RSDS record is malformed.
+    pub pdb_path: Option<String>,
+    /// PDB GUID from the RSDS record. `None` for non-CodeView entries.
+    pub pdb_guid: Option<[u8; 16]>,
+    /// PDB age counter from the RSDS record. `None` for non-CodeView entries.
+    pub pdb_age: Option<u32>,
+}
+
+/// Parsed IMAGE_LOAD_CONFIG_DIRECTORY (PE32+ / PE32).
+///
+/// Contains the security cookie VA and Control Flow Guard (CFG) metadata.
+/// Fields are stored as absolute virtual addresses where applicable.
+#[derive(Debug, Clone)]
+pub struct LoadConfig {
+    /// Absolute VA of the security cookie (`__security_cookie`).
+    pub security_cookie: u64,
+    /// Absolute VA of the CFG check function pointer.
+    pub guard_cf_check: u64,
+    /// Absolute VA of the CFG dispatch function pointer.
+    pub guard_cf_dispatch: u64,
+    /// Guard flags (`IMAGE_GUARD_*` bitmask).
+    pub guard_flags: u32,
+    /// Absolutized CFG target RVAs (each entry = `image_base + rva`).
+    pub cfg_targets: Vec<u64>,
+}
+
 /// A fully-parsed binary image ready for analysis, produced by a [`Loader`](crate::Loader).
 #[derive(Debug, Clone)]
 pub struct BinaryImage {
@@ -172,6 +210,48 @@ pub struct BinaryImage {
     pub string_table: BTreeMap<u64, String>,
     /// TLS callback function virtual addresses (PE only). Empty for ELF/Mach-O.
     pub tls_callbacks: Vec<u64>,
+    /// PE debug directory records. Empty for ELF/Mach-O.
+    pub debug_records: Vec<DebugRecord>,
+    /// PE load configuration directory. `None` for ELF/Mach-O or if absent.
+    pub load_config: Option<LoadConfig>,
+    /// Exception handling runtime functions (PE `.pdata`). Empty for ELF/Mach-O.
+    pub runtime_functions: Vec<RuntimeFunction>,
+}
+
+/// A PE RUNTIME_FUNCTION entry from the `.pdata` exception directory.
+///
+/// Each entry describes one function's address range and points to its
+/// UNWIND_INFO record in `.xdata`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeFunction {
+    /// Absolute VA of the function start.
+    pub begin_address: u64,
+    /// Absolute VA of the function end.
+    pub end_address: u64,
+    /// Absolute VA of the UNWIND_INFO record.
+    pub unwind_info_address: u64,
+    /// Parsed UNWIND_INFO header (if successfully read).
+    pub unwind_info: Option<UnwindInfo>,
+}
+
+/// The header of a PE UNWIND_INFO record from `.xdata`.
+///
+/// Describes the function's prolog layout and frame register usage.
+/// Individual unwind codes are not decoded — only the fixed 4-byte header.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnwindInfo {
+    /// UNWIND_INFO version (bits 0–2 of byte 0). Must be 1 or 2.
+    pub version: u8,
+    /// Flags (bits 3–7 of byte 0): UNW_FLAG_NHANDLER, EHANDLER, UHANDLER, CHAININFO.
+    pub flags: u8,
+    /// Size of the function prolog in bytes.
+    pub size_of_prolog: u8,
+    /// Number of UNWIND_CODE entries following the header.
+    pub count_of_codes: u8,
+    /// Frame register (bits 0–3 of byte 3). 0 = no frame register.
+    pub frame_register: u8,
+    /// Scaled frame register offset (bits 4–7 of byte 3).
+    pub frame_offset: u8,
 }
 
 impl BinaryImage {
@@ -182,9 +262,6 @@ impl BinaryImage {
 
     /// Look up the symbol at (or nearest before) `addr`.
     pub fn symbol_at(&self, addr: u64) -> Option<&Symbol> {
-        self.symbols
-            .range(..=addr)
-            .next_back()
-            .map(|(_, sym)| sym)
+        self.symbols.range(..=addr).next_back().map(|(_, sym)| sym)
     }
 }

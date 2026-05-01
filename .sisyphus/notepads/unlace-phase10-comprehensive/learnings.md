@@ -76,6 +76,19 @@ Created `fixtures/arm64_features.elf` — 1856-byte hand-crafted AArch64 ELF64 b
 - `readelf -s` → 6 symbols with correct types and sizes
 - `unlace decompile --arch aarch64 --emit ir` → exit 0, 4 functions in IR output
 
+## P10-29..P10-33: ARM64 Lifter Extension (2026-04-30)
+
+Extended the AArch64 lifter from the Phase 10 fixture gaps:
+- P10-29 caches Capstone per thread with `thread_local! RefCell<Option<Capstone>>`, avoiding per-instruction `Capstone::new()` without introducing a `Mutex`.
+- P10-30 adds MUL/SDIV/UDIV/MADD/MSUB lowering to integer arithmetic IR (`IntMult`, `IntSdiv`, `IntDiv`, multiply+add/sub).
+- P10-31 lowers CSEL/CSINC/CSINV/CSNEG to tagged `Callother` intrinsics (0x330..0x333) using Capstone condition-code detail and existing NZCV condition synthesis.
+- P10-32 adds UBFM/SBFM/EXTR coverage, including common UBFX/SBFX/SXT* aliases observed from Capstone.
+- P10-33 adds LDXR/LDAXR/STXR/STLXR and DMB/DSB/ISB as tagged `Callother` intrinsics (0x340..0x344), and wires AArch64 callother tags into the C printer.
+
+### Verification Notes
+- Added 19 ARM64-focused unit tests across arithmetic, conditional-select, bitfield/extract, exclusive atomics, and barriers.
+- `cargo test -p unlace-lift-arm arm64_` passes with all 19 new tests.
+
 ## P10-2: Synthetic Mach-O 64-bit Fixture with LC_DYLD_INFO + LC_DYSYMTAB (2026-04-30)
 
 Created `macho64_with_dyld_info()` — 768-byte hand-crafted Mach-O 64-bit binary.

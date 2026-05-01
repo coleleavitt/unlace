@@ -1277,4 +1277,81 @@ mod tests {
             "constant folded to c2 - c1"
         );
     }
+
+    #[test]
+    fn test_negate_sub_eq_zero_folds_to_neq() {
+        // BoolNegate(IntEqual((x - y), 0)) should fold to IntNotequal(x, y)
+        // via fixed-point: iter1 folds (x-y)==0 → x==y, iter2 folds !x==y → x!=y
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let zero = Varnode::constant(0, 4);
+        let v1 = Varnode::unique(0, 4);
+        let v2 = Varnode::unique(8, 1);
+        let v3 = Varnode::unique(16, 1);
+
+        let sub = IrInsn::with_output(IrOp::IntSub, v1, smallvec![r0, r8], 0x1000);
+        let eq = IrInsn::with_output(IrOp::IntEqual, v2, smallvec![v1, zero], 0x1004);
+        let neg = IrInsn::with_output(IrOp::BoolNegate, v3, smallvec![v2], 0x1008);
+
+        let mut ssa = make_single_block_ssa(vec![sub, eq, neg]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let final_insn = block
+            .insns
+            .iter()
+            .find(|i| i.output == Some(v3))
+            .expect("v3 output");
+        assert_eq!(
+            final_insn.op,
+            IrOp::IntNotequal,
+            "BoolNegate(IntEqual((x-y),0)) should fold to IntNotequal(x,y): {:?}",
+            final_insn,
+        );
+        assert_eq!(final_insn.inputs[0], r0);
+        assert_eq!(final_insn.inputs[1], r8);
+    }
+
+    #[test]
+    fn test_bool_and_of_sub_eq_zero_folds() {
+        // BoolAnd(IntEqual((x-y),0), IntEqual((a-b),0)) → BoolAnd(x==y, a==b)
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let r16 = Varnode::reg(16, 4);
+        let r24 = Varnode::reg(24, 4);
+        let zero = Varnode::constant(0, 4);
+        let sub1 = Varnode::unique(0, 4);
+        let sub2 = Varnode::unique(8, 4);
+        let eq1 = Varnode::unique(16, 1);
+        let eq2 = Varnode::unique(24, 1);
+        let and_out = Varnode::unique(32, 1);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntSub, sub1, smallvec![r0, r8], 0x1000),
+            IrInsn::with_output(IrOp::IntEqual, eq1, smallvec![sub1, zero], 0x1004),
+            IrInsn::with_output(IrOp::IntSub, sub2, smallvec![r16, r24], 0x1008),
+            IrInsn::with_output(IrOp::IntEqual, eq2, smallvec![sub2, zero], 0x100C),
+            IrInsn::with_output(IrOp::BoolAnd, and_out, smallvec![eq1, eq2], 0x1010),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let eq1_insn = block.insns.iter().find(|i| i.output == Some(eq1)).unwrap();
+        assert_eq!(eq1_insn.op, IrOp::IntEqual);
+        assert_eq!(eq1_insn.inputs[0], r0);
+        assert_eq!(eq1_insn.inputs[1], r8);
+
+        let eq2_insn = block.insns.iter().find(|i| i.output == Some(eq2)).unwrap();
+        assert_eq!(eq2_insn.op, IrOp::IntEqual);
+        assert_eq!(eq2_insn.inputs[0], r16);
+        assert_eq!(eq2_insn.inputs[1], r24);
+    }
 }

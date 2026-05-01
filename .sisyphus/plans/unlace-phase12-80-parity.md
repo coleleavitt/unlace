@@ -439,7 +439,7 @@ Wave 5 (Polish + Final — 5 tasks):
 
 ### Wave 4 — Architecture Breadth (5 tasks)
 
-- [x] P12-19. V850 lifter CLI gate + fixture (DEFERRED to Phase 13)
+- [x] P12-19. V850 lifter CLI gate + fixture
 
   **What to do**: Add ArchId::V850 to CLI arch gate. Find or create V850 ELF fixture. V850 lifter has 2,436 LOC and full decode/lift. Check `~/VulnerabilityResearch/` for V850 firmware.
   **Acceptance Criteria**: V850 fixture decompiles --emit ir without panic.
@@ -454,7 +454,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(fixtures): V850 fixture + CLI gate`
 
-- [x] P12-20. ARC lifter CLI gate + fixture (DEFERRED to Phase 13)
+- [x] P12-20. ARC lifter CLI gate + fixture
 
   **What to do**: Same for ARC (1,235 LOC, 14 tests).
   **Acceptance Criteria**: ARC fixture decompiles.
@@ -469,7 +469,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(fixtures): ARC fixture + CLI gate`
 
-- [x] P12-21. PowerPC fixture (DEFERRED to Phase 13)
+- [x] P12-21. PowerPC fixture
 
   **What to do**: Create PPC64 ELF fixture. PPC lifter has 67 mnemonics.
   **Acceptance Criteria**: PPC fixture decompiles.
@@ -484,7 +484,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(fixtures): PowerPC PPC64 fixture + CLI gate`
 
-- [x] P12-22. Golden entries + reference metrics for new arch fixtures (DEFERRED to Phase 13)
+- [x] P12-22. Golden entries + reference metrics for new arch fixtures
 
   **What to do**: Add golden entries for V850/ARC/PPC to golden_fixtures.rs + reference_metrics.toml.
   **Acceptance Criteria**: All golden tests pass.
@@ -499,7 +499,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(tests): V850/ARC/PPC golden entries + reference metrics`
 
-- [x] P12-23. Lifter coverage update (DEFERRED to Phase 13)
+- [x] P12-23. Lifter coverage update
 
   **What to do**: Update `.sisyphus/evidence/p12-23-coverage.txt` with coverage across all architecture fixtures.
   **Acceptance Criteria**: Coverage table for all fixtures.

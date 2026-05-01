@@ -9,6 +9,7 @@ pub mod eh_frame;
 pub mod elf;
 pub mod error;
 pub mod gcc_except_table;
+pub mod gopclntab;
 pub mod image;
 pub mod macho;
 pub mod pdb;

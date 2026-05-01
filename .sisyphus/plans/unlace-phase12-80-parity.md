@@ -138,7 +138,7 @@ Wave 5 (Polish + Final — 5 tasks):
 
 ### Wave 0 — Diagnostic (3 tasks)
 
-- [ ] P12-0. Baseline all per-fixture scores + call graph quality
+- [x] P12-0. Baseline all per-fixture scores + call graph quality
 
   **What to do**: Run golden_fixtures_metrics_summary with --nocapture. Capture all [score] lines. Also measure call graph quality: for medium.elf, count resolved vs unresolved CALL/CALLIND instructions.
   **Acceptance Criteria**: Evidence file with 11 fixture scores + call graph metric.
@@ -154,7 +154,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `chore(boulder): P12-0 baseline scores`
 
-- [ ] P12-1. Re-analyze medium.c gotos with corrected diagnosis
+- [x] P12-1. Re-analyze medium.c gotos with corrected diagnosis
 
   **What to do**: For each of the 13 gotos, classify as: cross-branch-to-nested-scope, forward-to-join, or other. Document the exact HIR pattern causing each.
   **Acceptance Criteria**: Learnings entry with per-goto classification.
@@ -169,7 +169,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: NO (diagnostic)
 
-- [ ] P12-2. Profile CMOVcc usage in debug_calls/cpp_vtable
+- [x] P12-2. Profile CMOVcc usage in debug_calls/cpp_vtable
 
   **What to do**: Decompile debug_calls.elf and cpp_vtable.elf with --emit ir. Count CMOVcc-derived COPY instructions that should have been conditional. Document how many ifs would be recovered.
   **Acceptance Criteria**: Evidence with cmov count per fixture.
@@ -362,7 +362,7 @@ Wave 5 (Polish + Final — 5 tasks):
 
 ### Wave 3 — For-Loop + Expression Recovery (5 tasks)
 
-- [ ] P12-14. Aggressive for-loop detection from comparison+branch chains
+- [x] P12-14. Aggressive for-loop detection from comparison+branch chains
 
   **What to do**: Extend `recover_for_loops` in structurer.rs. Current pattern: `init; while(cond) { body; step; }`. New pattern: detect counter patterns from x86 `cmp reg, const; jne loop_top` where reg is decremented in the body. Convert `while(reg != 0) { body; reg--; }` → `for(; reg != 0; reg--) { body; }`.
   **Acceptance Criteria**: medium.c for_count ≥ 1.
@@ -377,7 +377,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(struct): aggressive for-loop detection from counter+branch patterns`
 
-- [ ] P12-15. While-with-counter-to-for enhancement
+- [x] P12-15. While-with-counter-to-for enhancement
 
   **What to do**: Extend `while_to_for.rs`. Detect `while(v1) { ...; v1 = v1 - 1; }` → `for(; v1; v1--)`. The step detection should match INT_SUB/INT_ADD with constant operand on the condition variable.
   **Acceptance Criteria**: medium.c for_count ≥ 2.
@@ -392,7 +392,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(struct): while-with-counter-to-for detection`
 
-- [ ] P12-16. Return-value propagation
+- [x] P12-16. Return-value propagation
 
   **What to do**: In c_printer.rs, when emitting the last statement before `Return(None)`: if it's an assignment to RAX (register offset 0, size 8), combine into `return <expr>;`.
   **Acceptance Criteria**: medium.c return count ≥ 6.
@@ -407,7 +407,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `feat(output): propagate return value from last RAX assignment`
 
-- [ ] P12-17. cpp_rtti cross-branch goto fix
+- [x] P12-17. cpp_rtti cross-branch goto fix
 
   **What to do**: Apply label hoisting + condition duplication from Wave 2 to cpp_rtti's 2 gotos. If they're the same cross-branch pattern, the existing passes should handle them. Verify.
   **Acceptance Criteria**: cpp_rtti gotos ≤ 1. Score ≥ 55%.
@@ -422,7 +422,7 @@ Wave 5 (Polish + Final — 5 tasks):
   ```
   **Commit**: `chore(goldens): cpp_rtti goto fix verification`
 
-- [ ] P12-18. Golden refresh + score measurement (medium target ≥50%)
+- [x] P12-18. Golden refresh + score measurement (medium target ≥50%)
 
   **What to do**: Full golden refresh, measure all scores. Aggregate target ≥78%.
   **Acceptance Criteria**: medium.c ≥ 50%. Aggregate ≥ 78%.

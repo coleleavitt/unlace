@@ -12,10 +12,71 @@ pub fn cleanup_unreachable_labels(func: &mut HirFunction) {
     if !aliases.is_empty() {
         rewrite_gotos(&mut func.body, &aliases);
     }
+    remove_same_scope_backedges(&mut func.body);
 
     let mut used = BTreeSet::new();
     collect_gotos(&func.body, &mut used);
     remove_unused_labels(&mut func.body, &used);
+}
+
+fn remove_same_scope_backedges(nodes: &mut Vec<HirNode>) {
+    remove_backedges_visible_from_scope(nodes, &BTreeSet::new());
+}
+
+fn remove_backedges_visible_from_scope(nodes: &mut Vec<HirNode>, inherited: &BTreeSet<LabelId>) {
+    let mut visible = inherited.clone();
+    let mut retained = Vec::with_capacity(nodes.len());
+
+    for mut node in std::mem::take(nodes) {
+        match &mut node {
+            HirNode::Label(label) => {
+                visible.insert(*label);
+                retained.push(node);
+            }
+            HirNode::Goto(label) if visible.contains(label) => {}
+            HirNode::Block(children) => {
+                remove_backedges_visible_from_scope(children, &visible);
+                retained.push(node);
+            }
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                remove_backedges_visible_from_scope(then_body, &visible);
+                if let Some(else_body) = else_body {
+                    remove_backedges_visible_from_scope(else_body, &visible);
+                }
+                retained.push(node);
+            }
+            HirNode::While { body, .. }
+            | HirNode::DoWhile { body, .. }
+            | HirNode::For { body, .. } => {
+                remove_backedges_visible_from_scope(body, &visible);
+                retained.push(node);
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (_, body, _) in cases {
+                    remove_backedges_visible_from_scope(body, &visible);
+                }
+                if let Some(default) = default {
+                    remove_backedges_visible_from_scope(default, &visible);
+                }
+                retained.push(node);
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_body,
+            } => {
+                remove_backedges_visible_from_scope(try_body, &visible);
+                remove_backedges_visible_from_scope(catch_body, &visible);
+                retained.push(node);
+            }
+            _ => retained.push(node),
+        }
+    }
+
+    *nodes = retained;
 }
 
 fn collapse_label_clusters(nodes: &mut Vec<HirNode>, aliases: &mut BTreeMap<LabelId, LabelId>) {
@@ -252,5 +313,18 @@ mod tests {
                 HirNode::Break,
             ]
         );
+    }
+
+    #[test]
+    fn removes_same_scope_backward_gotos() {
+        let mut hir = func(vec![
+            HirNode::Label(LabelId(1)),
+            HirNode::Break,
+            HirNode::Goto(LabelId(1)),
+        ]);
+
+        cleanup_unreachable_labels(&mut hir);
+
+        assert_eq!(hir.body, vec![HirNode::Break]);
     }
 }

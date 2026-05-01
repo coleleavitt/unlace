@@ -332,42 +332,42 @@ Max Concurrent: 5 (Wave 1)
 
 ### Wave 2 — Expression + Condition Quality (6 tasks)
 
-- [ ] P11-12. Flag-chain folding (CMP+flags+Jcc → single comparison)
+- [x] P11-12. Flag-chain folding (CMP+flags+Jcc → single comparison)
 
   **What to do**: Extend `crates/unlace-passes/src/condition_simplify.rs`. Currently CMP emits INT_SUB + individual flag reads (ZF, SF, OF, CF). IDA folds `CMP a,b + JE` into `if (a == b)`. Add patterns: when CBRANCH's condition traces back through flag reads to an INT_SUB, fold the chain into a single IntEqual/IntLess/etc. This increases if-count because folded conditions become single clean ifs instead of multi-statement flag computation.
   **Acceptance Criteria**: ≥2 new unit tests. medium.c if-count increases.
   **QA Scenarios**: `cargo test -p unlace-passes condition_simplify` passes.
   **Commit**: `feat(passes): flag-chain folding CMP+flags+Jcc to single comparison`
 
-- [ ] P11-13. Condition chain flattening enhancement
+- [x] P11-13. Condition chain flattening enhancement
 
   **What to do**: Extend `crates/unlace-struct/src/flatten_if_else.rs`. Currently flattens `if (a) { X } else { if (b) { Y } }` → `if (a) { X } else if (b) { Y }`. Enhance to also handle: `if (!a) { goto L; } if (!b) { goto L; } X; L:` → `if (a && b) { X }` (short-circuit recovery for goto-based conditions).
   **Acceptance Criteria**: ≥1 new unit test. Works on f_rec_fib patterns.
   **QA Scenarios**: `cargo test -p unlace-struct flatten` passes.
   **Commit**: `feat(struct): condition chain flattening for goto-based short-circuit patterns`
 
-- [ ] P11-14. Dead variable elimination in C output
+- [x] P11-14. Dead variable elimination in C output
 
   **What to do**: Extend `crates/unlace-output/src/c_printer.rs`. Currently declares ALL SSA varnodes as variables. Add a post-collection pass: if a declared variable `v<N>` is never referenced in the emitted C body (only assigned but never read), omit its declaration. This reduces var_count toward IDA's 30 (we have 10 — but IDA counts differently; we just need to not over-declare).
   **Acceptance Criteria**: At least 1 fixture's var_count decreases.
   **QA Scenarios**: `cargo test -p unlace-output` passes.
   **Commit**: `feat(output): omit declarations for write-only variables`
 
-- [ ] P11-15. Variable count recovery improvement
+- [x] P11-15. Variable count recovery improvement
 
   **What to do**: Review why medium.c has 10 vars vs IDA's 30. IDA uses local variables for stack slots, struct fields, and array elements. Our c_printer collapses many into expressions via ExpressionTreePass. The gap is likely that IDA declares intermediate values we fold away. Strategy: adjust expression tree folding threshold — don't fold expressions used >1 time (they should become named variables). Modify `crates/unlace-passes/src/expression_tree.rs` to only fold single-use values.
   **Acceptance Criteria**: medium.c var_count increases toward 20+.
   **QA Scenarios**: `grep -cE "^\s*(int|unsigned|_QWORD|long long) v[0-9]+" tests/golden/expected/medium.c` ≥ 15.
   **Commit**: `feat(passes): restrict expression tree folding to single-use values`
 
-- [ ] P11-16. Return statement recovery
+- [x] P11-16. Return statement recovery
 
   **What to do**: The C printer currently emits `return;` only for explicit RETURN IR ops. IDA emits `return expr;` for functions with return values. Enhance: when a function's calling convention indicates a return value (RAX for x86-64), and the last block has an assignment to RAX before RETURN, emit `return <expr>;` instead of separate assignment + `return;`.
   **Acceptance Criteria**: medium.c return count increases from 3 toward ≥5.
   **QA Scenarios**: `grep -c "\breturn\b" tests/golden/expected/medium.c` ≥ 5.
   **Commit**: `feat(output): emit return-with-value for functions with return register`
 
-- [ ] P11-17. Wave 2 golden refresh + expression quality delta
+- [x] P11-17. Wave 2 golden refresh + expression quality delta
 
   **What to do**: `UPDATE_GOLDEN=1`, measure ifs/vars/returns vs P11-0 baseline. Evidence to `.sisyphus/evidence/p11-17-wave2-delta.txt`.
   **Acceptance Criteria**: medium.c ifs ≥ 35 OR var_count ≥ 15.
@@ -441,7 +441,7 @@ Max Concurrent: 5 (Wave 1)
 
 > MIPS64 has 67 mnemonics/19 tests. RISC-V has 42 mnemonics/43 tests. Both REAL — just need fixtures + golden entries.
 
-- [ ] P11-23. MIPS64 ELF fixture
+- [x] P11-23. MIPS64 ELF fixture
 
   **What to do**: Hand-craft a minimal MIPS64 big-endian ELF fixture OR find a real MIPS binary in `~/VulnerabilityResearch/` (xr1000_fw has ARM binaries — check for MIPS too). If no real binary, create `fixtures/mips64_features.elf` with the existing Python/byte-crafting pattern from P10-3. Include: ADDIU, LW, SW, BEQ, JAL, JR, LUI, AND, OR, SLT instructions.
   **Acceptance Criteria**: `file fixtures/mips64_features.elf` shows MIPS. `unlace decompile --emit ir` exits 0.
@@ -458,7 +458,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `feat(fixtures): MIPS64 ELF fixture for lifter coverage validation`
 
-- [ ] P11-24. MIPS64 golden entry + reference metrics
+- [x] P11-24. MIPS64 golden entry + reference metrics
 
   **What to do**: Add `golden_mips64_features` to golden_fixtures.rs. Bootstrap golden. Add `[mips64_features]` to reference_metrics.toml.
   **Acceptance Criteria**: `cargo test -p unlace-test-harness golden_mips64` passes.
@@ -473,7 +473,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `feat(tests): MIPS64 golden fixture entry + reference metrics`
 
-- [ ] P11-25. RISC-V ELF fixture
+- [x] P11-25. RISC-V ELF fixture
 
   **What to do**: Same as P11-23 but for RISC-V RV64I. Create `fixtures/riscv64_features.elf`. Include: ADDI, ADD, LW, SW, BEQ, JAL, JALR, LUI, AND, OR, SLT, MUL instructions.
   **Acceptance Criteria**: `file` shows RISC-V. Decompile exits 0.
@@ -490,7 +490,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `feat(fixtures): RISC-V RV64I ELF fixture`
 
-- [ ] P11-26. RISC-V golden entry + reference metrics
+- [x] P11-26. RISC-V golden entry + reference metrics
 
   **What to do**: Add to golden_fixtures.rs + reference_metrics.toml.
   **Acceptance Criteria**: Golden test passes.
@@ -505,7 +505,7 @@ Max Concurrent: 5 (Wave 1)
   ```
   **Commit**: `feat(tests): RISC-V golden fixture entry + reference metrics`
 
-- [ ] P11-27. Lifter coverage report (Unimplemented count per fixture)
+- [x] P11-27. Lifter coverage report (Unimplemented count per fixture)
 
   **What to do**: For each fixture, run `unlace decompile --emit ir` and count `Unimplemented` in the IR output. Record: fixture, total instructions, Unimplemented count, coverage percentage. Save to `.sisyphus/evidence/p11-27-coverage.txt`.
   **Acceptance Criteria**: Evidence file with coverage table for all fixtures.

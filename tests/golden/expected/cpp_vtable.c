@@ -34,13 +34,7 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void main(void) {
-    int v6; // eax
-    long long v2; // rsp
     int result;
-    int v3; // temp
-    long long v1; // temp
-    signed char v4; // temp
-    signed char v5; // temp
 
     *(_QWORD *)(0LL) = 0x1080LL;
     __printf_chk();
@@ -81,12 +75,7 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void _start(void) {
-    int v8; // ecx
-    long long v4; // rsp
     int v9; // rip
-    int v1; // temp
-    long long v5; // temp
-    signed char v6; // temp
     unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x10b5LL;

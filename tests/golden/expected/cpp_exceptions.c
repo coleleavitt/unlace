@@ -36,7 +36,6 @@ _DWORD __readfsdword(unsigned int offset);
 // may_throw(int) [clone .cold]
 void __aapcs may_throw(void * a1) {
     int v3; // rax
-    long long v2; // rsp
     int v5; // rip
     long long v1; // temp
     unsigned long long v6; // temp
@@ -98,19 +97,12 @@ _DWORD __readfsdword(unsigned int offset);
  */
 // safe_call(int) [clone .cold]
 __int32 safe_call(void) {
-    int v15; // eax
-    long long v7; // rax
-    long long v4; // rbx
-    long long v2; // rsp
     int v3; // rip
-    signed char v8; // ZF
-    int v11; // temp
     long long result; // temp
     unsigned long long v5; // temp
     unsigned long long pfn; // temp
     signed char v12; // temp
     signed char v13; // temp
-    signed char v14; // temp
 
     *(_QWORD *)(8LL) = 8LL;
     *(_QWORD *)(0LL) = 0x119cLL;
@@ -220,12 +212,7 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void _start(void) {
-    int v8; // ecx
-    long long v4; // rsp
     int v9; // rip
-    int v1; // temp
-    long long v5; // temp
-    signed char v6; // temp
     unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x1285LL;
@@ -321,8 +308,6 @@ void safe_call(void) {
     int v1; // edi
     signed char v5; // SF
     int v2; // temp
-    long long v9; // temp
-    int v3; // temp
     signed char v6; // temp
     signed char v7; // temp
 

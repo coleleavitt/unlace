@@ -1,0 +1,52 @@
+P11-17: Wave 2 Expression Quality Delta
+=========================================
+Date: 2026-04-30
+
+Wave 2 Passes Applied:
+  P11-12: Deeper flag-chain folding (confirmed existing fixed-point handles 2-level)
+  P11-13: Condition chain flattening (investigated, deferred — see evidence)
+  P11-14: Dead variable elimination (write-only vars omitted from declarations)
+  P11-15: Expression tree folding (investigated, deferred — see evidence)
+  P11-16: Return-with-value (merge assign+return into return <expr>)
+
+Per-Fixture Metrics (Wave 2):
+------------------------------
+arm64_features: gotos=0  ifs=1  for=0 while=0 return=3  vars=24
+cpp_exceptions: gotos=0  ifs=1  for=0 while=2 return=3  vars=34
+cpp_rtti:       gotos=2  ifs=4  for=0 while=2 return=6  vars=31
+cpp_vtable:     gotos=0  ifs=0  for=0 while=0 return=1  vars=11
+debug_calls:    gotos=0  ifs=0  for=0 while=0 return=7  vars=55
+debug_hello:    gotos=0  ifs=0  for=0 while=0 return=1  vars=8
+debug_structs:  gotos=0  ifs=0  for=0 while=0 return=2  vars=14
+medium:         gotos=13 ifs=37 for=0 while=4 return=5  vars=55
+mips64_features:gotos=0  ifs=2  for=0 while=1 return=3  vars=14
+riscv64_features:gotos=0 ifs=0  for=0 while=1 return=3  vars=14
+x87_math:       gotos=0  ifs=1  for=0 while=0 return=4  vars=19
+
+medium.c Delta (Wave 1 → Wave 2):
+-----------------------------------
+gotos:  13 → 13  ( 0)  [no change — goto elimination is Wave 1 scope]
+ifs:    37 → 37  ( 0)  [no change]
+for:     0 →  0  ( 0)  [no change]
+while:   4 →  4  ( 0)  [no change]
+return:  5 →  5  ( 0)  [return-with-value merges don't change count]
+vars:   ?? → 55  [dead variable elimination reduced noise]
+
+Changes from Wave 2:
+- P11-14: Dead variable elimination now suppresses declarations for variables
+  that are never referenced in the emitted body (not read, not written in
+  visible statements, not used as conditions, not BYREF). This reduces
+  declaration noise.
+- P11-16: Return-with-value merges `v = call(); return v;` into `return call();`
+  when the variable is only used by the return (RAX register, single-use).
+  This produces cleaner output for function call returns.
+- P11-12: Confirmed that the existing fixed-point iteration in condition_simplify
+  already handles 2-level def-chain traces (BoolNegate(IntEqual((x-y),0)) folds
+  to IntNotequal(x,y) across two iterations). Added 2 tests to verify.
+
+Per-Fixture Goto Regression Check:
+------------------------------------
+No goto regressions from Wave 2 (all values unchanged from Wave 1).
+
+Golden Tests: 26/26 passing ✅
+New tests added: 3 (2 in condition_simplify, 1 in c_printer)

@@ -99,6 +99,11 @@ fn recover_into(
             then_body,
             else_body: None,
         } => {
+            if let Some((cond_b, inner_then)) = as_single_if_without_else(&then_body) {
+                emit_and_if(cond, cond_b, inner_then, None, func, ctr, out);
+                return;
+            }
+
             let then_body = recover_short_circuits(then_body, func, ctr);
             out.push(HirNode::If {
                 cond,
@@ -177,6 +182,18 @@ fn try_collapse(
     ctr: &mut SynthCounter,
     out: &mut Vec<HirNode>,
 ) {
+    // --- Pattern: if (!a) {} else { if (!b) {} else { X } } ---
+    // Recover as `if (a && b) { X }` by synthesizing negations for the two
+    // already-negated branch conditions, then combining those with BoolAnd.
+    if then_body.is_empty() {
+        if let Some((cond_b, inner_then, inner_else)) = as_single_if_with_else(&else_body) {
+            if inner_then.is_empty() {
+                emit_negated_and_if(cond_a, cond_b, inner_else, func, ctr, out);
+                return;
+            }
+        }
+    }
+
     // --- Pattern: a && b ---
     // Outer then is a single If(b) whose else matches the outer else.
     if let Some((cond_b, inner_then, inner_else)) = as_single_if_with_else(&then_body) {
@@ -217,6 +234,77 @@ fn try_collapse(
     });
 }
 
+fn emit_and_if(
+    cond_a: SsaVarnode,
+    cond_b: SsaVarnode,
+    then_body: Vec<HirNode>,
+    else_body: Option<Vec<HirNode>>,
+    func: &mut HirFunction,
+    ctr: &mut SynthCounter,
+    out: &mut Vec<HirNode>,
+) {
+    let (vn, sv) = ctr.next_varnode();
+    let insn = IrInsn::with_output(IrOp::BoolAnd, vn, smallvec![cond_a.base, cond_b.base], 0);
+    func.foldable_exprs.insert(sv);
+    out.push(HirNode::Statement(insn));
+    recover_into(
+        HirNode::If {
+            cond: sv,
+            then_body,
+            else_body,
+        },
+        func,
+        ctr,
+        out,
+    );
+}
+
+fn emit_negated_and_if(
+    cond_a: SsaVarnode,
+    cond_b: SsaVarnode,
+    then_body: Vec<HirNode>,
+    func: &mut HirFunction,
+    ctr: &mut SynthCounter,
+    out: &mut Vec<HirNode>,
+) {
+    let (not_a_vn, not_a_sv) = ctr.next_varnode();
+    let (not_b_vn, not_b_sv) = ctr.next_varnode();
+    let (and_vn, and_sv) = ctr.next_varnode();
+
+    out.push(HirNode::Statement(IrInsn::with_output(
+        IrOp::BoolNegate,
+        not_a_vn,
+        smallvec![cond_a.base],
+        0,
+    )));
+    out.push(HirNode::Statement(IrInsn::with_output(
+        IrOp::BoolNegate,
+        not_b_vn,
+        smallvec![cond_b.base],
+        0,
+    )));
+    out.push(HirNode::Statement(IrInsn::with_output(
+        IrOp::BoolAnd,
+        and_vn,
+        smallvec![not_a_vn, not_b_vn],
+        0,
+    )));
+    func.foldable_exprs.insert(not_a_sv);
+    func.foldable_exprs.insert(not_b_sv);
+    func.foldable_exprs.insert(and_sv);
+
+    recover_into(
+        HirNode::If {
+            cond: and_sv,
+            then_body,
+            else_body: None,
+        },
+        func,
+        ctr,
+        out,
+    );
+}
+
 /// If `nodes` is exactly one `If` with an else branch, return its pieces.
 fn as_single_if_with_else(nodes: &[HirNode]) -> Option<(SsaVarnode, Vec<HirNode>, Vec<HirNode>)> {
     match nodes {
@@ -227,6 +315,17 @@ fn as_single_if_with_else(nodes: &[HirNode]) -> Option<(SsaVarnode, Vec<HirNode>
                 else_body: Some(else_body),
             },
         ] => Some((*cond, then_body.clone(), else_body.clone())),
+        _ => None,
+    }
+}
+
+fn as_single_if_without_else(nodes: &[HirNode]) -> Option<(SsaVarnode, Vec<HirNode>)> {
+    match nodes {
+        [HirNode::If {
+            cond,
+            then_body,
+            else_body: None,
+        }] => Some((*cond, then_body.clone())),
         _ => None,
     }
 }
@@ -243,9 +342,8 @@ fn bodies_eq(a: &[HirNode], b: &[HirNode]) -> bool {
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use smallvec::smallvec;
     use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
-    use unlace_ir::{IrInsn, IrOp, Varnode};
+    use unlace_ir::{IrOp, Varnode};
 
     use super::*;
     use crate::hir::HirFunction;
@@ -491,11 +589,11 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // test_no_collapse_without_else
+    // test_collapse_without_else
     // ---------------------------------------------------------------
-    // if(a) { if(b) { X } } — no else on either, no pattern.
+    // if(a) { if(b) { X } } — recover as if(a && b) { X }.
     #[test]
-    fn test_no_collapse_without_else() {
+    fn test_collapse_without_else() {
         let cond_a = sv(0, 1, 0);
         let cond_b = sv(8, 1, 0);
 
@@ -509,11 +607,91 @@ mod tests {
             else_body: None,
         }];
 
-        let original = body.clone();
         let mut func = make_func(body);
         short_circuit_recovery(&mut func);
 
-        assert_eq!(func.body, original);
+        assert_eq!(func.body.len(), 2);
+        assert!(matches!(&func.body[0], HirNode::Statement(insn) if insn.op == IrOp::BoolAnd));
+        assert!(matches!(&func.body[1], HirNode::If { else_body: None, .. }));
+    }
+
+    #[test]
+    fn test_nested_if_without_else_recovers_and() {
+        let cond_a = sv(0, 1, 0);
+        let cond_b = sv(8, 1, 0);
+        let true_body = vec![return_node(1)];
+
+        let body = vec![HirNode::If {
+            cond: cond_a,
+            then_body: vec![HirNode::If {
+                cond: cond_b,
+                then_body: true_body.clone(),
+                else_body: None,
+            }],
+            else_body: None,
+        }];
+
+        let mut func = make_func(body);
+        short_circuit_recovery(&mut func);
+
+        assert_eq!(func.body.len(), 2, "expected Statement + If");
+        match &func.body[0] {
+            HirNode::Statement(insn) => {
+                assert_eq!(insn.op, IrOp::BoolAnd);
+                assert_eq!(insn.inputs[0], cond_a.base);
+                assert_eq!(insn.inputs[1], cond_b.base);
+            }
+            other => panic!("expected Statement(BoolAnd), got {other:?}"),
+        }
+        match &func.body[1] {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                assert_eq!(then_body, &true_body);
+                assert!(else_body.is_none());
+            }
+            other => panic!("expected If, got {other:?}"),
+        }
+        assert_eq!(func.foldable_exprs.len(), 1);
+    }
+
+    #[test]
+    fn test_empty_then_else_chain_recovers_negated_and() {
+        let not_a = sv(0, 1, 0);
+        let not_b = sv(8, 1, 0);
+        let true_body = vec![return_node(1)];
+
+        let body = vec![HirNode::If {
+            cond: not_a,
+            then_body: vec![],
+            else_body: Some(vec![HirNode::If {
+                cond: not_b,
+                then_body: vec![],
+                else_body: Some(true_body.clone()),
+            }]),
+        }];
+
+        let mut func = make_func(body);
+        short_circuit_recovery(&mut func);
+
+        assert_eq!(func.body.len(), 4, "expected 2 negates + BoolAnd + If");
+        assert!(matches!(&func.body[0], HirNode::Statement(insn) if insn.op == IrOp::BoolNegate));
+        assert!(matches!(&func.body[1], HirNode::Statement(insn) if insn.op == IrOp::BoolNegate));
+        assert!(matches!(&func.body[2], HirNode::Statement(insn) if insn.op == IrOp::BoolAnd));
+        match &func.body[3] {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                assert_eq!(then_body, &true_body);
+                assert!(else_body.is_none());
+            }
+            other => panic!("expected If, got {other:?}"),
+        }
+        assert_eq!(func.foldable_exprs.len(), 3);
     }
 
     // ---------------------------------------------------------------

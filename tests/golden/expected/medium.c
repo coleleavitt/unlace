@@ -34,9 +34,12 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void main(void) {
+    int v34; // al
     int v15; // eax
     long long v13; // rax
     int v9; // ecx
+    int v35; // rcx
+    int v32; // edx
     long long v2; // rsp
     long long v26; // rsi
     long long v22; // rdi
@@ -48,10 +51,10 @@ void main(void) {
     __int128 v12; // xmm0
     __int128 v21; // xmm1
     __int128 v27; // xmm2
+    int result;
     int v16;
     signed char v17; // temp
     int v3; // temp
-    long long v1; // temp
     signed char v29; // temp
     int v4; // temp
     long long v24; // temp
@@ -60,51 +63,47 @@ void main(void) {
     signed char v6; // temp
     signed char v7; // temp
     signed char v8; // temp
+    signed char v33; // temp
     signed char v30; // temp
     signed char v31; // temp
 
     *(_QWORD *)(0x48LL) = 0x48LL;
     v5 = 0;
     v8 = 0;
-    v1 = v10 + 0x2010LL;
+    result = v10 + 0x2010LL;
     v11 = *(_OWORD *)(0LL);
     v12 = _mm_load_si128(v11);
-    v1 = __readfsqword(0x28u);
-    v1 = v10 + 0x2020LL;
-    v11 = *(_OWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
-    _mm_load_ps(0LL, v12);
-    v1 = v10 + 0x2030LL;
+    result = __readfsqword(0x28u);
+    result = v10 + 0x2020LL;
     v11 = *(_OWORD *)(0LL);
     v12 = _mm_load_si128(v11);
     _mm_load_ps(0LL, v12);
-    v1 = v10 + 0x2040LL;
+    result = v10 + 0x2030LL;
     v11 = *(_OWORD *)(0LL);
     v12 = _mm_load_si128(v11);
     _mm_load_ps(0LL, v12);
-    while (v16) {
-        break;
+    result = v10 + 0x2040LL;
+    v11 = *(_OWORD *)(0LL);
+    v12 = _mm_load_si128(v11);
+    _mm_load_ps(0LL, v12);
+    if (v16) {
     }
-    while (v16) {
-        break;
+    if (v16) {
     }
     while (v17) {
     }
-    while (v16) {
-        break;
+    if (v16) {
     }
     v20 = 0LL;
     v12 = _mm_xor_si128(v12, v12);
-    while (v16) {
-        break;
+    if (v16) {
     }
     v21 = _mm_load_si128(v12);
     v12 = _mm_add_epi32(v12, v21);
     v21 = _mm_load_si128(v12);
     v12 = _mm_add_epi32(v12, v21);
     if (v12) {
-        while (v16) {
-            break;
+        if (v16) {
         }
     } else {
         v3 = *(_DWORD *)(0LL);
@@ -113,23 +112,20 @@ void main(void) {
         }
     }
     if (v20) {
-        while (v16) {
-            break;
+        if (v16) {
         }
     } else {
         v3 = *(_DWORD *)(0x48LL);
         if (v14) {
         }
     }
-    while (v16) {
-        break;
+    if (v16) {
     }
     v12 = _mm_load_si128(0);
     v27 = _mm_add_epi32(0, v12);
     v12 = _mm_load_si128(0);
-    while (v14) {
+    if (v14) {
         v3 = *(_DWORD *)(0x48LL);
-        break;
     }
     if (v5) {
         while (v16) {
@@ -142,10 +138,9 @@ void main(void) {
     if (v18) {
         goto label_5;
     }
-    while (v16) {
-        break;
+    if (v16) {
     }
-    while (v16) {
+    if (v16) {
         if (v29) {
         } else {
             if (v5) {
@@ -154,9 +149,26 @@ void main(void) {
         label_8:;
             while (v5) {
             }
-            while (v16) {
-                break;
+            v4 = -19 % 0;
+            if (v9) {
+            } else {
+                *(_QWORD *)(0x48LL) = 0x13f9LL;
+                f_rec_fib();
+                *(_QWORD *)(0x48LL) = 0x1407LL;
+                f_rec_power.constprop.0();
+                *(_QWORD *)(0x48LL) = 0x1419LL;
+                v15 = v34;
+                v24 = *(_QWORD *)(0x48LL);
+                result = __readfsqword(0x28u);
+                if (v35) {
+                label_12:;
+                } else {
+                    result = *(_QWORD *)(0x48LL);
+                    result = *(_QWORD *)(0x48LL);
+                    return result;
+                }
             }
+            goto label_12;
         }
         if (v14) {
         } else {
@@ -167,8 +179,8 @@ void main(void) {
             goto label_8;
         }
         break;
-        break;
     }
+    return result;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;
@@ -254,24 +266,24 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void f_rec_fib(void) {
     long long v11; // rsp
-    long long v20; // rbp
+    long long v19; // rbp
     int v9; // edi
     int v13; // rdi
-    long long v24; // r15
+    long long v23; // r15
     signed char v2; // ZF
-    signed char v16; // SF
-    signed char v17; // temp
+    signed char v16; // temp
     int v1; // temp
     long long result; // temp
     signed char v8; // temp
     int v3; // temp
-    long long v18; // temp
+    long long v17; // temp
     signed char v4; // temp
     signed char v5; // temp
     signed char v6; // temp
 
     if (v9) {
     } else {
+        v11 = 0LL;
         *(_QWORD *)(0LL) = 0LL;
         *(_QWORD *)(0LL) = 0LL;
         *(_QWORD *)(0LL) = 0LL;
@@ -280,17 +292,19 @@ void f_rec_fib(void) {
         result = v13 - 2;
         *(_QWORD *)(0LL) = 0LL;
         v4 = LOBYTE(0);
-        v8 = 1;
-        if (v8) {
+        if (v11) {
         } else {
             while (v8) {
-                if (v17) {
+                v16 = v16;
+                if (v16) {
                 } else {
                     if (v5) {
                     }
                 label_1:;
-                    if (v17) {
+                    v16 = v16;
+                    if (v16) {
                     label_2:;
+                        *(_QWORD *)(0LL) = 0LL;
                     } else {
                         result = *(_QWORD *)(0LL);
                         result = *(_QWORD *)(0LL);
@@ -367,9 +381,8 @@ void f_ackermann(void) {
     *(_QWORD *)(0LL) = 0LL;
     *(_QWORD *)(0LL) = 0LL;
     *(_QWORD *)(0LL) = 0LL;
-    while (v6) {
+    if (v6) {
         result = v7 - 1;
-        break;
     }
     return result;
 }

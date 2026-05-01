@@ -39,6 +39,7 @@ void main(void) {
     long long v2; // rsp
     int v4; // rip
     signed char v11; // ZF
+    int result;
     int v6; // temp
     long long v1; // temp
     int v13; // temp
@@ -64,6 +65,7 @@ void main(void) {
     if (v12) {
     } else {
     }
+    return result;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;

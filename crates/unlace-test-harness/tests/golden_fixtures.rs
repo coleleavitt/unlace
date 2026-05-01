@@ -486,6 +486,7 @@ fn golden_fixtures_metrics_summary() {
         "cpp_vtable",
         "cpp_exceptions",
         "cpp_rtti",
+        "x87_math",
         "arm64_features",
         "mips64_features",
         "riscv64_features",
@@ -717,6 +718,7 @@ fn reference_metrics_file_loads_for_all_fixtures() {
         "arm64_features",
         "mips64_features",
         "riscv64_features",
+        "x87_math",
     ] {
         assert!(
             reference_metrics(name).is_some(),

@@ -33,12 +33,7 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void _start(void) {
-    int v8; // ecx
-    long long v4; // rsp
     int v9; // rip
-    int v1; // temp
-    long long v5; // temp
-    signed char v6; // temp
     unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x1065LL;
@@ -80,12 +75,8 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int add(int a, int b) {
-    long long v2; // rsp
-    long long v3; // rbp
     int v5; // esi
     int v4; // edi
-    long long v1; // temp
-    int v6; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
@@ -126,11 +117,8 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int sub(int a, int b) {
-    long long v2; // rsp
-    long long v3; // rbp
     int v5; // esi
     int v4; // edi
-    long long v1; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
@@ -171,8 +159,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int mul(int a, int b) {
-    long long v2; // rsp
-    long long v3; // rbp
     int v5; // esi
     int v4; // edi
     long long result; // temp
@@ -218,10 +204,7 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int square(int x) {
-    long long v2; // rsp
-    long long v3; // rbp
     long long result; // temp
-    int v4; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = 0;
@@ -265,9 +248,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int cube(int x) {
-    int v5; // eax
-    long long v2; // rsp
-    long long v3; // rbp
     long long result; // temp
 
     *(_QWORD *)(0LL) = 0LL;
@@ -313,8 +293,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int abs_val(int x) {
-    long long v2; // rsp
-    long long v3; // rbp
     int v4; // edi
     long long result; // temp
 
@@ -357,11 +335,8 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int max(int a, int b) {
-    long long v2; // rsp
-    long long v3; // rbp
     int v5; // esi
     int v4; // edi
-    long long v1; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
@@ -402,11 +377,8 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int min(int a, int b) {
-    long long v2; // rsp
-    long long v3; // rbp
     int v5; // esi
     int v4; // edi
-    long long v1; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = v4;
@@ -448,10 +420,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int clamp(int x, int lo, int hi) {
-    int v6; // eax
-    int v5; // edx
-    long long v2; // rsp
-    long long v3; // rbp
     long long result; // temp
 
     *(_QWORD *)(0LL) = 0LL;
@@ -500,9 +468,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int compute(int x) {
-    int v5; // eax
-    long long v2; // rsp
-    long long v3; // rbp
     long long result; // temp
 
     *(_QWORD *)(0LL) = 0LL;
@@ -564,7 +529,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int main(void) {
-    long long v2; // rsp
     long long result; // temp
 
     *(_QWORD *)(0LL) = 0LL;

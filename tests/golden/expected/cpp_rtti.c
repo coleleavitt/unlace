@@ -34,19 +34,9 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void main(void) {
-    int v9; // eax
-    long long v3; // rax
-    long long v2; // rsp
     int v4; // rip
-    signed char v11; // ZF
     int result;
-    int v6; // temp
     long long v1; // temp
-    int v13; // temp
-    long long v10; // temp
-    signed char v14; // temp
-    signed char v7; // temp
-    signed char v8; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     v1 = v4 + 0x3d00LL;
@@ -102,12 +92,7 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void _start(void) {
-    int v8; // ecx
-    long long v4; // rsp
     int v9; // rip
-    int v1; // temp
-    long long v5; // temp
-    signed char v6; // temp
     unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x1165LL;
@@ -151,14 +136,10 @@ _DWORD __readfsdword(unsigned int offset);
  */
 // identify(Animal*)
 void identify(void) {
-    long long v10; // rax
-    long long v5; // rsp
     int v11; // rip
     signed char v2; // ZF
     long long result; // temp
     unsigned long long v8; // temp
-    signed char v3; // temp
-    signed char v4; // temp
 
     v2 = 0;
     if (v2) {

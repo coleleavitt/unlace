@@ -36,18 +36,12 @@ _DWORD __readfsdword(unsigned int offset);
 void main(void) {
     int v34; // al
     int v15; // eax
-    long long v13; // rax
     int v9; // ecx
     int v35; // rcx
-    int v32; // edx
-    long long v2; // rsp
-    long long v26; // rsi
-    long long v22; // rdi
     long long v20; // r8
     int v18; // r10d
     int v10; // rip
     signed char v14; // ZF
-    signed char v28; // SF
     __int128 v12; // xmm0
     __int128 v21; // xmm1
     __int128 v27; // xmm2
@@ -60,12 +54,8 @@ void main(void) {
     long long v24; // temp
     _OWORD v11; // temp
     signed char v5; // temp
-    signed char v6; // temp
     signed char v7; // temp
     signed char v8; // temp
-    signed char v33; // temp
-    signed char v30; // temp
-    signed char v31; // temp
 
     *(_QWORD *)(0x48LL) = 0x48LL;
     v5 = 0;
@@ -217,12 +207,7 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void _start(void) {
-    int v8; // ecx
-    long long v4; // rsp
     int v9; // rip
-    int v1; // temp
-    long long v5; // temp
-    signed char v6; // temp
     unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x14a5LL;
@@ -266,20 +251,13 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void f_rec_fib(void) {
     long long v11; // rsp
-    long long v19; // rbp
     int v9; // edi
     int v13; // rdi
-    long long v23; // r15
-    signed char v2; // ZF
     signed char v16; // temp
-    int v1; // temp
     long long result; // temp
     signed char v8; // temp
-    int v3; // temp
-    long long v17; // temp
     signed char v4; // temp
     signed char v5; // temp
-    signed char v6; // temp
 
     if (v9) {
     } else {
@@ -359,21 +337,8 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void f_ackermann(void) {
     int v7; // rdx
-    long long v11; // rbx
-    long long v2; // rsp
-    int v8; // ebp
-    long long v12; // rbp
-    long long v13; // r12
-    long long v14; // r13
-    long long v15; // r14
-    long long v16; // r15
-    signed char v10; // ZF
     signed char v6; // temp
-    int v9; // temp
     long long result; // temp
-    signed char v3; // temp
-    signed char v4; // temp
-    signed char v5; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     *(_QWORD *)(0LL) = 0LL;
@@ -423,22 +388,15 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void f_rec_power.constprop.0(__int64 a1) {
     long long v20; // rsp
-    int v15; // esi
     int v1; // dil
-    int v11; // edi
-    int v16; // r8d
     signed char v3; // ZF
     int v12;
     signed char v2; // temp
     int v8; // temp
     long long result; // temp
-    signed char v4; // temp
     int v9; // temp
     int v18; // temp
     signed char v5; // temp
-    signed char v6; // temp
-    signed char v10; // temp
-    signed char v13; // temp
 
     v2 = v1 & 1;
     v3 = 0;

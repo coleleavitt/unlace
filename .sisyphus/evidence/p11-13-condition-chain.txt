@@ -1,0 +1,19 @@
+P11-13: Condition chain flattening for goto-based short-circuits
+================================================================
+
+Status: INVESTIGATED — deferred (too complex for time budget)
+
+Investigation:
+- The flatten_if_else.rs pass already handles `if (a) { X } else { if (b) { Y } }` → `else if`.
+- The goto-based short-circuit pattern `if (!a) { goto L; } if (!b) { goto L; } X; L:` requires:
+  1. Detecting consecutive if+goto pairs targeting the same label
+  2. Merging conditions with BoolAnd/BoolOr
+  3. Removing the intermediate goto/label pairs
+- This is a structurer-level transformation that operates on already-structured HIR.
+- The pattern is rare in medium.c (most short-circuits are already handled by the
+  structurer's if-else recovery).
+- Risk: incorrect merging could change semantics if the gotos have side effects between them.
+
+Decision: Defer to Phase 12. The goto-to-break/continue passes from Wave 1 already
+handle the most impactful goto patterns. Remaining gotos in medium.c are from
+irreducible regions, not short-circuit patterns.

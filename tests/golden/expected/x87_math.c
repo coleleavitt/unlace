@@ -33,12 +33,7 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void _start(void) {
-    int v8; // ecx
-    long long v4; // rsp
     int v9; // rip
-    int v1; // temp
-    long long v5; // temp
-    signed char v6; // temp
     unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x1065LL;
@@ -80,8 +75,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void sum_squares_x87(void) {
-    long long v5; // rsp
-    int v1; // reg?
     long long result; // temp
 
     /* CALLOTHER tag=791 */ 0;
@@ -122,10 +115,8 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void compare_floats_x87(void) {
-    long long v10; // rsp
     int v2; // CF
     int v4; // ZF
-    int v1; // reg?
     int v7; // reg?
     _Bool cond; // temp
     long long result; // temp
@@ -175,7 +166,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void mix_ops_x87(void) {
-    long long v3; // rsp
     long long result; // temp
 
     return result;

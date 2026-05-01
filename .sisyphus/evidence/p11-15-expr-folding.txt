@@ -1,0 +1,19 @@
+P11-15: Restrict expression tree folding to single-use same-block values
+========================================================================
+
+Status: INVESTIGATED — deferred (risk of regression outweighs benefit)
+
+Investigation:
+- The expression_tree pass in crates/unlace-passes/src/expression_tree.rs already
+  restricts folding to single-use values (checked via use_counts in compute_foldable).
+- The c_printer's compute_foldable() also checks use_counts == 1 and same-depth.
+- medium.c has 10 vars vs IDA's 30. The gap is NOT from over-folding — it's from
+  IDA counting stack slots, struct fields, and array elements as separate variables,
+  while our printer collapses them into expressions.
+- Restricting folding further would increase var_count but also increase noise
+  (more intermediate temporaries visible).
+- The dead variable elimination pass (P11-14) already reduces unnecessary declarations.
+
+Decision: The current single-use folding threshold is correct. The var_count gap
+is a counting methodology difference, not a folding problem. Defer further
+investigation to Phase 12 if parity scoring changes to weight var_count differently.

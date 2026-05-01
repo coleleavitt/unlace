@@ -148,22 +148,18 @@ void identify(void) {
         __dynamic_cast();
         v8 = *(_QWORD *)(0LL);
         if (v2) {
-        label_0:;
         } else {
             result = *(_QWORD *)(0LL);
             result = v11 + 0x1300LL;
             result = *(_QWORD *)(0LL);
             v13 = 0;
             if (v13) {
-            label_1:;
             } else {
                 result = *(_QWORD *)(0LL);
                 return result;
             }
         }
-        goto label_1;
     }
-    goto label_0;
 }
 typedef unsigned char _BYTE;
 typedef unsigned short _WORD;

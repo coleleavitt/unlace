@@ -337,8 +337,7 @@ pub fn lift_function(
     lifter: &dyn Lifter,
     entry: &FunctionEntry,
 ) -> Result<Function> {
-    let text = text_section(image)
-        .context("binary has no text section (.text / __text)")?;
+    let text = text_section(image).context("binary has no text section (.text / __text)")?;
 
     let (func_start, func_end) = function_bounds(entry, text);
 
@@ -850,6 +849,7 @@ pub fn emit_output(
             unlace_struct::goto_to_continue(&mut hir);
             unlace_struct::while_to_for(&mut hir);
             unlace_struct::eliminate_forward_gotos(&mut hir);
+            unlace_struct::hoist_cross_branch_labels(&mut hir);
             unlace_struct::return_merge(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
             Ok(unlace_output::print_c_full(

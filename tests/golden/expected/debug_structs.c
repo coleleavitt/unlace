@@ -34,7 +34,6 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void _start(void) {
     int v9; // rip
-    unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x1085LL;
     v3 = v9 + 0x3fd8LL;
@@ -76,14 +75,11 @@ _DWORD __readfsdword(unsigned int offset);
  */
 __int32 area(__int64 a1) {
     int v1; // rdi
-    unsigned int v3; // temp
 
     // source: /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
     result = v1 + 8LL;
     // source: /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
-    v3 = *(_DWORD *)(0LL);
-    // source: /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
-    v4 = v3;
+    v4 = *(_DWORD *)(0LL);
     result = v1 + 0xcLL;
     v3 = *(_DWORD *)(0LL);
     result = 0LL;
@@ -160,8 +156,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 int main(void) {
-    long long result; // temp
-
     *(_QWORD *)(0LL) = 0x1191LL;
     return result;
 }

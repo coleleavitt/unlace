@@ -37,8 +37,6 @@ _DWORD __readfsdword(unsigned int offset);
 void __aapcs may_throw(void * a1) {
     int v3; // rax
     int v5; // rip
-    long long v1; // temp
-    unsigned long long v6; // temp
 
     *(_QWORD *)(0LL) = v3;
     *(_QWORD *)(0LL) = v3;
@@ -98,11 +96,6 @@ _DWORD __readfsdword(unsigned int offset);
 // safe_call(int) [clone .cold]
 __int32 safe_call(void) {
     int v3; // rip
-    long long result; // temp
-    unsigned long long v5; // temp
-    unsigned long long pfn; // temp
-    signed char v12; // temp
-    signed char v13; // temp
 
     *(_QWORD *)(8LL) = 8LL;
     *(_QWORD *)(0LL) = 0x119cLL;
@@ -128,8 +121,7 @@ __int32 safe_call(void) {
         __cxa_begin_catch();
         result = *(_QWORD *)(0LL);
         *(_QWORD *)(0LL) = 0x11f6LL;
-        pfn = *(_QWORD *)(8LL);
-        ((void (*)())pfn)();
+        ((void (*)())*(_QWORD *)(8LL))();
         v12 = LOBYTE(0);
         v13 = 0;
         *(_QWORD *)(8LL) = 0x1211LL;
@@ -213,7 +205,6 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void _start(void) {
     int v9; // rip
-    unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x1285LL;
     v3 = v9 + 0x3fd8LL;
@@ -256,9 +247,6 @@ _DWORD __readfsdword(unsigned int offset);
 // may_throw(int)
 void may_throw(void) {
     int v1; // edi
-    _Bool cond; // PF
-    signed char v6; // SF
-    int v2; // temp
 
     do {
         v2 = v1;
@@ -306,10 +294,6 @@ _DWORD __readfsdword(unsigned int offset);
 // safe_call(int)
 void safe_call(void) {
     int v1; // edi
-    signed char v5; // SF
-    int v2; // temp
-    signed char v6; // temp
-    signed char v7; // temp
 
     do {
         v2 = v1;

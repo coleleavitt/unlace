@@ -36,7 +36,6 @@ _DWORD __readfsdword(unsigned int offset);
 void main(void) {
     int v4; // rip
     int result;
-    long long v1; // temp
 
     *(_QWORD *)(0LL) = 0LL;
     v1 = v4 + 0x3d00LL;
@@ -93,7 +92,6 @@ _DWORD __readfsdword(unsigned int offset);
  */
 void _start(void) {
     int v9; // rip
-    unsigned long long v10; // temp
 
     *(_QWORD *)(0LL) = 0x1165LL;
     v3 = v9 + 0x3fe0LL;
@@ -137,9 +135,6 @@ _DWORD __readfsdword(unsigned int offset);
 // identify(Animal*)
 void identify(void) {
     int v11; // rip
-    signed char v2; // ZF
-    long long result; // temp
-    unsigned long long v8; // temp
 
     v2 = 0;
     if (v2) {
@@ -197,8 +192,6 @@ _DWORD __readfsdword(unsigned int offset);
  */
 // Dog::speak()
 void Dog_speak(void) {
-    long long result; // temp
-
     return result;
 }
 typedef unsigned char _BYTE;
@@ -237,8 +230,6 @@ _DWORD __readfsdword(unsigned int offset);
  */
 // Cat::speak()
 void Cat_speak(void) {
-    long long result; // temp
-
     return result;
 }
 typedef unsigned char _BYTE;

@@ -839,6 +839,7 @@ pub fn emit_output(
             unlace_struct::simplify_chain_conditions(&mut hir, ssa);
             unlace_struct::if_chain_to_switch(&mut hir, ssa);
             unlace_struct::goto_to_break(&mut hir);
+            unlace_struct::goto_to_continue(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
             Ok(unlace_output::print_c_full(
                 &hir,

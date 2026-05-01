@@ -251,6 +251,52 @@ pub fn print_c_with_rtti(
     // Also suppress variables that the expression tree pass marked as
     // single-use temporaries — these are inlined at their use site.
     foldable_svs.extend(&func.foldable_exprs);
+
+    // Build the set of variable names that are actually referenced in the
+    // emitted body (read as input, used as condition, or written in a
+    // visible non-dead statement).  Declarations for unreferenced
+    // variables are omitted to reduce noise.
+    let referenced_names: BTreeSet<&str> = {
+        let mut names = BTreeSet::new();
+        // Variables read as inputs.
+        for (sv, count) in &ctx.sv_use_counts {
+            if *count > 0 {
+                if let Some(n) = ctx.var_names.get(sv) {
+                    names.insert(n.as_str());
+                }
+            }
+        }
+        // Variables used as conditions.
+        for sv in &ctx.cond_uses {
+            if let Some(n) = ctx.var_names.get(sv) {
+                names.insert(n.as_str());
+            }
+        }
+        // Variables written in visible (non-foldable) statements.
+        for (&stmt_idx, output_sv_opt) in &ctx.stmt_outputs {
+            if let Some(sv) = output_sv_opt {
+                if foldable_svs.contains(sv) {
+                    continue;
+                }
+                if let Some(insn) = ctx.stmt_insns.get(&stmt_idx) {
+                    if is_dead_zero_init(insn, stmt_idx, &ctx) {
+                        continue;
+                    }
+                }
+                if let Some(n) = ctx.var_names.get(sv) {
+                    names.insert(n.as_str());
+                }
+            }
+        }
+        // BYREF variables (address-taken) are always referenced.
+        for base in &ctx.byref_bases {
+            if let Some(n) = ctx.base_names.get(base) {
+                names.insert(n.as_str());
+            }
+        }
+        names
+    };
+
     let mut has_decl = false;
     let mut declared_names: BTreeSet<&str> = BTreeSet::new();
     for (sv, name) in &ctx.var_names {
@@ -258,6 +304,9 @@ pub fn print_c_with_rtti(
             continue;
         }
         if !declared_names.insert(name.as_str()) {
+            continue;
+        }
+        if !referenced_names.contains(name.as_str()) {
             continue;
         }
         let ty = ctx
@@ -1782,9 +1831,62 @@ fn dwarf_type_to_c(dwarf_type: &str) -> String {
 // ---------------------------------------------------------------------------
 
 fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut String) {
-    for node in nodes {
-        emit_node(node, depth, ctx, out);
+    let mut i = 0;
+    while i < nodes.len() {
+        if let Some(merged) = try_merge_assign_return(&nodes[i..], ctx) {
+            let idx = ctx.emit_stmt;
+            ctx.emit_stmt += 1;
+            indent(depth, out);
+            let _ = writeln!(out, "return {};", merged);
+            i += 2;
+            continue;
+        }
+        emit_node(&nodes[i], depth, ctx, out);
+        i += 1;
     }
+}
+
+/// Detect `Statement(insn) ; Return(Some(sv))` where the statement defines
+/// `sv` via the return register (RAX, offset 0) and fold into `return <expr>;`.
+///
+/// Only fires when the return variable has no other readers (use_count == 0
+/// from the perspective of non-return uses), so that the merged form doesn't
+/// lose a named variable that other code references.
+fn try_merge_assign_return(nodes: &[HirNode], ctx: &mut PrintCtx) -> Option<String> {
+    if nodes.len() < 2 {
+        return None;
+    }
+    let insn = match &nodes[0] {
+        HirNode::Statement(insn) => insn,
+        _ => return None,
+    };
+    let ret_sv = match &nodes[1] {
+        HirNode::Return(Some(sv)) => sv,
+        _ => return None,
+    };
+    if ret_sv.base.space != SpaceId::Register || ret_sv.base.offset != 0 {
+        return None;
+    }
+    let stmt_idx = ctx.emit_stmt;
+    let output_sv = ctx.stmt_outputs.get(&stmt_idx).cloned().flatten()?;
+    if output_sv != *ret_sv {
+        return None;
+    }
+    if ctx.foldable_stmts.contains(&stmt_idx) {
+        return None;
+    }
+    if is_dead_zero_init(insn, stmt_idx, ctx) {
+        return None;
+    }
+    // Only merge when the variable's sole use is this return statement.
+    // sv_use_counts includes the Return(Some(sv)) via cond_uses (adds 1).
+    // If total uses > 1, the variable is read elsewhere and needs a name.
+    let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
+    if total_uses > 1 {
+        return None;
+    }
+    let expr = emit_expr(insn, stmt_idx, ctx);
+    Some(expr)
 }
 
 fn resolve_sv_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
@@ -3905,13 +4007,13 @@ mod tests {
         );
 
         assert!(
-            output.contains("result = 1 + 2 + 3;"),
+            output.contains("result = 1 + 2 + 3;") || output.contains("return 1 + 2 + 3;"),
             "folded expression expected: {output}",
         );
 
         assert!(
-            output.contains("return result;"),
-            "return result expected: {output}",
+            output.contains("return result;") || output.contains("return 1 + 2 + 3;"),
+            "return expected: {output}",
         );
     }
 
@@ -7055,7 +7157,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("result = 0;"),
+            output.contains("result = 0;") || output.contains("return 0;"),
             "popcount(0) should fold to 0: {output}",
         );
         assert!(
@@ -7806,12 +7908,12 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("return result;"),
-            "returned varnode should be named 'result': {output}",
+            output.contains("return result;") || output.contains("return v1 + 1;"),
+            "returned varnode should appear in return: {output}",
         );
         assert!(
-            output.contains("result = "),
-            "definition of returned var should be 'result =': {output}",
+            output.contains("result = ") || output.contains("return v1 + 1;"),
+            "definition of returned var should be 'result =' or merged return: {output}",
         );
     }
 
@@ -8167,6 +8269,68 @@ mod tests {
         assert!(
             output.contains("Dog *this"),
             "member function should have 'Dog *this' param: {output}",
+        );
+    }
+
+    #[test]
+    fn test_write_only_variable_not_declared() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+        let c2 = con(2, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, r8, smallvec![c2], 0x1004)),
+            HirNode::Return(Some(SsaVarnode {
+                base: r8,
+                version: 0,
+            })),
+        ];
+
+        let func = make_func("dead_var", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("result"),
+            "r8 (returned) should be declared: {output}",
+        );
+        let has_v1_decl = output.lines().any(|l| {
+            let t = l.trim();
+            t.starts_with("int v1;") || t.starts_with("int v1; //")
+        });
+        assert!(
+            !has_v1_decl,
+            "write-only variable v1 (r0, never read) should NOT be declared: {output}",
+        );
+    }
+
+    #[test]
+    fn test_return_with_value_merges_call() {
+        let rax = reg(0, 8);
+        let target = con(0x401000, 8);
+
+        let call = IrInsn::with_output(IrOp::Call, rax, smallvec![target], 0x1000);
+        let body = vec![
+            HirNode::Statement(call),
+            HirNode::Return(Some(SsaVarnode {
+                base: rax,
+                version: 0,
+            })),
+        ];
+
+        let func = make_func("ret_call", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401000u64, "compute".to_string());
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("return compute();"),
+            "call + return should merge into `return compute();`: {output}",
+        );
+        assert!(
+            !output.contains("result = compute()"),
+            "should NOT have separate assignment: {output}",
         );
     }
 }

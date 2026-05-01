@@ -1155,7 +1155,7 @@ Max Concurrent: 5 (Wave 4)
 
 > Per Metis Discovery #6: Mach-O loader has chained-fixup imports (P9-21) but `relocations: Vec::new()` still empty + LC_DYLD_INFO unparsed. Wave 4 closes the IDA P0 gaps.
 
-- [ ] P10-21. Parse LC_DYSYMTAB indirect symbol table
+- [x] P10-21. Parse LC_DYSYMTAB indirect symbol table
 
   **What to do**:
   - Walk LC_DYSYMTAB load command. Read the indirect symbol table at `indirectsymoff` for `nindirectsyms` u32 entries.
@@ -1192,7 +1192,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): Mach-O LC_DYSYMTAB indirect symbol table parsing`
 
-- [ ] P10-22. LC_DYLD_INFO REBASE opcode interpreter
+- [x] P10-22. LC_DYLD_INFO REBASE opcode interpreter
 
   **What to do**:
   - Parse the REBASE bytecode stream from LC_DYLD_INFO::rebase_off/rebase_size.
@@ -1233,7 +1233,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): Mach-O LC_DYLD_INFO REBASE opcode interpreter`
 
-- [ ] P10-23. LC_DYLD_INFO BIND opcode interpreter (lazy + non-lazy)
+- [x] P10-23. LC_DYLD_INFO BIND opcode interpreter (lazy + non-lazy)
 
   **What to do**:
   - Parse BIND bytecode from LC_DYLD_INFO::bind_off/bind_size AND lazy_bind_off/lazy_bind_size.
@@ -1270,7 +1270,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): Mach-O LC_DYLD_INFO BIND opcode interpreter (lazy + non-lazy)`
 
-- [ ] P10-24. LC_DYLD_INFO EXPORT trie decoder
+- [x] P10-24. LC_DYLD_INFO EXPORT trie decoder
 
   **What to do**:
   - Parse EXPORT trie from LC_DYLD_INFO::export_off/export_size.
@@ -1307,7 +1307,7 @@ Max Concurrent: 5 (Wave 4)
 
   **Commit**: `feat(loader): Mach-O LC_DYLD_INFO EXPORT trie decoder`
 
-- [ ] P10-25. Apply relocations: populate BinaryImage.relocations
+- [x] P10-25. Apply relocations: populate BinaryImage.relocations
 
   **What to do**:
   - Consolidate output of P10-22 (REBASE) + P10-23 (BIND) into BinaryImage.relocations.

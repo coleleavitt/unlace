@@ -54,6 +54,56 @@ mod tests {
     }
 
     #[test]
+    fn test_cmove_lifts_to_conditional_callother() {
+        // 48 0F 44 C3 = cmove rax, rbx
+        let result = lifter()
+            .lift_insn(&[0x48, 0x0F, 0x44, 0xC3], 0x1000)
+            .expect("should decode cmove rax, rbx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Copy),
+            "CMOVE must not become an unconditional Copy"
+        );
+        let cmov = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("CMOVE should emit a Callother");
+        assert_eq!(
+            cmov.inputs[0],
+            unlace_ir::Varnode::constant(crate::ops::data_move::CMOV_CALLOTHER_TAG, 8)
+        );
+        assert_eq!(cmov.inputs.len(), 4, "CMOV takes (tag, cond, src, dst)");
+        assert_eq!(
+            cmov.inputs[1],
+            unlace_ir::Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::ZF, 1)
+        );
+    }
+
+    #[test]
+    fn test_cmovne_lifts_negated_condition() {
+        // 48 0F 45 C3 = cmovne rax, rbx
+        let result = lifter()
+            .lift_insn(&[0x48, 0x0F, 0x45, 0xC3], 0x1000)
+            .expect("should decode cmovne rax, rbx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate),
+            "CMOVNE should negate ZF for its condition"
+        );
+        let cmov = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("CMOVNE should emit a Callother");
+        assert_eq!(
+            cmov.inputs[0],
+            unlace_ir::Varnode::constant(crate::ops::data_move::CMOV_CALLOTHER_TAG, 8)
+        );
+        assert_eq!(cmov.inputs.len(), 4, "CMOVNE takes (tag, cond, src, dst)");
+    }
+
+    #[test]
     fn test_add_reg_reg() {
         // 48 01 d8 = add rax, rbx
         let result = lifter()

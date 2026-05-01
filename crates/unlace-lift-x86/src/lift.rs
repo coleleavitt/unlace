@@ -287,11 +287,11 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
     use Mnemonic as M;
 
     match insn.mnemonic() {
-        M::Mov
-        | M::Movzx
-        | M::Movsx
-        | M::Movsxd
-        | M::Cmove
+        M::Mov | M::Movzx | M::Movsx | M::Movsxd => {
+            data_move::lift_mov(ctx, insn);
+        }
+
+        M::Cmove
         | M::Cmovne
         | M::Cmovb
         | M::Cmovae
@@ -303,7 +303,7 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         | M::Cmovle
         | M::Cmovs
         | M::Cmovns => {
-            data_move::lift_mov(ctx, insn);
+            data_move::lift_cmov(ctx, insn);
         }
 
         M::Lea => data_move::lift_lea(ctx, insn),

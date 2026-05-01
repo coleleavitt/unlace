@@ -1779,6 +1779,7 @@ fn c_type(ty: &PrimitiveType) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
 fn c_return_type(ty: &PrimitiveType) -> &'static str {
     match ty {
         PrimitiveType::Unknown => "void",
@@ -1834,7 +1835,6 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
     let mut i = 0;
     while i < nodes.len() {
         if let Some(merged) = try_merge_assign_return(&nodes[i..], ctx) {
-            let idx = ctx.emit_stmt;
             ctx.emit_stmt += 1;
             indent(depth, out);
             let _ = writeln!(out, "return {};", merged);
@@ -2361,7 +2361,11 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             }
             IrOp::Callother => {
                 let expr = emit_callother(insn, idx, ctx);
-                let _ = writeln!(out, "{};", expr);
+                if is_callother_tag(insn, 0x350) {
+                    let _ = writeln!(out, "{}", expr);
+                } else {
+                    let _ = writeln!(out, "{};", expr);
+                }
             }
             IrOp::Branchind => {
                 let target = if !insn.inputs.is_empty() {
@@ -2603,12 +2607,9 @@ fn emit_expr_with_prec(
                 ) {
                     return resolved;
                 }
-                if let Some(field) = try_struct_field_access(
-                    &insn.inputs[addr_idx],
-                    stmt_idx,
-                    load_size,
-                    ctx,
-                ) {
+                if let Some(field) =
+                    try_struct_field_access(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
+                {
                     return field;
                 }
                 if let Some(sub) =
@@ -3046,8 +3047,19 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x343 => Some("__dsb__"),
         0x344 => Some("__isb__"),
 
+        // ── x86 conditional move pseudo-intrinsic ───────────────
+        0x350 => Some("__cmov__"),
+
         _ => None,
     }
+}
+
+fn is_callother_tag(insn: &IrInsn, tag: u64) -> bool {
+    insn.op == IrOp::Callother
+        && insn
+            .inputs
+            .first()
+            .is_some_and(|vn| vn.space == SpaceId::Const && vn.offset == tag)
 }
 
 fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
@@ -3061,6 +3073,13 @@ fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     }
 
     let tag = tag_vn.offset;
+    if tag == 0x350 && insn.inputs.len() >= 4 {
+        let cond = emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx);
+        let src = emit_operand_resolved(&insn.inputs[2], 2, stmt_idx, ctx);
+        let dst = emit_operand_resolved(&insn.inputs[3], 3, stmt_idx, ctx);
+        return format!("if ({}) {{ {} = {}; }}", cond, dst, src);
+    }
+
     match callother_intrinsic_name(tag) {
         Some(name) => {
             let args: Vec<String> = insn.inputs[1..]
@@ -5824,7 +5843,6 @@ mod tests {
             output.contains("v1 / v2"),
             "IntSdiv should NOT cast to unsigned: {output}",
         );
-        let div_line = output.lines().find(|l| l.contains("/")).expect("div line");
         let body_output: String = output
             .lines()
             .skip_while(|l| !l.contains("signed_div"))
@@ -7022,6 +7040,35 @@ mod tests {
     }
 
     #[test]
+    fn test_callother_cmov_emits_if_assignment() {
+        let cond = reg(259, 1);
+        let src = reg(16, 8);
+        let dst = reg(0, 8);
+        let tag = con(0x350, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, cond, src, dst],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("cmov", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("if (") && output.contains(" = "),
+            "CMOV Callother should emit an if-assignment: {output}",
+        );
+        assert!(
+            !output.contains("__cmov__("),
+            "CMOV Callother should not emit call syntax: {output}",
+        );
+    }
+
+    #[test]
     fn test_callother_no_output_resolved() {
         let r0 = reg(0, 16);
         let r16 = reg(16, 16);
@@ -7837,14 +7884,6 @@ mod tests {
         };
 
         let output = print_c(&func);
-
-        let decl_section: String = output
-            .lines()
-            .skip_while(|l| !l.contains(") {"))
-            .skip(1)
-            .take_while(|l| !l.trim().is_empty() && !l.contains("v1"))
-            .collect::<Vec<_>>()
-            .join("\n");
 
         let declares_v1 = output.lines().any(|l| {
             let trimmed = l.trim();

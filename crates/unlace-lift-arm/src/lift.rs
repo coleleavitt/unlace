@@ -208,6 +208,11 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_CMN => arithmetic::lift_cmn(ctx, &ops),
         Arm64Insn::ARM64_INS_TST => arithmetic::lift_tst(ctx, &ops),
         Arm64Insn::ARM64_INS_NEG => arithmetic::lift_neg(ctx, &ops),
+        Arm64Insn::ARM64_INS_MUL => arithmetic::lift_mul(ctx, &ops),
+        Arm64Insn::ARM64_INS_SDIV => arithmetic::lift_sdiv(ctx, &ops),
+        Arm64Insn::ARM64_INS_UDIV => arithmetic::lift_udiv(ctx, &ops),
+        Arm64Insn::ARM64_INS_MADD => arithmetic::lift_madd(ctx, &ops),
+        Arm64Insn::ARM64_INS_MSUB => arithmetic::lift_msub(ctx, &ops),
 
         Arm64Insn::ARM64_INS_AND => bitwise::lift_and(ctx, &ops),
         Arm64Insn::ARM64_INS_ORR => bitwise::lift_orr(ctx, &ops),

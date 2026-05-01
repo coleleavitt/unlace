@@ -288,3 +288,72 @@ pub fn lift_neg(ctx: &mut LiftCtx, ops: &Ops) {
         _ => ctx.emit_unimplemented(),
     }
 }
+
+fn lift_binop(ctx: &mut LiftCtx, ops: &Ops, op: IrOp) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let a = operand_to_varnode(ctx, &ops[1].0);
+    let b = operand_to_varnode(ctx, &ops[2].0);
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(op, result, smallvec![a, b], ctx.addr));
+            write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_mul(ctx: &mut LiftCtx, ops: &Ops) {
+    lift_binop(ctx, ops, IrOp::IntMult);
+}
+
+pub fn lift_sdiv(ctx: &mut LiftCtx, ops: &Ops) {
+    lift_binop(ctx, ops, IrOp::IntSdiv);
+}
+
+pub fn lift_udiv(ctx: &mut LiftCtx, ops: &Ops) {
+    lift_binop(ctx, ops, IrOp::IntDiv);
+}
+
+pub fn lift_madd(ctx: &mut LiftCtx, ops: &Ops) {
+    lift_mul_acc(ctx, ops, IrOp::IntAdd);
+}
+
+pub fn lift_msub(ctx: &mut LiftCtx, ops: &Ops) {
+    lift_mul_acc(ctx, ops, IrOp::IntSub);
+}
+
+fn lift_mul_acc(ctx: &mut LiftCtx, ops: &Ops, acc_op: IrOp) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let a = operand_to_varnode(ctx, &ops[1].0);
+    let b = operand_to_varnode(ctx, &ops[2].0);
+    let acc = operand_to_varnode(ctx, &ops[3].0);
+    match (a, b, acc) {
+        (Some(a), Some(b), Some(acc)) => {
+            let product = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntMult,
+                product,
+                smallvec![a, b],
+                ctx.addr,
+            ));
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            let inputs = if acc_op == IrOp::IntSub {
+                smallvec![acc, product]
+            } else {
+                smallvec![product, acc]
+            };
+            ctx.emit(IrInsn::with_output(acc_op, result, inputs, ctx.addr));
+            write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}

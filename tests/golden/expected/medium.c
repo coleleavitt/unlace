@@ -34,123 +34,129 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void main(void) {
-    int v34; // al
     int v15; // eax
-    int v9; // ecx
-    int v35; // rcx
+    int v38; // rcx
+    int v33; // edx
+    long long v37; // rdx
+    long long v22; // rdi
     long long v20; // r8
     int v18; // r10d
-    int v10; // rip
-    signed char v14; // ZF
-    __int128 v12; // xmm0
+    int v8; // rip
+    signed char v12; // ZF
+    __int128 v10; // xmm0
     __int128 v21; // xmm1
-    __int128 v27; // xmm2
+    __int128 v31; // xmm2
     int result;
-    int v16;
-    signed char v17; // temp
+    int v17;
+    signed char v16; // temp
     int v3; // temp
     signed char v29; // temp
-    int v4; // temp
+    int v13; // temp
     long long v24; // temp
-    _OWORD v11; // temp
-    signed char v5; // temp
-    signed char v7; // temp
-    signed char v8; // temp
+    _OWORD v9; // temp
+    signed char v14; // temp
+    signed char v4; // temp
 
     *(_QWORD *)(0x48LL) = 0x48LL;
-    v5 = 0;
-    v8 = 0;
-    result = v10 + 0x2010LL;
-    v11 = *(_OWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
+    v4 = 0;
+    result = v8 + 0x2010LL;
+    v9 = *(_OWORD *)(0LL);
+    v10 = _mm_load_si128(v9);
     result = __readfsqword(0x28u);
-    result = v10 + 0x2020LL;
-    v11 = *(_OWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
-    _mm_load_ps(0LL, v12);
-    result = v10 + 0x2030LL;
-    v11 = *(_OWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
-    _mm_load_ps(0LL, v12);
-    result = v10 + 0x2040LL;
-    v11 = *(_OWORD *)(0LL);
-    v12 = _mm_load_si128(v11);
-    _mm_load_ps(0LL, v12);
-    if (v16) {
+    _mm_load_ps(0LL, v10);
+    result = v8 + 0x2020LL;
+    v9 = *(_OWORD *)(0LL);
+    v10 = _mm_load_si128(v9);
+    _mm_load_ps(0LL, v10);
+    result = v8 + 0x2030LL;
+    v9 = *(_OWORD *)(0LL);
+    v10 = _mm_load_si128(v9);
+    _mm_load_ps(0LL, v10);
+    result = v8 + 0x2040LL;
+    v9 = *(_OWORD *)(0LL);
+    v10 = _mm_load_si128(v9);
+    _mm_load_ps(0LL, v10);
+    while (v16) {
     }
-    if (v16) {
+    if (v17) {
     }
-    while (v17) {
+    while (v16) {
     }
-    if (v16) {
+    if (v17) {
     }
     v20 = 0LL;
-    v12 = _mm_xor_si128(v12, v12);
-    if (v16) {
+    v10 = _mm_xor_si128(v10, v10);
+    if (v17) {
     }
-    v21 = _mm_load_si128(v12);
-    v12 = _mm_add_epi32(v12, v21);
-    v21 = _mm_load_si128(v12);
-    v12 = _mm_add_epi32(v12, v21);
-    if (v12) {
-        if (v16) {
+    v21 = _mm_load_si128(v10);
+    v22 = 0LL;
+    v10 = _mm_add_epi32(v10, v21);
+    v21 = _mm_load_si128(v10);
+    v10 = _mm_add_epi32(v10, v21);
+    if (v10) {
+        if (v17) {
         }
     } else {
         v3 = *(_DWORD *)(0LL);
-        v7 = 0;
-        if (v14) {
+        v16 = 0;
+        if (0x18) { -3 = 3; }
+        if (v22) {
         }
     }
     if (v20) {
-        if (v16) {
+        while (v14) {
+            v3 = *(_DWORD *)(0x48LL);
+            if (0) { 1 = 3; }
+            v13 = *(_DWORD *)(0x48LL);
+            if (1) { 1 = 3; }
         }
     } else {
         v3 = *(_DWORD *)(0x48LL);
-        if (v14) {
+        if (0) { 1 = 1; }
+        if (v22) {
         }
     }
-    if (v16) {
+    if (v17) {
     }
-    v12 = _mm_load_si128(0);
-    v27 = _mm_add_epi32(0, v12);
-    v12 = _mm_load_si128(0);
-    if (v14) {
+    v10 = _mm_load_si128(0);
+    v31 = _mm_add_epi32(0, v10);
+    v10 = _mm_load_si128(0);
+    if (v12) {
         v3 = *(_DWORD *)(0x48LL);
     }
-    if (v5) {
+    if (v14) {
         while (v16) {
-            break;
         }
     label_5:;
-        if (v8) {
+        if (v4) {
         }
     }
     if (v18) {
         goto label_5;
     }
-    if (v16) {
+    if (v17) {
     }
-    if (v16) {
+    if (v17) {
         if (v29) {
         } else {
-            if (v5) {
+            if (0) { 1 = -3; }
+            if (v33) {
             label_7:;
             }
         label_8:;
-            while (v5) {
+            while (v14) {
             }
-            v4 = -19 % 0;
-            if (v9) {
+            v16 = 1;
+            if (v16) {
             } else {
                 *(_QWORD *)(0x48LL) = 0x13f9LL;
                 f_rec_fib();
                 *(_QWORD *)(0x48LL) = 0x1407LL;
                 f_rec_power.constprop.0();
                 *(_QWORD *)(0x48LL) = 0x1419LL;
-                v15 = v34;
                 v24 = *(_QWORD *)(0x48LL);
                 result = __readfsqword(0x28u);
-                if (v35) {
+                if (v38) {
                 label_12:;
                 } else {
                     result = *(_QWORD *)(0x48LL);
@@ -160,9 +166,10 @@ void main(void) {
             }
             goto label_12;
         }
-        if (v14) {
+        if (v15) {
         } else {
-            if (v14) {
+            if (0) { 1 = 0x48LL; }
+            if (v37) {
             } else {
                 goto label_7;
             }

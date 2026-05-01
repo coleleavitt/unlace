@@ -394,3 +394,68 @@ pub fn lift_stp(ctx: &mut LiftCtx, ops: &Ops) {
         _ => ctx.emit_unimplemented(),
     }
 }
+
+pub fn lift_exclusive_load(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let addr = match &ops[1].0 {
+        Arm64OperandType::Mem(mem) => compute_mem_address(ctx, mem),
+        _ => None,
+    };
+    let dst = match ops.first() {
+        Some((Arm64OperandType::Reg(reg), _)) if !register_file::is_zero_reg(*reg) => {
+            register_file::reg_varnode(*reg)
+        }
+        Some((Arm64OperandType::Reg(_), _)) => return,
+        _ => None,
+    };
+
+    match (dst, addr) {
+        (Some(dst), Some(addr)) => ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            dst,
+            smallvec![Varnode::constant(0x340, 8), addr],
+            ctx.addr,
+        )),
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_exclusive_store(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let status = match ops.first() {
+        Some((Arm64OperandType::Reg(reg), _)) if !register_file::is_zero_reg(*reg) => {
+            register_file::reg_varnode(*reg)
+        }
+        Some((Arm64OperandType::Reg(_), _)) => return,
+        _ => None,
+    };
+    let value = operand_to_varnode(ctx, &ops[1].0);
+    let addr = match &ops[2].0 {
+        Arm64OperandType::Mem(mem) => compute_mem_address(ctx, mem),
+        _ => None,
+    };
+
+    match (status, value, addr) {
+        (Some(status), Some(value), Some(addr)) => ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            status,
+            smallvec![Varnode::constant(0x341, 8), value, addr],
+            ctx.addr,
+        )),
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_barrier(ctx: &mut LiftCtx, tag: u64) {
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(tag, 8)],
+        ctx.addr,
+    ));
+}

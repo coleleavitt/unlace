@@ -189,3 +189,227 @@ pub fn lift_mvn(ctx: &mut LiftCtx, ops: &Ops) {
         None => ctx.emit_unimplemented(),
     }
 }
+
+fn imm(op: &Arm64OperandType) -> Option<u64> {
+    match op {
+        Arm64OperandType::Imm(v) | Arm64OperandType::Cimm(v) => Some(*v as u64),
+        _ => None,
+    }
+}
+
+fn low_mask(width: u64) -> u64 {
+    if width >= 64 {
+        u64::MAX
+    } else {
+        (1_u64 << width) - 1
+    }
+}
+
+pub fn lift_ubfm(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let bits = u64::from(size) * 8;
+    let src = operand_to_varnode(ctx, &ops[1].0);
+    let immr = imm(&ops[2].0);
+    let imms = imm(&ops[3].0);
+    match (src, immr, imms) {
+        (Some(src), Some(immr), Some(imms)) if immr < bits && imms < bits => {
+            let width = if imms >= immr { imms - immr + 1 } else { imms + 1 };
+            let value = if immr == 0 {
+                src
+            } else {
+                let shifted = Varnode::unique(ctx.alloc_unique(), size);
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntRight,
+                    shifted,
+                    smallvec![src, Varnode::constant(immr, 1)],
+                    ctx.addr,
+                ));
+                shifted
+            };
+            let mask = Varnode::constant(low_mask(width), size);
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAnd,
+                result,
+                smallvec![value, mask],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_ubfx(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let bits = u64::from(size) * 8;
+    let src = operand_to_varnode(ctx, &ops[1].0);
+    let lsb = imm(&ops[2].0);
+    let width = imm(&ops[3].0);
+    match (src, lsb, width) {
+        (Some(src), Some(lsb), Some(width)) if lsb < bits && width > 0 && width <= bits => {
+            let shifted = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntRight,
+                shifted,
+                smallvec![src, Varnode::constant(lsb, 1)],
+                ctx.addr,
+            ));
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAnd,
+                result,
+                smallvec![shifted, Varnode::constant(low_mask(width), size)],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_sbfm(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let bits = u64::from(size) * 8;
+    let src = operand_to_varnode(ctx, &ops[1].0);
+    let immr = imm(&ops[2].0);
+    let imms = imm(&ops[3].0);
+    match (src, immr, imms) {
+        (Some(src), Some(immr), Some(imms)) if immr < bits && imms < bits => {
+            let width = if imms >= immr { imms - immr + 1 } else { imms + 1 };
+            emit_signed_extract(ctx, ops, src, immr, width, size);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_sbfx(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let bits = u64::from(size) * 8;
+    let src = operand_to_varnode(ctx, &ops[1].0);
+    let lsb = imm(&ops[2].0);
+    let width = imm(&ops[3].0);
+    match (src, lsb, width) {
+        (Some(src), Some(lsb), Some(width)) if lsb < bits && width > 0 && width <= bits => {
+            emit_signed_extract(ctx, ops, src, lsb, width, size);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_sxt(ctx: &mut LiftCtx, ops: &Ops, src_size: u8) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let src = operand_to_varnode(ctx, &ops[1].0);
+    match src {
+        Some(src) => {
+            let piece = Varnode::unique(ctx.alloc_unique(), src_size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Subpiece,
+                piece,
+                smallvec![src, Varnode::constant(0, 1)],
+                ctx.addr,
+            ));
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntSext,
+                result,
+                smallvec![piece],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+        }
+        None => ctx.emit_unimplemented(),
+    }
+}
+
+fn emit_signed_extract(
+    ctx: &mut LiftCtx,
+    ops: &Ops,
+    src: Varnode,
+    lsb: u64,
+    width: u64,
+    size: u8,
+) {
+    let shifted = Varnode::unique(ctx.alloc_unique(), size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntSright,
+        shifted,
+        smallvec![src, Varnode::constant(lsb, 1)],
+        ctx.addr,
+    ));
+    let extract_size = width.div_ceil(8).clamp(1, u64::from(size)) as u8;
+    let piece = Varnode::unique(ctx.alloc_unique(), extract_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Subpiece,
+        piece,
+        smallvec![shifted, Varnode::constant(0, 1)],
+        ctx.addr,
+    ));
+    let result = Varnode::unique(ctx.alloc_unique(), size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntSext,
+        result,
+        smallvec![piece],
+        ctx.addr,
+    ));
+    write_dst(ctx, ops, result);
+}
+
+pub fn lift_extr(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let bits = u64::from(size) * 8;
+    let rn = operand_to_varnode(ctx, &ops[1].0);
+    let rm = operand_to_varnode(ctx, &ops[2].0);
+    let lsb = imm(&ops[3].0);
+    match (rn, rm, lsb) {
+        (Some(rn), Some(rm), Some(lsb)) if lsb < bits => {
+            let right = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntRight,
+                right,
+                smallvec![rm, Varnode::constant(lsb, 1)],
+                ctx.addr,
+            ));
+            let left = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntLeft,
+                left,
+                smallvec![rn, Varnode::constant(bits - lsb, 1)],
+                ctx.addr,
+            ));
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntOr,
+                result,
+                smallvec![right, left],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}

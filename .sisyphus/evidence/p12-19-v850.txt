@@ -1,0 +1,9 @@
+func _start @ 0x10100 {
+BB_0 [entry, exit]:
+  RETURN v248:i32
+}
+func v850_branch @ 0x10114 {
+BB_0 [entry, exit]:
+  RETURN v248:i32
+}
+exit: 0

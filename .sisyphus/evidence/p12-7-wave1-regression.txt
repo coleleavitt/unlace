@@ -1,0 +1,19 @@
+P12-7 Wave 1 regression check
+baseline=p12-baseline.txt
+wave=p12-5-wave1-scores.txt
+
+OK arm64_features: baseline=81.8 wave=81.8 delta=+0.0pp
+OK cpp_exceptions: baseline=78.2 wave=78.2 delta=+0.0pp
+OK cpp_rtti: baseline=50.9 wave=50.9 delta=+0.0pp
+OK cpp_vtable: baseline=59.7 wave=59.7 delta=+0.0pp
+OK debug_calls: baseline=60.0 wave=70.9 delta=+10.9pp
+OK debug_hello: baseline=99.1 wave=99.1 delta=+0.0pp
+OK debug_structs: baseline=93.9 wave=93.9 delta=+0.0pp
+OK medium: baseline=0.0 wave=0.0 delta=+0.0pp
+OK mips64_features: baseline=95.5 wave=95.5 delta=+0.0pp
+OK riscv64_features: baseline=68.2 wave=68.2 delta=+0.0pp
+OK x87_math: baseline=86.4 wave=86.4 delta=+0.0pp
+
+cpp_vtable score=59.7
+debug_calls score=70.9 (target >=75% not met)
+result=PASS: no fixture dropped >1pp

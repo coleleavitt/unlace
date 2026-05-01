@@ -1415,8 +1415,8 @@ fn remove_labels_not_in(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
 /// into [`HirNode::For`].
 ///
 /// Recurses into nested blocks (if/else/while/for bodies). Conservative:
-/// only fires when the induction variable is not referenced after the loop
-/// in the same scope.
+/// fires for canonical counted loops even when the induction variable is
+/// referenced after the loop in the same scope.
 pub fn recover_for_loops(nodes: &mut Vec<HirNode>) {
     let mut i = 0;
     while i < nodes.len() {
@@ -1493,17 +1493,9 @@ fn try_recover_for_at(nodes: &[HirNode], idx: usize) -> Option<HirNode> {
         _ => return None,
     };
 
-    if cond.base != counter_base {
-        return None;
-    }
-
     let (update_insn, body_without_update) = extract_update(&body, &counter_base)?;
 
     if init_writes_counter_only(&init_insn, &counter_base).not_ok() {
-        return None;
-    }
-
-    if counter_used_after(&counter_base, &nodes[idx + 2..]) {
         return None;
     }
 
@@ -1576,94 +1568,6 @@ fn is_counter_update_op(insn: &IrInsn, counter: &Varnode) -> bool {
         }
         _ => false,
     }
-}
-
-fn counter_used_after(counter: &Varnode, following: &[HirNode]) -> bool {
-    following
-        .iter()
-        .any(|n| node_references_varnode(n, counter))
-}
-
-fn node_references_varnode(node: &HirNode, target: &Varnode) -> bool {
-    match node {
-        HirNode::Statement(insn) => insn_references_varnode(insn, target),
-        HirNode::Block(children) => children.iter().any(|c| node_references_varnode(c, target)),
-        HirNode::If {
-            cond,
-            then_body,
-            else_body,
-        } => {
-            cond.base == *target
-                || then_body.iter().any(|c| node_references_varnode(c, target))
-                || else_body
-                    .as_ref()
-                    .is_some_and(|eb| eb.iter().any(|c| node_references_varnode(c, target)))
-        }
-        HirNode::While { cond, body } => {
-            cond.base == *target || body.iter().any(|c| node_references_varnode(c, target))
-        }
-        HirNode::DoWhile { body, cond } => {
-            cond.base == *target || body.iter().any(|c| node_references_varnode(c, target))
-        }
-        HirNode::For {
-            init,
-            cond,
-            update,
-            body,
-        } => {
-            insn_references_varnode(init, target)
-                || cond.base == *target
-                || insn_references_varnode(update, target)
-                || body.iter().any(|c| node_references_varnode(c, target))
-        }
-        HirNode::Switch {
-            cond,
-            cases,
-            default,
-        } => {
-            cond.base == *target
-                || cases
-                    .iter()
-                    .any(|(_, b, _)| b.iter().any(|c| node_references_varnode(c, target)))
-                || default
-                    .as_ref()
-                    .is_some_and(|d| d.iter().any(|c| node_references_varnode(c, target)))
-        }
-        HirNode::Return(Some(sv)) => sv.base == *target,
-        HirNode::Ternary {
-            cond,
-            then_insn,
-            else_insn,
-            output,
-        } => {
-            cond.base == *target
-                || output == target
-                || insn_references_varnode(then_insn, target)
-                || insn_references_varnode(else_insn, target)
-        }
-        HirNode::TryCatch {
-            try_body,
-            catch_body,
-        } => {
-            try_body.iter().any(|c| node_references_varnode(c, target))
-                || catch_body
-                    .iter()
-                    .any(|c| node_references_varnode(c, target))
-        }
-        HirNode::Return(None)
-        | HirNode::Goto(_)
-        | HirNode::Label(_)
-        | HirNode::TailCall { .. }
-        | HirNode::Continue
-        | HirNode::Break => false,
-    }
-}
-
-fn insn_references_varnode(insn: &IrInsn, target: &Varnode) -> bool {
-    if insn.output == Some(*target) {
-        return true;
-    }
-    insn.inputs.iter().any(|v| v == target)
 }
 
 #[cfg(test)]
@@ -2242,7 +2146,7 @@ mod tests {
     }
 
     #[test]
-    fn test_for_loop_counter_used_after_loop_keeps_while() {
+    fn test_for_loop_counter_used_after_loop_still_recovers_for() {
         let i = Varnode::reg(0, 4);
         let printed = Varnode::reg(16, 4);
         let zero = Varnode::constant(0, 4);
@@ -2259,8 +2163,9 @@ mod tests {
 
         recover_for_loops(&mut hir_body);
 
-        assert_eq!(hir_body.len(), 3, "should still be 3 nodes (no collapse)");
-        assert!(matches!(hir_body[1], HirNode::While { .. }));
+        assert_eq!(hir_body.len(), 2, "init + while should collapse to one For");
+        assert!(matches!(hir_body[0], HirNode::For { .. }));
+        assert!(matches!(hir_body[1], HirNode::Statement(_)));
     }
 
     #[test]
@@ -2325,7 +2230,7 @@ mod tests {
     }
 
     #[test]
-    fn test_for_loop_cond_must_reference_counter() {
+    fn test_for_loop_compare_condition_recovers_for() {
         let i = Varnode::reg(0, 4);
         let unrelated = Varnode::reg(64, 4);
         let zero = Varnode::constant(0, 4);
@@ -2341,10 +2246,8 @@ mod tests {
 
         recover_for_loops(&mut hir_body);
 
-        assert!(
-            matches!(hir_body[1], HirNode::While { .. }),
-            "cond not referencing counter → must remain While"
-        );
+        assert_eq!(hir_body.len(), 1);
+        assert!(matches!(hir_body[0], HirNode::For { .. }));
     }
 
     // ── P3-8: Do-while loop recovery tests ──

@@ -116,9 +116,7 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void logic_test(void) {
-    int v2; // r8d
     int result; // reg?
-    long long v1; // temp
 
     v4 = 0;
     if (v4) {
@@ -160,7 +158,6 @@ _DWORD __readfsdword(unsigned int offset);
  * Xrefs from: unknown
  */
 void memory_test(void) {
-    int v2; // reg?
     int result; // reg?
     unsigned int v4; // temp
     unsigned long long v5; // temp

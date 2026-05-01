@@ -1,0 +1,26 @@
+=== P11-27 Lifter Coverage Report ===
+Date: 2026-05-01
+
+Fixture                    IR ops  Unimpl  Coverage
+─────────────────────────  ──────  ──────  ────────
+hello_world                    29       0   100.0%
+branches                       35       0   100.0%
+calls                          33       0   100.0%
+loops                         216       0   100.0%
+medium                       2726       0   100.0%
+debug_hello                    28       0   100.0%
+debug_calls                   161       0   100.0%
+debug_structs                  43       0   100.0%
+x87_math                       46       0   100.0%
+cpp_vtable                     31       0   100.0%
+cpp_exceptions                133       0   100.0%
+cpp_rtti                      134       0   100.0%
+arm64_features                 25       0   100.0%
+mips64_features                30       0   100.0%
+riscv64_features               18       0   100.0%
+
+Summary: 15 fixtures, 3688 total IR ops, 0 Unimplemented, 100% coverage.
+
+All hand-crafted fixtures (arm64, mips64, riscv64) use only instructions
+that are fully lifted by their respective lifters. No Unimplemented ops
+remain in any fixture's IR output.

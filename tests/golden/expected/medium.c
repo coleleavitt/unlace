@@ -8,12 +8,12 @@ void main(void) {
     int v1; // r10
     int v10; // rip
     int v31; // OF
-    __int128 v12; // xmm0
-    __int128 v22; // xmm1
-    __int128 v36; // xmm2
+    __m128i v12; // xmm0
+    __m128i v22; // xmm1
+    __m128i v36; // xmm2
     int result;
     int v18;
-    _OWORD v11; // temp
+    __m128i v11; // temp
     v3 = v1; *(_QWORD *)(v1) = v1; v3 = v1;
     v11 = *(_OWORD *)(v1); v12 = _mm_load_si128(v11); v13 = v1;
     _mm_load_ps(0LL, v12); v11 = *(_OWORD *)(v1); v12 = _mm_load_si128(v11);

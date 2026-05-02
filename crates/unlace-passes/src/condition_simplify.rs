@@ -201,7 +201,11 @@ fn simplify_eq(
                 let y = inner.inputs[1];
                 if inner.output.as_ref() == Some(&a) {
                     if insn.op == IrOp::IntEqual {
-                        let negate_input = if x == y && x.space != SpaceId::Const { x } else { a };
+                        let negate_input = if x == y && x.space != SpaceId::Const {
+                            x
+                        } else {
+                            a
+                        };
                         return Some(Simplification::Replace(replace_op(
                             insn,
                             IrOp::BoolNegate,

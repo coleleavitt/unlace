@@ -20,10 +20,14 @@ void __fastcall csel_test(__int64 a1) {
     _Bool cond; // reg?
     long long v3; // temp
     v3 = v1 - v2; cond = v3 == 0LL; v6 = LOBYTE(v3 < 0LL);
-    v7 = v6; v10 = __csel__(v6 ^ __OFSUB__(v1, v2), v1, v2); v11 = __csinc__(cond, v1, v2);
-    cond = v3 != 0LL; v12 = __csinv__(cond, v1, v2); v14 = __csneg__(!cond, v1, v2);
+    v7 = v6;
+    if (v6 ^ __OFSUB__(v1, v2)) { cond = v1; } else { cond = v2; }
+    __csinv__(v6 ^ __OFSUB__(v1, v2), v1, v2);
+    /* COPY */; /* BOOL_NEGATE */;
+    __csneg__(!cond, v1, v2);
     if (cond) {
     } else {
+        /* INT_ADD */;
     }
     return result;
 }

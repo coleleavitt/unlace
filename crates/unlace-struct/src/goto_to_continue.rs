@@ -13,7 +13,10 @@ fn rewrite_scope(nodes: &mut [HirNode]) {
         .windows(2)
         .map(|window| {
             if let HirNode::Label(label) = window[0]
-                && matches!(window[1], HirNode::While { .. } | HirNode::DoWhile { .. } | HirNode::For { .. })
+                && matches!(
+                    window[1],
+                    HirNode::While { .. } | HirNode::DoWhile { .. } | HirNode::For { .. }
+                )
             {
                 Some(label)
             } else {
@@ -24,7 +27,9 @@ fn rewrite_scope(nodes: &mut [HirNode]) {
 
     for i in 0..nodes.len() {
         match &mut nodes[i] {
-            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            HirNode::While { body, .. }
+            | HirNode::DoWhile { body, .. }
+            | HirNode::For { body, .. } => {
                 if i > 0
                     && let Some(Some(target)) = loop_header_targets.get(i - 1).copied()
                 {
@@ -109,8 +114,8 @@ fn replace_gotos_in_loop_body(nodes: &mut [HirNode], target: LabelId) {
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
     use unlace_ir::Varnode;
+    use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 
     use super::*;
 
@@ -147,6 +152,8 @@ mod tests {
 
         goto_to_continue(&mut hir);
 
-        assert!(matches!(hir.body[1], HirNode::While { ref body, .. } if body == &vec![HirNode::Continue]));
+        assert!(
+            matches!(hir.body[1], HirNode::While { ref body, .. } if body == &vec![HirNode::Continue])
+        );
     }
 }

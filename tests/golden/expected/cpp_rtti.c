@@ -31,20 +31,12 @@ void identify(void) {
                 return result;
             } else {
                 v2 = 1;
-                if (v2) {
-                }
             }
         } else {
-            result = 0LL; v16 = 0;
-            if (v16) {
-            } else {
-            }
+            result = 0LL;
         }
-    label_3:;
         return result;
-        goto label_3;
     }
-    return;
 }
 /* Function:   Dog::speak() | Address: 0x1300 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Dog::speak()
@@ -95,7 +87,6 @@ void sub_11e0(void) {
         *(_BYTE *)(v3) = 1; v3 = v3; v8 = v3;
         result = *(_QWORD *)(v3); return result;
     }
-    return;
 }
 /* Function:   sub_1220 | Address: 0x1220 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1220(void) {

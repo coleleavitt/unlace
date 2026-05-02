@@ -485,12 +485,7 @@ fn infer_insn(
 
                 if addr_is_ptr && !addr_is_chain && out.base.size == 8 {
                     let field_ty = addr_sv.and_then(|sv| {
-                        lookup_struct_field_type(
-                            var_map,
-                            composite_var_types,
-                            blocks,
-                            sv,
-                        )
+                        lookup_struct_field_type(var_map, composite_var_types, blocks, sv)
                     });
 
                     let promoted_ty = match field_ty {
@@ -612,16 +607,16 @@ fn find_add_base_and_const(
     bid: BlockId,
     insn_idx: usize,
 ) -> Option<(SsaVarnode, u64)> {
-    let in0 = var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0))).copied();
-    let in1 = var_map.get(&(bid, insn_idx, VarnodeSlot::Input(1))).copied();
+    let in0 = var_map
+        .get(&(bid, insn_idx, VarnodeSlot::Input(0)))
+        .copied();
+    let in1 = var_map
+        .get(&(bid, insn_idx, VarnodeSlot::Input(1)))
+        .copied();
 
     match (in0, in1) {
-        (Some(sv0), Some(sv1)) if sv1.base.space == SpaceId::Const => {
-            Some((sv0, sv1.base.offset))
-        }
-        (Some(sv0), Some(sv1)) if sv0.base.space == SpaceId::Const => {
-            Some((sv1, sv0.base.offset))
-        }
+        (Some(sv0), Some(sv1)) if sv1.base.space == SpaceId::Const => Some((sv0, sv1.base.offset)),
+        (Some(sv0), Some(sv1)) if sv0.base.space == SpaceId::Const => Some((sv1, sv0.base.offset)),
         _ => None,
     }
 }

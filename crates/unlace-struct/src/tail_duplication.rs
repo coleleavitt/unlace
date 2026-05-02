@@ -240,11 +240,7 @@ mod tests {
             .copied()
             .collect();
 
-        let targets: Vec<BlockId> = bb1_succs
-            .iter()
-            .chain(bb2_succs.iter())
-            .copied()
-            .collect();
+        let targets: Vec<BlockId> = bb1_succs.iter().chain(bb2_succs.iter()).copied().collect();
         assert!(
             targets.contains(&BlockId(3)) && targets.contains(&copy_id),
             "one pred should target original, other should target copy; got {targets:?}"

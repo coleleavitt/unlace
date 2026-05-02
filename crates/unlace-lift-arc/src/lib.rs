@@ -687,7 +687,11 @@ impl ArcLifter {
             return Ok(LiftedInsn {
                 ir_ops: vec![
                     IrInsn::with_output(IrOp::IntEqual, cond_tmp, vec![reg(0), imm(1)], addr),
-                    IrInsn::without_output(IrOp::Cbranch, vec![ram_target(addr + 8), cond_tmp], addr),
+                    IrInsn::without_output(
+                        IrOp::Cbranch,
+                        vec![ram_target(addr + 8), cond_tmp],
+                        addr,
+                    ),
                 ],
                 len: 4,
             });

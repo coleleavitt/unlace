@@ -189,28 +189,20 @@ pub fn parse_gopclntab(data: &[u8], text_base: u64) -> Option<GopclntabInfo> {
 /// Merge discovered Go functions into a [`BinaryImage`]'s symbol table.
 pub fn merge_go_symbols(image: &mut BinaryImage, info: &GopclntabInfo) {
     for func in &info.functions {
-        image
-            .symbols
-            .entry(func.addr)
-            .or_insert_with(|| Symbol {
-                name: func.name.clone(),
-                addr: func.addr,
-                size: 0,
-                kind: SymbolKind::Function,
-            });
+        image.symbols.entry(func.addr).or_insert_with(|| Symbol {
+            name: func.name.clone(),
+            addr: func.addr,
+            size: 0,
+            kind: SymbolKind::Function,
+        });
     }
 }
 
 /// Convenience: find `.gopclntab` in a `BinaryImage`, parse it, and merge symbols.
 pub fn discover_go_functions(image: &mut BinaryImage) {
-    let gopclntab_data = image
-        .section_by_name(".gopclntab")
-        .map(|s| s.data.clone());
+    let gopclntab_data = image.section_by_name(".gopclntab").map(|s| s.data.clone());
 
-    let text_base = image
-        .section_by_name(".text")
-        .map(|s| s.vaddr)
-        .unwrap_or(0);
+    let text_base = image.section_by_name(".text").map(|s| s.vaddr).unwrap_or(0);
 
     if let Some(data) = gopclntab_data {
         if let Some(info) = parse_gopclntab(&data, text_base) {
@@ -399,8 +391,8 @@ mod tests {
 
     #[test]
     fn test_real_go_fixture() {
-        let elf_data = std::fs::read("../../fixtures/go_hello.elf")
-            .expect("fixture go_hello.elf must exist");
+        let elf_data =
+            std::fs::read("../../fixtures/go_hello.elf").expect("fixture go_hello.elf must exist");
         let image = <crate::elf::ElfLoader as crate::Loader>::load(&elf_data)
             .expect("should parse go_hello.elf");
 
@@ -408,13 +400,9 @@ mod tests {
             .section_by_name(".gopclntab")
             .expect("go_hello.elf should have .gopclntab");
 
-        let text_base = image
-            .section_by_name(".text")
-            .map(|s| s.vaddr)
-            .unwrap_or(0);
+        let text_base = image.section_by_name(".text").map(|s| s.vaddr).unwrap_or(0);
 
-        let info = parse_gopclntab(&section.data, text_base)
-            .expect("should parse real gopclntab");
+        let info = parse_gopclntab(&section.data, text_base).expect("should parse real gopclntab");
         assert!(
             info.header.nfunc > 0,
             "Go binary should have at least 1 function"
@@ -425,7 +413,11 @@ mod tests {
         assert!(
             has_main,
             "should find main.main, got: {:?}",
-            info.functions.iter().map(|f| &f.name).take(10).collect::<Vec<_>>()
+            info.functions
+                .iter()
+                .map(|f| &f.name)
+                .take(10)
+                .collect::<Vec<_>>()
         );
     }
 

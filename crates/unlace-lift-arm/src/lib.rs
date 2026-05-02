@@ -386,10 +386,12 @@ mod tests {
         let result = lifter()
             .lift_insn(&[0x62, 0x1c, 0x40, 0x93], 0x1000)
             .expect("should decode");
-        assert!(result
-            .ir_ops
-            .iter()
-            .any(|i| i.op == IrOp::IntSright || i.op == IrOp::IntSext));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntSright || i.op == IrOp::IntSext)
+        );
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 

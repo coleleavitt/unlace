@@ -1048,11 +1048,7 @@ fn is_contiguous_low_mask(val: u64) -> Option<u8> {
     } else {
         (1u64 << width) - 1
     };
-    if val == expected {
-        Some(width)
-    } else {
-        None
-    }
+    if val == expected { Some(width) } else { None }
 }
 
 fn try_bitfield_read(
@@ -3059,12 +3055,9 @@ mod tests {
         let out = Varnode::unique(24, 4);
 
         let clear = IrInsn::with_output(IrOp::IntAnd, cleared, smallvec![x, inv_mask], 0x1000);
-        let mask_insn =
-            IrInsn::with_output(IrOp::IntAnd, masked_y, smallvec![y, mask], 0x1004);
-        let shift =
-            IrInsn::with_output(IrOp::IntLeft, shifted_y, smallvec![masked_y, c4], 0x1008);
-        let combine =
-            IrInsn::with_output(IrOp::IntOr, out, smallvec![cleared, shifted_y], 0x100C);
+        let mask_insn = IrInsn::with_output(IrOp::IntAnd, masked_y, smallvec![y, mask], 0x1004);
+        let shift = IrInsn::with_output(IrOp::IntLeft, shifted_y, smallvec![masked_y, c4], 0x1008);
+        let combine = IrInsn::with_output(IrOp::IntOr, out, smallvec![cleared, shifted_y], 0x100C);
 
         let mut ssa = make_single_block_ssa(vec![clear, mask_insn, shift, combine]);
         let changed = IdiomRecognitionPass

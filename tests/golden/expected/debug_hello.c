@@ -27,7 +27,6 @@ void sub_1100(void) {
         *(_BYTE *)(v3) = 1; v3 = v3; v8 = v3;
         result = *(_QWORD *)(v3); return result;
     }
-    return;
 }
 /* Function:   sub_1140 | Address: 0x1140 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1140(void) {

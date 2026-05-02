@@ -65,9 +65,10 @@ impl Lifter for ArmLifter {
                 .disasm_count(bytes, addr, 1)
                 .map_err(|e| LiftError::Decode(format!("{e}")))?;
 
-            let insn = insns.as_ref().first().ok_or_else(|| {
-                LiftError::Decode(format!("no instruction decoded at {addr:#x}"))
-            })?;
+            let insn = insns
+                .as_ref()
+                .first()
+                .ok_or_else(|| LiftError::Decode(format!("no instruction decoded at {addr:#x}")))?;
 
             let detail = cs
                 .insn_detail(insn)

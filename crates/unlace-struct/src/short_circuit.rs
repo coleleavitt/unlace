@@ -73,10 +73,7 @@ fn recover_short_circuits(
     let mut idx = 0;
     while idx < nodes.len() {
         if idx + 1 < nodes.len() {
-            if let (
-                Some((cond_a, then_a)),
-                Some((cond_b, then_b)),
-            ) = (
+            if let (Some((cond_a, then_a)), Some((cond_b, then_b))) = (
                 as_if_without_else_node(&nodes[idx]),
                 as_if_without_else_node(&nodes[idx + 1]),
             ) {
@@ -365,11 +362,13 @@ fn as_single_if_with_else(nodes: &[HirNode]) -> Option<(SsaVarnode, Vec<HirNode>
 
 fn as_single_if_without_else(nodes: &[HirNode]) -> Option<(SsaVarnode, Vec<HirNode>)> {
     match nodes {
-        [HirNode::If {
-            cond,
-            then_body,
-            else_body: None,
-        }] => Some((*cond, then_body.clone())),
+        [
+            HirNode::If {
+                cond,
+                then_body,
+                else_body: None,
+            },
+        ] => Some((*cond, then_body.clone())),
         _ => None,
     }
 }
@@ -667,7 +666,13 @@ mod tests {
 
         assert_eq!(func.body.len(), 2);
         assert!(matches!(&func.body[0], HirNode::Statement(insn) if insn.op == IrOp::BoolAnd));
-        assert!(matches!(&func.body[1], HirNode::If { else_body: None, .. }));
+        assert!(matches!(
+            &func.body[1],
+            HirNode::If {
+                else_body: None,
+                ..
+            }
+        ));
     }
 
     #[test]

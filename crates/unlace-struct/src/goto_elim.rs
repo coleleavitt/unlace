@@ -131,7 +131,23 @@ fn remove_unreachable_after_terminal(nodes: &mut Vec<HirNode>) {
 }
 
 fn is_terminal(node: &HirNode) -> bool {
-    matches!(node, HirNode::Return(_) | HirNode::Break | HirNode::Continue | HirNode::Goto(_))
+    match node {
+        HirNode::Return(_) | HirNode::Break | HirNode::Continue | HirNode::Goto(_) => true,
+        HirNode::Block(children) => children.last().map_or(false, is_terminal),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            let then_terminal = then_body.last().map_or(false, is_terminal);
+            let else_terminal = else_body
+                .as_ref()
+                .and_then(|e| e.last())
+                .map_or(false, is_terminal);
+            then_terminal && else_terminal
+        }
+        _ => false,
+    }
 }
 
 fn remove_forward_gotos(nodes: &mut Vec<HirNode>) {
@@ -280,7 +296,9 @@ fn collect_gotos(nodes: &[HirNode], used: &mut BTreeSet<LabelId>) {
                     collect_gotos(else_body, used);
                 }
             }
-            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            HirNode::While { body, .. }
+            | HirNode::DoWhile { body, .. }
+            | HirNode::For { body, .. } => {
                 collect_gotos(body, used);
             }
             HirNode::Switch { cases, default, .. } => {
@@ -314,8 +332,8 @@ fn retain_labels(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
     use unlace_ir::Varnode;
+    use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 
     use super::*;
 

@@ -92,7 +92,9 @@ fn replace_rax_assign_goto_with_return(
     let mut i = 0;
     while i + 1 < nodes.len() {
         let ret = match (&nodes[i], &nodes[i + 1]) {
-            (HirNode::Statement(insn), HirNode::Goto(label)) if label_returns.contains_key(label) => {
+            (HirNode::Statement(insn), HirNode::Goto(label))
+                if label_returns.contains_key(label) =>
+            {
                 rax_return_value(insn, label_returns.get(label).copied().flatten())
             }
             _ => None,

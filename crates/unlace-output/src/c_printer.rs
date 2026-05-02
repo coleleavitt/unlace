@@ -1898,7 +1898,7 @@ fn c_type(ty: &PrimitiveType) -> &'static str {
             2 => "short",
             4 => "int",
             8 => "long long",
-            16 => "__int128",
+            16 => "__m128i",
             _ => "int",
         },
         PrimitiveType::UnsignedInt(w) => match w {
@@ -1906,7 +1906,7 @@ fn c_type(ty: &PrimitiveType) -> &'static str {
             2 => "unsigned short",
             4 => "unsigned int",
             8 => "unsigned long long",
-            16 => "_OWORD",
+            16 => "__m128i",
             _ => "unsigned int",
         },
         PrimitiveType::Float => "float",
@@ -4271,8 +4271,8 @@ mod tests {
 
     #[test]
     fn test_oword_type_for_128_bit_values() {
-        assert_eq!(super::c_type(&PrimitiveType::UnsignedInt(16)), "_OWORD");
-        assert_eq!(super::c_type(&PrimitiveType::Int(16)), "__int128");
+        assert_eq!(super::c_type(&PrimitiveType::UnsignedInt(16)), "__m128i");
+        assert_eq!(super::c_type(&PrimitiveType::Int(16)), "__m128i");
         assert_eq!(super::ida_ptr_type(16), "_OWORD *");
     }
 

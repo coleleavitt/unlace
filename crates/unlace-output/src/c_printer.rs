@@ -185,7 +185,7 @@ pub fn print_c_with_rtti(
         func.composite_var_types.clone(),
     );
 
-    let dwarf_func = dwarf.and_then(|d| d.functions.get(&func.addr));
+    let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
     compute_dwarf_locals(dwarf_func, header, &mut ctx);
     compute_loop_counter_names(&func.body, 0, &mut ctx);
     collect_varnodes(&func.body, &mut ctx);
@@ -1470,6 +1470,22 @@ fn compute_dwarf_locals(
             }
         }
     }
+}
+
+fn dwarf_function_for_func<'a>(
+    dwarf: &'a unlace_loader::DwarfInfo,
+    func: &HirFunction,
+    header: Option<&FunctionHeaderInfo>,
+) -> Option<&'a unlace_loader::FunctionDebugInfo> {
+    dwarf
+        .functions
+        .values()
+        .find(|debug| debug.name == func.name)
+        .or_else(|| {
+            header.and_then(|h| dwarf.functions.values().find(|debug| debug.name == h.name))
+        })
+        .or_else(|| header.and_then(|h| dwarf.functions.get(&h.address)))
+        .or_else(|| dwarf.functions.get(&func.addr))
 }
 
 /// Detect simple counter loops and rename their counters to `i`/`j`/`k`.

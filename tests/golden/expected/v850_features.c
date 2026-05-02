@@ -1,78 +1,28 @@
-typedef unsigned char _BYTE;
-typedef unsigned short _WORD;
-typedef unsigned int _DWORD;
-typedef unsigned long long _QWORD;
-typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD;
-typedef unsigned char _BOOL;
-typedef signed char __int8;
-typedef signed short __int16;
-typedef signed int __int32;
-typedef signed long long __int64;
-#define LOBYTE(x)  ((_BYTE)(x))
-#define BYTE1(x)   ((_BYTE)((x) >> 8))
-#define BYTE2(x)   ((_BYTE)((x) >> 16))
-#define BYTE3(x)   ((_BYTE)((x) >> 24))
-#define LOWORD(x)  ((_WORD)(x))
-#define HIWORD(x)  ((_WORD)((x) >> 16))
-#define LODWORD(x) ((_DWORD)(x))
-#define HIDWORD(x) ((_DWORD)((x) >> 32))
-#define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
-#define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
-#define MEMORY ((volatile unsigned char *)0)
-#define JUMPOUT(addr) ((void)(addr))
-// FS-segment TLS reads (stack canary, GLIBC TCB).
-_QWORD __readfsqword(unsigned int offset);
-_DWORD __readfsdword(unsigned int offset);
-
-/*
- * Function:   _start
- * Address:    0x10100
- * Size:       0x4 (4 bytes)
- * Convention: unknown
- * Stack frame: 0x0 (0 bytes)
- * Xrefs from: unknown
- */
+/* Function:   _start | Address: 0x10100 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
     int result; // reg?
-
     return result;
 }
-typedef unsigned char _BYTE;
-typedef unsigned short _WORD;
-typedef unsigned int _DWORD;
-typedef unsigned long long _QWORD;
-typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD;
-typedef unsigned char _BOOL;
-typedef signed char __int8;
-typedef signed short __int16;
-typedef signed int __int32;
-typedef signed long long __int64;
-#define LOBYTE(x)  ((_BYTE)(x))
-#define BYTE1(x)   ((_BYTE)((x) >> 8))
-#define BYTE2(x)   ((_BYTE)((x) >> 16))
-#define BYTE3(x)   ((_BYTE)((x) >> 24))
-#define LOWORD(x)  ((_WORD)(x))
-#define HIWORD(x)  ((_WORD)((x) >> 16))
-#define LODWORD(x) ((_DWORD)(x))
-#define HIDWORD(x) ((_DWORD)((x) >> 32))
-#define __OFADD__(a, b) ((((a) ^ (b) ^ -1) & ((a) ^ ((a) + (b)))) < 0)
-#define __OFSUB__(a, b) ((((a) ^ (b)) & ((a) ^ ((a) - (b)))) < 0)
-#define MEMORY ((volatile unsigned char *)0)
-#define JUMPOUT(addr) ((void)(addr))
-// FS-segment TLS reads (stack canary, GLIBC TCB).
-_QWORD __readfsqword(unsigned int offset);
-_DWORD __readfsdword(unsigned int offset);
-
-/*
- * Function:   v850_branch
- * Address:    0x10114
- * Size:       0x4 (4 bytes)
- * Convention: unknown
- * Stack frame: 0x0 (0 bytes)
- * Xrefs from: unknown
- */
+/* Function:   sub_10104 | Address: 0x10104 | Size: 0x10 (16 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_10104(void) {
+    int result; // reg?
+    return result;
+}
+/* Function:   v850_branch | Address: 0x10114 | Size: 0x10 (16 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void v850_branch(void) {
     int result; // reg?
-
+    if (v4) {
+    }
+    return result;
+}
+/* Function:   sub_10118 | Address: 0x10118 | Size: 0xe (14 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void sub_10118(void) {
+    int v1; // r11d
+    int result; // reg?
+    int v2; // temp
+    v2 = v1 - v2; cond = v2 == 0; cond = (unsigned __int32)v1 < (unsigned __int32)v2;
+    if (cond) {
+    } else {
+    }
     return result;
 }

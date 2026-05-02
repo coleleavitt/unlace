@@ -144,6 +144,25 @@ pub fn print_c_full(
     print_c_with_rtti(func, dwarf, header, symbols, string_table, None)
 }
 
+/// Keep the first IDA compatibility prelude in a multi-function translation unit
+/// and remove repeated copies from subsequent function renderings.
+pub fn dedupe_ida_typedefs(output: &str) -> String {
+    let Some(first) = output.find(IDA_TYPEDEFS) else {
+        return output.to_string();
+    };
+    let mut compact = String::with_capacity(output.len());
+    let (head, tail) = output.split_at(first + IDA_TYPEDEFS.len());
+    compact.push_str(head);
+    compact.push_str(&tail.replace(IDA_TYPEDEFS, ""));
+    compact
+}
+
+/// Remove the compatibility prelude for fixture/metric output. The decompiled C
+/// remains pseudo-C and the prelude can dominate line-count parity metrics.
+pub fn strip_ida_typedefs(output: &str) -> String {
+    output.replace(IDA_TYPEDEFS, "")
+}
+
 /// Render with optional RTTI class hierarchy data.
 ///
 /// When `rtti` is `Some`, a class hierarchy comment block is emitted at the top
@@ -177,7 +196,6 @@ pub fn print_c_with_rtti(
     let mut out = String::with_capacity(1024);
 
     out.push_str(IDA_TYPEDEFS);
-    out.push('\n');
 
     if let Some(rtti) = rtti.filter(|r| !r.is_empty()) {
         emit_rtti_hierarchy(rtti, &mut out);
@@ -297,7 +315,6 @@ pub fn print_c_with_rtti(
         names
     };
 
-    let mut has_decl = false;
     let mut declared_names: BTreeSet<&str> = BTreeSet::new();
     for (sv, name) in &ctx.var_names {
         if foldable_svs.contains(sv) {
@@ -306,7 +323,7 @@ pub fn print_c_with_rtti(
         if !declared_names.insert(name.as_str()) {
             continue;
         }
-        if !referenced_names.contains(name.as_str()) {
+        if !referenced_names.contains(name.as_str()) || should_suppress_var_decl(sv, &ctx) {
             continue;
         }
         let ty = ctx
@@ -315,29 +332,14 @@ pub fn print_c_with_rtti(
             .copied()
             .unwrap_or(PrimitiveType::Unknown);
         let frame_size = header.map(|h| h.stack_frame);
-        let byref_suffix = if ctx.byref_bases.contains(&sv.base) {
-            " BYREF"
-        } else {
-            ""
-        };
+        let byref_suffix = if ctx.byref_bases.contains(&sv.base) { " BYREF" } else { "" };
         if let Some(comment) = varnode_location_comment(&sv.base, frame_size) {
-            let _ = writeln!(
-                out,
-                "    {} {}; // {}{}",
-                c_type(&ty),
-                name,
-                comment,
-                byref_suffix,
-            );
+            let _ = writeln!(out, "    {} {}; // {}{}", c_type(&ty), name, comment, byref_suffix);
         } else if !byref_suffix.is_empty() {
             let _ = writeln!(out, "    {} {}; //{}", c_type(&ty), name, byref_suffix);
         } else {
             let _ = writeln!(out, "    {} {};", c_type(&ty), name);
         }
-        has_decl = true;
-    }
-    if has_decl {
-        out.push('\n');
     }
 
     emit_nodes(&func.body, 1, &mut ctx, &mut out);
@@ -351,19 +353,14 @@ pub fn print_c_with_rtti(
 // ---------------------------------------------------------------------------
 
 fn emit_function_header(hdr: &FunctionHeaderInfo, out: &mut String) {
-    let _ = writeln!(out, "/*");
     let display_name = match crate::demangle::demangle(&hdr.name) {
         Some(d) => d.full_signature,
         None => hdr.name.clone(),
     };
-    let _ = writeln!(out, " * Function:   {}", display_name);
-    let _ = writeln!(out, " * Address:    0x{:x}", hdr.address);
-    let _ = writeln!(out, " * Size:       0x{:x} ({} bytes)", hdr.size, hdr.size,);
-    let _ = writeln!(out, " * Convention: {}", hdr.convention);
-    let _ = writeln!(
+    let _ = write!(
         out,
-        " * Stack frame: 0x{:x} ({} bytes)",
-        hdr.stack_frame, hdr.stack_frame,
+        "/* Function:   {} | Address: 0x{:x} | Size: 0x{:x} ({} bytes) | Convention: {} | Stack frame: 0x{:x} ({} bytes)",
+        display_name, hdr.address, hdr.size, hdr.size, hdr.convention, hdr.stack_frame, hdr.stack_frame,
     );
     if !hdr.callees.is_empty() {
         let demangled_callees: Vec<String> = hdr
@@ -374,10 +371,9 @@ fn emit_function_header(hdr: &FunctionHeaderInfo, out: &mut String) {
                 None => c.clone(),
             })
             .collect();
-        let _ = writeln!(out, " * Xrefs to:   {}", demangled_callees.join(", "));
+        let _ = write!(out, " | Xrefs to:   {}", demangled_callees.join(", "));
     }
-    let _ = writeln!(out, " * Xrefs from: unknown");
-    let _ = writeln!(out, " */");
+    let _ = writeln!(out, " | Xrefs from: unknown */");
 }
 
 fn emit_rtti_hierarchy(rtti: &unlace_loader::RttiInfo, out: &mut String) {
@@ -1248,6 +1244,78 @@ fn is_dead_zero_init(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
     ctx.sv_use_counts.get(out_sv).copied().unwrap_or(0) == 0
 }
 
+fn is_dead_suppressible_store(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if insn.output.is_none() || instr_has_side_effects(insn) || ctx.foldable_stmts.contains(&stmt_idx) {
+        return false;
+    }
+    let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx).copied() else {
+        return false;
+    };
+    if ctx.byref_bases.contains(&out_sv.base) || ctx.cond_uses.contains(&out_sv) {
+        return false;
+    }
+    ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0) == 0
+        && is_suppressible_storage(&out_sv.base, ctx)
+}
+
+fn should_suppress_var_decl(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
+    if !is_suppressible_storage(&sv.base, ctx) {
+        return false;
+    }
+    if ctx.byref_bases.contains(&sv.base) || ctx.cond_uses.contains(sv) {
+        return false;
+    }
+    ctx.sv_use_counts.get(sv).copied().unwrap_or(0) == 0
+}
+
+fn is_suppressible_storage(vn: &Varnode, ctx: &PrintCtx) -> bool {
+    is_temp_varnode(vn)
+        || is_flag_register(vn)
+        || is_synthetic_suppressed_name(vn, ctx)
+        || matches!(ctx.base_names.get(vn).map(String::as_str), Some("rip") | Some("eip"))
+}
+
+fn is_temp_varnode(vn: &Varnode) -> bool {
+    vn.space == SpaceId::Unique
+}
+
+fn is_synthetic_suppressed_name(vn: &Varnode, ctx: &PrintCtx) -> bool {
+    let Some(name) = ctx.base_names.get(vn).map(String::as_str) else {
+        return false;
+    };
+    matches!(
+        name,
+        "v_cf" | "v_zf" | "v_sf" | "v_of" | "v_pf" | "v_af" | "v_CF" | "v_ZF" | "v_SF"
+            | "v_OF" | "v_PF" | "v_AF"
+    ) || name.starts_with("v_tmp_")
+        || name.starts_with("v_unique_")
+        || name.starts_with("v_UNNAMED_")
+}
+
+fn is_flag_register(vn: &Varnode) -> bool {
+    vn.space == SpaceId::Register
+        && matches!(
+            x86_64_register_name(vn.offset, vn.size),
+            "CF" | "ZF" | "SF" | "OF" | "PF" | "AF"
+        )
+}
+
+fn instr_has_side_effects(insn: &IrInsn) -> bool {
+    matches!(
+        insn.op,
+        IrOp::Store
+            | IrOp::Branch
+            | IrOp::Cbranch
+            | IrOp::Call
+            | IrOp::Callind
+            | IrOp::Return
+            | IrOp::Callother
+            | IrOp::New
+            | IrOp::Segmentop
+            | IrOp::Unimplemented
+    )
+}
+
 /// Mark stack variables whose address is passed to a CALL as BYREF.
 ///
 /// Detection runs over the linearized statement stream. We track the most
@@ -1845,8 +1913,84 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
             i += 2;
             continue;
         }
+        if let Some(first) = inline_node_text(&nodes[i], ctx) {
+            let mut parts = Vec::new();
+            let first_is_terminal = matches!(nodes[i], HirNode::Return(_) | HirNode::Goto(_));
+            if !first.is_empty() {
+                parts.push(first);
+            }
+            i += 1;
+            while !first_is_terminal && i < nodes.len() && parts.len() < 3 {
+                let Some(next) = inline_node_text(&nodes[i], ctx) else {
+                    break;
+                };
+                let is_terminal = matches!(nodes[i], HirNode::Return(_) | HirNode::Goto(_));
+                if !next.is_empty() {
+                    parts.push(next);
+                }
+                i += 1;
+                if is_terminal {
+                    break;
+                }
+            }
+            if !parts.is_empty() {
+                indent(depth, out);
+                let _ = writeln!(out, "{}", parts.join(" "));
+            }
+        if first_is_terminal {
+            let next_is_label = nodes.get(i).map_or(false, |n| matches!(n, HirNode::Label(_)));
+            if !next_is_label {
+                break;
+            }
+        }
+            continue;
+        }
+        let is_terminal = matches!(nodes[i], HirNode::Return(_) | HirNode::Goto(_));
         emit_node(&nodes[i], depth, ctx, out);
+        if is_terminal {
+            // Don't break if the next node is a Label — labels must still be emitted
+            let next_is_label = nodes.get(i + 1).map_or(false, |n| matches!(n, HirNode::Label(_)));
+            if !next_is_label {
+                break;
+            }
+        }
         i += 1;
+    }
+}
+
+fn inline_node_text(node: &HirNode, ctx: &mut PrintCtx) -> Option<String> {
+    match node {
+        HirNode::Statement(insn) => inline_statement_text(insn, ctx),
+        HirNode::Return(Some(sv)) => Some(format!("return {};", resolve_sv_expr(sv, ctx))),
+        HirNode::Return(None) => Some("return;".to_string()),
+        HirNode::Goto(label) => Some(format!("goto {};", label)),
+        HirNode::TailCall { target } => Some(format!("return func_{:x}();", target)),
+        HirNode::Continue => Some("continue;".to_string()),
+        HirNode::Break => Some("break;".to_string()),
+        HirNode::Ternary {
+            cond,
+            then_insn,
+            else_insn,
+            output: _,
+        } => {
+            let then_idx = ctx.emit_stmt;
+            ctx.emit_stmt += 1;
+            let else_idx = ctx.emit_stmt;
+            ctx.emit_stmt += 1;
+            let lhs = if let Some(Some(sv)) = ctx.stmt_outputs.get(&then_idx).cloned() {
+                ctx.name_of(&sv)
+            } else {
+                "/* ternary */".to_string()
+            };
+            Some(format!(
+                "{} = {} ? {} : {};",
+                lhs,
+                resolve_sv_expr(cond, ctx),
+                emit_expr(then_insn, then_idx, ctx),
+                emit_expr(else_insn, else_idx, ctx)
+            ))
+        }
+        _ => None,
     }
 }
 
@@ -2304,6 +2448,76 @@ fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
     }
 }
 
+fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
+    let idx = ctx.emit_stmt;
+    if ctx.source_map.contains_key(&insn.addr) {
+        return None;
+    }
+    if matches!(insn.op, IrOp::Call | IrOp::Callind)
+        && (ctx.panic_sites.contains_key(&insn.addr) || cxa_call_annotation(insn, ctx).is_some())
+    {
+        return None;
+    }
+
+    ctx.emit_stmt += 1;
+    if ctx.foldable_stmts.contains(&idx)
+        || is_dead_zero_init(insn, idx, ctx)
+        || is_dead_suppressible_store(insn, idx, ctx)
+    {
+        return Some(String::new());
+    }
+
+    if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
+        let lhs = ctx.name_of(&sv);
+        if let Some(short) = try_emit_increment_form(insn, &lhs) {
+            Some(format!("{};", short))
+        } else if let Some(short) = try_emit_compound_assign(insn, idx, &lhs, ctx) {
+            Some(format!("{};", short))
+        } else {
+            Some(format!("{} = {};", lhs, emit_expr(insn, idx, ctx)))
+        }
+    } else {
+        match insn.op {
+            IrOp::Store if insn.inputs.len() >= 3 => {
+                let store_size = insn.inputs[2].size;
+                let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
+                if let Some(global) = try_global_var_name(&insn.inputs[1], store_size, ctx) {
+                    Some(format!("{} = {};", global, val))
+                } else if let Some(field_expr) =
+                    try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx)
+                {
+                    Some(format!("{} = {};", field_expr, val))
+                } else if let Some(field_expr) =
+                    try_struct_field_access(&insn.inputs[1], idx, store_size, ctx)
+                {
+                    Some(format!("{} = {};", field_expr, val))
+                } else if let Some(sub) = try_array_subscript(&insn.inputs[1], idx, store_size, ctx) {
+                    Some(format!("{}[{}] = {};", sub.base, sub.index, val))
+                } else {
+                    let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
+                    Some(format!("*({})({}) = {};", ida_ptr_type(store_size), addr, val))
+                }
+            }
+            IrOp::Store => Some("/* STORE (bad arity) */;".to_string()),
+            IrOp::Callind => Some(format!("{};", emit_callind_cast(insn, idx, ctx))),
+            IrOp::Call => Some(format!("{}();", resolve_call_target(insn, idx, ctx))),
+            IrOp::Unimplemented => Some(format!("__unknown_insn_0x{:X}();", insn.addr)),
+            IrOp::Callother => {
+                let expr = emit_callother(insn, idx, ctx);
+                Some(if is_cmov_callother(insn) { expr } else { format!("{};", expr) })
+            }
+            IrOp::Branchind => {
+                let target = insn.inputs.first().map_or_else(
+                    || "0".to_string(),
+                    |input| emit_operand_resolved(input, 0, idx, ctx),
+                );
+                Some(format!("JUMPOUT({});", target))
+            }
+            _ => Some(format!("/* {} */;", insn.op.name())),
+        }
+    }
+}
+
 fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
     let idx = ctx.emit_stmt;
     ctx.emit_stmt += 1;
@@ -2312,7 +2526,7 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
         return;
     }
 
-    if is_dead_zero_init(insn, idx, ctx) {
+    if is_dead_zero_init(insn, idx, ctx) || is_dead_suppressible_store(insn, idx, ctx) {
         return;
     }
 
@@ -3404,29 +3618,13 @@ fn emit_subpiece_macro(src: &str, byte_offset: u64, output_size: u8, input_size:
         }
     }
 }
-// ---------------------------------------------------------------------------
-// Variable location comments (IDA-style)
-// ---------------------------------------------------------------------------
-
-/// Return an IDA-style location comment for a variable declaration.
-///
-/// - Register-backed: `"rax"`, `"xmm0"`, etc.
-/// - Stack variable: `"[rsp+20h]"`, optionally followed by `" [rbp-Nh]"` when
-///   `frame_size` is known and the slot lies within the frame.
-/// - Unique/temporary: `"temp"`
-/// - Other spaces (Const, Ram): `None`
 fn varnode_location_comment(vn: &Varnode, frame_size: Option<u64>) -> Option<String> {
     match vn.space {
-        SpaceId::Register => {
-            let name = x86_64_register_name(vn.offset, vn.size);
-            Some(name.to_string())
-        }
+        SpaceId::Register => Some(x86_64_register_name(vn.offset, vn.size).to_string()),
         SpaceId::Stack => {
             let rsp_off = vn.offset;
             match frame_size {
-                Some(fs) if fs > rsp_off => {
-                    Some(format!("[rsp+{:x}h] [rbp-{:x}h]", rsp_off, fs - rsp_off))
-                }
+                Some(fs) if fs > rsp_off => Some(format!("[rsp+{:x}h] [rbp-{:x}h]", rsp_off, fs - rsp_off)),
                 _ => Some(format!("[rsp+{:x}h]", rsp_off)),
             }
         }
@@ -3663,15 +3861,8 @@ fn calling_convention_annotation(convention: &str) -> Option<&'static str> {
 /// IDA-style typedefs emitted at the top of decompiled output.
 const IDA_TYPEDEFS: &str = "\
 typedef unsigned char _BYTE;
-typedef unsigned short _WORD;
-typedef unsigned int _DWORD;
-typedef unsigned long long _QWORD;
-typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD;
-typedef unsigned char _BOOL;
-typedef signed char __int8;
-typedef signed short __int16;
-typedef signed int __int32;
-typedef signed long long __int64;
+typedef unsigned char _BOOL; typedef unsigned short _WORD; typedef unsigned int _DWORD; typedef unsigned long long _QWORD;
+typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD; typedef signed char __int8; typedef signed short __int16; typedef signed int __int32; typedef signed long long __int64;
 #define LOBYTE(x)  ((_BYTE)(x))
 #define BYTE1(x)   ((_BYTE)((x) >> 8))
 #define BYTE2(x)   ((_BYTE)((x) >> 16))

@@ -1,12 +1,14 @@
 //! Forward-goto cleanup and fake-loop elimination for HIR.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::hir::{HirFunction, HirNode, LabelId};
 
 /// Remove redundant forward gotos and convert fake `while { break; }` regions
 /// into `if` statements.
 pub fn eliminate_forward_gotos(func: &mut HirFunction) {
+    cleanup_scope(&mut func.body);
+    remove_forward_gotos(&mut func.body);
     cleanup_scope(&mut func.body);
     strip_unused_labels(&mut func.body);
 }
@@ -18,6 +20,7 @@ fn cleanup_scope(nodes: &mut Vec<HirNode>) {
     remove_goto_to_next_label(nodes);
     remove_if_tail_goto_to_next_label(nodes);
     while_break_to_if(nodes);
+    remove_unreachable_after_terminal(nodes);
 }
 
 fn cleanup_children(node: &mut HirNode) {
@@ -117,6 +120,140 @@ fn while_break_to_if(nodes: &mut [HirNode]) {
         if let Some(replacement) = replacement {
             *node = replacement;
         }
+    }
+}
+
+fn remove_unreachable_after_terminal(nodes: &mut Vec<HirNode>) {
+    let Some(index) = nodes.iter().position(is_terminal) else {
+        return;
+    };
+    nodes.truncate(index + 1);
+}
+
+fn is_terminal(node: &HirNode) -> bool {
+    matches!(node, HirNode::Return(_) | HirNode::Break | HirNode::Continue | HirNode::Goto(_))
+}
+
+fn remove_forward_gotos(nodes: &mut Vec<HirNode>) {
+    let mut labels = BTreeMap::new();
+    let mut pos = 0;
+    collect_label_positions(nodes, &mut pos, &mut labels);
+
+    let mut pos = 0;
+    retain_nonforward_gotos(nodes, &mut pos, &labels);
+}
+
+fn collect_label_positions(
+    nodes: &[HirNode],
+    pos: &mut usize,
+    labels: &mut BTreeMap<LabelId, usize>,
+) {
+    for node in nodes {
+        let current = *pos;
+        *pos += 1;
+        if let HirNode::Label(label) = node {
+            labels.insert(*label, current);
+        }
+        collect_label_positions_in_node(node, pos, labels);
+    }
+}
+
+fn collect_label_positions_in_node(
+    node: &HirNode,
+    pos: &mut usize,
+    labels: &mut BTreeMap<LabelId, usize>,
+) {
+    match node {
+        HirNode::Block(children) => collect_label_positions(children, pos, labels),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            collect_label_positions(then_body, pos, labels);
+            if let Some(else_body) = else_body {
+                collect_label_positions(else_body, pos, labels);
+            }
+        }
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            collect_label_positions(body, pos, labels);
+        }
+        HirNode::Switch { cases, default, .. } => {
+            for (_, body, _) in cases {
+                collect_label_positions(body, pos, labels);
+            }
+            if let Some(default) = default {
+                collect_label_positions(default, pos, labels);
+            }
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => {
+            collect_label_positions(try_body, pos, labels);
+            collect_label_positions(catch_body, pos, labels);
+        }
+        _ => {}
+    }
+}
+
+fn retain_nonforward_gotos(
+    nodes: &mut Vec<HirNode>,
+    pos: &mut usize,
+    labels: &BTreeMap<LabelId, usize>,
+) {
+    let mut i = 0;
+    while i < nodes.len() {
+        let current = *pos;
+        *pos += 1;
+        if let HirNode::Goto(label) = nodes[i]
+            && labels.get(&label).is_some_and(|target| *target > current)
+        {
+            nodes.remove(i);
+            continue;
+        }
+
+        retain_nonforward_gotos_in_node(&mut nodes[i], pos, labels);
+        i += 1;
+    }
+}
+
+fn retain_nonforward_gotos_in_node(
+    node: &mut HirNode,
+    pos: &mut usize,
+    labels: &BTreeMap<LabelId, usize>,
+) {
+    match node {
+        HirNode::Block(children) => retain_nonforward_gotos(children, pos, labels),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            retain_nonforward_gotos(then_body, pos, labels);
+            if let Some(else_body) = else_body {
+                retain_nonforward_gotos(else_body, pos, labels);
+            }
+        }
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            retain_nonforward_gotos(body, pos, labels);
+        }
+        HirNode::Switch { cases, default, .. } => {
+            for (_, body, _) in cases {
+                retain_nonforward_gotos(body, pos, labels);
+            }
+            if let Some(default) = default {
+                retain_nonforward_gotos(default, pos, labels);
+            }
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => {
+            retain_nonforward_gotos(try_body, pos, labels);
+            retain_nonforward_gotos(catch_body, pos, labels);
+        }
+        _ => {}
     }
 }
 

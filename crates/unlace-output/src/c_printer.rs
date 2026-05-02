@@ -186,7 +186,7 @@ pub fn print_c_with_rtti(
     );
 
     let dwarf_func = dwarf.and_then(|d| d.functions.get(&func.addr));
-    compute_dwarf_local_names(dwarf_func, header, &mut ctx);
+    compute_dwarf_locals(dwarf_func, header, &mut ctx);
     compute_loop_counter_names(&func.body, 0, &mut ctx);
     collect_varnodes(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
@@ -341,15 +341,21 @@ pub fn print_c_with_rtti(
             let _ = writeln!(
                 out,
                 "    {} {}; // {}{}",
-                c_type(&ty),
+                c_type_for_var(&ctx, &sv.base, &ty),
                 name,
                 comment,
                 byref_suffix
             );
         } else if !byref_suffix.is_empty() {
-            let _ = writeln!(out, "    {} {}; //{}", c_type(&ty), name, byref_suffix);
+            let _ = writeln!(
+                out,
+                "    {} {}; //{}",
+                c_type_for_var(&ctx, &sv.base, &ty),
+                name,
+                byref_suffix
+            );
         } else {
-            let _ = writeln!(out, "    {} {};", c_type(&ty), name);
+            let _ = writeln!(out, "    {} {};", c_type_for_var(&ctx, &sv.base, &ty), name);
         }
     }
 
@@ -483,6 +489,9 @@ struct PrintCtx {
     /// Override map: when present, [`PrintCtx::name_of`] returns the override
     /// for the matching base instead of the cached `vN` name.
     name_overrides: BTreeMap<Varnode, String>,
+    /// DWARF local variable type overrides keyed by the same base varnode used
+    /// by `name_overrides`.
+    dwarf_local_types: BTreeMap<Varnode, String>,
     /// Composite (struct/array) type annotations from SSA-level type inference.
     /// Used by `try_struct_field_access` to emit `base->field_<offset>` syntax.
     composite_var_types: BTreeMap<SsaVarnode, Type>,
@@ -522,6 +531,7 @@ impl PrintCtx {
             string_table,
             byref_bases: BTreeSet::new(),
             name_overrides: BTreeMap::new(),
+            dwarf_local_types: BTreeMap::new(),
             composite_var_types,
             source_map: dwarf.map(|d| d.source_map.clone()).unwrap_or_default(),
         }
@@ -1425,7 +1435,7 @@ fn compute_byref_bases(ctx: &mut PrintCtx) {
 /// register the DWARF name in `ctx.name_overrides` for the matching
 /// `SpaceId::Stack` Varnode. Stack variables that DWARF does not name
 /// keep their generated `vN`/`local_X` identifier.
-fn compute_dwarf_local_names(
+fn compute_dwarf_locals(
     dwarf_func: Option<&unlace_loader::FunctionDebugInfo>,
     header: Option<&FunctionHeaderInfo>,
     ctx: &mut PrintCtx,
@@ -1453,6 +1463,11 @@ fn compute_dwarf_local_names(
             ctx.name_overrides
                 .entry(stk)
                 .or_insert_with(|| local.name.clone());
+            if let Some(type_name) = local.type_name.as_deref() {
+                ctx.dwarf_local_types
+                    .entry(stk)
+                    .or_insert_with(|| dwarf_type_to_c(type_name));
+            }
         }
     }
 }
@@ -1884,6 +1899,13 @@ fn c_type(ty: &PrimitiveType) -> &'static str {
     }
 }
 
+fn c_type_for_var(ctx: &PrintCtx, var: &Varnode, fallback: &PrimitiveType) -> String {
+    ctx.dwarf_local_types
+        .get(var)
+        .cloned()
+        .unwrap_or_else(|| c_type(fallback).to_string())
+}
+
 #[allow(dead_code)]
 fn c_return_type(ty: &PrimitiveType) -> &'static str {
     match ty {
@@ -1925,10 +1947,34 @@ fn c_sig_return_type(ty: &PrimitiveType) -> &'static str {
 }
 
 fn dwarf_type_to_c(dwarf_type: &str) -> String {
-    match dwarf_type {
-        "void" => "void".to_string(),
-        "_Bool" => "_Bool".to_string(),
-        s => s.to_string(),
+    let mut normalized = dwarf_type
+        .trim()
+        .replace("const ", "")
+        .replace("volatile ", "")
+        .replace("restrict ", "")
+        .replace("struct ", "")
+        .replace("typedef ", "");
+    let ptr_depth = normalized.matches('*').count();
+    normalized = normalized.replace('*', " ");
+    let normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
+    let base = match normalized.as_str() {
+        "" => "long long",
+        "void" => "void",
+        "_Bool" | "bool" => "_Bool",
+        "signed char" => "char",
+        "short int" | "signed short" | "signed short int" => "short",
+        "unsigned short int" => "unsigned short",
+        "signed int" => "int",
+        "long int" | "signed long" | "signed long int" => "long",
+        "unsigned long int" | "long unsigned int" => "unsigned long",
+        "long long int" | "signed long long" | "signed long long int" => "long long",
+        "unsigned long long int" | "long long unsigned int" => "unsigned long long",
+        other => other,
+    };
+    if ptr_depth == 0 {
+        base.to_string()
+    } else {
+        format!("{} {}", base, "*".repeat(ptr_depth))
     }
 }
 

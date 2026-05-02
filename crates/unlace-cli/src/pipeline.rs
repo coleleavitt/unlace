@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use unlace_ir::ssa::SsaFunction;
-use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter};
+use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
+use unlace_ir::types::{StructFieldType, Type};
+use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
 use unlace_loader::{BinaryImage, DwarfInfo, Section, SymbolKind};
 use unlace_passes::{
     CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass, CopyPropagationPass,
@@ -734,6 +736,110 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     Ok(changes)
 }
 
+fn apply_dwarf_to_ssa(ssa: &mut SsaFunction, dwarf: &DwarfInfo, function_addr: u64) {
+    let Some(debug_func) = dwarf.functions.get(&function_addr) else {
+        return;
+    };
+
+    for local in &debug_func.locals {
+        let Some(frame_offset) = local.frame_offset else {
+            continue;
+        };
+        ssa.dwarf_local_names
+            .entry(frame_offset)
+            .or_insert_with(|| local.name.clone());
+
+        let Some(type_name) = local.type_name.as_deref() else {
+            continue;
+        };
+        let Some(dwarf_type) = dwarf_type_to_ssa_type(type_name, dwarf) else {
+            continue;
+        };
+        for base in stack_bases_for_frame_offset(ssa, frame_offset) {
+            ssa.composite_var_types
+                .entry(base)
+                .or_insert_with(|| dwarf_type.clone());
+        }
+    }
+}
+
+fn stack_bases_for_frame_offset(ssa: &SsaFunction, frame_offset: i64) -> Vec<SsaVarnode> {
+    let mut bases = BTreeSet::new();
+    for var in ssa.var_map.values() {
+        let base = var.base;
+        if base.space == SpaceId::Stack && stack_offset_matches(base.offset, frame_offset) {
+            bases.insert(*var);
+        }
+    }
+    bases.into_iter().collect()
+}
+
+fn stack_offset_matches(raw_offset: u64, frame_offset: i64) -> bool {
+    raw_offset as i64 == frame_offset || raw_offset == frame_offset.unsigned_abs()
+}
+
+fn dwarf_type_to_ssa_type(type_name: &str, dwarf: &DwarfInfo) -> Option<Type> {
+    let normalized = normalize_dwarf_type_name(type_name);
+    let pointer_depth = normalized.matches('*').count();
+    let base_name = normalized.replace('*', " ");
+    let base_name = base_name.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut ty = dwarf_base_type_to_ssa(&base_name, dwarf)?;
+    for _ in 0..pointer_depth {
+        ty = Type::Ptr(Box::new(ty));
+    }
+    Some(ty)
+}
+
+fn normalize_dwarf_type_name(type_name: &str) -> String {
+    type_name
+        .trim()
+        .replace("const ", "")
+        .replace("volatile ", "")
+        .replace("restrict ", "")
+        .replace("typedef ", "")
+}
+
+fn dwarf_base_type_to_ssa(base_name: &str, dwarf: &DwarfInfo) -> Option<Type> {
+    let struct_name = base_name.strip_prefix("struct ").unwrap_or(base_name);
+    if let Some(struct_type) = dwarf.structs.get(struct_name) {
+        return Some(Type::Struct {
+            name: struct_type.name.clone(),
+            fields: struct_type
+                .fields
+                .iter()
+                .filter_map(|field| {
+                    dwarf_type_to_ssa_type(&field.type_name, dwarf).map(|ty| StructFieldType {
+                        name: field.name.clone(),
+                        offset: field.offset,
+                        ty,
+                    })
+                })
+                .collect(),
+        });
+    }
+
+    let primitive = match base_name {
+        "_Bool" | "bool" => PrimitiveType::Bool,
+        "char" | "signed char" | "unsigned char" => PrimitiveType::Int(1),
+        "short" | "short int" | "signed short" | "signed short int" | "unsigned short"
+        | "unsigned short int" => PrimitiveType::Int(2),
+        "int" | "signed int" | "unsigned int" => PrimitiveType::Int(4),
+        "long" | "long int" | "signed long" | "signed long int" | "unsigned long"
+        | "unsigned long int" => PrimitiveType::Int(8),
+        "long long"
+        | "long long int"
+        | "signed long long"
+        | "signed long long int"
+        | "unsigned long long"
+        | "unsigned long long int" => PrimitiveType::Int(8),
+        "float" => PrimitiveType::Float,
+        "double" => PrimitiveType::Double,
+        "void" => return None,
+        _ => return None,
+    };
+    Some(Type::Primitive(primitive))
+}
+
 fn run_type_infer_bounded(ssa: &mut SsaFunction) {
     use unlace_ir::SpaceId;
     use unlace_ir::ssa::{PrimitiveType, SsaVarnode, VarnodeSlot};
@@ -921,6 +1027,10 @@ pub fn decompile_function_with_symbols(
         elapsed_us = t.elapsed().as_micros() as u64,
         "build_ssa done"
     );
+
+    if let Some(dwarf_info) = dwarf {
+        apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry.addr);
+    }
 
     warn_if_large_ir(&entry.name, &ssa);
     check_timeout(deadline, &entry.name)?;

@@ -64,14 +64,14 @@ int min(int a, int b) {
     *(_QWORD *)(0LL) = 0LL; *(_DWORD *)(0LL) = v4; *(_DWORD *)(0LL) = v5;
     return result;
 }
-/* Function:   clamp | Address: 0x1204 | Size: 0x33 (51 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   max, min | Xrefs from: unknown */
+/* Function:   clamp | Address: 0x1204 | Size: 0x33 (51 bytes) | Convention: unknown | Stack frame: 0x8 (8 bytes) | Xrefs to:   max, min | Xrefs from: unknown */
 int clamp(int x, int lo, int hi) {
     *(_QWORD *)(0LL) = 0LL; *(_DWORD *)(0LL) = 0; *(_DWORD *)(0LL) = 0;
     *(_DWORD *)(0LL) = 0;
     *(_QWORD *)(0LL) = 0x1228LL; max(); *(_QWORD *)(0LL) = 0x1236LL;
     min(); return result;
 }
-/* Function:   compute | Address: 0x1238 | Size: 0x7b (123 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   abs_val, add, clamp, cube, square, sub | Xrefs from: unknown */
+/* Function:   compute | Address: 0x1238 | Size: 0x7b (123 bytes) | Convention: unknown | Stack frame: 0x8 (8 bytes) | Xrefs to:   abs_val, add, clamp, cube, square, sub | Xrefs from: unknown */
 int compute(int x) {
     *(_QWORD *)(0LL) = 0LL; *(_DWORD *)(0LL) = 0;
     *(_QWORD *)(0LL) = 0x1256LL; add(); *(_DWORD *)(0LL) = 0;
@@ -87,7 +87,7 @@ int main(void) {
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0x12c6LL; compute();
     return result;
 }
-/* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
+/* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
 void sub_10e0(void) {
     long long v8; // rsp
     int v1; // rip

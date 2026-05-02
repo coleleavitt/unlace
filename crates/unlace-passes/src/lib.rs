@@ -53,7 +53,7 @@ pub use rust_enum::RustEnumPass;
 pub use rust_panic::RustPanicPass;
 pub use rust_vtable::RustVtablePass;
 pub use sccp::SccpPass;
-pub use stack_vars::StackVarRecoveryPass;
+pub use stack_vars::{StackOffsetSnapshotPass, StackVarRecoveryPass};
 pub use struct_field_detect::StructFieldDetectPass;
 pub use tail_call::TailCallDetectPass;
 pub use variable_merge::VariableMergePass;

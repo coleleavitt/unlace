@@ -1,4 +1,4 @@
-/* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   __stack_chk_fail, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
+/* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   __stack_chk_fail, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 void main(void) {
     long long v13; // rax
     long long v3; // rsp
@@ -80,7 +80,7 @@ void _start(void) {
     int v9; // rip
     *(_QWORD *)(0LL) = 0x14a5LL; return;
 }
-/* Function:   f_rec_fib | Address: 0x1570 | Size: 0x2b1 (689 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   f_rec_fib | Xrefs from: unknown */
+/* Function:   f_rec_fib | Address: 0x1570 | Size: 0x2b1 (689 bytes) | Convention: unknown | Stack frame: 0xc (12 bytes) | Xrefs to:   f_rec_fib | Xrefs from: unknown */
 void f_rec_fib(void) {
     int v11; // rdi
     v7 = 0;
@@ -97,7 +97,7 @@ void f_rec_fib(void) {
     }
     return;
 }
-/* Function:   f_ackermann | Address: 0x1830 | Size: 0x34e (846 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   f_ackermann | Xrefs from: unknown */
+/* Function:   f_ackermann | Address: 0x1830 | Size: 0x34e (846 bytes) | Convention: unknown | Stack frame: 0x8 (8 bytes) | Xrefs to:   f_ackermann | Xrefs from: unknown */
 void f_ackermann(void) {
     int v12; // rdx
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
@@ -230,7 +230,7 @@ void f_rec_power.constprop.0(__int64 a1) {
     }
     return;
 }
-/* Function:   sub_1520 | Address: 0x1520 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1040, sub_14b0 | Xrefs from: unknown */
+/* Function:   sub_1520 | Address: 0x1520 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_14b0 | Xrefs from: unknown */
 void sub_1520(void) {
     long long v8; // rsp
     int v1; // rip
@@ -250,7 +250,7 @@ void sub_1520(void) {
         result = *(_QWORD *)(v3); return result;
     }
 }
-/* Function:   sub_1560 | Address: 0x1560 | Size: 0x735 (1845 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
+/* Function:   sub_1560 | Address: 0x1560 | Size: 0x735 (1845 bytes) | Convention: unknown | Stack frame: 0xc (12 bytes) | Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 void sub_1560(void) {
     long long v14; // rsp
     int v11; // edi

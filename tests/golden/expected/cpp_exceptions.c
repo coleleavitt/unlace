@@ -1,4 +1,4 @@
-/* Function:   may_throw(int) [clone .cold] | Address: 0x1140 | Size: 0x4c (76 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_free_exception, __cxa_throw | Xrefs from: unknown */
+/* Function:   may_throw(int) [clone .cold] | Address: 0x1140 | Size: 0x4c (76 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_free_exception, __cxa_throw | Xrefs from: unknown */
 // may_throw(int) [clone .cold]
 void __aapcs may_throw(void * a1) {
     int v3; // rax
@@ -14,7 +14,7 @@ void __aapcs may_throw(void * a1) {
     v7 = v3; *(_QWORD *)(0LL) = 0x1185LL; __cxa_free_exception();
     *(_QWORD *)(0LL) = 0x118dLL; _Unwind_Resume(); return;
 }
-/* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0xb3 (179 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_free_exception, __cxa_throw | Xrefs from: unknown */
+/* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0xb3 (179 bytes) | Convention: unknown | Stack frame: 0x88 (136 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_free_exception, __cxa_throw | Xrefs from: unknown */
 // safe_call(int) [clone .cold]
 __int32 safe_call(void) {
     int v5; // rip
@@ -80,7 +80,7 @@ void __aapcs sub_1176(void * a1) {
     __cxa_throw();
     return;
 }
-/* Function:   sub_11c4 | Address: 0x11c4 | Size: 0x54 (84 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   __cxa_begin_catch, __cxa_free_exception | Xrefs from: unknown */
+/* Function:   sub_11c4 | Address: 0x11c4 | Size: 0x54 (84 bytes) | Convention: unknown | Stack frame: 0x20 (32 bytes) | Xrefs to:   __cxa_begin_catch, __cxa_free_exception | Xrefs from: unknown */
 void sub_11c4(void) {
     long long v2; // rsp
     unsigned long long pfn; // temp
@@ -94,7 +94,7 @@ void sub_11c4(void) {
     *(_QWORD *)(0LL) = 0x11f6LL; pfn = *(_QWORD *)(0x10LL); ((void (*)())pfn)();
     *(_QWORD *)(0x10LL) = 0x1211LL; return;
 }
-/* Function:   sub_121c | Address: 0x121c | Size: 0x9 (9 bytes) | Convention: Microsoft x64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   _Unwind_Resume | Xrefs from: unknown */
+/* Function:   sub_121c | Address: 0x121c | Size: 0x9 (9 bytes) | Convention: Microsoft x64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   _Unwind_Resume | Xrefs from: unknown */
 void __fastcall sub_121c(void) {
     int v1; // rdx
     long long v3; // temp
@@ -109,7 +109,7 @@ void __aapcs sub_122d(__int64 a1) {
     __cxa_end_catch();
     *(_QWORD *)(0LL) = 0x1241LL; _Unwind_Resume(); return;
 }
-/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
+/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
 void sub_1300(void) {
     long long v8; // rsp
     int v1; // rip

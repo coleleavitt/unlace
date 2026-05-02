@@ -14,7 +14,8 @@ use unlace_passes::{
     CppVtablePass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
     DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
     ModuloIdiomPass, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
-    StackVarRecoveryPass, StructFieldDetectPass, VariableMergePass, run_to_fixedpoint,
+    StackOffsetSnapshotPass, StackVarRecoveryPass, StructFieldDetectPass, VariableMergePass,
+    run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -705,6 +706,10 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     let idiom = IdiomRecognitionPass;
     let cond = ConditionSimplifyPass;
     let passes: &[&dyn Pass] = &[&fold, &prop, &gprop, &dce, &sccp, &cse, &gvn, &idiom, &cond];
+
+    StackOffsetSnapshotPass
+        .run(ssa)
+        .context("stack offset snapshot failed")?;
 
     let changes = run_to_fixedpoint(passes, ssa).context("pass pipeline failed")?;
 

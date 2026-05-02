@@ -444,6 +444,7 @@ mod tests {
             inferred_params: Vec::new(),
             inferred_return_type: PrimitiveType::Unknown,
             frame_setup_insns: std::collections::BTreeSet::new(),
+            stack_offset_hints: BTreeMap::new(),
             dwarf_local_names: BTreeMap::new(),
             inferred_structs: BTreeMap::new(),
             composite_var_types: BTreeMap::new(),

@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, StackVar, VarnodeSlot};
 use unlace_ir::types::{StructFieldType, Type};
-use unlace_ir::{IrOp, SpaceId, Varnode};
+use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
@@ -20,6 +20,36 @@ type ResolveCache = HashMap<(Varnode, u32), Option<i64>>;
 
 pub struct StackVarRecoveryPass;
 
+pub struct StackOffsetSnapshotPass;
+
+impl Pass for StackOffsetSnapshotPass {
+    fn name(&self) -> &str {
+        "stack-offset-snapshot"
+    }
+
+    fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        let def_map = build_def_map(func);
+        let mut resolve_cache = HashMap::new();
+        let mut hints = BTreeMap::new();
+
+        for (&bid, block) in &func.function.blocks {
+            for (insn_idx, insn) in block.insns.iter().enumerate() {
+                if matches!(insn.op, IrOp::Store | IrOp::Load)
+                    && insn.inputs.len() >= 2
+                    && let Some(offset) =
+                        extract_stack_offset(insn, func, &def_map, &mut resolve_cache)
+                {
+                    hints.insert((bid, insn_idx), offset);
+                }
+            }
+        }
+
+        let changed = func.stack_offset_hints != hints;
+        func.stack_offset_hints = hints;
+        Ok(changed)
+    }
+}
+
 impl Pass for StackVarRecoveryPass {
     fn name(&self) -> &str {
         "stack-var-recovery"
@@ -29,12 +59,7 @@ impl Pass for StackVarRecoveryPass {
         let old_len = func.stack_vars.len();
         let snapshot: BTreeMap<i64, StackVar> = func.stack_vars.clone();
 
-        let mut def_map: DefMap = HashMap::new();
-        for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
-            if *slot == VarnodeSlot::Output {
-                def_map.entry(sv.base).or_default().push((bid, insn_idx));
-            }
-        }
+        let def_map = build_def_map(func);
 
         let mut accesses: BTreeMap<i64, Vec<(SsaVarnode, u8)>> = BTreeMap::new();
         let mut resolve_cache: ResolveCache = HashMap::new();
@@ -47,9 +72,13 @@ impl Pass for StackVarRecoveryPass {
                         if insn.inputs.len() < 3 {
                             continue;
                         }
-                        if let Some(offset) =
-                            extract_stack_offset(insn, func, &def_map, &mut resolve_cache)
-                        {
+                        if let Some(offset) = extract_stack_offset_with_hints(
+                            (bid, insn_idx),
+                            insn,
+                            func,
+                            &def_map,
+                            &mut resolve_cache,
+                        ) {
                             let value_size = insn.inputs[2].size;
                             // Record the value varnode as an access
                             if let Some(&sv) =
@@ -70,9 +99,13 @@ impl Pass for StackVarRecoveryPass {
                         if insn.inputs.len() < 2 {
                             continue;
                         }
-                        if let Some(offset) =
-                            extract_stack_offset(insn, func, &def_map, &mut resolve_cache)
-                        {
+                        if let Some(offset) = extract_stack_offset_with_hints(
+                            (bid, insn_idx),
+                            insn,
+                            func,
+                            &def_map,
+                            &mut resolve_cache,
+                        ) {
                             let load_size = insn.output.map(|o| o.size).unwrap_or(8);
                             // Record the output varnode
                             if let Some(&sv) =
@@ -231,6 +264,32 @@ fn field_size(ty: PrimitiveType) -> Option<u8> {
         PrimitiveType::Ptr => Some(8),
         PrimitiveType::Unknown => None,
     }
+}
+
+fn build_def_map(func: &SsaFunction) -> DefMap {
+    let mut def_map: DefMap = HashMap::new();
+    for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
+        if *slot == VarnodeSlot::Output {
+            def_map.entry(sv.base).or_default().push((bid, insn_idx));
+        }
+    }
+    def_map
+}
+
+fn extract_stack_offset_with_hints(
+    current_loc: (BlockId, usize),
+    insn: &unlace_ir::IrInsn,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+) -> Option<i64> {
+    // Case 0: pre-optimization snapshot hints captured before fixedpoint
+    // propagation can collapse stack-relative address expressions to constants.
+    if let Some(&hint) = func.stack_offset_hints.get(&current_loc) {
+        return Some(hint);
+    }
+
+    extract_stack_offset(insn, func, def_map, resolve_cache)
 }
 
 fn extract_stack_offset(

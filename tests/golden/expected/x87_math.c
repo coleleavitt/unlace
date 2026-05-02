@@ -26,7 +26,7 @@ void compare_floats_x87(void) {
     }
     result = 0LL; return result;
 }
-/* Function:   mix_ops_x87 | Address: 0x1166 | Size: 0x1a (26 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   mix_ops_x87 | Address: 0x1166 | Size: 0x1a (26 bytes) | Convention: unknown | Stack frame: 0xa (10 bytes) | Xrefs from: unknown */
 void mix_ops_x87(void) {
     int v3; // reg?
     int v4; // reg?
@@ -38,7 +38,7 @@ void mix_ops_x87(void) {
 void main(void) {
     result = 0LL; return result;
 }
-/* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
+/* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
 void sub_10e0(void) {
     long long v8; // rsp
     int v1; // rip

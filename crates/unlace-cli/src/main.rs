@@ -160,7 +160,7 @@ fn run_decompile(
     }
 
     let lifter = get_lifter(image.arch);
-    let functions = pipeline::discover_functions(&image, function_filter)?;
+    let mut functions = pipeline::discover_functions(&image, function_filter)?;
 
     let dwarf = match import_dwarf(&image) {
         Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
@@ -169,6 +169,7 @@ fn run_decompile(
                 structs = d.structs.len(),
                 "loaded DWARF debug info",
             );
+            pipeline::drop_dwarf_duplicate_subfunctions(&mut functions, &d);
             Some(d)
         }
         Ok(_) => None,

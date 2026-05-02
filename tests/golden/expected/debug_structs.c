@@ -21,7 +21,7 @@ Point offset(Point p, int dx, int dy) {
 int main(void) {
     *(_QWORD *)(0LL) = 0x1191LL; return result;
 }
-/* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
+/* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
 void sub_1100(void) {
     long long v8; // rsp
     int v1; // rip

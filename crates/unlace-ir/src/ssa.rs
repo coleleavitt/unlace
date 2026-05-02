@@ -220,6 +220,10 @@ pub struct SsaFunction {
     pub calling_convention: CallingConvention,
     /// Recovered stack variables keyed by RSP-relative offset.
     pub stack_vars: BTreeMap<i64, StackVar>,
+    /// Pre-optimization stack offset map. Keyed by (BlockId, insn_idx) of
+    /// LOAD/STORE instructions. Value is the resolved RSP/RBP-relative offset.
+    /// Populated before the fixedpoint loop; consumed by StackVarRecoveryPass.
+    pub stack_offset_hints: BTreeMap<(BlockId, usize), i64>,
     /// SSA varnodes whose defining instruction can be folded inline as a
     /// sub-expression rather than emitted as a statement.
     /// Populated by [`ExpressionPass`](https://docs.rs/unlace-passes).
@@ -326,6 +330,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         var_types: BTreeMap::new(),
         calling_convention: CallingConvention::Unknown,
         stack_vars: BTreeMap::new(),
+        stack_offset_hints: BTreeMap::new(),
         foldable_exprs: BTreeSet::new(),
         noreturn: false,
         tail_call_map: BTreeMap::new(),

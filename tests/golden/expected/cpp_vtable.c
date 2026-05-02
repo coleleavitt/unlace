@@ -15,7 +15,7 @@ void use_base(void * a1) {
     unsigned long long v2; // temp
     v2 = *(_QWORD *)(v1); v3 = v2; return;
 }
-/* Function:   sub_1130 | Address: 0x1130 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1040, sub_10c0 | Xrefs from: unknown */
+/* Function:   sub_1130 | Address: 0x1130 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_10c0 | Xrefs from: unknown */
 void sub_1130(void) {
     long long v8; // rsp
     int v1; // rip

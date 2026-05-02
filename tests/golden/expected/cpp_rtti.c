@@ -1,4 +1,4 @@
-/* Function:   main | Address: 0x10c0 | Size: 0x77 (119 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   identify(Animal*), __printf_chk, __stack_chk_fail | Xrefs from: unknown */
+/* Function:   main | Address: 0x10c0 | Size: 0x77 (119 bytes) | Convention: unknown | Stack frame: 0x8 (8 bytes) | Xrefs to:   identify(Animal*), __printf_chk, __stack_chk_fail | Xrefs from: unknown */
 void main(void) {
     int v4; // rip
     int result;
@@ -17,7 +17,7 @@ void _start(void) {
     int v9; // rip
     *(_QWORD *)(0LL) = 0x1165LL; return;
 }
-/* Function:   identify(Animal*) | Address: 0x1230 | Size: 0xbb (187 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   __dynamic_cast | Xrefs from: unknown */
+/* Function:   identify(Animal*) | Address: 0x1230 | Size: 0xbb (187 bytes) | Convention: unknown | Stack frame: 0x8 (8 bytes) | Xrefs to:   __dynamic_cast | Xrefs from: unknown */
 // identify(Animal*)
 void identify(void) {
     int v12; // rip
@@ -68,7 +68,7 @@ void Cat_Cat(void) {
 void Dog_Dog(void) {
     return;
 }
-/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
+/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
 void sub_11e0(void) {
     long long v8; // rsp
     int v1; // rip

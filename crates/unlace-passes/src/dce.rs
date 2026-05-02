@@ -196,6 +196,7 @@ mod tests {
             inferred_params: Vec::new(),
             inferred_return_type: unlace_ir::ssa::PrimitiveType::Unknown,
             frame_setup_insns: std::collections::BTreeSet::new(),
+            stack_offset_hints: std::collections::BTreeMap::new(),
             dwarf_local_names: std::collections::BTreeMap::new(),
             inferred_structs: std::collections::BTreeMap::new(),
             composite_var_types: std::collections::BTreeMap::new(),

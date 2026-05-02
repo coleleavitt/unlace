@@ -29,7 +29,7 @@ pub fn return_merge(hir: &mut HirFunction) {
         }
     }
 
-    ensure_main_returns(hir);
+    ensure_tail_return(hir);
 }
 
 /// Scan the HIR body for `Label(id)` immediately followed by `Return(val)`.
@@ -337,22 +337,20 @@ fn strip_label_return_pairs(
     }
 }
 
-/// If the function is named `main` and doesn't end with a `Return`, append
-/// `return 0` (C99 §5.1.2.2.3: reaching `}` of main is equivalent to
-/// `return 0`).
-fn ensure_main_returns(hir: &mut HirFunction) {
-    if hir.name != "main" {
-        return;
-    }
-
+/// If a function falls off the end without an explicit return, make that tail
+/// path visible in the recovered HIR. `main` gets C's implicit `return 0`;
+/// other recovered functions get a bare `return` because their precise ABI
+/// return value was not recovered on that path.
+fn ensure_tail_return(hir: &mut HirFunction) {
     if ends_with_return(&hir.body) {
         return;
     }
 
-    hir.body.push(HirNode::Return(Some(SsaVarnode {
+    let value = (hir.name == "main").then_some(SsaVarnode {
         base: Varnode::constant(0, 4),
         version: 0,
-    })));
+    });
+    hir.body.push(HirNode::Return(value));
 }
 
 fn ends_with_return(nodes: &[HirNode]) -> bool {
@@ -447,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn test_non_main_no_implicit_return() {
+    fn test_non_main_gets_bare_tail_return() {
         let body = vec![HirNode::Statement(IrInsn::without_output(
             IrOp::Store,
             smallvec![],
@@ -458,8 +456,8 @@ mod tests {
         return_merge(&mut hir);
 
         assert!(
-            !matches!(hir.body.last(), Some(HirNode::Return(_))),
-            "non-main should not get implicit return"
+            matches!(hir.body.last(), Some(HirNode::Return(None))),
+            "non-main fallthrough should get a bare tail return"
         );
     }
 

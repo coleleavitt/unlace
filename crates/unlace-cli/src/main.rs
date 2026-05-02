@@ -198,6 +198,10 @@ fn run_decompile(
         }
     }
 
+    if matches!(emit, args::EmitFormat::C) {
+        all_output = unlace_output::strip_ida_typedefs(&all_output);
+    }
+
     if let Some(path) = output_path {
         let mut file = fs::File::create(path)
             .with_context(|| format!("failed to create '{}'", path.display()))?;

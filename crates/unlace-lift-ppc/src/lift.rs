@@ -208,7 +208,13 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
         // Branches
         PpcInsn::PPC_INS_B => ops::control_flow::lift_b(ctx, &ops),
         PpcInsn::PPC_INS_BL => ops::control_flow::lift_bl(ctx, &ops),
-        PpcInsn::PPC_INS_BC => ops::control_flow::lift_bc(ctx, cs, insn, detail),
+        PpcInsn::PPC_INS_BC
+        | PpcInsn::PPC_INS_BEQ
+        | PpcInsn::PPC_INS_BNE
+        | PpcInsn::PPC_INS_BLT
+        | PpcInsn::PPC_INS_BGT
+        | PpcInsn::PPC_INS_BLE
+        | PpcInsn::PPC_INS_BGE => ops::control_flow::lift_bc(ctx, cs, insn, detail),
         PpcInsn::PPC_INS_BCTR | PpcInsn::PPC_INS_BCCTR => {
             ops::control_flow::lift_bctr(ctx);
         }

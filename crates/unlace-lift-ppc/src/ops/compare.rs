@@ -30,7 +30,7 @@ pub fn lift_cmpw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     ctx.emit(IrInsn::with_output(
         IrOp::Copy,
         cr_vn,
-        smallvec![Varnode::constant(0, 4)],
+        smallvec![eq_result],
         ctx.addr,
     ));
 }

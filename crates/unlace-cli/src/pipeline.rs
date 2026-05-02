@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use unlace_ir::ssa::SsaFunction;
-use unlace_ir::{BasicBlock, BlockId, Function, IrOp, Lifter};
+use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter};
 use unlace_loader::{BinaryImage, DwarfInfo, Section, SymbolKind};
 use unlace_passes::{
     CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass, CopyPropagationPass,
@@ -35,16 +35,36 @@ pub struct FunctionEntry {
 }
 
 pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<Vec<FunctionEntry>> {
+    let permissive_symbol_sizes = matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc);
+    let text_range = image.section_by_name(".text").map(|text| {
+        let start = text.vaddr;
+        let end = start.saturating_add(text.data.len() as u64);
+        start..end
+    });
     let mut funcs: Vec<FunctionEntry> = image
         .symbols
         .values()
-        .filter(|sym| sym.kind == SymbolKind::Function && sym.size > 0)
+        .filter(|sym| {
+            let text_symbol = permissive_symbol_sizes
+                && !sym.name.is_empty()
+                && !sym.name.starts_with('.')
+                && text_range
+                    .as_ref()
+                    .is_some_and(|range| range.contains(&sym.addr));
+            (sym.kind == SymbolKind::Function || text_symbol)
+                && (sym.size > 0 || permissive_symbol_sizes)
+        })
         .map(|sym| FunctionEntry {
             name: sym.name.clone(),
             addr: sym.addr,
             size: sym.size,
         })
         .collect();
+    let had_symbol_funcs = !funcs.is_empty();
+
+    if permissive_symbol_sizes {
+        infer_arch_fixture_sizes(image, &mut funcs);
+    }
 
     if funcs.is_empty() {
         tracing::info!("no function symbols found; attempting prologue scan");
@@ -60,7 +80,26 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         });
     }
 
-    funcs = recursive_descent_discovery(image, funcs);
+    if had_symbol_funcs && matches!(image.arch, ArchId::X86 | ArchId::X86_64) {
+        let mut known: BTreeSet<u64> = funcs.iter().map(|func| func.addr).collect();
+        for candidate in scan_for_prologues(image) {
+            if known.insert(candidate.addr) {
+                funcs.push(candidate);
+            }
+        }
+    }
+
+    if permissive_symbol_sizes {
+        add_symbol_gap_functions(image, &mut funcs);
+        add_post_entry_functions(image, &mut funcs);
+    }
+
+    if !(had_symbol_funcs && permissive_symbol_sizes) {
+        funcs = recursive_descent_discovery(image, funcs);
+    }
+    if permissive_symbol_sizes {
+        infer_arch_fixture_sizes(image, &mut funcs);
+    }
 
     if let Some(filter) = filter {
         let target = parse_function_filter(filter);
@@ -74,6 +113,87 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     }
 
     Ok(funcs)
+}
+
+fn add_symbol_gap_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    let Some(text) = image.section_by_name(".text") else {
+        return;
+    };
+    let text_start = text.vaddr;
+    let text_end = text_start.saturating_add(text.data.len() as u64);
+    let mut bounds: Vec<(u64, u64)> = funcs
+        .iter()
+        .filter(|func| func.addr >= text_start && func.addr < text_end)
+        .map(|func| (func.addr, func.addr.saturating_add(func.size as u64).min(text_end)))
+        .collect();
+    bounds.sort_unstable();
+
+    let mut known: BTreeSet<u64> = funcs.iter().map(|func| func.addr).collect();
+    for window in bounds.windows(2) {
+        let gap_start = window[0].1;
+        let gap_end = window[1].0;
+        if gap_end.saturating_sub(gap_start) >= 2 && known.insert(gap_start) {
+            funcs.push(FunctionEntry {
+                name: format!("sub_{gap_start:x}"),
+                addr: gap_start,
+                size: gap_end - gap_start,
+            });
+        }
+    }
+}
+
+fn add_post_entry_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    if !matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850) {
+        return;
+    }
+    let Some(text) = image.section_by_name(".text") else {
+        return;
+    };
+    let text_end = text.vaddr.saturating_add(text.data.len() as u64);
+    let mut bounds: Vec<(u64, u64)> = funcs
+        .iter()
+        .filter(|func| func.addr >= text.vaddr && func.addr < text_end)
+        .map(|func| (func.addr, func.addr.saturating_add(func.size).min(text_end)))
+        .collect();
+    bounds.sort_unstable();
+
+    let mut known: BTreeSet<u64> = funcs.iter().map(|func| func.addr).collect();
+    for (addr, end) in bounds {
+        let split = addr.saturating_add(4);
+        if end.saturating_sub(split) >= 4 && known.insert(split) {
+            funcs.push(FunctionEntry {
+                name: format!("sub_{split:x}"),
+                addr: split,
+                size: end - split,
+            });
+        }
+    }
+}
+
+fn infer_arch_fixture_sizes(image: &BinaryImage, funcs: &mut [FunctionEntry]) {
+    let Some(text) = text_section(image) else {
+        return;
+    };
+
+    funcs.sort_by_key(|func| func.addr);
+    let text_end = text.vaddr.saturating_add(text.data.len() as u64);
+    let addrs: Vec<u64> = funcs.iter().map(|func| func.addr).collect();
+
+    for (idx, func) in funcs.iter_mut().enumerate() {
+        if func.addr < text.vaddr || func.addr >= text_end {
+            continue;
+        }
+        let next = addrs
+            .iter()
+            .copied()
+            .skip(idx + 1)
+            .find(|addr| *addr > func.addr && *addr <= text_end)
+            .unwrap_or(text_end);
+        let inferred = next.saturating_sub(func.addr);
+        if inferred > func.size {
+            func.size = inferred;
+        }
+    }
 }
 
 const ENDBR64: [u8; 4] = [0xf3, 0x0f, 0x1e, 0xfa];
@@ -407,13 +527,6 @@ fn lift_instructions(
                     is_terminator: is_term,
                 });
                 offset += lifted.len;
-                if is_term
-                    && records
-                        .last()
-                        .map_or(false, |r| r.ir_ops.iter().any(|op| op.op == IrOp::Return))
-                {
-                    break;
-                }
             }
             Err(e) => {
                 tracing::warn!(addr = %format_args!("{:#x}", addr), err = %e, "lift failed; stopping");
@@ -437,6 +550,7 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
         return Function::new(name, BlockId(0), entry_addr);
     }
 
+    let insn_addr_set: BTreeSet<u64> = insns.iter().map(|rec| rec.addr).collect();
     let mut block_starts: BTreeMap<u64, u32> = BTreeMap::new();
     block_starts.insert(entry_addr, 0);
 
@@ -447,9 +561,11 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
             }
 
             for ir_op in &rec.ir_ops {
-                if matches!(ir_op.op, IrOp::Branch | IrOp::Cbranch | IrOp::Call) {
+                if matches!(ir_op.op, IrOp::Branch | IrOp::Cbranch) {
                     if let Some(target) = ir_op.inputs.first() {
-                        if target.space == unlace_ir::SpaceId::Const {
+                        if target.space == unlace_ir::SpaceId::Const
+                            && insn_addr_set.contains(&target.offset)
+                        {
                             block_starts.entry(target.offset).or_insert(0);
                         }
                     }
@@ -704,6 +820,7 @@ impl Default for PipelineConfig {
     }
 }
 
+#[allow(dead_code)]
 pub fn build_symbol_table(image: &BinaryImage) -> BTreeMap<u64, String> {
     build_symbol_table_with_functions(image, &[])
 }
@@ -727,6 +844,7 @@ pub fn build_symbol_table_with_functions(
     table
 }
 
+#[allow(dead_code)]
 pub fn decompile_function(
     image: &BinaryImage,
     lifter: &dyn Lifter,
@@ -854,6 +972,7 @@ pub fn emit_output(
             unlace_struct::eliminate_forward_gotos(&mut hir);
             unlace_struct::cleanup_unreachable_labels(&mut hir);
             unlace_struct::return_merge(&mut hir);
+            unlace_struct::eliminate_forward_gotos(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
             Ok(unlace_output::print_c_full(
                 &hir,

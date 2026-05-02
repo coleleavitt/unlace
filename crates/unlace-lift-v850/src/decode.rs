@@ -375,13 +375,8 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
             }
         }
 
-        // Format IV: short load/store (ep-relative) — skip for MVP
-        (0b0110, _) | (0b0111, _) | (0b1000, _) | (0b1001, _) | (0b1010, _) => {
-            V850Op::Unknown { hw0 }
-        }
-
         // Format III: conditional branch
-        (0b1011, _) => {
+        (0b1010, 0b01) | (0b1011, _) => {
             let disp_hi = ((hw0 >> 11) & 0x1F) as u32;
             let disp_lo = ((hw0 >> 4) & 0x7) as u32;
             let raw9 = (disp_hi << 4) | (disp_lo << 1); // bit0 always 0
@@ -391,6 +386,11 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
                 cond: BranchCond::from_bits(cond_bits),
                 offset,
             }
+        }
+
+        // Format IV: short load/store (ep-relative) — skip for MVP
+        (0b0110, _) | (0b0111, _) | (0b1000, _) | (0b1001, _) | (0b1010, _) => {
+            V850Op::Unknown { hw0 }
         }
 
         _ => V850Op::Unknown { hw0 },

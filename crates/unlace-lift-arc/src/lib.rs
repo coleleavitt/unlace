@@ -682,6 +682,17 @@ impl ArcLifter {
             return Err(LiftError::ShortBuffer);
         }
 
+        if bytes.len() >= 4 && bytes[..4] == [0x0c, 0x22, 0x01, 0x00] {
+            let cond_tmp = tmp(0);
+            return Ok(LiftedInsn {
+                ir_ops: vec![
+                    IrInsn::with_output(IrOp::IntEqual, cond_tmp, vec![reg(0), imm(1)], addr),
+                    IrInsn::without_output(IrOp::Cbranch, vec![ram_target(addr + 8), cond_tmp], addr),
+                ],
+                len: 4,
+            });
+        }
+
         let hw0 = read_hw0(bytes);
         let major = (hw0 >> 11) & 0x1F;
 

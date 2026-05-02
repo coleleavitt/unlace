@@ -388,6 +388,10 @@ fn ops_branch(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
     }
 }
 
+fn branch_target(addr: u64, offset: i64) -> u64 {
+    addr.wrapping_add(offset as u64)
+}
+
 /// Extract (rd, mem(base, offset)) from a load instruction.
 fn ops_load(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
     match operands {
@@ -457,6 +461,10 @@ impl Lifter for RiscVLifter {
             return Err(LiftError::ShortBuffer);
         }
 
+        if let Some(lifted) = lift_rv64i_direct(bytes, addr) {
+            return Ok(lifted);
+        }
+
         let insns: Instructions<'_> = self
             .cs
             .disasm_count(bytes, addr, 1)
@@ -502,6 +510,147 @@ impl Lifter for RiscVLifter {
 unsafe impl Send for RiscVLifter {}
 unsafe impl Sync for RiscVLifter {}
 
+fn rv_reg(index: u32) -> RegId {
+    RegId(RiscVReg::RISCV_REG_X0 as u16 + index as u16)
+}
+
+fn sign_extend(value: u32, bits: u8) -> i64 {
+    let shift = 64 - bits;
+    ((value as i64) << shift) >> shift
+}
+
+fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
+    let half = u16::from_le_bytes([bytes[0], bytes[1]]);
+    if half == 0x8082 {
+        let mut ctx = LiftCtx::new(addr);
+        ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![], ctx.addr));
+        return Some(LiftedInsn {
+            ir_ops: ctx.ops,
+            len: 2,
+        });
+    }
+    if half & 0b11 != 0b11 || bytes.len() < 4 {
+        return None;
+    }
+
+    let word = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    let opcode = word & 0x7f;
+    let rd = (word >> 7) & 0x1f;
+    let funct3 = (word >> 12) & 0x7;
+    let rs1 = (word >> 15) & 0x1f;
+    let rs2 = (word >> 20) & 0x1f;
+    let funct7 = (word >> 25) & 0x7f;
+    let mut ctx = LiftCtx::new(addr);
+
+    match opcode {
+        0x13 => {
+            let imm = sign_extend(word >> 20, 12);
+            match funct3 {
+                0x0 if rd == 0 && rs1 == 0 && imm == 0 => {}
+                0x0 => ctx.lift_alu_ri(IrOp::IntAdd, rv_reg(rd), rv_reg(rs1), imm),
+                0x2 => ctx.lift_slti(rv_reg(rd), rv_reg(rs1), imm),
+                0x3 => ctx.lift_sltiu(rv_reg(rd), rv_reg(rs1), imm),
+                0x4 => ctx.lift_alu_ri(IrOp::IntXor, rv_reg(rd), rv_reg(rs1), imm),
+                0x6 => ctx.lift_alu_ri(IrOp::IntOr, rv_reg(rd), rv_reg(rs1), imm),
+                0x7 => ctx.lift_alu_ri(IrOp::IntAnd, rv_reg(rd), rv_reg(rs1), imm),
+                0x1 => ctx.lift_alu_ri(IrOp::IntLeft, rv_reg(rd), rv_reg(rs1), rs2 as i64),
+                0x5 if funct7 == 0x00 => {
+                    ctx.lift_alu_ri(IrOp::IntRight, rv_reg(rd), rv_reg(rs1), rs2 as i64)
+                }
+                0x5 if funct7 == 0x20 => {
+                    ctx.lift_alu_ri(IrOp::IntSright, rv_reg(rd), rv_reg(rs1), rs2 as i64)
+                }
+                _ => return None,
+            }
+        }
+        0x33 => {
+            let op = match (funct7, funct3) {
+                (0x00, 0x2) => {
+                    ctx.lift_slt(rv_reg(rd), rv_reg(rs1), rv_reg(rs2));
+                    return Some(LiftedInsn { ir_ops: ctx.ops, len: 4 });
+                }
+                (0x00, 0x3) => {
+                    ctx.lift_sltu(rv_reg(rd), rv_reg(rs1), rv_reg(rs2));
+                    return Some(LiftedInsn { ir_ops: ctx.ops, len: 4 });
+                }
+                (0x00, 0x0) => IrOp::IntAdd,
+                (0x20, 0x0) => IrOp::IntSub,
+                (0x00, 0x1) => IrOp::IntLeft,
+                (0x00, 0x4) => IrOp::IntXor,
+                (0x00, 0x5) => IrOp::IntRight,
+                (0x20, 0x5) => IrOp::IntSright,
+                (0x00, 0x6) => IrOp::IntOr,
+                (0x00, 0x7) => IrOp::IntAnd,
+                _ => return None,
+            };
+            ctx.lift_alu_rr(op, rv_reg(rd), rv_reg(rs1), rv_reg(rs2));
+        }
+        0x03 => {
+            let imm = sign_extend(word >> 20, 12);
+            let size = match funct3 {
+                0x0 | 0x4 => 1,
+                0x1 | 0x5 => 2,
+                0x2 | 0x6 => 4,
+                0x3 => 8,
+                _ => return None,
+            };
+            ctx.lift_load(rv_reg(rd), rv_reg(rs1), imm, size);
+        }
+        0x23 => {
+            let imm = ((word >> 7) & 0x1f) | (((word >> 25) & 0x7f) << 5);
+            let imm = sign_extend(imm, 12);
+            let size = match funct3 {
+                0x0 => 1,
+                0x1 => 2,
+                0x2 => 4,
+                0x3 => 8,
+                _ => return None,
+            };
+            ctx.lift_store(rv_reg(rs1), imm, rv_reg(rs2), size);
+        }
+        0x63 => {
+            let imm = (((word >> 31) & 0x1) << 12)
+                | (((word >> 7) & 0x1) << 11)
+                | (((word >> 25) & 0x3f) << 5)
+                | (((word >> 8) & 0xf) << 1);
+            let target = addr.wrapping_add(sign_extend(imm, 13) as u64);
+            match funct3 {
+                0x0 => ctx.lift_cbranch(IrOp::IntEqual, rv_reg(rs1), rv_reg(rs2), target),
+                0x1 => ctx.lift_cbranch(IrOp::IntNotequal, rv_reg(rs1), rv_reg(rs2), target),
+                0x4 => ctx.lift_cbranch(IrOp::IntSless, rv_reg(rs1), rv_reg(rs2), target),
+                0x6 => ctx.lift_cbranch(IrOp::IntLess, rv_reg(rs1), rv_reg(rs2), target),
+                0x5 | 0x7 => {
+                    let cmp_op = if funct3 == 0x5 { IrOp::IntSless } else { IrOp::IntLess };
+                    let cmp = ctx.alloc_unique(1);
+                    ctx.emit(IrInsn::with_output(
+                        cmp_op,
+                        cmp,
+                        smallvec![read_reg(rv_reg(rs1)), read_reg(rv_reg(rs2))],
+                        addr,
+                    ));
+                    let neg = ctx.alloc_unique(1);
+                    ctx.emit(IrInsn::with_output(IrOp::BoolNegate, neg, smallvec![cmp], addr));
+                    ctx.emit(IrInsn::without_output(
+                        IrOp::Cbranch,
+                        smallvec![Varnode::constant(target, 8), neg],
+                        addr,
+                    ));
+                }
+                _ => return None,
+            }
+        }
+        0x67 if rd == 0 && rs1 == 1 && sign_extend(word >> 20, 12) == 0 => {
+            ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![], ctx.addr));
+        }
+        _ => return None,
+    }
+
+    Some(LiftedInsn {
+        ir_ops: ctx.ops,
+        len: 4,
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Instruction dispatch
 // ---------------------------------------------------------------------------
@@ -514,6 +663,81 @@ fn dispatch_insn(
     mnemonic: &str,
 ) {
     use RiscVInsn::*;
+
+    // Capstone exposes many RISC-V pseudo-instructions (li, mv, ret) with ids
+    // that are not stable across bindings. Prefer the mnemonic for common
+    // instructions so fixture code is not mis-lifted as an unrelated branch.
+    match mnemonic {
+        "ret" if operands.is_empty() => {
+            ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![], ctx.addr));
+            return;
+        }
+        "li" => {
+            if let [RiscVOperand::Reg(rd), RiscVOperand::Imm(imm)] = operands {
+                ctx.write_reg(*rd, Varnode::constant(*imm as u64, 8));
+            } else {
+                ctx.emit_unimplemented();
+            }
+            return;
+        }
+        "mv" => {
+            if let [RiscVOperand::Reg(rd), RiscVOperand::Reg(rs)] = operands {
+                ctx.write_reg(*rd, read_reg(*rs));
+            } else {
+                ctx.emit_unimplemented();
+            }
+            return;
+        }
+        "addi" => {
+            if let Some((rd, rs1, imm)) = ops_rri(operands) {
+                ctx.lift_alu_ri(IrOp::IntAdd, rd, rs1, imm);
+            } else {
+                ctx.emit_unimplemented();
+            }
+            return;
+        }
+        "and" => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr(IrOp::IntAnd, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+            return;
+        }
+        "or" => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr(IrOp::IntOr, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+            return;
+        }
+        "xor" => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr(IrOp::IntXor, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+            return;
+        }
+        "beq" => {
+            if let Some((rs1, rs2, target)) = ops_branch(operands) {
+                ctx.lift_cbranch(IrOp::IntEqual, rs1, rs2, branch_target(addr, target));
+            } else {
+                ctx.emit_unimplemented();
+            }
+            return;
+        }
+        "bne" => {
+            if let Some((rs1, rs2, target)) = ops_branch(operands) {
+                ctx.lift_cbranch(IrOp::IntNotequal, rs1, rs2, branch_target(addr, target));
+            } else {
+                ctx.emit_unimplemented();
+            }
+            return;
+        }
+        _ => {}
+    }
 
     let id = insn_id;
 
@@ -738,21 +962,21 @@ fn dispatch_insn(
         // -- Branches: BEQ, BNE, BLT, BGE, BLTU, BGEU --
         x if x == RISCV_INS_BEQ as u32 => {
             if let Some((rs1, rs2, target)) = ops_branch(operands) {
-                ctx.lift_cbranch(IrOp::IntEqual, rs1, rs2, target as u64);
+                ctx.lift_cbranch(IrOp::IntEqual, rs1, rs2, branch_target(addr, target));
             } else {
                 ctx.emit_unimplemented();
             }
         }
         x if x == RISCV_INS_BNE as u32 => {
             if let Some((rs1, rs2, target)) = ops_branch(operands) {
-                ctx.lift_cbranch(IrOp::IntNotequal, rs1, rs2, target as u64);
+                ctx.lift_cbranch(IrOp::IntNotequal, rs1, rs2, branch_target(addr, target));
             } else {
                 ctx.emit_unimplemented();
             }
         }
         x if x == RISCV_INS_BLT as u32 => {
             if let Some((rs1, rs2, target)) = ops_branch(operands) {
-                ctx.lift_cbranch(IrOp::IntSless, rs1, rs2, target as u64);
+                ctx.lift_cbranch(IrOp::IntSless, rs1, rs2, branch_target(addr, target));
             } else {
                 ctx.emit_unimplemented();
             }
@@ -776,7 +1000,7 @@ fn dispatch_insn(
                     smallvec![cmp],
                     addr,
                 ));
-                let target_vn = Varnode::constant(target as u64, 8);
+                let target_vn = Varnode::constant(branch_target(addr, target), 8);
                 ctx.emit(IrInsn::without_output(
                     IrOp::Cbranch,
                     smallvec![target_vn, neg],
@@ -788,7 +1012,7 @@ fn dispatch_insn(
         }
         x if x == RISCV_INS_BLTU as u32 => {
             if let Some((rs1, rs2, target)) = ops_branch(operands) {
-                ctx.lift_cbranch(IrOp::IntLess, rs1, rs2, target as u64);
+                ctx.lift_cbranch(IrOp::IntLess, rs1, rs2, branch_target(addr, target));
             } else {
                 ctx.emit_unimplemented();
             }
@@ -812,7 +1036,7 @@ fn dispatch_insn(
                     smallvec![cmp],
                     addr,
                 ));
-                let target_vn = Varnode::constant(target as u64, 8);
+                let target_vn = Varnode::constant(branch_target(addr, target), 8);
                 ctx.emit(IrInsn::without_output(
                     IrOp::Cbranch,
                     smallvec![target_vn, neg],
@@ -830,7 +1054,7 @@ fn dispatch_insn(
                 [RiscVOperand::Reg(rd), RiscVOperand::Imm(target)] => {
                     let ret_addr = Varnode::constant(addr.wrapping_add(4), 8);
                     ctx.write_reg(*rd, ret_addr);
-                    let target_vn = Varnode::constant(*target as u64, 8);
+                    let target_vn = Varnode::constant(branch_target(addr, *target), 8);
                     ctx.emit(IrInsn::without_output(
                         IrOp::Branch,
                         smallvec![target_vn],
@@ -843,7 +1067,7 @@ fn dispatch_insn(
                     let ra = RegId(RiscVReg::RISCV_REG_X1 as u16);
                     let ret_addr = Varnode::constant(addr.wrapping_add(4), 8);
                     ctx.write_reg(ra, ret_addr);
-                    let target_vn = Varnode::constant(*target as u64, 8);
+                    let target_vn = Varnode::constant(branch_target(addr, *target), 8);
                     ctx.emit(IrInsn::without_output(
                         IrOp::Branch,
                         smallvec![target_vn],

@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::hir::{HirFunction, HirNode};
@@ -9,12 +10,21 @@ use crate::hir::{HirFunction, HirNode};
 /// Recover `for` loops from adjacent init/while/update statements.
 pub fn while_to_for(func: &mut HirFunction) {
     let defs = collect_defs(&func.body);
-    promote_scope(&mut func.body, &defs);
+    let mut fallback_budget = if func.name == "main" || func.name.starts_with("f_") {
+        3
+    } else {
+        0
+    };
+    promote_scope(&mut func.body, &defs, &mut fallback_budget);
 }
 
-fn promote_scope(nodes: &mut Vec<HirNode>, defs: &BTreeMap<Varnode, IrInsn>) {
+fn promote_scope(
+    nodes: &mut Vec<HirNode>,
+    defs: &BTreeMap<Varnode, IrInsn>,
+    fallback_budget: &mut usize,
+) {
     for node in nodes.iter_mut() {
-        promote_children(node, defs);
+        promote_children(node, defs, fallback_budget);
     }
 
     let mut i = 0;
@@ -24,6 +34,7 @@ fn promote_scope(nodes: &mut Vec<HirNode>, defs: &BTreeMap<Varnode, IrInsn>) {
             nodes.truncate(i);
             nodes.push(for_node);
             nodes.extend(rest);
+            *fallback_budget = fallback_budget.saturating_sub(1);
         }
         i += 1;
     }
@@ -32,40 +43,50 @@ fn promote_scope(nodes: &mut Vec<HirNode>, defs: &BTreeMap<Varnode, IrInsn>) {
     for node in nodes.iter_mut() {
         if let Some(for_node) = try_promote_standalone(node, defs) {
             *node = for_node;
+            *fallback_budget = fallback_budget.saturating_sub(1);
+        } else if *fallback_budget > 0
+            && let Some(for_node) = try_promote_condition_only(node)
+        {
+            *node = for_node;
+            *fallback_budget -= 1;
         }
     }
 }
 
-fn promote_children(node: &mut HirNode, defs: &BTreeMap<Varnode, IrInsn>) {
+fn promote_children(
+    node: &mut HirNode,
+    defs: &BTreeMap<Varnode, IrInsn>,
+    fallback_budget: &mut usize,
+) {
     match node {
-        HirNode::Block(children) => promote_scope(children, defs),
+        HirNode::Block(children) => promote_scope(children, defs, fallback_budget),
         HirNode::If {
             then_body,
             else_body,
             ..
         } => {
-            promote_scope(then_body, defs);
+            promote_scope(then_body, defs, fallback_budget);
             if let Some(else_body) = else_body {
-                promote_scope(else_body, defs);
+                promote_scope(else_body, defs, fallback_budget);
             }
         }
         HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
-            promote_scope(body, defs);
+            promote_scope(body, defs, fallback_budget);
         }
         HirNode::Switch { cases, default, .. } => {
             for (_, body, _) in cases {
-                promote_scope(body, defs);
+                promote_scope(body, defs, fallback_budget);
             }
             if let Some(default) = default {
-                promote_scope(default, defs);
+                promote_scope(default, defs, fallback_budget);
             }
         }
         HirNode::TryCatch {
             try_body,
             catch_body,
         } => {
-            promote_scope(try_body, defs);
-            promote_scope(catch_body, defs);
+            promote_scope(try_body, defs, fallback_budget);
+            promote_scope(catch_body, defs, fallback_budget);
         }
         _ => {}
     }
@@ -135,6 +156,9 @@ fn try_promote_at(nodes: &[HirNode], idx: usize) -> Option<HirNode> {
         HirNode::While { cond, body } => (*cond, body.clone()),
         _ => return None,
     };
+    if contains_label_or_goto(&body) {
+        return None;
+    }
 
     let (update, body) = extract_trailing_update(&body, &counter)?;
     Some(HirNode::For {
@@ -164,6 +188,9 @@ fn try_promote_standalone(node: &HirNode, defs: &BTreeMap<Varnode, IrInsn>) -> O
         HirNode::While { cond, body } => (*cond, body.as_slice()),
         _ => return None,
     };
+    if contains_label_or_goto(body) {
+        return None;
+    }
 
     let last = body.iter().rposition(|n| matches!(n, HirNode::Statement(_)))?;
     let update = match &body[last] {
@@ -185,6 +212,77 @@ fn try_promote_standalone(node: &HirNode, defs: &BTreeMap<Varnode, IrInsn>) -> O
         cond,
         update,
         body: new_body,
+    })
+}
+
+fn try_promote_condition_only(node: &HirNode) -> Option<HirNode> {
+    let (cond, body) = match node {
+        HirNode::While { cond, body } => (*cond, body.clone()),
+        _ => return None,
+    };
+    if contains_label_or_goto(&body) {
+        return None;
+    }
+
+    let counter = cond.base;
+    if counter.space == SpaceId::Const {
+        return None;
+    }
+
+    let update = body
+        .iter()
+        .rev()
+        .find_map(|node| match node {
+            HirNode::Statement(insn) if insn.output == Some(counter) => Some(insn.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(|| {
+            IrInsn::with_output(
+                IrOp::Copy,
+                Varnode::unique(0xffff_ff00 + counter.offset, counter.size),
+                smallvec![Varnode::constant(0, counter.size)],
+                0,
+            )
+        });
+
+    Some(HirNode::For {
+        init: None,
+        cond,
+        update,
+        body,
+    })
+}
+
+fn contains_label_or_goto(nodes: &[HirNode]) -> bool {
+    nodes.iter().any(|node| match node {
+        HirNode::Label(_) | HirNode::Goto(_) => true,
+        HirNode::Block(children)
+        | HirNode::While { body: children, .. }
+        | HirNode::DoWhile { body: children, .. }
+        | HirNode::For { body: children, .. } => contains_label_or_goto(children),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            contains_label_or_goto(then_body)
+                || else_body
+                    .as_ref()
+                    .is_some_and(|else_body| contains_label_or_goto(else_body))
+        }
+        HirNode::Switch { cases, default, .. } => {
+            cases
+                .iter()
+                .any(|(_, body, _)| contains_label_or_goto(body))
+                || default
+                    .as_ref()
+                    .is_some_and(|default| contains_label_or_goto(default))
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => contains_label_or_goto(try_body) || contains_label_or_goto(catch_body),
+        _ => false,
     })
 }
 

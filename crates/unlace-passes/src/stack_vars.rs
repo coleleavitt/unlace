@@ -237,13 +237,22 @@ fn extract_stack_offset(insn: &unlace_ir::IrInsn, func: &SsaFunction) -> Option<
     //
     // Walk the instruction stream to find the definition of addr.
     if addr.space == SpaceId::Unique || addr.space == SpaceId::Register {
-        return find_rsp_relative_offset(addr, func);
+        return find_rsp_relative_offset(addr, func, 0);
     }
 
     None
 }
 
-fn find_rsp_relative_offset(addr_varnode: &unlace_ir::Varnode, func: &SsaFunction) -> Option<i64> {
+const MAX_RESOLVE_DEPTH: u32 = 16;
+
+fn find_rsp_relative_offset(
+    addr_varnode: &unlace_ir::Varnode,
+    func: &SsaFunction,
+    depth: u32,
+) -> Option<i64> {
+    if depth > MAX_RESOLVE_DEPTH {
+        return None;
+    }
     // Find the instruction that defines this varnode by scanning var_map for an Output
     // entry that maps to an SsaVarnode with this base.
     for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
@@ -271,12 +280,12 @@ fn find_rsp_relative_offset(addr_varnode: &unlace_ir::Varnode, func: &SsaFunctio
                 }
                 // base could be an SSA version of RSP produced by INT_SUB
                 if disp.space == SpaceId::Const {
-                    if let Some(base_off) = find_rsp_relative_offset(base, func) {
+                    if let Some(base_off) = find_rsp_relative_offset(base, func, depth + 1) {
                         return Some(base_off.wrapping_add(disp.offset as i64));
                     }
                 }
                 if base.space == SpaceId::Const {
-                    if let Some(disp_off) = find_rsp_relative_offset(disp, func) {
+                    if let Some(disp_off) = find_rsp_relative_offset(disp, func, depth + 1) {
                         return Some(disp_off.wrapping_add(base.offset as i64));
                     }
                 }
@@ -291,7 +300,7 @@ fn find_rsp_relative_offset(addr_varnode: &unlace_ir::Varnode, func: &SsaFunctio
                 }
                 // base could be an SSA version of RSP
                 if disp.space == SpaceId::Const {
-                    if let Some(base_off) = find_rsp_relative_offset(base, func) {
+                    if let Some(base_off) = find_rsp_relative_offset(base, func, depth + 1) {
                         return Some(base_off.wrapping_sub(disp.offset as i64));
                     }
                 }
@@ -304,7 +313,7 @@ fn find_rsp_relative_offset(addr_varnode: &unlace_ir::Varnode, func: &SsaFunctio
                 if is_rsp_or_rbp(src) {
                     return Some(0);
                 }
-                return find_rsp_relative_offset(src, func);
+                return find_rsp_relative_offset(src, func, depth + 1);
             }
             _ => {}
         }

@@ -55,7 +55,8 @@ void main(void) {
     if (v18) {
     }
     v12 = _mm_load_si128(v36); v36 = _mm_add_epi32(v36, v12); v12 = _mm_load_si128(v36);
-    if (v14) {
+    for (; v14; v14 = 0) {
+        break;
     }
     if (v6) {
         do {
@@ -102,7 +103,7 @@ void f_ackermann(void) {
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
     *(_DWORD *)(0LL) = 0;
-    if (v10) {
+    while (v10) {
         *(_DWORD *)(0xcLL) = 0;
         v10 = 1;
         if (v10) {
@@ -113,7 +114,7 @@ void f_ackermann(void) {
             } else {
             }
         }
-        if (v10) {
+        while (v10) {
             if (v10) {
             } else {
                 if (v3) {
@@ -248,7 +249,6 @@ void sub_1520(void) {
         *(_BYTE *)(v3) = 1; v3 = v3; v8 = v3;
         result = *(_QWORD *)(v3); return result;
     }
-    return;
 }
 /* Function:   sub_1560 | Address: 0x1560 | Size: 0x735 (1845 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 void sub_1560(void) {

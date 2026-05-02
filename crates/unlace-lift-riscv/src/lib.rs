@@ -118,25 +118,60 @@ impl LiftCtx {
         let a = read_reg(rs1);
         let b = read_reg(rs2);
         let a32 = self.alloc_unique(4);
-        self.emit(IrInsn::with_output(IrOp::Subpiece, a32, smallvec![a, Varnode::constant(0, 4)], self.addr));
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            a32,
+            smallvec![a, Varnode::constant(0, 4)],
+            self.addr,
+        ));
         let b32 = self.alloc_unique(4);
-        self.emit(IrInsn::with_output(IrOp::Subpiece, b32, smallvec![b, Varnode::constant(0, 4)], self.addr));
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            b32,
+            smallvec![b, Varnode::constant(0, 4)],
+            self.addr,
+        ));
         let res32 = self.alloc_unique(4);
-        self.emit(IrInsn::with_output(op, res32, smallvec![a32, b32], self.addr));
+        self.emit(IrInsn::with_output(
+            op,
+            res32,
+            smallvec![a32, b32],
+            self.addr,
+        ));
         let ext = self.alloc_unique(8);
-        self.emit(IrInsn::with_output(IrOp::IntSext, ext, smallvec![res32], self.addr));
+        self.emit(IrInsn::with_output(
+            IrOp::IntSext,
+            ext,
+            smallvec![res32],
+            self.addr,
+        ));
         self.write_reg(rd, ext);
     }
 
     fn lift_alu_ri_w(&mut self, op: IrOp, rd: RegId, rs1: RegId, imm: i64) {
         let a = read_reg(rs1);
         let a32 = self.alloc_unique(4);
-        self.emit(IrInsn::with_output(IrOp::Subpiece, a32, smallvec![a, Varnode::constant(0, 4)], self.addr));
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            a32,
+            smallvec![a, Varnode::constant(0, 4)],
+            self.addr,
+        ));
         let b32 = Varnode::constant(imm as u64, 4);
         let res32 = self.alloc_unique(4);
-        self.emit(IrInsn::with_output(op, res32, smallvec![a32, b32], self.addr));
+        self.emit(IrInsn::with_output(
+            op,
+            res32,
+            smallvec![a32, b32],
+            self.addr,
+        ));
         let ext = self.alloc_unique(8);
-        self.emit(IrInsn::with_output(IrOp::IntSext, ext, smallvec![res32], self.addr));
+        self.emit(IrInsn::with_output(
+            IrOp::IntSext,
+            ext,
+            smallvec![res32],
+            self.addr,
+        ));
         self.write_reg(rd, ext);
     }
 
@@ -567,11 +602,17 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
             let op = match (funct7, funct3) {
                 (0x00, 0x2) => {
                     ctx.lift_slt(rv_reg(rd), rv_reg(rs1), rv_reg(rs2));
-                    return Some(LiftedInsn { ir_ops: ctx.ops, len: 4 });
+                    return Some(LiftedInsn {
+                        ir_ops: ctx.ops,
+                        len: 4,
+                    });
                 }
                 (0x00, 0x3) => {
                     ctx.lift_sltu(rv_reg(rd), rv_reg(rs1), rv_reg(rs2));
-                    return Some(LiftedInsn { ir_ops: ctx.ops, len: 4 });
+                    return Some(LiftedInsn {
+                        ir_ops: ctx.ops,
+                        len: 4,
+                    });
                 }
                 (0x00, 0x0) => IrOp::IntAdd,
                 (0x20, 0x0) => IrOp::IntSub,
@@ -620,7 +661,11 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
                 0x4 => ctx.lift_cbranch(IrOp::IntSless, rv_reg(rs1), rv_reg(rs2), target),
                 0x6 => ctx.lift_cbranch(IrOp::IntLess, rv_reg(rs1), rv_reg(rs2), target),
                 0x5 | 0x7 => {
-                    let cmp_op = if funct3 == 0x5 { IrOp::IntSless } else { IrOp::IntLess };
+                    let cmp_op = if funct3 == 0x5 {
+                        IrOp::IntSless
+                    } else {
+                        IrOp::IntLess
+                    };
                     let cmp = ctx.alloc_unique(1);
                     ctx.emit(IrInsn::with_output(
                         cmp_op,
@@ -629,7 +674,12 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
                         addr,
                     ));
                     let neg = ctx.alloc_unique(1);
-                    ctx.emit(IrInsn::with_output(IrOp::BoolNegate, neg, smallvec![cmp], addr));
+                    ctx.emit(IrInsn::with_output(
+                        IrOp::BoolNegate,
+                        neg,
+                        smallvec![cmp],
+                        addr,
+                    ));
                     ctx.emit(IrInsn::without_output(
                         IrOp::Cbranch,
                         smallvec![Varnode::constant(target, 8), neg],

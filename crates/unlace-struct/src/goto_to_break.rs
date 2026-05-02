@@ -12,8 +12,10 @@ fn rewrite_scope(nodes: &mut [HirNode]) {
     let loop_exit_targets: Vec<Option<LabelId>> = nodes
         .windows(2)
         .map(|window| {
-            if matches!(window[0], HirNode::While { .. } | HirNode::DoWhile { .. } | HirNode::For { .. })
-                && let HirNode::Label(label) = window[1]
+            if matches!(
+                window[0],
+                HirNode::While { .. } | HirNode::DoWhile { .. } | HirNode::For { .. }
+            ) && let HirNode::Label(label) = window[1]
             {
                 Some(label)
             } else {
@@ -24,9 +26,10 @@ fn rewrite_scope(nodes: &mut [HirNode]) {
 
     for i in 0..nodes.len() {
         match &mut nodes[i] {
-            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
-                if let Some(Some(target)) = loop_exit_targets.get(i).copied()
-                {
+            HirNode::While { body, .. }
+            | HirNode::DoWhile { body, .. }
+            | HirNode::For { body, .. } => {
+                if let Some(Some(target)) = loop_exit_targets.get(i).copied() {
                     replace_gotos_in_scope(body, target, HirNode::Break);
                 }
                 rewrite_scope(body);
@@ -72,7 +75,9 @@ fn replace_gotos_in_scope(nodes: &mut [HirNode], target: LabelId, replacement: H
     for node in nodes {
         match node {
             HirNode::Goto(label) if *label == target => *node = replacement.clone(),
-            HirNode::Block(children) => replace_gotos_in_scope(children, target, replacement.clone()),
+            HirNode::Block(children) => {
+                replace_gotos_in_scope(children, target, replacement.clone())
+            }
             HirNode::If {
                 then_body,
                 else_body,
@@ -108,8 +113,8 @@ fn replace_gotos_in_scope(nodes: &mut [HirNode], target: LabelId, replacement: H
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
-    use unlace_ir::ssa::PrimitiveType;
     use unlace_ir::Varnode;
+    use unlace_ir::ssa::PrimitiveType;
 
     use super::*;
 
@@ -143,6 +148,8 @@ mod tests {
 
         goto_to_break(&mut hir);
 
-        assert!(matches!(hir.body[0], HirNode::While { ref body, .. } if body == &vec![HirNode::Break]));
+        assert!(
+            matches!(hir.body[0], HirNode::While { ref body, .. } if body == &vec![HirNode::Break])
+        );
     }
 }

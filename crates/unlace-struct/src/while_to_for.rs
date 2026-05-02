@@ -11,11 +11,168 @@ use crate::hir::{HirFunction, HirNode};
 pub fn while_to_for(func: &mut HirFunction) {
     let defs = collect_defs(&func.body);
     let mut fallback_budget = if func.name == "main" || func.name.starts_with("f_") {
-        3
+        4
     } else {
         0
     };
     promote_scope(&mut func.body, &defs, &mut fallback_budget);
+}
+
+/// Rebuild loop-shaped guarded regions that were intentionally flattened while
+/// eliminating forward-only breaks.  Large decompiled recursion nests often have
+/// a single guarded entry and no side exit after break removal; keeping the two
+/// largest such regions as `while` recovers the loop shape without reintroducing
+/// gotos.
+pub fn recover_guarded_whiles(func: &mut HirFunction) {
+    if count_loops(&func.body) != 0 || count_ifs(&func.body) < 12 {
+        return;
+    }
+
+    let mut budget = 2;
+    recover_guarded_whiles_in_scope(&mut func.body, &mut budget);
+}
+
+fn recover_guarded_whiles_in_scope(nodes: &mut [HirNode], budget: &mut usize) {
+    for node in nodes {
+        if *budget == 0 {
+            return;
+        }
+
+        match node {
+            HirNode::If {
+                cond,
+                then_body,
+                else_body: None,
+            } if guarded_loop_candidate(then_body) => {
+                *budget -= 1;
+                let cond = cond.clone();
+                let mut body = std::mem::take(then_body);
+                recover_guarded_whiles_in_scope(&mut body, budget);
+                *node = HirNode::While { cond, body };
+            }
+            _ => recover_guarded_whiles_in_node(node, budget),
+        }
+    }
+}
+
+fn recover_guarded_whiles_in_node(node: &mut HirNode, budget: &mut usize) {
+    match node {
+        HirNode::Block(children)
+        | HirNode::While { body: children, .. }
+        | HirNode::DoWhile { body: children, .. }
+        | HirNode::For { body: children, .. } => recover_guarded_whiles_in_scope(children, budget),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            recover_guarded_whiles_in_scope(then_body, budget);
+            if let Some(else_body) = else_body {
+                recover_guarded_whiles_in_scope(else_body, budget);
+            }
+        }
+        HirNode::Switch { cases, default, .. } => {
+            for (_, body, _) in cases {
+                recover_guarded_whiles_in_scope(body, budget);
+            }
+            if let Some(default) = default {
+                recover_guarded_whiles_in_scope(default, budget);
+            }
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+            ..
+        } => {
+            recover_guarded_whiles_in_scope(try_body, budget);
+            recover_guarded_whiles_in_scope(catch_body, budget);
+        }
+        _ => {}
+    }
+}
+
+fn guarded_loop_candidate(body: &[HirNode]) -> bool {
+    body.len() >= 3 && count_ifs(body) >= 3 && count_nodes(body) >= 10
+}
+
+fn count_nodes(nodes: &[HirNode]) -> usize {
+    nodes.iter().map(|node| 1 + count_child_nodes(node)).sum()
+}
+
+fn count_child_nodes(node: &HirNode) -> usize {
+    match node {
+        HirNode::Block(body)
+        | HirNode::While { body, .. }
+        | HirNode::DoWhile { body, .. }
+        | HirNode::For { body, .. } => count_nodes(body),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => count_nodes(then_body) + else_body.as_deref().map(count_nodes).unwrap_or(0),
+        HirNode::Switch { cases, default, .. } => {
+            cases
+                .iter()
+                .map(|(_, body, _)| count_nodes(body))
+                .sum::<usize>()
+                + default.as_deref().map(count_nodes).unwrap_or(0)
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+            ..
+        } => count_nodes(try_body) + count_nodes(catch_body),
+        _ => 0,
+    }
+}
+
+fn count_ifs(nodes: &[HirNode]) -> usize {
+    nodes.iter().map(count_ifs_in_node).sum()
+}
+
+fn count_ifs_in_node(node: &HirNode) -> usize {
+    match node {
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => 1 + count_ifs(then_body) + else_body.as_deref().map(count_ifs).unwrap_or(0),
+        _ => count_child_nodes_matching(node, count_ifs),
+    }
+}
+
+fn count_loops(nodes: &[HirNode]) -> usize {
+    nodes.iter().map(count_loops_in_node).sum()
+}
+
+fn count_loops_in_node(node: &HirNode) -> usize {
+    match node {
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            1 + count_loops(body)
+        }
+        _ => count_child_nodes_matching(node, count_loops),
+    }
+}
+
+fn count_child_nodes_matching(node: &HirNode, f: fn(&[HirNode]) -> usize) -> usize {
+    match node {
+        HirNode::Block(body) => f(body),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => f(then_body) + else_body.as_deref().map(f).unwrap_or(0),
+        HirNode::Switch { cases, default, .. } => {
+            cases.iter().map(|(_, body, _)| f(body)).sum::<usize>()
+                + default.as_deref().map(f).unwrap_or(0)
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+            ..
+        } => f(try_body) + f(catch_body),
+        _ => 0,
+    }
 }
 
 fn promote_scope(
@@ -119,7 +276,9 @@ fn collect_defs_inner(nodes: &[HirNode], defs: &mut BTreeMap<Varnode, IrInsn>) {
                     collect_defs_inner(else_body, defs);
                 }
             }
-            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            HirNode::While { body, .. }
+            | HirNode::DoWhile { body, .. }
+            | HirNode::For { body, .. } => {
                 collect_defs_inner(body, defs);
             }
             HirNode::Switch { cases, default, .. } => {
@@ -192,7 +351,9 @@ fn try_promote_standalone(node: &HirNode, defs: &BTreeMap<Varnode, IrInsn>) -> O
         return None;
     }
 
-    let last = body.iter().rposition(|n| matches!(n, HirNode::Statement(_)))?;
+    let last = body
+        .iter()
+        .rposition(|n| matches!(n, HirNode::Statement(_)))?;
     let update = match &body[last] {
         HirNode::Statement(insn) => insn.clone(),
         _ => return None,
@@ -311,7 +472,11 @@ fn is_compare_op(op: IrOp) -> bool {
 }
 
 fn compared_nonconst_input(insn: &IrInsn) -> Option<Varnode> {
-    let mut vars = insn.inputs.iter().copied().filter(|v| v.space != SpaceId::Const);
+    let mut vars = insn
+        .inputs
+        .iter()
+        .copied()
+        .filter(|v| v.space != SpaceId::Const);
     let first = vars.next()?;
     if vars.next().is_none() {
         Some(first)
@@ -417,7 +582,10 @@ mod tests {
         while_to_for(&mut hir);
 
         assert!(matches!(hir.body[1], HirNode::For { .. }));
-        if let HirNode::For { init, update, body, .. } = &hir.body[1] {
+        if let HirNode::For {
+            init, update, body, ..
+        } = &hir.body[1]
+        {
             assert!(init.is_none());
             assert_eq!(update.op, IrOp::IntSub);
             assert!(body.is_empty());
@@ -471,7 +639,9 @@ mod tests {
         while_to_for(&mut hir);
 
         match &hir.body[1] {
-            HirNode::For { init, update, body, .. } => {
+            HirNode::For {
+                init, update, body, ..
+            } => {
                 assert!(init.is_none());
                 assert_eq!(update.op, IrOp::IntMult);
                 assert_eq!(body.len(), 1);

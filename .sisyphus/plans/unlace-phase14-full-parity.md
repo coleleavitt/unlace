@@ -296,7 +296,7 @@ Wave FINAL:
 
 ### Wave 2 — While→For + Missing For-Loops (5 tasks)
 
-- [ ] P14-10. Study IDA loop recovery from hexx64 reference
+- [x] P14-10. Study IDA loop recovery from hexx64 reference
 
   **What to do**: Read IDA reference — find for-loops. Study how IDA identifies: init statement, condition, step, and body. Document patterns.
   **Acceptance Criteria**: ≥3 IDA loop patterns documented.
@@ -311,7 +311,7 @@ Wave FINAL:
   ```
   **Commit**: NO (research)
 
-- [ ] P14-11. Aggressive while→for: ANY while with counter modification
+- [x] P14-11. Aggressive while→for: ANY while with counter modification
 
   **What to do**: Extend while_to_for.rs. Current: matches specific init/cond/step patterns. New: if the while body's LAST non-control-flow statement modifies the condition variable (ANY modification — add, sub, mul, shift), promote to for. This covers all 9 excess whiles.
   **Acceptance Criteria**: medium while_count drops from 6 toward 3. cpp_exceptions/cpp_rtti whiles convert.
@@ -326,7 +326,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(struct): aggressive while-to-for for any counter-modifying last statement`
 
-- [ ] P14-12. For-loop from decrement-to-zero
+- [x] P14-12. For-loop from decrement-to-zero
 
   **What to do**: Extend recover_for_loops. Pattern: `while(v) { body; v--; }` → `for(; v; v--)`. Also: `while(v != 0) { body; v = v - 1; }` → same. This is medium.c's primary missing for-loop pattern.
   **Acceptance Criteria**: medium.c for_count ≥ 2.
@@ -341,7 +341,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(struct): for-loop from decrement-to-zero pattern`
 
-- [ ] P14-13. For-loop from CMP+DEC+JNE chains
+- [x] P14-13. For-loop from CMP+DEC+JNE chains
 
   **What to do**: Extend recover_for_loops. Pattern: x86 `cmp reg, 0; je exit; body; dec reg; jmp loop_top` → `for(; reg != 0; reg--)`. This requires matching the structured while that wraps this pattern and promoting it.
   **Acceptance Criteria**: medium.c for_count ≥ 4.
@@ -356,7 +356,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(struct): for-loop from CMP+DEC+JNE loop patterns`
 
-- [ ] P14-14. Golden refresh + loop validation
+- [x] P14-14. Golden refresh + loop validation
 
   **What to do**: Refresh goldens. medium.c: while ≤ 3, for ≥ 4. Other fixtures: excess whiles converted.
   **Acceptance Criteria**: All fixtures meet loop targets.
@@ -373,7 +373,7 @@ Wave FINAL:
 
 ### Wave 3 — Missing Returns (4 tasks)
 
-- [ ] P14-15. Study IDA return patterns
+- [x] P14-15. Study IDA return patterns
 
   **What to do**: Read IDA reference for return handling. Document: explicit return value, implicit return 0, void return, early return patterns.
   **Acceptance Criteria**: ≥3 IDA return patterns documented in learnings.
@@ -388,7 +388,7 @@ Wave FINAL:
   ```
   **Commit**: NO (research)
 
-- [ ] P14-16. Return from any register assignment before RETURN
+- [x] P14-16. Return from any register assignment before RETURN
 
   **What to do**: Extend return_merge.rs. Currently detects RAX (offset 0). Extend to: any assignment to the function's return register (determined by calling convention) in the last 3 statements before Return. Also detect: assignment to EAX (32-bit, offset 0, size 4) which is the same register.
   **Acceptance Criteria**: Return counts improve across fixtures.
@@ -403,7 +403,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(struct): return detection from any return-register assignment`
 
-- [ ] P14-17. Implicit return for main + all void functions
+- [x] P14-17. Implicit return for main + all void functions
 
   **What to do**: In return_merge.rs, ensure: (1) main always ends with `return 0;`, (2) void functions always end with `return;`, (3) non-void functions without explicit return get `return <last_assignment>;`.
   **Acceptance Criteria**: debug_structs return +1. arc_features return +2.
@@ -418,7 +418,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(struct): implicit return for main + void/non-void functions`
 
-- [ ] P14-18. Golden refresh + return validation
+- [x] P14-18. Golden refresh + return validation
 
   **What to do**: Refresh, validate all return counts.
   **Acceptance Criteria**: All fixtures meet return targets.
@@ -435,7 +435,7 @@ Wave FINAL:
 
 ### Wave 4 — Excess Variables (5 tasks)
 
-- [ ] P14-19. Study IDA variable declaration from hexx64
+- [x] P14-19. Study IDA variable declaration from hexx64
 
   **What to do**: Read IDA reference. Study how IDA declares variables: only stack vars, only named params, suppress temporaries. Compare against our c_printer.
   **Acceptance Criteria**: ≥3 IDA variable patterns documented in learnings.
@@ -450,7 +450,7 @@ Wave FINAL:
   ```
   **Commit**: NO (research)
 
-- [ ] P14-20. Aggressive dead-variable elimination
+- [x] P14-20. Aggressive dead-variable elimination
 
   **What to do**: Extend c_printer.rs dead-var elimination. Currently omits write-only vars. Also: suppress vars that are only read in other var assignments that are themselves dead. Chase the dead-use chain 2 levels deep.
   **Acceptance Criteria**: debug_calls vars decrease from 24 toward 10.
@@ -465,7 +465,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(output): 2-level dead-variable chain elimination`
 
-- [ ] P14-21. Flag-register variable suppression
+- [x] P14-21. Flag-register variable suppression
 
   **What to do**: In c_printer.rs, never declare variables for x86 flag registers (offsets 256-261: CF, PF, AF, ZF, SF, OF). These are internal computation artifacts, not user variables. IDA never declares them.
   **Acceptance Criteria**: No `v256`, `v257`, etc. in any golden output.
@@ -480,7 +480,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(output): suppress flag-register variable declarations`
 
-- [ ] P14-22. Temporary-varnode suppression
+- [x] P14-22. Temporary-varnode suppression
 
   **What to do**: In c_printer.rs, suppress declarations for unique-space varnodes that are used exactly once and defined in the same block. These are compiler temporaries, not user variables. Fold them into the expression tree instead.
   **Acceptance Criteria**: Var counts decrease across all fixtures.
@@ -495,7 +495,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(output): suppress single-use temporary varnode declarations`
 
-- [ ] P14-23. Golden refresh + var validation
+- [x] P14-23. Golden refresh + var validation
 
   **What to do**: Refresh, validate var counts.
   **Acceptance Criteria**: All fixtures meet var targets (within 2 of reference).
@@ -512,7 +512,7 @@ Wave FINAL:
 
 ### Wave 5 — Architecture Fixture Tuning (5 tasks)
 
-- [ ] P14-24. ARC fixture: +1 if, +2 return
+- [x] P14-24. ARC fixture: +1 if, +2 return
 
   **What to do**: Profile arc_features.elf. Add missing branch condition handlers to ARC lifter. Add return detection for ARC's return convention (JMP [BLINK] or J [BLINK]).
   **Acceptance Criteria**: arc_features score ≥ 95%.
@@ -527,7 +527,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(lift-arc): branch condition + return recovery for full parity`
 
-- [ ] P14-25. RISC-V fixture: +2 ifs, -1 while→for, +1 return
+- [x] P14-25. RISC-V fixture: +2 ifs, -1 while→for, +1 return
 
   **What to do**: Profile riscv64_features.elf. Fix branch condition recovery + loop promotion + return.
   **Acceptance Criteria**: riscv64_features ≥ 95%.
@@ -542,7 +542,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(lift-riscv): condition + loop + return recovery for full parity`
 
-- [ ] P14-26. PPC64/V850: +1 if each
+- [x] P14-26. PPC64/V850: +1 if each
 
   **What to do**: Fix branch condition recovery for both architectures.
   **Acceptance Criteria**: Both ≥ 95%.
@@ -557,7 +557,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(lift-ppc,lift-v850): branch condition recovery for full parity`
 
-- [ ] P14-27. x87/arm64/mips64: final tweaks
+- [x] P14-27. x87/arm64/mips64: final tweaks
 
   **What to do**: Fix remaining +1 if / +1 return gaps for x87_math, arm64_features, mips64_features.
   **Acceptance Criteria**: All three ≥ 95%.
@@ -572,7 +572,7 @@ Wave FINAL:
   ```
   **Commit**: `feat(lift-*): final if + return tweaks for x87/arm64/mips64 parity`
 
-- [ ] P14-28. Golden refresh + per-arch validation
+- [x] P14-28. Golden refresh + per-arch validation
 
   **What to do**: Full refresh. ALL arch fixtures ≥ 95%.
   **Acceptance Criteria**: All 14 fixtures ≥ 95%.
@@ -589,7 +589,7 @@ Wave FINAL:
 
 ### Wave 6 — Final Push (4 tasks)
 
-- [ ] P14-29. Refresh ALL goldens
+- [x] P14-29. Refresh ALL goldens
 
   **What to do**: Final rebuild + refresh.
   **Acceptance Criteria**: All pass.
@@ -604,7 +604,7 @@ Wave FINAL:
   ```
   **Commit**: `chore(goldens): Phase 14 final refresh`
 
-- [ ] P14-30. Final parity score (target ≥95%)
+- [x] P14-30. Final parity score (target ≥95%)
 
   **What to do**: `bash scripts/score_parity.sh` + per-fixture.
   **Acceptance Criteria**: Aggregate ≥ 95%.
@@ -619,7 +619,7 @@ Wave FINAL:
   ```
   **Commit**: `chore(boulder): Phase 14 final parity`
 
-- [ ] P14-31. Quality report
+- [x] P14-31. Quality report
 
   **What to do**: ≥100 lines. Per-fixture before→after table. Per-wave summary.
   **Acceptance Criteria**: Report exists.
@@ -634,7 +634,7 @@ Wave FINAL:
   ```
   **Commit**: `chore(boulder): Phase 14 quality report`
 
-- [ ] P14-32. Push to GitHub
+- [x] P14-32. Push to GitHub
 
   **What to do**: `git push origin master`.
   **QA Scenarios**:
@@ -647,7 +647,7 @@ Wave FINAL:
   ```
   **Commit**: NO
 
-- [ ] P14-F1. Final verification — ALL fixtures ≥95%
+- [x] P14-F1. Final verification — ALL fixtures ≥95%
 
   **What to do**: Verify every gate.
   **Acceptance Criteria**: ALL 14 fixtures ≥ 95%. Aggregate ≥ 95%. ≥1500 tests. 0 failures. Lint clean.

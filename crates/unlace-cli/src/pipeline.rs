@@ -35,7 +35,10 @@ pub struct FunctionEntry {
 }
 
 pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<Vec<FunctionEntry>> {
-    let permissive_symbol_sizes = matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc);
+    let permissive_symbol_sizes = matches!(
+        image.arch,
+        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
+    );
     let text_range = image.section_by_name(".text").map(|text| {
         let start = text.vaddr;
         let end = start.saturating_add(text.data.len() as u64);
@@ -124,7 +127,12 @@ fn add_symbol_gap_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>)
     let mut bounds: Vec<(u64, u64)> = funcs
         .iter()
         .filter(|func| func.addr >= text_start && func.addr < text_end)
-        .map(|func| (func.addr, func.addr.saturating_add(func.size as u64).min(text_end)))
+        .map(|func| {
+            (
+                func.addr,
+                func.addr.saturating_add(func.size as u64).min(text_end),
+            )
+        })
         .collect();
     bounds.sort_unstable();
 
@@ -973,6 +981,8 @@ pub fn emit_output(
             unlace_struct::cleanup_unreachable_labels(&mut hir);
             unlace_struct::return_merge(&mut hir);
             unlace_struct::eliminate_forward_gotos(&mut hir);
+            unlace_struct::recover_guarded_whiles(&mut hir);
+            unlace_struct::cleanup_empty_ifs(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
             Ok(unlace_output::print_c_full(
                 &hir,

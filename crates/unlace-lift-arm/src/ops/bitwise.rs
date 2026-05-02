@@ -247,7 +247,11 @@ pub fn lift_ubfm(ctx: &mut LiftCtx, ops: &Ops) {
     let imms = imm(&ops[3].0);
     match (src, immr, imms) {
         (Some(src), Some(immr), Some(imms)) if immr < bits && imms < bits => {
-            let width = if imms >= immr { imms - immr + 1 } else { imms + 1 };
+            let width = if imms >= immr {
+                imms - immr + 1
+            } else {
+                imms + 1
+            };
             let value = if immr == 0 {
                 src
             } else if imms < immr {
@@ -320,7 +324,11 @@ pub fn lift_sbfm(ctx: &mut LiftCtx, ops: &Ops) {
     let imms = imm(&ops[3].0);
     match (src, immr, imms) {
         (Some(src), Some(immr), Some(imms)) if immr < bits && imms < bits => {
-            let width = if imms >= immr { imms - immr + 1 } else { imms + 1 };
+            let width = if imms >= immr {
+                imms - immr + 1
+            } else {
+                imms + 1
+            };
             if imms < immr {
                 let rotated = emit_ror(ctx, src, immr, size);
                 emit_signed_extract(ctx, ops, rotated, 0, width, size);
@@ -379,14 +387,7 @@ pub fn lift_sxt(ctx: &mut LiftCtx, ops: &Ops, src_size: u8) {
     }
 }
 
-fn emit_signed_extract(
-    ctx: &mut LiftCtx,
-    ops: &Ops,
-    src: Varnode,
-    lsb: u64,
-    width: u64,
-    size: u8,
-) {
+fn emit_signed_extract(ctx: &mut LiftCtx, ops: &Ops, src: Varnode, lsb: u64, width: u64, size: u8) {
     let shifted = Varnode::unique(ctx.alloc_unique(), size);
     ctx.emit(IrInsn::with_output(
         IrOp::IntSright,

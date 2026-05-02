@@ -157,10 +157,7 @@ struct DyldInfoPayloads<'data> {
     export: &'data [u8],
 }
 
-fn collect_macho_dynamic_linking<Mach>(
-    file: &MachOFile<Mach>,
-    data: &[u8],
-) -> MachoDynamicLinking
+fn collect_macho_dynamic_linking<Mach>(file: &MachOFile<Mach>, data: &[u8]) -> MachoDynamicLinking
 where
     Mach: MachHeader<Endian = object::Endianness>,
 {
@@ -169,7 +166,11 @@ where
         Err(_) => return MachoDynamicLinking::default(),
     };
 
-    let pointer_size = if file.macho_header().is_type_64() { 8 } else { 4 };
+    let pointer_size = if file.macho_header().is_type_64() {
+        8
+    } else {
+        4
+    };
     let mut segment_bases = Vec::new();
     let mut indirect_symbols = Vec::new();
     let mut dyld = DyldInfoPayloads::default();
@@ -201,14 +202,26 @@ where
                 }
             }
             LoadCommandVariant::DyldInfo(info) => {
-                dyld.rebase = read_linkedit_range(data, info.rebase_off.get(endian), info.rebase_size.get(endian));
-                dyld.bind = read_linkedit_range(data, info.bind_off.get(endian), info.bind_size.get(endian));
+                dyld.rebase = read_linkedit_range(
+                    data,
+                    info.rebase_off.get(endian),
+                    info.rebase_size.get(endian),
+                );
+                dyld.bind = read_linkedit_range(
+                    data,
+                    info.bind_off.get(endian),
+                    info.bind_size.get(endian),
+                );
                 dyld.lazy_bind = read_linkedit_range(
                     data,
                     info.lazy_bind_off.get(endian),
                     info.lazy_bind_size.get(endian),
                 );
-                dyld.export = read_linkedit_range(data, info.export_off.get(endian), info.export_size.get(endian));
+                dyld.export = read_linkedit_range(
+                    data,
+                    info.export_off.get(endian),
+                    info.export_size.get(endian),
+                );
             }
             _ => {}
         }
@@ -217,7 +230,12 @@ where
     let mut relocations = Vec::new();
     decode_rebase_opcodes(dyld.rebase, &segment_bases, pointer_size, &mut relocations);
     decode_bind_opcodes(dyld.bind, &segment_bases, pointer_size, &mut relocations);
-    decode_bind_opcodes(dyld.lazy_bind, &segment_bases, pointer_size, &mut relocations);
+    decode_bind_opcodes(
+        dyld.lazy_bind,
+        &segment_bases,
+        pointer_size,
+        &mut relocations,
+    );
     let exports = decode_export_trie(dyld.export);
 
     MachoDynamicLinking {
@@ -273,30 +291,45 @@ fn decode_rebase_opcodes(
             0x00 => break,
             0x10 => {}
             0x20 => {
-                let Some(offset) = reader.read_uleb128() else { break };
+                let Some(offset) = reader.read_uleb128() else {
+                    break;
+                };
                 loc = SegmentOffset {
                     segment: imm as usize,
                     offset,
                 };
             }
             0x30 => {
-                let Some(delta) = reader.read_uleb128() else { break };
+                let Some(delta) = reader.read_uleb128() else {
+                    break;
+                };
                 loc.offset = loc.offset.saturating_add(delta);
             }
             0x40 => loc.offset = loc.offset.saturating_add(u64::from(imm) * pointer_size),
             0x50 => rebase_times(imm as u64, segment_bases, pointer_size, out, &mut loc),
             0x60 => {
-                let Some(count) = reader.read_uleb128() else { break };
+                let Some(count) = reader.read_uleb128() else {
+                    break;
+                };
                 rebase_times(count, segment_bases, pointer_size, out, &mut loc);
             }
             0x70 => {
-                let Some(delta) = reader.read_uleb128() else { break };
+                let Some(delta) = reader.read_uleb128() else {
+                    break;
+                };
                 push_rebase(segment_bases, out, loc);
-                loc.offset = loc.offset.saturating_add(delta).saturating_add(pointer_size);
+                loc.offset = loc
+                    .offset
+                    .saturating_add(delta)
+                    .saturating_add(pointer_size);
             }
             0x80 => {
-                let Some(count) = reader.read_uleb128() else { break };
-                let Some(skip) = reader.read_uleb128() else { break };
+                let Some(count) = reader.read_uleb128() else {
+                    break;
+                };
+                let Some(skip) = reader.read_uleb128() else {
+                    break;
+                };
                 for _ in 0..count {
                     if ops >= DYLD_MAX_OPCODE_OPS {
                         break;
@@ -372,33 +405,45 @@ fn decode_bind_opcodes(
             0x00 => break,
             0x10 => state.ordinal = i64::from(imm),
             0x20 => {
-                let Some(ordinal) = reader.read_uleb128() else { break };
+                let Some(ordinal) = reader.read_uleb128() else {
+                    break;
+                };
                 state.ordinal = ordinal as i64;
             }
             0x30 => state.ordinal = sign_extend_special_ordinal(imm),
             0x40 => {
-                let Some(symbol) = reader.read_c_string() else { break };
+                let Some(symbol) = reader.read_c_string() else {
+                    break;
+                };
                 state.symbol = symbol.to_string();
             }
             0x50 => {}
             0x60 => {
-                let Some(addend) = reader.read_sleb128() else { break };
+                let Some(addend) = reader.read_sleb128() else {
+                    break;
+                };
                 state.addend = addend;
             }
             0x70 => {
-                let Some(offset) = reader.read_uleb128() else { break };
+                let Some(offset) = reader.read_uleb128() else {
+                    break;
+                };
                 state.loc = SegmentOffset {
                     segment: imm as usize,
                     offset,
                 };
             }
             0x80 => {
-                let Some(delta) = reader.read_uleb128() else { break };
+                let Some(delta) = reader.read_uleb128() else {
+                    break;
+                };
                 state.loc.offset = state.loc.offset.saturating_add(delta);
             }
             0x90 => push_bind(segment_bases, out, &mut state, pointer_size),
             0xA0 => {
-                let Some(delta) = reader.read_uleb128() else { break };
+                let Some(delta) = reader.read_uleb128() else {
+                    break;
+                };
                 push_bind_no_advance(segment_bases, out, &state);
                 state.loc.offset = state
                     .loc
@@ -415,8 +460,12 @@ fn decode_bind_opcodes(
                     .saturating_add(pointer_size);
             }
             0xC0 => {
-                let Some(count) = reader.read_uleb128() else { break };
-                let Some(skip) = reader.read_uleb128() else { break };
+                let Some(count) = reader.read_uleb128() else {
+                    break;
+                };
+                let Some(skip) = reader.read_uleb128() else {
+                    break;
+                };
                 for _ in 0..count {
                     if ops >= DYLD_MAX_OPCODE_OPS {
                         break;
@@ -489,7 +538,13 @@ fn decode_export_trie(bytes: &[u8]) -> Vec<Symbol> {
     out
 }
 
-fn walk_export_trie(bytes: &[u8], offset: usize, name: String, depth: usize, out: &mut Vec<Symbol>) {
+fn walk_export_trie(
+    bytes: &[u8],
+    offset: usize,
+    name: String,
+    depth: usize,
+    out: &mut Vec<Symbol>,
+) {
     if depth > DYLD_MAX_EXPORT_DEPTH || offset >= bytes.len() || out.len() >= DYLD_MAX_OPCODE_OPS {
         return;
     }
@@ -505,7 +560,8 @@ fn walk_export_trie(bytes: &[u8], offset: usize, name: String, depth: usize, out
     };
 
     if terminal_size != 0 {
-        let mut terminal = DyldBytecode::new(&bytes[offset + terminal_start..offset + terminal_end]);
+        let mut terminal =
+            DyldBytecode::new(&bytes[offset + terminal_start..offset + terminal_end]);
         let flags = terminal.read_uleb128().unwrap_or(0);
         if flags & 0x08 == 0 {
             if let Some(addr) = terminal.read_uleb128() {
@@ -772,8 +828,7 @@ fn merge_chained_imports<Mach>(
     data: &[u8],
     out: &mut BTreeMap<u64, Symbol>,
     relocations: &mut Vec<Relocation>,
-)
-where
+) where
     Mach: MachHeader<Endian = object::Endianness>,
 {
     let endian = match file.macho_header().endian() {
@@ -887,8 +942,7 @@ fn walk_chained_fixup_pages(
     if payload.len() < 28 {
         return;
     }
-    let starts_offset =
-        u32::from_le_bytes(payload[4..8].try_into().unwrap_or([0; 4])) as usize;
+    let starts_offset = u32::from_le_bytes(payload[4..8].try_into().unwrap_or([0; 4])) as usize;
     if starts_offset == 0 || starts_offset + 4 > payload.len() {
         return;
     }
@@ -916,14 +970,10 @@ fn walk_chained_fixup_pages(
             continue;
         }
         let seg_info = &starts[seg_info_abs..];
-        let page_size =
-            u16::from_le_bytes(seg_info[4..6].try_into().unwrap_or([0; 2])) as usize;
-        let pointer_format =
-            u16::from_le_bytes(seg_info[6..8].try_into().unwrap_or([0; 2]));
-        let segment_offset =
-            u64::from_le_bytes(seg_info[8..16].try_into().unwrap_or([0; 8]));
-        let page_count =
-            u16::from_le_bytes(seg_info[20..22].try_into().unwrap_or([0; 2])) as usize;
+        let page_size = u16::from_le_bytes(seg_info[4..6].try_into().unwrap_or([0; 2])) as usize;
+        let pointer_format = u16::from_le_bytes(seg_info[6..8].try_into().unwrap_or([0; 2]));
+        let segment_offset = u64::from_le_bytes(seg_info[8..16].try_into().unwrap_or([0; 8]));
+        let page_count = u16::from_le_bytes(seg_info[20..22].try_into().unwrap_or([0; 2])) as usize;
 
         if pointer_format != DYLD_CHAINED_PTR_64 {
             tracing::debug!(
@@ -939,16 +989,13 @@ fn walk_chained_fixup_pages(
             continue;
         }
 
-        let (seg_vmaddr, seg_fileoff, seg_filesize) = segments
-            .get(seg_idx)
-            .copied()
-            .unwrap_or((0, 0, 0));
+        let (seg_vmaddr, seg_fileoff, seg_filesize) =
+            segments.get(seg_idx).copied().unwrap_or((0, 0, 0));
 
         for page_idx in 0..page_count {
             let ps_off = 22 + page_idx * 2;
-            let page_start = u16::from_le_bytes(
-                seg_info[ps_off..ps_off + 2].try_into().unwrap_or([0; 2]),
-            );
+            let page_start =
+                u16::from_le_bytes(seg_info[ps_off..ps_off + 2].try_into().unwrap_or([0; 2]));
             if page_start == DYLD_CHAINED_PTR_START_NONE {
                 continue;
             }
@@ -988,8 +1035,7 @@ fn walk_ptr64_chain(
             break;
         }
         let file_pos = page_file_base.saturating_add(offset) as usize;
-        if file_pos + 8 > file_data.len() || page_file_base.saturating_add(offset) >= seg_file_end
-        {
+        if file_pos + 8 > file_data.len() || page_file_base.saturating_add(offset) >= seg_file_end {
             break;
         }
 
@@ -1048,7 +1094,11 @@ where
         Err(_) => return BTreeMap::new(),
     };
 
-    let pointer_size: usize = if std::mem::size_of::<Mach>() > 28 { 8 } else { 4 };
+    let pointer_size: usize = if std::mem::size_of::<Mach>() > 28 {
+        8
+    } else {
+        4
+    };
 
     let (indirect_syms, nlist_names) = match load_indirect_table::<Mach>(file, data, endian) {
         Some(v) => v,
@@ -1164,7 +1214,11 @@ where
         })
         .collect();
 
-    let nlist_entry_size: usize = if std::mem::size_of::<Mach>() > 28 { 16 } else { 12 };
+    let nlist_entry_size: usize = if std::mem::size_of::<Mach>() > 28 {
+        16
+    } else {
+        12
+    };
     let sym_off = symoff as usize;
     let str_off = stroff as usize;
     let str_end = str_off.checked_add(strsize as usize)?;
@@ -1226,10 +1280,7 @@ where
                         break;
                     }
                     let sec_name_bytes = &cmd_data[soff..soff + 16];
-                    let nul = sec_name_bytes
-                        .iter()
-                        .position(|&b| b == 0)
-                        .unwrap_or(16);
+                    let nul = sec_name_bytes.iter().position(|&b| b == 0).unwrap_or(16);
                     let sec_name = std::str::from_utf8(&sec_name_bytes[..nul]).unwrap_or("");
                     if sec_name == target_name {
                         let r1 = u32::from_le_bytes(
@@ -1252,10 +1303,7 @@ where
                         break;
                     }
                     let sec_name_bytes = &cmd_data[soff..soff + 16];
-                    let nul = sec_name_bytes
-                        .iter()
-                        .position(|&b| b == 0)
-                        .unwrap_or(16);
+                    let nul = sec_name_bytes.iter().position(|&b| b == 0).unwrap_or(16);
                     let sec_name = std::str::from_utf8(&sec_name_bytes[..nul]).unwrap_or("");
                     if sec_name == target_name {
                         let r1 = u32::from_le_bytes(
@@ -1278,10 +1326,7 @@ where
 // P10-28: LC_LOAD_DYLIB + LC_RPATH dependency tracking
 // ---------------------------------------------------------------------------
 
-fn load_dylibs_and_rpaths<Mach>(
-    file: &MachOFile<Mach>,
-    data: &[u8],
-) -> (Vec<DylibDep>, Vec<String>)
+fn load_dylibs_and_rpaths<Mach>(file: &MachOFile<Mach>, data: &[u8]) -> (Vec<DylibDep>, Vec<String>)
 where
     Mach: MachHeader<Endian = object::Endianness>,
 {
@@ -2145,7 +2190,9 @@ mod tests {
         let img = MachoLoader::load(&bin).expect("Mach-O with lazy bind stream must load");
 
         assert!(img.relocations.iter().any(|reloc| {
-            reloc.addr == 0x2008 && reloc.sym_name == "dylib!_puts" && reloc.kind == RelocKind::GlobDat
+            reloc.addr == 0x2008
+                && reloc.sym_name == "dylib!_puts"
+                && reloc.kind == RelocKind::GlobDat
         }));
     }
 
@@ -2186,7 +2233,11 @@ mod tests {
 
         let img = MachoLoader::load(&bin).expect("Mach-O with dyld relocations must load");
 
-        assert!(img.relocations.iter().any(|r| r.kind == RelocKind::Relative));
+        assert!(
+            img.relocations
+                .iter()
+                .any(|r| r.kind == RelocKind::Relative)
+        );
         assert!(img.relocations.iter().any(|r| r.kind == RelocKind::GlobDat));
         assert!(!img.relocations.is_empty());
     }

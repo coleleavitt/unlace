@@ -738,11 +738,8 @@ where
     let mut offset = 0usize;
 
     while offset + 8 <= dir_data.len() && out.len() < 4096 {
-        let timestamp = u32::from_le_bytes(
-            dir_data[offset..offset + 4]
-                .try_into()
-                .unwrap_or([0; 4]),
-        );
+        let timestamp =
+            u32::from_le_bytes(dir_data[offset..offset + 4].try_into().unwrap_or([0; 4]));
         let name_offset = u16::from_le_bytes(
             dir_data[offset + 4..offset + 6]
                 .try_into()
@@ -795,8 +792,7 @@ fn parse_rich_header(data: &[u8]) -> Option<RichHeader> {
         return None;
     }
 
-    let nt_offset =
-        u32::from_le_bytes(data[0x3C..0x40].try_into().ok()?) as usize;
+    let nt_offset = u32::from_le_bytes(data[0x3C..0x40].try_into().ok()?) as usize;
 
     // Search region: after DOS header (0x80 is typical stub end) up to NT headers.
     let search_start = 0x40;
@@ -833,9 +829,7 @@ fn parse_rich_header(data: &[u8]) -> Option<RichHeader> {
         if pos + 4 > region.len() {
             break;
         }
-        let val = u32::from_le_bytes(
-            region[pos..pos + 4].try_into().unwrap_or([0; 4]),
-        );
+        let val = u32::from_le_bytes(region[pos..pos + 4].try_into().unwrap_or([0; 4]));
         if val == encoded_dans {
             dans_pos = Some(pos);
             break;
@@ -1677,7 +1671,11 @@ mod tests {
         let pe = pe64_with_pdata_and_debug();
         let img = PeLoader::load(&pe).expect("must parse");
 
-        assert_eq!(img.runtime_functions.len(), 1, "fixture has 1 RUNTIME_FUNCTION");
+        assert_eq!(
+            img.runtime_functions.len(),
+            1,
+            "fixture has 1 RUNTIME_FUNCTION"
+        );
 
         let rf = &img.runtime_functions[0];
         let image_base: u64 = 0x0040_0000;
@@ -1717,7 +1715,11 @@ mod tests {
         let pe = pe64_with_pdata_and_debug();
         let img = PeLoader::load(&pe).expect("must parse");
 
-        assert_eq!(img.debug_records.len(), 1, "fixture has 1 debug directory entry");
+        assert_eq!(
+            img.debug_records.len(),
+            1,
+            "fixture has 1 debug directory entry"
+        );
 
         let rec = &img.debug_records[0];
         assert_eq!(rec.typ, 2, "type should be IMAGE_DEBUG_TYPE_CODEVIEW");
@@ -1728,7 +1730,10 @@ mod tests {
         let guid = rec.pdb_guid.expect("RSDS should have guid");
         assert_eq!(
             guid,
-            [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10]
+            [
+                0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+                0x0F, 0x10
+            ]
         );
 
         let age = rec.pdb_age.expect("RSDS should have age");
@@ -1769,7 +1774,10 @@ mod tests {
 
         let lc = img.load_config.as_ref().expect("fixture has load config");
         assert_eq!(lc.guard_cf_check, 0, "fixture has no CFG check pointer");
-        assert_eq!(lc.guard_cf_dispatch, 0, "fixture has no CFG dispatch pointer");
+        assert_eq!(
+            lc.guard_cf_dispatch, 0,
+            "fixture has no CFG dispatch pointer"
+        );
         assert_eq!(lc.guard_flags, 0, "fixture has no guard flags");
         assert!(lc.cfg_targets.is_empty(), "fixture has no CFG targets");
     }
@@ -1830,7 +1838,10 @@ mod tests {
         pe[start..start + rich_block.len()].copy_from_slice(&rich_block);
 
         let img = PeLoader::load(&pe).expect("must parse PE with Rich header");
-        let rh = img.rich_header.as_ref().expect("Rich header should be present");
+        let rh = img
+            .rich_header
+            .as_ref()
+            .expect("Rich header should be present");
         assert_eq!(rh.xor_key, xor_key);
         assert_eq!(rh.records.len(), 1);
         assert_eq!(rh.records[0].comp_id, comp_id);

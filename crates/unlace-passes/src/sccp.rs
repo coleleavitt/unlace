@@ -784,7 +784,10 @@ fn collect_callother_input_defs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
 
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
-            let Some(output_sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output)).copied()
+            let Some(output_sv) = func
+                .var_map
+                .get(&(bid, insn_idx, VarnodeSlot::Output))
+                .copied()
             else {
                 continue;
             };
@@ -997,7 +1000,10 @@ mod tests {
 
         let mut ssa = make_single_block_ssa(insns);
         let changed = SccpPass.run(&mut ssa).expect("pass should succeed");
-        assert!(!changed, "runtime condition chain must not be rewritten to constants");
+        assert!(
+            !changed,
+            "runtime condition chain must not be rewritten to constants"
+        );
 
         let block = ssa.function.blocks.values().next().expect("has block");
         assert_eq!(block.insns[0].op, IrOp::IntSub);

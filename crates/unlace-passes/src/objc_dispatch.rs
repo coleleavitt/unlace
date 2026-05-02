@@ -6,8 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::SsaFunction;
 use unlace_ir::IrOp;
+use unlace_ir::ssa::SsaFunction;
 
 use crate::pass::{Pass, PassError};
 
@@ -114,13 +114,11 @@ mod tests {
     fn test_detect_objc_msgsend() {
         let msgsend_addr: u64 = 0x2000;
 
-        let insns = vec![
-            IrInsn::without_output(
-                IrOp::Call,
-                smallvec![Varnode::constant(msgsend_addr, 8)],
-                0x1000,
-            ),
-        ];
+        let insns = vec![IrInsn::without_output(
+            IrOp::Call,
+            smallvec![Varnode::constant(msgsend_addr, 8)],
+            0x1000,
+        )];
 
         let mut ssa = make_single_block_ssa(insns);
 
@@ -146,13 +144,11 @@ mod tests {
 
     #[test]
     fn test_no_msgsend_no_change() {
-        let insns = vec![
-            IrInsn::without_output(
-                IrOp::Call,
-                smallvec![Varnode::constant(0x3000, 8)],
-                0x1000,
-            ),
-        ];
+        let insns = vec![IrInsn::without_output(
+            IrOp::Call,
+            smallvec![Varnode::constant(0x3000, 8)],
+            0x1000,
+        )];
 
         let mut ssa = make_single_block_ssa(insns);
         let pass = ObjcDispatchPass::new();
@@ -179,13 +175,11 @@ mod tests {
     fn test_callind_not_matched() {
         let msgsend_addr: u64 = 0x2000;
 
-        let insns = vec![
-            IrInsn::without_output(
-                IrOp::Callind,
-                smallvec![Varnode::constant(msgsend_addr, 8)],
-                0x1000,
-            ),
-        ];
+        let insns = vec![IrInsn::without_output(
+            IrOp::Callind,
+            smallvec![Varnode::constant(msgsend_addr, 8)],
+            0x1000,
+        )];
 
         let mut ssa = make_single_block_ssa(insns);
 

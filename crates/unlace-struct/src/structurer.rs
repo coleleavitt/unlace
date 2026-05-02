@@ -1466,7 +1466,9 @@ fn collect_hir_defs_inner(nodes: &[HirNode], defs: &mut BTreeMap<Varnode, IrInsn
                     collect_hir_defs_inner(eb, defs);
                 }
             }
-            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            HirNode::While { body, .. }
+            | HirNode::DoWhile { body, .. }
+            | HirNode::For { body, .. } => {
                 collect_hir_defs_inner(body, defs);
             }
             HirNode::Switch { cases, default, .. } => {
@@ -2280,7 +2282,8 @@ mod tests {
             IrInsn::with_output(IrOp::IntLess, cond, smallvec![i, bound], 0x1008),
         );
 
-        let replacement = try_recover_for_at(&hir_body, 0, &defs).expect("compare cond should recover");
+        let replacement =
+            try_recover_for_at(&hir_body, 0, &defs).expect("compare cond should recover");
         hir_body.splice(0..2, [replacement]);
 
         assert!(matches!(hir_body[0], HirNode::For { .. }));
@@ -2378,7 +2381,9 @@ mod tests {
         recover_for_loops(&mut hir_body);
 
         match &hir_body[0] {
-            HirNode::For { init, cond, update, .. } => {
+            HirNode::For {
+                init, cond, update, ..
+            } => {
                 assert!(init.is_none());
                 assert_eq!(cond.base, i);
                 assert_eq!(update.op, IrOp::IntSub);
@@ -2414,7 +2419,9 @@ mod tests {
         recover_for_loops(&mut hir_body);
 
         match &hir_body[1] {
-            HirNode::For { init, update, body, .. } => {
+            HirNode::For {
+                init, update, body, ..
+            } => {
                 assert!(init.is_none());
                 assert_eq!(update.output, Some(reg));
                 assert_eq!(body.len(), 1, "dec step should move to for update");

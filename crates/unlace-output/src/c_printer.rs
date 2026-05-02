@@ -332,9 +332,20 @@ pub fn print_c_with_rtti(
             .copied()
             .unwrap_or(PrimitiveType::Unknown);
         let frame_size = header.map(|h| h.stack_frame);
-        let byref_suffix = if ctx.byref_bases.contains(&sv.base) { " BYREF" } else { "" };
+        let byref_suffix = if ctx.byref_bases.contains(&sv.base) {
+            " BYREF"
+        } else {
+            ""
+        };
         if let Some(comment) = varnode_location_comment(&sv.base, frame_size) {
-            let _ = writeln!(out, "    {} {}; // {}{}", c_type(&ty), name, comment, byref_suffix);
+            let _ = writeln!(
+                out,
+                "    {} {}; // {}{}",
+                c_type(&ty),
+                name,
+                comment,
+                byref_suffix
+            );
         } else if !byref_suffix.is_empty() {
             let _ = writeln!(out, "    {} {}; //{}", c_type(&ty), name, byref_suffix);
         } else {
@@ -360,7 +371,13 @@ fn emit_function_header(hdr: &FunctionHeaderInfo, out: &mut String) {
     let _ = write!(
         out,
         "/* Function:   {} | Address: 0x{:x} | Size: 0x{:x} ({} bytes) | Convention: {} | Stack frame: 0x{:x} ({} bytes)",
-        display_name, hdr.address, hdr.size, hdr.size, hdr.convention, hdr.stack_frame, hdr.stack_frame,
+        display_name,
+        hdr.address,
+        hdr.size,
+        hdr.size,
+        hdr.convention,
+        hdr.stack_frame,
+        hdr.stack_frame,
     );
     if !hdr.callees.is_empty() {
         let demangled_callees: Vec<String> = hdr
@@ -1245,7 +1262,10 @@ fn is_dead_zero_init(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
 }
 
 fn is_dead_suppressible_store(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> bool {
-    if insn.output.is_none() || instr_has_side_effects(insn) || ctx.foldable_stmts.contains(&stmt_idx) {
+    if insn.output.is_none()
+        || instr_has_side_effects(insn)
+        || ctx.foldable_stmts.contains(&stmt_idx)
+    {
         return false;
     }
     let Some(Some(out_sv)) = ctx.stmt_outputs.get(&stmt_idx).copied() else {
@@ -1272,7 +1292,10 @@ fn is_suppressible_storage(vn: &Varnode, ctx: &PrintCtx) -> bool {
     is_temp_varnode(vn)
         || is_flag_register(vn)
         || is_synthetic_suppressed_name(vn, ctx)
-        || matches!(ctx.base_names.get(vn).map(String::as_str), Some("rip") | Some("eip"))
+        || matches!(
+            ctx.base_names.get(vn).map(String::as_str),
+            Some("rip") | Some("eip")
+        )
 }
 
 fn is_temp_varnode(vn: &Varnode) -> bool {
@@ -1285,8 +1308,18 @@ fn is_synthetic_suppressed_name(vn: &Varnode, ctx: &PrintCtx) -> bool {
     };
     matches!(
         name,
-        "v_cf" | "v_zf" | "v_sf" | "v_of" | "v_pf" | "v_af" | "v_CF" | "v_ZF" | "v_SF"
-            | "v_OF" | "v_PF" | "v_AF"
+        "v_cf"
+            | "v_zf"
+            | "v_sf"
+            | "v_of"
+            | "v_pf"
+            | "v_af"
+            | "v_CF"
+            | "v_ZF"
+            | "v_SF"
+            | "v_OF"
+            | "v_PF"
+            | "v_AF"
     ) || name.starts_with("v_tmp_")
         || name.starts_with("v_unique_")
         || name.starts_with("v_UNNAMED_")
@@ -1916,6 +1949,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
         if let Some(first) = inline_node_text(&nodes[i], ctx) {
             let mut parts = Vec::new();
             let first_is_terminal = matches!(nodes[i], HirNode::Return(_) | HirNode::Goto(_));
+            let mut group_has_terminal = first_is_terminal;
             if !first.is_empty() {
                 parts.push(first);
             }
@@ -1925,6 +1959,9 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     break;
                 };
                 let is_terminal = matches!(nodes[i], HirNode::Return(_) | HirNode::Goto(_));
+                if is_terminal {
+                    group_has_terminal = true;
+                }
                 if !next.is_empty() {
                     parts.push(next);
                 }
@@ -1937,19 +1974,23 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 indent(depth, out);
                 let _ = writeln!(out, "{}", parts.join(" "));
             }
-        if first_is_terminal {
-            let next_is_label = nodes.get(i).map_or(false, |n| matches!(n, HirNode::Label(_)));
-            if !next_is_label {
-                break;
+            if group_has_terminal {
+                let next_is_label = nodes
+                    .get(i)
+                    .map_or(false, |n| matches!(n, HirNode::Label(_)));
+                if !next_is_label {
+                    break;
+                }
             }
-        }
             continue;
         }
         let is_terminal = matches!(nodes[i], HirNode::Return(_) | HirNode::Goto(_));
         emit_node(&nodes[i], depth, ctx, out);
         if is_terminal {
             // Don't break if the next node is a Label — labels must still be emitted
-            let next_is_label = nodes.get(i + 1).map_or(false, |n| matches!(n, HirNode::Label(_)));
+            let next_is_label = nodes
+                .get(i + 1)
+                .map_or(false, |n| matches!(n, HirNode::Label(_)));
             if !next_is_label {
                 break;
             }
@@ -2458,6 +2499,11 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     {
         return None;
     }
+    // CSEL must go through emit_statement for if-else expansion
+    if is_csel_callother(insn) {
+        ctx.emit_stmt += 1;
+        return None;
+    }
 
     ctx.emit_stmt += 1;
     if ctx.foldable_stmts.contains(&idx)
@@ -2491,11 +2537,17 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                     try_struct_field_access(&insn.inputs[1], idx, store_size, ctx)
                 {
                     Some(format!("{} = {};", field_expr, val))
-                } else if let Some(sub) = try_array_subscript(&insn.inputs[1], idx, store_size, ctx) {
+                } else if let Some(sub) = try_array_subscript(&insn.inputs[1], idx, store_size, ctx)
+                {
                     Some(format!("{}[{}] = {};", sub.base, sub.index, val))
                 } else {
                     let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
-                    Some(format!("*({})({}) = {};", ida_ptr_type(store_size), addr, val))
+                    Some(format!(
+                        "*({})({}) = {};",
+                        ida_ptr_type(store_size),
+                        addr,
+                        val
+                    ))
                 }
             }
             IrOp::Store => Some("/* STORE (bad arity) */;".to_string()),
@@ -2504,7 +2556,11 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             IrOp::Unimplemented => Some(format!("__unknown_insn_0x{:X}();", insn.addr)),
             IrOp::Callother => {
                 let expr = emit_callother(insn, idx, ctx);
-                Some(if is_cmov_callother(insn) { expr } else { format!("{};", expr) })
+                Some(if is_cmov_callother(insn) {
+                    expr
+                } else {
+                    format!("{};", expr)
+                })
             }
             IrOp::Branchind => {
                 let target = insn.inputs.first().map_or_else(
@@ -2547,7 +2603,17 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             }
         }
 
-        if let Some(short) = try_emit_increment_form(insn, &lhs) {
+        // CSEL → if-else assignment (ARM64 conditional select)
+        if is_csel_callother(insn) && insn.inputs.len() >= 4 {
+            let cond = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
+            let true_val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
+            let false_val = emit_operand_resolved(&insn.inputs[3], 3, idx, ctx);
+            let _ = writeln!(
+                out,
+                "if ({}) {{ {} = {}; }} else {{ {} = {}; }}",
+                cond, lhs, true_val, lhs, false_val
+            );
+        } else if let Some(short) = try_emit_increment_form(insn, &lhs) {
             let _ = writeln!(out, "{};", short);
         } else if let Some(short) = try_emit_compound_assign(insn, idx, &lhs, ctx) {
             let _ = writeln!(out, "{};", short);
@@ -3300,6 +3366,15 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
     }
 }
 
+fn is_csel_callother(insn: &IrInsn) -> bool {
+    insn.op == IrOp::Callother
+        && insn.inputs.len() >= 4
+        && insn
+            .inputs
+            .first()
+            .is_some_and(|vn| vn.space == SpaceId::Const && matches!(vn.offset, 0x330..=0x333))
+}
+
 fn is_cmov_callother(insn: &IrInsn) -> bool {
     insn.op == IrOp::Callother
         && insn.inputs.len() >= 4
@@ -3624,7 +3699,9 @@ fn varnode_location_comment(vn: &Varnode, frame_size: Option<u64>) -> Option<Str
         SpaceId::Stack => {
             let rsp_off = vn.offset;
             match frame_size {
-                Some(fs) if fs > rsp_off => Some(format!("[rsp+{:x}h] [rbp-{:x}h]", rsp_off, fs - rsp_off)),
+                Some(fs) if fs > rsp_off => {
+                    Some(format!("[rsp+{:x}h] [rbp-{:x}h]", rsp_off, fs - rsp_off))
+                }
                 _ => Some(format!("[rsp+{:x}h]", rsp_off)),
             }
         }
@@ -5290,14 +5367,24 @@ mod tests {
 
         let body = vec![
             HirNode::For {
-                init: Some(IrInsn::with_output(IrOp::Copy, outer, smallvec![zero], 0x1000)),
+                init: Some(IrInsn::with_output(
+                    IrOp::Copy,
+                    outer,
+                    smallvec![zero],
+                    0x1000,
+                )),
                 cond: SsaVarnode {
                     base: outer,
                     version: 0,
                 },
                 update: IrInsn::with_output(IrOp::IntAdd, outer, smallvec![outer, one], 0x1020),
                 body: vec![HirNode::For {
-                    init: Some(IrInsn::with_output(IrOp::Copy, inner, smallvec![zero], 0x1004)),
+                    init: Some(IrInsn::with_output(
+                        IrOp::Copy,
+                        inner,
+                        smallvec![zero],
+                        0x1004,
+                    )),
                     cond: SsaVarnode {
                         base: inner,
                         version: 0,

@@ -4,16 +4,19 @@
 //! addresses, groups accesses at the same offset into logical local
 //! variables, and populates `SsaFunction::stack_vars`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, StackVar, VarnodeSlot};
 use unlace_ir::types::{StructFieldType, Type};
-use unlace_ir::{IrOp, SpaceId};
+use unlace_ir::{IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
 const RSP_OFFSET: u64 = 32;
 const RBP_OFFSET: u64 = 40;
+
+type DefMap = HashMap<Varnode, Vec<(unlace_ir::BlockId, usize)>>;
+type ResolveCache = HashMap<(Varnode, u32), Option<i64>>;
 
 pub struct StackVarRecoveryPass;
 
@@ -26,7 +29,15 @@ impl Pass for StackVarRecoveryPass {
         let old_len = func.stack_vars.len();
         let snapshot: BTreeMap<i64, StackVar> = func.stack_vars.clone();
 
+        let mut def_map: DefMap = HashMap::new();
+        for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
+            if *slot == VarnodeSlot::Output {
+                def_map.entry(sv.base).or_default().push((bid, insn_idx));
+            }
+        }
+
         let mut accesses: BTreeMap<i64, Vec<(SsaVarnode, u8)>> = BTreeMap::new();
+        let mut resolve_cache: ResolveCache = HashMap::new();
 
         for (&bid, block) in &func.function.blocks {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
@@ -36,7 +47,9 @@ impl Pass for StackVarRecoveryPass {
                         if insn.inputs.len() < 3 {
                             continue;
                         }
-                        if let Some(offset) = extract_stack_offset(insn, func) {
+                        if let Some(offset) =
+                            extract_stack_offset(insn, func, &def_map, &mut resolve_cache)
+                        {
                             let value_size = insn.inputs[2].size;
                             // Record the value varnode as an access
                             if let Some(&sv) =
@@ -57,7 +70,9 @@ impl Pass for StackVarRecoveryPass {
                         if insn.inputs.len() < 2 {
                             continue;
                         }
-                        if let Some(offset) = extract_stack_offset(insn, func) {
+                        if let Some(offset) =
+                            extract_stack_offset(insn, func, &def_map, &mut resolve_cache)
+                        {
                             let load_size = insn.output.map(|o| o.size).unwrap_or(8);
                             // Record the output varnode
                             if let Some(&sv) =
@@ -218,7 +233,12 @@ fn field_size(ty: PrimitiveType) -> Option<u8> {
     }
 }
 
-fn extract_stack_offset(insn: &unlace_ir::IrInsn, func: &SsaFunction) -> Option<i64> {
+fn extract_stack_offset(
+    insn: &unlace_ir::IrInsn,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+) -> Option<i64> {
     let addr = &insn.inputs[1];
 
     // Case 1: Address is already a SpaceId::Stack varnode.
@@ -237,7 +257,7 @@ fn extract_stack_offset(insn: &unlace_ir::IrInsn, func: &SsaFunction) -> Option<
     //
     // Walk the instruction stream to find the definition of addr.
     if addr.space == SpaceId::Unique || addr.space == SpaceId::Register {
-        return find_rsp_relative_offset(addr, func, 0);
+        return find_rsp_relative_offset(addr, func, def_map, resolve_cache, 0);
     }
 
     None
@@ -246,23 +266,34 @@ fn extract_stack_offset(insn: &unlace_ir::IrInsn, func: &SsaFunction) -> Option<
 const MAX_RESOLVE_DEPTH: u32 = 16;
 
 fn find_rsp_relative_offset(
-    addr_varnode: &unlace_ir::Varnode,
+    addr_varnode: &Varnode,
     func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
     depth: u32,
 ) -> Option<i64> {
     if depth > MAX_RESOLVE_DEPTH {
         return None;
     }
-    // Find the instruction that defines this varnode by scanning var_map for an Output
-    // entry that maps to an SsaVarnode with this base.
-    for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
-        if *slot != VarnodeSlot::Output {
-            continue;
-        }
-        if sv.base != *addr_varnode {
-            continue;
-        }
+    if let Some(&cached) = resolve_cache.get(&(*addr_varnode, depth)) {
+        return cached;
+    }
 
+    let resolved =
+        find_rsp_relative_offset_uncached(addr_varnode, func, def_map, resolve_cache, depth);
+    resolve_cache.insert((*addr_varnode, depth), resolved);
+    resolved
+}
+
+fn find_rsp_relative_offset_uncached(
+    addr_varnode: &Varnode,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+    depth: u32,
+) -> Option<i64> {
+    // Find instructions that define this varnode via the precomputed output index.
+    for &(bid, insn_idx) in def_map.get(addr_varnode)? {
         let block = func.function.blocks.get(&bid)?;
         let def_insn = block.insns.get(insn_idx)?;
 
@@ -280,12 +311,16 @@ fn find_rsp_relative_offset(
                 }
                 // base could be an SSA version of RSP produced by INT_SUB
                 if disp.space == SpaceId::Const {
-                    if let Some(base_off) = find_rsp_relative_offset(base, func, depth + 1) {
+                    if let Some(base_off) =
+                        find_rsp_relative_offset(base, func, def_map, resolve_cache, depth + 1)
+                    {
                         return Some(base_off.wrapping_add(disp.offset as i64));
                     }
                 }
                 if base.space == SpaceId::Const {
-                    if let Some(disp_off) = find_rsp_relative_offset(disp, func, depth + 1) {
+                    if let Some(disp_off) =
+                        find_rsp_relative_offset(disp, func, def_map, resolve_cache, depth + 1)
+                    {
                         return Some(disp_off.wrapping_add(base.offset as i64));
                     }
                 }
@@ -300,7 +335,9 @@ fn find_rsp_relative_offset(
                 }
                 // base could be an SSA version of RSP
                 if disp.space == SpaceId::Const {
-                    if let Some(base_off) = find_rsp_relative_offset(base, func, depth + 1) {
+                    if let Some(base_off) =
+                        find_rsp_relative_offset(base, func, def_map, resolve_cache, depth + 1)
+                    {
                         return Some(base_off.wrapping_sub(disp.offset as i64));
                     }
                 }
@@ -313,7 +350,7 @@ fn find_rsp_relative_offset(
                 if is_rsp_or_rbp(src) {
                     return Some(0);
                 }
-                return find_rsp_relative_offset(src, func, depth + 1);
+                return find_rsp_relative_offset(src, func, def_map, resolve_cache, depth + 1);
             }
             _ => {}
         }

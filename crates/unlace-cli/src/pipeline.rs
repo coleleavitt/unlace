@@ -14,7 +14,7 @@ use unlace_passes::{
     CppVtablePass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
     DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
     ModuloIdiomPass, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
-    StructFieldDetectPass, VariableMergePass, run_to_fixedpoint,
+    StackVarRecoveryPass, StructFieldDetectPass, VariableMergePass, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -118,6 +118,28 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     }
 
     Ok(funcs)
+}
+
+/// Drop synthetic `sub_*` entries that point at DWARF low-PC addresses inside a
+/// named symbol. Some compilers record the first debuggable instruction after a
+/// prologue as the DWARF function address; recursive discovery can then add that
+/// interior address as a second function. Keep standalone synthetic functions,
+/// but avoid emitting duplicate bodies for named symbol functions.
+pub fn drop_dwarf_duplicate_subfunctions(funcs: &mut Vec<FunctionEntry>, _dwarf: &DwarfInfo) {
+    let named_ranges: Vec<(u64, u64)> = funcs
+        .iter()
+        .filter(|func| !func.name.starts_with("sub_") && func.size > 0)
+        .map(|func| (func.addr, func.addr.saturating_add(func.size)))
+        .collect();
+
+    funcs.retain(|func| {
+        if !func.name.starts_with("sub_") {
+            return true;
+        }
+        !named_ranges
+            .iter()
+            .any(|(start, end)| func.addr > *start && func.addr < *end)
+    });
 }
 
 fn add_symbol_gap_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
@@ -704,6 +726,10 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
         .run(ssa)
         .context("prologue/epilogue detection failed")?;
 
+    StackVarRecoveryPass
+        .run(ssa)
+        .context("stack variable recovery failed")?;
+
     CppVtablePass
         .run(ssa)
         .context("C++ vtable dispatch detection failed")?;
@@ -736,8 +762,8 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     Ok(changes)
 }
 
-fn apply_dwarf_to_ssa(ssa: &mut SsaFunction, dwarf: &DwarfInfo, function_addr: u64) {
-    let Some(debug_func) = dwarf.functions.get(&function_addr) else {
+fn apply_dwarf_to_ssa(ssa: &mut SsaFunction, dwarf: &DwarfInfo, entry: &FunctionEntry) {
+    let Some(debug_func) = dwarf_function_for_entry(dwarf, entry) else {
         return;
     };
 
@@ -761,6 +787,17 @@ fn apply_dwarf_to_ssa(ssa: &mut SsaFunction, dwarf: &DwarfInfo, function_addr: u
                 .or_insert_with(|| dwarf_type.clone());
         }
     }
+}
+
+fn dwarf_function_for_entry<'a>(
+    dwarf: &'a DwarfInfo,
+    entry: &FunctionEntry,
+) -> Option<&'a unlace_loader::FunctionDebugInfo> {
+    dwarf
+        .functions
+        .values()
+        .find(|func| func.name == entry.name)
+        .or_else(|| dwarf.functions.get(&entry.addr))
 }
 
 fn stack_bases_for_frame_offset(ssa: &SsaFunction, frame_offset: i64) -> Vec<SsaVarnode> {
@@ -1029,7 +1066,7 @@ pub fn decompile_function_with_symbols(
     );
 
     if let Some(dwarf_info) = dwarf {
-        apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry.addr);
+        apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
     }
 
     warn_if_large_ir(&entry.name, &ssa);

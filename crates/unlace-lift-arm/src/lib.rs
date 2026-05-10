@@ -751,4 +751,52 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn arm_capstone_decodes_mov_imm() {
+        // MOV r0, #5  →  0xE3A00005
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE3A00005u32.to_le_bytes(), 0x1000)
+            .expect("MOV imm decodes");
+        assert_eq!(r.len, 4);
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm_capstone_decodes_add() {
+        // ADD r1, r2, r3  →  0xE0821003
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE0821003u32.to_le_bytes(), 0x1000)
+            .expect("ADD decodes");
+        assert_eq!(r.len, 4);
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn thumb_capstone_decodes_mov() {
+        // Thumb-1 MOVS r0, #3  →  0x2003
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&0x2003u16.to_le_bytes(), 0x1000)
+            .expect("MOVS decodes");
+        assert_eq!(r.len, 2);
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm_capstone_decodes_bl() {
+        // BL #+0x100 from 0x1000  →  0xEB00003E (Capstone reports BL <target>).
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xEB00003Eu32.to_le_bytes(), 0x1000)
+            .expect("BL decodes");
+        assert_eq!(r.len, 4);
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Call));
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
 }

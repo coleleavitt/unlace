@@ -569,6 +569,7 @@ mod tests {
             runtime_functions: vec![],
             resources: vec![],
             bound_imports: vec![],
+            delay_imports: Vec::new(),
             rich_header: None,
             dylibs: vec![],
             rpaths: vec![],

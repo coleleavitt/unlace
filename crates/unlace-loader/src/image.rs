@@ -217,6 +217,17 @@ pub struct BoundImport {
     pub timestamp: u32,
 }
 
+/// A single PE delay-loaded import — resolved lazily at first call rather
+/// than eagerly at load time. Populated from
+/// `IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DelayImport {
+    /// Source DLL module name (without path).
+    pub dll_name: String,
+    /// Imported function symbol name, or `#N` for ordinal-only imports.
+    pub function_name: String,
+}
+
 /// A single record from the PE Rich header.
 ///
 /// Each record encodes a build tool identifier and the number of times it was
@@ -315,6 +326,9 @@ pub struct BinaryImage {
     pub resources: Vec<ResourceEntry>,
     /// PE bound import descriptors. Empty for ELF/Mach-O or if absent.
     pub bound_imports: Vec<BoundImport>,
+    /// PE delay-loaded imports. Empty for ELF/Mach-O or PEs without
+    /// an `IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT` directory.
+    pub delay_imports: Vec<DelayImport>,
     /// PE Rich header. `None` for ELF/Mach-O or if absent.
     pub rich_header: Option<RichHeader>,
     /// Mach-O dylib dependencies. Empty for ELF/PE.
@@ -444,6 +458,7 @@ mod tests {
             runtime_functions: Vec::new(),
             resources: Vec::new(),
             bound_imports: Vec::new(),
+            delay_imports: Vec::new(),
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
@@ -499,5 +514,21 @@ mod tests {
     fn binaryimage_default_has_empty_go_itabs() {
         let img = empty_image();
         assert!(img.go_itabs.is_empty());
+    }
+
+    #[test]
+    fn binaryimage_default_has_empty_delay_imports() {
+        let img = empty_image();
+        assert!(img.delay_imports.is_empty());
+    }
+
+    #[test]
+    fn delay_import_struct_roundtrips() {
+        let di = DelayImport {
+            dll_name: "kernel32.dll".to_string(),
+            function_name: "LoadLibraryW".to_string(),
+        };
+        assert_eq!(di.dll_name, "kernel32.dll");
+        assert_eq!(di.function_name, "LoadLibraryW");
     }
 }

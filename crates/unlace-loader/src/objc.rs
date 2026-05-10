@@ -53,20 +53,33 @@ pub struct ObjcClass {
     pub protocols: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjcCategory {
+    pub name: String,
+    pub class_addr: u64,
+    pub class_name: Option<String>,
+    pub instance_methods: Vec<ObjcMethod>,
+    pub class_methods: Vec<ObjcMethod>,
+    pub properties: Vec<ObjcProperty>,
+    pub protocols: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ObjcInfo {
     pub classes: BTreeMap<u64, ObjcClass>,
+    pub categories: Vec<ObjcCategory>,
 }
 
 impl ObjcInfo {
     pub fn empty() -> Self {
         Self {
             classes: BTreeMap::new(),
+            categories: Vec::new(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.classes.is_empty()
+        self.classes.is_empty() && self.categories.is_empty()
     }
 }
 
@@ -273,29 +286,120 @@ pub fn scan_objc_classlist(image: &BinaryImage) -> ObjcInfo {
         .iter()
         .find(|s| s.name.contains("__objc_classlist") || s.name == "__objc_classlist");
 
-    let section = match classlist_section {
-        Some(s) => s,
-        None => return ObjcInfo::empty(),
-    };
-
-    let data = &section.data;
     let mut classes = BTreeMap::new();
-    let ptr_size = 8usize;
-
-    let num_entries = data.len() / ptr_size;
-    for i in 0..num_entries {
-        let offset = i * ptr_size;
-        let class_ptr = match read_u64(data, offset, image.endian) {
-            Some(p) if p != 0 => p,
-            _ => continue,
-        };
-
-        if let Some(cls) = parse_class_at(image, class_ptr) {
-            classes.insert(class_ptr, cls);
+    if let Some(section) = classlist_section {
+        let data = &section.data;
+        let ptr_size = 8usize;
+        let num_entries = data.len() / ptr_size;
+        for i in 0..num_entries {
+            let offset = i * ptr_size;
+            let class_ptr = match read_u64(data, offset, image.endian) {
+                Some(p) if p != 0 => p,
+                _ => continue,
+            };
+            if let Some(cls) = parse_class_at(image, class_ptr) {
+                classes.insert(class_ptr, cls);
+            }
         }
     }
 
-    ObjcInfo { classes }
+    let categories = scan_objc_categories_with_classes(image, &classes);
+
+    ObjcInfo { classes, categories }
+}
+
+/// category_t (64-bit):
+///   - `[0..8]`    name (cstring*)
+///   - `[8..16]`   cls (class_t*)
+///   - `[16..24]`  instanceMethods (method_list_t*)
+///   - `[24..32]`  classMethods (method_list_t*)
+///   - `[32..40]`  protocols (protocol_list_t*)
+///   - `[40..48]`  instanceProperties (property_list_t*)
+fn parse_category_at(
+    image: &BinaryImage,
+    cat_ptr: u64,
+    classes: &BTreeMap<u64, ObjcClass>,
+) -> Option<ObjcCategory> {
+    let name_ptr = read_u64_at_va(image, cat_ptr)?;
+    let cls_ptr = read_u64_at_va(image, cat_ptr + 8)?;
+    let inst_methods_ptr = read_u64_at_va(image, cat_ptr + 16)?;
+    let class_methods_ptr = read_u64_at_va(image, cat_ptr + 24)?;
+    let protocols_ptr = read_u64_at_va(image, cat_ptr + 32)?;
+    let props_ptr = read_u64_at_va(image, cat_ptr + 40)?;
+
+    let name = read_cstring_at_va(image, name_ptr, 256)?;
+    if name.is_empty() {
+        return None;
+    }
+
+    let instance_methods = if inst_methods_ptr == 0 {
+        Vec::new()
+    } else {
+        parse_method_list(image, inst_methods_ptr).unwrap_or_default()
+    };
+    let class_methods = if class_methods_ptr == 0 {
+        Vec::new()
+    } else {
+        parse_method_list(image, class_methods_ptr).unwrap_or_default()
+    };
+    let properties = if props_ptr == 0 {
+        Vec::new()
+    } else {
+        parse_property_list(image, props_ptr).unwrap_or_default()
+    };
+    let protocols = if protocols_ptr == 0 {
+        Vec::new()
+    } else {
+        parse_protocol_list(image, protocols_ptr).unwrap_or_default()
+    };
+
+    let class_name = classes.get(&cls_ptr).map(|c| c.name.clone());
+
+    Some(ObjcCategory {
+        name,
+        class_addr: cls_ptr,
+        class_name,
+        instance_methods,
+        class_methods,
+        properties,
+        protocols,
+    })
+}
+
+fn scan_objc_categories_with_classes(
+    image: &BinaryImage,
+    classes: &BTreeMap<u64, ObjcClass>,
+) -> Vec<ObjcCategory> {
+    let catlist_section = image
+        .sections
+        .iter()
+        .find(|s| s.name.contains("__objc_catlist") || s.name == "__objc_catlist");
+
+    let section = match catlist_section {
+        Some(s) => s,
+        None => return Vec::new(),
+    };
+
+    let data = &section.data;
+    let ptr_size = 8usize;
+    let num_entries = data.len() / ptr_size;
+    let mut out = Vec::new();
+    for i in 0..num_entries {
+        let offset = i * ptr_size;
+        let cat_ptr = match read_u64(data, offset, image.endian) {
+            Some(p) if p != 0 => p,
+            _ => continue,
+        };
+        if let Some(cat) = parse_category_at(image, cat_ptr, classes) {
+            out.push(cat);
+        }
+    }
+    out
+}
+
+/// Standalone scan of `__objc_catlist` without cross-referencing known classes.
+pub fn scan_objc_categories(image: &BinaryImage) -> Vec<ObjcCategory> {
+    scan_objc_categories_with_classes(image, &BTreeMap::new())
 }
 
 #[cfg(test)]
@@ -620,6 +724,227 @@ mod tests {
         assert_eq!(cls.properties.len(), 1);
         assert_eq!(cls.properties[0].name, "px");
         assert_eq!(cls.properties[0].attributes, "T@");
+    }
+
+    fn build_method_list_section(
+        list_va: u64,
+        entries: &[(u64, u64, u64)],
+    ) -> Vec<u8> {
+        let mut mlist = Vec::new();
+        mlist.extend_from_slice(&24u32.to_le_bytes());
+        mlist.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+        for (name, types, imp) in entries {
+            mlist.extend_from_slice(&name.to_le_bytes());
+            mlist.extend_from_slice(&types.to_le_bytes());
+            mlist.extend_from_slice(&imp.to_le_bytes());
+        }
+        let _ = list_va;
+        mlist
+    }
+
+    #[test]
+    fn parse_synthetic_category() {
+        let cat_name_va: u64 = 0x40000;
+        let foo_va: u64 = 0x40010;
+        let bar_va: u64 = 0x40020;
+        let t_foo_va: u64 = 0x40030;
+        let t_bar_va: u64 = 0x40040;
+        let mut text = vec![0u8; 0x100];
+        text[..3].copy_from_slice(b"Ex\0");
+        text[0x10..0x14].copy_from_slice(b"foo\0");
+        text[0x20..0x24].copy_from_slice(b"bar\0");
+        text[0x30..0x34].copy_from_slice(b"v@:\0");
+        text[0x40..0x44].copy_from_slice(b"i@:\0");
+
+        let mlist_va: u64 = 0x50000;
+        let mlist = build_method_list_section(
+            mlist_va,
+            &[(foo_va, t_foo_va, 0x1234), (bar_va, t_bar_va, 0x5678)],
+        );
+
+        let cat_va: u64 = 0x60000;
+        let mut cat = Vec::new();
+        cat.extend_from_slice(&cat_name_va.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes()); // cls=NULL
+        cat.extend_from_slice(&mlist_va.to_le_bytes()); // instanceMethods
+        cat.extend_from_slice(&0u64.to_le_bytes()); // classMethods
+        cat.extend_from_slice(&0u64.to_le_bytes()); // protocols
+        cat.extend_from_slice(&0u64.to_le_bytes()); // properties
+
+        let catlist_va: u64 = 0x70000;
+        let catlist = cat_va.to_le_bytes().to_vec();
+
+        let sections = vec![
+            Section {
+                name: "__objc_catlist".into(),
+                vaddr: catlist_va,
+                size: catlist.len() as u64,
+                data: catlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: cat_va,
+                size: cat.len() as u64,
+                data: cat,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_methlist".into(),
+                vaddr: mlist_va,
+                size: mlist.len() as u64,
+                data: mlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
+        ];
+
+        let info = scan_objc_classlist(&make_test_image(sections));
+        assert_eq!(info.categories.len(), 1);
+        let cat = &info.categories[0];
+        assert_eq!(cat.name, "Ex");
+        assert_eq!(cat.instance_methods.len(), 2);
+        assert_eq!(cat.instance_methods[0].name, "foo");
+        assert_eq!(cat.instance_methods[1].name, "bar");
+        assert!(cat.class_name.is_none());
+    }
+
+    #[test]
+    fn category_class_name_resolves_when_class_known() {
+        // Build a real class first.
+        let class_name = b"MyClass\0";
+        let class_name_va: u64 = 0x40000;
+        let class_ro_va: u64 = 0x30000;
+        let mut class_ro_data = vec![0u8; 24];
+        class_ro_data.extend_from_slice(&class_name_va.to_le_bytes());
+        let class_va: u64 = 0x20000;
+        let mut class_data = vec![0u8; 32];
+        class_data.extend_from_slice(&class_ro_va.to_le_bytes());
+        let classlist_va: u64 = 0x10000;
+        let classlist_data = class_va.to_le_bytes().to_vec();
+
+        // Category referencing that class.
+        let cat_name_va: u64 = 0x40080;
+        let mut text = vec![0u8; 0x200];
+        text[..class_name.len()].copy_from_slice(class_name);
+        text[0x80..0x86].copy_from_slice(b"Extra\0");
+
+        let cat_va: u64 = 0x60000;
+        let mut cat = Vec::new();
+        cat.extend_from_slice(&cat_name_va.to_le_bytes());
+        cat.extend_from_slice(&class_va.to_le_bytes()); // cls -> known class
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        let catlist_va: u64 = 0x70000;
+        let catlist = cat_va.to_le_bytes().to_vec();
+
+        let sections = vec![
+            Section {
+                name: "__objc_classlist".into(),
+                vaddr: classlist_va,
+                size: classlist_data.len() as u64,
+                data: classlist_data,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_catlist".into(),
+                vaddr: catlist_va,
+                size: catlist.len() as u64,
+                data: catlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: class_va,
+                size: class_data.len() as u64,
+                data: class_data,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA_CONST".into(),
+                vaddr: class_ro_va,
+                size: class_ro_data.len() as u64,
+                data: class_ro_data,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA2".into(),
+                vaddr: cat_va,
+                size: cat.len() as u64,
+                data: cat,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
+        ];
+
+        let info = scan_objc_classlist(&make_test_image(sections));
+        assert_eq!(info.categories.len(), 1);
+        let cat = &info.categories[0];
+        assert_eq!(cat.name, "Extra");
+        assert_eq!(cat.class_name.as_deref(), Some("MyClass"));
+        assert_eq!(cat.class_addr, class_va);
+    }
+
+    #[test]
+    fn category_class_name_unknown_when_class_external() {
+        let cat_name_va: u64 = 0x40000;
+        let mut text = vec![0u8; 0x40];
+        text[..4].copy_from_slice(b"Ext\0");
+
+        let cat_va: u64 = 0x60000;
+        let mut cat = Vec::new();
+        cat.extend_from_slice(&cat_name_va.to_le_bytes());
+        cat.extend_from_slice(&0xCAFEBABEu64.to_le_bytes()); // cls outside scanned classes
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        let catlist_va: u64 = 0x70000;
+        let catlist = cat_va.to_le_bytes().to_vec();
+
+        let sections = vec![
+            Section {
+                name: "__objc_catlist".into(),
+                vaddr: catlist_va,
+                size: catlist.len() as u64,
+                data: catlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: cat_va,
+                size: cat.len() as u64,
+                data: cat,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
+        ];
+
+        let info = scan_objc_classlist(&make_test_image(sections));
+        assert_eq!(info.categories.len(), 1);
+        assert_eq!(info.categories[0].name, "Ext");
+        assert!(info.categories[0].class_name.is_none());
+        assert_eq!(info.categories[0].class_addr, 0xCAFEBABE);
     }
 
     #[test]

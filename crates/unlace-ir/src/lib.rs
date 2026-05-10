@@ -14,6 +14,7 @@ mod function;
 mod insn;
 mod lifter;
 mod op;
+pub mod reg_alias;
 mod space;
 pub mod ssa;
 pub mod types;

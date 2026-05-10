@@ -1057,6 +1057,80 @@ mod tests {
         assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 
+    // t161: UMLAL / SMLAL — 64-bit multiply-accumulate. Operand order is
+    // RdLo, RdHi, Rn, Rm; semantics RdHi:RdLo += Rn * Rm.
+
+    #[test]
+    fn umlal_emits_mult_high_and_carry_chain() {
+        // ARM UMLAL r0, r1, r2, r3.  Encoding: cond=E, bits[27:20]=0000_1010
+        // (U=0, A=1, S=0), RdHi=1, RdLo=0, Rm=3, 1001, Rn=2  →  0xE0A10392.
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE0A1_0392u32.to_le_bytes(), 0x1000)
+            .expect("UMLAL decodes");
+
+        // Low-half multiply present.
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntMult),
+            "UMLAL must emit IntMult for the product low half"
+        );
+        // Unsigned MULT_HIGH callother — NOT the signed variant.
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH),
+            "UMLAL must emit unsigned MULT_HIGH Callother"
+        );
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
+            "UMLAL must NOT emit signed MULT_HIGH"
+        );
+        // 64-bit add → expect at least two IntAdd ops (low + hi-chain).
+        let n_adds = r.ir_ops.iter().filter(|i| i.op == IrOp::IntAdd).count();
+        assert!(
+            n_adds >= 2,
+            "UMLAL must emit ≥2 IntAdd ops (low + hi); got {n_adds}: {:?}",
+            r.ir_ops.iter().map(|i| i.op).collect::<Vec<_>>()
+        );
+        // Carry-out from the low add must feed the high chain.
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntCarry),
+            "UMLAL must emit IntCarry to thread the low→high carry"
+        );
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntZext),
+            "UMLAL must IntZext the 1-bit carry to 32 bits before adding"
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn smlal_uses_signed_high() {
+        // ARM SMLAL r0, r1, r2, r3.  Encoding: cond=E, bits[27:20]=0000_1110
+        // (U=1, A=1, S=0), RdHi=1, RdLo=0, Rm=3, 1001, Rn=2  →  0xE0E10392.
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE0E1_0392u32.to_le_bytes(), 0x1000)
+            .expect("SMLAL decodes");
+
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
+            "SMLAL must emit signed MULT_HIGH Callother"
+        );
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH),
+            "SMLAL must NOT emit unsigned MULT_HIGH"
+        );
+        // Same accumulate structure as UMLAL.
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntMult));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntCarry));
+        let n_adds = r.ir_ops.iter().filter(|i| i.op == IrOp::IntAdd).count();
+        assert!(n_adds >= 2, "SMLAL must emit ≥2 IntAdd; got {n_adds}");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
     #[test]
     fn aarch64_umulh_emits_single_intmulthigh() {
         // UMULH X0, X1, X2  →  0x9BC2_7C20

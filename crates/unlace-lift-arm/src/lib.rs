@@ -12,9 +12,10 @@ mod tests {
 
     use crate::ArmLifter;
     use crate::lift::{
-        ARM_FLAG_N, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH,
-        ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm,
-        decode_thumb1_push_pop, expand_reg_list, try_aarch64_csel,
+        ARM_FLAG_N, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP, CALLOTHER_INT_MULT_HIGH,
+        CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
+        decode_thumb1_ldm_stm, decode_thumb1_push_pop, expand_reg_list, try_aarch64_ccmp,
+        try_aarch64_csel,
     };
 
     #[test]
@@ -1084,6 +1085,90 @@ mod tests {
             r.ir_ops.iter().any(|i| i.op == IrOp::Callother
                 && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
             "SMULH must emit a signed-MULT_HIGH Callother"
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn try_aarch64_ccmp_recognizes_register_form() {
+        // CCMP X0, X1, #4, EQ  →  0xFA41_0004
+        let d = try_aarch64_ccmp(0xFA41_0004).expect("CCMP register form must decode");
+        assert!(d.sf);
+        assert!(!d.is_neg);
+        assert_eq!(d.rn, 0);
+        assert_eq!(d.rm_or_imm, 1);
+        assert!(!d.is_imm);
+        assert_eq!(d.nzcv, 4);
+        assert_eq!(d.cond, 0);
+    }
+
+    #[test]
+    fn try_aarch64_ccmn_recognizes_register_form() {
+        // CCMN X0, X1, #4, EQ  →  0xBA41_0004 (op30=0 marks CCMN)
+        let d = try_aarch64_ccmp(0xBA41_0004).expect("CCMN register form must decode");
+        assert!(d.sf);
+        assert!(d.is_neg, "CCMN must set is_neg");
+        assert_eq!(d.rn, 0);
+        assert_eq!(d.rm_or_imm, 1);
+        assert!(!d.is_imm);
+        assert_eq!(d.nzcv, 4);
+        assert_eq!(d.cond, 0);
+    }
+
+    #[test]
+    fn try_aarch64_ccmp_recognizes_immediate_form() {
+        // CCMP X0, #5, #4, EQ  → register Rm slot becomes imm5, bit11=1.
+        // Encoding: sf=1, op30=1, fixed=111010010, imm5=5, cond=0, bits10..11=10,
+        //           bit4=0, Rn=0, nzcv=4
+        // = 1111_1010_0100_0101_0000_1000_0000_0100 = 0xFA45_0804
+        let d = try_aarch64_ccmp(0xFA45_0804).expect("CCMP imm form must decode");
+        assert!(d.sf);
+        assert!(!d.is_neg);
+        assert_eq!(d.rm_or_imm, 5);
+        assert!(d.is_imm, "imm-form must set is_imm");
+        assert_eq!(d.cond, 0);
+        assert_eq!(d.nzcv, 4);
+    }
+
+    #[test]
+    fn try_aarch64_ccmp_rejects_non_ccmp() {
+        // MOVZ X0, #5 → 0xD2800020
+        assert!(try_aarch64_ccmp(0xD280_0020).is_none());
+        // CSEL X0, X1, X2, EQ → 0x9A82_0020
+        assert!(try_aarch64_ccmp(0x9A82_0020).is_none());
+    }
+
+    #[test]
+    fn ccmp_lifts_to_callother() {
+        // CCMP X0, X1, #4, EQ → 0xFA41_0004 (le bytes: 04 00 41 FA)
+        let r = lifter()
+            .lift_insn(&0xFA41_0004u32.to_le_bytes(), 0x1000)
+            .expect("CCMP should decode");
+        let call = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_AARCH64_CCMP)
+            .expect("CCMP must lift to a Callother with the AARCH64_CCMP tag");
+        // is_neg flag is the last input — must be 0 for CCMP.
+        assert_eq!(call.inputs.last().expect("is_neg flag present").offset, 0);
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn ccmn_lifts_to_callother_with_is_neg() {
+        // CCMN X0, X1, #4, EQ → 0xBA41_0004
+        let r = lifter()
+            .lift_insn(&0xBA41_0004u32.to_le_bytes(), 0x1000)
+            .expect("CCMN should decode");
+        let call = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_AARCH64_CCMP)
+            .expect("CCMN must lift to a Callother with the AARCH64_CCMP tag");
+        assert_eq!(
+            call.inputs.last().expect("is_neg flag present").offset,
+            1,
+            "CCMN must set is_neg flag"
         );
         assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }

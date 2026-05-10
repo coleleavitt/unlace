@@ -176,6 +176,10 @@ fn seed_from_composites(func: &mut SsaFunction) {
     for (sv, ty) in &func.composite_var_types {
         let primitive = match ty {
             Type::Primitive(p) => *p,
+            Type::Bitfield { underlying, .. } => match underlying.as_ref() {
+                Type::Primitive(p) => *p,
+                _ => PrimitiveType::Unknown,
+            },
             Type::Ptr(_) | Type::Struct { .. } | Type::Array { .. } | Type::FuncPtr { .. } => {
                 PrimitiveType::Ptr
             }
@@ -624,6 +628,10 @@ fn find_add_base_and_const(
 fn field_to_primitive(ty: &Type) -> PrimitiveType {
     match ty {
         Type::Primitive(p) => *p,
+        Type::Bitfield { underlying, .. } => match underlying.as_ref() {
+            Type::Primitive(p) => *p,
+            _ => PrimitiveType::Unknown,
+        },
         Type::Ptr(_) | Type::FuncPtr { .. } => PrimitiveType::Ptr,
         Type::Struct { .. } | Type::Array { .. } => PrimitiveType::Ptr,
     }

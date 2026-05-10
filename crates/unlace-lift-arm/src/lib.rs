@@ -12,8 +12,8 @@ mod tests {
 
     use crate::ArmLifter;
     use crate::lift::{
-        ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm,
-        decode_thumb1_push_pop, expand_reg_list,
+        ArmLiftMode, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
+        decode_thumb1_ldm_stm, decode_thumb1_push_pop, expand_reg_list,
     };
 
     #[test]
@@ -650,6 +650,57 @@ mod tests {
                 "auth insn should not produce Unimplemented: {bytes:?}"
             );
         }
+    }
+
+    #[test]
+    fn arm32_lifter_constructs_and_handles_empty_input() {
+        let l = ArmLifter::new_arm32();
+        assert_eq!(l.mode(), ArmLiftMode::Arm32);
+        assert!(!l.register_file().registers.is_empty());
+        // Empty buffer must be a ShortBuffer error, not a panic.
+        assert!(l.lift_insn(&[], 0x1000).is_err());
+        assert!(l.lift_insn(&[0x00, 0x00], 0x1000).is_err());
+    }
+
+    #[test]
+    fn thumb_lifter_recognizes_it_block_then_lifts_one_conditional_insn() {
+        let l = ArmLifter::new_thumb();
+        assert_eq!(l.mode(), ArmLiftMode::Thumb);
+        // IT EQ — encoded as 0xBF08 (little-endian: 0x08, 0xBF).
+        let r = l.lift_insn(&[0x08, 0xBF], 0x1000).expect("IT should decode");
+        assert_eq!(r.len, 2);
+        assert!(r.ir_ops.is_empty(), "IT itself emits no IR");
+        let st = l.current_it_state().expect("IT must arm the state machine");
+        assert_eq!(st.firstcond, 0);
+        assert_eq!(st.conds, vec![0]);
+
+        // The next instruction (any 16-bit Thumb encoding) pops the cond
+        // and falls through to the scaffolded path. Use a PUSH {r0} encoding
+        // so we get observable IR rather than just Unimplemented.
+        let push_r0 = 0xB401u16; // PUSH {r0}
+        let bytes = push_r0.to_le_bytes();
+        let r = l.lift_insn(&bytes, 0x1002).expect("PUSH decodes");
+        assert_eq!(r.len, 2);
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Store));
+        // IT-block had exactly one slot; it must now be drained.
+        assert!(l.current_it_state().is_none());
+    }
+
+    #[test]
+    fn arm32_lifter_lifts_ldmia() {
+        let l = ArmLifter::new_arm32();
+        // LDMIA r0!, {r1, r2}  →  e8b00006 (little-endian: 06 00 b0 e8)
+        let r = l
+            .lift_insn(&[0x06, 0x00, 0xb0, 0xe8], 0x1000)
+            .expect("LDMIA decodes");
+        assert_eq!(r.len, 4);
+        let loads = r.ir_ops.iter().filter(|i| i.op == IrOp::Load).count();
+        assert_eq!(loads, 2, "LDMIA r0!, {{r1, r2}} must emit two Load ops");
+        // Writeback => one extra IntAdd updating r0 after the transfers.
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntAdd),
+            "writeback should mutate Rn via IntAdd"
+        );
     }
 
     #[test]

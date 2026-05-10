@@ -1,6 +1,15 @@
 //! AArch64 lifting context and top-level mnemonic dispatch.
+//!
+//! Also hosts the ARM 32-bit / Thumb scaffolding (`ArmLiftMode::Arm32` /
+//! `ArmLiftMode::Thumb`). Those modes do not yet wire up Capstone — the
+//! `capstone` crate would need its `arch_arm` feature enabled at the
+//! workspace level. The scaffold intercepts the encodings the existing
+//! decoder helpers (`decode_arm_ldm_stm`, `decode_thumb1_*`, `decode_it`)
+//! recognise and falls through to `Unimplemented` for everything else.
+//! See `TODO(t127)` markers for the follow-up work.
 
 use std::cell::RefCell;
+use std::sync::Mutex;
 
 use capstone::Insn;
 use capstone::arch::arm64::{Arm64Insn, Arm64OpMem, Arm64OperandType, Arm64Shift};
@@ -17,15 +26,69 @@ thread_local! {
     static ARM64_CS: RefCell<Option<Capstone>> = const { RefCell::new(None) };
 }
 
+/// Which ARM ISA variant a given `ArmLifter` instance is configured for.
+/// `Aarch64` is the legacy default (Capstone arm64). `Arm32` and `Thumb`
+/// are 32-bit modes that currently only dispatch the bespoke decoder
+/// helpers in this crate; instructions outside that set fall through to
+/// `Unimplemented` (see `TODO(t127)`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArmLiftMode {
+    Aarch64,
+    Arm32,
+    Thumb,
+}
+
 pub struct ArmLifter {
     reg_file: RegisterFile,
+    mode: ArmLiftMode,
+    /// Live Thumb-2 IT-block state. When `Some`, the next instruction(s)
+    /// are conditional with the head condition popped from `conds`.
+    /// Wrapped in `Mutex` because `Lifter::lift_insn` is `&self` but the
+    /// IT-state machine threads across consecutive calls. Aarch64 mode
+    /// never touches this field.
+    it_state: Mutex<Option<ItState>>,
 }
 
 impl ArmLifter {
+    /// Default AArch64 lifter (existing behaviour, unchanged).
     pub fn new() -> Self {
         Self {
             reg_file: aarch64_register_file(),
+            mode: ArmLiftMode::Aarch64,
+            it_state: Mutex::new(None),
         }
+    }
+
+    /// 32-bit ARM scaffold. Decodes LDM/STM via the in-crate helpers and
+    /// emits proper Load/Store IR; every other encoding falls through to
+    /// `Unimplemented` until Capstone's `arch_arm` feature is enabled.
+    pub fn new_arm32() -> Self {
+        Self {
+            reg_file: arm32_register_file(),
+            mode: ArmLiftMode::Arm32,
+            it_state: Mutex::new(None),
+        }
+    }
+
+    /// Thumb scaffold. Recognises IT-blocks (tracking conditional state
+    /// across subsequent calls), PUSH/POP, and 16-bit LDM/STM; everything
+    /// else falls through to `Unimplemented`.
+    pub fn new_thumb() -> Self {
+        Self {
+            reg_file: arm32_register_file(),
+            mode: ArmLiftMode::Thumb,
+            it_state: Mutex::new(None),
+        }
+    }
+
+    pub fn mode(&self) -> ArmLiftMode {
+        self.mode
+    }
+
+    /// Inspect the current IT-state (cloned). Tests use this to assert
+    /// that an IT-instruction advanced the state machine.
+    pub fn current_it_state(&self) -> Option<ItState> {
+        self.it_state.lock().ok().and_then(|g| g.clone())
     }
 
     fn make_capstone() -> Capstone {
@@ -46,10 +109,27 @@ impl Default for ArmLifter {
 
 impl Lifter for ArmLifter {
     fn arch(&self) -> ArchId {
+        // Arm32 / Thumb still report AArch64 today; a dedicated `ArchId::Arm`
+        // requires plumbing through the loader/dispatcher and is out of MVP scope.
+        // TODO(t127): introduce ArchId::Arm and wire it through.
         ArchId::AArch64
     }
 
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
+        match self.mode {
+            ArmLiftMode::Aarch64 => self.lift_aarch64(bytes, addr),
+            ArmLiftMode::Arm32 => self.lift_arm32(bytes, addr),
+            ArmLiftMode::Thumb => self.lift_thumb(bytes, addr),
+        }
+    }
+
+    fn register_file(&self) -> &RegisterFile {
+        &self.reg_file
+    }
+}
+
+impl ArmLifter {
+    fn lift_aarch64(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
         if bytes.len() < 4 {
             return Err(LiftError::ShortBuffer);
         }
@@ -94,9 +174,175 @@ impl Lifter for ArmLifter {
         })
     }
 
-    fn register_file(&self) -> &RegisterFile {
-        &self.reg_file
+    fn lift_arm32(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
+        if bytes.len() < 4 {
+            return Err(LiftError::ShortBuffer);
+        }
+        let raw = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+
+        if let Some(decoded) = decode_arm_ldm_stm(raw) {
+            let mut ctx = LiftCtx::new(addr);
+            emit_ldm_stm(&mut ctx, decoded);
+            return Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
+
+        // TODO(t127): wire Capstone arm32 mode (gated on `capstone` feature
+        // `arch_arm`) for the long tail of ARM32 instructions. Until then
+        // every non-block-transfer ARM32 insn lifts as Unimplemented so
+        // upstream callers can still walk the stream.
+        let mut ctx = LiftCtx::new(addr);
+        ctx.emit_unimplemented();
+        Ok(LiftedInsn {
+            ir_ops: ctx.ops,
+            len: 4,
+        })
     }
+
+    fn lift_thumb(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
+        if bytes.len() < 2 {
+            return Err(LiftError::ShortBuffer);
+        }
+        let half = u16::from_le_bytes([bytes[0], bytes[1]]);
+
+        if let Some(state) = decode_it(half) {
+            if let Ok(mut guard) = self.it_state.lock() {
+                *guard = Some(state);
+            }
+            // IT itself has no architectural effect besides arming the
+            // following slots; emit no IR.
+            return Ok(LiftedInsn {
+                ir_ops: Vec::new(),
+                len: 2,
+            });
+        }
+
+        // Pop the next pending IT-condition (if any) before decoding. We
+        // capture it for diagnostics but the MVP does not yet *use* it to
+        // guard the lifted IR — see `TODO(t127)`.
+        let _pending_cond = self.pop_pending_it_cond();
+
+        if let Some(decoded) = decode_thumb1_push_pop(half) {
+            let mut ctx = LiftCtx::new(addr);
+            emit_ldm_stm(&mut ctx, decoded);
+            return Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 2,
+            });
+        }
+        if let Some(decoded) = decode_thumb1_ldm_stm(half) {
+            let mut ctx = LiftCtx::new(addr);
+            emit_ldm_stm(&mut ctx, decoded);
+            return Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 2,
+            });
+        }
+
+        // TODO(t127): fall through to a Capstone-driven Thumb decode path
+        // and guard the resulting IR with `_pending_cond` when present.
+        let mut ctx = LiftCtx::new(addr);
+        ctx.emit_unimplemented();
+        Ok(LiftedInsn {
+            ir_ops: ctx.ops,
+            len: 2,
+        })
+    }
+
+    /// Pop the head condition off the active IT-block, if any. Returns
+    /// `None` once the block is exhausted (and clears the slot).
+    fn pop_pending_it_cond(&self) -> Option<u8> {
+        let mut guard = self.it_state.lock().ok()?;
+        let state = guard.as_mut()?;
+        if state.conds.is_empty() {
+            *guard = None;
+            return None;
+        }
+        let cond = state.conds.remove(0);
+        if state.conds.is_empty() {
+            *guard = None;
+        }
+        Some(cond)
+    }
+}
+
+/// Minimal 32-bit ARM register file — r0..r15 (where r13=SP, r14=LR,
+/// r15=PC) plus an APSR slot for the condition flags. Mirrors the layout
+/// `expand_reg_list` produces (`u8` register numbers 0..15) so a `Varnode`
+/// can be derived as `Varnode::reg(reg_num * 4, 4)`.
+pub fn arm32_register_file() -> RegisterFile {
+    use unlace_ir::RegisterDef;
+    const NAMES: [&str; 16] = [
+        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
+        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
+    ];
+    let mut regs = Vec::with_capacity(17);
+    for (i, name) in NAMES.iter().enumerate() {
+        regs.push(RegisterDef {
+            name,
+            varnode: Varnode::reg((i as u64) * 4, 4),
+        });
+    }
+    regs.push(RegisterDef {
+        name: "APSR",
+        varnode: Varnode::reg(64, 4),
+    });
+    RegisterFile { registers: regs }
+}
+
+/// Emit IR for a decoded LDM/STM (or PUSH/POP) tuple. Generates one
+/// Load/Store per register in the list and, when `writeback` is set,
+/// adjusts `Rn` by `±4 * count` after the transfers.
+fn emit_ldm_stm(ctx: &mut LiftCtx, decoded: LdmStmDecoded) {
+    let (addressing, rn, reg_list, writeback, is_load) = decoded;
+    let pairs = expand_reg_list(reg_list, addressing);
+    if pairs.is_empty() {
+        return;
+    }
+    let base_vn = arm32_reg_varnode(rn);
+
+    for (offset, reg_num) in &pairs {
+        let target_addr = if *offset == 0 {
+            base_vn
+        } else {
+            let disp = Varnode::constant(*offset as i64 as u64, 4);
+            let tmp = Varnode::unique(ctx.alloc_unique(), 4);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAdd,
+                tmp,
+                smallvec![base_vn, disp],
+                ctx.addr,
+            ));
+            tmp
+        };
+        if is_load {
+            let loaded = ctx.emit_load(4, target_addr);
+            ctx.emit_copy(arm32_reg_varnode(*reg_num), loaded);
+        } else {
+            ctx.emit_store(target_addr, arm32_reg_varnode(*reg_num));
+        }
+    }
+
+    if writeback {
+        let count = pairs.len() as i64;
+        let delta: i64 = match addressing {
+            LdmStmAddressing::Ia | LdmStmAddressing::Ib => 4 * count,
+            LdmStmAddressing::Da | LdmStmAddressing::Db => -4 * count,
+        };
+        let delta_vn = Varnode::constant(delta as u64, 4);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntAdd,
+            base_vn,
+            smallvec![base_vn, delta_vn],
+            ctx.addr,
+        ));
+    }
+}
+
+fn arm32_reg_varnode(reg_num: u8) -> Varnode {
+    Varnode::reg((reg_num as u64) * 4, 4)
 }
 
 pub struct LiftCtx {

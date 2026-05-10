@@ -186,6 +186,51 @@ pub fn lift_ret(ctx: &mut LiftCtx, ops: &Ops) {
     ));
 }
 
+/// CSET Rd, cond  ≡  CSINC Rd, XZR, XZR, !cond  ≡  `Rd = (cond) ? 1 : 0`.
+/// CSETM Rd, cond ≡  CSINV Rd, XZR, XZR, !cond  ≡  `Rd = (cond) ? -1 : 0`.
+/// Capstone reports only the destination register; the condition lives in
+/// the detail. We lower to the same `Callother` shape as CSEL with constant
+/// inputs for `Rn`/`Rm` so downstream consumers can render uniformly.
+pub fn lift_cset(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, tag: u64) {
+    let cc = detail.arch_detail().arm64().map(|a| a.cc());
+    let cond = match cc.and_then(|cc| build_condition(ctx, cc)) {
+        Some(cond) => cond,
+        None => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+    let dst = match ops.first() {
+        Some((Arm64OperandType::Reg(reg), _)) if !crate::register_file::is_zero_reg(*reg) => {
+            crate::register_file::reg_varnode(*reg)
+        }
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+    let Some(dst) = dst else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let (true_val, false_val): (u64, u64) = if tag == 0x331 {
+        (1, 0)
+    } else {
+        (u64::MAX, 0)
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![
+            Varnode::constant(tag, 8),
+            cond,
+            Varnode::constant(true_val, dst.size),
+            Varnode::constant(false_val, dst.size),
+        ],
+        ctx.addr,
+    ));
+}
+
 pub fn lift_csel(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, tag: u64) {
     if ops.len() < 3 {
         ctx.emit_unimplemented();

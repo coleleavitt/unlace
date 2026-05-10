@@ -884,6 +884,8 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_CSINC => control_flow::lift_csel(ctx, &ops, detail, 0x331),
         Arm64Insn::ARM64_INS_CSINV => control_flow::lift_csel(ctx, &ops, detail, 0x332),
         Arm64Insn::ARM64_INS_CSNEG => control_flow::lift_csel(ctx, &ops, detail, 0x333),
+        Arm64Insn::ARM64_INS_CSET => control_flow::lift_cset(ctx, &ops, detail, 0x331),
+        Arm64Insn::ARM64_INS_CSETM => control_flow::lift_cset(ctx, &ops, detail, 0x332),
 
         _ => ctx.emit_unimplemented(),
     }
@@ -1030,6 +1032,38 @@ pub fn decode_it(insn: u16) -> Option<ItState> {
         conds.push(if bit == fc_lsb { firstcond } else { inv });
     }
     Some(ItState { firstcond, conds })
+}
+
+/// AArch64 conditional-select decoded fields (CSEL/CSINC/CSINV/CSNEG and
+/// the CSET/CSETM aliases). `op` packs `bit30` (high) and `bit10` (low):
+/// `0=CSEL`, `1=CSINC`, `2=CSINV`, `3=CSNEG`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CselDecoded {
+    pub sf: bool,
+    pub op: u8,
+    pub rd: u8,
+    pub rn: u8,
+    pub rm: u8,
+    pub cond: u8,
+}
+
+/// Standalone decoder for the AArch64 conditional-select group
+/// (`sf 0 0 11010100 Rm:5 cond:4 op2:1 0 Rn:5 Rd:5`). Returns `None` for
+/// any other encoding. Lets callers consume the bytes without spinning up
+/// Capstone (used as a fast pre-filter / fallback path).
+pub fn try_aarch64_csel(insn: u32) -> Option<CselDecoded> {
+    if (insn & 0x7FE0_0800) != 0x1A80_0000 {
+        return None;
+    }
+    let sf = (insn >> 31) & 1 == 1;
+    let op30 = (insn >> 30) & 1;
+    let op10 = (insn >> 10) & 1;
+    let op = ((op30 as u8) << 1) | (op10 as u8);
+    let rm = ((insn >> 16) & 0x1F) as u8;
+    let cond = ((insn >> 12) & 0xF) as u8;
+    let rn = ((insn >> 5) & 0x1F) as u8;
+    let rd = (insn & 0x1F) as u8;
+    Some(CselDecoded { sf, op, rd, rn, rm, cond })
 }
 
 /// Return `true` if `insn` is an AArch64 pointer-authentication or BTI

@@ -3,6 +3,7 @@
 pub mod c_printer;
 pub mod cfg_dot;
 pub mod cpp_class;
+pub mod cpp_stl;
 pub mod demangle;
 pub mod ir_dump;
 
@@ -13,5 +14,9 @@ pub use c_printer::{
 };
 pub use cfg_dot::emit_cfg_dot;
 pub use cpp_class::annotate_cpp_class_info;
+pub use cpp_stl::{
+    StlType, looks_like_shared_ptr_layout, looks_like_string_layout, looks_like_unique_ptr_layout,
+    looks_like_vector_layout, recognize_stl,
+};
 pub use demangle::{DemangleResult, SymbolKind, SymbolLanguage, demangle, sanitize_for_c};
 pub use ir_dump::dump_ir;

@@ -1067,15 +1067,40 @@ fn emit_class_layout_for_func(
     let _ = writeln!(out, " * }}; */");
 }
 
+/// Resolve the displayed C type for the synthesized `this` parameter of
+/// a C++ member function.
+///
+/// Lookup precedence:
+///   1. RTTI — the binary itself names the class via `__class_type_info`.
+///   2. STL recognition — `std::vector<int>::push_back` exposes the
+///      container kind in the demangled name even when no RTTI exists
+///      (libcxx STL types are template-instantiated in every TU and have
+///      no central typeinfo entry).
+///
+/// Returns `None` for free functions, non-C++ symbols, or when neither
+/// source recognises the class — callers fall back to the generic
+/// `__int64 *this` rendering.
 fn rtti_this_param_type(
     demangled: &Option<crate::demangle::DemangleResult>,
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Option<String> {
     let dr = demangled.as_ref()?;
     let class_name = dr.class_name.as_ref()?;
-    let rtti = rtti?;
-    rtti.class_by_name(class_name)?;
-    Some(class_name.clone())
+
+    // Prefer RTTI when the binary itself names the class.
+    if let Some(rtti) = rtti {
+        if rtti.class_by_name(class_name).is_some() {
+            return Some(class_name.clone());
+        }
+    }
+
+    // Fall back to STL container recognition driven by the demangled
+    // name — there is no RTTI for `std::vector<int>` etc.
+    if let Some(stl) = crate::cpp_stl::recognize_stl(dr) {
+        return Some(stl.display());
+    }
+
+    None
 }
 
 /// Recognise STL container types (`std::vector<T>`, `std::string`, etc.)
@@ -12300,6 +12325,92 @@ mod tests {
         assert!(
             output.contains("Dog *this"),
             "member function should have 'Dog *this' param: {output}",
+        );
+    }
+
+    /// `std::vector<int>::push_back` has no RTTI entry (libcxx STL types
+    /// are template-instantiated everywhere with no central typeinfo),
+    /// so the C printer must fall back to the demangle-driven STL
+    /// recogniser to emit `std::vector<int> *this`.
+    #[test]
+    fn test_stl_this_param_vector() {
+        let body = vec![HirNode::Return(None)];
+        // Itanium-mangled `std::vector<int, std::allocator<int>>::push_back(int const&)`
+        let func = make_func("_ZNSt6vectorIiSaIiEE9push_backERKi", body);
+
+        let output = super::print_c(&func);
+
+        assert!(
+            output.contains("std::vector<int> *this"),
+            "member function should have 'std::vector<int> *this' param: {output}",
+        );
+    }
+
+    #[test]
+    fn test_stl_this_param_string_libcxx() {
+        let body = vec![HirNode::Return(None)];
+        // libcxx `std::__1::basic_string<char,…>::append(char const*)`
+        let func = make_func(
+            "_ZNSt3__112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6appendEPKc",
+            body,
+        );
+
+        let output = super::print_c(&func);
+
+        assert!(
+            output.contains("std::string *this"),
+            "libcxx basic_string<char,…> should print as 'std::string *this': {output}",
+        );
+    }
+
+    #[test]
+    fn test_stl_this_param_shared_ptr() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_ZNSt10shared_ptrIiE5resetEv", body);
+
+        let output = super::print_c(&func);
+
+        assert!(
+            output.contains("std::shared_ptr<int> *this"),
+            "shared_ptr<int>::reset should print as 'std::shared_ptr<int> *this': {output}",
+        );
+    }
+
+    /// RTTI takes precedence when present — even if the demangled name
+    /// also looks like an STL container, the binary's class info wins.
+    #[test]
+    fn test_rtti_wins_over_stl_recognition() {
+        use unlace_loader::rtti::{CppClass, RttiInfo};
+
+        let body = vec![HirNode::Return(None)];
+        // Pretend the binary contains a user-defined `vector` class
+        // (unlikely but illustrative — we want RTTI to dominate).
+        let func = make_func("_ZN6vector3fooEv", body);
+
+        let mut classes = BTreeMap::new();
+        classes.insert(
+            0x4000,
+            CppClass {
+                mangled_name: "6vector".to_string(),
+                demangled_name: "vector".to_string(),
+                typeinfo_addr: 0x4000,
+                bases: vec![],
+                vtable_addr: None,
+                vtable_methods: vec![],
+                vtable_layout: None,
+            },
+        );
+        let rtti = RttiInfo { classes };
+
+        let output = super::print_c_with_rtti(&func, None, None, None, None, Some(&rtti));
+
+        assert!(
+            output.contains("vector *this"),
+            "RTTI should match the user-defined `vector` class: {output}",
+        );
+        assert!(
+            !output.contains("std::vector"),
+            "STL fallback should not fire when RTTI recognises the class: {output}",
         );
     }
 

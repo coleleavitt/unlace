@@ -187,6 +187,22 @@ pub enum HirNode {
     /// closure with typed parameter list and body.
     ObjcBlock { invoke: u64, captures: Vec<String> },
 
+    /// An ARM/Thumb IT-block guarded region: a contiguous run of statements
+    /// that execute only when an architecture condition code holds.
+    ///
+    /// Emitted by the structurer when consecutive [`IrInsn`]s carry a
+    /// matching `guard` (cond code, ARM ARM A8.3 encoding, 0..=15). The C
+    /// printer renders this as `if (cond_<mnemonic>) { ... }` since the
+    /// flag-producing instruction lives upstream and the cond is taken
+    /// directly from the architecture's NZCV state at runtime.
+    ///
+    /// MVP scope: no else_body. The `E` arm of an `ITE` becomes a separate
+    /// `GuardedIf` with the inverted cond code at the same scope.
+    GuardedIf {
+        cond_code: u8,
+        then_body: Vec<HirNode>,
+    },
+
     /// One or more raw assembly lines that the lifter could not translate
     /// into structured IR.
     ///

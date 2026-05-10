@@ -243,6 +243,7 @@ where
 
     merge_function_starts::<Mach>(&file, data, &mut symbols);
     merge_chained_imports::<Mach>(&file, data, &mut symbols, &mut dynamic_linking.relocations);
+    merge_modern_dyld_lcs::<Mach>(&file, data, &mut symbols, &mut dynamic_linking.relocations);
     merge_dyld_exports(&mut symbols, &dynamic_linking.exports);
     merge_dyld_binds(&mut symbols, &dynamic_linking.relocations);
     let (dylibs, rpaths) = load_dylibs_and_rpaths::<Mach>(&file, data);
@@ -1051,6 +1052,152 @@ fn decode_chained_imports(payload: &[u8], out: &mut BTreeMap<u64, Symbol>) {
             kind: SymbolKind::Unknown,
         });
     }
+}
+
+/// Drive `parse_chained_fixups` / `parse_exports_trie` / `parse_bind_opcodes`
+/// off the load commands of `file` and merge their output into `symbols` /
+/// `relocations`. The legacy private path covers the same wire formats but
+/// speaks to internal helpers — this is the public entry point so any new
+/// decode (PTR_64_OFFSET, ARM64E chained fixups, weak binds, …) reaches the
+/// `BinaryImage` without bypassing existing entries.
+fn merge_modern_dyld_lcs<Mach>(
+    file: &MachOFile<Mach>,
+    data: &[u8],
+    symbols: &mut BTreeMap<u64, Symbol>,
+    relocations: &mut Vec<Relocation>,
+) where
+    Mach: MachHeader<Endian = object::Endianness>,
+{
+    let endian = match file.macho_header().endian() {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    let segments: Vec<(u64, u64)> = collect_segment_vmaddrs::<Mach>(file, data)
+        .into_iter()
+        .map(|(vmaddr, _fileoff, filesize)| (vmaddr, filesize))
+        .collect();
+
+    let mut cmds = match file.macho_header().load_commands(endian, data, 0) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    while let Ok(Some(cmd)) = cmds.next() {
+        let variant = match cmd.variant() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        match variant {
+            LoadCommandVariant::LinkeditData(linkedit)
+                if linkedit.cmd.get(endian) == macho::LC_DYLD_CHAINED_FIXUPS =>
+            {
+                let off = u64::from(linkedit.dataoff.get(endian));
+                let size = u64::from(linkedit.datasize.get(endian));
+                if let Some(fixups) = parse_chained_fixups(data, off, size) {
+                    apply_chained_fixups(&fixups, symbols, relocations);
+                }
+            }
+            LoadCommandVariant::DyldInfo(info) => {
+                let export_off = u64::from(info.export_off.get(endian));
+                let export_size = u64::from(info.export_size.get(endian));
+                let bind_off = u64::from(info.bind_off.get(endian));
+                let bind_size = u64::from(info.bind_size.get(endian));
+                let lazy_off = u64::from(info.lazy_bind_off.get(endian));
+                let lazy_size = u64::from(info.lazy_bind_size.get(endian));
+                let weak_off = u64::from(info.weak_bind_off.get(endian));
+                let weak_size = u64::from(info.weak_bind_size.get(endian));
+
+                for entry in parse_exports_trie(data, export_off, export_size) {
+                    symbols.entry(entry.address).or_insert_with(|| Symbol {
+                        name: entry.name,
+                        addr: entry.address,
+                        size: 0,
+                        kind: SymbolKind::Unknown,
+                    });
+                }
+
+                let binds = parse_bind_opcodes(data, bind_off, bind_size, &segments)
+                    .into_iter()
+                    .chain(parse_bind_opcodes(data, lazy_off, lazy_size, &segments))
+                    .chain(parse_bind_opcodes(data, weak_off, weak_size, &segments));
+                for b in binds {
+                    apply_bind_import(b, symbols, relocations);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn apply_chained_fixups(
+    fixups: &[ChainedFixup],
+    symbols: &mut BTreeMap<u64, Symbol>,
+    relocations: &mut Vec<Relocation>,
+) {
+    for f in fixups {
+        match &f.kind {
+            ChainedFixupKind::Rebase { .. } => {
+                if !relocations
+                    .iter()
+                    .any(|r| r.addr == f.addr && r.kind == RelocKind::Relative)
+                {
+                    relocations.push(Relocation {
+                        addr: f.addr,
+                        sym_name: String::new(),
+                        kind: RelocKind::Relative,
+                    });
+                }
+            }
+            ChainedFixupKind::Bind { symbol, .. } => {
+                if symbol.is_empty() {
+                    continue;
+                }
+                if !relocations
+                    .iter()
+                    .any(|r| r.addr == f.addr && r.sym_name == *symbol)
+                {
+                    relocations.push(Relocation {
+                        addr: f.addr,
+                        sym_name: symbol.clone(),
+                        kind: RelocKind::GlobDat,
+                    });
+                }
+                symbols.entry(f.addr).or_insert_with(|| Symbol {
+                    name: symbol.clone(),
+                    addr: f.addr,
+                    size: 0,
+                    kind: SymbolKind::Unknown,
+                });
+            }
+        }
+    }
+}
+
+fn apply_bind_import(
+    b: ImportBinding,
+    symbols: &mut BTreeMap<u64, Symbol>,
+    relocations: &mut Vec<Relocation>,
+) {
+    if b.symbol.is_empty() {
+        return;
+    }
+    if !relocations
+        .iter()
+        .any(|r| r.addr == b.addr && r.sym_name == b.symbol)
+    {
+        relocations.push(Relocation {
+            addr: b.addr,
+            sym_name: b.symbol.clone(),
+            kind: RelocKind::GlobDat,
+        });
+    }
+    symbols.entry(b.addr).or_insert_with(|| Symbol {
+        name: b.symbol,
+        addr: b.addr,
+        size: 0,
+        kind: SymbolKind::Unknown,
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -3698,5 +3845,162 @@ mod tests {
         for b in &binds {
             assert_eq!(b.symbol, "_x");
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // t126: load-path wiring for LC_DYLD_CHAINED_FIXUPS / LC_DYLD_INFO[_ONLY]
+    // -----------------------------------------------------------------------
+
+    fn macho64_with_extra_lc(extra_lc: &[u8], payload: &[u8]) -> Vec<u8> {
+        let mut buf = vec![0u8; 0x2000];
+
+        let lc_size_segment: u32 = 72 + 80;
+        let lc_size_symtab: u32 = 24;
+        let lc_size_extra: u32 = extra_lc.len() as u32;
+        let sizeofcmds = lc_size_segment + lc_size_symtab + lc_size_extra;
+        let ncmds: u32 = 3;
+
+        buf[0..4].copy_from_slice(&macho::MH_MAGIC_64.to_le_bytes());
+        buf[4..8].copy_from_slice(&(macho::CPU_TYPE_X86_64 as i32).to_le_bytes());
+        buf[8..12].copy_from_slice(&3u32.to_le_bytes());
+        buf[12..16].copy_from_slice(&2u32.to_le_bytes());
+        buf[16..20].copy_from_slice(&ncmds.to_le_bytes());
+        buf[20..24].copy_from_slice(&sizeofcmds.to_le_bytes());
+
+        let seg = 0x20usize;
+        buf[seg..seg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[seg + 4..seg + 8].copy_from_slice(&lc_size_segment.to_le_bytes());
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        buf[seg + 24..seg + 32].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 32..seg + 40].copy_from_slice(&0x4000u64.to_le_bytes());
+        buf[seg + 48..seg + 56].copy_from_slice(&0x2000u64.to_le_bytes());
+        buf[seg + 56..seg + 60].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 60..seg + 64].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 64..seg + 68].copy_from_slice(&1u32.to_le_bytes());
+
+        let sec = seg + 72;
+        buf[sec..sec + 6].copy_from_slice(b"__text");
+        buf[sec + 16..sec + 22].copy_from_slice(b"__TEXT");
+        buf[sec + 32..sec + 40].copy_from_slice(&0x1100u64.to_le_bytes());
+        buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes());
+        buf[sec + 48..sec + 52].copy_from_slice(&0x100u32.to_le_bytes());
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+
+        let sym_cmd = seg + lc_size_segment as usize;
+        buf[sym_cmd..sym_cmd + 4].copy_from_slice(&0x02u32.to_le_bytes());
+        buf[sym_cmd + 4..sym_cmd + 8].copy_from_slice(&lc_size_symtab.to_le_bytes());
+
+        let extra_off = sym_cmd + lc_size_symtab as usize;
+        buf[extra_off..extra_off + extra_lc.len()].copy_from_slice(extra_lc);
+
+        buf[0x100] = 0xC3;
+        if !payload.is_empty() {
+            buf[0x1000..0x1000 + payload.len()].copy_from_slice(payload);
+        }
+
+        buf
+    }
+
+    #[test]
+    fn macho_loader_finds_chained_fixups_when_lc_present() {
+        const FIXUPS_BLOB_OFF: u32 = 0x1000;
+        let mut fixups = vec![0u8; 0x300];
+
+        write_u32(&mut fixups, 0, 0);
+        write_u32(&mut fixups, 4, 0x20);
+        write_u32(&mut fixups, 8, 0x80);
+        write_u32(&mut fixups, 12, 0xA0);
+        write_u32(&mut fixups, 16, 1);
+        write_u32(&mut fixups, 20, 1);
+        write_u32(&mut fixups, 24, 0);
+
+        let starts = 0x20usize;
+        write_u32(&mut fixups, starts, 1);
+        write_u32(&mut fixups, starts + 4, 0x10);
+
+        let raw_import: u32 = 1u32 << 9;
+        write_u32(&mut fixups, 0x80, raw_import);
+        let name = b"_dyld_sym";
+        fixups[0xA1..0xA1 + name.len()].copy_from_slice(name);
+
+        let si = starts + 0x10;
+        write_u32(&mut fixups, si, 22);
+        write_u16(&mut fixups, si + 4, 0x100);
+        write_u16(&mut fixups, si + 6, 6);
+        write_u64(&mut fixups, si + 8, 0x100);
+        write_u32(&mut fixups, si + 16, 0);
+        write_u16(&mut fixups, si + 20, 1);
+        write_u16(&mut fixups, si + 22, 0);
+
+        let raw: u64 = 1u64 << 63;
+        write_u64(&mut fixups, 0x100, raw);
+
+        let mut lc = vec![0u8; 16];
+        lc[0..4].copy_from_slice(&0x80000034u32.to_le_bytes());
+        lc[4..8].copy_from_slice(&16u32.to_le_bytes());
+        lc[8..12].copy_from_slice(&FIXUPS_BLOB_OFF.to_le_bytes());
+        lc[12..16].copy_from_slice(&(fixups.len() as u32).to_le_bytes());
+
+        let buf = macho64_with_extra_lc(&lc, &fixups);
+        let img = MachoLoader::load(&buf).expect("loads");
+
+        let has_bind_reloc = img.relocations.iter().any(|r| r.sym_name == "_dyld_sym");
+        assert!(
+            has_bind_reloc,
+            "expected '_dyld_sym' relocation from chained fixups; got {:?}",
+            img.relocations
+        );
+    }
+
+    #[test]
+    fn macho_loader_parses_exports_when_lc_dyld_info_present() {
+        const TRIE_OFF: u32 = 0x1000;
+        let mut trie: Vec<u8> = Vec::new();
+
+        write_uleb(&mut trie, 0);
+        trie.push(1);
+        trie.extend_from_slice(b"_hello");
+        trie.push(0);
+
+        let child_off_pos = trie.len();
+        trie.push(0);
+
+        let leaf_off = trie.len();
+        assert!(leaf_off < 0x80);
+        trie[child_off_pos] = leaf_off as u8;
+
+        let mut term = Vec::new();
+        write_uleb(&mut term, 0);
+        write_uleb(&mut term, 0x1234);
+        write_uleb(&mut trie, term.len() as u64);
+        trie.extend(term);
+        trie.push(0);
+
+        let mut lc = vec![0u8; 48];
+        lc[0..4].copy_from_slice(&0x80000022u32.to_le_bytes());
+        lc[4..8].copy_from_slice(&48u32.to_le_bytes());
+        lc[40..44].copy_from_slice(&TRIE_OFF.to_le_bytes());
+        lc[44..48].copy_from_slice(&(trie.len() as u32).to_le_bytes());
+
+        let buf = macho64_with_extra_lc(&lc, &trie);
+        let img = MachoLoader::load(&buf).expect("loads");
+
+        let exported = img
+            .symbols
+            .values()
+            .any(|s| s.name == "_hello" && s.addr == 0x1234);
+        assert!(
+            exported,
+            "expected exported symbol '_hello' at 0x1234; symbols: {:?}",
+            img.symbols.values().map(|s| &s.name).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn macho_loader_handles_missing_modern_lcs_gracefully() {
+        let buf = minimal_macho64();
+        let img = MachoLoader::load(&buf).expect("loads");
+        assert_eq!(img.arch, ArchId::X86_64);
+        assert!(img.relocations.is_empty());
     }
 }

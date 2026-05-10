@@ -259,6 +259,24 @@ impl ArmLifter {
             });
         }
 
+        // t178: Thumb-2 (32-bit) LDM/STM. Tried before Capstone so we
+        // own the lowering (matching the A32 / Thumb-1 LDM precedent) —
+        // this keeps writeback semantics + per-register Load/Store
+        // expansion uniform across all ARM modes.
+        if bytes.len() >= 4 {
+            let hw1 = half;
+            let hw2 = u16::from_le_bytes([bytes[2], bytes[3]]);
+            if let Some(decoded) = decode_thumb2_ldm_stm(hw1, hw2) {
+                let mut ctx = LiftCtx::new(addr);
+                emit_ldm_stm(&mut ctx, decoded);
+                apply_guard(&mut ctx.ops, pending_cond);
+                return Ok(LiftedInsn {
+                    ir_ops: ctx.ops,
+                    len: 4,
+                });
+            }
+        }
+
         let mut lifted = THUMB_CS.with(|cell| {
             let mut slot = cell.borrow_mut();
             if slot.is_none() {
@@ -2049,6 +2067,65 @@ pub fn decode_thumb1_push_pop(insn: u16) -> Option<LdmStmDecoded> {
         LdmStmAddressing::Ia
     };
     Some((addressing, 13, reg_list, true, is_pop))
+}
+
+/// Decode a Thumb-2 (T32, 32-bit) LDM/STM encoding. Two layouts share
+/// the same insn class, distinguished by the P/U bits:
+///
+/// ```text
+///   LDMIA.W / STMIA.W  ←  P=0, U=1   (increment after, U=1)
+///   LDMDB.W / STMDB.W  ←  P=1, U=0   (decrement before)
+/// ```
+///
+/// Full insn shape (input here is little-endian halfwords `hw1`, `hw2`,
+/// where `hw1` is the most-significant halfword of the 32-bit insn):
+///
+/// ```text
+///   hw1:  1110_100 P U 0 W L  Rn:4
+///   hw2:  P_pc  M_lr  (0)     reg_list:13
+/// ```
+///
+/// Returns `None` for any other encoding (including the `P==U` reserved
+/// combos, which alias different instruction classes such as RFE/SRS).
+/// The `reg_list` is the 16-bit register bitmap suitable for
+/// [`expand_reg_list`], built from hw2's low 13 bits plus bit-14 (LR) and
+/// bit-15 (PC). Bit 13 is reserved-zero in the encoding, so SP cannot
+/// appear in a T32 reg list — we preserve that by masking it out.
+///
+/// PUSH.W / POP.W (the T2 encodings of the wide push/pop) are this same
+/// class with Rn=13 and W=1; they fall out of this decoder naturally and
+/// don't need a separate code path.
+pub fn decode_thumb2_ldm_stm(hw1: u16, hw2: u16) -> Option<LdmStmDecoded> {
+    // Top 7 bits of hw1 must be 1110_100 (the T32 load/store-multiple
+    // class).
+    if (hw1 >> 9) & 0x7F != 0b1110_100 {
+        return None;
+    }
+    let p = (hw1 >> 8) & 1 == 1;
+    let u = (hw1 >> 7) & 1 == 1;
+    // Bit 22 (hw1 bit 6) must be 0 for LDM/STM (it's the S bit for
+    // exception-return-style encodings); reject if set.
+    if (hw1 >> 6) & 1 != 0 {
+        return None;
+    }
+    let w = (hw1 >> 5) & 1 == 1;
+    let l = (hw1 >> 4) & 1 == 1;
+    let rn = (hw1 & 0xF) as u8;
+    // P==U is the reserved combination per ARM ARM A8.6.53/55; bail
+    // rather than guess.
+    if p == u {
+        return None;
+    }
+    let addressing = if p {
+        LdmStmAddressing::Db
+    } else {
+        LdmStmAddressing::Ia
+    };
+    // hw2 encodes the 13-bit reg list in bits[12:0], with bit 13 RAZ,
+    // bit 14 = LR-present, bit 15 = PC-present. Mask off the reserved
+    // SP bit so callers can pass the result directly to expand_reg_list.
+    let reg_list = hw2 & 0xDFFF;
+    Some((addressing, rn, reg_list, w, l))
 }
 
 /// Thumb-2 IT-block state: the leading condition plus the per-instruction

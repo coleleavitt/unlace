@@ -243,9 +243,9 @@ where
 
     merge_function_starts::<Mach>(&file, data, &mut symbols);
     merge_chained_imports::<Mach>(&file, data, &mut symbols, &mut dynamic_linking.relocations);
-    merge_modern_dyld_lcs::<Mach>(&file, data, &mut symbols, &mut dynamic_linking.relocations);
     merge_dyld_exports(&mut symbols, &dynamic_linking.exports);
     merge_dyld_binds(&mut symbols, &dynamic_linking.relocations);
+    merge_modern_dyld_lcs::<Mach>(&file, data, &mut symbols, &mut dynamic_linking.relocations);
     let (dylibs, rpaths) = load_dylibs_and_rpaths::<Mach>(&file, data);
     let plt_symbols = resolve_stubs::<Mach>(&file, data, &sections);
 

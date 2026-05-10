@@ -647,6 +647,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         }
     }
 
@@ -680,6 +681,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         recover_switches(&mut func);
@@ -831,6 +833,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let targets = [0x4200u64, 0x4210, 0x4220];

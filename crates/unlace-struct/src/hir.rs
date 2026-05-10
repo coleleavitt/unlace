@@ -12,6 +12,8 @@ use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaVarnode};
 use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, Varnode};
 
+use crate::switch_recovery::IndirectBranchKind;
+
 /// Opaque label identifier for goto/label fallback.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LabelId(pub u32);
@@ -314,4 +316,11 @@ pub struct HirFunction {
     /// a bracket-form `[Class method:]` the C printer should emit it as the
     /// statement text in place of the synthesized `objc_msgSend(...)` call.
     pub objc_dispatch_calls: BTreeMap<u64, String>,
+    /// Per-arch indirect-branch classifications keyed by the BRANCHIND
+    /// instruction's machine address. Populated by the structurer when an
+    /// indirect branch did not resolve as a structured `Switch` and the
+    /// architecture-specific classifier in [`crate::switch_recovery`]
+    /// recognised the dispatch pattern. Downstream passes can use these
+    /// annotations to drive per-kind table layout recovery.
+    pub indirect_branch_kinds: BTreeMap<u64, IndirectBranchKind>,
 }

@@ -429,6 +429,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            indirect_branch_kinds: BTreeMap::new(),
         }
     }
 

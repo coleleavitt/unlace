@@ -1,3 +1,33 @@
+//! DWARF `.debug_info` consumer (t109).
+//!
+//! Walks every compilation unit in the image's DWARF sections via
+//! [`gimli::Dwarf::units`] and lowers the following DIE tags into the
+//! [`DwarfInfo`] struct:
+//!
+//!  * `DW_TAG_subprogram`     → [`FunctionDebugInfo`] (name, low_pc,
+//!    high_pc, return type, parameters, locals, decl location).
+//!  * `DW_TAG_structure_type` → [`StructType`] with [`StructField`]
+//!    members.
+//!  * `DW_TAG_union_type`     → [`UnionType`] with member list.
+//!  * `DW_TAG_enumeration_type` → [`EnumType`] with `(name, value)`
+//!    variant list.
+//!  * `DW_TAG_variable` (inside a subprogram) → [`LocalVariable`] with
+//!    optional `frame_offset` decoded from a single-op `DW_OP_fbreg`
+//!    location expression.
+//!
+//! Recursive types are resolved through [`resolve_type_name`], which
+//! recurses through `DW_TAG_pointer_type`, `DW_TAG_const_type`,
+//! `DW_TAG_volatile_type`, `DW_TAG_restrict_type`, and `DW_TAG_typedef`
+//! to produce a printable C-style name (e.g. `"const Rect *"`).
+//!
+//! Missing or empty `.debug_*` sections are not an error: callers
+//! receive an empty [`DwarfInfo`] and can fall back to symbol-table
+//! recovery.
+//!
+//! Tests: see the `tests` module — fixtures `debug_calls.elf`,
+//! `debug_structs.elf`, `hello_world.elf`, and `stripped.elf` exercise
+//! every public surface end-to-end.
+
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 

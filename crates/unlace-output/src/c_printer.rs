@@ -309,6 +309,15 @@ pub struct PrinterAnnotations {
     /// at the top of the C output preamble.  Classes without ivars are
     /// skipped (no empty `struct {};` would be a C constraint violation).
     pub objc_classes: Vec<unlace_loader::ObjcClass>,
+    /// Resolved PE forwarder chains: IAT slot VA → `target_dll!target_symbol`.
+    ///
+    /// Populated from [`unlace_loader::BinaryImage::forwarded_resolutions`].
+    /// When a CALL's target address (the constant `inputs[0]` of an
+    /// `IrOp::Call`) is a key in this map, the printer appends a
+    /// `/* -> ntdll!RtlAllocateHeap */` trailing comment so analysts can
+    /// see the final landing site of a forwarder chain without leaving
+    /// the C view.
+    pub forwarded_resolutions: BTreeMap<u64, String>,
 }
 
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
@@ -372,6 +381,7 @@ pub fn print_c_with_annotations(
         ctx.line_comments = ann.line_comments.clone();
         ctx.custom_names = ann.custom_names.clone();
         ctx.string_hash_table = ann.string_hash_table.clone();
+        ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
     }
     if let Some(cfg) = config {
         ctx.config = cfg;
@@ -1197,6 +1207,10 @@ struct PrintCtx {
     /// so a case constant matching a recognised CRC32/FNV-1a/djb2 of a
     /// binary string renders as `case 0xN: /* "name" */`.
     string_hash_table: BTreeMap<u64, String>,
+    /// IAT slot VA → resolved forwarder target, lifted from
+    /// [`PrinterAnnotations::forwarded_resolutions`]. Empty when the caller
+    /// didn't pass annotations or the binary has no resolved forwarders.
+    forwarded_resolutions: BTreeMap<u64, String>,
 }
 
 impl PrintCtx {
@@ -1260,6 +1274,7 @@ impl PrintCtx {
             custom_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             string_hash_table: BTreeMap::new(),
+            forwarded_resolutions: BTreeMap::new(),
         }
     }
 
@@ -3607,6 +3622,26 @@ fn emit_comment_line(text: &str, depth: usize, tab_width: usize, out: &mut Strin
     }
 }
 
+/// If this Call's target is an IAT slot whose forwarder chain has been
+/// resolved (via [`PrinterAnnotations::forwarded_resolutions`]), return
+/// the trailing `/* -> dll!sym */` comment text the printer should append
+/// to the call statement. Returns `None` for non-CALL insns or when the
+/// target VA is not a key in the resolution map.
+fn forwarded_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
+    if !matches!(insn.op, IrOp::Call | IrOp::Callind) {
+        return None;
+    }
+    if ctx.forwarded_resolutions.is_empty() {
+        return None;
+    }
+    let target = insn.inputs.first()?;
+    if target.space != SpaceId::Const {
+        return None;
+    }
+    let resolved = ctx.forwarded_resolutions.get(&target.offset)?;
+    Some(format!("/* -> {} */", resolved))
+}
+
 fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     if insn.inputs.is_empty() {
         return "/* unknown */".to_string();
@@ -4026,13 +4061,26 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                 }
             }
             IrOp::Store => Some("/* STORE (bad arity) */;".to_string()),
-            IrOp::Callind => Some(format!("{};", emit_callind_cast(insn, idx, ctx))),
-            IrOp::Call => {
-                if let Some(bracket) = objc_bracket_call(insn, ctx) {
-                    Some(format!("{};", bracket))
-                } else {
-                    Some(format!("{}();", resolve_call_target(insn, idx, ctx)))
+            IrOp::Callind => {
+                let mut s = format!("{};", emit_callind_cast(insn, idx, ctx));
+                if let Some(c) = forwarded_call_comment(insn, ctx) {
+                    s.push(' ');
+                    s.push_str(&c);
                 }
+                Some(s)
+            }
+            IrOp::Call => {
+                let base = if let Some(bracket) = objc_bracket_call(insn, ctx) {
+                    format!("{};", bracket)
+                } else {
+                    format!("{}();", resolve_call_target(insn, idx, ctx))
+                };
+                let mut s = base;
+                if let Some(c) = forwarded_call_comment(insn, ctx) {
+                    s.push(' ');
+                    s.push_str(&c);
+                }
+                Some(s)
             }
             IrOp::Unimplemented => Some(format!("__unknown_insn_0x{:X}();", insn.addr)),
             IrOp::Callother => {
@@ -4189,12 +4237,21 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     let _ = writeln!(out, "/* {} */", ann);
                     indent(depth, ctx.config.tab_width, out);
                 }
+                let fwd = forwarded_call_comment(insn, ctx);
                 if insn.op == IrOp::Callind {
                     let expr = emit_callind_cast(insn, idx, ctx);
-                    let _ = writeln!(out, "{};", expr);
+                    if let Some(c) = fwd {
+                        let _ = writeln!(out, "{}; {}", expr, c);
+                    } else {
+                        let _ = writeln!(out, "{};", expr);
+                    }
                 } else {
                     let target = resolve_call_target(insn, idx, ctx);
-                    let _ = writeln!(out, "{}();", target);
+                    if let Some(c) = fwd {
+                        let _ = writeln!(out, "{}(); {}", target, c);
+                    } else {
+                        let _ = writeln!(out, "{}();", target);
+                    }
                 }
             }
             IrOp::Unimplemented => {
@@ -5059,11 +5116,16 @@ fn emit_expr_with_prec(
 
         // -- Call with output --
         IrOp::Call | IrOp::Callind => {
-            if insn.op == IrOp::Callind {
+            let base = if insn.op == IrOp::Callind {
                 emit_callind_cast(insn, stmt_idx, ctx)
             } else {
                 let target = resolve_call_target(insn, stmt_idx, ctx);
                 format!("{}()", target)
+            };
+            if let Some(c) = forwarded_call_comment(insn, ctx) {
+                format!("{} {}", base, c)
+            } else {
+                base
             }
         }
 
@@ -9107,6 +9169,51 @@ mod tests {
         assert!(
             output.contains("malloc()"),
             "CALL with output to known symbol should emit 'malloc()': {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // t173: forwarded-export resolution comment on Call rendering
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_call_renders_forwarded_resolution_comment() {
+        // CALL through an IAT slot whose forwarder has been resolved
+        // (e.g. `kernel32!HeapAlloc → ntdll!RtlAllocateHeap`) gets a
+        // trailing `/* -> ntdll!RtlAllocateHeap */` comment.
+        let iat_slot_va: u64 = 0x0040_3000;
+        let target_addr = con(iat_slot_va, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], 0x1000);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(iat_slot_va, "kernel32!HeapAlloc".to_string());
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.forwarded_resolutions
+            .insert(iat_slot_va, "NTDLL!RtlAllocateHeap".to_string());
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            Some(&symbols),
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(
+            output.contains("/* -> NTDLL!RtlAllocateHeap */"),
+            "forwarded-resolution comment must render on CALL: {output}",
+        );
+        // The original (un-resolved) symbol name still appears as the
+        // call target — the comment is *additive*, not a rename.
+        assert!(
+            output.contains("kernel32!HeapAlloc"),
+            "primary symbol name must still render: {output}",
         );
     }
 

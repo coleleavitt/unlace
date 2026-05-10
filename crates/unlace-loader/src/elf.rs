@@ -74,6 +74,7 @@ where
         bound_imports: Vec::new(),
             delay_imports: Vec::new(),
             forwarded_exports: Vec::new(),
+            forwarded_resolutions: std::collections::BTreeMap::new(),
         rich_header: None,
         dylibs: Vec::new(),
         rpaths: Vec::new(),

@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use object::pe;
-use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile};
+use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, ImageThunkData, PeFile};
 use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 
 use crate::Loader;
@@ -92,6 +92,8 @@ where
     let bound_imports = parse_bound_imports(&file, data);
     let rich_header = parse_rich_header(data);
 
+    let forwarded_resolutions = build_forwarded_resolutions::<Pe>(&file, &forwarded_exports);
+
     let mut image = BinaryImage {
         arch,
         endian: Endian::Little,
@@ -109,6 +111,7 @@ where
         bound_imports,
         delay_imports,
         forwarded_exports,
+        forwarded_resolutions,
         rich_header,
         dylibs: Vec::new(),
         rpaths: Vec::new(),
@@ -1188,6 +1191,94 @@ where
     }
 }
 
+/// Build the IAT-slot → resolved-forwarder map for this image.
+///
+/// Walks every `(library, function)` thunk in the eager and delay-load
+/// import directories and looks each function name up in `forwards`. When
+/// a match exists we record the IAT slot's *runtime VA* — i.e.
+/// `image_base + first_thunk_rva + slot_index * thunk_size` — and value it
+/// with `target_dll!target_symbol` (ordinal forwards keep their `#N` form).
+///
+/// This makes the printer's call renderer able to surface a
+/// `/* -> ntdll!RtlAllocateHeap */` trailing comment whenever a Call's
+/// resolved target points at one of these IAT slots, so analysts can see
+/// the final landing site of a forwarder chain without leaving the C view.
+///
+/// Returns an empty map when the binary has no import table, no forwarded
+/// exports, or no overlap between the two.
+fn build_forwarded_resolutions<'data, Pe>(
+    file: &PeFile<'data, Pe>,
+    forwards: &[ForwardedExport],
+) -> BTreeMap<u64, String>
+where
+    Pe: ImageNtHeaders,
+{
+    let mut out: BTreeMap<u64, String> = BTreeMap::new();
+    if forwards.is_empty() {
+        return out;
+    }
+
+    // Build a fast `function name → resolved string` index keyed on the
+    // *source* (this-DLL) symbol name. We only care about hits during the
+    // IAT walk, so the lookup is by-name and case-sensitive (the PE loader
+    // already preserves case).
+    let mut by_name: BTreeMap<&str, String> = BTreeMap::new();
+    for fwd in forwards {
+        let resolved = format!("{}!{}", fwd.target_dll, fwd.target_symbol);
+        by_name.insert(fwd.name.as_str(), resolved);
+    }
+
+    let image_base = file.relative_address_base();
+    let thunk_size = std::mem::size_of::<Pe::ImageThunkData>() as u64;
+
+    // Eager imports.
+    if let Ok(Some(table)) = file.import_table() {
+        if let Ok(mut descs) = table.descriptors() {
+            while let Ok(Some(desc)) = descs.next() {
+                let lib_bytes = match table.name(desc.name.get(object::endian::LittleEndian)) {
+                    Ok(b) => b,
+                    Err(_) => continue,
+                };
+                let _ = lib_bytes; // library name not needed for the map key
+                let iat_rva = desc.first_thunk.get(object::endian::LittleEndian);
+                if iat_rva == 0 {
+                    continue;
+                }
+                // Walk via OFT (name table) when present, since the IAT may
+                // have been overwritten at load time — names live in the
+                // hint-name table referenced by OFT thunks. Fall back to
+                // first_thunk if OFT is null.
+                let name_thunk_rva = {
+                    let oft = desc.original_first_thunk.get(object::endian::LittleEndian);
+                    if oft != 0 { oft } else { iat_rva }
+                };
+                let mut thunks = match table.thunks(name_thunk_rva) {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let mut slot_idx: u64 = 0;
+                while let Ok(Some(thunk)) = thunks.next::<Pe>() {
+                    if !thunk.is_ordinal() {
+                        if let Ok((_hint, name)) = table.hint_name(thunk.address()) {
+                            if let Some(resolved) =
+                                by_name.get(std::str::from_utf8(name).unwrap_or(""))
+                            {
+                                let slot_va = image_base
+                                    + u64::from(iat_rva)
+                                    + slot_idx * thunk_size;
+                                out.insert(slot_va, resolved.clone());
+                            }
+                        }
+                    }
+                    slot_idx += 1;
+                }
+            }
+        }
+    }
+
+    out
+}
+
 /// Populate symbols from the PE import directory (IAT).
 ///
 /// Each import is recorded at address 0 (the true IAT slot address depends on
@@ -2196,5 +2287,261 @@ mod tests {
         // should NOT contain them (the high-level exports iterator drops
         // forwarders, by design).
         assert_eq!(img.forwarded_exports.len(), 2);
+    }
+
+    // ---------------------------------------------------------------------
+    // t173: forwarded export *resolution* — build a PE that exports two
+    // forwarders AND imports those same names from its own DLL, then
+    // verify [`BinaryImage::forwarded_resolutions`] maps each IAT slot VA
+    // onto the resolved `target_dll!target_symbol` (ordinal forwards keep
+    // their `#N` form).
+    // ---------------------------------------------------------------------
+
+    /// PE32+ fixture: `.text` + `.rdata` (export dir) + `.idata` (import
+    /// dir). Imports two thunks from `self.dll` — `HeapAlloc` and
+    /// `ZwQuerySystem` — whose names collide with the two forwarded
+    /// exports also wired into the export directory.
+    ///
+    /// Returns `(buf, iat_va_heap_alloc, iat_va_zw_query)` so test bodies
+    /// can assert on the expected IAT slot VAs without reproducing the
+    /// layout math.
+    fn pe64_with_self_import_of_forwarders() -> (Vec<u8>, u64, u64) {
+        let nt: usize = 0x80;
+        let opt_hdr_size: u16 = 16 * 8 + 112;
+        let oh = nt + 24;
+        let sh = oh + opt_hdr_size as usize;
+        let section_count: u16 = 3;
+        let section_table_end = sh + (section_count as usize) * 40;
+
+        let text_offset: u32 = 0x400;
+        let rdata_offset: u32 = 0x600;
+        let rdata_size: u32 = 0x200;
+        let idata_offset: u32 = 0x800;
+        let idata_size: u32 = 0x200;
+        let total_size: u32 = idata_offset + idata_size;
+        let mut buf = vec![0u8; total_size as usize];
+
+        // ---- DOS + NT signature ----
+        buf[0] = b'M';
+        buf[1] = b'Z';
+        buf[0x3C..0x40].copy_from_slice(&(nt as u32).to_le_bytes());
+        buf[nt..nt + 4].copy_from_slice(&[b'P', b'E', 0, 0]);
+
+        // ---- COFF file header ----
+        let fh = nt + 4;
+        buf[fh..fh + 2].copy_from_slice(&pe::IMAGE_FILE_MACHINE_AMD64.to_le_bytes());
+        buf[fh + 2..fh + 4].copy_from_slice(&section_count.to_le_bytes());
+        buf[fh + 16..fh + 18].copy_from_slice(&opt_hdr_size.to_le_bytes());
+        buf[fh + 18..fh + 20].copy_from_slice(&pe::IMAGE_FILE_EXECUTABLE_IMAGE.to_le_bytes());
+
+        // ---- Optional header ----
+        buf[oh..oh + 2].copy_from_slice(&pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC.to_le_bytes());
+        buf[oh + 16..oh + 20].copy_from_slice(&0x1000u32.to_le_bytes());
+        let image_base: u64 = 0x0040_0000;
+        buf[oh + 24..oh + 32].copy_from_slice(&image_base.to_le_bytes());
+        buf[oh + 32..oh + 36].copy_from_slice(&0x1000u32.to_le_bytes());
+        buf[oh + 36..oh + 40].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[oh + 56..oh + 60].copy_from_slice(&0x5000u32.to_le_bytes());
+        buf[oh + 60..oh + 64].copy_from_slice(&(section_table_end as u32).to_le_bytes());
+        let dir_count: u32 = 16;
+        buf[oh + 108..oh + 112].copy_from_slice(&dir_count.to_le_bytes());
+
+        // ---- Section: .text ----
+        buf[sh..sh + 5].copy_from_slice(b".text");
+        buf[sh + 8..sh + 12].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[sh + 12..sh + 16].copy_from_slice(&0x1000u32.to_le_bytes());
+        buf[sh + 16..sh + 20].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[sh + 20..sh + 24].copy_from_slice(&text_offset.to_le_bytes());
+        buf[sh + 36..sh + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_MEM_EXECUTE | pe::IMAGE_SCN_CNT_CODE)
+                .to_le_bytes(),
+        );
+        buf[text_offset as usize] = 0xC3;
+
+        // ---- Section: .rdata (export directory) ----
+        let rdata_rva: u32 = 0x2000;
+        let sh2 = sh + 40;
+        buf[sh2..sh2 + 6].copy_from_slice(b".rdata");
+        buf[sh2 + 8..sh2 + 12].copy_from_slice(&rdata_size.to_le_bytes());
+        buf[sh2 + 12..sh2 + 16].copy_from_slice(&rdata_rva.to_le_bytes());
+        buf[sh2 + 16..sh2 + 20].copy_from_slice(&rdata_size.to_le_bytes());
+        buf[sh2 + 20..sh2 + 24].copy_from_slice(&rdata_offset.to_le_bytes());
+        buf[sh2 + 36..sh2 + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_CNT_INITIALIZED_DATA).to_le_bytes(),
+        );
+
+        // ---- Section: .idata (import directory) ----
+        let idata_rva: u32 = 0x3000;
+        let sh3 = sh + 80;
+        buf[sh3..sh3 + 6].copy_from_slice(b".idata");
+        buf[sh3 + 8..sh3 + 12].copy_from_slice(&idata_size.to_le_bytes());
+        buf[sh3 + 12..sh3 + 16].copy_from_slice(&idata_rva.to_le_bytes());
+        buf[sh3 + 16..sh3 + 20].copy_from_slice(&idata_size.to_le_bytes());
+        buf[sh3 + 20..sh3 + 24].copy_from_slice(&idata_offset.to_le_bytes());
+        buf[sh3 + 36..sh3 + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_CNT_INITIALIZED_DATA).to_le_bytes(),
+        );
+
+        // ---- Build export directory inside .rdata (same as t164 fixture) ----
+        let rd = rdata_offset as usize;
+        let export_dir_rva = rdata_rva;
+        let funcs_off = 0x28usize;
+        let names_off = 0x30usize;
+        let ords_off = 0x38usize;
+        let dll_name_off = 0x3Cusize;
+        let fn1_name_off = 0x4Ausize;
+        let fn2_name_off = 0x54usize;
+        let fwd1_off = 0x62usize;
+        let fwd2_off = 0x78usize;
+        let blob_end = 0x84usize;
+        let export_dir_size = blob_end as u32;
+
+        buf[rd + 12..rd + 16]
+            .copy_from_slice(&(rdata_rva + dll_name_off as u32).to_le_bytes());
+        buf[rd + 16..rd + 20].copy_from_slice(&1u32.to_le_bytes());
+        buf[rd + 20..rd + 24].copy_from_slice(&2u32.to_le_bytes());
+        buf[rd + 24..rd + 28].copy_from_slice(&2u32.to_le_bytes());
+        buf[rd + 28..rd + 32]
+            .copy_from_slice(&(rdata_rva + funcs_off as u32).to_le_bytes());
+        buf[rd + 32..rd + 36]
+            .copy_from_slice(&(rdata_rva + names_off as u32).to_le_bytes());
+        buf[rd + 36..rd + 40]
+            .copy_from_slice(&(rdata_rva + ords_off as u32).to_le_bytes());
+
+        buf[rd + funcs_off..rd + funcs_off + 4]
+            .copy_from_slice(&(rdata_rva + fwd1_off as u32).to_le_bytes());
+        buf[rd + funcs_off + 4..rd + funcs_off + 8]
+            .copy_from_slice(&(rdata_rva + fwd2_off as u32).to_le_bytes());
+
+        buf[rd + names_off..rd + names_off + 4]
+            .copy_from_slice(&(rdata_rva + fn1_name_off as u32).to_le_bytes());
+        buf[rd + names_off + 4..rd + names_off + 8]
+            .copy_from_slice(&(rdata_rva + fn2_name_off as u32).to_le_bytes());
+
+        buf[rd + ords_off..rd + ords_off + 2].copy_from_slice(&0u16.to_le_bytes());
+        buf[rd + ords_off + 2..rd + ords_off + 4].copy_from_slice(&1u16.to_le_bytes());
+
+        let write_cstr = |buf: &mut [u8], off: usize, s: &str| {
+            buf[off..off + s.len()].copy_from_slice(s.as_bytes());
+            buf[off + s.len()] = 0;
+        };
+        write_cstr(&mut buf, rd + dll_name_off, "kernel32.dll");
+        write_cstr(&mut buf, rd + fn1_name_off, "HeapAlloc");
+        write_cstr(&mut buf, rd + fn2_name_off, "ZwQuerySystem");
+        write_cstr(&mut buf, rd + fwd1_off, "NTDLL.RtlAllocateHeap");
+        write_cstr(&mut buf, rd + fwd2_off, "NTDLL.#142");
+
+        // ---- Build import directory inside .idata ----
+        //
+        // Layout (offsets relative to `idata_offset` / `idata_rva`):
+        //   +0x00  ImageImportDescriptor[0]: OFT, ts, fwd, name, FT (20 B)
+        //   +0x14  ImageImportDescriptor[1]: null terminator (20 B)
+        //   +0x28  Import lookup table (OFT thunks, 8 B × 2 + null) = 24 B
+        //   +0x40  Import address table (FT thunks, 8 B × 2 + null) = 24 B
+        //   +0x58  DLL name "self.dll\0"
+        //   +0x62  hint-name "\0\0HeapAlloc\0"        (2-byte hint + str)
+        //   +0x70  hint-name "\0\0ZwQuerySystem\0"
+        let id = idata_offset as usize;
+        let desc0_off = 0x00usize;
+        let oft_off = 0x28usize;
+        let ft_off = 0x40usize;
+        let dll_off = 0x58usize;
+        let hn1_off = 0x62usize;
+        let hn2_off = 0x70usize;
+
+        // Descriptor[0]
+        // OriginalFirstThunk
+        buf[id + desc0_off..id + desc0_off + 4]
+            .copy_from_slice(&(idata_rva + oft_off as u32).to_le_bytes());
+        // TimeDateStamp (0), ForwarderChain (0) — already zero
+        // Name
+        buf[id + desc0_off + 12..id + desc0_off + 16]
+            .copy_from_slice(&(idata_rva + dll_off as u32).to_le_bytes());
+        // FirstThunk (IAT)
+        buf[id + desc0_off + 16..id + desc0_off + 20]
+            .copy_from_slice(&(idata_rva + ft_off as u32).to_le_bytes());
+        // Descriptor[1] = all zeroes already (null terminator)
+
+        // OFT thunks (64-bit): two RVAs to hint-name entries, then 0
+        buf[id + oft_off..id + oft_off + 8]
+            .copy_from_slice(&u64::from(idata_rva + hn1_off as u32).to_le_bytes());
+        buf[id + oft_off + 8..id + oft_off + 16]
+            .copy_from_slice(&u64::from(idata_rva + hn2_off as u32).to_le_bytes());
+        // 3rd thunk = 0 terminator
+
+        // IAT thunks (same as OFT pre-bind)
+        buf[id + ft_off..id + ft_off + 8]
+            .copy_from_slice(&u64::from(idata_rva + hn1_off as u32).to_le_bytes());
+        buf[id + ft_off + 8..id + ft_off + 16]
+            .copy_from_slice(&u64::from(idata_rva + hn2_off as u32).to_le_bytes());
+
+        write_cstr(&mut buf, id + dll_off, "self.dll");
+        // hint-name: u16 hint (=0) then asciiz name
+        buf[id + hn1_off..id + hn1_off + 2].copy_from_slice(&0u16.to_le_bytes());
+        write_cstr(&mut buf, id + hn1_off + 2, "HeapAlloc");
+        buf[id + hn2_off..id + hn2_off + 2].copy_from_slice(&0u16.to_le_bytes());
+        write_cstr(&mut buf, id + hn2_off + 2, "ZwQuerySystem");
+
+        // Wire EXPORT and IMPORT data directory entries.
+        let export_dir_entry = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_EXPORT as usize) * 8;
+        buf[export_dir_entry..export_dir_entry + 4]
+            .copy_from_slice(&export_dir_rva.to_le_bytes());
+        buf[export_dir_entry + 4..export_dir_entry + 8]
+            .copy_from_slice(&export_dir_size.to_le_bytes());
+
+        let import_dir_entry = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_IMPORT as usize) * 8;
+        buf[import_dir_entry..import_dir_entry + 4]
+            .copy_from_slice(&idata_rva.to_le_bytes());
+        // size = two descriptors (the loader doesn't actually use this).
+        buf[import_dir_entry + 4..import_dir_entry + 8]
+            .copy_from_slice(&40u32.to_le_bytes());
+
+        // IAT slot VAs the test will assert on. FT thunks are u64-sized for
+        // PE32+; slot 0 → HeapAlloc, slot 1 → ZwQuerySystem.
+        let iat_heap_alloc = image_base + u64::from(idata_rva + ft_off as u32);
+        let iat_zw_query = iat_heap_alloc + 8;
+        (buf, iat_heap_alloc, iat_zw_query)
+    }
+
+    #[test]
+    fn forwarded_resolutions_maps_iat_slot_to_target() {
+        let (pe, iat_heap, _iat_zw) = pe64_with_self_import_of_forwarders();
+        let img = PeLoader::load(&pe).expect("PE must parse");
+        // Sanity: both forwarders surfaced as t164.
+        assert_eq!(img.forwarded_exports.len(), 2);
+        // The IAT slot VA for HeapAlloc must resolve to the NTDLL target.
+        let resolved = img
+            .forwarded_resolutions
+            .get(&iat_heap)
+            .expect("HeapAlloc IAT slot must be in forwarded_resolutions");
+        assert_eq!(resolved, "NTDLL!RtlAllocateHeap");
+    }
+
+    #[test]
+    fn forwarded_resolutions_handles_ordinal_form() {
+        let (pe, _iat_heap, iat_zw) = pe64_with_self_import_of_forwarders();
+        let img = PeLoader::load(&pe).expect("PE must parse");
+        let resolved = img
+            .forwarded_resolutions
+            .get(&iat_zw)
+            .expect("ZwQuerySystem IAT slot must be in forwarded_resolutions");
+        // Ordinal forwards keep their `#N` form in the resolved target.
+        assert_eq!(resolved, "NTDLL!#142");
+    }
+
+    #[test]
+    fn forwarded_resolutions_empty_when_no_matching_imports() {
+        // The original t164 fixture exports forwarders but doesn't import
+        // them. The resolution map must therefore stay empty — proves the
+        // pass only fires on actual import↔export overlap and doesn't
+        // synthesise spurious entries.
+        let pe = pe64_with_forwarded_exports();
+        let img = PeLoader::load(&pe).expect("PE must parse");
+        assert_eq!(img.forwarded_exports.len(), 2);
+        assert!(
+            img.forwarded_resolutions.is_empty(),
+            "no imports → no resolutions, got {:?}",
+            img.forwarded_resolutions
+        );
     }
 }

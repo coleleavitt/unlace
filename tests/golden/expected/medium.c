@@ -48,7 +48,8 @@ void main(void) {
     v29 = _mm_xor_si128(v29, v29);
     while (v34) {
         v37 = *(_OWORD *)(0LL); v27 = _mm_load_si128(v37); v28 = _mm_load_si128(v27);
-        v28 = _mm_shuffle_epi32(v28, v28); v27 = _mm_shuffle_epi32(v27, v27); v29 = _mm_add_epi32(v29, v28);
+        v28 = _mm_mul_epu32(v28, v27); v27 = _mm_mul_epu32(v27, v27); v28 = _mm_shuffle_epi32(v28, v28);
+        v27 = _mm_shuffle_epi32(v27, v27); v29 = _mm_add_epi32(v29, v28);
     }
     if (v24) {
     }

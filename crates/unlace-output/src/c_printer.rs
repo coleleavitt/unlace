@@ -5189,6 +5189,10 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x11A => Some("_mm_sub_epi32"), // PSUBD
         0x11B => Some("_mm_sub_epi64"), // PSUBQ
 
+        // ── SSE2 packed integer multiply (0x123, 0x127) ────────
+        0x123 => Some("_mm_mullo_epi32"), // PMULLD
+        0x127 => Some("_mm_mul_epu32"),   // PMULUDQ
+
         // ── SSE2 packed bitwise logic (0x120..0x122) ───────────
         0x120 => Some("_mm_and_si128"), // PAND
         0x121 => Some("_mm_or_si128"),  // POR

@@ -692,6 +692,117 @@ mod tests {
         assert_callother_tag(&[0x66, 0x0F, 0xFB, 0xC1], sse_tag::PSUBQ);
     }
 
+    /// t163 — PMULUDQ (SSE2 unsigned 32×32→64 of low dword per lane).
+    #[test]
+    fn test_lift_sse_pmuludq() {
+        // 66 0F F4 C1 = pmuludq xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0xF4, 0xC1], sse_tag::PMULUDQ);
+
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xF4, 0xC1], 0x1000)
+            .expect("pmuludq must decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PMULUDQ must emit Callother");
+        let dst = co.output.expect("PMULUDQ must produce a register output");
+        assert_eq!(dst.size, 16, "PMULUDQ lane width is the full 128-bit XMM");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    /// t163 — PADDQ → PSUBQ chained on XMM0 must share the XMM0 register
+    /// varnode (same offset, same 16-byte size) so SSA / liveness sees
+    /// the dataflow. This is the downstream-visibility contract: any
+    /// pass that walks `output → later input` will pick up the chain.
+    #[test]
+    fn t163_paddq_psubq_chain_shares_xmm0_register_varnode() {
+        use crate::register_file::XMM0;
+        use unlace_ir::SpaceId;
+
+        // 66 0F D4 C1 = paddq xmm0, xmm1   (xmm0 = xmm0 + xmm1)
+        let paddq = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xD4, 0xC1], 0x1000)
+            .expect("paddq decodes");
+        // 66 0F FB C2 = psubq xmm0, xmm2   (xmm0 = xmm0 - xmm2)
+        let psubq = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xFB, 0xC2], 0x1004)
+            .expect("psubq decodes");
+
+        let paddq_co = paddq
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PADDQ)
+            .expect("PADDQ Callother present");
+        let psubq_co = psubq
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PSUBQ)
+            .expect("PSUBQ Callother present");
+
+        let paddq_out = paddq_co.output.expect("PADDQ writes a varnode");
+        assert_eq!(paddq_out.space, SpaceId::Register);
+        assert_eq!(paddq_out.offset, XMM0, "PADDQ must write XMM0");
+        assert_eq!(paddq_out.size, 16);
+
+        // PSUBQ reads xmm0 (operand 0 as source) and writes xmm0 again.
+        let psubq_reads_xmm0 = psubq_co.inputs.iter().any(|v| {
+            v.space == SpaceId::Register && v.offset == XMM0 && v.size == 16
+        });
+        assert!(
+            psubq_reads_xmm0,
+            "PSUBQ must read the same XMM0 reg varnode PADDQ wrote — \
+             inputs were: {:?}",
+            psubq_co.inputs,
+        );
+
+        let psubq_out = psubq_co.output.expect("PSUBQ writes a varnode");
+        assert_eq!(psubq_out.space, SpaceId::Register);
+        assert_eq!(psubq_out.offset, XMM0, "PSUBQ also writes XMM0");
+        assert_eq!(psubq_out.size, 16);
+
+        // Sanity: write/read offsets agree byte-for-byte (the dataflow
+        // identity matters more than the varnode struct equality, since
+        // the size field is the only thing we'd ever vary).
+        assert_eq!(paddq_out.offset, psubq_out.offset);
+    }
+
+    /// t163 — PADDQ on XMM8 (REX-extended) must reach the same XMM8
+    /// reg-file varnode that the register file declares. Catches a
+    /// class of bugs where the REX.R-extended lane is silently dropped.
+    #[test]
+    fn t163_paddq_xmm8_uses_declared_register_file_varnode() {
+        use crate::register_file::{XMM8, x86_64_register_file};
+        use unlace_ir::SpaceId;
+
+        // 66 45 0F D4 C0 = paddq xmm8, xmm8
+        let r = lifter()
+            .lift_insn(&[0x66, 0x45, 0x0F, 0xD4, 0xC0], 0x1000)
+            .expect("paddq xmm8,xmm8 decodes");
+        let co = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PADDQ)
+            .expect("PADDQ Callother present");
+
+        let out = co.output.expect("PADDQ writes a varnode");
+        assert_eq!(out.space, SpaceId::Register);
+        assert_eq!(out.offset, XMM8);
+        assert_eq!(out.size, 16);
+
+        // The offset must match what the public register-file declares
+        // under the name "XMM8" — downstream code that looks XMM8 up by
+        // name has to find this exact varnode.
+        let rf = x86_64_register_file();
+        let xmm8 = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "XMM8")
+            .expect("register file declares XMM8");
+        assert_eq!(out.offset, xmm8.varnode.offset);
+        assert_eq!(out.size, xmm8.varnode.size);
+    }
+
     #[test]
     fn paddd_emits_callother_with_lane_size_4() {
         // 66 0F FE C1 = paddd xmm0, xmm1.

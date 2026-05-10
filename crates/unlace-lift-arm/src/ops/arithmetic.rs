@@ -311,6 +311,37 @@ pub fn lift_mul(ctx: &mut LiftCtx, ops: &Ops) {
     lift_binop(ctx, ops, IrOp::IntMult);
 }
 
+/// UMULH/SMULH Xd, Xn, Xm — Xd = (Xn * Xm) >> 64. Emit a single
+/// `Callother(<MULT_HIGH tag>, Xn, Xm) -> Xd` so a later pass can recognize
+/// the high-half multiply (e.g. for divisor-by-constant magic numbers).
+pub fn lift_mul_high(ctx: &mut LiftCtx, ops: &Ops, signed: bool) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let a = operand_to_varnode(ctx, &ops[1].0);
+    let b = operand_to_varnode(ctx, &ops[2].0);
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let tag = if signed {
+                crate::lift::CALLOTHER_INT_SMULT_HIGH
+            } else {
+                crate::lift::CALLOTHER_INT_MULT_HIGH
+            };
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Callother,
+                result,
+                smallvec![Varnode::constant(tag, 8), a, b],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
 pub fn lift_sdiv(ctx: &mut LiftCtx, ops: &Ops) {
     lift_binop(ctx, ops, IrOp::IntSdiv);
 }

@@ -17,6 +17,7 @@ void __fastcall csel_test(__int64 a1) {
     long long v5; // rsp
     long long v6; // rbp
     int result; // reg?
+    signed char v9; // reg?
     long long v13; // temp
     v13 = v1 - v2;
     _Bool cond = v13 == 0LL; // reg?

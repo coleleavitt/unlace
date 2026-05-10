@@ -1768,6 +1768,8 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
     match id {
         Arm64Insn::ARM64_INS_ADD => arithmetic::lift_add(ctx, &ops),
         Arm64Insn::ARM64_INS_SUB => arithmetic::lift_sub(ctx, &ops),
+        Arm64Insn::ARM64_INS_ADDS => arithmetic::lift_adds(ctx, &ops),
+        Arm64Insn::ARM64_INS_SUBS => arithmetic::lift_subs(ctx, &ops),
         Arm64Insn::ARM64_INS_CMP => arithmetic::lift_cmp(ctx, &ops),
         Arm64Insn::ARM64_INS_CMN => arithmetic::lift_cmn(ctx, &ops),
         Arm64Insn::ARM64_INS_TST => arithmetic::lift_tst(ctx, &ops),

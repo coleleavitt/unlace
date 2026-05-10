@@ -16,8 +16,9 @@
 //! with a single `Callother(intrinsic_id, ...)` call so a downstream
 //! printer can render it as `memcpy(...)` / `memset(...)` / `memcmp(...)`.
 //!
-//! **MVP scope** — recognises REP MOVSB and REP STOSB only (the most
-//! common). Wider lane sizes and CMPS variants are TODO.
+//! **MVP scope** — recognises REP MOVSB, REP STOSB, REPE CMPSB
+//! (→ `memcmp`) and REPNE SCASB-with-zero-needle (→ `strlen`).
+//! Wider lane sizes are TODO.
 
 use unlace_ir::IrOp;
 use unlace_ir::ssa::SsaFunction;
@@ -58,6 +59,13 @@ pub enum RepStringKind {
     Movs { elem_size: u8 },
     Stos { elem_size: u8 },
     Cmps { elem_size: u8 },
+    /// REPE CMPSB → `memcmp(rsi, rdi, rcx)`: two Loads (rsi, rdi),
+    /// no Store, IntSub on the counter, and a compare exit.
+    Memcmp { elem_size: u8 },
+    /// REPNE SCASB scanning for a zero needle (AL == 0) → `strlen(rdi)`:
+    /// one Load (rdi), no Store, IntSub on the counter, and a compare
+    /// against a constant-zero operand.
+    Strlen { elem_size: u8 },
 }
 
 /// A detected REP-string loop: the SSA block id and the recognised kind.
@@ -81,31 +89,50 @@ pub fn detect_rep_string_loops(func: &SsaFunction) -> Vec<RepStringLoop> {
         if !matches!(term.op, IrOp::Cbranch | IrOp::Branch) {
             continue;
         }
-        // Look for the canonical body shape:
-        //   * at least one Load (MOVS / CMPS) or constant Store source (STOS)
-        //   * at least one Store
-        //   * an IntSub (the RCX -= 1 decrement)
-        let mut has_load = false;
-        let mut has_store = false;
+        // Tally body shape:
+        //   * Loads  — MOVS has 1, CMPS has 2, STOS has 0, SCAS has 1.
+        //   * Stores — MOVS/STOS = 1, CMPS/SCAS = 0.
+        //   * IntSub — the RCX -= 1 decrement, present in every variant.
+        //   * Compare with a constant-zero operand — characteristic of SCASB
+        //     used as `strlen` (the AL needle is 0).
+        let mut load_count = 0usize;
+        let mut store_count = 0usize;
         let mut has_decrement = false;
+        let mut has_zero_compare = false;
+        let mut has_compare = false;
         for insn in &block.insns {
             match insn.op {
-                IrOp::Load => has_load = true,
-                IrOp::Store => has_store = true,
+                IrOp::Load => load_count += 1,
+                IrOp::Store => store_count += 1,
                 IrOp::IntSub => has_decrement = true,
+                IrOp::IntEqual | IrOp::IntNotequal => {
+                    has_compare = true;
+                    // "Known base" for strlen: one side is a constant 0.
+                    if insn.inputs.iter().any(|v| {
+                        v.space == unlace_ir::SpaceId::Const && v.offset == 0
+                    }) {
+                        has_zero_compare = true;
+                    }
+                }
                 _ => {}
             }
         }
-        if !(has_store && has_decrement) {
+        if !has_decrement {
             continue;
         }
-        let kind = if has_load {
-            // MOVS or CMPS — distinguish by counting stores. CMPS has zero
-            // stores; MOVS has one. Our `has_store` flag was set for either.
-            // For MVP, classify any (Load + Store + IntSub) self-loop as Movs.
-            RepStringKind::Movs { elem_size: 1 }
-        } else {
-            RepStringKind::Stos { elem_size: 1 }
+        let kind = match (load_count, store_count) {
+            // STOS: store-only, no load.
+            (0, s) if s >= 1 => RepStringKind::Stos { elem_size: 1 },
+            // MOVS: one load, one store (data copy).
+            (1, s) if s >= 1 => RepStringKind::Movs { elem_size: 1 },
+            // SCAS used as strlen: one load, no store, compare-vs-zero.
+            (1, 0) if has_zero_compare => RepStringKind::Strlen { elem_size: 1 },
+            // CMPS: two loads, no store, compare between them.
+            (n, 0) if n >= 2 && has_compare => RepStringKind::Memcmp { elem_size: 1 },
+            // Generic CMPS shape (compare absent but two loads) — fall back
+            // to the bare `Cmps` classification so callers can still see it.
+            (n, 0) if n >= 2 => RepStringKind::Cmps { elem_size: 1 },
+            _ => continue,
         };
         out.push(RepStringLoop { block_id, kind });
     }
@@ -179,6 +206,73 @@ mod tests {
         let loops = detect_rep_string_loops(&ssa);
         assert_eq!(loops.len(), 1);
         assert!(matches!(loops[0].kind, RepStringKind::Stos { .. }));
+    }
+
+    #[test]
+    fn recognizes_repe_cmpsb_pattern_as_memcmp() {
+        // REPE CMPSB body: Load *rsi, Load *rdi, IntEqual(a, b), IntSub rcx, 1.
+        // No Store — that's what distinguishes CMPS from MOVS.
+        let space = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let rdi = Varnode::reg(0x10, 8);
+        let rsi = Varnode::reg(0x18, 8);
+        let rcx = Varnode::reg(0x20, 8);
+        let a = Varnode::reg(0x100, 1);
+        let b = Varnode::reg(0x108, 1);
+        let zf = Varnode::reg(0x200, 1);
+        let insns = vec![
+            IrInsn::with_output(IrOp::Load, a.clone(), smallvec![space.clone(), rsi], 0x1000),
+            IrInsn::with_output(IrOp::Load, b.clone(), smallvec![space, rdi], 0x1002),
+            IrInsn::with_output(IrOp::IntEqual, zf, smallvec![a, b], 0x1004),
+            IrInsn::with_output(
+                IrOp::IntSub,
+                rcx.clone(),
+                smallvec![rcx, Varnode::constant(1, 8)],
+                0x1008,
+            ),
+        ];
+        let ssa = make_self_loop(insns);
+        let loops = detect_rep_string_loops(&ssa);
+        assert_eq!(loops.len(), 1);
+        assert!(
+            matches!(loops[0].kind, RepStringKind::Memcmp { elem_size: 1 }),
+            "expected Memcmp, got {:?}",
+            loops[0].kind
+        );
+    }
+
+    #[test]
+    fn recognizes_repne_scasb_with_zero_needle_as_strlen() {
+        // REPNE SCASB scanning for AL == 0 body:
+        //   Load *rdi, IntEqual(loaded, 0), IntSub rcx, 1.
+        // Single Load + zero-constant compare + no Store ⇒ strlen.
+        let space = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let rdi = Varnode::reg(0x10, 8);
+        let rcx = Varnode::reg(0x20, 8);
+        let loaded = Varnode::reg(0x100, 1);
+        let zf = Varnode::reg(0x200, 1);
+        let insns = vec![
+            IrInsn::with_output(IrOp::Load, loaded.clone(), smallvec![space, rdi], 0x1000),
+            IrInsn::with_output(
+                IrOp::IntEqual,
+                zf,
+                smallvec![loaded, Varnode::constant(0, 1)],
+                0x1004,
+            ),
+            IrInsn::with_output(
+                IrOp::IntSub,
+                rcx.clone(),
+                smallvec![rcx, Varnode::constant(1, 8)],
+                0x1008,
+            ),
+        ];
+        let ssa = make_self_loop(insns);
+        let loops = detect_rep_string_loops(&ssa);
+        assert_eq!(loops.len(), 1);
+        assert!(
+            matches!(loops[0].kind, RepStringKind::Strlen { elem_size: 1 }),
+            "expected Strlen, got {:?}",
+            loops[0].kind
+        );
     }
 
     #[test]

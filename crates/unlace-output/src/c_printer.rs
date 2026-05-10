@@ -389,6 +389,7 @@ pub fn print_c_with_annotations(
     ctx.parent_returns_void = matches!(func.return_type, PrimitiveType::Unknown);
     ctx.frame_size = header.map(|h| h.stack_frame);
     ctx.objc_dispatch_calls = func.objc_dispatch_calls.clone();
+    ctx.byref_boxes = func.byref_boxes.clone();
 
     let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
     compute_dwarf_locals(dwarf_func, header, &mut ctx);
@@ -606,6 +607,23 @@ pub fn print_c_with_annotations(
             .copied()
             .unwrap_or(PrimitiveType::Unknown);
         let frame_size = header.map(|h| h.stack_frame);
+        // t176 — Objective-C `__block` (byref) box: render
+        // `__block T name;` and skip the generic BYREF marker (the
+        // address-escape *is* the whole point of the box, so the
+        // standard BYREF suffix would be redundant).
+        if let Some(bx) = ctx.byref_boxes.get(&sv.base) {
+            let captured_c = render_type_as_c(&bx.captured_type);
+            if let Some(comment) = varnode_location_comment(&sv.base, frame_size) {
+                let _ = writeln!(
+                    out,
+                    "    __block {} {}; // {}",
+                    captured_c, name, comment,
+                );
+            } else {
+                let _ = writeln!(out, "    __block {} {};", captured_c, name);
+            }
+            continue;
+        }
         let byref_suffix = if ctx.byref_bases.contains(&sv.base) {
             " BYREF"
         } else {
@@ -1203,6 +1221,11 @@ struct PrintCtx {
     /// ObjC dispatch annotations keyed by instruction VA. Lifted from
     /// [`HirFunction::objc_dispatch_calls`].
     objc_dispatch_calls: BTreeMap<u64, String>,
+    /// Recovered ObjC `__block` (byref) boxes keyed by the alloca's base
+    /// [`Varnode`]. Lifted from [`HirFunction::byref_boxes`] and consulted
+    /// by local-decl emission to render `__block T name;` in place of the
+    /// raw 40-byte anonymous struct.
+    byref_boxes: BTreeMap<Varnode, unlace_ir::ssa::ByrefBox>,
     /// Pre-computed `hash → string` table consulted by switch-case emission
     /// so a case constant matching a recognised CRC32/FNV-1a/djb2 of a
     /// binary string renders as `case 0xN: /* "name" */`.
@@ -1273,6 +1296,7 @@ impl PrintCtx {
             line_comments: BTreeMap::new(),
             custom_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
             string_hash_table: BTreeMap::new(),
             forwarded_resolutions: BTreeMap::new(),
         }
@@ -2993,6 +3017,23 @@ fn infer_type_from_insn(insn: &IrInsn, output_sv: &SsaVarnode, ctx: &mut PrintCt
 // ---------------------------------------------------------------------------
 // Type printing
 // ---------------------------------------------------------------------------
+
+/// Render an [`unlace_ir::types::Type`] as a C type fragment.
+///
+/// Used by [`HirFunction::byref_boxes`] rendering to surface the
+/// captured payload type in `__block T name;` declarations. Composite
+/// shapes (struct / array / function-pointer / bitfield) fall back to
+/// their `Display` implementation; primitive shapes route through
+/// [`c_type`] so the printer's existing primitive-name conventions
+/// are preserved.
+fn render_type_as_c(ty: &unlace_ir::types::Type) -> String {
+    use unlace_ir::types::Type;
+    match ty {
+        Type::Primitive(p) => c_type(p).to_string(),
+        Type::Ptr(inner) => format!("{} *", render_type_as_c(inner)),
+        other => other.to_string(),
+    }
+}
 
 fn c_type(ty: &PrimitiveType) -> &'static str {
     match ty {
@@ -6112,6 +6153,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         }
     }
 
@@ -6499,6 +6541,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -7053,6 +7096,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         };
 
         let mut functions = BTreeMap::new();
@@ -7153,6 +7197,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         };
 
         let output = super::print_c(&func);
@@ -7181,6 +7226,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         };
 
         let output = super::print_c(&func);
@@ -10459,6 +10505,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -10486,6 +10533,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -10517,6 +10565,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -10544,6 +10593,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -10571,6 +10621,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -10624,6 +10675,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         };
 
         let output = print_c(&func);

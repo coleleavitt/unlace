@@ -404,6 +404,31 @@ pub struct SsaFunction {
     /// consumed by the C printer to render `s->field` and enum variant
     /// names instead of raw offsets and integer literals.
     pub op_bindings: OpTypeBindings,
+    /// Recovered Objective-C `__block` (byref) variable boxes, keyed by
+    /// the box's base [`Varnode`] (typically the alloca address on the
+    /// stack frame). Populated by `unlace_passes::objc_byref::apply_objc_byref`
+    /// and consumed by the C printer to render the alloca as
+    /// `__block T name;` instead of the unnamed 40-byte struct.
+    pub byref_boxes: BTreeMap<Varnode, ByrefBox>,
+}
+
+/// Annotation carried on [`SsaFunction::byref_boxes`] for one detected
+/// `__block` allocation.
+///
+/// Mirrors `unlace_passes::objc_byref::ByrefBox` so the IR layer can
+/// surface byref metadata without taking a dependency on the passes
+/// crate (which depends on `unlace_ir`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ByrefBox {
+    /// User-visible type of the captured payload.
+    pub captured_type: crate::types::Type,
+    /// SSA varnode of the value stored into the captured slot.
+    pub captured_value_sv: SsaVarnode,
+    /// Byte offset of the captured slot within the box (24 or 40).
+    pub captured_offset: u64,
+    /// `(BlockId, insn_idx)` of the captured-payload store, useful for
+    /// the printer when it wants to recover the original initializer.
+    pub captured_store_loc: (crate::BlockId, usize),
 }
 
 /// Per-operand type-binding tables resolved during analysis.
@@ -503,6 +528,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         variadic_call_types: BTreeMap::new(),
         signature_revision: 0,
         op_bindings: OpTypeBindings::default(),
+        byref_boxes: BTreeMap::new(),
     }
 }
 

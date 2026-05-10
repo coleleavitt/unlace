@@ -135,6 +135,7 @@ mod tests {
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
+            byref_boxes: BTreeMap::new(),
         }
     }
 

@@ -103,6 +103,7 @@ pub fn structure_with_arch(
             })
             .collect(),
         indirect_branch_kinds,
+        byref_boxes: func.byref_boxes.clone(),
     })
 }
 

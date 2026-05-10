@@ -372,4 +372,10 @@ pub struct HirFunction {
     /// recognised the dispatch pattern. Downstream passes can use these
     /// annotations to drive per-kind table layout recovery.
     pub indirect_branch_kinds: BTreeMap<u64, IndirectBranchKind>,
+    /// Recovered Objective-C `__block` (byref) variable boxes, keyed by
+    /// the base [`unlace_ir::Varnode`] of the box's alloca. Propagated
+    /// from [`unlace_ir::ssa::SsaFunction::byref_boxes`] at structuring
+    /// time; consumed by the C printer to render the alloca as
+    /// `__block T name;` instead of a 40-byte anonymous struct.
+    pub byref_boxes: BTreeMap<unlace_ir::Varnode, unlace_ir::ssa::ByrefBox>,
 }

@@ -1316,6 +1316,7 @@ dependencies = [
  "insta",
  "object",
  "pdb",
+ "rustc-demangle",
  "thiserror",
  "tracing",
  "unlace-ir",

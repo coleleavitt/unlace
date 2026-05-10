@@ -535,6 +535,7 @@ impl<'a> StructureCtx<'a> {
         }
         flush_guard(&mut pending_guard, nodes);
         fuse_guarded_if_else(nodes);
+        fold_guarded_ternary(nodes);
     }
 
     fn try_structure_switch(&mut self, bid: BlockId) -> Option<(HirNode, Option<BlockId>)> {
@@ -1778,6 +1779,145 @@ fn remove_labels_not_in(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
     }
 }
 
+/// t167: collapse `GuardedIf { then=[v=a], else=[v=b] }` into a
+/// [`HirNode::GuardedTernary`] (`v = cond_<cc> ? a : b;`) when both arms
+/// are exactly one `Copy` to the same output varnode and the arms have
+/// no side effects.
+///
+/// "No side effects" is enforced by requiring `IrOp::Copy` (no Load,
+/// Store, Call, or Callother). The structurer guarantees both branches
+/// are single statements via the input pattern; we additionally check
+/// that each statement is a plain `Statement(IrInsn)` (rejecting nested
+/// blocks / commented wrappers / further if-nests).
+///
+/// Recurses into all child node bodies so nested IT-block ternaries fold
+/// too. Idempotent.
+fn fold_guarded_ternary(nodes: &mut Vec<HirNode>) {
+    for node in nodes.iter_mut() {
+        fold_guarded_ternary_in_children(node);
+    }
+    let len = nodes.len();
+    let mut taken = Vec::with_capacity(len);
+    for node in std::mem::take(nodes) {
+        match node {
+            HirNode::GuardedIf {
+                cond_code,
+                then_body,
+                else_body,
+            } => match try_fold_guarded_ternary(cond_code, &then_body, &else_body) {
+                Some(folded) => taken.push(folded),
+                None => taken.push(HirNode::GuardedIf {
+                    cond_code,
+                    then_body,
+                    else_body,
+                }),
+            },
+            other => taken.push(other),
+        }
+    }
+    *nodes = taken;
+}
+
+fn fold_guarded_ternary_in_children(node: &mut HirNode) {
+    match node {
+        HirNode::Block(children) => fold_guarded_ternary(children),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            fold_guarded_ternary(then_body);
+            if let Some(eb) = else_body {
+                fold_guarded_ternary(eb);
+            }
+        }
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+            fold_guarded_ternary(body);
+        }
+        HirNode::For { body, .. } => fold_guarded_ternary(body),
+        HirNode::Switch { cases, default, .. } => {
+            for (_, body, _) in cases {
+                fold_guarded_ternary(body);
+            }
+            if let Some(def) = default {
+                fold_guarded_ternary(def);
+            }
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => {
+            fold_guarded_ternary(try_body);
+            fold_guarded_ternary(catch_body);
+        }
+        HirNode::Commented { inner, .. } => fold_guarded_ternary_in_children(inner),
+        HirNode::GuardedIf {
+            then_body,
+            else_body,
+            ..
+        } => {
+            fold_guarded_ternary(then_body);
+            fold_guarded_ternary(else_body);
+        }
+        HirNode::Statement(_)
+        | HirNode::Return(_)
+        | HirNode::Goto(_)
+        | HirNode::Label(_)
+        | HirNode::Ternary { .. }
+        | HirNode::GuardedTernary { .. }
+        | HirNode::TailCall { .. }
+        | HirNode::Continue
+        | HirNode::Break
+        | HirNode::ObjcBlock { .. }
+        | HirNode::Asm { .. } => {}
+    }
+}
+
+fn try_fold_guarded_ternary(
+    cond_code: u8,
+    then_body: &[HirNode],
+    else_body: &[HirNode],
+) -> Option<HirNode> {
+    let then_insn = match then_body {
+        [HirNode::Statement(insn)] => insn,
+        _ => return None,
+    };
+    let else_insn = match else_body {
+        [HirNode::Statement(insn)] => insn,
+        _ => return None,
+    };
+
+    // Both arms must be plain Copy ops — no Load/Store/Call/Callother
+    // (any of those carries observable side effects and selecting on a
+    // predicate would alter program semantics).
+    if then_insn.op != IrOp::Copy || else_insn.op != IrOp::Copy {
+        return None;
+    }
+
+    let then_out = then_insn.output?;
+    let else_out = else_insn.output?;
+    if then_out != else_out {
+        return None;
+    }
+
+    // The `guard` field on the inner IrInsns is the per-insn IT-cond the
+    // lifter stamped (the same cond that was hoisted onto the surrounding
+    // GuardedIf); we don't need to re-check it here. We do strip it from
+    // the cloned insns so the rendered ternary expression doesn't carry
+    // a stale predicate.
+    let mut then_insn = then_insn.clone();
+    let mut else_insn = else_insn.clone();
+    then_insn.guard = None;
+    else_insn.guard = None;
+
+    Some(HirNode::GuardedTernary {
+        cond_code,
+        then_insn,
+        else_insn,
+        output: then_out,
+    })
+}
+
 /// Fuse adjacent [`HirNode::GuardedIf`] pairs whose cond codes are inverses
 /// (`cc_b == cc_a ^ 1`, ARM A8.3) into a single `GuardedIf` carrying the
 /// second group as `else_body`. The lifter emits one `GuardedIf` per
@@ -1952,6 +2092,7 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
         | HirNode::Goto(_)
         | HirNode::Label(_)
         | HirNode::Ternary { .. }
+        | HirNode::GuardedTernary { .. }
         | HirNode::TailCall { .. }
         | HirNode::Continue
         | HirNode::Break
@@ -4758,5 +4899,178 @@ mod tests {
         );
         assert_eq!(found[0].2, 0);
         assert_eq!(found[1].2, 0);
+    }
+
+    // -------------------------------------------------------------------
+    // t167: GuardedIf → GuardedTernary idiom recognition
+    // -------------------------------------------------------------------
+
+    fn guarded_copy(output: Varnode, input: Varnode, addr: u64, cc: u8) -> IrInsn {
+        let mut insn = copy_insn(output, input, addr);
+        insn.guard = Some(cc);
+        insn
+    }
+
+    fn collect_guarded_ternaries(nodes: &[HirNode], out: &mut Vec<(u8, Varnode)>) {
+        for n in nodes {
+            match n {
+                HirNode::GuardedTernary {
+                    cond_code, output, ..
+                } => out.push((*cond_code, *output)),
+                HirNode::Block(inner) => collect_guarded_ternaries(inner, out),
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_guarded_ternaries(then_body, out);
+                    if let Some(eb) = else_body {
+                        collect_guarded_ternaries(eb, out);
+                    }
+                }
+                HirNode::GuardedIf {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_guarded_ternaries(then_body, out);
+                    collect_guarded_ternaries(else_body, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// The canonical ITE-fold idiom:
+    ///   IT EQ; movs r0, #1; mov r0, #2  ≈  r0 = cond_eq ? 1 : 2.
+    /// After `fuse_guarded_if_else` produces a single `GuardedIf` with
+    /// `else_body`, `fold_guarded_ternary` must collapse it into one
+    /// `GuardedTernary` carrying the EQ cond and r0 as the shared output.
+    #[test]
+    fn t167_ite_with_copies_folds_to_guarded_ternary() {
+        let r0 = Varnode::reg(0, 8);
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+
+        let mut func = Function::new("ite_fold_copy", BlockId(0), 0xA000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        // T-lane: r0 = 1  (cond=EQ=0)
+        bb0.insns.push(guarded_copy(r0, c1, 0xA000, 0));
+        // E-lane: r0 = 2  (cond=NE=1, the inverse of EQ)
+        bb0.insns.push(guarded_copy(r0, c2, 0xA004, 1));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0xA008));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        // Exactly one GuardedTernary, none of the original GuardedIfs left.
+        let mut ternaries = Vec::new();
+        collect_guarded_ternaries(&hir.body, &mut ternaries);
+        assert_eq!(
+            ternaries.len(),
+            1,
+            "expected 1 GuardedTernary, got {ternaries:?}"
+        );
+        assert_eq!(ternaries[0].0, 0, "cond_code should be EQ (T-lane cond)");
+        assert_eq!(ternaries[0].1, r0, "output should be r0");
+
+        let mut guarded_ifs = Vec::new();
+        collect_guarded_ifs(&hir.body, &mut guarded_ifs);
+        assert!(
+            guarded_ifs.is_empty(),
+            "the GuardedIf should have been folded away, got {guarded_ifs:?}"
+        );
+
+        // The folded node carries the two Copy insns intact.
+        let HirNode::GuardedTernary {
+            then_insn,
+            else_insn,
+            ..
+        } = hir
+            .body
+            .iter()
+            .find(|n| matches!(n, HirNode::GuardedTernary { .. }))
+            .expect("GuardedTernary present in top-level body")
+        else {
+            unreachable!()
+        };
+        assert_eq!(then_insn.op, IrOp::Copy);
+        assert_eq!(else_insn.op, IrOp::Copy);
+        assert_eq!(then_insn.inputs[0], c1);
+        assert_eq!(else_insn.inputs[0], c2);
+    }
+
+    /// Same shape, different cond code (GT/LE pair). Verifies the fold is
+    /// not hard-coded to EQ/NE and that the chosen `cond_code` is the
+    /// T-lane's (so the C printer can render `cond_gt ? a : b`).
+    #[test]
+    fn t167_ite_with_alt_cond_pair_folds() {
+        let r5 = Varnode::reg(40, 8);
+        let c10 = Varnode::constant(10, 8);
+        let c20 = Varnode::constant(20, 8);
+
+        let mut func = Function::new("ite_fold_gt", BlockId(0), 0xB000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        // T-lane cond=GT=12, E-lane cond=LE=13 (inverses).
+        bb0.insns.push(guarded_copy(r5, c10, 0xB000, 12));
+        bb0.insns.push(guarded_copy(r5, c20, 0xB004, 13));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0xB008));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        let mut ternaries = Vec::new();
+        collect_guarded_ternaries(&hir.body, &mut ternaries);
+        assert_eq!(ternaries.len(), 1, "GT/LE pair must fold: {ternaries:?}");
+        assert_eq!(ternaries[0].0, 12, "cond_code should be GT (T-lane)");
+        assert_eq!(ternaries[0].1, r5);
+    }
+
+    /// Negative: if either arm has more than one statement, the fold must
+    /// NOT fire. The `GuardedIf` must survive intact (we get back zero
+    /// GuardedTernaries and one GuardedIf with else_body).
+    #[test]
+    fn t167_ite_with_multi_insn_then_arm_does_not_fold() {
+        let r0 = Varnode::reg(0, 8);
+        let r1 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+        let c3 = Varnode::constant(3, 8);
+
+        let mut func = Function::new("ite_multi_then", BlockId(0), 0xC000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        // T-lane: two insns (r1 = 1; r0 = 2). The structurer groups both
+        // under the same EQ guard so the then_body has length 2 — the
+        // single-statement precondition of the fold fails.
+        bb0.insns.push(guarded_copy(r1, c1, 0xC000, 0));
+        bb0.insns.push(guarded_copy(r0, c2, 0xC004, 0));
+        // E-lane: single insn r0 = 3 (cond=NE).
+        bb0.insns.push(guarded_copy(r0, c3, 0xC008, 1));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0xC00C));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        let mut ternaries = Vec::new();
+        collect_guarded_ternaries(&hir.body, &mut ternaries);
+        assert!(
+            ternaries.is_empty(),
+            "multi-insn then-arm must NOT collapse to a ternary, got {ternaries:?}"
+        );
+
+        let mut guarded_ifs = Vec::new();
+        collect_guarded_ifs(&hir.body, &mut guarded_ifs);
+        assert_eq!(
+            guarded_ifs.len(),
+            1,
+            "the original GuardedIf must survive, got {guarded_ifs:?}"
+        );
+        // cond, then-body length, else-body length.
+        assert_eq!(guarded_ifs[0].0, 0);
+        assert_eq!(guarded_ifs[0].1, 2, "then-arm keeps its two statements");
+        assert_eq!(guarded_ifs[0].2, 1, "else-arm keeps its one statement");
     }
 }

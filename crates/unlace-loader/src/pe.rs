@@ -159,11 +159,16 @@ fn collect_seh_from_image(image: &BinaryImage) -> Option<crate::seh::SehInfo> {
     Some(crate::seh::SehInfo { functions })
 }
 
-/// Stub MSVC RTTI scan. Returns `None` for now — full vtable scan against
-/// `.rdata` is left for a future task. The wiring is in place so populating
-/// this is a localized change.
-fn collect_msvc_rtti_from_image(_image: &BinaryImage) -> Option<crate::msvc_rtti::MsvcRtti> {
-    None
+/// Scan `.rdata` for MSVC vtables and recover the per-class hierarchy.
+/// Returns `None` when no classes were found so downstream code can keep
+/// using the `Option` discriminant to mean "no RTTI present".
+fn collect_msvc_rtti_from_image(image: &BinaryImage) -> Option<crate::msvc_rtti::MsvcRtti> {
+    let rtti = crate::msvc_rtti::scan_vtables(image);
+    if rtti.classes.is_empty() {
+        None
+    } else {
+        Some(rtti)
+    }
 }
 
 /// Walk `IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT` and merge each delay-bound thunk

@@ -55,22 +55,85 @@ pub enum GoKind {
     Complex128,
     String,
     UnsafePointer,
-    Ptr { elem_va: u64 },
-    Slice { elem_va: u64 },
-    Array { elem_va: u64, len: u64 },
-    Struct { fields: Vec<GoStructField> },
-    Map { key_va: u64, elem_va: u64, bucket_va: u64 },
-    Interface { method_count: usize },
-    Chan { elem_va: u64, dir: u32 },
-    Func { in_count: u16, out_count: u16 },
+    Ptr {
+        elem_va: u64,
+    },
+    /// `slicetype { _type; elem *type }`.
+    Slice {
+        elem_va: u64,
+    },
+    /// `arraytype { _type; elem *type; slice *type; len uintptr }`.
+    Array {
+        elem_va: u64,
+        slice_va: u64,
+        len: u64,
+    },
+    /// `structtype { _type; pkgpath name; fields []structfield }`.
+    Struct {
+        pkgpath_va: u64,
+        fields: Vec<GoStructField>,
+    },
+    /// `maptype { _type; key *type; elem *type; bucket *type;
+    /// hasher unsafe.Pointer; keysize u8; valuesize u8;
+    /// bucketsize u16; flags u32 }`.
+    Map {
+        key_va: u64,
+        elem_va: u64,
+        bucket_va: u64,
+        hasher_va: u64,
+        key_size: u8,
+        value_size: u8,
+        bucket_size: u16,
+        flags: u32,
+    },
+    /// `interfacetype { _type; pkgpath name; mhdr []imethod }`.
+    /// Each `imethod` is `{ name nameOff; ityp typeOff }` (two i32s, 8 bytes).
+    Interface {
+        pkgpath_va: u64,
+        method_count: usize,
+        methods: Vec<GoIMethod>,
+    },
+    /// `chantype { _type; elem *type; dir uintptr }`.
+    Chan {
+        elem_va: u64,
+        dir: u32,
+    },
+    /// `functype { _type; inCount u16; outCount u16 }` plus trailing
+    /// `[inCount + outCount]*_type` array. The high bit of `outCount`
+    /// in the on-disk layout flags a variadic final parameter; here it
+    /// is split out into [`Self::Func::variadic`] and `out_count` only
+    /// carries the real out-arg count.
+    Func {
+        in_count: u16,
+        out_count: u16,
+        variadic: bool,
+        in_types: Vec<u64>,
+        out_types: Vec<u64>,
+    },
     Other(u8),
 }
+
+/// Convenience alias used by some external docs; the canonical name is
+/// [`GoKind`]. Re-exported under `GoTypeKind` so consumers can pick the
+/// name that reads best in their own surface.
+pub type GoTypeKind = GoKind;
 
 #[derive(Debug, Clone)]
 pub struct GoStructField {
     pub name: String,
     pub typ_va: u64,
     pub offset: u64,
+}
+
+/// A single `imethod` slot inside `interfacetype.mhdr`.
+///
+/// Both fields are *offsets* (signed i32) into Go's name/type tables —
+/// they are not absolute VAs. Resolving them to a concrete name / `_type`
+/// requires the surrounding `moduledata` (out of scope for this decoder).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GoIMethod {
+    pub name_off: i32,
+    pub typ_off: i32,
 }
 
 fn read_u64(data: &[u8], off: usize) -> Option<u64> {
@@ -81,6 +144,20 @@ fn read_u64(data: &[u8], off: usize) -> Option<u64> {
 fn read_u16(data: &[u8], off: usize) -> Option<u16> {
     data.get(off..off + 2)
         .map(|s| u16::from_le_bytes(s.try_into().unwrap()))
+}
+
+fn read_u32(data: &[u8], off: usize) -> Option<u32> {
+    data.get(off..off + 4)
+        .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+}
+
+fn read_i32(data: &[u8], off: usize) -> Option<i32> {
+    data.get(off..off + 4)
+        .map(|s| i32::from_le_bytes(s.try_into().unwrap()))
+}
+
+fn read_u8(data: &[u8], off: usize) -> Option<u8> {
+    data.get(off).copied()
 }
 
 /// Decode an encoded Go `Name`: `[flag u8][len varint][bytes...]`.
@@ -149,39 +226,92 @@ pub fn parse_type_at(
 
     let kind = match kind_byte {
         17 => {
+            // arraytype { _type; elem *type; slice *type; len uintptr }
             let elem_va = read_u64(image_data, tail_off)?;
-            let _slice_va = read_u64(image_data, tail_off + 8)?;
+            let slice_va = read_u64(image_data, tail_off + 8)?;
             let len = read_u64(image_data, tail_off + 16)?;
-            GoKind::Array { elem_va, len }
+            GoKind::Array {
+                elem_va,
+                slice_va,
+                len,
+            }
         }
         18 => {
+            // chantype { _type; elem *type; dir uintptr }
             let elem_va = read_u64(image_data, tail_off)?;
             let dir = read_u64(image_data, tail_off + 8)? as u32;
             GoKind::Chan { elem_va, dir }
         }
         19 => {
+            // functype { _type; inCount u16; outCount u16 (high bit = variadic) }
+            // trailing [inCount + realOutCount]*_type
             let in_count = read_u16(image_data, tail_off)?;
-            let out_count = read_u16(image_data, tail_off + 2)?;
+            let raw_out = read_u16(image_data, tail_off + 2)?;
+            let variadic = (raw_out & 0x8000) != 0;
+            let out_count = raw_out & 0x7FFF;
+            // Per the Go runtime, the in/out type pointer array follows the
+            // functype header. Older Go (1.16+) inserts a 4-byte padding so
+            // the pointer array is 8-byte aligned; we round up to 8.
+            let arr_off = tail_off + 8;
+            let total = in_count as usize + out_count as usize;
+            let mut in_types = Vec::with_capacity(in_count as usize);
+            let mut out_types = Vec::with_capacity(out_count as usize);
+            // Bounds-check the trailing array up front. If truncated, fall
+            // back to an empty list rather than refusing to decode the kind.
+            if image_data
+                .get(arr_off..arr_off + total * 8)
+                .is_some()
+            {
+                for i in 0..in_count as usize {
+                    in_types.push(read_u64(image_data, arr_off + i * 8)?);
+                }
+                for i in 0..out_count as usize {
+                    out_types
+                        .push(read_u64(image_data, arr_off + (in_count as usize + i) * 8)?);
+                }
+            }
             GoKind::Func {
                 in_count,
                 out_count,
+                variadic,
+                in_types,
+                out_types,
             }
         }
         20 => {
-            // uncommonType (16) + pkgPath name ptr (8) + methods slice (ptr+len+cap=24)
-            let methods_len = read_u64(image_data, tail_off + 8 + 8)?;
+            // interfacetype { _type; pkgpath name; mhdr []imethod }
+            //   pkgpath:  *byte  (8)
+            //   mhdr:     ptr (8) + len (8) + cap (8)
+            let pkgpath_va = read_u64(image_data, tail_off)?;
+            let methods_ptr = read_u64(image_data, tail_off + 8)?;
+            let methods_len = read_u64(image_data, tail_off + 16)? as usize;
+            let methods = parse_imethods(image_data, methods_ptr, methods_len, &va_to_offset);
             GoKind::Interface {
-                method_count: methods_len as usize,
+                pkgpath_va,
+                method_count: methods_len,
+                methods,
             }
         }
         21 => {
+            // maptype { _type; key, elem, bucket *type; hasher unsafe.Pointer;
+            //           keysize u8; valuesize u8; bucketsize u16; flags u32 }
             let key_va = read_u64(image_data, tail_off)?;
             let elem_va = read_u64(image_data, tail_off + 8)?;
             let bucket_va = read_u64(image_data, tail_off + 16)?;
+            let hasher_va = read_u64(image_data, tail_off + 24)?;
+            let key_size = read_u8(image_data, tail_off + 32)?;
+            let value_size = read_u8(image_data, tail_off + 33)?;
+            let bucket_size = read_u16(image_data, tail_off + 34)?;
+            let flags = read_u32(image_data, tail_off + 36)?;
             GoKind::Map {
                 key_va,
                 elem_va,
                 bucket_va,
+                hasher_va,
+                key_size,
+                value_size,
+                bucket_size,
+                flags,
             }
         }
         22 => {
@@ -189,11 +319,15 @@ pub fn parse_type_at(
             GoKind::Ptr { elem_va }
         }
         23 => {
+            // slicetype { _type; elem *type }
             let elem_va = read_u64(image_data, tail_off)?;
             GoKind::Slice { elem_va }
         }
         25 => {
-            // pkgPath name ptr (8) + fields slice (ptr+len+cap = 24)
+            // structtype { _type; pkgpath name; fields []structfield }
+            //   pkgpath:  *byte  (8)  — name encoded ptr
+            //   fields:   ptr (8) + len (8) + cap (8)
+            let pkgpath_va = read_u64(image_data, tail_off)?;
             let fields_ptr_va = read_u64(image_data, tail_off + 8)?;
             let fields_len = read_u64(image_data, tail_off + 16)?;
             let fields = parse_struct_fields(
@@ -202,7 +336,10 @@ pub fn parse_type_at(
                 fields_len as usize,
                 &va_to_offset,
             );
-            GoKind::Struct { fields }
+            GoKind::Struct {
+                pkgpath_va,
+                fields,
+            }
         }
         other => basic_kind(other).unwrap_or(GoKind::Other(other)),
     };
@@ -375,9 +512,39 @@ fn resolve_inter_method_count(
         }
     })?;
     match t.kind {
-        GoKind::Interface { method_count } => Some(method_count),
+        GoKind::Interface { method_count, .. } => Some(method_count),
         _ => None,
     }
+}
+
+/// Decode `interfacetype.mhdr` — `n` × `imethod { nameOff i32; ityp i32 }`
+/// (8 bytes each). Returns an empty vec when the slice's data pointer is
+/// out-of-image; per-entry truncation breaks early but keeps anything
+/// already decoded.
+fn parse_imethods(
+    image_data: &[u8],
+    methods_va: u64,
+    methods_len: usize,
+    va_to_offset: &impl Fn(u64) -> Option<usize>,
+) -> Vec<GoIMethod> {
+    let mut out = Vec::with_capacity(methods_len);
+    if methods_len == 0 {
+        return out;
+    }
+    let Some(base) = va_to_offset(methods_va) else {
+        return out;
+    };
+    for i in 0..methods_len {
+        let m_off = base + i * 8;
+        let Some(name_off) = read_i32(image_data, m_off) else {
+            break;
+        };
+        let Some(typ_off) = read_i32(image_data, m_off + 4) else {
+            break;
+        };
+        out.push(GoIMethod { name_off, typ_off });
+    }
+    out
 }
 
 fn parse_struct_fields(
@@ -487,7 +654,7 @@ mod tests {
         buf.extend_from_slice(&10u64.to_le_bytes()); // len
         let t = parse_type_at(&buf, 0, ident).expect("decode");
         match t.kind {
-            GoKind::Array { elem_va, len } => {
+            GoKind::Array { elem_va, len, .. } => {
                 assert_eq!(elem_va, 0xAAAA);
                 assert_eq!(len, 10);
             }
@@ -536,7 +703,7 @@ mod tests {
 
         let t = parse_type_at(&buf, 0, ident).expect("decode");
         match t.kind {
-            GoKind::Struct { fields } => {
+            GoKind::Struct { fields, .. } => {
                 assert_eq!(fields.len(), 2);
                 assert_eq!(fields[0].name, "x");
                 assert_eq!(fields[0].typ_va, 0x500);
@@ -544,6 +711,244 @@ mod tests {
                 assert_eq!(fields[1].name, "y");
                 assert_eq!(fields[1].typ_va, 0x510);
                 assert_eq!(fields[1].offset, 8);
+            }
+            other => panic!("expected Struct, got {other:?}"),
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // t171: full per-kind layout decode tests (one per kind).
+    //
+    // Each test asserts that the tail-specific fields demanded by the task
+    // round-trip through `parse_type_at`. Synthetic byte fixtures with the
+    // identity VA-mapping; pointer payloads use distinctive cookies so
+    // mis-assigned offsets fail loudly.
+    // -------------------------------------------------------------------
+
+    /// Kind 17 — `arraytype { _type; elem *type; slice *type; len uintptr }`.
+    /// Verifies that `slice_va` (which the previous decoder threw away) is
+    /// preserved alongside `elem_va` and `len`.
+    #[test]
+    fn t171_kind_array_decodes_slice_ptr_and_len() {
+        let mut buf = Vec::new();
+        write_head(&mut buf, 80, 17);
+        buf.extend_from_slice(&0x1111_AAAAu64.to_le_bytes()); // elem
+        buf.extend_from_slice(&0x2222_BBBBu64.to_le_bytes()); // slice ptr
+        buf.extend_from_slice(&7u64.to_le_bytes()); // len
+
+        let t = parse_type_at(&buf, 0, ident).expect("decode");
+        match t.kind {
+            GoKind::Array {
+                elem_va,
+                slice_va,
+                len,
+            } => {
+                assert_eq!(elem_va, 0x1111_AAAA);
+                assert_eq!(slice_va, 0x2222_BBBB);
+                assert_eq!(len, 7);
+            }
+            other => panic!("expected Array, got {other:?}"),
+        }
+    }
+
+    /// Kind 18 — `chantype { _type; elem *type; dir uintptr }`.
+    /// `dir` is one of {1=recv, 2=send, 3=both}; the decoder must downcast
+    /// the uintptr to u32 without sign-extending or losing bits.
+    #[test]
+    fn t171_kind_chan_decodes_elem_and_dir() {
+        let mut buf = Vec::new();
+        write_head(&mut buf, 8, 18);
+        buf.extend_from_slice(&0xCAFE_F00Du64.to_le_bytes()); // elem
+        buf.extend_from_slice(&3u64.to_le_bytes()); // dir = chanDir(SendDir|RecvDir)
+
+        let t = parse_type_at(&buf, 0, ident).expect("decode");
+        match t.kind {
+            GoKind::Chan { elem_va, dir } => {
+                assert_eq!(elem_va, 0xCAFE_F00D);
+                assert_eq!(dir, 3);
+            }
+            other => panic!("expected Chan, got {other:?}"),
+        }
+    }
+
+    /// Kind 19 — `functype { _type; inCount u16; outCount u16 }` plus the
+    /// trailing `[in + out]*_type` array. The high bit of `outCount` flags
+    /// variadic; the decoder must split it out and decode every pointer in
+    /// the trailing array.
+    #[test]
+    fn t171_kind_func_decodes_io_arrays_and_variadic_flag() {
+        let mut buf = Vec::new();
+        write_head(&mut buf, 8, 19);
+        // in_count = 2, out_count = 1 with variadic bit set ⇒ raw = 0x8001
+        buf.extend_from_slice(&2u16.to_le_bytes());
+        buf.extend_from_slice(&0x8001u16.to_le_bytes());
+        // 4 bytes pad to 8-byte align the type pointer array
+        buf.extend_from_slice(&0u32.to_le_bytes());
+        // [in0, in1, out0]
+        buf.extend_from_slice(&0xAAAA_0001u64.to_le_bytes());
+        buf.extend_from_slice(&0xAAAA_0002u64.to_le_bytes());
+        buf.extend_from_slice(&0xBBBB_0001u64.to_le_bytes());
+
+        let t = parse_type_at(&buf, 0, ident).expect("decode");
+        match t.kind {
+            GoKind::Func {
+                in_count,
+                out_count,
+                variadic,
+                in_types,
+                out_types,
+            } => {
+                assert_eq!(in_count, 2);
+                assert_eq!(out_count, 1);
+                assert!(variadic, "high bit of outCount must set variadic=true");
+                assert_eq!(in_types, vec![0xAAAA_0001, 0xAAAA_0002]);
+                assert_eq!(out_types, vec![0xBBBB_0001]);
+            }
+            other => panic!("expected Func, got {other:?}"),
+        }
+    }
+
+    /// Kind 20 — `interfacetype { _type; pkgpath name; mhdr []imethod }`.
+    /// Each `imethod` is two i32 offsets (8 bytes). The decoder must
+    /// surface both the pkgpath VA and an actual list of `GoIMethod`s
+    /// rather than a bare count.
+    #[test]
+    fn t171_kind_interface_decodes_pkgpath_and_imethods() {
+        let mut buf = vec![0u8; 0x200];
+        let mut head = Vec::new();
+        write_head(&mut head, 16, 20);
+        buf[..head.len()].copy_from_slice(&head);
+
+        let tail = TYPE_HEAD_SIZE;
+        // pkgpath name *byte
+        buf[tail..tail + 8].copy_from_slice(&0x77AAu64.to_le_bytes());
+        // mhdr: ptr=0x100, len=2, cap=2
+        buf[tail + 8..tail + 16].copy_from_slice(&0x100u64.to_le_bytes());
+        buf[tail + 16..tail + 24].copy_from_slice(&2u64.to_le_bytes());
+        buf[tail + 24..tail + 32].copy_from_slice(&2u64.to_le_bytes());
+
+        // imethod[0] { nameOff = 0x11, typOff = 0x22 }
+        buf[0x100..0x104].copy_from_slice(&0x11i32.to_le_bytes());
+        buf[0x104..0x108].copy_from_slice(&0x22i32.to_le_bytes());
+        // imethod[1] { nameOff = 0x33, typOff = 0x44 }
+        buf[0x108..0x10C].copy_from_slice(&0x33i32.to_le_bytes());
+        buf[0x10C..0x110].copy_from_slice(&0x44i32.to_le_bytes());
+
+        let t = parse_type_at(&buf, 0, ident).expect("decode");
+        match t.kind {
+            GoKind::Interface {
+                pkgpath_va,
+                method_count,
+                methods,
+            } => {
+                assert_eq!(pkgpath_va, 0x77AA);
+                assert_eq!(method_count, 2);
+                assert_eq!(methods.len(), 2);
+                assert_eq!(methods[0], GoIMethod { name_off: 0x11, typ_off: 0x22 });
+                assert_eq!(methods[1], GoIMethod { name_off: 0x33, typ_off: 0x44 });
+            }
+            other => panic!("expected Interface, got {other:?}"),
+        }
+    }
+
+    /// Kind 21 — `maptype` carries layout metadata that the bucket walker
+    /// needs (keysize, valuesize, bucketsize, flags). Pre-t171 the decoder
+    /// only captured the three type pointers and dropped everything else.
+    #[test]
+    fn t171_kind_map_decodes_layout_metadata() {
+        let mut buf = Vec::new();
+        write_head(&mut buf, 8, 21);
+        buf.extend_from_slice(&0x1u64.to_le_bytes()); // key
+        buf.extend_from_slice(&0x2u64.to_le_bytes()); // elem
+        buf.extend_from_slice(&0x3u64.to_le_bytes()); // bucket
+        buf.extend_from_slice(&0x4u64.to_le_bytes()); // hasher
+        buf.push(8); // key_size
+        buf.push(16); // value_size
+        buf.extend_from_slice(&144u16.to_le_bytes()); // bucket_size
+        buf.extend_from_slice(&0xDEAD_BEEFu32.to_le_bytes()); // flags
+
+        let t = parse_type_at(&buf, 0, ident).expect("decode");
+        match t.kind {
+            GoKind::Map {
+                key_va,
+                elem_va,
+                bucket_va,
+                hasher_va,
+                key_size,
+                value_size,
+                bucket_size,
+                flags,
+            } => {
+                assert_eq!(key_va, 1);
+                assert_eq!(elem_va, 2);
+                assert_eq!(bucket_va, 3);
+                assert_eq!(hasher_va, 4);
+                assert_eq!(key_size, 8);
+                assert_eq!(value_size, 16);
+                assert_eq!(bucket_size, 144);
+                assert_eq!(flags, 0xDEAD_BEEF);
+            }
+            other => panic!("expected Map, got {other:?}"),
+        }
+    }
+
+    /// Kind 23 — `slicetype` is the minimal kind: just one elem pointer.
+    /// Sanity-check that the elem VA round-trips and the variant matches.
+    #[test]
+    fn t171_kind_slice_decodes_elem_ptr() {
+        let mut buf = Vec::new();
+        write_head(&mut buf, 24, 23);
+        buf.extend_from_slice(&0x7FFE_DCBAu64.to_le_bytes());
+
+        let t = parse_type_at(&buf, 0, ident).expect("decode");
+        match t.kind {
+            GoKind::Slice { elem_va } => assert_eq!(elem_va, 0x7FFE_DCBA),
+            other => panic!("expected Slice, got {other:?}"),
+        }
+    }
+
+    /// Kind 25 — `structtype { _type; pkgpath name; fields []structfield }`.
+    /// In addition to the existing two-field round-trip, t171 surfaces the
+    /// `pkgpath_va` so downstream resolvers can name-qualify struct types.
+    #[test]
+    fn t171_kind_struct_decodes_pkgpath_and_field_offset_embed() {
+        let mut buf = vec![0u8; 0x400];
+
+        let mut head = Vec::new();
+        write_head(&mut head, 24, 25);
+        buf[..head.len()].copy_from_slice(&head);
+
+        let tail = TYPE_HEAD_SIZE;
+        // pkgpath name *byte
+        buf[tail..tail + 8].copy_from_slice(&0x9000u64.to_le_bytes());
+        // fields: ptr=0x100, len=1, cap=1
+        buf[tail + 8..tail + 16].copy_from_slice(&0x100u64.to_le_bytes());
+        buf[tail + 16..tail + 24].copy_from_slice(&1u64.to_le_bytes());
+        buf[tail + 24..tail + 32].copy_from_slice(&1u64.to_le_bytes());
+
+        // structfield[0]: name=0x200 → "z", typ=0x600, offsetEmbed=0x21
+        // (offsetEmbed encodes embed-flag in bit 0; the decoder surfaces
+        // the raw uintptr — masking is the caller's job.)
+        buf[0x100..0x108].copy_from_slice(&0x200u64.to_le_bytes());
+        buf[0x108..0x110].copy_from_slice(&0x600u64.to_le_bytes());
+        buf[0x110..0x118].copy_from_slice(&0x21u64.to_le_bytes());
+
+        // name "z"
+        buf[0x200] = 0;
+        buf[0x201] = 1;
+        buf[0x202] = b'z';
+
+        let t = parse_type_at(&buf, 0, ident).expect("decode");
+        match t.kind {
+            GoKind::Struct {
+                pkgpath_va,
+                fields,
+            } => {
+                assert_eq!(pkgpath_va, 0x9000);
+                assert_eq!(fields.len(), 1);
+                assert_eq!(fields[0].name, "z");
+                assert_eq!(fields[0].typ_va, 0x600);
+                assert_eq!(fields[0].offset, 0x21);
             }
             other => panic!("expected Struct, got {other:?}"),
         }

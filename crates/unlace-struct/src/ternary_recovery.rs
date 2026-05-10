@@ -63,6 +63,8 @@ fn recover_node(node: HirNode) -> HirNode {
             cond,
             cases,
             default,
+            jumptable_addr,
+            jumptable_cases,
         } => HirNode::Switch {
             cond,
             cases: cases
@@ -70,6 +72,8 @@ fn recover_node(node: HirNode) -> HirNode {
                 .map(|(c, body, ft)| (c, recover_ternaries(body), ft))
                 .collect(),
             default: default.map(recover_ternaries),
+            jumptable_addr,
+            jumptable_cases,
         },
 
         other => other,
@@ -111,7 +115,7 @@ fn try_as_ternary(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
 
     use smallvec::smallvec;
 
@@ -143,6 +147,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         }
     }
 

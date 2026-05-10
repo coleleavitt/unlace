@@ -62,6 +62,10 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
             .collect(),
         noreturn: func.noreturn,
         composite_var_types: func.composite_var_types.clone(),
+        is_ctor: false,
+        is_dtor: false,
+        class_name: None,
+        merged_names: func.merged_names.clone(),
     })
 }
 
@@ -212,6 +216,8 @@ fn recurse_try_catch_children(
             cond,
             cases,
             default,
+            jumptable_addr,
+            jumptable_cases,
         } => HirNode::Switch {
             cond,
             cases: cases
@@ -219,6 +225,8 @@ fn recurse_try_catch_children(
                 .map(|(c, body, ft)| (c, wrap_try_catch(body, landing_pad_addrs, func), ft))
                 .collect(),
             default: default.map(|d| wrap_try_catch(d, landing_pad_addrs, func)),
+            jumptable_addr,
+            jumptable_cases,
         },
         HirNode::TryCatch {
             try_body,
@@ -476,6 +484,8 @@ impl<'a> StructureCtx<'a> {
             cond,
             cases,
             default: default_body,
+            jumptable_addr: None,
+            jumptable_cases: None,
         };
 
         let combined = if pre_stmts.is_empty() {
@@ -1523,6 +1533,7 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
             recover_for_loops(try_body);
             recover_for_loops(catch_body);
         }
+        HirNode::Commented { inner, .. } => recover_for_loops_in_children(inner),
         HirNode::Statement(_)
         | HirNode::Return(_)
         | HirNode::Goto(_)

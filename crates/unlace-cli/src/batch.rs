@@ -122,8 +122,15 @@ pub fn run_batch(
         "starting batch decompilation"
     );
 
-    let results: Vec<BatchResult> =
-        pool.install(|| decompile_all_parallel(&image, &functions, config, dwarf.as_ref()));
+    // RTTI is scanned once and shared across all parallel decompilation
+    // jobs — it's read-only and the structured layout is needed by the
+    // C printer for class layout / vtable annotations.
+    let rtti = unlace_loader::scan_rtti(&image);
+    let rtti_opt = if rtti.is_empty() { None } else { Some(&rtti) };
+
+    let results: Vec<BatchResult> = pool.install(|| {
+        decompile_all_parallel(&image, &functions, config, dwarf.as_ref(), rtti_opt)
+    });
 
     if let Some(dir) = output_dir {
         write_per_file(dir, &results)?;
@@ -143,6 +150,7 @@ fn decompile_all_parallel(
     functions: &[FunctionEntry],
     config: &BatchConfig,
     dwarf: Option<&DwarfInfo>,
+    rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Vec<BatchResult> {
     let lifter = get_lifter(image.arch);
     let pipeline_config = PipelineConfig {
@@ -167,6 +175,7 @@ fn decompile_all_parallel(
                 &pipeline_config,
                 dwarf,
                 functions,
+                rtti,
             );
             BatchResult {
                 addr: entry.addr,
@@ -276,7 +285,7 @@ mod tests {
         let image = ElfLoader::load(&data).unwrap();
         let functions = pipeline::discover_functions(&image, None).unwrap();
 
-        let results = decompile_all_parallel(&image, &functions, &config, None);
+        let results = decompile_all_parallel(&image, &functions, &config, None, None);
 
         let mut output = String::new();
         let mut sorted: Vec<&BatchResult> = results.iter().collect();
@@ -315,7 +324,7 @@ mod tests {
         let data = fs::read(fixture("medium.elf")).unwrap();
         let image = ElfLoader::load(&data).unwrap();
         let functions = pipeline::discover_functions(&image, None).unwrap();
-        let results = decompile_all_parallel(&image, &functions, &config, None);
+        let results = decompile_all_parallel(&image, &functions, &config, None, None);
 
         write_per_file(tmp.path(), &results).unwrap();
 
@@ -345,7 +354,7 @@ mod tests {
         let functions = pipeline::discover_functions(&image, None).unwrap();
         assert!(!functions.is_empty());
 
-        let results = decompile_all_parallel(&image, &functions, &config, None);
+        let results = decompile_all_parallel(&image, &functions, &config, None, None);
 
         assert_eq!(results.len(), functions.len());
         let has_failures = results.iter().any(|r| r.output.is_err());
@@ -367,7 +376,7 @@ mod tests {
         let image = ElfLoader::load(&data).unwrap();
         let functions = pipeline::discover_functions(&image, None).unwrap();
 
-        let results = decompile_all_parallel(&image, &functions, &config, None);
+        let results = decompile_all_parallel(&image, &functions, &config, None, None);
         let succeeded = results.iter().filter(|r| r.output.is_ok()).count();
         assert!(
             succeeded > 0,

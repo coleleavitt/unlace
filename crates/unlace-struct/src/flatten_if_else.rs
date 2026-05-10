@@ -115,6 +115,8 @@ fn simplify_node(node: HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> HirNo
             cond,
             cases,
             default,
+            jumptable_addr,
+            jumptable_cases,
         } => HirNode::Switch {
             cond,
             cases: cases
@@ -122,6 +124,8 @@ fn simplify_node(node: HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> HirNo
                 .map(|(c, body, ft)| (c, simplify_nodes(body, def_map), ft))
                 .collect(),
             default: default.map(|d| simplify_nodes(d, def_map)),
+            jumptable_addr,
+            jumptable_cases,
         },
         HirNode::TryCatch {
             try_body,
@@ -255,6 +259,8 @@ fn flatten_node(node: HirNode) -> HirNode {
             cond,
             cases,
             default,
+            jumptable_addr,
+            jumptable_cases,
         } => HirNode::Switch {
             cond,
             cases: cases
@@ -262,6 +268,8 @@ fn flatten_node(node: HirNode) -> HirNode {
                 .map(|(c, body, ft)| (c, flatten_nodes(body), ft))
                 .collect(),
             default: default.map(flatten_nodes),
+            jumptable_addr,
+            jumptable_cases,
         },
         HirNode::TryCatch {
             try_body,
@@ -333,6 +341,10 @@ mod tests {
             panic_sites: BTreeMap::new(),
             noreturn: false,
             composite_var_types: BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         }
     }
 

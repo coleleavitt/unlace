@@ -183,7 +183,10 @@ pub fn print_c_with_rtti(
         sym_owned,
         str_owned,
         func.composite_var_types.clone(),
+        func.merged_names.clone(),
     );
+    ctx.parent_returns_void = matches!(func.return_type, PrimitiveType::Unknown);
+    ctx.frame_size = header.map(|h| h.stack_frame);
 
     let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
     compute_dwarf_locals(dwarf_func, header, &mut ctx);
@@ -192,6 +195,7 @@ pub fn print_c_with_rtti(
     compute_foldable(&mut ctx);
     compute_byref_bases(&mut ctx);
     compute_heuristic_names(&func.body, &mut ctx);
+    compute_hoist_plan(&mut ctx);
 
     let mut out = String::with_capacity(1024);
 
@@ -199,6 +203,10 @@ pub fn print_c_with_rtti(
 
     if let Some(rtti) = rtti.filter(|r| !r.is_empty()) {
         emit_rtti_hierarchy(rtti, &mut out);
+        // Emit the per-class layout block immediately above the first
+        // ctor of each class — pinned at the top of the function so it
+        // sits *above* the function-header comment.
+        emit_class_layout_for_func(func, rtti, &mut out);
     }
 
     if let Some(hdr) = header {
@@ -209,7 +217,26 @@ pub fn print_c_with_rtti(
     let emit_name = match (&dwarf_func, &demangled) {
         (Some(df), _) => df.name.clone(),
         (None, Some(dr)) => {
-            let _ = writeln!(out, "// {}", dr.full_signature);
+            // Strip libcxx / libstdc++ inline namespaces so the header
+            // comment matches the rendered `this` parameter type, which
+            // routes through `recognize_stl_type` → `clean_inline_ns`.
+            // Otherwise the comment shows `std::__1::vector` while the
+            // signature shows `std::vector`.
+            let mut sig = dr.full_signature.clone();
+            for marker in ["std::__1::", "std::__cxx11::", "std::__2::"] {
+                if sig.contains(marker) {
+                    sig = sig.replace(marker, "std::");
+                }
+            }
+            let _ = writeln!(out, "// {}", sig);
+            // Surface lambda closures with a one-line annotation so a
+            // human reader knows the enclosing class is a compiler-
+            // generated closure type (`Ul…E_` / `$_<n>`).  Conservative
+            // detection only — full `[capture](args) { ... }` rendering
+            // would need to walk the closure's data members.
+            if dr.is_lambda {
+                out.push_str("// lambda closure operator()\n");
+            }
             crate::demangle::sanitize_for_c(&dr.short_name)
         }
         (None, None) => func.name.clone(),
@@ -246,9 +273,22 @@ pub fn print_c_with_rtti(
             let _ = write!(out, "{} {}", ty, name);
         }
     } else {
+        // Prefer the RTTI-recovered class for `this` (it pins down the
+        // concrete user-defined class).  When that's unavailable, fall back
+        // to STL recognition: `std::vector<int>::push_back` tells us the
+        // `this` parameter is `std::vector<int>*` even when no RTTI is
+        // emitted (e.g. exception-disabled or stripped C++ binaries).
         let rtti_this_type = rtti_this_param_type(&demangled, rtti);
+        let stl_this_type = if rtti_this_type.is_none() {
+            stl_this_param_type(&demangled)
+        } else {
+            None
+        };
         let mut param_idx = 0;
         if let Some(ref this_ty) = rtti_this_type {
+            let _ = write!(out, "{} *this", this_ty);
+            param_idx = 1;
+        } else if let Some(ref this_ty) = stl_this_type {
             let _ = write!(out, "{} *this", this_ty);
             param_idx = 1;
         }
@@ -326,6 +366,12 @@ pub fn print_c_with_rtti(
         if !referenced_names.contains(name.as_str()) || should_suppress_var_decl(sv, &ctx) {
             continue;
         }
+        // Hoisted decls are emitted in the function body at the point of
+        // first use; skip the function-top entry so we don't emit a
+        // duplicate `int v3;` line.
+        if ctx.hoist_decl_plan.contains_key(&sv.base) {
+            continue;
+        }
         let ty = ctx
             .var_types
             .get(sv)
@@ -399,37 +445,284 @@ fn emit_function_header(hdr: &FunctionHeaderInfo, out: &mut String) {
     let _ = writeln!(out, " | Xrefs from: unknown */");
 }
 
+/// Sentinel placed on the *first* line of the RTTI hierarchy block so a
+/// post-pass like [`dedupe_rtti_hierarchy`] can find and dedupe it after
+/// concatenating multiple per-function outputs.
+const RTTI_BLOCK_BEGIN: &str = "/*__UNLACE_RTTI_BLOCK_BEGIN__";
+const RTTI_BLOCK_END: &str = "__UNLACE_RTTI_BLOCK_END__*/";
+
 fn emit_rtti_hierarchy(rtti: &unlace_loader::RttiInfo, out: &mut String) {
     let hierarchy = rtti.format_hierarchy();
     if hierarchy.is_empty() {
         return;
     }
-    let _ = writeln!(out, "/*");
+    out.push_str(RTTI_BLOCK_BEGIN);
+    out.push('\n');
     let _ = writeln!(out, " * C++ Class Hierarchy (from RTTI):");
     for line in hierarchy.lines() {
         let _ = writeln!(out, " *   {}", line);
     }
 
+    // Resolve typeinfo addresses → demangled class names so the RTTI
+    // pointer in each subtable can be printed symbolically.
+    let ti_to_name: BTreeMap<u64, String> = rtti
+        .classes
+        .iter()
+        .map(|(&addr, cls)| (addr, cls.demangled_name.clone()))
+        .collect();
+
     for cls in rtti.classes.values() {
-        if cls.vtable_methods.is_empty() {
+        let Some(layout) = cls.vtable_layout.as_ref() else {
+            // Fall back to the legacy view when no structured layout
+            // was reconstructed.
+            if cls.vtable_methods.is_empty() {
+                continue;
+            }
+            let _ = writeln!(out, " *");
+            let _ = writeln!(out, " * {}::vtable:", cls.demangled_name);
+            for (slot, va, name) in &cls.vtable_methods {
+                let display = match name {
+                    Some(n) => match crate::demangle::demangle(n) {
+                        Some(d) => d.full_signature,
+                        None => n.clone(),
+                    },
+                    None => format!("sub_{:x}", va),
+                };
+                let _ = writeln!(out, " *   [{}] {}", slot, display);
+            }
             continue;
-        }
+        };
+
+        // Discover overridden methods: any vfunc whose demangled class
+        // name doesn't match this class is an inherited slot we kept;
+        // any vfunc whose demangled name does match (and the class has
+        // bases) is an override.
         let _ = writeln!(out, " *");
-        let _ = writeln!(out, " * {}::vtable:", cls.demangled_name);
-        for (slot, _va, name) in &cls.vtable_methods {
-            let display = match name {
-                Some(n) => match crate::demangle::demangle(n) {
-                    Some(d) => d.full_signature,
-                    None => n.clone(),
-                },
-                None => format!("sub_{:x}", _va),
+        let _ = writeln!(
+            out,
+            " * {}::vtable @ {:#x} ({} bytes, {} subtable{}):",
+            cls.demangled_name,
+            layout.vtable_addr,
+            layout.total_size,
+            layout.subtables.len(),
+            if layout.subtables.len() == 1 { "" } else { "s" },
+        );
+
+        for (sub_idx, sub) in layout.subtables.iter().enumerate() {
+            let role = if sub_idx == 0 {
+                "primary".to_string()
+            } else {
+                // For secondary subtables, identify which base they
+                // cover by looking up the typeinfo (which still points
+                // at the most-derived class) — we can't always tell,
+                // but we *can* detect virtual-base secondary tables
+                // because they're listed last in Itanium emission order.
+                format!("secondary #{sub_idx}")
             };
-            let _ = writeln!(out, " *   [{}] {}", slot, display);
+            let _ = writeln!(
+                out,
+                " *   [{}] {} subtable @ {:#x}:",
+                sub_idx, role, sub.address_point,
+            );
+            if !sub.virtual_base_offsets.is_empty() {
+                for (i, off) in sub.virtual_base_offsets.iter().enumerate() {
+                    let _ = writeln!(out, " *       vbase_offset[{i}] = {off}");
+                }
+            }
+            let _ = writeln!(out, " *       offset_to_top = {}", sub.offset_to_top);
+            let rtti_disp = ti_to_name
+                .get(&sub.rtti_addr)
+                .cloned()
+                .unwrap_or_else(|| format!("{:#x}", sub.rtti_addr));
+            let _ = writeln!(out, " *       typeinfo      = &typeinfo for {rtti_disp}");
+            for (slot, kind) in sub.functions.iter().enumerate() {
+                match kind {
+                    unlace_loader::VtableSlotKind::Function {
+                        va, name, is_thunk,
+                    } => {
+                        let display = match name {
+                            Some(n) => match crate::demangle::demangle(n) {
+                                Some(d) => d.full_signature,
+                                None => n.clone(),
+                            },
+                            None => format!("sub_{:x}", va),
+                        };
+                        // Heuristic override marker: when the demangled
+                        // class part of the symbol matches this class
+                        // *and* this class has at least one base, the
+                        // slot overrides an inherited virtual.
+                        let mut tag = String::new();
+                        if *is_thunk {
+                            tag.push_str(" [thunk]");
+                        } else if !cls.bases.is_empty() {
+                            if let Some(n) = name {
+                                if let Some(d) = crate::demangle::demangle(n) {
+                                    if d.class_name.as_deref() == Some(cls.demangled_name.as_str())
+                                    {
+                                        tag.push_str(" [override]");
+                                    }
+                                }
+                            }
+                        }
+                        let _ =
+                            writeln!(out, " *       vfunc[{slot}] = {display}{tag}");
+                    }
+                    unlace_loader::VtableSlotKind::Zero => {
+                        let _ = writeln!(out, " *       vfunc[{slot}] = (null)");
+                    }
+                    unlace_loader::VtableSlotKind::Raw(v) => {
+                        let _ = writeln!(out, " *       vfunc[{slot}] = raw {:#x}", v);
+                    }
+                    // The following slot kinds are reserved for future
+                    // extensions; they don't appear in our current
+                    // layout reconstruction but are handled defensively.
+                    unlace_loader::VtableSlotKind::VCallOffset(off) => {
+                        let _ = writeln!(out, " *       vcall_offset = {off}");
+                    }
+                    unlace_loader::VtableSlotKind::VBaseOffset(off) => {
+                        let _ = writeln!(out, " *       vbase_offset = {off}");
+                    }
+                    unlace_loader::VtableSlotKind::OffsetToTop(off) => {
+                        let _ = writeln!(out, " *       offset_to_top = {off}");
+                    }
+                    unlace_loader::VtableSlotKind::Rtti(p) => {
+                        let _ = writeln!(out, " *       typeinfo = {:#x}", p);
+                    }
+                }
+            }
         }
     }
 
-    let _ = writeln!(out, " */");
+    out.push_str(" ");
+    out.push_str(RTTI_BLOCK_END);
     out.push('\n');
+    out.push('\n');
+}
+
+/// After concatenating per-function outputs, keep the first RTTI block
+/// and strip every subsequent copy. The block is delimited by
+/// [`RTTI_BLOCK_BEGIN`] / [`RTTI_BLOCK_END`] sentinels so this pass is
+/// linear and never trips on user comments. After deduplication the
+/// sentinels are rewritten as plain `/*` / `*/` so the output is valid C.
+pub fn dedupe_rtti_hierarchy(output: &str) -> String {
+    let mut out = String::with_capacity(output.len());
+    let mut seen = false;
+    let mut rest = output;
+    while let Some(begin) = rest.find(RTTI_BLOCK_BEGIN) {
+        out.push_str(&rest[..begin]);
+        let after_begin = &rest[begin..];
+        let Some(end_offset) = after_begin.find(RTTI_BLOCK_END) else {
+            // Malformed — bail and keep the rest verbatim.
+            out.push_str(after_begin);
+            return out;
+        };
+        let block_end = end_offset + RTTI_BLOCK_END.len();
+        let block = &after_begin[..block_end];
+        if !seen {
+            // Rewrite the sentinels so the block is valid C: `/*` for
+            // the BEGIN line, ` */` for the END line.
+            let rewritten = block
+                .replace(RTTI_BLOCK_BEGIN, "/*")
+                .replace(RTTI_BLOCK_END, "*/");
+            out.push_str(&rewritten);
+            seen = true;
+        }
+        // Skip the block + the immediate trailing newline so we don't
+        // leave a blank line where stripped duplicates used to live.
+        let after_block = &after_begin[block_end..];
+        let after_block = after_block.strip_prefix('\n').unwrap_or(after_block);
+        rest = after_block;
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Emit a per-class layout block above the first ctor of a class.
+///
+/// Format:
+/// ```text
+/// /* class MyClass : public Base {
+///  *   vfunc[0] = method1
+///  *   vfunc[1] = method2 [override]
+///  * }; */
+/// ```
+fn emit_class_layout_for_func(
+    func: &HirFunction,
+    rtti: &unlace_loader::RttiInfo,
+    out: &mut String,
+) {
+    let Some(class_name) = func.class_name.as_deref() else {
+        return;
+    };
+    if !func.is_ctor {
+        return;
+    }
+    let Some(cls) = rtti.class_by_name(class_name) else {
+        return;
+    };
+    let Some(layout) = cls.vtable_layout.as_ref() else {
+        return;
+    };
+    let primary = match layout.subtables.first() {
+        Some(p) => p,
+        None => return,
+    };
+
+    // class header — list base classes for context.
+    let mut header = format!("class {class_name}");
+    if !cls.bases.is_empty() {
+        header.push_str(" : ");
+        let mut parts = Vec::new();
+        for b in &cls.bases {
+            let vis = if b.is_public { "public" } else { "private" };
+            let virt = if b.is_virtual { " virtual" } else { "" };
+            // Resolve the base typeinfo → name when possible.
+            let bname = rtti
+                .classes
+                .get(&b.typeinfo_addr)
+                .map(|c| c.demangled_name.clone())
+                .unwrap_or_else(|| format!("ti_{:x}", b.typeinfo_addr));
+            parts.push(format!("{vis}{virt} {bname}"));
+        }
+        header.push_str(&parts.join(", "));
+    }
+    let _ = writeln!(out, "/* {header} {{");
+    for (slot, kind) in primary.functions.iter().enumerate() {
+        match kind {
+            unlace_loader::VtableSlotKind::Function {
+                va, name, is_thunk,
+            } => {
+                let display = match name {
+                    Some(n) => match crate::demangle::demangle(n) {
+                        Some(d) => d.full_signature,
+                        None => n.clone(),
+                    },
+                    None => format!("sub_{:x}", va),
+                };
+                let mut tag = String::new();
+                if *is_thunk {
+                    tag.push_str(" [thunk]");
+                } else if !cls.bases.is_empty() {
+                    if let Some(n) = name {
+                        if let Some(d) = crate::demangle::demangle(n) {
+                            if d.class_name.as_deref() == Some(class_name) {
+                                tag.push_str(" [override]");
+                            }
+                        }
+                    }
+                }
+                let _ = writeln!(out, " *   vfunc[{slot}] = {display}{tag}");
+            }
+            unlace_loader::VtableSlotKind::Zero => {
+                let _ = writeln!(out, " *   vfunc[{slot}] = (null)");
+            }
+            unlace_loader::VtableSlotKind::Raw(v) => {
+                let _ = writeln!(out, " *   vfunc[{slot}] = raw {:#x}", v);
+            }
+            _ => {}
+        }
+    }
+    let _ = writeln!(out, " * }}; */");
 }
 
 fn rtti_this_param_type(
@@ -443,9 +736,42 @@ fn rtti_this_param_type(
     Some(class_name.clone())
 }
 
+/// Recognise STL container types (`std::vector<T>`, `std::string`, etc.)
+/// from the demangled symbol's namespace path, and return the C-style
+/// spelling to use for the `this` parameter.  Conservative: only fires
+/// when [`crate::demangle::demangle`] already classified the symbol as a
+/// member function of one of the supported classes — see
+/// [`unlace_passes::recognize_stl_type`].
+fn stl_this_param_type(
+    demangled: &Option<crate::demangle::DemangleResult>,
+) -> Option<String> {
+    let dr = demangled.as_ref()?;
+    let class_name = dr.class_name.as_ref()?;
+    unlace_passes::recognize_stl_type(&dr.namespaces, class_name)
+}
+
 // ---------------------------------------------------------------------------
 // Context
 // ---------------------------------------------------------------------------
+
+/// How and where a hoisted local declaration should be emitted.
+///
+/// Populated by [`compute_hoist_plan`] and consulted by both the
+/// function-top declaration block (which skips entries present here) and
+/// [`emit_statement`] / [`inline_statement_text`] (which fold the type
+/// prefix into the matching assignment).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct HoistPlan {
+    /// Statement index where the declaration is anchored.  When
+    /// `fold_into_assignment` is true the assignment at this stmt becomes
+    /// `<type> <name> = <expr>;` with the location comment preserved as a
+    /// trailing line comment.
+    stmt_idx: u32,
+    /// `true` when the statement at `stmt_idx` writes the hoisted variable
+    /// as a regular assignment (not foldable, not dead-zero, not compound,
+    /// not CSEL) and can therefore absorb the type prefix.
+    fold_into_assignment: bool,
+}
 
 struct PrintCtx {
     next_var: u32,
@@ -476,8 +802,35 @@ struct PrintCtx {
     /// dead stores that DSE cannot eliminate within a single block).
     sv_use_counts: BTreeMap<SsaVarnode, usize>,
     cond_uses: Vec<SsaVarnode>,
+    /// `(varnode, anchor stmt idx)` pairs recording which statement reads
+    /// each `cond_uses` entry.  Used together with `stmt_inputs`/`stmt_outputs`
+    /// to compute the LCA scope of a declared name when deciding whether to
+    /// hoist its declaration to the point of first use.
+    cond_use_stmts: Vec<(SsaVarnode, u32)>,
     collect_depth: u32,
     stmt_depths: BTreeMap<u32, u32>,
+    /// Lexical scope path of each statement, recorded during
+    /// `collect_varnodes`.  Each path element is a unique scope id assigned
+    /// when entering a block-introducing construct (then-body, else-body,
+    /// while-body, for-body, switch case, etc.), so two statements share an
+    /// LCA iff their paths share a prefix.  The empty `Vec<u32>` denotes the
+    /// function-root scope.
+    stmt_scope_paths: BTreeMap<u32, Vec<u32>>,
+    /// Next scope id used to label nested blocks during collection.
+    next_scope_id: u32,
+    /// Stack of scope ids walked during `collect_varnodes`, mutated as the
+    /// walker enters/leaves block-introducing constructs.
+    current_scope_path: Vec<u32>,
+    /// Hoist plan: maps a base varnode to the statement index where its
+    /// declaration should be emitted in the body instead of at the
+    /// function-top declaration block.  Names absent from this map fall
+    /// back to the function-top declaration block.  Populated by
+    /// [`compute_hoist_plan`] after foldable detection.
+    hoist_decl_plan: BTreeMap<Varnode, HoistPlan>,
+    /// Recovered stack frame size (from the `FunctionHeaderInfo`), needed
+    /// by hoisted declaration emission to render `[rsp+...] [rbp-...]`
+    /// trailing comments matching the function-top decl block.
+    frame_size: Option<u64>,
     field_by_offset: BTreeMap<u64, Vec<(String, String, u64)>>,
     panic_sites: BTreeMap<u64, PanicKind>,
     /// Merged symbol table: address → symbol name (PLT + function symbols).
@@ -496,6 +849,19 @@ struct PrintCtx {
     /// Used by `try_struct_field_access` to emit `base->field_<offset>` syntax.
     composite_var_types: BTreeMap<SsaVarnode, Type>,
     source_map: BTreeMap<u64, unlace_loader::SourceLocation>,
+    /// `true` when the enclosing function returns `void` (or the inferred
+    /// return type is `Unknown`, which we render as `void`). Used by
+    /// [`HirNode::TailCall`] emission to choose between `return foo();`
+    /// (non-void) and `foo(); return;` (void), matching IDA convention.
+    parent_returns_void: bool,
+    /// Pre-coalesced per-SSA-varnode names from
+    /// [`unlace_passes::VariableMergePass`].
+    ///
+    /// When this map contains an entry for an SsaVarnode, [`Self::name_of`]
+    /// returns that name (after first honouring DWARF / role-based overrides
+    /// keyed by the base [`Varnode`]).  Empty when the coalescer was not run,
+    /// in which case naming falls back to the printer's `next_var` allocator.
+    merged_names: BTreeMap<SsaVarnode, String>,
 }
 
 impl PrintCtx {
@@ -505,10 +871,22 @@ impl PrintCtx {
         symbols: BTreeMap<u64, String>,
         string_table: BTreeMap<u64, String>,
         composite_var_types: BTreeMap<SsaVarnode, Type>,
+        merged_names: BTreeMap<SsaVarnode, String>,
     ) -> Self {
         let field_by_offset = build_field_offset_map(dwarf);
+        // Advance the fresh-name allocator past any `vN` already claimed by
+        // the variable-merge pass so fallback names never collide with
+        // pre-coalesced ones.
+        let mut start_next: u32 = 1;
+        for n in merged_names.values() {
+            if let Some(rest) = n.strip_prefix('v') {
+                if let Ok(idx) = rest.parse::<u32>() {
+                    start_next = start_next.max(idx + 1);
+                }
+            }
+        }
         Self {
-            next_var: 1,
+            next_var: start_next,
             var_names: BTreeMap::new(),
             var_types: BTreeMap::new(),
             base_names: BTreeMap::new(),
@@ -523,8 +901,14 @@ impl PrintCtx {
             sv_defining_stmt: BTreeMap::new(),
             sv_use_counts: BTreeMap::new(),
             cond_uses: Vec::new(),
+            cond_use_stmts: Vec::new(),
             collect_depth: 0,
             stmt_depths: BTreeMap::new(),
+            stmt_scope_paths: BTreeMap::new(),
+            next_scope_id: 0,
+            current_scope_path: Vec::new(),
+            hoist_decl_plan: BTreeMap::new(),
+            frame_size: None,
             field_by_offset,
             panic_sites,
             symbols,
@@ -534,6 +918,8 @@ impl PrintCtx {
             dwarf_local_types: BTreeMap::new(),
             composite_var_types,
             source_map: dwarf.map(|d| d.source_map.clone()).unwrap_or_default(),
+            parent_returns_void: false,
+            merged_names,
         }
     }
 
@@ -542,7 +928,13 @@ impl PrintCtx {
             return n.clone();
         }
         let name = if let Some(override_name) = self.name_overrides.get(&sv.base) {
+            // DWARF / role-based override (keyed by base) wins over coalescer.
             override_name.clone()
+        } else if let Some(merged) = self.merged_names.get(sv) {
+            // Variable-merge pass result (per-SsaVarnode).  Reuse the same
+            // name for every SsaVarnode in the same coalesced cluster, even
+            // if their base Varnodes differ (Unique-space coalescing).
+            merged.clone()
         } else if let Some(existing) = self.base_names.get(&sv.base) {
             existing.clone()
         } else {
@@ -946,6 +1338,8 @@ fn collect_insn_as_stmt(insn: &IrInsn, ctx: &mut PrintCtx) -> u32 {
     let idx = ctx.next_stmt;
     ctx.next_stmt += 1;
     ctx.stmt_depths.insert(idx, ctx.collect_depth);
+    ctx.stmt_scope_paths
+        .insert(idx, ctx.current_scope_path.clone());
 
     let mut input_svs = Vec::new();
     for input in &insn.inputs {
@@ -988,6 +1382,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 let idx = ctx.next_stmt;
                 ctx.next_stmt += 1;
                 ctx.stmt_depths.insert(idx, ctx.collect_depth);
+                ctx.stmt_scope_paths
+                    .insert(idx, ctx.current_scope_path.clone());
 
                 let mut input_svs = Vec::new();
                 for input in &insn.inputs {
@@ -1027,10 +1423,21 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             } => {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+                // Anchor the cond read at the next-allocated stmt so the
+                // hoist pass treats it as a use at the enclosing scope.
+                ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
                 ctx.collect_depth += 1;
+                let then_scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(then_scope);
                 collect_varnodes(then_body, ctx);
+                ctx.current_scope_path.pop();
                 if let Some(eb) = else_body {
+                    let else_scope = ctx.next_scope_id;
+                    ctx.next_scope_id += 1;
+                    ctx.current_scope_path.push(else_scope);
                     collect_varnodes(eb, ctx);
+                    ctx.current_scope_path.pop();
                 }
                 ctx.collect_depth -= 1;
             }
@@ -1038,17 +1445,30 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             HirNode::While { cond, body } => {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+                ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
                 ctx.collect_depth += 1;
+                let body_scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(body_scope);
                 collect_varnodes(body, ctx);
+                ctx.current_scope_path.pop();
                 ctx.collect_depth -= 1;
             }
 
             HirNode::DoWhile { body, cond } => {
                 ctx.collect_depth += 1;
+                let body_scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(body_scope);
                 collect_varnodes(body, ctx);
+                ctx.current_scope_path.pop();
                 ctx.collect_depth -= 1;
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+                // do/while reads the cond *after* the body; anchor at the
+                // last-allocated stmt index inside the loop body.
+                ctx.cond_use_stmts
+                    .push((*cond, ctx.next_stmt.saturating_sub(1)));
             }
 
             HirNode::For {
@@ -1062,9 +1482,14 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 }
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+                ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
                 ctx.collect_depth += 1;
+                let body_scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(body_scope);
                 collect_varnodes(body, ctx);
                 collect_insn_as_stmt(update, ctx);
+                ctx.current_scope_path.pop();
                 ctx.collect_depth -= 1;
             }
 
@@ -1072,15 +1497,25 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 cond,
                 cases,
                 default,
+                ..
             } => {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+                ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
                 ctx.collect_depth += 1;
                 for (_case, body, _) in cases {
+                    let case_scope = ctx.next_scope_id;
+                    ctx.next_scope_id += 1;
+                    ctx.current_scope_path.push(case_scope);
                     collect_varnodes(body, ctx);
+                    ctx.current_scope_path.pop();
                 }
                 if let Some(def) = default {
+                    let default_scope = ctx.next_scope_id;
+                    ctx.next_scope_id += 1;
+                    ctx.current_scope_path.push(default_scope);
                     collect_varnodes(def, ctx);
+                    ctx.current_scope_path.pop();
                 }
                 ctx.collect_depth -= 1;
             }
@@ -1088,6 +1523,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             HirNode::Return(Some(sv)) => {
                 ctx.name_of(sv);
                 ctx.cond_uses.push(*sv);
+                ctx.cond_use_stmts.push((*sv, ctx.next_stmt));
             }
 
             HirNode::Ternary {
@@ -1099,9 +1535,13 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
 
+                ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
+
                 let then_idx = ctx.next_stmt;
                 ctx.next_stmt += 1;
                 ctx.stmt_depths.insert(then_idx, ctx.collect_depth);
+                ctx.stmt_scope_paths
+                    .insert(then_idx, ctx.current_scope_path.clone());
                 let mut then_inputs = Vec::new();
                 for input in &then_insn.inputs {
                     if input.space == SpaceId::Const {
@@ -1133,6 +1573,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 let else_idx = ctx.next_stmt;
                 ctx.next_stmt += 1;
                 ctx.stmt_depths.insert(else_idx, ctx.collect_depth);
+                ctx.stmt_scope_paths
+                    .insert(else_idx, ctx.current_scope_path.clone());
                 let mut else_inputs = Vec::new();
                 for input in &else_insn.inputs {
                     if input.space == SpaceId::Const {
@@ -1174,9 +1616,23 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 catch_body,
             } => {
                 ctx.collect_depth += 1;
+                let try_scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(try_scope);
                 collect_varnodes(try_body, ctx);
+                ctx.current_scope_path.pop();
+                let catch_scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(catch_scope);
                 collect_varnodes(catch_body, ctx);
+                ctx.current_scope_path.pop();
                 ctx.collect_depth -= 1;
+            }
+
+            HirNode::Commented { inner, .. } => {
+                // Comments are pass-through for varnode collection — recurse
+                // into the wrapped node as if the wrapper weren't there.
+                collect_varnodes(std::slice::from_ref(inner.as_ref()), ctx);
             }
         }
     }
@@ -1426,6 +1882,194 @@ fn compute_byref_bases(ctx: &mut PrintCtx) {
             }
         }
     }
+}
+
+/// Decide which local declarations to hoist out of the function-top decl
+/// block and into the body at the point of first use, matching IDA's
+/// `<type> <name> = <expr>;` layout.
+///
+/// A base varnode qualifies for hoisting when:
+///   1. The earliest statement that touches it (input read, output write, or
+///      condition use) is itself an assignment that *defines* the variable.
+///   2. That defining statement's lexical scope path equals the LCA of the
+///      scope paths of every other use of the variable — i.e. the assignment
+///      lexically dominates all subsequent reads (same scope or nested).
+///   3. The defining statement is not foldable, dead-zero, dead-suppressed,
+///      a CSEL/Ternary expansion, or otherwise rewritten by the emitter into
+///      a non-`<lhs> = <rhs>;` shape.
+///   4. The base is not BYREF (address taken): IDA still emits BYREF locals
+///      at the top of the function for clarity, and we follow suit.
+///   5. The defining statement is not a compound-op rewrite of the same
+///      variable (`v = v + ...` → `v += ...`), which implies the value was
+///      already live before the rewrite.
+///
+/// Names that don't qualify fall through to the original function-top
+/// declaration block, preserving prior layout for cases this pass cannot
+/// reason about safely.
+fn compute_hoist_plan(ctx: &mut PrintCtx) {
+    use std::collections::BTreeMap;
+
+    // For each base varnode, gather every statement index that touches it.
+    let mut use_stmts: BTreeMap<Varnode, Vec<u32>> = BTreeMap::new();
+    for (&stmt_idx, inputs) in &ctx.stmt_inputs {
+        for sv in inputs {
+            use_stmts.entry(sv.base).or_default().push(stmt_idx);
+        }
+    }
+    for (&stmt_idx, output_sv_opt) in &ctx.stmt_outputs {
+        if let Some(sv) = output_sv_opt {
+            use_stmts.entry(sv.base).or_default().push(stmt_idx);
+        }
+    }
+    for (sv, anchor_stmt) in &ctx.cond_use_stmts {
+        // Anchor at the *previous* statement (the one that wrote the cond
+        // value) when the recorded anchor is past the end of the stmt list.
+        let s = (*anchor_stmt).min(ctx.next_stmt.saturating_sub(1));
+        use_stmts.entry(sv.base).or_default().push(s);
+    }
+
+    let empty_path: Vec<u32> = Vec::new();
+
+    for (base, mut stmts) in use_stmts {
+        if stmts.is_empty() {
+            continue;
+        }
+        stmts.sort_unstable();
+        stmts.dedup();
+
+        // Skip BYREF — these are address-taken and must live at fn top.
+        if ctx.byref_bases.contains(&base) {
+            continue;
+        }
+        // Skip vars whose name isn't even known yet (defensive).
+        if !ctx.base_names.contains_key(&base) {
+            continue;
+        }
+
+        // Compute LCA of all use paths.
+        let lca = lca_scope_path(&stmts, &ctx.stmt_scope_paths, &empty_path);
+
+        let first_stmt = stmts[0];
+        let first_path = ctx
+            .stmt_scope_paths
+            .get(&first_stmt)
+            .cloned()
+            .unwrap_or_default();
+
+        // The defining statement must live at exactly the LCA scope: if it
+        // is deeper, sibling-scope uses would not be dominated and we'd
+        // need to emit a bare decl above the construct enclosing the first
+        // use — leave that case to the function-top fallback for now.
+        if first_path != lca {
+            continue;
+        }
+
+        // The first-touched statement must *write* this base (not just read
+        // it).  Reads-before-writes happen for parameter/live-in values
+        // which must stay declared at fn top (or via the signature).
+        let Some(Some(out_sv)) = ctx.stmt_outputs.get(&first_stmt).copied() else {
+            continue;
+        };
+        if out_sv.base != base {
+            continue;
+        }
+
+        // Skip statements that the emitter would suppress or rewrite into
+        // a non-assignment shape.
+        if ctx.foldable_stmts.contains(&first_stmt) {
+            continue;
+        }
+        let Some(insn) = ctx.stmt_insns.get(&first_stmt).cloned() else {
+            continue;
+        };
+        if is_dead_zero_init(&insn, first_stmt, ctx) {
+            continue;
+        }
+        if is_dead_suppressible_store(&insn, first_stmt, ctx) {
+            continue;
+        }
+        if is_csel_callother(&insn) {
+            // CSEL emits an `if (...) { lhs = ...; } else ...` — can't fold.
+            continue;
+        }
+
+        // Compound (`v += 1`) and increment (`v++`) forms reuse the lhs as
+        // both rvalue and lvalue; declaring inside such a stmt is illegal.
+        // It also means the value was live before this stmt, so a function-
+        // top declaration is the correct shape.
+        let lhs_is_self_input = insn
+            .inputs
+            .iter()
+            .any(|i| i.space != SpaceId::Const && Some(*i) == insn.output);
+        if lhs_is_self_input {
+            continue;
+        }
+
+        // Don't hoist values that the return-merge pass is poised to fold
+        // into `return <expr>;`.  Those are writes to the return register
+        // (offset 0 in `SpaceId::Register`) whose SSA varnode has at most
+        // one read \u2014 the read is the trailing `Return(Some(sv))`.  Hoisting
+        // here would insert a `<type> <name> = <expr>;` line and force the
+        // merge pass to give up, regressing the IDA convention.
+        if base.space == SpaceId::Register && base.offset == 0 {
+            let reads = ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0);
+            if reads <= 1 {
+                continue;
+            }
+        }
+
+        // Sanity: every other use's path must extend the LCA prefix.
+        let mut all_dominated = true;
+        for &s in &stmts {
+            let p = ctx
+                .stmt_scope_paths
+                .get(&s)
+                .cloned()
+                .unwrap_or_default();
+            if !p.starts_with(&lca) {
+                all_dominated = false;
+                break;
+            }
+        }
+        if !all_dominated {
+            continue;
+        }
+
+        ctx.hoist_decl_plan.insert(
+            base,
+            HoistPlan {
+                stmt_idx: first_stmt,
+                fold_into_assignment: true,
+            },
+        );
+    }
+}
+
+/// Longest common prefix of the scope paths for every statement in `stmts`.
+fn lca_scope_path(
+    stmts: &[u32],
+    paths: &BTreeMap<u32, Vec<u32>>,
+    fallback: &Vec<u32>,
+) -> Vec<u32> {
+    let mut iter = stmts.iter();
+    let first = match iter.next() {
+        Some(s) => paths.get(s).unwrap_or(fallback).clone(),
+        None => return fallback.clone(),
+    };
+    let mut lca = first;
+    for s in iter {
+        let p = paths.get(s).unwrap_or(fallback);
+        let common = lca
+            .iter()
+            .zip(p.iter())
+            .take_while(|(a, b)| a == b)
+            .count();
+        lca.truncate(common);
+        if lca.is_empty() {
+            break;
+        }
+    }
+    lca
 }
 
 /// Map DWARF local variable names onto stack-backed Varnode bases.
@@ -2067,7 +2711,7 @@ fn inline_node_text(node: &HirNode, ctx: &mut PrintCtx) -> Option<String> {
         HirNode::Return(Some(sv)) => Some(format!("return {};", resolve_sv_expr(sv, ctx))),
         HirNode::Return(None) => Some("return;".to_string()),
         HirNode::Goto(label) => Some(format!("goto {};", label)),
-        HirNode::TailCall { target } => Some(format!("return func_{:x}();", target)),
+        HirNode::TailCall { target } => Some(format_tail_call_text(*target, ctx)),
         HirNode::Continue => Some("continue;".to_string()),
         HirNode::Break => Some("break;".to_string()),
         HirNode::Ternary {
@@ -2128,6 +2772,13 @@ fn try_merge_assign_return(nodes: &[HirNode], ctx: &mut PrintCtx) -> Option<Stri
             if is_dead_zero_init(insn, stmt_idx, ctx) {
                 return None;
             }
+            // Don't drop a hoisted variable's declaration into a `return`
+            // shortcut — the variable is referenced elsewhere too.
+            if let Some(plan) = ctx.hoist_decl_plan.get(&output_sv.base) {
+                if plan.stmt_idx == stmt_idx {
+                    return None;
+                }
+            }
             let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
             if total_uses > 1 {
                 return None;
@@ -2147,6 +2798,11 @@ fn try_merge_assign_return(nodes: &[HirNode], ctx: &mut PrintCtx) -> Option<Stri
             }
             if is_dead_zero_init(insn, stmt_idx, ctx) {
                 return None;
+            }
+            if let Some(plan) = ctx.hoist_decl_plan.get(&output_sv.base) {
+                if plan.stmt_idx == stmt_idx {
+                    return None;
+                }
             }
             let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
             if total_uses > 0 {
@@ -2244,6 +2900,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             cond,
             cases,
             default,
+            ..
         } => {
             let cond_expr = resolve_sv_expr(cond, ctx);
             indent(depth, out);
@@ -2335,11 +2992,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 
         HirNode::TailCall { target } => {
             indent(depth, out);
-            let _ = writeln!(
-                out,
-                "return ((unsigned long long (*)(void))0x{:x})();",
-                target
-            );
+            let _ = writeln!(out, "{}", format_tail_call_text(*target, ctx));
         }
 
         HirNode::Continue => {
@@ -2365,6 +3018,30 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             indent(depth, out);
             let _ = writeln!(out, "}}");
         }
+
+        HirNode::Commented { pre, post, inner } => {
+            for line in pre {
+                emit_comment_line(line, depth, out);
+            }
+            emit_node(inner, depth, ctx, out);
+            for line in post {
+                emit_comment_line(line, depth, out);
+            }
+        }
+    }
+}
+
+/// Emit a single comment line at the given indent. Multi-line comment
+/// strings (containing `\n`) are split into one `// `-prefixed line
+/// per source line, preserving paragraph structure.
+fn emit_comment_line(text: &str, depth: usize, out: &mut String) {
+    for line in text.split('\n') {
+        indent(depth, out);
+        if line.is_empty() {
+            let _ = writeln!(out, "//");
+        } else {
+            let _ = writeln!(out, "// {}", line);
+        }
     }
 }
 
@@ -2386,6 +3063,35 @@ fn demangle_callee_name(raw: &str) -> String {
     match crate::demangle::demangle(raw) {
         Some(d) => crate::demangle::sanitize_for_c(&d.short_name),
         None => raw.to_string(),
+    }
+}
+
+/// Resolve a tail-call target address to a C identifier. Falls back to the
+/// IDA-style `sub_<addr>` name when the symbol table has no entry.
+fn tail_call_target_name(target: u64, ctx: &PrintCtx) -> String {
+    if let Some(name) = ctx.symbols.get(&target) {
+        return demangle_callee_name(name);
+    }
+    format!("sub_{:x}", target)
+}
+
+/// Render a `TailCall { target }` as the IDA-style tail-call form.
+///
+/// * Non-void parent: `return callee();`
+/// * Void parent:    `callee();` — the structurer already emits a trailing
+///                   `Return(None)` after the tail call, so we don't add a
+///                   second `return;` here (which would render as the ugly
+///                   `callee(); return; return;` triple).
+///
+/// The callee is resolved against the symbol table (with demangling) so the
+/// emitted form matches the rest of the pretty-printer's call sites instead
+/// of the previous `((unsigned long long (*)(void))0x…)()` cast.
+fn format_tail_call_text(target: u64, ctx: &PrintCtx) -> String {
+    let name = tail_call_target_name(target, ctx);
+    if ctx.parent_returns_void {
+        format!("{}();", name)
+    } else {
+        format!("return {}();", name)
     }
 }
 
@@ -2566,6 +3272,17 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
         ctx.emit_stmt += 1;
         return None;
     }
+    // Hoisted variable declarations must render through emit_statement so
+    // the type prefix and `// <location>` trailer can be emitted on a
+    // dedicated line.  Inline grouping joins adjacent stmts on one line
+    // which is incompatible with mid-line decl annotations.
+    if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).copied() {
+        if let Some(plan) = ctx.hoist_decl_plan.get(&sv.base) {
+            if plan.stmt_idx == idx && plan.fold_into_assignment {
+                return None;
+            }
+        }
+    }
 
     ctx.emit_stmt += 1;
     if ctx.foldable_stmts.contains(&idx)
@@ -2636,6 +3353,41 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     }
 }
 
+/// If statement `idx` is the hoist-decl anchor for the variable written by
+/// `sv`, return `(prefix, terminator)` where:
+///   * `prefix` is `"<type> "` to prepend to the assignment LHS, and
+///   * `terminator` is `";"` followed by an optional ` // <location>` comment
+///     mirroring the function-top declaration block's annotation.
+fn hoisted_decl_for_stmt(
+    idx: u32,
+    sv: &SsaVarnode,
+    ctx: &PrintCtx,
+) -> Option<(String, String)> {
+    let plan = ctx.hoist_decl_plan.get(&sv.base)?;
+    if plan.stmt_idx != idx || !plan.fold_into_assignment {
+        return None;
+    }
+    let ty = ctx
+        .var_types
+        .get(sv)
+        .copied()
+        .unwrap_or(PrimitiveType::Unknown);
+    let prefix = format!("{} ", c_type_for_var(ctx, &sv.base, &ty));
+    let byref_suffix = if ctx.byref_bases.contains(&sv.base) {
+        " BYREF"
+    } else {
+        ""
+    };
+    let comment = varnode_location_comment(&sv.base, ctx.frame_size);
+    let terminator = match (comment, byref_suffix.is_empty()) {
+        (Some(c), true) => format!("; // {}", c),
+        (Some(c), false) => format!("; // {}{}", c, byref_suffix),
+        (None, false) => format!("; //{}", byref_suffix),
+        (None, true) => ";".to_string(),
+    };
+    Some((prefix, terminator))
+}
+
 fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
     let idx = ctx.emit_stmt;
     ctx.emit_stmt += 1;
@@ -2681,7 +3433,13 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             let _ = writeln!(out, "{};", short);
         } else {
             let rhs = emit_expr(insn, idx, ctx);
-            let _ = writeln!(out, "{} = {};", lhs, rhs);
+            // Hoist the variable's declaration into this assignment if the
+            // pre-pass selected this stmt as the variable's declaration site.
+            if let Some((decl_prefix, decl_trailer)) = hoisted_decl_for_stmt(idx, &sv, ctx) {
+                let _ = writeln!(out, "{}{} = {}{}", decl_prefix, lhs, rhs, decl_trailer);
+            } else {
+                let _ = writeln!(out, "{} = {};", lhs, rhs);
+            }
         }
     } else {
         match insn.op {
@@ -4042,6 +4800,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         }
     }
 
@@ -4118,6 +4880,85 @@ mod tests {
         assert!(output.contains("while (v1)"), "while: {output}");
         assert!(output.contains("v1--;"), "body: {output}");
         assert!(output.contains("return;"), "return: {output}");
+    }
+
+    /// `merged_names` from [`unlace_passes::VariableMergePass`] should drive
+    /// the C printer's variable naming, overriding the default `vN` allocator.
+    /// Two distinct base [`Varnode`]s coalesced into one cluster must appear
+    /// under the same source-level name.
+    #[test]
+    fn test_merged_names_drives_naming() {
+        // r0 = r8 + 1; return r0;  → `r0` will end up renderable.
+        // We seed merged_names so that r0 (sv version 0) and r8 (sv version 0)
+        // both map to the same `vCOAL` name.
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r8, c1],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let mut func = make_func("merge_test", body);
+        let r0_sv = SsaVarnode {
+            base: r0,
+            version: 0,
+        };
+        let r8_sv = SsaVarnode {
+            base: r8,
+            version: 0,
+        };
+        func.merged_names.insert(r0_sv, "vCOAL".to_string());
+        func.merged_names.insert(r8_sv, "vCOAL".to_string());
+
+        let output = print_c(&func);
+
+        // Either `vCOAL` shows up directly OR a higher-priority role override
+        // (e.g. `result` for the return value) replaces it.  We only assert
+        // that no leaked `v1` / `v2` fallback names appear, which would mean
+        // the merged_names path was bypassed entirely.
+        let banned = [" v1 ", " v2 ", "v1 = ", "v2 = ", "(v1 ", "(v2 "];
+        for needle in banned {
+            assert!(
+                !output.contains(needle),
+                "fallback name {needle:?} leaked despite merged_names override: {output}",
+            );
+        }
+
+        // The merged name should appear somewhere in the rendered body.
+        assert!(
+            output.contains("vCOAL"),
+            "merged name `vCOAL` should appear in output: {output}",
+        );
+    }
+
+    /// When `merged_names` is empty (pass not run) the printer falls back to
+    /// its native `vN` allocator — regression guard for the new code path.
+    #[test]
+    fn test_empty_merged_names_falls_back_to_vN() {
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000)),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let func = make_func("fallback", body);
+        // merged_names is empty in make_func.
+        let output = print_c(&func);
+
+        // result is the canonical name for a returned value (Result role).
+        assert!(
+            output.contains("result"),
+            "fallback path should still produce a Result-role name: {output}",
+        );
     }
 
     #[test]
@@ -4344,6 +5185,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -4892,6 +5737,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let mut functions = BTreeMap::new();
@@ -4986,6 +5835,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: true,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let output = super::print_c(&func);
@@ -5008,6 +5861,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let output = super::print_c(&func);
@@ -7791,6 +8648,8 @@ mod tests {
                 (SwitchCase::Value(1), vec![HirNode::Return(None)], false),
             ],
             default: None,
+            jumptable_addr: None,
+            jumptable_cases: None,
         }];
 
         let func = make_func("switch_break", body);
@@ -7816,6 +8675,8 @@ mod tests {
                 (SwitchCase::Value(1), vec![HirNode::Return(None)], false),
             ],
             default: None,
+            jumptable_addr: None,
+            jumptable_cases: None,
         }];
 
         let func = make_func("switch_ft", body);
@@ -8144,6 +9005,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -8165,6 +9030,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -8190,6 +9059,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -8211,6 +9084,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -8232,6 +9109,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -8279,6 +9160,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -8381,8 +9266,8 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("_Bool cond;") || output.contains("_BOOL cond;"),
-            "comparison output should be declared as 'cond': {output}",
+            output.contains("_Bool cond") || output.contains("_BOOL cond"),
+            "comparison output should be named 'cond': {output}",
         );
     }
 
@@ -8559,6 +9444,8 @@ mod tests {
         );
     }
 
+
+
     #[test]
     fn test_non_mangled_call_target_unchanged() {
         let target_addr = con(0x401030, 8);
@@ -8640,6 +9527,7 @@ mod tests {
                 bases: vec![],
                 vtable_addr: None,
                 vtable_methods: vec![],
+                vtable_layout: None,
             },
         );
         classes.insert(
@@ -8656,6 +9544,7 @@ mod tests {
                 }],
                 vtable_addr: Some(0x3cf0),
                 vtable_methods: vec![(0, 0x1300, Some("_ZN3Dog5speakEv".to_string()))],
+                vtable_layout: None,
             },
         );
         let rtti = RttiInfo { classes };
@@ -8697,6 +9586,7 @@ mod tests {
                 bases: vec![],
                 vtable_addr: None,
                 vtable_methods: vec![],
+                vtable_layout: None,
             },
         );
         let rtti = RttiInfo { classes };
@@ -8768,6 +9658,479 @@ mod tests {
         assert!(
             !output.contains("result = compute()"),
             "should NOT have separate assignment: {output}",
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // TailCall emission (`return callee();` / `callee();`) — IDA convention.
+    // ---------------------------------------------------------------------
+
+    /// Tail call in a non-void function with a known symbol must render as
+    /// `return helper();` — the IDA convention. Verifies that the symbol
+    /// table is consulted (no `func_<addr>` or cast-to-fn-ptr fallback).
+    #[test]
+    fn test_tail_call_named_target_non_void() {
+        let body = vec![HirNode::TailCall { target: 0x401000 }];
+        let func = make_func("caller", body); // make_func returns Int(4)
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401000u64, "helper".to_string());
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("return helper();"),
+            "non-void parent: tail call should render as `return helper();`: {output}",
+        );
+        assert!(
+            !output.contains("func_401000"),
+            "should not fall back to func_<addr> when symbol is known: {output}",
+        );
+        assert!(
+            !output.contains("(*)(void)"),
+            "should not emit cast-to-fn-ptr form: {output}",
+        );
+    }
+
+    /// Tail call to an unknown address falls back to the IDA-style
+    /// `sub_<hex>` placeholder name.
+    #[test]
+    fn test_tail_call_unknown_target_falls_back_to_sub() {
+        let body = vec![HirNode::TailCall { target: 0xdeadbeef }];
+        let func = make_func("caller", body);
+        let output = super::print_c_full(&func, None, None, None, None);
+
+        assert!(
+            output.contains("return sub_deadbeef();"),
+            "unknown target: tail call should fall back to `sub_<hex>`: {output}",
+        );
+    }
+
+    /// Tail call in a void function (return type Unknown → rendered as
+    /// `void`) must render as just `callee();`. The structurer's trailing
+    /// `Return(None)` will emit the closing `return;` so we mustn't double
+    /// it (which previously produced `callee(); return; return;`).
+    #[test]
+    fn test_tail_call_void_parent_omits_return() {
+        let body = vec![
+            HirNode::TailCall { target: 0x401000 },
+            HirNode::Return(None),
+        ];
+        let mut func = make_func("caller_void", body);
+        func.return_type = PrimitiveType::Unknown; // → "void"
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401000u64, "exit_handler".to_string());
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("exit_handler();"),
+            "void parent: tail call should render as `exit_handler();`: {output}",
+        );
+        assert!(
+            !output.contains("return; return;"),
+            "void parent: must not emit duplicated `return; return;`: {output}",
+        );
+        assert!(
+            !output.contains("return exit_handler();"),
+            "void parent: must NOT prepend `return` to a void-returning tail call: {output}",
+        );
+    }
+
+    /// Mangled C++ symbols at the tail-call site are demangled and
+    /// sanitized to their short C identifier (with `::` → `_`) — matching
+    /// how regular call sites are rendered elsewhere in the printer.
+    #[test]
+    fn test_tail_call_demangles_cpp_symbol() {
+        let body = vec![HirNode::TailCall { target: 0x401000 }];
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        // `_ZN3foo3barEv` → demangled `foo::bar`, short name `foo::bar`,
+        // sanitized to `foo_bar`.
+        symbols.insert(0x401000u64, "_ZN3foo3barEv".to_string());
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("return foo_bar();"),
+            "tail call to mangled symbol should demangle and sanitize to \
+             `foo_bar`: {output}",
+        );
+        assert!(
+            !output.contains("_ZN3foo3barEv"),
+            "raw mangled name should not appear in output: {output}",
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // HirNode::Commented — pre/post comment markers (Phase 14 task)
+    // ---------------------------------------------------------------
+
+    /// A `Commented` wrapper with one `pre` line emits the comment on
+    /// its own line *immediately before* the wrapped statement, at the
+    /// statement's indentation.
+    #[test]
+    fn test_commented_pre_renders_before_statement() {
+        let r0 = reg(0, 4);
+        let c5 = con(5, 4);
+        let copy = HirNode::Statement(IrInsn::with_output(
+            IrOp::Copy,
+            r0,
+            smallvec![c5],
+            0x1000,
+        ));
+        let body = vec![
+            HirNode::Commented {
+                pre: vec!["from /tmp/source.c:42".to_string()],
+                post: vec![],
+                inner: Box::new(copy),
+            },
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+        let func = make_func("pre_comment", body);
+        let output = print_c(&func);
+
+        // Comment must come before the statement, not after.
+        let comment_pos = output
+            .find("// from /tmp/source.c:42")
+            .expect(&format!("pre-comment missing in output:\n{output}"));
+        let stmt_pos = output
+            .find("= 5")
+            .expect(&format!("statement missing in output:\n{output}"));
+        assert!(
+            comment_pos < stmt_pos,
+            "pre-comment must precede the wrapped statement; got:\n{output}"
+        );
+    }
+
+    /// A `Commented` wrapper with one `post` line emits the comment on
+    /// its own line *immediately after* the wrapped statement.
+    #[test]
+    fn test_commented_post_renders_after_statement() {
+        let r0 = reg(0, 4);
+        let c7 = con(7, 4);
+        let copy = HirNode::Statement(IrInsn::with_output(
+            IrOp::Copy,
+            r0,
+            smallvec![c7],
+            0x1000,
+        ));
+        let body = vec![
+            HirNode::Commented {
+                pre: vec![],
+                post: vec!["end of init".to_string()],
+                inner: Box::new(copy),
+            },
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+        let func = make_func("post_comment", body);
+        let output = print_c(&func);
+
+        let stmt_pos = output
+            .find("= 7")
+            .expect(&format!("statement missing in output:\n{output}"));
+        let comment_pos = output
+            .find("// end of init")
+            .expect(&format!("post-comment missing in output:\n{output}"));
+        assert!(
+            stmt_pos < comment_pos,
+            "post-comment must follow the wrapped statement; got:\n{output}"
+        );
+    }
+
+    /// Multi-line comment strings (containing `\n`) must be split into
+    /// one `// `-prefixed line per source line, preserving structure.
+    /// Both `pre` and `post` are exercised together to confirm the
+    /// emit ordering survives multi-line content on either side.
+    #[test]
+    fn test_commented_multiline_preserved() {
+        let r0 = reg(0, 4);
+        let c3 = con(3, 4);
+        let copy = HirNode::Statement(IrInsn::with_output(
+            IrOp::Copy,
+            r0,
+            smallvec![c3],
+            0x1000,
+        ));
+        let body = vec![
+            HirNode::Commented {
+                pre: vec!["first pre line\nsecond pre line".to_string()],
+                post: vec!["first post line\nsecond post line".to_string()],
+                inner: Box::new(copy),
+            },
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+        let func = make_func("multi_comment", body);
+        let output = print_c(&func);
+
+        // Each input line must surface as its own `// `-prefixed line.
+        for needle in [
+            "// first pre line",
+            "// second pre line",
+            "// first post line",
+            "// second post line",
+        ] {
+            assert!(
+                output.contains(needle),
+                "expected `{needle}` in output:\n{output}"
+            );
+        }
+
+        // Ordering: both pre lines before stmt, both post lines after.
+        let pre1 = output.find("// first pre line").unwrap();
+        let pre2 = output.find("// second pre line").unwrap();
+        let stmt = output.find("= 3").unwrap();
+        let post1 = output.find("// first post line").unwrap();
+        let post2 = output.find("// second post line").unwrap();
+        assert!(pre1 < pre2 && pre2 < stmt, "pre ordering wrong:\n{output}");
+        assert!(stmt < post1 && post1 < post2, "post ordering wrong:\n{output}");
+    }
+
+    /// `Commented` is transparent for non-`Statement` nodes — a
+    /// pre-comment attached to a `Return` still emits *above* the
+    /// `return ...;` line.
+    #[test]
+    fn test_commented_wraps_return_node() {
+        let body = vec![HirNode::Commented {
+            pre: vec!["return path A".to_string()],
+            post: vec![],
+            inner: Box::new(HirNode::Return(None)),
+        }];
+        let func = make_func("commented_return", body);
+        let output = print_c(&func);
+
+        let comment_pos = output.find("// return path A").expect(&format!(
+            "pre-comment on Return missing in output:\n{output}"
+        ));
+        let ret_pos = output
+            .find("return;")
+            .expect(&format!("return; missing in output:\n{output}"));
+        assert!(
+            comment_pos < ret_pos,
+            "pre-comment must precede wrapped Return; got:\n{output}"
+        );
+    }
+
+    /// Sanity check the *exact* rendered shape — comment lines must
+    /// appear at the same indent as the wrapped statement, with `// `
+    /// prefix and a trailing newline. This locks in the visual contract
+    /// that downstream tooling (DWARF integration, plugin hooks) relies on.
+    #[test]
+    fn test_commented_exact_render_shape() {
+        let r0 = reg(0, 4);
+        let c9 = con(9, 4);
+        let copy = HirNode::Statement(IrInsn::with_output(
+            IrOp::Copy,
+            r0,
+            smallvec![c9],
+            0x1000,
+        ));
+        let body = vec![
+            HirNode::Commented {
+                pre: vec!["hint".to_string()],
+                post: vec!["trailing".to_string()],
+                inner: Box::new(copy),
+            },
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+        let func = make_func("shape", body);
+        let output = print_c(&func);
+
+        // Body is indented one level (4 spaces). Pre-comment, statement,
+        // and post-comment must all share that indentation, in order.
+        assert!(
+            output.contains("    // hint\n"),
+            "pre-comment must be `    // hint\\n`; got:\n{output}"
+        );
+        assert!(
+            output.contains("    // trailing\n"),
+            "post-comment must be `    // trailing\\n`; got:\n{output}"
+        );
+
+        let pre_pos = output.find("    // hint\n").unwrap();
+        let post_pos = output.find("    // trailing\n").unwrap();
+        let stmt_pos = output.find("= 9").unwrap();
+        assert!(
+            pre_pos < stmt_pos && stmt_pos < post_pos,
+            "rendered ordering wrong:\n{output}"
+        );
+    }
+
+    /// The `with_pre_comment` / `with_post_comment` builder helpers
+    /// stack additional comments onto an existing `Commented` wrapper
+    /// without nesting wrappers (so transform passes that re-wrap don't
+    /// produce O(n) layered comments).
+    #[test]
+    fn test_commented_builder_helpers_flatten() {
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+        let stmt = HirNode::Statement(IrInsn::with_output(
+            IrOp::Copy,
+            r0,
+            smallvec![c1],
+            0x1000,
+        ));
+
+        let wrapped = stmt
+            .with_pre_comment("alpha")
+            .with_pre_comment("beta")
+            .with_post_comment("gamma");
+
+        match &wrapped {
+            HirNode::Commented { pre, post, inner } => {
+                assert_eq!(pre, &vec!["alpha".to_string(), "beta".to_string()]);
+                assert_eq!(post, &vec!["gamma".to_string()]);
+                assert!(matches!(inner.as_ref(), HirNode::Statement(_)));
+            }
+            other => panic!("expected Commented wrapper, got: {other:?}"),
+        }
+
+        // unwrap_commented should peel the wrapper.
+        assert!(matches!(
+            wrapped.unwrap_commented(),
+            HirNode::Statement(_)
+        ));
+    }
+
+    /// `_ZNSt6vectorIiSaIiEE9push_backERKi` →
+    /// `std::vector<int>::push_back(int const&)`. The printer must emit
+    /// `std::vector<int> *this` as the first parameter so the function
+    /// signature reflects the recovered STL type.
+    #[test]
+    fn stl_vector_method_emits_typed_this() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_ZNSt6vectorIiSaIiEE9push_backERKi", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("std::vector<int> *this"),
+            "expected `std::vector<int> *this` in signature, got:\n{output}",
+        );
+    }
+
+    /// libcxx (`std::__1`) flavour of vector — the inline namespace must
+    /// be folded back to plain `std::` in the rendered `this`-type, even
+    /// though the original demangled signature (kept verbatim in the
+    /// preceding `//` comment) still mentions `std::__1`.
+    #[test]
+    fn stl_vector_libcxx_inline_namespace_collapsed() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_ZNSt3__16vectorIiNS_9allocatorIiEEE9push_backERKi", body);
+        let output = print_c(&func);
+
+        // Locate the function signature line — it's the line that opens
+        // the body with `{` and contains the parameter list. We assert on
+        // that line specifically so the demangled-signature comment can
+        // legitimately preserve `std::__1::` for traceability.
+        let sig_line = output
+            .lines()
+            .find(|l| l.contains("*this") && l.trim_end().ends_with('{'))
+            .expect("signature line with *this and opening brace");
+        assert!(
+            sig_line.contains("std::vector<int> *this"),
+            "libcxx vector signature: {sig_line}\n--- full ---\n{output}",
+        );
+        assert!(
+            !sig_line.contains("std::__1::"),
+            "inline namespace should be stripped from signature line, got:\n{sig_line}",
+        );
+    }
+
+    /// `basic_string<char, …>` collapses to `std::string`.
+    #[test]
+    fn stl_string_emits_collapsed_typedef() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func(
+            "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE6appendEPKc",
+            body,
+        );
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("std::string *this"),
+            "expected `std::string *this`, got:\n{output}",
+        );
+    }
+
+    /// `_ZNSt10shared_ptrIiE5resetEv` → `std::shared_ptr<int>::reset()`.
+    #[test]
+    fn stl_shared_ptr_method_emits_typed_this() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_ZNSt10shared_ptrIiE5resetEv", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("std::shared_ptr<int> *this"),
+            "expected `std::shared_ptr<int> *this`, got:\n{output}",
+        );
+    }
+
+    /// Plain (non-STL) C++ free function must NOT get an STL `this`
+    /// parameter — STL recognition is opt-in by namespace match.
+    #[test]
+    fn non_stl_function_does_not_get_stl_this() {
+        // _Z3addii → int add(int, int)
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_Z3addii", body);
+        let output = print_c(&func);
+
+        assert!(
+            !output.contains("std::"),
+            "non-STL function should not mention std::, got:\n{output}",
+        );
+        assert!(
+            !output.contains("*this"),
+            "non-STL should not synthesise this, got:\n{output}",
+        );
+    }
+
+    /// gcc-style lambda closure: the C printer must emit a
+    /// `// lambda closure operator()` annotation immediately under the
+    /// demangled-signature comment so a human reader can recognise the
+    /// enclosing class as a compiler-generated closure type.  See
+    /// [`crate::demangle::DemangleResult::is_lambda`].
+    #[test]
+    fn lambda_closure_emits_annotation_comment() {
+        // _ZZ11call_lambdaiENKUliE_clEi
+        //   → call_lambda(int)::{lambda(int)#1}::operator()(int) const
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_ZZ11call_lambdaiENKUliE_clEi", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("// lambda closure operator()"),
+            "expected lambda annotation comment, got:\n{output}",
+        );
+        // The full demangled signature must still be emitted above the
+        // annotation — we annotate, we don't replace.
+        assert!(
+            output.contains("lambda"),
+            "demangled signature with `lambda` should appear, got:\n{output}",
+        );
+    }
+
+    /// clang-style lambda (`$_<n>` source name) — same annotation must
+    /// fire from the alternate detection path.
+    #[test]
+    fn clang_dollar_lambda_emits_annotation_comment() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_ZZ11call_lambdaiENK3$_0clEi", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("// lambda closure operator()"),
+            "expected lambda annotation for clang $_0, got:\n{output}",
+        );
+    }
+
+    /// Negative: a regular non-lambda member function must NOT receive
+    /// the lambda annotation comment.
+    #[test]
+    fn non_lambda_method_has_no_lambda_annotation() {
+        let body = vec![HirNode::Return(None)];
+        let func = make_func("_ZN3foo3barEv", body);
+        let output = print_c(&func);
+
+        assert!(
+            !output.contains("// lambda"),
+            "non-lambda method got a spurious lambda comment, output:\n{output}",
         );
     }
 }

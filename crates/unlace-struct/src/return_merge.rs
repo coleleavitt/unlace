@@ -383,6 +383,10 @@ mod tests {
             panic_sites: Default::default(),
             noreturn: false,
             composite_var_types: Default::default(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         }
     }
 

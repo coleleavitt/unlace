@@ -11,10 +11,11 @@ use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
 use unlace_loader::{BinaryImage, DwarfInfo, Section, SymbolKind};
 use unlace_passes::{
     CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass, CopyPropagationPass,
-    CppVtablePass, CsePass, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass,
-    DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
-    ModuloIdiomPass, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
-    StackOffsetSnapshotPass, StackVarRecoveryPass, StructFieldDetectPass, VariableMergePass,
+    CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass, DeadFlagElimPass,
+    DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass,
+    IdiomRecognitionPass, ModuloIdiomPass, OuterFixedpointReport, ParamInferPass, Pass,
+    PrologueElimPass, ReturnTypeInferPass, SccpPass, StackOffsetSnapshotPass, StackVarRecoveryPass,
+    StructFieldDetectPass, TailCallDetectPass, VariableMergePass, run_outer_fixedpoint,
     run_to_fixedpoint,
 };
 
@@ -696,75 +697,136 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
 }
 
 pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
-    let fold = ConstantFoldPass;
-    let prop = CopyPropagationPass;
-    let gprop = GlobalCopyPropPass;
-    let dce = DeadCodeElimPass;
-    let sccp = SccpPass;
-    let cse = CsePass;
-    let gvn = GvnPass;
-    let idiom = IdiomRecognitionPass;
-    let cond = ConditionSimplifyPass;
-    let passes: &[&dyn Pass] = &[&fold, &prop, &gprop, &dce, &sccp, &cse, &gvn, &idiom, &cond];
+    let report = run_passes_with_report(ssa)?;
+    Ok(report.ir_changes)
+}
 
+/// Detailed report from one [`run_passes`] invocation.
+///
+/// Captures the outer-fixed-point behaviour: how many outer iterations ran,
+/// whether the iteration cap was hit (suggesting a non-converging cascade),
+/// and the cumulative count of inner-fixedpoint changes across all
+/// IR-level rounds.
+#[derive(Clone, Debug, Default)]
+pub struct PassesReport {
+    /// Total number of inner IR-level fixedpoint changes across all outer iters.
+    pub ir_changes: usize,
+    /// Outer-loop convergence info.
+    #[allow(dead_code)] // exposed for callers/tests; CLI code path only reads `ir_changes`.
+    pub outer: OuterFixedpointReport,
+}
+
+/// Run the pass pipeline and return a structured report.
+///
+/// The pipeline mirrors IDA's two-tier driver (sub_14B8B0 / sub_F9180):
+///
+/// 1. **One-time pre-pass.** [`StackOffsetSnapshotPass`] captures the
+///    pre-optimization stack-offset map, used later by stack var recovery.
+/// 2. **Outer fixed-point loop** (capped at [`DEFAULT_OUTER_FIXEDPOINT_CAP`]).
+///    Each outer iteration runs:
+///      - the inner IR-level fixed-point cluster (sccp / copy-prop / cse /
+///        gvn / algebraic simplify / dce / cond-simplify), which itself
+///        converges via [`run_to_fixedpoint`];
+///      - cleanup passes (dead store / dead flag / division / modulo);
+///      - structural detection (prologue / tail call / stack vars / C++ vt);
+///      - type recovery (calling convention / param infer / return infer /
+///        struct field detect / primitive type infer).
+///    After each iteration we hash the type-recovery state via
+///    [`unlace_passes::ssa_type_signature`]; if it changed we run again.
+///    This is the key cascade: better types ⇒ better simplification ⇒
+///    better pattern matching ⇒ better types.
+/// 3. **One-time post-pass.** [`ExpressionTreePass`] (folds inline
+///    sub-expressions for printing) and [`VariableMergePass`] (assigns
+///    final canonical names) run exactly once after convergence. They are
+///    presentation-layer concerns and re-running them inside the loop
+///    would either be redundant or risk oscillation.
+pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
+    // (1) One-time pre-pass: snapshot pre-optimization stack offsets so
+    // later iterations of stack-var recovery still see the original
+    // RSP/RBP-relative addressing.
     StackOffsetSnapshotPass
         .run(ssa)
         .context("stack offset snapshot failed")?;
 
-    let changes = run_to_fixedpoint(passes, ssa).context("pass pipeline failed")?;
+    let mut total_ir_changes: usize = 0usize;
 
-    // Single-run passes (after fixedpoint stabilizes)
-    DeadStoreElimPass
-        .run(ssa)
-        .context("dead store elimination failed")?;
-    DeadFlagElimPass
-        .run(ssa)
-        .context("dead flag elimination failed")?;
-    DivisionIdiomPass
-        .run(ssa)
-        .context("division idiom recovery failed")?;
-    ModuloIdiomPass
-        .run(ssa)
-        .context("modulo idiom recovery failed")?;
+    // (2) Outer fixed-point loop. The inner cluster already converges per
+    // call to `run_to_fixedpoint`; the outer loop re-runs the whole sweep
+    // when type recovery learned something new that the IR-level passes
+    // couldn't see on the previous round.
+    let outer_report = run_outer_fixedpoint(
+        ssa,
+        DEFAULT_OUTER_FIXEDPOINT_CAP,
+        |ssa, _iter| -> Result<(), unlace_passes::PassError> {
+            // ---- IR-level fixed-point cluster ----
+            let fold = ConstantFoldPass;
+            let prop = CopyPropagationPass;
+            let gprop = GlobalCopyPropPass;
+            let dce = DeadCodeElimPass;
+            let sccp = SccpPass;
+            let cse = CsePass;
+            let gvn = GvnPass;
+            let idiom = IdiomRecognitionPass;
+            let cond = ConditionSimplifyPass;
+            let passes: &[&dyn Pass] =
+                &[&fold, &prop, &gprop, &dce, &sccp, &cse, &gvn, &idiom, &cond];
+            let inner = run_to_fixedpoint(passes, ssa)?;
+            total_ir_changes = total_ir_changes.saturating_add(inner);
 
-    PrologueElimPass
-        .run(ssa)
-        .context("prologue/epilogue detection failed")?;
+            // ---- Cleanup passes (single-run per outer iter) ----
+            DeadStoreElimPass.run(ssa)?;
+            DeadFlagElimPass.run(ssa)?;
+            DivisionIdiomPass.run(ssa)?;
+            ModuloIdiomPass.run(ssa)?;
 
-    StackVarRecoveryPass
-        .run(ssa)
-        .context("stack variable recovery failed")?;
+            // ---- Structural detection ----
+            PrologueElimPass.run(ssa)?;
+            TailCallDetectPass.run(ssa)?;
+            StackVarRecoveryPass.run(ssa)?;
+            CppVtablePass.run(ssa)?;
 
-    CppVtablePass
-        .run(ssa)
-        .context("C++ vtable dispatch detection failed")?;
+            // ---- Type recovery ----
+            CallingConventionDetectPass.run(ssa)?;
+            ParamInferPass.run(ssa)?;
+            ReturnTypeInferPass.run(ssa)?;
+            StructFieldDetectPass.run(ssa)?;
+            run_type_infer_bounded(ssa);
 
-    CallingConventionDetectPass
-        .run(ssa)
-        .context("calling convention detection failed")?;
-    ParamInferPass
-        .run(ssa)
-        .context("parameter inference failed")?;
-    ReturnTypeInferPass
-        .run(ssa)
-        .context("return type inference failed")?;
+            Ok(())
+        },
+    )
+    .context("outer fixed-point pipeline failed")?;
 
+    if outer_report.hit_cap {
+        tracing::warn!(
+            func = %ssa.function.name,
+            cap = DEFAULT_OUTER_FIXEDPOINT_CAP,
+            "pass pipeline outer loop hit iteration cap without converging"
+        );
+    }
+
+    // (3) Presentation-layer post-passes. These run once, after the type
+    // and IR shape have stabilised, because they encode print-time
+    // decisions that should be made against the final IR.
     ExpressionTreePass
         .run(ssa)
         .context("expression tree pass failed")?;
-
-    StructFieldDetectPass
-        .run(ssa)
-        .context("struct field detection failed")?;
-
-    run_type_infer_bounded(ssa);
 
     VariableMergePass
         .run(ssa)
         .context("variable merge pass failed")?;
 
-    tracing::debug!(changes, "pass pipeline complete");
-    Ok(changes)
+    tracing::debug!(
+        ir_changes = total_ir_changes,
+        outer_iters = outer_report.iterations,
+        outer_hit_cap = outer_report.hit_cap,
+        "pass pipeline complete"
+    );
+
+    Ok(PassesReport {
+        ir_changes: total_ir_changes,
+        outer: outer_report,
+    })
 }
 
 fn apply_dwarf_to_ssa(ssa: &mut SsaFunction, dwarf: &DwarfInfo, entry: &FunctionEntry) {
@@ -1009,7 +1071,7 @@ pub fn decompile_function(
     config: &PipelineConfig,
     dwarf: Option<&DwarfInfo>,
 ) -> Result<String> {
-    decompile_function_with_symbols(image, lifter, entry, emit, config, dwarf, &[])
+    decompile_function_with_symbols(image, lifter, entry, emit, config, dwarf, &[], None)
 }
 
 pub fn decompile_function_with_symbols(
@@ -1020,6 +1082,7 @@ pub fn decompile_function_with_symbols(
     config: &PipelineConfig,
     dwarf: Option<&DwarfInfo>,
     discovered: &[FunctionEntry],
+    rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Result<String> {
     let _span = tracing::debug_span!("decompile_function", func = %entry.name).entered();
     let deadline = Instant::now() + config.timeout;
@@ -1074,6 +1137,8 @@ pub fn decompile_function_with_symbols(
         apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
     }
 
+    populate_eh_landing_pads(image, entry, &mut ssa);
+
     warn_if_large_ir(&entry.name, &ssa);
     check_timeout(deadline, &entry.name)?;
 
@@ -1090,7 +1155,7 @@ pub fn decompile_function_with_symbols(
 
     let t = Instant::now();
     let symbols = build_symbol_table_with_functions(image, discovered);
-    let result = emit_output(emit, &ssa, dwarf, &symbols, &image.string_table);
+    let result = emit_output(emit, &ssa, dwarf, &symbols, &image.string_table, rtti);
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         "emit_output done"
@@ -1105,19 +1170,79 @@ fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Recover precise try/catch boundaries for `entry` from the binary's
+/// `.eh_frame` and `.gcc_except_table` sections, populating
+/// [`SsaFunction::eh_landing_pads`].
+///
+/// This replaces the heuristic `__cxa_throw` / `__cxa_begin_catch` call-site
+/// detection with the authoritative LSDA call-site table that the C++
+/// personality routine consumes at runtime. Each landing-pad VA is the first
+/// instruction of a catch / cleanup handler — the structurer wraps blocks
+/// starting at these addresses in `HirNode::TryCatch`.
+///
+/// On any failure (missing sections, parse error, no FDE for this function)
+/// the landing-pad set is left empty and structuring proceeds as if no
+/// exception data existed. This is safe: empty set ⇒
+/// `structure_with_landing_pads` behaves identically to plain `structure`.
+///
+/// **Deferred:** this only stores landing-pad addresses, not the per-handler
+/// typeinfo / action chain. Multiple `catch (T1) / catch (T2)` arms collapse
+/// into a single `HirNode::TryCatch` body — disambiguating them requires
+/// extending the HIR with a per-arm typeinfo slot, which is left for later.
+fn populate_eh_landing_pads(image: &BinaryImage, entry: &FunctionEntry, ssa: &mut SsaFunction) {
+    let eh = match unlace_loader::parse_eh_frame(image) {
+        Ok(eh) if !eh.lsda_entries.is_empty() => eh,
+        _ => return,
+    };
+
+    let info = match unlace_loader::parse_gcc_except_table(image, &eh.lsda_entries) {
+        Ok(info) if !info.is_empty() => info,
+        _ => return,
+    };
+
+    // Match this function's start address against the LSDA function map.
+    // The FDE's initial_address is what populates `function_start`, which
+    // matches `FunctionEntry::addr` for entries discovered from the symbol
+    // table or DWARF.
+    let Some(lsda) = info.functions.get(&entry.addr) else {
+        return;
+    };
+
+    for region in &lsda.try_regions {
+        if let Some(lp) = region.landing_pad {
+            ssa.eh_landing_pads.insert(lp);
+        }
+    }
+
+    if !ssa.eh_landing_pads.is_empty() {
+        tracing::trace!(
+            func = %entry.name,
+            count = ssa.eh_landing_pads.len(),
+            "populated EH landing pads from LSDA",
+        );
+    }
+}
+
 pub fn emit_output(
     format: EmitFormat,
     ssa: &SsaFunction,
     dwarf: Option<&DwarfInfo>,
     symbols: &BTreeMap<u64, String>,
     string_table: &BTreeMap<u64, String>,
+    rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Result<String> {
     match format {
         EmitFormat::Ir => Ok(unlace_output::dump_ir(ssa)),
         EmitFormat::CfgDot => Ok(unlace_output::emit_cfg_dot(ssa)),
         EmitFormat::C => {
-            let mut hir =
-                unlace_struct::structure(ssa).context("control-flow structuring failed")?;
+            // Use LSDA-derived landing pads when available; falls back to
+            // plain `structure` (no TryCatch wrapping) when the set is empty.
+            let mut hir = if ssa.eh_landing_pads.is_empty() {
+                unlace_struct::structure(ssa).context("control-flow structuring failed")?
+            } else {
+                unlace_struct::structure_with_landing_pads(ssa, &ssa.eh_landing_pads)
+                    .context("control-flow structuring failed")?
+            };
             unlace_struct::ternary_recovery(&mut hir);
             unlace_struct::short_circuit_recovery(&mut hir);
             unlace_struct::flatten_if_else_chains(&mut hir);
@@ -1136,12 +1261,13 @@ pub fn emit_output(
             unlace_struct::recover_guarded_whiles(&mut hir);
             unlace_struct::cleanup_empty_ifs(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
-            Ok(unlace_output::print_c_full(
+            Ok(unlace_output::print_c_with_rtti(
                 &hir,
                 dwarf,
                 Some(&header),
                 Some(symbols),
                 Some(string_table),
+                rtti,
             ))
         }
     }

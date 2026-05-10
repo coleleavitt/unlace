@@ -254,6 +254,8 @@ fn rewrite_node(node: HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> HirNod
             cond: chain.switch_expr,
             cases,
             default,
+            jumptable_addr: None,
+            jumptable_cases: None,
         };
     }
 
@@ -285,6 +287,8 @@ fn rewrite_node(node: HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> HirNod
             cond,
             cases,
             default,
+            jumptable_addr,
+            jumptable_cases,
         } => HirNode::Switch {
             cond,
             cases: cases
@@ -292,6 +296,8 @@ fn rewrite_node(node: HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> HirNod
                 .map(|(c, body, ft)| (c, rewrite_nodes(body, def_map), ft))
                 .collect(),
             default: default.map(|d| rewrite_nodes(d, def_map)),
+            jumptable_addr,
+            jumptable_cases,
         },
 
         HirNode::For {
@@ -350,6 +356,10 @@ mod tests {
             panic_sites: BTreeMap::new(),
             noreturn: false,
             composite_var_types: BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         }
     }
 
@@ -434,6 +444,7 @@ mod tests {
                 cond,
                 cases,
                 default,
+                ..
             } => {
                 // The cond should have the same base as x.
                 assert_eq!(cond.base, x);
@@ -565,6 +576,7 @@ mod tests {
                 cond,
                 cases,
                 default,
+                ..
             } => {
                 assert_eq!(cond.base, x);
                 assert_eq!(cases.len(), 3);

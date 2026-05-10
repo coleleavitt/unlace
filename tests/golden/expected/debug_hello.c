@@ -1,46 +1,44 @@
 /* Function:   _start | Address: 0x1060 | Size: 0x1f (31 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
-    int v9; // rip
+    int v6; // rip
     *(_QWORD *)(0LL) = 0x1085LL; return;
 }
-/* Function:   main | Address: 0x1149 | Size: 0x1d (29 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   main | Address: 0x1149 | Size: 0xf (15 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 int main(void) {
     int result;
     *(_QWORD *)(0LL) = 0x115dLL; return result;
 }
 /* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
 void sub_1100(void) {
-    long long v8; // rsp
-    int v1; // rip
-    unsigned char v4; // temp
-    unsigned long long v3; // temp
-    v4 = *(_BYTE *)(v3);
-    if (v1) {
+    long long v1; // rsp
+    int v4; // rip
+    unsigned long long v10; // temp
+    if (v4) {
         return result;
     } else {
-        *(_QWORD *)(0LL) = 0LL; v3 = *(_QWORD *)(v3); cond = v3 == 0LL;
+        *(_QWORD *)(0LL) = 0LL; v10 = *(_QWORD *)(v10);
         if (cond) {
         } else {
-            v3 = *(_QWORD *)(v3); *(_QWORD *)(0LL) = 0x1127LL; sub_1040();
+            v10 = *(_QWORD *)(v10); *(_QWORD *)(0LL) = 0x1127LL; sub_1040();
         }
-        v8 = v3; *(_QWORD *)(v3) = 0x112cLL; sub_1090();
-        *(_BYTE *)(v3) = 1; v3 = v3; v8 = v3;
-        result = *(_QWORD *)(v3); return result;
+        v1 = v10; *(_QWORD *)(v10) = 0x112cLL; sub_1090();
+        *(_BYTE *)(v10) = 1; v10 = v10; v1 = v10;
+        result = *(_QWORD *)(v10); return result;
     }
 }
 /* Function:   sub_1140 | Address: 0x1140 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1140(void) {
-    return;
+    sub_10c0(); return;
 }
 /* Function:   sub_1090 | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1090(void) {
-    int v1; // rip
-    signed char v7; // temp
-    v5 = 1; v7 = LOBYTE(0LL);
-    if (v5) {
+    int v5; // rip
+    signed char v17; // temp
+    v8 = 1; v17 = LOBYTE(0LL);
+    if (v8) {
     } else {
-        v5 = 1; v7 = v7;
-        if (v5) {
+        v8 = 1; v17 = v17;
+        if (v8) {
         }
     }
     return result;

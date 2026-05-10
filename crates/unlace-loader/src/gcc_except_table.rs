@@ -536,4 +536,199 @@ mod tests {
         let info = parse_gcc_except_table(&img, &[]).expect("gcc_except_table parse");
         assert!(info.is_empty());
     }
+
+    // ---------------------------------------------------------------------
+    // Synthetic LSDA byte-sequence tests
+    //
+    // These bypass any real ELF and craft a minimal `.gcc_except_table`
+    // section directly so the parser logic is exercised in isolation,
+    // independent of compiler/version drift in the fixtures.
+    // ---------------------------------------------------------------------
+
+    /// Build a `BinaryImage` containing only a `.gcc_except_table` section
+    /// at `lsda_section_va` with the given raw bytes.
+    fn make_lsda_image(lsda_section_va: u64, bytes: Vec<u8>) -> BinaryImage {
+        BinaryImage {
+            arch: crate::image::ArchId::X86_64,
+            endian: crate::image::Endian::Little,
+            entry: 0,
+            sections: vec![crate::image::Section {
+                name: ".gcc_except_table".to_string(),
+                vaddr: lsda_section_va,
+                size: bytes.len() as u64,
+                data: bytes,
+                flags: crate::image::SectionFlags::READ,
+            }],
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: vec![],
+            string_table: BTreeMap::new(),
+            tls_callbacks: vec![],
+            debug_records: vec![],
+            load_config: None,
+            runtime_functions: vec![],
+            resources: vec![],
+            bound_imports: vec![],
+            rich_header: None,
+            dylibs: vec![],
+            rpaths: vec![],
+        }
+    }
+
+    #[test]
+    fn test_synthetic_lsda_single_call_site() {
+        // Header:
+        //   lpStartEncoding   = 0xFF (DW_EH_PE_omit) → lpStart defaults to function_start
+        //   ttypeEncoding     = 0xFF (DW_EH_PE_omit) → no type table
+        //   callSiteEncoding  = 0x03 (DW_EH_PE_udata4) → 4-byte fields
+        //   callSiteLength    = ULEB128(13)            → 13-byte call-site table
+        // Call site (4+4+4+1 = 13 bytes):
+        //   start  = 0x0010 (u32 LE)
+        //   length = 0x0020 (u32 LE)
+        //   lpad   = 0x0040 (u32 LE)
+        //   action = 0      (uleb128 single byte)
+        #[rustfmt::skip]
+        let bytes = vec![
+            0xFF,                        // lpStartEncoding
+            0xFF,                        // ttypeEncoding
+            0x03,                        // callSiteEncoding
+            0x0D,                        // callSiteLength = 13
+            0x10, 0x00, 0x00, 0x00,      // cs_start
+            0x20, 0x00, 0x00, 0x00,      // cs_length
+            0x40, 0x00, 0x00, 0x00,      // cs_lpad
+            0x00,                        // cs_action
+        ];
+
+        let lsda_va: u64 = 0x4000;
+        let function_start: u64 = 0x1000;
+        let img = make_lsda_image(lsda_va, bytes);
+
+        let info = parse_gcc_except_table(
+            &img,
+            &[LsdaEntry {
+                lsda_addr: lsda_va,
+                function_start,
+            }],
+        )
+        .expect("parse");
+
+        let lsda = info
+            .functions
+            .get(&function_start)
+            .expect("LSDA for function should be present");
+        assert_eq!(lsda.try_regions.len(), 1, "expected one call-site region");
+
+        let region = &lsda.try_regions[0];
+        assert_eq!(region.pc_range, 0x1010..0x1030, "pc range mismatch");
+        assert_eq!(
+            region.landing_pad,
+            Some(0x1040),
+            "landing pad should be lpStart + cs_lpad",
+        );
+        assert!(
+            region.type_filters.is_empty(),
+            "action == 0 ⇒ no type filters, got {:?}",
+            region.type_filters,
+        );
+    }
+
+    #[test]
+    fn test_synthetic_lsda_cleanup_only_call_site() {
+        // Same encoding as above but cs_lpad == 0 ⇒ no landing pad
+        // (the call site is unprotected — exception just propagates).
+        #[rustfmt::skip]
+        let bytes = vec![
+            0xFF, 0xFF, 0x03, 0x0D,
+            0x10, 0x00, 0x00, 0x00,      // cs_start
+            0x20, 0x00, 0x00, 0x00,      // cs_length
+            0x00, 0x00, 0x00, 0x00,      // cs_lpad = 0
+            0x00,                        // cs_action
+        ];
+
+        let lsda_va: u64 = 0x4000;
+        let function_start: u64 = 0x1000;
+        let img = make_lsda_image(lsda_va, bytes);
+        let info = parse_gcc_except_table(
+            &img,
+            &[LsdaEntry {
+                lsda_addr: lsda_va,
+                function_start,
+            }],
+        )
+        .expect("parse");
+
+        let lsda = info.functions.get(&function_start).expect("LSDA present");
+        assert_eq!(lsda.try_regions.len(), 1);
+        assert_eq!(
+            lsda.try_regions[0].landing_pad, None,
+            "lpad == 0 ⇒ no landing pad",
+        );
+    }
+
+    #[test]
+    fn test_synthetic_lsda_two_call_sites() {
+        // Two adjacent call sites with distinct pc ranges and landing pads.
+        // callSiteLength = 26 (two 13-byte entries).
+        #[rustfmt::skip]
+        let bytes = vec![
+            0xFF, 0xFF, 0x03, 0x1A,      // header, cs_table_len = 26
+            // -- call site #1 --
+            0x10, 0x00, 0x00, 0x00,      // cs_start  = 0x10
+            0x20, 0x00, 0x00, 0x00,      // cs_length = 0x20
+            0x80, 0x00, 0x00, 0x00,      // cs_lpad   = 0x80
+            0x00,                        // cs_action = 0
+            // -- call site #2 --
+            0x40, 0x00, 0x00, 0x00,      // cs_start  = 0x40
+            0x10, 0x00, 0x00, 0x00,      // cs_length = 0x10
+            0x90, 0x00, 0x00, 0x00,      // cs_lpad   = 0x90
+            0x00,                        // cs_action = 0
+        ];
+
+        let lsda_va: u64 = 0x4000;
+        let function_start: u64 = 0x1000;
+        let img = make_lsda_image(lsda_va, bytes);
+        let info = parse_gcc_except_table(
+            &img,
+            &[LsdaEntry {
+                lsda_addr: lsda_va,
+                function_start,
+            }],
+        )
+        .expect("parse");
+
+        let lsda = info.functions.get(&function_start).expect("LSDA present");
+        assert_eq!(lsda.try_regions.len(), 2);
+
+        assert_eq!(lsda.try_regions[0].pc_range, 0x1010..0x1030);
+        assert_eq!(lsda.try_regions[0].landing_pad, Some(0x1080));
+
+        assert_eq!(lsda.try_regions[1].pc_range, 0x1040..0x1050);
+        assert_eq!(lsda.try_regions[1].landing_pad, Some(0x1090));
+    }
+
+    #[test]
+    fn test_synthetic_lsda_truncated_header_is_dropped() {
+        // Only the lpStartEncoding byte — every subsequent header read
+        // will fail. The parser must return without panicking and with
+        // no LSDA recorded.
+        let bytes = vec![0xFF];
+
+        let lsda_va: u64 = 0x4000;
+        let function_start: u64 = 0x1000;
+        let img = make_lsda_image(lsda_va, bytes);
+        let info = parse_gcc_except_table(
+            &img,
+            &[LsdaEntry {
+                lsda_addr: lsda_va,
+                function_start,
+            }],
+        )
+        .expect("parse should not error on truncation");
+
+        assert!(
+            info.functions.is_empty(),
+            "truncated LSDA should be silently dropped, got {:?}",
+            info.functions,
+        );
+    }
 }

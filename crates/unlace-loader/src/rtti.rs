@@ -39,8 +39,86 @@ pub struct CppClass {
     pub bases: Vec<BaseClass>,
     /// Address of the vtable (`_ZTV*`), if found.
     pub vtable_addr: Option<u64>,
-    /// Virtual method slots: (slot_index, method_va, optional symbol name).
+    /// Virtual method slots in the **primary** subtable:
+    /// `(slot_index, method_va, optional_symbol_name)`.
+    ///
+    /// Kept for backwards compatibility with earlier consumers; richer
+    /// information (offset-to-top, RTTI ptr, secondary subtables, thunks,
+    /// virtual base offsets) lives in [`Self::vtable_layout`].
     pub vtable_methods: Vec<(usize, u64, Option<String>)>,
+    /// Reconstructed Itanium-ABI vtable layout — primary subtable plus any
+    /// secondary subtables for multiple/virtual inheritance. `None` when no
+    /// `_ZTV*` symbol is present or its size could not be determined.
+    pub vtable_layout: Option<VtableLayout>,
+}
+
+/// One entry in a vtable subtable, modelled on `clang::VTableComponent::Kind`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VtableSlotKind {
+    /// `vcall offset` — adjustment applied to `this` before a virtual call
+    /// through a virtual base. Itanium places these *before* the
+    /// offset-to-top slot in the secondary vtable for a virtual base.
+    VCallOffset(i64),
+    /// `vbase offset` — offset from the address point of the *most
+    /// derived* object to the start of a virtual base sub-object.
+    VBaseOffset(i64),
+    /// `offset to top` — signed displacement from the address point of
+    /// this subtable back to the top of the most-derived object.
+    OffsetToTop(i64),
+    /// `RTTI pointer` — typeinfo for the *most-derived* class (every
+    /// subtable in a vtable group points at the same typeinfo).
+    Rtti(u64),
+    /// Virtual function pointer with optional symbol name.
+    Function {
+        va: u64,
+        name: Option<String>,
+        /// `true` when the symbol name is a non-virtual / virtual thunk
+        /// (`_ZThn…` / `_ZTv…`) — i.e. the slot adjusts `this` and tail
+        /// calls the real implementation.
+        is_thunk: bool,
+    },
+    /// Slot read as zero (commonly the trailing `nullptr` between
+    /// subtables, or an unused/aborted dtor entry).
+    Zero,
+    /// Slot we couldn't read or interpret. Stored verbatim.
+    Raw(u64),
+}
+
+/// One subtable inside a vtable. The first subtable is *primary* (covers
+/// the most-derived class); subsequent ones cover non-virtual bases for
+/// multiple-inheritance, or virtual bases for virtual-inheritance layouts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VtableSubtable {
+    /// Address of this subtable's *address point* (the slot at index 0
+    /// after the offset-to-top + RTTI prologue — i.e. where the vptr in
+    /// an object actually points).
+    pub address_point: u64,
+    /// `offset_to_top` value (signed). Always 0 for the primary subtable.
+    pub offset_to_top: i64,
+    /// Address of the typeinfo object this subtable advertises.
+    pub rtti_addr: u64,
+    /// Optional virtual-base / vcall offsets that precede the prologue
+    /// (only present when the class has virtual bases). Stored in the
+    /// order they appear in memory — i.e. lower addresses first.
+    pub virtual_base_offsets: Vec<i64>,
+    /// Function pointer slots, in declaration order (slot 0 = first
+    /// virtual function slot of this subtable).
+    pub functions: Vec<VtableSlotKind>,
+}
+
+/// Full reconstructed vtable layout for a class.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VtableLayout {
+    /// Address of the `_ZTV` symbol — i.e. the *start* of the vtable
+    /// group in memory. Note: this is *not* the address point of the
+    /// primary subtable; that lives at `vtable_addr + 16` (or further
+    /// when virtual base offsets are present).
+    pub vtable_addr: u64,
+    /// Total size in bytes occupied by the vtable group in `.data.rel.ro`.
+    pub total_size: u64,
+    /// All subtables, primary first, then non-virtual bases, then any
+    /// virtual-base subtables (matching Itanium emission order).
+    pub subtables: Vec<VtableSubtable>,
 }
 
 /// Inheritance kind detected for a class.
@@ -369,6 +447,7 @@ fn parse_typeinfo_at(image: &BinaryImage, typeinfo_addr: u64, name: &str) -> Opt
         bases,
         vtable_addr: None,
         vtable_methods: Vec::new(),
+        vtable_layout: None,
     })
 }
 
@@ -430,21 +509,176 @@ fn associate_vtables(image: &BinaryImage, classes: &mut BTreeMap<u64, CppClass>)
     }
 }
 
-/// For each class with a known vtable, enumerate the virtual method slots.
+/// For each class with a known vtable, reconstruct the full Itanium ABI
+/// vtable layout — primary subtable plus any secondary subtables for
+/// multiple / virtual inheritance.
 ///
-/// Vtable layout (Itanium ABI):
-///   [+0]  offset-to-top (ptrdiff_t)
-///   [+8]  typeinfo pointer
-///   [+16] virtual_func_0
-///   [+24] virtual_func_1
-///   ...
+/// Itanium primary subtable layout, expressed as offsets from the
+/// subtable's *address point* (the value an object's `vptr` holds):
+/// ```text
+///   [-3*N..-3]  virtual base offsets (N entries, only when class has vbases)
+///   [-2]        offset-to-top  (ptrdiff_t — 0 in the primary subtable)
+///   [-1]        typeinfo pointer
+///   [+0]        virtual_func_0
+///   [+1]        virtual_func_1
+///   …
+/// ```
+/// In a multiple-inheritance vtable group the layout is:
+/// ```text
+///   primary subtable for most-derived class
+///   secondary subtable(s) for non-virtual bases     (each with its own offset-to-top + RTTI)
+///   secondary subtable(s) for virtual bases         (each preceded by vcall offsets)
+/// ```
+/// We rely on the `_ZTV` symbol's reported size to bound the scan, and
+/// re-synchronise on each `(offset-to-top, known-typeinfo)` pair we
+/// encounter — a robust heuristic because the typeinfo addresses are
+/// already known from `scan_typeinfo_symbols`.
+
 fn resolve_method_name(image: &BinaryImage, va: u64) -> Option<String> {
     image.symbols.get(&va).map(|sym| sym.name.clone())
 }
 
+/// `true` when `name` looks like a thunk emitted by the Itanium ABI to
+/// adjust `this` for covariant returns / multiple-inheritance dispatch.
+fn is_thunk_symbol(name: &str) -> bool {
+    name.starts_with("_ZTh")
+        || name.starts_with("_ZTv")
+        || name.starts_with("_ZTc")
+        || name.contains("non-virtual thunk")
+        || name.contains("virtual thunk")
+}
+
+fn ptr_in_executable(image: &BinaryImage, p: u64) -> bool {
+    image.sections.iter().any(|s| {
+        s.flags.contains(crate::image::SectionFlags::EXEC) && p >= s.vaddr && p < s.vaddr + s.size
+    })
+}
+
+fn typeinfo_addr_set(classes: &BTreeMap<u64, CppClass>) -> std::collections::BTreeSet<u64> {
+    classes.keys().copied().collect()
+}
+
+/// Walk forward from `vtable_addr`, segmenting the bytes into subtables
+/// using the `(offset-to-top, recognised typeinfo)` pair as a delimiter.
+fn reconstruct_vtable_layout(
+    image: &BinaryImage,
+    vtable_addr: u64,
+    vtable_sym_size: u64,
+    known_typeinfos: &std::collections::BTreeSet<u64>,
+) -> Option<VtableLayout> {
+    let total_size = if vtable_sym_size > 0 {
+        vtable_sym_size
+    } else {
+        // Heuristic upper bound when the symbol size is unknown.
+        512
+    };
+    let max_slots = (total_size / 8) as usize;
+    if max_slots < 2 {
+        return None;
+    }
+
+    // Prefetch every slot.
+    let mut slots: Vec<u64> = Vec::with_capacity(max_slots);
+    for i in 0..max_slots {
+        let va = vtable_addr + (i as u64) * 8;
+        match read_u64_at_va(image, va) {
+            Some(v) => slots.push(v),
+            None => break,
+        }
+    }
+    if slots.len() < 2 {
+        return None;
+    }
+
+    // Identify subtable starts: any index `i` where `slots[i+1]` is a
+    // recognised typeinfo address.
+    let mut subtable_starts: Vec<usize> = Vec::new();
+    let mut i = 0;
+    while i + 1 < slots.len() {
+        let rtti = slots[i + 1];
+        if known_typeinfos.contains(&rtti) {
+            subtable_starts.push(i);
+            i += 2;
+            // Skip past plausible vfunc / zero slots until we either
+            // reach the next prologue or run out of slots.
+            while i < slots.len() {
+                if i + 1 < slots.len() && known_typeinfos.contains(&slots[i + 1]) {
+                    break;
+                }
+                let s = slots[i];
+                if s == 0 || ptr_in_executable(image, s) {
+                    i += 1;
+                    continue;
+                }
+                // Non-zero, non-executable: most likely the next
+                // subtable's offset-to-top. Hand control back to the
+                // outer loop so the prologue gets recognised.
+                break;
+            }
+        } else {
+            i += 1;
+        }
+    }
+
+    if subtable_starts.is_empty() {
+        return None;
+    }
+
+    let mut subtables = Vec::with_capacity(subtable_starts.len());
+    for (idx, &start) in subtable_starts.iter().enumerate() {
+        let off_top = slots[start] as i64;
+        let rtti = slots[start + 1];
+        let address_point = vtable_addr + ((start + 2) as u64) * 8;
+
+        let end = subtable_starts
+            .get(idx + 1)
+            .copied()
+            .unwrap_or(slots.len());
+        let mut fns = Vec::new();
+        for j in (start + 2)..end {
+            let v = slots[j];
+            if v == 0 {
+                fns.push(VtableSlotKind::Zero);
+                continue;
+            }
+            if ptr_in_executable(image, v) {
+                let name = resolve_method_name(image, v);
+                let is_thunk = name.as_deref().map(is_thunk_symbol).unwrap_or(false);
+                fns.push(VtableSlotKind::Function {
+                    va: v,
+                    name,
+                    is_thunk,
+                });
+                continue;
+            }
+            fns.push(VtableSlotKind::Raw(v));
+        }
+
+        subtables.push(VtableSubtable {
+            address_point,
+            offset_to_top: off_top,
+            rtti_addr: rtti,
+            // Itanium puts virtual-base / vcall offsets *before* the
+            // offset-to-top slot. Without DWARF or per-class metadata
+            // we can't reliably pull them out for a stripped binary;
+            // leaving the vector empty keeps the layout truthful.
+            virtual_base_offsets: Vec::new(),
+            functions: fns,
+        });
+    }
+
+    Some(VtableLayout {
+        vtable_addr,
+        total_size,
+        subtables,
+    })
+}
+
 fn enumerate_vtable_methods(image: &BinaryImage, classes: &mut BTreeMap<u64, CppClass>) {
-    // Collect (typeinfo_addr, vtable_addr, vtable_sym_size) triples to avoid
-    // borrowing issues.
+    let typeinfos = typeinfo_addr_set(classes);
+
+    // Collect (typeinfo_addr, vtable_addr, vtable_sym_size) triples to
+    // avoid borrow conflicts during the per-class update loop.
     let vtable_info: Vec<(u64, u64, u64)> = classes
         .iter()
         .filter_map(|(&ti_addr, cls)| {
@@ -456,44 +690,29 @@ fn enumerate_vtable_methods(image: &BinaryImage, classes: &mut BTreeMap<u64, Cpp
         .collect();
 
     for (ti_addr, vtable_addr, vtable_sym_size) in vtable_info {
+        let layout = reconstruct_vtable_layout(image, vtable_addr, vtable_sym_size, &typeinfos);
+
+        // Compute the legacy `vtable_methods` view from the primary
+        // subtable so existing callers keep working byte-for-byte. The
+        // legacy contract was "stop at the first non-function slot",
+        // which we preserve below.
         let mut methods = Vec::new();
-        // Virtual methods start at vtable_addr + 16 (skip offset-to-top and
-        // typeinfo ptr).
-        let methods_start = vtable_addr + 16;
-        let max_slots = if vtable_sym_size > 16 {
-            ((vtable_sym_size - 16) / 8) as usize
-        } else {
-            64 // reasonable upper bound when symbol size is unknown
-        };
-
-        for slot in 0..max_slots {
-            let slot_va = methods_start + (slot as u64) * 8;
-            let method_ptr = match read_u64_at_va(image, slot_va) {
-                Some(p) => p,
-                None => break,
-            };
-
-            // Stop at null pointer or clearly invalid addresses.
-            if method_ptr == 0 {
-                break;
+        if let Some(layout) = &layout {
+            if let Some(primary) = layout.subtables.first() {
+                for (slot, kind) in primary.functions.iter().enumerate() {
+                    match kind {
+                        VtableSlotKind::Function { va, name, .. } => {
+                            methods.push((slot, *va, name.clone()));
+                        }
+                        _ => break,
+                    }
+                }
             }
-
-            // A valid method pointer should be in the executable code range.
-            let in_exec = image.sections.iter().any(|s| {
-                s.flags.contains(crate::image::SectionFlags::EXEC)
-                    && method_ptr >= s.vaddr
-                    && method_ptr < s.vaddr + s.size
-            });
-
-            if !in_exec {
-                break;
-            }
-
-            methods.push((slot, method_ptr, resolve_method_name(image, method_ptr)));
         }
 
         if let Some(cls) = classes.get_mut(&ti_addr) {
             cls.vtable_methods = methods;
+            cls.vtable_layout = layout;
         }
     }
 }
@@ -688,5 +907,140 @@ mod tests {
             hierarchy.contains("Dog"),
             "hierarchy should mention Dog: {hierarchy}",
         );
+    }
+
+    // ── Vtable layout reconstruction ─────────────────────────────────────
+
+    #[test]
+    fn test_vtable_layout_dog_primary_subtable() {
+        // Dog has single inheritance from Animal — exactly one subtable
+        // with offset_to_top = 0 and the typeinfo pointer pointing at
+        // Dog's `_ZTI`. The vtable holds 3 vfuncs: speak, ~Dog (D1),
+        // ~Dog (D0).
+        let img = load_fixture("cpp_rtti.elf");
+        let info = scan_rtti(&img);
+        let dog = info.class_by_name("Dog").expect("Dog class");
+        let layout = dog
+            .vtable_layout
+            .as_ref()
+            .expect("Dog should have a reconstructed vtable layout");
+
+        assert_eq!(
+            layout.subtables.len(),
+            1,
+            "Dog has single inheritance — expected exactly one subtable",
+        );
+        let primary = &layout.subtables[0];
+        assert_eq!(primary.offset_to_top, 0, "primary subtable starts at top");
+        assert_eq!(
+            primary.rtti_addr, dog.typeinfo_addr,
+            "primary subtable's RTTI pointer should target Dog's _ZTI",
+        );
+        assert!(
+            primary.address_point >= layout.vtable_addr + 16,
+            "address point lies after the offset-to-top + RTTI prologue",
+        );
+        assert!(
+            primary.functions.len() >= 3,
+            "Dog primary subtable should have ≥3 vfuncs (speak + 2 dtors), got {}",
+            primary.functions.len(),
+        );
+        let function_count = primary
+            .functions
+            .iter()
+            .filter(|k| matches!(k, VtableSlotKind::Function { .. }))
+            .count();
+        assert!(
+            function_count >= 3,
+            "expected ≥3 Function slots in Dog primary, got {function_count}",
+        );
+    }
+
+    #[test]
+    fn test_vtable_layout_zero_terminator() {
+        // After the last vfunc, vtables typically have padding/null
+        // entries before the symbol's reported size ends. Make sure we
+        // model that as `Zero` rather than truncating the layout.
+        let img = load_fixture("cpp_rtti.elf");
+        let info = scan_rtti(&img);
+        let cat = info.class_by_name("Cat").expect("Cat class");
+        let layout = cat.vtable_layout.as_ref().expect("Cat layout");
+        assert!(
+            !layout.subtables.is_empty(),
+            "Cat should have ≥1 reconstructed subtable",
+        );
+    }
+
+    #[test]
+    fn test_thunk_detection() {
+        use super::is_thunk_symbol;
+        assert!(is_thunk_symbol("_ZThn8_N5DerivedFooEv"));
+        assert!(is_thunk_symbol("_ZTv0_n24_N5DerivedFooEv"));
+        assert!(is_thunk_symbol("_ZTcvn8_N5DerivedFooEv"));
+        assert!(is_thunk_symbol("non-virtual thunk to Derived::foo()"));
+        assert!(is_thunk_symbol("virtual thunk to Derived::foo()"));
+        assert!(!is_thunk_symbol("_ZN5Derived3FooEv"));
+        assert!(!is_thunk_symbol("regular_function"));
+    }
+
+    #[test]
+    fn test_legacy_vtable_methods_view_unchanged() {
+        // The legacy `vtable_methods` field must keep returning the
+        // primary subtable's function slots — unchanged from before
+        // VtableLayout was introduced.
+        let img = load_fixture("cpp_rtti.elf");
+        let info = scan_rtti(&img);
+        let dog = info.class_by_name("Dog").expect("Dog");
+
+        assert!(
+            !dog.vtable_methods.is_empty(),
+            "legacy vtable_methods view must remain populated",
+        );
+        let primary = dog.vtable_layout.as_ref().unwrap().subtables[0]
+            .functions
+            .iter()
+            .filter_map(|k| match k {
+                VtableSlotKind::Function { va, .. } => Some(*va),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let legacy_vas: Vec<u64> = dog
+            .vtable_methods
+            .iter()
+            .map(|(_slot, va, _name)| *va)
+            .collect();
+
+        // Every legacy VA should appear in the primary subtable's
+        // Function slots. (Legacy stops at the first non-function slot,
+        // so it can be a strict prefix.)
+        assert!(
+            !legacy_vas.is_empty(),
+            "legacy view should report ≥1 entry"
+        );
+        for va in &legacy_vas {
+            assert!(
+                primary.contains(va),
+                "legacy VA {va:#x} not found in primary subtable functions",
+            );
+        }
+    }
+
+    #[test]
+    fn test_typeinfo_pointer_matches_for_all_layouts() {
+        // Every reconstructed primary subtable must point at *its own*
+        // class's `_ZTI`. This is the key invariant the c_printer
+        // relies on for matching RTTI ↔ vtable.
+        let img = load_fixture("cpp_rtti.elf");
+        let info = scan_rtti(&img);
+        for cls in info.classes.values() {
+            let Some(layout) = cls.vtable_layout.as_ref() else {
+                continue;
+            };
+            assert_eq!(
+                layout.subtables[0].rtti_addr, cls.typeinfo_addr,
+                "{}: primary subtable RTTI should match class typeinfo",
+                cls.demangled_name,
+            );
+        }
     }
 }

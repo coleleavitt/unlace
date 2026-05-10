@@ -1314,6 +1314,8 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_CSNEG => control_flow::lift_csel(ctx, &ops, detail, 0x333),
         Arm64Insn::ARM64_INS_CSET => control_flow::lift_cset(ctx, &ops, detail, 0x331),
         Arm64Insn::ARM64_INS_CSETM => control_flow::lift_cset(ctx, &ops, detail, 0x332),
+        Arm64Insn::ARM64_INS_CCMP => control_flow::lift_ccmp(ctx, &ops, detail, false),
+        Arm64Insn::ARM64_INS_CCMN => control_flow::lift_ccmp(ctx, &ops, detail, true),
 
         Arm64Insn::ARM64_INS_MRS => emit_aarch64_mrs(ctx, &ops),
         Arm64Insn::ARM64_INS_MSR => emit_aarch64_msr(ctx, &ops),
@@ -1546,6 +1548,61 @@ pub fn try_aarch64_csel(insn: u32) -> Option<CselDecoded> {
     let rd = (insn & 0x1F) as u8;
     Some(CselDecoded { sf, op, rd, rn, rm, cond })
 }
+
+/// AArch64 conditional-compare decoded fields (CCMP/CCMN, register and
+/// immediate forms). `is_neg=true` ⇒ CCMN (uses addition); `is_imm=true` ⇒
+/// the second operand is the 5-bit immediate field instead of Rm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CcmpDecoded {
+    pub sf: bool,
+    pub is_neg: bool,
+    pub rn: u8,
+    pub rm_or_imm: u8,
+    pub is_imm: bool,
+    pub nzcv: u8,
+    pub cond: u8,
+}
+
+/// Standalone decoder for the AArch64 conditional-compare group.
+///
+/// Register-form encoding (`bits[11:10] = 00`):
+/// `sf 1 1 11010010 Rm:5 cond:4 0 0 Rn:5 0 nzcv:4`  (CCMP)
+/// `sf 0 1 11010010 Rm:5 cond:4 0 0 Rn:5 0 nzcv:4`  (CCMN)
+///
+/// Immediate-form encoding (`bits[11:10] = 10`): same shape, with `Rm`
+/// replaced by `imm5`. We accept both forms and surface the `is_imm`
+/// distinction so the lifter can decide what to feed to the IR.
+pub fn try_aarch64_ccmp(insn: u32) -> Option<CcmpDecoded> {
+    // Required bits (with bit11 free for reg/imm distinction):
+    //   bit29 = 1, bits[28:21] = 11010010, bit10 = 0, bit4 = 0.
+    // Mask: 0x3FE0_0410 ; expected: 0x3A40_0000.
+    if (insn & 0x3FE0_0410) != 0x3A40_0000 {
+        return None;
+    }
+    let sf = (insn >> 31) & 1 == 1;
+    let op30 = (insn >> 30) & 1;
+    let is_neg = op30 == 0; // op==0 → CCMN (add); op==1 → CCMP (sub)
+    let rm_or_imm = ((insn >> 16) & 0x1F) as u8;
+    let cond = ((insn >> 12) & 0xF) as u8;
+    let is_imm = (insn >> 11) & 1 == 1;
+    let rn = ((insn >> 5) & 0x1F) as u8;
+    let nzcv = (insn & 0xF) as u8;
+    Some(CcmpDecoded {
+        sf,
+        is_neg,
+        rn,
+        rm_or_imm,
+        is_imm,
+        nzcv,
+        cond,
+    })
+}
+
+/// Canonical AArch64 CCMP/CCMN intrinsic tag. Emitted as
+/// `Callother(CALLOTHER_AARCH64_CCMP, cond, Rn, Rm_or_imm, nzcv_or_-imm-flag, is_neg)`
+/// — no IR output (NZCV is implicit architectural state). A later pass
+/// can recognize the intrinsic when flag-aware analyses are added.
+pub const CALLOTHER_AARCH64_CCMP: u64 = 0x362;
 
 /// Return `true` if `insn` is an AArch64 pointer-authentication or BTI
 /// instruction with no architectural effects relevant to lifting; the

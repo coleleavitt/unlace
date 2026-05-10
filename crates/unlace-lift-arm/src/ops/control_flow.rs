@@ -231,6 +231,56 @@ pub fn lift_cset(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, tag: u64) {
     ));
 }
 
+/// CCMP/CCMN Rn, Rm/#imm5, #nzcv, cond — conditional compare.
+///
+/// Semantics: if `cond` evaluates true, NZCV is set to `compare(Rn, Rm)`
+/// (CCMP subtracts, CCMN adds); otherwise NZCV is set to the literal 4-bit
+/// `#nzcv` immediate. MVP: emit a single
+/// `Callother(CALLOTHER_AARCH64_CCMP, cond, Rn, Rm_or_imm5, nzcv, is_neg_flag)`
+/// with no IR output. NZCV varnodes are not yet plumbed through this lifter
+/// so flag mutation is implicit; a later pass can recognize the intrinsic.
+pub fn lift_ccmp(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, is_neg: bool) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+
+    let cc = detail.arch_detail().arm64().map(|a| a.cc());
+    let cond = match cc.and_then(|cc| build_condition(ctx, cc)) {
+        Some(cond) => cond,
+        None => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+
+    let rn = operand_to_varnode(ctx, &ops[0].0);
+    // Second operand is either Rm (register) or an immediate. Both lift to
+    // a Varnode without distinguishing here — the tag carries semantics.
+    let rm_or_imm = operand_to_varnode(ctx, &ops[1].0);
+    let nzcv = match ops.get(2).map(|p| &p.0) {
+        Some(Arm64OperandType::Imm(v)) => Varnode::constant(*v as u64 & 0xF, 1),
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+
+    let tag = Varnode::constant(crate::lift::CALLOTHER_AARCH64_CCMP, 8);
+    let neg_flag = Varnode::constant(u64::from(is_neg), 1);
+
+    match (rn, rm_or_imm) {
+        (Some(rn), Some(rm_or_imm)) => {
+            ctx.emit(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, cond, rn, rm_or_imm, nzcv, neg_flag],
+                ctx.addr,
+            ));
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
 pub fn lift_csel(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, tag: u64) {
     if ops.len() < 3 {
         ctx.emit_unimplemented();

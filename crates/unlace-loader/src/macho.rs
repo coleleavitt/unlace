@@ -265,6 +265,7 @@ where
         resources: Vec::new(),
         bound_imports: Vec::new(),
             delay_imports: Vec::new(),
+            forwarded_exports: Vec::new(),
         rich_header: None,
         dylibs,
         rpaths,

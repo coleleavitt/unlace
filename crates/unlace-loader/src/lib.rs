@@ -19,6 +19,7 @@ pub mod pdb_types;
 pub mod pe;
 pub mod rtti;
 pub mod strings;
+pub mod til;
 
 pub use dwarf::{
     DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo, SourceLocation,

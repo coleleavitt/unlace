@@ -23,10 +23,34 @@ use std::collections::BTreeMap;
 use crate::image::{BinaryImage, Endian};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjcMethod {
+    pub name: String,
+    pub type_encoding: String,
+    pub imp_addr: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjcIvar {
+    pub name: String,
+    pub offset: u32,
+    pub type_encoding: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjcProperty {
+    pub name: String,
+    pub attributes: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjcClass {
     pub name: String,
     pub class_addr: u64,
     pub superclass_addr: u64,
+    pub methods: Vec<ObjcMethod>,
+    pub ivars: Vec<ObjcIvar>,
+    pub properties: Vec<ObjcProperty>,
+    pub protocols: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -106,7 +130,8 @@ fn parse_class_at(image: &BinaryImage, class_ptr: u64) -> Option<ObjcClass> {
     }
 
     // class_ro_t: flags(4), instance_start(4), instance_size(4), reserved(4),
-    //             ivar_layout(8), name(8)
+    //             ivar_layout(8), name(8), baseMethods(8), baseProtocols(8),
+    //             ivars(8), weakIvarLayout(8), baseProperties(8)
     let name_ptr = read_u64_at_va(image, class_ro_ptr + 24)?;
     let name = read_cstring_at_va(image, name_ptr, 256)?;
 
@@ -114,11 +139,131 @@ fn parse_class_at(image: &BinaryImage, class_ptr: u64) -> Option<ObjcClass> {
         return None;
     }
 
+    let methods = read_u64_at_va(image, class_ro_ptr + 32)
+        .map(|p| if p == 0 { Vec::new() } else { parse_method_list(image, p).unwrap_or_default() })
+        .unwrap_or_default();
+    let protocols = read_u64_at_va(image, class_ro_ptr + 40)
+        .map(|p| if p == 0 { Vec::new() } else { parse_protocol_list(image, p).unwrap_or_default() })
+        .unwrap_or_default();
+    let ivars = read_u64_at_va(image, class_ro_ptr + 48)
+        .map(|p| if p == 0 { Vec::new() } else { parse_ivar_list(image, p).unwrap_or_default() })
+        .unwrap_or_default();
+    let properties = read_u64_at_va(image, class_ro_ptr + 64)
+        .map(|p| if p == 0 { Vec::new() } else { parse_property_list(image, p).unwrap_or_default() })
+        .unwrap_or_default();
+
     Some(ObjcClass {
         name,
         class_addr: class_ptr,
         superclass_addr: superclass,
+        methods,
+        ivars,
+        properties,
+        protocols,
     })
+}
+
+/// method_list_t: entsize(u32) | flags-bits-mixed-in (u32 count). Each entry:
+/// name(ptr), types(ptr), imp(ptr) in legacy ABI. Newer ABI uses 12-byte
+/// relative offsets; we conservatively decode the 24-byte legacy form first.
+fn parse_method_list(image: &BinaryImage, list_va: u64) -> Option<Vec<ObjcMethod>> {
+    let header = read_bytes_at_va(image, list_va, 8)?;
+    let entsize = u32::from_le_bytes(header[0..4].try_into().ok()?) & 0xfffc;
+    let count = u32::from_le_bytes(header[4..8].try_into().ok()?);
+    if count == 0 || count > 4096 || entsize == 0 || entsize > 64 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let entry_va = list_va + 8 + (i as u64) * (entsize as u64);
+        if entsize >= 24 {
+            let name_ptr = read_u64_at_va(image, entry_va)?;
+            let types_ptr = read_u64_at_va(image, entry_va + 8)?;
+            let imp_addr = read_u64_at_va(image, entry_va + 16)?;
+            let name = read_cstring_at_va(image, name_ptr, 256).unwrap_or_default();
+            let type_encoding = read_cstring_at_va(image, types_ptr, 256).unwrap_or_default();
+            if name.is_empty() {
+                continue;
+            }
+            out.push(ObjcMethod { name, type_encoding, imp_addr });
+        }
+    }
+    Some(out)
+}
+
+/// ivar_list_t: entsize(u32) count(u32). Entry layout:
+/// offset_ptr(ptr) name(ptr) type(ptr) alignment(u32) size(u32) — 32 bytes.
+fn parse_ivar_list(image: &BinaryImage, list_va: u64) -> Option<Vec<ObjcIvar>> {
+    let header = read_bytes_at_va(image, list_va, 8)?;
+    let entsize = u32::from_le_bytes(header[0..4].try_into().ok()?);
+    let count = u32::from_le_bytes(header[4..8].try_into().ok()?);
+    if count == 0 || count > 4096 || entsize < 32 || entsize > 64 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let entry_va = list_va + 8 + (i as u64) * (entsize as u64);
+        let offset_ptr = read_u64_at_va(image, entry_va)?;
+        let name_ptr = read_u64_at_va(image, entry_va + 8)?;
+        let type_ptr = read_u64_at_va(image, entry_va + 16)?;
+        let offset = read_bytes_at_va(image, offset_ptr, 4)
+            .and_then(|b| b.try_into().ok())
+            .map(u32::from_le_bytes)
+            .unwrap_or(0);
+        let name = read_cstring_at_va(image, name_ptr, 256).unwrap_or_default();
+        let type_encoding = read_cstring_at_va(image, type_ptr, 256).unwrap_or_default();
+        if name.is_empty() {
+            continue;
+        }
+        out.push(ObjcIvar { name, offset, type_encoding });
+    }
+    Some(out)
+}
+
+/// property_list_t: entsize(u32) count(u32). Entry: name(ptr) attributes(ptr) — 16 bytes.
+fn parse_property_list(image: &BinaryImage, list_va: u64) -> Option<Vec<ObjcProperty>> {
+    let header = read_bytes_at_va(image, list_va, 8)?;
+    let entsize = u32::from_le_bytes(header[0..4].try_into().ok()?);
+    let count = u32::from_le_bytes(header[4..8].try_into().ok()?);
+    if count == 0 || count > 4096 || entsize < 16 || entsize > 64 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let entry_va = list_va + 8 + (i as u64) * (entsize as u64);
+        let name_ptr = read_u64_at_va(image, entry_va)?;
+        let attr_ptr = read_u64_at_va(image, entry_va + 8)?;
+        let name = read_cstring_at_va(image, name_ptr, 256).unwrap_or_default();
+        let attributes = read_cstring_at_va(image, attr_ptr, 256).unwrap_or_default();
+        if name.is_empty() {
+            continue;
+        }
+        out.push(ObjcProperty { name, attributes });
+    }
+    Some(out)
+}
+
+/// protocol_list_t: count(u64) followed by `count` protocol_t pointers.
+/// Each protocol_t starts: isa(ptr) name(ptr) ... — we extract just the name.
+fn parse_protocol_list(image: &BinaryImage, list_va: u64) -> Option<Vec<String>> {
+    let count = read_u64_at_va(image, list_va)?;
+    if count == 0 || count > 1024 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let proto_ptr = read_u64_at_va(image, list_va + 8 + i * 8)?;
+        if proto_ptr == 0 {
+            continue;
+        }
+        let name_ptr = read_u64_at_va(image, proto_ptr + 8)?;
+        if let Some(name) = read_cstring_at_va(image, name_ptr, 256) {
+            if !name.is_empty() {
+                out.push(name);
+            }
+        }
+    }
+    Some(out)
 }
 
 pub fn scan_objc_classlist(image: &BinaryImage) -> ObjcInfo {
@@ -345,6 +490,136 @@ mod tests {
         let names: Vec<&str> = info.classes.values().map(|c| c.name.as_str()).collect();
         assert!(names.contains(&"MyClass"));
         assert!(names.contains(&"MyOtherClass"));
+    }
+
+    #[test]
+    fn test_class_with_methods() {
+        // method_list at 0x50000: entsize=24, count=2,
+        //   [name="foo" types="v@:" imp=0x1234], [name="bar" types="i@:" imp=0x5678].
+        let foo_va: u64 = 0x40000;
+        let bar_va: u64 = 0x40010;
+        let v_at_va: u64 = 0x40020;
+        let i_at_va: u64 = 0x40030;
+        let mut text = vec![0u8; 0x100];
+        text[..4].copy_from_slice(b"foo\0");
+        text[0x10..0x14].copy_from_slice(b"bar\0");
+        text[0x20..0x24].copy_from_slice(b"v@:\0");
+        text[0x30..0x34].copy_from_slice(b"i@:\0");
+
+        let mlist_va: u64 = 0x50000;
+        let mut mlist = Vec::new();
+        mlist.extend_from_slice(&24u32.to_le_bytes()); // entsize
+        mlist.extend_from_slice(&2u32.to_le_bytes()); // count
+        mlist.extend_from_slice(&foo_va.to_le_bytes());
+        mlist.extend_from_slice(&v_at_va.to_le_bytes());
+        mlist.extend_from_slice(&0x1234u64.to_le_bytes());
+        mlist.extend_from_slice(&bar_va.to_le_bytes());
+        mlist.extend_from_slice(&i_at_va.to_le_bytes());
+        mlist.extend_from_slice(&0x5678u64.to_le_bytes());
+
+        // class_ro at 0x30000: name="C" + baseMethods=mlist_va.
+        let name_va: u64 = 0x40040;
+        text[0x40..0x42].copy_from_slice(b"C\0");
+        let ro_va: u64 = 0x30000;
+        let mut ro = vec![0u8; 24];
+        ro.extend_from_slice(&name_va.to_le_bytes()); // +24: name
+        ro.extend_from_slice(&mlist_va.to_le_bytes()); // +32: baseMethods
+        ro.extend_from_slice(&[0u8; 8]); // +40: baseProtocols
+        ro.extend_from_slice(&[0u8; 8]); // +48: ivars
+        ro.extend_from_slice(&[0u8; 8]); // +56: weakIvarLayout
+        ro.extend_from_slice(&[0u8; 8]); // +64: baseProperties
+
+        let class_va: u64 = 0x20000;
+        let mut class = vec![0u8; 32];
+        class.extend_from_slice(&ro_va.to_le_bytes());
+
+        let classlist_va: u64 = 0x10000;
+        let classlist = class_va.to_le_bytes().to_vec();
+
+        let sections = vec![
+            Section { name: "__objc_classlist".into(), vaddr: classlist_va, size: classlist.len() as u64, data: classlist, flags: SectionFlags::READ },
+            Section { name: "__DATA".into(), vaddr: class_va, size: class.len() as u64, data: class, flags: SectionFlags::READ },
+            Section { name: "__DATA_CONST".into(), vaddr: ro_va, size: ro.len() as u64, data: ro, flags: SectionFlags::READ },
+            Section { name: "__objc_methlist".into(), vaddr: mlist_va, size: mlist.len() as u64, data: mlist, flags: SectionFlags::READ },
+            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+        ];
+
+        let info = scan_objc_classlist(&make_test_image(sections));
+        let cls = info.classes.values().next().expect("one class");
+        assert_eq!(cls.name, "C");
+        assert_eq!(cls.methods.len(), 2);
+        assert_eq!(cls.methods[0].name, "foo");
+        assert_eq!(cls.methods[0].imp_addr, 0x1234);
+        assert_eq!(cls.methods[1].name, "bar");
+        assert_eq!(cls.methods[1].imp_addr, 0x5678);
+    }
+
+    #[test]
+    fn test_class_with_ivars_and_properties() {
+        // ivar_list (32-byte entries): one ivar "_x" int32 at offset 8.
+        let ivar_offset_va: u64 = 0x40000;
+        let ivar_name_va: u64 = 0x40010;
+        let ivar_type_va: u64 = 0x40020;
+        let prop_name_va: u64 = 0x40030;
+        let prop_attr_va: u64 = 0x40040;
+        let class_name_va: u64 = 0x40050;
+        let mut text = vec![0u8; 0x100];
+        text[..4].copy_from_slice(&8u32.to_le_bytes()); // ivar offset value
+        text[0x10..0x13].copy_from_slice(b"_x\0");
+        text[0x20..0x22].copy_from_slice(b"i\0");
+        text[0x30..0x33].copy_from_slice(b"px\0");
+        text[0x40..0x44].copy_from_slice(b"T@\0\0");
+        text[0x50..0x52].copy_from_slice(b"K\0");
+
+        let ivar_list_va: u64 = 0x50000;
+        let mut ivars = Vec::new();
+        ivars.extend_from_slice(&32u32.to_le_bytes()); // entsize
+        ivars.extend_from_slice(&1u32.to_le_bytes()); // count
+        ivars.extend_from_slice(&ivar_offset_va.to_le_bytes()); // offset_ptr
+        ivars.extend_from_slice(&ivar_name_va.to_le_bytes()); // name
+        ivars.extend_from_slice(&ivar_type_va.to_le_bytes()); // type
+        ivars.extend_from_slice(&4u32.to_le_bytes()); // alignment
+        ivars.extend_from_slice(&4u32.to_le_bytes()); // size
+
+        let prop_list_va: u64 = 0x50100;
+        let mut props = Vec::new();
+        props.extend_from_slice(&16u32.to_le_bytes()); // entsize
+        props.extend_from_slice(&1u32.to_le_bytes()); // count
+        props.extend_from_slice(&prop_name_va.to_le_bytes());
+        props.extend_from_slice(&prop_attr_va.to_le_bytes());
+
+        let ro_va: u64 = 0x30000;
+        let mut ro = vec![0u8; 24];
+        ro.extend_from_slice(&class_name_va.to_le_bytes()); // name
+        ro.extend_from_slice(&[0u8; 8]); // baseMethods
+        ro.extend_from_slice(&[0u8; 8]); // baseProtocols
+        ro.extend_from_slice(&ivar_list_va.to_le_bytes()); // ivars
+        ro.extend_from_slice(&[0u8; 8]); // weakIvarLayout
+        ro.extend_from_slice(&prop_list_va.to_le_bytes()); // baseProperties
+
+        let class_va: u64 = 0x20000;
+        let mut class = vec![0u8; 32];
+        class.extend_from_slice(&ro_va.to_le_bytes());
+
+        let sections = vec![
+            Section { name: "__objc_classlist".into(), vaddr: 0x10000, size: 8, data: class_va.to_le_bytes().to_vec(), flags: SectionFlags::READ },
+            Section { name: "__DATA".into(), vaddr: class_va, size: class.len() as u64, data: class, flags: SectionFlags::READ },
+            Section { name: "__DATA_CONST".into(), vaddr: ro_va, size: ro.len() as u64, data: ro, flags: SectionFlags::READ },
+            Section { name: "__objc_ivars".into(), vaddr: ivar_list_va, size: ivars.len() as u64, data: ivars, flags: SectionFlags::READ },
+            Section { name: "__objc_props".into(), vaddr: prop_list_va, size: props.len() as u64, data: props, flags: SectionFlags::READ },
+            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+        ];
+
+        let info = scan_objc_classlist(&make_test_image(sections));
+        let cls = info.classes.values().next().expect("one class");
+        assert_eq!(cls.name, "K");
+        assert_eq!(cls.ivars.len(), 1);
+        assert_eq!(cls.ivars[0].name, "_x");
+        assert_eq!(cls.ivars[0].offset, 8);
+        assert_eq!(cls.ivars[0].type_encoding, "i");
+        assert_eq!(cls.properties.len(), 1);
+        assert_eq!(cls.properties[0].name, "px");
+        assert_eq!(cls.properties[0].attributes, "T@");
     }
 
     #[test]

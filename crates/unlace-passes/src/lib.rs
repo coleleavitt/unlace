@@ -27,6 +27,7 @@ pub mod licm;
 pub mod strength_reduce;
 pub mod modulo_idiom;
 pub mod noreturn;
+pub mod noreturn_propagation;
 pub mod objc_dispatch;
 pub mod op_type_binding;
 pub mod pass;
@@ -79,6 +80,7 @@ pub use licm::{LicmPass, NaturalLoop, find_natural_loops};
 pub use strength_reduce::StrengthReducePass;
 pub use modulo_idiom::ModuloIdiomPass;
 pub use noreturn::NoreturnDetectPass;
+pub use noreturn_propagation::{DEFAULT_PROPAGATE_CAP, propagate_noreturn};
 pub use objc_dispatch::ObjcDispatchPass;
 pub use pass::{
     DEFAULT_OUTER_FIXEDPOINT_CAP, OuterFixedpointReport, Pass, PassError, run_outer_fixedpoint,

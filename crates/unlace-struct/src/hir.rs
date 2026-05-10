@@ -207,6 +207,35 @@ pub enum HirNode {
         else_body: Vec<HirNode>,
     },
 
+    /// A select-expression collapse of a [`HirNode::GuardedIf`] whose
+    /// `then_body` and `else_body` are each a single `Statement(Copy)`
+    /// assigning the same output varnode. Conceptually
+    ///
+    /// ```text
+    /// if (cond_<cc>) { v = a; } else { v = b; }
+    /// ```
+    ///
+    /// becomes
+    ///
+    /// ```text
+    /// v = cond_<cc> ? a : b;
+    /// ```
+    ///
+    /// Recovered by the structurer's `fold_guarded_ternary` pass (t167)
+    /// after `fuse_guarded_if_else` has paired the T- and E-lanes of an
+    /// IT block. Only fires when both arms have exactly one assignment to
+    /// the same lvalue *and* are pure `Copy` ops (no implicit side effects
+    /// like Load/Store or Call). `cond_code` is the ARM A8.3 cond code;
+    /// the C printer renders the predicate as `cond_<mnemonic>` mirroring
+    /// the existing `GuardedIf` output style.
+    GuardedTernary {
+        cond_code: u8,
+        then_insn: IrInsn,
+        else_insn: IrInsn,
+        /// Output varnode both branches write to.
+        output: Varnode,
+    },
+
     /// One or more raw assembly lines that the lifter could not translate
     /// into structured IR.
     ///

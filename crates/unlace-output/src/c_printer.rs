@@ -1978,6 +1978,55 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.stmt_outputs.insert(else_idx, else_out_sv);
             }
 
+            HirNode::GuardedTernary {
+                cond_code: _,
+                then_insn,
+                else_insn,
+                output: _,
+            } => {
+                // Mirror the `Ternary` collection but without the
+                // SsaVarnode cond bookkeeping — the predicate is an ARM
+                // cond_code (architectural NZCV state), not a per-function
+                // value, so it has no SsaVarnode to register. Both arms
+                // are Copy ops to a shared output (enforced by the
+                // structurer's fold pass); we still allocate stmt slots
+                // so name resolution / type inference stay consistent.
+                for insn in [then_insn, else_insn] {
+                    let idx = ctx.next_stmt;
+                    ctx.next_stmt += 1;
+                    ctx.stmt_depths.insert(idx, ctx.collect_depth);
+                    ctx.stmt_scope_paths
+                        .insert(idx, ctx.current_scope_path.clone());
+                    let mut inputs = Vec::new();
+                    for input in &insn.inputs {
+                        if input.space == SpaceId::Const {
+                            continue;
+                        }
+                        let ver = ctx.current_version(input);
+                        let sv = SsaVarnode {
+                            base: *input,
+                            version: ver,
+                        };
+                        ctx.name_of(&sv);
+                        inputs.push(sv);
+                    }
+                    ctx.stmt_inputs.insert(idx, inputs);
+                    let out_sv = if let Some(output) = insn.output {
+                        let ver = ctx.next_version(&output);
+                        let sv = SsaVarnode {
+                            base: output,
+                            version: ver,
+                        };
+                        ctx.name_of(&sv);
+                        infer_type_from_insn(insn, &sv, ctx);
+                        Some(sv)
+                    } else {
+                        None
+                    };
+                    ctx.stmt_outputs.insert(idx, out_sv);
+                }
+            }
+
             HirNode::Return(None)
             | HirNode::Goto(_)
             | HirNode::Label(_)
@@ -3485,6 +3534,39 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                     captures.join(", ")
                 );
             }
+        }
+
+        HirNode::GuardedTernary {
+            cond_code,
+            then_insn,
+            else_insn,
+            output: _,
+        } => {
+            // Mirror `Ternary` rendering but with the ARM cond_code mnemonic
+            // as the predicate. Statement slots were allocated in the same
+            // order during `collect_varnodes` so we draw the LHS name from
+            // the then-arm slot.
+            let then_idx = ctx.emit_stmt;
+            ctx.emit_stmt += 1;
+            let else_idx = ctx.emit_stmt;
+            ctx.emit_stmt += 1;
+
+            let lhs = if let Some(Some(sv)) = ctx.stmt_outputs.get(&then_idx).cloned() {
+                ctx.name_of(&sv)
+            } else {
+                "/* guarded-ternary */".to_string()
+            };
+
+            let then_expr = emit_expr(then_insn, then_idx, ctx);
+            let else_expr = emit_expr(else_insn, else_idx, ctx);
+            let mnem = arm_cond_mnemonic(*cond_code);
+
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(
+                out,
+                "{} = cond_{} ? {} : {};",
+                lhs, mnem, then_expr, else_expr
+            );
         }
     }
 }

@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 
 use unlace_ir::IrOp;
 use unlace_ir::ssa::SsaFunction;
+use unlace_loader::ObjcCategory;
 
 use crate::pass::{Pass, PassError};
 
@@ -35,6 +36,13 @@ pub struct ObjcDispatchPass {
     /// Map from string-literal VA to selector text, populated from
     /// `__objc_methname` entries.
     pub selector_strings: BTreeMap<u64, String>,
+    /// Map from category-method IMP address to its owning `(class, category)`.
+    /// Built from `ObjcInfo.categories` via `with_categories`.
+    pub category_methods: BTreeMap<u64, (String, String)>,
+    /// Reverse lookup keyed by `(class, selector)` → category name. Used by
+    /// the render layer when arg-tracing yields a class+selector pair to
+    /// decide whether to emit `[Class(Category) sel:]`.
+    pub category_lookup: BTreeMap<(String, String), String>,
 }
 
 impl ObjcDispatchPass {
@@ -43,6 +51,8 @@ impl ObjcDispatchPass {
             msgsend_addrs: BTreeMap::new(),
             class_symbols: BTreeMap::new(),
             selector_strings: BTreeMap::new(),
+            category_methods: BTreeMap::new(),
+            category_lookup: BTreeMap::new(),
         }
     }
 
@@ -57,6 +67,8 @@ impl ObjcDispatchPass {
             msgsend_addrs,
             class_symbols: BTreeMap::new(),
             selector_strings: BTreeMap::new(),
+            category_methods: BTreeMap::new(),
+            category_lookup: BTreeMap::new(),
         }
     }
 
@@ -71,6 +83,26 @@ impl ObjcDispatchPass {
     /// resolved by VA.
     pub fn with_selector_strings(mut self, selector_strings: BTreeMap<u64, String>) -> Self {
         self.selector_strings = selector_strings;
+        self
+    }
+
+    /// Builder: register all category methods from `__objc_catlist`. Each
+    /// instance- or class-method's IMP address is recorded with its owning
+    /// `(class_name, category_name)` so the render layer can emit the
+    /// `[Class(Category) selector:]` bracket form. Categories whose owning
+    /// class couldn't be resolved (no `class_name`) are skipped.
+    pub fn with_categories(mut self, categories: &[ObjcCategory]) -> Self {
+        for cat in categories {
+            let Some(class) = cat.class_name.as_deref() else {
+                continue;
+            };
+            for method in cat.instance_methods.iter().chain(cat.class_methods.iter()) {
+                self.category_methods
+                    .insert(method.imp_addr, (class.to_string(), cat.name.clone()));
+                self.category_lookup
+                    .insert((class.to_string(), method.name.clone()), cat.name.clone());
+            }
+        }
         self
     }
 }
@@ -142,7 +174,15 @@ impl Pass for ObjcDispatchPass {
 
                 let target_addr = target.offset;
                 if let Some(variant) = self.msgsend_addrs.get(&target_addr) {
-                    let annotation = resolve_call(func, bid, i, variant, &self.class_symbols, &self.selector_strings);
+                    let annotation = resolve_call(
+                        func,
+                        bid,
+                        i,
+                        variant,
+                        &self.class_symbols,
+                        &self.selector_strings,
+                        &self.category_lookup,
+                    );
                     found.insert((bid, i), annotation);
                 }
             }
@@ -164,6 +204,7 @@ fn resolve_call(
     variant: &str,
     class_symbols: &BTreeMap<u64, String>,
     selector_strings: &BTreeMap<u64, String>,
+    category_lookup: &BTreeMap<(String, String), String>,
 ) -> String {
     use unlace_ir::ssa::VarnodeSlot;
 
@@ -184,7 +225,10 @@ fn resolve_call(
         .cloned();
 
     match (class_name, selector) {
-        (Some(cls), Some(sel)) => format!("[{cls} {sel}]"),
+        (Some(cls), Some(sel)) => match category_lookup.get(&(cls.clone(), sel.clone())) {
+            Some(cat) => format!("[{cls}({cat}) {sel}]"),
+            None => format!("[{cls} {sel}]"),
+        },
         _ => format!("// {variant}(self, selector)"),
     }
 }
@@ -229,6 +273,8 @@ mod tests {
             msgsend_addrs: addrs,
             class_symbols: BTreeMap::new(),
             selector_strings: BTreeMap::new(),
+        category_methods: BTreeMap::new(),
+        category_lookup: BTreeMap::new(),
         };
 
         let changed = pass.run(&mut ssa).expect("pass succeeds");
@@ -317,6 +363,8 @@ mod tests {
             msgsend_addrs: addrs,
             class_symbols: classes,
             selector_strings: sels,
+        category_methods: BTreeMap::new(),
+        category_lookup: BTreeMap::new(),
         };
         pass.run(&mut ssa).expect("ok");
 
@@ -360,6 +408,8 @@ mod tests {
             msgsend_addrs: addrs,
             class_symbols: classes,
             selector_strings: BTreeMap::new(),
+        category_methods: BTreeMap::new(),
+        category_lookup: BTreeMap::new(),
         };
         pass.run(&mut ssa).expect("ok");
 
@@ -385,9 +435,130 @@ mod tests {
             msgsend_addrs: addrs,
             class_symbols: BTreeMap::new(),
             selector_strings: BTreeMap::new(),
+        category_methods: BTreeMap::new(),
+        category_lookup: BTreeMap::new(),
         };
 
         let changed = pass.run(&mut ssa).expect("pass succeeds");
         assert!(!changed, "CALLIND should not be matched (only CALL)");
+    }
+
+    fn make_category(class: &str, cat: &str, method: &str, imp: u64) -> ObjcCategory {
+        ObjcCategory {
+            name: cat.to_string(),
+            class_addr: 0xDEAD_BEEF,
+            class_name: Some(class.to_string()),
+            instance_methods: vec![unlace_loader::ObjcMethod {
+                name: method.to_string(),
+                type_encoding: "v@:".to_string(),
+                imp_addr: imp,
+            }],
+            class_methods: Vec::new(),
+            properties: Vec::new(),
+            protocols: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn dispatch_pass_populates_category_methods() {
+        let cat1 = make_category("MyClass", "MyCat", "extraMethod", 0x9000);
+        let cat2 = make_category("OtherClass", "Helpers", "doThing", 0x9100);
+        let pass = ObjcDispatchPass::new().with_categories(&[cat1, cat2]);
+
+        assert_eq!(pass.category_methods.len(), 2);
+        assert_eq!(
+            pass.category_methods.get(&0x9000),
+            Some(&("MyClass".to_string(), "MyCat".to_string()))
+        );
+        assert_eq!(pass.category_lookup.len(), 2);
+        assert_eq!(
+            pass.category_lookup.get(&("MyClass".to_string(), "extraMethod".to_string())),
+            Some(&"MyCat".to_string())
+        );
+    }
+
+    #[test]
+    fn category_method_renders_with_paren() {
+        // Build a function: rdi = Load 0x10000 (class symbol), rsi = Load 0x20000
+        // (selector string), then Call objc_msgSend(rdi, rsi).
+        let msgsend_addr: u64 = 0x2000;
+        let class_va: u64 = 0x10000;
+        let sel_va: u64 = 0x20000;
+
+        let rdi = Varnode::reg(0, 8);
+        let rsi = Varnode::reg(48, 8);
+        let space = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::Load, rdi, smallvec![space, Varnode::constant(class_va, 8)], 0x1000),
+            IrInsn::with_output(IrOp::Load, rsi, smallvec![space, Varnode::constant(sel_va, 8)], 0x1004),
+            IrInsn::without_output(
+                IrOp::Call,
+                smallvec![Varnode::constant(msgsend_addr, 8), rdi, rsi],
+                0x1008,
+            ),
+        ];
+        let mut ssa = make_single_block_ssa(insns);
+
+        let mut addrs = BTreeMap::new();
+        addrs.insert(msgsend_addr, "objc_msgSend".to_string());
+        let mut classes = BTreeMap::new();
+        classes.insert(class_va, "MyClass".to_string());
+        let mut selectors = BTreeMap::new();
+        selectors.insert(sel_va, "extraMethod".to_string());
+
+        let cat = make_category("MyClass", "MyCat", "extraMethod", 0x9000);
+        let pass = ObjcDispatchPass {
+            msgsend_addrs: addrs,
+            class_symbols: classes,
+            selector_strings: selectors,
+            category_methods: BTreeMap::new(),
+            category_lookup: BTreeMap::new(),
+        }
+        .with_categories(&[cat]);
+        pass.run(&mut ssa).expect("ok");
+
+        let ann = ssa.objc_dispatch_calls.values().next().expect("recorded");
+        assert_eq!(ann, "[MyClass(MyCat) extraMethod]");
+    }
+
+    #[test]
+    fn base_class_method_renders_without_paren() {
+        let msgsend_addr: u64 = 0x2000;
+        let class_va: u64 = 0x10000;
+        let sel_va: u64 = 0x20000;
+
+        let rdi = Varnode::reg(0, 8);
+        let rsi = Varnode::reg(48, 8);
+        let space = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::Load, rdi, smallvec![space, Varnode::constant(class_va, 8)], 0x1000),
+            IrInsn::with_output(IrOp::Load, rsi, smallvec![space, Varnode::constant(sel_va, 8)], 0x1004),
+            IrInsn::without_output(
+                IrOp::Call,
+                smallvec![Varnode::constant(msgsend_addr, 8), rdi, rsi],
+                0x1008,
+            ),
+        ];
+        let mut ssa = make_single_block_ssa(insns);
+
+        let mut addrs = BTreeMap::new();
+        addrs.insert(msgsend_addr, "objc_msgSend".to_string());
+        let mut classes = BTreeMap::new();
+        classes.insert(class_va, "MyClass".to_string());
+        let mut selectors = BTreeMap::new();
+        selectors.insert(sel_va, "baseMethod".to_string());
+
+        // Note: no category for "baseMethod" — should render plainly.
+        let pass = ObjcDispatchPass {
+            msgsend_addrs: addrs,
+            class_symbols: classes,
+            selector_strings: selectors,
+            category_methods: BTreeMap::new(),
+            category_lookup: BTreeMap::new(),
+        };
+        pass.run(&mut ssa).expect("ok");
+
+        let ann = ssa.objc_dispatch_calls.values().next().expect("recorded");
+        assert_eq!(ann, "[MyClass baseMethod]");
     }
 }

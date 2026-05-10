@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 unlace-ir = { workspace = true }
+unlace-loader = { workspace = true }
 petgraph = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }

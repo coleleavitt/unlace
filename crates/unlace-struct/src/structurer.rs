@@ -482,27 +482,57 @@ impl<'a> StructureCtx<'a> {
             return;
         };
 
+        let mut pending_guard: Option<(u8, Vec<HirNode>)> = None;
+        let flush_guard = |pg: &mut Option<(u8, Vec<HirNode>)>, sink: &mut Vec<HirNode>| {
+            if let Some((cc, body)) = pg.take() {
+                sink.push(HirNode::GuardedIf {
+                    cond_code: cc,
+                    then_body: body,
+                });
+            }
+        };
+
         for (i, insn) in block.insns.iter().enumerate() {
             if self.is_frame_setup(bid, i) {
                 continue;
             }
-            match insn.op {
-                // Skip control-flow terminators — they're handled structurally.
+            let produced: Option<HirNode> = match insn.op {
                 IrOp::Branch => {
-                    if let Some(&target) = self.func.tail_call_map.get(&bid) {
-                        nodes.push(HirNode::TailCall { target });
-                    }
+                    flush_guard(&mut pending_guard, nodes);
+                    self.func
+                        .tail_call_map
+                        .get(&bid)
+                        .copied()
+                        .map(|target| HirNode::TailCall { target })
                 }
-                IrOp::Cbranch | IrOp::Branchind => continue,
+                IrOp::Cbranch | IrOp::Branchind => {
+                    flush_guard(&mut pending_guard, nodes);
+                    continue;
+                }
                 IrOp::Return => {
+                    flush_guard(&mut pending_guard, nodes);
                     let ret_val = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0));
-                    nodes.push(HirNode::Return(ret_val));
+                    Some(HirNode::Return(ret_val))
                 }
-                _ => {
-                    nodes.push(HirNode::Statement(insn.clone()));
+                _ => Some(HirNode::Statement(insn.clone())),
+            };
+            let Some(node) = produced else { continue };
+
+            match insn.guard {
+                Some(cc) => match &mut pending_guard {
+                    Some((open_cc, body)) if *open_cc == cc => body.push(node),
+                    _ => {
+                        flush_guard(&mut pending_guard, nodes);
+                        pending_guard = Some((cc, vec![node]));
+                    }
+                },
+                None => {
+                    flush_guard(&mut pending_guard, nodes);
+                    nodes.push(node);
                 }
             }
         }
+        flush_guard(&mut pending_guard, nodes);
     }
 
     fn try_structure_switch(&mut self, bid: BlockId) -> Option<(HirNode, Option<BlockId>)> {
@@ -1859,6 +1889,7 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
             recover_for_loops(catch_body);
         }
         HirNode::Commented { inner, .. } => recover_for_loops_in_children(inner),
+        HirNode::GuardedIf { then_body, .. } => recover_for_loops(then_body),
         HirNode::Statement(_)
         | HirNode::Return(_)
         | HirNode::Goto(_)
@@ -4481,6 +4512,98 @@ mod tests {
             hir.indirect_branch_kinds.is_empty(),
             "x86 BRANCHIND with multiple IndirectJump successors is consumed by \
              the structured-switch path and must not appear in indirect_branch_kinds"
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // t148: IT-block guard → HirNode::GuardedIf
+    // -------------------------------------------------------------------
+
+    fn guarded_arith(output: Varnode, inputs: &[Varnode], addr: u64, cc: u8) -> IrInsn {
+        let mut insn = arith_insn(output, inputs, addr);
+        insn.guard = Some(cc);
+        insn
+    }
+
+    fn collect_guarded_ifs(nodes: &[HirNode], out: &mut Vec<(u8, usize)>) {
+        for n in nodes {
+            match n {
+                HirNode::GuardedIf {
+                    cond_code,
+                    then_body,
+                } => {
+                    out.push((*cond_code, then_body.len()));
+                    collect_guarded_ifs(then_body, out);
+                }
+                HirNode::Block(inner) => collect_guarded_ifs(inner, out),
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_guarded_ifs(then_body, out);
+                    if let Some(eb) = else_body {
+                        collect_guarded_ifs(eb, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn it_block_emits_if_in_hir() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("it_single", BlockId(0), 0x5000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        // Single insn carrying an IT-block guard (cond=EQ=0).
+        bb0.insns.push(guarded_arith(r0, &[r8, c1], 0x5000, 0));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0x5004));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        let mut found = Vec::new();
+        collect_guarded_ifs(&hir.body, &mut found);
+        assert_eq!(found.len(), 1, "expected one GuardedIf, got {found:?}");
+        assert_eq!(found[0].0, 0, "cond_code should be EQ (0)");
+        assert_eq!(found[0].1, 1, "then_body should hold the single guarded insn");
+    }
+
+    #[test]
+    fn consecutive_same_cond_insns_grouped() {
+        let r0 = Varnode::reg(0, 8);
+        let r1 = Varnode::reg(8, 8);
+        let r2 = Varnode::reg(16, 8);
+        let r3 = Varnode::reg(24, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("it_grouped", BlockId(0), 0x6000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(guarded_arith(r0, &[r1, c1], 0x6000, 0));
+        bb0.insns.push(guarded_arith(r2, &[r1, c1], 0x6004, 0));
+        bb0.insns.push(guarded_arith(r3, &[r1, c1], 0x6008, 0));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0x600C));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        let mut found = Vec::new();
+        collect_guarded_ifs(&hir.body, &mut found);
+        assert_eq!(
+            found.len(),
+            1,
+            "three same-cond insns should fuse into one GuardedIf, got {found:?}"
+        );
+        assert_eq!(found[0].0, 0);
+        assert_eq!(
+            found[0].1, 3,
+            "all three guarded insns should land in then_body"
         );
     }
 }

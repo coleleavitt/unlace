@@ -1800,6 +1800,7 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
         | HirNode::TailCall { .. }
         | HirNode::Continue
         | HirNode::Break
+        | HirNode::ObjcBlock { .. }
         | HirNode::Asm { .. } => {}
     }
 }

@@ -1954,6 +1954,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             | HirNode::TailCall { .. }
             | HirNode::Continue
             | HirNode::Break
+            | HirNode::ObjcBlock { .. }
             | HirNode::Asm { .. } => {}
 
             HirNode::TryCatch {
@@ -3392,6 +3393,20 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             }
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
+        }
+
+        HirNode::ObjcBlock { invoke, captures } => {
+            indent(depth, ctx.config.tab_width, out);
+            if captures.is_empty() {
+                let _ = writeln!(out, "^{{ /* invoke=0x{:x} */ }};", invoke);
+            } else {
+                let _ = writeln!(
+                    out,
+                    "^{{ /* invoke=0x{:x} captures=[{}] */ }};",
+                    invoke,
+                    captures.join(", ")
+                );
+            }
         }
     }
 }

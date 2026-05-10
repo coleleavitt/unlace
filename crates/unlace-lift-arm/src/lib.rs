@@ -789,6 +789,74 @@ mod tests {
     }
 
     #[test]
+    fn it_eq_marks_next_insn_with_eq_guard() {
+        // IT EQ  →  0xBF08
+        // MOVS r0, #1  →  0x2001 (Thumb-1, fits in IT block; cond is EQ=0)
+        let l = ArmLifter::new_thumb();
+        let _ = l.lift_insn(&0xBF08u16.to_le_bytes(), 0x1000).expect("IT");
+        let r = l
+            .lift_insn(&0x2001u16.to_le_bytes(), 0x1002)
+            .expect("MOVS");
+        let copy = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("MOVS must lift to Copy");
+        assert_eq!(copy.guard, Some(0));
+    }
+
+    #[test]
+    fn ittee_alternates_t_and_e() {
+        // ITTEE EQ — firstcond=EQ=0; per ARM ARM the mask bits encode slots
+        // 2..N as T-when-equal-to-firstcond[0] / E-when-inverted, with a
+        // trailing `1` terminator. For [T,E,E] over 4 slots: mask = 0b0111.
+        // Encoding: 0b1011_1111_0000_0111 = 0xBF07
+        let l = ArmLifter::new_thumb();
+        let _ = l.lift_insn(&0xBF07u16.to_le_bytes(), 0x1000).expect("IT");
+        let mut got_guards = Vec::new();
+        let mut pc = 0x1002u64;
+        for _ in 0..4 {
+            let r = l
+                .lift_insn(&0x2001u16.to_le_bytes(), pc)
+                .expect("MOVS lifts");
+            let copy = r
+                .ir_ops
+                .iter()
+                .find(|i| i.op == IrOp::Copy)
+                .expect("Copy present");
+            got_guards.push(copy.guard);
+            pc += 2;
+        }
+        assert_eq!(got_guards, vec![Some(0), Some(0), Some(1), Some(1)]);
+    }
+
+    #[test]
+    fn insn_after_it_block_has_no_guard() {
+        // IT EQ; MOVS; ADDS  →  third insn falls outside the block
+        let l = ArmLifter::new_thumb();
+        let _ = l.lift_insn(&0xBF08u16.to_le_bytes(), 0x1000).expect("IT");
+        let movs = l
+            .lift_insn(&0x2001u16.to_le_bytes(), 0x1002)
+            .expect("MOVS");
+        let movs_copy = movs
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("Copy");
+        assert_eq!(movs_copy.guard, Some(0));
+
+        // ADDS r0, #1  →  0x3001 (post-IT, must be unguarded)
+        let adds = l
+            .lift_insn(&0x3001u16.to_le_bytes(), 0x1004)
+            .expect("ADDS");
+        assert!(
+            adds.ir_ops.iter().all(|i| i.guard.is_none()),
+            "post-IT insn must not carry a guard: {:?}",
+            adds.ir_ops
+        );
+    }
+
+    #[test]
     fn arm_capstone_decodes_bl() {
         // BL #+0x100 from 0x1000  →  0xEB00003E (Capstone reports BL <target>).
         let l = ArmLifter::new_arm32();

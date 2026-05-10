@@ -286,6 +286,7 @@ mod tests {
             frame_size: 0,
             resolved_indirect_calls: BTreeMap::new(),
             variadic_call_types: BTreeMap::new(),
+            signature_revision: 0,
         }
     }
 

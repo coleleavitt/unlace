@@ -30,6 +30,7 @@ pub mod noreturn;
 pub mod objc_dispatch;
 pub mod pass;
 pub mod prologue_elim;
+pub mod reanalysis;
 pub mod redundant_flag_elim;
 pub mod register_coalesce;
 pub mod rust_enum;
@@ -81,6 +82,10 @@ pub use pass::{
     run_to_fixedpoint, ssa_type_signature,
 };
 pub use prologue_elim::PrologueElimPass;
+pub use reanalysis::{
+    DEFAULT_REANALYSIS_CAP, ReanalysisReport, SignatureSnapshot, bump_if_signature_changed,
+    reanalysis_fixpoint,
+};
 pub use redundant_flag_elim::RedundantFlagElimPass;
 pub use register_coalesce::RegisterCoalescePass;
 pub use rust_enum::RustEnumPass;

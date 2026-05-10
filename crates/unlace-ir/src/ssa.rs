@@ -367,6 +367,13 @@ pub struct SsaFunction {
     /// [`VarargDetectPass`](https://docs.rs/unlace-passes) primarily for
     /// printf-family format-string parsing.
     pub variadic_call_types: BTreeMap<(BlockId, usize), Vec<PrimitiveType>>,
+    /// Monotonically increasing counter of *observable signature changes*:
+    /// flips of `inferred_params`, `inferred_return_type`, or `noreturn`.
+    /// The reanalysis fixpoint loop in `unlace-passes::reanalysis` snapshots
+    /// this before re-running per-function refinement passes; if it bumps,
+    /// every caller of this function is re-enqueued so its inferred call
+    /// arguments / return-type slots can be refined to match.
+    pub signature_revision: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -428,6 +435,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         frame_size: 0,
         resolved_indirect_calls: BTreeMap::new(),
         variadic_call_types: BTreeMap::new(),
+        signature_revision: 0,
     }
 }
 

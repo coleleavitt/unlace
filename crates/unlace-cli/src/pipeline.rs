@@ -15,9 +15,9 @@ use unlace_passes::{
     DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass,
     IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport, ParamInferPass, Pass,
     StrengthReducePass,
-    PrologueElimPass, ReturnTypeInferPass, SccpPass, StackOffsetSnapshotPass, StackVarRecoveryPass,
-    StructFieldDetectPass, TailCallDetectPass, VariableMergePass, run_outer_fixedpoint,
-    run_to_fixedpoint,
+    PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot, StackOffsetSnapshotPass,
+    StackVarRecoveryPass, StructFieldDetectPass, TailCallDetectPass, VariableMergePass,
+    bump_if_signature_changed, run_outer_fixedpoint, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -749,6 +749,12 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
         .run(ssa)
         .context("stack offset snapshot failed")?;
 
+    // Snapshot the signature triple so we can bump `signature_revision`
+    // exactly once if the per-function pipeline mutates it. This makes the
+    // revision counter usable as a dirty-flag for any whole-program
+    // [`unlace_passes::reanalysis_fixpoint`] driver layered on top.
+    let pre_pipeline_sig = SignatureSnapshot::of(ssa);
+
     let mut total_ir_changes: usize = 0usize;
 
     // (2) Outer fixed-point loop. The inner cluster already converges per
@@ -820,10 +826,16 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
         .run(ssa)
         .context("variable merge pass failed")?;
 
+    // Bump the signature revision iff the pipeline mutated any of the three
+    // observable signature components. Whole-program drivers can compare
+    // revisions across runs to know which functions to re-analyze.
+    let _ = bump_if_signature_changed(ssa, &pre_pipeline_sig);
+
     tracing::debug!(
         ir_changes = total_ir_changes,
         outer_iters = outer_report.iterations,
         outer_hit_cap = outer_report.hit_cap,
+        signature_revision = ssa.signature_revision,
         "pass pipeline complete"
     );
 

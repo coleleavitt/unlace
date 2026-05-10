@@ -207,6 +207,7 @@ mod tests {
             frame_size: 0,
             resolved_indirect_calls: std::collections::BTreeMap::new(),
             variadic_call_types: std::collections::BTreeMap::new(),
+            signature_revision: 0,
         }
     }
 

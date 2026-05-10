@@ -11,9 +11,9 @@ use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 use crate::Loader;
 use crate::error::LoadError;
 use crate::image::{
-    ArchId, BinaryImage, BoundImport, DebugRecord, Endian, LoadConfig, RelocKind, Relocation,
-    ResourceEntry, RichHeader, RichRecord, RuntimeFunction, Section, SectionFlags, Symbol,
-    SymbolKind, UnwindInfo,
+    ArchId, BinaryImage, BoundImport, DebugRecord, DelayImport, Endian, LoadConfig, RelocKind,
+    Relocation, ResourceEntry, RichHeader, RichRecord, RuntimeFunction, Section, SectionFlags,
+    Symbol, SymbolKind, UnwindInfo,
 };
 
 /// DOS header magic bytes: `MZ`.
@@ -78,7 +78,8 @@ where
 
     load_exports(&file, &mut symbols);
     load_imports(&file, &mut symbols);
-    load_delay_imports::<Pe>(&file, data, &mut symbols);
+    let mut delay_imports: Vec<DelayImport> = Vec::new();
+    load_delay_imports::<Pe>(&file, data, &mut symbols, &mut delay_imports);
 
     let relocations = load_base_relocations(&file, data);
     let tls_callbacks = load_tls_callbacks::<Pe>(&file, data);
@@ -104,6 +105,7 @@ where
         runtime_functions,
         resources,
         bound_imports,
+        delay_imports,
         rich_header,
         dylibs: Vec::new(),
         rpaths: Vec::new(),
@@ -180,8 +182,12 @@ fn collect_msvc_rtti_from_image(image: &BinaryImage) -> Option<crate::msvc_rtti:
 /// stays empty at load time and the runtime delay loader patches it on demand.
 /// Like the eager IAT, we record names at addr=0 because the true VA depends
 /// on runtime fixup. Ordinal-only imports use the literal `#<n>` form.
-fn load_delay_imports<Pe>(file: &PeFile<Pe>, data: &[u8], out: &mut BTreeMap<u64, Symbol>)
-where
+fn load_delay_imports<Pe>(
+    file: &PeFile<Pe>,
+    data: &[u8],
+    out: &mut BTreeMap<u64, Symbol>,
+    delay_imports: &mut Vec<DelayImport>,
+) where
     Pe: ImageNtHeaders,
 {
     let table = match file
@@ -235,6 +241,10 @@ where
                 addr: 0,
                 size: 0,
                 kind: SymbolKind::Unknown,
+            });
+            delay_imports.push(DelayImport {
+                dll_name: lib.clone(),
+                function_name: name,
             });
         }
     }

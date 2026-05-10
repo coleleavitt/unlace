@@ -41,6 +41,7 @@ pub mod rust_enum;
 pub mod rust_panic;
 pub mod rust_vtable;
 pub mod sccp;
+pub mod rep_string_idiom;
 pub mod sizeof_recognition;
 pub mod stack_pointer_tracking;
 pub mod stack_vars;

@@ -72,6 +72,7 @@ where
         runtime_functions: Vec::new(),
         resources: Vec::new(),
         bound_imports: Vec::new(),
+            delay_imports: Vec::new(),
         rich_header: None,
         dylibs: Vec::new(),
         rpaths: Vec::new(),

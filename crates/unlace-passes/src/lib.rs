@@ -28,6 +28,7 @@ pub mod strength_reduce;
 pub mod modulo_idiom;
 pub mod noreturn;
 pub mod objc_dispatch;
+pub mod op_type_binding;
 pub mod pass;
 pub mod prologue_elim;
 pub mod reanalysis;
@@ -49,6 +50,7 @@ pub use caller_param_propagate::{
     apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,
 };
 pub use indirect_call_resolve::IndirectCallResolvePass;
+pub use op_type_binding::{OpTypeBindingPass, render_enum_const, render_field_access};
 pub use interproc_fixpoint::{
     DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint,
 };

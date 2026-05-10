@@ -208,6 +208,7 @@ mod tests {
             resolved_indirect_calls: std::collections::BTreeMap::new(),
             variadic_call_types: std::collections::BTreeMap::new(),
             signature_revision: 0,
+            op_bindings: unlace_ir::ssa::OpTypeBindings::default(),
         }
     }
 

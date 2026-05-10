@@ -13,6 +13,9 @@ use unlace_ir::{
     Varnode,
 };
 
+mod rvc;
+pub use rvc::{expand, is_compressed};
+
 // ---------------------------------------------------------------------------
 // Register file layout
 // ---------------------------------------------------------------------------
@@ -494,6 +497,20 @@ impl Lifter for RiscVLifter {
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
         if bytes.len() < 2 {
             return Err(LiftError::ShortBuffer);
+        }
+
+        // RVC dispatch: peek byte 0; if compressed, expand to a 32-bit word and
+        // route through the existing decoder, but report len=2 so the basic-block
+        // walker advances PC correctly.
+        if is_compressed(bytes[0]) {
+            let half = u16::from_le_bytes([bytes[0], bytes[1]]);
+            if let Some(word) = expand(half) {
+                let buf = word.to_le_bytes();
+                if let Some(mut lifted) = lift_rv64i_direct(&buf, addr) {
+                    lifted.len = 2;
+                    return Ok(lifted);
+                }
+            }
         }
 
         if let Some(lifted) = lift_rv64i_direct(bytes, addr) {

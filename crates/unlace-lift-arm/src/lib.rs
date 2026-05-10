@@ -450,6 +450,74 @@ mod tests {
     }
 
     #[test]
+    fn paciasp_recognized_as_nop() {
+        // PACIASP  →  d503233f
+        let result = lifter()
+            .lift_insn(&[0x3f, 0x23, 0x03, 0xd5], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.is_empty());
+    }
+
+    #[test]
+    fn bti_c_recognized_as_nop() {
+        // BTI c  →  d503245f
+        let result = lifter()
+            .lift_insn(&[0x5f, 0x24, 0x03, 0xd5], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.is_empty());
+    }
+
+    #[test]
+    fn xpaclri_recognized_as_nop() {
+        // XPACLRI  →  d50322ff
+        let result = lifter()
+            .lift_insn(&[0xff, 0x22, 0x03, 0xd5], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.is_empty());
+    }
+
+    #[test]
+    fn retaa_lifts_as_ret_or_nop() {
+        // RETAA  →  d65f0bff
+        let result = lifter()
+            .lift_insn(&[0xff, 0x0b, 0x5f, 0xd6], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.len, 4);
+        assert!(
+            result.ir_ops.is_empty() || result.ir_ops.iter().any(|i| i.op == IrOp::Return),
+            "RETAA should lift as a no-op or as a RET"
+        );
+    }
+
+    #[test]
+    fn auth_does_not_break_decode() {
+        // A sequence including a PACIA-family op (PACIA X0, X1 → dac10020),
+        // an AUTIASP, a BTI c, a BLRAAZ X8 (d73f081f-ish? actually BLRAAZ X8 = d73f0900 wait)...
+        // Just verify each lifts to something (either empty IR or valid IR).
+        let cases: &[&[u8]] = &[
+            &[0x20, 0x00, 0xc1, 0xda], // PACIA X0, X1
+            &[0xbf, 0x23, 0x03, 0xd5], // AUTIASP
+            &[0x5f, 0x24, 0x03, 0xd5], // BTI c
+            &[0x1f, 0x09, 0x3f, 0xd6], // BLRAAZ X8  →  d63f091f
+            &[0xff, 0x0b, 0x5f, 0xd6], // RETAA
+            &[0xff, 0x0f, 0x5f, 0xd6], // RETAB
+        ];
+        for bytes in cases {
+            let result = lifter().lift_insn(bytes, 0x1000);
+            assert!(result.is_ok(), "auth insn should decode cleanly: {bytes:?}");
+            let lifted = result.expect("already asserted Ok");
+            assert_eq!(lifted.len, 4);
+            assert!(
+                !lifted.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+                "auth insn should not produce Unimplemented: {bytes:?}"
+            );
+        }
+    }
+
+    #[test]
     fn test_no_panic_on_various() {
         let cases: Vec<&[u8]> = vec![
             &[0x1f, 0x20, 0x03, 0xd5], // NOP

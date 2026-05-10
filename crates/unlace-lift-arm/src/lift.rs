@@ -54,6 +54,16 @@ impl Lifter for ArmLifter {
             return Err(LiftError::ShortBuffer);
         }
 
+        let raw = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        if try_pac_bti_nop(raw) {
+            return Ok(LiftedInsn {
+                ir_ops: Vec::new(),
+                len: 4,
+            });
+        }
+        let rewritten = pac_auth_branch_rewrite(raw).map(u32::to_le_bytes);
+        let decode_bytes: &[u8] = rewritten.as_ref().map(|b| &b[..]).unwrap_or(bytes);
+
         ARM64_CS.with(|cell| {
             let mut slot = cell.borrow_mut();
             if slot.is_none() {
@@ -62,7 +72,7 @@ impl Lifter for ArmLifter {
             let cs = slot.as_ref().expect("thread-local Capstone initialized");
 
             let insns = cs
-                .disasm_count(bytes, addr, 1)
+                .disasm_count(decode_bytes, addr, 1)
                 .map_err(|e| LiftError::Decode(format!("{e}")))?;
 
             let insn = insns
@@ -271,5 +281,57 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_CSNEG => control_flow::lift_csel(ctx, &ops, detail, 0x333),
 
         _ => ctx.emit_unimplemented(),
+    }
+}
+
+/// Return `true` if `insn` is an AArch64 pointer-authentication or BTI
+/// instruction with no architectural effects relevant to lifting; the
+/// caller should consume 4 bytes and emit no IR.
+pub fn try_pac_bti_nop(insn: u32) -> bool {
+    if (insn & 0xFFFF_0000) == 0xDAC1_0000 {
+        let opcode = (insn >> 10) & 0x3F;
+        if opcode <= 0x11 {
+            return true;
+        }
+    }
+
+    const HINT_NOPS: &[u32] = &[
+        0xD503_233F,
+        0xD503_237F,
+        0xD503_23BF,
+        0xD503_23FF,
+        0xD503_231F,
+        0xD503_235F,
+        0xD503_239F,
+        0xD503_23DF,
+        0xD503_22FF,
+        0xD503_241F,
+        0xD503_245F,
+        0xD503_249F,
+        0xD503_24DF,
+    ];
+    HINT_NOPS.contains(&insn)
+}
+
+/// If `insn` is a PAC-authenticated branch (BR*A*/BLR*A*/RET*A*), return the
+/// equivalent unauthenticated encoding so Capstone can lift it normally.
+fn pac_auth_branch_rewrite(insn: u32) -> Option<u32> {
+    const AUTH_MASK: u32 = 0xFFFF_F800;
+    match insn & AUTH_MASK {
+        0xD61F_0800 | 0xD71F_0800 => {
+            let rn = (insn >> 5) & 0x1F;
+            Some(0xD61F_0000 | (rn << 5))
+        }
+        0xD63F_0800 | 0xD73F_0800 => {
+            let rn = (insn >> 5) & 0x1F;
+            Some(0xD63F_0000 | (rn << 5))
+        }
+        _ => {
+            if insn == 0xD65F_0BFF || insn == 0xD65F_0FFF {
+                Some(0xD65F_03C0)
+            } else {
+                None
+            }
+        }
     }
 }

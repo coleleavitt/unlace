@@ -75,6 +75,15 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
         is_dtor: false,
         class_name: None,
         merged_names: func.merged_names.clone(),
+        objc_dispatch_calls: func
+            .objc_dispatch_calls
+            .iter()
+            .filter_map(|(&(bid, idx), ann)| {
+                let block = func.function.blocks.get(&bid)?;
+                let insn = block.insns.get(idx)?;
+                Some((insn.addr, ann.clone()))
+            })
+            .collect(),
     })
 }
 

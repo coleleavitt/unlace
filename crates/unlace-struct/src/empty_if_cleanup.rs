@@ -202,6 +202,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         }
     }
 

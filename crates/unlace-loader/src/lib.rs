@@ -24,6 +24,8 @@ pub mod rtti;
 pub mod strings;
 pub mod til;
 
+pub use objc::{ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_classlist};
+
 pub use dwarf::{
     DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo, SourceLocation,
     StructField, StructType, UnionType, import_dwarf,

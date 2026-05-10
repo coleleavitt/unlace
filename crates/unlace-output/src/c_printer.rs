@@ -369,6 +369,7 @@ pub fn print_c_with_annotations(
     }
     ctx.parent_returns_void = matches!(func.return_type, PrimitiveType::Unknown);
     ctx.frame_size = header.map(|h| h.stack_frame);
+    ctx.objc_dispatch_calls = func.objc_dispatch_calls.clone();
 
     let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
     compute_dwarf_locals(dwarf_func, header, &mut ctx);
@@ -1164,6 +1165,9 @@ struct PrintCtx {
     /// [`Self::symbols`] so the printer can tell a *user override* apart from
     /// a name that originated in the binary's own symbol table.
     custom_names: BTreeMap<u64, String>,
+    /// ObjC dispatch annotations keyed by instruction VA. Lifted from
+    /// [`HirFunction::objc_dispatch_calls`].
+    objc_dispatch_calls: BTreeMap<u64, String>,
 }
 
 impl PrintCtx {
@@ -1225,6 +1229,7 @@ impl PrintCtx {
             merged_names,
             line_comments: BTreeMap::new(),
             custom_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         }
     }
 
@@ -3557,6 +3562,24 @@ fn try_emit_compound_assign(
     Some(format!("{} {} {}", lhs, op_str, other))
 }
 
+/// If `insn` is an `objc_msgSend` call site that the dispatch pass resolved
+/// to a concrete `[Class method:]` annotation, return that bracket form so
+/// the printer can emit it in place of the synthesised `objc_msgSend(...)`
+/// expression. Returns `None` when no annotation is recorded or when it is
+/// the fallback `// objc_msgSend(...)` comment form (which the existing
+/// `cxa_call_annotation` / line-comment paths render separately).
+fn objc_bracket_call(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
+    if !matches!(insn.op, IrOp::Call) {
+        return None;
+    }
+    let ann = ctx.objc_dispatch_calls.get(&insn.addr)?;
+    if ann.starts_with('[') {
+        Some(ann.clone())
+    } else {
+        None
+    }
+}
+
 fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
     if insn.op != IrOp::Call || insn.inputs.is_empty() {
         return None;
@@ -3616,6 +3639,12 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             Some(format!("{};", short))
         } else if let Some(short) = try_emit_compound_assign(insn, idx, &lhs, ctx) {
             Some(format!("{};", short))
+        } else if insn.op == IrOp::Call {
+            if let Some(bracket) = objc_bracket_call(insn, ctx) {
+                Some(format!("{} = {};", lhs, bracket))
+            } else {
+                Some(format!("{} = {};", lhs, emit_expr(insn, idx, ctx)))
+            }
         } else {
             Some(format!("{} = {};", lhs, emit_expr(insn, idx, ctx)))
         }
@@ -3649,7 +3678,13 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             }
             IrOp::Store => Some("/* STORE (bad arity) */;".to_string()),
             IrOp::Callind => Some(format!("{};", emit_callind_cast(insn, idx, ctx))),
-            IrOp::Call => Some(format!("{}();", resolve_call_target(insn, idx, ctx))),
+            IrOp::Call => {
+                if let Some(bracket) = objc_bracket_call(insn, ctx) {
+                    Some(format!("{};", bracket))
+                } else {
+                    Some(format!("{}();", resolve_call_target(insn, idx, ctx)))
+                }
+            }
             IrOp::Unimplemented => Some(format!("__unknown_insn_0x{:X}();", insn.addr)),
             IrOp::Callother => {
                 let expr = emit_callother(insn, idx, ctx);
@@ -5657,6 +5692,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         }
     }
 
@@ -6042,6 +6078,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -6594,6 +6631,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let mut functions = BTreeMap::new();
@@ -6692,6 +6730,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let output = super::print_c(&func);
@@ -6718,6 +6757,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let output = super::print_c(&func);
@@ -9949,6 +9989,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -9974,6 +10015,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -10003,6 +10045,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -10028,6 +10071,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -10053,6 +10097,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let output = print_c(&func);
@@ -10104,6 +10149,7 @@ mod tests {
             is_dtor: false,
             class_name: None,
             merged_names: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
         };
 
         let output = print_c(&func);

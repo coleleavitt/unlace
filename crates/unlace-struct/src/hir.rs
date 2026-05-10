@@ -301,4 +301,8 @@ pub struct HirFunction {
     /// `v3` / `v4`.  Empty when the coalescer was not run or produced no
     /// merges, in which case the printer falls back to its old behaviour.
     pub merged_names: BTreeMap<SsaVarnode, String>,
+    /// ObjC dispatch annotations keyed by instruction VA. When the value is
+    /// a bracket-form `[Class method:]` the C printer should emit it as the
+    /// statement text in place of the synthesized `objc_msgSend(...)` call.
+    pub objc_dispatch_calls: BTreeMap<u64, String>,
 }

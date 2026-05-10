@@ -906,6 +906,114 @@ mod tests {
     }
 
     #[test]
+    fn arm_capstone_decodes_mul() {
+        // MUL R0, R1, R2  →  0xE0000291
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE000_0291u32.to_le_bytes(), 0x1000)
+            .expect("MUL decodes");
+        assert_eq!(r.len, 4);
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntMult),
+            "expected IntMult; got: {:?}",
+            r.ir_ops.iter().map(|i| i.op).collect::<Vec<_>>()
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm_capstone_decodes_and_orr_eor() {
+        let l = ArmLifter::new_arm32();
+        let cases: &[(u32, IrOp)] = &[
+            (0xE001_0002, IrOp::IntAnd),
+            (0xE181_0002, IrOp::IntOr),
+            (0xE021_0002, IrOp::IntXor),
+        ];
+        for (enc, expected) in cases {
+            let r = l
+                .lift_insn(&enc.to_le_bytes(), 0x1000)
+                .expect("decodes");
+            assert!(
+                r.ir_ops.iter().any(|i| i.op == *expected),
+                "encoding {enc:#x} should produce {expected:?}"
+            );
+            assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        }
+    }
+
+    #[test]
+    fn arm_capstone_decodes_ldrb() {
+        // LDRB R0, [R1]  →  0xE5D10000
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE5D1_0000u32.to_le_bytes(), 0x1000)
+            .expect("LDRB decodes");
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Load));
+        let load = r.ir_ops.iter().find(|i| i.op == IrOp::Load).unwrap();
+        assert_eq!(load.output.expect("Load has output").size, 1);
+    }
+
+    #[test]
+    fn arm_capstone_decodes_strh() {
+        // STRH R0, [R1]  →  0xE1C100B0
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE1C1_00B0u32.to_le_bytes(), 0x1000)
+            .expect("STRH decodes");
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Store));
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm_capstone_decodes_b_cond() {
+        // BNE #+0x100 from 0x1000  →  0x1A00003E
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0x1A00_003Eu32.to_le_bytes(), 0x1000)
+            .expect("BNE decodes");
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Cbranch),
+            "expected Cbranch; got: {:?}",
+            r.ir_ops.iter().map(|i| i.op).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn arm_capstone_decodes_bx_lr_as_return() {
+        // BX LR  →  0xE12FFF1E
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE12F_FF1Eu32.to_le_bytes(), 0x1000)
+            .expect("BX LR decodes");
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Return));
+    }
+
+    #[test]
+    fn thumb_capstone_decodes_cbz() {
+        // CBZ r0, #+6  →  T1: 1011 0001 imm5 Rn → 0xB108
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&0xB108u16.to_le_bytes(), 0x1000)
+            .expect("CBZ decodes");
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Cbranch),
+            "got: {:?}",
+            r.ir_ops.iter().map(|i| i.op).collect::<Vec<_>>()
+        );
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntEqual));
+    }
+
+    #[test]
+    fn arm_capstone_decodes_cmp() {
+        // CMP R0, R1  →  0xE1500001
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE150_0001u32.to_le_bytes(), 0x1000)
+            .expect("CMP decodes");
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
+    }
+
+    #[test]
     fn arm_capstone_decodes_bl() {
         // BL #+0x100 from 0x1000  →  0xEB00003E (Capstone reports BL <target>).
         let l = ArmLifter::new_arm32();

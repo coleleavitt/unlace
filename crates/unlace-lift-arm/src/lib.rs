@@ -628,6 +628,36 @@ mod tests {
     }
 
     #[test]
+    fn autia_xn_remains_nop() {
+        // t135 — AUTIA X0, X0  →  dac11000
+        //
+        // PAC AUTI* instructions currently lift as no-ops via try_pac_bti_nop.
+        // Statically modeling the auth-and-fail behavior (whereby the CPU sets
+        // a poison bit on auth failure) yields little practical signal because
+        // the decoder cannot know whether auth will succeed at runtime. We keep
+        // the no-op semantics and document the deferred work here.
+        //
+        // TODO(t135): emit a dedicated Callother(PTR_AUTH) intrinsic so a later
+        // pass can recognize auth-and-branch idioms when modeling speculative
+        // execution attacks (e.g. PACMAN-style gadgets).
+        let result = lifter()
+            .lift_insn(&[0x00, 0x10, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.is_empty(), "AUTIA Xn must remain a no-op");
+    }
+
+    #[test]
+    fn autiasp_remains_nop() {
+        // t135 — AUTIASP (HINT-space)  →  d50323bf
+        let result = lifter()
+            .lift_insn(&[0xbf, 0x23, 0x03, 0xd5], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.is_empty(), "AUTIASP must remain a no-op");
+    }
+
+    #[test]
     fn auth_does_not_break_decode() {
         // A sequence including a PACIA-family op (PACIA X0, X1 → dac10020),
         // an AUTIASP, a BTI c, a BLRAAZ X8 (d73f081f-ish? actually BLRAAZ X8 = d73f0900 wait)...

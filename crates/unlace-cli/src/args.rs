@@ -51,6 +51,16 @@ pub enum Cmd {
         /// Directory containing plugin shared libraries (.so/.dylib/.dll).
         #[arg(long)]
         plugin_dir: Option<PathBuf>,
+
+        /// Soft right-margin column at which the C printer attempts to
+        /// wrap long expressions. Mirrors IDA's `module_data + 600` field.
+        #[arg(long)]
+        max_width: Option<usize>,
+
+        /// Number of space columns emitted per nesting level. Mirrors
+        /// IDA's `module_data + 592` indent-step setting.
+        #[arg(long)]
+        tab_width: Option<usize>,
     },
 
     /// Batch-decompile all functions in a binary in parallel.

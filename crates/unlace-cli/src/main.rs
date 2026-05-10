@@ -33,10 +33,25 @@ fn main() {
             verbose,
             timeout,
             plugin_dir,
+            max_width,
+            tab_width,
         } => {
             init_tracing(verbose);
+            let print_config = if max_width.is_some() || tab_width.is_some() {
+                let mut cfg = unlace_output::PrintConfig::from_env();
+                if let Some(w) = max_width {
+                    cfg.max_line_width = w;
+                }
+                if let Some(t) = tab_width {
+                    cfg.tab_width = t;
+                }
+                Some(cfg)
+            } else {
+                None
+            };
             let config = PipelineConfig {
                 timeout: Duration::from_secs(timeout),
+                print_config,
             };
             load_plugins(plugin_dir.as_deref()).and_then(|mgr| {
                 run_decompile(

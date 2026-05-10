@@ -13,7 +13,8 @@ use unlace_passes::{
     CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass, CopyPropagationPass,
     CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass, DeadFlagElimPass,
     DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass,
-    IdiomRecognitionPass, ModuloIdiomPass, OuterFixedpointReport, ParamInferPass, Pass,
+    IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport, ParamInferPass, Pass,
+    StrengthReducePass,
     PrologueElimPass, ReturnTypeInferPass, SccpPass, StackOffsetSnapshotPass, StackVarRecoveryPass,
     StructFieldDetectPass, TailCallDetectPass, VariableMergePass, run_outer_fixedpoint,
     run_to_fixedpoint,
@@ -766,10 +767,13 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             let sccp = SccpPass;
             let cse = CsePass;
             let gvn = GvnPass;
+            let licm = LicmPass;
+            let iv_elim = IvElimPass;
+            let strength_reduce = StrengthReducePass;
             let idiom = IdiomRecognitionPass;
             let cond = ConditionSimplifyPass;
             let passes: &[&dyn Pass] =
-                &[&fold, &prop, &gprop, &dce, &sccp, &cse, &gvn, &idiom, &cond];
+                &[&fold, &prop, &gprop, &dce, &sccp, &cse, &gvn, &licm, &iv_elim, &strength_reduce, &idiom, &cond];
             let inner = run_to_fixedpoint(passes, ssa)?;
             total_ir_changes = total_ir_changes.saturating_add(inner);
 
@@ -1028,12 +1032,16 @@ pub fn warn_if_large_ir(func_name: &str, ssa: &SsaFunction) {
 
 pub struct PipelineConfig {
     pub timeout: Duration,
+    /// Optional explicit C-printer configuration. When `None` the printer
+    /// derives its config from `UNLACE_*` environment variables.
+    pub print_config: Option<unlace_output::PrintConfig>,
 }
 
 impl Default for PipelineConfig {
     fn default() -> Self {
         Self {
             timeout: Duration::from_secs(30),
+            print_config: None,
         }
     }
 }
@@ -1155,7 +1163,15 @@ pub fn decompile_function_with_symbols(
 
     let t = Instant::now();
     let symbols = build_symbol_table_with_functions(image, discovered);
-    let result = emit_output(emit, &ssa, dwarf, &symbols, &image.string_table, rtti);
+    let result = emit_output(
+        emit,
+        &ssa,
+        dwarf,
+        &symbols,
+        &image.string_table,
+        rtti,
+        config.print_config,
+    );
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         "emit_output done"
@@ -1230,6 +1246,7 @@ pub fn emit_output(
     symbols: &BTreeMap<u64, String>,
     string_table: &BTreeMap<u64, String>,
     rtti: Option<&unlace_loader::RttiInfo>,
+    print_config: Option<unlace_output::PrintConfig>,
 ) -> Result<String> {
     match format {
         EmitFormat::Ir => Ok(unlace_output::dump_ir(ssa)),
@@ -1261,13 +1278,14 @@ pub fn emit_output(
             unlace_struct::recover_guarded_whiles(&mut hir);
             unlace_struct::cleanup_empty_ifs(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
-            Ok(unlace_output::print_c_with_rtti(
+            Ok(unlace_output::print_c_with_rtti_config(
                 &hir,
                 dwarf,
                 Some(&header),
                 Some(symbols),
                 Some(string_table),
                 rtti,
+                print_config,
             ))
         }
     }

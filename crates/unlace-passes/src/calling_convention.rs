@@ -84,7 +84,95 @@ fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
         }
     }
 
-    score_convention(&read_before_write)
+    let base = score_convention(&read_before_write);
+    refine_convention(func, base, &read_before_write)
+}
+
+/// Post-process the score-based CC pick by looking for **strong, positive**
+/// evidence of stdcall (`ret N` with `N > 0`), thiscall (`this` written to
+/// RCX-relative storage at entry), or fastcall (`ret N` + ECX/EDX prefix).
+///
+/// The refinement only fires on **explicit** signals so it never demotes a
+/// well-classified SysV/MSx64/AArch64 candidate. `score_convention`'s output
+/// is returned unchanged when no positive signal is present.
+fn refine_convention(
+    func: &SsaFunction,
+    base: CallingConvention,
+    read_before_write: &BTreeSet<u64>,
+) -> CallingConvention {
+    let callee_pops_bytes = callee_pop_bytes(func);
+    let stores_this = stores_this_pointer(func);
+
+    // Thiscall — strongest signal is "writes ECX to a stack slot at entry"
+    // (the classic `mov [rsp+8], ecx` `this`-spill). Only override if the
+    // base wasn't already a confident SysV pick.
+    if stores_this
+        && !matches!(base, CallingConvention::SystemV)
+        && read_before_write.contains(&RCX)
+        && !SYSV_ONLY_REGS.iter().any(|r| read_before_write.contains(r))
+    {
+        return CallingConvention::Thiscall;
+    }
+
+    // Stdcall — non-zero `ret N` epilogue, and no RDI/RSI/R8/R9 in the arg
+    // pool (those would imply 64-bit ABI, which never uses `ret N`). We
+    // override base = MicrosoftX64 here because i386 stdcall and amd64
+    // MS x64 are mutually exclusive yet share the RCX/RDX prefix.
+    if callee_pops_bytes > 0
+        && !SYSV_ONLY_REGS.iter().any(|r| read_before_write.contains(r))
+        && ![R8, R9].iter().any(|r| read_before_write.contains(r))
+    {
+        return CallingConvention::Stdcall;
+    }
+
+    base
+}
+
+/// Detect a `this`-pointer spill: a `Store` of `ECX` to an RSP/RBP-relative
+/// slot in the entry block. This is a near-certain marker of i386 thiscall
+/// (`mov dword ptr [ebp - X], ecx`) and Windows x64 thiscall (`mov [rsp+8],
+/// rcx`).
+fn stores_this_pointer(func: &SsaFunction) -> bool {
+    let entry = func.function.entry;
+    let Some(block) = func.function.blocks.get(&entry) else {
+        return false;
+    };
+
+    for insn in &block.insns {
+        if insn.op != IrOp::Store {
+            continue;
+        }
+        if insn.inputs.len() < 3 {
+            continue;
+        }
+        let value = insn.inputs[2];
+        if value.space == SpaceId::Register && value.offset == RCX {
+            return true;
+        }
+    }
+    false
+}
+
+/// Inspect every `Return` instruction and return the maximum non-zero
+/// constant operand (the bytes the callee pops from the stack). A value of
+/// `0` means no `ret N`-style epilogue was observed.
+fn callee_pop_bytes(func: &SsaFunction) -> u64 {
+    let mut max_pop = 0u64;
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            if insn.op != IrOp::Return {
+                continue;
+            }
+            for inp in &insn.inputs {
+                if inp.space == SpaceId::Const && inp.offset > 0 {
+                    if inp.offset > max_pop {
+                        max_pop = inp.offset;
+                    }
+                }
+            }
+        }
+    }
+    max_pop
 }
 
 fn score_convention(read_before_write: &BTreeSet<u64>) -> CallingConvention {
@@ -922,5 +1010,89 @@ mod tests {
         ReturnTypeInferPass.run(&mut ssa).unwrap();
 
         assert_eq!(ssa.inferred_return_type, PrimitiveType::Double);
+    }
+
+    // -------------------------------------------------------------------
+    // t81 — custom calling-convention refinement
+    // -------------------------------------------------------------------
+
+    /// `ret 8` epilogue ⇒ stdcall (callee pops 8 bytes for one stack arg).
+    #[test]
+    fn t81_stdcall_from_ret_n() {
+        let mut func = unlace_ir::Function::new("stdcall_fn", BlockId(0), 0x1000);
+        let mut bb = unlace_ir::BasicBlock::new(BlockId(0));
+        let out = Varnode::unique(0, 8);
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rcx(), rdx()],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(8, 4)],
+            0x1004,
+        ));
+        func.insert_block(bb);
+        let mut ssa = unlace_ir::ssa::build_ssa(func);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::Stdcall);
+    }
+
+    /// `mov [rbp-8], ecx` at entry ⇒ thiscall.
+    #[test]
+    fn t81_thiscall_from_this_spill() {
+        let mut func = unlace_ir::Function::new("thiscall_fn", BlockId(0), 0x1000);
+        let mut bb = unlace_ir::BasicBlock::new(BlockId(0));
+
+        let space_ram = Varnode::constant(1, 8);
+        let addr = Varnode::unique(0, 8);
+        let neg8 = Varnode::constant((-8i64) as u64, 8);
+
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![Varnode::reg(40, 8), neg8],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr, rcx()],
+            0x1004,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1008,
+        ));
+        func.insert_block(bb);
+        let mut ssa = unlace_ir::ssa::build_ssa(func);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::Thiscall);
+    }
+
+    /// Fastcall (i386): first two args in ECX + EDX, callee-pops `ret N`.
+    /// We approximate fastcall as stdcall in the current enum; the key
+    /// invariant is that detection does **not** misclassify as MS x64.
+    #[test]
+    fn t81_fastcall_classified_as_stdcall_when_ret_n() {
+        let mut func = unlace_ir::Function::new("fastcall_fn", BlockId(0), 0x1000);
+        let mut bb = unlace_ir::BasicBlock::new(BlockId(0));
+        let out = Varnode::unique(0, 8);
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rcx(), rdx()],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(12, 4)],
+            0x1004,
+        ));
+        func.insert_block(bb);
+        let mut ssa = unlace_ir::ssa::build_ssa(func);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::Stdcall);
     }
 }

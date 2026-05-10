@@ -25,6 +25,15 @@ pub enum StructureError {
     MissingEntry(BlockId),
 }
 
+/// Result of scanning the predecessor of a `BRANCHIND` for a bounds-check
+/// pattern (`cmp index, K; jae default`). Lets the structurer recover the
+/// number of in-range cases and the out-of-bounds default target.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct BoundsCheck {
+    pub case_count: u64,
+    pub default_target: Option<BlockId>,
+}
+
 /// Recover structured control flow from an [`SsaFunction`].
 ///
 /// This is the main entry point. The algorithm:
@@ -443,6 +452,7 @@ impl<'a> StructureCtx<'a> {
         }
 
         let cond = self.recover_switch_index(bid);
+        let bounds = self.extract_bounds_check(bid, &cond);
         self.emitted.insert(bid);
 
         let mut pre_stmts = Vec::new();
@@ -458,7 +468,12 @@ impl<'a> StructureCtx<'a> {
 
         let join = self.find_switch_join(bid, &targets);
 
-        let num_cases = if targets.len() > 2 {
+        let bounds_default = bounds.and_then(|b| b.default_target);
+        let has_explicit_default = bounds_default
+            .map(|t| targets.iter().any(|x| *x == t))
+            .unwrap_or(false);
+
+        let num_cases = if targets.len() > 2 && !has_explicit_default {
             targets.len() - 1
         } else {
             targets.len()
@@ -466,7 +481,11 @@ impl<'a> StructureCtx<'a> {
         let mut cases = Vec::new();
         let mut default_body = None;
         for (i, &tgt) in targets.iter().enumerate() {
-            if i == targets.len() - 1 && targets.len() > 2 {
+            if has_explicit_default && Some(tgt) == bounds_default && default_body.is_none() {
+                default_body = Some(self.structure_until(tgt, join));
+                continue;
+            }
+            if !has_explicit_default && i == targets.len() - 1 && targets.len() > 2 {
                 let body = self.structure_until(tgt, join);
                 default_body = Some(body);
             } else {
@@ -480,12 +499,14 @@ impl<'a> StructureCtx<'a> {
             }
         }
 
+        let jumptable_cases = bounds.map(|b| b.case_count as usize);
+
         let switch_node = HirNode::Switch {
             cond,
             cases,
             default: default_body,
             jumptable_addr: None,
-            jumptable_cases: None,
+            jumptable_cases,
         };
 
         let combined = if pre_stmts.is_empty() {
@@ -496,6 +517,176 @@ impl<'a> StructureCtx<'a> {
         };
 
         Some((combined, join))
+    }
+
+    /// Bound information extracted from a CMP/SUB-then-CBRANCH guarding a
+    /// switch dispatch. Recovered by [`StructureCtx::extract_bounds_check`]
+    /// and used to populate `jumptable_cases` and a default target.
+    fn extract_bounds_check(
+        &self,
+        switch_block: BlockId,
+        index: &SsaVarnode,
+    ) -> Option<BoundsCheck> {
+        for pred in self.func.cfg.predecessors(switch_block) {
+            if self.synthetic.contains(&pred) || pred == switch_block {
+                continue;
+            }
+            if let Some(bc) = self.scan_pred_for_bounds(pred, switch_block, index) {
+                return Some(bc);
+            }
+        }
+        None
+    }
+
+    fn scan_pred_for_bounds(
+        &self,
+        pred: BlockId,
+        switch_block: BlockId,
+        index: &SsaVarnode,
+    ) -> Option<BoundsCheck> {
+        let block = self.func.function.blocks.get(&pred)?;
+        let cbranch_idx = block.insns.iter().rposition(|i| i.op == IrOp::Cbranch)?;
+        let cond_sv = self.resolve_ssa_varnode(pred, cbranch_idx, VarnodeSlot::Input(1))?;
+
+        for (i, insn) in block.insns.iter().enumerate().take(cbranch_idx).rev() {
+            let out = self.resolve_ssa_varnode(pred, i, VarnodeSlot::Output);
+            let matches = matches!(out, Some(o) if o.base == cond_sv.base && o.version == cond_sv.version);
+            if !matches {
+                continue;
+            }
+
+            let lhs_raw = insn.inputs.get(0).copied()?;
+            let rhs_raw = insn.inputs.get(1).copied()?;
+            let lhs_is_const = lhs_raw.space == SpaceId::Const;
+            let rhs_is_const = rhs_raw.space == SpaceId::Const;
+            let lhs_sv = if lhs_is_const {
+                None
+            } else {
+                self.resolve_ssa_varnode(pred, i, VarnodeSlot::Input(0))
+            };
+            let rhs_sv = if rhs_is_const {
+                None
+            } else {
+                self.resolve_ssa_varnode(pred, i, VarnodeSlot::Input(1))
+            };
+            let lhs_matches_index = lhs_sv
+                .as_ref()
+                .is_some_and(|sv| self.varnode_aliases(pred, sv, index));
+            let rhs_matches_index = rhs_sv
+                .as_ref()
+                .is_some_and(|sv| self.varnode_aliases(pred, sv, index));
+
+            let (bound, branch_taken_when_in_range) = match insn.op {
+                IrOp::IntLess | IrOp::IntSless => {
+                    if lhs_matches_index && rhs_is_const {
+                        (rhs_raw.offset, true)
+                    } else if rhs_matches_index && lhs_is_const {
+                        (lhs_raw.offset.wrapping_add(1), false)
+                    } else {
+                        return None;
+                    }
+                }
+                IrOp::IntLessequal | IrOp::IntSlessequal => {
+                    if lhs_matches_index && rhs_is_const {
+                        (rhs_raw.offset.wrapping_add(1), true)
+                    } else if rhs_matches_index && lhs_is_const {
+                        (lhs_raw.offset, false)
+                    } else {
+                        return None;
+                    }
+                }
+                IrOp::IntSub => {
+                    if lhs_matches_index && rhs_is_const {
+                        (rhs_raw.offset, true)
+                    } else {
+                        return None;
+                    }
+                }
+                _ => return None,
+            };
+
+            let edges = self.func.cfg.edges_from(pred);
+            let in_range_kind = if branch_taken_when_in_range {
+                EdgeKind::ConditionalTrue
+            } else {
+                EdgeKind::ConditionalFalse
+            };
+            let oob_kind = if branch_taken_when_in_range {
+                EdgeKind::ConditionalFalse
+            } else {
+                EdgeKind::ConditionalTrue
+            };
+
+            let in_range_target = edges
+                .iter()
+                .find(|(_, k)| *k == in_range_kind)
+                .map(|(t, _)| *t);
+            let oob_target = edges.iter().find(|(_, k)| *k == oob_kind).map(|(t, _)| *t);
+
+            if in_range_target != Some(switch_block) {
+                return None;
+            }
+
+            return Some(BoundsCheck {
+                case_count: bound,
+                default_target: oob_target.filter(|t| !self.synthetic.contains(t)),
+            });
+        }
+        None
+    }
+
+    /// True if `candidate` is the same SSA value as `target`, or resolves
+    /// through a Copy / Cast / Subpiece chain in `bid` back to `target`.
+    /// Falls back to `Varnode`-base equality for register / stack / unique
+    /// classes when versions diverge across SSA-rename boundaries — switch
+    /// bounds checks often live one block before the dispatch where the
+    /// SSA renamer assigned a different version of the same register.
+    fn varnode_aliases(
+        &self,
+        bid: BlockId,
+        candidate: &SsaVarnode,
+        target: &SsaVarnode,
+    ) -> bool {
+        if candidate.base == target.base && candidate.version == target.version {
+            return true;
+        }
+        let Some(block) = self.func.function.blocks.get(&bid) else {
+            return false;
+        };
+        let mut cur = *candidate;
+        for _ in 0..4 {
+            if cur.base == target.base && cur.version == target.version {
+                return true;
+            }
+            let mut advanced = false;
+            for (i, insn) in block.insns.iter().enumerate() {
+                let Some(out) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output) else {
+                    continue;
+                };
+                if out.base != cur.base || out.version != cur.version {
+                    continue;
+                }
+                match insn.op {
+                    IrOp::Copy | IrOp::IntZext | IrOp::IntSext | IrOp::Subpiece => {
+                        if let Some(input) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
+                        {
+                            cur = input;
+                            advanced = true;
+                        }
+                    }
+                    _ => {}
+                }
+                break;
+            }
+            if !advanced {
+                break;
+            }
+        }
+        candidate.base == target.base
+            && matches!(
+                candidate.base.space,
+                SpaceId::Register | SpaceId::Stack | SpaceId::Unique
+            )
     }
 
     fn recover_switch_index(&self, bid: BlockId) -> SsaVarnode {
@@ -528,7 +719,9 @@ impl<'a> StructureCtx<'a> {
 
         // Find the instruction that defines `target` in this block.
         for (i, insn) in block.insns.iter().enumerate().rev() {
-            let output_sv = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output)?;
+            let Some(output_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output) else {
+                continue;
+            };
             if output_sv.base != target.base || output_sv.version != target.version {
                 continue;
             }
@@ -549,22 +742,29 @@ impl<'a> StructureCtx<'a> {
         let block = self.func.function.blocks.get(&bid)?;
 
         for (i, insn) in block.insns.iter().enumerate().rev() {
-            let output_sv = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output)?;
+            let Some(output_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output) else {
+                continue;
+            };
             if output_sv.base != addr.base || output_sv.version != addr.version {
                 continue;
             }
 
-            // Pattern: INT_ADD(base_const, scaled_index) or INT_ADD(scaled_index, base_const)
+            // Pattern: INT_ADD(base_const, scaled_index) or INT_ADD(scaled_index, base_const).
+            // Constant inputs are not in the var_map, so check raw inputs directly.
             if insn.op == IrOp::IntAdd && insn.inputs.len() >= 2 {
-                let lhs = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0));
-                let rhs = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1));
-
-                // One side should be the constant base, the other the scaled index.
-                if let (Some(lhs_sv), Some(rhs_sv)) = (lhs, rhs) {
-                    if is_const(&rhs_sv) {
+                let lhs_const = insn.inputs[0].space == SpaceId::Const;
+                let rhs_const = insn.inputs[1].space == SpaceId::Const;
+                if rhs_const {
+                    if let Some(lhs_sv) =
+                        self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
+                    {
                         return self.extract_index_from_scale(bid, &lhs_sv);
                     }
-                    if is_const(&lhs_sv) {
+                }
+                if lhs_const {
+                    if let Some(rhs_sv) =
+                        self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1))
+                    {
                         return self.extract_index_from_scale(bid, &rhs_sv);
                     }
                 }
@@ -580,33 +780,42 @@ impl<'a> StructureCtx<'a> {
         let block = self.func.function.blocks.get(&bid)?;
 
         for (i, insn) in block.insns.iter().enumerate().rev() {
-            let out = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output)?;
+            let Some(out) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output) else {
+                continue;
+            };
             if out.base != scaled.base || out.version != scaled.version {
                 continue;
             }
 
-            // Pattern: INT_MULT(index, scale_const) or INT_LEFT(index, shift_const)
+            // Pattern: INT_MULT(index, scale_const) or INT_LEFT(index, shift_const).
+            // Constant inputs are not in var_map; check raw inputs directly.
             match insn.op {
                 IrOp::IntMult if insn.inputs.len() >= 2 => {
-                    let lhs = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0));
-                    let rhs = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1));
-                    if let (Some(lhs_sv), Some(rhs_sv)) = (lhs, rhs) {
-                        if is_scale_const(&rhs_sv) {
-                            return Some(lhs_sv);
+                    let lhs_raw = insn.inputs[0];
+                    let rhs_raw = insn.inputs[1];
+                    if rhs_raw.space == SpaceId::Const && is_scale_value(rhs_raw.offset) {
+                        if let Some(lhs_sv) =
+                            self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
+                        {
+                            return Some(self.walk_bitwise_chain(bid, &lhs_sv, 4));
                         }
-                        if is_scale_const(&lhs_sv) {
-                            return Some(rhs_sv);
+                    }
+                    if lhs_raw.space == SpaceId::Const && is_scale_value(lhs_raw.offset) {
+                        if let Some(rhs_sv) =
+                            self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1))
+                        {
+                            return Some(self.walk_bitwise_chain(bid, &rhs_sv, 4));
                         }
                     }
                 }
                 IrOp::IntLeft if insn.inputs.len() >= 2 => {
-                    let index = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0));
-                    let shift = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1));
-                    if let (Some(index_sv), Some(shift_sv)) = (index, shift) {
-                        if is_const(&shift_sv) {
-                            return Some(index_sv);
+                    let shift_raw = insn.inputs[1];
+                    if shift_raw.space == SpaceId::Const {
+                        if let Some(index_sv) =
+                            self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
+                        {
+                            return Some(self.walk_bitwise_chain(bid, &index_sv, 4));
                         }
-                        let _ = shift_sv;
                     }
                 }
                 _ => {}
@@ -615,7 +824,54 @@ impl<'a> StructureCtx<'a> {
         }
 
         // The scaled value itself might be the index (scale == 1).
-        Some(*scaled)
+        Some(self.walk_bitwise_chain(bid, scaled, 4))
+    }
+
+    /// Walk through a chain of `IntAnd(x, mask_const)`, `IntRight(x, shift_const)`,
+    /// `IntSright(x, shift_const)`, and `IntZext/Sext` ops to dig down to the
+    /// underlying index source. Stops at non-bitwise ops or at depth zero.
+    fn walk_bitwise_chain(
+        &self,
+        bid: BlockId,
+        start: &SsaVarnode,
+        depth: u32,
+    ) -> SsaVarnode {
+        if depth == 0 {
+            return *start;
+        }
+        let Some(block) = self.func.function.blocks.get(&bid) else {
+            return *start;
+        };
+        for (i, insn) in block.insns.iter().enumerate().rev() {
+            let Some(out) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Output) else {
+                continue;
+            };
+            if out.base != start.base || out.version != start.version {
+                continue;
+            }
+            let next = match insn.op {
+                IrOp::IntAnd | IrOp::IntRight | IrOp::IntSright if insn.inputs.len() >= 2 => {
+                    let lhs_raw = insn.inputs[0];
+                    let rhs_raw = insn.inputs[1];
+                    if rhs_raw.space == SpaceId::Const {
+                        self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
+                    } else if lhs_raw.space == SpaceId::Const && insn.op == IrOp::IntAnd {
+                        self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1))
+                    } else {
+                        None
+                    }
+                }
+                IrOp::IntZext | IrOp::IntSext | IrOp::Subpiece if !insn.inputs.is_empty() => {
+                    self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
+                }
+                _ => None,
+            };
+            return match next {
+                Some(n) => self.walk_bitwise_chain(bid, &n, depth - 1),
+                None => *start,
+            };
+        }
+        *start
     }
 
     fn fallback_switch_cond(&self) -> SsaVarnode {
@@ -1316,15 +1572,8 @@ fn dominates(dom_tree: &unlace_ir::ssa::DominatorTree, a: BlockId, b: BlockId) -
     false
 }
 
-fn is_const(sv: &SsaVarnode) -> bool {
-    sv.base.space == unlace_ir::SpaceId::Const
-}
-
-fn is_scale_const(sv: &SsaVarnode) -> bool {
-    if sv.base.space != unlace_ir::SpaceId::Const {
-        return false;
-    }
-    matches!(sv.base.offset, 1 | 2 | 4 | 8)
+fn is_scale_value(v: u64) -> bool {
+    matches!(v, 1 | 2 | 4 | 8)
 }
 
 /// Strip `Label` nodes whose `LabelId` has no corresponding `Goto` in the
@@ -1541,7 +1790,8 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
         | HirNode::Ternary { .. }
         | HirNode::TailCall { .. }
         | HirNode::Continue
-        | HirNode::Break => {}
+        | HirNode::Break
+        | HirNode::Asm { .. } => {}
     }
 }
 
@@ -3744,5 +3994,323 @@ mod tests {
             "only the valid (BlockId(0), 0) entry should survive"
         );
         assert!(hir.panic_sites.contains_key(&0x1000));
+    }
+
+    /// t77: A `cmp index, 5; jb dispatch` pattern in the predecessor of a
+    /// BRANCHIND should yield a `BoundsCheck { case_count: 5, default_target: BB2 }`
+    /// and propagate `case_count` into `Switch::jumptable_cases`.
+    #[test]
+    fn bounds_check_int_less_recovers_case_count() {
+        let r_index = Varnode::reg(0x10, 8);
+        let cond_vn = Varnode::reg(0x100, 1);
+        let table_base = Varnode::constant(0x20000, 8);
+        let c4 = Varnode::constant(4, 8);
+        let c5 = Varnode::constant(5, 8);
+        let scaled = Varnode::unique(100, 8);
+        let addr = Varnode::unique(200, 8);
+        let target = Varnode::unique(300, 8);
+        let ram = Varnode::constant(1, 8);
+
+        let mut func = Function::new("bounds_switch", BlockId(0), 0x9000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntLess,
+            cond_vn,
+            smallvec![r_index, c5],
+            0x9000,
+        ));
+        bb0.insns.push(cbranch_insn(cond_vn, 0x9004));
+        bb0.successors = smallvec![BlockId(1), BlockId(99)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            scaled,
+            smallvec![r_index, c4],
+            0x9010,
+        ));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![table_base, scaled],
+            0x9014,
+        ));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            target,
+            smallvec![ram, addr],
+            0x9018,
+        ));
+        bb1.insns.push(IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![target],
+            0x901c,
+        ));
+        bb1.successors = smallvec![BlockId(10), BlockId(11), BlockId(12)];
+
+        let mut bb10 = BasicBlock::new(BlockId(10));
+        bb10.insns.push(ctrl_insn(IrOp::Return, 0x9100));
+        let mut bb11 = BasicBlock::new(BlockId(11));
+        bb11.insns.push(ctrl_insn(IrOp::Return, 0x9110));
+        let mut bb12 = BasicBlock::new(BlockId(12));
+        bb12.insns.push(ctrl_insn(IrOp::Return, 0x9120));
+
+        let mut bb99 = BasicBlock::new(BlockId(99));
+        bb99.insns.push(ctrl_insn(IrOp::Return, 0x9200));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb10);
+        func.insert_block(bb11);
+        func.insert_block(bb12);
+        func.insert_block(bb99);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn find_switch(nodes: &[HirNode]) -> Option<&HirNode> {
+            for n in nodes {
+                match n {
+                    HirNode::Switch { .. } => return Some(n),
+                    HirNode::Block(inner) => {
+                        if let Some(s) = find_switch(inner) {
+                            return Some(s);
+                        }
+                    }
+                    HirNode::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        if let Some(s) = find_switch(then_body) {
+                            return Some(s);
+                        }
+                        if let Some(eb) = else_body {
+                            if let Some(s) = find_switch(eb) {
+                                return Some(s);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        let switch = find_switch(&hir.body).expect("should produce a Switch");
+        match switch {
+            HirNode::Switch {
+                jumptable_cases, ..
+            } => {
+                assert_eq!(
+                    *jumptable_cases,
+                    Some(5),
+                    "IntLess(index, 5) should give case_count=5"
+                );
+            }
+            _ => panic!(),
+        }
+    }
+
+    /// t77: `IntSub(index, K)` followed by a CBRANCH on the high bit acts as
+    /// `index >= K` — the switch path is ConditionalFalse and case_count = K.
+    #[test]
+    fn bounds_check_int_sub_recovers_case_count() {
+        let ctx = make_bounds_ctx_int_sub();
+        let switch_block = BlockId(1);
+        let index = SsaVarnode {
+            base: Varnode::reg(0x10, 8),
+            version: 0,
+        };
+        let bc = ctx
+            .extract_bounds_check(switch_block, &index)
+            .expect("IntSub bounds pattern should match");
+        assert_eq!(bc.case_count, 7, "IntSub(index, 7) → case_count = 7");
+    }
+
+    /// t74: `IntAnd(raw, 0xF)` chained into a multiply-scale should resolve
+    /// down to `raw` when walked through the bitwise chain.
+    #[test]
+    fn bitwise_chain_int_and_resolves_to_source() {
+        let raw = Varnode::reg(0x20, 8);
+        let masked = Varnode::unique(40, 8);
+        let scaled = Varnode::unique(50, 8);
+        let mask = Varnode::constant(0xF, 8);
+        let scale = Varnode::constant(8, 8);
+
+        let mut func = Function::new("and_chain", BlockId(0), 0xB000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAnd,
+            masked,
+            smallvec![raw, mask],
+            0xB000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            scaled,
+            smallvec![masked, scale],
+            0xB002,
+        ));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0xB004));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let leaked: &'static SsaFunction = Box::leak(Box::new(ssa));
+        let ctx = StructureCtx::new(leaked);
+        let scaled_sv = SsaVarnode {
+            base: scaled,
+            version: 0,
+        };
+        let out = ctx
+            .extract_index_from_scale(BlockId(0), &scaled_sv)
+            .expect("should resolve");
+        assert_eq!(
+            out.base, raw,
+            "IntAnd(raw, mask) chain should resolve back to raw"
+        );
+    }
+
+    /// t74: `IntRight(raw, 4)` chain should walk through to `raw`.
+    #[test]
+    fn bitwise_chain_int_right_resolves_to_source() {
+        let raw = Varnode::reg(0x20, 8);
+        let shifted = Varnode::unique(40, 8);
+        let scaled = Varnode::unique(50, 8);
+        let four = Varnode::constant(4, 8);
+        let scale = Varnode::constant(4, 8);
+
+        let mut func = Function::new("right_chain", BlockId(0), 0xC000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntRight,
+            shifted,
+            smallvec![raw, four],
+            0xC000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            scaled,
+            smallvec![shifted, scale],
+            0xC002,
+        ));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0xC004));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let leaked: &'static SsaFunction = Box::leak(Box::new(ssa));
+        let ctx = StructureCtx::new(leaked);
+        let scaled_sv = SsaVarnode {
+            base: scaled,
+            version: 0,
+        };
+        let out = ctx
+            .extract_index_from_scale(BlockId(0), &scaled_sv)
+            .expect("should resolve");
+        assert_eq!(
+            out.base, raw,
+            "IntRight(raw, shift) chain should resolve back to raw"
+        );
+    }
+
+    /// t74: chained `(x >> 4) & 0xF` then scale should resolve all the way
+    /// through both ops back to `x`.
+    #[test]
+    fn bitwise_chain_shift_then_mask_resolves_to_source() {
+        let raw = Varnode::reg(0x20, 8);
+        let shifted = Varnode::unique(40, 8);
+        let masked = Varnode::unique(45, 8);
+        let scaled = Varnode::unique(50, 8);
+        let four = Varnode::constant(4, 8);
+        let mask = Varnode::constant(0xF, 8);
+        let scale = Varnode::constant(8, 8);
+
+        let mut func = Function::new("shift_mask_chain", BlockId(0), 0xD000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntRight,
+            shifted,
+            smallvec![raw, four],
+            0xD000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAnd,
+            masked,
+            smallvec![shifted, mask],
+            0xD002,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            scaled,
+            smallvec![masked, scale],
+            0xD004,
+        ));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0xD006));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let leaked: &'static SsaFunction = Box::leak(Box::new(ssa));
+        let ctx = StructureCtx::new(leaked);
+        let scaled_sv = SsaVarnode {
+            base: scaled,
+            version: 0,
+        };
+        let out = ctx
+            .extract_index_from_scale(BlockId(0), &scaled_sv)
+            .expect("should resolve");
+        assert_eq!(
+            out.base, raw,
+            "(x >> 4) & 0xF chain should resolve back to x"
+        );
+    }
+
+    fn make_bounds_ctx_int_sub() -> StructureCtx<'static> {
+        let r_index = Varnode::reg(0x10, 8);
+        let cond_vn = Varnode::reg(0x100, 1);
+        let c7 = Varnode::constant(7, 8);
+        let sub_out = Varnode::unique(50, 8);
+
+        let mut func = Function::new("sub_bounds", BlockId(0), 0xA000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntSub,
+            sub_out,
+            smallvec![r_index, c7],
+            0xA000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntLess,
+            cond_vn,
+            smallvec![r_index, c7],
+            0xA002,
+        ));
+        bb0.insns.push(cbranch_insn(cond_vn, 0xA004));
+        bb0.successors = smallvec![BlockId(1), BlockId(99)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![sub_out],
+            0xA010,
+        ));
+        bb1.successors = smallvec![BlockId(10), BlockId(11)];
+
+        let mut bb10 = BasicBlock::new(BlockId(10));
+        bb10.insns.push(ctrl_insn(IrOp::Return, 0xA100));
+        let mut bb11 = BasicBlock::new(BlockId(11));
+        bb11.insns.push(ctrl_insn(IrOp::Return, 0xA110));
+        let mut bb99 = BasicBlock::new(BlockId(99));
+        bb99.insns.push(ctrl_insn(IrOp::Return, 0xA200));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb10);
+        func.insert_block(bb11);
+        func.insert_block(bb99);
+
+        let ssa = build_ssa(func);
+        let leaked: &'static SsaFunction = Box::leak(Box::new(ssa));
+        StructureCtx::new(leaked)
     }
 }

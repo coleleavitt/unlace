@@ -1,40 +1,35 @@
 /* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   __stack_chk_fail, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 void main(void) {
     int v5; // edx
-    long long v9; // rsp
     long long v13; // rdi
-    int v18; // r10
     int v21; // rip
-    signed char v24; // ZF
-    int v26; // OF
-    __m128i v27; // xmm0
     __m128i v28; // xmm1
     __m128i v29; // xmm2
     int v30;
     int result;
-    int v33;
-    __m128i v42; // temp
-    v9 = v18; *(_QWORD *)(v18) = v18; v9 = v18;
-    v42 = *(_OWORD *)(v18); v27 = _mm_load_si128(v42); _mm_load_ps(0LL, v27);
-    v42 = *(_OWORD *)(v18); v27 = _mm_load_si128(v42); _mm_load_ps(v18, v27);
-    v42 = *(_OWORD *)(v18); v27 = _mm_load_si128(v42); _mm_load_ps(v18, v27);
-    v42 = *(_OWORD *)(v18); v27 = _mm_load_si128(v42); _mm_load_ps(v18, v27);
-    for (; v35; v35 = 0) {
+    int v56;
+    __m128i v37; // temp
+    *(_QWORD *)(0LL) = 0LL; v37 = *(_OWORD *)(0LL);
+    __m128i v54 = _mm_load_si128(v37); // xmm0
+    _mm_load_ps(0LL, v54); v37 = *(_OWORD *)(0LL); v27 = _mm_load_si128(v37);
+    _mm_load_ps(0LL, v27); v37 = *(_OWORD *)(0LL); v27 = _mm_load_si128(v37);
+    _mm_load_ps(0LL, v27);
+    for (; v34; v55 = 0) {
     }
-    if (v33) {
+    if (v56) {
     }
-    for (; v35; v55 = 0) {
-        v24 = 0; v35 = 0;
+    for (; v34; v55 = 0) {
     }
-    if (v33) {
+    if (v56) {
     }
     v27 = _mm_xor_si128(v27, v27);
-    if (v33) {
+    if (v56) {
     }
-    v28 = _mm_load_si128(v27); v13 = 4LL; v27 = _mm_add_epi32(v27, v28);
+    v28 = _mm_load_si128(v27); v13 = 0LL; v27 = _mm_add_epi32(v27, v28);
     v28 = _mm_load_si128(v27); v27 = _mm_add_epi32(v27, v28);
     if (v27) {
-        if (v33) {
+        v34 = 0;
+        if (v56) {
         }
     } else {
         if (0) { 0 = 0LL; }
@@ -42,30 +37,30 @@ void main(void) {
         }
     }
     if (v5) {
-        for (; v26; v63 = 0) {
-            if (0) { 0 = 0LL; } if (0) { 0 = 4LL; }
+        for (; v44; v64 = 0) {
+            if (0) { 0 = 0LL; } if (0) { 0 = 0LL; }
         }
     } else {
         if (0) { 0 = 0; }
-        if (v24) {
+        if (v30) {
         }
     }
     v29 = _mm_xor_si128(v29, v29);
-    if (v33) {
+    while (v34) {
+        v37 = *(_OWORD *)(0LL); v27 = _mm_load_si128(v37); v28 = _mm_load_si128(v27);
+        v28 = _mm_shuffle_epi32(v28, v28); v27 = _mm_shuffle_epi32(v27, v27); v29 = _mm_add_epi32(v29, v28);
     }
-    for (; v24; v50 = 0) {
-        break;
-    }
-    if (v43) {
-        do {
-            break;
-        } while (v26);
-    }
-    if (v40) {
+    if (v24) {
     }
     if (v30) {
     }
-    if (v33) {
+    for (; v34; v55 = 0) {
+    }
+    if (v30) {
+    }
+    if (v30) {
+    }
+    if (v56) {
     }
     if (v24) {
         if (v24) {
@@ -87,59 +82,46 @@ void f_rec_fib(void) {
     } else {
         *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
         *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
-        for (; v37; v37 = 1) {
+        for (; v37; v48 = 0) {
             if (v34) {
+            } else {
+                return result;
             }
-            break;
         }
     }
     return;
 }
 /* Function:   f_ackermann | Address: 0x1830 | Size: 0x34e (846 bytes) | Convention: unknown | Stack frame: 0x8 (8 bytes) | Xrefs to:   f_ackermann | Xrefs from: unknown */
 void f_ackermann(void) {
-    int v4; // rdx
-    int v26;
+    long long v8; // rsp
+    int v28;
+    int v50;
+    signed char v37; // temp
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
-    *(_DWORD *)(0LL) = 0;
+    v37 = 0; *(_DWORD *)(0LL) = 0;
     while (v32) {
-        *(_DWORD *)(0xcLL) = 0;
-        v32 = 1;
-        if (v32) {
+        *(_DWORD *)(0LL) = 0;
+        if (v28) {
         } else {
-            if (v23) {
+            v33 = 0;
+            if (v25) {
                 if (v32) {
                 }
             } else {
             }
         }
-        while (v32) {
-            if (v32) {
+        if (v50) {
+            if (v25) {
+                v32 = 1;
+                if (v32) {
+                } else {
+                }
             } else {
-                if (v23) {
-                    v32 = 0;
+                while (v32) {
                     if (v32) {
                     } else {
-                    }
-                } else {
-                }
-            }
-            if (v32) {
-                v32 = 0;
-                if (v32) {
-                } else {
-                    if (v23) {
-                        if (v32) {
-                        } else {
-                        }
-                    } else {
-                    }
-                }
-                if (v32) {
-                    v32 = 0;
-                    if (v32) {
-                    } else {
-                        if (v23) {
+                        if (v25) {
                             if (v32) {
                             } else {
                             }
@@ -147,32 +129,57 @@ void f_ackermann(void) {
                         }
                     }
                     if (v32) {
-                        *(_DWORD *)(8LL) = 0; *(_DWORD *)(4LL) = 0; qword_FFFFFFFFFFFFFFF8 = 0x1978LL;
-                        f_ackermann();
                         if (v32) {
                         } else {
+                            if (v25) {
+                                if (v32) {
+                                } else {
+                                }
+                            } else {
+                            }
+                        }
+                        if (v32) {
                             if (v32) {
                             } else {
-                                if (v26) {
+                                if (v25) {
+                                    if (v32) {
+                                    } else {
+                                    }
+                                } else {
+                                }
+                            }
+                            *(_DWORD *)(0LL) = 0; *(_DWORD *)(0LL) = 0; *(_QWORD *)(0LL) = 0x1978LL;
+                            f_ackermann();
+                            if (v8) {
+                            } else {
+                                if (v37) {
                                 } else {
                                 }
                             }
                         }
+                        if (v33) {
+                        } else {
+                            if (v33) {
+                            } else {
+                            }
+                        }
+                    }
+                    if (v33) {
+                    } else {
+                        if (v33) {
+                        } else {
+                        }
                     }
                 }
-                if (v26) {
+                if (v33) {
                 } else {
                 }
             }
-            if (v26) {
-            } else {
-            }
         }
-        if (v26) {
+        if (v8) {
+        }
+        if (v33) {
         } else {
-            v32 = 0;
-            if (v32) {
-            }
         }
     }
     return result;
@@ -238,28 +245,30 @@ void sub_1520(void) {
 }
 /* Function:   sub_1560 | Address: 0x1560 | Size: 0x735 (1845 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 void sub_1560(void) {
-    long long v9; // rsp
     int v14; // edi
     int v15; // rdi
-    signed char v41; // temp
-    signed char v59; // temp
-    signed char v49; // temp
+    signed char v56; // temp
     sub_14e0();
-    signed char v47 = LOBYTE(0); // temp
-    v41 = v47;
+    signed char v44 = LOBYTE(0); // temp
     if (v14) {
         return result;
     } else {
-        v9 = cond; *(_QWORD *)(cond) = cond; v9 = cond;
+        long long v9 = cond; // rsp
         *(_QWORD *)(cond) = cond; v9 = cond; *(_QWORD *)(cond) = cond;
         v9 = cond; *(_QWORD *)(cond) = cond; v9 = cond;
         *(_QWORD *)(cond) = cond; v9 = cond; *(_QWORD *)(cond) = cond;
-        result = cond - 0x38LL; cond = cond == 4LL; cond = result < 0LL;
-        v58 = LOBYTE(cond); v59 = LOBYTE(result);
-        if (v44) {
-            cond = cond; v47 = v58; v49 = v59;
-            v49 = v49;
-            if (v41) {
+        v9 = cond; *(_QWORD *)(cond) = cond; cond = cond == -8LL;
+        cond = cond < 0LL; v55 = LOBYTE(cond); v56 = LOBYTE(cond);
+        if (v41) {
+            v46 = v56;
+            if (v38) {
+                cond = cond; v42 = 0; v44 = v55;
+            } else {
+                v46 = LOBYTE(cond); v60 = cond; cond = cond;
+                v9 = cond; cond = cond; v9 = cond;
+                cond = cond; v9 = cond; cond = cond;
+                v9 = cond; cond = cond; v9 = cond;
+                cond = cond; v9 = cond; return result;
             }
         }
     }

@@ -183,10 +183,125 @@ impl Pass for StackVarRecoveryPass {
         }
 
         infer_struct_layouts(func);
+        detect_frame_gaps(func);
 
         let changed = func.stack_vars.len() != old_len || func.stack_vars != snapshot;
         Ok(changed)
     }
+}
+
+/// Recover the local-frame size from the entry-block prologue and emit a
+/// coverage-gap map for any byte ranges of `[-frame_size, 0)` that are not
+/// covered by an inferred stack variable.
+///
+/// Modelled after IDA's `calc_tinfo_gaps` /  `append_tinfo_covered`
+/// (`references/ida/idalib/all/`): the goal is to surface "holes" in the
+/// stack frame that the user can later annotate as opaque buffers, while
+/// suppressing tiny ABI-driven alignment padding.
+fn detect_frame_gaps(func: &mut SsaFunction) {
+    func.stack_gaps.clear();
+
+    let frame_size = recover_frame_size(func);
+    func.frame_size = frame_size;
+    if frame_size == 0 {
+        return;
+    }
+
+    let mut covered: Vec<(i64, i64)> = Vec::new();
+    for (&offset, sv) in &func.stack_vars {
+        let span = stack_var_span(sv);
+        if span > 0 {
+            covered.push((offset, offset + span as i64));
+        }
+    }
+    covered.sort_unstable();
+
+    let frame_start = -(frame_size as i64);
+    let frame_end = 0i64;
+
+    let mut cursor = frame_start;
+    let emit = |start: i64, end: i64, covered: &[(i64, i64)]| -> Option<(i64, u32)> {
+        if end <= start {
+            return None;
+        }
+        let size = (end - start) as u32;
+        if size <= 8 && is_padding_adjacent(start, end, covered) {
+            return None;
+        }
+        Some((start, size))
+    };
+
+    for &(s, e) in &covered {
+        if s > cursor {
+            if let Some((g_off, g_size)) = emit(cursor, s.min(frame_end), &covered) {
+                func.stack_gaps.insert(g_off, g_size);
+            }
+        }
+        if e > cursor {
+            cursor = e;
+        }
+    }
+    if cursor < frame_end {
+        if let Some((g_off, g_size)) = emit(cursor, frame_end, &covered) {
+            func.stack_gaps.insert(g_off, g_size);
+        }
+    }
+}
+
+/// Effective storage span of a [`StackVar`] in bytes.
+///
+/// Prefers the inferred primitive type's width; falls back to the maximum
+/// access size observed for the slot, then finally to a single byte.
+fn stack_var_span(sv: &StackVar) -> u32 {
+    if let Some(w) = field_size(sv.ty) {
+        return w as u32;
+    }
+    1
+}
+
+/// Heuristic: a sub-8-byte gap is treated as alignment padding when at
+/// least one neighbour (left or right) is a real covered slot. This
+/// matches how compilers insert pad bytes between members to satisfy
+/// natural-alignment requirements.
+fn is_padding_adjacent(start: i64, end: i64, covered: &[(i64, i64)]) -> bool {
+    let touches_left = covered.iter().any(|&(_, e)| e == start);
+    let touches_right = covered.iter().any(|&(s, _)| s == end);
+    touches_left || touches_right
+}
+
+/// Locate `IntSub(RSP, const)` in the entry block where the output is RSP
+/// (or copied to RSP) and return `const` as the local-frame byte size.
+///
+/// Returns 0 when no plausible prologue is found — this is conservative;
+/// gap detection silently skips functions without a recovered frame.
+fn recover_frame_size(func: &SsaFunction) -> u32 {
+    let entry = func.function.entry;
+    let Some(block) = func.function.blocks.get(&entry) else {
+        return 0;
+    };
+
+    for insn in &block.insns {
+        if insn.op != IrOp::IntSub {
+            continue;
+        }
+        if insn.inputs.len() < 2 {
+            continue;
+        }
+        let lhs = insn.inputs[0];
+        let rhs = insn.inputs[1];
+        if !(lhs.space == SpaceId::Register && lhs.offset == RSP_OFFSET) {
+            continue;
+        }
+        if rhs.space != SpaceId::Const {
+            continue;
+        }
+        let k = rhs.offset;
+        if k == 0 || k > 0x10_000 {
+            continue;
+        }
+        return k as u32;
+    }
+    0
 }
 
 /// Group adjacent stack slots with compatible primitive types into structs.
@@ -844,5 +959,137 @@ mod tests {
             ssa.stack_vars.keys().collect::<Vec<_>>()
         );
         assert_eq!(ssa.stack_vars[&-24].name, "local_18");
+    }
+
+    /// Frame: 24 bytes total. Slots: i32@-20 (4) + i64@-16 (8) + i64@-8 (8).
+    /// The 4-byte hole between RSP-24 (frame start) and RSP-20 sits adjacent
+    /// to a typed slot ⇒ should be classified as alignment padding and
+    /// suppressed.
+    #[test]
+    fn t70_padding_gap_is_suppressed() {
+        use unlace_ir::ssa::StackVar;
+
+        let mut func =
+            unlace_ir::Function::new("padding", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        let u0 = Varnode::unique(0, 8);
+        let c24 = Varnode::constant(24, 8);
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntSub,
+            u0,
+            smallvec![rsp(), c24],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rsp(),
+            smallvec![u0],
+            0x1004,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1008,
+        ));
+        func.insert_block(bb);
+        let mut ssa = unlace_ir::ssa::build_ssa(func);
+
+        ssa.stack_vars.insert(
+            -20,
+            StackVar {
+                offset: -20,
+                name: "i".to_string(),
+                ty: PrimitiveType::Int(4),
+                accesses: Vec::new(),
+            },
+        );
+        ssa.stack_vars.insert(
+            -16,
+            StackVar {
+                offset: -16,
+                name: "j".to_string(),
+                ty: PrimitiveType::Int(8),
+                accesses: Vec::new(),
+            },
+        );
+        ssa.stack_vars.insert(
+            -8,
+            StackVar {
+                offset: -8,
+                name: "k".to_string(),
+                ty: PrimitiveType::Int(8),
+                accesses: Vec::new(),
+            },
+        );
+
+        super::detect_frame_gaps(&mut ssa);
+
+        assert_eq!(ssa.frame_size, 24);
+        assert!(
+            ssa.stack_gaps.is_empty(),
+            "small adjacent gap must be classified as padding, got {:?}",
+            ssa.stack_gaps
+        );
+    }
+
+    /// Frame: 64 bytes. A single 8-byte slot at -8 leaves the bottom 56
+    /// bytes of the frame uncovered — that's a real explicit buffer gap
+    /// (>8 bytes), not alignment padding.
+    #[test]
+    fn t70_explicit_buffer_gap_is_emitted() {
+        use unlace_ir::ssa::StackVar;
+
+        let mut func = unlace_ir::Function::new("buf", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        let u0 = Varnode::unique(0, 8);
+        let c64 = Varnode::constant(64, 8);
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntSub,
+            u0,
+            smallvec![rsp(), c64],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1004,
+        ));
+        func.insert_block(bb);
+        let mut ssa = unlace_ir::ssa::build_ssa(func);
+
+        ssa.stack_vars.insert(
+            -8,
+            StackVar {
+                offset: -8,
+                name: "ret".to_string(),
+                ty: PrimitiveType::Int(8),
+                accesses: Vec::new(),
+            },
+        );
+
+        super::detect_frame_gaps(&mut ssa);
+
+        assert_eq!(ssa.frame_size, 64);
+        assert_eq!(ssa.stack_gaps.len(), 1);
+        let (&start, &size) = ssa.stack_gaps.iter().next().unwrap();
+        assert_eq!(start, -64);
+        assert_eq!(size, 56);
+    }
+
+    #[test]
+    fn t70_no_prologue_no_gaps() {
+        let mut func =
+            unlace_ir::Function::new("noprologue", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1000,
+        ));
+        func.insert_block(bb);
+        let mut ssa = unlace_ir::ssa::build_ssa(func);
+        super::detect_frame_gaps(&mut ssa);
+        assert_eq!(ssa.frame_size, 0);
+        assert!(ssa.stack_gaps.is_empty());
     }
 }

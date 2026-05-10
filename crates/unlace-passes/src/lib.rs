@@ -1,6 +1,11 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
+pub mod call_boundary_copyprop;
+pub mod caller_param_propagate;
 pub mod calling_convention;
+pub mod indirect_call_resolve;
+pub mod interproc_fixpoint;
+pub mod vararg_detect;
 pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
@@ -10,17 +15,23 @@ pub mod cse;
 pub mod dce;
 pub mod dead_flag_elim;
 pub mod dead_store_elim;
+pub mod dse_global;
 pub mod division_idiom;
 pub mod expression_tree;
 pub mod global_copy_prop;
 pub mod gvn;
 pub mod idiom_recognition;
 pub mod libc_signatures;
+pub mod iv_elim;
+pub mod licm;
+pub mod strength_reduce;
 pub mod modulo_idiom;
 pub mod noreturn;
 pub mod objc_dispatch;
 pub mod pass;
 pub mod prologue_elim;
+pub mod redundant_flag_elim;
+pub mod register_coalesce;
 pub mod rust_enum;
 pub mod rust_panic;
 pub mod rust_vtable;
@@ -28,9 +39,21 @@ pub mod sccp;
 pub mod stack_vars;
 pub mod struct_field_detect;
 pub mod tail_call;
+pub mod tail_duplication;
 pub mod type_infer;
 pub mod variable_merge;
 
+pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
+pub use caller_param_propagate::{
+    apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,
+};
+pub use indirect_call_resolve::IndirectCallResolvePass;
+pub use interproc_fixpoint::{
+    DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint,
+};
+pub use vararg_detect::{
+    detect_variadic_callees, parse_format_string, parse_printf_format_strings,
+};
 pub use calling_convention::{CallingConventionDetectPass, ParamInferPass, ReturnTypeInferPass};
 pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
@@ -41,11 +64,15 @@ pub use cse::CsePass;
 pub use dce::DeadCodeElimPass;
 pub use dead_flag_elim::DeadFlagElimPass;
 pub use dead_store_elim::DeadStoreElimPass;
+pub use dse_global::DeadStoreElimGlobalPass;
 pub use division_idiom::DivisionIdiomPass;
 pub use expression_tree::ExpressionTreePass;
 pub use global_copy_prop::GlobalCopyPropPass;
 pub use gvn::GvnPass;
 pub use idiom_recognition::IdiomRecognitionPass;
+pub use iv_elim::IvElimPass;
+pub use licm::{LicmPass, NaturalLoop, find_natural_loops};
+pub use strength_reduce::StrengthReducePass;
 pub use modulo_idiom::ModuloIdiomPass;
 pub use noreturn::NoreturnDetectPass;
 pub use objc_dispatch::ObjcDispatchPass;
@@ -54,6 +81,8 @@ pub use pass::{
     run_to_fixedpoint, ssa_type_signature,
 };
 pub use prologue_elim::PrologueElimPass;
+pub use redundant_flag_elim::RedundantFlagElimPass;
+pub use register_coalesce::RegisterCoalescePass;
 pub use rust_enum::RustEnumPass;
 pub use rust_panic::RustPanicPass;
 pub use rust_vtable::RustVtablePass;
@@ -61,6 +90,7 @@ pub use sccp::SccpPass;
 pub use stack_vars::{StackOffsetSnapshotPass, StackVarRecoveryPass};
 pub use struct_field_detect::StructFieldDetectPass;
 pub use tail_call::TailCallDetectPass;
+pub use tail_duplication::TailDuplicationPass;
 pub use variable_merge::VariableMergePass;
 
 #[cfg(test)]

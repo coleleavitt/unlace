@@ -215,6 +215,70 @@ pub fn parse_type_at(
     })
 }
 
+// ---------------------------------------------------------------------------
+// t137: Go runtime.itab decoder.
+//
+// Each itab pinned by `moduledata.itablinks` packs an (interface, concrete)
+// pair plus the function pointers that satisfy the interface methods:
+//
+//   runtime.itab {
+//       inter   *interfacetype  // 8
+//       _type   *_type          // 8
+//       hash    uint32          // 4   (copy of _type.hash for type-switch)
+//       _       [4]byte         // 4   padding
+//       fun     [1]uintptr      // 0 if interface is empty, else N method ptrs
+//   }
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoItab {
+    pub va: u64,
+    pub inter_type_va: u64,
+    pub concrete_type_va: u64,
+    pub hash: u32,
+    pub methods: Vec<u64>,
+}
+
+/// Header size in bytes (inter + _type + hash + pad).
+const ITAB_HEADER_SIZE: usize = 24;
+
+/// Parse a `runtime.itab` record at virtual address `va`.
+///
+/// `method_count` is the number of method slots the linked interface
+/// declares — callers resolve this from the interface_type. When the
+/// interface is empty (`method_count == 0`), `methods` comes back empty.
+pub fn parse_itab(
+    image_data: &[u8],
+    va: u64,
+    va_to_offset: impl Fn(u64) -> Option<usize>,
+    method_count: usize,
+) -> Option<GoItab> {
+    let off = va_to_offset(va)?;
+    let head = image_data.get(off..off + ITAB_HEADER_SIZE)?;
+
+    let inter_type_va = u64::from_le_bytes(head[0..8].try_into().ok()?);
+    let concrete_type_va = u64::from_le_bytes(head[8..16].try_into().ok()?);
+    let hash = u32::from_le_bytes(head[16..20].try_into().ok()?);
+
+    let mut methods = Vec::with_capacity(method_count);
+    if method_count > 0 {
+        let fun_off = off + ITAB_HEADER_SIZE;
+        let fun_bytes = image_data.get(fun_off..fun_off + method_count * 8)?;
+        for i in 0..method_count {
+            let m = u64::from_le_bytes(fun_bytes[i * 8..i * 8 + 8].try_into().ok()?);
+            methods.push(m);
+        }
+    }
+
+    Some(GoItab {
+        va,
+        inter_type_va,
+        concrete_type_va,
+        hash,
+        methods,
+    })
+}
+
 fn parse_struct_fields(
     image_data: &[u8],
     fields_va: u64,
@@ -382,5 +446,43 @@ mod tests {
             }
             other => panic!("expected Struct, got {other:?}"),
         }
+    }
+
+    // -------------------------------------------------------------------
+    // t137: runtime.itab decoder tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn parse_itab_decodes_header() {
+        // Header only (method_count = 0): inter ptr, concrete ptr, hash, pad.
+        let mut buf = vec![0u8; ITAB_HEADER_SIZE];
+        buf[0..8].copy_from_slice(&0xAAAA_AAAAu64.to_le_bytes());
+        buf[8..16].copy_from_slice(&0xBBBB_BBBBu64.to_le_bytes());
+        buf[16..20].copy_from_slice(&0xDEAD_BEEFu32.to_le_bytes());
+
+        let itab = parse_itab(&buf, 0, ident, 0).expect("decode");
+        assert_eq!(itab.va, 0);
+        assert_eq!(itab.inter_type_va, 0xAAAA_AAAA);
+        assert_eq!(itab.concrete_type_va, 0xBBBB_BBBB);
+        assert_eq!(itab.hash, 0xDEAD_BEEF);
+        assert!(itab.methods.is_empty());
+    }
+
+    #[test]
+    fn parse_itab_with_two_methods() {
+        // Header + two function pointers = 24 + 16 = 40 bytes.
+        let mut buf = vec![0u8; ITAB_HEADER_SIZE + 16];
+        buf[0..8].copy_from_slice(&0x1u64.to_le_bytes());
+        buf[8..16].copy_from_slice(&0x2u64.to_le_bytes());
+        buf[16..20].copy_from_slice(&0x1234u32.to_le_bytes());
+        buf[ITAB_HEADER_SIZE..ITAB_HEADER_SIZE + 8]
+            .copy_from_slice(&0x4010_0000u64.to_le_bytes());
+        buf[ITAB_HEADER_SIZE + 8..ITAB_HEADER_SIZE + 16]
+            .copy_from_slice(&0x4010_1000u64.to_le_bytes());
+
+        let itab = parse_itab(&buf, 0, ident, 2).expect("decode");
+        assert_eq!(itab.methods.len(), 2);
+        assert_eq!(itab.methods[0], 0x4010_0000);
+        assert_eq!(itab.methods[1], 0x4010_1000);
     }
 }

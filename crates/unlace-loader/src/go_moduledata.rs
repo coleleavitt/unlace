@@ -82,6 +82,9 @@ pub struct GoModuleInfo {
     /// `typelinks`: signed offsets (relative to `types_va`) at which each
     /// reflect-discoverable `runtime._type` lives.
     pub typelinks: Vec<i32>,
+    /// `itablinks`: virtual addresses of each `runtime.itab` registered by
+    /// the linker.
+    pub itablinks: Vec<u64>,
     /// Recovered `modulename` if it decodes as UTF-8.
     pub modulename: Option<String>,
 }
@@ -100,6 +103,7 @@ const OFF_MAXPC: usize = 168;
 const OFF_TYPES: usize = 296;
 const OFF_ETYPES: usize = 304;
 const OFF_TYPELINKS: usize = 352;
+const OFF_ITABLINKS: usize = 376;
 const OFF_MODULENAME: usize = 464;
 
 /// Maximum struct extent we ever read. moduledata is much larger than this in
@@ -190,6 +194,25 @@ fn parse_at(image: &BinaryImage, va: u64) -> Option<GoModuleInfo> {
         Vec::new()
     };
 
+    // itablinks slice header: ptr + len + cap (24 bytes). Each entry is a
+    // *itab, i.e. a 64-bit virtual address.
+    let itablinks_ptr = read_u64_le(&raw, OFF_ITABLINKS)?;
+    let itablinks_len = read_u64_le(&raw, OFF_ITABLINKS + 8)? as usize;
+    let itablinks = if itablinks_ptr != 0 && itablinks_len > 0 && itablinks_len < 1_000_000 {
+        let mut out = Vec::with_capacity(itablinks_len.min(1024));
+        if let Some(bytes) = read_va(image, itablinks_ptr, itablinks_len * 8) {
+            for i in 0..itablinks_len {
+                let Some(v) = read_u64_le(&bytes, i * 8) else {
+                    break;
+                };
+                out.push(v);
+            }
+        }
+        out
+    } else {
+        Vec::new()
+    };
+
     // modulename string header: ptr + len (16 bytes).
     let modulename_ptr = read_u64_le(&raw, OFF_MODULENAME)?;
     let modulename_len = read_u64_le(&raw, OFF_MODULENAME + 8)? as usize;
@@ -205,6 +228,7 @@ fn parse_at(image: &BinaryImage, va: u64) -> Option<GoModuleInfo> {
         types_va,
         etypes_va,
         typelinks,
+        itablinks,
         modulename,
     })
 }
@@ -289,6 +313,7 @@ mod tests {
             msvc_rtti: None,
             seh: None,
             go_module: None,
+            go_itabs: std::collections::BTreeMap::new(),
         }
     }
 

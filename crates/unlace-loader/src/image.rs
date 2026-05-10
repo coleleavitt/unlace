@@ -369,4 +369,19 @@ impl BinaryImage {
     pub fn symbol_at(&self, addr: u64) -> Option<&Symbol> {
         self.symbols.range(..=addr).next_back().map(|(_, sym)| sym)
     }
+
+    /// Predicate suitable for [`unlace_ir::data_xrefs::build_data_xref_graph`]:
+    /// returns `true` iff `addr` falls inside any non-executable mapped
+    /// section (data / rodata / bss). Executable sections are excluded so
+    /// code-pointer constants don't masquerade as data globals — those
+    /// are tracked by the call graph instead.
+    pub fn is_global_data_addr(&self, addr: u64) -> bool {
+        for sec in &self.sections {
+            let end = sec.vaddr.saturating_add(sec.size);
+            if addr >= sec.vaddr && addr < end && !sec.flags.contains(SectionFlags::EXEC) {
+                return true;
+            }
+        }
+        false
+    }
 }

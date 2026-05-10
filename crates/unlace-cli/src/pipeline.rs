@@ -1103,7 +1103,18 @@ fn flirt_db() -> &'static FlirtDb {
 
 /// Try to identify `entry`'s function body as a known library stub.
 /// Returns the canonical name when matched.
+///
+/// FLIRT is only consulted for functions whose user-facing name *already*
+/// looks like a stripped-binary stub (`sub_XXXX`, empty / synthesised, or
+/// already a known libc name from PLT resolution). For named functions
+/// (`main`, application code) we skip the lookup — false-positives there
+/// would silently elide user code with a library stub comment. This
+/// mirrors IDA's behaviour where FLIRT only renames `unknown_libname`
+/// entries.
 pub fn flirt_match(image: &BinaryImage, entry: &FunctionEntry) -> Option<String> {
+    if !is_flirt_eligible_name(&entry.name) {
+        return None;
+    }
     let text = text_section(image)?;
     let (start, end) = function_bounds(entry, text);
     if start < text.vaddr {
@@ -1116,6 +1127,19 @@ pub fn flirt_match(image: &BinaryImage, entry: &FunctionEntry) -> Option<String>
     }
     let bytes = &text.data[off_start..off_end];
     flirt_db().match_function(bytes).map(str::to_string)
+}
+
+/// Whether `name` looks like a stripped-binary placeholder that FLIRT is
+/// allowed to rename. Real symbol names ("main", "process_args") are off
+/// limits — the user named them deliberately and a pattern collision
+/// would silently swap the body.
+fn is_flirt_eligible_name(name: &str) -> bool {
+    name.is_empty()
+        || name.starts_with("sub_")
+        || name.starts_with("loc_")
+        || name.starts_with("unk_")
+        || name.starts_with("nullsub_")
+        || name == "entry"
 }
 
 /// Render a one-line C-printer surrogate for a FLIRT-matched function.

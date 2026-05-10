@@ -8,6 +8,7 @@
 mod arch;
 mod block;
 pub mod cfg;
+pub mod data_xrefs;
 mod display;
 mod function;
 mod insn;

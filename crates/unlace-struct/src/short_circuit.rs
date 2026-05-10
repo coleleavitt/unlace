@@ -164,6 +164,8 @@ fn recover_into(
             cond,
             cases,
             default,
+            jumptable_addr,
+            jumptable_cases,
         } => {
             out.push(HirNode::Switch {
                 cond,
@@ -172,6 +174,8 @@ fn recover_into(
                     .map(|(c, body, ft)| (c, recover_short_circuits(body, func, ctr), ft))
                     .collect(),
                 default: default.map(|d| recover_short_circuits(d, func, ctr)),
+                jumptable_addr,
+                jumptable_cases,
             });
         }
 
@@ -420,6 +424,10 @@ mod tests {
             panic_sites: BTreeMap::new(),
             noreturn: false,
             composite_var_types: BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         }
     }
 

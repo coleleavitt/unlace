@@ -96,6 +96,8 @@ fn cleanup_node(
             cond,
             cases,
             default,
+            jumptable_addr,
+            jumptable_cases,
         } => {
             let cases = cases
                 .into_iter()
@@ -108,6 +110,8 @@ fn cleanup_node(
                 cond,
                 cases,
                 default,
+                jumptable_addr,
+                jumptable_cases,
             });
         }
         HirNode::TryCatch {
@@ -194,6 +198,10 @@ mod tests {
             panic_sites: BTreeMap::new(),
             noreturn: false,
             composite_var_types: BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         }
     }
 

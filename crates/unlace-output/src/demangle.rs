@@ -55,6 +55,20 @@ pub struct DemangleResult {
     /// `true` when this symbol is a C++ destructor — detected from the
     /// Itanium D0/D1/D2 tag or from `short_name` starting with `~`.
     pub is_dtor: bool,
+    /// `true` when this symbol belongs to a C++ lambda closure type.
+    ///
+    /// A lambda closure is an anonymous class whose only normal member is
+    /// the call operator.  The Itanium ABI mangles the closure-type-name
+    /// as `Ul <lambda-sig> E [<digits>] _` (see Itanium ABI §5.1.6); clang
+    /// historically emits the closure with the source name `$_<n>` instead
+    /// (e.g. `3$_0` as a length-prefixed identifier).  Both shapes are
+    /// detected here so callers can render a `// lambda` annotation
+    /// without having to re-parse the mangled string.
+    ///
+    /// Only the `operator()` (and other artefacts of the closure type
+    /// itself) are flagged.  An ordinary function that *takes* a lambda as
+    /// a parameter is not.
+    pub is_lambda: bool,
 }
 
 /// Attempt to demangle a mangled symbol name.
@@ -94,6 +108,8 @@ pub fn demangle(name: &str) -> Option<DemangleResult> {
         other => other,
     };
 
+    let is_lambda = detect_lambda(name, &full_signature);
+
     Some(DemangleResult {
         short_name,
         full_signature: full_signature.into_owned(),
@@ -104,7 +120,143 @@ pub fn demangle(name: &str) -> Option<DemangleResult> {
         param_types,
         is_ctor,
         is_dtor,
+        is_lambda,
     })
+}
+
+/// Detect whether a (mangled, demangled) pair refers to a C++ lambda
+/// closure type.
+///
+/// Two independent signals, ORed together for robustness:
+///
+/// * **Itanium closure-type-name (`Ul…E_`)** — the canonical mangling per
+///   Itanium ABI §5.1.6.  Implemented by [`mangled_has_itanium_lambda`].
+/// * **Clang `$_<n>` source name** — older clang versions emitted the
+///   closure as a normal length-prefixed source name beginning with
+///   `$_<digit>` (e.g. `3$_0`).  Detected as a substring of the mangled
+///   form *or* the demangled form (which surfaces it verbatim, like
+///   `outer()::$_0::operator()`).
+/// * **GCC `{lambda(...)#N}` demangler output** — purely a textual hint
+///   from libiberty, but cheap and reliable when present.
+fn detect_lambda(mangled: &str, demangled: &str) -> bool {
+    if mangled_has_itanium_lambda(mangled) {
+        return true;
+    }
+    if demangled.contains("{lambda(") {
+        return true;
+    }
+    if demangled_has_clang_dollar_name(demangled) {
+        return true;
+    }
+    if mangled_has_clang_dollar_name(mangled) {
+        return true;
+    }
+    false
+}
+
+/// Scan an Itanium-mangled string for the closure-type-name production
+/// `Ul <lambda-sig> E [<digits>] _`.
+///
+/// We don't fully parse `<lambda-sig>` (that requires a complete type
+/// grammar).  Instead we look for the literal byte sequence `Ul` followed,
+/// somewhere later, by an `E` then optional digits then `_` — the cheapest
+/// shape that has zero practical false positives in real symbols, because
+/// regular Itanium productions never start a sub-name with `Ul` (lengths
+/// are decimal digits, builtin types are single-letter, and
+/// `<unnamed-type-name>` uses `Ut` rather than `Ul`).
+///
+/// We also require that the `Ul` is preceded by either start-of-string,
+/// `N` (nested-name opener), `E` (closer of a previous nested name), or
+/// a digit (length-prefixed) boundary, to skip incidental `Ul` substrings
+/// that happen to fall inside a mangled identifier.
+fn mangled_has_itanium_lambda(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let mut i = 0usize;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'U' && bytes[i + 1] == b'l' {
+            let prev = if i == 0 { b'\0' } else { bytes[i - 1] };
+            let boundary = matches!(prev, b'\0' | b'N' | b'E' | b'K' | b'V' | b'r')
+                || prev.is_ascii_digit();
+            if boundary && itanium_lambda_terminator_after(&bytes[i + 2..]) {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Look for the `E [<digits>] _` closing of a closure-type-name starting
+/// from just past the `Ul` opener.
+///
+/// Walks forward looking for an `E` at any depth-0 position (we treat
+/// the body as opaque since we're not parsing types).  Once we see an
+/// `E`, accept if it's followed by zero or more decimal digits and then
+/// an underscore.  Bounded to 256 bytes to keep this O(1) on
+/// pathological inputs.
+fn itanium_lambda_terminator_after(rest: &[u8]) -> bool {
+    let limit = rest.len().min(256);
+    let mut i = 0usize;
+    while i < limit {
+        if rest[i] == b'E' {
+            let mut j = i + 1;
+            while j < rest.len() && rest[j].is_ascii_digit() {
+                j += 1;
+            }
+            if rest.get(j) == Some(&b'_') {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Detect clang's `$_<digit>` closure source-name in a mangled string.
+///
+/// Clang historically emits the lambda's anonymous class as a regular
+/// length-prefixed identifier whose text is `$_<n>`.  In the mangled form
+/// this appears as e.g. `3$_0` — the leading length already consumed the
+/// `$`.  We just look for the `$_` followed by an ASCII digit anywhere in
+/// the mangled string; `$` is otherwise absent from valid Itanium output
+/// (the alphabet is `[A-Za-z0-9_.]`).
+fn mangled_has_clang_dollar_name(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let mut i = 0usize;
+    while i + 2 < bytes.len() {
+        if bytes[i] == b'$'
+            && bytes[i + 1] == b'_'
+            && bytes[i + 2].is_ascii_digit()
+        {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Detect clang's `$_<digit>` closure name as it appears in the demangled
+/// signature (e.g. `outer()::$_0::operator()`).
+///
+/// We require the `$_` to be either at the start of the string, after a
+/// `:` (nested-name separator), or after a space — anything else would
+/// suggest the `$_` is incidental.
+fn demangled_has_clang_dollar_name(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let mut i = 0usize;
+    while i + 2 < bytes.len() {
+        if bytes[i] == b'$'
+            && bytes[i + 1] == b'_'
+            && bytes[i + 2].is_ascii_digit()
+        {
+            let prev = if i == 0 { b'\0' } else { bytes[i - 1] };
+            if matches!(prev, b'\0' | b':' | b' ' | b'(') {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
 }
 
 /// Decompose a demangled signature into namespace path, class name, and
@@ -516,6 +668,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn dump_stl_temp() {
+        for sym in [
+            "_ZNSt6vectorIiSaIiEE9push_backERKi",
+            "_ZNSt3__16vectorIiNS_9allocatorIiEEE9push_backERKi",
+            "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE6appendEPKc",
+            "_ZNSt3__112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEE6appendEPKc",
+            "_ZNSt3__13mapIiiNS_4lessIiEENS_9allocatorINS_4pairIKiiEEEEEixERS3_",
+            "_ZNSt10shared_ptrIiE5resetEv",
+            "_ZNSt3__110shared_ptrIiE5resetEv",
+            "_ZNSt10unique_ptrIiSt14default_deleteIiEE5resetEPi",
+        ] {
+            if let Some(r) = demangle(sym) {
+                eprintln!("INPUT: {}", sym);
+                eprintln!("  full: {}", r.full_signature);
+                eprintln!("  short: {}", r.short_name);
+                eprintln!("  ns: {:?}", r.namespaces);
+                eprintln!("  class: {:?}", r.class_name);
+                eprintln!();
+            } else {
+                eprintln!("FAILED to demangle {}", sym);
+            }
+        }
+    }
+
+    #[test]
     fn demangle_cpp_itanium() {
         let result = demangle("_ZN3foo3barEv").expect("should demangle C++ symbol");
         assert_eq!(result.language, SymbolLanguage::Cpp);
@@ -641,6 +818,8 @@ mod tests {
         assert_eq!(t.symbol_kind, SymbolKind::VirtualThunk);
     }
 
+
+
     #[test]
     fn detect_normal_function() {
         let r = demangle("_ZN3foo3barEv").expect("normal func demangles");
@@ -743,5 +922,108 @@ mod tests {
         let r = demangle("_ZN3foo3barEv").expect("normal method");
         assert!(!r.is_ctor);
         assert!(!r.is_dtor);
+    }
+
+    // -----------------------------------------------------------------------
+    // Lambda closure-type detection.
+    // -----------------------------------------------------------------------
+
+    /// gcc/libstdc++ mangling: a lambda inside `call_lambda(int)` shows up
+    /// as a closure-type-name `UliE_` ("lambda taking one int") nested in
+    /// the local-name `Z…E…`.  The full demangled form is
+    /// `call_lambda(int)::{lambda(int)#1}::operator()(int) const`.
+    #[test]
+    fn detect_lambda_gcc_one_param() {
+        let r = demangle("_ZZ11call_lambdaiENKUliE_clEi").expect("demangles");
+        assert!(r.is_lambda, "should be flagged as lambda; got: {:?}", r);
+        assert!(
+            r.full_signature.contains("lambda"),
+            "full sig should mention lambda: {}",
+            r.full_signature
+        );
+    }
+
+    /// Two-parameter lambda — closure-type body is `Ulii E_`.  Verifies
+    /// the terminator-scanner doesn't trip over multiple type letters.
+    #[test]
+    fn detect_lambda_gcc_two_params() {
+        let r = demangle("_ZZ12call_lambda2iENKUliiE_clEii").expect("demangles");
+        assert!(r.is_lambda, "two-arg lambda missed: {:?}", r);
+    }
+
+    /// clang mangling: closure type is emitted as a length-prefixed
+    /// identifier `3$_0` (literal `$_0`).  Detection should fire from the
+    /// demangled form `…::$_0::operator()` or the raw mangled `$_0`.
+    #[test]
+    fn detect_lambda_clang_dollar_name() {
+        let r = demangle("_ZZ11call_lambdaiENK3$_0clEi").expect("demangles");
+        assert!(
+            r.is_lambda,
+            "clang $_0 closure not detected; got: {:?}",
+            r
+        );
+    }
+
+    #[test]
+    fn detect_lambda_clang_dollar_two_params() {
+        let r = demangle("_ZZ12call_lambda2iENK3$_0clEii").expect("demangles");
+        assert!(r.is_lambda, "got: {:?}", r);
+    }
+
+    /// Negative tests — none of these are lambdas and a false-positive
+    /// would corrupt the C-printer annotation downstream.
+    #[test]
+    fn detect_lambda_negative_normal_method() {
+        let r = demangle("_ZN3foo3barEv").expect("demangles");
+        assert!(!r.is_lambda, "normal method flagged as lambda: {:?}", r);
+    }
+
+    #[test]
+    fn detect_lambda_negative_constructor() {
+        let r = demangle("_ZN4BaseC1Ev").expect("demangles");
+        assert!(!r.is_lambda);
+
+        let r = demangle("_ZN4BaseD0Ev").expect("demangles");
+        assert!(!r.is_lambda);
+    }
+
+    #[test]
+    fn detect_lambda_negative_template_method() {
+        let r = demangle("_ZNSt6vectorIiSaIiEE9push_backERKi").expect("demangles");
+        assert!(!r.is_lambda, "vector::push_back flagged: {:?}", r);
+    }
+
+    #[test]
+    fn detect_lambda_negative_vtable_typeinfo() {
+        assert!(!demangle("_ZTV4Base").unwrap().is_lambda);
+        assert!(!demangle("_ZTI4Base").unwrap().is_lambda);
+    }
+
+    /// Direct unit test of the Itanium-mangling scanner.
+    #[test]
+    fn itanium_lambda_scanner_units() {
+        assert!(mangled_has_itanium_lambda("_ZZ11call_lambdaiENKUliE_clEi"));
+        assert!(mangled_has_itanium_lambda(
+            "_ZZ12call_lambda2iENKUliiE_clEii"
+        ));
+        // No `Ul` at all.
+        assert!(!mangled_has_itanium_lambda("_ZN3foo3barEv"));
+        // `Ul` appears only inside a length-prefixed identifier — the byte
+        // before `U` is an ASCII letter, not a boundary, so we skip it.
+        assert!(!mangled_has_itanium_lambda("_ZN3aUlbEv"));
+    }
+
+    /// Direct unit test of the clang `$_<n>` scanner — both code paths.
+    #[test]
+    fn clang_dollar_scanner_units() {
+        assert!(mangled_has_clang_dollar_name("_ZZ11call_lambdaiENK3$_0clEi"));
+        assert!(demangled_has_clang_dollar_name(
+            "call_lambda(int)::$_0::operator()(int) const"
+        ));
+        // No dollar-sign anywhere.
+        assert!(!mangled_has_clang_dollar_name("_ZN3foo3barEv"));
+        assert!(!demangled_has_clang_dollar_name("foo::bar()"));
+        // `$_` not followed by digit must not match.
+        assert!(!demangled_has_clang_dollar_name("foo::$_a"));
     }
 }

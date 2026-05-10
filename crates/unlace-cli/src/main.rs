@@ -181,6 +181,11 @@ fn run_decompile(
 
     tracing::info!(count = functions.len(), "discovered functions");
 
+    // Scan RTTI once for the whole binary; the C printer uses it to
+    // emit class hierarchy + reconstructed vtable layouts.
+    let rtti = unlace_loader::scan_rtti(&image);
+    let rtti_opt = if rtti.is_empty() { None } else { Some(&rtti) };
+
     let mut all_output = String::new();
 
     for func_entry in &functions {
@@ -194,6 +199,7 @@ fn run_decompile(
             config,
             dwarf.as_ref(),
             &functions,
+            rtti_opt,
         ) {
             Ok(text) => all_output.push_str(&text),
             Err(e) => {
@@ -208,6 +214,7 @@ fn run_decompile(
 
     if matches!(emit, args::EmitFormat::C) {
         all_output = unlace_output::strip_ida_typedefs(&all_output);
+        all_output = unlace_output::dedupe_rtti_hierarchy(&all_output);
     }
 
     if let Some(path) = output_path {

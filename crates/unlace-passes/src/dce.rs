@@ -201,6 +201,8 @@ mod tests {
             inferred_structs: std::collections::BTreeMap::new(),
             composite_var_types: std::collections::BTreeMap::new(),
             array_strides: std::collections::BTreeMap::new(),
+            external_signatures: std::collections::BTreeMap::new(),
+            eh_landing_pads: std::collections::BTreeSet::new(),
         }
     }
 

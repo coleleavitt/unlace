@@ -63,7 +63,7 @@ impl DominatorTree {
 /// Determined by [`CallingConventionDetectPass`](https://docs.rs/unlace-passes)
 /// examining which argument registers are read before being written in the
 /// function entry block.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub enum CallingConvention {
     /// System V AMD64 ABI: args in RDI, RSI, RDX, RCX, R8, R9; return in RAX.
     SystemV,
@@ -78,6 +78,7 @@ pub enum CallingConvention {
     /// 32-bit x86 thiscall: `this` in ECX, remaining args on stack, callee cleans up.
     Thiscall,
     /// Could not determine (insufficient evidence or unsupported architecture).
+    #[default]
     Unknown,
 }
 
@@ -95,14 +96,43 @@ impl std::fmt::Display for CallingConvention {
     }
 }
 
+/// Inferred signature of a function — return type and parameter types.
+///
+/// Populated by the inter-procedural type propagation pipeline after each
+/// function has been individually analyzed. Keyed by function entry address
+/// in the [`FunctionSignatureRegistry`] so that `Call` instructions whose
+/// target is a constant address can look up callee types.
+///
+/// Param types are listed in calling-convention order (e.g. for SystemV:
+/// RDI, RSI, RDX, RCX, R8, R9). An entry of [`PrimitiveType::Unknown`]
+/// means the type was not determinable from the callee body alone.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct FunctionSignature {
+    /// Inferred return type (corresponds to the value left in RAX/X0/etc.).
+    pub return_type: PrimitiveType,
+    /// Inferred parameter types in calling-convention order.
+    pub param_types: Vec<PrimitiveType>,
+    /// Calling convention used to interpret the parameter slots.
+    pub calling_convention: CallingConvention,
+}
+
+/// Map from function entry address to its inferred [`FunctionSignature`].
+///
+/// Built by the CLI driver after a first analysis pass over every function
+/// in the binary. On a second analysis pass, [`InterprocTypePropPass`] uses
+/// this map at every `Call` instruction to refine caller-side argument and
+/// return-value types.
+pub type FunctionSignatureRegistry = BTreeMap<u64, FunctionSignature>;
+
 /// Inferred primitive type for an SSA varnode.
 ///
 /// The type lattice starts at [`Unknown`](Self::Unknown) and is refined by
 /// [`TypeInferPass`](https://docs.rs/unlace-passes) as it walks instructions.
 /// Width is in **bytes** (matching [`Varnode::size`](crate::Varnode::size)).
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub enum PrimitiveType {
     /// No type information yet — joins with anything to become that type.
+    #[default]
     Unknown,
     /// Boolean (1 byte, value in {0, 1}).
     Bool,
@@ -292,6 +322,27 @@ pub struct SsaFunction {
     /// qword element sizes respectively. The C printer uses this to recover
     /// `base[idx]` array subscripts in place of raw pointer arithmetic.
     pub array_strides: BTreeMap<(BlockId, usize), u64>,
+    /// Inferred signatures of *other* functions in the binary, keyed by their
+    /// entry address. Populated by the CLI driver between two analysis
+    /// passes so the inter-procedural type propagation pass can refine
+    /// caller-side argument and return-value types at every `Call`
+    /// instruction whose target is a constant address.
+    ///
+    /// Empty by default — single-function decompilation has no peer info.
+    pub external_signatures: FunctionSignatureRegistry,
+    /// Exception-handling landing-pad addresses for this function, recovered
+    /// from `.eh_frame` + `.gcc_except_table` (LSDA call-site table).
+    ///
+    /// Each entry is the absolute virtual address of a landing pad — the
+    /// first instruction of a catch / cleanup handler reachable from a
+    /// `try`-protected call site within this function. Empty for functions
+    /// without LSDA data (pure C, no try/catch, missing unwind tables).
+    ///
+    /// Populated by the CLI pipeline; consumed by
+    /// `unlace_struct::structure_with_landing_pads` to materialise
+    /// `HirNode::TryCatch` nodes at the correct boundaries instead of
+    /// relying on `__cxa_begin_catch` call-site heuristics.
+    pub eh_landing_pads: BTreeSet<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -347,6 +398,8 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         inferred_structs: BTreeMap::new(),
         composite_var_types: BTreeMap::new(),
         array_strides: BTreeMap::new(),
+        external_signatures: BTreeMap::new(),
+        eh_landing_pads: BTreeSet::new(),
     }
 }
 

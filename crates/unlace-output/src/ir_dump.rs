@@ -284,6 +284,8 @@ mod tests {
             inferred_structs: BTreeMap::new(),
             composite_var_types: BTreeMap::new(),
             array_strides: BTreeMap::new(),
+            external_signatures: BTreeMap::new(),
+            eh_landing_pads: BTreeSet::new(),
         }
     }
 

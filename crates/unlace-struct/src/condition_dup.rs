@@ -358,6 +358,10 @@ mod tests {
             panic_sites: BTreeMap::new(),
             noreturn: false,
             composite_var_types: BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         }
     }
 

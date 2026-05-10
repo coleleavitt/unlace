@@ -33,7 +33,10 @@ pub use image::{
 };
 pub use macho::MachoLoader;
 pub use pe::PeLoader;
-pub use rtti::{BaseClass, CppClass, InheritanceKind, RttiInfo, scan_rtti};
+pub use rtti::{
+    BaseClass, CppClass, InheritanceKind, RttiInfo, VtableLayout, VtableSlotKind, VtableSubtable,
+    scan_rtti,
+};
 
 /// Trait for binary format loaders.
 ///

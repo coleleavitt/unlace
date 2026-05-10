@@ -97,6 +97,17 @@ pub enum HirNode {
         cond: SsaVarnode,
         cases: Vec<(SwitchCase, Vec<HirNode>, bool)>,
         default: Option<Vec<HirNode>>,
+        /// Address of the jump table that this switch was recovered from,
+        /// if any. Populated by [`crate::switch_recovery`] when a jump table
+        /// is matched to the switch's instruction address. Used by the C
+        /// printer to emit an IDA-style `// jumptable 0x<addr> cases <N>`
+        /// annotation above the `switch` keyword.
+        jumptable_addr: Option<u64>,
+        /// Number of cases in the jump table this switch was recovered from.
+        /// Counts table entries, *not* unique case bodies (so duplicated
+        /// default-fallthrough entries inflate this number — this matches
+        /// IDA's annotation behaviour).
+        jumptable_cases: Option<usize>,
     },
 
     /// Return from the function.
@@ -140,6 +151,83 @@ pub enum HirNode {
         try_body: Vec<HirNode>,
         catch_body: Vec<HirNode>,
     },
+
+    /// A wrapper that attaches free-form C comments to an inner node.
+    ///
+    /// `pre` comments render *before* the inner statement (one per line,
+    /// at the inner statement's indentation). `post` comments render
+    /// *after* the inner statement, on the same line for trailing
+    /// `// foo` content if a single short comment, otherwise on their
+    /// own lines below.
+    ///
+    /// Sources for these comments include:
+    /// - DWARF source-line annotations (e.g. `// /path/foo.c:42`).
+    /// - Symbol metadata (e.g. `// hint: external API`).
+    /// - User-provided overrides via the future plugin/comment hook.
+    ///
+    /// The inner node may be any [`HirNode`] (statement, control-flow
+    /// construct, even another `Commented` wrapper). Transform passes
+    /// preserve the wrapper, propagating comments from input to output.
+    /// The C printer renders pre-comments before the inner node's first
+    /// emitted line and post-comments after its last emitted line.
+    Commented {
+        pre: Vec<String>,
+        post: Vec<String>,
+        inner: Box<HirNode>,
+    },
+}
+
+impl HirNode {
+    /// Wrap `self` with a single pre-statement comment, building (or extending)
+    /// a [`HirNode::Commented`] wrapper. Convenience for plugin/DWARF code that
+    /// attaches comments without caring about structural shape.
+    pub fn with_pre_comment(self, comment: impl Into<String>) -> HirNode {
+        match self {
+            HirNode::Commented {
+                mut pre,
+                post,
+                inner,
+            } => {
+                pre.push(comment.into());
+                HirNode::Commented { pre, post, inner }
+            }
+            other => HirNode::Commented {
+                pre: vec![comment.into()],
+                post: Vec::new(),
+                inner: Box::new(other),
+            },
+        }
+    }
+
+    /// Wrap `self` with a single post-statement comment, building (or extending)
+    /// a [`HirNode::Commented`] wrapper.
+    pub fn with_post_comment(self, comment: impl Into<String>) -> HirNode {
+        match self {
+            HirNode::Commented {
+                pre,
+                mut post,
+                inner,
+            } => {
+                post.push(comment.into());
+                HirNode::Commented { pre, post, inner }
+            }
+            other => HirNode::Commented {
+                pre: Vec::new(),
+                post: vec![comment.into()],
+                inner: Box::new(other),
+            },
+        }
+    }
+
+    /// Borrow the unwrapped, comment-stripped node (recursing through nested
+    /// wrappers). Returns `self` when `self` is not [`HirNode::Commented`].
+    pub fn unwrap_commented(&self) -> &HirNode {
+        let mut cur = self;
+        while let HirNode::Commented { inner, .. } = cur {
+            cur = inner.as_ref();
+        }
+        cur
+    }
 }
 
 /// A structured function in the HIR.
@@ -162,4 +250,37 @@ pub struct HirFunction {
     /// from [`SsaFunction::composite_var_types`] for use by the C printer when
     /// emitting `base->field_<offset>` struct field access syntax.
     pub composite_var_types: BTreeMap<SsaVarnode, Type>,
+    /// `true` when this function is detected as a C++ constructor.
+    ///
+    /// Detection sources:
+    /// 1. Itanium mangling tags `C1` / `C2` / `C3` in the symbol name
+    ///    (handled in [`unlace_output::demangle::demangle`]).
+    /// 2. Demangled `ClassName::ClassName(...)` shape where the final
+    ///    component matches the enclosing class.
+    ///
+    /// Populated at structuring time from [`HirFunction::name`] and
+    /// preserved across HIR rewriting passes. The C printer uses this to
+    /// surface a `ClassName::ClassName(args)` comment above the emitted
+    /// signature instead of the raw mangled identifier.
+    pub is_ctor: bool,
+    /// `true` when this function is detected as a C++ destructor.
+    ///
+    /// Detection sources:
+    /// 1. Itanium mangling tags `D0` / `D1` / `D2` in the symbol name.
+    /// 2. Demangled name whose final component starts with `~`.
+    pub is_dtor: bool,
+    /// The class/struct that owns this member function, when detectable
+    /// from the demangled name. `None` for free functions or symbols that
+    /// don't demangle as member functions.
+    pub class_name: Option<String>,
+    /// Per-SSA-varnode names produced by [`unlace_passes::VariableMergePass`]'s
+    /// interference-graph coalescer.
+    ///
+    /// When non-empty, the C printer prefers this map over its default
+    /// "one name per base [`Varnode`]" heuristic, allowing several SSA
+    /// versions of one base — and (for Unique-space) several distinct bases
+    /// with disjoint live ranges — to share one source-level name like
+    /// `v3` / `v4`.  Empty when the coalescer was not run or produced no
+    /// merges, in which case the printer falls back to its old behaviour.
+    pub merged_names: BTreeMap<SsaVarnode, String>,
 }

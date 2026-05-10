@@ -1,20 +1,20 @@
 /* Function:   _start | Address: 0x10100 | Size: 0x1a (26 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
-    int v3; // eax
-    int v1;
-    int v2;
-    v1(); v2();
-    cond = v3 == 1;
+    int v1; // eax
+    int v7;
+    int v8;
+    v7(); v8();
+    _Bool cond = v1 == 1; // temp
     if (cond) {
     }
-    v3 = v3; return;
+    v1 = v1; return;
 }
 /* Function:   arc_branch | Address: 0x1011c | Size: 0x18 (24 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void arc_branch(void) {
-    int v1;
-    int v2;
-    v1(); v2(); v3 = 0;
-    if (v3) {
+    int v6;
+    int v7;
+    v6(); v7(); v8 = 0;
+    if (v8) {
     }
     return;
 }

@@ -242,13 +242,18 @@ fn refine_node(
             cond,
             cases,
             default,
+            jumptable_addr,
+            jumptable_cases,
         } => {
             let switch_addr = first_stmt_addr(&cases);
-            let refined_cases = match switch_addr.and_then(|a| tables.get(&a)) {
-                Some((table, targets)) if validate_table_base(table.base, sections).is_some() => {
-                    refine_cases(cases, table, targets)
-                }
-                _ => cases,
+            let matched_table = switch_addr.and_then(|a| tables.get(&a));
+            let (refined_cases, new_addr, new_count) = match matched_table {
+                Some((table, targets)) if validate_table_base(table.base, sections).is_some() => (
+                    refine_cases(cases, table, targets),
+                    Some(table.base),
+                    Some(table.num_entries as usize),
+                ),
+                _ => (cases, jumptable_addr, jumptable_cases),
             };
             HirNode::Switch {
                 cond,
@@ -269,6 +274,8 @@ fn refine_node(
                         .map(|n| refine_node(n, tables, sections))
                         .collect()
                 }),
+                jumptable_addr: new_addr,
+                jumptable_cases: new_count,
             }
         }
         other => other,
@@ -345,6 +352,8 @@ fn walk_node(node: HirNode) -> HirNode {
             cond,
             cases,
             default,
+            jumptable_addr,
+            jumptable_cases,
         } => HirNode::Switch {
             cond,
             cases: cases
@@ -352,6 +361,8 @@ fn walk_node(node: HirNode) -> HirNode {
                 .map(|(c, body, ft)| (c, walk_nodes(body), ft))
                 .collect(),
             default: default.map(walk_nodes),
+            jumptable_addr,
+            jumptable_cases,
         },
         HirNode::Statement(ref insn) if insn.op == IrOp::Branchind => {
             tracing::debug!(
@@ -393,12 +404,18 @@ mod tests {
                     (SwitchCase::Value(1), vec![HirNode::Return(None)], false),
                 ],
                 default: Some(vec![HirNode::Return(None)]),
+                jumptable_addr: None,
+                jumptable_cases: None,
             }],
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         }
     }
 
@@ -428,6 +445,10 @@ mod tests {
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         recover_switches(&mut func);
@@ -567,12 +588,18 @@ mod tests {
                     (SwitchCase::Value(2), case_body(switch_addr + 0x20), false),
                 ],
                 default: None,
+                jumptable_addr: None,
+                jumptable_cases: None,
             }],
             addr: switch_addr,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
+            is_ctor: false,
+            is_dtor: false,
+            class_name: None,
+            merged_names: BTreeMap::new(),
         };
 
         let targets = [0x4200u64, 0x4210, 0x4220];

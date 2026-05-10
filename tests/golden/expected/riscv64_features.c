@@ -1,7 +1,8 @@
 /* Function:   _start | Address: 0x10100 | Size: 0x10 (16 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
-    int v1;
-    while (v1) {
+    int v3;
+    arithmetic_test(); logic_test(); memory_test();
+    while (v3) {
     }
     return;
 }
@@ -11,25 +12,24 @@ void arithmetic_test(void) {
 }
 /* Function:   logic_test | Address: 0x10134 | Size: 0x30 (48 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void logic_test(void) {
-    v5 = 0;
-    if (v5) {
+    v6 = 0;
+    if (v6) {
     }
-    v5 = 1;
-    if (v5) {
+    v6 = 1;
+    if (v6) {
     }
     return;
 }
 /* Function:   memory_test | Address: 0x10164 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void memory_test(void) {
-    long long result; // rdx
-    unsigned int v5; // temp
-    unsigned long long v3; // temp
-    result = 0x42LL; *(_QWORD *)(0x42LL) = v3; *(_QWORD *)(0x42LL) = v3;
-    *(_DWORD *)(0x42LL) = LODWORD(0x42LL); v5 = *(_DWORD *)(0x42LL); v3 = (__int64)(v5);
-    v6 = v3; v3 = (unsigned __int64)(v3 < 0x64LL); v8 = v3;
-    cond = v3 == 0LL;
+    unsigned int v8; // temp
+    unsigned long long v10; // temp
+    long long result = 0x42LL; // rdx
+    *(_QWORD *)(0x42LL) = v10; *(_QWORD *)(0x42LL) = v10; *(_DWORD *)(0x42LL) = LODWORD(0x42LL);
+    v8 = *(_DWORD *)(0x42LL); v10 = (__int64)(v8); v4 = v10;
+    v10 = (unsigned __int64)(v10 < 0x64LL); v5 = v10; cond = v10 == 0LL;
     if (cond) {
     }
-    v3 = *(_QWORD *)(0x42LL); v9 = v3; v3 = *(_QWORD *)(0x42LL);
-    v10 = v3; return result;
+    v10 = *(_QWORD *)(0x42LL); v6 = v10; v10 = *(_QWORD *)(0x42LL);
+    v1 = v10; return result;
 }

@@ -19,8 +19,8 @@ void ppc_branch(void) {
 /* Function:   sub_10000120 | Address: 0x10000120 | Size: 0x10 (16 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10000120(void) {
     int result; // reg?
-    v2 = 0;
-    if (v2) {
+    v3 = 0;
+    if (v3) {
     } else {
     }
     return result;

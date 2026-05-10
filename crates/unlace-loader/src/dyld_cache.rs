@@ -1761,4 +1761,155 @@ mod tests {
         assert_eq!(visits[0].0, 0);
         assert_eq!(visits[1].0, 16);
     }
+
+    // -----------------------------------------------------------------------
+    // t179: dyld v5 chain apply with auth-key preservation
+    //
+    // Walk a multi-entry chain mixing plain and auth pointers and verify
+    // through `apply_v5_slide` that:
+    //   * auth entries retain key / diversity / addr-div bits verbatim;
+    //     only the low 32-bit offset is rewritten = (target + add) & 0xFFFF_FFFF
+    //   * plain entries get the full 50-bit (target + add) rewrite
+    //   * the next-link bits (51..62) and is_auth bit (50) are preserved
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn apply_v5_preserves_auth_key_and_diversifier() {
+        // Build a 3-entry chain on a single page:
+        //   page[0]   = auth IB, addr_div=1, diversity=0x2BAD, target=0x1000, next=1 (+8)
+        //   page[8]   = plain, target=0x2000, next=2 (+16 → page[24])
+        //   page[24]  = auth DA, addr_div=0, diversity=0x0123, target=0x3000, next=0 (end)
+        let page_size: usize = 4096;
+        let mut page = vec![0u8; page_size];
+
+        // Auth entry: key=IB(1), addr_div=1, diversity=0x2BAD, target=0x1000, next=1
+        let auth0_raw: u64 = (1u64 << 51)            // next_offset_div8 = 1 → +8 bytes
+            | (1u64 << 50)                            // is_auth
+            | (1u64 << 48)                            // key = IB
+            | (1u64 << 47)                            // addr_div = 1
+            | (0x2BADu64 << 32)                       // diversity
+            | 0x0000_1000u64;                         // 32-bit target offset
+        // Plain entry: target=0x2000, next=2
+        let plain_raw: u64 = (2u64 << 51) | 0x0000_2000u64;
+        // Auth entry: key=DA(2), addr_div=0, diversity=0x0123, target=0x3000, next=0 (end)
+        let auth1_raw: u64 = (1u64 << 50)             // is_auth
+            | (2u64 << 48)                            // key = DA
+            | (0u64 << 47)                            // addr_div = 0
+            | (0x0123u64 << 32)                       // diversity
+            | 0x0000_3000u64;
+        page[0..8].copy_from_slice(&auth0_raw.to_le_bytes());
+        page[8..16].copy_from_slice(&plain_raw.to_le_bytes());
+        page[24..32].copy_from_slice(&auth1_raw.to_le_bytes());
+
+        // Sanity: walk_v5_page sees all three entries in order.
+        let mut visits: Vec<(usize, u64)> = Vec::new();
+        walk_v5_page(&page, 0, 0, |off, raw| visits.push((off, raw)));
+        assert_eq!(visits.len(), 3, "three-entry mixed chain");
+        assert_eq!(visits[0].0, 0);
+        assert_eq!(visits[1].0, 8);
+        assert_eq!(visits[2].0, 24);
+
+        let slide = SlideInfoV5 {
+            version: 5,
+            page_size: page_size as u32,
+            page_starts: vec![0],
+            value_add: 0x40,
+        };
+        let slide_amount: u64 = 0x100;
+        let add = slide.value_add.wrapping_add(slide_amount); // 0x140
+
+        let out = apply_v5_slide(&page, &slide, slide_amount);
+        let new_auth0 = u64::from_le_bytes(out[0..8].try_into().unwrap());
+        let new_plain = u64::from_le_bytes(out[8..16].try_into().unwrap());
+        let new_auth1 = u64::from_le_bytes(out[24..32].try_into().unwrap());
+
+        // --- auth0: key=IB, addr_div=1, diversity=0x2BAD ---
+        let e0 = decode_v5_chain_entry(new_auth0);
+        let a0 = e0.auth.expect("auth0 should still be auth");
+        assert_eq!(a0.key, 1, "IB key preserved");
+        assert!(a0.use_addr, "addr_div preserved");
+        assert_eq!(a0.diversity, 0x2BAD, "diversity preserved");
+        assert_eq!(
+            e0.target,
+            (0x1000u64 + add) & 0xFFFF_FFFF,
+            "auth offset slid by (value_add + slide_amount)"
+        );
+        // Next-link bits (51..62) survive intact for auth0.
+        assert_eq!(
+            (new_auth0 >> 51) & 0xFFF,
+            1,
+            "auth0 next-link bits preserved"
+        );
+
+        // --- auth1: key=DA, addr_div=0, diversity=0x0123 ---
+        let e2 = decode_v5_chain_entry(new_auth1);
+        let a2 = e2.auth.expect("auth1 should still be auth");
+        assert_eq!(a2.key, 2, "DA key preserved");
+        assert!(!a2.use_addr, "addr_div=0 preserved");
+        assert_eq!(a2.diversity, 0x0123, "diversity preserved");
+        assert_eq!(
+            e2.target,
+            (0x3000u64 + add) & 0xFFFF_FFFF,
+            "auth offset slid"
+        );
+        assert_eq!(
+            (new_auth1 >> 51) & 0xFFF,
+            0,
+            "auth1 terminator next-link preserved"
+        );
+
+        // --- plain entry slid through full 50 bits ---
+        let e1 = decode_v5_chain_entry(new_plain);
+        assert!(e1.auth.is_none(), "plain entry stays plain");
+        assert_eq!(e1.target, 0x2000u64 + add, "plain offset slid (no mask)");
+    }
+
+    #[test]
+    fn apply_v5_slides_plain_offset() {
+        // Two-entry plain chain on a single page, verify full 50-bit slide
+        // is applied to both entries and is_auth bit stays 0.
+        let page_size: usize = 4096;
+        let mut page = vec![0u8; page_size];
+
+        // raw0: plain, target = 0x0000_0000_DEAD_BEEF, next = 1 (+8)
+        let raw0: u64 = (1u64 << 51) | 0xDEAD_BEEFu64;
+        // raw1: plain, target near 50-bit ceiling, next = 0 (end)
+        let raw1: u64 = 0x0001_2345_6789_ABCDu64 & 0x0003_FFFF_FFFF_FFFF;
+        page[0..8].copy_from_slice(&raw0.to_le_bytes());
+        page[8..16].copy_from_slice(&raw1.to_le_bytes());
+
+        let slide = SlideInfoV5 {
+            version: 5,
+            page_size: page_size as u32,
+            page_starts: vec![0],
+            value_add: 0,
+        };
+        let slide_amount: u64 = 0x1_0000; // 64 KiB slide
+        let out = apply_v5_slide(&page, &slide, slide_amount);
+
+        let new0 = u64::from_le_bytes(out[0..8].try_into().unwrap());
+        let new1 = u64::from_le_bytes(out[8..16].try_into().unwrap());
+
+        // is_auth stays 0 on both.
+        assert_eq!((new0 >> 50) & 1, 0);
+        assert_eq!((new1 >> 50) & 1, 0);
+
+        // next-link bits preserved.
+        assert_eq!((new0 >> 51) & 0xFFF, 1, "raw0 next=1 preserved");
+        assert_eq!((new1 >> 51) & 0xFFF, 0, "raw1 terminator preserved");
+
+        // Full 50-bit slid offset.
+        let e0 = decode_v5_chain_entry(new0);
+        let e1 = decode_v5_chain_entry(new1);
+        assert!(e0.auth.is_none());
+        assert!(e1.auth.is_none());
+        assert_eq!(
+            e0.target,
+            (0xDEAD_BEEFu64 + slide_amount) & 0x0003_FFFF_FFFF_FFFF
+        );
+        assert_eq!(
+            e1.target,
+            (0x0001_2345_6789_ABCDu64 + slide_amount) & 0x0003_FFFF_FFFF_FFFF
+        );
+    }
 }

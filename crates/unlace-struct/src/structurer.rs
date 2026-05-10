@@ -13,10 +13,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::cfg::EdgeKind;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
-use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
+use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::eager_returns::eager_returns;
 use crate::hir::{HirFunction, HirNode, LabelId, SwitchCase};
+use crate::switch_recovery::{IndirectBranchKind, classify_indirect_branch};
 
 /// Errors that can occur during control-flow structuring.
 #[derive(Debug, thiserror::Error)]
@@ -42,6 +43,21 @@ pub struct BoundsCheck {
 ///    loop constructs at each node.
 /// 3. Any CFG edge that doesn't fit a structured pattern becomes a goto/label.
 pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
+    structure_with_arch(func, ArchId::X86_64)
+}
+
+/// Like [`structure`] but classifies any indirect branches that did not
+/// structure as a `Switch` using the per-architecture detectors in
+/// [`crate::switch_recovery::classify_indirect_branch`].
+///
+/// The classification results are stored on
+/// [`HirFunction::indirect_branch_kinds`] keyed by the BRANCHIND
+/// instruction's machine address. Recognised kinds drive future per-arch
+/// jump-table reconstruction; today they are purely informational.
+pub fn structure_with_arch(
+    func: &SsaFunction,
+    arch: ArchId,
+) -> Result<HirFunction, StructureError> {
     let mut ctx = StructureCtx::new(func);
     let entry = func.function.entry;
 
@@ -52,6 +68,8 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
     let mut body = ctx.structure_region(entry);
     strip_unused_labels(&mut body);
     recover_for_loops(&mut body);
+
+    let indirect_branch_kinds = classify_unstructured_indirect_branches(func, arch);
 
     Ok(HirFunction {
         name: func.function.name.clone(),
@@ -84,7 +102,46 @@ pub fn structure(func: &SsaFunction) -> Result<HirFunction, StructureError> {
                 Some((insn.addr, ann.clone()))
             })
             .collect(),
+        indirect_branch_kinds,
     })
+}
+
+/// For every block whose terminator is an unstructured `BRANCHIND` (i.e.
+/// the structurer did not emit it as a `Switch`), invoke the per-arch
+/// classifier and collect recognised dispatch kinds keyed by the BRANCHIND
+/// machine address.
+///
+/// "Unstructured" here means: the block ends in `BRANCHIND` but has fewer
+/// than two `IndirectJump` successors (the structured-switch path requires
+/// `>= 2` and consumes those blocks). The generic / x86 LOAD→BRANCHIND
+/// shape still classifies as [`IndirectBranchKind::Generic`] when present,
+/// but only on non-x86 paths do the arch-specific detectors fire.
+fn classify_unstructured_indirect_branches(
+    func: &SsaFunction,
+    arch: ArchId,
+) -> BTreeMap<u64, IndirectBranchKind> {
+    let mut out = BTreeMap::new();
+    for (&bid, block) in &func.function.blocks {
+        let Some(last) = block.insns.last() else {
+            continue;
+        };
+        if last.op != IrOp::Branchind {
+            continue;
+        }
+        let n_indirect = func
+            .cfg
+            .edges_from(bid)
+            .iter()
+            .filter(|(_, kind)| *kind == EdgeKind::IndirectJump)
+            .count();
+        if n_indirect >= 2 {
+            continue;
+        }
+        if let Some(kind) = classify_indirect_branch(arch, &block.insns) {
+            out.insert(last.addr, kind);
+        }
+    }
+    out
 }
 
 /// Like [`structure`] but wraps regions at `landing_pad_addrs` in `TryCatch` nodes.
@@ -94,7 +151,17 @@ pub fn structure_with_landing_pads(
     func: &SsaFunction,
     landing_pad_addrs: &BTreeSet<u64>,
 ) -> Result<HirFunction, StructureError> {
-    let mut hir = structure(func)?;
+    structure_with_landing_pads_and_arch(func, landing_pad_addrs, ArchId::X86_64)
+}
+
+/// [`structure_with_landing_pads`] with an explicit `arch` for per-arch
+/// indirect-branch classification.
+pub fn structure_with_landing_pads_and_arch(
+    func: &SsaFunction,
+    landing_pad_addrs: &BTreeSet<u64>,
+    arch: ArchId,
+) -> Result<HirFunction, StructureError> {
+    let mut hir = structure_with_arch(func, arch)?;
     if !landing_pad_addrs.is_empty() {
         let confirmed = resolve_landing_pad_addrs(func, landing_pad_addrs);
         if !confirmed.is_empty() {
@@ -4322,5 +4389,98 @@ mod tests {
         let ssa = build_ssa(func);
         let leaked: &'static SsaFunction = Box::leak(Box::new(ssa));
         StructureCtx::new(leaked)
+    }
+
+    /// t125: an ARM/Thumb byte-table indirect-branch shape (LOAD u8 +
+    /// INT_ADD + BRANCHIND) should be classified as
+    /// `IndirectBranchKind::ArmThumbTable` and recorded on
+    /// `HirFunction::indirect_branch_kinds` keyed by the BRANCHIND VA.
+    #[test]
+    fn structurer_classifies_arm_thumb_indirect_branch_when_pattern_matches() {
+        let table_base = Varnode::constant(0x8000, 4);
+        let idx = Varnode::reg(0x10, 4);
+        let off_byte = Varnode::unique(1, 1);
+        let off_word = Varnode::unique(2, 4);
+        let target = Varnode::unique(3, 4);
+
+        let mut func = Function::new("arm_thumb_tbb", BlockId(0), 0x1000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            off_byte,
+            smallvec![Varnode::constant(1, 8), table_base, idx],
+            0x1000,
+        ));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            target,
+            smallvec![table_base, off_word],
+            0x1004,
+        ));
+        bb0.insns.push(IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![target],
+            0x1008,
+        ));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(ctrl_insn(IrOp::Return, 0x1010));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+
+        let ssa = build_ssa(func);
+        let hir = structure_with_arch(&ssa, ArchId::Arm).expect("structuring should succeed");
+
+        assert_eq!(
+            hir.indirect_branch_kinds.get(&0x1008),
+            Some(&IndirectBranchKind::ArmThumbTable),
+            "ARM TBB-shape BRANCHIND should classify as ArmThumbTable"
+        );
+    }
+
+    /// t125: An x86 indirect branch whose successors don't form a
+    /// structured switch should leave `indirect_branch_kinds` empty
+    /// (the existing generic / x86 switch path already handles those).
+    #[test]
+    fn structurer_leaves_indirect_branch_kinds_empty_for_x86() {
+        let table_base = Varnode::constant(0x8000, 8);
+        let idx = Varnode::reg(0x10, 8);
+        let target = Varnode::unique(1, 8);
+
+        let mut func = Function::new("x86_unstructured", BlockId(0), 0x2000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            target,
+            smallvec![Varnode::constant(1, 8), table_base, idx],
+            0x2000,
+        ));
+        bb0.insns.push(IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![target],
+            0x2004,
+        ));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(ctrl_insn(IrOp::Return, 0x2100));
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(ctrl_insn(IrOp::Return, 0x2200));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+
+        let ssa = build_ssa(func);
+        let hir =
+            structure_with_arch(&ssa, ArchId::X86_64).expect("structuring should succeed");
+
+        assert!(
+            hir.indirect_branch_kinds.is_empty(),
+            "x86 BRANCHIND with multiple IndirectJump successors is consumed by \
+             the structured-switch path and must not appear in indirect_branch_kinds"
+        );
     }
 }

@@ -43,11 +43,13 @@ pub use return_merge::return_merge;
 pub use short_circuit::short_circuit_recovery;
 pub use structurer::{
     StructureError, recover_for_loops, structure, structure_preserve_returns,
-    structure_preserve_returns_with_landing_pads, structure_with_landing_pads,
+    structure_preserve_returns_with_landing_pads, structure_with_arch,
+    structure_with_landing_pads, structure_with_landing_pads_and_arch,
 };
 pub use switch_recovery::{
-    JumpTable, JumpTableKind, SectionPerms, SectionView, TableEndian, find_default_target,
-    read_jump_table, recover_switches, refine_switches_with_tables, validate_table_base,
+    IndirectBranchKind, JumpTable, JumpTableKind, SectionPerms, SectionView, TableEndian,
+    classify_indirect_branch, find_default_target, read_jump_table, recover_switches,
+    refine_switches_with_tables, validate_table_base,
 };
 pub use tail_duplication::tail_duplicate_small_blocks;
 pub use ternary_recovery::ternary_recovery;

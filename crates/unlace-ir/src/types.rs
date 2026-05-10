@@ -63,6 +63,15 @@ pub enum Type {
         return_type: Box<Type>,
         variadic: bool,
     },
+    /// C bitfield: a sub-byte field carved out of `underlying`. `offset` is
+    /// the bit position within the storage unit and `width` the number of
+    /// bits the field occupies. Recovered from shift/mask read patterns and
+    /// shift-or-mask write patterns.
+    Bitfield {
+        underlying: Box<Type>,
+        offset: u32,
+        width: u32,
+    },
 }
 
 /// A single field within a [`Type::Struct`].
@@ -134,6 +143,7 @@ impl Type {
                 }
                 u8::try_from(end).ok()
             }
+            Type::Bitfield { underlying, .. } => underlying.size(),
         }
     }
 
@@ -271,6 +281,9 @@ impl fmt::Display for Type {
                 None => write!(f, "{element}[]"),
             },
             Type::Struct { name, .. } => write!(f, "struct {name}"),
+            Type::Bitfield {
+                underlying, width, ..
+            } => write!(f, "{underlying} : {width}"),
             Type::FuncPtr {
                 params,
                 return_type,

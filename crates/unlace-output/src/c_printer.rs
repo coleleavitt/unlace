@@ -6361,6 +6361,30 @@ fn emit_operand_resolved(
     )
 }
 
+/// Returns `Some(unsigned)` if the input varnode is typed as a single-byte
+/// integer (i.e. a `char` in C terms), encoding signedness via the boolean.
+///
+/// Used to detect char-typed comparison contexts so that constant operands
+/// can render as char literals.
+fn char_typed_input(vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> Option<bool> {
+    if vn.space == SpaceId::Const {
+        return None;
+    }
+    let resolved_sv = ctx
+        .stmt_inputs
+        .get(&stmt_idx)
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *vn).copied());
+    let sv = resolved_sv.unwrap_or(SsaVarnode {
+        base: *vn,
+        version: 0,
+    });
+    match ctx.var_types.get(&sv).copied()? {
+        PrimitiveType::Int(1) => Some(false),
+        PrimitiveType::UnsignedInt(1) => Some(true),
+        _ => None,
+    }
+}
+
 fn is_pointer_typed_input(vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> bool {
     if vn.space == SpaceId::Const {
         return false;
@@ -6392,6 +6416,25 @@ fn const_context_for_binop_pair(
         && is_pointer_typed_input(&insn.inputs[other_idx], stmt_idx, ctx)
     {
         return ConstContext::Pointer;
+    }
+    // Char-literal context: a small constant compared against a byte-typed
+    // value renders as a C char literal (e.g. `c == 'A'`). Restricted to
+    // (in)equality and ordering comparisons so we don't mis-render
+    // arithmetic constants such as `c + 1` as `c + '\x01'`.
+    if matches!(
+        insn.op,
+        IrOp::IntEqual
+            | IrOp::IntNotequal
+            | IrOp::IntLess
+            | IrOp::IntLessequal
+            | IrOp::IntSless
+            | IrOp::IntSlessequal
+    ) && insn.inputs[this_idx].space == SpaceId::Const
+        && insn.inputs[this_idx].size == 1
+    {
+        if let Some(unsigned) = char_typed_input(&insn.inputs[other_idx], stmt_idx, ctx) {
+            return ConstContext::Char { unsigned };
+        }
     }
     base_ctx
 }
@@ -6437,6 +6480,13 @@ enum ConstContext {
     Bitwise,
     Pointer,
     Unsigned,
+    /// Char-typed context. Numeric constants in this context render as
+    /// C char literals (e.g. `'A'`, `'\n'`, `'\xff'`) instead of integers
+    /// when the value lies in a representable byte range. Falls back to
+    /// `Signed`/`Unsigned` rendering otherwise.
+    Char {
+        unsigned: bool,
+    },
 }
 
 fn const_context_for_op(op: IrOp) -> ConstContext {
@@ -6534,6 +6584,22 @@ fn format_constant_ctx(value: u64, size: u8, context: ConstContext) -> String {
         return "nullptr".to_string();
     }
 
+    if let ConstContext::Char { unsigned } = context {
+        if size == 1 {
+            if let Some(lit) = format_char_literal(value, unsigned) {
+                return lit;
+            }
+        }
+        // Fall through to the appropriate numeric rendering when the value
+        // can't be represented as a char literal (oversized, out-of-range).
+        let fallback = if unsigned {
+            ConstContext::Unsigned
+        } else {
+            ConstContext::Signed
+        };
+        return format_constant_ctx(value, size, fallback);
+    }
+
     let msb_threshold = match size {
         1 => 0x80u64,
         2 => 0x8000,
@@ -6600,6 +6666,42 @@ fn sign_extend(value: u64, size: u8) -> i64 {
         8 => value as i64,
         _ => value as i64,
     }
+}
+
+/// Render a single-byte numeric constant as a C char literal.
+///
+/// Returns `None` when the value lies outside the byte range that maps to a
+/// reasonable char literal (`> 0xFF` for unsigned, `> 0x7F` for signed) so
+/// the caller can fall back to numeric rendering.
+///
+/// Escape sequences follow C99 §6.4.4.4:
+/// - `0x00` → `'\0'`
+/// - `0x07` → `'\a'`, `0x08` → `'\b'`, `0x09` → `'\t'`, `0x0A` → `'\n'`
+/// - `0x0B` → `'\v'`, `0x0C` → `'\f'`, `0x0D` → `'\r'`
+/// - `0x27` → `'\''`, `0x5C` → `'\\'`
+/// - Other printable ASCII (`0x20..=0x7E`) → as-is
+/// - Otherwise → `'\xHH'` hex escape
+fn format_char_literal(value: u64, unsigned: bool) -> Option<String> {
+    let max = if unsigned { 0xFFu64 } else { 0x7Fu64 };
+    if value > max {
+        return None;
+    }
+    let byte = value as u8;
+    let body = match byte {
+        0x00 => "\\0".to_string(),
+        0x07 => "\\a".to_string(),
+        0x08 => "\\b".to_string(),
+        0x09 => "\\t".to_string(),
+        0x0A => "\\n".to_string(),
+        0x0B => "\\v".to_string(),
+        0x0C => "\\f".to_string(),
+        0x0D => "\\r".to_string(),
+        0x27 => "\\'".to_string(),
+        0x5C => "\\\\".to_string(),
+        0x20..=0x7E => (byte as char).to_string(),
+        _ => format!("\\x{:02x}", byte),
+    };
+    Some(format!("'{}'", body))
 }
 
 // ---------------------------------------------------------------------------
@@ -11231,6 +11333,196 @@ mod tests {
         assert_eq!(
             super::format_constant_ctx(0x100, 4, super::ConstContext::Unsigned),
             "0x100u",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // char literal rendering
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_format_char_literal_printable() {
+        assert_eq!(
+            super::format_char_literal(0x41, false).as_deref(),
+            Some("'A'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x62, false).as_deref(),
+            Some("'b'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x2B, false).as_deref(),
+            Some("'+'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x20, false).as_deref(),
+            Some("' '"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x7E, false).as_deref(),
+            Some("'~'"),
+        );
+    }
+
+    #[test]
+    fn test_format_char_literal_escapes() {
+        assert_eq!(
+            super::format_char_literal(0x00, false).as_deref(),
+            Some("'\\0'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x07, false).as_deref(),
+            Some("'\\a'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x08, false).as_deref(),
+            Some("'\\b'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x09, false).as_deref(),
+            Some("'\\t'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x0A, false).as_deref(),
+            Some("'\\n'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x0B, false).as_deref(),
+            Some("'\\v'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x0C, false).as_deref(),
+            Some("'\\f'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x0D, false).as_deref(),
+            Some("'\\r'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x27, false).as_deref(),
+            Some("'\\''"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x5C, false).as_deref(),
+            Some("'\\\\'"),
+        );
+    }
+
+    #[test]
+    fn test_format_char_literal_hex_escape() {
+        assert_eq!(
+            super::format_char_literal(0xFF, true).as_deref(),
+            Some("'\\xff'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x01, false).as_deref(),
+            Some("'\\x01'"),
+        );
+        assert_eq!(
+            super::format_char_literal(0x7F, false).as_deref(),
+            Some("'\\x7f'"),
+        );
+    }
+
+    #[test]
+    fn test_format_char_literal_out_of_range() {
+        assert_eq!(super::format_char_literal(0x80, false), None);
+        assert_eq!(super::format_char_literal(0xFF, false), None);
+        assert_eq!(super::format_char_literal(0x100, true), None);
+        assert_eq!(super::format_char_literal(0x1000, true), None);
+    }
+
+    #[test]
+    fn test_format_constant_char_context() {
+        assert_eq!(
+            super::format_constant_ctx(
+                0x41,
+                1,
+                super::ConstContext::Char { unsigned: false }
+            ),
+            "'A'",
+        );
+        assert_eq!(
+            super::format_constant_ctx(
+                0x0A,
+                1,
+                super::ConstContext::Char { unsigned: false }
+            ),
+            "'\\n'",
+        );
+        assert_eq!(
+            super::format_constant_ctx(
+                0x00,
+                1,
+                super::ConstContext::Char { unsigned: false }
+            ),
+            "'\\0'",
+        );
+        assert_eq!(
+            super::format_constant_ctx(
+                0xFF,
+                1,
+                super::ConstContext::Char { unsigned: true }
+            ),
+            "'\\xff'",
+        );
+    }
+
+    #[test]
+    fn test_format_constant_int_context_keeps_integer() {
+        let rendered = super::format_constant_ctx(0x41, 4, super::ConstContext::Signed);
+        assert!(
+            !rendered.starts_with('\''),
+            "0x41 in Signed context must not become a char literal: {rendered}",
+        );
+        assert_eq!(rendered, "0x41");
+        assert_eq!(
+            super::format_constant_ctx(0, 4, super::ConstContext::Signed),
+            "0",
+        );
+        assert_eq!(
+            super::format_constant_ctx(0, 1, super::ConstContext::Signed),
+            "0",
+        );
+    }
+
+    #[test]
+    fn test_format_constant_char_context_falls_through_when_oversized() {
+        assert_eq!(
+            super::format_constant_ctx(
+                0x41,
+                4,
+                super::ConstContext::Char { unsigned: false }
+            ),
+            "0x41",
+        );
+        assert_eq!(
+            super::format_constant_ctx(
+                0x80,
+                1,
+                super::ConstContext::Char { unsigned: false }
+            ),
+            "0x80ULL",
+        );
+    }
+
+    #[test]
+    fn test_format_constant_quote_and_backslash() {
+        assert_eq!(
+            super::format_constant_ctx(
+                0x27,
+                1,
+                super::ConstContext::Char { unsigned: false }
+            ),
+            "'\\''",
+        );
+        assert_eq!(
+            super::format_constant_ctx(
+                0x5C,
+                1,
+                super::ConstContext::Char { unsigned: false }
+            ),
+            "'\\\\'",
         );
     }
 

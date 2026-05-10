@@ -195,6 +195,164 @@ fn read_cstr(data: &[u8], offset: usize) -> Option<String> {
     Some(String::from_utf8_lossy(&tail[..len]).into_owned())
 }
 
+// ---------------------------------------------------------------------------
+// t112: dyld_cache_slide_info3 — page-chain rewriter for the modern slide
+// format used by arm64e shared caches.
+// ---------------------------------------------------------------------------
+
+/// Decoded `dyld_cache_slide_info3`.
+///
+/// Layout on disk (little-endian):
+///
+/// ```text
+///   uint32  version           // = 3
+///   uint32  page_size
+///   uint32  page_starts_count
+///   uint32  pad
+///   uint64  auth_value_add
+///   uint16  page_starts[page_starts_count]
+/// ```
+///
+/// We don't yet model v1/v2/v5 — the runtime caches Apple ships post-iOS 12
+/// are overwhelmingly v3 (arm64e) or per-mapping v3 inside
+/// `dyld_cache_mapping_and_slide_info`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlideInfo {
+    pub version: u32,
+    pub page_size: u32,
+    pub page_starts: Vec<u16>,
+    pub value_add: u64,
+}
+
+/// `page_starts[i] == DELTA_NONE` marks a page with no fixups.
+pub const SLIDE_V3_PAGE_NONE: u16 = 0xFFFF;
+
+/// Parse a `dyld_cache_slide_info3` blob.
+///
+/// Returns `None` when `data[off..off+size]` is out of bounds, when the
+/// version field isn't 3, or when the header runs short of `page_starts`.
+pub fn parse_v3_slide_info(data: &[u8], off: u64, size: u64) -> Option<SlideInfo> {
+    let start = usize::try_from(off).ok()?;
+    let len = usize::try_from(size).ok()?;
+    let end = start.checked_add(len)?;
+    if end > data.len() || len < 24 {
+        return None;
+    }
+    let blob = &data[start..end];
+    let version = u32::from_le_bytes(blob[0..4].try_into().ok()?);
+    if version != 3 {
+        return None;
+    }
+    let page_size = u32::from_le_bytes(blob[4..8].try_into().ok()?);
+    let page_starts_count = u32::from_le_bytes(blob[8..12].try_into().ok()?) as usize;
+    // bytes 12..16 are padding.
+    let value_add = u64::from_le_bytes(blob[16..24].try_into().ok()?);
+
+    let starts_end = 24usize.checked_add(page_starts_count.checked_mul(2)?)?;
+    if starts_end > blob.len() {
+        return None;
+    }
+    let mut page_starts = Vec::with_capacity(page_starts_count);
+    for i in 0..page_starts_count {
+        let off = 24 + i * 2;
+        page_starts.push(u16::from_le_bytes(blob[off..off + 2].try_into().ok()?));
+    }
+    Some(SlideInfo {
+        version,
+        page_size,
+        page_starts,
+        value_add,
+    })
+}
+
+const SLIDE_V3_MAX_CHAIN: usize = 1 << 14;
+
+/// Walk a single page's chain. For each 8-byte entry encountered, invoke
+/// `visit(file_offset, raw)` where `raw` is the unmodified little-endian
+/// 64-bit value at that slot.
+///
+/// Returns the number of chain entries visited (capped at
+/// `SLIDE_V3_MAX_CHAIN` to guard against malformed loops).
+fn walk_v3_page<F: FnMut(usize, u64)>(image: &[u8], page_base: usize, page_start: u16, mut visit: F) -> usize {
+    if page_start == SLIDE_V3_PAGE_NONE {
+        return 0;
+    }
+    let mut chain_off = page_base + page_start as usize;
+    let mut count = 0usize;
+    while count < SLIDE_V3_MAX_CHAIN {
+        if chain_off + 8 > image.len() {
+            break;
+        }
+        let raw = u64::from_le_bytes(image[chain_off..chain_off + 8].try_into().unwrap_or([0; 8]));
+        visit(chain_off, raw);
+        // next is bits 51..62 (12 bits), in 8-byte units; 0 ends the chain.
+        let next = (raw >> 51) & 0x7FF;
+        count += 1;
+        if next == 0 {
+            break;
+        }
+        chain_off = chain_off.saturating_add((next as usize) * 8);
+    }
+    count
+}
+
+/// Apply v3 slide rewrites to `image`, returning a fresh buffer.
+///
+/// `slide_amount` is the post-load runtime slide added to each rebased
+/// pointer (after `slide.value_add`). Authenticated entries (`is_auth=1`)
+/// preserve the auth diversity bits and reuse the 32-bit `target` field as
+/// `target + value_add + slide_amount`.
+pub fn apply_v3_slide(image: &[u8], slide: &SlideInfo, slide_amount: u64) -> Vec<u8> {
+    let mut out = image.to_vec();
+    if slide.version != 3 || slide.page_size == 0 {
+        return out;
+    }
+    let page_size = slide.page_size as usize;
+    for (page_idx, &start) in slide.page_starts.iter().enumerate() {
+        let page_base = page_idx * page_size;
+        if page_base >= out.len() {
+            break;
+        }
+        let mut entries = Vec::new();
+        walk_v3_page(&out, page_base, start, |off, raw| entries.push((off, raw)));
+        for (off, raw) in entries {
+            let new_raw = rewrite_v3_entry(raw, slide.value_add + slide_amount);
+            if off + 8 <= out.len() {
+                out[off..off + 8].copy_from_slice(&new_raw.to_le_bytes());
+            }
+        }
+    }
+    out
+}
+
+fn rewrite_v3_entry(raw: u64, add: u64) -> u64 {
+    let is_auth = (raw >> 63) & 1 == 1;
+    if is_auth {
+        // dyld_cache_slide_pointer3.auth:
+        //   target:32 (offset within cache)
+        //   diversity:16
+        //   addr_div:1
+        //   key:2
+        //   next:11
+        //   bind:1 = 0
+        //   auth:1 = 1
+        let target = raw & 0xFFFF_FFFF;
+        let upper = raw & !0xFFFF_FFFF;
+        let new_target = (target.wrapping_add(add)) & 0xFFFF_FFFF;
+        new_target | upper
+    } else {
+        // dyld_cache_slide_pointer3.plain:
+        //   target:51 + high8:8 packed as: top 8 bits of full VA in bits 36..43,
+        //   target offset in bits 0..36; bits 51..62 = next; bit 62 = auth=0; bit 63=0.
+        // Concretely: full value = (target as low 51 bits) + value_add.
+        let next = (raw >> 51) & 0x7FF;
+        let target51 = raw & 0x0007_FFFF_FFFF_FFFF;
+        let new_val = target51.wrapping_add(add);
+        // Preserve the original `next` so the chain can still be re-walked.
+        (next << 51) | (new_val & 0x0007_FFFF_FFFF_FFFF)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,5 +473,93 @@ mod tests {
             .extract_image("/usr/lib/libfoo.dylib")
             .expect("extract image");
         assert_eq!(bytes.first().copied(), Some(0xCF));
+    }
+
+    // -----------------------------------------------------------------------
+    // t112: dyld v3 slide-info tests
+    // -----------------------------------------------------------------------
+
+    /// Build a v3 slide_info blob and pad to a multiple of `page_size` so
+    /// callers can splice it into a synthetic file image.
+    fn build_v3_slide(page_size: u32, value_add: u64, page_starts: &[u16]) -> Vec<u8> {
+        let mut buf = vec![0u8; 24 + page_starts.len() * 2];
+        buf[0..4].copy_from_slice(&3u32.to_le_bytes()); // version
+        buf[4..8].copy_from_slice(&page_size.to_le_bytes());
+        buf[8..12].copy_from_slice(&(page_starts.len() as u32).to_le_bytes());
+        // pad bytes 12..16 left zero
+        buf[16..24].copy_from_slice(&value_add.to_le_bytes());
+        for (i, &s) in page_starts.iter().enumerate() {
+            let off = 24 + i * 2;
+            buf[off..off + 2].copy_from_slice(&s.to_le_bytes());
+        }
+        buf
+    }
+
+    #[test]
+    fn parse_v3_header() {
+        let blob = build_v3_slide(0x4000, 0x1_8000_0000, &[0, SLIDE_V3_PAGE_NONE, 16]);
+        let slide = parse_v3_slide_info(&blob, 0, blob.len() as u64).expect("parses");
+        assert_eq!(slide.version, 3);
+        assert_eq!(slide.page_size, 0x4000);
+        assert_eq!(slide.value_add, 0x1_8000_0000);
+        assert_eq!(slide.page_starts, vec![0, SLIDE_V3_PAGE_NONE, 16]);
+
+        // Reject blob with wrong version.
+        let mut bad = blob.clone();
+        bad[0] = 1;
+        assert!(parse_v3_slide_info(&bad, 0, bad.len() as u64).is_none());
+    }
+
+    #[test]
+    fn walk_single_page_chain() {
+        // Build a page-sized image (0x4000 bytes) with three chained entries:
+        //   off=0  -> next=2 (i.e. +16 bytes)
+        //   off=16 -> next=1 (i.e. +8 bytes)
+        //   off=24 -> next=0 (end)
+        let page_size = 0x4000usize;
+        let mut image = vec![0u8; page_size];
+
+        let mk = |target: u64, next: u64| -> u64 {
+            (next << 51) | (target & 0x0007_FFFF_FFFF_FFFF)
+        };
+        let e0 = mk(0xAAA, 2);
+        let e1 = mk(0xBBB, 1);
+        let e2 = mk(0xCCC, 0);
+        image[0..8].copy_from_slice(&e0.to_le_bytes());
+        image[16..24].copy_from_slice(&e1.to_le_bytes());
+        image[24..32].copy_from_slice(&e2.to_le_bytes());
+
+        let mut visited = Vec::new();
+        let count = walk_v3_page(&image, 0, 0, |off, raw| visited.push((off, raw)));
+        assert_eq!(count, 3);
+        assert_eq!(visited.len(), 3);
+        assert_eq!(visited[0].0, 0);
+        assert_eq!(visited[1].0, 16);
+        assert_eq!(visited[2].0, 24);
+    }
+
+    #[test]
+    fn apply_slide_rewrites_pointer() {
+        // Single page, one rebase entry. target = 0x100, value_add = 0x1000,
+        // slide_amount = 0x40 -> rewritten target = 0x1140.
+        let page_size = 0x4000usize;
+        let mut image = vec![0u8; page_size];
+        let mk = |target: u64, next: u64| -> u64 {
+            (next << 51) | (target & 0x0007_FFFF_FFFF_FFFF)
+        };
+        image[0..8].copy_from_slice(&mk(0x100, 0).to_le_bytes());
+
+        let slide = SlideInfo {
+            version: 3,
+            page_size: page_size as u32,
+            page_starts: vec![0],
+            value_add: 0x1000,
+        };
+        let out = apply_v3_slide(&image, &slide, 0x40);
+        let new_raw = u64::from_le_bytes(out[0..8].try_into().unwrap());
+        // Lower 51 bits hold the slid target.
+        assert_eq!(new_raw & 0x0007_FFFF_FFFF_FFFF, 0x1140);
+        // Upper bits (next=0, auth=0) preserved at zero.
+        assert_eq!(new_raw >> 51, 0);
     }
 }

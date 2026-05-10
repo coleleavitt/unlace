@@ -3442,13 +3442,24 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let _ = writeln!(out, "}}");
         }
 
-        HirNode::GuardedIf { cond_code, then_body } => {
+        HirNode::GuardedIf {
+            cond_code,
+            then_body,
+            else_body,
+        } => {
             let mnem = arm_cond_mnemonic(*cond_code);
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "if (cond_{}) {{", mnem);
             emit_nodes(then_body, depth + 1, ctx, out);
             indent(depth, ctx.config.tab_width, out);
-            let _ = writeln!(out, "}}");
+            if else_body.is_empty() {
+                let _ = writeln!(out, "}}");
+            } else {
+                let _ = writeln!(out, "}} else {{");
+                emit_nodes(else_body, depth + 1, ctx, out);
+                indent(depth, ctx.config.tab_width, out);
+                let _ = writeln!(out, "}}");
+            }
         }
 
         HirNode::ObjcBlock { invoke, captures } => {

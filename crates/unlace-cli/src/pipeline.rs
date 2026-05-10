@@ -1261,10 +1261,16 @@ pub fn decompile_function_with_symbols(
 
     let t = Instant::now();
     let symbols = build_symbol_table_with_functions(image, discovered);
-    let printer_annotations = config
+    let mut printer_annotations = config
         .annotations
         .as_ref()
-        .map(|db| build_printer_annotations(db, entry.addr));
+        .map(|db| build_printer_annotations(db, entry.addr))
+        .unwrap_or_default();
+    let hash_pass = unlace_passes::StringHashSwitchPass::from_strings(&image.string_table);
+    printer_annotations.string_hash_table = hash_pass.hash_table().clone();
+    let objc_info = unlace_loader::scan_objc_classlist(image);
+    printer_annotations.objc_classes = objc_info.classes.into_values().collect();
+    let printer_annotations = Some(printer_annotations);
     let result = emit_output(
         emit,
         &ssa,
@@ -1359,6 +1365,7 @@ fn build_printer_annotations(
             .cloned()
             .unwrap_or_default(),
         custom_names: db.custom_names.clone(),
+        ..Default::default()
     }
 }
 

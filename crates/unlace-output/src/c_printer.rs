@@ -1621,6 +1621,40 @@ fn try_fs_canary_load(addr_vn: &Varnode, access_size: u8) -> Option<String> {
     }
 }
 
+/// If the switch discriminant is a `char`/`u8` and the case value is a
+/// printable ASCII character that isn't in the C escape set, render the
+/// case label as a character literal (e.g. `case 'A':`).
+fn format_char_case(v: u64, is_char: bool) -> Option<String> {
+    if !is_char {
+        return None;
+    }
+    if !(0x20..=0x7E).contains(&v) {
+        return None;
+    }
+    let c = v as u8 as char;
+    // Skip characters that need C escaping — emit as integer for clarity.
+    match c {
+        '\'' | '"' | '\\' | '?' => return None,
+        _ => {}
+    }
+    Some(format!("'{}'", c))
+}
+
+/// Recognize the macOS/Darwin stack-canary read: a `Load` whose address is a
+/// symbol named `__stack_chk_guard`. Emits `*__stack_chk_guard` (a pointer
+/// indirection through the libSystem-supplied guard global).
+fn try_macos_canary_load(addr_vn: &Varnode, ctx: &PrintCtx) -> Option<String> {
+    if addr_vn.space != SpaceId::Const {
+        return None;
+    }
+    let sym = ctx.symbols.get(&addr_vn.offset)?;
+    if sym == "__stack_chk_guard" || sym.ends_with("___stack_chk_guard") {
+        Some("*__stack_chk_guard".to_string())
+    } else {
+        None
+    }
+}
+
 /// Hex-Rays-style `MEMORY[addr]` annotation for absolute addresses that the
 /// rest of the pipeline (string table, globals, struct fields, arrays) failed
 /// to give a name to. Limited to constant addresses outside the canonical
@@ -3214,13 +3248,21 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             ..
         } => {
             let cond_expr = resolve_sv_expr(cond, ctx);
+            let cond_is_char = matches!(
+                ctx.var_types.get(cond).copied().unwrap_or(PrimitiveType::Unknown),
+                PrimitiveType::Int(1) | PrimitiveType::UnsignedInt(1),
+            );
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "switch ({}) {{", cond_expr);
             for (case, body, fall_through) in cases {
                 indent(depth, ctx.config.tab_width, out);
                 match case {
                     SwitchCase::Value(v) => {
-                        let _ = writeln!(out, "case {}:", v);
+                        if let Some(lit) = format_char_case(*v, cond_is_char) {
+                            let _ = writeln!(out, "case {}:", lit);
+                        } else {
+                            let _ = writeln!(out, "case {}:", v);
+                        }
                     }
                     SwitchCase::Range(lo, hi) => {
                         let _ = writeln!(out, "case {} ... {}:", lo, hi);
@@ -4513,6 +4555,9 @@ fn emit_expr_with_prec(
             let addr_idx = if insn.inputs.len() >= 2 { 1 } else { 0 };
             if addr_idx < insn.inputs.len() {
                 if let Some(canary) = try_fs_canary_load(&insn.inputs[addr_idx], load_size) {
+                    return canary;
+                }
+                if let Some(canary) = try_macos_canary_load(&insn.inputs[addr_idx], ctx) {
                     return canary;
                 }
                 if let Some(global) = try_global_var_name(&insn.inputs[addr_idx], load_size, ctx) {
@@ -11923,6 +11968,140 @@ mod tests {
         assert!(
             output.contains("// patched for CVE-2024-x"),
             "missing line comment: {output}"
+        );
+    }
+
+    // ── t122: stack canary + char-case polish ──
+
+    #[test]
+    fn canary_load_renders_as_readfsqword() {
+        use super::tests::{con, make_func, reg, sv};
+        let space = con(0, 8);
+        let addr = con(0x28, 8);
+        let r8 = reg(8, 8);
+        let load = unlace_ir::IrInsn::with_output(
+            unlace_ir::IrOp::Load,
+            r8,
+            smallvec::smallvec![space, addr],
+            0x1000,
+        );
+        let body = vec![
+            unlace_struct::HirNode::Statement(load),
+            unlace_struct::HirNode::Return(Some(sv(8, 8))),
+        ];
+        let func = make_func("canary_linux", body);
+        let output = super::print_c(&func);
+        assert!(
+            output.contains("__readfsqword(0x28u)"),
+            "expected Linux canary intrinsic: {output}"
+        );
+    }
+
+    #[test]
+    fn canary_load_macos_renders_as_stack_chk_guard() {
+        use super::tests::{con, make_func, reg, sv};
+        let guard_addr: u64 = 0x100008000;
+        let space = con(0, 8);
+        let addr = con(guard_addr, 8);
+        let r8 = reg(8, 8);
+        let load = unlace_ir::IrInsn::with_output(
+            unlace_ir::IrOp::Load,
+            r8,
+            smallvec::smallvec![space, addr],
+            0x1000,
+        );
+        let body = vec![
+            unlace_struct::HirNode::Statement(load),
+            unlace_struct::HirNode::Return(Some(sv(8, 8))),
+        ];
+        let func = make_func("canary_macos", body);
+        let mut symbols = std::collections::BTreeMap::new();
+        symbols.insert(guard_addr, "__stack_chk_guard".to_string());
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+        assert!(
+            output.contains("*__stack_chk_guard"),
+            "expected macOS canary indirection: {output}"
+        );
+    }
+
+    #[test]
+    fn case_renders_as_char_literal_when_type_is_char() {
+        use super::tests::{con, make_func, reg, sv};
+        // Statement that types sv(0, 1) as Int(1) (via Copy with size-1 output).
+        let r0_byte = reg(0, 1);
+        let c_a = con(b'A' as u64, 1);
+        let body = vec![
+            unlace_struct::HirNode::Statement(unlace_ir::IrInsn::with_output(
+                unlace_ir::IrOp::Copy,
+                r0_byte,
+                smallvec::smallvec![c_a],
+                0x1000,
+            )),
+            unlace_struct::HirNode::Switch {
+                cond: sv(0, 1),
+                cases: vec![
+                    (
+                        unlace_struct::SwitchCase::Value(b'A' as u64),
+                        vec![unlace_struct::HirNode::Return(None)],
+                        false,
+                    ),
+                    (
+                        unlace_struct::SwitchCase::Value(b'Z' as u64),
+                        vec![unlace_struct::HirNode::Return(None)],
+                        false,
+                    ),
+                ],
+                default: None,
+                jumptable_addr: None,
+                jumptable_cases: None,
+            },
+        ];
+        let func = make_func("switch_char", body);
+        let output = super::print_c(&func);
+        assert!(
+            output.contains("case 'A':"),
+            "expected char literal for printable ASCII: {output}"
+        );
+        assert!(
+            output.contains("case 'Z':"),
+            "expected char literal for printable ASCII: {output}"
+        );
+    }
+
+    #[test]
+    fn case_renders_as_int_when_type_is_int() {
+        use super::tests::{con, make_func, reg, sv};
+        // Statement that types sv(0, 4) as Int(4) — NOT char.
+        let r0 = reg(0, 4);
+        let c0 = con(0, 4);
+        let body = vec![
+            unlace_struct::HirNode::Statement(unlace_ir::IrInsn::with_output(
+                unlace_ir::IrOp::Copy,
+                r0,
+                smallvec::smallvec![c0],
+                0x1000,
+            )),
+            unlace_struct::HirNode::Switch {
+                cond: sv(0, 4),
+                cases: vec![(
+                    unlace_struct::SwitchCase::Value(b'A' as u64),
+                    vec![unlace_struct::HirNode::Return(None)],
+                    false,
+                )],
+                default: None,
+                jumptable_addr: None,
+                jumptable_cases: None,
+            },
+        ];
+        let func = make_func("switch_int", body);
+        let output = super::print_c(&func);
+        assert!(
+            output.contains("case 65:"),
+            "int-typed switch should emit integer case label, not char: {output}"
+        );
+        assert!(
+            !output.contains("case 'A':"),
+            "int-typed switch must not emit char literal: {output}"
         );
     }
 }

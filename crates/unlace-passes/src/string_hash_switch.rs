@@ -54,6 +54,11 @@ impl StringHashSwitchPass {
         &self.hash_table
     }
 
+    /// Alias of [`Self::table`] used by the C printer pipeline wiring.
+    pub fn hash_table(&self) -> &BTreeMap<u64, String> {
+        &self.hash_table
+    }
+
     pub fn is_empty(&self) -> bool {
         self.hash_table.is_empty()
     }

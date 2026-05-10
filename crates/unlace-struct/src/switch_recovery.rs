@@ -15,7 +15,7 @@
 //!    switches.
 //! 4. Default-case detection from the out-of-bounds branch.
 
-use unlace_ir::IrOp;
+use unlace_ir::{ArchId, IrInsn, IrOp};
 
 use crate::hir::{HirFunction, HirNode, SwitchCase};
 
@@ -603,6 +603,206 @@ fn walk_node(node: HirNode) -> HirNode {
             node
         }
         other => other,
+    }
+}
+
+/// Coarse classification of a recognized indirect-branch dispatch pattern.
+///
+/// Returned by [`classify_indirect_branch`] and consumed by downstream
+/// jump-table recovery to pick an appropriate [`JumpTableKind`]. The
+/// `Generic` variant captures patterns that the architecture-agnostic
+/// classifier already recognizes (x86-style `BRANCHIND` of a single LOAD
+/// from a table base); architecture-specific variants are produced by the
+/// fall-through detectors in the [`arch`] module.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum IndirectBranchKind {
+    /// Architecture-agnostic table dispatch — `LOAD` (table[idx]) feeds
+    /// `BRANCHIND`. Matched by the generic classifier on every arch.
+    Generic,
+    /// ARM/Thumb byte- or halfword-table (TBB / TBH style): a 1- or
+    /// 2-byte `LOAD` of an *offset* added to PC, then `BRANCHIND`.
+    ArmThumbTable,
+    /// MIPS `lui` / `lw` / `jr` table: 32-bit table base materialized via
+    /// `lui` then `addiu` (or `lui` + `lw`), 4-byte indexed `LOAD`, then
+    /// `BRANCHIND`.
+    MipsLuiLwJr,
+    /// PowerPC `lwz r,table@toc(r2); mtctr r; bctr` table: a `LOAD` whose
+    /// base is the TOC pointer feeds a move-to-CTR (modeled as `COPY` in
+    /// our IR), followed by `BRANCHIND`.
+    PpcTocTable,
+    /// RISC-V `auipc; addi; jalr` table: an `INT_ADD` of (PC, offset)
+    /// feeds `BRANCHIND` — used both for direct PC-relative jumps and as
+    /// the address-materialization half of a jump table.
+    RiscvAuipcJalr,
+}
+
+/// Classify an indirect-branch site (a slice of IR instructions ending in
+/// `BRANCHIND`) into one of the known dispatch patterns.
+///
+/// This is the single entry point for per-arch fall-through detection.
+/// The generic classifier is consulted first; if it returns `None`, the
+/// per-architecture detectors in [`arch`] are tried in turn, gated by the
+/// supplied `arch` parameter. Returns `None` if no recognized pattern
+/// matches — callers should leave the `BRANCHIND` un-structured (the
+/// existing structurer path already handles that).
+///
+/// This is purely additive: existing callers of the structurer never
+/// invoke this function, so x86 / generic switch recovery is unaffected.
+/// New callers (per-arch passes) opt in by calling `classify_indirect_branch`
+/// directly.
+pub fn classify_indirect_branch(arch: ArchId, insns: &[IrInsn]) -> Option<IndirectBranchKind> {
+    // On non-x86 targets, try the architecture-specific detector first —
+    // it understands richer patterns (e.g. MIPS lui+lw+jr) that the
+    // generic LOAD→BRANCHIND match would otherwise swallow as `Generic`.
+    let arch_match = match arch {
+        ArchId::Arm | ArchId::AArch64 => arch::try_arm_thumb_table(insns),
+        ArchId::Mips | ArchId::Mips64 => arch::try_mips_lui_lw_jr(insns),
+        ArchId::Ppc | ArchId::Ppc64 => arch::try_ppc_toc_table(insns),
+        ArchId::RiscV64 => arch::try_riscv_auipc_jalr(insns),
+        _ => None,
+    };
+    if arch_match.is_some() {
+        return arch_match;
+    }
+    // Fall through to the architecture-agnostic LOAD→BRANCHIND match
+    // (the x86-style table dispatch).
+    arch::try_generic_table(insns)
+}
+
+/// Per-architecture jump-table pattern detectors.
+///
+/// These are MVP scaffolds — each detector recognizes one canonical
+/// instruction sequence for its target and returns `None` for everything
+/// else. They feed into [`classify_indirect_branch`] as fall-through
+/// alternates when the architecture-agnostic classifier doesn't match.
+pub(crate) mod arch {
+    use super::{IndirectBranchKind, IrInsn, IrOp};
+
+    /// Does this instruction stream end in a `BRANCHIND`? Helper shared by
+    /// every per-arch detector.
+    fn ends_in_branchind(insns: &[IrInsn]) -> bool {
+        insns
+            .last()
+            .map(|i| i.op == IrOp::Branchind)
+            .unwrap_or(false)
+    }
+
+    /// Find the index of the last `BRANCHIND` in `insns`, if any.
+    fn branchind_idx(insns: &[IrInsn]) -> Option<usize> {
+        insns.iter().rposition(|i| i.op == IrOp::Branchind)
+    }
+
+    /// Architecture-agnostic recognizer: a `LOAD` immediately followed by
+    /// a `BRANCHIND`. Mirrors the most common x86 / generic table
+    /// dispatch and serves as the "do we even need an arch detector?"
+    /// gate inside [`super::classify_indirect_branch`].
+    pub(crate) fn try_generic_table(insns: &[IrInsn]) -> Option<IndirectBranchKind> {
+        let bi = branchind_idx(insns)?;
+        // Walk backwards skipping non-control ops; the immediately
+        // preceding non-trivial op should be a LOAD.
+        let prev = insns[..bi].iter().rev().find(|i| {
+            !matches!(i.op, IrOp::Branch | IrOp::Cbranch | IrOp::Branchind)
+        })?;
+        if prev.op == IrOp::Load {
+            Some(IndirectBranchKind::Generic)
+        } else {
+            None
+        }
+    }
+
+    /// ARM/Thumb TBB / TBH detector.
+    ///
+    /// Canonical pattern (Thumb-2):
+    ///   `LOAD` (1- or 2-byte read of an offset from `.rodata`) →
+    ///   `INT_ADD` (PC + offset) → `BRANCHIND`.
+    ///
+    /// MVP: matches the structural sequence (LOAD with `size <= 2`,
+    /// followed somewhere by an `INT_ADD`, terminated by `BRANCHIND`).
+    pub(crate) fn try_arm_thumb_table(insns: &[IrInsn]) -> Option<IndirectBranchKind> {
+        if !ends_in_branchind(insns) {
+            return None;
+        }
+        let has_byte_load = insns.iter().any(|i| {
+            i.op == IrOp::Load
+                && i.output.map(|o| o.size <= 2).unwrap_or(false)
+        });
+        let has_pc_add = insns.iter().any(|i| i.op == IrOp::IntAdd);
+        if has_byte_load && has_pc_add {
+            Some(IndirectBranchKind::ArmThumbTable)
+        } else {
+            None
+        }
+    }
+
+    /// MIPS `lui` / `lw` / `jr` detector.
+    ///
+    /// Canonical pattern:
+    ///   `COPY` (lui — high-half immediate into reg) →
+    ///   `INT_ADD` (addiu reg, lo) or `LOAD` (lw at base) →
+    ///   `LOAD` (lw at base + idx*4) → `BRANCHIND` (jr).
+    ///
+    /// MVP: matches the structural sequence (at least one `COPY` of a
+    /// constant, at least one 4-byte `LOAD`, terminated by `BRANCHIND`).
+    pub(crate) fn try_mips_lui_lw_jr(insns: &[IrInsn]) -> Option<IndirectBranchKind> {
+        if !ends_in_branchind(insns) {
+            return None;
+        }
+        let has_lui_like = insns.iter().any(|i| {
+            i.op == IrOp::Copy
+                && i.inputs
+                    .first()
+                    .map(|v| v.space == unlace_ir::SpaceId::Const)
+                    .unwrap_or(false)
+        });
+        let has_word_load = insns.iter().any(|i| {
+            i.op == IrOp::Load
+                && i.output.map(|o| o.size == 4).unwrap_or(false)
+        });
+        if has_lui_like && has_word_load {
+            Some(IndirectBranchKind::MipsLuiLwJr)
+        } else {
+            None
+        }
+    }
+
+    /// PowerPC TOC-relative table detector.
+    ///
+    /// Canonical pattern:
+    ///   `LOAD` (lwz / ld at table@toc(r2)) →
+    ///   `COPY` (mtctr — register to count register) →
+    ///   `BRANCHIND` (bctr).
+    ///
+    /// MVP: matches `LOAD` followed by `COPY` (mtctr surrogate) followed
+    /// by `BRANCHIND`.
+    pub(crate) fn try_ppc_toc_table(insns: &[IrInsn]) -> Option<IndirectBranchKind> {
+        let bi = branchind_idx(insns)?;
+        // Find the most recent COPY before the BRANCHIND (mtctr surrogate).
+        let copy_pos = insns[..bi].iter().rposition(|i| i.op == IrOp::Copy)?;
+        // And a LOAD before that COPY (the TOC fetch).
+        let has_prior_load = insns[..copy_pos].iter().any(|i| i.op == IrOp::Load);
+        if has_prior_load {
+            Some(IndirectBranchKind::PpcTocTable)
+        } else {
+            None
+        }
+    }
+
+    /// RISC-V `auipc` / `addi` / `jalr` detector.
+    ///
+    /// Canonical pattern:
+    ///   `INT_ADD` (auipc — PC + upper-immediate) →
+    ///   optional `INT_ADD` (addi — + lower-immediate) →
+    ///   `BRANCHIND` (jalr through computed address).
+    ///
+    /// MVP: at least one `INT_ADD` immediately before the `BRANCHIND`.
+    pub(crate) fn try_riscv_auipc_jalr(insns: &[IrInsn]) -> Option<IndirectBranchKind> {
+        let bi = branchind_idx(insns)?;
+        let has_add = insns[..bi].iter().any(|i| i.op == IrOp::IntAdd);
+        if has_add {
+            Some(IndirectBranchKind::RiscvAuipcJalr)
+        } else {
+            None
+        }
     }
 }
 
@@ -1253,5 +1453,139 @@ mod tests {
             })
             .collect();
         assert_eq!(values, vec![10, 12, 14], "lo=10 shifts case values by 10");
+    }
+
+    // ----- t116: per-arch jump-table classifier MVP scaffolding -----
+
+    use unlace_ir::ArchId;
+
+    /// ARM/Thumb TBB-style dispatch — a 1-byte LOAD (the table-of-offsets
+    /// read) plus an INT_ADD to PC, terminated by BRANCHIND. The detector
+    /// should classify this as [`IndirectBranchKind::ArmThumbTable`].
+    #[test]
+    fn arm_tbb_detector_recognizes_minimal_pattern() {
+        let load_byte = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::unique(0x100, 1), // 1-byte loaded offset
+            smallvec![Varnode::constant(0xAA, 8), Varnode::reg(0, 4)],
+            0x1000,
+        );
+        let add_pc = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(0x108, 8),
+            smallvec![Varnode::reg(0, 8), Varnode::unique(0x100, 1)],
+            0x1004,
+        );
+        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::unique(0x108, 8)], 0x1008);
+
+        let kind = classify_indirect_branch(ArchId::Arm, &[load_byte, add_pc, bi]);
+        assert_eq!(
+            kind,
+            Some(IndirectBranchKind::ArmThumbTable),
+            "ARM TBB pattern (byte LOAD + INT_ADD + BRANCHIND) must classify"
+        );
+    }
+
+    /// MIPS lui/lw/jr dispatch — a COPY of a constant (lui surrogate) plus
+    /// a 4-byte LOAD (lw), terminated by BRANCHIND (jr).
+    #[test]
+    fn mips_lui_lw_jr_recognizes_pattern() {
+        // Build LUI-equivalent: COPY of a constant into a register.
+        let lui = IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(0, 4),
+            smallvec![Varnode::constant(0x40000000, 4)],
+            0x2000,
+        );
+        // Build LW: 4-byte LOAD from (table_base + idx*4).
+        let lw = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::reg(4, 4),
+            smallvec![Varnode::constant(0x42, 8), Varnode::reg(8, 4)],
+            0x2004,
+        );
+        let jr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(4, 4)], 0x2008);
+
+        let kind = classify_indirect_branch(ArchId::Mips64, &[lui, lw, jr]);
+        assert_eq!(
+            kind,
+            Some(IndirectBranchKind::MipsLuiLwJr),
+            "MIPS lui+lw+jr pattern must classify"
+        );
+    }
+
+    /// PPC TOC table — LOAD (lwz at @toc) followed by COPY (mtctr
+    /// surrogate) followed by BRANCHIND (bctr).
+    #[test]
+    fn ppc_toc_recognizes_pattern() {
+        let toc_load = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::reg(3, 8),
+            smallvec![Varnode::constant(0x42, 8), Varnode::reg(2, 8)], // r2 = TOC
+            0x3000,
+        );
+        let mtctr = IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(0x100, 8), // CTR-like sink
+            smallvec![Varnode::reg(3, 8)],
+            0x3004,
+        );
+        let bctr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x100, 8)], 0x3008);
+
+        let kind = classify_indirect_branch(ArchId::Ppc64, &[toc_load, mtctr, bctr]);
+        assert_eq!(
+            kind,
+            Some(IndirectBranchKind::PpcTocTable),
+            "PPC lwz@toc + mtctr + bctr pattern must classify"
+        );
+    }
+
+    /// RISC-V auipc/addi/jalr — an INT_ADD that builds (PC + offset)
+    /// followed by BRANCHIND (jalr).
+    #[test]
+    fn riscv_auipc_jalr_recognizes_pattern() {
+        let auipc = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::reg(0x28, 8),
+            smallvec![Varnode::reg(0, 8), Varnode::constant(0x1000, 8)],
+            0x4000,
+        );
+        let jalr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x28, 8)], 0x4004);
+
+        let kind = classify_indirect_branch(ArchId::RiscV64, &[auipc, jalr]);
+        assert_eq!(
+            kind,
+            Some(IndirectBranchKind::RiscvAuipcJalr),
+            "RISC-V auipc+jalr pattern must classify"
+        );
+    }
+
+    /// Sanity: the generic LOAD→BRANCHIND match path returns Generic
+    /// before any per-arch path is tried.
+    #[test]
+    fn generic_load_branchind_classifies_first() {
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::reg(0, 8),
+            smallvec![Varnode::constant(0xAA, 8), Varnode::reg(8, 8)],
+            0x5000,
+        );
+        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0, 8)], 0x5004);
+        let kind = classify_indirect_branch(ArchId::X86_64, &[load, bi]);
+        assert_eq!(kind, Some(IndirectBranchKind::Generic));
+    }
+
+    /// Empty / unrecognized streams must classify as `None` so the
+    /// existing structurer fall-through path keeps owning them.
+    #[test]
+    fn unrecognized_returns_none() {
+        let nop = IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(0, 8),
+            smallvec![Varnode::constant(0, 8)],
+            0x6000,
+        );
+        let kind = classify_indirect_branch(ArchId::X86_64, &[nop]);
+        assert!(kind.is_none(), "no BRANCHIND → no classification");
     }
 }

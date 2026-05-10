@@ -1980,6 +1980,16 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 // into the wrapped node as if the wrapper weren't there.
                 collect_varnodes(std::slice::from_ref(inner.as_ref()), ctx);
             }
+
+            HirNode::GuardedIf { then_body, .. } => {
+                ctx.collect_depth += 1;
+                let scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(scope);
+                collect_varnodes(then_body, ctx);
+                ctx.current_scope_path.pop();
+                ctx.collect_depth -= 1;
+            }
         }
     }
 }
@@ -3395,6 +3405,15 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let _ = writeln!(out, "}}");
         }
 
+        HirNode::GuardedIf { cond_code, then_body } => {
+            let mnem = arm_cond_mnemonic(*cond_code);
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "if (cond_{}) {{", mnem);
+            emit_nodes(then_body, depth + 1, ctx, out);
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "}}");
+        }
+
         HirNode::ObjcBlock { invoke, captures } => {
             indent(depth, ctx.config.tab_width, out);
             if captures.is_empty() {
@@ -3408,6 +3427,28 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 );
             }
         }
+    }
+}
+
+/// ARM A8.3 condition-code mnemonic for IT-block guards.
+fn arm_cond_mnemonic(cc: u8) -> &'static str {
+    match cc & 0xF {
+        0x0 => "eq",
+        0x1 => "ne",
+        0x2 => "cs",
+        0x3 => "cc",
+        0x4 => "mi",
+        0x5 => "pl",
+        0x6 => "vs",
+        0x7 => "vc",
+        0x8 => "hi",
+        0x9 => "ls",
+        0xA => "ge",
+        0xB => "lt",
+        0xC => "gt",
+        0xD => "le",
+        0xE => "al",
+        _ => "nv",
     }
 }
 
@@ -3636,6 +3677,116 @@ fn objc_bracket_call(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
         None
     }
 }
+
+/// Translate a single ObjC `@encoding` type code into the closest C type
+/// spelling.  Unknown encodings fall back to `void*` with an inline comment
+/// preserving the original code so the reader can still recover the
+/// intended type.  Compound encodings (`^X`, `[N X]`) recurse on `X`.
+pub fn objc_type_encoding_to_c(encoding: &str) -> String {
+    let trimmed = encoding.trim();
+    let trimmed = trimmed.trim_start_matches(|c: char| {
+        matches!(c, 'r' | 'n' | 'N' | 'o' | 'O' | 'R' | 'V')
+    });
+    match trimmed {
+        "c" => return "char".into(),
+        "C" => return "unsigned char".into(),
+        "s" => return "short".into(),
+        "S" => return "unsigned short".into(),
+        "i" => return "int".into(),
+        "I" => return "unsigned int".into(),
+        "l" => return "long".into(),
+        "L" => return "unsigned long".into(),
+        "q" => return "long long".into(),
+        "Q" => return "unsigned long long".into(),
+        "f" => return "float".into(),
+        "d" => return "double".into(),
+        "B" => return "_Bool".into(),
+        "v" => return "void".into(),
+        "*" => return "char*".into(),
+        "@" => return "id".into(),
+        "#" => return "Class".into(),
+        ":" => return "SEL".into(),
+        "?" => return "void* /* type=? */".into(),
+        "" => return "void* /* type= */".into(),
+        _ => {}
+    }
+
+    if let Some(rest) = trimmed.strip_prefix('@') {
+        if let Some(class) = rest.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+            if !class.is_empty() && !class.starts_with('<') {
+                return format!("{}*", class);
+            }
+        }
+        return "id".into();
+    }
+
+    if let Some(inner) = trimmed.strip_prefix('^') {
+        return format!("{}*", objc_type_encoding_to_c(inner));
+    }
+
+    if let Some(body) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+        let split = body
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(body.len());
+        let (count, inner) = body.split_at(split);
+        if !count.is_empty() && !inner.is_empty() {
+            return format!("{}[{}]", objc_type_encoding_to_c(inner), count);
+        }
+    }
+
+    if let Some(body) = trimmed.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
+        if let Some(name) = body.split('=').next() {
+            if !name.is_empty() && name != "?" {
+                return format!("struct {}", name);
+            }
+        }
+    }
+    if let Some(body) = trimmed.strip_prefix('(').and_then(|s| s.strip_suffix(')')) {
+        if let Some(name) = body.split('=').next() {
+            if !name.is_empty() && name != "?" {
+                return format!("union {}", name);
+            }
+        }
+    }
+
+    if let Some(width) = trimmed.strip_prefix('b') {
+        if !width.is_empty() && width.chars().all(|c| c.is_ascii_digit()) {
+            return format!("unsigned int /* :{} */", width);
+        }
+    }
+
+    format!("void* /* type={} */", trimmed.escape_default())
+}
+
+/// Emit a synthetic `struct ClassName { type ivar1; type ivar2; ... };`
+/// for the given ObjC class.  Returns `None` when no ivars are recorded so
+/// callers can skip emission entirely rather than printing an empty struct
+/// (which is a C constraint violation).
+///
+/// Ivars are emitted in declared order so reading the synthetic struct
+/// top-to-bottom mirrors the recovered offsets.
+pub fn render_objc_class_struct(class: &unlace_loader::ObjcClass) -> Option<String> {
+    if class.ivars.is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    let _ = writeln!(out, "struct {} {{", class.name);
+    for ivar in &class.ivars {
+        let ty = objc_type_encoding_to_c(&ivar.type_encoding);
+        let _ = writeln!(
+            out,
+            "    {} {};  /* offset 0x{:X} */",
+            ty, ivar.name, ivar.offset
+        );
+    }
+    let _ = writeln!(out, "}};");
+    // TODO(t147): wire this into PrintCtx so the synthesised structs are
+    // emitted in the file preamble for every ObjC class referenced by the
+    // function being printed.  Currently the helper is callable but the
+    // c_printer driver does not invoke it.
+    Some(out)
+}
+
 
 fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
     if insn.op != IrOp::Call || insn.inputs.is_empty() {
@@ -12129,5 +12280,64 @@ mod tests {
             !output.contains("case 'A':"),
             "int-typed switch must not emit char literal: {output}"
         );
+    }
+
+    #[test]
+    fn render_objc_class_struct_with_two_ivars() {
+        use unlace_loader::{ObjcClass, ObjcIvar};
+        let class = ObjcClass {
+            name: "ClassName".into(),
+            class_addr: 0x1000,
+            superclass_addr: 0,
+            methods: vec![],
+            ivars: vec![
+                ObjcIvar { name: "name".into(), offset: 8, type_encoding: "@".into() },
+                ObjcIvar { name: "count".into(), offset: 16, type_encoding: "q".into() },
+            ],
+            properties: vec![],
+            protocols: vec![],
+        };
+        let out = super::render_objc_class_struct(&class).expect("two ivars → Some");
+        assert!(out.contains("struct ClassName {"), "{out}");
+        assert!(out.contains("id name;"), "{out}");
+        assert!(out.contains("long long count;"), "{out}");
+        assert!(out.trim_end().ends_with("};"), "{out}");
+    }
+
+    #[test]
+    fn render_objc_class_struct_with_no_ivars_returns_none() {
+        use unlace_loader::ObjcClass;
+        let class = ObjcClass {
+            name: "Empty".into(),
+            class_addr: 0x2000,
+            superclass_addr: 0,
+            methods: vec![],
+            ivars: vec![],
+            properties: vec![],
+            protocols: vec![],
+        };
+        assert!(super::render_objc_class_struct(&class).is_none());
+    }
+
+    #[test]
+    fn render_objc_class_struct_handles_unknown_type_encoding() {
+        use unlace_loader::{ObjcClass, ObjcIvar};
+        let class = ObjcClass {
+            name: "Weird".into(),
+            class_addr: 0x3000,
+            superclass_addr: 0,
+            methods: vec![],
+            ivars: vec![ObjcIvar {
+                name: "mystery".into(),
+                offset: 0,
+                type_encoding: "?".into(),
+            }],
+            properties: vec![],
+            protocols: vec![],
+        };
+        let out = super::render_objc_class_struct(&class).unwrap();
+        assert!(out.contains("void*"), "{out}");
+        assert!(out.contains("/* type=? */"), "{out}");
+        assert!(out.contains("mystery"), "{out}");
     }
 }

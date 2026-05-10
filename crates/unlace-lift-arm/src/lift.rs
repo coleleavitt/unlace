@@ -12,7 +12,7 @@ use std::cell::RefCell;
 use std::sync::Mutex;
 
 use capstone::Insn;
-use capstone::arch::arm::{ArmCC, ArmInsn, ArmOpMem, ArmOperandType, ArmReg};
+use capstone::arch::arm::{ArmCC, ArmInsn, ArmOpMem, ArmOperandType, ArmReg, ArmShift};
 use capstone::arch::arm64::{Arm64Insn, Arm64OpMem, Arm64OperandType, Arm64Shift};
 use capstone::prelude::*;
 use smallvec::smallvec;
@@ -409,6 +409,91 @@ fn arm32_operands(detail: &InsnDetail) -> Vec<ArmOperandType> {
     out
 }
 
+/// Parallel accessor returning the per-operand `ArmShift` slot Capstone
+/// reports. The vector aligns 1:1 with `arm32_operands(detail)` — index
+/// `i` here is the shift applied to operand `i` there. Most operands have
+/// `ArmShift::Invalid`; only register operands in data-processing forms
+/// like `ADD Rd, Rn, Rm, LSL #imm` carry a meaningful shift.
+fn arm32_operand_shifts(detail: &InsnDetail) -> Vec<ArmShift> {
+    let arch = detail.arch_detail();
+    let mut out = Vec::new();
+    if let Some(arm) = arch.arm() {
+        for op in arm.operands() {
+            out.push(op.shift);
+        }
+    }
+    out
+}
+
+/// Apply an `ArmShift` to a Varnode `v`, emitting the required shift IR
+/// and returning the shifted result. `Invalid` is a no-op (returns `v`
+/// unchanged). Reg-by-reg shifts read the shift count from a GPR;
+/// imm shifts use a constant operand.
+fn apply_arm32_shift(ctx: &mut LiftCtx, v: Varnode, shift: ArmShift) -> Varnode {
+    let (op, amount): (IrOp, Varnode) = match shift {
+        ArmShift::Invalid => return v,
+        ArmShift::Lsl(n) => {
+            if n == 0 {
+                return v;
+            }
+            (IrOp::IntLeft, Varnode::constant(n as u64, 4))
+        }
+        ArmShift::Lsr(n) => {
+            if n == 0 {
+                return v;
+            }
+            (IrOp::IntRight, Varnode::constant(n as u64, 4))
+        }
+        ArmShift::Asr(n) => {
+            if n == 0 {
+                return v;
+            }
+            (IrOp::IntSright, Varnode::constant(n as u64, 4))
+        }
+        ArmShift::Ror(n) => {
+            if n == 0 {
+                return v;
+            }
+            // ROR is modeled as IntRight for the MVP; a follow-up can
+            // introduce a dedicated rotate-right Callother or compose
+            // (src >> n) | (src << (32 - n)).
+            (IrOp::IntRight, Varnode::constant(n as u64, 4))
+        }
+        ArmShift::Rrx(_) => {
+            // RRX needs the carry flag; route through the same Callother
+            // tag the standalone RRX emitter uses (0x351).
+            let dst = Varnode::unique(ctx.alloc_unique(), 4);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Callother,
+                dst,
+                smallvec![Varnode::constant(0x351, 8), v],
+                ctx.addr,
+            ));
+            return dst;
+        }
+        ArmShift::LslReg(reg) => {
+            let Some(idx) = arm32_reg_index(reg) else { return v };
+            (IrOp::IntLeft, arm32_reg_varnode(idx))
+        }
+        ArmShift::LsrReg(reg) => {
+            let Some(idx) = arm32_reg_index(reg) else { return v };
+            (IrOp::IntRight, arm32_reg_varnode(idx))
+        }
+        ArmShift::AsrReg(reg) => {
+            let Some(idx) = arm32_reg_index(reg) else { return v };
+            (IrOp::IntSright, arm32_reg_varnode(idx))
+        }
+        ArmShift::RorReg(reg) => {
+            let Some(idx) = arm32_reg_index(reg) else { return v };
+            (IrOp::IntRight, arm32_reg_varnode(idx))
+        }
+        ArmShift::RrxReg(_) => return v,
+    };
+    let out = Varnode::unique(ctx.alloc_unique(), v.size);
+    ctx.emit(IrInsn::with_output(op, out, smallvec![v, amount], ctx.addr));
+    out
+}
+
 fn arm32_updates_flags(detail: &InsnDetail) -> bool {
     detail
         .arch_detail()
@@ -423,50 +508,51 @@ fn arm32_updates_flags(detail: &InsnDetail) -> bool {
 /// caller can keep walking the byte stream.
 fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
     let ops = arm32_operands(detail);
+    let shifts = arm32_operand_shifts(detail);
     let id = ArmInsn::from(insn.id().0);
 
     match id {
         ArmInsn::ARM_INS_NOP => {}
 
         ArmInsn::ARM_INS_MOV | ArmInsn::ARM_INS_MOVS | ArmInsn::ARM_INS_MOVW => {
-            emit_arm32_copy(ctx, &ops, false)
+            emit_arm32_copy(ctx, &ops, &shifts, false)
         }
-        ArmInsn::ARM_INS_MVN => emit_arm32_copy(ctx, &ops, true),
+        ArmInsn::ARM_INS_MVN => emit_arm32_copy(ctx, &ops, &shifts, true),
         ArmInsn::ARM_INS_MOVT => emit_arm32_movt(ctx, &ops),
 
         ArmInsn::ARM_INS_ADD => {
-            emit_arm32_binop(ctx, &ops, IrOp::IntAdd);
+            emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntAdd);
             if arm32_updates_flags(detail) {
                 emit_arm32_adds_subs_flags(ctx, &ops, IrOp::IntAdd);
             }
         }
         ArmInsn::ARM_INS_SUB => {
-            emit_arm32_binop(ctx, &ops, IrOp::IntSub);
+            emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntSub);
             if arm32_updates_flags(detail) {
                 emit_arm32_adds_subs_flags(ctx, &ops, IrOp::IntSub);
             }
         }
         ArmInsn::ARM_INS_RSB => emit_arm32_binop_rev(ctx, &ops, IrOp::IntSub),
 
-        ArmInsn::ARM_INS_MUL => emit_arm32_binop(ctx, &ops, IrOp::IntMult),
+        ArmInsn::ARM_INS_MUL => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntMult),
         ArmInsn::ARM_INS_MLA => emit_arm32_mla(ctx, &ops, false),
         ArmInsn::ARM_INS_MLS => emit_arm32_mla(ctx, &ops, true),
         ArmInsn::ARM_INS_UMULL => emit_arm32_long_mul(ctx, &ops, false),
         ArmInsn::ARM_INS_SMULL => emit_arm32_long_mul(ctx, &ops, true),
         ArmInsn::ARM_INS_UMLAL => emit_arm32_long_mul_acc(ctx, &ops, false),
         ArmInsn::ARM_INS_SMLAL => emit_arm32_long_mul_acc(ctx, &ops, true),
-        ArmInsn::ARM_INS_UDIV => emit_arm32_binop(ctx, &ops, IrOp::IntDiv),
-        ArmInsn::ARM_INS_SDIV => emit_arm32_binop(ctx, &ops, IrOp::IntSdiv),
+        ArmInsn::ARM_INS_UDIV => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntDiv),
+        ArmInsn::ARM_INS_SDIV => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntSdiv),
 
-        ArmInsn::ARM_INS_AND => emit_arm32_binop(ctx, &ops, IrOp::IntAnd),
-        ArmInsn::ARM_INS_ORR => emit_arm32_binop(ctx, &ops, IrOp::IntOr),
-        ArmInsn::ARM_INS_EOR => emit_arm32_binop(ctx, &ops, IrOp::IntXor),
+        ArmInsn::ARM_INS_AND => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntAnd),
+        ArmInsn::ARM_INS_ORR => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntOr),
+        ArmInsn::ARM_INS_EOR => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntXor),
         ArmInsn::ARM_INS_BIC => emit_arm32_bic(ctx, &ops),
 
-        ArmInsn::ARM_INS_LSL => emit_arm32_binop(ctx, &ops, IrOp::IntLeft),
-        ArmInsn::ARM_INS_LSR => emit_arm32_binop(ctx, &ops, IrOp::IntRight),
-        ArmInsn::ARM_INS_ASR => emit_arm32_binop(ctx, &ops, IrOp::IntSright),
-        ArmInsn::ARM_INS_ROR => emit_arm32_binop(ctx, &ops, IrOp::IntRight),
+        ArmInsn::ARM_INS_LSL => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntLeft),
+        ArmInsn::ARM_INS_LSR => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntRight),
+        ArmInsn::ARM_INS_ASR => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntSright),
+        ArmInsn::ARM_INS_ROR => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntRight),
         ArmInsn::ARM_INS_RRX => emit_arm32_rrx(ctx, &ops),
 
         ArmInsn::ARM_INS_LDR => emit_arm32_load(ctx, &ops, 4),
@@ -490,7 +576,7 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_TEQ => emit_arm32_flags(ctx, &ops, IrOp::IntXor),
 
         ArmInsn::ARM_INS_B => emit_arm32_branch(ctx, &ops, insn, detail),
-        ArmInsn::ARM_INS_BL | ArmInsn::ARM_INS_BLX => emit_arm32_call(ctx, &ops),
+        ArmInsn::ARM_INS_BL | ArmInsn::ARM_INS_BLX => emit_arm32_call(ctx, &ops, insn),
         ArmInsn::ARM_INS_BX => emit_arm32_bx(ctx, &ops),
         ArmInsn::ARM_INS_CBZ => emit_arm32_cbz(ctx, &ops, false),
         ArmInsn::ARM_INS_CBNZ => emit_arm32_cbz(ctx, &ops, true),
@@ -498,6 +584,14 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
 
         ArmInsn::ARM_INS_MRS => emit_arm32_mrs(ctx, &ops),
         ArmInsn::ARM_INS_MSR => emit_arm32_msr(ctx, &ops),
+
+        ArmInsn::ARM_INS_BFI => emit_arm32_bfi(ctx, &ops),
+        ArmInsn::ARM_INS_UBFX => emit_arm32_ubfx(ctx, &ops, false),
+        ArmInsn::ARM_INS_SBFX => emit_arm32_ubfx(ctx, &ops, true),
+
+        ArmInsn::ARM_INS_REV => emit_arm32_byte_rev(ctx, &ops, ArmReverseKind::Rev),
+        ArmInsn::ARM_INS_REV16 => emit_arm32_byte_rev(ctx, &ops, ArmReverseKind::Rev16),
+        ArmInsn::ARM_INS_RBIT => emit_arm32_byte_rev(ctx, &ops, ArmReverseKind::Rbit),
 
         _ => ctx.emit_unimplemented(),
     }
@@ -556,7 +650,12 @@ fn arm32_first_dst(ops: &[ArmOperandType]) -> Option<Varnode> {
     arm32_reg_index(*reg).map(arm32_reg_varnode)
 }
 
-fn emit_arm32_copy(ctx: &mut LiftCtx, ops: &[ArmOperandType], invert: bool) {
+fn emit_arm32_copy(
+    ctx: &mut LiftCtx,
+    ops: &[ArmOperandType],
+    shifts: &[ArmShift],
+    invert: bool,
+) {
     let Some(dst) = arm32_first_dst(ops) else {
         ctx.emit_unimplemented();
         return;
@@ -565,6 +664,8 @@ fn emit_arm32_copy(ctx: &mut LiftCtx, ops: &[ArmOperandType], invert: bool) {
         ctx.emit_unimplemented();
         return;
     };
+    let src_shift = shifts.get(1).copied().unwrap_or(ArmShift::Invalid);
+    let src = apply_arm32_shift(ctx, src, src_shift);
     if invert {
         ctx.emit(IrInsn::with_output(
             IrOp::IntNegate,
@@ -577,23 +678,32 @@ fn emit_arm32_copy(ctx: &mut LiftCtx, ops: &[ArmOperandType], invert: bool) {
     }
 }
 
-fn emit_arm32_binop(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
+fn emit_arm32_binop(
+    ctx: &mut LiftCtx,
+    ops: &[ArmOperandType],
+    shifts: &[ArmShift],
+    op: IrOp,
+) {
     let Some(dst) = arm32_first_dst(ops) else {
         ctx.emit_unimplemented();
         return;
     };
-    let (lhs_op, rhs_op) = match ops.len() {
-        2 => (&ops[0], &ops[1]),
-        _ => (&ops[1], &ops[2]),
+    let (lhs_idx, rhs_idx) = match ops.len() {
+        2 => (0usize, 1usize),
+        _ => (1usize, 2usize),
     };
-    let Some(lhs) = arm32_operand_to_varnode(ctx, lhs_op) else {
+    let Some(lhs) = arm32_operand_to_varnode(ctx, &ops[lhs_idx]) else {
         ctx.emit_unimplemented();
         return;
     };
-    let Some(rhs) = arm32_operand_to_varnode(ctx, rhs_op) else {
+    let Some(rhs) = arm32_operand_to_varnode(ctx, &ops[rhs_idx]) else {
         ctx.emit_unimplemented();
         return;
     };
+    let lhs_shift = shifts.get(lhs_idx).copied().unwrap_or(ArmShift::Invalid);
+    let rhs_shift = shifts.get(rhs_idx).copied().unwrap_or(ArmShift::Invalid);
+    let lhs = apply_arm32_shift(ctx, lhs, lhs_shift);
+    let rhs = apply_arm32_shift(ctx, rhs, rhs_shift);
     ctx.emit(IrInsn::with_output(op, dst, smallvec![lhs, rhs], ctx.addr));
 }
 
@@ -871,11 +981,17 @@ fn emit_arm32_branch(ctx: &mut LiftCtx, ops: &[ArmOperandType], insn: &Insn, det
     ));
 }
 
-fn emit_arm32_call(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+/// BL/BLX — branch with link. Writes the return address (insn addr +
+/// `insn.len()`) into LR (R14) before the call, mirroring the
+/// architectural side effect.
+fn emit_arm32_call(ctx: &mut LiftCtx, ops: &[ArmOperandType], insn: &Insn) {
     let Some(target) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
         ctx.emit_unimplemented();
         return;
     };
+    let return_addr = insn.address().wrapping_add(insn.len() as u64);
+    let lr = arm32_reg_varnode(14);
+    ctx.emit_copy(lr, Varnode::constant(return_addr, 4));
     ctx.emit(IrInsn::without_output(
         IrOp::Call,
         smallvec![target],
@@ -1246,6 +1362,204 @@ fn emit_arm32_exclusive_store(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
         smallvec![Varnode::constant(0x353, 8), value, addr_vn],
         ctx.addr,
     ));
+}
+
+/// BFI Rd, Rn, #lsb, #width — replace `Rd[lsb+width-1:lsb]` with
+/// `Rn[width-1:0]`, leaving the rest of `Rd` intact.
+///
+/// Lowering:
+///   field_mask  = ((1 << width) - 1) << lsb
+///   src_bits    = (Rn & ((1 << width) - 1)) << lsb
+///   Rd          = (Rd & !field_mask) | src_bits
+fn emit_arm32_bfi(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rn) = arm32_operand_to_varnode(ctx, &ops[1]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let (Some(lsb), Some(width)) = (arm32_operand_imm(&ops[2]), arm32_operand_imm(&ops[3])) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    if width == 0 || width > 32 || lsb >= 32 || lsb + width > 32 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let width_mask: u32 = if width == 32 { 0xFFFF_FFFF } else { (1u32 << width) - 1 };
+    let field_mask: u32 = width_mask.checked_shl(lsb).unwrap_or(0);
+
+    // src_low = Rn & width_mask
+    let src_low = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAnd,
+        src_low,
+        smallvec![rn, Varnode::constant(width_mask as u64, 4)],
+        ctx.addr,
+    ));
+    // src_bits = src_low << lsb
+    let src_bits = if lsb == 0 {
+        src_low
+    } else {
+        let s = Varnode::unique(ctx.alloc_unique(), 4);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntLeft,
+            s,
+            smallvec![src_low, Varnode::constant(lsb as u64, 4)],
+            ctx.addr,
+        ));
+        s
+    };
+    // keep = Rd & !field_mask
+    let inv_mask: u32 = !field_mask;
+    let keep = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAnd,
+        keep,
+        smallvec![dst, Varnode::constant(inv_mask as u64, 4)],
+        ctx.addr,
+    ));
+    // Rd = keep | src_bits
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        dst,
+        smallvec![keep, src_bits],
+        ctx.addr,
+    ));
+}
+
+/// UBFX/SBFX Rd, Rn, #lsb, #width — extract `width` bits starting at
+/// `lsb` from `Rn`, zero-extend (UBFX) or sign-extend (SBFX) the result
+/// into the 32-bit `Rd`.
+///
+/// Lowering (UBFX): Rd = (Rn >> lsb) & ((1 << width) - 1)
+/// Lowering (SBFX): Rd = (Rn << (32 - lsb - width)) s>> (32 - width)
+fn emit_arm32_ubfx(ctx: &mut LiftCtx, ops: &[ArmOperandType], signed: bool) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rn) = arm32_operand_to_varnode(ctx, &ops[1]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let (Some(lsb), Some(width)) = (arm32_operand_imm(&ops[2]), arm32_operand_imm(&ops[3])) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    if width == 0 || width > 32 || lsb >= 32 || lsb + width > 32 {
+        ctx.emit_unimplemented();
+        return;
+    }
+
+    if signed {
+        // (Rn << left) s>> right, where left = 32 - lsb - width, right = 32 - width.
+        let left = 32 - lsb - width;
+        let right = 32 - width;
+        let shifted_left = if left == 0 {
+            rn
+        } else {
+            let t = Varnode::unique(ctx.alloc_unique(), 4);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntLeft,
+                t,
+                smallvec![rn, Varnode::constant(left as u64, 4)],
+                ctx.addr,
+            ));
+            t
+        };
+        if right == 0 {
+            ctx.emit_copy(dst, shifted_left);
+        } else {
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntSright,
+                dst,
+                smallvec![shifted_left, Varnode::constant(right as u64, 4)],
+                ctx.addr,
+            ));
+        }
+    } else {
+        // (Rn >> lsb) & mask
+        let shifted = if lsb == 0 {
+            rn
+        } else {
+            let t = Varnode::unique(ctx.alloc_unique(), 4);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntRight,
+                t,
+                smallvec![rn, Varnode::constant(lsb as u64, 4)],
+                ctx.addr,
+            ));
+            t
+        };
+        let width_mask: u32 = if width == 32 { 0xFFFF_FFFF } else { (1u32 << width) - 1 };
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntAnd,
+            dst,
+            smallvec![shifted, Varnode::constant(width_mask as u64, 4)],
+            ctx.addr,
+        ));
+    }
+}
+
+/// Distinguish REV/REV16/RBIT in the byte-reverse Callother dispatch.
+#[derive(Clone, Copy)]
+enum ArmReverseKind {
+    Rev,
+    Rev16,
+    Rbit,
+}
+
+/// Canonical byte/bit-reverse intrinsic tags. Lowered as
+/// `Callother(<tag>, Rn) -> Rd`. A future task can replace these with
+/// explicit byte-extraction + OR sequences if a downstream pass needs
+/// to reason about individual bits.
+pub const CALLOTHER_ARM_REV: u64 = 0x354;
+pub const CALLOTHER_ARM_REV16: u64 = 0x355;
+pub const CALLOTHER_ARM_RBIT: u64 = 0x356;
+
+fn emit_arm32_byte_rev(ctx: &mut LiftCtx, ops: &[ArmOperandType], kind: ArmReverseKind) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let tag = match kind {
+        ArmReverseKind::Rev => CALLOTHER_ARM_REV,
+        ArmReverseKind::Rev16 => CALLOTHER_ARM_REV16,
+        ArmReverseKind::Rbit => CALLOTHER_ARM_RBIT,
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(tag, 8), src],
+        ctx.addr,
+    ));
+}
+
+/// Resolve an immediate-typed Capstone operand to its `u32` value.
+/// Returns `None` for non-immediate operand kinds. Used by bitfield
+/// emitters (BFI/UBFX/SBFX) where the lsb/width slots are always Imm.
+fn arm32_operand_imm(op: &ArmOperandType) -> Option<u32> {
+    match op {
+        ArmOperandType::Imm(i) => Some(*i as u32),
+        ArmOperandType::Cimm(i) => Some(*i as u32),
+        ArmOperandType::Pimm(i) => Some(*i as u32),
+        _ => None,
+    }
 }
 
 /// CBZ/CBNZ Rn, label — Thumb-2 compare-branch-zero. Lowers to a flag

@@ -8,14 +8,15 @@ pub use lift::ArmLifter;
 
 #[cfg(test)]
 mod tests {
-    use unlace_ir::{ArchId, IrOp, Lifter};
+    use unlace_ir::{ArchId, IrOp, Lifter, SpaceId};
 
     use crate::ArmLifter;
     use crate::lift::{
         ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
-        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
-        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
-        expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
+        CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV, CALLOTHER_ARM_REV16, CALLOTHER_INT_MULT_HIGH,
+        CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
+        decode_thumb1_ldm_stm, decode_thumb1_push_pop, expand_reg_list, try_aarch64_ccmp,
+        try_aarch64_csel,
     };
 
     #[test]
@@ -1596,5 +1597,273 @@ mod tests {
         assert_eq!(co.inputs[0].offset, 0x363);
         assert!(co.output.is_some(), "MRS has output register");
         assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    // -------------------------------------------------------------------
+    // t166 — ARM32 Capstone opcode expansion
+    // -------------------------------------------------------------------
+
+    /// Shifted-register data-processing: `ADD R0, R1, R2, LSL #4` must
+    /// surface as `IntAdd(R1, IntLeft(R2, #4))`. We verify (a) the dispatch
+    /// produces an IntAdd, (b) a prior IntLeft sits between R2 and that add,
+    /// and (c) no Unimplemented falls through.
+    #[test]
+    fn arm32_add_reg_shifted_by_imm_lifts_with_shift() {
+        // ADD R0, R1, R2, LSL #4  →  0xE0810202
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE081_0202u32.to_le_bytes(), 0x1000)
+            .expect("ADD reg-shift-imm decodes");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        // Pre-shift: IntLeft on R2 with constant 4.
+        let pre_shift = r
+            .ir_ops
+            .iter()
+            .find(|i| {
+                i.op == IrOp::IntLeft
+                    && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 4)
+            })
+            .expect("ADD with LSL #4 must emit a pre-shift IntLeft on the rhs");
+        let add = r.ir_ops.iter().find(|i| i.op == IrOp::IntAdd).expect("IntAdd present");
+        // The IntAdd should consume the unique varnode produced by the shift.
+        assert!(
+            add.inputs.iter().any(|v| Some(*v) == pre_shift.output),
+            "IntAdd must consume the pre-shifted varnode"
+        );
+    }
+
+    /// Reg-shifted-by-reg form: `EOR R0, R1, R2, LSL R3`. The shift amount
+    /// is a GPR (R3), so the emitted IntLeft consumes the R3 varnode rather
+    /// than a constant.
+    #[test]
+    fn arm32_eor_reg_shifted_by_reg_lifts_with_shift() {
+        // EOR R0, R1, R2, LSL R3  →  cond=E, 0010_0010 EOR, S=0, Rn=1, Rd=0,
+        // operand2 reg-shift-reg = Rs=3:0:sh=00:1:Rm=2 = 0x312
+        //  →  1110_0000_0010_0001_0000_0011_0001_0010 = 0xE0210312
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE021_0312u32.to_le_bytes(), 0x1000)
+            .expect("EOR reg-shift-reg decodes");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntLeft),
+            "EOR R..., LSL R3 must emit an IntLeft for the shifter"
+        );
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntXor));
+    }
+
+    /// BL writes the return address (insn_addr + 4) into LR (R14) before
+    /// emitting the `Call`. R14 lives at register offset 14*4 = 56.
+    #[test]
+    fn arm32_bl_writes_return_address_to_lr() {
+        // BL #+0x100 from 0x1000  →  0xEB00003E
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xEB00_003Eu32.to_le_bytes(), 0x1000)
+            .expect("BL decodes");
+        let lr_pos = r
+            .ir_ops
+            .iter()
+            .position(|i| {
+                i.op == IrOp::Copy
+                    && i.output
+                        .map(|v| v.offset == 14 * 4 && v.space != SpaceId::Const)
+                        .unwrap_or(false)
+            })
+            .expect("BL must emit a Copy writing LR");
+        let lr_write = &r.ir_ops[lr_pos];
+        let val = lr_write.inputs.first().expect("Copy has source");
+        assert!(val.space == SpaceId::Const, "LR write should source a constant");
+        assert_eq!(val.offset, 0x1004, "LR must hold insn_addr + 4");
+        // The Call must follow the LR write.
+        let call_pos = r
+            .ir_ops
+            .iter()
+            .position(|i| i.op == IrOp::Call)
+            .expect("BL emits Call");
+        assert!(lr_pos < call_pos, "LR write must precede the Call");
+    }
+
+    /// MOVW writes a 16-bit immediate into the low half of Rd. Unlike MOVT
+    /// it does not need to preserve the high half (the architectural form
+    /// zeroes it), so the MVP just routes it through the same Copy path as
+    /// plain MOV. We assert the Copy reaches Rd with the right immediate.
+    #[test]
+    fn arm32_movw_writes_low_half_immediate() {
+        // MOVW R0, #0x1234  →  0xE3010234
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE301_0234u32.to_le_bytes(), 0x1000)
+            .expect("MOVW decodes");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let copy = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy && i.output.map(|v| v.offset == 0).unwrap_or(false))
+            .expect("MOVW must Copy into R0");
+        assert_eq!(
+            copy.inputs[0].offset, 0x1234,
+            "MOVW immediate must be the low 16 bits"
+        );
+    }
+
+    /// MOVT preserves the low 16 bits of Rd and writes `imm << 16` into
+    /// the high half. Lowering: `Rd = (Rd & 0xFFFF) | (imm << 16)`. We
+    /// verify the mask-and-merge sequence is present.
+    #[test]
+    fn arm32_movt_preserves_low_half_and_writes_high() {
+        // MOVT R0, #0x1234  →  0xE3410234
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE341_0234u32.to_le_bytes(), 0x1000)
+            .expect("MOVT decodes");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        // Must mask Rd with 0xFFFF (preserving the low half).
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntAnd
+                && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 0xFFFF)),
+            "MOVT must mask Rd by 0xFFFF to preserve the low half"
+        );
+        // Must shift the immediate left by 16.
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntLeft
+                && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 16)),
+            "MOVT must shift the immediate left by 16"
+        );
+        // Final merge: IntOr into R0.
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntOr
+                && i.output.map(|v| v.offset == 0).unwrap_or(false)),
+            "MOVT must finish with IntOr into R0"
+        );
+    }
+
+    /// LDREX/STREX should lower to the Callother atomic intrinsics so
+    /// downstream analyses can recognise lock semantics. We exercise both
+    /// directions in one test (single insn per family is sufficient — the
+    /// emitters are tag-only).
+    #[test]
+    fn arm32_ldrex_strex_lift_to_callother_atomics() {
+        let l = ArmLifter::new_arm32();
+        // LDREX R0, [R1]  →  0xE1910F9F
+        let r = l
+            .lift_insn(&0xE191_0F9Fu32.to_le_bytes(), 0x1000)
+            .expect("LDREX decodes");
+        let co = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("LDREX emits Callother");
+        assert_eq!(co.inputs[0].offset, 0x352, "LDREX tag");
+        assert!(co.output.is_some(), "LDREX writes a destination");
+
+        // STREX R0, R2, [R1]  →  0xE1810F92
+        let r = l
+            .lift_insn(&0xE181_0F92u32.to_le_bytes(), 0x1000)
+            .expect("STREX decodes");
+        let co = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("STREX emits Callother");
+        assert_eq!(co.inputs[0].offset, 0x353, "STREX tag");
+        assert!(co.output.is_some(), "STREX writes the success status");
+    }
+
+    /// BFI Rd, Rn, #lsb, #width — bitfield insert. Must mask Rd to drop
+    /// the destination field, mask Rn to width, shift it into place, and
+    /// OR the two halves together.
+    #[test]
+    fn arm32_bfi_inserts_bitfield() {
+        // BFI R0, R1, #4, #8  →  0xE7CB0211 (msb = lsb+width-1 = 11)
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE7CB_0211u32.to_le_bytes(), 0x1000)
+            .expect("BFI decodes");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        // width=8 mask = 0xFF
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntAnd
+                && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 0xFF)),
+            "BFI must mask the source by ((1<<width)-1)"
+        );
+        // field_mask = 0xFF << 4 = 0xFF0; inverse mask = !0xFF0 = 0xFFFFF00F
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntAnd
+                && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 0xFFFF_F00F)),
+            "BFI must mask Rd by the inverse field-mask"
+        );
+        // Final merge into R0.
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntOr
+                && i.output.map(|v| v.offset == 0).unwrap_or(false)),
+            "BFI must finish with IntOr into Rd"
+        );
+    }
+
+    /// UBFX Rd, Rn, #lsb, #width — unsigned bitfield extract.
+    /// Lowering: `Rd = (Rn >> lsb) & ((1 << width) - 1)`.
+    #[test]
+    fn arm32_ubfx_extracts_unsigned_bitfield() {
+        // UBFX R0, R1, #4, #8  →  0xE7E70251 (widthm1 = 7)
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE7E7_0251u32.to_le_bytes(), 0x1000)
+            .expect("UBFX decodes");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        // Right-shift by lsb=4.
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntRight
+                && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 4)),
+            "UBFX must right-shift Rn by lsb"
+        );
+        // Mask by 0xFF (width=8).
+        let mask_op = r
+            .ir_ops
+            .iter()
+            .find(|i| {
+                i.op == IrOp::IntAnd
+                    && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 0xFF)
+            })
+            .expect("UBFX must mask by ((1<<width)-1)");
+        assert_eq!(mask_op.output.map(|v| v.offset), Some(0), "result lands in R0");
+        // Must NOT emit a sign-extending IntSright (that's SBFX's path).
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::IntSright),
+            "UBFX is unsigned — no IntSright"
+        );
+    }
+
+    /// REV/REV16/RBIT each route through a Callother intrinsic so a
+    /// downstream pass can recognise the byte/bit-reverse pattern without
+    /// having to undo a byte-extract chain. We sanity-check all three
+    /// tags in one test.
+    #[test]
+    fn arm32_rev_family_lifts_to_callother_tags() {
+        let l = ArmLifter::new_arm32();
+        let cases: &[(u32, u64)] = &[
+            (0xE6BF_0F31, CALLOTHER_ARM_REV),   // REV   R0, R1
+            (0xE6BF_0FB1, CALLOTHER_ARM_REV16), // REV16 R0, R1
+            (0xE6FF_0F31, CALLOTHER_ARM_RBIT),  // RBIT  R0, R1
+        ];
+        for (enc, expected_tag) in cases {
+            let r = l
+                .lift_insn(&enc.to_le_bytes(), 0x1000)
+                .unwrap_or_else(|e| panic!("encoding {enc:#x} should decode: {e:?}"));
+            assert!(
+                !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+                "encoding {enc:#x} should not fall through to Unimplemented"
+            );
+            let co = r
+                .ir_ops
+                .iter()
+                .find(|i| i.op == IrOp::Callother)
+                .unwrap_or_else(|| panic!("encoding {enc:#x} must emit Callother"));
+            assert_eq!(
+                co.inputs[0].offset, *expected_tag,
+                "encoding {enc:#x} must use tag {expected_tag:#x}"
+            );
+            assert!(co.output.is_some(), "byte-reverse writes a destination");
+        }
     }
 }

@@ -137,6 +137,10 @@ pub struct FunctionHeaderInfo {
     pub stack_frame: u64,
     /// Sorted list of callee names/addresses referenced by CALL instructions.
     pub callees: Vec<String>,
+    /// Whether the function adjusts RSP by a non-constant amount mid-body
+    /// (alloca / variable-length stack arrays). Populated from
+    /// [`SsaFunction::dynamic_sp`](unlace_ir::ssa::SsaFunction).
+    pub dynamic_sp: bool,
 }
 
 impl FunctionHeaderInfo {
@@ -209,6 +213,7 @@ impl FunctionHeaderInfo {
             convention,
             stack_frame,
             callees,
+            dynamic_sp: ssa.dynamic_sp,
         }
     }
 }
@@ -562,6 +567,9 @@ fn emit_function_header(hdr: &FunctionHeaderInfo, out: &mut String) {
         let _ = write!(out, " | Xrefs to:   {}", demangled_callees.join(", "));
     }
     let _ = writeln!(out, " | Xrefs from: unknown */");
+    if hdr.dynamic_sp {
+        let _ = writeln!(out, "// alloca / dynamic stack");
+    }
 }
 
 /// Sentinel placed on the *first* line of the RTTI hierarchy block so a
@@ -8635,6 +8643,7 @@ mod tests {
             convention: "unknown".to_string(),
             stack_frame: 0,
             callees: vec!["printf".to_string()],
+            dynamic_sp: false,
         };
 
         let output = super::print_c_full(&func, None, Some(&header), Some(&symbols), None);
@@ -8664,6 +8673,7 @@ mod tests {
             convention: "Microsoft x64".to_string(),
             stack_frame: 0x40,
             callees: vec![],
+            dynamic_sp: false,
         };
 
         let output = super::print_c_full(&func, None, Some(&header), None, None);
@@ -8689,6 +8699,7 @@ mod tests {
             convention: "System V AMD64".to_string(),
             stack_frame: 0x20,
             callees: vec![],
+            dynamic_sp: false,
         };
 
         let output = super::print_c_full(&func, None, Some(&header), None, None);
@@ -8722,6 +8733,7 @@ mod tests {
             convention: "unknown".to_string(),
             stack_frame: 0,
             callees: vec![],
+            dynamic_sp: false,
         };
 
         let output = super::print_c_full(&func, None, Some(&header), None, None);
@@ -8751,6 +8763,7 @@ mod tests {
             convention: "cdecl".to_string(),
             stack_frame: 0x10,
             callees: vec![],
+            dynamic_sp: false,
         };
 
         let output = super::print_c_full(&func, None, Some(&header), None, None);
@@ -8776,6 +8789,7 @@ mod tests {
             convention: "stdcall".to_string(),
             stack_frame: 0,
             callees: vec![],
+            dynamic_sp: false,
         };
         let out1 = super::print_c_full(&func1, None, Some(&header1), None, None);
         assert!(
@@ -8791,6 +8805,7 @@ mod tests {
             convention: "thiscall".to_string(),
             stack_frame: 0,
             callees: vec![],
+            dynamic_sp: false,
         };
         let out2 = super::print_c_full(&func2, None, Some(&header2), None, None);
         assert!(
@@ -9628,6 +9643,7 @@ mod tests {
             convention: "System V AMD64".to_string(),
             stack_frame: 0x60,
             callees: vec![],
+            dynamic_sp: false,
         };
 
         let mut functions = BTreeMap::new();
@@ -9701,6 +9717,7 @@ mod tests {
             convention: "System V AMD64".to_string(),
             stack_frame: 0xa0,
             callees: vec![],
+            dynamic_sp: false,
         };
         let output = super::print_c_full(&func, None, Some(&header), None, None);
 
@@ -9744,6 +9761,7 @@ mod tests {
             convention: "System V AMD64".to_string(),
             stack_frame: 0x60,
             callees: vec![],
+            dynamic_sp: false,
         };
         let output = super::print_c_full(&func, None, Some(&header), None, None);
 

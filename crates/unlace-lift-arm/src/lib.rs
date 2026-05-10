@@ -1247,6 +1247,96 @@ mod tests {
         assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 
+    /// t162 — CCMP must commit a real value to each of NF/ZF/CF/VF on the
+    /// success branch (the architectural flag bytes are the IR's contract
+    /// with downstream consumers like CSEL/CSET). We verify by looking for
+    /// a Copy/BoolOr write into each of the four flag offsets.
+    #[test]
+    fn ccmp_writes_nzcv_flag_varnodes_on_success_branch() {
+        use unlace_ir::SpaceId;
+        // CCMP X0, X1, #4, EQ → 0xFA41_0004
+        let r = lifter()
+            .lift_insn(&0xFA41_0004u32.to_le_bytes(), 0x1000)
+            .expect("CCMP should decode");
+
+        // Every flag (NF=264, ZF=265, CF=266, VF=267) must appear as an
+        // output of a register-space write somewhere in the lifted block.
+        for (name, offset) in [("NF", 264u64), ("ZF", 265), ("CF", 266), ("VF", 267)] {
+            let written = r.ir_ops.iter().any(|i| {
+                i.output
+                    .map(|o| o.space == SpaceId::Register && o.offset == offset && o.size == 1)
+                    .unwrap_or(false)
+            });
+            assert!(written, "CCMP must write {name} (offset {offset})");
+        }
+
+        // The success branch should compute its flags from an IntSub of
+        // the operands (CCMP semantics). Verify the IntSub is present.
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntSub),
+            "CCMP success branch must compute Rn - Rm for flag derivation",
+        );
+
+        // And the four `nzcv` literal bits must reach the IR as Const
+        // varnodes (one per flag) — present in the blend chain.
+        let const_inputs: Vec<u64> = r
+            .ir_ops
+            .iter()
+            .flat_map(|i| i.inputs.iter())
+            .filter(|v| v.space == SpaceId::Const && v.size == 1)
+            .map(|v| v.offset)
+            .collect();
+        // #nzcv = 0b0100 → N=0, Z=1, C=0, V=0. The 1 must show up.
+        assert!(
+            const_inputs.iter().any(|c| *c == 1),
+            "CCMP with #nzcv=4 must surface bit-2 (Z=1) as a 1-byte const, \
+             got constants: {const_inputs:?}",
+        );
+
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    /// t162 — when the condition fails, the architectural flag varnodes
+    /// must end up holding the literal #nzcv immediate bits. Using
+    /// `#nzcv = 0b1111` (all set) lets us assert the fail-path delivers
+    /// the all-ones constant into the flag blend at each bit.
+    #[test]
+    fn ccmp_propagates_nzcv_immediate_on_failure_branch() {
+        use unlace_ir::SpaceId;
+        // CCMP X0, X1, #0xF, EQ → encoding: same as 0xFA41_0004 but with
+        // the nzcv field = 0xF instead of 0x4. Bits[3:0] = 0xF.
+        // → 0xFA41_000F
+        let r = lifter()
+            .lift_insn(&0xFA41_000Fu32.to_le_bytes(), 0x1000)
+            .expect("CCMP w/ nzcv=0xF should decode");
+
+        // All four bits (N=1, Z=1, C=1, V=1) of the literal #nzcv=0b1111
+        // must reach the IR as `Varnode::constant(1, 1)` — one per blend.
+        let one_byte_const_count = r
+            .ir_ops
+            .iter()
+            .flat_map(|i| i.inputs.iter())
+            .filter(|v| v.space == SpaceId::Const && v.size == 1 && v.offset == 1)
+            .count();
+        assert!(
+            one_byte_const_count >= 4,
+            "CCMP fail-branch must surface four 1-byte `1` constants for \
+             #nzcv=0xF, got {one_byte_const_count}",
+        );
+
+        // Each of NF/ZF/CF/VF must still be written.
+        for (name, offset) in [("NF", 264u64), ("ZF", 265), ("CF", 266), ("VF", 267)] {
+            let written = r.ir_ops.iter().any(|i| {
+                i.output
+                    .map(|o| o.space == SpaceId::Register && o.offset == offset)
+                    .unwrap_or(false)
+            });
+            assert!(written, "CCMP fail-branch path must still write {name}");
+        }
+
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
     #[test]
     fn arm_capstone_decodes_bl() {
         // BL #+0x100 from 0x1000  →  0xEB00003E (Capstone reports BL <target>).

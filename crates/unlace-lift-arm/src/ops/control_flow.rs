@@ -1,7 +1,7 @@
 use capstone::arch::arm64::{Arm64CC, Arm64OperandType, Arm64Shift};
 use capstone::prelude::*;
 use smallvec::smallvec;
-use unlace_ir::{IrInsn, IrOp, Varnode};
+use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::lift::{LiftCtx, operand_to_varnode};
 use crate::register_file::{CF, NF, VF, X30, ZF};
@@ -235,10 +235,17 @@ pub fn lift_cset(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, tag: u64) {
 ///
 /// Semantics: if `cond` evaluates true, NZCV is set to `compare(Rn, Rm)`
 /// (CCMP subtracts, CCMN adds); otherwise NZCV is set to the literal 4-bit
-/// `#nzcv` immediate. MVP: emit a single
-/// `Callother(CALLOTHER_AARCH64_CCMP, cond, Rn, Rm_or_imm5, nzcv, is_neg_flag)`
-/// with no IR output. NZCV varnodes are not yet plumbed through this lifter
-/// so flag mutation is implicit; a later pass can recognize the intrinsic.
+/// `#nzcv` immediate (bit3=N, bit2=Z, bit1=C, bit0=V).
+///
+/// IR shape (t162):
+///   1. Emit the canonical `Callother(CALLOTHER_AARCH64_CCMP, …)` so the
+///      intrinsic remains recoverable for higher-level rendering.
+///   2. Compute the "compare-succeeds" flags (N/Z/C/V) into unique temps —
+///      mirroring `emit_add_flags` / `emit_sub_flags` for CMN/CMP.
+///   3. For each of N/Z/C/V, blend `cond ? computed : nzcv_bit` and write
+///      the result to the NF/ZF/CF/VF register varnodes. Downstream
+///      consumers (CSEL/CSET via `build_condition`) read those varnodes
+///      directly so the predicate now propagates.
 pub fn lift_ccmp(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, is_neg: bool) {
     if ops.len() < 3 {
         ctx.emit_unimplemented();
@@ -254,31 +261,208 @@ pub fn lift_ccmp(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, is_neg: bool
         }
     };
 
-    let rn = operand_to_varnode(ctx, &ops[0].0);
+    let rn_opt = operand_to_varnode(ctx, &ops[0].0);
     // Second operand is either Rm (register) or an immediate. Both lift to
     // a Varnode without distinguishing here — the tag carries semantics.
-    let rm_or_imm = operand_to_varnode(ctx, &ops[1].0);
-    let nzcv = match ops.get(2).map(|p| &p.0) {
-        Some(Arm64OperandType::Imm(v)) => Varnode::constant(*v as u64 & 0xF, 1),
+    let rm_or_imm_opt = operand_to_varnode(ctx, &ops[1].0);
+    let nzcv_imm = match ops.get(2).map(|p| &p.0) {
+        Some(Arm64OperandType::Imm(v)) => (*v as u64) & 0xF,
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+    let nzcv_vn = Varnode::constant(nzcv_imm, 1);
+
+    let tag = Varnode::constant(crate::lift::CALLOTHER_AARCH64_CCMP, 8);
+    let neg_flag = Varnode::constant(u64::from(is_neg), 1);
+
+    let (rn, rm_or_imm) = match (rn_opt, rm_or_imm_opt) {
+        (Some(rn), Some(rm)) => (rn, rm),
         _ => {
             ctx.emit_unimplemented();
             return;
         }
     };
 
-    let tag = Varnode::constant(crate::lift::CALLOTHER_AARCH64_CCMP, 8);
-    let neg_flag = Varnode::constant(u64::from(is_neg), 1);
+    // 1. Canonical intrinsic anchor — kept for downstream recognition.
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![tag, cond, rn, rm_or_imm, nzcv_vn, neg_flag],
+        ctx.addr,
+    ));
 
-    match (rn, rm_or_imm) {
-        (Some(rn), Some(rm_or_imm)) => {
-            ctx.emit(IrInsn::without_output(
-                IrOp::Callother,
-                smallvec![tag, cond, rn, rm_or_imm, nzcv, neg_flag],
-                ctx.addr,
-            ));
-        }
-        _ => ctx.emit_unimplemented(),
+    // Size the second operand to Rn's width so the arithmetic-flag ops
+    // are well-typed. The immediate form arrives as an 8-byte constant
+    // from `operand_to_varnode`; re-issue at op_size. A wider register
+    // (illegal mix in real code) is defensively narrowed via Subpiece.
+    let op_size = rn.size;
+    let rm_sized = if rm_or_imm.size == op_size {
+        rm_or_imm
+    } else if rm_or_imm.space == SpaceId::Const {
+        Varnode::constant(rm_or_imm.offset, op_size)
+    } else {
+        let trunc = Varnode::unique(ctx.alloc_unique(), op_size);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            trunc,
+            smallvec![rm_or_imm, Varnode::constant(0, 1)],
+            ctx.addr,
+        ));
+        trunc
+    };
+
+    // 2. Compute the "compare-succeeds" flags into temps.
+    let (comp_nf, comp_zf, comp_cf, comp_vf) =
+        compute_ccmp_flags(ctx, rn, rm_sized, op_size, is_neg);
+
+    // 3. Blend `cond ? computed : nzcv_bit` for each flag and commit to
+    //    the architectural flag varnodes.
+    //    NZCV layout (4-bit immediate): bit3=N, bit2=Z, bit1=C, bit0=V.
+    let nf_imm = Varnode::constant((nzcv_imm >> 3) & 1, 1);
+    let zf_imm = Varnode::constant((nzcv_imm >> 2) & 1, 1);
+    let cf_imm = Varnode::constant((nzcv_imm >> 1) & 1, 1);
+    let vf_imm = Varnode::constant(nzcv_imm & 1, 1);
+
+    let nf_reg = Varnode::reg(NF, 1);
+    let zf_reg = Varnode::reg(ZF, 1);
+    let cf_reg = Varnode::reg(CF, 1);
+    let vf_reg = Varnode::reg(VF, 1);
+
+    blend_flag(ctx, cond, comp_nf, nf_imm, nf_reg);
+    blend_flag(ctx, cond, comp_zf, zf_imm, zf_reg);
+    blend_flag(ctx, cond, comp_cf, cf_imm, cf_reg);
+    blend_flag(ctx, cond, comp_vf, vf_imm, vf_reg);
+}
+
+/// Compute NF/ZF/CF/VF as if `Rn op (±Rm)` had retired, returning the
+/// four 1-byte temp varnodes (caller blends them with the #nzcv literal).
+///
+/// `is_neg=true` means CCMN — addition; otherwise CCMP uses subtraction.
+fn compute_ccmp_flags(
+    ctx: &mut LiftCtx,
+    a: Varnode,
+    b: Varnode,
+    op_size: u8,
+    is_neg: bool,
+) -> (Varnode, Varnode, Varnode, Varnode) {
+    let result = Varnode::unique(ctx.alloc_unique(), op_size);
+    let arith_op = if is_neg { IrOp::IntAdd } else { IrOp::IntSub };
+    ctx.emit(IrInsn::with_output(
+        arith_op,
+        result,
+        smallvec![a, b],
+        ctx.addr,
+    ));
+
+    // ZF: result == 0
+    let zero = Varnode::constant(0, op_size);
+    let zf = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntEqual,
+        zf,
+        smallvec![result, zero],
+        ctx.addr,
+    ));
+
+    // NF: sign bit of result.
+    let sign_bit = (op_size as u64) * 8 - 1;
+    let shifted = Varnode::unique(ctx.alloc_unique(), op_size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntRight,
+        shifted,
+        smallvec![result, Varnode::constant(sign_bit, 1)],
+        ctx.addr,
+    ));
+    let nf = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Subpiece,
+        nf,
+        smallvec![shifted, Varnode::constant(0, 1)],
+        ctx.addr,
+    ));
+
+    // CF / VF: differ between add and sub. Matches the patterns in
+    // arithmetic::emit_add_flags / emit_sub_flags.
+    let cf = Varnode::unique(ctx.alloc_unique(), 1);
+    let vf = Varnode::unique(ctx.alloc_unique(), 1);
+    if is_neg {
+        // CCMN → add: C = unsigned carry, V = signed overflow of add.
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntCarry,
+            cf,
+            smallvec![a, b],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntScarry,
+            vf,
+            smallvec![a, b],
+            ctx.addr,
+        ));
+    } else {
+        // CCMP → sub: C = NOT borrow, V = signed borrow of sub.
+        let borrow = Varnode::unique(ctx.alloc_unique(), 1);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntLess,
+            borrow,
+            smallvec![a, b],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(
+            IrOp::BoolNegate,
+            cf,
+            smallvec![borrow],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntSborrow,
+            vf,
+            smallvec![a, b],
+            ctx.addr,
+        ));
     }
+
+    (nf, zf, cf, vf)
+}
+
+/// Emit `dst = (cond) ? when_true : when_false` for 1-byte flag values.
+///
+/// Lowering: `dst = (cond & when_true) | (!cond & when_false)`.
+fn blend_flag(
+    ctx: &mut LiftCtx,
+    cond: Varnode,
+    when_true: Varnode,
+    when_false: Varnode,
+    dst: Varnode,
+) {
+    let true_side = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::BoolAnd,
+        true_side,
+        smallvec![cond, when_true],
+        ctx.addr,
+    ));
+    let not_cond = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::BoolNegate,
+        not_cond,
+        smallvec![cond],
+        ctx.addr,
+    ));
+    let false_side = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::BoolAnd,
+        false_side,
+        smallvec![not_cond, when_false],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::BoolOr,
+        dst,
+        smallvec![true_side, false_side],
+        ctx.addr,
+    ));
 }
 
 pub fn lift_csel(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, tag: u64) {

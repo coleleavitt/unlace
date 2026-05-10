@@ -301,6 +301,14 @@ pub struct PrinterAnnotations {
     /// User overrides for synthesized `sub_<addr>` names. Merged on top of
     /// the symbol table at print time.
     pub custom_names: BTreeMap<u64, String>,
+    /// Pre-computed `hash → string` table from `StringHashSwitchPass`.
+    /// When a switch case constant matches a key the printer emits the
+    /// original string as a trailing comment (`case 0x...: /* "name" */`).
+    pub string_hash_table: BTreeMap<u64, String>,
+    /// ObjC classes whose synthetic ivar struct layouts should be emitted
+    /// at the top of the C output preamble.  Classes without ivars are
+    /// skipped (no empty `struct {};` would be a C constraint violation).
+    pub objc_classes: Vec<unlace_loader::ObjcClass>,
 }
 
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
@@ -363,6 +371,7 @@ pub fn print_c_with_annotations(
     if let Some(ann) = annotations {
         ctx.line_comments = ann.line_comments.clone();
         ctx.custom_names = ann.custom_names.clone();
+        ctx.string_hash_table = ann.string_hash_table.clone();
     }
     if let Some(cfg) = config {
         ctx.config = cfg;
@@ -383,6 +392,22 @@ pub fn print_c_with_annotations(
     let mut out = String::with_capacity(1024);
 
     out.push_str(IDA_TYPEDEFS);
+
+    if let Some(ann) = annotations {
+        let mut emitted_any = false;
+        for class in &ann.objc_classes {
+            if let Some(s) = render_objc_class_struct(class) {
+                if !emitted_any {
+                    out.push_str("// ObjC class layouts (recovered from __objc_classlist)\n");
+                    emitted_any = true;
+                }
+                out.push_str(&s);
+            }
+        }
+        if emitted_any {
+            out.push('\n');
+        }
+    }
 
     if let Some(rtti) = rtti.filter(|r| !r.is_empty()) {
         emit_rtti_hierarchy(rtti, &mut out);
@@ -1168,6 +1193,10 @@ struct PrintCtx {
     /// ObjC dispatch annotations keyed by instruction VA. Lifted from
     /// [`HirFunction::objc_dispatch_calls`].
     objc_dispatch_calls: BTreeMap<u64, String>,
+    /// Pre-computed `hash → string` table consulted by switch-case emission
+    /// so a case constant matching a recognised CRC32/FNV-1a/djb2 of a
+    /// binary string renders as `case 0xN: /* "name" */`.
+    string_hash_table: BTreeMap<u64, String>,
 }
 
 impl PrintCtx {
@@ -1230,6 +1259,7 @@ impl PrintCtx {
             line_comments: BTreeMap::new(),
             custom_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            string_hash_table: BTreeMap::new(),
         }
     }
 
@@ -3271,6 +3301,13 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                     SwitchCase::Value(v) => {
                         if let Some(lit) = format_char_case(*v, cond_is_char) {
                             let _ = writeln!(out, "case {}:", lit);
+                        } else if let Some(s) = ctx.string_hash_table.get(v) {
+                            let _ = writeln!(
+                                out,
+                                "case 0x{:X}u:  /* \"{}\" */",
+                                v,
+                                s.escape_default()
+                            );
                         } else {
                             let _ = writeln!(out, "case {}:", v);
                         }
@@ -12339,5 +12376,162 @@ mod tests {
         assert!(out.contains("void*"), "{out}");
         assert!(out.contains("/* type=? */"), "{out}");
         assert!(out.contains("mystery"), "{out}");
+    }
+
+    // -----------------------------------------------------------------------
+    // t152 — string-hash switch case rendering
+    // -----------------------------------------------------------------------
+
+    fn hash_switch_func(case_val: u64) -> HirFunction {
+        let r0 = reg(0, 4);
+        let c0 = con(0, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                r0,
+                smallvec![c0],
+                0x1000,
+            )),
+            HirNode::Switch {
+                cond: sv(0, 4),
+                cases: vec![(
+                    SwitchCase::Value(case_val),
+                    vec![HirNode::Return(None)],
+                    false,
+                )],
+                default: None,
+                jumptable_addr: None,
+                jumptable_cases: None,
+            },
+        ];
+        make_func("switch_hash", body)
+    }
+
+    #[test]
+    fn c_printer_renders_hash_case_with_string_comment() {
+        let func = hash_switch_func(0x3610_A686);
+        let mut ann = super::PrinterAnnotations::default();
+        ann.string_hash_table.insert(0x3610_A686, "hello".into());
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+        assert!(
+            output.contains("case 0x3610A686u:") && output.contains("/* \"hello\" */"),
+            "expected hash case with string comment, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_printer_renders_unknown_hash_case_normally() {
+        let func = hash_switch_func(0xDEAD_BEEF);
+        let mut ann = super::PrinterAnnotations::default();
+        ann.string_hash_table.insert(0x3610_A686, "hello".into());
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+        assert!(
+            output.contains("case 3735928559:") || output.contains("case 0xDEADBEEF"),
+            "expected plain integer case for unknown hash, got:\n{output}"
+        );
+        assert!(
+            !output.contains("/* \""),
+            "no string comment expected for unknown hash, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_printer_escapes_special_chars_in_string_comment() {
+        let func = hash_switch_func(0x1234_5678);
+        let mut ann = super::PrinterAnnotations::default();
+        ann.string_hash_table
+            .insert(0x1234_5678, "a\"b\\c".into());
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+        assert!(
+            output.contains(r#"/* "a\"b\\c" */"#),
+            "expected escape_default-rendered string, got:\n{output}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // t153 — ObjC class struct decls in C output preamble
+    // -----------------------------------------------------------------------
+
+    fn minimal_func() -> HirFunction {
+        make_func("noop", vec![HirNode::Return(None)])
+    }
+
+    fn objc_class(name: &str, ivars: Vec<unlace_loader::ObjcIvar>) -> unlace_loader::ObjcClass {
+        unlace_loader::ObjcClass {
+            name: name.into(),
+            class_addr: 0,
+            superclass_addr: 0,
+            methods: vec![],
+            ivars,
+            properties: vec![],
+            protocols: vec![],
+        }
+    }
+
+    #[test]
+    fn preamble_emits_objc_class_struct() {
+        let func = minimal_func();
+        let mut ann = super::PrinterAnnotations::default();
+        ann.objc_classes.push(objc_class(
+            "ClassName",
+            vec![
+                unlace_loader::ObjcIvar { name: "name".into(), offset: 8, type_encoding: "@".into() },
+                unlace_loader::ObjcIvar { name: "count".into(), offset: 16, type_encoding: "q".into() },
+            ],
+        ));
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+        assert!(
+            output.contains("struct ClassName {"),
+            "expected preamble to contain ObjC class struct, got:\n{output}"
+        );
+        assert!(
+            output.contains("// ObjC class layouts"),
+            "expected preamble heading comment, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn preamble_omits_classes_with_no_ivars() {
+        let func = minimal_func();
+        let mut ann = super::PrinterAnnotations::default();
+        ann.objc_classes.push(objc_class("Empty", vec![]));
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+        assert!(
+            !output.contains("struct Empty"),
+            "ivar-less class should not produce a struct decl, got:\n{output}"
+        );
+        assert!(
+            !output.contains("// ObjC class layouts"),
+            "heading must not appear when nothing was emitted, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn preamble_emits_multiple_classes() {
+        let func = minimal_func();
+        let mut ann = super::PrinterAnnotations::default();
+        ann.objc_classes.push(objc_class(
+            "Alpha",
+            vec![unlace_loader::ObjcIvar { name: "a".into(), offset: 0, type_encoding: "i".into() }],
+        ));
+        ann.objc_classes.push(objc_class(
+            "Beta",
+            vec![unlace_loader::ObjcIvar { name: "b".into(), offset: 0, type_encoding: "q".into() }],
+        ));
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+        assert!(output.contains("struct Alpha {"), "missing Alpha:\n{output}");
+        assert!(output.contains("struct Beta {"), "missing Beta:\n{output}");
     }
 }

@@ -33,6 +33,12 @@ pub mod tag {
     pub const POR: u64 = 0x121;
     pub const PXOR: u64 = 0x122;
 
+    pub const PMULLD: u64 = 0x123;
+
+    pub const PCMPEQB: u64 = 0x124;
+    pub const PCMPEQW: u64 = 0x125;
+    pub const PCMPEQD: u64 = 0x126;
+
     pub const ADDPS: u64 = 0x130;
     pub const SUBPS: u64 = 0x131;
     pub const MULPS: u64 = 0x132;

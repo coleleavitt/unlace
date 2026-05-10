@@ -692,6 +692,90 @@ mod tests {
         assert_callother_tag(&[0x66, 0x0F, 0xFB, 0xC1], sse_tag::PSUBQ);
     }
 
+    #[test]
+    fn paddd_emits_callother_with_lane_size_4() {
+        // 66 0F FE C1 = paddd xmm0, xmm1.
+        // lift-x86 uses one Callother tag per lane-width (PADDB/W/D/Q);
+        // PADDD encodes the 4-byte-lane variant.
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xFE, 0xC1], 0x1000)
+            .unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PADDD must emit Callother");
+        assert_eq!(co.inputs[0].offset, sse_tag::PADDD);
+        let dst = co.output.expect("PADDD has dst output");
+        assert_eq!(dst.size, 16);
+        assert_eq!(co.inputs.len(), 3);
+    }
+
+    #[test]
+    fn psubd_emits_callother() {
+        // 66 0F FA C1 = psubd xmm0, xmm1
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xFA, 0xC1], 0x1000)
+            .unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PSUBD must emit Callother");
+        assert_eq!(co.inputs[0].offset, sse_tag::PSUBD);
+        assert_eq!(co.output.unwrap().size, 16);
+    }
+
+    #[test]
+    fn pmulld_emits_callother() {
+        // 66 0F 38 40 C1 = pmulld xmm0, xmm1 (SSE4.1)
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0x38, 0x40, 0xC1], 0x1000)
+            .unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PMULLD must emit Callother");
+        assert_eq!(co.inputs[0].offset, sse_tag::PMULLD);
+        assert_eq!(co.output.unwrap().size, 16);
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn pand_uses_intand_or_callother() {
+        // 66 0F DB C1 = pand xmm0, xmm1.
+        // lift-x86 lowers 128-bit SSE bitwise ops via Callother; accept either
+        // IntAnd or Callother(tag::PAND) so future 128-bit IntAnd drops in.
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xDB, 0xC1], 0x1000)
+            .unwrap();
+        let is_intand = result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd);
+        let is_callother_pand = result.ir_ops.iter().any(|i| {
+            i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PAND
+        });
+        assert!(
+            is_intand || is_callother_pand,
+            "PAND must lift to either IntAnd or Callother(tag::PAND)"
+        );
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn pcmpeqd_emits_callother() {
+        // 66 0F 76 C1 = pcmpeqd xmm0, xmm1
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0x76, 0xC1], 0x1000)
+            .unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PCMPEQD must emit Callother");
+        assert_eq!(co.inputs[0].offset, sse_tag::PCMPEQD);
+        assert_eq!(co.output.unwrap().size, 16);
+    }
+
     // -- Sign extension (CDQE / CDQ / CQO / CBW / CWDE) --------------------
 
     #[test]

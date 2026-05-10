@@ -25,10 +25,15 @@
 //!     comment (NUL-terminated)
 //!     fields-comments (NUL-terminated)
 //!
-//! This MVP only consumes the header and the syms section. Type-string
-//! decoding is left for a follow-up — callers receive raw bytes.
+//! Each [`TilSym`] carries both the raw IDA-encoded `typestring` bytes and a
+//! best-effort decoded [`Type`] when [`decode_typestring`] succeeds. Composite
+//! types (struct/union/enum) currently decode as empty placeholders — the
+//! BT_COMPLEX member lists are deferred to a later pass.
 
 use std::collections::BTreeMap;
+
+use unlace_ir::ssa::PrimitiveType;
+use unlace_ir::types::Type;
 
 const TIL_MAGIC: &[u8] = b"IDATIL";
 
@@ -50,8 +55,11 @@ pub struct TilHeader {
 pub struct TilSym {
     pub name: String,
     pub ordinal: u64,
-    /// Raw IDA-encoded type bytes. Decoding is deferred.
+    /// Raw IDA-encoded type bytes (the BT_*/BTM_* mini-language stream).
     pub typestring: Vec<u8>,
+    /// Decoded type when [`decode_typestring`] could parse the leading byte.
+    /// `None` for empty / malformed / unsupported encodings.
+    pub decoded: Option<Type>,
     pub fields: Vec<u8>,
     pub comment: String,
     pub fields_comment: String,
@@ -207,12 +215,14 @@ pub fn parse_til(bytes: &[u8]) -> Result<TilFile, TilError> {
             let fields_comment = String::from_utf8(fields_comment)
                 .map_err(|_| TilError::BadUtf8 { field: "sym fields_comment" })?;
 
+            let decoded = decode_typestring(&typestring);
             syms.insert(
                 name.clone(),
                 TilSym {
                     name,
                     ordinal,
                     typestring,
+                    decoded,
                     fields,
                     comment,
                     fields_comment,
@@ -222,6 +232,164 @@ pub fn parse_til(bytes: &[u8]) -> Result<TilFile, TilError> {
     }
 
     Ok(TilFile { header, syms })
+}
+
+// ---------------------------------------------------------------------------
+// Type-string mini-language (BT_*/BTM_*) decoder
+// ---------------------------------------------------------------------------
+//
+// The IDA TIL type encoding stores each type as a stream of bytes whose low
+// nibble (`BT_*`) tags the base type and whose high nibble (`BTMT_*`) carries
+// signedness / const / volatile flags. Pointer / array / function types are
+// recursive: the next byte starts the element / return type.
+
+const BT_VOID: u8 = 0x01;
+const BT_INT8: u8 = 0x02;
+const BT_INT16: u8 = 0x03;
+const BT_INT32: u8 = 0x04;
+const BT_INT64: u8 = 0x05;
+const BT_INT128: u8 = 0x06;
+const BT_INT: u8 = 0x07;
+const BT_BOOL: u8 = 0x08;
+const BT_FLOAT: u8 = 0x09;
+const BT_PTR: u8 = 0x0A;
+const BT_ARRAY: u8 = 0x0B;
+const BT_FUNC: u8 = 0x0C;
+const BT_COMPLEX: u8 = 0x0D;
+const BT_BITFIELD: u8 = 0x0E;
+
+const BTMT_UNSIGNED: u8 = 0x20;
+
+/// Decode an IDA type-string into a [`Type`]. Returns `None` for empty input
+/// or unrecognised leading bytes.
+pub fn decode_typestring(bytes: &[u8]) -> Option<Type> {
+    if bytes.is_empty() {
+        return None;
+    }
+    let mut pos = 0usize;
+    decode_one(bytes, &mut pos)
+}
+
+fn decode_one(bytes: &[u8], pos: &mut usize) -> Option<Type> {
+    let b = *bytes.get(*pos)?;
+    *pos += 1;
+    let base = b & 0x0F;
+    let modifier = b & 0xF0;
+    let unsigned = modifier == BTMT_UNSIGNED;
+
+    match base {
+        BT_VOID => Some(Type::Primitive(PrimitiveType::Unknown)),
+        BT_INT8 => Some(int_type(1, unsigned)),
+        BT_INT16 => Some(int_type(2, unsigned)),
+        BT_INT32 => Some(int_type(4, unsigned)),
+        BT_INT64 => Some(int_type(8, unsigned)),
+        BT_INT128 => Some(int_type(16, unsigned)),
+        BT_INT => Some(int_type(4, unsigned)),
+        BT_BOOL => Some(Type::Primitive(PrimitiveType::Bool)),
+        BT_FLOAT => {
+            let sub = bytes.get(*pos).copied().unwrap_or(0);
+            if *pos < bytes.len() {
+                *pos += 1;
+            }
+            Some(match sub {
+                2 => Type::Primitive(PrimitiveType::Double),
+                _ => Type::Primitive(PrimitiveType::Float),
+            })
+        }
+        BT_PTR => {
+            let inner = decode_one(bytes, pos).unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+            Some(Type::Ptr(Box::new(inner)))
+        }
+        BT_ARRAY => {
+            let dim = read_da(bytes, pos).unwrap_or(0);
+            let element =
+                decode_one(bytes, pos).unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+            Some(Type::Array {
+                element: Box::new(element),
+                size: if dim == 0 { None } else { Some(dim) },
+            })
+        }
+        BT_FUNC => {
+            // Calling-convention byte (cm), then a return type, then a packed
+            // arg count (`dt`), then each argument type.
+            let _cm = bytes.get(*pos).copied().unwrap_or(0);
+            if *pos < bytes.len() {
+                *pos += 1;
+            }
+            let return_type =
+                decode_one(bytes, pos).unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+            let argc = read_dt(bytes, pos).unwrap_or(0);
+            let mut params = Vec::with_capacity(argc as usize);
+            for _ in 0..argc {
+                let p =
+                    decode_one(bytes, pos).unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+                params.push(p);
+            }
+            Some(Type::FuncPtr {
+                params,
+                return_type: Box::new(return_type),
+                variadic: false,
+            })
+        }
+        BT_COMPLEX => {
+            // TODO: decode the BT_COMPLEX member list (struct/union/enum body).
+            // This MVP returns an empty struct placeholder; consumers needing
+            // full layouts should parse the BT_COMPLEX sub-form themselves.
+            let _size = read_dt(bytes, pos).unwrap_or(0);
+            Some(Type::Struct {
+                name: String::new(),
+                fields: Vec::new(),
+            })
+        }
+        BT_BITFIELD => {
+            let width = bytes.get(*pos).copied().unwrap_or(0) as u32;
+            if *pos < bytes.len() {
+                *pos += 1;
+            }
+            Some(Type::Bitfield {
+                underlying: Box::new(int_type(4, unsigned)),
+                offset: 0,
+                width,
+            })
+        }
+        _ => None,
+    }
+}
+
+fn int_type(width: u8, unsigned: bool) -> Type {
+    if unsigned {
+        Type::uint(width)
+    } else {
+        Type::int(width)
+    }
+}
+
+/// Read an IDA `dt` (variable-length non-zero count). One byte 0x01..0x7f is
+/// `(b - 1)`; values >= 0x80 chain a second byte: `((b & 0x7f) | (next << 7)) - 1`.
+fn read_dt(bytes: &[u8], pos: &mut usize) -> Option<u32> {
+    let b = *bytes.get(*pos)?;
+    *pos += 1;
+    if b & 0x80 == 0 {
+        Some(b.saturating_sub(1) as u32)
+    } else {
+        let n = *bytes.get(*pos)?;
+        *pos += 1;
+        let v = (b as u32 & 0x7f) | ((n as u32) << 7);
+        Some(v.saturating_sub(1))
+    }
+}
+
+/// Read an IDA `da` (array dimension).
+fn read_da(bytes: &[u8], pos: &mut usize) -> Option<u64> {
+    let b = *bytes.get(*pos)?;
+    *pos += 1;
+    if b & 0x80 == 0 {
+        Some(b as u64)
+    } else {
+        let n = *bytes.get(*pos)?;
+        *pos += 1;
+        Some((b as u64 & 0x7f) | ((n as u64) << 7))
+    }
 }
 
 #[cfg(test)]
@@ -283,6 +451,65 @@ mod tests {
         assert_eq!(sym.ordinal, 42);
         assert_eq!(sym.typestring, vec![0x0d, 0x01]);
         assert_eq!(sym.comment, "a stdio FILE");
+        assert!(matches!(sym.decoded, Some(Type::Struct { .. })));
+    }
+
+    #[test]
+    fn decode_void() {
+        let ty = decode_typestring(&[BT_VOID]).expect("void decodes");
+        assert_eq!(ty, Type::Primitive(PrimitiveType::Unknown));
+    }
+
+    #[test]
+    fn decode_int_signed_unsigned() {
+        let signed = decode_typestring(&[BT_INT32]).expect("signed int");
+        assert_eq!(signed, Type::int(4));
+
+        let unsigned = decode_typestring(&[BT_INT32 | BTMT_UNSIGNED]).expect("unsigned int");
+        assert_eq!(unsigned, Type::uint(4));
+
+        let s8 = decode_typestring(&[BT_INT8]).expect("int8");
+        assert_eq!(s8, Type::int(1));
+        let u8t = decode_typestring(&[BT_INT8 | BTMT_UNSIGNED]).expect("uint8");
+        assert_eq!(u8t, Type::uint(1));
+    }
+
+    #[test]
+    fn decode_pointer_to_int() {
+        let ty = decode_typestring(&[BT_PTR, BT_INT]).expect("ptr decodes");
+        assert_eq!(ty, Type::ptr_to(Type::int(4)));
+    }
+
+    #[test]
+    fn decode_array_int_10() {
+        let ty = decode_typestring(&[BT_ARRAY, 10, BT_INT32]).expect("array decodes");
+        assert_eq!(
+            ty,
+            Type::Array {
+                element: Box::new(Type::int(4)),
+                size: Some(10),
+            }
+        );
+    }
+
+    #[test]
+    fn decode_function_returning_int() {
+        let bytes = [BT_FUNC, 0x00, BT_INT32, 0x03, BT_INT32, BT_PTR, BT_INT8];
+        let ty = decode_typestring(&bytes).expect("func decodes");
+        match ty {
+            Type::FuncPtr {
+                params,
+                return_type,
+                variadic,
+            } => {
+                assert_eq!(*return_type, Type::int(4));
+                assert_eq!(params.len(), 2);
+                assert_eq!(params[0], Type::int(4));
+                assert_eq!(params[1], Type::ptr_to(Type::int(1)));
+                assert!(!variadic);
+            }
+            other => panic!("expected FuncPtr, got {other:?}"),
+        }
     }
 
     #[test]

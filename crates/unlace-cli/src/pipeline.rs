@@ -8,7 +8,7 @@ use unlace_ir::ssa::SsaFunction;
 use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
-use unlace_loader::{BinaryImage, DwarfInfo, Section, SymbolKind};
+use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
 use unlace_passes::{
     CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass, CopyPropagationPass,
     CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass, DeadFlagElimPass,
@@ -1082,6 +1082,43 @@ pub fn decompile_function(
     decompile_function_with_symbols(image, lifter, entry, emit, config, dwarf, &[], None)
 }
 
+/// Process-wide FLIRT signature database; lazily built on first use.
+fn flirt_db() -> &'static FlirtDb {
+    use std::sync::OnceLock;
+    static DB: OnceLock<FlirtDb> = OnceLock::new();
+    DB.get_or_init(unlace_loader::default_flirt_db)
+}
+
+/// Try to identify `entry`'s function body as a known library stub.
+/// Returns the canonical name when matched.
+pub fn flirt_match(image: &BinaryImage, entry: &FunctionEntry) -> Option<String> {
+    let text = text_section(image)?;
+    let (start, end) = function_bounds(entry, text);
+    if start < text.vaddr {
+        return None;
+    }
+    let off_start = (start - text.vaddr) as usize;
+    let off_end = ((end - text.vaddr) as usize).min(text.data.len());
+    if off_start >= off_end {
+        return None;
+    }
+    let bytes = &text.data[off_start..off_end];
+    flirt_db().match_function(bytes).map(str::to_string)
+}
+
+/// Render a one-line C-printer surrogate for a FLIRT-matched function.
+/// The body is elided; the canonical library name is surfaced as both the
+/// emitted symbol and a `// [flirt] …` annotation so a human reader knows
+/// the decompiler chose pattern-recognition over instruction-by-instruction
+/// recovery.
+pub fn render_flirt_stub(canonical: &str, entry: &FunctionEntry) -> String {
+    format!(
+        "// [flirt] {canonical}\n// {} @ {:#x} (matched library stub; body elided)\n\
+         void {}(void) {{ /* {canonical} */ }}\n",
+        entry.name, entry.addr, canonical,
+    )
+}
+
 pub fn decompile_function_with_symbols(
     image: &BinaryImage,
     lifter: &dyn Lifter,
@@ -1094,6 +1131,13 @@ pub fn decompile_function_with_symbols(
 ) -> Result<String> {
     let _span = tracing::debug_span!("decompile_function", func = %entry.name).entered();
     let deadline = Instant::now() + config.timeout;
+
+    if matches!(emit, EmitFormat::C) {
+        if let Some(canonical) = flirt_match(image, entry) {
+            tracing::debug!(func = %entry.name, canonical = %canonical, "flirt match; eliding body");
+            return Ok(render_flirt_stub(&canonical, entry));
+        }
+    }
 
     let t = Instant::now();
     let mut ir_func = lift_function(image, lifter, entry)?;
@@ -1544,5 +1588,36 @@ mod tests {
             "function 1 size must reach next function start (got {})",
             f1.size,
         );
+    }
+
+    #[test]
+    fn flirt_render_stub_emits_canonical_header() {
+        let entry = FunctionEntry {
+            name: "sub_4011a0".into(),
+            addr: 0x4011a0,
+            size: 16,
+        };
+        let out = super::render_flirt_stub("strcpy", &entry);
+        assert!(out.contains("// [flirt] strcpy"), "header missing: {out}");
+        assert!(out.contains("body elided"));
+        assert!(out.contains("void strcpy(void)"));
+    }
+
+    #[test]
+    fn flirt_match_finds_known_prologue_in_text() {
+        // Build a tiny image whose .text holds the leading bytes of glibc's
+        // memcpy: endbr64; mov %rdi,%rax; mov %rdx,%rcx; rep movsb; ret.
+        let memcpy_bytes: Vec<u8> = vec![
+            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
+        ];
+        let base: u64 = 0x1000;
+        let image = make_text_image(memcpy_bytes.clone(), base);
+        let entry = FunctionEntry {
+            name: "sub_1000".into(),
+            addr: base,
+            size: memcpy_bytes.len() as u64,
+        };
+        let canonical = super::flirt_match(&image, &entry);
+        assert_eq!(canonical.as_deref(), Some("memcpy"));
     }
 }

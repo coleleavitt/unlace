@@ -8,6 +8,7 @@ pub mod dwarf;
 pub mod eh_frame;
 pub mod elf;
 pub mod error;
+pub mod flirt;
 pub mod gcc_except_table;
 pub mod gopclntab;
 pub mod image;
@@ -25,6 +26,7 @@ pub use dwarf::{
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;
 pub use error::LoadError;
+pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
 pub use image::{
     ArchId, BinaryImage, BoundImport, DebugRecord, DylibDep, DylibKind, Endian, LoadConfig,

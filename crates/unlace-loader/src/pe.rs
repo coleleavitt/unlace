@@ -11,9 +11,9 @@ use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 use crate::Loader;
 use crate::error::LoadError;
 use crate::image::{
-    ArchId, BinaryImage, BoundImport, DebugRecord, DelayImport, Endian, LoadConfig, RelocKind,
-    Relocation, ResourceEntry, RichHeader, RichRecord, RuntimeFunction, Section, SectionFlags,
-    Symbol, SymbolKind, UnwindInfo,
+    ArchId, BinaryImage, BoundImport, DebugRecord, DelayImport, Endian, ForwardedExport,
+    LoadConfig, RelocKind, Relocation, ResourceEntry, RichHeader, RichRecord, RuntimeFunction,
+    Section, SectionFlags, Symbol, SymbolKind, UnwindInfo,
 };
 
 /// DOS header magic bytes: `MZ`.
@@ -77,6 +77,8 @@ where
     let mut symbols = load_coff_symbols(&file);
 
     load_exports(&file, &mut symbols);
+    let mut forwarded_exports: Vec<ForwardedExport> = Vec::new();
+    load_forwarded_exports::<Pe>(&file, &mut forwarded_exports);
     load_imports(&file, &mut symbols);
     let mut delay_imports: Vec<DelayImport> = Vec::new();
     load_delay_imports::<Pe>(&file, data, &mut symbols, &mut delay_imports);
@@ -106,6 +108,7 @@ where
         resources,
         bound_imports,
         delay_imports,
+        forwarded_exports,
         rich_header,
         dylibs: Vec::new(),
         rpaths: Vec::new(),
@@ -1106,6 +1109,85 @@ where
     }
 }
 
+/// Populate `out` with forwarded exports — exports whose RVA points back
+/// into the export directory range, encoding a `"DLL.Symbol"` (or
+/// `"DLL.#ordinal"`) redirection string instead of a real function body.
+///
+/// The high-level `file.exports()` iterator silently *drops* forwarders
+/// (it can't synthesise an address for them), so we walk the low-level
+/// `ExportTable` here, inspect each address-table entry via
+/// `target_from_address`, and emit a [`ForwardedExport`] for the
+/// `ForwardByName` / `ForwardByOrdinal` cases. Anonymous (no-name)
+/// forwarders are emitted with their `#ord` form as `name`, matching how
+/// we surface ordinal-only delay imports elsewhere.
+fn load_forwarded_exports<'data, Pe>(file: &PeFile<'data, Pe>, out: &mut Vec<ForwardedExport>)
+where
+    Pe: ImageNtHeaders,
+{
+    let table = match file.export_table() {
+        Ok(Some(t)) => t,
+        Ok(None) => return,
+        Err(err) => {
+            tracing::debug!(?err, "PE export table unreadable");
+            return;
+        }
+    };
+
+    // Build an ordinal-index → name map so we can attach names to forwarded
+    // entries discovered via the address table.
+    let mut names: std::collections::BTreeMap<u32, String> = std::collections::BTreeMap::new();
+    for (name_ptr, ordinal_index) in table.name_iter() {
+        if let Ok(raw) = table.name_from_pointer(name_ptr) {
+            names.insert(
+                u32::from(ordinal_index),
+                String::from_utf8_lossy(raw).into_owned(),
+            );
+        }
+    }
+
+    let ordinal_base = table.ordinal_base();
+    for (idx, addr_entry) in table.addresses().iter().enumerate() {
+        let addr = addr_entry.get(object::endian::LittleEndian);
+        if !table.is_forward(addr) {
+            continue;
+        }
+        let target = match table.target_from_address(addr) {
+            Ok(t) => t,
+            Err(err) => {
+                tracing::debug!(?err, "PE forwarded export target unreadable");
+                continue;
+            }
+        };
+        let (target_dll, target_symbol, target_ordinal) = match target {
+            object::read::pe::ExportTarget::ForwardByName(lib, sym) => (
+                String::from_utf8_lossy(lib).into_owned(),
+                String::from_utf8_lossy(sym).into_owned(),
+                None,
+            ),
+            object::read::pe::ExportTarget::ForwardByOrdinal(lib, ord) => (
+                String::from_utf8_lossy(lib).into_owned(),
+                format!("#{ord}"),
+                Some(ord),
+            ),
+            // Not a forwarder — `is_forward` already filtered these, but the
+            // pattern is exhaustive.
+            object::read::pe::ExportTarget::Address(_) => continue,
+        };
+        let idx_u32 = idx as u32;
+        let name = names.get(&idx_u32).cloned().unwrap_or_else(|| {
+            // Anonymous forward — synthesise `#ord` form using the ordinal
+            // base + array index.
+            format!("#{}", ordinal_base.wrapping_add(idx_u32))
+        });
+        out.push(ForwardedExport {
+            name,
+            target_dll,
+            target_symbol,
+            target_ordinal,
+        });
+    }
+}
+
 /// Populate symbols from the PE import directory (IAT).
 ///
 /// Each import is recorded at address 0 (the true IAT slot address depends on
@@ -1919,5 +2001,200 @@ mod tests {
         assert_eq!(rh.records.len(), 1);
         assert_eq!(rh.records[0].comp_id, comp_id);
         assert_eq!(rh.records[0].count, count);
+    }
+
+    // ---------------------------------------------------------------------
+    // t164: forwarded exports — exports whose RVA points back inside the
+    // export directory range and resolves to a `"DLL.Symbol"` (or
+    // `"DLL.#ordinal"`) redirection string. We build a minimal PE32+ image
+    // with a `.rdata` section holding a valid export directory + two
+    // forwarders (one by name, one by ordinal) and verify both are surfaced
+    // on `BinaryImage.forwarded_exports`.
+    // ---------------------------------------------------------------------
+
+    /// PE32+ fixture: one `.text` + one `.rdata` section, with an export
+    /// directory in `.rdata` listing two forwarded exports:
+    ///   `HeapAlloc`     → `NTDLL.RtlAllocateHeap`
+    ///   `ZwQuerySystem` → `NTDLL.#142`
+    fn pe64_with_forwarded_exports() -> Vec<u8> {
+        let nt: usize = 0x80;
+        let opt_hdr_size: u16 = 16 * 8 + 112;
+        let oh = nt + 24;
+        let sh = oh + opt_hdr_size as usize;
+        let section_count: u16 = 2;
+        let section_table_end = sh + (section_count as usize) * 40;
+
+        let text_offset: u32 = 0x400;
+        let rdata_offset: u32 = 0x600;
+        let rdata_size: u32 = 0x200;
+        let total_size: u32 = rdata_offset + rdata_size;
+        let mut buf = vec![0u8; total_size as usize];
+
+        // ---- DOS + NT signature ----
+        buf[0] = b'M';
+        buf[1] = b'Z';
+        buf[0x3C..0x40].copy_from_slice(&(nt as u32).to_le_bytes());
+        buf[nt..nt + 4].copy_from_slice(&[b'P', b'E', 0, 0]);
+
+        // ---- COFF file header ----
+        let fh = nt + 4;
+        buf[fh..fh + 2].copy_from_slice(&pe::IMAGE_FILE_MACHINE_AMD64.to_le_bytes());
+        buf[fh + 2..fh + 4].copy_from_slice(&section_count.to_le_bytes());
+        buf[fh + 16..fh + 18].copy_from_slice(&opt_hdr_size.to_le_bytes());
+        buf[fh + 18..fh + 20].copy_from_slice(&pe::IMAGE_FILE_EXECUTABLE_IMAGE.to_le_bytes());
+
+        // ---- Optional header ----
+        buf[oh..oh + 2].copy_from_slice(&pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC.to_le_bytes());
+        buf[oh + 16..oh + 20].copy_from_slice(&0x1000u32.to_le_bytes());
+        let image_base: u64 = 0x0040_0000;
+        buf[oh + 24..oh + 32].copy_from_slice(&image_base.to_le_bytes());
+        buf[oh + 32..oh + 36].copy_from_slice(&0x1000u32.to_le_bytes());
+        buf[oh + 36..oh + 40].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[oh + 56..oh + 60].copy_from_slice(&0x4000u32.to_le_bytes());
+        buf[oh + 60..oh + 64].copy_from_slice(&(section_table_end as u32).to_le_bytes());
+        let dir_count: u32 = 16;
+        buf[oh + 108..oh + 112].copy_from_slice(&dir_count.to_le_bytes());
+
+        // ---- Section: .text ----
+        buf[sh..sh + 5].copy_from_slice(b".text");
+        buf[sh + 8..sh + 12].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[sh + 12..sh + 16].copy_from_slice(&0x1000u32.to_le_bytes());
+        buf[sh + 16..sh + 20].copy_from_slice(&0x200u32.to_le_bytes());
+        buf[sh + 20..sh + 24].copy_from_slice(&text_offset.to_le_bytes());
+        buf[sh + 36..sh + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_MEM_EXECUTE | pe::IMAGE_SCN_CNT_CODE)
+                .to_le_bytes(),
+        );
+
+        // ---- Section: .rdata (holds the export directory) ----
+        let rdata_rva: u32 = 0x2000;
+        let sh2 = sh + 40;
+        buf[sh2..sh2 + 6].copy_from_slice(b".rdata");
+        buf[sh2 + 8..sh2 + 12].copy_from_slice(&rdata_size.to_le_bytes());
+        buf[sh2 + 12..sh2 + 16].copy_from_slice(&rdata_rva.to_le_bytes());
+        buf[sh2 + 16..sh2 + 20].copy_from_slice(&rdata_size.to_le_bytes());
+        buf[sh2 + 20..sh2 + 24].copy_from_slice(&rdata_offset.to_le_bytes());
+        buf[sh2 + 36..sh2 + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_CNT_INITIALIZED_DATA).to_le_bytes(),
+        );
+
+        buf[text_offset as usize] = 0xC3;
+
+        // ---- Build the export directory inside .rdata ----
+        //
+        // Layout, all offsets relative to `rdata_offset` (file) and
+        // `rdata_rva` (RVA):
+        //   +0x00  export_dir (40 bytes)
+        //   +0x28  address-of-functions table (2 × u32)
+        //   +0x30  address-of-names    table (2 × u32)
+        //   +0x38  address-of-name-ord table (2 × u16)
+        //   +0x3C  dll-name "kernel32.dll\0"
+        //   +0x4A  fn1-name "HeapAlloc\0"
+        //   +0x54  fn2-name "ZwQuerySystem\0"
+        //   +0x62  forward1 "NTDLL.RtlAllocateHeap\0"
+        //   +0x78  forward2 "NTDLL.#142\0"
+        //
+        // We pin every offset explicitly to keep the test obvious.
+        let rd = rdata_offset as usize;
+        let export_dir_rva = rdata_rva;
+        let funcs_off = 0x28usize;
+        let names_off = 0x30usize;
+        let ords_off = 0x38usize;
+        let dll_name_off = 0x3Cusize;
+        let fn1_name_off = 0x4Ausize;
+        let fn2_name_off = 0x54usize;
+        let fwd1_off = 0x62usize;
+        let fwd2_off = 0x78usize;
+        let blob_end = 0x84usize;
+        let export_dir_size = blob_end as u32;
+
+        // export_dir
+        // Characteristics .. MinorVersion: leave zero.
+        // Name RVA
+        buf[rd + 12..rd + 16]
+            .copy_from_slice(&(rdata_rva + dll_name_off as u32).to_le_bytes());
+        // Base ordinal = 1
+        buf[rd + 16..rd + 20].copy_from_slice(&1u32.to_le_bytes());
+        // NumberOfFunctions = 2
+        buf[rd + 20..rd + 24].copy_from_slice(&2u32.to_le_bytes());
+        // NumberOfNames = 2
+        buf[rd + 24..rd + 28].copy_from_slice(&2u32.to_le_bytes());
+        // AddressOfFunctions RVA
+        buf[rd + 28..rd + 32]
+            .copy_from_slice(&(rdata_rva + funcs_off as u32).to_le_bytes());
+        // AddressOfNames RVA
+        buf[rd + 32..rd + 36]
+            .copy_from_slice(&(rdata_rva + names_off as u32).to_le_bytes());
+        // AddressOfNameOrdinals RVA
+        buf[rd + 36..rd + 40]
+            .copy_from_slice(&(rdata_rva + ords_off as u32).to_le_bytes());
+
+        // Address-of-functions: both RVAs point *inside* the export directory
+        // range → `is_forward` returns true.
+        buf[rd + funcs_off..rd + funcs_off + 4]
+            .copy_from_slice(&(rdata_rva + fwd1_off as u32).to_le_bytes());
+        buf[rd + funcs_off + 4..rd + funcs_off + 8]
+            .copy_from_slice(&(rdata_rva + fwd2_off as u32).to_le_bytes());
+
+        // Address-of-names
+        buf[rd + names_off..rd + names_off + 4]
+            .copy_from_slice(&(rdata_rva + fn1_name_off as u32).to_le_bytes());
+        buf[rd + names_off + 4..rd + names_off + 8]
+            .copy_from_slice(&(rdata_rva + fn2_name_off as u32).to_le_bytes());
+
+        // Address-of-name-ordinals: 0-based index into the functions table.
+        buf[rd + ords_off..rd + ords_off + 2].copy_from_slice(&0u16.to_le_bytes());
+        buf[rd + ords_off + 2..rd + ords_off + 4].copy_from_slice(&1u16.to_le_bytes());
+
+        // Strings.
+        let write_cstr = |buf: &mut [u8], off: usize, s: &str| {
+            buf[off..off + s.len()].copy_from_slice(s.as_bytes());
+            buf[off + s.len()] = 0;
+        };
+        write_cstr(&mut buf, rd + dll_name_off, "kernel32.dll");
+        write_cstr(&mut buf, rd + fn1_name_off, "HeapAlloc");
+        write_cstr(&mut buf, rd + fn2_name_off, "ZwQuerySystem");
+        write_cstr(&mut buf, rd + fwd1_off, "NTDLL.RtlAllocateHeap");
+        write_cstr(&mut buf, rd + fwd2_off, "NTDLL.#142");
+
+        // Wire the EXPORT data directory entry.
+        let export_dir_entry = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_EXPORT as usize) * 8;
+        buf[export_dir_entry..export_dir_entry + 4]
+            .copy_from_slice(&export_dir_rva.to_le_bytes());
+        buf[export_dir_entry + 4..export_dir_entry + 8]
+            .copy_from_slice(&export_dir_size.to_le_bytes());
+
+        buf
+    }
+
+    #[test]
+    fn test_pe_forwarded_export_by_name() {
+        let pe = pe64_with_forwarded_exports();
+        let img = PeLoader::load(&pe).expect("PE with forwarded exports must parse");
+        let f = img
+            .forwarded_export("HeapAlloc")
+            .expect("HeapAlloc forwarder must be surfaced");
+        assert_eq!(f.target_dll, "NTDLL");
+        assert_eq!(f.target_symbol, "RtlAllocateHeap");
+        assert!(
+            f.target_ordinal.is_none(),
+            "by-name forward has no numeric ordinal"
+        );
+    }
+
+    #[test]
+    fn test_pe_forwarded_export_by_ordinal() {
+        let pe = pe64_with_forwarded_exports();
+        let img = PeLoader::load(&pe).expect("PE with forwarded exports must parse");
+        let f = img
+            .forwarded_export("ZwQuerySystem")
+            .expect("ZwQuerySystem forwarder must be surfaced");
+        assert_eq!(f.target_dll, "NTDLL");
+        assert_eq!(f.target_symbol, "#142");
+        assert_eq!(f.target_ordinal, Some(142));
+        // Both forwarders should be present and the eager `.symbols` map
+        // should NOT contain them (the high-level exports iterator drops
+        // forwarders, by design).
+        assert_eq!(img.forwarded_exports.len(), 2);
     }
 }

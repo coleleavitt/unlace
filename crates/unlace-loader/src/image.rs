@@ -228,6 +228,28 @@ pub struct DelayImport {
     pub function_name: String,
 }
 
+/// A PE *forwarded* export — an export whose RVA points back into the export
+/// directory range and resolves to a `"DLL.Symbol"` (or `"DLL.#ordinal"`)
+/// string. The runtime loader transparently redirects callers to the named
+/// target DLL/symbol; common in `kernel32.dll → ntdll.dll` and the
+/// API-set redirects on modern Windows.
+///
+/// `target_symbol` carries either the export name or `#N` (matching how we
+/// surface ordinal-only delay imports). When the forward is ordinal-form we
+/// also populate `target_ordinal` with the numeric value for analyzers that
+/// want to skip re-parsing the `#N` string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForwardedExport {
+    /// Export name as it appears in the source DLL's export table.
+    pub name: String,
+    /// Target DLL module name (without path / extension as encoded on disk).
+    pub target_dll: String,
+    /// Target symbol name in the target DLL, or `#N` for ordinal-only forwards.
+    pub target_symbol: String,
+    /// Numeric ordinal when the forward is ordinal-form (`DLL.#142`), else `None`.
+    pub target_ordinal: Option<u32>,
+}
+
 /// A single record from the PE Rich header.
 ///
 /// Each record encodes a build tool identifier and the number of times it was
@@ -329,6 +351,9 @@ pub struct BinaryImage {
     /// PE delay-loaded imports. Empty for ELF/Mach-O or PEs without
     /// an `IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT` directory.
     pub delay_imports: Vec<DelayImport>,
+    /// PE forwarded exports — exports that redirect into another DLL.
+    /// Empty for ELF/Mach-O or PEs whose export table has no forwarders.
+    pub forwarded_exports: Vec<ForwardedExport>,
     /// PE Rich header. `None` for ELF/Mach-O or if absent.
     pub rich_header: Option<RichHeader>,
     /// Mach-O dylib dependencies. Empty for ELF/PE.
@@ -417,6 +442,12 @@ impl BinaryImage {
         false
     }
 
+    /// Look up a forwarded export by source name (e.g. `"HeapAlloc"` in a
+    /// `kernel32.dll` image returns the ntdll redirect, if any).
+    pub fn forwarded_export(&self, name: &str) -> Option<&ForwardedExport> {
+        self.forwarded_exports.iter().find(|f| f.name == name)
+    }
+
     /// Returns `true` if the binary appears to be Go-compiled.
     ///
     /// Detected by either a successful `runtime.firstmoduledata` parse, or by
@@ -459,6 +490,7 @@ mod tests {
             resources: Vec::new(),
             bound_imports: Vec::new(),
             delay_imports: Vec::new(),
+            forwarded_exports: Vec::new(),
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
@@ -530,5 +562,36 @@ mod tests {
         };
         assert_eq!(di.dll_name, "kernel32.dll");
         assert_eq!(di.function_name, "LoadLibraryW");
+    }
+
+    #[test]
+    fn binaryimage_default_has_empty_forwarded_exports() {
+        let img = empty_image();
+        assert!(img.forwarded_exports.is_empty());
+        assert!(img.forwarded_export("anything").is_none());
+    }
+
+    #[test]
+    fn forwarded_export_lookup_by_name() {
+        let mut img = empty_image();
+        img.forwarded_exports.push(ForwardedExport {
+            name: "HeapAlloc".to_string(),
+            target_dll: "NTDLL".to_string(),
+            target_symbol: "RtlAllocateHeap".to_string(),
+            target_ordinal: None,
+        });
+        img.forwarded_exports.push(ForwardedExport {
+            name: "ZwFoo".to_string(),
+            target_dll: "NTDLL".to_string(),
+            target_symbol: "#142".to_string(),
+            target_ordinal: Some(142),
+        });
+        let f = img.forwarded_export("HeapAlloc").expect("found");
+        assert_eq!(f.target_dll, "NTDLL");
+        assert_eq!(f.target_symbol, "RtlAllocateHeap");
+        assert!(f.target_ordinal.is_none());
+        let g = img.forwarded_export("ZwFoo").expect("found");
+        assert_eq!(g.target_ordinal, Some(142));
+        assert!(img.forwarded_export("missing").is_none());
     }
 }

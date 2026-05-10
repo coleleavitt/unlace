@@ -570,6 +570,7 @@ mod tests {
             resources: vec![],
             bound_imports: vec![],
             delay_imports: Vec::new(),
+            forwarded_exports: Vec::new(),
             rich_header: None,
             dylibs: vec![],
             rpaths: vec![],

@@ -249,7 +249,7 @@ where
     let (dylibs, rpaths) = load_dylibs_and_rpaths::<Mach>(&file, data);
     let plt_symbols = resolve_stubs::<Mach>(&file, data, &sections);
 
-    Ok(BinaryImage {
+    let mut image = BinaryImage {
         arch,
         endian,
         entry,
@@ -268,7 +268,14 @@ where
         dylibs,
         rpaths,
         pdb_types: None,
-    })
+        msvc_rtti: None,
+        seh: None,
+        go_module: None,
+    };
+
+    image.go_module = crate::go_moduledata::parse_firstmoduledata(&image);
+
+    Ok(image)
 }
 
 #[derive(Debug, Default)]

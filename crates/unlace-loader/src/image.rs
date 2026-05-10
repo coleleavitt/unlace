@@ -325,6 +325,16 @@ pub struct BinaryImage {
     /// Consumed by the type-infer pipeline to seed function signatures and
     /// composite layouts. `None` for ELF/Mach-O or PEs without PDB.
     pub pdb_types: Option<crate::pdb_types::PdbTypes>,
+    /// MSVC RTTI hierarchy recovered from `.rdata` vtables (PE only).
+    /// `None` for ELF/Mach-O or PEs without RTTI.
+    pub msvc_rtti: Option<crate::msvc_rtti::MsvcRtti>,
+    /// SEH unwind information recovered from `.pdata` + `.xdata` (PE only).
+    /// `None` for ELF/Mach-O or PEs without SEH.
+    pub seh: Option<crate::seh::SehInfo>,
+    /// Go `runtime.firstmoduledata` recovered from a Go-compiled binary.
+    /// `None` for non-Go binaries (or stripped Go binaries where neither
+    /// the symbol nor a recognizable pclntab is present).
+    pub go_module: Option<crate::go_moduledata::GoModuleInfo>,
 }
 
 /// A PE RUNTIME_FUNCTION entry from the `.pdata` exception directory.
@@ -387,5 +397,96 @@ impl BinaryImage {
             }
         }
         false
+    }
+
+    /// Returns `true` if the binary appears to be Go-compiled.
+    ///
+    /// Detected by either a successful `runtime.firstmoduledata` parse, or by
+    /// the presence of any of the standard Go pclntab section names.
+    pub fn is_go_binary(&self) -> bool {
+        if self.go_module.is_some() {
+            return true;
+        }
+        const GO_SECTIONS: &[&str] = &[
+            ".gopclntab",
+            "__gopclntab",
+            "__go_pclntab",
+            "go.pclntab",
+            "__TEXT,__gosymtab",
+        ];
+        GO_SECTIONS
+            .iter()
+            .any(|name| self.section_by_name(name).is_some())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_image() -> BinaryImage {
+        BinaryImage {
+            arch: ArchId::Unknown(0),
+            endian: Endian::Little,
+            entry: 0,
+            sections: Vec::new(),
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: Vec::new(),
+            string_table: BTreeMap::new(),
+            tls_callbacks: Vec::new(),
+            debug_records: Vec::new(),
+            load_config: None,
+            runtime_functions: Vec::new(),
+            resources: Vec::new(),
+            bound_imports: Vec::new(),
+            rich_header: None,
+            dylibs: Vec::new(),
+            rpaths: Vec::new(),
+            pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: None,
+        }
+    }
+
+    #[test]
+    fn binaryimage_default_has_no_go_module() {
+        let img = empty_image();
+        assert!(img.go_module.is_none());
+        assert!(!img.is_go_binary());
+    }
+
+    #[test]
+    fn is_go_binary_true_when_gopclntab_section_present() {
+        let mut img = empty_image();
+        img.sections.push(Section {
+            name: ".gopclntab".to_string(),
+            vaddr: 0x401000,
+            size: 0,
+            data: Vec::new(),
+            flags: SectionFlags::empty(),
+        });
+        assert!(img.is_go_binary());
+    }
+
+    #[test]
+    fn is_go_binary_false_for_native_c_binary() {
+        let mut img = empty_image();
+        img.sections.push(Section {
+            name: ".text".to_string(),
+            vaddr: 0x401000,
+            size: 0,
+            data: Vec::new(),
+            flags: SectionFlags::EXEC,
+        });
+        assert!(!img.is_go_binary());
+    }
+
+    #[test]
+    fn binaryimage_has_msvc_rtti_and_seh_fields_default_none() {
+        let img = empty_image();
+        assert!(img.msvc_rtti.is_none());
+        assert!(img.seh.is_none());
     }
 }

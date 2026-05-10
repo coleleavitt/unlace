@@ -6,6 +6,34 @@
 //! wiring (RVA resolution, vftable scan) is deferred — these parsers operate
 //! on raw byte slices and are exercised via synthetic-byte unit tests.
 
+use std::collections::BTreeMap;
+
+/// Aggregated MSVC RTTI hierarchy recovered from a PE binary.
+#[derive(Debug, Clone, Default)]
+pub struct MsvcRtti {
+    /// Recovered classes keyed by mangled name (`.?AVMyClass@@`).
+    pub classes: BTreeMap<String, MsvcClass>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MsvcClass {
+    pub mangled_name: String,
+    pub demangled: Option<String>,
+    pub vtable_addr: u64,
+    pub method_count: usize,
+    pub bases: Vec<MsvcBaseClass>,
+    pub inheritance: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct MsvcBaseClass {
+    pub mangled_name: String,
+    pub mdisp: i32,
+    pub pdisp: i32,
+    pub vdisp: i32,
+    pub attributes: u32,
+}
+
 #[derive(Debug, Clone)]
 pub struct CompleteObjectLocator {
     pub signature: u32,

@@ -176,6 +176,15 @@ pub enum HirNode {
         inner: Box<HirNode>,
     },
 
+    /// An Objective-C block literal recovered by `unlace-passes`'s
+    /// `objc_blocks` pass.
+    ///
+    /// MVP rendering: emitted as a placeholder `^{ /* invoke=0x... */ }`
+    /// expression with the recovered `invoke` function-pointer address and
+    /// captured-variable names. Future work: lower as a proper block
+    /// closure with typed parameter list and body.
+    ObjcBlock { invoke: u64, captures: Vec<String> },
+
     /// One or more raw assembly lines that the lifter could not translate
     /// into structured IR.
     ///

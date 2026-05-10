@@ -1024,4 +1024,54 @@ mod tests {
         assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Call));
         assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
+
+    #[test]
+    fn arm32_mrs_cpsr_lifts_to_callother() {
+        // MRS R0, CPSR  →  0xE10F0000
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE10F0000u32.to_le_bytes(), 0x1000)
+            .expect("MRS decodes");
+        let co = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("MRS emits Callother");
+        assert_eq!(co.inputs[0].offset, 0x363);
+        assert!(co.output.is_some(), "MRS has output register");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm32_msr_cpsr_rm_lifts_to_callother() {
+        // MSR CPSR_c, R0  →  0xE129F000
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE129F000u32.to_le_bytes(), 0x1000)
+            .expect("MSR decodes");
+        let co = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("MSR emits Callother");
+        assert_eq!(co.inputs[0].offset, 0x364);
+        assert!(co.output.is_none(), "MSR writes a sysreg, not a varnode");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn aarch64_mrs_lifts_to_callother() {
+        // MRS X0, NZCV  →  0xD53B4200
+        let r = lifter()
+            .lift_insn(&0xD53B4200u32.to_le_bytes(), 0x1000)
+            .expect("AArch64 MRS decodes");
+        let co = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("MRS emits Callother");
+        assert_eq!(co.inputs[0].offset, 0x363);
+        assert!(co.output.is_some(), "MRS has output register");
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
 }

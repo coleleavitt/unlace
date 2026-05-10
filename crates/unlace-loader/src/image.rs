@@ -354,6 +354,18 @@ pub struct BinaryImage {
     /// PE forwarded exports — exports that redirect into another DLL.
     /// Empty for ELF/Mach-O or PEs whose export table has no forwarders.
     pub forwarded_exports: Vec<ForwardedExport>,
+    /// Resolved forwarder chains: IAT slot VA → `target_dll!target_symbol`.
+    ///
+    /// Built post-load by walking this image's import table and matching
+    /// each `(library, function)` against [`Self::forwarded_exports`] by
+    /// function name. When an import refers to a symbol that this image
+    /// *also* exports as a forwarder, we record the IAT slot VA → resolved
+    /// final symbol. The printer surfaces these as `/* -> dll!sym */`
+    /// trailing comments at Call sites.
+    ///
+    /// Empty for non-PE binaries and PEs whose imports do not collide with
+    /// their own forwarded exports.
+    pub forwarded_resolutions: BTreeMap<u64, String>,
     /// PE Rich header. `None` for ELF/Mach-O or if absent.
     pub rich_header: Option<RichHeader>,
     /// Mach-O dylib dependencies. Empty for ELF/PE.
@@ -491,6 +503,7 @@ mod tests {
             bound_imports: Vec::new(),
             delay_imports: Vec::new(),
             forwarded_exports: Vec::new(),
+            forwarded_resolutions: BTreeMap::new(),
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),

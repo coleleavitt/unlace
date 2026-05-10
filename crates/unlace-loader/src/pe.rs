@@ -89,7 +89,7 @@ where
     let bound_imports = parse_bound_imports(&file, data);
     let rich_header = parse_rich_header(data);
 
-    Ok(BinaryImage {
+    let mut image = BinaryImage {
         arch,
         endian: Endian::Little,
         entry,
@@ -108,7 +108,62 @@ where
         dylibs: Vec::new(),
         rpaths: Vec::new(),
         pdb_types: None,
-    })
+        msvc_rtti: None,
+        seh: None,
+        go_module: None,
+    };
+
+    image.seh = collect_seh_from_image(&image);
+    image.msvc_rtti = collect_msvc_rtti_from_image(&image);
+    image.go_module = crate::go_moduledata::parse_firstmoduledata(&image);
+
+    Ok(image)
+}
+
+/// Walk `image.runtime_functions` and the corresponding `.xdata` entries to
+/// build a `SehInfo` from the parsed PE. Returns `None` if the binary has no
+/// runtime function table.
+fn collect_seh_from_image(image: &BinaryImage) -> Option<crate::seh::SehInfo> {
+    if image.runtime_functions.is_empty() {
+        return None;
+    }
+    let mut functions = Vec::with_capacity(image.runtime_functions.len());
+    for rf in &image.runtime_functions {
+        let unwind_info_raw = rf.unwind_info.map(|ui| crate::seh::UnwindInfo {
+            version: ui.version,
+            flags: ui.flags,
+            size_of_prolog: ui.size_of_prolog,
+            count_of_codes: ui.count_of_codes,
+            frame_register: ui.frame_register,
+            frame_offset: ui.frame_offset,
+            unwind_codes_raw: Vec::new(),
+            handler_rva: None,
+        });
+        let handler = unwind_info_raw.as_ref().and_then(|ui| ui.handler_rva).map(u64::from);
+        functions.push(crate::seh::SehFunction {
+            begin: rf.begin_address,
+            end: rf.end_address,
+            unwind_info: unwind_info_raw.unwrap_or(crate::seh::UnwindInfo {
+                version: 0,
+                flags: 0,
+                size_of_prolog: 0,
+                count_of_codes: 0,
+                frame_register: 0,
+                frame_offset: 0,
+                unwind_codes_raw: Vec::new(),
+                handler_rva: None,
+            }),
+            handler,
+        });
+    }
+    Some(crate::seh::SehInfo { functions })
+}
+
+/// Stub MSVC RTTI scan. Returns `None` for now — full vtable scan against
+/// `.rdata` is left for a future task. The wiring is in place so populating
+/// this is a localized change.
+fn collect_msvc_rtti_from_image(_image: &BinaryImage) -> Option<crate::msvc_rtti::MsvcRtti> {
+    None
 }
 
 /// Walk `IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT` and merge each delay-bound thunk

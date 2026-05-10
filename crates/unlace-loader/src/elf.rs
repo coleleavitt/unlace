@@ -57,7 +57,7 @@ where
     let (plt_symbols, relocations) = load_relocations(&file);
     let string_table = crate::strings::scan_strings(&sections);
 
-    Ok(BinaryImage {
+    let mut image = BinaryImage {
         arch,
         endian,
         entry,
@@ -76,7 +76,14 @@ where
         dylibs: Vec::new(),
         rpaths: Vec::new(),
         pdb_types: None,
-    })
+        msvc_rtti: None,
+        seh: None,
+        go_module: None,
+    };
+
+    image.go_module = crate::go_moduledata::parse_firstmoduledata(&image);
+
+    Ok(image)
 }
 
 /// Map the ELF `e_machine` value to our [`ArchId`].

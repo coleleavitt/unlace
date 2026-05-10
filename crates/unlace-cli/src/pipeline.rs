@@ -1449,6 +1449,9 @@ mod tests {
             dylibs: Vec::new(),
             rpaths: Vec::new(),
         pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: None,
         }
     }
 

@@ -573,6 +573,9 @@ mod tests {
             dylibs: vec![],
             rpaths: vec![],
             pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: None,
         }
     }
 

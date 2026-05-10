@@ -18,6 +18,19 @@ pub struct RuntimeFunction {
 }
 
 #[derive(Debug, Clone)]
+pub struct SehInfo {
+    pub functions: Vec<SehFunction>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SehFunction {
+    pub begin: u64,
+    pub end: u64,
+    pub unwind_info: UnwindInfo,
+    pub handler: Option<u64>,
+}
+
+#[derive(Debug, Clone)]
 pub struct UnwindInfo {
     pub version: u8,
     pub flags: u8,

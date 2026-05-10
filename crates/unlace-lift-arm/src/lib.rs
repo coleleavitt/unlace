@@ -12,9 +12,9 @@ mod tests {
 
     use crate::ArmLifter;
     use crate::lift::{
-        ARM_FLAG_N, ARM_FLAG_Z, ArmLiftMode, ItState, LdmStmAddressing, decode_arm_ldm_stm,
-        decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop, expand_reg_list,
-        try_aarch64_csel,
+        ARM_FLAG_N, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH,
+        ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm,
+        decode_thumb1_push_pop, expand_reg_list, try_aarch64_csel,
     };
 
     #[test]
@@ -1012,6 +1012,80 @@ mod tests {
             .lift_insn(&0xE150_0001u32.to_le_bytes(), 0x1000)
             .expect("CMP decodes");
         assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
+    }
+
+    #[test]
+    fn umull_emits_intmult_and_intmulthigh() {
+        // ARM UMULL r0, r1, r2, r3 → r1:r0 = r2 * r3.
+        // Encoding: cond=E, op=0000_1000, RdHi=1, RdLo=0, Rm=3, 1001, Rn=2.
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE081_0392u32.to_le_bytes(), 0x1000)
+            .expect("UMULL decodes");
+        let mult = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntMult)
+            .expect("UMULL must emit IntMult for the low half");
+        let high = r
+            .ir_ops
+            .iter()
+            .find(|i| {
+                i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH
+            })
+            .expect("UMULL must emit a MULT_HIGH Callother for the high half");
+        assert_eq!(mult.inputs[0], high.inputs[1]);
+        assert_eq!(mult.inputs[1], high.inputs[2]);
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn smull_uses_signed_high() {
+        // ARM SMULL r0, r1, r2, r3 → encoding differs from UMULL only in
+        // bit[22] (signed): op=0000_1100.
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE0C1_0392u32.to_le_bytes(), 0x1000)
+            .expect("SMULL decodes");
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntMult));
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
+            "SMULL must emit the signed-MULT_HIGH Callother"
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn aarch64_umulh_emits_single_intmulthigh() {
+        // UMULH X0, X1, X2  →  0x9BC2_7C20
+        let r = lifter()
+            .lift_insn(&0x9BC2_7C20u32.to_le_bytes(), 0x1000)
+            .expect("UMULH decodes");
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH),
+            "UMULH must emit a MULT_HIGH Callother"
+        );
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::IntMult),
+            "AArch64 UMULH should not emit a low-half IntMult"
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn aarch64_smulh_emits_signed_high() {
+        // SMULH X0, X1, X2  →  0x9B42_7C20
+        let r = lifter()
+            .lift_insn(&0x9B42_7C20u32.to_le_bytes(), 0x1000)
+            .expect("SMULH decodes");
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
+            "SMULH must emit a signed-MULT_HIGH Callother"
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 
     #[test]

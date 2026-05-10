@@ -448,8 +448,8 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_MUL => emit_arm32_binop(ctx, &ops, IrOp::IntMult),
         ArmInsn::ARM_INS_MLA => emit_arm32_mla(ctx, &ops, false),
         ArmInsn::ARM_INS_MLS => emit_arm32_mla(ctx, &ops, true),
-        ArmInsn::ARM_INS_UMULL => emit_arm32_long_mul(ctx, &ops),
-        ArmInsn::ARM_INS_SMULL => emit_arm32_long_mul(ctx, &ops),
+        ArmInsn::ARM_INS_UMULL => emit_arm32_long_mul(ctx, &ops, false),
+        ArmInsn::ARM_INS_SMULL => emit_arm32_long_mul(ctx, &ops, true),
         ArmInsn::ARM_INS_UDIV => emit_arm32_binop(ctx, &ops, IrOp::IntDiv),
         ArmInsn::ARM_INS_SDIV => emit_arm32_binop(ctx, &ops, IrOp::IntSdiv),
 
@@ -873,10 +873,14 @@ fn emit_arm32_mla(ctx: &mut LiftCtx, ops: &[ArmOperandType], subtract: bool) {
 }
 
 /// UMULL/SMULL Rdlo, Rdhi, Rn, Rm — 64-bit multiply with the result split
-/// across two 32-bit registers. MVP: emit one IntMult into Rdlo plus a
-/// `Callother(0x350, Rn, Rm)` into Rdhi so a later pass can recover the
-/// high word when type information demands it.
-fn emit_arm32_long_mul(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+/// across two 32-bit registers. We emit `Rdlo = IntMult(Rn, Rm)` for the
+/// low half, and `Rdhi = Callother(MULT_HIGH, Rn, Rm)` for the high half.
+/// The `Callother` tag (`CALLOTHER_INT_MULT_HIGH` / `CALLOTHER_INT_SMULT_HIGH`)
+/// is the canonical high-half intrinsic — downstream passes (e.g.
+/// divisor-by-constant magic-number recognition) match on it to recover the
+/// upper word of a 2N-bit product. Signed/unsigned must be tracked because
+/// the high half differs between the two; the low half is identical.
+fn emit_arm32_long_mul(ctx: &mut LiftCtx, ops: &[ArmOperandType], signed: bool) {
     if ops.len() < 4 {
         ctx.emit_unimplemented();
         return;
@@ -897,14 +901,26 @@ fn emit_arm32_long_mul(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
         ctx.emit_unimplemented();
         return;
     };
+    let tag = if signed {
+        CALLOTHER_INT_SMULT_HIGH
+    } else {
+        CALLOTHER_INT_MULT_HIGH
+    };
     ctx.emit(IrInsn::with_output(IrOp::IntMult, rdlo, smallvec![rn, rm], ctx.addr));
     ctx.emit(IrInsn::with_output(
         IrOp::Callother,
         rdhi,
-        smallvec![Varnode::constant(0x350, 8), rn, rm],
+        smallvec![Varnode::constant(tag, 8), rn, rm],
         ctx.addr,
     ));
 }
+
+/// Canonical high-half multiply intrinsics. Emitted as
+/// `Callother(<tag>, Rn, Rm) -> Rdhi`. Pairs with an `IntMult(Rn, Rm) -> Rdlo`
+/// to model UMULL/SMULL on ARM A32 and stand-alone on AArch64 UMULH/SMULH.
+pub const CALLOTHER_INT_MULT_HIGH: u64 = 0x361;
+/// Signed counterpart of [`CALLOTHER_INT_MULT_HIGH`].
+pub const CALLOTHER_INT_SMULT_HIGH: u64 = 0x363;
 
 /// RRX Rd, Rm — rotate-right-with-extend by 1: `Rd = (C << 31) | (Rm >> 1)`.
 /// MVP routes this as a Callother intrinsic since the carry flag isn't
@@ -1239,6 +1255,8 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_UDIV => arithmetic::lift_udiv(ctx, &ops),
         Arm64Insn::ARM64_INS_MADD => arithmetic::lift_madd(ctx, &ops),
         Arm64Insn::ARM64_INS_MSUB => arithmetic::lift_msub(ctx, &ops),
+        Arm64Insn::ARM64_INS_UMULH => arithmetic::lift_mul_high(ctx, &ops, false),
+        Arm64Insn::ARM64_INS_SMULH => arithmetic::lift_mul_high(ctx, &ops, true),
 
         Arm64Insn::ARM64_INS_AND => bitwise::lift_and(ctx, &ops),
         Arm64Insn::ARM64_INS_ORR => bitwise::lift_orr(ctx, &ops),

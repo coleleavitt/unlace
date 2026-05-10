@@ -15,8 +15,8 @@ mod tests {
         ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
         CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV, CALLOTHER_ARM_REV16, CALLOTHER_INT_MULT_HIGH,
         CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
-        decode_thumb1_ldm_stm, decode_thumb1_push_pop, expand_reg_list, try_aarch64_ccmp,
-        try_aarch64_csel,
+        decode_thumb1_ldm_stm, decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list,
+        try_aarch64_ccmp, try_aarch64_csel,
     };
 
     #[test]
@@ -2214,5 +2214,154 @@ mod tests {
         assert_eq!(r.len, 4);
         assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
         assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Branchind));
+    }
+
+    // --- t178: Thumb-2 (T32 32-bit) LDM/STM register-list encodings ---
+    //
+    // Mirrors t111 (A32 LDM/STM via `decode_arm_ldm_stm`) and the
+    // Thumb-1 narrow forms (`decode_thumb1_ldm_stm` /
+    // `decode_thumb1_push_pop`). All four addressing modes share one
+    // 32-bit encoding class, distinguished by P/U bits, and lower
+    // through the common `emit_ldm_stm`. Each test covers a distinct
+    // addressing-mode × load/store combination and validates both
+    // the byte-level decoder and the full lifter pipeline.
+
+    /// LDMIA.W rN!, {regs} — increment-after with writeback. Loads each
+    /// register, then bumps Rn by `4 * count`.
+    #[test]
+    fn thumb2_ldmia_w_decodes_and_lifts() {
+        // ldmia.w r0!, {r1, r2, r3}  →  e8b0 000e
+        // hw1 fields: P=0, U=1, W=1, L=1, Rn=0 — `LDMIA r0!, {r1..r3}`.
+        let (addr, rn, list, w, l) =
+            decode_thumb2_ldm_stm(0xE8B0, 0x000E).expect("T2 LDMIA.W decodes");
+        assert_eq!(addr, LdmStmAddressing::Ia);
+        assert_eq!(rn, 0);
+        assert_eq!(list, 0x000E);
+        assert!(w, "LDMIA.W with `!` must report writeback");
+        assert!(l, "L bit must be set for LDM");
+
+        // End-to-end through the Thumb lifter.
+        let l_ift = ArmLifter::new_thumb();
+        // Byte stream (LE per halfword): hw1=e8b0 → b0 e8 ; hw2=000e → 0e 00.
+        let r = l_ift
+            .lift_insn(&[0xB0, 0xE8, 0x0E, 0x00], 0x1000)
+            .expect("LDMIA.W full pipeline");
+        assert_eq!(r.len, 4, "T2 LDM is a 32-bit encoding");
+        let loads = r.ir_ops.iter().filter(|i| i.op == IrOp::Load).count();
+        assert_eq!(loads, 3, "LDMIA.W {{r1,r2,r3}} must emit 3 Loads");
+        // Writeback => one IntAdd updating Rn (delta = +12).
+        let wb = r
+            .ir_ops
+            .iter()
+            .filter(|i| i.op == IrOp::IntAdd)
+            .find(|i| i.inputs.iter().any(|v| v.offset == 12));
+        assert!(
+            wb.is_some(),
+            "writeback after 3-reg IA must IntAdd Rn by 12"
+        );
+    }
+
+    /// LDMDB.W rN!, {regs} — decrement-before with writeback. The base
+    /// is implicitly biased by `-4 * count` before each load, then Rn is
+    /// decremented by the same amount.
+    #[test]
+    fn thumb2_ldmdb_w_decodes_and_lifts() {
+        // ldmdb.w r0!, {r1, r2, r3}  →  e930 000e
+        let (addr, rn, list, w, l) =
+            decode_thumb2_ldm_stm(0xE930, 0x000E).expect("T2 LDMDB.W decodes");
+        assert_eq!(addr, LdmStmAddressing::Db);
+        assert_eq!(rn, 0);
+        assert_eq!(list, 0x000E);
+        assert!(w);
+        assert!(l);
+
+        let l_ift = ArmLifter::new_thumb();
+        let r = l_ift
+            .lift_insn(&[0x30, 0xE9, 0x0E, 0x00], 0x1000)
+            .expect("LDMDB.W full pipeline");
+        assert_eq!(r.len, 4);
+        let loads = r.ir_ops.iter().filter(|i| i.op == IrOp::Load).count();
+        assert_eq!(loads, 3, "LDMDB.W must still emit 3 Loads");
+        // Writeback for DB is `Rn -= 4 * count` — i.e. an IntAdd with a
+        // negative-valued constant. For 3 regs that's -12, which in
+        // two's complement (u64) is 0xFFFFFFFFFFFFFFF4.
+        let wb = r
+            .ir_ops
+            .iter()
+            .filter(|i| i.op == IrOp::IntAdd)
+            .find(|i| i.inputs.iter().any(|v| v.offset == (-12i64) as u64));
+        assert!(
+            wb.is_some(),
+            "writeback after 3-reg DB must IntAdd Rn by -12"
+        );
+    }
+
+    /// STMIA.W rN!, {regs} — increment-after with writeback. Stores each
+    /// register, then bumps Rn forward.
+    #[test]
+    fn thumb2_stmia_w_decodes_and_lifts() {
+        // stmia.w r0!, {r4, r5, r6, r7}  →  e8a0 00f0
+        let (addr, rn, list, w, l) =
+            decode_thumb2_ldm_stm(0xE8A0, 0x00F0).expect("T2 STMIA.W decodes");
+        assert_eq!(addr, LdmStmAddressing::Ia);
+        assert_eq!(rn, 0);
+        assert_eq!(list, 0x00F0);
+        assert!(w);
+        assert!(!l, "STM must report L=0");
+
+        let l_ift = ArmLifter::new_thumb();
+        let r = l_ift
+            .lift_insn(&[0xA0, 0xE8, 0xF0, 0x00], 0x1000)
+            .expect("STMIA.W full pipeline");
+        assert_eq!(r.len, 4);
+        let stores = r.ir_ops.iter().filter(|i| i.op == IrOp::Store).count();
+        assert_eq!(stores, 4, "STMIA.W {{r4..r7}} must emit 4 Stores");
+        assert_eq!(
+            r.ir_ops.iter().filter(|i| i.op == IrOp::Load).count(),
+            0,
+            "STM must not emit any Loads"
+        );
+    }
+
+    /// STMDB.W rN!, {regs} — decrement-before with writeback. The PUSH.W
+    /// idiom (Rn=SP) is exactly this encoding; we exercise it with a
+    /// non-SP base to keep the test orthogonal to push/pop coverage.
+    #[test]
+    fn thumb2_stmdb_w_decodes_and_lifts() {
+        // stmdb.w r0!, {r4, r5, r6, r7}  →  e920 00f0
+        let (addr, rn, list, w, l) =
+            decode_thumb2_ldm_stm(0xE920, 0x00F0).expect("T2 STMDB.W decodes");
+        assert_eq!(addr, LdmStmAddressing::Db);
+        assert_eq!(rn, 0);
+        assert_eq!(list, 0x00F0);
+        assert!(w);
+        assert!(!l);
+
+        let l_ift = ArmLifter::new_thumb();
+        let r = l_ift
+            .lift_insn(&[0x20, 0xE9, 0xF0, 0x00], 0x1000)
+            .expect("STMDB.W full pipeline");
+        assert_eq!(r.len, 4);
+        let stores = r.ir_ops.iter().filter(|i| i.op == IrOp::Store).count();
+        assert_eq!(stores, 4);
+        let wb = r
+            .ir_ops
+            .iter()
+            .filter(|i| i.op == IrOp::IntAdd)
+            .find(|i| i.inputs.iter().any(|v| v.offset == (-16i64) as u64));
+        assert!(
+            wb.is_some(),
+            "writeback after 4-reg DB must IntAdd Rn by -16"
+        );
+    }
+
+    /// Sanity-check the reserved P==U combination is rejected (it would
+    /// alias RFE/SRS encodings, not LDM/STM).
+    #[test]
+    fn thumb2_ldm_stm_rejects_reserved_pu_combination() {
+        // P=0, U=0 (hw1 bits[8:7] = 00) — reserved class.
+        assert!(decode_thumb2_ldm_stm(0xE810, 0x000E).is_none());
+        // P=1, U=1 (hw1 bits[8:7] = 11) — also reserved here.
+        assert!(decode_thumb2_ldm_stm(0xE990, 0x000E).is_none());
     }
 }

@@ -453,6 +453,8 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_MLS => emit_arm32_mla(ctx, &ops, true),
         ArmInsn::ARM_INS_UMULL => emit_arm32_long_mul(ctx, &ops, false),
         ArmInsn::ARM_INS_SMULL => emit_arm32_long_mul(ctx, &ops, true),
+        ArmInsn::ARM_INS_UMLAL => emit_arm32_long_mul_acc(ctx, &ops, false),
+        ArmInsn::ARM_INS_SMLAL => emit_arm32_long_mul_acc(ctx, &ops, true),
         ArmInsn::ARM_INS_UDIV => emit_arm32_binop(ctx, &ops, IrOp::IntDiv),
         ArmInsn::ARM_INS_SDIV => emit_arm32_binop(ctx, &ops, IrOp::IntSdiv),
 
@@ -1000,6 +1002,125 @@ fn emit_arm32_long_mul(ctx: &mut LiftCtx, ops: &[ArmOperandType], signed: bool) 
         smallvec![Varnode::constant(tag, 8), rn, rm],
         ctx.addr,
     ));
+}
+
+/// UMLAL / SMLAL — 64-bit multiply-accumulate:
+///
+/// ```text
+///   RdHi:RdLo  =  RdHi:RdLo  +  (Rn * Rm)
+/// ```
+///
+/// Capstone reports operands in the order `RdLo, RdHi, Rn, Rm` (same as
+/// UMULL/SMULL). The lifter snapshots `RdLo_in` / `RdHi_in` into uniques
+/// before doing any writes, computes the multiply low/high halves via the
+/// same `IntMult` + `Callother(MULT_HIGH)` pair the long-multiply lifter
+/// uses, then performs the 64-bit add with an explicit carry-out from the
+/// low half into the high half:
+///
+/// ```text
+///   prod_lo   = Rn  *  Rm
+///   prod_hi   = MULT_HIGH(Rn, Rm)   // signed/unsigned selected by `signed`
+///   new_lo    = RdLo_in  +  prod_lo
+///   carry32   = zext1→32 ( INT_CARRY(RdLo_in, prod_lo) )
+///   new_hi    = RdHi_in  +  prod_hi  +  carry32
+///   RdLo      = new_lo
+///   RdHi      = new_hi
+/// ```
+///
+/// Snapshotting matters: `RdLo` and `RdHi` may alias `Rn`/`Rm`, and even
+/// when they don't, writing `RdLo` first would clobber the input we still
+/// need for the carry-out into `RdHi`.
+fn emit_arm32_long_mul_acc(ctx: &mut LiftCtx, ops: &[ArmOperandType], signed: bool) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(rdlo) = arm32_operand_to_varnode(ctx, &ops[0]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rdhi) = arm32_operand_to_varnode(ctx, &ops[1]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rn) = arm32_operand_to_varnode(ctx, &ops[2]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rm) = arm32_operand_to_varnode(ctx, &ops[3]) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    // Snapshot RdLo_in and RdHi_in into uniques *before* any writes.
+    let rdlo_in = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit_copy(rdlo_in, rdlo);
+    let rdhi_in = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit_copy(rdhi_in, rdhi);
+
+    // prod_lo / prod_hi.
+    let prod_lo = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntMult,
+        prod_lo,
+        smallvec![rn, rm],
+        ctx.addr,
+    ));
+    let tag = if signed {
+        CALLOTHER_INT_SMULT_HIGH
+    } else {
+        CALLOTHER_INT_MULT_HIGH
+    };
+    let prod_hi = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        prod_hi,
+        smallvec![Varnode::constant(tag, 8), rn, rm],
+        ctx.addr,
+    ));
+
+    // new_lo = RdLo_in + prod_lo  (and capture the carry-out).
+    let new_lo = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAdd,
+        new_lo,
+        smallvec![rdlo_in, prod_lo],
+        ctx.addr,
+    ));
+    let carry1 = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntCarry,
+        carry1,
+        smallvec![rdlo_in, prod_lo],
+        ctx.addr,
+    ));
+    let carry32 = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntZext,
+        carry32,
+        smallvec![carry1],
+        ctx.addr,
+    ));
+
+    // new_hi = RdHi_in + prod_hi + carry32.
+    let hi_tmp = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAdd,
+        hi_tmp,
+        smallvec![rdhi_in, prod_hi],
+        ctx.addr,
+    ));
+    let new_hi = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAdd,
+        new_hi,
+        smallvec![hi_tmp, carry32],
+        ctx.addr,
+    ));
+
+    // Commit.
+    ctx.emit_copy(rdlo, new_lo);
+    ctx.emit_copy(rdhi, new_hi);
 }
 
 /// Canonical high-half multiply intrinsics. Emitted as

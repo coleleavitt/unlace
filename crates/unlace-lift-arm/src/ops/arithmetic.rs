@@ -3,9 +3,61 @@ use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
 use crate::lift::{LiftCtx, operand_to_varnode};
-use crate::register_file::{CF, NF, VF, ZF, is_zero_reg};
+use crate::register_file::{ARM_NZCV, CF, NF, VF, ZF, is_zero_reg};
 
 type Ops = [(Arm64OperandType, Arm64Shift)];
+
+/// Pack the four 1-byte flag varnodes (NF/ZF/CF/VF) into the unified
+/// 4-byte `ARM_NZCV` varnode using the PSTATE bit layout
+/// `N<<31 | Z<<30 | C<<29 | V<<28`. Emitted as a tail to every
+/// flag-setting op so consumers can read NZCV in a single dataflow
+/// hop rather than chasing four byte varnodes.
+pub(crate) fn emit_pack_nzcv(ctx: &mut LiftCtx) {
+    fn shift_flag(ctx: &mut LiftCtx, flag_off: u64, shift: u64) -> Varnode {
+        let src = Varnode::reg(flag_off, 1);
+        let wide = Varnode::unique(ctx.alloc_unique(), 4);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntZext,
+            wide,
+            smallvec![src],
+            ctx.addr,
+        ));
+        let shifted = Varnode::unique(ctx.alloc_unique(), 4);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntLeft,
+            shifted,
+            smallvec![wide, Varnode::constant(shift, 1)],
+            ctx.addr,
+        ));
+        shifted
+    }
+
+    let n = shift_flag(ctx, NF, 31);
+    let z = shift_flag(ctx, ZF, 30);
+    let c = shift_flag(ctx, CF, 29);
+    let v = shift_flag(ctx, VF, 28);
+
+    let nz = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        nz,
+        smallvec![n, z],
+        ctx.addr,
+    ));
+    let nzc = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        nzc,
+        smallvec![nz, c],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        Varnode::reg(ARM_NZCV, 4),
+        smallvec![nzc, v],
+        ctx.addr,
+    ));
+}
 
 fn emit_result_flags(ctx: &mut LiftCtx, result: Varnode, op_size: u8) {
     let zero = Varnode::constant(0, op_size);
@@ -58,6 +110,9 @@ fn emit_add_flags(ctx: &mut LiftCtx, a: Varnode, b: Varnode, result: Varnode, op
         smallvec![a, b],
         ctx.addr,
     ));
+    // t170: also pack into the unified ARM_NZCV varnode so consumers can
+    // grab the whole PSTATE.NZCV nibble in one dataflow hop.
+    emit_pack_nzcv(ctx);
 }
 
 fn emit_sub_flags(ctx: &mut LiftCtx, a: Varnode, b: Varnode, result: Varnode, op_size: u8) {
@@ -84,6 +139,7 @@ fn emit_sub_flags(ctx: &mut LiftCtx, a: Varnode, b: Varnode, result: Varnode, op
         smallvec![a, b],
         ctx.addr,
     ));
+    emit_pack_nzcv(ctx);
 }
 
 fn dst_size(ops: &Ops) -> u8 {
@@ -151,6 +207,58 @@ pub fn lift_sub(ctx: &mut LiftCtx, ops: &Ops) {
                 ctx.addr,
             ));
             write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+/// ADDS Xd, Xn, Xm/#imm — like `ADD` but also writes NF/ZF/CF/VF and
+/// the unified `ARM_NZCV` (t170).
+pub fn lift_adds(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let a = operand_to_varnode(ctx, &ops[1].0);
+    let b = operand_to_varnode(ctx, &ops[2].0);
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAdd,
+                result,
+                smallvec![a, b],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+            emit_add_flags(ctx, a, b, result, size);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+/// SUBS Xd, Xn, Xm/#imm — like `SUB` but also writes NF/ZF/CF/VF and
+/// the unified `ARM_NZCV` (t170).
+pub fn lift_subs(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let a = operand_to_varnode(ctx, &ops[1].0);
+    let b = operand_to_varnode(ctx, &ops[2].0);
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntSub,
+                result,
+                smallvec![a, b],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+            emit_sub_flags(ctx, a, b, result, size);
         }
         _ => ctx.emit_unimplemented(),
     }

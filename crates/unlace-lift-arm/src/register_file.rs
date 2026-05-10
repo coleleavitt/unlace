@@ -46,6 +46,17 @@ pub const ZF: u64 = 265; // Zero flag (byte 1 of NZCV)
 pub const CF: u64 = 266; // Carry flag (byte 2 of NZCV)
 pub const VF: u64 = 267; // oVerflow flag (byte 3 of NZCV)
 
+/// Unified 4-byte NZCV varnode (t170) in **PSTATE packed layout**:
+/// `N<<31 | Z<<30 | C<<29 | V<<28`. Lives at a non-overlapping offset
+/// from `NF/ZF/CF/VF` so dataflow can track it as a single SSA value
+/// without aliasing the per-flag bytes. CCMP/CCMN/SUBS/ADDS/CMP/CMN
+/// emit *both* the per-flag bytes and a pack into this varnode; the
+/// CCMP fail-path additionally writes the immediate `#nzcv` shifted
+/// into the same packed positions. Conditional consumers
+/// (CSEL/Bcc/...) that walk dataflow can grab the latest NZCV write
+/// in one hop rather than four.
+pub const ARM_NZCV: u64 = 272;
+
 /// Names for X0..X30.
 const XREG_NAMES: [&str; 31] = [
     "X0", "X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8", "X9", "X10", "X11", "X12", "X13", "X14",
@@ -73,6 +84,10 @@ pub fn aarch64_register_file() -> RegisterFile {
     regs.push(RegisterDef {
         name: "NZCV",
         varnode: Varnode::reg(NZCV, 4),
+    });
+    regs.push(RegisterDef {
+        name: "PSTATE_NZCV",
+        varnode: Varnode::reg(ARM_NZCV, 4),
     });
     RegisterFile { registers: regs }
 }

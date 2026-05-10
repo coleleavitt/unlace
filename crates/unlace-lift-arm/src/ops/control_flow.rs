@@ -4,7 +4,7 @@ use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::lift::{LiftCtx, operand_to_varnode};
-use crate::register_file::{CF, NF, VF, X30, ZF};
+use crate::register_file::{ARM_NZCV, CF, NF, VF, X30, ZF};
 
 type Ops = [(Arm64OperandType, Arm64Shift)];
 
@@ -333,6 +333,135 @@ pub fn lift_ccmp(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, is_neg: bool
     blend_flag(ctx, cond, comp_zf, zf_imm, zf_reg);
     blend_flag(ctx, cond, comp_cf, cf_imm, cf_reg);
     blend_flag(ctx, cond, comp_vf, vf_imm, vf_reg);
+
+    // 4. t170: also commit the packed PSTATE.NZCV varnode so consumers
+    //    (CSEL/Bcc) can read NZCV in one dataflow hop instead of four.
+    //    Layout: N<<31 | Z<<30 | C<<29 | V<<28. On the cond=true side we
+    //    pack the computed flag temps; on the cond=false side we pack
+    //    the immediate `#nzcv` (which already uses the same N/Z/C/V bit
+    //    order, just at bit positions 3..0 → shift up by 28).
+    let packed_imm = (nzcv_imm as u64) << 28;
+    let packed_imm_vn = Varnode::constant(packed_imm, 4);
+    let packed_computed = pack_computed_nzcv(ctx, comp_nf, comp_zf, comp_cf, comp_vf);
+    blend_word_nzcv(ctx, cond, packed_computed, packed_imm_vn);
+}
+
+/// Pack four 1-byte flag temps into a 4-byte unique varnode in PSTATE
+/// layout `N<<31 | Z<<30 | C<<29 | V<<28`.
+fn pack_computed_nzcv(
+    ctx: &mut LiftCtx,
+    nf: Varnode,
+    zf: Varnode,
+    cf: Varnode,
+    vf: Varnode,
+) -> Varnode {
+    fn shifted(ctx: &mut LiftCtx, flag: Varnode, shift: u64) -> Varnode {
+        let wide = Varnode::unique(ctx.alloc_unique(), 4);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntZext,
+            wide,
+            smallvec![flag],
+            ctx.addr,
+        ));
+        let out = Varnode::unique(ctx.alloc_unique(), 4);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntLeft,
+            out,
+            smallvec![wide, Varnode::constant(shift, 1)],
+            ctx.addr,
+        ));
+        out
+    }
+    let n = shifted(ctx, nf, 31);
+    let z = shifted(ctx, zf, 30);
+    let c = shifted(ctx, cf, 29);
+    let v = shifted(ctx, vf, 28);
+    let nz = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        nz,
+        smallvec![n, z],
+        ctx.addr,
+    ));
+    let nzc = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        nzc,
+        smallvec![nz, c],
+        ctx.addr,
+    ));
+    let packed = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        packed,
+        smallvec![nzc, v],
+        ctx.addr,
+    ));
+    packed
+}
+
+/// 4-byte blend: `ARM_NZCV = cond ? on_true : on_false`, lowered as
+/// `(zext(cond)*-1 & on_true) | (zext(!cond)*-1 & on_false)` — i.e.
+/// classic bit-mask blend extended from `blend_flag`'s 1-byte form.
+fn blend_word_nzcv(ctx: &mut LiftCtx, cond: Varnode, on_true: Varnode, on_false: Varnode) {
+    // Widen cond to a 4-byte mask: 0x0000_0000 or 0xFFFF_FFFF.
+    let cond_w = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntZext,
+        cond_w,
+        smallvec![cond],
+        ctx.addr,
+    ));
+    let true_mask = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Int2comp,
+        true_mask,
+        smallvec![cond_w],
+        ctx.addr,
+    ));
+    // not_cond = !cond (1-byte boolean) → widen + 2comp the same way.
+    let not_cond = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::BoolNegate,
+        not_cond,
+        smallvec![cond],
+        ctx.addr,
+    ));
+    let nc_w = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntZext,
+        nc_w,
+        smallvec![not_cond],
+        ctx.addr,
+    ));
+    let false_mask = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Int2comp,
+        false_mask,
+        smallvec![nc_w],
+        ctx.addr,
+    ));
+
+    let t_side = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAnd,
+        t_side,
+        smallvec![true_mask, on_true],
+        ctx.addr,
+    ));
+    let f_side = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAnd,
+        f_side,
+        smallvec![false_mask, on_false],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        Varnode::reg(ARM_NZCV, 4),
+        smallvec![t_side, f_side],
+        ctx.addr,
+    ));
 }
 
 /// Compute NF/ZF/CF/VF as if `Rn op (±Rm)` had retired, returning the

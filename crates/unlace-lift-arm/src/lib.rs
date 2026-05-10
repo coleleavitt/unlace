@@ -164,12 +164,14 @@ mod tests {
         let l = lifter();
         let rf = l.register_file();
         assert!(!rf.registers.is_empty());
-        assert_eq!(rf.registers.len(), 34);
+        assert_eq!(rf.registers.len(), 35);
         assert_eq!(rf.registers[0].name, "X0");
         assert_eq!(rf.registers[30].name, "X30");
         assert_eq!(rf.registers[31].name, "SP");
         assert_eq!(rf.registers[32].name, "PC");
         assert_eq!(rf.registers[33].name, "NZCV");
+        // t170: unified packed-PSTATE NZCV varnode at a non-overlapping offset.
+        assert_eq!(rf.registers[34].name, "PSTATE_NZCV");
     }
 
     #[test]
@@ -1336,6 +1338,118 @@ mod tests {
         }
 
         assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    // -------------------------------------------------------------------
+    // t170 — unified packed PSTATE NZCV varnode (offset 272, 4 bytes).
+    // -------------------------------------------------------------------
+
+    /// `ARM_NZCV` offset constant pinned for the assertions below — kept
+    /// in lockstep with `register_file::ARM_NZCV`.
+    const ARM_NZCV_OFFSET: u64 = 272;
+
+    /// CCMP followed by CSEL: the CCMP block must commit a write to the
+    /// unified `ARM_NZCV` varnode (offset 272, size 4), and a subsequent
+    /// CSEL must consume one of the flag varnodes that CCMP wrote (NF or
+    /// ZF) — i.e. both insns share the same flag-bearing storage region.
+    #[test]
+    fn ccmp_then_csel_share_nzcv_varnode() {
+        use unlace_ir::SpaceId;
+
+        // CCMP X0, X1, #4, EQ → 0xFA41_0004
+        let ccmp = lifter()
+            .lift_insn(&0xFA41_0004u32.to_le_bytes(), 0x1000)
+            .expect("CCMP should decode");
+
+        // CCMP must write the packed ARM_NZCV (size 4, offset 272).
+        let writes_arm_nzcv = ccmp.ir_ops.iter().any(|i| {
+            i.output
+                .map(|o| {
+                    o.space == SpaceId::Register
+                        && o.offset == ARM_NZCV_OFFSET
+                        && o.size == 4
+                })
+                .unwrap_or(false)
+        });
+        assert!(
+            writes_arm_nzcv,
+            "CCMP must commit a 4-byte write to ARM_NZCV (offset {ARM_NZCV_OFFSET})",
+        );
+
+        // CSEL X0, X1, X2, EQ → 0x9A82_0020
+        let csel = lifter()
+            .lift_insn(&0x9A82_0020u32.to_le_bytes(), 0x1004)
+            .expect("CSEL should decode");
+
+        // CSEL's condition build reads ZF (offset 265, size 1) — the same
+        // flag-bearing storage that CCMP wrote via its blend chain.
+        let reads_zf = csel.ir_ops.iter().any(|i| {
+            i.inputs.iter().any(|v| {
+                v.space == SpaceId::Register && v.offset == 265 && v.size == 1
+            })
+        });
+        assert!(
+            reads_zf,
+            "CSEL .EQ must read ZF (offset 265) written by the preceding CCMP",
+        );
+        assert!(!ccmp.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(!csel.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    /// SUBS followed by B.EQ: SUBS must write `ARM_NZCV` (offset 272,
+    /// size 4) and the B.EQ branch's condition must read ZF (offset 265)
+    /// — i.e. the conditional branch consumes a flag that lives inside
+    /// the NZCV storage region the SUBS just published.
+    #[test]
+    fn subs_then_bcc_reads_nzcv() {
+        use unlace_ir::SpaceId;
+
+        // SUBS X0, X1, X2 → 0xEB02_0020.
+        let subs = lifter()
+            .lift_insn(&0xEB02_0020u32.to_le_bytes(), 0x1000)
+            .expect("SUBS should decode");
+
+        // SUBS must commit a 4-byte write to ARM_NZCV.
+        let writes_arm_nzcv = subs.ir_ops.iter().any(|i| {
+            i.output
+                .map(|o| {
+                    o.space == SpaceId::Register
+                        && o.offset == ARM_NZCV_OFFSET
+                        && o.size == 4
+                })
+                .unwrap_or(false)
+        });
+        assert!(
+            writes_arm_nzcv,
+            "SUBS must commit a 4-byte write to ARM_NZCV (offset {ARM_NZCV_OFFSET})",
+        );
+        // ...and each per-flag byte (NF/ZF/CF/VF at 264..267) too.
+        for (name, offset) in [("NF", 264u64), ("ZF", 265), ("CF", 266), ("VF", 267)] {
+            assert!(
+                subs.ir_ops.iter().any(|i| i
+                    .output
+                    .map(|o| o.space == SpaceId::Register && o.offset == offset && o.size == 1)
+                    .unwrap_or(false)),
+                "SUBS must still write per-flag byte {name} (offset {offset})",
+            );
+        }
+
+        // B.EQ #+0x10 → 0x5400_0080. The lifter consumes ZF (offset 265).
+        let beq = lifter()
+            .lift_insn(&0x5400_0080u32.to_le_bytes(), 0x1004)
+            .expect("B.EQ should decode");
+        let reads_zf = beq.ir_ops.iter().any(|i| {
+            i.inputs.iter().any(|v| {
+                v.space == SpaceId::Register && v.offset == 265 && v.size == 1
+            })
+        });
+        assert!(
+            reads_zf,
+            "B.EQ must read ZF (offset 265) inside the NZCV region SUBS wrote",
+        );
+        assert!(beq.ir_ops.iter().any(|i| i.op == IrOp::Cbranch));
+        assert!(!subs.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(!beq.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 
     #[test]

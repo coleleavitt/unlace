@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use object::macho;
-use object::read::macho::{FatArch, LoadCommandVariant, MachHeader, MachOFatFile, MachOFile};
+use object::read::macho::{LoadCommandVariant, MachHeader, MachOFatFile, MachOFile};
 use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 
 use crate::Loader;
@@ -58,9 +58,8 @@ impl Loader for MachoLoader {
         let magic: [u8; 4] = [data[0], data[1], data[2], data[3]];
 
         match magic {
-            // Fat/universal — pick the first slice.
-            FAT_MAGIC_32 => load_fat::<macho::FatArch32>(data),
-            FAT_MAGIC_64 => load_fat::<macho::FatArch64>(data),
+            // Fat/universal — pick the preferred slice.
+            FAT_MAGIC_32 | FAT_MAGIC_64 => load_fat(data, None),
             // 64-bit single-arch (either endianness).
             MH_MAGIC_64_LE | MH_MAGIC_64_BE => {
                 load_macho::<macho::MachHeader64<object::Endianness>>(data)
@@ -74,17 +73,145 @@ impl Loader for MachoLoader {
     }
 }
 
-/// Extract the first architecture slice from a fat/universal binary and load it.
-fn load_fat<Fat>(data: &[u8]) -> Result<BinaryImage, LoadError>
-where
-    Fat: FatArch,
-{
-    let fat = MachOFatFile::<Fat>::parse(data)?;
-    let arches = fat.arches();
-    let first = arches.first().ok_or(LoadError::InvalidMagic)?;
-    let slice = first.data(data)?;
+/// One entry in a fat/universal Mach-O binary's architecture table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FatArch {
+    pub cputype: u32,
+    pub cpusubtype: u32,
+    pub offset: u64,
+    pub size: u64,
+}
 
-    // Determine whether the slice is 32-bit or 64-bit from its own magic.
+impl FatArch {
+    fn arch_id(&self) -> ArchId {
+        let ct = self.cputype;
+        if ct == macho::CPU_TYPE_X86_64 as u32 {
+            ArchId::X86_64
+        } else if ct == macho::CPU_TYPE_X86 as u32 {
+            ArchId::X86
+        } else if ct == macho::CPU_TYPE_ARM64 as u32 || ct == macho::CPU_TYPE_ARM64_32 as u32 {
+            ArchId::AArch64
+        } else if ct == macho::CPU_TYPE_ARM as u32 {
+            ArchId::Arm
+        } else if ct == macho::CPU_TYPE_POWERPC as u32 {
+            ArchId::Ppc
+        } else if ct == macho::CPU_TYPE_POWERPC64 as u32 {
+            ArchId::Ppc64
+        } else if ct == macho::CPU_TYPE_MIPS as u32 {
+            ArchId::Mips
+        } else {
+            ArchId::Unknown(self.cputype as u16)
+        }
+    }
+
+    /// Static preference rank — lower is more preferred.
+    fn preference_rank(&self) -> u8 {
+        match self.arch_id() {
+            ArchId::AArch64 => 0,
+            ArchId::X86_64 => 1,
+            ArchId::Arm => 2,
+            ArchId::X86 => 3,
+            _ => 0xFF,
+        }
+    }
+}
+
+/// Parse the architecture table of a fat/universal Mach-O.
+///
+/// Returns `None` if `data` is not a fat binary or the header is truncated.
+pub fn parse_fat_arches(data: &[u8]) -> Option<Vec<FatArch>> {
+    if data.len() < 8 {
+        return None;
+    }
+    let magic: [u8; 4] = [data[0], data[1], data[2], data[3]];
+    let is_64 = match magic {
+        FAT_MAGIC_32 => false,
+        FAT_MAGIC_64 => true,
+        _ => return None,
+    };
+    let count = u32::from_be_bytes([data[4], data[5], data[6], data[7]]) as usize;
+    let entry_size = if is_64 { 32 } else { 20 };
+    let needed = 8usize.checked_add(count.checked_mul(entry_size)?)?;
+    if data.len() < needed {
+        return None;
+    }
+
+    let mut arches = Vec::with_capacity(count);
+    for i in 0..count {
+        let base = 8 + i * entry_size;
+        let cputype = u32::from_be_bytes([
+            data[base],
+            data[base + 1],
+            data[base + 2],
+            data[base + 3],
+        ]);
+        let cpusubtype = u32::from_be_bytes([
+            data[base + 4],
+            data[base + 5],
+            data[base + 6],
+            data[base + 7],
+        ]);
+        let (offset, size) = if is_64 {
+            let o = u64::from_be_bytes(data[base + 8..base + 16].try_into().ok()?);
+            let s = u64::from_be_bytes(data[base + 16..base + 24].try_into().ok()?);
+            (o, s)
+        } else {
+            let o = u32::from_be_bytes(data[base + 8..base + 12].try_into().ok()?) as u64;
+            let s = u32::from_be_bytes(data[base + 12..base + 16].try_into().ok()?) as u64;
+            (o, s)
+        };
+        arches.push(FatArch {
+            cputype,
+            cpusubtype,
+            offset,
+            size,
+        });
+    }
+    Some(arches)
+}
+
+/// Select the slice for the preferred architecture from a fat/universal binary.
+///
+/// If `preferred_arch` matches an entry exactly, its slice is returned. Otherwise
+/// the entry with the best static preference rank (arm64 > x86_64 > arm > x86) wins.
+/// Returns `None` if `data` is not fat or no slice fits inside the file.
+pub fn select_fat_slice(data: &[u8], preferred_arch: Option<ArchId>) -> Option<&[u8]> {
+    let arches = parse_fat_arches(data)?;
+    if arches.is_empty() {
+        return None;
+    }
+
+    let chosen = if let Some(want) = preferred_arch {
+        arches
+            .iter()
+            .find(|a| a.arch_id() == want)
+            .or_else(|| arches.iter().min_by_key(|a| a.preference_rank()))
+    } else {
+        arches.iter().min_by_key(|a| a.preference_rank())
+    }?;
+
+    let start = chosen.offset as usize;
+    let end = start.checked_add(chosen.size as usize)?;
+    data.get(start..end)
+}
+
+/// Extract the preferred architecture slice from a fat/universal binary and load it.
+fn load_fat(data: &[u8], preferred_arch: Option<ArchId>) -> Result<BinaryImage, LoadError> {
+    // Validate via the `object` crate so malformed tables surface an error
+    // rather than silently falling through.
+    let magic: [u8; 4] = [data[0], data[1], data[2], data[3]];
+    match magic {
+        FAT_MAGIC_32 => {
+            let _ = MachOFatFile::<macho::FatArch32>::parse(data)?;
+        }
+        FAT_MAGIC_64 => {
+            let _ = MachOFatFile::<macho::FatArch64>::parse(data)?;
+        }
+        _ => return Err(LoadError::InvalidMagic),
+    }
+
+    let slice = select_fat_slice(data, preferred_arch).ok_or(LoadError::InvalidMagic)?;
+
     if slice.len() < 4 {
         return Err(LoadError::InvalidMagic);
     }
@@ -1878,6 +2005,95 @@ mod tests {
             .section_by_name("__text")
             .expect("__text section must exist in fat slice");
         assert!(text.flags.contains(SectionFlags::EXEC));
+    }
+
+    /// Build a synthetic FAT_MAGIC_32 header with `arches` as the table.
+    /// No payload is written — we only test header parsing here.
+    fn synthetic_fat32_header(arches: &[(u32, u32, u32, u32, u32)]) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(8 + arches.len() * 20);
+        buf.extend_from_slice(&macho::FAT_MAGIC.to_be_bytes());
+        buf.extend_from_slice(&(arches.len() as u32).to_be_bytes());
+        for (cputype, cpusubtype, offset, size, align) in arches {
+            buf.extend_from_slice(&cputype.to_be_bytes());
+            buf.extend_from_slice(&cpusubtype.to_be_bytes());
+            buf.extend_from_slice(&offset.to_be_bytes());
+            buf.extend_from_slice(&size.to_be_bytes());
+            buf.extend_from_slice(&align.to_be_bytes());
+        }
+        buf
+    }
+
+    /// Build a synthetic FAT_MAGIC_64 header.
+    fn synthetic_fat64_header(arches: &[(u32, u32, u64, u64, u32)]) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(8 + arches.len() * 32);
+        buf.extend_from_slice(&macho::FAT_MAGIC_64.to_be_bytes());
+        buf.extend_from_slice(&(arches.len() as u32).to_be_bytes());
+        for (cputype, cpusubtype, offset, size, align) in arches {
+            buf.extend_from_slice(&cputype.to_be_bytes());
+            buf.extend_from_slice(&cpusubtype.to_be_bytes());
+            buf.extend_from_slice(&offset.to_be_bytes());
+            buf.extend_from_slice(&size.to_be_bytes());
+            buf.extend_from_slice(&align.to_be_bytes());
+            buf.extend_from_slice(&0u32.to_be_bytes());
+        }
+        buf
+    }
+
+    #[test]
+    fn parse_fat_arches_synthetic_32() {
+        let data = synthetic_fat32_header(&[
+            (macho::CPU_TYPE_X86_64 as u32, 3, 0x1000, 0x4000, 12),
+            (macho::CPU_TYPE_ARM64 as u32, 0, 0x5000, 0x4000, 12),
+        ]);
+        let arches = parse_fat_arches(&data).expect("parse 32-bit fat header");
+        assert_eq!(arches.len(), 2);
+        assert_eq!(arches[0].cputype, macho::CPU_TYPE_X86_64 as u32);
+        assert_eq!(arches[0].offset, 0x1000);
+        assert_eq!(arches[0].size, 0x4000);
+        assert_eq!(arches[1].cputype, macho::CPU_TYPE_ARM64 as u32);
+        assert_eq!(arches[1].offset, 0x5000);
+    }
+
+    #[test]
+    fn parse_fat_arches_64() {
+        let data = synthetic_fat64_header(&[
+            (macho::CPU_TYPE_X86_64 as u32, 3, 0x1_0000_0000, 0x4000, 12),
+            (macho::CPU_TYPE_ARM64 as u32, 0, 0x2_0000_0000, 0x8000, 14),
+        ]);
+        let arches = parse_fat_arches(&data).expect("parse 64-bit fat header");
+        assert_eq!(arches.len(), 2);
+        assert_eq!(arches[0].offset, 0x1_0000_0000);
+        assert_eq!(arches[0].size, 0x4000);
+        assert_eq!(arches[1].offset, 0x2_0000_0000);
+        assert_eq!(arches[1].size, 0x8000);
+    }
+
+    #[test]
+    fn select_slice_prefers_arm64() {
+        let mut data = synthetic_fat32_header(&[
+            (macho::CPU_TYPE_X86_64 as u32, 3, 0x1000, 0x10, 12),
+            (macho::CPU_TYPE_ARM64 as u32, 0, 0x1010, 0x10, 12),
+        ]);
+        data.resize(0x1020, 0);
+        for b in &mut data[0x1000..0x1010] {
+            *b = 0xAA;
+        }
+        for b in &mut data[0x1010..0x1020] {
+            *b = 0xBB;
+        }
+
+        let slice = select_fat_slice(&data, None).expect("default selects arm64");
+        assert_eq!(slice, &[0xBB; 0x10]);
+
+        let x86 = select_fat_slice(&data, Some(ArchId::X86_64)).expect("explicit x86_64");
+        assert_eq!(x86, &[0xAA; 0x10]);
+    }
+
+    #[test]
+    fn non_fat_returns_none() {
+        let data = minimal_macho64();
+        assert!(parse_fat_arches(&data).is_none());
+        assert!(select_fat_slice(&data, None).is_none());
     }
 
     /// Mach-O 64-bit with one LC_FUNCTION_STARTS pointing at two synthetic

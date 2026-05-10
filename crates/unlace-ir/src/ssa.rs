@@ -354,6 +354,31 @@ pub struct SsaFunction {
     /// prologue (`sub rsp, K` ⇒ `K`). Zero when the prologue is missing or
     /// could not be matched.
     pub frame_size: u32,
+    /// Per-instruction stack-pointer delta relative to function entry,
+    /// keyed by `(BlockId, insn_index)`. Populated by
+    /// [`StackPointerTrackingPass`](https://docs.rs/unlace-passes). Mirrors
+    /// IDA's `add_auto_stkpnt`: lets later passes reason about mid-function
+    /// frame growth (alloca, dynamic stack arrays, struct-return holes).
+    pub sp_delta_at: BTreeMap<(BlockId, usize), i64>,
+    /// Frame-region holes: byte ranges in `[min_sp_depth, 0)` not covered
+    /// by any recovered `stack_var`. Keyed by RSP-relative offset; value
+    /// is the hole's byte size. Mirrors IDA's `func_has_stkframe_hole`.
+    pub stack_holes: BTreeMap<i64, u32>,
+    /// Whether the function adjusts RSP by a non-constant value mid-body
+    /// (alloca / dynamic stack arrays). When true the C printer emits an
+    /// explanatory comment in the function preamble.
+    pub dynamic_sp: bool,
+    /// Type associated with an `IrInsn` whose constant operand was
+    /// recognised as `sizeof(T)`. Keyed by `(BlockId, insn_index)`. The
+    /// IR has no `Sizeof` opcode (the 75-opcode spec is frozen), so this
+    /// side-map is the IR producer's output: callers consult it to render
+    /// `sizeof(struct Foo)` in place of the literal byte count. Populated
+    /// by [`SizeofRecognitionPass`](https://docs.rs/unlace-passes).
+    pub sizeof_type_map: BTreeMap<(BlockId, usize), crate::types::Type>,
+    /// Type associated with an `IntAnd` whose mask was recognised as the
+    /// bit-pattern for `alignof(T)`. Keyed by `(BlockId, insn_index)`.
+    /// Companion to `sizeof_type_map`.
+    pub alignof_type_map: BTreeMap<(BlockId, usize), crate::types::Type>,
     /// Indirect calls (`Callind`) for which a unique concrete target address
     /// has been recovered (e.g. via constant function pointers, vtable-slot
     /// reads of read-only memory). Keyed by `(BlockId, insn_index)` of the
@@ -469,6 +494,11 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         eh_landing_pads: BTreeSet::new(),
         stack_gaps: BTreeMap::new(),
         frame_size: 0,
+        sp_delta_at: BTreeMap::new(),
+        stack_holes: BTreeMap::new(),
+        dynamic_sp: false,
+        sizeof_type_map: BTreeMap::new(),
+        alignof_type_map: BTreeMap::new(),
         resolved_indirect_calls: BTreeMap::new(),
         variadic_call_types: BTreeMap::new(),
         signature_revision: 0,

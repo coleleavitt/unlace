@@ -7,6 +7,7 @@
 pub mod demangle_rust;
 pub mod demangle_swift;
 pub mod dwarf;
+pub mod dyld_cache;
 pub mod eh_frame;
 pub mod elf;
 pub mod error;

@@ -21,6 +21,7 @@ pub mod pdb;
 pub mod pdb_types;
 pub mod pe;
 pub mod rtti;
+pub mod go_moduledata;
 pub mod strings;
 pub mod til;
 

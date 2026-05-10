@@ -548,6 +548,10 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_ORR => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntOr),
         ArmInsn::ARM_INS_EOR => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntXor),
         ArmInsn::ARM_INS_BIC => emit_arm32_bic(ctx, &ops),
+        // t172: ORN Rd, Rn, Op2 — Thumb-2-only OR-Not, `Rd = Rn | ~Op2`.
+        // Mirrors BIC's structure (which is `Rn & ~Op2`) but combines with
+        // OR instead of AND.
+        ArmInsn::ARM_INS_ORN => emit_arm32_orn(ctx, &ops),
 
         ArmInsn::ARM_INS_LSL => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntLeft),
         ArmInsn::ARM_INS_LSR => emit_arm32_binop(ctx, &ops, &shifts, IrOp::IntRight),
@@ -753,6 +757,45 @@ fn emit_arm32_bic(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
     ));
     ctx.emit(IrInsn::with_output(
         IrOp::IntAnd,
+        dst,
+        smallvec![lhs, inverted],
+        ctx.addr,
+    ));
+}
+
+/// ORN Rd, Rn, Op2 — Thumb-2-only OR-Not. Lowers to `Rd = Rn | ~Op2`,
+/// the dual of BIC (`Rd = Rn & ~Op2`). No A32 encoding exists, but the
+/// Capstone insn id (`ARM_INS_ORN`) is shared with the synthetic disasm
+/// path, so a single emitter covers both dispatch sources. Operand layout
+/// matches the other 3-operand data-processing forms: `[Rd, Rn, Op2]` for
+/// register-register and `[Rn, Op2]` when Capstone elides the destination
+/// (always 3-op in practice for ORN, but we tolerate both).
+fn emit_arm32_orn(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let (lhs_op, rhs_op) = match ops.len() {
+        2 => (&ops[0], &ops[1]),
+        _ => (&ops[1], &ops[2]),
+    };
+    let Some(lhs) = arm32_operand_to_varnode(ctx, lhs_op) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = arm32_operand_to_varnode(ctx, rhs_op) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let inverted = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntNegate,
+        inverted,
+        smallvec![rhs],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
         dst,
         smallvec![lhs, inverted],
         ctx.addr,

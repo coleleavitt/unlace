@@ -1980,4 +1980,239 @@ mod tests {
             assert!(co.output.is_some(), "byte-reverse writes a destination");
         }
     }
+
+    // --- t172: Thumb-2 (T32 32-bit encoding) opcode expansion ---
+    //
+    // Most of these share Capstone insn ids with their A32 counterparts;
+    // the tests verify the *Thumb* lifter path produces equivalent IR when
+    // fed the wide 32-bit Thumb-2 byte encodings (little-endian per
+    // halfword). ORN is the only opcode that genuinely needed a new
+    // dispatch arm — it has no A32 form.
+
+    /// MOVW.W Rd, #imm16 — Thumb-2 wide form. Same `ARM_INS_MOVW` id as
+    /// A32, so the existing copy emitter handles it; the test asserts the
+    /// Thumb dispatch path actually reaches Capstone (i.e. the prefilter
+    /// doesn't accidentally eat the encoding).
+    #[test]
+    fn thumb2_movw_wide_lifts_to_copy() {
+        // MOVW R0, #0x1234  →  f241 2034  (halfword-LE bytes)
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0x41, 0xf2, 0x34, 0x20], 0x1000)
+            .expect("MOVW.W decodes");
+        assert_eq!(r.len, 4, "MOVW.W is a 32-bit Thumb-2 encoding");
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Copy),
+            "MOVW.W must lower to a Copy"
+        );
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "MOVW.W must not fall through to Unimplemented"
+        );
+    }
+
+    /// MOVT.W Rd, #imm16 — sets high half of Rd. Reuses the A32 emitter
+    /// (mask low, shift imm, OR), which we assert by structure.
+    #[test]
+    fn thumb2_movt_wide_preserves_low_half() {
+        // MOVT R0, #0xABCD  →  f6ca 30cd
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0xca, 0xf6, 0xcd, 0x30], 0x1000)
+            .expect("MOVT.W decodes");
+        assert_eq!(r.len, 4);
+        let and_mask = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntAnd)
+            .expect("MOVT.W must mask Rd by 0xFFFF");
+        assert_eq!(and_mask.inputs[1].offset, 0xFFFF);
+        let shift = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntLeft)
+            .expect("MOVT.W must shift the immediate left");
+        assert_eq!(shift.inputs[1].offset, 16, "MOVT shift count is 16");
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntOr),
+            "MOVT.W must finish with IntOr"
+        );
+    }
+
+    /// MLA Rd, Rn, Rm, Ra — Thumb-2 multiply-accumulate. Emits IntMult
+    /// (Rn*Rm) followed by IntAdd (Ra + product).
+    #[test]
+    fn thumb2_mla_lifts_to_mult_then_add() {
+        // MLA R0, R1, R2, R3  →  fb01 3002
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0x01, 0xfb, 0x02, 0x30], 0x1000)
+            .expect("MLA.W decodes");
+        assert_eq!(r.len, 4);
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntMult));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    /// MLS Rd, Rn, Rm, Ra — Thumb-2 multiply-subtract. Same shape as MLA
+    /// but the accumulate becomes IntSub.
+    #[test]
+    fn thumb2_mls_lifts_to_mult_then_sub() {
+        // MLS R0, R1, R2, R3  →  fb01 3012
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0x01, 0xfb, 0x12, 0x30], 0x1000)
+            .expect("MLS.W decodes");
+        assert_eq!(r.len, 4);
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntMult));
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntSub),
+            "MLS uses IntSub for Ra - product"
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    /// SDIV — Thumb-2 (T32) signed-divide. Lifts to IntSdiv. Different
+    /// encoding from A32 but Capstone collapses both to ARM_INS_SDIV.
+    #[test]
+    fn thumb2_sdiv_lifts_to_int_sdiv() {
+        // SDIV R0, R1, R2  →  fb91 f0f2
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0x91, 0xfb, 0xf2, 0xf0], 0x1000)
+            .expect("SDIV.T32 decodes");
+        assert_eq!(r.len, 4);
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntSdiv),
+            "SDIV must lift to IntSdiv (signed)"
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::IntDiv));
+    }
+
+    /// UDIV — Thumb-2 (T32) unsigned-divide. Lifts to IntDiv.
+    #[test]
+    fn thumb2_udiv_lifts_to_int_div() {
+        // UDIV R0, R1, R2  →  fbb1 f0f2
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0xb1, 0xfb, 0xf2, 0xf0], 0x1000)
+            .expect("UDIV.T32 decodes");
+        assert_eq!(r.len, 4);
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntDiv),
+            "UDIV must lift to IntDiv (unsigned)"
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::IntSdiv));
+    }
+
+    /// ORN.W Rd, Rn, Rm — Thumb-2-only OR-Not. New dispatch arm; lowers
+    /// to IntNegate followed by IntOr (dual of BIC).
+    #[test]
+    fn thumb2_orn_lifts_to_negate_then_or() {
+        // ORN R0, R1, R2  →  ea61 0002
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0x61, 0xea, 0x02, 0x00], 0x1000)
+            .expect("ORN.W decodes");
+        assert_eq!(r.len, 4);
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntNegate),
+            "ORN must complement its second operand"
+        );
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::IntOr),
+            "ORN must combine with IntOr (not IntAnd — that would be BIC)"
+        );
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::IntAnd),
+            "ORN must NOT emit IntAnd (BIC's signature)"
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    /// RSB.W Rd, Rn, #imm — Thumb-2 wide reverse-subtract. Shares the
+    /// A32 `emit_arm32_binop_rev` emitter, which swaps operand order so
+    /// the IntSub computes `imm - Rn` (not `Rn - imm`).
+    #[test]
+    fn thumb2_rsb_wide_lifts_to_reversed_int_sub() {
+        // RSB.W R0, R1, #5  →  f1c1 0005
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0xc1, 0xf1, 0x05, 0x00], 0x1000)
+            .expect("RSB.W decodes");
+        assert_eq!(r.len, 4);
+        let sub = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntSub)
+            .expect("RSB.W must emit IntSub");
+        // emit_arm32_binop_rev swaps operands: input[0] is the rhs (imm),
+        // input[1] is the lhs (Rn). Asserting input[0] is the constant
+        // pins down the reversal.
+        assert_eq!(
+            sub.inputs[0].space,
+            SpaceId::Const,
+            "RSB.W reverses operands so the immediate is the minuend"
+        );
+        assert_eq!(sub.inputs[0].offset, 5);
+    }
+
+    /// BLX (immediate, T32 4-byte form) — branch with link and exchange.
+    /// Capstone reports ARM_INS_BLX, same as A32; the existing call
+    /// emitter writes LR and emits a Call.
+    #[test]
+    fn thumb2_blx_immediate_emits_call_and_writes_lr() {
+        // BLX <next>  →  f7ff effe  (offset-0 self-anchored encoding)
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0xff, 0xf7, 0xfe, 0xef], 0x1000)
+            .expect("BLX-imm.T32 decodes");
+        assert_eq!(r.len, 4);
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Call),
+            "BLX must emit a Call op"
+        );
+        // BL/BLX writes the return address into LR via a Copy.
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Copy),
+            "BLX must write the return address into LR"
+        );
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    /// TBB [Rn, Rm] — Thumb-2 table-branch byte. Verifies the dispatch
+    /// reaches `emit_arm32_tbb` from the Thumb path, not just A32.
+    #[test]
+    fn thumb2_tbb_dispatches_via_thumb_path() {
+        // TBB [R0, R1]  →  e8d0 f001
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0xd0, 0xe8, 0x01, 0xf0], 0x1000)
+            .expect("TBB.T32 decodes");
+        assert_eq!(r.len, 4);
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "TBB must not be Unimplemented in the Thumb path"
+        );
+        // emit_arm32_tbb produces a Branchind (computed indirect branch).
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Branchind),
+            "TBB lowers to a Branchind"
+        );
+    }
+
+    /// TBH [Rn, Rm, LSL #1] — Thumb-2 table-branch halfword. Same emitter
+    /// as TBB; this test just nails down that both insn ids reach it.
+    #[test]
+    fn thumb2_tbh_dispatches_via_thumb_path() {
+        // TBH [R0, R1, LSL #1]  →  e8d0 f011
+        let l = ArmLifter::new_thumb();
+        let r = l
+            .lift_insn(&[0xd0, 0xe8, 0x11, 0xf0], 0x1000)
+            .expect("TBH.T32 decodes");
+        assert_eq!(r.len, 4);
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Branchind));
+    }
 }

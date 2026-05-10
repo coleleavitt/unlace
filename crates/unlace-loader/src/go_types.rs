@@ -279,6 +279,107 @@ pub fn parse_itab(
     })
 }
 
+/// Hard cap on method-pointer slots scanned per itab when the interface
+/// type's method count can't be resolved. Bounds the walk for unbound
+/// itabs (e.g. when `inter_type_va` points outside any mapped section).
+const ITAB_MAX_METHODS_FALLBACK: usize = 16;
+
+/// Resolve `va` to a section + file offset. Walks the image's sections in
+/// order, returning the first that contains `va` with enough backing bytes.
+fn image_va_to_section(
+    image: &crate::image::BinaryImage,
+    va: u64,
+) -> Option<(&crate::image::Section, usize)> {
+    for sec in &image.sections {
+        if va >= sec.vaddr && va < sec.vaddr.saturating_add(sec.size) {
+            let off = (va - sec.vaddr) as usize;
+            if off < sec.data.len() {
+                return Some((sec, off));
+            }
+        }
+    }
+    None
+}
+
+/// Parse a `runtime.itab` directly from a [`BinaryImage`] at virtual
+/// address `va`. Resolves the interface-type's method count by following
+/// `inter_type_va` and decoding it as a Go `_type` of kind=`Interface`.
+/// Falls back to [`ITAB_MAX_METHODS_FALLBACK`] when the interface type is
+/// unreachable (truncated section, foreign mapping, or simply out-of-range).
+///
+/// Returns `None` only when `va` itself doesn't resolve into any mapped
+/// section — every other failure mode (unresolvable interface type,
+/// truncated method array) downgrades to an empty methods list.
+pub fn parse_itab_at(image: &crate::image::BinaryImage, va: u64) -> Option<GoItab> {
+    let (sec, off) = image_va_to_section(image, va)?;
+    let head = sec.data.get(off..off + ITAB_HEADER_SIZE)?;
+    let inter_type_va = u64::from_le_bytes(head[0..8].try_into().ok()?);
+    let concrete_type_va = u64::from_le_bytes(head[8..16].try_into().ok()?);
+    let hash = u32::from_le_bytes(head[16..20].try_into().ok()?);
+
+    let method_count = resolve_inter_method_count(image, inter_type_va)
+        .unwrap_or(ITAB_MAX_METHODS_FALLBACK);
+
+    let mut methods = Vec::with_capacity(method_count);
+    let fun_off = off + ITAB_HEADER_SIZE;
+    for i in 0..method_count {
+        let slot = fun_off + i * 8;
+        let Some(slice) = sec.data.get(slot..slot + 8) else {
+            break;
+        };
+        methods.push(u64::from_le_bytes(slice.try_into().ok()?));
+    }
+
+    Some(GoItab {
+        va,
+        inter_type_va,
+        concrete_type_va,
+        hash,
+        methods,
+    })
+}
+
+/// Walk every VA in `image.go_module.itablinks` and parse each as a
+/// `runtime.itab`, inserting successful decodes into `image.go_itabs`.
+/// No-op when the binary isn't Go (no `go_module`).
+pub fn populate_itabs_from_module(image: &mut crate::image::BinaryImage) {
+    let Some(module) = image.go_module.as_ref() else {
+        return;
+    };
+    let itablinks = module.itablinks.clone();
+    for itab_va in itablinks {
+        if let Some(itab) = parse_itab_at(image, itab_va) {
+            image.go_itabs.insert(itab_va, itab);
+        }
+    }
+}
+
+/// Look up the method count of a Go interface `_type` at `va`. Returns
+/// `None` if the type isn't reachable, isn't kind=Interface, or its tail
+/// can't be decoded.
+fn resolve_inter_method_count(
+    image: &crate::image::BinaryImage,
+    va: u64,
+) -> Option<usize> {
+    if va == 0 {
+        return None;
+    }
+    let (sec, _off) = image_va_to_section(image, va)?;
+    let sec_base = sec.vaddr;
+    let sec_data = sec.data.clone();
+    let t = parse_type_at(&sec_data, va, |a: u64| {
+        if a >= sec_base && a < sec_base.saturating_add(sec_data.len() as u64) {
+            Some((a - sec_base) as usize)
+        } else {
+            None
+        }
+    })?;
+    match t.kind {
+        GoKind::Interface { method_count } => Some(method_count),
+        _ => None,
+    }
+}
+
 fn parse_struct_fields(
     image_data: &[u8],
     fields_va: u64,
@@ -484,5 +585,62 @@ mod tests {
         assert_eq!(itab.methods.len(), 2);
         assert_eq!(itab.methods[0], 0x4010_0000);
         assert_eq!(itab.methods[1], 0x4010_1000);
+    }
+
+    #[test]
+    fn parse_itab_at_resolves_va_to_section() {
+        use crate::image::{
+            ArchId, BinaryImage, Endian, Section, SectionFlags,
+        };
+        use std::collections::BTreeMap;
+
+        const RODATA_BASE: u64 = 0x4010_0000;
+        let mut rodata = vec![0u8; 0x200];
+        // itab header at offset 0x00 of .rodata:
+        rodata[0..8].copy_from_slice(&0xAAAA_AAAAu64.to_le_bytes());
+        rodata[8..16].copy_from_slice(&0xBBBB_BBBBu64.to_le_bytes());
+        rodata[16..20].copy_from_slice(&0xCAFE_BABEu32.to_le_bytes());
+        // No methods needed — interface type at 0xAAAA_AAAA is unresolvable,
+        // so the walk falls back to the 16-method cap reading zeros.
+
+        let img = BinaryImage {
+            arch: ArchId::X86_64,
+            endian: Endian::Little,
+            entry: 0,
+            sections: vec![Section {
+                name: ".rodata".to_string(),
+                vaddr: RODATA_BASE,
+                size: rodata.len() as u64,
+                data: rodata,
+                flags: SectionFlags::READ,
+            }],
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: Vec::new(),
+            string_table: BTreeMap::new(),
+            tls_callbacks: Vec::new(),
+            debug_records: Vec::new(),
+            load_config: None,
+            runtime_functions: Vec::new(),
+            resources: Vec::new(),
+            bound_imports: Vec::new(),
+            rich_header: None,
+            dylibs: Vec::new(),
+            rpaths: Vec::new(),
+            pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: None,
+            go_itabs: BTreeMap::new(),
+        };
+
+        let itab = parse_itab_at(&img, RODATA_BASE).expect("itab decodes");
+        assert_eq!(itab.va, RODATA_BASE);
+        assert_eq!(itab.inter_type_va, 0xAAAA_AAAA);
+        assert_eq!(itab.concrete_type_va, 0xBBBB_BBBB);
+        assert_eq!(itab.hash, 0xCAFE_BABE);
+
+        // VA outside any mapped section returns None.
+        assert!(parse_itab_at(&img, 0xDEAD_BEEF).is_none());
     }
 }

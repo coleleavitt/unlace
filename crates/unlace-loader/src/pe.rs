@@ -117,6 +117,7 @@ where
     image.seh = collect_seh_from_image(&image);
     image.msvc_rtti = collect_msvc_rtti_from_image(&image);
     image.go_module = crate::go_moduledata::parse_firstmoduledata(&image);
+    crate::go_types::populate_itabs_from_module(&mut image);
 
     Ok(image)
 }

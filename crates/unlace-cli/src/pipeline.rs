@@ -1047,6 +1047,9 @@ pub struct PipelineConfig {
     /// Optional explicit C-printer configuration. When `None` the printer
     /// derives its config from `UNLACE_*` environment variables.
     pub print_config: Option<unlace_output::PrintConfig>,
+    /// User-authored annotations (function comments, custom names, …) loaded
+    /// from a sidecar JSON file.  `None` when no sidecar was found.
+    pub annotations: Option<crate::annotations::AnnotationDb>,
 }
 
 impl Default for PipelineConfig {
@@ -1054,6 +1057,7 @@ impl Default for PipelineConfig {
         Self {
             timeout: Duration::from_secs(30),
             print_config: None,
+            annotations: None,
         }
     }
 }
@@ -1243,6 +1247,10 @@ pub fn decompile_function_with_symbols(
 
     let t = Instant::now();
     let symbols = build_symbol_table_with_functions(image, discovered);
+    let printer_annotations = config
+        .annotations
+        .as_ref()
+        .map(|db| build_printer_annotations(db, entry.addr));
     let result = emit_output(
         emit,
         &ssa,
@@ -1251,6 +1259,7 @@ pub fn decompile_function_with_symbols(
         &image.string_table,
         rtti,
         config.print_config,
+        printer_annotations.as_ref(),
     );
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
@@ -1319,6 +1328,26 @@ fn populate_eh_landing_pads(image: &BinaryImage, entry: &FunctionEntry, ssa: &mu
     }
 }
 
+/// Slice an [`AnnotationDb`] down to the per-function view the printer needs.
+///
+/// `function_comments`/`line_comments` are keyed by function entry address;
+/// `custom_names` is the global addr→name map and is passed through whole so
+/// the printer can also rename callees referenced from inside this function.
+fn build_printer_annotations(
+    db: &crate::annotations::AnnotationDb,
+    func_addr: u64,
+) -> unlace_output::PrinterAnnotations {
+    unlace_output::PrinterAnnotations {
+        function_comment: db.function_comments.get(&func_addr).cloned(),
+        line_comments: db
+            .line_comments
+            .get(&func_addr)
+            .cloned()
+            .unwrap_or_default(),
+        custom_names: db.custom_names.clone(),
+    }
+}
+
 pub fn emit_output(
     format: EmitFormat,
     ssa: &SsaFunction,
@@ -1327,6 +1356,7 @@ pub fn emit_output(
     string_table: &BTreeMap<u64, String>,
     rtti: Option<&unlace_loader::RttiInfo>,
     print_config: Option<unlace_output::PrintConfig>,
+    annotations: Option<&unlace_output::PrinterAnnotations>,
 ) -> Result<String> {
     match format {
         EmitFormat::Ir => Ok(unlace_output::dump_ir(ssa)),
@@ -1358,7 +1388,7 @@ pub fn emit_output(
             unlace_struct::recover_guarded_whiles(&mut hir);
             unlace_struct::cleanup_empty_ifs(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
-            Ok(unlace_output::print_c_with_rtti_config(
+            Ok(unlace_output::print_c_with_annotations(
                 &hir,
                 dwarf,
                 Some(&header),
@@ -1366,6 +1396,7 @@ pub fn emit_output(
                 Some(string_table),
                 rtti,
                 print_config,
+                annotations,
             ))
         }
     }

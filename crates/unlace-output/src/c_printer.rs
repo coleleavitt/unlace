@@ -285,6 +285,24 @@ pub fn print_c_with_rtti(
     print_c_with_rtti_config(func, dwarf, header, symbols, string_table, rtti, None)
 }
 
+/// User-authored annotations scoped to the function being printed.
+///
+/// Built by the CLI from a persistent `AnnotationDb`: the per-function fields
+/// (`function_comment`, `line_comments`) are keyed in by the caller so the
+/// printer never has to know the function's own address. `custom_names` is
+/// the global address→name map and is consulted for *any* address mentioned
+/// in this function (own name, callees, tail-call targets, …).
+#[derive(Default, Debug, Clone)]
+pub struct PrinterAnnotations {
+    /// Prose to render immediately above the function header block.
+    pub function_comment: Option<String>,
+    /// Per-instruction notes keyed by instruction VA (within this function).
+    pub line_comments: BTreeMap<u64, String>,
+    /// User overrides for synthesized `sub_<addr>` names. Merged on top of
+    /// the symbol table at print time.
+    pub custom_names: BTreeMap<u64, String>,
+}
+
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
 /// When `config` is `None` the printer falls back to [`PrintConfig::from_env`].
 pub fn print_c_with_rtti_config(
@@ -296,7 +314,43 @@ pub fn print_c_with_rtti_config(
     rtti: Option<&unlace_loader::RttiInfo>,
     config: Option<PrintConfig>,
 ) -> String {
-    let sym_owned = symbols.cloned().unwrap_or_default();
+    print_c_with_annotations(
+        func,
+        dwarf,
+        header,
+        symbols,
+        string_table,
+        rtti,
+        config,
+        None,
+    )
+}
+
+/// Full-featured entry point with optional [`PrinterAnnotations`].
+///
+/// User-authored annotations are layered on top of the synthesized output:
+/// `function_comment` becomes a `// …` line above the header, `line_comments`
+/// render on the line preceding the matching instruction, and `custom_names`
+/// override `sub_<addr>` synthesis for both the function's own name and any
+/// referenced callee.
+pub fn print_c_with_annotations(
+    func: &HirFunction,
+    dwarf: Option<&DwarfInfo>,
+    header: Option<&FunctionHeaderInfo>,
+    symbols: Option<&BTreeMap<u64, String>>,
+    string_table: Option<&BTreeMap<u64, String>>,
+    rtti: Option<&unlace_loader::RttiInfo>,
+    config: Option<PrintConfig>,
+    annotations: Option<&PrinterAnnotations>,
+) -> String {
+    let mut sym_owned = symbols.cloned().unwrap_or_default();
+    if let Some(ann) = annotations {
+        // Custom names take precedence over the synthesized symbol table —
+        // overwrite so a user-rename of a known PLT symbol still wins.
+        for (addr, name) in &ann.custom_names {
+            sym_owned.insert(*addr, name.clone());
+        }
+    }
     let str_owned = string_table.cloned().unwrap_or_default();
     let mut ctx = PrintCtx::new(
         dwarf,
@@ -306,6 +360,10 @@ pub fn print_c_with_rtti_config(
         func.composite_var_types.clone(),
         func.merged_names.clone(),
     );
+    if let Some(ann) = annotations {
+        ctx.line_comments = ann.line_comments.clone();
+        ctx.custom_names = ann.custom_names.clone();
+    }
     if let Some(cfg) = config {
         ctx.config = cfg;
     }
@@ -333,14 +391,24 @@ pub fn print_c_with_rtti_config(
         emit_class_layout_for_func(func, rtti, &mut out);
     }
 
+    if let Some(ann) = annotations.and_then(|a| a.function_comment.as_deref()) {
+        for line in ann.lines() {
+            let _ = writeln!(out, "// {}", line);
+        }
+    }
+
     if let Some(hdr) = header {
         emit_function_header(hdr, &mut out);
     }
 
     let demangled = crate::demangle::demangle(&func.name);
-    let emit_name = match (&dwarf_func, &demangled) {
-        (Some(df), _) => df.name.clone(),
-        (None, Some(dr)) => {
+    let custom_self_name = header
+        .and_then(|h| ctx.custom_names.get(&h.address))
+        .cloned();
+    let emit_name = match (&custom_self_name, &dwarf_func, &demangled) {
+        (Some(name), _, _) => name.clone(),
+        (None, Some(df), _) => df.name.clone(),
+        (None, None, Some(dr)) => {
             // Strip libcxx / libstdc++ inline namespaces so the header
             // comment matches the rendered `this` parameter type, which
             // routes through `recognize_stl_type` → `clean_inline_ns`.
@@ -363,7 +431,7 @@ pub fn print_c_with_rtti_config(
             }
             crate::demangle::sanitize_for_c(&dr.short_name)
         }
-        (None, None) => func.name.clone(),
+        (None, None, None) => func.name.clone(),
     };
 
     let return_type_str = dwarf_func
@@ -1089,6 +1157,13 @@ struct PrintCtx {
     /// keyed by the base [`Varnode`]).  Empty when the coalescer was not run,
     /// in which case naming falls back to the printer's `next_var` allocator.
     merged_names: BTreeMap<SsaVarnode, String>,
+    /// User-authored per-instruction comments, keyed by instruction VA.
+    /// Populated from [`PrinterAnnotations::line_comments`] at construction.
+    line_comments: BTreeMap<u64, String>,
+    /// User overrides for synthesized `sub_<addr>` names.  Distinct from
+    /// [`Self::symbols`] so the printer can tell a *user override* apart from
+    /// a name that originated in the binary's own symbol table.
+    custom_names: BTreeMap<u64, String>,
 }
 
 impl PrintCtx {
@@ -1148,6 +1223,8 @@ impl PrintCtx {
             source_map: dwarf.map(|d| d.source_map.clone()).unwrap_or_default(),
             parent_returns_void: false,
             merged_names,
+            line_comments: BTreeMap::new(),
+            custom_names: BTreeMap::new(),
         }
     }
 
@@ -3644,6 +3721,13 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
     if let Some(loc) = ctx.source_map.get(&insn.addr) {
         indent(depth, ctx.config.tab_width, out);
         let _ = writeln!(out, "// source: {}:{}", loc.file, loc.line);
+    }
+
+    if let Some(comment) = ctx.line_comments.get(&insn.addr).cloned() {
+        for line in comment.lines() {
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "// {}", line);
+        }
     }
 
     indent(depth, ctx.config.tab_width, out);
@@ -11690,5 +11774,109 @@ mod tests {
         assert!(should_break_before(&call, None, 21, &ctx));
         // 30 columns available, width 22 → fits, no break.
         assert!(!should_break_before(&call, None, 30, &ctx));
+    }
+
+    // -----------------------------------------------------------------------
+    // PrinterAnnotations integration
+    // -----------------------------------------------------------------------
+
+    fn annot_func() -> HirFunction {
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                r8,
+                smallvec![c1],
+                0x1004,
+            )),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+        let mut f = make_func("sub_1000", body);
+        f.addr = 0x1000;
+        f
+    }
+
+    #[test]
+    fn function_comment_renders() {
+        let func = annot_func();
+        let header = super::FunctionHeaderInfo {
+            name: "sub_1000".into(),
+            address: 0x1000,
+            ..Default::default()
+        };
+        let mut ann = super::PrinterAnnotations::default();
+        ann.function_comment = Some("ENTRY: validates auth token".into());
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            Some(&header),
+            None,
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+        assert!(
+            output.contains("// ENTRY: validates auth token"),
+            "missing function comment in: {output}"
+        );
+    }
+
+    #[test]
+    fn custom_name_overrides_default() {
+        let func = annot_func();
+        let header = super::FunctionHeaderInfo {
+            name: "sub_1000".into(),
+            address: 0x1000,
+            ..Default::default()
+        };
+        let mut ann = super::PrinterAnnotations::default();
+        ann.custom_names.insert(0x1000, "validate_token".into());
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            Some(&header),
+            None,
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+        assert!(
+            output.contains("validate_token("),
+            "custom name not used in signature: {output}"
+        );
+        assert!(
+            !output.contains("sub_1000("),
+            "fallback synthesized name leaked: {output}"
+        );
+    }
+
+    #[test]
+    fn line_comment_at_addr() {
+        let func = annot_func();
+        let header = super::FunctionHeaderInfo {
+            name: "sub_1000".into(),
+            address: 0x1000,
+            ..Default::default()
+        };
+        let mut ann = super::PrinterAnnotations::default();
+        ann.line_comments
+            .insert(0x1004, "patched for CVE-2024-x".into());
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            Some(&header),
+            None,
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+        assert!(
+            output.contains("// patched for CVE-2024-x"),
+            "missing line comment: {output}"
+        );
     }
 }

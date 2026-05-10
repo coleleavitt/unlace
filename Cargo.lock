@@ -1202,6 +1202,8 @@ dependencies = [
  "clap",
  "criterion",
  "rayon",
+ "serde",
+ "serde_json",
  "smallvec",
  "tempfile",
  "tracing",

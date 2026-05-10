@@ -61,6 +61,16 @@ pub enum Cmd {
         /// IDA's `module_data + 592` indent-step setting.
         #[arg(long)]
         tab_width: Option<usize>,
+
+        /// Path to a JSON annotation database to load before printing.
+        /// Defaults to `<binary>.unlace.json` when present.
+        #[arg(long)]
+        annotations_load: Option<PathBuf>,
+
+        /// If set, write the (possibly empty) annotation database back to
+        /// this path after the run. Useful for seeding a fresh sidecar.
+        #[arg(long)]
+        annotations_save: Option<PathBuf>,
     },
 
     /// Batch-decompile all functions in a binary in parallel.

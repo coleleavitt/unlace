@@ -1,3 +1,4 @@
+mod annotations;
 mod args;
 mod batch;
 mod pipeline;
@@ -15,6 +16,7 @@ use unlace_lift::get_lifter;
 use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf};
 use unlace_plugin::PluginManager;
 
+use crate::annotations::AnnotationDb;
 use crate::args::{Args, Cmd};
 use crate::batch::BatchConfig;
 use crate::pipeline::PipelineConfig;
@@ -35,6 +37,8 @@ fn main() {
             plugin_dir,
             max_width,
             tab_width,
+            annotations_load,
+            annotations_save,
         } => {
             init_tracing(verbose);
             let print_config = if max_width.is_some() || tab_width.is_some() {
@@ -49,11 +53,17 @@ fn main() {
             } else {
                 None
             };
+            let annotation_db =
+                resolve_annotations(&binary, annotations_load.as_deref()).unwrap_or_else(|e| {
+                    tracing::warn!(err = %e, "failed to load annotations; continuing without");
+                    None
+                });
             let config = PipelineConfig {
                 timeout: Duration::from_secs(timeout),
                 print_config,
+                annotations: annotation_db.clone(),
             };
-            load_plugins(plugin_dir.as_deref()).and_then(|mgr| {
+            let result = load_plugins(plugin_dir.as_deref()).and_then(|mgr| {
                 run_decompile(
                     &binary,
                     function.as_deref(),
@@ -63,7 +73,14 @@ fn main() {
                     &config,
                     &mgr,
                 )
-            })
+            });
+            if let Some(path) = annotations_save.as_deref() {
+                let to_save = annotation_db.unwrap_or_default();
+                if let Err(e) = to_save.save(path) {
+                    tracing::warn!(err = %e, "failed to write annotations sidecar");
+                }
+            }
+            result
         }
         Cmd::Batch {
             binary,
@@ -104,6 +121,25 @@ fn init_tracing(verbose: u8) {
         )
         .with_writer(std::io::stderr)
         .init();
+}
+
+/// Resolve which annotation DB (if any) should be loaded for `binary`.
+///
+/// * Explicit `--annotations-load` always wins (and errors if missing).
+/// * Otherwise the default sidecar `<binary>.unlace.json` is used *only* if
+///   it already exists — absence is not an error.
+fn resolve_annotations(
+    binary: &std::path::Path,
+    explicit: Option<&std::path::Path>,
+) -> Result<Option<AnnotationDb>> {
+    if let Some(path) = explicit {
+        return AnnotationDb::load(path).map(Some);
+    }
+    let sidecar = annotations::default_path(binary);
+    if sidecar.exists() {
+        return AnnotationDb::load(&sidecar).map(Some);
+    }
+    Ok(None)
 }
 
 fn load_plugins(dir: Option<&std::path::Path>) -> Result<PluginManager> {

@@ -53,6 +53,27 @@ pub mod tag {
     pub const PSHUFB: u64 = 0x141;
     pub const PUNPCKLBW: u64 = 0x142;
 
+    // ── SSSE3 packed integer ops (t174) ─────────────────────────
+    /// SSSE3 packed horizontal add, 16-bit lanes.
+    pub const PHADDW: u64 = 0x180;
+    /// SSSE3 packed horizontal add, 32-bit lanes.
+    pub const PHADDD: u64 = 0x181;
+    /// SSSE3 packed horizontal sub, 16-bit lanes.
+    pub const PHSUBW: u64 = 0x182;
+    /// SSSE3 packed horizontal sub, 32-bit lanes.
+    pub const PHSUBD: u64 = 0x183;
+    /// SSSE3 packed align right (3-operand: dst, src, imm8).
+    pub const PALIGNR: u64 = 0x184;
+    /// SSSE3 packed multiply-add of unsigned bytes by signed bytes,
+    /// summing adjacent pairs to 16-bit lanes.
+    pub const PMADDUBSW: u64 = 0x185;
+    /// SSSE3 packed sign of bytes (negate / zero / keep per src2 sign).
+    pub const PSIGNB: u64 = 0x186;
+    /// SSSE3 packed sign of 16-bit lanes.
+    pub const PSIGNW: u64 = 0x187;
+    /// SSSE3 packed sign of 32-bit lanes.
+    pub const PSIGND: u64 = 0x188;
+
     pub const PMOVMSKB: u64 = 0x150;
 
     pub const PACKSSWB: u64 = 0x160;

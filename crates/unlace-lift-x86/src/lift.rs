@@ -437,6 +437,17 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Pshufb => sse::lift_sse_binop(ctx, insn, sse::tag::PSHUFB),
         M::Punpcklbw => sse::lift_sse_binop(ctx, insn, sse::tag::PUNPCKLBW),
 
+        // SSSE3 packed integer ops (t174).
+        M::Phaddw => sse::lift_sse_binop(ctx, insn, sse::tag::PHADDW),
+        M::Phaddd => sse::lift_sse_binop(ctx, insn, sse::tag::PHADDD),
+        M::Phsubw => sse::lift_sse_binop(ctx, insn, sse::tag::PHSUBW),
+        M::Phsubd => sse::lift_sse_binop(ctx, insn, sse::tag::PHSUBD),
+        M::Palignr => sse::lift_sse_blend(ctx, insn, sse::tag::PALIGNR),
+        M::Pmaddubsw => sse::lift_sse_binop(ctx, insn, sse::tag::PMADDUBSW),
+        M::Psignb => sse::lift_sse_binop(ctx, insn, sse::tag::PSIGNB),
+        M::Psignw => sse::lift_sse_binop(ctx, insn, sse::tag::PSIGNW),
+        M::Psignd => sse::lift_sse_binop(ctx, insn, sse::tag::PSIGND),
+
         M::Pmovmskb => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVMSKB),
 
         M::Packsswb => sse::lift_sse_binop(ctx, insn, sse::tag::PACKSSWB),

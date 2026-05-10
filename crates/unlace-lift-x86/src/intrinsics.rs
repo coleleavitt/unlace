@@ -170,6 +170,16 @@ impl Default for IntrinsicRegistry {
             ("PUNPCKHDQ", info("_mm_unpackhi_epi32", 2, 16, SseShuffle)),
             ("PUNPCKHQDQ", info("_mm_unpackhi_epi64", 2, 16, SseShuffle)),
             ("SHUFPS", info("_mm_shuffle_ps", 3, 16, SseShuffle)),
+            // ── SSSE3 packed integer ops (t174) ─────────────────────
+            ("PHADDW", info("_mm_hadd_epi16", 2, 16, SseArith)),
+            ("PHADDD", info("_mm_hadd_epi32", 2, 16, SseArith)),
+            ("PHSUBW", info("_mm_hsub_epi16", 2, 16, SseArith)),
+            ("PHSUBD", info("_mm_hsub_epi32", 2, 16, SseArith)),
+            ("PALIGNR", info("_mm_alignr_epi8", 3, 16, SseShuffle)),
+            ("PMADDUBSW", info("_mm_maddubs_epi16", 2, 16, SseArith)),
+            ("PSIGNB", info("_mm_sign_epi8", 2, 16, SseArith)),
+            ("PSIGNW", info("_mm_sign_epi16", 2, 16, SseArith)),
+            ("PSIGND", info("_mm_sign_epi32", 2, 16, SseArith)),
             // ── SSE2 conversions ────────────────────────────────────
             ("CVTSI2SD", info("_mm_cvtsi32_sd", 2, 16, SseConvert)),
             ("CVTSI2SS", info("_mm_cvtsi32_ss", 2, 16, SseConvert)),

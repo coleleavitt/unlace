@@ -321,6 +321,10 @@ pub struct BinaryImage {
     pub dylibs: Vec<DylibDep>,
     /// Mach-O `@rpath` search paths from `LC_RPATH`. Empty for ELF/PE.
     pub rpaths: Vec<String>,
+    /// PDB-derived CodeView types, when an associated `.pdb` was loaded.
+    /// Consumed by the type-infer pipeline to seed function signatures and
+    /// composite layouts. `None` for ELF/Mach-O or PEs without PDB.
+    pub pdb_types: Option<crate::pdb_types::PdbTypes>,
 }
 
 /// A PE RUNTIME_FUNCTION entry from the `.pdata` exception directory.

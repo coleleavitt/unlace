@@ -139,6 +139,7 @@ where
         rich_header: None,
         dylibs,
         rpaths,
+        pdb_types: None,
     })
 }
 

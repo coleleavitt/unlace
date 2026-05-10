@@ -476,8 +476,57 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_CBNZ => emit_arm32_cbz(ctx, &ops, true),
         ArmInsn::ARM_INS_TBB | ArmInsn::ARM_INS_TBH => emit_arm32_tbb(ctx, &ops),
 
+        ArmInsn::ARM_INS_MRS => emit_arm32_mrs(ctx, &ops),
+        ArmInsn::ARM_INS_MSR => emit_arm32_msr(ctx, &ops),
+
         _ => ctx.emit_unimplemented(),
     }
+}
+
+const CALLOTHER_ARM_MRS: u64 = 0x363;
+const CALLOTHER_ARM_MSR: u64 = 0x364;
+
+fn arm32_sysreg_const(op: &ArmOperandType) -> Option<Varnode> {
+    match op {
+        ArmOperandType::SysReg(reg) => Some(Varnode::constant(reg.0 as u64, 4)),
+        ArmOperandType::Pimm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
+        ArmOperandType::Cimm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
+        ArmOperandType::Imm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
+        _ => None,
+    }
+}
+
+fn emit_arm32_mrs(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let sysreg = ops
+        .get(1)
+        .and_then(arm32_sysreg_const)
+        .unwrap_or_else(|| Varnode::constant(0, 4));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(CALLOTHER_ARM_MRS, 8), sysreg],
+        ctx.addr,
+    ));
+}
+
+fn emit_arm32_msr(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let sysreg = ops
+        .first()
+        .and_then(arm32_sysreg_const)
+        .unwrap_or_else(|| Varnode::constant(0, 4));
+    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(CALLOTHER_ARM_MSR, 8), sysreg, src],
+        ctx.addr,
+    ));
 }
 
 fn arm32_first_dst(ops: &[ArmOperandType]) -> Option<Varnode> {
@@ -1165,8 +1214,61 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_CSET => control_flow::lift_cset(ctx, &ops, detail, 0x331),
         Arm64Insn::ARM64_INS_CSETM => control_flow::lift_cset(ctx, &ops, detail, 0x332),
 
+        Arm64Insn::ARM64_INS_MRS => emit_aarch64_mrs(ctx, &ops),
+        Arm64Insn::ARM64_INS_MSR => emit_aarch64_msr(ctx, &ops),
+
         _ => ctx.emit_unimplemented(),
     }
+}
+
+fn aarch64_sysreg_const(op: &Arm64OperandType) -> Option<Varnode> {
+    match op {
+        Arm64OperandType::RegMrs(s) | Arm64OperandType::RegMsr(s) => {
+            Some(Varnode::constant(*s as u32 as u64, 4))
+        }
+        Arm64OperandType::Pstate(p) => Some(Varnode::constant(*p as u32 as u64, 4)),
+        Arm64OperandType::Imm(i) => Some(Varnode::constant(*i as u64, 4)),
+        Arm64OperandType::Cimm(i) => Some(Varnode::constant(*i as u64, 4)),
+        _ => None,
+    }
+}
+
+fn emit_aarch64_mrs(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {
+    let dst = match ops.first() {
+        Some((Arm64OperandType::Reg(reg), _)) => reg_varnode(*reg),
+        _ => None,
+    };
+    let Some(dst) = dst else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let sysreg = ops
+        .get(1)
+        .and_then(|(o, _)| aarch64_sysreg_const(o))
+        .unwrap_or_else(|| Varnode::constant(0, 4));
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(CALLOTHER_ARM_MRS, 8), sysreg],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_msr(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {
+    let sysreg = ops
+        .first()
+        .and_then(|(o, _)| aarch64_sysreg_const(o))
+        .unwrap_or_else(|| Varnode::constant(0, 4));
+    let src = ops.get(1).and_then(|(o, _)| operand_to_varnode(ctx, o));
+    let Some(src) = src else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(CALLOTHER_ARM_MSR, 8), sysreg, src],
+        ctx.addr,
+    ));
 }
 
 /// ARM 32-bit LDM/STM addressing mode (Increment/Decrement, After/Before).

@@ -2011,13 +2011,24 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 collect_varnodes(std::slice::from_ref(inner.as_ref()), ctx);
             }
 
-            HirNode::GuardedIf { then_body, .. } => {
+            HirNode::GuardedIf {
+                then_body,
+                else_body,
+                ..
+            } => {
                 ctx.collect_depth += 1;
                 let scope = ctx.next_scope_id;
                 ctx.next_scope_id += 1;
                 ctx.current_scope_path.push(scope);
                 collect_varnodes(then_body, ctx);
                 ctx.current_scope_path.pop();
+                if !else_body.is_empty() {
+                    let scope = ctx.next_scope_id;
+                    ctx.next_scope_id += 1;
+                    ctx.current_scope_path.push(scope);
+                    collect_varnodes(else_body, ctx);
+                    ctx.current_scope_path.pop();
+                }
                 ctx.collect_depth -= 1;
             }
         }

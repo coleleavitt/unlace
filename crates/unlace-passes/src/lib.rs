@@ -44,6 +44,7 @@ pub mod sccp;
 pub mod sizeof_recognition;
 pub mod stack_pointer_tracking;
 pub mod stack_vars;
+pub mod string_hash_switch;
 pub mod struct_field_detect;
 pub mod tail_call;
 pub mod tail_duplication;
@@ -105,6 +106,10 @@ pub use sccp::SccpPass;
 pub use sizeof_recognition::{SizeofRecognitionPass, recognize_with_resolver};
 pub use stack_pointer_tracking::StackPointerTrackingPass;
 pub use stack_vars::{StackOffsetSnapshotPass, StackVarRecoveryPass};
+pub use string_hash_switch::{
+    StringHashSwitchPass, crc32 as string_hash_crc32, djb2 as string_hash_djb2,
+    fnv1a as string_hash_fnv1a,
+};
 pub use struct_field_detect::StructFieldDetectPass;
 pub use tail_call::TailCallDetectPass;
 pub use tail_duplication::TailDuplicationPass;

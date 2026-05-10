@@ -58,6 +58,11 @@ impl<'a> SectionView<'a> {
         addr >= self.vaddr && addr < self.vaddr.saturating_add(self.data.len() as u64)
     }
 
+    pub fn read_u8(&self, addr: u64) -> Option<u8> {
+        let off = addr.checked_sub(self.vaddr)? as usize;
+        self.data.get(off).copied()
+    }
+
     pub fn read_u32(&self, addr: u64, endian: TableEndian) -> Option<u32> {
         let off = addr.checked_sub(self.vaddr)? as usize;
         let bytes = self.data.get(off..off + 4)?;
@@ -101,6 +106,41 @@ pub enum JumpTableKind {
     /// The table has a non-zero starting case value (e.g. case starts at 10).
     /// `lo` is the inclusive lower bound; cases are `lo, lo+1, ..., lo+N-1`.
     DenseWithOffset { lo: i64 },
+    /// Sparse table: many table slots forward to a shared default; only the
+    /// distinct non-default slots become real cases. `lo` is the case-value
+    /// offset (slot index `i` corresponds to `lo + i`); during refinement,
+    /// any entry pointing to `default_addr` is dropped from the case list
+    /// and merged into the switch's `default` arm.
+    SparseAbsolute { lo: i64, default_addr: u64 },
+    /// PIE / RIP-relative table emitted by clang and gcc on `-fPIC` x86_64.
+    /// Each 32-bit entry holds a *signed* offset from the table base; the
+    /// resolved target is `table.base.wrapping_add(sign_extend(entry))`.
+    /// When the binary's loader reports a `R_X86_64_PC32` / `R_X86_64_64`
+    /// relocation pointing at the slot, we use the pre-resolved address
+    /// instead of recomputing.
+    RipRelative,
+    /// Byte-indexed secondary lookup: the table holds 1-byte indices, each
+    /// of which selects an entry in a *secondary* table holding the actual
+    /// targets (absolute addresses). Common on tiny ARM/MIPS dispatch and
+    /// some clang `-Os` x86 outputs. `secondary_base` and
+    /// `secondary_entry_size` describe the secondary table.
+    ByteIndexedSecondary {
+        secondary_base: u64,
+        secondary_entry_size: u8,
+    },
+    /// ARM/Thumb table: like [`Self::DenseAbsolute`] but each resolved
+    /// target may have its low bit set to indicate Thumb encoding. The
+    /// reader strips bit 0 before returning the address.
+    ArmThumbAbsolute,
+}
+
+/// Architecture / instruction-set mode of a recovered switch target,
+/// returned alongside the address so downstream lifters know which decoder
+/// to apply at the destination.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum TargetMode {
+    Default,
+    Thumb,
 }
 
 /// Validate that `base` falls inside a section with the required permissions.
@@ -120,23 +160,195 @@ pub fn validate_table_base<'s, 'b>(
 
 /// Read the concrete target addresses out of a validated jump table.
 pub fn read_jump_table(table: &JumpTable, section: &SectionView<'_>) -> Option<Vec<u64>> {
+    read_jump_table_with_relocs(table, section, &[])
+}
+
+/// Like [`read_jump_table`] but consults a relocations list first. If a
+/// relocation overlaps the slot's address (e.g. `R_X86_64_PC32` /
+/// `R_X86_64_64` written into a PIE jump table), the pre-resolved target
+/// is taken from the relocation rather than computed from the raw bytes.
+/// Falls back to byte-wise decoding when no relocation matches.
+pub fn read_jump_table_with_relocs(
+    table: &JumpTable,
+    section: &SectionView<'_>,
+    relocs: &[(u64, u64)],
+) -> Option<Vec<u64>> {
+    read_jump_table_full(table, section, relocs, &[])
+        .map(|entries| entries.into_iter().map(|(addr, _)| addr).collect())
+}
+
+/// Full read of a jump table, returning `(target_addr, mode)` for each
+/// entry. `secondary_section` is consulted when `table.kind` is
+/// [`JumpTableKind::ByteIndexedSecondary`] to dereference the secondary
+/// table; pass `&[]` (or any slice not containing the secondary base) to
+/// fall back to `section`.
+pub fn read_jump_table_full(
+    table: &JumpTable,
+    section: &SectionView<'_>,
+    relocs: &[(u64, u64)],
+    secondary_sections: &[SectionView<'_>],
+) -> Option<Vec<(u64, TargetMode)>> {
     let mut out = Vec::with_capacity(table.num_entries as usize);
     for i in 0..table.num_entries as u64 {
         let addr = table
             .base
             .checked_add(i.checked_mul(table.entry_size as u64)?)?;
-        let target = match table.entry_size {
+
+        if let Some((_, resolved)) = relocs.iter().find(|(slot, _)| *slot == addr) {
+            out.push((*resolved, TargetMode::Default));
+            continue;
+        }
+
+        let raw = match table.entry_size {
+            1 => section.read_u8(addr)? as u64,
             4 => section.read_u32(addr, table.endian)? as u64,
             8 => section.read_u64(addr, table.endian)?,
             _ => return None,
         };
-        let resolved = match table.kind {
-            JumpTableKind::DenseRelative => table.base.wrapping_add(target),
-            _ => target,
+        let (resolved, mode) = match table.kind {
+            JumpTableKind::DenseRelative => {
+                (table.base.wrapping_add(raw), TargetMode::Default)
+            }
+            JumpTableKind::RipRelative if table.entry_size == 4 => {
+                let signed = raw as i32 as i64 as u64;
+                (table.base.wrapping_add(signed), TargetMode::Default)
+            }
+            JumpTableKind::RipRelative => {
+                (table.base.wrapping_add(raw), TargetMode::Default)
+            }
+            JumpTableKind::ArmThumbAbsolute => {
+                let mode = if raw & 1 != 0 {
+                    TargetMode::Thumb
+                } else {
+                    TargetMode::Default
+                };
+                (raw & !1u64, mode)
+            }
+            JumpTableKind::ByteIndexedSecondary {
+                secondary_base,
+                secondary_entry_size,
+            } => {
+                let secondary_addr = secondary_base.checked_add(
+                    raw.checked_mul(secondary_entry_size as u64)?,
+                )?;
+                let secondary = secondary_sections
+                    .iter()
+                    .find(|s| s.contains_addr(secondary_addr))
+                    .or_else(|| {
+                        if section.contains_addr(secondary_addr) {
+                            Some(section)
+                        } else {
+                            None
+                        }
+                    })?;
+                let target = match secondary_entry_size {
+                    4 => secondary.read_u32(secondary_addr, table.endian)? as u64,
+                    8 => secondary.read_u64(secondary_addr, table.endian)?,
+                    _ => return None,
+                };
+                (target, TargetMode::Default)
+            }
+            JumpTableKind::DenseAbsolute
+            | JumpTableKind::DenseWithOffset { .. }
+            | JumpTableKind::SparseAbsolute { .. } => (raw, TargetMode::Default),
         };
-        out.push(resolved);
+        out.push((resolved, mode));
     }
     Some(out)
+}
+
+/// Infer the number of jump-table entries from cross-references when no
+/// explicit bounds-check was found in the dispatch code. Returns `None`
+/// when neither bound is informative (no refs and no following symbol).
+///
+/// Two independent caps are computed and the smaller is returned:
+/// 1. **next-symbol cap**: the table can't physically extend past the next
+///    defined symbol after `table_base`. With the next symbol at `next`,
+///    `(next - table_base) / entry_size` is the upper bound.
+/// 2. **xref cap**: the highest slot index that any xref points at, plus
+///    one. Code only stores the address of slots that exist, so the last
+///    referenced slot is at least the table's last index.
+pub fn infer_num_entries_from_xrefs(
+    table_base: u64,
+    next_symbol_addr: Option<u64>,
+    xrefs_into: &[u64],
+    entry_size: u32,
+) -> Option<u32> {
+    if entry_size == 0 {
+        return None;
+    }
+    let next_cap = next_symbol_addr.and_then(|n| {
+        n.checked_sub(table_base)
+            .map(|delta| (delta / entry_size as u64) as u32)
+    });
+
+    let xref_cap = {
+        let mut max_slot: Option<u32> = None;
+        for &x in xrefs_into {
+            let Some(delta) = x.checked_sub(table_base) else {
+                continue;
+            };
+            if delta % entry_size as u64 != 0 {
+                continue;
+            }
+            let idx = (delta / entry_size as u64) as u32;
+            max_slot = Some(max_slot.map_or(idx, |m| m.max(idx)));
+        }
+        max_slot.map(|m| m.saturating_add(1))
+    };
+
+    match (next_cap, xref_cap) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }
+}
+
+/// Resolve nested jump tables: when an outer table's resolved target
+/// matches the *switch instruction address* of an inner table in `tables`,
+/// the outer slot is replaced by the inner table's targets. Caps recursion
+/// at `max_depth` (default 3 — IDA's threshold) and bails on cycles.
+///
+/// Returns a fresh `BTreeMap` with flattened targets. Tables that don't
+/// participate in nesting pass through unchanged. The new outer
+/// `num_entries` reflects the post-flattening list length.
+pub fn flatten_nested_tables(
+    tables: &std::collections::BTreeMap<u64, (JumpTable, Vec<u64>)>,
+    max_depth: u32,
+) -> std::collections::BTreeMap<u64, (JumpTable, Vec<u64>)> {
+    let mut out = std::collections::BTreeMap::new();
+    for (&switch_addr, (table, targets)) in tables {
+        let mut visited = std::collections::BTreeSet::new();
+        visited.insert(switch_addr);
+        let flat = flatten_targets(targets, tables, &mut visited, max_depth);
+        let mut new_table = table.clone();
+        new_table.num_entries = flat.len() as u32;
+        out.insert(switch_addr, (new_table, flat));
+    }
+    out
+}
+
+fn flatten_targets(
+    targets: &[u64],
+    tables: &std::collections::BTreeMap<u64, (JumpTable, Vec<u64>)>,
+    visited: &mut std::collections::BTreeSet<u64>,
+    depth_remaining: u32,
+) -> Vec<u64> {
+    let mut out = Vec::new();
+    for &t in targets {
+        if depth_remaining > 0 && !visited.contains(&t) {
+            if let Some((_, inner)) = tables.get(&t) {
+                visited.insert(t);
+                let expanded = flatten_targets(inner, tables, visited, depth_remaining - 1);
+                visited.remove(&t);
+                out.extend(expanded);
+                continue;
+            }
+        }
+        out.push(t);
+    }
+    out
 }
 
 /// Returns the first target address that appears more than once in the table.
@@ -309,19 +521,38 @@ fn first_addr_in_body(nodes: &[HirNode]) -> Option<u64> {
 fn refine_cases(
     cases: Vec<(SwitchCase, Vec<HirNode>, bool)>,
     table: &JumpTable,
-    _targets: &[u64],
+    targets: &[u64],
 ) -> Vec<(SwitchCase, Vec<HirNode>, bool)> {
-    cases
-        .into_iter()
-        .enumerate()
-        .map(|(i, (_old, body, ft))| {
-            let value = match table.kind {
-                JumpTableKind::DenseAbsolute | JumpTableKind::DenseRelative => i as u64,
-                JumpTableKind::DenseWithOffset { lo } => (lo + i as i64) as u64,
-            };
-            (SwitchCase::Value(value), body, ft)
-        })
-        .collect()
+    match table.kind {
+        JumpTableKind::SparseAbsolute { lo, default_addr } => cases
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, (_old, body, ft))| {
+                let tgt = targets.get(i).copied();
+                if tgt == Some(default_addr) {
+                    return None;
+                }
+                let value = (lo + i as i64) as u64;
+                Some((SwitchCase::Value(value), body, ft))
+            })
+            .collect(),
+        _ => cases
+            .into_iter()
+            .enumerate()
+            .map(|(i, (_old, body, ft))| {
+                let value = match table.kind {
+                    JumpTableKind::DenseAbsolute
+                    | JumpTableKind::DenseRelative
+                    | JumpTableKind::RipRelative
+                    | JumpTableKind::ArmThumbAbsolute
+                    | JumpTableKind::ByteIndexedSecondary { .. } => i as u64,
+                    JumpTableKind::DenseWithOffset { lo } => (lo + i as i64) as u64,
+                    JumpTableKind::SparseAbsolute { .. } => unreachable!(),
+                };
+                (SwitchCase::Value(value), body, ft)
+            })
+            .collect(),
+    }
 }
 
 fn walk_nodes(nodes: Vec<HirNode>) -> Vec<HirNode> {
@@ -670,5 +901,354 @@ mod tests {
             JumpTableKind::DenseWithOffset { lo } => assert_eq!(lo, 5),
             _ => panic!("expected DenseWithOffset"),
         }
+    }
+
+    /// t72: A 5-entry sparse table with case values 1, 5, 10, 50, 100 is
+    /// represented as a 100-slot table where most entries forward to the
+    /// shared default. After refinement, only the 5 non-default cases
+    /// remain, with case-values matching the slot indices `lo + i`.
+    #[test]
+    fn refine_cases_sparse_filters_default_entries() {
+        let default_addr = 0xDEADu64;
+        let target_a = 0xA000u64;
+        let target_b = 0xB000u64;
+        let target_c = 0xC000u64;
+        let target_d = 0xD000u64;
+        let target_e = 0xE000u64;
+
+        let mut targets = vec![default_addr; 100];
+        targets[1] = target_a;
+        targets[5] = target_b;
+        targets[10] = target_c;
+        targets[50] = target_d;
+        targets[99] = target_e;
+
+        let table = JumpTable {
+            base: 0x10000,
+            entry_size: 8,
+            num_entries: 100,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::SparseAbsolute {
+                lo: 0,
+                default_addr,
+            },
+        };
+
+        let cases: Vec<(SwitchCase, Vec<HirNode>, bool)> = (0..100)
+            .map(|i| {
+                let stmt = IrInsn::without_output(
+                    IrOp::Copy,
+                    smallvec![Varnode::constant(i as u64, 8)],
+                    0x1000 + i as u64,
+                );
+                (SwitchCase::Value(i as u64), vec![HirNode::Statement(stmt)], false)
+            })
+            .collect();
+
+        let refined = refine_cases(cases, &table, &targets);
+        let values: Vec<u64> = refined
+            .iter()
+            .filter_map(|(c, _, _)| match c {
+                SwitchCase::Value(v) => Some(*v),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            values,
+            vec![1, 5, 10, 50, 99],
+            "sparse refinement should leave only non-default slots"
+        );
+    }
+
+    /// t85: RIP-relative table — each 32-bit entry encodes a *signed* offset
+    /// from the table base. Resolves negative deltas correctly via sign
+    /// extension.
+    #[test]
+    fn read_jump_table_rip_relative_signed_offset() {
+        let base: u64 = 0x100000;
+        let target_lo: u64 = 0x0F8000;
+        let target_hi: u64 = 0x108000;
+        let off_lo = (target_lo as i64 - base as i64) as i32 as u32;
+        let off_hi = (target_hi as i64 - base as i64) as i32 as u32;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&off_lo.to_le_bytes());
+        bytes.extend_from_slice(&off_hi.to_le_bytes());
+
+        let section = SectionView {
+            name: ".rodata",
+            vaddr: base,
+            data: &bytes,
+            perms: SectionPerms::RO,
+        };
+        let table = JumpTable {
+            base,
+            entry_size: 4,
+            num_entries: 2,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::RipRelative,
+        };
+        let read = read_jump_table(&table, &section).expect("read should succeed");
+        assert_eq!(
+            read,
+            vec![target_lo, target_hi],
+            "RipRelative should sign-extend the 32-bit offset"
+        );
+    }
+
+    /// t85: when a relocation list reports the slot's resolved address, the
+    /// reader must prefer it over decoding the raw bytes (which may be
+    /// zero in unrelocated PIE binaries).
+    #[test]
+    fn read_jump_table_uses_relocations_first() {
+        let base: u64 = 0x200000;
+        let bytes = vec![0u8; 16];
+        let section = SectionView {
+            name: ".rodata",
+            vaddr: base,
+            data: &bytes,
+            perms: SectionPerms::RO,
+        };
+        let table = JumpTable {
+            base,
+            entry_size: 8,
+            num_entries: 2,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::DenseAbsolute,
+        };
+        let relocs = vec![(base, 0xCAFEu64), (base + 8, 0xBEEFu64)];
+        let read = read_jump_table_with_relocs(&table, &section, &relocs)
+            .expect("read should succeed");
+        assert_eq!(
+            read,
+            vec![0xCAFE, 0xBEEF],
+            "relocation entries override raw byte decoding"
+        );
+    }
+
+    /// t86: byte-sized table where each 1-byte slot indexes into a
+    /// secondary table holding 4-byte absolute targets.
+    #[test]
+    fn read_jump_table_byte_indexed_secondary() {
+        let primary_base: u64 = 0x10000;
+        let secondary_base: u64 = 0x20000;
+        let primary_bytes: Vec<u8> = vec![2, 0, 1, 2];
+        let mut secondary_bytes = Vec::new();
+        for t in [0xAAAAu32, 0xBBBB, 0xCCCC] {
+            secondary_bytes.extend_from_slice(&t.to_le_bytes());
+        }
+
+        let primary = SectionView {
+            name: ".rodata",
+            vaddr: primary_base,
+            data: &primary_bytes,
+            perms: SectionPerms::RO,
+        };
+        let secondary = SectionView {
+            name: ".rodata",
+            vaddr: secondary_base,
+            data: &secondary_bytes,
+            perms: SectionPerms::RO,
+        };
+        let table = JumpTable {
+            base: primary_base,
+            entry_size: 1,
+            num_entries: 4,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::ByteIndexedSecondary {
+                secondary_base,
+                secondary_entry_size: 4,
+            },
+        };
+        let read = read_jump_table_full(&table, &primary, &[], &[secondary])
+            .expect("byte-indexed read should succeed");
+        let addrs: Vec<u64> = read.into_iter().map(|(a, _)| a).collect();
+        assert_eq!(
+            addrs,
+            vec![0xCCCC, 0xAAAA, 0xBBBB, 0xCCCC],
+            "byte index → secondary table → absolute target"
+        );
+    }
+
+    /// t86: ARM/Thumb table — entries with bit 0 set encode Thumb mode;
+    /// the reader strips the bit and reports `TargetMode::Thumb`.
+    #[test]
+    fn read_jump_table_arm_thumb_strips_low_bit() {
+        let base: u64 = 0x80000;
+        let targets: Vec<u32> = vec![0x80100, 0x80201, 0x80300, 0x80401];
+        let mut bytes = Vec::new();
+        for t in &targets {
+            bytes.extend_from_slice(&t.to_le_bytes());
+        }
+        let section = SectionView {
+            name: ".text",
+            vaddr: base,
+            data: &bytes,
+            perms: SectionPerms::RX,
+        };
+        let table = JumpTable {
+            base,
+            entry_size: 4,
+            num_entries: 4,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::ArmThumbAbsolute,
+        };
+        let read = read_jump_table_full(&table, &section, &[], &[])
+            .expect("arm/thumb read should succeed");
+        assert_eq!(
+            read,
+            vec![
+                (0x80100, TargetMode::Default),
+                (0x80200, TargetMode::Thumb),
+                (0x80300, TargetMode::Default),
+                (0x80400, TargetMode::Thumb),
+            ],
+            "low bit set → Thumb mode, target masks bit 0"
+        );
+    }
+
+    /// t84: a 2-level dispatch — outer table at 0x1000 points at three
+    /// targets, the middle one being 0x2000 which is itself the switch
+    /// address of an inner table holding [0xA, 0xB]. After flattening, the
+    /// outer table targets become [0x9, 0xA, 0xB, 0xC] (inner expanded
+    /// in-place).
+    #[test]
+    fn flatten_nested_tables_inlines_inner_targets() {
+        let outer = JumpTable {
+            base: 0x10000,
+            entry_size: 8,
+            num_entries: 3,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::DenseAbsolute,
+        };
+        let inner = JumpTable {
+            base: 0x20000,
+            entry_size: 8,
+            num_entries: 2,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::DenseAbsolute,
+        };
+        let outer_targets = vec![0x9, 0x2000, 0xC];
+        let inner_targets = vec![0xA, 0xB];
+
+        let mut tables = std::collections::BTreeMap::new();
+        tables.insert(0x1000u64, (outer, outer_targets.clone()));
+        tables.insert(0x2000u64, (inner, inner_targets.clone()));
+
+        let flat = flatten_nested_tables(&tables, 3);
+        let (out_table, out_targets) = &flat[&0x1000];
+        assert_eq!(
+            *out_targets,
+            vec![0x9, 0xA, 0xB, 0xC],
+            "inner targets should replace the inner switch_addr in the outer list"
+        );
+        assert_eq!(
+            out_table.num_entries, 4,
+            "num_entries reflects post-flatten length"
+        );
+    }
+
+    /// t84: cycle protection — if outer table A points at inner B which
+    /// points back at A, flattening must terminate without infinite
+    /// recursion (the cycle slot is left in place).
+    #[test]
+    fn flatten_nested_tables_breaks_cycles() {
+        let a = JumpTable {
+            base: 0x10000,
+            entry_size: 8,
+            num_entries: 1,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::DenseAbsolute,
+        };
+        let b = JumpTable {
+            base: 0x20000,
+            entry_size: 8,
+            num_entries: 1,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::DenseAbsolute,
+        };
+        let mut tables = std::collections::BTreeMap::new();
+        tables.insert(0x1000u64, (a, vec![0x2000]));
+        tables.insert(0x2000u64, (b, vec![0x1000]));
+
+        let _ = flatten_nested_tables(&tables, 3);
+    }
+
+    /// t87: with no explicit bounds check, the table size is bounded by
+    /// (a) the offset to the next symbol and (b) the highest slot any
+    /// xref points at. The smaller of the two wins.
+    #[test]
+    fn infer_num_entries_caps_to_min_of_xref_and_next_symbol() {
+        let base = 0x10000;
+        let entry_size = 8;
+
+        let next_only = infer_num_entries_from_xrefs(base, Some(base + 64), &[], entry_size);
+        assert_eq!(next_only, Some(8), "next symbol at +64 → 8 slots of size 8");
+
+        let xref_only = infer_num_entries_from_xrefs(
+            base,
+            None,
+            &[base, base + 8, base + 24],
+            entry_size,
+        );
+        assert_eq!(
+            xref_only,
+            Some(4),
+            "highest referenced slot is index 3 → 4 entries"
+        );
+
+        let both = infer_num_entries_from_xrefs(
+            base,
+            Some(base + 64),
+            &[base, base + 8, base + 24],
+            entry_size,
+        );
+        assert_eq!(both, Some(4), "min(8 from next, 4 from xref) = 4");
+
+        let neither = infer_num_entries_from_xrefs(base, None, &[], entry_size);
+        assert_eq!(neither, None, "no signal → None");
+    }
+
+    /// t72: SparseAbsolute with non-zero `lo` shifts the case values by the
+    /// configured base, mirroring DenseWithOffset semantics.
+    #[test]
+    fn refine_cases_sparse_with_lo_offset() {
+        let default_addr = 0x4444u64;
+
+        let mut targets = vec![default_addr; 5];
+        targets[0] = 0xA000;
+        targets[2] = 0xB000;
+        targets[4] = 0xC000;
+
+        let table = JumpTable {
+            base: 0x20000,
+            entry_size: 8,
+            num_entries: 5,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::SparseAbsolute {
+                lo: 10,
+                default_addr,
+            },
+        };
+
+        let cases: Vec<(SwitchCase, Vec<HirNode>, bool)> = (0..5)
+            .map(|i| {
+                let stmt = IrInsn::without_output(
+                    IrOp::Copy,
+                    smallvec![Varnode::constant(i as u64, 8)],
+                    0x1000 + i as u64,
+                );
+                (SwitchCase::Value(i as u64), vec![HirNode::Statement(stmt)], false)
+            })
+            .collect();
+
+        let refined = refine_cases(cases, &table, &targets);
+        let values: Vec<u64> = refined
+            .iter()
+            .filter_map(|(c, _, _)| match c {
+                SwitchCase::Value(v) => Some(*v),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(values, vec![10, 12, 14], "lo=10 shifts case values by 10");
     }
 }

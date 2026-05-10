@@ -3,6 +3,108 @@
 //! Translates a [`HirFunction`] into a C source string that passes
 //! `gcc -fsyntax-only`. Output is deterministic: identical input produces
 //! byte-identical output.
+//!
+//! # IDA `cot_xxx` expression-opcode coverage audit
+//!
+//! Hex-Rays' `sub_2662B0` (the citree expression dispatch, 889 lines) drives
+//! every C expression form via the `cot_*` opcode table. Unlace's IR is
+//! Ghidra-style PCode (see [`unlace_ir::IrOp`]) rather than Hex-Rays
+//! microcode, so we don't have a 1:1 opcode mapping — but the printer must
+//! still cover the same set of C surface constructs. The table below tracks
+//! each cot opcode, the C construct it produces, and where (if anywhere)
+//! unlace emits the equivalent.
+//!
+//! | cot | C form | Unlace emit site | Status |
+//! |---|---|---|---|
+//! | `cot_comma` (1)        | `a, b`              | n/a (lifter inlines) | implicit |
+//! | `cot_asg` (2)          | `a = b`             | `emit_statement` (assignment) | ✅ |
+//! | `cot_asgXxx` (3..15)   | `a += b` etc.       | `try_emit_compound_assign`   | ✅ |
+//! | `cot_tern` (16)        | `c ? a : b`         | branch-collapse pass         | ✅ |
+//! | `cot_lor`/`cot_land`   | `||` / `&&`         | `BoolOr` / `BoolAnd` binop   | ✅ |
+//! | `cot_bor`/`cot_xor`/`cot_band` | `\|`/`^`/`&` | `IntOr`/`IntXor`/`IntAnd`   | ✅ |
+//! | `cot_eq`/`cot_ne`      | `==` / `!=`         | `IntEqual` / `IntNotequal`   | ✅ |
+//! | `cot_sge`..`cot_ult`   | `< <= > >=`         | `IntLess(equal)` family      | ✅ |
+//! | `cot_sshl`/`cot_ushl`  | `<<`                | `IntLeft`                    | ✅ |
+//! | `cot_sshr`/`cot_ushr`  | `>>`                | `IntSright`/`IntRight`       | ✅ |
+//! | `cot_add`/`cot_sub`    | `+` / `-`           | `IntAdd`/`IntSub`/`Ptradd`   | ✅ |
+//! | `cot_mul`/`cot_sdiv`/`cot_udiv` | `*` `/`    | `IntMult`/`IntS?div`         | ✅ |
+//! | `cot_smod`/`cot_umod`  | `%`                 | `IntS?rem`                   | ✅ |
+//! | `cot_fadd`..`cot_fdiv` | float `+ - * /`     | `FloatAdd`..`FloatDiv`       | ✅ |
+//! | `cot_fneg`             | unary float `-`     | `FloatNeg`                   | ✅ |
+//! | `cot_neg`              | unary `-`           | `Int2comp`                   | ✅ |
+//! | `cot_cast` (48)        | `(T)x`              | `IrOp::Cast` + `IntZext/Sext`| ✅ |
+//! | `cot_lnot`/`cot_bnot`  | `!x` / `~x`         | `BoolNegate`/`IntNegate`     | ✅ |
+//! | `cot_ptr` (52)         | `*p`                | `Load` (with field/array recovery) | ✅ |
+//! | `cot_ref` (51)         | `&x`                | stack-var address-taken path | ✅ |
+//! | `cot_postinc` (53)     | `x++`               | `try_emit_postfix_inc_dec`   | ✅ |
+//! | `cot_postdec` (54)     | `x--`               | `try_emit_postfix_inc_dec`   | ✅ |
+//! | `cot_preinc` (55)      | `++x`               | folded into postinc form     | ⚠️ deferred — see note |
+//! | `cot_predec` (56)      | `--x`               | folded into postdec form     | ⚠️ deferred — see note |
+//! | `cot_idx` (57)         | `arr[i]`            | `try_array_subscript`, `try_struct_field_access` | ✅ |
+//! | `cot_memref` (58)      | `s.m`               | `try_struct_field_access`    | ✅ |
+//! | `cot_memptr` (59)      | `p->m`              | `try_resolve_field_from_addr`| ✅ |
+//! | `cot_call` (60)        | `f(...)`            | `Call`/`Callind`             | ✅ |
+//! | `cot_var/obj/num/...`  | name / literal      | `emit_operand_with_prec`     | ✅ |
+//! | `cot_str` (63)         | `"..."`             | `emit_operand_with_prec` + `escape_c_string` | ✅ |
+//! | `cot_fnum` (64)        | float literal       | `format_constant_ctx` (TODO floats) | ⚠️ partial |
+//! | `cot_helper` (65)      | `__builtin_*` call  | `callother_intrinsic_name` table; `Popcount`/`Lzcount` direct | ✅ |
+//! | `cot_sizeof` (66)      | `sizeof(x)`         | helper [`emit_sizeof_expr`] / [`emit_sizeof_type`] available; no IR producer yet | ⚠️ deferred |
+//! | `cot_alignof` (67)     | `_Alignof(T)`       | helper [`emit_alignof_type`] available; no IR producer yet | ⚠️ deferred |
+//! | `cot_label` (68)       | `&&label` (GCC ext) | not emitted (no computed-goto in IR)         | ❌ out-of-scope |
+//! | `cot_type` (69)        | bare type-as-expr   | only meaningful inside `sizeof`/`offsetof` arg | ❌ out-of-scope |
+//!
+//! ## Deferred items
+//!
+//! * **`cot_preinc` / `cot_predec`**: Hex-Rays distinguishes pre- and post-
+//!   increment by examining the surrounding statement context (whether the
+//!   pre-bump value is consumed). Unlace's IR-level recognizer
+//!   ([`try_emit_postfix_inc_dec`]) treats `x = x + 1` uniformly as `x++`.
+//!   Producing the prefix form would require a use-before-definition check
+//!   on the same statement; the resulting C is semantically identical for
+//!   statement-position increments, so we defer.
+//!
+//! * **`cot_sizeof`, `cot_alignof`, `cot_type`**: These require a HIR-level
+//!   `Sizeof(Type)` / `Alignof(Type)` / `Sizeof(Expr)` node. Today the IR has
+//!   no such opcode (PCode doesn't have one) and the lifters never emit them.
+//!   Adding them is an orthogonal task — when it lands, callers should use
+//!   the formatter helpers below rather than open-coding the syntax.
+//!
+//! * **`cot_label`**: GCC's `&&label` / computed-goto extension. The IR has
+//!   `Branchind` for indirect branches but no notion of label-as-rvalue;
+//!   we'd never produce one from a binary, so this is permanently
+//!   out-of-scope.
+//!
+//! ## String escape parity (cot_str)
+//!
+//! Hex-Rays' `str2user` (called from `sub_265AA0`) emits the standard C
+//! single-character escapes for control bytes: `\\ \" \' \n \r \t \v \f \a
+//! \b \0`, falling back to `\xHH` for other non-printable bytes. Unlace's
+//! [`escape_c_string`] mirrors that table.
+//!
+//! # IDA token-ID compatibility note
+//!
+//! Hex-Rays' `sub_1AF8F0` emits a small set of fixed syntax tokens by single
+//! byte ID. The IDA-tagged output stream interleaves these IDs with the
+//! plain text so a downstream consumer (the `tag_remove` pass) can
+//! recolour or rewrite them without re-parsing. Unlace does not produce
+//! IDA-tagged output: every token below is emitted as the corresponding
+//! plain ASCII string literal. Listed here as provenance for future
+//! maintainers comparing unlace output against an IDA dump.
+//!
+//! | ID    | IDA token | Unlace emit               |
+//! |-------|-----------|---------------------------|
+//! | 0x41  | `(`       | literal `(`               |
+//! | 0x42  | `asm`     | literal `__asm`           |
+//! | 0x43  | `else`    | literal `else`            |
+//! | 0x44  | `do`      | literal `do`              |
+//! | 0x45  | `;`       | literal `;`               |
+//! | 0x46  | `{`       | literal `{`               |
+//! | 0x47  | `}`       | literal `}`               |
+//! | 0x48  | `)`       | literal `)`               |
+//! | 0x49  | `:`       | literal `:`               |
+//! | 0x4A  | `/*pre*/` | `// ` line-comment prefix |
+//! | 0x4B  | `/*post*/`| trailing `// ` comment    |
+//! | 0x4C  | `try`     | literal `__try`           |
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
@@ -175,6 +277,20 @@ pub fn print_c_with_rtti(
     string_table: Option<&BTreeMap<u64, String>>,
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> String {
+    print_c_with_rtti_config(func, dwarf, header, symbols, string_table, rtti, None)
+}
+
+/// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
+/// When `config` is `None` the printer falls back to [`PrintConfig::from_env`].
+pub fn print_c_with_rtti_config(
+    func: &HirFunction,
+    dwarf: Option<&DwarfInfo>,
+    header: Option<&FunctionHeaderInfo>,
+    symbols: Option<&BTreeMap<u64, String>>,
+    string_table: Option<&BTreeMap<u64, String>>,
+    rtti: Option<&unlace_loader::RttiInfo>,
+    config: Option<PrintConfig>,
+) -> String {
     let sym_owned = symbols.cloned().unwrap_or_default();
     let str_owned = string_table.cloned().unwrap_or_default();
     let mut ctx = PrintCtx::new(
@@ -185,6 +301,9 @@ pub fn print_c_with_rtti(
         func.composite_var_types.clone(),
         func.merged_names.clone(),
     );
+    if let Some(cfg) = config {
+        ctx.config = cfg;
+    }
     ctx.parent_returns_void = matches!(func.return_type, PrimitiveType::Unknown);
     ctx.frame_size = header.map(|h| h.stack_frame);
 
@@ -773,7 +892,107 @@ struct HoistPlan {
     fold_into_assignment: bool,
 }
 
+/// Output formatting configuration.
+///
+/// Mirrors the indent / margin / format-flags fields stored in IDA's
+/// `module_data` structure (offsets `592`, `600`, `719` resolved by
+/// `sub_268FA0` and configured through the Options dialog `sub_33D380`).
+/// Each field maps to a documented IDA default:
+///
+/// * `indent_width` — IDA `module_data + 592`. Number of space columns
+///   added per nesting level. IDA defaults to **2**; the Unlace printer
+///   has historically rendered 4-space tabs, so the tab- and indent-
+///   widths are kept distinct.
+/// * `tab_width` — Width of a single indent step actually emitted by
+///   [`indent`]. Defaults to **4** to preserve byte-identical output for
+///   the existing golden suite (and matches the literal `"    "` that
+///   used to be hard-coded inside `indent`).
+/// * `max_line_width` — IDA `module_data + 600`. Soft right margin used
+///   by future line-wrapping logic. Defaults to **100** (Unlace's
+///   historical wrap target).
+/// * `wrap_floor` — Minimum line width before wrapping kicks in. Matches
+///   the IDA Options-dialog default of **80**.
+///
+/// All four fields can be overridden at construction time via environment
+/// variables read inside [`PrintCtx::new`]:
+///
+/// | Variable                  | Field            |
+/// |---------------------------|------------------|
+/// | `UNLACE_MAX_LINE_WIDTH`   | `max_line_width` |
+/// | `UNLACE_TAB_WIDTH`        | `tab_width`      |
+/// | `UNLACE_INDENT`           | `indent_width`   |
+/// | `UNLACE_WRAP_FLOOR`       | `wrap_floor`     |
+/// | `UNLACE_FORMAT_FLAGS`     | `format_flags`   |
+///
+/// Values that fail to parse as `usize` (or that are absent) leave the
+/// corresponding field at its IDA-aligned default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PrintConfig {
+    /// IDA `module_data + 600` — soft right margin (default 100).
+    pub max_line_width: usize,
+    /// Indent-step width in columns (default 4).
+    pub tab_width: usize,
+    /// IDA `module_data + 592` — logical indent width (default 2).
+    pub indent_width: usize,
+    /// Lower-bound margin honoured when wrapping (default 80, IDA's
+    /// Options-dialog default).
+    pub wrap_floor: usize,
+    /// IDA `module_data + 719` — format-flags bitfield. Mirrors IDA's
+    /// per-output toggles (e.g. emit assembly addresses, hex-only
+    /// constants, drop trailing semicolons in tagged streams). Unlace
+    /// does not currently consume any bits; the field is plumbed for
+    /// forward compatibility so future flag-driven emits land without a
+    /// signature break. Default: `0`.
+    pub format_flags: u32,
+}
+
+impl Default for PrintConfig {
+    fn default() -> Self {
+        Self {
+            max_line_width: 100,
+            tab_width: 4,
+            indent_width: 2,
+            wrap_floor: 80,
+            format_flags: 0,
+        }
+    }
+}
+
+impl PrintConfig {
+    /// Build a [`PrintConfig`] starting from [`PrintConfig::default`] and
+    /// applying any present `UNLACE_*` environment overrides. Unparseable
+    /// values are silently ignored so a malformed env var never panics
+    /// the printer mid-decompilation.
+    pub fn from_env() -> Self {
+        let mut cfg = Self::default();
+        if let Some(v) = read_usize_env("UNLACE_MAX_LINE_WIDTH") {
+            cfg.max_line_width = v;
+        }
+        if let Some(v) = read_usize_env("UNLACE_TAB_WIDTH") {
+            cfg.tab_width = v;
+        }
+        if let Some(v) = read_usize_env("UNLACE_INDENT") {
+            cfg.indent_width = v;
+        }
+        if let Some(v) = read_usize_env("UNLACE_WRAP_FLOOR") {
+            cfg.wrap_floor = v;
+        }
+        if let Some(v) = read_usize_env("UNLACE_FORMAT_FLAGS") {
+            cfg.format_flags = v as u32;
+        }
+        cfg
+    }
+}
+
+fn read_usize_env(name: &str) -> Option<usize> {
+    std::env::var(name).ok().and_then(|v| v.parse::<usize>().ok())
+}
+
 struct PrintCtx {
+    /// Output formatting configuration (indent width, line margins, …).
+    /// Populated from environment variables at [`PrintCtx::new`] time
+    /// via [`PrintConfig::from_env`].
+    config: PrintConfig,
     next_var: u32,
     var_names: BTreeMap<SsaVarnode, String>,
     var_types: BTreeMap<SsaVarnode, PrimitiveType>,
@@ -886,6 +1105,7 @@ impl PrintCtx {
             }
         }
         Self {
+            config: PrintConfig::from_env(),
             next_var: start_next,
             var_names: BTreeMap::new(),
             var_types: BTreeMap::new(),
@@ -1609,7 +1829,8 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             | HirNode::Label(_)
             | HirNode::TailCall { .. }
             | HirNode::Continue
-            | HirNode::Break => {}
+            | HirNode::Break
+            | HirNode::Asm { .. } => {}
 
             HirNode::TryCatch {
                 try_body,
@@ -2647,7 +2868,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
     while i < nodes.len() {
         if let Some(merged) = try_merge_assign_return(&nodes[i..], ctx) {
             ctx.emit_stmt += 1;
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "return {};", merged);
             i += 2;
             continue;
@@ -2677,7 +2898,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 }
             }
             if !parts.is_empty() {
-                indent(depth, out);
+                indent(depth, ctx.config.tab_width, out);
                 let _ = writeln!(out, "{}", parts.join(" "));
             }
             if group_has_terminal {
@@ -2836,33 +3057,33 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             else_body,
         } => {
             let cond_expr = resolve_sv_expr(cond, ctx);
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "if ({}) {{", cond_expr);
             emit_nodes(then_body, depth + 1, ctx, out);
             if let Some(eb) = else_body {
-                indent(depth, out);
+                indent(depth, ctx.config.tab_width, out);
                 let _ = writeln!(out, "}} else {{");
                 emit_nodes(eb, depth + 1, ctx, out);
             }
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
         }
 
         HirNode::While { cond, body } => {
             let cond_expr = resolve_sv_expr(cond, ctx);
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "while ({}) {{", cond_expr);
             emit_nodes(body, depth + 1, ctx, out);
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
         }
 
         HirNode::DoWhile { body, cond } => {
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "do {{");
             emit_nodes(body, depth + 1, ctx, out);
             let cond_expr = resolve_sv_expr(cond, ctx);
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}} while ({});", cond_expr);
         }
 
@@ -2889,10 +3110,10 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 
             let cond_expr = resolve_sv_expr(cond, ctx);
 
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "for ({}; {}; {}) {{", init_str, cond_expr, update_str);
             out.push_str(&body_buf);
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
         }
 
@@ -2903,10 +3124,10 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             ..
         } => {
             let cond_expr = resolve_sv_expr(cond, ctx);
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "switch ({}) {{", cond_expr);
             for (case, body, fall_through) in cases {
-                indent(depth, out);
+                indent(depth, ctx.config.tab_width, out);
                 match case {
                     SwitchCase::Value(v) => {
                         let _ = writeln!(out, "case {}:", v);
@@ -2919,44 +3140,44 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                     if !body.is_empty() {
                         emit_nodes(body, depth + 1, ctx, out);
                     }
-                    indent(depth + 1, out);
+                    indent(depth + 1, ctx.config.tab_width, out);
                     let _ = writeln!(out, "/* fall through */");
                 } else {
                     emit_nodes(body, depth + 1, ctx, out);
-                    indent(depth + 1, out);
+                    indent(depth + 1, ctx.config.tab_width, out);
                     let _ = writeln!(out, "break;");
                 }
             }
             if let Some(def) = default {
-                indent(depth, out);
+                indent(depth, ctx.config.tab_width, out);
                 let _ = writeln!(out, "default:");
                 emit_nodes(def, depth + 1, ctx, out);
-                indent(depth + 1, out);
+                indent(depth + 1, ctx.config.tab_width, out);
                 let _ = writeln!(out, "break;");
             }
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
         }
 
         HirNode::Return(Some(sv)) => {
             let name = resolve_sv_expr(sv, ctx);
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "return {};", name);
         }
 
         HirNode::Return(None) => {
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "return;");
         }
 
         HirNode::Goto(label) => {
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "goto {};", label);
         }
 
         HirNode::Label(label) => {
             if depth > 0 {
-                indent(depth - 1, out);
+                indent(depth - 1, ctx.config.tab_width, out);
             }
             let _ = writeln!(out, "{}:;", label);
         }
@@ -2982,7 +3203,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let else_expr = emit_expr(else_insn, else_idx, ctx);
             let cond_name = resolve_sv_expr(cond, ctx);
 
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(
                 out,
                 "{} = {} ? {} : {};",
@@ -2991,17 +3212,17 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
         }
 
         HirNode::TailCall { target } => {
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "{}", format_tail_call_text(*target, ctx));
         }
 
         HirNode::Continue => {
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "continue;");
         }
 
         HirNode::Break => {
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "break;");
         }
 
@@ -3009,24 +3230,36 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             try_body,
             catch_body,
         } => {
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "__try {{");
             emit_nodes(try_body, depth + 1, ctx, out);
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}} __except {{");
             emit_nodes(catch_body, depth + 1, ctx, out);
-            indent(depth, out);
+            indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
         }
 
         HirNode::Commented { pre, post, inner } => {
+            let tab = ctx.config.tab_width;
             for line in pre {
-                emit_comment_line(line, depth, out);
+                emit_comment_line(line, depth, tab, out);
             }
             emit_node(inner, depth, ctx, out);
             for line in post {
-                emit_comment_line(line, depth, out);
+                emit_comment_line(line, depth, tab, out);
             }
+        }
+
+        HirNode::Asm { instructions } => {
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "__asm {{");
+            for line in instructions {
+                indent(depth + 1, ctx.config.tab_width, out);
+                let _ = writeln!(out, "{}", line);
+            }
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "}}");
         }
     }
 }
@@ -3034,9 +3267,9 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 /// Emit a single comment line at the given indent. Multi-line comment
 /// strings (containing `\n`) are split into one `// `-prefixed line
 /// per source line, preserving paragraph structure.
-fn emit_comment_line(text: &str, depth: usize, out: &mut String) {
+fn emit_comment_line(text: &str, depth: usize, tab_width: usize, out: &mut String) {
     for line in text.split('\n') {
-        indent(depth, out);
+        indent(depth, tab_width, out);
         if line.is_empty() {
             let _ = writeln!(out, "//");
         } else {
@@ -3233,7 +3466,7 @@ fn try_emit_compound_assign(
         other_idx,
         stmt_idx,
         const_ctx,
-        0,
+        ParentCtx::top(),
         ctx,
     );
     Some(format!("{} {} {}", lhs, op_str, other))
@@ -3401,11 +3634,11 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
     }
 
     if let Some(loc) = ctx.source_map.get(&insn.addr) {
-        indent(depth, out);
+        indent(depth, ctx.config.tab_width, out);
         let _ = writeln!(out, "// source: {}:{}", loc.file, loc.line);
     }
 
-    indent(depth, out);
+    indent(depth, ctx.config.tab_width, out);
 
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
         let lhs = ctx.name_of(&sv);
@@ -3413,7 +3646,7 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
         if matches!(insn.op, IrOp::Call | IrOp::Callind) {
             if let Some(ann) = cxa_call_annotation(insn, ctx) {
                 let _ = writeln!(out, "/* {} */", ann);
-                indent(depth, out);
+                indent(depth, ctx.config.tab_width, out);
             }
         }
 
@@ -3473,12 +3706,12 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             IrOp::Call | IrOp::Callind => {
                 if let Some(kind) = ctx.panic_sites.get(&insn.addr) {
                     let _ = writeln!(out, "/* PANIC: {} */", kind);
-                    indent(depth, out);
+                    indent(depth, ctx.config.tab_width, out);
                 }
                 let cxa_annotation = cxa_call_annotation(insn, ctx);
                 if let Some(ref ann) = cxa_annotation {
                     let _ = writeln!(out, "/* {} */", ann);
-                    indent(depth, out);
+                    indent(depth, ctx.config.tab_width, out);
                 }
                 if insn.op == IrOp::Callind {
                     let expr = emit_callind_cast(insn, idx, ctx);
@@ -3515,70 +3748,278 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
 }
 
 // ---------------------------------------------------------------------------
-// Operator precedence (C standard levels)
+// Operator precedence — IDA's scheme (lower = tighter)
 // ---------------------------------------------------------------------------
+//
+// This mirrors Hex-Rays' off_4E0320 lookup table, ported via sub_25F3C0
+// (`references/hexrays/ida_dump/hexx64/all/sub_25F3C0.c`).  In IDA's scheme,
+// a *lower* precedence value binds *tighter* — opposite of the textbook
+// "higher binds tighter" convention.  We adopt IDA's numbering so the
+// algorithm in `needs_parens` ports directly without sign flips.
+//
+// Levels:
+//   0  — leaf (variable, constant, call, postfix, etc. — never parenthesized
+//          by needs_parens; they handle their own grouping)
+//   2  — unary prefix (!, ~, -)
+//   3  — multiplicative (*, /, %)
+//   4  — additive (+, -)
+//   5  — shift (<<, >>)
+//   6  — relational (<, <=, >, >=)
+//   7  — equality (==, !=)
+//   8  — bitwise AND (&)
+//   9  — bitwise XOR (^)
+//   10 — bitwise OR (|)
+//   11 — logical AND (&&)
+//   12 — logical OR (||)
+//   13 — ternary ?:
+//   14 — assignment
 
-/// Return the C precedence level for an IrOp when used as a binary operator.
-///
-/// Higher values bind tighter.  When a child expression has lower precedence
-/// than its parent, parentheses are required.
-fn c_precedence(op: IrOp) -> u8 {
+/// IDA-scheme precedence (lower = tighter).  Mirrors the off_4E0320 table.
+fn ida_precedence(op: IrOp) -> u8 {
     match op {
-        // Multiply / divide / mod — 54
+        // Unary prefix
+        IrOp::IntNegate | IrOp::BoolNegate | IrOp::Int2comp | IrOp::FloatNeg => 2,
+
+        // Multiplicative
         IrOp::IntMult
         | IrOp::FloatMult
         | IrOp::IntDiv
         | IrOp::IntSdiv
         | IrOp::FloatDiv
         | IrOp::IntRem
-        | IrOp::IntSrem => 54,
+        | IrOp::IntSrem => 3,
 
-        // Add / subtract — 50
+        // Additive
         IrOp::IntAdd
         | IrOp::FloatAdd
         | IrOp::IntSub
         | IrOp::FloatSub
         | IrOp::Ptradd
-        | IrOp::Ptrsub => 50,
+        | IrOp::Ptrsub => 4,
 
-        // Shifts — 46
-        IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright => 46,
+        // Shifts
+        IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright => 5,
 
-        // Relational — 42
+        // Relational
         IrOp::IntLess
         | IrOp::IntLessequal
         | IrOp::IntSless
         | IrOp::IntSlessequal
         | IrOp::FloatLess
-        | IrOp::FloatLessequal => 42,
+        | IrOp::FloatLessequal => 6,
 
-        // Equality — 38
-        IrOp::IntEqual | IrOp::IntNotequal | IrOp::FloatEqual | IrOp::FloatNotequal => 38,
+        // Equality
+        IrOp::IntEqual | IrOp::IntNotequal | IrOp::FloatEqual | IrOp::FloatNotequal => 7,
 
-        // Bitwise AND — 34
-        IrOp::IntAnd => 34,
+        // Bitwise AND
+        IrOp::IntAnd => 8,
 
-        // Bitwise XOR — 30
-        IrOp::IntXor | IrOp::BoolXor => 30,
+        // Bitwise XOR
+        IrOp::IntXor | IrOp::BoolXor => 9,
 
-        // Bitwise OR — 26
-        IrOp::IntOr => 26,
+        // Bitwise OR
+        IrOp::IntOr => 10,
 
-        // Logical AND — 22
-        IrOp::BoolAnd => 22,
+        // Logical AND
+        IrOp::BoolAnd => 11,
 
-        // Logical OR — 18
-        IrOp::BoolOr => 18,
+        // Logical OR
+        IrOp::BoolOr => 12,
 
-        // Unary prefix (!, ~, -, *, &, casts) — 62
-        IrOp::IntNegate | IrOp::BoolNegate | IrOp::Int2comp | IrOp::FloatNeg => 62,
-
-        // Function call, subscript, member access — 70
-        IrOp::Call | IrOp::Callind => 70,
-
-        // Everything else (copy, load, store, etc.) — 0
+        // Calls, copies, loads — leaves
         _ => 0,
     }
+}
+
+/// Encode the IDA `cot_*` opcode number for an IrOp.  This is what
+/// `needs_parens` switches on, mirroring the bitmasks in sub_25F3C0.
+///
+/// We map only the opcodes that the IDA algorithm tests against:
+///   17 = cot_lor   (||)
+///   18 = cot_land  (&&)
+///   19 = cot_bor   (|)
+///   20 = cot_xor   (^)
+///   21 = cot_band  (&)
+///   35 = cot_add   (+)
+///   36 = cot_sub   (-)
+///   37 = cot_mul   (*)
+///   38 = cot_sdiv  (signed /)
+///   39 = cot_udiv  (unsigned /)
+///   40 = cot_smod  (signed %)
+///   41 = cot_umod  (unsigned %)
+///   42 = cot_fadd  (float +)  — treated as associative like add
+///   47 = cot_bnot  (~)
+///   56 = cot_call
+///
+/// Every opcode in the algorithm's "compare" / "shift" branches is identified
+/// by precedence (not opcode), so they don't need an entry here.  Anything
+/// that doesn't appear in sub_25F3C0's bitmasks returns 0.
+fn ida_opcode(op: IrOp) -> u8 {
+    match op {
+        IrOp::BoolOr => 17,
+        IrOp::BoolAnd => 18,
+        IrOp::IntOr => 19,
+        IrOp::IntXor | IrOp::BoolXor => 20,
+        IrOp::IntAnd => 21,
+        IrOp::IntAdd | IrOp::Ptradd => 35,
+        IrOp::IntSub | IrOp::Ptrsub => 36,
+        IrOp::IntMult => 37,
+        IrOp::IntSdiv => 38,
+        IrOp::IntDiv => 39,
+        IrOp::IntSrem => 40,
+        IrOp::IntRem => 41,
+        IrOp::FloatAdd => 42,
+        IrOp::IntNegate => 47,
+        IrOp::Call | IrOp::Callind => 56,
+        _ => 0,
+    }
+}
+
+/// Context describing a child expression's parent for parenthesization
+/// decisions.  Mirrors the `a1` (this), `a2` (parent_op), `a3` (parent
+/// expression node) arguments of IDA's sub_25F3C0.
+#[derive(Clone, Copy, Debug, Default)]
+struct ParentCtx {
+    /// Parent operator opcode (`None` = no parent / top-level expression).
+    parent_op: Option<IrOp>,
+    /// True if the child is the right-hand operand of `parent_op`.
+    /// (Mirrors `*(parent + 32) == this` in the IDA dump.)
+    child_is_right: bool,
+}
+
+impl ParentCtx {
+    /// No parent — top-level expression.  Never parenthesizes.
+    const fn top() -> Self {
+        Self {
+            parent_op: None,
+            child_is_right: false,
+        }
+    }
+
+    /// Parent is `op`, child is the left operand.
+    const fn lhs_of(op: IrOp) -> Self {
+        Self {
+            parent_op: Some(op),
+            child_is_right: false,
+        }
+    }
+
+    /// Parent is `op`, child is the right operand.
+    const fn rhs_of(op: IrOp) -> Self {
+        Self {
+            parent_op: Some(op),
+            child_is_right: true,
+        }
+    }
+}
+
+/// Decide whether the child expression `child_op` needs parentheses when
+/// nested inside the context described by `parent`.
+///
+/// Direct port of Hex-Rays' `sub_25F3C0`
+/// (`references/hexrays/ida_dump/hexx64/all/sub_25F3C0.c`).  See the file
+/// header for the level numbering convention.
+fn needs_parens(child_op: IrOp, parent: ParentCtx) -> bool {
+    // No parent → never paren.
+    let Some(parent_op) = parent.parent_op else {
+        return false;
+    };
+
+    let child_prec = ida_precedence(child_op);
+    let parent_prec = ida_precedence(parent_op);
+    let child_opc = ida_opcode(child_op);
+    let parent_opc = ida_opcode(parent_op);
+
+    // `v7 = parent_prec`, `v8 = child_prec` in the IDA dump.
+    // Default `result = 1` (paren), then refine.
+
+    // Branch 1: parent_prec < child_prec (parent strictly tighter) → paren.
+    if parent_prec < child_prec {
+        return true;
+    }
+
+    // Branch 2: parent_prec > child_prec (parent strictly looser).  Almost
+    // always safe to drop parens — except for the "mixed-precedence trap":
+    // shift/relational/equality nested under bitwise/logical, where C's
+    // precedence surprises most readers (e.g. `a & b == c` parses as
+    // `a & (b == c)`).
+    if parent_prec > child_prec {
+        // child_prec ∈ [3, 7]  (== shift, relational, equality)
+        // parent_prec == 5 (shift, the "v7 == 5" idiom for `a + b << c`)
+        //              || parent_prec ∈ [8, 10] (band/xor/bor)
+        let child_is_shift_or_compare = (3..=7).contains(&child_prec);
+        let parent_is_band_or_higher = parent_prec == 5 || (8..=10).contains(&parent_prec);
+        return child_is_shift_or_compare && parent_is_band_or_higher;
+    }
+
+    // Branch 3: parent_prec == child_prec.
+
+    // Comparison level (relational or equality): ALWAYS paren — `a == b == c`
+    // is legal C but almost never what the original source meant.
+    if (6..=7).contains(&parent_prec) {
+        return true;
+    }
+
+    // Now we dispatch on the *child opcode*.
+
+    // 3a: child opcode > 0x2D (45).  Covers cot_bnot (47), postinc (53),
+    // postdec (54).
+    if child_opc > 0x2D {
+        if child_opc == 47 {
+            // ~x — paren only if parent is a call (postfix-style `(~x)()`).
+            return parent_opc == 56;
+        }
+        if matches!(child_opc, 53 | 54) {
+            // x++, x-- — paren only if parent is `&` (cot_ref = 51).
+            // Unlace doesn't currently emit postinc/postdec from IR, so this
+            // branch is dead but kept for parity with sub_25F3C0.
+            return parent_opc == 51;
+        }
+        // Other > 0x2D opcodes (assignments, compounds): default fallthrough
+        // handled below.
+    } else if child_opc > 0x2B {
+        // 3b: 0x2B < child_opc <= 0x2D — these are `cot_idx` (44) and
+        // `cot_asg` (1)…  Actually opcodes 44-45.  Paren if right operand.
+        // Unlace doesn't emit these either; preserved for fidelity.
+        return parent.child_is_right;
+    } else if (1..=42).contains(&child_opc) {
+        // 3c: child is a binary op in the [cot_asg .. cot_fadd] range.
+        let bit = 1u64 << child_opc;
+
+        // Associative ops: never paren (left-assoc, same-level chain).
+        //   1=asg, 17=lor, 18=land, 19=bor, 20=xor, 21=band, 35=add, 42=fadd
+        const ASSOCIATIVE_MASK: u64 = 0x408003E0002;
+        if bit & ASSOCIATIVE_MASK != 0 {
+            return false;
+        }
+
+        // Right-associative trap: paren only if right operand.
+        //   38=sdiv, 39=udiv, 40=smod, 41=umod
+        const RIGHT_ASSOC_MASK: u64 = 0x3C000000000;
+        if bit & RIGHT_ASSOC_MASK != 0 {
+            return parent.child_is_right;
+        }
+
+        // cot_mul (37): flat-chain with another mul, else paren if right.
+        if child_opc == 37 {
+            if parent_opc == 37 {
+                return false;
+            }
+            return parent.child_is_right;
+        }
+
+        // Fall through: cot_sub (36), cot_shl (33), cot_shr (34), and
+        // anything else not specifically handled above — fall into default.
+    }
+
+    // 3d: Default branch — leaves (`child_prec <= 2`) never paren when same
+    // precedence (the parent is also a unary, which can't happen in
+    // practice — but the IDA code returns 0 here).  Otherwise paren only
+    // when the child is the right operand.
+    if child_prec <= 2 {
+        return false;
+    }
+    parent.child_is_right
 }
 
 /// Return `true` if `op` is a binary operator that we emit via `emit_binop`.
@@ -3622,28 +4063,248 @@ fn is_binop(op: IrOp) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// Expression-width pre-measurement (port of IDA `sub_262260`)
+// ---------------------------------------------------------------------------
+
+/// Estimate the rendered column width of an SSA expression *without*
+/// emitting it.
+///
+/// IDA's `sub_262260` is consulted by `sub_267EB0` (the line-break
+/// decider) to decide whether a sub-expression fits the remaining row
+/// before committing to a one-line rendering. Unlace's printer doesn't
+/// have a single-pass width oracle, so this helper walks the IR
+/// recursively and approximates the post-emit length. The walker is
+/// read-only (`&PrintCtx`) so it can be called mid-emit without
+/// disturbing the fresh-name allocator.
+///
+/// Coverage:
+/// * **Constants** — width of `format_constant` for the input's value/size.
+/// * **Variables** — looks up the operand's recorded name (DWARF /
+///   coalesced / cached `vN`); falls back to `"vN"` ≈ 3 columns.
+/// * **Binary ops** — `lhs + " op " + rhs`; +2 if a parenthesisation rule
+///   would wrap the side (precedence-blind, conservative).
+/// * **Unary ops** — `op + child`; +2 if the child is itself binary.
+/// * **Calls** — `name + "(" + sum(args) + (n-1)*2 + ")"` (commas + spaces).
+/// * **Loads** — `*(<addr>)` ⇒ `addr + 3`.
+/// * **Casts** (`IntZext` / `IntSext` / `FloatFloat2int` family) —
+///   `"(<type>)" + child`; the type prefix is approximated as 8 columns.
+fn measure_expr_width(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> usize {
+    fn measure_operand(vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> usize {
+        if vn.space == SpaceId::Const {
+            return format_constant_ctx(vn.offset, vn.size, ConstContext::Signed).len();
+        }
+        if let Some(name) = ctx.base_names.get(vn) {
+            return name.len();
+        }
+        if let Some(name) = ctx.name_overrides.get(vn) {
+            return name.len();
+        }
+        if let Some(inputs) = ctx.stmt_inputs.get(&stmt_idx) {
+            if let Some(sv) = inputs.iter().find(|sv| sv.base == *vn) {
+                if let Some(name) = ctx.var_names.get(sv) {
+                    return name.len();
+                }
+                if let Some(name) = ctx.merged_names.get(sv) {
+                    return name.len();
+                }
+            }
+        }
+        // Default `vN` placeholder width — three chars covers v1..v99,
+        // four for v100+; pick the larger as a small safety margin.
+        4
+    }
+
+    fn measure_inputs(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> Vec<usize> {
+        insn.inputs
+            .iter()
+            .map(|vn| measure_operand(vn, stmt_idx, ctx))
+            .collect()
+    }
+
+    match insn.op {
+        // Binary ops: `lhs OP rhs` plus surrounding spaces; +2 if
+        // a conservative wrap rule applies (we don't have full
+        // precedence context here, so assume no extra parens).
+        IrOp::IntAdd
+        | IrOp::IntSub
+        | IrOp::IntMult
+        | IrOp::IntDiv
+        | IrOp::IntSdiv
+        | IrOp::IntRem
+        | IrOp::IntSrem
+        | IrOp::IntAnd
+        | IrOp::IntOr
+        | IrOp::IntXor
+        | IrOp::IntLeft
+        | IrOp::IntRight
+        | IrOp::IntSright
+        | IrOp::IntEqual
+        | IrOp::IntNotequal
+        | IrOp::IntLess
+        | IrOp::IntSless
+        | IrOp::IntLessequal
+        | IrOp::IntSlessequal
+        | IrOp::BoolAnd
+        | IrOp::BoolOr
+        | IrOp::BoolXor
+        | IrOp::FloatAdd
+        | IrOp::FloatSub
+        | IrOp::FloatMult
+        | IrOp::FloatDiv
+        | IrOp::FloatEqual
+        | IrOp::FloatNotequal
+        | IrOp::FloatLess
+        | IrOp::FloatLessequal => {
+            let widths = measure_inputs(insn, stmt_idx, ctx);
+            let lhs = widths.first().copied().unwrap_or(0);
+            let rhs = widths.get(1).copied().unwrap_or(0);
+            // op token is 1..3 columns ('+', '<<', '<=', '&&', etc.).
+            // Use 2 as a stable average; wraps don't depend on the
+            // exact byte length of the operator.
+            let op_token = 2;
+            lhs + 1 + op_token + 1 + rhs
+        }
+
+        // Unary ops: `op + child`. Operator is one column ('-', '~', '!').
+        IrOp::IntNegate | IrOp::Int2comp | IrOp::BoolNegate | IrOp::FloatNeg | IrOp::FloatAbs => {
+            let widths = measure_inputs(insn, stmt_idx, ctx);
+            let child = widths.first().copied().unwrap_or(0);
+            1 + child
+        }
+
+        // Casts: `(<type>)<child>`. Type-string width is approximated
+        // as 8 columns (`unsigned`, `__int64`, etc. cluster around 6-9).
+        IrOp::IntZext | IrOp::IntSext | IrOp::FloatInt2float | IrOp::FloatFloat2float
+        | IrOp::FloatFloat2int => {
+            let widths = measure_inputs(insn, stmt_idx, ctx);
+            let child = widths.first().copied().unwrap_or(0);
+            8 + child
+        }
+
+        // Loads: `*(<addr>)` — 3 fixed columns plus the address operand.
+        IrOp::Load => {
+            let widths = measure_inputs(insn, stmt_idx, ctx);
+            let addr = if widths.len() >= 2 {
+                widths[1]
+            } else {
+                widths.first().copied().unwrap_or(0)
+            };
+            3 + addr
+        }
+
+        // Calls: `<name>(<args, comma-separated>)`. Inputs[0] is the
+        // call target (name or const-address); inputs[1..] are args.
+        IrOp::Call | IrOp::Callind | IrOp::Callother => {
+            let widths = measure_inputs(insn, stmt_idx, ctx);
+            let name = widths.first().copied().unwrap_or(0);
+            let args: usize = widths.iter().skip(1).sum();
+            let arg_count = widths.len().saturating_sub(1);
+            let separators = arg_count.saturating_sub(1) * 2;
+            name + 1 + args + separators + 1
+        }
+
+        // Copy: a transparent rename, width is the operand alone.
+        IrOp::Copy => {
+            let widths = measure_inputs(insn, stmt_idx, ctx);
+            widths.first().copied().unwrap_or(0)
+        }
+
+        // Catch-all: emit an approximate width based on operand sum
+        // plus a small overhead for the opcode glue.
+        _ => {
+            let widths = measure_inputs(insn, stmt_idx, ctx);
+            widths.iter().sum::<usize>() + 4
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Line-break pre-decision (port of IDA `sub_267EB0`)
+// ---------------------------------------------------------------------------
+
+/// Decide whether the printer should emit a soft break *before* `insn`.
+///
+/// IDA's `sub_267EB0` walks the citree before committing each
+/// sub-expression to one line. The rules below mirror the exact branch
+/// order in that 69-line function and are paired with
+/// [`measure_expr_width`] as the width oracle:
+///
+/// 1. **Same-operator chain** — if the parent and child share the same
+///    binary op (`a + b + c`), never break: chained associative
+///    operators read better packed together.
+/// 2. **Operator family** — bitwise and/xor go together
+///    (`{IntXor, IntAnd}`), additive ops go together
+///    (`{IntAdd, IntSub, FloatAdd, FloatSub}`), and multiplicative
+///    ops go together (`{IntMult, IntS?div, IntS?rem, FloatMult,
+///    FloatDiv}`). Two ops in the same family don't break.
+/// 3. **Hard floor** — if `available_cols < 20` we always break: there
+///    isn't room for a meaningful sub-expression here.
+/// 4. **Width oracle** — measure the child's width via
+///    [`measure_expr_width`]; break iff it exceeds `available_cols`.
+/// 5. **Default** — fits, no break.
+#[allow(dead_code)]
+fn should_break_before(
+    insn: &IrInsn,
+    parent_op: Option<IrOp>,
+    available_cols: usize,
+    ctx: &PrintCtx,
+) -> bool {
+    fn family(op: IrOp) -> Option<u8> {
+        match op {
+            IrOp::IntXor | IrOp::IntAnd => Some(0),
+            IrOp::IntAdd | IrOp::IntSub | IrOp::FloatAdd | IrOp::FloatSub => Some(1),
+            IrOp::IntMult
+            | IrOp::IntSdiv
+            | IrOp::IntDiv
+            | IrOp::IntSrem
+            | IrOp::IntRem
+            | IrOp::FloatMult
+            | IrOp::FloatDiv => Some(2),
+            _ => None,
+        }
+    }
+
+    if let Some(p) = parent_op {
+        if p == insn.op {
+            return false;
+        }
+        if let (Some(fp), Some(fc)) = (family(p), family(insn.op)) {
+            if fp == fc {
+                return false;
+            }
+        }
+    }
+
+    if available_cols < 20 {
+        return true;
+    }
+
+    measure_expr_width(insn, 0, ctx) > available_cols
+}
+
+// ---------------------------------------------------------------------------
 // Expression emission
 // ---------------------------------------------------------------------------
 
 fn emit_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
-    emit_expr_with_prec(insn, stmt_idx, 0, ctx)
+    emit_expr_with_prec(insn, stmt_idx, ParentCtx::top(), ctx)
 }
 
 fn emit_expr_with_prec(
     insn: &IrInsn,
     stmt_idx: u32,
-    parent_prec: u8,
+    parent: ParentCtx,
     ctx: &mut PrintCtx,
 ) -> String {
     match insn.op {
         // -- Binary arithmetic/bitwise --
-        IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", stmt_idx, parent_prec, ctx),
-        IrOp::IntSub | IrOp::FloatSub => emit_binop(insn, "-", stmt_idx, parent_prec, ctx),
-        IrOp::IntMult | IrOp::FloatMult => emit_binop(insn, "*", stmt_idx, parent_prec, ctx),
-        IrOp::IntSdiv | IrOp::FloatDiv => emit_binop(insn, "/", stmt_idx, parent_prec, ctx),
-        IrOp::IntDiv => emit_unsigned_binop(insn, "/", stmt_idx, parent_prec, ctx),
-        IrOp::IntSrem => emit_binop(insn, "%", stmt_idx, parent_prec, ctx),
-        IrOp::IntRem => emit_unsigned_binop(insn, "%", stmt_idx, parent_prec, ctx),
+        IrOp::IntAdd | IrOp::FloatAdd => emit_binop(insn, "+", stmt_idx, parent, ctx),
+        IrOp::IntSub | IrOp::FloatSub => emit_binop(insn, "-", stmt_idx, parent, ctx),
+        IrOp::IntMult | IrOp::FloatMult => emit_binop(insn, "*", stmt_idx, parent, ctx),
+        IrOp::IntSdiv | IrOp::FloatDiv => emit_binop(insn, "/", stmt_idx, parent, ctx),
+        IrOp::IntDiv => emit_unsigned_binop(insn, "/", stmt_idx, parent, ctx),
+        IrOp::IntSrem => emit_binop(insn, "%", stmt_idx, parent, ctx),
+        IrOp::IntRem => emit_unsigned_binop(insn, "%", stmt_idx, parent, ctx),
         IrOp::IntAnd => {
             if insn.inputs.len() >= 2
                 && insn.inputs[1].space == SpaceId::Const
@@ -3651,7 +4312,7 @@ fn emit_expr_with_prec(
             {
                 return "0".to_string();
             }
-            emit_binop(insn, "&", stmt_idx, parent_prec, ctx)
+            emit_binop(insn, "&", stmt_idx, parent, ctx)
         }
         IrOp::IntOr => {
             if insn.inputs.len() >= 2
@@ -3660,7 +4321,7 @@ fn emit_expr_with_prec(
             {
                 return emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
             }
-            emit_binop(insn, "|", stmt_idx, parent_prec, ctx)
+            emit_binop(insn, "|", stmt_idx, parent, ctx)
         }
         IrOp::IntXor => {
             if insn.inputs.len() >= 2
@@ -3669,33 +4330,33 @@ fn emit_expr_with_prec(
             {
                 return "0".to_string();
             }
-            emit_binop(insn, "^", stmt_idx, parent_prec, ctx)
+            emit_binop(insn, "^", stmt_idx, parent, ctx)
         }
-        IrOp::IntLeft => emit_binop(insn, "<<", stmt_idx, parent_prec, ctx),
-        IrOp::IntSright => emit_binop(insn, ">>", stmt_idx, parent_prec, ctx),
-        IrOp::IntRight => emit_unsigned_binop(insn, ">>", stmt_idx, parent_prec, ctx),
+        IrOp::IntLeft => emit_binop(insn, "<<", stmt_idx, parent, ctx),
+        IrOp::IntSright => emit_binop(insn, ">>", stmt_idx, parent, ctx),
+        IrOp::IntRight => emit_unsigned_binop(insn, ">>", stmt_idx, parent, ctx),
 
         // -- Boolean ops --
-        IrOp::BoolAnd => emit_binop(insn, "&&", stmt_idx, parent_prec, ctx),
-        IrOp::BoolOr => emit_binop(insn, "||", stmt_idx, parent_prec, ctx),
-        IrOp::BoolXor => emit_binop(insn, "^", stmt_idx, parent_prec, ctx),
+        IrOp::BoolAnd => emit_binop(insn, "&&", stmt_idx, parent, ctx),
+        IrOp::BoolOr => emit_binop(insn, "||", stmt_idx, parent, ctx),
+        IrOp::BoolXor => emit_binop(insn, "^", stmt_idx, parent, ctx),
 
         // -- Comparisons --
-        IrOp::IntEqual | IrOp::FloatEqual => emit_binop(insn, "==", stmt_idx, parent_prec, ctx),
+        IrOp::IntEqual | IrOp::FloatEqual => emit_binop(insn, "==", stmt_idx, parent, ctx),
         IrOp::IntNotequal | IrOp::FloatNotequal => {
-            emit_binop(insn, "!=", stmt_idx, parent_prec, ctx)
+            emit_binop(insn, "!=", stmt_idx, parent, ctx)
         }
-        IrOp::IntSless | IrOp::FloatLess => emit_binop(insn, "<", stmt_idx, parent_prec, ctx),
-        IrOp::IntLess => emit_unsigned_binop(insn, "<", stmt_idx, parent_prec, ctx),
+        IrOp::IntSless | IrOp::FloatLess => emit_binop(insn, "<", stmt_idx, parent, ctx),
+        IrOp::IntLess => emit_unsigned_binop(insn, "<", stmt_idx, parent, ctx),
         IrOp::IntSlessequal | IrOp::FloatLessequal => {
-            emit_binop(insn, "<=", stmt_idx, parent_prec, ctx)
+            emit_binop(insn, "<=", stmt_idx, parent, ctx)
         }
-        IrOp::IntLessequal => emit_unsigned_binop(insn, "<=", stmt_idx, parent_prec, ctx),
+        IrOp::IntLessequal => emit_unsigned_binop(insn, "<=", stmt_idx, parent, ctx),
 
         // -- Unary ops --
-        IrOp::IntNegate => emit_unaryop(insn, "~", stmt_idx, parent_prec, ctx),
-        IrOp::BoolNegate => emit_bool_negate(insn, stmt_idx, parent_prec, ctx),
-        IrOp::Int2comp | IrOp::FloatNeg => emit_unaryop(insn, "-", stmt_idx, parent_prec, ctx),
+        IrOp::IntNegate => emit_unaryop(insn, "~", stmt_idx, parent, ctx),
+        IrOp::BoolNegate => emit_bool_negate(insn, stmt_idx, parent, ctx),
+        IrOp::Int2comp | IrOp::FloatNeg => emit_unaryop(insn, "-", stmt_idx, parent, ctx),
 
         // -- Copy / move --
         IrOp::Copy => {
@@ -3715,7 +4376,7 @@ fn emit_expr_with_prec(
                     } else {
                         ConstContext::Signed
                     };
-                emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, copy_ctx, 0, ctx)
+                emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, copy_ctx, parent, ctx)
             }
         }
 
@@ -3797,8 +4458,8 @@ fn emit_expr_with_prec(
         }
 
         // -- Pointer arithmetic --
-        IrOp::Ptradd => emit_binop(insn, "+", stmt_idx, parent_prec, ctx),
-        IrOp::Ptrsub => emit_binop(insn, "-", stmt_idx, parent_prec, ctx),
+        IrOp::Ptradd => emit_binop(insn, "+", stmt_idx, parent, ctx),
+        IrOp::Ptrsub => emit_binop(insn, "-", stmt_idx, parent, ctx),
 
         // -- Float conversions --
         IrOp::FloatInt2float => {
@@ -3942,10 +4603,9 @@ fn emit_binop(
     insn: &IrInsn,
     op: &str,
     stmt_idx: u32,
-    parent_prec: u8,
+    parent: ParentCtx,
     ctx: &mut PrintCtx,
 ) -> String {
-    let my_prec = c_precedence(insn.op);
     let const_ctx = const_context_for_op(insn.op);
     let lhs_ctx = if insn.inputs.len() >= 2 {
         const_context_for_binop_pair(insn, 0, stmt_idx, ctx)
@@ -3958,12 +4618,26 @@ fn emit_binop(
         const_ctx
     };
     let lhs = if !insn.inputs.is_empty() {
-        emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, lhs_ctx, my_prec, ctx)
+        emit_operand_with_prec(
+            &insn.inputs[0],
+            0,
+            stmt_idx,
+            lhs_ctx,
+            ParentCtx::lhs_of(insn.op),
+            ctx,
+        )
     } else {
         "0".to_string()
     };
     let rhs = if insn.inputs.len() >= 2 {
-        emit_operand_with_prec(&insn.inputs[1], 1, stmt_idx, rhs_ctx, my_prec, ctx)
+        emit_operand_with_prec(
+            &insn.inputs[1],
+            1,
+            stmt_idx,
+            rhs_ctx,
+            ParentCtx::rhs_of(insn.op),
+            ctx,
+        )
     } else {
         "0".to_string()
     };
@@ -3999,7 +4673,7 @@ fn emit_binop(
     };
 
     let expr = bare.unwrap_or_else(|| format!("{} {} {}", lhs, op, rhs));
-    if my_prec > 0 && my_prec < parent_prec {
+    if needs_parens(insn.op, parent) {
         format!("({})", expr)
     } else {
         expr
@@ -4010,23 +4684,30 @@ fn emit_unaryop(
     insn: &IrInsn,
     op: &str,
     stmt_idx: u32,
-    _parent_prec: u8,
+    parent: ParentCtx,
     ctx: &mut PrintCtx,
 ) -> String {
-    let my_prec = c_precedence(insn.op);
+    // Operand of a unary prefix is in unary context — for a leaf operand
+    // this won't paren, but a binary sub-expression beneath the unary will
+    // be forced to paren by the "parent strictly tighter" branch.
     let operand = if !insn.inputs.is_empty() {
         emit_operand_with_prec(
             &insn.inputs[0],
             0,
             stmt_idx,
             ConstContext::Signed,
-            my_prec,
+            ParentCtx::lhs_of(insn.op),
             ctx,
         )
     } else {
         "0".to_string()
     };
-    format!("{}{}", op, operand)
+    let bare = format!("{}{}", op, operand);
+    if needs_parens(insn.op, parent) {
+        format!("({})", bare)
+    } else {
+        bare
+    }
 }
 
 fn negate_comparison(op: IrOp) -> Option<&'static str> {
@@ -4041,7 +4722,7 @@ fn negate_comparison(op: IrOp) -> Option<&'static str> {
     }
 }
 
-fn emit_bool_negate(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut PrintCtx) -> String {
+fn emit_bool_negate(insn: &IrInsn, stmt_idx: u32, parent: ParentCtx, ctx: &mut PrintCtx) -> String {
     if !insn.inputs.is_empty() && insn.inputs[0].space != SpaceId::Const {
         let input_vn = &insn.inputs[0];
         let resolved_sv = ctx
@@ -4059,21 +4740,15 @@ fn emit_bool_negate(insn: &IrInsn, stmt_idx: u32, parent_prec: u8, ctx: &mut Pri
                 if let Some(negated_op) = negate_comparison(def_insn.op) {
                     let is_unsigned = matches!(def_insn.op, IrOp::IntLess | IrOp::IntLessequal);
                     if is_unsigned {
-                        return emit_unsigned_binop(
-                            &def_insn,
-                            negated_op,
-                            def_stmt,
-                            parent_prec,
-                            ctx,
-                        );
+                        return emit_unsigned_binop(&def_insn, negated_op, def_stmt, parent, ctx);
                     }
-                    return emit_binop(&def_insn, negated_op, def_stmt, parent_prec, ctx);
+                    return emit_binop(&def_insn, negated_op, def_stmt, parent, ctx);
                 }
             }
         }
     }
 
-    emit_unaryop(insn, "!", stmt_idx, parent_prec, ctx)
+    emit_unaryop(insn, "!", stmt_idx, parent, ctx)
 }
 
 fn emit_call1(insn: &IrInsn, func: &str, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
@@ -4239,13 +4914,19 @@ fn emit_unsigned_binop(
     insn: &IrInsn,
     op: &str,
     stmt_idx: u32,
-    parent_prec: u8,
+    parent: ParentCtx,
     ctx: &mut PrintCtx,
 ) -> String {
-    let my_prec = c_precedence(insn.op);
     let const_ctx = ConstContext::Bitwise;
     let lhs = if !insn.inputs.is_empty() {
-        let raw = emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, const_ctx, my_prec, ctx);
+        let raw = emit_operand_with_prec(
+            &insn.inputs[0],
+            0,
+            stmt_idx,
+            const_ctx,
+            ParentCtx::lhs_of(insn.op),
+            ctx,
+        );
         let ty = type_for_size(insn.inputs[0].size, false);
         format!("({}){}", ty, raw)
     } else {
@@ -4253,9 +4934,23 @@ fn emit_unsigned_binop(
     };
     let rhs = if insn.inputs.len() >= 2 {
         if op == ">>" {
-            emit_operand_with_prec(&insn.inputs[1], 1, stmt_idx, const_ctx, my_prec, ctx)
+            emit_operand_with_prec(
+                &insn.inputs[1],
+                1,
+                stmt_idx,
+                const_ctx,
+                ParentCtx::rhs_of(insn.op),
+                ctx,
+            )
         } else {
-            let raw = emit_operand_with_prec(&insn.inputs[1], 1, stmt_idx, const_ctx, my_prec, ctx);
+            let raw = emit_operand_with_prec(
+                &insn.inputs[1],
+                1,
+                stmt_idx,
+                const_ctx,
+                ParentCtx::rhs_of(insn.op),
+                ctx,
+            );
             let ty = type_for_size(insn.inputs[1].size, false);
             format!("({}){}", ty, raw)
         }
@@ -4263,7 +4958,7 @@ fn emit_unsigned_binop(
         "0".to_string()
     };
     let expr = format!("{} {} {}", lhs, op, rhs);
-    if my_prec > 0 && my_prec < parent_prec {
+    if needs_parens(insn.op, parent) {
         format!("({})", expr)
     } else {
         expr
@@ -4280,7 +4975,14 @@ fn emit_operand_resolved(
     stmt_idx: u32,
     ctx: &mut PrintCtx,
 ) -> String {
-    emit_operand_with_prec(vn, _raw_idx, stmt_idx, ConstContext::Signed, 0, ctx)
+    emit_operand_with_prec(
+        vn,
+        _raw_idx,
+        stmt_idx,
+        ConstContext::Signed,
+        ParentCtx::top(),
+        ctx,
+    )
 }
 
 fn is_pointer_typed_input(vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> bool {
@@ -4323,7 +5025,7 @@ fn emit_operand_with_prec(
     _raw_idx: usize,
     stmt_idx: u32,
     const_ctx: ConstContext,
-    parent_prec: u8,
+    parent: ParentCtx,
     ctx: &mut PrintCtx,
 ) -> String {
     if vn.space == SpaceId::Const {
@@ -4346,7 +5048,7 @@ fn emit_operand_with_prec(
 
     if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
         if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
-            return emit_expr_with_prec(&def_insn, def_stmt, parent_prec, ctx);
+            return emit_expr_with_prec(&def_insn, def_stmt, parent, ctx);
         }
     }
 
@@ -4455,6 +5157,18 @@ fn sign_extend(value: u64, size: u8) -> i64 {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Render a string literal body with C escape sequences.
+///
+/// Mirrors the escape table used by IDA's `str2user` (called from
+/// `sub_265AA0` for `cot_str` rendering): the standard C single-character
+/// escapes (`\\`, `\"`, `\n`, `\r`, `\t`, `\v`, `\f`, `\a`, `\b`, `\0`)
+/// followed by `\xHH` for any other non-printable byte. Multi-byte UTF-8
+/// codepoints are emitted as a sequence of `\xHH` for each underlying byte
+/// so the output is bytewise unambiguous.
+///
+/// Note: the single-quote (`'`) does not need escaping inside a double-
+/// quoted string literal, so we leave it as-is — matching both IDA and the
+/// C standard.
 fn escape_c_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
@@ -4462,8 +5176,12 @@ fn escape_c_string(s: &str) -> String {
             '\\' => out.push_str("\\\\"),
             '"' => out.push_str("\\\""),
             '\n' => out.push_str("\\n"),
-            '\t' => out.push_str("\\t"),
             '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\x0b' => out.push_str("\\v"), // vertical tab
+            '\x0c' => out.push_str("\\f"), // form feed
+            '\x07' => out.push_str("\\a"), // bell
+            '\x08' => out.push_str("\\b"), // backspace
             '\0' => out.push_str("\\0"),
             c if c.is_ascii_graphic() || c == ' ' => out.push(c),
             c => {
@@ -4474,6 +5192,42 @@ fn escape_c_string(s: &str) -> String {
         }
     }
     out
+}
+
+// ---------------------------------------------------------------------------
+// `cot_sizeof` / `cot_alignof` formatters
+//
+// These are reachable today only via direct callers (they have no IR
+// producer); see the cot-coverage audit at the top of this file. Centralizing
+// the syntax here means that when a future HIR `Sizeof(...)` / `Alignof(...)`
+// node lands, the printer wiring is already in place and matches IDA's
+// surface form.
+// ---------------------------------------------------------------------------
+
+/// Emit `sizeof(<type>)` for a type-as-argument form (IDA's `cot_sizeof`
+/// applied to a `cot_type`). The caller is responsible for already having
+/// formatted `type_str` as a valid C type-name (e.g. `"int *"`).
+///
+/// Currently has no in-tree caller; the helper exists so that when a HIR
+/// `Sizeof(Type)` node lands, the printer wiring is one call away.
+#[allow(dead_code)]
+pub(crate) fn emit_sizeof_type(type_str: &str) -> String {
+    format!("sizeof({})", type_str)
+}
+
+/// Emit `sizeof(<expr>)` for an expression argument (IDA's `cot_sizeof`
+/// applied to any non-`cot_type`).
+#[allow(dead_code)]
+pub(crate) fn emit_sizeof_expr(expr: &str) -> String {
+    format!("sizeof({})", expr)
+}
+
+/// Emit `_Alignof(<type>)` per C11 (IDA's `cot_alignof`). We use the C11
+/// keyword rather than the GCC `__alignof` extension because it's portable
+/// and matches how IDA renders `cot_alignof` in modern profiles.
+#[allow(dead_code)]
+pub(crate) fn emit_alignof_type(type_str: &str) -> String {
+    format!("_Alignof({})", type_str)
 }
 
 /// Emit an IDA-style SUBPIECE macro based on output size and byte offset.
@@ -4674,9 +5428,16 @@ fn x86_64_register_name(offset: u64, size: u8) -> &'static str {
 
 // ---------------------------------------------------------------------------
 
-fn indent(depth: usize, out: &mut String) {
-    for _ in 0..depth {
-        out.push_str("    ");
+/// Emit `depth` indent steps of `tab_width` spaces each.
+///
+/// Replaces the previous hard-coded `"    "` literal so callers can drive
+/// the indent step from [`PrintCtx::config`] (and ultimately from the
+/// `UNLACE_TAB_WIDTH` env var or IDA's `module_data + 592` indent
+/// configuration). With `tab_width = 4` (the default) output remains
+/// byte-identical to the pre-config behaviour.
+fn indent(depth: usize, tab_width: usize, out: &mut String) {
+    for _ in 0..(depth * tab_width) {
+        out.push(' ');
     }
 }
 
@@ -7712,6 +8473,83 @@ mod tests {
     }
 
     // -------------------------------------------------------------------
+    // cot_str escape-table parity (matches IDA's str2user output).
+    //
+    // Verifies each escape-category produces the expected C-source form:
+    //   * standard single-char escapes: \\ \" \n \r \t \v \f \a \b \0
+    //   * non-printable bytes fall back to \xHH
+    //   * multi-byte UTF-8 codepoints are byte-decomposed to \xHH
+    //   * printable ASCII / space pass through unchanged
+    //   * single-quote is NOT escaped inside a double-quoted literal
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_escape_c_string_standard_singles() {
+        // \\ \" \n \r \t \v \f \a \b \0
+        let s = "\\\"\n\r\t\x0b\x0c\x07\x08\0";
+        let out = super::escape_c_string(s);
+        assert_eq!(out, r#"\\\"\n\r\t\v\f\a\b\0"#, "got {out:?}");
+    }
+
+    #[test]
+    fn test_escape_c_string_hex_fallback_for_other_controls() {
+        // 0x01, 0x1F, 0x7F should become \x01, \x1f, \x7f
+        let s = "\x01\x1f\x7f";
+        let out = super::escape_c_string(s);
+        assert_eq!(out, r"\x01\x1f\x7f");
+    }
+
+    #[test]
+    fn test_escape_c_string_printable_passthrough() {
+        let s = "Hello, World! 123";
+        let out = super::escape_c_string(s);
+        assert_eq!(out, "Hello, World! 123");
+    }
+
+    #[test]
+    fn test_escape_c_string_single_quote_is_bare() {
+        // Inside a "..." literal, ' does not need escaping.
+        let out = super::escape_c_string("it's");
+        assert_eq!(out, "it's");
+    }
+
+    #[test]
+    fn test_escape_c_string_multibyte_utf8_byte_decomposed() {
+        // 'é' is C3 A9 in UTF-8 — both bytes >= 0x80, so they go through
+        // the \xHH fallback and emerge as \xc3\xa9.
+        let out = super::escape_c_string("café");
+        assert_eq!(out, r"caf\xc3\xa9");
+    }
+
+    // -------------------------------------------------------------------
+    // cot_sizeof / cot_alignof formatter helpers.
+    //
+    // These have no IR producer today; the tests verify the *string* shape
+    // matches IDA so that when a future HIR Sizeof/Alignof node is wired
+    // up, the printer output is already correct.
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_emit_alignof_type() {
+        assert_eq!(super::emit_alignof_type("int"), "_Alignof(int)");
+        assert_eq!(super::emit_alignof_type("struct foo"), "_Alignof(struct foo)");
+        assert_eq!(super::emit_alignof_type("int *"), "_Alignof(int *)");
+    }
+
+    #[test]
+    fn test_emit_sizeof_type() {
+        assert_eq!(super::emit_sizeof_type("int *"), "sizeof(int *)");
+        assert_eq!(super::emit_sizeof_type("char[16]"), "sizeof(char[16])");
+        assert_eq!(super::emit_sizeof_type("struct s"), "sizeof(struct s)");
+    }
+
+    #[test]
+    fn test_emit_sizeof_expr() {
+        assert_eq!(super::emit_sizeof_expr("v100"), "sizeof(v100)");
+        assert_eq!(super::emit_sizeof_expr("a[0]"), "sizeof(a[0])");
+    }
+
+    // -------------------------------------------------------------------
     // P4-8/P4-9: Symbol table threading + CALL resolution tests
     // -------------------------------------------------------------------
 
@@ -10132,5 +10970,707 @@ mod tests {
             !output.contains("// lambda"),
             "non-lambda method got a spurious lambda comment, output:\n{output}",
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // HirNode::Asm — IDA-style `__asm { ... }` block emission for raw
+    // assembly the lifter could not translate (cit_asm / opcode 79 in
+    // hex-rays' citem dispatcher).
+    // ---------------------------------------------------------------------
+
+    /// Single asm line renders as a one-line `__asm { ... }` block with
+    /// the instruction text indented inside the braces.
+    #[test]
+    fn asm_node_single_instruction() {
+        let body = vec![
+            HirNode::Asm {
+                instructions: vec!["cli".to_string()],
+            },
+            HirNode::Return(None),
+        ];
+        let func = make_func("priv_op", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("__asm {"),
+            "expected __asm block opener, got:\n{output}",
+        );
+        assert!(
+            output.contains("cli"),
+            "expected mnemonic in body, got:\n{output}",
+        );
+        // The `cli` line must be more deeply indented than the `__asm {`
+        // line — i.e. one level inside the block.
+        let asm_indent = output
+            .lines()
+            .find(|l| l.trim_start().starts_with("__asm {"))
+            .map(|l| l.len() - l.trim_start().len())
+            .expect("__asm line not found");
+        let cli_indent = output
+            .lines()
+            .find(|l| l.trim_start().starts_with("cli"))
+            .map(|l| l.len() - l.trim_start().len())
+            .expect("cli line not found");
+        assert!(
+            cli_indent > asm_indent,
+            "expected `cli` indented deeper than `__asm {{`, got asm={asm_indent} cli={cli_indent}\n{output}",
+        );
+        // The closing brace lives on its own line at the asm-opener depth.
+        let close_lines = output
+            .lines()
+            .filter(|l| l.trim() == "}")
+            .count();
+        assert!(
+            close_lines >= 1,
+            "expected at least one bare `}}` closing line, got:\n{output}",
+        );
+    }
+
+    /// Multiple asm lines emit one indented line per instruction inside
+    /// a single `__asm { ... }` block.
+    #[test]
+    fn asm_node_multiple_instructions() {
+        let body = vec![
+            HirNode::Asm {
+                instructions: vec![
+                    "rdtsc".to_string(),
+                    "mov rcx, rax".to_string(),
+                    "shl rcx, 32".to_string(),
+                ],
+            },
+            HirNode::Return(None),
+        ];
+        let func = make_func("read_tsc", body);
+        let output = print_c(&func);
+
+        assert!(output.contains("__asm {"), "missing block opener: {output}");
+        assert!(output.contains("rdtsc"), "missing rdtsc: {output}");
+        assert!(
+            output.contains("mov rcx, rax"),
+            "missing mov: {output}",
+        );
+        assert!(
+            output.contains("shl rcx, 32"),
+            "missing shl: {output}",
+        );
+
+        // The three lines must appear in order, each on its own line.
+        let rdtsc_pos = output.find("rdtsc").unwrap();
+        let mov_pos = output.find("mov rcx, rax").unwrap();
+        let shl_pos = output.find("shl rcx, 32").unwrap();
+        assert!(
+            rdtsc_pos < mov_pos && mov_pos < shl_pos,
+            "asm lines emitted out of order:\n{output}",
+        );
+    }
+
+    /// Asm blocks nest correctly inside `if` / `while` bodies — the
+    /// printer's depth-aware indentation must apply, and surrounding
+    /// control flow is unaffected.
+    #[test]
+    fn asm_node_inside_if_and_while() {
+        let body = vec![
+            HirNode::If {
+                cond: sv(0, 4),
+                then_body: vec![HirNode::Asm {
+                    instructions: vec!["int 3".to_string()],
+                }],
+                else_body: None,
+            },
+            HirNode::While {
+                cond: sv(0, 4),
+                body: vec![HirNode::Asm {
+                    instructions: vec!["pause".to_string(), "nop".to_string()],
+                }],
+            },
+            HirNode::Return(None),
+        ];
+        let func = make_func("nested_asm", body);
+        let output = print_c(&func);
+
+        // Both __asm blocks must appear.
+        assert_eq!(
+            output.matches("__asm {").count(),
+            2,
+            "expected two __asm blocks, got:\n{output}",
+        );
+        assert!(output.contains("int 3"), "missing int 3: {output}");
+        assert!(output.contains("pause"), "missing pause: {output}");
+        assert!(output.contains("nop"), "missing nop: {output}");
+        // The asm inside the if must be indented deeper than the asm's
+        // `if (...) {` opener — i.e. the line containing `int 3` should
+        // start with at least 4 spaces (function body depth 1 + then-body
+        // depth 1 + asm-body depth 1 = 6 spaces with 2-space indent, but
+        // we just sanity-check it's strictly deeper than `if`).
+        let if_line_indent = output
+            .lines()
+            .find(|l| l.trim_start().starts_with("if ("))
+            .map(|l| l.len() - l.trim_start().len())
+            .expect("if line not found");
+        let int3_indent = output
+            .lines()
+            .find(|l| l.trim_start().starts_with("int 3"))
+            .map(|l| l.len() - l.trim_start().len())
+            .expect("int 3 line not found");
+        assert!(
+            int3_indent > if_line_indent,
+            "expected `int 3` to be more indented than `if (...)`, got if={if_line_indent} int3={int3_indent}\n{output}",
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // PrintConfig — indent / margin / format-flag plumbing
+    //
+    // These tests pin the IDA-aligned defaults documented on
+    // [`PrintConfig`] (offsets 592 / 600 / 719 in `module_data`) and
+    // verify that the env-var override path and the per-context
+    // `tab_width` actually drive `indent()` output.  The env-var tests
+    // mutate process state, so each one carefully restores the prior
+    // value to keep the suite parallel-safe — but because cargo runs
+    // unit tests in a shared process by default we additionally serialise
+    // the env-mutating tests via a dedicated mutex.
+    // ---------------------------------------------------------------------
+
+    use std::sync::Mutex;
+
+    use super::PrintConfig;
+
+    /// Serialises tests that touch the global process environment so
+    /// they don't race when cargo schedules them on multiple threads.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    /// RAII guard that snapshots a single env var on construction and
+    /// restores it (or removes it) on drop, so a test failure can't
+    /// leak state into sibling tests.
+    struct EnvGuard {
+        key: &'static str,
+        prev: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn new(key: &'static str) -> Self {
+            Self {
+                key,
+                prev: std::env::var(key).ok(),
+            }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            // SAFETY: tests are serialised through `ENV_LOCK`; only one
+            // thread mutates the process environment at a time.
+            unsafe {
+                match self.prev.take() {
+                    Some(v) => std::env::set_var(self.key, v),
+                    None => std::env::remove_var(self.key),
+                }
+            }
+        }
+    }
+
+    /// `PrintConfig::default()` returns the IDA-aligned defaults
+    /// (`module_data` offsets 592/600 → indent 2 / max 100, with
+    /// Unlace's historical 4-space tab and IDA's 80-column wrap floor).
+    #[test]
+    fn print_config_defaults_match_ida() {
+        let cfg = PrintConfig::default();
+        assert_eq!(cfg.max_line_width, 100, "max_line_width default");
+        assert_eq!(cfg.tab_width, 4, "tab_width default");
+        assert_eq!(cfg.indent_width, 2, "indent_width default (IDA module_data+592)");
+        assert_eq!(cfg.wrap_floor, 80, "wrap_floor default (IDA Options dialog)");
+        assert_eq!(cfg.format_flags, 0, "format_flags default (IDA module_data+719)");
+    }
+
+    /// With no `UNLACE_*` env vars set, `PrintConfig::from_env`
+    /// reproduces the defaults bit-for-bit.
+    #[test]
+    fn print_config_from_env_no_vars_yields_defaults() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        // Clear any inherited overrides before sampling.
+        let _g0 = EnvGuard::new("UNLACE_MAX_LINE_WIDTH");
+        let _g1 = EnvGuard::new("UNLACE_TAB_WIDTH");
+        let _g2 = EnvGuard::new("UNLACE_INDENT");
+        let _g3 = EnvGuard::new("UNLACE_WRAP_FLOOR");
+        // SAFETY: tests are serialised through `ENV_LOCK`.
+        unsafe {
+            std::env::remove_var("UNLACE_MAX_LINE_WIDTH");
+            std::env::remove_var("UNLACE_TAB_WIDTH");
+            std::env::remove_var("UNLACE_INDENT");
+            std::env::remove_var("UNLACE_WRAP_FLOOR");
+        }
+        assert_eq!(PrintConfig::from_env(), PrintConfig::default());
+    }
+
+    /// Each `UNLACE_*` env var, when set to a parseable `usize`,
+    /// overrides exactly one [`PrintConfig`] field and leaves the
+    /// others at their default.
+    #[test]
+    fn print_config_env_vars_override_defaults() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _g0 = EnvGuard::new("UNLACE_MAX_LINE_WIDTH");
+        let _g1 = EnvGuard::new("UNLACE_TAB_WIDTH");
+        let _g2 = EnvGuard::new("UNLACE_INDENT");
+        let _g3 = EnvGuard::new("UNLACE_WRAP_FLOOR");
+        // SAFETY: tests are serialised through `ENV_LOCK`.
+        unsafe {
+            std::env::set_var("UNLACE_MAX_LINE_WIDTH", "132");
+            std::env::set_var("UNLACE_TAB_WIDTH", "8");
+            std::env::set_var("UNLACE_INDENT", "3");
+            std::env::set_var("UNLACE_WRAP_FLOOR", "60");
+        }
+        let cfg = PrintConfig::from_env();
+        assert_eq!(cfg.max_line_width, 132);
+        assert_eq!(cfg.tab_width, 8);
+        assert_eq!(cfg.indent_width, 3);
+        assert_eq!(cfg.wrap_floor, 60);
+    }
+
+    /// Malformed env values (non-numeric / negative / blank) are
+    /// silently ignored — the field falls back to the default.  This
+    /// guards against a typo in `UNLACE_TAB_WIDTH=four` panicking the
+    /// printer in the middle of a long decompilation run.
+    #[test]
+    fn print_config_invalid_env_falls_back_to_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _g0 = EnvGuard::new("UNLACE_MAX_LINE_WIDTH");
+        let _g1 = EnvGuard::new("UNLACE_TAB_WIDTH");
+        let _g2 = EnvGuard::new("UNLACE_INDENT");
+        let _g3 = EnvGuard::new("UNLACE_WRAP_FLOOR");
+        // SAFETY: tests are serialised through `ENV_LOCK`.
+        unsafe {
+            std::env::set_var("UNLACE_MAX_LINE_WIDTH", "not-a-number");
+            std::env::set_var("UNLACE_TAB_WIDTH", "");
+            std::env::remove_var("UNLACE_INDENT");
+            std::env::remove_var("UNLACE_WRAP_FLOOR");
+        }
+        let cfg = PrintConfig::from_env();
+        let def = PrintConfig::default();
+        assert_eq!(cfg, def);
+    }
+
+    /// A custom `tab_width` actually drives the per-line indentation
+    /// emitted by the printer — flipping the env var from the default
+    /// 4 to 2 halves every body-line's leading-space count.
+    #[test]
+    fn print_ctx_custom_tab_width_drives_indent() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _g = EnvGuard::new("UNLACE_TAB_WIDTH");
+        // SAFETY: tests are serialised through `ENV_LOCK`.
+        unsafe {
+            std::env::set_var("UNLACE_TAB_WIDTH", "2");
+        }
+
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+        let body = vec![HirNode::If {
+            cond: sv(0, 4),
+            then_body: vec![HirNode::If {
+                cond: sv(0, 4),
+                then_body: vec![HirNode::Statement(IrInsn::with_output(
+                    IrOp::IntAdd,
+                    r0,
+                    smallvec![r0, c1],
+                    0x1000,
+                ))],
+                else_body: None,
+            }],
+            else_body: None,
+        }];
+
+        let func = make_func("nested_2sp", body);
+        let output = print_c(&func);
+
+        // depth 3 × tab_width 2 = 6 leading spaces (was 12 with default).
+        let add_line = output
+            .lines()
+            .find(|l| l.contains("v1++;"))
+            .expect("should find add line");
+        let lead = add_line.len() - add_line.trim_start().len();
+        assert_eq!(lead, 6, "expected 6 spaces (3 × 2): {add_line:?}");
+    }
+
+    /// `format_flags` round-trips through both `Default` and the
+    /// `UNLACE_FORMAT_FLAGS` env hook. Plumbed for forward compatibility:
+    /// no current emit consumes the bits, but the field must travel
+    /// through `PrintConfig::from_env` so future flag-driven behaviour
+    /// lands without an API break.
+    #[test]
+    fn print_config_format_flags_roundtrip() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _g = EnvGuard::new("UNLACE_FORMAT_FLAGS");
+        unsafe { std::env::remove_var("UNLACE_FORMAT_FLAGS"); }
+        assert_eq!(PrintConfig::default().format_flags, 0);
+        unsafe { std::env::set_var("UNLACE_FORMAT_FLAGS", "42"); }
+        assert_eq!(PrintConfig::from_env().format_flags, 42);
+    }
+
+    /// Constructing the printer with `max_line_width=60` (vs the default
+    /// 100) makes a long expression's rendered output cross the requested
+    /// margin, demonstrating that the explicit-config path actually
+    /// reaches the emit logic. We don't assert exact wrap positions —
+    /// the printer's wrap policy is governed by t64 — only that the
+    /// custom config plumbs through `print_c_with_rtti_config` to the
+    /// `PrintCtx` without being silently dropped.
+    #[test]
+    fn print_config_explicit_override_reaches_ctx() {
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+        let body = vec![HirNode::If {
+            cond: sv(0, 4),
+            then_body: vec![HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, c1],
+                0x1000,
+            ))],
+            else_body: None,
+        }];
+        let func = make_func("widthcheck", body);
+        let narrow = PrintConfig {
+            max_line_width: 60,
+            tab_width: 2,
+            indent_width: 2,
+            wrap_floor: 40,
+            format_flags: 0,
+        };
+        let out = crate::c_printer::print_c_with_rtti_config(
+            &func, None, None, None, None, None, Some(narrow),
+        );
+        // tab_width=2 forced through config: depth-2 body line indents by
+        // 4 spaces (2 × 2), not the default 8 (2 × 4).
+        let body_line = out.lines().find(|l| l.contains("v1++;")).expect("body");
+        let lead = body_line.len() - body_line.trim_start().len();
+        assert_eq!(lead, 4, "expected 4-space indent under tab_width=2: {body_line:?}");
+    }
+
+    /// Sanity check that the *default* indent (no env vars set) still
+    /// produces the historical 4-space-per-level output.  This is a
+    /// belt-and-braces guard alongside `test_print_indentation` — that
+    /// test runs without ENV_LOCK so it could in principle race with
+    /// other env-mutating tests; this one explicitly clears the env.
+    #[test]
+    fn print_ctx_default_tab_width_is_four() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _g = EnvGuard::new("UNLACE_TAB_WIDTH");
+        // SAFETY: tests are serialised through `ENV_LOCK`.
+        unsafe {
+            std::env::remove_var("UNLACE_TAB_WIDTH");
+        }
+
+        let r0 = reg(0, 4);
+        let c1 = con(1, 4);
+        let body = vec![HirNode::If {
+            cond: sv(0, 4),
+            then_body: vec![HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r0, c1],
+                0x1000,
+            ))],
+            else_body: None,
+        }];
+        let func = make_func("nested_default", body);
+        let output = print_c(&func);
+
+        // depth 2 × tab_width 4 = 8 leading spaces.
+        let add_line = output
+            .lines()
+            .find(|l| l.contains("v1++;"))
+            .expect("should find add line");
+        let lead = add_line.len() - add_line.trim_start().len();
+        assert_eq!(lead, 8, "expected 8 spaces (2 × 4 default): {add_line:?}");
+    }
+
+    // ---------------------------------------------------------------------
+    // needs_parens — direct port of IDA sub_25F3C0
+    // ---------------------------------------------------------------------
+    //
+    // These tests pin down the algorithm's behaviour at every branch.  They
+    // exercise `needs_parens` directly (no IR synthesis required) so the
+    // logic stays nailed down even if higher-level emission paths change.
+
+    use super::{ParentCtx, needs_parens};
+
+    fn rhs(parent: IrOp) -> ParentCtx {
+        ParentCtx::rhs_of(parent)
+    }
+    fn lhs(parent: IrOp) -> ParentCtx {
+        ParentCtx::lhs_of(parent)
+    }
+    fn top() -> ParentCtx {
+        ParentCtx::top()
+    }
+
+    #[test]
+    fn parens_top_level_never_wraps() {
+        // No parent → never paren (the `if (a3)` early-out in sub_25F3C0).
+        assert!(!needs_parens(IrOp::IntAdd, top()));
+        assert!(!needs_parens(IrOp::IntEqual, top()));
+        assert!(!needs_parens(IrOp::IntNegate, top()));
+    }
+
+    #[test]
+    fn parens_associative_chain_no_inner_parens() {
+        // `a + b + c` parses as `(a + b) + c`; the inner `+` is the LHS of
+        // the outer `+` — associative bitmask says no paren.
+        assert!(!needs_parens(IrOp::IntAdd, lhs(IrOp::IntAdd)));
+        // `a | b | c` — same shape.
+        assert!(!needs_parens(IrOp::IntOr, lhs(IrOp::IntOr)));
+        assert!(!needs_parens(IrOp::IntAnd, lhs(IrOp::IntAnd)));
+        assert!(!needs_parens(IrOp::IntXor, lhs(IrOp::IntXor)));
+        assert!(!needs_parens(IrOp::BoolAnd, lhs(IrOp::BoolAnd)));
+        assert!(!needs_parens(IrOp::BoolOr, lhs(IrOp::BoolOr)));
+        // Even on the RHS — `+` is associative, so bitmask wins.
+        assert!(!needs_parens(IrOp::IntAdd, rhs(IrOp::IntAdd)));
+        assert!(!needs_parens(IrOp::IntOr, rhs(IrOp::IntOr)));
+    }
+
+    #[test]
+    fn parens_comparison_chain_always_wraps() {
+        // `a == b == c` — the inner `==` is wrapped regardless of side.
+        assert!(needs_parens(IrOp::IntEqual, lhs(IrOp::IntEqual)));
+        assert!(needs_parens(IrOp::IntEqual, rhs(IrOp::IntEqual)));
+        assert!(needs_parens(IrOp::IntNotequal, lhs(IrOp::IntEqual)));
+        // Relational chain too: `a < b < c`.
+        assert!(needs_parens(IrOp::IntSless, lhs(IrOp::IntSless)));
+        assert!(needs_parens(IrOp::IntSlessequal, rhs(IrOp::IntSless)));
+    }
+
+    #[test]
+    fn parens_right_assoc_div() {
+        // `(a / b) / c` flat-chain — inner `/` is LHS, no paren.
+        assert!(!needs_parens(IrOp::IntSdiv, lhs(IrOp::IntSdiv)));
+        // `a / (b / c)` — inner `/` is RHS, must paren.
+        assert!(needs_parens(IrOp::IntSdiv, rhs(IrOp::IntSdiv)));
+        // Same for unsigned div / mod variants.
+        assert!(needs_parens(IrOp::IntDiv, rhs(IrOp::IntDiv)));
+        assert!(needs_parens(IrOp::IntSrem, rhs(IrOp::IntSrem)));
+        assert!(needs_parens(IrOp::IntRem, rhs(IrOp::IntRem)));
+    }
+
+    #[test]
+    fn parens_mul_flat_chain() {
+        // `a * b * c` — both inner positions of mul-of-mul: no paren.
+        assert!(!needs_parens(IrOp::IntMult, lhs(IrOp::IntMult)));
+        assert!(!needs_parens(IrOp::IntMult, rhs(IrOp::IntMult)));
+        // `a * (b / c)` — inner is `/`, RHS of `*`: paren via right-assoc.
+        assert!(needs_parens(IrOp::IntSdiv, rhs(IrOp::IntMult)));
+        // `(a / b) * c` — inner is `/`, LHS of `*`: no paren (right-assoc
+        // mask only fires on RHS).
+        assert!(!needs_parens(IrOp::IntSdiv, lhs(IrOp::IntMult)));
+    }
+
+    #[test]
+    fn parens_mixed_shift_compare() {
+        // `a << b == c`: `==` is *looser* than `<<` (parent_prec 7 >
+        // child_prec 5), so it parses as `(a << b) == c` already.  child
+        // ∈ [3,7] but parent prec=7, NOT in {5} ∪ [8,10] → trap doesn't
+        // fire, no paren needed.
+        assert!(!needs_parens(IrOp::IntLeft, lhs(IrOp::IntEqual)));
+        assert!(!needs_parens(IrOp::IntLeft, rhs(IrOp::IntEqual)));
+
+        // `a & (b == c)` — child `==` (prec 7), parent `&` (prec 8).
+        // Parent_prec > child_prec, AND parent_prec ∈ [8,10]: trap fires.
+        assert!(needs_parens(IrOp::IntEqual, rhs(IrOp::IntAnd)));
+        assert!(needs_parens(IrOp::IntEqual, lhs(IrOp::IntAnd)));
+
+        // `a & (b << c)` — child `<<` (prec 5), parent `&` (prec 8).
+        // child_prec ∈ [3,7] ✓, parent_prec ∈ [8,10] ✓ → trap fires.
+        assert!(needs_parens(IrOp::IntLeft, rhs(IrOp::IntAnd)));
+
+        // `a + b << c` — child `+` (prec 4) on LHS of parent `<<` (prec
+        // 5).  child ∈ [3,7] ✓, parent_prec == 5 ✓ → trap fires (paren).
+        assert!(needs_parens(IrOp::IntAdd, lhs(IrOp::IntLeft)));
+
+        // `a + (b * c)` — child `*` (prec 3) on RHS of parent `+` (prec
+        // 4).  child_prec ∈ [3,7] ✓ but parent_prec=4, not 5 and not in
+        // [8,10]: trap does NOT fire — no paren.
+        assert!(!needs_parens(IrOp::IntMult, rhs(IrOp::IntAdd)));
+    }
+
+    #[test]
+    fn parens_parent_strictly_tighter_always_wraps() {
+        // `(a == b) * c` — child `==` (prec 7), parent `*` (prec 3).
+        // parent_prec < child_prec → unconditional paren.
+        assert!(needs_parens(IrOp::IntEqual, lhs(IrOp::IntMult)));
+        // `(a + b) * c` — child `+` (prec 4), parent `*` (prec 3): paren.
+        assert!(needs_parens(IrOp::IntAdd, lhs(IrOp::IntMult)));
+        // `(a | b) & c` — child `|` (prec 10), parent `&` (prec 8): paren.
+        assert!(needs_parens(IrOp::IntOr, lhs(IrOp::IntAnd)));
+    }
+
+    #[test]
+    fn parens_unary_above_binary() {
+        // `~(a + b)` — child `+` (prec 4), parent `~` (prec 2).
+        // parent_prec < child_prec → paren.
+        assert!(needs_parens(IrOp::IntAdd, lhs(IrOp::IntNegate)));
+        // `(~x) | y` — child `~` (prec 2), parent `|` (prec 10).
+        // parent_prec > child_prec.  child_prec=2, NOT in [3,7] — trap
+        // does not fire.  No paren.
+        assert!(!needs_parens(IrOp::IntNegate, lhs(IrOp::IntOr)));
+    }
+
+    #[test]
+    fn parens_bnot_under_call_postfix() {
+        // `(~x)()` — child opcode 47 (cot_bnot), parent opcode 56 (call).
+        // Parent prec=0 (call is a leaf in the table), child prec=2;
+        // parent_prec < child_prec → strictly-tighter branch wraps
+        // unconditionally.  This reproduces sub_25F3C0's `v6 == 47 && a2
+        // == 56` outcome via the precedence comparison.
+        assert!(needs_parens(IrOp::IntNegate, lhs(IrOp::Call)));
+    }
+
+    #[test]
+    fn parens_subtract_right_operand_wraps() {
+        // `a - (b - c)` — child `-` (prec 4), parent `-` (prec 4).
+        // Same prec, opcode 36 falls through bitmasks (not associative,
+        // not in right-assoc mask, not opcode 37) → default branch:
+        // child_prec=4 > 2, so paren if RHS.
+        assert!(needs_parens(IrOp::IntSub, rhs(IrOp::IntSub)));
+        // `(a - b) - c` — LHS of same: no paren.
+        assert!(!needs_parens(IrOp::IntSub, lhs(IrOp::IntSub)));
+    }
+
+    #[test]
+    fn parens_shift_chain_right_assoc() {
+        // `a << (b << c)` — same level, default branch, paren if RHS.
+        assert!(needs_parens(IrOp::IntLeft, rhs(IrOp::IntLeft)));
+        assert!(!needs_parens(IrOp::IntLeft, lhs(IrOp::IntLeft)));
+    }
+
+    // -----------------------------------------------------------------
+    // measure_expr_width — t66 (port of IDA sub_262260)
+    // -----------------------------------------------------------------
+
+    use super::measure_expr_width;
+
+    fn empty_ctx() -> super::PrintCtx {
+        super::PrintCtx::new(
+            None,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+    }
+
+    /// Constants are measured by their rendered length; signed-context
+    /// `1u32` renders as `1` (1 col), wide values render as their decimal
+    /// or `0x…ULL` form.
+    #[test]
+    fn measure_expr_width_constant() {
+        let ctx = empty_ctx();
+        let one = IrInsn::with_output(IrOp::Copy, reg(0, 4), smallvec![con(1, 4)], 0);
+        // Copy passes width through: just `1`.
+        assert_eq!(measure_expr_width(&one, 0, &ctx), 1);
+
+        let big = IrInsn::with_output(IrOp::Copy, reg(0, 4), smallvec![con(1234, 4)], 0);
+        // signed-context format_constant(1234, 4) → "0x4d2" → 5 cols.
+        assert_eq!(measure_expr_width(&big, 0, &ctx), 5);
+    }
+
+    /// Binary op width is `lhs + " op " + rhs` with a 2-column op token
+    /// approximation; `r0 + 1` ⇒ 4 (var) + 1 + 2 + 1 + 1 (const) = 9
+    /// when var falls back to the default 4-column placeholder.
+    #[test]
+    fn measure_expr_width_binop() {
+        let ctx = empty_ctx();
+        let add = IrInsn::with_output(IrOp::IntAdd, reg(0, 4), smallvec![reg(0, 4), con(1, 4)], 0);
+        let w = measure_expr_width(&add, 0, &ctx);
+        // var(4) + space + op(2) + space + const(1) = 9.
+        assert_eq!(w, 9);
+    }
+
+    /// Call width is `name(arg1, arg2)` — `name` + `(` + sum(args) +
+    /// commas + `)`. With one var-target and two const args:
+    /// 4 + 1 + 1 + 2 + 1 + 1 = 10.
+    #[test]
+    fn measure_expr_width_call() {
+        let ctx = empty_ctx();
+        let call = IrInsn::without_output(
+            IrOp::Call,
+            smallvec![reg(0, 4), con(1, 4), con(2, 4)],
+            0,
+        );
+        let w = measure_expr_width(&call, 0, &ctx);
+        // target(4) + '(' + 1 + ', ' + 1 + ')' = 4+1+1+2+1+1 = 10.
+        assert_eq!(w, 10);
+    }
+
+    /// Unary op width is `op + child`; here `-r0` ⇒ 1 + 4 = 5.
+    #[test]
+    fn measure_expr_width_unary() {
+        let ctx = empty_ctx();
+        let neg = IrInsn::with_output(IrOp::Int2comp, reg(0, 4), smallvec![reg(0, 4)], 0);
+        assert_eq!(measure_expr_width(&neg, 0, &ctx), 5);
+    }
+
+    // -----------------------------------------------------------------
+    // should_break_before — t64 (port of IDA sub_267EB0)
+    // -----------------------------------------------------------------
+
+    use super::should_break_before;
+
+    /// Rule 1: same-operator chain — `a + b + c` never breaks.
+    #[test]
+    fn should_break_same_operator_chain() {
+        let ctx = empty_ctx();
+        let add = IrInsn::with_output(IrOp::IntAdd, reg(0, 4), smallvec![reg(0, 4), con(1, 4)], 0);
+        // Plenty of columns; only the same-op rule should matter.
+        assert!(!should_break_before(&add, Some(IrOp::IntAdd), 200, &ctx));
+    }
+
+    /// Rule 2: operator family — `IntAdd` inside an `IntSub` parent
+    /// stays on the same line (additive family).
+    #[test]
+    fn should_break_operator_family() {
+        let ctx = empty_ctx();
+        let add = IrInsn::with_output(IrOp::IntAdd, reg(0, 4), smallvec![reg(0, 4), con(1, 4)], 0);
+        // Same additive family — no break.
+        assert!(!should_break_before(&add, Some(IrOp::IntSub), 200, &ctx));
+        // Cross-family (additive vs bitwise): the family rule does
+        // not apply, falls through to the width check.
+        let xor = IrInsn::with_output(IrOp::IntXor, reg(0, 4), smallvec![reg(0, 4), con(1, 4)], 0);
+        // Width fits → no break.
+        assert!(!should_break_before(&xor, Some(IrOp::IntAdd), 200, &ctx));
+    }
+
+    /// Rule 3: hard floor — under 20 columns of room, every node breaks.
+    #[test]
+    fn should_break_hard_floor() {
+        let ctx = empty_ctx();
+        let add = IrInsn::with_output(IrOp::IntAdd, reg(0, 4), smallvec![reg(0, 4), con(1, 4)], 0);
+        assert!(should_break_before(&add, None, 19, &ctx));
+        // With no parent and exactly the floor we *don't* break (rule
+        // 3 requires `<` 20, and the width oracle says `9 ≤ 20`).
+        assert!(!should_break_before(&add, None, 20, &ctx));
+    }
+
+    /// Rule 4: width oracle — when the measured width exceeds
+    /// `available_cols`, force a break.
+    #[test]
+    fn should_break_width_exceeds() {
+        let ctx = empty_ctx();
+        // Build a 6-arg call: target + 6 args = 7 inputs.
+        // Width ≈ 4 + 1 + 6×1 + 5×2 + 1 = 22.
+        let call = IrInsn::without_output(
+            IrOp::Call,
+            smallvec![
+                reg(0, 4),
+                con(1, 4),
+                con(2, 4),
+                con(3, 4),
+                con(4, 4),
+                con(5, 4),
+                con(6, 4),
+            ],
+            0,
+        );
+        // 21 columns available, width 22 → break.
+        assert!(should_break_before(&call, None, 21, &ctx));
+        // 30 columns available, width 22 → fits, no break.
+        assert!(!should_break_before(&call, None, 30, &ctx));
     }
 }

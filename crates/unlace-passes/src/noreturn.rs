@@ -178,6 +178,10 @@ mod tests {
             array_strides: BTreeMap::new(),
             external_signatures: BTreeMap::new(),
             eh_landing_pads: BTreeSet::new(),
+            stack_gaps: BTreeMap::new(),
+            frame_size: 0,
+            resolved_indirect_calls: BTreeMap::new(),
+            variadic_call_types: BTreeMap::new(),
         }
     }
 

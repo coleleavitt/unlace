@@ -343,6 +343,30 @@ pub struct SsaFunction {
     /// `HirNode::TryCatch` nodes at the correct boundaries instead of
     /// relying on `__cxa_begin_catch` call-site heuristics.
     pub eh_landing_pads: BTreeSet<u64>,
+    /// Detected stack-frame gaps (regions of the local frame that no
+    /// LOAD/STORE/Stack-space access has covered). Keyed by RSP-relative
+    /// start offset; value is the gap's byte length. Populated by
+    /// [`StackVarRecoveryPass`](https://docs.rs/unlace-passes); only gaps
+    /// strictly larger than 8 bytes (heuristic for real explicit storage
+    /// rather than ABI alignment padding) are recorded.
+    pub stack_gaps: BTreeMap<i64, u32>,
+    /// Total local-frame size in bytes recovered from the entry-block
+    /// prologue (`sub rsp, K` ⇒ `K`). Zero when the prologue is missing or
+    /// could not be matched.
+    pub frame_size: u32,
+    /// Indirect calls (`Callind`) for which a unique concrete target address
+    /// has been recovered (e.g. via constant function pointers, vtable-slot
+    /// reads of read-only memory). Keyed by `(BlockId, insn_index)` of the
+    /// `Callind`; value is the resolved callee address. Populated by
+    /// [`IndirectCallResolvePass`](https://docs.rs/unlace-passes).
+    pub resolved_indirect_calls: BTreeMap<(BlockId, usize), u64>,
+    /// Inferred argument types for variadic-tail slots at each call site.
+    /// Keyed by `(BlockId, insn_index)` of a `Call`/`Callind`; value is the
+    /// list of `PrimitiveType`s in argument order, starting at the first
+    /// variadic slot (i.e. after the fixed-parameter prefix). Populated by
+    /// [`VarargDetectPass`](https://docs.rs/unlace-passes) primarily for
+    /// printf-family format-string parsing.
+    pub variadic_call_types: BTreeMap<(BlockId, usize), Vec<PrimitiveType>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -400,6 +424,10 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         array_strides: BTreeMap::new(),
         external_signatures: BTreeMap::new(),
         eh_landing_pads: BTreeSet::new(),
+        stack_gaps: BTreeMap::new(),
+        frame_size: 0,
+        resolved_indirect_calls: BTreeMap::new(),
+        variadic_call_types: BTreeMap::new(),
     }
 }
 

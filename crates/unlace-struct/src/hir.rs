@@ -175,6 +175,24 @@ pub enum HirNode {
         post: Vec<String>,
         inner: Box<HirNode>,
     },
+
+    /// One or more raw assembly lines that the lifter could not translate
+    /// into structured IR.
+    ///
+    /// Emitted in C output as an IDA-style `__asm { ... }` block. This
+    /// variant is the structurer's safety net for instructions that have
+    /// no semantic equivalent (privileged x86 ops, rare FPU paths, opaque
+    /// fallback decodes, etc.). The lifter currently produces
+    /// [`unlace_ir::IrOp::Unimplemented`] for these and the structurer
+    /// surfaces them as `Statement` nodes today; future work will rewrite
+    /// runs of `Unimplemented` into `Asm` blocks carrying the original
+    /// mnemonic + operands so the output preserves the unlowered text
+    /// instead of dropping it.
+    ///
+    /// Each string in `instructions` represents one raw asm line and is
+    /// emitted verbatim (no leading indentation; the printer adds it).
+    /// Empty `instructions` produces an empty `__asm { }` block.
+    Asm { instructions: Vec<String> },
 }
 
 impl HirNode {

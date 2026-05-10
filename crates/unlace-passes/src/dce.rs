@@ -203,6 +203,10 @@ mod tests {
             array_strides: std::collections::BTreeMap::new(),
             external_signatures: std::collections::BTreeMap::new(),
             eh_landing_pads: std::collections::BTreeSet::new(),
+            stack_gaps: std::collections::BTreeMap::new(),
+            frame_size: 0,
+            resolved_indirect_calls: std::collections::BTreeMap::new(),
+            variadic_call_types: std::collections::BTreeMap::new(),
         }
     }
 

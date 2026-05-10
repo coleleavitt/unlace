@@ -155,6 +155,7 @@ fn decompile_all_parallel(
     let lifter = get_lifter(image.arch);
     let pipeline_config = PipelineConfig {
         timeout: std::time::Duration::from_secs(config.timeout_secs),
+        print_config: None,
     };
 
     let mut indexed: BTreeMap<u64, &FunctionEntry> = BTreeMap::new();

@@ -353,6 +353,238 @@ fn rewrite_v3_entry(raw: u64, add: u64) -> u64 {
     }
 }
 
+// ---------------------------------------------------------------------------
+// t133: dyld_cache_slide_info2 — older arm64/x86_64h delta-mask format used by
+// macOS 10.12–11 caches. Each pointer slot encodes the delta to the next
+// chain entry in a bitfield masked by `delta_mask`; chain ends when delta=0.
+// ---------------------------------------------------------------------------
+
+pub const SLIDE_V2_PAGE_NONE: u16 = 0xFFFF;
+pub const SLIDE_V2_PAGE_USES_EXTRA: u16 = 0x4000;
+pub const SLIDE_V2_PAGE_EXTRA_END: u16 = 0x8000;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlideInfoV2 {
+    pub version: u32,
+    pub page_size: u32,
+    pub delta_mask: u64,
+    pub value_add: u64,
+    pub page_starts: Vec<u16>,
+    pub page_extras: Vec<u16>,
+}
+
+/// Parse a `dyld_cache_slide_info2` blob.
+pub fn parse_v2_slide_info(data: &[u8], off: u64, size: u64) -> Option<SlideInfoV2> {
+    let start = usize::try_from(off).ok()?;
+    let len = usize::try_from(size).ok()?;
+    let end = start.checked_add(len)?;
+    if end > data.len() || len < 40 {
+        return None;
+    }
+    let blob = &data[start..end];
+    let version = u32::from_le_bytes(blob[0..4].try_into().ok()?);
+    if version != 2 {
+        return None;
+    }
+    let page_size = u32::from_le_bytes(blob[4..8].try_into().ok()?);
+    let page_starts_offset = u32::from_le_bytes(blob[8..12].try_into().ok()?) as usize;
+    let page_starts_count = u32::from_le_bytes(blob[12..16].try_into().ok()?) as usize;
+    let page_extras_offset = u32::from_le_bytes(blob[16..20].try_into().ok()?) as usize;
+    let page_extras_count = u32::from_le_bytes(blob[20..24].try_into().ok()?) as usize;
+    let delta_mask = u64::from_le_bytes(blob[24..32].try_into().ok()?);
+    let value_add = u64::from_le_bytes(blob[32..40].try_into().ok()?);
+
+    let starts_end = page_starts_offset.checked_add(page_starts_count.checked_mul(2)?)?;
+    let extras_end = page_extras_offset.checked_add(page_extras_count.checked_mul(2)?)?;
+    if starts_end > blob.len() || extras_end > blob.len() {
+        return None;
+    }
+
+    let mut page_starts = Vec::with_capacity(page_starts_count);
+    for i in 0..page_starts_count {
+        let o = page_starts_offset + i * 2;
+        page_starts.push(u16::from_le_bytes(blob[o..o + 2].try_into().ok()?));
+    }
+    let mut page_extras = Vec::with_capacity(page_extras_count);
+    for i in 0..page_extras_count {
+        let o = page_extras_offset + i * 2;
+        page_extras.push(u16::from_le_bytes(blob[o..o + 2].try_into().ok()?));
+    }
+
+    Some(SlideInfoV2 {
+        version,
+        page_size,
+        delta_mask,
+        value_add,
+        page_starts,
+        page_extras,
+    })
+}
+
+const SLIDE_V2_MAX_CHAIN: usize = 1 << 14;
+
+fn walk_v2_chain(
+    image: &[u8],
+    page_base: usize,
+    start_off_in_page: usize,
+    delta_mask: u64,
+) -> Vec<usize> {
+    let mut out = Vec::new();
+    if delta_mask == 0 {
+        return out;
+    }
+    let delta_shift = delta_mask.trailing_zeros();
+    let mut off = page_base + start_off_in_page;
+    let mut count = 0usize;
+    while count < SLIDE_V2_MAX_CHAIN {
+        if off + 8 > image.len() {
+            break;
+        }
+        out.push(off);
+        let raw = u64::from_le_bytes(image[off..off + 8].try_into().unwrap_or([0; 8]));
+        let delta = (raw & delta_mask) >> delta_shift;
+        count += 1;
+        if delta == 0 {
+            break;
+        }
+        off = off.saturating_add((delta as usize) * 4);
+    }
+    out
+}
+
+/// Apply v2 slide rewrites to `image`, returning a fresh buffer.
+pub fn apply_v2_slide(image: &[u8], slide: &SlideInfoV2, slide_amount: u64) -> Vec<u8> {
+    let mut out = image.to_vec();
+    if slide.version != 2 || slide.page_size == 0 {
+        return out;
+    }
+    let page_size = slide.page_size as usize;
+    let add = slide.value_add.wrapping_add(slide_amount);
+
+    for (page_idx, &start) in slide.page_starts.iter().enumerate() {
+        if start == SLIDE_V2_PAGE_NONE {
+            continue;
+        }
+        let page_base = page_idx * page_size;
+        if page_base >= out.len() {
+            break;
+        }
+
+        let chain_starts: Vec<usize> = if (start & SLIDE_V2_PAGE_USES_EXTRA) != 0 {
+            let mut starts = Vec::new();
+            let mut idx = (start & !SLIDE_V2_PAGE_USES_EXTRA) as usize;
+            while idx < slide.page_extras.len() {
+                let extra = slide.page_extras[idx];
+                let off_in_page = (extra & !SLIDE_V2_PAGE_EXTRA_END) as usize * 4;
+                starts.push(off_in_page);
+                if (extra & SLIDE_V2_PAGE_EXTRA_END) != 0 {
+                    break;
+                }
+                idx += 1;
+            }
+            starts
+        } else {
+            vec![(start as usize) * 4]
+        };
+
+        for s in chain_starts {
+            let slots = walk_v2_chain(&out, page_base, s, slide.delta_mask);
+            for off in slots {
+                if off + 8 > out.len() {
+                    continue;
+                }
+                let raw = u64::from_le_bytes(out[off..off + 8].try_into().unwrap_or([0; 8]));
+                let value = raw & !slide.delta_mask;
+                let new_value = value.wrapping_add(add) & !slide.delta_mask;
+                let new_raw = (raw & slide.delta_mask) | new_value;
+                out[off..off + 8].copy_from_slice(&new_raw.to_le_bytes());
+            }
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// t133: dyld_cache_slide_info5 — variant of v3 used on arm64e caches in the
+// iOS 16/macOS 13 era. The on-disk header matches v3; full chain rewriting
+// is deferred (key_index + IA/IB/DA/DB selector decoding).
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlideInfoV5 {
+    pub version: u32,
+    pub page_size: u32,
+    pub page_starts: Vec<u16>,
+    pub value_add: u64,
+}
+
+/// Parse a `dyld_cache_slide_info5` blob.
+pub fn parse_v5_slide_info(data: &[u8], off: u64, size: u64) -> Option<SlideInfoV5> {
+    let start = usize::try_from(off).ok()?;
+    let len = usize::try_from(size).ok()?;
+    let end = start.checked_add(len)?;
+    if end > data.len() || len < 24 {
+        return None;
+    }
+    let blob = &data[start..end];
+    let version = u32::from_le_bytes(blob[0..4].try_into().ok()?);
+    if version != 5 {
+        return None;
+    }
+    let page_size = u32::from_le_bytes(blob[4..8].try_into().ok()?);
+    let page_starts_count = u32::from_le_bytes(blob[8..12].try_into().ok()?) as usize;
+    let value_add = u64::from_le_bytes(blob[16..24].try_into().ok()?);
+
+    let starts_end = 24usize.checked_add(page_starts_count.checked_mul(2)?)?;
+    if starts_end > blob.len() {
+        return None;
+    }
+    let mut page_starts = Vec::with_capacity(page_starts_count);
+    for i in 0..page_starts_count {
+        let o = 24 + i * 2;
+        page_starts.push(u16::from_le_bytes(blob[o..o + 2].try_into().ok()?));
+    }
+    Some(SlideInfoV5 {
+        version,
+        page_size,
+        page_starts,
+        value_add,
+    })
+}
+
+/// Apply v5 slide rewrites. STUBBED: returns the input unchanged rather than
+/// corrupting it. TODO: decode key_index + IA/IB/DA/DB selector per chain
+/// entry.
+pub fn apply_v5_slide(image: &[u8], slide: &SlideInfoV5, _slide_amount: u64) -> Vec<u8> {
+    let _ = slide;
+    image.to_vec()
+}
+
+/// Extract a single image from a dyld_shared_cache by index, applying slide
+/// info where wired. Returns up to [`EXTRACT_WINDOW`] bytes starting at the
+/// image's mach_header file offset.
+///
+/// Slide-info discovery from `dyld_cache_mapping_and_slide_info` records is
+/// deferred — the legacy `mapping_info` table parsed by this MVP does not
+/// carry slide-info offsets. When that wiring lands this helper will
+/// dispatch on version via `parse_v{2,3,5}_slide_info` + `apply_v{2,3,5}_slide`.
+pub fn extract_image_with_slide(
+    cache: &DyldCache,
+    image_index: usize,
+    _slide_amount: u64,
+) -> Option<Vec<u8>> {
+    let entry = cache.list_images().get(image_index)?;
+    let off = cache.vaddr_to_file_offset(entry.address)? as usize;
+    let end = off
+        .checked_add(EXTRACT_WINDOW)
+        .map(|e| e.min(cache.data.len()))
+        .unwrap_or(cache.data.len());
+    if off >= cache.data.len() {
+        return None;
+    }
+    Some(cache.data[off..end].to_vec())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -561,5 +793,135 @@ mod tests {
         assert_eq!(new_raw & 0x0007_FFFF_FFFF_FFFF, 0x1140);
         // Upper bits (next=0, auth=0) preserved at zero.
         assert_eq!(new_raw >> 51, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // t133: dyld v2/v5 slide-info + extract_image_with_slide tests
+    // -----------------------------------------------------------------------
+
+    fn build_v2_slide(
+        page_size: u32,
+        delta_mask: u64,
+        value_add: u64,
+        page_starts: &[u16],
+        page_extras: &[u16],
+    ) -> Vec<u8> {
+        let header_len = 40usize;
+        let starts_off = header_len;
+        let extras_off = starts_off + page_starts.len() * 2;
+        let total = extras_off + page_extras.len() * 2;
+
+        let mut buf = vec![0u8; total];
+        buf[0..4].copy_from_slice(&2u32.to_le_bytes());
+        buf[4..8].copy_from_slice(&page_size.to_le_bytes());
+        buf[8..12].copy_from_slice(&(starts_off as u32).to_le_bytes());
+        buf[12..16].copy_from_slice(&(page_starts.len() as u32).to_le_bytes());
+        buf[16..20].copy_from_slice(&(extras_off as u32).to_le_bytes());
+        buf[20..24].copy_from_slice(&(page_extras.len() as u32).to_le_bytes());
+        buf[24..32].copy_from_slice(&delta_mask.to_le_bytes());
+        buf[32..40].copy_from_slice(&value_add.to_le_bytes());
+        for (i, &s) in page_starts.iter().enumerate() {
+            let o = starts_off + i * 2;
+            buf[o..o + 2].copy_from_slice(&s.to_le_bytes());
+        }
+        for (i, &s) in page_extras.iter().enumerate() {
+            let o = extras_off + i * 2;
+            buf[o..o + 2].copy_from_slice(&s.to_le_bytes());
+        }
+        buf
+    }
+
+    #[test]
+    fn parse_v2_slide_info_header() {
+        let blob = build_v2_slide(
+            0x4000,
+            0x00FF_FF00_0000_0000,
+            0x1_8000_0000,
+            &[0, SLIDE_V2_PAGE_NONE],
+            &[],
+        );
+        let slide = parse_v2_slide_info(&blob, 0, blob.len() as u64).expect("parses");
+        assert_eq!(slide.version, 2);
+        assert_eq!(slide.page_size, 0x4000);
+        assert_eq!(slide.delta_mask, 0x00FF_FF00_0000_0000);
+        assert_eq!(slide.value_add, 0x1_8000_0000);
+        assert_eq!(slide.page_starts, vec![0, SLIDE_V2_PAGE_NONE]);
+        assert!(slide.page_extras.is_empty());
+
+        let mut bad = blob.clone();
+        bad[0] = 3;
+        assert!(parse_v2_slide_info(&bad, 0, bad.len() as u64).is_none());
+    }
+
+    #[test]
+    fn parse_v5_slide_info_header() {
+        // v5 reuses v3's header shape; stamp version=5 over a v3 build.
+        let mut blob = build_v3_slide(0x4000, 0x1_8000_0000, &[0, SLIDE_V3_PAGE_NONE]);
+        blob[0..4].copy_from_slice(&5u32.to_le_bytes());
+        let slide = parse_v5_slide_info(&blob, 0, blob.len() as u64).expect("parses");
+        assert_eq!(slide.version, 5);
+        assert_eq!(slide.page_size, 0x4000);
+        assert_eq!(slide.value_add, 0x1_8000_0000);
+        assert_eq!(slide.page_starts, vec![0, SLIDE_V3_PAGE_NONE]);
+    }
+
+    #[test]
+    fn apply_v2_slide_walks_chain() {
+        // Two-entry chain on a single page. delta_mask lives in the top 16
+        // bits so value_add doesn't overlap. delta is in 4-byte units.
+        let page_size = 0x4000usize;
+        let delta_mask: u64 = 0xFFFF_0000_0000_0000;
+        let delta_shift = 48u32;
+        let value_add: u64 = 0x1_8000_0000;
+        let slide_amount: u64 = 0x40;
+
+        let mut image = vec![0u8; page_size];
+        let mk = |value: u64, delta: u64| -> u64 {
+            (value & !delta_mask) | ((delta << delta_shift) & delta_mask)
+        };
+        image[0..8].copy_from_slice(&mk(0x1000, 2).to_le_bytes()); // next = +8 B
+        image[8..16].copy_from_slice(&mk(0x2000, 0).to_le_bytes()); // end
+
+        let slide = SlideInfoV2 {
+            version: 2,
+            page_size: page_size as u32,
+            delta_mask,
+            value_add,
+            page_starts: vec![0],
+            page_extras: vec![],
+        };
+        let out = apply_v2_slide(&image, &slide, slide_amount);
+
+        let raw0 = u64::from_le_bytes(out[0..8].try_into().unwrap());
+        let raw1 = u64::from_le_bytes(out[8..16].try_into().unwrap());
+        assert_eq!(raw0 & !delta_mask, 0x1000 + value_add + slide_amount);
+        assert_eq!(raw1 & !delta_mask, 0x2000 + value_add + slide_amount);
+        assert_eq!((raw0 & delta_mask) >> delta_shift, 2);
+        assert_eq!((raw1 & delta_mask) >> delta_shift, 0);
+    }
+
+    #[test]
+    fn extract_image_with_slide_no_slide_returns_unmodified() {
+        let mapping = Mapping {
+            address: 0x1_8000_0000,
+            size: 0x1000,
+            file_offset: 0x1000,
+        };
+        let mut data = build_cache(
+            &magic_x86_64(),
+            &[("/usr/lib/libfoo.dylib", 0x1_8000_0040)],
+            &[mapping],
+        );
+        let needed = 0x1000 + 0x100;
+        if data.len() < needed {
+            data.resize(needed, 0);
+        }
+        data[0x1040] = 0xCF;
+
+        let cache = DyldCache::parse(&data).expect("parse");
+        let bytes = extract_image_with_slide(&cache, 0, 0).expect("extract");
+        assert_eq!(bytes.first().copied(), Some(0xCF));
+
+        assert!(extract_image_with_slide(&cache, 99, 0).is_none());
     }
 }

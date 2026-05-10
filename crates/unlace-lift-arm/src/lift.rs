@@ -434,13 +434,16 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_MVN => emit_arm32_copy(ctx, &ops, true),
         ArmInsn::ARM_INS_MOVT => emit_arm32_movt(ctx, &ops),
 
-        ArmInsn::ARM_INS_ADD => emit_arm32_binop(ctx, &ops, IrOp::IntAdd),
+        ArmInsn::ARM_INS_ADD => {
+            emit_arm32_binop(ctx, &ops, IrOp::IntAdd);
+            if arm32_updates_flags(detail) {
+                emit_arm32_adds_subs_flags(ctx, &ops, IrOp::IntAdd);
+            }
+        }
         ArmInsn::ARM_INS_SUB => {
             emit_arm32_binop(ctx, &ops, IrOp::IntSub);
             if arm32_updates_flags(detail) {
-                if let Some(dst) = arm32_first_dst(&ops) {
-                    emit_arm32_nz_flags(ctx, dst);
-                }
+                emit_arm32_adds_subs_flags(ctx, &ops, IrOp::IntSub);
             }
         }
         ArmInsn::ARM_INS_RSB => emit_arm32_binop_rev(ctx, &ops, IrOp::IntSub),
@@ -683,11 +686,9 @@ pub const ARM_FLAG_C: Varnode = Varnode::reg(ARM_NZCV_BASE + 2, 1);
 pub const ARM_FLAG_V: Varnode = Varnode::reg(ARM_NZCV_BASE + 3, 1);
 
 /// Emit `N = (result < 0)` and `Z = (result == 0)` writes for a flag-setting
-/// arithmetic op. C/V emission is deferred (TODO): the ARM ARM spec is
-/// op-specific (Add: result < arg0; Sub: arg0 >= arg1 unsigned; logical:
-/// shifter carry-out) and tying the precise computation to each emitter
-/// site is left for a follow-up task. Downstream passes can continue to
-/// fall back to `Callother(0x360, cc)` for C/V-dependent branches.
+/// arithmetic op. C/V are emitted by [`emit_arm32_add_cv_flags`] /
+/// [`emit_arm32_sub_cv_flags`] which are op-specific (Add: unsigned overflow;
+/// Sub: NOT-borrow). Logical-op carry-out (shifter carry) is still deferred.
 fn emit_arm32_nz_flags(ctx: &mut LiftCtx, result: Varnode) {
     let zero = Varnode::constant(0, result.size);
     ctx.emit(IrInsn::with_output(
@@ -704,6 +705,81 @@ fn emit_arm32_nz_flags(ctx: &mut LiftCtx, result: Varnode) {
     ));
 }
 
+/// Emit C/V writes for an ADD-shaped flag-setting op (ADDS/CMN).
+///
+/// * `C = INT_CARRY(a, b)` — unsigned overflow of `a + b`.
+/// * `V = INT_SCARRY(a, b)` — signed overflow of `a + b`.
+fn emit_arm32_add_cv_flags(ctx: &mut LiftCtx, a: Varnode, b: Varnode) {
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntCarry,
+        ARM_FLAG_C,
+        smallvec![a, b],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntScarry,
+        ARM_FLAG_V,
+        smallvec![a, b],
+        ctx.addr,
+    ));
+}
+
+/// Emit C/V writes for a SUB-shaped flag-setting op (SUBS/CMP).
+///
+/// On ARM, `C` for subtraction is **NOT borrow** — i.e. `C = (a >= b)`
+/// unsigned. We synthesize this as `BoolNegate(IntLess(a, b))` to mirror the
+/// AArch64 lifter's idiom and to keep `IntLess` available for further fold
+/// passes. `V = INT_SBORROW(a, b)` is the signed-overflow primitive.
+fn emit_arm32_sub_cv_flags(ctx: &mut LiftCtx, a: Varnode, b: Varnode) {
+    let borrow = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntLess,
+        borrow,
+        smallvec![a, b],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::BoolNegate,
+        ARM_FLAG_C,
+        smallvec![borrow],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntSborrow,
+        ARM_FLAG_V,
+        smallvec![a, b],
+        ctx.addr,
+    ));
+}
+
+/// For ADDS/SUBS, the dispatch first runs the regular binop emitter (which
+/// writes the GPR `dst`), then this helper recomputes the operand varnodes
+/// and emits N/Z/C/V from them. Re-resolving the operands is cheaper than
+/// threading lhs/rhs back out of `emit_arm32_binop` and keeps that helper
+/// reusable for the flag-less variants. If either operand fails to resolve
+/// we silently skip flag emission — the binop itself already ran.
+fn emit_arm32_adds_subs_flags(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        return;
+    };
+    let (lhs_op, rhs_op) = match ops.len() {
+        2 => (&ops[0], &ops[1]),
+        _ => (&ops[1], &ops[2]),
+    };
+    let Some(lhs) = arm32_operand_to_varnode(ctx, lhs_op) else {
+        return;
+    };
+    let Some(rhs) = arm32_operand_to_varnode(ctx, rhs_op) else {
+        return;
+    };
+    emit_arm32_nz_flags(ctx, dst);
+    match op {
+        IrOp::IntAdd => emit_arm32_add_cv_flags(ctx, lhs, rhs),
+        IrOp::IntSub => emit_arm32_sub_cv_flags(ctx, lhs, rhs),
+        _ => {}
+    }
+}
+
 fn emit_arm32_flags(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
     let Some(lhs) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
         ctx.emit_unimplemented();
@@ -715,8 +791,19 @@ fn emit_arm32_flags(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
     };
     let result = Varnode::unique(ctx.alloc_unique(), 4);
     ctx.emit(IrInsn::with_output(op, result, smallvec![lhs, rhs], ctx.addr));
-    if matches!(op, IrOp::IntSub) {
-        emit_arm32_nz_flags(ctx, result);
+    match op {
+        IrOp::IntSub => {
+            emit_arm32_nz_flags(ctx, result);
+            emit_arm32_sub_cv_flags(ctx, lhs, rhs);
+        }
+        IrOp::IntAdd => {
+            emit_arm32_nz_flags(ctx, result);
+            emit_arm32_add_cv_flags(ctx, lhs, rhs);
+        }
+        // TST/TEQ (IntAnd/IntXor) still defer flag emission to the original
+        // t151 boundary; logical-op C is the shifter carry-out (not derived
+        // from result) and V is unaffected.
+        _ => {}
     }
 }
 

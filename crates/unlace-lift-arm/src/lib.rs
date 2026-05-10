@@ -12,10 +12,10 @@ mod tests {
 
     use crate::ArmLifter;
     use crate::lift::{
-        ARM_FLAG_N, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP, CALLOTHER_INT_MULT_HIGH,
-        CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
-        decode_thumb1_ldm_stm, decode_thumb1_push_pop, expand_reg_list, try_aarch64_ccmp,
-        try_aarch64_csel,
+        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
+        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
+        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
+        expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
     };
 
     #[test]
@@ -1261,6 +1261,117 @@ mod tests {
         assert!(
             r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_Z)),
             "SUBS must emit a write to ARM_FLAG_Z"
+        );
+    }
+
+    // t160: ADDS/SUBS/CMP/CMN also emit C and V flag varnodes.
+
+    #[test]
+    fn cmp_emits_c_and_v_flag_writes() {
+        // CMP R0, R1  →  0xE1500001. Expect C = !(R0 < R1) and
+        // V = INT_SBORROW(R0, R1).
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE150_0001u32.to_le_bytes(), 0x1000)
+            .expect("CMP decodes");
+        assert!(
+            r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_C)),
+            "CMP must emit a write to ARM_FLAG_C"
+        );
+        assert!(
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntSborrow && i.output == Some(ARM_FLAG_V)),
+            "CMP must emit IntSborrow → ARM_FLAG_V; got {:?}",
+            r.ir_ops.iter().map(|i| (i.op, i.output)).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn subs_emits_c_and_v_flag_writes() {
+        // SUBS R0, R1, R2  →  0xE0510002.
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE051_0002u32.to_le_bytes(), 0x1000)
+            .expect("SUBS decodes");
+        assert!(
+            r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_C)),
+            "SUBS must emit a write to ARM_FLAG_C"
+        );
+        assert!(
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntSborrow && i.output == Some(ARM_FLAG_V)),
+            "SUBS must emit IntSborrow → ARM_FLAG_V"
+        );
+    }
+
+    #[test]
+    fn cmn_emits_c_and_v_flag_writes() {
+        // CMN R0, R1  →  cond=AL(0xE), op=00010111, Rn=0, Rd=0(SBZ), Rm=1
+        //   = 0xE1700001.
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE170_0001u32.to_le_bytes(), 0x1000)
+            .expect("CMN decodes");
+        assert!(
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntCarry && i.output == Some(ARM_FLAG_C)),
+            "CMN must emit IntCarry → ARM_FLAG_C"
+        );
+        assert!(
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntScarry && i.output == Some(ARM_FLAG_V)),
+            "CMN must emit IntScarry → ARM_FLAG_V"
+        );
+    }
+
+    #[test]
+    fn adds_emits_c_and_v_flag_writes() {
+        // ADDS R0, R1, R2  →  cond=AL, op=0000_1001(S=1), Rn=1, Rd=0, Rm=2
+        //   = 0xE091_0002.
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE091_0002u32.to_le_bytes(), 0x1000)
+            .expect("ADDS decodes");
+        assert!(
+            r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_N)),
+            "ADDS must emit ARM_FLAG_N"
+        );
+        assert!(
+            r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_Z)),
+            "ADDS must emit ARM_FLAG_Z"
+        );
+        assert!(
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntCarry && i.output == Some(ARM_FLAG_C)),
+            "ADDS must emit IntCarry → ARM_FLAG_C"
+        );
+        assert!(
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntScarry && i.output == Some(ARM_FLAG_V)),
+            "ADDS must emit IntScarry → ARM_FLAG_V"
+        );
+    }
+
+    #[test]
+    fn add_without_s_does_not_emit_flags() {
+        // ADD (no S) R0, R1, R2  →  0xE081_0002. No flag writes.
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE081_0002u32.to_le_bytes(), 0x1000)
+            .expect("ADD decodes");
+        assert!(
+            !r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_N)
+                || writes_to(i, ARM_FLAG_Z)
+                || writes_to(i, ARM_FLAG_C)
+                || writes_to(i, ARM_FLAG_V)),
+            "non-S ADD must not touch NZCV; got {:?}",
+            r.ir_ops.iter().map(|i| (i.op, i.output)).collect::<Vec<_>>()
         );
     }
 

@@ -1591,4 +1591,120 @@ mod tests {
         let kind = classify_indirect_branch(ArchId::X86_64, &[nop]);
         assert!(kind.is_none(), "no BRANCHIND → no classification");
     }
+
+    // ----- t138: per-arch jump-table dispatch round-trip tests -----
+    //
+    // Each test below exercises the per-arch classifier with a representative
+    // raw IR sequence and asserts (a) the matching arch fires, and (b) an
+    // unrelated arch does NOT classify the same pattern as something else.
+
+    /// ARM/Thumb TBH (16-bit halfword table) — same shape as TBB but with a
+    /// 2-byte LOAD; the classifier accepts both 1- and 2-byte loads.
+    #[test]
+    fn arm_thumb_classifies_tbh() {
+        let load_half = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::unique(0x100, 2),
+            smallvec![Varnode::constant(0xAA, 8), Varnode::reg(0, 4)],
+            0x1000,
+        );
+        let add_pc = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(0x108, 8),
+            smallvec![Varnode::reg(0, 8), Varnode::unique(0x100, 2)],
+            0x1004,
+        );
+        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::unique(0x108, 8)], 0x1008);
+        let kind = classify_indirect_branch(ArchId::Arm, &[load_half, add_pc, bi]);
+        assert_eq!(kind, Some(IndirectBranchKind::ArmThumbTable));
+    }
+
+    /// MIPS classifier should reject an x86-style LOAD→BRANCHIND when arch is
+    /// declared MIPS64 — but it WILL fall through to the generic detector,
+    /// which accepts it. This is the documented behavior: `Generic` is a
+    /// valid outcome on every arch.
+    #[test]
+    fn mips_falls_through_to_generic_for_x86_pattern() {
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::reg(0, 8),
+            smallvec![Varnode::constant(0xAA, 8), Varnode::reg(8, 8)],
+            0x2000,
+        );
+        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0, 8)], 0x2004);
+        let kind = classify_indirect_branch(ArchId::Mips64, &[load, bi]);
+        assert_eq!(kind, Some(IndirectBranchKind::Generic));
+    }
+
+    /// PPC classifier should not match a RISC-V auipc+jalr pattern: the PPC
+    /// arm requires Load+Copy+Branchind. RISC-V uses IntAdd+Branchind.
+    #[test]
+    fn ppc_does_not_classify_riscv_pattern() {
+        let auipc = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::reg(0x28, 8),
+            smallvec![Varnode::reg(0, 8), Varnode::constant(0x1000, 8)],
+            0x3000,
+        );
+        let jalr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x28, 8)], 0x3004);
+        // Declared PPC, but pattern shape is RISC-V: PPC detector returns None
+        // and the generic LOAD→BRANCHIND path also returns None (no LOAD).
+        let kind = classify_indirect_branch(ArchId::Ppc64, &[auipc, jalr]);
+        assert!(kind.is_none(), "PPC detector should not claim RISC-V shape; got {:?}", kind);
+    }
+
+    /// RISC-V classifier should not match a MIPS lui+lw+jr triple as
+    /// `RiscvAuipcJalr`. The arch-specific RISC-V arm requires IntAdd+
+    /// Branchind, which this pattern doesn't have; the generic LOAD+
+    /// BRANCHIND fall-through fires instead, returning `Generic`.
+    #[test]
+    fn riscv_arch_arm_does_not_claim_mips_pattern() {
+        let lui = IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(0, 4),
+            smallvec![Varnode::constant(0x40000000, 4)],
+            0x4000,
+        );
+        let lw = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::reg(4, 4),
+            smallvec![Varnode::constant(0x42, 8), Varnode::reg(8, 4)],
+            0x4004,
+        );
+        let jr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(4, 4)], 0x4008);
+        // Arch-specific RISC-V detector returns None on this pattern (no IntAdd).
+        assert!(arch::try_riscv_auipc_jalr(&[lui.clone(), lw.clone(), jr.clone()]).is_none());
+        // Top-level dispatch falls through to `Generic` (LOAD → BRANCHIND).
+        let kind = classify_indirect_branch(ArchId::RiscV64, &[lui, lw, jr]);
+        assert_eq!(kind, Some(IndirectBranchKind::Generic));
+    }
+
+    /// AArch64 ADRP+ADD+BR — under the current detector set AArch64 is
+    /// gated to `try_arm_thumb_table`, which expects the TBB/TBH shape
+    /// (1- or 2-byte LOAD + IntAdd + BRANCHIND). A pure ADRP+ADD+BR
+    /// (modeled as IntAdd + IntAdd + Branchind, no LOAD) won't match
+    /// arch-specifically and won't match generic either. This test
+    /// pins the documented behavior.
+    #[test]
+    fn aarch64_adrp_add_br_currently_unclassified() {
+        let adrp = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::reg(0x10, 8),
+            smallvec![Varnode::reg(0, 8), Varnode::constant(0x1000, 8)],
+            0x5000,
+        );
+        let add = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::reg(0x18, 8),
+            smallvec![Varnode::reg(0x10, 8), Varnode::constant(0x42, 8)],
+            0x5004,
+        );
+        let br = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x18, 8)], 0x5008);
+        let kind = classify_indirect_branch(ArchId::AArch64, &[adrp, add, br]);
+        assert!(
+            kind.is_none(),
+            "AArch64 ADRP+ADD+BR is documented as not yet classified; got {:?}",
+            kind
+        );
+    }
 }

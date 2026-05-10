@@ -1347,6 +1347,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "unlace-ir",
+ "unlace-loader",
 ]
 
 [[package]]

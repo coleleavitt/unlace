@@ -13,7 +13,7 @@ mod tests {
     use crate::ArmLifter;
     use crate::lift::{
         ArmLiftMode, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
-        decode_thumb1_ldm_stm, decode_thumb1_push_pop, expand_reg_list,
+        decode_thumb1_ldm_stm, decode_thumb1_push_pop, expand_reg_list, try_aarch64_csel,
     };
 
     #[test]
@@ -474,6 +474,55 @@ mod tests {
     fn arm64_csel_lifts_to_callother() {
         // CSEL X2, X0, X1, LT  →  9a81b002
         assert_callother_tag(&[0x02, 0xb0, 0x81, 0x9a], 0x330);
+    }
+
+    #[test]
+    fn try_aarch64_csel_recognizes_csel_x0_x1_x2_eq() {
+        // CSEL X0, X1, X2, EQ  →  0x9A820020
+        let d = try_aarch64_csel(0x9A82_0020).expect("CSEL must decode");
+        assert!(d.sf);
+        assert_eq!(d.op, 0);
+        assert_eq!(d.rd, 0);
+        assert_eq!(d.rn, 1);
+        assert_eq!(d.rm, 2);
+        assert_eq!(d.cond, 0);
+    }
+
+    #[test]
+    fn try_aarch64_csel_recognizes_csinc() {
+        // CSINC W3, W4, W5, NE  →  0x1A851483
+        let d = try_aarch64_csel(0x1A85_1483).expect("CSINC must decode");
+        assert!(!d.sf);
+        assert_eq!(d.op, 1);
+        assert_eq!(d.rd, 3);
+        assert_eq!(d.rn, 4);
+        assert_eq!(d.rm, 5);
+        assert_eq!(d.cond, 1);
+    }
+
+    #[test]
+    fn try_aarch64_csel_recognizes_cset() {
+        // CSET X0, EQ  ≡  CSINC X0, XZR, XZR, NE  →  0x9A9F17E0
+        let d = try_aarch64_csel(0x9A9F_17E0).expect("CSET must decode");
+        assert!(d.sf);
+        assert_eq!(d.op, 1);
+        assert_eq!(d.rn, 31);
+        assert_eq!(d.rm, 31);
+        assert_eq!(d.cond, 1);
+    }
+
+    #[test]
+    fn csel_lifts_to_callother() {
+        let r = lifter()
+            .lift_insn(&[0x20, 0x00, 0x82, 0x9a], 0x1000)
+            .expect("CSEL decodes");
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
+    #[test]
+    fn non_csel_falls_through() {
+        // MOVZ X0, #5  →  0xD28000A0
+        assert!(try_aarch64_csel(0xD280_00A0).is_none());
     }
 
     #[test]

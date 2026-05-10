@@ -10,6 +10,7 @@ pdb = { workspace = true }
 fallible-iterator = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+rustc-demangle = "0.1"
 unlace-ir = { workspace = true }
 
 [dev-dependencies]

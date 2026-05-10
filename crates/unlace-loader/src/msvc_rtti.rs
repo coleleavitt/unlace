@@ -97,6 +97,10 @@ pub fn parse_type_descriptor(buf: &[u8], offset: usize, ptr_size: usize) -> Opti
     let tail = buf.get(name_off..)?;
     let nul = tail.iter().position(|&b| b == 0)?;
     let name = std::str::from_utf8(&tail[..nul]).ok()?.to_string();
+    let body = name.strip_prefix('.').unwrap_or(&name);
+    if !body.starts_with("?A") {
+        return None;
+    }
     Some(TypeDescriptor { name })
 }
 
@@ -172,6 +176,8 @@ pub fn scan_vtables(image: &BinaryImage) -> MsvcRtti {
                 method_count += 1;
                 p += ptr_size;
             }
+            let (bases, inheritance) =
+                walk_base_class_array(rdata, col.p_class_descriptor as u64, ptr_size);
             let mangled = td.name;
             let demangled = Some(demangle_rtti_name(&mangled));
             classes.insert(
@@ -181,8 +187,8 @@ pub fn scan_vtables(image: &BinaryImage) -> MsvcRtti {
                     demangled,
                     vtable_addr,
                     method_count,
-                    bases: Vec::new(),
-                    inheritance: 0,
+                    bases,
+                    inheritance,
                 },
             );
         }
@@ -197,6 +203,61 @@ fn read_ptr(buf: &[u8], off: usize, size: usize) -> u64 {
         8 => u64::from_le_bytes(buf[off..off + 8].try_into().unwrap()),
         _ => 0,
     }
+}
+
+/// Walk a `RTTIClassHierarchyDescriptor` and its base-class array, returning
+/// the parsed base list (excluding the leading self-entry) and the CHD's
+/// `attributes` field (bit 0 = multiple, bit 1 = virtual, bit 2 = ambiguous).
+///
+/// On any malformed read this falls back to `(vec![], 0)` rather than failing
+/// the surrounding scan — bad RTTI is common in stripped/obfuscated PEs.
+fn walk_base_class_array(
+    rdata: &Section,
+    chd_vaddr: u64,
+    ptr_size: usize,
+) -> (Vec<MsvcBaseClass>, u32) {
+    let Some(chd_offset) = vaddr_to_rdata_offset(rdata, chd_vaddr) else {
+        return (Vec::new(), 0);
+    };
+    let Some(chd) = parse_class_hierarchy_descriptor(&rdata.data[chd_offset..]) else {
+        return (Vec::new(), 0);
+    };
+    let Some(bca_offset) = vaddr_to_rdata_offset(rdata, chd.p_base_class_array as u64)
+    else {
+        return (Vec::new(), chd.attributes);
+    };
+
+    let mut bases = Vec::new();
+    for i in 1..chd.num_base_classes {
+        let entry_off = bca_offset + (i as usize) * 4;
+        if entry_off + 4 > rdata.data.len() {
+            break;
+        }
+        let bcd_rva = u32::from_le_bytes(
+            rdata.data[entry_off..entry_off + 4].try_into().unwrap(),
+        );
+        let Some(bcd_off) = vaddr_to_rdata_offset(rdata, bcd_rva as u64) else {
+            continue;
+        };
+        let Some(bcd) = parse_base_class_descriptor(&rdata.data[bcd_off..]) else {
+            continue;
+        };
+        let Some(td_off) = vaddr_to_rdata_offset(rdata, bcd.p_type_descriptor as u64)
+        else {
+            continue;
+        };
+        let Some(td) = parse_type_descriptor(&rdata.data, td_off, ptr_size) else {
+            continue;
+        };
+        bases.push(MsvcBaseClass {
+            mangled_name: td.name,
+            mdisp: bcd.mdisp,
+            pdisp: bcd.pdisp,
+            vdisp: bcd.vdisp,
+            attributes: bcd.attributes,
+        });
+    }
+    (bases, chd.attributes)
 }
 
 fn vaddr_to_rdata_offset(rdata: &Section, vaddr: u64) -> Option<usize> {
@@ -369,5 +430,131 @@ mod tests {
         assert_eq!(demangle_rtti_name("?AUBar@@"), "Bar");
         assert_eq!(demangle_rtti_name(".?AVNamespaced@@"), "Namespaced");
         assert_eq!(demangle_rtti_name("not_mangled"), "not_mangled");
+    }
+
+    fn synthetic_pe_with_bases(
+        self_name: &str,
+        parents: &[&str],
+        chd_attributes: u32,
+    ) -> BinaryImage {
+        const RDATA_BASE: u64 = 0x4000_0000;
+        const TEXT_BASE: u64 = 0x4010_0000;
+
+        let mut rdata = vec![0u8; 0x800];
+
+        let col_va = RDATA_BASE + 0x100;
+        rdata[0..8].copy_from_slice(&col_va.to_le_bytes());
+        for i in 0..3u64 {
+            let slot = (8 + i * 8) as usize;
+            rdata[slot..slot + 8]
+                .copy_from_slice(&(TEXT_BASE + i * 0x10).to_le_bytes());
+        }
+
+        let td_self_va = (RDATA_BASE + 0x200) as u32;
+        let chd_va = (RDATA_BASE + 0x300) as u32;
+        let coff = 0x100usize;
+        rdata[coff..coff + 4].copy_from_slice(&1u32.to_le_bytes());
+        rdata[coff + 4..coff + 8].copy_from_slice(&0u32.to_le_bytes());
+        rdata[coff + 8..coff + 12].copy_from_slice(&0u32.to_le_bytes());
+        rdata[coff + 12..coff + 16].copy_from_slice(&td_self_va.to_le_bytes());
+        rdata[coff + 16..coff + 20].copy_from_slice(&chd_va.to_le_bytes());
+
+        let toff = 0x200usize;
+        let nb = self_name.as_bytes();
+        rdata[toff + 16..toff + 16 + nb.len()].copy_from_slice(nb);
+        rdata[toff + 16 + nb.len()] = 0;
+
+        let bca_va = (RDATA_BASE + 0x340) as u32;
+        let num_bases = 1 + parents.len() as u32;
+        let chd_off = 0x300usize;
+        rdata[chd_off..chd_off + 4].copy_from_slice(&1u32.to_le_bytes());
+        rdata[chd_off + 4..chd_off + 8].copy_from_slice(&chd_attributes.to_le_bytes());
+        rdata[chd_off + 8..chd_off + 12].copy_from_slice(&num_bases.to_le_bytes());
+        rdata[chd_off + 12..chd_off + 16].copy_from_slice(&bca_va.to_le_bytes());
+
+        let bca_off = 0x340usize;
+        let self_bcd_rva = (RDATA_BASE + 0x380) as u32;
+        rdata[bca_off..bca_off + 4].copy_from_slice(&self_bcd_rva.to_le_bytes());
+        for (i, _) in parents.iter().enumerate() {
+            let parent_bcd_rva = (RDATA_BASE + 0x3A0 + (i as u64) * 0x20) as u32;
+            let entry = bca_off + 4 + i * 4;
+            rdata[entry..entry + 4].copy_from_slice(&parent_bcd_rva.to_le_bytes());
+        }
+
+        let self_bcd_off = 0x380usize;
+        rdata[self_bcd_off..self_bcd_off + 4].copy_from_slice(&td_self_va.to_le_bytes());
+
+        for (i, name) in parents.iter().enumerate() {
+            let bcd_off = 0x3A0 + i * 0x20;
+            let td_off = 0x500 + i * 0x40;
+            let td_va = (RDATA_BASE + td_off as u64) as u32;
+            rdata[bcd_off..bcd_off + 4].copy_from_slice(&td_va.to_le_bytes());
+            rdata[bcd_off + 4..bcd_off + 8].copy_from_slice(&0u32.to_le_bytes());
+            rdata[bcd_off + 8..bcd_off + 12]
+                .copy_from_slice(&((i as i32) * 8).to_le_bytes());
+            rdata[bcd_off + 12..bcd_off + 16].copy_from_slice(&(-1i32).to_le_bytes());
+            rdata[bcd_off + 16..bcd_off + 20].copy_from_slice(&(-1i32).to_le_bytes());
+            rdata[bcd_off + 20..bcd_off + 24].copy_from_slice(&0u32.to_le_bytes());
+            rdata[bcd_off + 24..bcd_off + 28].copy_from_slice(&0u32.to_le_bytes());
+
+            let nb = name.as_bytes();
+            rdata[td_off + 16..td_off + 16 + nb.len()].copy_from_slice(nb);
+            rdata[td_off + 16 + nb.len()] = 0;
+        }
+
+        let mut img = empty_image(ArchId::X86_64);
+        img.sections.push(Section {
+            name: ".rdata".to_string(),
+            vaddr: RDATA_BASE,
+            size: rdata.len() as u64,
+            data: rdata,
+            flags: SectionFlags::READ,
+        });
+        img.sections.push(Section {
+            name: ".text".to_string(),
+            vaddr: TEXT_BASE,
+            size: 0x1000,
+            data: vec![0u8; 0x1000],
+            flags: SectionFlags::READ | SectionFlags::EXEC,
+        });
+        img
+    }
+
+    #[test]
+    fn scan_vtables_recovers_single_inheritance() {
+        let img = synthetic_pe_with_bases(".?AVChild@@", &[".?AVParent@@"], 0);
+        let rtti = scan_vtables(&img);
+        assert_eq!(rtti.classes.len(), 1);
+        let class = rtti.classes.get(".?AVChild@@").expect("Child recovered");
+        assert_eq!(class.bases.len(), 1);
+        assert_eq!(class.bases[0].mangled_name, ".?AVParent@@");
+        assert_eq!(class.bases[0].mdisp, 0);
+        assert_eq!(class.inheritance, 0);
+    }
+
+    #[test]
+    fn scan_vtables_recovers_multiple_inheritance() {
+        let img = synthetic_pe_with_bases(
+            ".?AVChild@@",
+            &[".?AVParent1@@", ".?AVParent2@@"],
+            0b001,
+        );
+        let rtti = scan_vtables(&img);
+        let class = rtti.classes.get(".?AVChild@@").expect("Child recovered");
+        assert_eq!(class.bases.len(), 2);
+        assert_eq!(class.bases[0].mangled_name, ".?AVParent1@@");
+        assert_eq!(class.bases[1].mangled_name, ".?AVParent2@@");
+        assert_eq!(class.inheritance, 0b001);
+    }
+
+    #[test]
+    fn scan_vtables_handles_invalid_chd_gracefully() {
+        let mut img = synthetic_pe_with_bases(".?AVLone@@", &[".?AVParent@@"], 0);
+        let rdata = &mut img.sections[0].data;
+        rdata[0x110..0x114].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+        let rtti = scan_vtables(&img);
+        let class = rtti.classes.get(".?AVLone@@").expect("class still found");
+        assert!(class.bases.is_empty());
+        assert_eq!(class.inheritance, 0);
     }
 }

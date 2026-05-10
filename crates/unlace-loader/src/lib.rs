@@ -24,6 +24,7 @@ pub mod pe;
 pub mod rtti;
 pub mod seh;
 pub mod go_moduledata;
+pub mod go_types;
 pub mod strings;
 pub mod til;
 

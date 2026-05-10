@@ -15,6 +15,7 @@ pub mod image;
 pub mod macho;
 pub mod objc;
 pub mod pdb;
+pub mod pdb_types;
 pub mod pe;
 pub mod rtti;
 pub mod strings;
@@ -34,6 +35,7 @@ pub use image::{
     SymbolKind,
 };
 pub use macho::MachoLoader;
+pub use pdb_types::{PdbTypes, ProcSig, import_pdb_types};
 pub use pe::PeLoader;
 pub use rtti::{
     BaseClass, CppClass, InheritanceKind, RttiInfo, VtableLayout, VtableSlotKind, VtableSubtable,

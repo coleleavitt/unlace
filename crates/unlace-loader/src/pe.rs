@@ -107,6 +107,7 @@ where
         rich_header,
         dylibs: Vec::new(),
         rpaths: Vec::new(),
+        pdb_types: None,
     })
 }
 

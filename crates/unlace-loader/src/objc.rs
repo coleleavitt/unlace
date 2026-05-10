@@ -177,6 +177,7 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
+        pdb_types: None,
         }
     }
 

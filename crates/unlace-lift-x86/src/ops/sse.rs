@@ -34,6 +34,8 @@ pub mod tag {
     pub const PXOR: u64 = 0x122;
 
     pub const PMULLD: u64 = 0x123;
+    /// SSE2 unsigned 32×32→64 multiply of the low dword of each 64-bit lane.
+    pub const PMULUDQ: u64 = 0x127;
 
     pub const PCMPEQB: u64 = 0x124;
     pub const PCMPEQW: u64 = 0x125;

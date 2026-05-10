@@ -117,6 +117,7 @@ impl Default for IntrinsicRegistry {
             ("PSUBQ", info("_mm_sub_epi64", 2, 16, SseArith)),
             ("PMULLW", info("_mm_mullo_epi16", 2, 16, SseArith)),
             ("PMULLD", info("_mm_mullo_epi32", 2, 16, SseArith)),
+            ("PMULUDQ", info("_mm_mul_epu32", 2, 16, SseArith)),
             ("PMADDWD", info("_mm_madd_epi16", 2, 16, SseArith)),
             // ── SSE packed float arithmetic ─────────────────────────
             ("ADDPS", info("_mm_add_ps", 2, 16, SseArith)),

@@ -374,6 +374,42 @@ pub struct SsaFunction {
     /// every caller of this function is re-enqueued so its inferred call
     /// arguments / return-type slots can be refined to match.
     pub signature_revision: u64,
+    /// Per-operand type bindings (struct-offset / enum-constant) attached to
+    /// individual instruction inputs. Populated by `OpTypeBindingPass`;
+    /// consumed by the C printer to render `s->field` and enum variant
+    /// names instead of raw offsets and integer literals.
+    pub op_bindings: OpTypeBindings,
+}
+
+/// Per-operand type-binding tables resolved during analysis.
+///
+/// Both maps are keyed by `(block, insn_idx, operand_idx)` — the operand
+/// index references the `IrInsn::inputs` slot whose typed display the
+/// printer should consult.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OpTypeBindings {
+    /// Struct-offset bindings: an address operand `base + K` where `base` is
+    /// a known struct pointer; the printer renders `base->field` rather than
+    /// `*(int*)((char*)base + K)`.
+    pub stroff: BTreeMap<(BlockId, usize, usize), StrOffBinding>,
+    /// Enum-constant bindings: a constant operand compared against a known
+    /// enum-discriminant variable; the printer renders the variant name in
+    /// place of the integer literal.
+    pub enum_const: BTreeMap<(BlockId, usize, usize), EnumConstBinding>,
+}
+
+/// One struct-offset operand binding.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StrOffBinding {
+    pub struct_type: crate::types::Type,
+    pub field_path: Vec<String>,
+}
+
+/// One enum-constant operand binding.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EnumConstBinding {
+    pub enum_name: String,
+    pub variant: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -436,6 +472,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         resolved_indirect_calls: BTreeMap::new(),
         variadic_call_types: BTreeMap::new(),
         signature_revision: 0,
+        op_bindings: OpTypeBindings::default(),
     }
 }
 

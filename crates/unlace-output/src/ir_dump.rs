@@ -291,10 +291,10 @@ mod tests {
             resolved_indirect_calls: BTreeMap::new(),
             variadic_call_types: BTreeMap::new(),
             signature_revision: 0,
+            op_bindings: unlace_ir::ssa::OpTypeBindings::default(),
         }
     }
 
-    #[test]
     #[test]
     fn test_dump_with_phi() {
         let r0 = Varnode::reg(0, 4);

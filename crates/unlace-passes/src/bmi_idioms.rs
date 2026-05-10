@@ -6,9 +6,10 @@
 //! - `BLSI(x)   = x & -x`       — extract lowest set bit
 //! - `BLSR(x)   = x & (x - 1)`  — clear lowest set bit
 //! - `BLSMSK(x) = x ^ (x - 1)`  — mask up to & including lowest set bit
-//! - `ANDN(x,y) = ~x & y`       — and-not
+//! - `ANDN(x,y) = ~x & y`       — and-not (matched via `IntNegate(x)` *or* `IntXor(x, -1)`)
+//! - `BEXTR_CONST(src, lo, w)`  — `(src >> lo) & ((1 << w) - 1)` with constant `lo`/`w`
 //!
-//! BEXTR / PEXT / PDEP / RORX are intentionally out of scope for this pass.
+//! PEXT / PDEP / RORX are intentionally out of scope.
 
 use std::collections::BTreeMap;
 
@@ -25,6 +26,8 @@ pub const CALLOTHER_BLSR: u64 = 0x341;
 pub const CALLOTHER_BLSMSK: u64 = 0x342;
 /// `Callother` tag for `__ANDN__(x, y)`.
 pub const CALLOTHER_ANDN: u64 = 0x343;
+/// `Callother` tag for `__BEXTR_CONST__(src, lo, width)`.
+pub const CALLOTHER_BEXTR_CONST: u64 = 0x344;
 
 pub struct BmiIdiomPass;
 
@@ -80,6 +83,7 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
             try_blsi(insn, output, &insn.inputs[0], &insn.inputs[1], def_map)
                 .or_else(|| try_blsr(insn, output, &insn.inputs[0], &insn.inputs[1], def_map))
                 .or_else(|| try_andn(insn, output, &insn.inputs[0], &insn.inputs[1], def_map))
+                .or_else(|| try_bextr_const(insn, output, &insn.inputs[0], &insn.inputs[1], def_map))
         }
         IrOp::IntXor if insn.inputs.len() == 2 => {
             try_blsmsk(insn, output, &insn.inputs[0], &insn.inputs[1], def_map)
@@ -151,7 +155,8 @@ fn match_sub1_pair(
     Some(*x)
 }
 
-/// `~x & y` — one operand is `INT_NEGATE(x)` (bitwise-not in p-code).
+/// `~x & y` — bitwise-not in p-code is `IntNegate(x)`, but some front-ends
+/// emit it as `IntXor(x, -1)`. Accept both.
 fn try_andn(
     insn: &IrInsn,
     output: Varnode,
@@ -159,16 +164,10 @@ fn try_andn(
     b: &Varnode,
     def_map: &BTreeMap<Varnode, IrInsn>,
 ) -> Option<IrInsn> {
-    // Either (~x, y) or (y, ~x). Reject if both sides happen to be negates
-    // (ambiguous; not a canonical ANDN emission).
-    let a_neg = def_of(a, def_map)
-        .filter(|d| d.op == IrOp::IntNegate && d.inputs.len() == 1)
-        .map(|d| d.inputs[0]);
-    let b_neg = def_of(b, def_map)
-        .filter(|d| d.op == IrOp::IntNegate && d.inputs.len() == 1)
-        .map(|d| d.inputs[0]);
+    let a_not = bit_not_source(a, def_map);
+    let b_not = bit_not_source(b, def_map);
 
-    let (x, y) = match (a_neg, b_neg) {
+    let (x, y) = match (a_not, b_not) {
         (Some(x), None) => (x, *b),
         (None, Some(x)) => (x, *a),
         _ => return None,
@@ -179,6 +178,108 @@ fn try_andn(
         &[x, y],
         insn.addr,
     ))
+}
+
+/// If `v` is defined as `IntNegate(x)` or `IntXor(x, -1)` (bitwise NOT in either
+/// canonical form), return `x`. The `-1` constant is recognised both as a
+/// literal `u64::MAX` and as the all-ones mask sized to the constant operand.
+fn bit_not_source(v: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<Varnode> {
+    let def = def_of(v, def_map)?;
+    match def.op {
+        IrOp::IntNegate if def.inputs.len() == 1 => Some(def.inputs[0]),
+        IrOp::IntXor if def.inputs.len() == 2 => {
+            if is_all_ones(&def.inputs[1]) {
+                Some(def.inputs[0])
+            } else if is_all_ones(&def.inputs[0]) {
+                Some(def.inputs[1])
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn is_all_ones(v: &Varnode) -> bool {
+    if v.space != SpaceId::Const {
+        return false;
+    }
+    if v.offset == u64::MAX {
+        return true;
+    }
+    let bits = (v.size as u32) * 8;
+    if bits == 0 || bits > 64 {
+        return false;
+    }
+    let mask = if bits == 64 {
+        u64::MAX
+    } else {
+        (1u64 << bits) - 1
+    };
+    v.offset == mask
+}
+
+/// `(src >> lo) & ((1 << w) - 1)` with constant `lo` and constant mask
+/// `(1<<w)-1` — fold to `__BEXTR_CONST__(src, lo, w)`.
+fn try_bextr_const(
+    insn: &IrInsn,
+    output: Varnode,
+    a: &Varnode,
+    b: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+) -> Option<IrInsn> {
+    let (shift_vn, mask_vn) = if b.space == SpaceId::Const {
+        (a, b)
+    } else if a.space == SpaceId::Const {
+        (b, a)
+    } else {
+        return None;
+    };
+
+    let width = const_mask_width(mask_vn)?;
+    let shift_def = def_of(shift_vn, def_map)?;
+    if shift_def.op != IrOp::IntRight || shift_def.inputs.len() != 2 {
+        return None;
+    }
+    if shift_def.inputs[1].space != SpaceId::Const {
+        return None;
+    }
+    let src = shift_def.inputs[0];
+    let lo = shift_def.inputs[1].offset;
+    if width == 0 || width > 64 {
+        return None;
+    }
+    Some(make_callother(
+        output,
+        CALLOTHER_BEXTR_CONST,
+        &[
+            src,
+            Varnode::constant(lo, 8),
+            Varnode::constant(width, 8),
+        ],
+        insn.addr,
+    ))
+}
+
+/// If `v` is a constant of the form `(1 << w) - 1` for some `1 <= w <= 64`,
+/// return `w`. Otherwise `None`.
+fn const_mask_width(v: &Varnode) -> Option<u64> {
+    if v.space != SpaceId::Const {
+        return None;
+    }
+    let val = v.offset;
+    if val == 0 {
+        return None;
+    }
+    if val == u64::MAX {
+        return Some(64);
+    }
+    let plus_one = val.checked_add(1)?;
+    if plus_one.is_power_of_two() {
+        Some(plus_one.trailing_zeros() as u64)
+    } else {
+        None
+    }
 }
 
 fn is_negation_of(neg: Varnode, x: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>) -> bool {
@@ -300,6 +401,63 @@ mod tests {
         assert_eq!(and_insn.inputs[0].offset, CALLOTHER_ANDN);
         assert_eq!(and_insn.inputs[1], x);
         assert_eq!(and_insn.inputs[2], y);
+    }
+
+    #[test]
+    fn recognizes_andn_bitnot_form() {
+        // nx = INT_XOR(x, -1); out = INT_AND(nx, y)  — alternative ~x encoding
+        let x = Varnode::reg(0, 4);
+        let y = Varnode::reg(8, 4);
+        let nx = Varnode::unique(0, 4);
+        let out = Varnode::unique(4, 4);
+        let ones = Varnode::constant(0xFFFF_FFFF, 4);
+        let i_xor = IrInsn::with_output(IrOp::IntXor, nx, smallvec![x, ones], 0x1000);
+        let i_and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![nx, y], 0x1004);
+        let ssa = run_pass(vec![i_xor, i_and]);
+        let insns = only_block_insns(&ssa);
+        let and_insn = &insns[1];
+        assert_eq!(and_insn.op, IrOp::Callother);
+        assert_eq!(and_insn.inputs[0].offset, CALLOTHER_ANDN);
+        assert_eq!(and_insn.inputs[1], x);
+        assert_eq!(and_insn.inputs[2], y);
+    }
+
+    #[test]
+    fn recognizes_bextr_with_const_ctrl() {
+        // shr = INT_RIGHT(x, 4); out = INT_AND(shr, 0xFF)  → BEXTR_CONST(x, 4, 8)
+        let x = Varnode::reg(0, 4);
+        let shr = Varnode::unique(0, 4);
+        let out = Varnode::unique(4, 4);
+        let four = Varnode::constant(4, 4);
+        let mask = Varnode::constant(0xFF, 4);
+        let i_shr = IrInsn::with_output(IrOp::IntRight, shr, smallvec![x, four], 0x1000);
+        let i_and = IrInsn::with_output(IrOp::IntAnd, out, smallvec![shr, mask], 0x1004);
+        let ssa = run_pass(vec![i_shr, i_and]);
+        let insns = only_block_insns(&ssa);
+        let and_insn = &insns[1];
+        assert_eq!(and_insn.op, IrOp::Callother);
+        assert_eq!(and_insn.inputs[0].offset, CALLOTHER_BEXTR_CONST);
+        assert_eq!(and_insn.inputs[1], x);
+        assert_eq!(and_insn.inputs[2].space, SpaceId::Const);
+        assert_eq!(and_insn.inputs[2].offset, 4);
+        assert_eq!(and_insn.inputs[3].space, SpaceId::Const);
+        assert_eq!(and_insn.inputs[3].offset, 8);
+    }
+
+    #[test]
+    fn bmi_pass_runs_in_default_pipeline() {
+        let names = crate::default_pass_names();
+        let bmi_name = BmiIdiomPass.name();
+        assert!(
+            names.contains(&bmi_name),
+            "default pipeline must include the BMI idiom pass; got {names:?}"
+        );
+        let bmi_idx = names.iter().position(|n| *n == bmi_name).unwrap();
+        let gvn_idx = names.iter().position(|n| *n == "gvn").expect("gvn scheduled");
+        assert!(
+            bmi_idx > gvn_idx,
+            "BMI must run after gvn (gvn={gvn_idx}, bmi={bmi_idx})"
+        );
     }
 
     #[test]

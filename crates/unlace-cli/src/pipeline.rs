@@ -10,14 +10,14 @@ use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
 use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
 use unlace_passes::{
-    CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass, CopyPropagationPass,
-    CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass, DeadFlagElimPass,
-    DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass,
-    IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport, ParamInferPass, Pass,
-    StrengthReducePass,
-    PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot, StackOffsetSnapshotPass,
-    StackVarRecoveryPass, StructFieldDetectPass, TailCallDetectPass, VariableMergePass,
-    bump_if_signature_changed, run_outer_fixedpoint, run_to_fixedpoint,
+    BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
+    CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
+    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
+    GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
+    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
+    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
+    TailCallDetectPass, VariableMergePass, bump_if_signature_changed, run_outer_fixedpoint,
+    run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -777,9 +777,23 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             let iv_elim = IvElimPass;
             let strength_reduce = StrengthReducePass;
             let idiom = IdiomRecognitionPass;
+            let bmi = BmiIdiomPass;
             let cond = ConditionSimplifyPass;
-            let passes: &[&dyn Pass] =
-                &[&fold, &prop, &gprop, &dce, &sccp, &cse, &gvn, &licm, &iv_elim, &strength_reduce, &idiom, &cond];
+            let passes: &[&dyn Pass] = &[
+                &fold,
+                &prop,
+                &gprop,
+                &dce,
+                &sccp,
+                &cse,
+                &gvn,
+                &bmi,
+                &licm,
+                &iv_elim,
+                &strength_reduce,
+                &idiom,
+                &cond,
+            ];
             let inner = run_to_fixedpoint(passes, ssa)?;
             total_ir_changes = total_ir_changes.saturating_add(inner);
 

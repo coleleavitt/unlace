@@ -110,6 +110,29 @@ pub use tail_call::TailCallDetectPass;
 pub use tail_duplication::TailDuplicationPass;
 pub use variable_merge::VariableMergePass;
 
+/// Names of the passes scheduled in the default per-function pipeline's
+/// inner fixed-point cluster, in execution order. Mirrors the schedule
+/// assembled in `unlace_cli::pipeline::run_passes_with_report`; tests
+/// assert membership here so the schedule can be inspected without
+/// spinning up a binary image. Keep in sync with the CLI orchestrator.
+pub fn default_pass_names() -> Vec<&'static str> {
+    vec![
+        "constant-fold",
+        "copy-propagation",
+        "global-copy-propagation",
+        "dce",
+        "sccp",
+        "cse",
+        "gvn",
+        "bmi-idioms",
+        "licm",
+        "iv-elim",
+        "strength-reduce",
+        "idiom-recognition",
+        "condition-simplify",
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;

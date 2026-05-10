@@ -711,6 +711,99 @@ mod tests {
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 
+    // ── t174 — SSE3 / SSSE3 packed integer ops ────────────────────────
+    //
+    // SSSE3 opcodes are `66 0F 38 XX /r`; PALIGNR uses `66 0F 3A 0F /r ib`.
+    // We assert the Callother tag matches and (for PALIGNR) that the
+    // 4-input shape `(tag, dst, src, imm)` is preserved.
+
+    #[test]
+    fn test_lift_sse_pshufb_t174() {
+        // 66 0F 38 00 C1 = pshufb xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x00, 0xC1], sse_tag::PSHUFB);
+    }
+
+    #[test]
+    fn test_lift_sse_phaddw_t174() {
+        // 66 0F 38 01 C1 = phaddw xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x01, 0xC1], sse_tag::PHADDW);
+    }
+
+    #[test]
+    fn test_lift_sse_phaddd_t174() {
+        // 66 0F 38 02 C1 = phaddd xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x02, 0xC1], sse_tag::PHADDD);
+    }
+
+    #[test]
+    fn test_lift_sse_phsubw_t174() {
+        // 66 0F 38 05 C1 = phsubw xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x05, 0xC1], sse_tag::PHSUBW);
+    }
+
+    #[test]
+    fn test_lift_sse_phsubd_t174() {
+        // 66 0F 38 06 C1 = phsubd xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x06, 0xC1], sse_tag::PHSUBD);
+    }
+
+    #[test]
+    fn test_lift_sse_pmaddubsw_t174() {
+        // 66 0F 38 04 C1 = pmaddubsw xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x04, 0xC1], sse_tag::PMADDUBSW);
+    }
+
+    #[test]
+    fn test_lift_sse_psignb_t174() {
+        // 66 0F 38 08 C1 = psignb xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x08, 0xC1], sse_tag::PSIGNB);
+    }
+
+    #[test]
+    fn test_lift_sse_psignw_t174() {
+        // 66 0F 38 09 C1 = psignw xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x09, 0xC1], sse_tag::PSIGNW);
+    }
+
+    #[test]
+    fn test_lift_sse_psignd_t174() {
+        // 66 0F 38 0A C1 = psignd xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x0A, 0xC1], sse_tag::PSIGND);
+    }
+
+    #[test]
+    fn test_lift_sse_palignr_t174() {
+        // 66 0F 3A 0F C1 04 = palignr xmm0, xmm1, 4
+        //
+        // PALIGNR is the only ssse3 op we touch with a 3rd operand
+        // (an imm8 shift count). The lifter routes it through
+        // `lift_sse_blend`, so the Callother shape is
+        // `(tag, src0, src1, imm)` — four inputs total.
+        let bytes = &[0x66, 0x0F, 0x3A, 0x0F, 0xC1, 0x04];
+        assert_callother_tag(bytes, sse_tag::PALIGNR);
+
+        let result = lifter()
+            .lift_insn(bytes, 0x1000)
+            .expect("palignr must decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PALIGNR must emit Callother");
+        assert_eq!(
+            co.inputs.len(),
+            4,
+            "PALIGNR Callother is (tag, src0, src1, imm)",
+        );
+        // The imm8 reaches the IR as a constant varnode.
+        let imm = co.inputs[3];
+        assert_eq!(
+            imm.offset, 4,
+            "PALIGNR imm8 (4) must be preserved as the 4th Callother input",
+        );
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
     /// t163 — PADDQ → PSUBQ chained on XMM0 must share the XMM0 register
     /// varnode (same offset, same 16-byte size) so SSA / liveness sees
     /// the dataflow. This is the downstream-visibility contract: any

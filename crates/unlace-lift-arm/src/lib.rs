@@ -12,8 +12,9 @@ mod tests {
 
     use crate::ArmLifter;
     use crate::lift::{
-        ArmLiftMode, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
-        decode_thumb1_ldm_stm, decode_thumb1_push_pop, expand_reg_list, try_aarch64_csel,
+        ARM_FLAG_N, ARM_FLAG_Z, ArmLiftMode, ItState, LdmStmAddressing, decode_arm_ldm_stm,
+        decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop, expand_reg_list,
+        try_aarch64_csel,
     };
 
     #[test]
@@ -1057,6 +1058,94 @@ mod tests {
         assert_eq!(co.inputs[0].offset, 0x364);
         assert!(co.output.is_none(), "MSR writes a sysreg, not a varnode");
         assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    // -------------------------------------------------------------------
+    // t151: NZCV flag varnodes for ARM
+    // -------------------------------------------------------------------
+
+    fn writes_to(insn: &unlace_ir::IrInsn, vn: unlace_ir::Varnode) -> bool {
+        insn.output == Some(vn)
+    }
+
+    #[test]
+    fn cmp_emits_n_and_z_flag_writes() {
+        // CMP R0, R1  →  0xE1500001 (already covered by arm_capstone_decodes_cmp;
+        // here we additionally assert the t151 N/Z register writes).
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE150_0001u32.to_le_bytes(), 0x1000)
+            .expect("CMP decodes");
+        assert!(
+            r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_N)),
+            "CMP must emit a write to ARM_FLAG_N; got {:?}",
+            r.ir_ops.iter().map(|i| (i.op, i.output)).collect::<Vec<_>>()
+        );
+        assert!(
+            r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_Z)),
+            "CMP must emit a write to ARM_FLAG_Z"
+        );
+    }
+
+    #[test]
+    fn subs_emits_n_and_z_flag_writes() {
+        // SUBS R0, R1, R2  →  0xE0510002 (cond=AL, op=0010_0101_S=1, Rn=1,
+        // Rd=0, operand2 = Rm=2 with no shift).
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xE051_0002u32.to_le_bytes(), 0x1000)
+            .expect("SUBS decodes");
+        assert!(
+            r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_N)),
+            "SUBS must emit a write to ARM_FLAG_N"
+        );
+        assert!(
+            r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_Z)),
+            "SUBS must emit a write to ARM_FLAG_Z"
+        );
+    }
+
+    #[test]
+    fn beq_consumes_z_flag() {
+        // CMP r0, r1; BEQ #+0  → assert the cbranch predicate references
+        // ARM_FLAG_Z (or a unique varnode produced from it), not Callother.
+        let l = ArmLifter::new_arm32();
+        let cmp = l
+            .lift_insn(&0xE150_0001u32.to_le_bytes(), 0x1000)
+            .expect("CMP decodes");
+        let beq = l
+            .lift_insn(&0x0AFF_FFFFu32.to_le_bytes(), 0x1004)
+            .expect("BEQ decodes");
+        let mut all = cmp.ir_ops;
+        all.extend(beq.ir_ops);
+        let cbr = all
+            .iter()
+            .find(|i| i.op == IrOp::Cbranch)
+            .expect("BEQ emits Cbranch");
+        // The predicate is input[1] (target is input[0]). For EQ, the
+        // predicate IS the Z flag varnode directly.
+        let pred = cbr.inputs.get(1).expect("Cbranch has predicate input");
+        assert_eq!(*pred, ARM_FLAG_Z, "BEQ predicate must be ARM_FLAG_Z");
+        assert!(
+            !all.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs.first().map(|v| v.offset) == Some(0x360)),
+            "BEQ must not fall back to Callother(0x360) predicate"
+        );
+    }
+
+    #[test]
+    fn bvs_falls_back_to_callother_for_now() {
+        // BVS #+0  → cc=VS=6, still deferred. Encoding: cond=6, op=101,
+        // offset=0xFFFFFE  →  0x6AFF_FFFE.
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0x6AFF_FFFEu32.to_le_bytes(), 0x1000)
+            .expect("BVS decodes");
+        assert!(
+            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs.first().map(|v| v.offset) == Some(0x360)),
+            "BVS still uses Callother(0x360) predicate (V deferred)"
+        );
     }
 
     #[test]

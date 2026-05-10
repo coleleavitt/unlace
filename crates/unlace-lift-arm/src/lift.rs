@@ -409,6 +409,14 @@ fn arm32_operands(detail: &InsnDetail) -> Vec<ArmOperandType> {
     out
 }
 
+fn arm32_updates_flags(detail: &InsnDetail) -> bool {
+    detail
+        .arch_detail()
+        .arm()
+        .map(|a| a.update_flags())
+        .unwrap_or(false)
+}
+
 /// Dispatch a decoded ARM/Thumb instruction to its IR emitter. The MVP
 /// covers MOV/ADD/SUB/AND/ORR/EOR/BIC/LSL/LSR/ASR/ROR/LDR/STR/CMP/CMN/
 /// TST/TEQ/B/BL/BX/NOP; the long tail still emits `Unimplemented` so the
@@ -427,7 +435,14 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_MOVT => emit_arm32_movt(ctx, &ops),
 
         ArmInsn::ARM_INS_ADD => emit_arm32_binop(ctx, &ops, IrOp::IntAdd),
-        ArmInsn::ARM_INS_SUB => emit_arm32_binop(ctx, &ops, IrOp::IntSub),
+        ArmInsn::ARM_INS_SUB => {
+            emit_arm32_binop(ctx, &ops, IrOp::IntSub);
+            if arm32_updates_flags(detail) {
+                if let Some(dst) = arm32_first_dst(&ops) {
+                    emit_arm32_nz_flags(ctx, dst);
+                }
+            }
+        }
         ArmInsn::ARM_INS_RSB => emit_arm32_binop_rev(ctx, &ops, IrOp::IntSub),
 
         ArmInsn::ARM_INS_MUL => emit_arm32_binop(ctx, &ops, IrOp::IntMult),
@@ -654,6 +669,41 @@ fn emit_arm32_store(ctx: &mut LiftCtx, ops: &[ArmOperandType], _size: u8) {
     ctx.emit_store(addr_vn, value);
 }
 
+// t151: NZCV flag varnodes for ARM32.
+//
+// AArch32 lacks the discrete register-file slots that AArch64 has for NZCV;
+// to keep flag-producing instructions and conditional branches connected at
+// the IR level we synthesize four 1-byte register-space varnodes outside the
+// 16-register GPR range (`Varnode::reg(0..0x40, 4)`). 0x500 is well past the
+// GPR file and any future banked-register expansion.
+pub const ARM_NZCV_BASE: u64 = 0x500;
+pub const ARM_FLAG_N: Varnode = Varnode::reg(ARM_NZCV_BASE, 1);
+pub const ARM_FLAG_Z: Varnode = Varnode::reg(ARM_NZCV_BASE + 1, 1);
+pub const ARM_FLAG_C: Varnode = Varnode::reg(ARM_NZCV_BASE + 2, 1);
+pub const ARM_FLAG_V: Varnode = Varnode::reg(ARM_NZCV_BASE + 3, 1);
+
+/// Emit `N = (result < 0)` and `Z = (result == 0)` writes for a flag-setting
+/// arithmetic op. C/V emission is deferred (TODO): the ARM ARM spec is
+/// op-specific (Add: result < arg0; Sub: arg0 >= arg1 unsigned; logical:
+/// shifter carry-out) and tying the precise computation to each emitter
+/// site is left for a follow-up task. Downstream passes can continue to
+/// fall back to `Callother(0x360, cc)` for C/V-dependent branches.
+fn emit_arm32_nz_flags(ctx: &mut LiftCtx, result: Varnode) {
+    let zero = Varnode::constant(0, result.size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntSless,
+        ARM_FLAG_N,
+        smallvec![result, zero],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntEqual,
+        ARM_FLAG_Z,
+        smallvec![result, zero],
+        ctx.addr,
+    ));
+}
+
 fn emit_arm32_flags(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
     let Some(lhs) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
         ctx.emit_unimplemented();
@@ -665,6 +715,9 @@ fn emit_arm32_flags(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
     };
     let result = Varnode::unique(ctx.alloc_unique(), 4);
     ctx.emit(IrInsn::with_output(op, result, smallvec![lhs, rhs], ctx.addr));
+    if matches!(op, IrOp::IntSub) {
+        emit_arm32_nz_flags(ctx, result);
+    }
 }
 
 fn emit_arm32_branch(ctx: &mut LiftCtx, ops: &[ArmOperandType], insn: &Insn, detail: &InsnDetail) {
@@ -679,24 +732,54 @@ fn emit_arm32_branch(ctx: &mut LiftCtx, ops: &[ArmOperandType], insn: &Insn, det
             smallvec![target],
             ctx.addr,
         ));
-    } else {
-        // The AArch32 register file in this lifter does not yet model NZCV
-        // as discrete varnodes (unlike the AArch64 build), so synthesize a
-        // boolean condition via `Callother(0x360, cc_const)` — downstream
-        // passes that need flag-precise modeling can recognize the tag.
-        let cond = Varnode::unique(ctx.alloc_unique(), 1);
+        return;
+    }
+
+    // t151 MVP: EQ/NE/MI/PL consume the NZCV varnodes emitted by CMP/SUBS.
+    // The remaining cond codes still depend on C/V (HI, LS, GE, LT, GT, LE,
+    // CS, CC, VS, VC), which a future task will lift once C/V emission is
+    // wired into every flag-setting op.
+    let cond = match cc {
+        ArmCC::ARM_CC_EQ => Some(ARM_FLAG_Z),
+        ArmCC::ARM_CC_MI => Some(ARM_FLAG_N),
+        ArmCC::ARM_CC_NE => {
+            let t = Varnode::unique(ctx.alloc_unique(), 1);
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                t,
+                smallvec![ARM_FLAG_Z],
+                ctx.addr,
+            ));
+            Some(t)
+        }
+        ArmCC::ARM_CC_PL => {
+            let t = Varnode::unique(ctx.alloc_unique(), 1);
+            ctx.emit(IrInsn::with_output(
+                IrOp::BoolNegate,
+                t,
+                smallvec![ARM_FLAG_N],
+                ctx.addr,
+            ));
+            Some(t)
+        }
+        _ => None,
+    };
+
+    let cond = cond.unwrap_or_else(|| {
+        let c = Varnode::unique(ctx.alloc_unique(), 1);
         ctx.emit(IrInsn::with_output(
             IrOp::Callother,
-            cond,
+            c,
             smallvec![Varnode::constant(0x360, 8), Varnode::constant(cc as u32 as u64, 1)],
             ctx.addr,
         ));
-        ctx.emit(IrInsn::without_output(
-            IrOp::Cbranch,
-            smallvec![target, cond],
-            ctx.addr,
-        ));
-    }
+        c
+    });
+    ctx.emit(IrInsn::without_output(
+        IrOp::Cbranch,
+        smallvec![target, cond],
+        ctx.addr,
+    ));
 }
 
 fn emit_arm32_call(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {

@@ -4,6 +4,7 @@
 //! uniform [`BinaryImage`] representation, plus concrete implementations
 //! starting with [`ElfLoader`].
 
+pub mod demangle_swift;
 pub mod dwarf;
 pub mod eh_frame;
 pub mod elf;

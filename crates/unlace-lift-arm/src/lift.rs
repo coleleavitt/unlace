@@ -12,6 +12,7 @@ use std::cell::RefCell;
 use std::sync::Mutex;
 
 use capstone::Insn;
+use capstone::arch::arm::{ArmInsn, ArmOpMem, ArmOperandType, ArmReg};
 use capstone::arch::arm64::{Arm64Insn, Arm64OpMem, Arm64OperandType, Arm64Shift};
 use capstone::prelude::*;
 use smallvec::smallvec;
@@ -24,6 +25,8 @@ use crate::register_file::{aarch64_register_file, reg_varnode};
 
 thread_local! {
     static ARM64_CS: RefCell<Option<Capstone>> = const { RefCell::new(None) };
+    static ARM32_CS: RefCell<Option<Capstone>> = const { RefCell::new(None) };
+    static THUMB_CS: RefCell<Option<Capstone>> = const { RefCell::new(None) };
 }
 
 /// Which ARM ISA variant a given `ArmLifter` instance is configured for.
@@ -98,6 +101,24 @@ impl ArmLifter {
             .detail(true)
             .build()
             .expect("failed to build capstone arm64")
+    }
+
+    fn make_capstone_arm32() -> Capstone {
+        Capstone::new()
+            .arm()
+            .mode(arch::arm::ArchMode::Arm)
+            .detail(true)
+            .build()
+            .expect("failed to build capstone arm32")
+    }
+
+    fn make_capstone_thumb() -> Capstone {
+        Capstone::new()
+            .arm()
+            .mode(arch::arm::ArchMode::Thumb)
+            .detail(true)
+            .build()
+            .expect("failed to build capstone thumb")
     }
 }
 
@@ -189,15 +210,13 @@ impl ArmLifter {
             });
         }
 
-        // TODO(t127): wire Capstone arm32 mode (gated on `capstone` feature
-        // `arch_arm`) for the long tail of ARM32 instructions. Until then
-        // every non-block-transfer ARM32 insn lifts as Unimplemented so
-        // upstream callers can still walk the stream.
-        let mut ctx = LiftCtx::new(addr);
-        ctx.emit_unimplemented();
-        Ok(LiftedInsn {
-            ir_ops: ctx.ops,
-            len: 4,
+        ARM32_CS.with(|cell| {
+            let mut slot = cell.borrow_mut();
+            if slot.is_none() {
+                *slot = Some(Self::make_capstone_arm32());
+            }
+            let cs = slot.as_ref().expect("thread-local Capstone arm32 initialized");
+            decode_one_arm32(cs, bytes, addr, 4)
         })
     }
 
@@ -219,9 +238,6 @@ impl ArmLifter {
             });
         }
 
-        // Pop the next pending IT-condition (if any) before decoding. We
-        // capture it for diagnostics but the MVP does not yet *use* it to
-        // guard the lifted IR — see `TODO(t127)`.
         let _pending_cond = self.pop_pending_it_cond();
 
         if let Some(decoded) = decode_thumb1_push_pop(half) {
@@ -241,13 +257,13 @@ impl ArmLifter {
             });
         }
 
-        // TODO(t127): fall through to a Capstone-driven Thumb decode path
-        // and guard the resulting IR with `_pending_cond` when present.
-        let mut ctx = LiftCtx::new(addr);
-        ctx.emit_unimplemented();
-        Ok(LiftedInsn {
-            ir_ops: ctx.ops,
-            len: 2,
+        THUMB_CS.with(|cell| {
+            let mut slot = cell.borrow_mut();
+            if slot.is_none() {
+                *slot = Some(Self::make_capstone_thumb());
+            }
+            let cs = slot.as_ref().expect("thread-local Capstone thumb initialized");
+            decode_one_arm32(cs, bytes, addr, 2)
         })
     }
 
@@ -290,6 +306,335 @@ pub fn arm32_register_file() -> RegisterFile {
         varnode: Varnode::reg(64, 4),
     });
     RegisterFile { registers: regs }
+}
+
+/// Resolve a Capstone `ArmReg` constant to its 0..15 register index.
+/// Returns `None` for non-GPR registers (FPSCR, CPSR, …) or invalid IDs.
+fn arm32_reg_index(reg: capstone::RegId) -> Option<u8> {
+    let raw = reg.0 as u32;
+    match raw {
+        ArmReg::ARM_REG_R0 => Some(0),
+        ArmReg::ARM_REG_R1 => Some(1),
+        ArmReg::ARM_REG_R2 => Some(2),
+        ArmReg::ARM_REG_R3 => Some(3),
+        ArmReg::ARM_REG_R4 => Some(4),
+        ArmReg::ARM_REG_R5 => Some(5),
+        ArmReg::ARM_REG_R6 => Some(6),
+        ArmReg::ARM_REG_R7 => Some(7),
+        ArmReg::ARM_REG_R8 => Some(8),
+        ArmReg::ARM_REG_R9 => Some(9),
+        ArmReg::ARM_REG_R10 => Some(10),
+        ArmReg::ARM_REG_R11 => Some(11),
+        ArmReg::ARM_REG_R12 => Some(12),
+        ArmReg::ARM_REG_SP => Some(13),
+        ArmReg::ARM_REG_LR => Some(14),
+        ArmReg::ARM_REG_PC => Some(15),
+        _ => None,
+    }
+}
+
+fn arm32_operand_to_varnode(ctx: &mut LiftCtx, op_type: &ArmOperandType) -> Option<Varnode> {
+    match op_type {
+        ArmOperandType::Reg(reg) => arm32_reg_index(*reg).map(arm32_reg_varnode),
+        ArmOperandType::Imm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
+        ArmOperandType::Cimm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
+        ArmOperandType::Pimm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
+        ArmOperandType::Mem(mem) => arm32_compute_mem_address(ctx, mem),
+        _ => None,
+    }
+}
+
+fn arm32_compute_mem_address(ctx: &mut LiftCtx, mem: &ArmOpMem) -> Option<Varnode> {
+    let base_idx = arm32_reg_index(mem.base())?;
+    let base = arm32_reg_varnode(base_idx);
+    let disp = mem.disp();
+    if disp == 0 {
+        Some(base)
+    } else {
+        let disp_vn = Varnode::constant(disp as i64 as u64, 4);
+        let result = Varnode::unique(ctx.alloc_unique(), 4);
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntAdd,
+            result,
+            smallvec![base, disp_vn],
+            ctx.addr,
+        ));
+        Some(result)
+    }
+}
+
+/// Run Capstone over `bytes` for a single A32/T32 instruction, dispatch
+/// the recognised mnemonics into IR, and report `Unimplemented` for the
+/// long tail.
+fn decode_one_arm32(
+    cs: &Capstone,
+    bytes: &[u8],
+    addr: u64,
+    default_len: usize,
+) -> Result<LiftedInsn, LiftError> {
+    let insns = cs
+        .disasm_count(bytes, addr, 1)
+        .map_err(|e| LiftError::Decode(format!("{e}")))?;
+    let Some(insn) = insns.as_ref().first() else {
+        let mut ctx = LiftCtx::new(addr);
+        ctx.emit_unimplemented();
+        return Ok(LiftedInsn {
+            ir_ops: ctx.ops,
+            len: default_len,
+        });
+    };
+    let detail = cs
+        .insn_detail(insn)
+        .map_err(|e| LiftError::Decode(format!("{e}")))?;
+    let mut ctx = LiftCtx::new(addr);
+    dispatch_arm32_mnemonic(&mut ctx, insn, &detail);
+    Ok(LiftedInsn {
+        ir_ops: ctx.ops,
+        len: insn.len(),
+    })
+}
+
+fn arm32_operands(detail: &InsnDetail) -> Vec<ArmOperandType> {
+    let arch = detail.arch_detail();
+    let mut out = Vec::new();
+    if let Some(arm) = arch.arm() {
+        for op in arm.operands() {
+            out.push(op.op_type);
+        }
+    }
+    out
+}
+
+/// Dispatch a decoded ARM/Thumb instruction to its IR emitter. The MVP
+/// covers MOV/ADD/SUB/AND/ORR/EOR/BIC/LSL/LSR/ASR/ROR/LDR/STR/CMP/CMN/
+/// TST/TEQ/B/BL/BX/NOP; the long tail still emits `Unimplemented` so the
+/// caller can keep walking the byte stream.
+fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
+    let ops = arm32_operands(detail);
+    let id = ArmInsn::from(insn.id().0);
+
+    match id {
+        ArmInsn::ARM_INS_NOP => {}
+
+        ArmInsn::ARM_INS_MOV | ArmInsn::ARM_INS_MOVS | ArmInsn::ARM_INS_MOVW => {
+            emit_arm32_copy(ctx, &ops, false)
+        }
+        ArmInsn::ARM_INS_MVN => emit_arm32_copy(ctx, &ops, true),
+
+        ArmInsn::ARM_INS_ADD => emit_arm32_binop(ctx, &ops, IrOp::IntAdd),
+        ArmInsn::ARM_INS_SUB => emit_arm32_binop(ctx, &ops, IrOp::IntSub),
+        ArmInsn::ARM_INS_RSB => emit_arm32_binop_rev(ctx, &ops, IrOp::IntSub),
+
+        ArmInsn::ARM_INS_AND => emit_arm32_binop(ctx, &ops, IrOp::IntAnd),
+        ArmInsn::ARM_INS_ORR => emit_arm32_binop(ctx, &ops, IrOp::IntOr),
+        ArmInsn::ARM_INS_EOR => emit_arm32_binop(ctx, &ops, IrOp::IntXor),
+        ArmInsn::ARM_INS_BIC => emit_arm32_bic(ctx, &ops),
+
+        ArmInsn::ARM_INS_LSL => emit_arm32_binop(ctx, &ops, IrOp::IntLeft),
+        ArmInsn::ARM_INS_LSR => emit_arm32_binop(ctx, &ops, IrOp::IntRight),
+        ArmInsn::ARM_INS_ASR => emit_arm32_binop(ctx, &ops, IrOp::IntSright),
+        ArmInsn::ARM_INS_ROR => emit_arm32_binop(ctx, &ops, IrOp::IntRight),
+
+        ArmInsn::ARM_INS_LDR => emit_arm32_load(ctx, &ops, 4),
+        ArmInsn::ARM_INS_LDRB | ArmInsn::ARM_INS_LDRSB => emit_arm32_load(ctx, &ops, 1),
+        ArmInsn::ARM_INS_LDRH | ArmInsn::ARM_INS_LDRSH => emit_arm32_load(ctx, &ops, 2),
+        ArmInsn::ARM_INS_STR => emit_arm32_store(ctx, &ops, 4),
+        ArmInsn::ARM_INS_STRB => emit_arm32_store(ctx, &ops, 1),
+        ArmInsn::ARM_INS_STRH => emit_arm32_store(ctx, &ops, 2),
+
+        ArmInsn::ARM_INS_CMP => emit_arm32_flags(ctx, &ops, IrOp::IntSub),
+        ArmInsn::ARM_INS_CMN => emit_arm32_flags(ctx, &ops, IrOp::IntAdd),
+        ArmInsn::ARM_INS_TST => emit_arm32_flags(ctx, &ops, IrOp::IntAnd),
+        ArmInsn::ARM_INS_TEQ => emit_arm32_flags(ctx, &ops, IrOp::IntXor),
+
+        ArmInsn::ARM_INS_B => emit_arm32_branch(ctx, &ops, insn),
+        ArmInsn::ARM_INS_BL | ArmInsn::ARM_INS_BLX => emit_arm32_call(ctx, &ops),
+        ArmInsn::ARM_INS_BX => emit_arm32_bx(ctx, &ops),
+
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+fn arm32_first_dst(ops: &[ArmOperandType]) -> Option<Varnode> {
+    let ArmOperandType::Reg(reg) = ops.first()? else {
+        return None;
+    };
+    arm32_reg_index(*reg).map(arm32_reg_varnode)
+}
+
+fn emit_arm32_copy(ctx: &mut LiftCtx, ops: &[ArmOperandType], invert: bool) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    if invert {
+        ctx.emit(IrInsn::with_output(
+            IrOp::IntNegate,
+            dst,
+            smallvec![src],
+            ctx.addr,
+        ));
+    } else {
+        ctx.emit_copy(dst, src);
+    }
+}
+
+fn emit_arm32_binop(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let (lhs_op, rhs_op) = match ops.len() {
+        2 => (&ops[0], &ops[1]),
+        _ => (&ops[1], &ops[2]),
+    };
+    let Some(lhs) = arm32_operand_to_varnode(ctx, lhs_op) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = arm32_operand_to_varnode(ctx, rhs_op) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(op, dst, smallvec![lhs, rhs], ctx.addr));
+}
+
+fn emit_arm32_binop_rev(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let (lhs_op, rhs_op) = match ops.len() {
+        2 => (&ops[1], &ops[0]),
+        _ => (&ops[2], &ops[1]),
+    };
+    let Some(lhs) = arm32_operand_to_varnode(ctx, lhs_op) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = arm32_operand_to_varnode(ctx, rhs_op) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(op, dst, smallvec![lhs, rhs], ctx.addr));
+}
+
+fn emit_arm32_bic(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let (lhs_op, rhs_op) = match ops.len() {
+        2 => (&ops[0], &ops[1]),
+        _ => (&ops[1], &ops[2]),
+    };
+    let Some(lhs) = arm32_operand_to_varnode(ctx, lhs_op) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = arm32_operand_to_varnode(ctx, rhs_op) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let inverted = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntNegate,
+        inverted,
+        smallvec![rhs],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAnd,
+        dst,
+        smallvec![lhs, inverted],
+        ctx.addr,
+    ));
+}
+
+fn emit_arm32_load(ctx: &mut LiftCtx, ops: &[ArmOperandType], size: u8) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(addr_vn) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let loaded = ctx.emit_load(size, addr_vn);
+    ctx.emit_copy(dst, loaded);
+}
+
+fn emit_arm32_store(ctx: &mut LiftCtx, ops: &[ArmOperandType], _size: u8) {
+    let Some(value) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(addr_vn) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit_store(addr_vn, value);
+}
+
+fn emit_arm32_flags(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
+    let Some(lhs) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let result = Varnode::unique(ctx.alloc_unique(), 4);
+    ctx.emit(IrInsn::with_output(op, result, smallvec![lhs, rhs], ctx.addr));
+}
+
+fn emit_arm32_branch(ctx: &mut LiftCtx, ops: &[ArmOperandType], insn: &Insn) {
+    let target = ops
+        .first()
+        .and_then(|o| arm32_operand_to_varnode(ctx, o))
+        .unwrap_or_else(|| Varnode::constant(insn.address(), 4));
+    ctx.emit(IrInsn::without_output(
+        IrOp::Branch,
+        smallvec![target],
+        ctx.addr,
+    ));
+}
+
+fn emit_arm32_call(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(target) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::without_output(
+        IrOp::Call,
+        smallvec![target],
+        ctx.addr,
+    ));
+}
+
+fn emit_arm32_bx(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let target_reg = match ops.first() {
+        Some(ArmOperandType::Reg(reg)) => arm32_reg_index(*reg),
+        _ => None,
+    };
+    if target_reg == Some(14) {
+        ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![], ctx.addr));
+        return;
+    }
+    let Some(idx) = target_reg else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::without_output(
+        IrOp::Branchind,
+        smallvec![arm32_reg_varnode(idx)],
+        ctx.addr,
+    ));
 }
 
 /// Emit IR for a decoded LDM/STM (or PUSH/POP) tuple. Generates one

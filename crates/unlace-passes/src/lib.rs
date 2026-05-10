@@ -1,5 +1,6 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
+pub mod bmi_idioms;
 pub mod call_boundary_copyprop;
 pub mod caller_param_propagate;
 pub mod calling_convention;
@@ -48,6 +49,7 @@ pub mod tail_duplication;
 pub mod type_infer;
 pub mod variable_merge;
 
+pub use bmi_idioms::BmiIdiomPass;
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
 pub use caller_param_propagate::{
     apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,

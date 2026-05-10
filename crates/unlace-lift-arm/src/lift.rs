@@ -284,6 +284,149 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
     }
 }
 
+/// ARM 32-bit LDM/STM addressing mode (Increment/Decrement, After/Before).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LdmStmAddressing {
+    Ia,
+    Ib,
+    Da,
+    Db,
+}
+
+/// Walk a 16-bit ARM register-list mask and produce `(offset, regnum)` pairs
+/// describing the per-register transfer addresses for an LDM/STM (or
+/// PUSH/POP) instruction. Offsets are relative to the base register `Rn`
+/// *before* writeback. The lowest-numbered register always occupies the
+/// lowest address; the variants differ only in how the offset sequence
+/// aligns to `Rn`.
+pub fn expand_reg_list(reg_list: u16, addressing: LdmStmAddressing) -> Vec<(i32, u8)> {
+    let regs: Vec<u8> = (0..16u8).filter(|i| (reg_list >> i) & 1 == 1).collect();
+    let n = regs.len() as i32;
+    let mut out = Vec::with_capacity(regs.len());
+    match addressing {
+        LdmStmAddressing::Ia => {
+            for (i, r) in regs.iter().enumerate() {
+                out.push((4 * i as i32, *r));
+            }
+        }
+        LdmStmAddressing::Ib => {
+            for (i, r) in regs.iter().enumerate() {
+                out.push((4 * (i as i32 + 1), *r));
+            }
+        }
+        LdmStmAddressing::Da => {
+            let base = -4 * (n - 1);
+            for (i, r) in regs.iter().enumerate() {
+                out.push((base + 4 * i as i32, *r));
+            }
+        }
+        LdmStmAddressing::Db => {
+            let base = -4 * n;
+            for (i, r) in regs.iter().enumerate() {
+                out.push((base + 4 * i as i32, *r));
+            }
+        }
+    }
+    out
+}
+
+/// Decoded LDM/STM fields: `(addressing, Rn, reg_list, writeback, load_not_store)`.
+pub type LdmStmDecoded = (LdmStmAddressing, u8, u16, bool, bool);
+
+/// Decode an ARM A1 LDM/STM encoding: `cond:4 100:3 P U S W L:5 Rn:4 reg_list:16`.
+/// Returns `None` if bits[27:25] are not `100`.
+pub fn decode_arm_ldm_stm(insn: u32) -> Option<LdmStmDecoded> {
+    if (insn >> 25) & 0b111 != 0b100 {
+        return None;
+    }
+    let p = (insn >> 24) & 1 == 1;
+    let u = (insn >> 23) & 1 == 1;
+    let w = (insn >> 21) & 1 == 1;
+    let l = (insn >> 20) & 1 == 1;
+    let rn = ((insn >> 16) & 0xF) as u8;
+    let reg_list = (insn & 0xFFFF) as u16;
+    let addressing = match (p, u) {
+        (false, false) => LdmStmAddressing::Da,
+        (false, true) => LdmStmAddressing::Ia,
+        (true, false) => LdmStmAddressing::Db,
+        (true, true) => LdmStmAddressing::Ib,
+    };
+    Some((addressing, rn, reg_list, w, l))
+}
+
+/// Decode a Thumb T1 LDM/STM encoding (`1100 L Rn:3 reg_list:8`).
+/// Always IA addressing, writeback iff `Rn` is not in `reg_list` (LDM) or
+/// always for STM — but per ARM ARM the encoded `W` for the Thumb form is
+/// implicit: writeback is conventional, so we report `writeback=true`.
+pub fn decode_thumb1_ldm_stm(insn: u16) -> Option<LdmStmDecoded> {
+    if (insn >> 12) & 0xF != 0b1100 {
+        return None;
+    }
+    let l = (insn >> 11) & 1 == 1;
+    let rn = ((insn >> 8) & 0b111) as u8;
+    let reg_list = insn & 0xFF;
+    Some((LdmStmAddressing::Ia, rn, reg_list, true, l))
+}
+
+/// Decode a Thumb T1 PUSH/POP encoding:
+/// PUSH = `1011 010 M reg_list:8` (M=bit8 → LR in list at bit 14),
+/// POP  = `1011 110 P reg_list:8` (P=bit8 → PC in list at bit 15).
+/// Both have base `sp` (r13) and writeback.
+pub fn decode_thumb1_push_pop(insn: u16) -> Option<LdmStmDecoded> {
+    let top7 = (insn >> 9) & 0b111_1111;
+    let is_push = top7 == 0b101_1010;
+    let is_pop = top7 == 0b101_1110;
+    if !is_push && !is_pop {
+        return None;
+    }
+    let extra = (insn >> 8) & 1;
+    let low = insn & 0xFF;
+    let reg_list = if is_push {
+        low | (extra << 14)
+    } else {
+        low | (extra << 15)
+    };
+    let addressing = if is_push {
+        LdmStmAddressing::Db
+    } else {
+        LdmStmAddressing::Ia
+    };
+    Some((addressing, 13, reg_list, true, is_pop))
+}
+
+/// Thumb-2 IT-block state: the leading condition plus the per-instruction
+/// condition codes for each slot in the block (1..=4 entries).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ItState {
+    pub firstcond: u8,
+    pub conds: Vec<u8>,
+}
+
+/// Decode a Thumb IT instruction (`1011 1111 firstcond:4 mask:4`). Returns
+/// `None` if not an IT, or if `mask` is `0b0000` (reserved / NOP-hint
+/// encoding per ARM ARM B1.5.5).
+pub fn decode_it(insn: u16) -> Option<ItState> {
+    if (insn >> 8) & 0xFF != 0b1011_1111 {
+        return None;
+    }
+    let firstcond = ((insn >> 4) & 0xF) as u8;
+    let mask = (insn & 0xF) as u8;
+    if mask == 0 {
+        return None;
+    }
+    let tz = mask.trailing_zeros();
+    let count = (4 - tz) as usize;
+    let inv = firstcond ^ 1;
+    let fc_lsb = firstcond & 1;
+    let mut conds = Vec::with_capacity(count);
+    conds.push(firstcond);
+    for i in 1..count {
+        let bit = (mask >> (4 - i)) & 1;
+        conds.push(if bit == fc_lsb { firstcond } else { inv });
+    }
+    Some(ItState { firstcond, conds })
+}
+
 /// Return `true` if `insn` is an AArch64 pointer-authentication or BTI
 /// instruction with no architectural effects relevant to lifting; the
 /// caller should consume 4 bytes and emit no IR.

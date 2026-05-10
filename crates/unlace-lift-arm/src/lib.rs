@@ -11,6 +11,141 @@ mod tests {
     use unlace_ir::{ArchId, IrOp, Lifter};
 
     use crate::ArmLifter;
+    use crate::lift::{
+        ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm,
+        decode_thumb1_push_pop, expand_reg_list,
+    };
+
+    #[test]
+    fn expand_reg_list_ldmia_three_regs() {
+        let got = expand_reg_list(0b0000_0000_0000_1110, LdmStmAddressing::Ia);
+        assert_eq!(got, vec![(0, 1), (4, 2), (8, 3)]);
+    }
+
+    #[test]
+    fn expand_reg_list_stmdb_pre_decrement() {
+        let got = expand_reg_list(0b1111_0000, LdmStmAddressing::Db);
+        assert_eq!(got, vec![(-16, 4), (-12, 5), (-8, 6), (-4, 7)]);
+    }
+
+    #[test]
+    fn expand_reg_list_ldmib_offsets_shift() {
+        let got = expand_reg_list(0b0000_0000_0000_1110, LdmStmAddressing::Ib);
+        assert_eq!(got, vec![(4, 1), (8, 2), (12, 3)]);
+    }
+
+    #[test]
+    fn expand_reg_list_ldmda_lowest_addr_lowest_reg() {
+        let got = expand_reg_list(0b0000_0000_0000_1110, LdmStmAddressing::Da);
+        assert_eq!(got, vec![(-8, 1), (-4, 2), (0, 3)]);
+    }
+
+    #[test]
+    fn decode_arm_ldmia_writeback() {
+        // LDMIA r0!, {r1,r2,r3} = 0xE8B0000E
+        let (addr, rn, list, w, l) = decode_arm_ldm_stm(0xE8B0_000E).expect("ldm decode");
+        assert_eq!(addr, LdmStmAddressing::Ia);
+        assert_eq!(rn, 0);
+        assert_eq!(list, 0x000E);
+        assert!(w);
+        assert!(l);
+    }
+
+    #[test]
+    fn decode_arm_stmdb_no_writeback() {
+        // STMDB r0, {r1} = 0xE9000002  (P=1,U=0,W=0,L=0)
+        let (addr, rn, list, w, l) = decode_arm_ldm_stm(0xE900_0002).expect("stmdb decode");
+        assert_eq!(addr, LdmStmAddressing::Db);
+        assert_eq!(rn, 0);
+        assert_eq!(list, 0x0002);
+        assert!(!w);
+        assert!(!l);
+    }
+
+    #[test]
+    fn decode_arm_ldm_rejects_non_block_class() {
+        assert!(decode_arm_ldm_stm(0xE3A0_0000).is_none());
+    }
+
+    #[test]
+    fn decode_thumb_push() {
+        // PUSH {r4, lr} = 0xB510 → DB sp!, {r4, lr}
+        let (addr, rn, list, w, l) = decode_thumb1_push_pop(0xB510).expect("push decode");
+        assert_eq!(addr, LdmStmAddressing::Db);
+        assert_eq!(rn, 13);
+        assert_eq!(list, 0x4010);
+        assert!(w);
+        assert!(!l);
+    }
+
+    #[test]
+    fn decode_thumb_pop_pc() {
+        // POP {r4, pc} = 0xBD10 → IA sp!, {r4, pc}
+        let (addr, rn, list, w, l) = decode_thumb1_push_pop(0xBD10).expect("pop decode");
+        assert_eq!(addr, LdmStmAddressing::Ia);
+        assert_eq!(rn, 13);
+        assert_eq!(list, 0x8010);
+        assert!(w);
+        assert!(l);
+    }
+
+    #[test]
+    fn decode_thumb_ldm_basic() {
+        // LDM r0!, {r1,r2} = 0xC803  (1100 1 000 0000_0011)
+        let (addr, rn, list, w, l) = decode_thumb1_ldm_stm(0xC803).expect("thumb ldm");
+        assert_eq!(addr, LdmStmAddressing::Ia);
+        assert_eq!(rn, 0);
+        assert_eq!(list, 0x0003);
+        assert!(w);
+        assert!(l);
+    }
+
+    #[test]
+    fn decode_it_eq() {
+        let s = decode_it(0xBF08).expect("IT EQ");
+        assert_eq!(
+            s,
+            ItState {
+                firstcond: 0,
+                conds: vec![0],
+            }
+        );
+    }
+
+    #[test]
+    fn decode_itt_eq() {
+        let s = decode_it(0xBF04).expect("ITT EQ");
+        assert_eq!(s.firstcond, 0);
+        assert_eq!(s.conds, vec![0, 0]);
+    }
+
+    #[test]
+    fn decode_ite_eq() {
+        let s = decode_it(0xBF0C).expect("ITE EQ");
+        assert_eq!(s.firstcond, 0);
+        assert_eq!(s.conds, vec![0, 1]);
+    }
+
+    #[test]
+    fn decode_ittt_eq() {
+        let s = decode_it(0xBF02).expect("ITTT EQ");
+        assert_eq!(s.firstcond, 0);
+        assert_eq!(s.conds, vec![0, 0, 0]);
+    }
+
+    #[test]
+    fn decode_iteee_ne() {
+        // firstcond=NE=1, mask=0b0001 → ITEEE  →  insn = 0xBF11
+        let s = decode_it(0xBF11).expect("ITEEE NE");
+        assert_eq!(s.firstcond, 1);
+        assert_eq!(s.conds, vec![1, 0, 0, 0]);
+    }
+
+    #[test]
+    fn decode_it_rejects_non_it() {
+        assert!(decode_it(0x4770).is_none()); // BX LR
+        assert!(decode_it(0xBF00).is_none()); // mask=0 → NOP hint
+    }
 
     fn lifter() -> ArmLifter {
         ArmLifter::new()

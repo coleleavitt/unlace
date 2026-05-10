@@ -2077,6 +2077,269 @@ fn decode_chain_entry_from_blob(
     }
 }
 
+// ---------------------------------------------------------------------------
+// t111: Public exports-trie + imports-binding-opcode API.
+// ---------------------------------------------------------------------------
+
+/// One entry yielded from an `LC_DYLD_INFO[_ONLY]` exports trie.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportEntry {
+    pub name: String,
+    pub flags: u32,
+    pub address: u64,
+}
+
+/// Decode the trie at `data[offset..offset+size]` into a flat list of exports.
+///
+/// Returns an empty vector when bounds are invalid. Reexports (flag bit 0x08)
+/// are skipped — they reference a name in another dylib, not an address in
+/// this image.
+pub fn parse_exports_trie(data: &[u8], offset: u64, size: u64) -> Vec<ExportEntry> {
+    let off = match usize::try_from(offset) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    let len = match usize::try_from(size) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    let Some(end) = off.checked_add(len) else {
+        return Vec::new();
+    };
+    if end > data.len() || len == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    walk_export_trie_public(&data[off..end], 0, String::new(), 0, &mut out);
+    out
+}
+
+fn walk_export_trie_public(
+    bytes: &[u8],
+    offset: usize,
+    name: String,
+    depth: usize,
+    out: &mut Vec<ExportEntry>,
+) {
+    if depth > DYLD_MAX_EXPORT_DEPTH || offset >= bytes.len() || out.len() >= DYLD_MAX_OPCODE_OPS {
+        return;
+    }
+    let mut reader = DyldBytecode::new(&bytes[offset..]);
+    let Some(terminal_size) = reader.read_uleb128() else {
+        return;
+    };
+    let terminal_start = reader.position();
+    let Some(terminal_end) = terminal_start.checked_add(terminal_size as usize) else {
+        return;
+    };
+    if terminal_end > bytes.len() - offset {
+        return;
+    }
+
+    if terminal_size != 0 {
+        let mut terminal =
+            DyldBytecode::new(&bytes[offset + terminal_start..offset + terminal_end]);
+        let flags = terminal.read_uleb128().unwrap_or(0);
+        // Skip re-exports (REEXPORT bit): they encode `(ordinal, name)`, not
+        // an in-image address.
+        if flags & 0x08 == 0 {
+            if let Some(addr) = terminal.read_uleb128() {
+                out.push(ExportEntry {
+                    name: name.clone(),
+                    flags: flags as u32,
+                    address: addr,
+                });
+            }
+        }
+    }
+
+    reader.set_position(terminal_end);
+    let Some(child_count) = reader.read_u8() else {
+        return;
+    };
+    for _ in 0..child_count {
+        let Some(label) = reader.read_c_string() else {
+            return;
+        };
+        let Some(child_offset) = reader.read_uleb128() else {
+            return;
+        };
+        let child_offset = child_offset as usize;
+        if child_offset >= bytes.len() {
+            continue;
+        }
+        let mut child_name = name.clone();
+        child_name.push_str(label);
+        walk_export_trie_public(bytes, child_offset, child_name, depth + 1, out);
+    }
+}
+
+/// Bind-record pointer type (BIND_TYPE_*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindKind {
+    /// BIND_TYPE_POINTER = 1
+    Pointer,
+    /// BIND_TYPE_TEXT_ABSOLUTE32 = 2
+    TextAbs,
+    /// BIND_TYPE_TEXT_PCREL32 = 3
+    TextPcRel,
+}
+
+impl BindKind {
+    fn from_imm(imm: u8) -> Self {
+        match imm {
+            2 => BindKind::TextAbs,
+            3 => BindKind::TextPcRel,
+            _ => BindKind::Pointer,
+        }
+    }
+}
+
+/// One emitted record from `BIND_OPCODE_DO_BIND*`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportBinding {
+    pub addr: u64,
+    pub symbol: String,
+    pub dylib_ordinal: i32,
+    pub addend: i64,
+    pub kind: BindKind,
+}
+
+/// Decode an `LC_DYLD_INFO[_ONLY]` bind / lazy_bind / weak_bind opcode stream
+/// at `data[offset..offset+size]` using `segments` as the segment-index →
+/// `(vmaddr, vmsize)` table.
+///
+/// Pointer size is fixed at 8 (Mach-O 64-bit). Callers handling 32-bit slices
+/// should slice in their own decoder.
+pub fn parse_bind_opcodes(
+    data: &[u8],
+    offset: u64,
+    size: u64,
+    segments: &[(u64, u64)],
+) -> Vec<ImportBinding> {
+    let off = match usize::try_from(offset) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    let len = match usize::try_from(size) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    let Some(end) = off.checked_add(len) else {
+        return Vec::new();
+    };
+    if end > data.len() || len == 0 {
+        return Vec::new();
+    }
+
+    let bytes = &data[off..end];
+    let mut reader = DyldBytecode::new(bytes);
+    let mut out = Vec::new();
+    let mut ordinal: i32 = 0;
+    let mut addend: i64 = 0;
+    let mut symbol = String::new();
+    let mut seg_idx: usize = 0;
+    let mut seg_off: u64 = 0;
+    let mut kind = BindKind::Pointer;
+    let pointer_size: u64 = 8;
+
+    let push = |out: &mut Vec<ImportBinding>,
+                segments: &[(u64, u64)],
+                seg_idx: usize,
+                seg_off: u64,
+                symbol: &str,
+                ordinal: i32,
+                addend: i64,
+                kind: BindKind| {
+        if symbol.is_empty() {
+            return;
+        }
+        let Some(&(vmaddr, _vmsize)) = segments.get(seg_idx) else {
+            return;
+        };
+        out.push(ImportBinding {
+            addr: vmaddr.saturating_add(seg_off),
+            symbol: symbol.to_string(),
+            dylib_ordinal: ordinal,
+            addend,
+            kind,
+        });
+    };
+
+    let mut ops = 0usize;
+    while ops < DYLD_MAX_OPCODE_OPS {
+        let Some(byte) = reader.read_u8() else { break };
+        ops += 1;
+        let opcode = byte & 0xF0;
+        let imm = byte & 0x0F;
+        match opcode {
+            0x00 => break, // BIND_OPCODE_DONE
+            0x10 => ordinal = imm as i32, // SET_DYLIB_ORDINAL_IMM
+            0x20 => {
+                let Some(v) = reader.read_uleb128() else { break };
+                ordinal = v as i32;
+            }
+            0x30 => {
+                // SET_DYLIB_SPECIAL_IMM: sign-extend a 4-bit value.
+                ordinal = if imm == 0 {
+                    0
+                } else {
+                    (imm | 0xF0) as i8 as i32
+                };
+            }
+            0x40 => {
+                // SET_SYMBOL_TRAILING_FLAGS_IMM: imm = flags, then C string.
+                let _flags = imm;
+                let Some(s) = reader.read_c_string() else { break };
+                symbol = s.to_string();
+            }
+            0x50 => kind = BindKind::from_imm(imm), // SET_TYPE_IMM
+            0x60 => {
+                let Some(v) = reader.read_sleb128() else { break };
+                addend = v;
+            }
+            0x70 => {
+                let Some(o) = reader.read_uleb128() else { break };
+                seg_idx = imm as usize;
+                seg_off = o;
+            }
+            0x80 => {
+                let Some(d) = reader.read_uleb128() else { break };
+                seg_off = seg_off.saturating_add(d);
+            }
+            0x90 => {
+                push(&mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind);
+                seg_off = seg_off.saturating_add(pointer_size);
+            }
+            0xA0 => {
+                push(&mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind);
+                let Some(d) = reader.read_uleb128() else { break };
+                seg_off = seg_off.saturating_add(d).saturating_add(pointer_size);
+            }
+            0xB0 => {
+                push(&mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind);
+                seg_off = seg_off
+                    .saturating_add(u64::from(imm) * pointer_size)
+                    .saturating_add(pointer_size);
+            }
+            0xC0 => {
+                let Some(count) = reader.read_uleb128() else { break };
+                let Some(skip) = reader.read_uleb128() else { break };
+                for _ in 0..count {
+                    if ops >= DYLD_MAX_OPCODE_OPS {
+                        break;
+                    }
+                    ops += 1;
+                    push(&mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind);
+                    seg_off = seg_off.saturating_add(pointer_size).saturating_add(skip);
+                }
+            }
+            _ => break,
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3301,6 +3564,139 @@ mod tests {
                 assert_eq!(symbol, "_malloc");
             }
             _ => panic!("expected bind, got {:?}", fixups[0].kind),
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // t111: exports-trie + bind-opcode public-API tests
+    // -----------------------------------------------------------------------
+
+    fn write_uleb(out: &mut Vec<u8>, mut v: u64) {
+        loop {
+            let mut byte = (v & 0x7F) as u8;
+            v >>= 7;
+            if v != 0 {
+                byte |= 0x80;
+                out.push(byte);
+            } else {
+                out.push(byte);
+                return;
+            }
+        }
+    }
+
+    #[test]
+    fn parse_exports_trie_single_terminal() {
+        // Layout: ULEB(terminal_size) + flags + addr + u8(child_count=0).
+        let mut buf = Vec::new();
+        let mut term = Vec::new();
+        write_uleb(&mut term, 0); // flags
+        write_uleb(&mut term, 0x1234); // address
+        write_uleb(&mut buf, term.len() as u64); // terminal_size
+        buf.extend(term);
+        buf.push(0); // child_count
+
+        let entries = parse_exports_trie(&buf, 0, buf.len() as u64);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "");
+        assert_eq!(entries[0].flags, 0);
+        assert_eq!(entries[0].address, 0x1234);
+    }
+
+    #[test]
+    fn parse_exports_trie_two_children() {
+        // Root has no terminal but two children: "_a" -> 0x10, "_b" -> 0x20.
+        let mut a_node = Vec::new();
+        {
+            let mut term = Vec::new();
+            write_uleb(&mut term, 0);
+            write_uleb(&mut term, 0x10);
+            write_uleb(&mut a_node, term.len() as u64);
+            a_node.extend(term);
+            a_node.push(0);
+        }
+        let mut b_node = Vec::new();
+        {
+            let mut term = Vec::new();
+            write_uleb(&mut term, 0);
+            write_uleb(&mut term, 0x20);
+            write_uleb(&mut b_node, term.len() as u64);
+            b_node.extend(term);
+            b_node.push(0);
+        }
+
+        // Root prefix: ULEB(0)=1B, u8(child_count)=1B → 2 bytes.
+        // Per child: "_x\0" (3B) + ULEB(offset, 1B) = 4 bytes.
+        // Root span = 2 + 2*4 = 10. Leaf "_a" at offset 10.
+        let mut buf = Vec::new();
+        write_uleb(&mut buf, 0);
+        buf.push(2);
+        let off_a: u64 = 10;
+        let off_b: u64 = off_a + a_node.len() as u64;
+        buf.extend_from_slice(b"_a");
+        buf.push(0);
+        write_uleb(&mut buf, off_a);
+        buf.extend_from_slice(b"_b");
+        buf.push(0);
+        write_uleb(&mut buf, off_b);
+        assert_eq!(buf.len(), 10);
+        buf.extend(a_node);
+        buf.extend(b_node);
+
+        let mut entries = parse_exports_trie(&buf, 0, buf.len() as u64);
+        entries.sort_by_key(|e| e.address);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].name, "_a");
+        assert_eq!(entries[0].address, 0x10);
+        assert_eq!(entries[1].name, "_b");
+        assert_eq!(entries[1].address, 0x20);
+    }
+
+    #[test]
+    fn parse_bind_set_segment_then_do_bind() {
+        let mut buf = Vec::new();
+        buf.push(0x40); // SET_SYMBOL_TRAILING_FLAGS_IMM | 0
+        buf.extend_from_slice(b"_printf");
+        buf.push(0);
+        buf.push(0x11); // SET_DYLIB_ORDINAL_IMM | 1
+        buf.push(0x51); // SET_TYPE_IMM | 1 (pointer)
+        buf.push(0x70); // SET_SEGMENT_AND_OFFSET_ULEB | 0
+        write_uleb(&mut buf, 0x40);
+        buf.push(0x90); // DO_BIND
+        buf.push(0x00); // DONE
+
+        let segments = vec![(0x1_0000_0000u64, 0x1000u64)];
+        let binds = parse_bind_opcodes(&buf, 0, buf.len() as u64, &segments);
+        assert_eq!(binds.len(), 1);
+        assert_eq!(binds[0].addr, 0x1_0000_0040);
+        assert_eq!(binds[0].symbol, "_printf");
+        assert_eq!(binds[0].dylib_ordinal, 1);
+        assert_eq!(binds[0].kind, BindKind::Pointer);
+    }
+
+    #[test]
+    fn parse_bind_do_bind_uleb_times() {
+        let mut buf = Vec::new();
+        buf.push(0x40);
+        buf.extend_from_slice(b"_x");
+        buf.push(0);
+        buf.push(0x51); // SET_TYPE pointer
+        buf.push(0x70); // SET_SEGMENT_AND_OFFSET_ULEB seg=0
+        write_uleb(&mut buf, 0);
+        buf.push(0xC0); // DO_BIND_ULEB_TIMES_SKIPPING_ULEB
+        write_uleb(&mut buf, 3);
+        write_uleb(&mut buf, 8);
+        buf.push(0x00); // DONE
+
+        let segments = vec![(0x4000u64, 0x1000u64)];
+        let binds = parse_bind_opcodes(&buf, 0, buf.len() as u64, &segments);
+        assert_eq!(binds.len(), 3);
+        // pointer_size=8 + skip=8 = stride 16.
+        assert_eq!(binds[0].addr, 0x4000);
+        assert_eq!(binds[1].addr, 0x4010);
+        assert_eq!(binds[2].addr, 0x4020);
+        for b in &binds {
+            assert_eq!(b.symbol, "_x");
         }
     }
 }

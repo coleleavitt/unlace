@@ -271,6 +271,7 @@ where
         msvc_rtti: None,
         seh: None,
         go_module: None,
+        go_itabs: std::collections::BTreeMap::new(),
     };
 
     image.go_module = crate::go_moduledata::parse_firstmoduledata(&image);

@@ -268,6 +268,7 @@ mod tests {
             msvc_rtti: None,
             seh: None,
             go_module: None,
+            go_itabs: std::collections::BTreeMap::new(),
         };
 
         let info = parse_eh_frame(&img).expect("missing .eh_frame should not error");
@@ -309,6 +310,7 @@ mod tests {
             msvc_rtti: None,
             seh: None,
             go_module: None,
+            go_itabs: std::collections::BTreeMap::new(),
         };
 
         let result = parse_eh_frame(&img);

@@ -250,6 +250,7 @@ mod tests {
             msvc_rtti: None,
             seh: None,
             go_module: None,
+            go_itabs: std::collections::BTreeMap::new(),
         }
     }
 

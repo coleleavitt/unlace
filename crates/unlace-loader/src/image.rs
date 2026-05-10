@@ -335,6 +335,10 @@ pub struct BinaryImage {
     /// `None` for non-Go binaries (or stripped Go binaries where neither
     /// the symbol nor a recognizable pclntab is present).
     pub go_module: Option<crate::go_moduledata::GoModuleInfo>,
+    /// Decoded Go `runtime.itab` records keyed by their virtual address.
+    /// Populated from `GoModuleInfo.itablinks` when the moduledata parse
+    /// succeeds. Empty for non-Go binaries.
+    pub go_itabs: std::collections::BTreeMap<u64, crate::go_types::GoItab>,
 }
 
 /// A PE RUNTIME_FUNCTION entry from the `.pdata` exception directory.
@@ -447,6 +451,7 @@ mod tests {
             msvc_rtti: None,
             seh: None,
             go_module: None,
+            go_itabs: BTreeMap::new(),
         }
     }
 
@@ -488,5 +493,11 @@ mod tests {
         let img = empty_image();
         assert!(img.msvc_rtti.is_none());
         assert!(img.seh.is_none());
+    }
+
+    #[test]
+    fn binaryimage_default_has_empty_go_itabs() {
+        let img = empty_image();
+        assert!(img.go_itabs.is_empty());
     }
 }

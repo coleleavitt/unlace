@@ -111,6 +111,7 @@ where
         msvc_rtti: None,
         seh: None,
         go_module: None,
+        go_itabs: std::collections::BTreeMap::new(),
     };
 
     image.seh = collect_seh_from_image(&image);

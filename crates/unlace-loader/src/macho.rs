@@ -275,6 +275,7 @@ where
     };
 
     image.go_module = crate::go_moduledata::parse_firstmoduledata(&image);
+    crate::go_types::populate_itabs_from_module(&mut image);
 
     Ok(image)
 }

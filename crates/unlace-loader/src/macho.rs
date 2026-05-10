@@ -281,6 +281,7 @@ where
 
 #[derive(Debug, Default)]
 struct MachoDynamicLinking {
+    #[allow(dead_code)]
     indirect_symbols: Vec<u32>,
     relocations: Vec<Relocation>,
     exports: Vec<Symbol>,

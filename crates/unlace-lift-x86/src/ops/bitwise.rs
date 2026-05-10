@@ -346,7 +346,9 @@ pub mod bit_tag {
     pub const BSF: u64 = 0x200;
     pub const BSR: u64 = 0x201;
     pub const TZCNT: u64 = 0x202;
+    #[allow(dead_code)]
     pub const LZCNT: u64 = 0x203;
+    #[allow(dead_code)]
     pub const POPCNT: u64 = 0x204;
     pub const TRAP: u64 = 0x300;
 }

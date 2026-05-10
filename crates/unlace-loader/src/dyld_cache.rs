@@ -552,12 +552,131 @@ pub fn parse_v5_slide_info(data: &[u8], off: u64, size: u64) -> Option<SlideInfo
     })
 }
 
-/// Apply v5 slide rewrites. STUBBED: returns the input unchanged rather than
-/// corrupting it. TODO: decode key_index + IA/IB/DA/DB selector per chain
-/// entry.
-pub fn apply_v5_slide(image: &[u8], slide: &SlideInfoV5, _slide_amount: u64) -> Vec<u8> {
-    let _ = slide;
-    image.to_vec()
+/// PAC auth-signature bits attached to an arm64e v5 chain entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SlideEntryAuth {
+    /// 0 = IA, 1 = IB, 2 = DA, 3 = DB.
+    pub key: u8,
+    /// 15-bit discriminator constant baked into the chain entry.
+    pub diversity: u16,
+    /// When set, the runtime mixes the address into the discriminator.
+    pub use_addr: bool,
+}
+
+/// One decoded v5 chain entry. `target` is the image-relative offset of the
+/// pointer's destination; `auth` is `Some` for arm64e auth pointers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SlideEntry {
+    pub offset: u64,
+    pub target: u64,
+    pub auth: Option<SlideEntryAuth>,
+}
+
+/// Sentinel `next_offset_div8` value marking the last entry in a v5 chain.
+pub const SLIDE_V5_CHAIN_END: u16 = 0xFFF;
+
+/// Decode a single 64-bit v5 chain entry.
+///
+/// Layout (per `dyld_cache_slide_pointer5`):
+///   bits 51..62 = next_offset_div8 (0xFFF = end of chain)
+///   bit  50     = is_auth
+///   if auth:
+///     bits 48..49 = key_index (0=IA, 1=IB, 2=DA, 3=DB)
+///     bit  47     = addr_diversity
+///     bits 32..46 = diversity (15 bits)
+///     bits  0..31 = unsigned 32-bit image-relative offset
+///   else:
+///     bits  0..49 = pointer offset (50 bits)
+pub fn decode_v5_chain_entry(raw: u64) -> SlideEntry {
+    let is_auth = (raw >> 50) & 1 != 0;
+    if is_auth {
+        let key = ((raw >> 48) & 0x3) as u8;
+        let use_addr = (raw >> 47) & 1 != 0;
+        let diversity = ((raw >> 32) & 0x7FFF) as u16;
+        let target = raw & 0xFFFF_FFFF;
+        SlideEntry {
+            offset: 0,
+            target,
+            auth: Some(SlideEntryAuth { key, diversity, use_addr }),
+        }
+    } else {
+        let target = raw & 0x0003_FFFF_FFFF_FFFF;
+        SlideEntry { offset: 0, target, auth: None }
+    }
+}
+
+const SLIDE_V5_MAX_CHAIN: usize = 1 << 14;
+
+fn walk_v5_page<F: FnMut(usize, u64)>(
+    image: &[u8],
+    page_base: usize,
+    page_start: u16,
+    mut visit: F,
+) -> usize {
+    if page_start == SLIDE_V3_PAGE_NONE {
+        return 0;
+    }
+    let mut chain_off = page_base + page_start as usize;
+    let mut count = 0usize;
+    while count < SLIDE_V5_MAX_CHAIN {
+        if chain_off + 8 > image.len() {
+            break;
+        }
+        let raw = u64::from_le_bytes(image[chain_off..chain_off + 8].try_into().unwrap_or([0; 8]));
+        visit(chain_off, raw);
+        let next = ((raw >> 51) & 0xFFF) as u16;
+        count += 1;
+        if next == SLIDE_V5_CHAIN_END || next == 0 {
+            break;
+        }
+        chain_off = chain_off.saturating_add((next as usize) * 8);
+    }
+    count
+}
+
+fn rewrite_v5_entry(raw: u64, add: u64) -> u64 {
+    let entry = decode_v5_chain_entry(raw);
+    let next_bits = raw & 0x7FF8_0000_0000_0000;
+    match entry.auth {
+        Some(_) => {
+            let auth_bits = raw & 0x0007_FFFF_0000_0000;
+            let new_target = (entry.target.wrapping_add(add)) & 0xFFFF_FFFF;
+            next_bits | auth_bits | (1u64 << 50) | new_target
+        }
+        None => {
+            let new_target = entry.target.wrapping_add(add) & 0x0003_FFFF_FFFF_FFFF;
+            next_bits | new_target
+        }
+    }
+}
+
+/// Apply v5 slide rewrites to `image`, returning a fresh buffer.
+///
+/// Auth pointers preserve the key/diversity/addr-div bits so a subsequent
+/// runtime authentication pass still has the original discriminator; only
+/// the 32-bit image offset is slid.
+pub fn apply_v5_slide(image: &[u8], slide: &SlideInfoV5, slide_amount: u64) -> Vec<u8> {
+    let mut out = image.to_vec();
+    if slide.version != 5 || slide.page_size == 0 {
+        return out;
+    }
+    let page_size = slide.page_size as usize;
+    let add = slide.value_add.wrapping_add(slide_amount);
+    for (page_idx, &start) in slide.page_starts.iter().enumerate() {
+        let page_base = page_idx * page_size;
+        if page_base >= out.len() {
+            break;
+        }
+        let mut entries = Vec::new();
+        walk_v5_page(&out, page_base, start, |off, raw| entries.push((off, raw)));
+        for (off, raw) in entries {
+            let new_raw = rewrite_v5_entry(raw, add);
+            if off + 8 <= out.len() {
+                out[off..off + 8].copy_from_slice(&new_raw.to_le_bytes());
+            }
+        }
+    }
+    out
 }
 
 /// Extract a single image from a dyld_shared_cache by index, applying slide
@@ -898,6 +1017,54 @@ mod tests {
         assert_eq!(raw1 & !delta_mask, 0x2000 + value_add + slide_amount);
         assert_eq!((raw0 & delta_mask) >> delta_shift, 2);
         assert_eq!((raw1 & delta_mask) >> delta_shift, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // t142: dyld v5 ARM64e auth-key bit decoding
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn decode_v5_plain_pointer() {
+        // is_auth=0, low-50 bits = target. Stamp some next bits to ensure
+        // they're masked off.
+        let target: u64 = 0x0001_2345_6789;
+        let next: u64 = 7;
+        let raw = (next << 51) | target;
+        let entry = decode_v5_chain_entry(raw);
+        assert!(entry.auth.is_none());
+        assert_eq!(entry.target, target);
+    }
+
+    #[test]
+    fn decode_v5_auth_ia_pointer() {
+        // is_auth=1, key=0 (IA), addr_div=0, diversity=0x1234, target=0xCAFE.
+        let raw: u64 = (1u64 << 50)        // is_auth
+            | (0u64 << 48)                 // key = IA
+            | (0u64 << 47)                 // addr_div=0
+            | (0x1234u64 << 32)            // diversity
+            | 0xCAFEu64;                   // target offset
+        let entry = decode_v5_chain_entry(raw);
+        let auth = entry.auth.expect("auth pointer");
+        assert_eq!(auth.key, 0);
+        assert_eq!(auth.diversity, 0x1234);
+        assert!(!auth.use_addr);
+        assert_eq!(entry.target, 0xCAFE);
+    }
+
+    #[test]
+    fn decode_v5_auth_addr_diversified() {
+        // is_auth=1, key=2 (DA), addr_div=1.
+        let raw: u64 = (1u64 << 50)
+            | (2u64 << 48)                 // key = DA
+            | (1u64 << 47)                 // addr_div=1
+            | (0x7FFFu64 << 32)            // max 15-bit diversity
+            | 0xDEAD_BEEFu64;
+        let entry = decode_v5_chain_entry(raw);
+        let auth = entry.auth.expect("auth pointer");
+        assert!(auth.use_addr);
+        assert_eq!(auth.key, 2);
+        assert_eq!(auth.diversity, 0x7FFF);
+        assert_eq!(entry.target, 0xDEAD_BEEF);
     }
 
     #[test]

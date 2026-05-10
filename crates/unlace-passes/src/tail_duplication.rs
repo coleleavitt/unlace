@@ -20,8 +20,6 @@
 //! operands when deleting an incoming edge); SSA must be re-built after
 //! this pass for SSA-aware passes downstream.
 
-use std::collections::{BTreeMap, BTreeSet};
-
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BlockId, IrOp};
 

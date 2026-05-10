@@ -49,11 +49,28 @@ pub struct ImageEntry {
 }
 
 /// Parsed dyld shared cache.
+/// Slide-info blob location inside a [`DyldCache`].
+///
+/// Modern dyld caches carry slide-info offsets inside
+/// `dyld_cache_mapping_and_slide_info` records, but the legacy
+/// `mapping_info` parser used by this MVP does not surface them. Callers
+/// that already know where the slide-info header lives (e.g. extracted
+/// from a separate parse pass or a `.dylddata` sidecar) can register it
+/// via [`DyldCache::set_slide_info`]; subsequent
+/// [`extract_image_with_slide`] calls will then dispatch through
+/// [`apply_slide_info`] and rebase the returned bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SlideInfoLocation {
+    pub file_offset: u64,
+    pub size: u64,
+}
+
 pub struct DyldCache<'a> {
     data: &'a [u8],
     header: DyldCacheHeader,
     mappings: Vec<Mapping>,
     images: Vec<ImageEntry>,
+    slide_info: Option<SlideInfoLocation>,
 }
 
 impl<'a> DyldCache<'a> {
@@ -70,7 +87,20 @@ impl<'a> DyldCache<'a> {
             header,
             mappings,
             images,
+            slide_info: None,
         })
+    }
+
+    /// Register where the slide-info blob lives inside this cache. Once
+    /// set, [`extract_image_with_slide`] applies the appropriate v1–v5
+    /// rebase pass to extracted image bytes.
+    pub fn set_slide_info(&mut self, loc: SlideInfoLocation) {
+        self.slide_info = Some(loc);
+    }
+
+    /// Currently-registered slide-info blob location, if any.
+    pub fn slide_info(&self) -> Option<SlideInfoLocation> {
+        self.slide_info
     }
 
     pub fn header(&self) -> &DyldCacheHeader {
@@ -683,14 +713,17 @@ pub fn apply_v5_slide(image: &[u8], slide: &SlideInfoV5, slide_amount: u64) -> V
 /// info where wired. Returns up to [`EXTRACT_WINDOW`] bytes starting at the
 /// image's mach_header file offset.
 ///
-/// Slide-info discovery from `dyld_cache_mapping_and_slide_info` records is
-/// deferred — the legacy `mapping_info` table parsed by this MVP does not
-/// carry slide-info offsets. When that wiring lands this helper will
-/// dispatch on version via `parse_v{2,3,5}_slide_info` + `apply_v{2,3,5}_slide`.
+/// When the cache has a slide-info blob registered via
+/// [`DyldCache::set_slide_info`], the returned bytes have the appropriate
+/// v1/v2/v3/v4/v5 rebase pass applied. Slot offsets in the slide-info
+/// page tables are interpreted relative to the start of the extracted
+/// window (which equals the image's `mach_header` file offset), matching
+/// the convention used by dyld for per-mapping `mapping_and_slide_info`
+/// records.
 pub fn extract_image_with_slide(
     cache: &DyldCache,
     image_index: usize,
-    _slide_amount: u64,
+    slide_amount: u64,
 ) -> Option<Vec<u8>> {
     let entry = cache.list_images().get(image_index)?;
     let off = cache.vaddr_to_file_offset(entry.address)? as usize;
@@ -701,7 +734,21 @@ pub fn extract_image_with_slide(
     if off >= cache.data.len() {
         return None;
     }
-    Some(cache.data[off..end].to_vec())
+    let raw = cache.data[off..end].to_vec();
+    let Some(loc) = cache.slide_info() else {
+        return Some(raw);
+    };
+    let Some(version) = apply_slide_info(cache.data, loc.file_offset, loc.size) else {
+        return Some(raw);
+    };
+    let slid = match version {
+        SlideVersion::V1(s) => apply_v1_slide(&raw, &s, slide_amount),
+        SlideVersion::V2(s) => apply_v2_slide(&raw, &s, slide_amount),
+        SlideVersion::V3(s) => apply_v3_slide(&raw, &s, slide_amount),
+        SlideVersion::V4(s) => apply_v4_slide(&raw, &s, slide_amount),
+        SlideVersion::V5(s) => apply_v5_slide(&raw, &s, slide_amount),
+    };
+    Some(slid)
 }
 
 // =============================================================================
@@ -723,13 +770,25 @@ pub struct SlideInfoV1 {
     pub entries_offset: u32,
     pub entries_count: u32,
     pub entries_size: u32,
+    /// `toc[i]` indexes into `entries` selecting a bitmap covering the i-th
+    /// page (page_size = `SLIDE_V1_PAGE_SIZE`).
+    pub toc: Vec<u16>,
+    /// Flat bitmap pool. Entry `i` occupies bytes
+    /// `entries[i*entries_size..(i+1)*entries_size]`.
+    pub entries: Vec<u8>,
 }
 
-/// Parse a v1 `dyld_cache_slide_info` header.
+/// v1 hardcoded page size (4 KiB) covered by one bitmap entry.
+pub const SLIDE_V1_PAGE_SIZE: usize = 4096;
+
+/// Parse a v1 `dyld_cache_slide_info` header **plus** the toc and bitmap
+/// tables it references. All sub-tables are required to live inside
+/// `data[off..off+size]`; out-of-range offsets return `None`.
 pub fn parse_v1_slide_info(data: &[u8], off: u64, size: u64) -> Option<SlideInfoV1> {
     let off = off as usize;
     let size = size as usize;
-    if off.checked_add(size)? > data.len() || size < 24 {
+    let blob_end = off.checked_add(size)?;
+    if blob_end > data.len() || size < 24 {
         return None;
     }
     let header = &data[off..off + 24];
@@ -742,6 +801,27 @@ pub fn parse_v1_slide_info(data: &[u8], off: u64, size: u64) -> Option<SlideInfo
     let entries_offset = u32::from_le_bytes(header[12..16].try_into().ok()?);
     let entries_count = u32::from_le_bytes(header[16..20].try_into().ok()?);
     let entries_size = u32::from_le_bytes(header[20..24].try_into().ok()?);
+
+    let toc_start = off.checked_add(toc_offset as usize)?;
+    let toc_bytes = (toc_count as usize).checked_mul(2)?;
+    let toc_end = toc_start.checked_add(toc_bytes)?;
+    if toc_end > blob_end {
+        return None;
+    }
+    let mut toc = Vec::with_capacity(toc_count as usize);
+    for i in 0..toc_count as usize {
+        let o = toc_start + i * 2;
+        toc.push(u16::from_le_bytes(data[o..o + 2].try_into().ok()?));
+    }
+
+    let entries_start = off.checked_add(entries_offset as usize)?;
+    let entries_bytes = (entries_count as usize).checked_mul(entries_size as usize)?;
+    let entries_end = entries_start.checked_add(entries_bytes)?;
+    if entries_end > blob_end {
+        return None;
+    }
+    let entries = data[entries_start..entries_end].to_vec();
+
     Some(SlideInfoV1 {
         version,
         toc_offset,
@@ -749,7 +829,57 @@ pub fn parse_v1_slide_info(data: &[u8], off: u64, size: u64) -> Option<SlideInfo
         entries_offset,
         entries_count,
         entries_size,
+        toc,
+        entries,
     })
+}
+
+/// Apply v1 slide rewrites to `image`, returning a fresh buffer.
+///
+/// For each `toc[i]` entry, the bitmap at
+/// `entries[toc[i] * entries_size .. + entries_size]` enumerates which
+/// 4-byte slots of page `i` (page_size = [`SLIDE_V1_PAGE_SIZE`]) need
+/// the slide added. Each set bit `b` in bitmap byte `B` selects the slot
+/// at page offset `(B*8 + b) * 4`. Slots are little-endian u32s; the
+/// rewrite adds `slide_amount` modulo 2^32.
+pub fn apply_v1_slide(image: &[u8], slide: &SlideInfoV1, slide_amount: u64) -> Vec<u8> {
+    let mut out = image.to_vec();
+    if slide.version != 1 || slide.entries_size == 0 {
+        return out;
+    }
+    let entries_size = slide.entries_size as usize;
+    let page_size = SLIDE_V1_PAGE_SIZE;
+    let slide_lo = (slide_amount & 0xFFFF_FFFF) as u32;
+    for (page_idx, &entry_idx) in slide.toc.iter().enumerate() {
+        let page_base = page_idx * page_size;
+        if page_base >= out.len() {
+            break;
+        }
+        let bitmap_start = (entry_idx as usize) * entries_size;
+        let bitmap_end = bitmap_start.saturating_add(entries_size);
+        if bitmap_end > slide.entries.len() {
+            continue;
+        }
+        let bitmap = &slide.entries[bitmap_start..bitmap_end];
+        for (byte_idx, &byte) in bitmap.iter().enumerate() {
+            if byte == 0 {
+                continue;
+            }
+            for bit in 0..8 {
+                if (byte >> bit) & 1 == 0 {
+                    continue;
+                }
+                let slot_off = page_base + (byte_idx * 8 + bit) * 4;
+                if slot_off + 4 > out.len() {
+                    continue;
+                }
+                let raw = u32::from_le_bytes(out[slot_off..slot_off + 4].try_into().unwrap_or([0; 4]));
+                let new_raw = raw.wrapping_add(slide_lo);
+                out[slot_off..slot_off + 4].copy_from_slice(&new_raw.to_le_bytes());
+            }
+        }
+    }
+    out
 }
 
 /// Parsed `dyld_cache_slide_info` (version 4) — armv7-style 32-bit pointer
@@ -766,10 +896,15 @@ pub struct SlideInfoV4 {
     pub delta_mask: u64,
     pub value_add: u64,
     pub page_starts: Vec<u16>,
+    pub page_extras: Vec<u16>,
 }
 
 /// v4 page-start sentinel: page contains no slide entries.
 pub const SLIDE_V4_PAGE_NONE: u16 = 0xFFFF;
+/// v4 page-start flag: indirects into `page_extras` for multi-chain pages.
+pub const SLIDE_V4_PAGE_USES_EXTRA: u16 = 0x4000;
+/// v4 page-extras flag marking the last chain in a multi-chain page.
+pub const SLIDE_V4_PAGE_EXTRA_END: u16 = 0x8000;
 
 /// Parse a v4 slide-info header + page_starts table.
 pub fn parse_v4_slide_info(data: &[u8], off: u64, size: u64) -> Option<SlideInfoV4> {
@@ -790,15 +925,27 @@ pub fn parse_v4_slide_info(data: &[u8], off: u64, size: u64) -> Option<SlideInfo
     let page_extras_count = u32::from_le_bytes(header[20..24].try_into().ok()?);
     let delta_mask = u64::from_le_bytes(header[24..32].try_into().ok()?);
     let value_add = u64::from_le_bytes(header[32..40].try_into().ok()?);
+    let blob_end = off.checked_add(size)?;
     let table_off = off.checked_add(page_starts_offset as usize)?;
     let table_len = (page_starts_count as usize).checked_mul(2)?;
-    if table_off.checked_add(table_len)? > data.len() {
+    if table_off.checked_add(table_len)? > blob_end {
         return None;
     }
     let mut page_starts = Vec::with_capacity(page_starts_count as usize);
     for i in 0..page_starts_count as usize {
         let bytes = &data[table_off + i * 2..table_off + i * 2 + 2];
         page_starts.push(u16::from_le_bytes([bytes[0], bytes[1]]));
+    }
+
+    let extras_off = off.checked_add(page_extras_offset as usize)?;
+    let extras_len = (page_extras_count as usize).checked_mul(2)?;
+    if page_extras_count > 0 && extras_off.checked_add(extras_len)? > blob_end {
+        return None;
+    }
+    let mut page_extras = Vec::with_capacity(page_extras_count as usize);
+    for i in 0..page_extras_count as usize {
+        let bytes = &data[extras_off + i * 2..extras_off + i * 2 + 2];
+        page_extras.push(u16::from_le_bytes([bytes[0], bytes[1]]));
     }
     Some(SlideInfoV4 {
         version,
@@ -810,7 +957,104 @@ pub fn parse_v4_slide_info(data: &[u8], off: u64, size: u64) -> Option<SlideInfo
         delta_mask,
         value_add,
         page_starts,
+        page_extras,
     })
+}
+
+const SLIDE_V4_MAX_CHAIN: usize = 1 << 14;
+
+fn walk_v4_chain(
+    image: &[u8],
+    page_base: usize,
+    start_off_in_page: usize,
+    delta_mask: u32,
+) -> Vec<usize> {
+    let mut out = Vec::new();
+    if delta_mask == 0 {
+        return out;
+    }
+    let delta_shift = delta_mask.trailing_zeros();
+    let mut off = page_base + start_off_in_page;
+    let mut count = 0usize;
+    while count < SLIDE_V4_MAX_CHAIN {
+        if off + 4 > image.len() {
+            break;
+        }
+        out.push(off);
+        let raw = u32::from_le_bytes(image[off..off + 4].try_into().unwrap_or([0; 4]));
+        let delta = (raw & delta_mask) >> delta_shift;
+        count += 1;
+        if delta == 0 {
+            break;
+        }
+        off = off.saturating_add((delta as usize) * 4);
+    }
+    out
+}
+
+/// Apply v4 slide rewrites to `image`, returning a fresh buffer.
+///
+/// v4 is the 32-bit-pointer analogue of v2. Each chain entry is a
+/// little-endian u32 whose high bits (`delta_mask`) carry the chain
+/// delta (in 4-byte units, 0 = end) and whose low bits hold the
+/// pointer. Rebase replaces the pointer with `(pointer + value_add +
+/// slide_amount) & !delta_mask`, preserving the chain delta in place.
+pub fn apply_v4_slide(image: &[u8], slide: &SlideInfoV4, slide_amount: u64) -> Vec<u8> {
+    let mut out = image.to_vec();
+    if slide.version != 4 || slide.page_size == 0 {
+        return out;
+    }
+    let page_size = slide.page_size as usize;
+    // v4 stores 32-bit chain entries; only the low 32 bits of `delta_mask`
+    // are meaningful.
+    let delta_mask32 = (slide.delta_mask & 0xFFFF_FFFF) as u32;
+    let add = slide
+        .value_add
+        .wrapping_add(slide_amount)
+        & 0xFFFF_FFFF;
+    let add32 = add as u32;
+
+    for (page_idx, &start) in slide.page_starts.iter().enumerate() {
+        if start == SLIDE_V4_PAGE_NONE {
+            continue;
+        }
+        let page_base = page_idx * page_size;
+        if page_base >= out.len() {
+            break;
+        }
+
+        let chain_starts: Vec<usize> = if (start & SLIDE_V4_PAGE_USES_EXTRA) != 0 {
+            let mut starts = Vec::new();
+            let mut idx = (start & !SLIDE_V4_PAGE_USES_EXTRA) as usize;
+            while idx < slide.page_extras.len() {
+                let extra = slide.page_extras[idx];
+                let off_in_page = (extra & !SLIDE_V4_PAGE_EXTRA_END) as usize * 4;
+                starts.push(off_in_page);
+                if (extra & SLIDE_V4_PAGE_EXTRA_END) != 0 {
+                    break;
+                }
+                idx += 1;
+            }
+            starts
+        } else {
+            vec![(start as usize) * 4]
+        };
+
+        for s in chain_starts {
+            let slots = walk_v4_chain(&out, page_base, s, delta_mask32);
+            for off in slots {
+                if off + 4 > out.len() {
+                    continue;
+                }
+                let raw = u32::from_le_bytes(out[off..off + 4].try_into().unwrap_or([0; 4]));
+                let value = raw & !delta_mask32;
+                let new_value = value.wrapping_add(add32) & !delta_mask32;
+                let new_raw = (raw & delta_mask32) | new_value;
+                out[off..off + 4].copy_from_slice(&new_raw.to_le_bytes());
+            }
+        }
+    }
+    out
 }
 
 /// One slide-fixup record: a file offset and the slid pointer value.
@@ -1240,20 +1484,38 @@ mod tests {
 
     #[test]
     fn parse_v1_slide_info_header() {
-        let mut buf = vec![0u8; 24];
+        // Header followed by toc (2 entries) and entries (3 bitmaps × 4 B).
+        let toc_offset = 24u32;
+        let toc_count = 2u32;
+        let entries_offset = 24u32 + toc_count * 2; // 28
+        let entries_count = 3u32;
+        let entries_size = 4u32;
+        let total = entries_offset as usize + (entries_count * entries_size) as usize; // 28 + 12 = 40
+        let mut buf = vec![0u8; total];
         buf[0..4].copy_from_slice(&1u32.to_le_bytes()); // version
-        buf[4..8].copy_from_slice(&0x10u32.to_le_bytes()); // toc_offset
-        buf[8..12].copy_from_slice(&0x20u32.to_le_bytes()); // toc_count
-        buf[12..16].copy_from_slice(&0x30u32.to_le_bytes()); // entries_offset
-        buf[16..20].copy_from_slice(&0x40u32.to_le_bytes()); // entries_count
-        buf[20..24].copy_from_slice(&0x50u32.to_le_bytes()); // entries_size
-        let info = parse_v1_slide_info(&buf, 0, 24).expect("v1 parses");
+        buf[4..8].copy_from_slice(&toc_offset.to_le_bytes());
+        buf[8..12].copy_from_slice(&toc_count.to_le_bytes());
+        buf[12..16].copy_from_slice(&entries_offset.to_le_bytes());
+        buf[16..20].copy_from_slice(&entries_count.to_le_bytes());
+        buf[20..24].copy_from_slice(&entries_size.to_le_bytes());
+        // toc: pages 0 and 1 reference entry indices 2 and 0.
+        buf[24..26].copy_from_slice(&2u16.to_le_bytes());
+        buf[26..28].copy_from_slice(&0u16.to_le_bytes());
+        // stamp a couple of bitmap bytes so we can confirm they're copied.
+        buf[28] = 0xAA;
+        buf[28 + (entries_size as usize) * 2] = 0x55; // bitmap[2][0]
+
+        let info = parse_v1_slide_info(&buf, 0, total as u64).expect("v1 parses");
         assert_eq!(info.version, 1);
-        assert_eq!(info.toc_offset, 0x10);
-        assert_eq!(info.toc_count, 0x20);
-        assert_eq!(info.entries_offset, 0x30);
-        assert_eq!(info.entries_count, 0x40);
-        assert_eq!(info.entries_size, 0x50);
+        assert_eq!(info.toc_offset, toc_offset);
+        assert_eq!(info.toc_count, toc_count);
+        assert_eq!(info.entries_offset, entries_offset);
+        assert_eq!(info.entries_count, entries_count);
+        assert_eq!(info.entries_size, entries_size);
+        assert_eq!(info.toc, vec![2, 0]);
+        assert_eq!(info.entries.len(), 12);
+        assert_eq!(info.entries[0], 0xAA);
+        assert_eq!(info.entries[(entries_size as usize) * 2], 0x55);
     }
 
     #[test]
@@ -1302,6 +1564,183 @@ mod tests {
     fn apply_slide_info_rejects_truncated_header() {
         let buf = vec![0u8; 2]; // < 4 bytes
         assert!(apply_slide_info(&buf, 0, 2).is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // t169: end-to-end — slide-info wiring through extract_image_with_slide
+    // -----------------------------------------------------------------------
+
+    /// Build a synthetic cache whose image starts at file offset 0x1000,
+    /// then append (caller-supplied) extra bytes (slide-info blob). Stamp
+    /// `image_bytes` at the image's mach_header file offset and return
+    /// `(buffer, slide_blob_file_offset)`.
+    fn build_cache_with_image(
+        image_va: u64,
+        image_file_off: u64,
+        image_bytes: &[u8],
+        slide_blob: &[u8],
+    ) -> (Vec<u8>, u64) {
+        let mapping = Mapping {
+            address: image_va,
+            size: 0x1_0000,
+            file_offset: image_file_off,
+        };
+        let mut data = build_cache(
+            &magic_x86_64(),
+            &[("/usr/lib/libtest.dylib", image_va)],
+            &[mapping],
+        );
+        let image_off = image_file_off as usize;
+        let image_end = image_off + image_bytes.len();
+        if data.len() < image_end {
+            data.resize(image_end, 0);
+        }
+        data[image_off..image_end].copy_from_slice(image_bytes);
+        let slide_off = data.len() as u64;
+        data.extend_from_slice(slide_blob);
+        (data, slide_off)
+    }
+
+    #[test]
+    fn extract_image_with_slide_applies_v1_fixups() {
+        // Image of one 4 KiB page with two 4-byte pointer slots.
+        //  - slot at offset 0x10 → bit 4 of bitmap byte 0 of page 0
+        //  - slot at offset 0x20 → bit 0 of bitmap byte 1 of page 0
+        let mut image = vec![0u8; SLIDE_V1_PAGE_SIZE];
+        image[0x10..0x14].copy_from_slice(&0x0000_0100u32.to_le_bytes());
+        image[0x20..0x24].copy_from_slice(&0x0000_0200u32.to_le_bytes());
+
+        // Build a v1 slide-info blob covering page 0 with toc[0]=0.
+        // entries[0] = bitmap with bit at (byte 0, bit 4) and (byte 1, bit 0).
+        let entries_size = 4u32;
+        let toc_offset = 24u32;
+        let toc_count = 1u32;
+        let entries_offset = toc_offset + toc_count * 2; // 26
+        let entries_count = 1u32;
+        let total = entries_offset as usize + (entries_count * entries_size) as usize;
+        let mut slide = vec![0u8; total];
+        slide[0..4].copy_from_slice(&1u32.to_le_bytes()); // version
+        slide[4..8].copy_from_slice(&toc_offset.to_le_bytes());
+        slide[8..12].copy_from_slice(&toc_count.to_le_bytes());
+        slide[12..16].copy_from_slice(&entries_offset.to_le_bytes());
+        slide[16..20].copy_from_slice(&entries_count.to_le_bytes());
+        slide[20..24].copy_from_slice(&entries_size.to_le_bytes());
+        slide[24..26].copy_from_slice(&0u16.to_le_bytes()); // toc[0] = entry 0
+        // bitmap byte 0 bit 4 → page off (0*8 + 4)*4 = 0x10
+        slide[entries_offset as usize] = 1 << 4;
+        // bitmap byte 1 bit 0 → page off (1*8 + 0)*4 = 0x20
+        slide[entries_offset as usize + 1] = 1 << 0;
+
+        let (data, slide_off) = build_cache_with_image(
+            0x1_8000_0000,
+            0x1000,
+            &image,
+            &slide,
+        );
+        let mut cache = DyldCache::parse(&data).expect("parse");
+        cache.set_slide_info(SlideInfoLocation {
+            file_offset: slide_off,
+            size: slide.len() as u64,
+        });
+
+        let slide_amount = 0x40u64;
+        let bytes = extract_image_with_slide(&cache, 0, slide_amount).expect("extract");
+        let s0 = u32::from_le_bytes(bytes[0x10..0x14].try_into().unwrap());
+        let s1 = u32::from_le_bytes(bytes[0x20..0x24].try_into().unwrap());
+        assert_eq!(s0, 0x0000_0140, "slot 0 rebased by slide_amount");
+        assert_eq!(s1, 0x0000_0240, "slot 1 rebased by slide_amount");
+        // Untouched bytes remain zero.
+        assert_eq!(&bytes[0..0x10], &[0u8; 0x10][..]);
+    }
+
+    #[test]
+    fn extract_image_with_slide_applies_v4_fixups() {
+        // Single-page v4 image with a 2-entry chain. Delta lives in the
+        // top 8 bits of each 32-bit slot (delta units are 4 B).
+        let page_size = 0x1000u32;
+        let delta_mask: u32 = 0xFF00_0000;
+        let delta_shift = delta_mask.trailing_zeros();
+        let value_add: u64 = 0x0010_0000;
+        let slide_amount: u64 = 0x40;
+
+        let mut image = vec![0u8; page_size as usize];
+        // First slot at off 0: value=0x1000, next delta=2 (i.e. +8 B).
+        let raw0: u32 = (0x1000u32 & !delta_mask) | ((2u32 << delta_shift) & delta_mask);
+        // Second slot at off 8: value=0x2000, next delta=0 (end).
+        let raw1: u32 = 0x2000u32 & !delta_mask;
+        image[0..4].copy_from_slice(&raw0.to_le_bytes());
+        image[8..12].copy_from_slice(&raw1.to_le_bytes());
+
+        // Build v4 blob: header (40 B) + page_starts (1 × 2 B) = 42 B.
+        let page_starts_offset = 40u32;
+        let page_starts_count = 1u32;
+        let total = page_starts_offset as usize + (page_starts_count as usize) * 2;
+        let mut slide = vec![0u8; total];
+        slide[0..4].copy_from_slice(&4u32.to_le_bytes()); // version
+        slide[4..8].copy_from_slice(&page_size.to_le_bytes());
+        slide[8..12].copy_from_slice(&page_starts_offset.to_le_bytes());
+        slide[12..16].copy_from_slice(&page_starts_count.to_le_bytes());
+        // page_extras_offset / count zero
+        slide[24..32].copy_from_slice(&(delta_mask as u64).to_le_bytes());
+        slide[32..40].copy_from_slice(&value_add.to_le_bytes());
+        slide[40..42].copy_from_slice(&0u16.to_le_bytes()); // page_start = 0 (offset 0)
+
+        let (data, slide_off) = build_cache_with_image(
+            0x1_8000_0000,
+            0x1000,
+            &image,
+            &slide,
+        );
+        let mut cache = DyldCache::parse(&data).expect("parse");
+        cache.set_slide_info(SlideInfoLocation {
+            file_offset: slide_off,
+            size: slide.len() as u64,
+        });
+
+        let bytes = extract_image_with_slide(&cache, 0, slide_amount).expect("extract");
+        let r0 = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
+        let r1 = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
+        let add32 = (value_add.wrapping_add(slide_amount) & 0xFFFF_FFFF) as u32;
+        assert_eq!(r0 & !delta_mask, (0x1000u32.wrapping_add(add32)) & !delta_mask);
+        assert_eq!(r1 & !delta_mask, (0x2000u32.wrapping_add(add32)) & !delta_mask);
+        // Delta bits preserved.
+        assert_eq!((r0 & delta_mask) >> delta_shift, 2);
+        assert_eq!((r1 & delta_mask) >> delta_shift, 0);
+    }
+
+    #[test]
+    fn extract_image_with_slide_applies_v3_fixups() {
+        // Regression: v3 chain on a single page with one entry.
+        let page_size = 0x4000usize;
+        let mut image = vec![0u8; page_size];
+        // target=0x100, next=0 (chain ends).
+        let raw: u64 = 0x100u64 & 0x0007_FFFF_FFFF_FFFF;
+        image[0..8].copy_from_slice(&raw.to_le_bytes());
+
+        // v3 slide-info: header (24 B) + page_starts (1 × 2 B).
+        let mut slide = vec![0u8; 24 + 2];
+        slide[0..4].copy_from_slice(&3u32.to_le_bytes());
+        slide[4..8].copy_from_slice(&(page_size as u32).to_le_bytes());
+        slide[8..12].copy_from_slice(&1u32.to_le_bytes()); // page_starts_count
+        slide[16..24].copy_from_slice(&0x1000u64.to_le_bytes()); // value_add
+        slide[24..26].copy_from_slice(&0u16.to_le_bytes()); // page_starts[0] = 0
+
+        let (data, slide_off) = build_cache_with_image(
+            0x1_8000_0000,
+            0x1000,
+            &image,
+            &slide,
+        );
+        let mut cache = DyldCache::parse(&data).expect("parse");
+        cache.set_slide_info(SlideInfoLocation {
+            file_offset: slide_off,
+            size: slide.len() as u64,
+        });
+
+        let slide_amount = 0x40u64;
+        let bytes = extract_image_with_slide(&cache, 0, slide_amount).expect("extract");
+        let new_raw = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
+        assert_eq!(new_raw & 0x0007_FFFF_FFFF_FFFF, 0x1140);
     }
 
     #[test]

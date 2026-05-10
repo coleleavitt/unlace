@@ -196,11 +196,15 @@ pub enum HirNode {
     /// flag-producing instruction lives upstream and the cond is taken
     /// directly from the architecture's NZCV state at runtime.
     ///
-    /// MVP scope: no else_body. The `E` arm of an `ITE` becomes a separate
-    /// `GuardedIf` with the inverted cond code at the same scope.
+    /// The `else_body` field carries the fused `E` lane of an `ITE`/`ITEE`/etc.
+    /// IT block: when two adjacent [`GuardedIf`] nodes have inverse cond codes
+    /// (`cond_b == cond_a ^ 1`), the structurer fuses them into a single
+    /// `GuardedIf` whose `else_body` is the second group's body. Empty for
+    /// pure `IT` (T-only) blocks.
     GuardedIf {
         cond_code: u8,
         then_body: Vec<HirNode>,
+        else_body: Vec<HirNode>,
     },
 
     /// One or more raw assembly lines that the lifter could not translate

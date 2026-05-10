@@ -322,6 +322,7 @@ mod tests {
             variadic_call_types: BTreeMap::new(),
             signature_revision: 0,
             op_bindings: unlace_ir::ssa::OpTypeBindings::default(),
+            byref_boxes: std::collections::BTreeMap::new(),
         }
     }
 

@@ -238,11 +238,12 @@ impl ArmLifter {
             });
         }
 
-        let _pending_cond = self.pop_pending_it_cond();
+        let pending_cond = self.pop_pending_it_cond();
 
         if let Some(decoded) = decode_thumb1_push_pop(half) {
             let mut ctx = LiftCtx::new(addr);
             emit_ldm_stm(&mut ctx, decoded);
+            apply_guard(&mut ctx.ops, pending_cond);
             return Ok(LiftedInsn {
                 ir_ops: ctx.ops,
                 len: 2,
@@ -251,20 +252,23 @@ impl ArmLifter {
         if let Some(decoded) = decode_thumb1_ldm_stm(half) {
             let mut ctx = LiftCtx::new(addr);
             emit_ldm_stm(&mut ctx, decoded);
+            apply_guard(&mut ctx.ops, pending_cond);
             return Ok(LiftedInsn {
                 ir_ops: ctx.ops,
                 len: 2,
             });
         }
 
-        THUMB_CS.with(|cell| {
+        let mut lifted = THUMB_CS.with(|cell| {
             let mut slot = cell.borrow_mut();
             if slot.is_none() {
                 *slot = Some(Self::make_capstone_thumb());
             }
             let cs = slot.as_ref().expect("thread-local Capstone thumb initialized");
             decode_one_arm32(cs, bytes, addr, 2)
-        })
+        })?;
+        apply_guard(&mut lifted.ir_ops, pending_cond);
+        Ok(lifted)
     }
 
     /// Pop the head condition off the active IT-block, if any. Returns
@@ -615,6 +619,16 @@ fn emit_arm32_call(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
         smallvec![target],
         ctx.addr,
     ));
+}
+
+/// Stamp every IR instruction emitted for the current source insn with
+/// the active IT-block condition code. Called after lifting when the
+/// IT-state machine popped a cond for this slot.
+fn apply_guard(ops: &mut [IrInsn], cond: Option<u8>) {
+    let Some(cond) = cond else { return };
+    for insn in ops.iter_mut() {
+        insn.guard = Some(cond);
+    }
 }
 
 fn emit_arm32_bx(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {

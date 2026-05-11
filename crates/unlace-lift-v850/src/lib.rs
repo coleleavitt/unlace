@@ -498,9 +498,13 @@ mod tests {
 
     #[test]
     fn lift_unknown_emits_unimplemented() {
-        // Format IV (short load/store) is not implemented — should emit Unimplemented
-        let hw: u16 = (5 << 11) | (0b0110 << 7) | 0;
-        let bytes = hw.to_le_bytes();
+        // Extended-32 with an unrecognized sub-opcode (0x3F primary opcode,
+        // sub-op 0x3F in hw1) — should fall through to Unknown → Unimplemented.
+        let hw0: u16 = (5 << 11) | (0x3F << 5) | 0;
+        let hw1: u16 = (0 << 11) | (0x3F << 5) | 0;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&hw0.to_le_bytes());
+        bytes.extend_from_slice(&hw1.to_le_bytes());
         let lifted = lift_bytes(&bytes, 0x1000);
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
@@ -551,6 +555,124 @@ mod tests {
         let bytes = encode_format_i(7, 0b001100, 2);
         let lifted = lift_bytes(&bytes, 0x1000);
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
+    }
+
+    // -- t347: RH850/V850 deep extensions ---------------------------------
+    // Six tests covering the new instruction families.
+
+    /// SATADD reg-reg lowers to a tagged Callother whose result lands in dst.
+    #[test]
+    fn lift_satadd_reg_is_callother() {
+        // Format I: (0b0001, 0b10) with reg2 != 0 ⇒ SATADD reg1, reg2
+        let bytes = encode_format_i(7, 0b000110, 3);
+        let lifted = lift_bytes(&bytes, 0x1000);
+        assert_eq!(lifted.len, 2);
+        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+        let has_satadd_tag = lifted.ir_ops.iter().any(|i| {
+            i.op == IrOp::Callother
+                && i.inputs.first().map_or(false, |v| {
+                    v.space == unlace_ir::SpaceId::Const && v.offset == 0x800
+                })
+        });
+        assert!(has_satadd_tag, "SATADD should emit Callother(tag=0x800, ...)");
+    }
+
+    /// SATSUB reg-reg uses the SATSUB tag (0x801).
+    #[test]
+    fn lift_satsub_reg_is_callother() {
+        // Format I: (0b0001, 0b01) with reg2 != 0 ⇒ SATSUB reg1, reg2
+        let bytes = encode_format_i(7, 0b000101, 3);
+        let lifted = lift_bytes(&bytes, 0x1000);
+        let has_satsub_tag = lifted.ir_ops.iter().any(|i| {
+            i.op == IrOp::Callother
+                && i.inputs.first().map_or(false, |v| {
+                    v.space == unlace_ir::SpaceId::Const && v.offset == 0x801
+                })
+        });
+        assert!(has_satsub_tag, "SATSUB should emit Callother(tag=0x801, ...)");
+    }
+
+    /// MUL Format XI emits a 64-bit IntMult split into low/high subpieces.
+    #[test]
+    fn lift_mul_format_xi() {
+        // hw0: reg2=5, opcode_10_5=0x3F, reg1=3
+        let hw0: u16 = (5 << 11) | (0x3F << 5) | 3;
+        // hw1: reg3=6, sub-opcode 0x22 (MUL), bit0=0
+        let hw1: u16 = (6 << 11) | (0x22 << 5) | 0;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&hw0.to_le_bytes());
+        bytes.extend_from_slice(&hw1.to_le_bytes());
+        let lifted = lift_bytes(&bytes, 0x1000);
+        assert_eq!(lifted.len, 4);
+        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::IntMult));
+        // Should sign-extend operands (signed MUL) and split with Subpiece.
+        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
+        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Subpiece));
+    }
+
+    /// DIV Format XI emits IntSdiv for quotient and IntSrem for remainder.
+    #[test]
+    fn lift_div_format_xi() {
+        // hw0: reg2=8, opcode_10_5=0x3F, reg1=2
+        let hw0: u16 = (8 << 11) | (0x3F << 5) | 2;
+        // hw1: reg3=9, sub-opcode 0x2C (DIV signed), bit0=0
+        let hw1: u16 = (9 << 11) | (0x2C << 5) | 0;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&hw0.to_le_bytes());
+        bytes.extend_from_slice(&hw1.to_le_bytes());
+        let lifted = lift_bytes(&bytes, 0x1000);
+        assert_eq!(lifted.len, 4);
+        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::IntSdiv));
+        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::IntSrem));
+    }
+
+    /// SLD.W lifts to a Load with the EP register (r30) as base.
+    #[test]
+    fn lift_sld_w_uses_ep_base() {
+        // Format IV: hw0 = reg2(5) << 11 | 0b1010 << 7 | disp8 (bit0=0 for SLD.W).
+        // disp8 = 0x08 (low bit must be 0) ⇒ byte disp = 0x10.
+        let hw: u16 = (5u16 << 11) | (0b1010 << 7) | 0x08;
+        let bytes = hw.to_le_bytes();
+        let lifted = lift_bytes(&bytes, 0x1000);
+        assert_eq!(lifted.len, 2);
+        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Load));
+        // Base address calc should reference EP = r30 (offset 30*8 = 240).
+        let reads_ep = lifted.ir_ops.iter().any(|i| {
+            i.op == IrOp::IntAdd
+                && i.inputs.iter().any(|v| {
+                    v.space == unlace_ir::SpaceId::Register && v.offset == 30 * 8
+                })
+        });
+        assert!(reads_ep, "SLD.W should compute address as EP + disp");
+    }
+
+    /// BSW (byte-swap-word) lifts to a tagged Callother (tag 0x803).
+    #[test]
+    fn lift_bsw_is_callother() {
+        // hw0: reg2=4 (src), opcode_10_5=0x3F, reg1=0
+        let hw0: u16 = (4 << 11) | (0x3F << 5) | 0;
+        // hw1: reg3=7 (dst), sub-opcode 0x14, bit0=0 ⇒ BSW
+        let hw1: u16 = (7 << 11) | (0x14 << 5) | 0;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&hw0.to_le_bytes());
+        bytes.extend_from_slice(&hw1.to_le_bytes());
+        let lifted = lift_bytes(&bytes, 0x1000);
+        assert_eq!(lifted.len, 4);
+        let has_bsw_tag = lifted.ir_ops.iter().any(|i| {
+            i.op == IrOp::Callother
+                && i.inputs.first().map_or(false, |v| {
+                    v.space == unlace_ir::SpaceId::Const && v.offset == 0x803
+                })
+        });
+        assert!(has_bsw_tag, "BSW should emit Callother(tag=0x803, src)");
+        // Result should be copied into reg3 (offset 56).
+        let writes_reg3 = lifted.ir_ops.iter().any(|i| {
+            i.op == IrOp::Copy
+                && i.output.map_or(false, |v| {
+                    v.space == unlace_ir::SpaceId::Register && v.offset == 7 * 8
+                })
+        });
+        assert!(writes_reg3, "BSW should write to reg3");
     }
 
     // -- 32-bit instruction needs 4 bytes --

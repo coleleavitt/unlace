@@ -309,6 +309,15 @@ pub struct PrinterAnnotations {
     /// at the top of the C output preamble.  Classes without ivars are
     /// skipped (no empty `struct {};` would be a C constraint violation).
     pub objc_classes: Vec<unlace_loader::ObjcClass>,
+    /// ObjC categories whose `@interface ClassName (CategoryName)` method
+    /// summaries should be emitted at the top of the C output preamble,
+    /// underneath the class layout block.  Categories with zero methods
+    /// still render — an empty `@interface … @end` block makes the
+    /// runtime-recovered category name visible even when no methods
+    /// survived the scan (e.g. swizzles that the analyst can fill in
+    /// later via per-line comments).  Wired from
+    /// [`unlace_loader::ObjcInfo::categories`] by the CLI pipeline.
+    pub objc_categories: Vec<unlace_loader::ObjcCategory>,
     /// Resolved PE forwarder chains: IAT slot VA → `target_dll!target_symbol`.
     ///
     /// Populated from [`unlace_loader::BinaryImage::forwarded_resolutions`].
@@ -426,6 +435,24 @@ pub fn print_c_with_annotations(
                 }
                 out.push_str(&s);
             }
+        }
+        if emitted_any {
+            out.push('\n');
+        }
+    }
+
+    // t196: ObjC categories as `@interface ClassName (CategoryName)`
+    // comment blocks. Sits just under the class-layout preamble so
+    // analysts see both the class shape and any post-hoc method
+    // additions when reading the recovered C.
+    if let Some(ann) = annotations {
+        let mut emitted_any = false;
+        for cat in &ann.objc_categories {
+            if !emitted_any {
+                out.push_str("// ObjC categories (recovered from __objc_catlist)\n");
+                emitted_any = true;
+            }
+            out.push_str(&render_objc_category(cat));
         }
         if emitted_any {
             out.push('\n');
@@ -4336,6 +4363,42 @@ pub fn render_objc_class_struct(class: &unlace_loader::ObjcClass) -> Option<Stri
     // function being printed.  Currently the helper is callable but the
     // c_printer driver does not invoke it.
     Some(out)
+}
+
+/// Render an ObjC category as a commented `@interface` block:
+///
+/// ```text
+/// // @interface ClassName (CategoryName)
+/// //   - methodA();
+/// //   - methodB();
+/// // @end
+/// ```
+///
+/// The header line uses the recovered `class_name` if present; when the
+/// category's `class_ref` could not be resolved to a name (only the raw
+/// `class_addr` survived the scan) we fall back to `class_0x<addr>` so the
+/// preamble still parses on the eye even though the symbol is anonymous.
+///
+/// Both `instance_methods` and `class_methods` are surfaced — instance
+/// methods are prefixed `-` (matching ObjC's `-`/`+` selector convention),
+/// class methods `+`. The body is intentionally allowed to be empty: a
+/// category may exist in the runtime even with zero recovered selectors
+/// (the analyst gets a "this category exists" breadcrumb to chase).
+pub fn render_objc_category(cat: &unlace_loader::ObjcCategory) -> String {
+    let mut out = String::new();
+    let class_label: String = cat
+        .class_name
+        .clone()
+        .unwrap_or_else(|| format!("class_0x{:X}", cat.class_addr));
+    let _ = writeln!(out, "// @interface {} ({})", class_label, cat.name);
+    for m in &cat.instance_methods {
+        let _ = writeln!(out, "//   - {}();", m.name);
+    }
+    for m in &cat.class_methods {
+        let _ = writeln!(out, "//   + {}();", m.name);
+    }
+    let _ = writeln!(out, "// @end");
+    out
 }
 
 
@@ -13215,5 +13278,100 @@ mod tests {
         );
         assert!(output.contains("struct Alpha {"), "missing Alpha:\n{output}");
         assert!(output.contains("struct Beta {"), "missing Beta:\n{output}");
+    }
+
+    // ----- t196: ObjC categories preamble -----
+
+    fn objc_method(name: &str) -> unlace_loader::ObjcMethod {
+        unlace_loader::ObjcMethod {
+            name: name.into(),
+            type_encoding: "v@:".into(),
+            imp_addr: 0,
+        }
+    }
+
+    fn objc_category(
+        name: &str,
+        class_name: Option<&str>,
+        instance_methods: Vec<unlace_loader::ObjcMethod>,
+    ) -> unlace_loader::ObjcCategory {
+        unlace_loader::ObjcCategory {
+            name: name.into(),
+            class_addr: 0xCAFEBABE,
+            class_name: class_name.map(Into::into),
+            instance_methods,
+            class_methods: vec![],
+            properties: vec![],
+            protocols: vec![],
+        }
+    }
+
+    #[test]
+    fn preamble_emits_category_with_two_instance_methods() {
+        let func = minimal_func();
+        let mut ann = super::PrinterAnnotations::default();
+        ann.objc_categories.push(objc_category(
+            "Networking",
+            Some("MyController"),
+            vec![objc_method("methodA"), objc_method("methodB")],
+        ));
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+        assert!(
+            output.contains("// ObjC categories (recovered from __objc_catlist)"),
+            "expected category section heading, got:\n{output}"
+        );
+        assert!(
+            output.contains("// @interface MyController (Networking)"),
+            "expected @interface header line, got:\n{output}"
+        );
+        assert!(
+            output.contains("//   - methodA();"),
+            "expected methodA line, got:\n{output}"
+        );
+        assert!(
+            output.contains("//   - methodB();"),
+            "expected methodB line, got:\n{output}"
+        );
+        assert!(
+            output.contains("// @end"),
+            "expected @end terminator, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn preamble_emits_category_with_no_methods_as_empty_body() {
+        let func = minimal_func();
+        let mut ann = super::PrinterAnnotations::default();
+        ann.objc_categories
+            .push(objc_category("Stubs", Some("WidgetView"), vec![]));
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+        // Header + @end must be present even though the body is empty;
+        // that's the whole point of surfacing zero-method categories.
+        assert!(
+            output.contains("// @interface WidgetView (Stubs)"),
+            "expected header line, got:\n{output}"
+        );
+        assert!(
+            output.contains("// @end"),
+            "expected @end terminator, got:\n{output}"
+        );
+        // Sanity: there must be exactly zero method lines for this category.
+        // We test this structurally — between the `@interface` and `@end`
+        // lines there should be no `//   -` or `//   +` selector entries.
+        let header_idx = output
+            .find("// @interface WidgetView (Stubs)")
+            .expect("header line must be present");
+        let end_idx = output[header_idx..]
+            .find("// @end")
+            .expect("@end must follow header");
+        let body = &output[header_idx..header_idx + end_idx];
+        assert!(
+            !body.contains("//   -") && !body.contains("//   +"),
+            "empty-method category body must not contain selector lines, got body:\n{body}"
+        );
     }
 }

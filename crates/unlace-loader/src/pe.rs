@@ -2807,6 +2807,7 @@ mod tests {
             go_module: None,
             go_itabs: BTreeMap::new(),
             go_types: BTreeMap::new(),
+            swift_info: None,
         }
     }
 

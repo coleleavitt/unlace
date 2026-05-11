@@ -57,6 +57,7 @@ pub mod stack_vars;
 pub mod string_hash_switch;
 pub mod struct_field_detect;
 pub mod struct_field_recovery;
+pub mod var_naming;
 pub mod tail_call;
 pub mod tail_duplication;
 pub mod type_constraint_solver;
@@ -132,6 +133,7 @@ pub use string_hash_switch::{
 };
 pub use struct_field_detect::StructFieldDetectPass;
 pub use struct_field_recovery::recover_structs;
+pub use var_naming::{VarClassification, VarRole, classify_variables, suggest_name};
 pub use tail_call::TailCallDetectPass;
 pub use tail_duplication::TailDuplicationPass;
 pub use variable_merge::VariableMergePass;

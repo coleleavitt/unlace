@@ -282,11 +282,15 @@ where
         go_module: None,
         go_itabs: std::collections::BTreeMap::new(),
         go_types: std::collections::BTreeMap::new(),
+        swift_info: None,
     };
 
     image.go_module = crate::go_moduledata::parse_firstmoduledata(&image);
     crate::go_types::populate_itabs_from_module(&mut image);
     crate::go_types::populate_go_types_from_module(&mut image);
+    // t193: Swift 5+ metadata recovery. Best-effort, Mach-O-only —
+    // ELF/PE images leave `swift_info = None`.
+    image.swift_info = crate::swift_metadata::scan_swift_metadata(&image);
 
     Ok(image)
 }

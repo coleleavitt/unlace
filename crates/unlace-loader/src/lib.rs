@@ -26,6 +26,7 @@ pub mod seh;
 pub mod go_moduledata;
 pub mod go_types;
 pub mod strings;
+pub mod swift_metadata;
 pub mod til;
 
 pub use objc::{
@@ -53,6 +54,10 @@ pub use pe::PeLoader;
 pub use rtti::{
     BaseClass, CppClass, InheritanceKind, RttiInfo, VtableLayout, VtableSlotKind, VtableSubtable,
     scan_rtti,
+};
+pub use swift_metadata::{
+    SwiftConformance, SwiftInfo, SwiftProtocolDescriptor, SwiftTypeDescriptor,
+    scan_swift_metadata,
 };
 
 /// Trait for binary format loaders.

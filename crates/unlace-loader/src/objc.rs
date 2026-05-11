@@ -436,6 +436,7 @@ mod tests {
             go_module: None,
             go_itabs: std::collections::BTreeMap::new(),
             go_types: std::collections::BTreeMap::new(),
+            swift_info: None,
         }
     }
 

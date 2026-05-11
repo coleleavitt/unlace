@@ -274,6 +274,7 @@ mod tests {
             go_module: None,
             go_itabs: std::collections::BTreeMap::new(),
             go_types: std::collections::BTreeMap::new(),
+            swift_info: None,
         };
 
         let info = parse_eh_frame(&img).expect("missing .eh_frame should not error");
@@ -321,6 +322,7 @@ mod tests {
             go_module: None,
             go_itabs: std::collections::BTreeMap::new(),
             go_types: std::collections::BTreeMap::new(),
+            swift_info: None,
         };
 
         let result = parse_eh_frame(&img);

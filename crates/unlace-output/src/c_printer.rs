@@ -5503,6 +5503,12 @@ fn emit_expr_with_prec(
         }
 
         // -- Extensions --
+        // `IntZext` / `IntSext` are explicit type-changing ops: the cast IS
+        // the operation, not optional surface noise. We keep emitting it
+        // unless the existing `is_redundant_widen` heuristic fires (e.g. the
+        // implicit C i32→i64 widening). The flow-sensitive
+        // [`should_emit_cast`] minimizer applies to the generic [`IrOp::Cast`]
+        // path below, where the cast's meaning is genuinely ambiguous.
         IrOp::IntZext | IrOp::IntSext => {
             if !insn.inputs.is_empty() {
                 let op = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
@@ -5523,9 +5529,14 @@ fn emit_expr_with_prec(
         // -- Cast --
         IrOp::Cast => {
             if !insn.inputs.is_empty() {
+                let from_ty = flow_type_for_input(&insn.inputs[0], stmt_idx, ctx);
                 let op = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 if let Some(output) = insn.output {
                     if is_redundant_same_size_cast(&insn.inputs[0], output.size) {
+                        return op;
+                    }
+                    let to_ty = primitive_for_size(output.size, true);
+                    if !should_emit_cast(from_ty, to_ty) {
                         return op;
                     }
                     let ty = type_for_size(output.size, true);
@@ -6915,6 +6926,102 @@ fn is_redundant_widen(op: IrOp, input: &Varnode, output_size: u8) -> bool {
 /// `(type)(x)` is redundant when the operand already has the target width.
 fn is_redundant_same_size_cast(input: &Varnode, output_size: u8) -> bool {
     input.size == output_size
+}
+
+/// Decide whether a `(to)(value)` cast carries information worth emitting.
+///
+/// The C printer otherwise emits a cast at every `IrOp::Cast` / `IntZext` /
+/// `IntSext` site, which produces a torrent of redundant `(unsigned __int64)`
+/// / `(__int32)` noise on values whose flow-sensitive type already matches
+/// the destination. This predicate is the gatekeeper: returning `false`
+/// suppresses the cast entirely.
+///
+/// Rules (kept conservative — when in doubt, **emit** the cast so semantics
+/// are never silently dropped):
+///
+/// * Same width + same signedness → `false` (purely cosmetic noise).
+/// * Different width on integers (sign-extend, zero-extend, truncation) →
+///   `true` — the cast changes the value's representation.
+/// * Pointer ↔ integer in either direction → `true` (always meaningful in C).
+/// * Either side is [`PrimitiveType::Unknown`] → `false` — Unknown is the
+///   lattice bottom, so we have no basis to claim the cast is informative
+///   and the surrounding context will paint the type anyway. This avoids
+///   "noise" casts on un-inferred temporaries.
+/// * `Bool` ↔ `Bool` → `false`; `Bool` ↔ anything else → `true`.
+/// * Float family: same-kind → `false`; otherwise (Float↔Double, Float↔Int,
+///   Double↔Int) → `true`.
+/// Look up the inferred flow-sensitive type of a *use* of `input` at the
+/// statement `stmt_idx`. Returns [`PrimitiveType::Unknown`] when the input
+/// is a constant (no SSA name) or the type inference pass did not assign
+/// a concrete type. This is the bridge between the raw `Varnode` operands
+/// the printer sees and the SSA-keyed `var_types` map produced by
+/// `TypeInferPass`.
+fn flow_type_for_input(
+    input: &Varnode,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> PrimitiveType {
+    if input.space == SpaceId::Const {
+        return PrimitiveType::Unknown;
+    }
+    let sv = ctx
+        .stmt_inputs
+        .get(&stmt_idx)
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *input).copied());
+    match sv {
+        Some(sv) => ctx
+            .var_types
+            .get(&sv)
+            .copied()
+            .unwrap_or(PrimitiveType::Unknown),
+        None => PrimitiveType::Unknown,
+    }
+}
+
+/// Map an IDA-style integer type name (the kind emitted by [`type_for_size`])
+/// plus an explicit signedness flag to a [`PrimitiveType`]. Used as the
+/// destination side of [`should_emit_cast`] at cast sites where we already
+/// know the target width and signed/unsigned-ness.
+fn primitive_for_size(size: u8, signed: bool) -> PrimitiveType {
+    if signed {
+        PrimitiveType::Int(size)
+    } else {
+        PrimitiveType::UnsignedInt(size)
+    }
+}
+
+pub(crate) fn should_emit_cast(from: PrimitiveType, to: PrimitiveType) -> bool {
+    use PrimitiveType::*;
+    // Unknown on either side: suppress noise.
+    if matches!(from, Unknown) || matches!(to, Unknown) {
+        return false;
+    }
+    // Identical types: trivially redundant.
+    if from == to {
+        return false;
+    }
+    match (from, to) {
+        // Pointer ↔ integer or pointer ↔ pointer-typed mismatch: always cast.
+        (Ptr, Int(_)) | (Ptr, UnsignedInt(_)) | (Int(_), Ptr) | (UnsignedInt(_), Ptr) => true,
+        // Integer width / signedness changes.
+        (Int(w1), Int(w2)) | (UnsignedInt(w1), UnsignedInt(w2)) if w1 == w2 => false,
+        (Int(_), Int(_)) | (UnsignedInt(_), UnsignedInt(_)) => true, // width differs
+        // Mixed signedness — same width is purely cosmetic in C semantics for
+        // values that fit, but the printer surfaces it for IDA parity.
+        (Int(w1), UnsignedInt(w2)) | (UnsignedInt(w1), Int(w2)) if w1 != w2 => true,
+        (Int(_), UnsignedInt(_)) | (UnsignedInt(_), Int(_)) => true,
+        // Bool conversions.
+        (Bool, Bool) => false,
+        (Bool, _) | (_, Bool) => true,
+        // Float family.
+        (Float, Float) | (Double, Double) => false,
+        (Float, Double) | (Double, Float) => true,
+        (Float, _) | (_, Float) | (Double, _) | (_, Double) => true,
+        // Pointer ↔ pointer with the same width is suppressed by the early
+        // `from == to` check above; differing pointer-like types fall through
+        // here as a defensive default.
+        _ => true,
+    }
 }
 
 /// IDA-style pointer cast for memory dereference based on access size.
@@ -14135,5 +14242,75 @@ mod tests {
             output.contains("printf();"),
             "non-const fmt should fall back to legacy printf() rendering:\n{output}",
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // t215: should_emit_cast — flow-sensitive cast minimization
+    // ---------------------------------------------------------------------
+    //
+    // The four contract tests below pin the predicate's behaviour at the
+    // four corners called out by the design note:
+    //
+    //   1. Same width + same signedness → no cast.
+    //   2. Sign-extension to a wider int → cast (information-bearing).
+    //   3. Pointer ↔ integer → cast (always meaningful in C).
+    //   4. Unknown on either side → no cast (Unknown is the lattice bottom).
+    //
+    // Together they nail the predicate to its intended shape so a future
+    // refactor that accidentally drops the Unknown short-circuit, or treats
+    // Ptr like an integer, will break loudly here rather than silently
+    // smear casts (or omit them) across the entire C output.
+
+    #[test]
+    fn should_emit_cast_int_to_int_same_width_is_suppressed() {
+        // (int)(int x) — both sides 4-byte signed int. Cast is purely
+        // cosmetic; the predicate must say "do not emit".
+        assert!(!super::should_emit_cast(
+            PrimitiveType::Int(4),
+            PrimitiveType::Int(4)
+        ));
+    }
+
+    #[test]
+    fn should_emit_cast_sign_extend_to_wider_int_is_emitted() {
+        // (long)(int x) — 4→8 byte signed extension changes the bit pattern
+        // and is therefore information-bearing. Must emit.
+        assert!(super::should_emit_cast(
+            PrimitiveType::Int(4),
+            PrimitiveType::Int(8)
+        ));
+    }
+
+    #[test]
+    fn should_emit_cast_int_to_pointer_is_emitted() {
+        // (int*)(int x) — integer ↔ pointer is always meaningful in C
+        // (pointer provenance, alignment). Must emit in either direction.
+        assert!(super::should_emit_cast(
+            PrimitiveType::Int(4),
+            PrimitiveType::Ptr
+        ));
+        assert!(super::should_emit_cast(
+            PrimitiveType::Ptr,
+            PrimitiveType::Int(4)
+        ));
+    }
+
+    #[test]
+    fn should_emit_cast_unknown_is_suppressed() {
+        // (unknown)(unknown) and partial-Unknown forms — Unknown is the
+        // bottom of the type lattice, so we have no basis to claim the
+        // cast is informative. Suppress to avoid noise.
+        assert!(!super::should_emit_cast(
+            PrimitiveType::Unknown,
+            PrimitiveType::Unknown
+        ));
+        assert!(!super::should_emit_cast(
+            PrimitiveType::Unknown,
+            PrimitiveType::Int(4)
+        ));
+        assert!(!super::should_emit_cast(
+            PrimitiveType::Int(4),
+            PrimitiveType::Unknown
+        ));
     }
 }

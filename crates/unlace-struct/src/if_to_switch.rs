@@ -643,4 +643,100 @@ mod tests {
             other => panic!("expected If preserved, got {other:?}"),
         }
     }
+
+    /// 4-case if-else chain on the same variable -> emits switch with 4 cases.
+    #[test]
+    fn test_if_chain_4_cases_to_switch() {
+        let x = Varnode::reg(0, 4);
+        let cond1 = sv(256, 1, 1);
+        let cond2 = sv(256, 1, 2);
+        let cond3 = sv(256, 1, 3);
+        let cond4 = sv(256, 1, 4);
+
+        let body_a = vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2000)];
+        let body_b = vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2010)];
+        let body_c = vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2020)];
+        let body_d = vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2030)];
+
+        let if_chain = HirNode::If {
+            cond: cond1,
+            then_body: body_a.clone(),
+            else_body: Some(vec![HirNode::If {
+                cond: cond2,
+                then_body: body_b.clone(),
+                else_body: Some(vec![HirNode::If {
+                    cond: cond3,
+                    then_body: body_c.clone(),
+                    else_body: Some(vec![HirNode::If {
+                        cond: cond4,
+                        then_body: body_d.clone(),
+                        else_body: None,
+                    }]),
+                }]),
+            }]),
+        };
+
+        let def_map = make_def_map(vec![
+            (cond1, x, 1),
+            (cond2, x, 2),
+            (cond3, x, 3),
+            (cond4, x, 4),
+        ]);
+
+        let mut func = make_hir(vec![if_chain]);
+        func.body = rewrite_nodes(std::mem::take(&mut func.body), &def_map);
+
+        assert_eq!(func.body.len(), 1);
+        match &func.body[0] {
+            HirNode::Switch {
+                cond,
+                cases,
+                default,
+                ..
+            } => {
+                assert_eq!(cond.base, x);
+                assert_eq!(cases.len(), 4);
+                assert_eq!(cases[0].0, SwitchCase::Value(1));
+                assert_eq!(cases[1].0, SwitchCase::Value(2));
+                assert_eq!(cases[2].0, SwitchCase::Value(3));
+                assert_eq!(cases[3].0, SwitchCase::Value(4));
+                assert!(default.is_none());
+            }
+            other => panic!("expected Switch with 4 cases, got {other:?}"),
+        }
+    }
+
+    /// 2-case if-else chain (below threshold) -> stays as if-else, not switch.
+    #[test]
+    fn test_if_chain_2_cases_stays_as_if_else() {
+        let x = Varnode::reg(0, 4);
+        let cond1 = sv(256, 1, 1);
+        let cond2 = sv(256, 1, 2);
+
+        let body_a = vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2000)];
+        let body_b = vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2010)];
+
+        let if_chain = HirNode::If {
+            cond: cond1,
+            then_body: body_a,
+            else_body: Some(vec![HirNode::If {
+                cond: cond2,
+                then_body: body_b,
+                else_body: None,
+            }]),
+        };
+
+        let def_map = make_def_map(vec![(cond1, x, 1), (cond2, x, 2)]);
+
+        let mut func = make_hir(vec![if_chain]);
+        func.body = rewrite_nodes(std::mem::take(&mut func.body), &def_map);
+
+        assert_eq!(func.body.len(), 1);
+        assert!(
+            matches!(&func.body[0], HirNode::If { .. }),
+            "2-case chain should stay as if-else, got {:?}",
+            func.body[0],
+        );
+    }
+
 }

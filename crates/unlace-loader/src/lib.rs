@@ -23,6 +23,7 @@ pub mod ios_img4;
 pub mod macho;
 pub mod msvc_rtti;
 pub mod objc;
+pub mod packer_detect;
 pub mod pdb;
 pub mod pdb_types;
 pub mod pe;

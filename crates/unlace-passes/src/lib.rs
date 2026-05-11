@@ -130,8 +130,10 @@ pub use stack_frame_recovery::recover_stack_frame;
 pub use stack_pointer_tracking::StackPointerTrackingPass;
 pub use stack_vars::{StackOffsetSnapshotPass, StackVarRecoveryPass};
 pub use string_hash_switch::{
-    StringHashSwitchPass, crc32 as string_hash_crc32, djb2 as string_hash_djb2,
-    fnv1a as string_hash_fnv1a,
+    HashFamily, StringHashSwitchPass, crc32 as string_hash_crc32, djb2 as string_hash_djb2,
+    fnv1a as string_hash_fnv1a, identify_hash_pattern, is_crc32_pattern, is_djb2_pattern,
+    is_fnv1a_pattern, is_murmur3_pattern, is_sdbm_pattern, murmur3 as string_hash_murmur3,
+    sdbm as string_hash_sdbm,
 };
 pub use struct_field_detect::StructFieldDetectPass;
 pub use struct_field_recovery::recover_structs;

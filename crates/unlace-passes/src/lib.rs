@@ -25,6 +25,7 @@ pub mod cpp_vtable;
 pub mod crypto_idioms;
 pub mod crypto_lib_recognize;
 pub mod ct_violation;
+pub mod cwe_detect;
 pub mod cse;
 pub mod db_recognize;
 pub mod dce;

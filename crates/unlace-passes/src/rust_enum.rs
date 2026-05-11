@@ -298,6 +298,8 @@ mod tests {
             byref_info: None,
             libc_call_annotations: std::collections::BTreeMap::new(),
             array_struct_layouts: std::collections::BTreeMap::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         }
     }
 

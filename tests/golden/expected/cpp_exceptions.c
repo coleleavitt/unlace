@@ -117,7 +117,7 @@ void sub_11c4(void) {
 void __fastcall sub_121c(void) {
     int v2; // rdx
     long long v5; // temp
-    v1 = v2; sub_11e2(); v5 -= 8LL;
+    a3 = v2; sub_11e2(); v5 -= 8LL;
     v3 = v5; *(_QWORD *)(v5) = 0x122dLL; _Unwind_Resume();
     return;
 }

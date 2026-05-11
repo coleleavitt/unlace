@@ -527,4 +527,18 @@ pub struct HirFunction {
     /// structuring time; empty when the byref detector found nothing or
     /// hasn't been run.
     pub byref_params: std::collections::BTreeSet<u32>,
+    /// Per-SsaVarnode role-based names propagated from
+    /// [`unlace_ir::ssa::SsaFunction::var_role_names`].
+    ///
+    /// The C printer consults this map *between* a non-default
+    /// `merged_names` entry (which always wins when meaningful) and the
+    /// fresh-`vN` fallback allocator. Empty when the role-naming pass
+    /// classified every SSA value as `Temporary`.
+    pub var_role_names: BTreeMap<SsaVarnode, String>,
+    /// Late-pipeline finalized prototype propagated from
+    /// [`unlace_ir::ssa::SsaFunction::finalized_signature`]. When `Some`,
+    /// the C printer prefers its `params` / `return_type` over the raw
+    /// [`Self::params`] / [`Self::return_type`] when emitting the header,
+    /// and surfaces `dropped_param_count` as a comment.
+    pub finalized_signature: Option<unlace_ir::ssa::FinalizedSignature>,
 }

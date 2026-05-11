@@ -17,7 +17,8 @@ use unlace_passes::{
     ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
     StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
     detect_byref, recover_stack_frame,
-    TailCallDetectPass, VariableMergePass, bump_if_signature_changed, run_outer_fixedpoint,
+    TailCallDetectPass, VarNamingPass, VariableMergePass, bump_if_signature_changed,
+    run_outer_fixedpoint,
     run_to_fixedpoint,
 };
 
@@ -849,6 +850,15 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
     VariableMergePass
         .run(ssa)
         .context("variable merge pass failed")?;
+
+    // t227 — role-based naming. Sits after the variable-merge coalescer so
+    // role names like `i`/`saved_rbx` can override the merger's generic
+    // `vN` choices, while still losing to *meaningful* (non-`vN`) names
+    // produced by the merger (it occasionally promotes a DWARF name into
+    // its output map).
+    VarNamingPass
+        .run(ssa)
+        .context("var naming pass failed")?;
 
     // Bump the signature revision iff the pipeline mutated any of the three
     // observable signature components. Whole-program drivers can compare

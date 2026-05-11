@@ -17,6 +17,7 @@ pub mod vararg_detect;
 pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
+pub mod coverage_ingest;
 pub mod boost_recognize;
 pub mod builtin_recognize;
 pub mod cpp_stl;
@@ -118,6 +119,10 @@ pub use bool_simplify::BoolSimplifyPass;
 pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;
+pub use coverage_ingest::{
+    AFL_MAP_SIZE, CoverageError, CoverageMap, LLVM_PROFRAW_MAGIC_BE, LLVM_PROFRAW_MAGIC_LE,
+    ProfRaw, parse_afl_coverage, parse_profraw,
+};
 pub use cpp_stl::recognize_stl_type;
 pub use serial_recognize::{SerialKind, recognize_serial_api};
 pub use cpp_vtable::CppVtablePass;

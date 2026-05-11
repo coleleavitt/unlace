@@ -456,6 +456,50 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Blendps => sse::lift_sse_blend(ctx, insn, sse::tag::BLENDPS),
         M::Pblendvb => sse::lift_sse_blend(ctx, insn, sse::tag::PBLENDVB),
 
+        // ── SSE4.1 / SSE4.2 packed ops (t185) ───────────────────
+        M::Pcmpeqq => sse::lift_sse_binop(ctx, insn, sse::tag::PCMPEQQ),
+
+        M::Pmovzxbw => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVZXBW),
+        M::Pmovzxbd => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVZXBD),
+        M::Pmovzxbq => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVZXBQ),
+        M::Pmovzxwd => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVZXWD),
+        M::Pmovzxwq => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVZXWQ),
+        M::Pmovzxdq => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVZXDQ),
+
+        M::Pmovsxbw => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVSXBW),
+        M::Pmovsxbd => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVSXBD),
+        M::Pmovsxbq => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVSXBQ),
+        M::Pmovsxwd => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVSXWD),
+        M::Pmovsxwq => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVSXWQ),
+        M::Pmovsxdq => sse::lift_sse_unop(ctx, insn, sse::tag::PMOVSXDQ),
+
+        M::Pmuldq => sse::lift_sse_binop(ctx, insn, sse::tag::PMULDQ),
+
+        M::Pminsd => sse::lift_sse_binop(ctx, insn, sse::tag::PMINSD),
+        M::Pminud => sse::lift_sse_binop(ctx, insn, sse::tag::PMINUD),
+        M::Pmaxsd => sse::lift_sse_binop(ctx, insn, sse::tag::PMAXSD),
+        M::Pmaxud => sse::lift_sse_binop(ctx, insn, sse::tag::PMAXUD),
+
+        // PINSR* is a 3-operand RMW: dst (xmm) is read + written.
+        M::Pinsrb => sse::lift_sse_blend(ctx, insn, sse::tag::PINSRB),
+        M::Pinsrw => sse::lift_sse_blend(ctx, insn, sse::tag::PINSRW),
+        M::Pinsrd => sse::lift_sse_blend(ctx, insn, sse::tag::PINSRD),
+        M::Pinsrq => sse::lift_sse_blend(ctx, insn, sse::tag::PINSRQ),
+
+        // PEXTR* writes a small GP/mem operand; dedicated helper.
+        M::Pextrb => sse::lift_sse_extract(ctx, insn, sse::tag::PEXTRB),
+        M::Pextrw => sse::lift_sse_extract(ctx, insn, sse::tag::PEXTRW),
+        M::Pextrd => sse::lift_sse_extract(ctx, insn, sse::tag::PEXTRD),
+        M::Pextrq => sse::lift_sse_extract(ctx, insn, sse::tag::PEXTRQ),
+
+        // PCMPESTRI/PCMPISTRI set ECX/flags implicitly. iced exposes a
+        // 64-bit variant `Pcmpestri64` for REX.W; both map to the same
+        // string-compare semantics.
+        M::Pcmpestri | M::Pcmpestri64 => {
+            sse::lift_sse_string_compare(ctx, insn, sse::tag::PCMPESTRI)
+        }
+        M::Pcmpistri => sse::lift_sse_string_compare(ctx, insn, sse::tag::PCMPISTRI),
+
         M::Fld => fpu::lift_fld(ctx, insn),
         M::Fst => fpu::lift_fst(ctx, insn),
         M::Fstp => fpu::lift_fstp(ctx, insn),

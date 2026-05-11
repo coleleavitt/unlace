@@ -26,6 +26,10 @@ pub enum IntrinsicCategory {
     SseBlend,
     /// SSE2 pack-with-saturation: PACKSSWB, PACKUSWB, etc.
     SsePack,
+    /// SSE4.1 lane insert/extract: PINSRB/W/D/Q, PEXTRB/W/D/Q.
+    SseInsertExtract,
+    /// SSE4.2 packed string comparison: PCMPESTRI, PCMPISTRI.
+    SseStringCompare,
     /// AVX packed arithmetic: VPADDB, VPADDW, etc.
     AvxArith,
     /// AVX aligned/unaligned moves: VMOVDQA, VMOVDQU.
@@ -228,6 +232,49 @@ impl Default for IntrinsicRegistry {
             ("BLENDVPD", info("_mm_blendv_pd", 3, 16, SseBlend)),
             ("PBLENDW", info("_mm_blend_epi16", 3, 16, SseBlend)),
             ("PBLENDVB", info("_mm_blendv_epi8", 3, 16, SseBlend)),
+            // ── SSE4.1 packed compare (64-bit lanes) ────────────────
+            ("PCMPEQQ", info("_mm_cmpeq_epi64", 2, 16, SseCompare)),
+            // ── SSE4.1 zero-extending widening converts ─────────────
+            ("PMOVZXBW", info("_mm_cvtepu8_epi16", 1, 16, SseConvert)),
+            ("PMOVZXBD", info("_mm_cvtepu8_epi32", 1, 16, SseConvert)),
+            ("PMOVZXBQ", info("_mm_cvtepu8_epi64", 1, 16, SseConvert)),
+            ("PMOVZXWD", info("_mm_cvtepu16_epi32", 1, 16, SseConvert)),
+            ("PMOVZXWQ", info("_mm_cvtepu16_epi64", 1, 16, SseConvert)),
+            ("PMOVZXDQ", info("_mm_cvtepu32_epi64", 1, 16, SseConvert)),
+            // ── SSE4.1 sign-extending widening converts ─────────────
+            ("PMOVSXBW", info("_mm_cvtepi8_epi16", 1, 16, SseConvert)),
+            ("PMOVSXBD", info("_mm_cvtepi8_epi32", 1, 16, SseConvert)),
+            ("PMOVSXBQ", info("_mm_cvtepi8_epi64", 1, 16, SseConvert)),
+            ("PMOVSXWD", info("_mm_cvtepi16_epi32", 1, 16, SseConvert)),
+            ("PMOVSXWQ", info("_mm_cvtepi16_epi64", 1, 16, SseConvert)),
+            ("PMOVSXDQ", info("_mm_cvtepi32_epi64", 1, 16, SseConvert)),
+            // ── SSE4.1 packed signed 32×32→64 multiply ──────────────
+            ("PMULDQ", info("_mm_mul_epi32", 2, 16, SseArith)),
+            // ── SSE4.1 packed 32-bit min/max ────────────────────────
+            ("PMINSD", info("_mm_min_epi32", 2, 16, SseArith)),
+            ("PMINUD", info("_mm_min_epu32", 2, 16, SseArith)),
+            ("PMAXSD", info("_mm_max_epi32", 2, 16, SseArith)),
+            ("PMAXUD", info("_mm_max_epu32", 2, 16, SseArith)),
+            // ── SSE4.1 lane insert (3-operand) ──────────────────────
+            ("PINSRB", info("_mm_insert_epi8", 3, 16, SseInsertExtract)),
+            ("PINSRW", info("_mm_insert_epi16", 3, 16, SseInsertExtract)),
+            ("PINSRD", info("_mm_insert_epi32", 3, 16, SseInsertExtract)),
+            ("PINSRQ", info("_mm_insert_epi64", 3, 16, SseInsertExtract)),
+            // ── SSE4.1 lane extract (3-operand) ─────────────────────
+            //
+            // PEXTR* writes a small GP/mem operand, so the output size
+            // tracks the lane width rather than the source register.
+            ("PEXTRB", info("_mm_extract_epi8", 2, 1, SseInsertExtract)),
+            ("PEXTRW", info("_mm_extract_epi16", 2, 2, SseInsertExtract)),
+            ("PEXTRD", info("_mm_extract_epi32", 2, 4, SseInsertExtract)),
+            ("PEXTRQ", info("_mm_extract_epi64", 2, 8, SseInsertExtract)),
+            // ── SSE4.2 packed string compare → ECX/flags ────────────
+            //
+            // PCMPESTRI/PCMPISTRI write the result index into ECX
+            // implicitly; here we record the (haystack, needle, control)
+            // shape so the recoverer can rebuild the intrinsic call.
+            ("PCMPESTRI", info("_mm_cmpestri", 3, 4, SseStringCompare)),
+            ("PCMPISTRI", info("_mm_cmpistri", 3, 4, SseStringCompare)),
             // ── AVX moves ───────────────────────────────────────────
             ("VMOVDQA", info("_mm256_load_si256", 1, 32, AvxMove)),
             ("VMOVDQU", info("_mm256_loadu_si256", 1, 32, AvxMove)),
@@ -517,6 +564,111 @@ mod tests {
             let info = reg.lookup(name).unwrap_or_else(|| panic!("{name} missing"));
             assert_eq!(info.category, IntrinsicCategory::X87Fpu);
         }
+    }
+
+    #[test]
+    fn test_sse41_widening_converts_present() {
+        // t185 — PMOVZX/PMOVSX widening converts route through
+        // SseConvert and reach C intrinsics like _mm_cvtepu8_epi16.
+        let reg = registry();
+        for (mnemonic, expected_c) in [
+            ("PMOVZXBW", "_mm_cvtepu8_epi16"),
+            ("PMOVZXBD", "_mm_cvtepu8_epi32"),
+            ("PMOVZXBQ", "_mm_cvtepu8_epi64"),
+            ("PMOVZXWD", "_mm_cvtepu16_epi32"),
+            ("PMOVZXWQ", "_mm_cvtepu16_epi64"),
+            ("PMOVZXDQ", "_mm_cvtepu32_epi64"),
+            ("PMOVSXBW", "_mm_cvtepi8_epi16"),
+            ("PMOVSXBD", "_mm_cvtepi8_epi32"),
+            ("PMOVSXBQ", "_mm_cvtepi8_epi64"),
+            ("PMOVSXWD", "_mm_cvtepi16_epi32"),
+            ("PMOVSXWQ", "_mm_cvtepi16_epi64"),
+            ("PMOVSXDQ", "_mm_cvtepi32_epi64"),
+        ] {
+            let info = reg
+                .lookup(mnemonic)
+                .unwrap_or_else(|| panic!("{mnemonic} missing"));
+            assert_eq!(info.c_name, expected_c, "{mnemonic} c_name");
+            assert_eq!(info.input_count, 1, "{mnemonic} should be unary");
+            assert_eq!(info.output_size, 16, "{mnemonic} writes a 128-bit XMM");
+            assert_eq!(info.category, IntrinsicCategory::SseConvert);
+        }
+    }
+
+    #[test]
+    fn test_sse41_minmax_32_present() {
+        // t185 — PMIN{S,U}D / PMAX{S,U}D are 2-operand packed-32 ops.
+        let reg = registry();
+        for (mnemonic, expected_c) in [
+            ("PMINSD", "_mm_min_epi32"),
+            ("PMINUD", "_mm_min_epu32"),
+            ("PMAXSD", "_mm_max_epi32"),
+            ("PMAXUD", "_mm_max_epu32"),
+        ] {
+            let info = reg
+                .lookup(mnemonic)
+                .unwrap_or_else(|| panic!("{mnemonic} missing"));
+            assert_eq!(info.c_name, expected_c);
+            assert_eq!(info.input_count, 2);
+            assert_eq!(info.output_size, 16);
+            assert_eq!(info.category, IntrinsicCategory::SseArith);
+        }
+    }
+
+    #[test]
+    fn test_sse41_insert_extract_present() {
+        // t185 — PINSR{B,W,D,Q} write XMM (16 bytes); PEXTR{B,W,D,Q}
+        // write a small GP/mem operand whose width tracks the lane.
+        let reg = registry();
+        for (mnemonic, expected_c, out_size) in [
+            ("PINSRB", "_mm_insert_epi8", 16),
+            ("PINSRW", "_mm_insert_epi16", 16),
+            ("PINSRD", "_mm_insert_epi32", 16),
+            ("PINSRQ", "_mm_insert_epi64", 16),
+            ("PEXTRB", "_mm_extract_epi8", 1),
+            ("PEXTRW", "_mm_extract_epi16", 2),
+            ("PEXTRD", "_mm_extract_epi32", 4),
+            ("PEXTRQ", "_mm_extract_epi64", 8),
+        ] {
+            let info = reg
+                .lookup(mnemonic)
+                .unwrap_or_else(|| panic!("{mnemonic} missing"));
+            assert_eq!(info.c_name, expected_c);
+            assert_eq!(info.output_size, out_size, "{mnemonic} output size");
+            assert_eq!(info.category, IntrinsicCategory::SseInsertExtract);
+        }
+    }
+
+    #[test]
+    fn test_sse42_string_compare_present() {
+        // t185 — PCMPESTRI / PCMPISTRI surface as `_mm_cmpestri` /
+        // `_mm_cmpistri`; the index result is a 4-byte value (ECX).
+        let reg = registry();
+        for (mnemonic, expected_c) in [
+            ("PCMPESTRI", "_mm_cmpestri"),
+            ("PCMPISTRI", "_mm_cmpistri"),
+        ] {
+            let info = reg
+                .lookup(mnemonic)
+                .unwrap_or_else(|| panic!("{mnemonic} missing"));
+            assert_eq!(info.c_name, expected_c);
+            assert_eq!(info.input_count, 3);
+            assert_eq!(info.output_size, 4);
+            assert_eq!(info.category, IntrinsicCategory::SseStringCompare);
+        }
+    }
+
+    #[test]
+    fn test_sse41_pmuldq_pcmpeqq_present() {
+        // t185 — Spot-check the two stand-alone SSE4.1 entries.
+        let reg = registry();
+        let pmuldq = reg.lookup("PMULDQ").expect("PMULDQ missing");
+        assert_eq!(pmuldq.c_name, "_mm_mul_epi32");
+        assert_eq!(pmuldq.category, IntrinsicCategory::SseArith);
+
+        let pcmpeqq = reg.lookup("PCMPEQQ").expect("PCMPEQQ missing");
+        assert_eq!(pcmpeqq.c_name, "_mm_cmpeq_epi64");
+        assert_eq!(pcmpeqq.category, IntrinsicCategory::SseCompare);
     }
 
     #[test]

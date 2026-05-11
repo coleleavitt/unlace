@@ -489,6 +489,15 @@ const LF_ENUM: u16 = 0x1507;
 const LF_FIELDLIST: u16 = 0x1203;
 const LF_MEMBER: u16 = 0x150D;
 
+// IPI stream leaf kinds (0x1601..=0x1606). IPI lives in a separate stream
+// from TPI but shares the same record framing.
+const LF_FUNC_ID: u16 = 0x1601;
+const LF_MFUNC_ID: u16 = 0x1602;
+const LF_BUILDINFO: u16 = 0x1603;
+const LF_SUBSTR_LIST: u16 = 0x1604;
+const LF_STRING_ID: u16 = 0x1605;
+const LF_UDT_SRC_LINE: u16 = 0x1606;
+
 // Numeric-leaf tag space.
 const LF_NUMERIC_CHAR: u16 = 0x8000;
 const LF_NUMERIC_SHORT: u16 = 0x8001;
@@ -802,6 +811,101 @@ fn name_end(buf: &[u8], at: usize) -> usize {
         Some(p) => at + p + 1,
         None => buf.len(),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Low-level IPI stream walker.
+//
+// The IPI ("Item-Id") stream mirrors the TPI stream framing exactly (same
+// `length`/`leaf_kind`/`payload` record layout, same numeric leaf encoding)
+// but holds *item* identifiers — function names, build info, source-file
+// strings, UDT→source-line mappings — instead of types. Leaf kinds are in
+// the 0x1601..=0x1606 range. Item IDs are assigned starting at 0x1000 and
+// live in a separate identifier space from TPI's type indices.
+// ---------------------------------------------------------------------------
+
+/// High-level kind of an IPI item decoded by [`walk_ipi`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PdbIpiKind {
+    /// `LF_FUNC_ID` (0x1601): free function id (scope_id + type_index + name).
+    FuncId,
+    /// `LF_MFUNC_ID` (0x1602): member-function id (parent_type + type_index + name).
+    MFuncId,
+    /// `LF_BUILDINFO` (0x1603): build-info argument list — no name.
+    BuildInfo,
+    /// `LF_SUBSTR_LIST` (0x1604): substring list used by `LF_STRING_ID` — no name.
+    SubStrList,
+    /// `LF_STRING_ID` (0x1605): a string id; `name` is the string body.
+    StringId,
+    /// `LF_UDT_SRC_LINE` (0x1606): UDT → source-line mapping — no name.
+    UdtSrcLine,
+}
+
+/// One IPI item decoded from a raw IPI stream by [`walk_ipi`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PdbIpiItem {
+    /// Item identifier (0x1000-based, in the IPI id space).
+    pub id: u32,
+    /// Discriminant identifying which IPI leaf produced this record.
+    pub kind: PdbIpiKind,
+    /// Item name when the leaf carries one (`LF_FUNC_ID`, `LF_MFUNC_ID`,
+    /// `LF_STRING_ID`). `None` for leaves that have no string body
+    /// (`LF_BUILDINFO`, `LF_SUBSTR_LIST`, `LF_UDT_SRC_LINE`).
+    pub name: Option<String>,
+}
+
+/// Walk a raw IPI stream of CodeView leaf records and return every
+/// recognized IPI item (`LF_FUNC_ID`, `LF_MFUNC_ID`, `LF_BUILDINFO`,
+/// `LF_SUBSTR_LIST`, `LF_STRING_ID`, `LF_UDT_SRC_LINE`).
+///
+/// The input is interpreted as a contiguous sequence of records starting at
+/// offset 0; pass the bytes *after* the IPI header. Item IDs follow the
+/// CodeView convention of starting at 0x1000 and incrementing per record.
+/// Unknown leaf kinds occupy an ID slot but are skipped using their
+/// `length` prefix.
+pub fn walk_ipi(stream_data: &[u8]) -> Result<Vec<PdbIpiItem>, PdbError> {
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+    let mut next_id: u32 = 0x1000;
+    while cursor < stream_data.len() {
+        let rec = read_record(stream_data, cursor)?;
+        cursor = rec.next;
+        let id = next_id;
+        next_id += 1;
+        let payload = &stream_data[rec.payload_start..rec.payload_end];
+        let (kind, name) = match rec.kind {
+            LF_FUNC_ID => {
+                // scope_id u32, type u32 (TI), name (NUL-terminated).
+                if payload.len() < 8 {
+                    return Err(PdbError::UnexpectedEof(rec.payload_start));
+                }
+                let name = read_cstr(payload, 8, rec.payload_start)?;
+                (PdbIpiKind::FuncId, Some(name))
+            }
+            LF_MFUNC_ID => {
+                // parent_type u32 (TI), type u32 (TI), name.
+                if payload.len() < 8 {
+                    return Err(PdbError::UnexpectedEof(rec.payload_start));
+                }
+                let name = read_cstr(payload, 8, rec.payload_start)?;
+                (PdbIpiKind::MFuncId, Some(name))
+            }
+            LF_STRING_ID => {
+                // substr_list u32 (item_id, 0 if none), name.
+                if payload.len() < 4 {
+                    return Err(PdbError::UnexpectedEof(rec.payload_start));
+                }
+                let name = read_cstr(payload, 4, rec.payload_start)?;
+                (PdbIpiKind::StringId, Some(name))
+            }
+            LF_BUILDINFO => (PdbIpiKind::BuildInfo, None),
+            LF_SUBSTR_LIST => (PdbIpiKind::SubStrList, None),
+            LF_UDT_SRC_LINE => (PdbIpiKind::UdtSrcLine, None),
+            _ => continue,
+        };
+        out.push(PdbIpiItem { id, kind, name });
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -1138,5 +1242,138 @@ mod tests {
         // Pointer-to-i32 via indirection.
         let p = primitive_to_type(pdb::PrimitiveKind::I32, Some(pdb::Indirection::Near32));
         assert!(p.is_pointer());
+    }
+
+    // -------------------------------------------------------------------
+    // Raw IPI walker tests — synthesize byte streams matching the on-disk
+    // CodeView leaf format for the 0x1601..=0x1606 leaves and assert that
+    // `walk_ipi` produces the expected item shapes.
+    // -------------------------------------------------------------------
+
+    fn func_id_payload(scope_id: u32, type_ti: u32, name: &str) -> Vec<u8> {
+        let mut p = Vec::new();
+        p.extend_from_slice(&scope_id.to_le_bytes());
+        p.extend_from_slice(&type_ti.to_le_bytes());
+        p.extend_from_slice(name.as_bytes());
+        p.push(0);
+        p
+    }
+
+    fn mfunc_id_payload(parent_ti: u32, type_ti: u32, name: &str) -> Vec<u8> {
+        let mut p = Vec::new();
+        p.extend_from_slice(&parent_ti.to_le_bytes());
+        p.extend_from_slice(&type_ti.to_le_bytes());
+        p.extend_from_slice(name.as_bytes());
+        p.push(0);
+        p
+    }
+
+    fn string_id_payload(substr_list_id: u32, s: &str) -> Vec<u8> {
+        let mut p = Vec::new();
+        p.extend_from_slice(&substr_list_id.to_le_bytes());
+        p.extend_from_slice(s.as_bytes());
+        p.push(0);
+        p
+    }
+
+    #[test]
+    fn walk_ipi_decodes_func_id() {
+        // Single LF_FUNC_ID record: scope=0 (file/global), type=0x1234.
+        let stream = record(LF_FUNC_ID, &func_id_payload(0, 0x1234, "main"));
+        let items = walk_ipi(&stream).expect("walk succeeds");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, 0x1000);
+        assert_eq!(items[0].kind, PdbIpiKind::FuncId);
+        assert_eq!(items[0].name.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn walk_ipi_decodes_mfunc_and_string_id() {
+        // Two records, IDs 0x1000 and 0x1001.
+        let mut stream = record(
+            LF_MFUNC_ID,
+            &mfunc_id_payload(0x2000, 0x2001, "MyClass::do_thing"),
+        );
+        stream.extend(record(LF_STRING_ID, &string_id_payload(0, "C:\\src\\foo.cpp")));
+
+        let items = walk_ipi(&stream).expect("walk succeeds");
+        assert_eq!(items.len(), 2);
+
+        assert_eq!(items[0].id, 0x1000);
+        assert_eq!(items[0].kind, PdbIpiKind::MFuncId);
+        assert_eq!(items[0].name.as_deref(), Some("MyClass::do_thing"));
+
+        assert_eq!(items[1].id, 0x1001);
+        assert_eq!(items[1].kind, PdbIpiKind::StringId);
+        assert_eq!(items[1].name.as_deref(), Some("C:\\src\\foo.cpp"));
+    }
+
+    #[test]
+    fn walk_ipi_handles_nameless_leaves() {
+        // BUILDINFO + SUBSTR_LIST + UDT_SRC_LINE: walker should report
+        // each with `name = None` and the correct kind discriminant.
+        // Concrete payload bytes don't matter for nameless leaves — the
+        // walker only inspects the length-prefixed framing.
+        let buildinfo = {
+            let mut p = Vec::new();
+            p.extend_from_slice(&5u16.to_le_bytes()); // count
+            for arg in [0x1100u32, 0x1101, 0x1102, 0x1103, 0x1104] {
+                p.extend_from_slice(&arg.to_le_bytes());
+            }
+            p
+        };
+        let substr_list = {
+            let mut p = Vec::new();
+            p.extend_from_slice(&2u32.to_le_bytes()); // count
+            p.extend_from_slice(&0x1200u32.to_le_bytes());
+            p.extend_from_slice(&0x1201u32.to_le_bytes());
+            p
+        };
+        let udt_src_line = {
+            let mut p = Vec::new();
+            p.extend_from_slice(&0x1500u32.to_le_bytes()); // type TI
+            p.extend_from_slice(&0x1000u32.to_le_bytes()); // src (LF_STRING_ID id)
+            p.extend_from_slice(&42u32.to_le_bytes()); // line
+            p
+        };
+
+        let mut stream = record(LF_BUILDINFO, &buildinfo);
+        stream.extend(record(LF_SUBSTR_LIST, &substr_list));
+        stream.extend(record(LF_UDT_SRC_LINE, &udt_src_line));
+
+        let items = walk_ipi(&stream).expect("walk succeeds");
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].id, 0x1000);
+        assert_eq!(items[0].kind, PdbIpiKind::BuildInfo);
+        assert!(items[0].name.is_none());
+        assert_eq!(items[1].id, 0x1001);
+        assert_eq!(items[1].kind, PdbIpiKind::SubStrList);
+        assert!(items[1].name.is_none());
+        assert_eq!(items[2].id, 0x1002);
+        assert_eq!(items[2].kind, PdbIpiKind::UdtSrcLine);
+        assert!(items[2].name.is_none());
+    }
+
+    #[test]
+    fn walk_ipi_skips_unknown_leaves_and_advances_ids() {
+        // Mix three records: FUNC_ID (known) → bogus 0x9999 leaf (skipped
+        // by walker, but still consumes an item-id slot) → STRING_ID
+        // (known). The STRING_ID should land at id 0x1002 even though
+        // only two items appear in the output, proving the walker
+        // increments the id counter for every record it sees — not just
+        // recognized ones — which matches how compilers actually
+        // allocate IPI ids.
+        let mut stream = record(LF_FUNC_ID, &func_id_payload(0, 0x1234, "alpha"));
+        stream.extend(record(0x9999, &[0u8; 4])); // unknown leaf, 4 payload bytes
+        stream.extend(record(LF_STRING_ID, &string_id_payload(0, "beta")));
+
+        let items = walk_ipi(&stream).expect("walk succeeds");
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].id, 0x1000);
+        assert_eq!(items[0].kind, PdbIpiKind::FuncId);
+        assert_eq!(items[0].name.as_deref(), Some("alpha"));
+        assert_eq!(items[1].id, 0x1002, "id slot consumed by unknown leaf");
+        assert_eq!(items[1].kind, PdbIpiKind::StringId);
+        assert_eq!(items[1].name.as_deref(), Some("beta"));
     }
 }

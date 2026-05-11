@@ -6787,6 +6787,18 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x411 => Some("__autib"),
         0x412 => Some("__xpaci"),
         0x413 => Some("__xpacd"),
+
+        // ── AArch64 SVE (0x420..0x429) ──────────────────────────────
+        0x420 => Some("svadd_s32"),
+        0x421 => Some("svsub_s32"),
+        0x422 => Some("svmul_s32"),
+        0x423 => Some("svaddf_f32"),
+        0x424 => Some("svsubf_f32"),
+        0x425 => Some("svmulf_f32"),
+        0x426 => Some("svld1_s32"),
+        0x427 => Some("svst1_s32"),
+        0x428 => Some("svand_pred"),
+        0x429 => Some("svptrue_b32"),
         _ => None,
     }
 }
@@ -6808,6 +6820,28 @@ const CALLOTHER_NEON_MUL: u64 = 0x40A;
 const CALLOTHER_NEON_FADD: u64 = 0x40B;
 const CALLOTHER_NEON_FSUB: u64 = 0x40C;
 const CALLOTHER_NEON_FMUL: u64 = 0x40D;
+
+// ── AArch64 SVE Callother tags (mirror of `unlace-lift-arm`) ───────────
+#[allow(dead_code)]
+const CALLOTHER_SVE_ADD: u64 = 0x420;
+#[allow(dead_code)]
+const CALLOTHER_SVE_SUB: u64 = 0x421;
+#[allow(dead_code)]
+const CALLOTHER_SVE_MUL: u64 = 0x422;
+#[allow(dead_code)]
+const CALLOTHER_SVE_FADD: u64 = 0x423;
+#[allow(dead_code)]
+const CALLOTHER_SVE_FSUB: u64 = 0x424;
+#[allow(dead_code)]
+const CALLOTHER_SVE_FMUL: u64 = 0x425;
+#[allow(dead_code)]
+const CALLOTHER_SVE_LD1: u64 = 0x426;
+#[allow(dead_code)]
+const CALLOTHER_SVE_ST1: u64 = 0x427;
+#[allow(dead_code)]
+const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
+#[allow(dead_code)]
+const CALLOTHER_SVE_PTRUE: u64 = 0x429;
 
 /// Map an AArch64 NEON `Callother` `(tag, lane_size, signed)` triple to
 /// its Apple/ARM C intrinsic name (e.g. `vaddq_s32`).
@@ -17295,6 +17329,30 @@ mod tests {
         assert!(
             output.contains("LOWORD("),
             "IntAnd(x, 0xFFFF) should emit LOWORD(x): {output}"
+        );
+    }
+
+    #[test]
+    fn test_callother_sve_add_emits_svadd_s32_t300() {
+        // Callother(0x420 /* SVE_ADD */, pg=0, zd, zn, zm) → svadd_s32
+        let tag = con(0x420, 8);
+        let pg = con(0, 1);
+        let zd = con(0, 1);
+        let zn = con(1, 1);
+        let zm = con(2, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, pg, zd, zn, zm],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("sve_add_s32", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("svadd_s32("),
+            "SVE ADD should render as svadd_s32: {output}",
         );
     }
 }

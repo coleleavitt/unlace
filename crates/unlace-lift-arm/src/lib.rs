@@ -8,7 +8,7 @@ pub use lift::ArmLifter;
 
 #[cfg(test)]
 mod tests {
-    use unlace_ir::{ArchId, IrOp, Lifter, SpaceId};
+    use unlace_ir::{ArchId, IrOp, Lifter, SpaceId, Varnode};
 
     use crate::ArmLifter;
     use crate::lift::{
@@ -195,7 +195,8 @@ mod tests {
         let l = lifter();
         let rf = l.register_file();
         assert!(!rf.registers.is_empty());
-        assert_eq!(rf.registers.len(), 35);
+        // 31 Xn + SP + PC + NZCV + PSTATE_NZCV + 32 Zn + 16 Pn = 83
+        assert_eq!(rf.registers.len(), 83);
         assert_eq!(rf.registers[0].name, "X0");
         assert_eq!(rf.registers[30].name, "X30");
         assert_eq!(rf.registers[31].name, "SP");
@@ -203,6 +204,11 @@ mod tests {
         assert_eq!(rf.registers[33].name, "NZCV");
         // t170: unified packed-PSTATE NZCV varnode at a non-overlapping offset.
         assert_eq!(rf.registers[34].name, "PSTATE_NZCV");
+        // t300: SVE registers
+        assert_eq!(rf.registers[35].name, "Z0");
+        assert_eq!(rf.registers[66].name, "Z31");
+        assert_eq!(rf.registers[67].name, "P0");
+        assert_eq!(rf.registers[82].name, "P15");
     }
 
     #[test]
@@ -2950,5 +2956,62 @@ mod tests {
         assert_eq!(co.inputs[1].space, SpaceId::Const);
         // SSAT immediate is 1-based saturation width (here #8 → "to 8 bits").
         assert_eq!(co.inputs[1].offset, 8);
+    }
+
+    // ── t300: SVE scaffolding tests ───────────────────────────────────
+
+    #[test]
+    fn test_sve_add_z0_z1_z2_lifts_t300() {
+        // Exercise emit_sve_callother for SVE ADD: tag=0x420, pg=0, zd=z0, zn=z1, zm=z2.
+        use crate::lift::{emit_sve_callother, LiftCtx, CALLOTHER_SVE_ADD};
+        use crate::register_file::{sve_z_offset, SVE_Z_SIZE};
+
+        let mut ctx = LiftCtx::new(0x2000);
+        let zd = Varnode::reg(sve_z_offset(0), SVE_Z_SIZE);
+        let zn = Varnode::reg(sve_z_offset(1), SVE_Z_SIZE);
+        let zm = Varnode::reg(sve_z_offset(2), SVE_Z_SIZE);
+        emit_sve_callother(&mut ctx, CALLOTHER_SVE_ADD, 0, &[zd, zn, zm]);
+
+        assert_eq!(ctx.ops.len(), 1);
+        let co = &ctx.ops[0];
+        assert_eq!(co.op, IrOp::Callother);
+        assert_eq!(co.inputs[0].offset, CALLOTHER_SVE_ADD);
+        // pg index = 0
+        assert_eq!(co.inputs[1].offset, 0);
+        // zd varnode
+        assert_eq!(co.inputs[2].offset, sve_z_offset(0));
+        assert_eq!(co.inputs[2].size, SVE_Z_SIZE);
+    }
+
+    #[test]
+    fn test_sve_ld1_lifts_t300() {
+        // Exercise emit_sve_callother for SVE LD1.
+        use crate::lift::{emit_sve_callother, LiftCtx, CALLOTHER_SVE_LD1};
+        use crate::register_file::{sve_z_offset, SVE_Z_SIZE};
+
+        let mut ctx = LiftCtx::new(0x3000);
+        let zt = Varnode::reg(sve_z_offset(5), SVE_Z_SIZE);
+        let base = Varnode::reg(0, 8); // X0
+        emit_sve_callother(&mut ctx, CALLOTHER_SVE_LD1, 3, &[zt, base]);
+
+        assert_eq!(ctx.ops.len(), 1);
+        let co = &ctx.ops[0];
+        assert_eq!(co.op, IrOp::Callother);
+        assert_eq!(co.inputs[0].offset, CALLOTHER_SVE_LD1);
+        // pg index = 3 (P3)
+        assert_eq!(co.inputs[1].offset, 3);
+    }
+
+    #[test]
+    fn test_sve_predicate_reg_accessed_t300() {
+        // Verify that P registers appear in the register file with correct
+        // offset and size.
+        use crate::register_file::{aarch64_register_file, sve_p_offset, SVE_P_SIZE};
+
+        let rf = aarch64_register_file();
+        let p3 = rf.registers.iter().find(|r| r.name == "P3").unwrap();
+        assert_eq!(p3.varnode.offset, sve_p_offset(3));
+        assert_eq!(p3.varnode.size, SVE_P_SIZE);
+        assert_eq!(p3.varnode.space, SpaceId::Register);
     }
 }

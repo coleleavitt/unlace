@@ -1894,7 +1894,7 @@ pub struct LiftCtx {
 }
 
 impl LiftCtx {
-    fn new(addr: u64) -> Self {
+    pub(crate) fn new(addr: u64) -> Self {
         Self {
             ops: Vec::new(),
             addr,
@@ -2799,6 +2799,44 @@ fn emit_pac_callother(ctx: &mut LiftCtx, pac: &PacAuthDecoded) {
 /// The `unlace-struct` `fold_csel_ternary` pass (t180) recognizes this
 /// tag and collapses CMP/SUBS+CSEL pairs into [`HirNode::CselTernary`].
 pub const CALLOTHER_AARCH64_CSEL: u64 = 0x330;
+
+// ── SVE Callother tags (0x420..0x429) ──────────────────────────────────
+/// SVE integer ADD (predicated). Inputs: tag, pg, zd, zn, zm.
+pub const CALLOTHER_SVE_ADD: u64 = 0x420;
+/// SVE integer SUB (predicated).
+pub const CALLOTHER_SVE_SUB: u64 = 0x421;
+/// SVE integer MUL (predicated).
+pub const CALLOTHER_SVE_MUL: u64 = 0x422;
+/// SVE floating-point ADD (predicated).
+pub const CALLOTHER_SVE_FADD: u64 = 0x423;
+/// SVE floating-point SUB (predicated).
+pub const CALLOTHER_SVE_FSUB: u64 = 0x424;
+/// SVE floating-point MUL (predicated).
+pub const CALLOTHER_SVE_FMUL: u64 = 0x425;
+/// SVE contiguous load (LD1).
+pub const CALLOTHER_SVE_LD1: u64 = 0x426;
+/// SVE contiguous store (ST1).
+pub const CALLOTHER_SVE_ST1: u64 = 0x427;
+/// SVE predicate logical AND.
+pub const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
+/// SVE PTRUE — set predicate to all-true for element size.
+pub const CALLOTHER_SVE_PTRUE: u64 = 0x429;
+
+/// Emit a generic SVE `Callother` intrinsic.
+///
+/// Layout: `Callother(tag, pg_index, zd_index, operands…) → void`.
+/// The predicate register index (`pg`) is always the second input after
+/// the tag so downstream passes know which predicate governs the lane
+/// mask.  For non-predicated operations (e.g. `PTRUE`), `pg` should be
+/// 0xFF (sentinel meaning "all lanes").
+pub fn emit_sve_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varnode]) {
+    let mut inputs: smallvec::SmallVec<[Varnode; 3]> = smallvec::smallvec![
+        Varnode::constant(tag, 8),
+        Varnode::constant(pg as u64, 1),
+    ];
+    inputs.extend_from_slice(operands);
+    ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
+}
 
 /// Return `true` if `insn` is an AArch64 pointer-authentication or BTI
 /// instruction with no architectural effects relevant to lifting; the

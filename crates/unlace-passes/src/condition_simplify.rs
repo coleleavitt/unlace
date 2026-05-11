@@ -14,8 +14,8 @@ use crate::pass::{Pass, PassError};
 /// - Double negation: `BoolNegate(BoolNegate(x))` → `x`
 /// - And/Or absorption with constants
 /// - Negated comparisons: `BoolNegate(IntEqual(a, b))` → `IntNotequal(a, b)`
-/// - De Morgan: `BoolNegate(BoolOr(a, b))` → `BoolAnd(BoolNegate(a), BoolNegate(b))`
-/// - De Morgan: `BoolNegate(BoolAnd(a, b))` → `BoolOr(BoolNegate(a), BoolNegate(b))`
+/// - De Morgan: `BoolNegate(BoolOr(a, b))` → `BoolAnd(BoolNegate(a), BoolNegate(b))` (only when both a, b already negated)
+/// - De Morgan: `BoolNegate(BoolAnd(a, b))` → `BoolOr(BoolNegate(a), BoolNegate(b))` (only when both a, b already negated)
 /// - Xor with false: `BoolXor(x, false)` → `x`
 /// - `(x - y) == 0` → `x == y`, `(x - y) != 0` → `x != y`
 /// - `x == x` → `1`, `x != x` → `0`
@@ -417,17 +417,21 @@ fn try_simplify(
                             smallvec::smallvec![*b, *a],
                         )));
                     }
-                    // !(a || b) → (!a) && (!b)
+                    // !(a || b) → (!a) && (!b) — only when both inputs already negated
                     IrOp::BoolOr => {
                         let a = *inner_insn.inputs.first()?;
                         let b = *inner_insn.inputs.get(1)?;
-                        return Some(demorgan(insn, a, b, IrOp::BoolAnd, output, next_unique));
+                        if both_negated(&a, &b, def_map) {
+                            return Some(demorgan(insn, a, b, IrOp::BoolAnd, output, next_unique));
+                        }
                     }
-                    // !(a && b) → (!a) || (!b)
+                    // !(a && b) → (!a) || (!b) — only when both inputs already negated
                     IrOp::BoolAnd => {
                         let a = *inner_insn.inputs.first()?;
                         let b = *inner_insn.inputs.get(1)?;
-                        return Some(demorgan(insn, a, b, IrOp::BoolOr, output, next_unique));
+                        if both_negated(&a, &b, def_map) {
+                            return Some(demorgan(insn, a, b, IrOp::BoolOr, output, next_unique));
+                        }
                     }
                     _ => {}
                 }
@@ -582,6 +586,13 @@ fn demorgan(
         prefix: vec![neg_a, neg_b],
         replacement: combined,
     }
+}
+
+/// Returns true if both `a` and `b` are defined by `BoolNegate` instructions.
+fn both_negated(a: &Varnode, b: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>) -> bool {
+    let a_neg = def_map.get(a).map_or(false, |insn| insn.op == IrOp::BoolNegate);
+    let b_neg = def_map.get(b).map_or(false, |insn| insn.op == IrOp::BoolNegate);
+    a_neg && b_neg
 }
 
 fn two(inputs: &[Varnode]) -> Option<(Varnode, Varnode)> {
@@ -984,12 +995,37 @@ mod tests {
         assert_eq!(block.insns[0].inputs[0], r0);
     }
 
-    // ── De Morgan: !(a || b) → (!a) && (!b) ────────────────────────
+    // ── De Morgan canonicalization (depth-reducing heuristic) ────────────
 
     #[test]
-    fn test_demorgan_negate_or() {
-        // v1 = BoolOr(r0, r8)
-        // v2 = BoolNegate(v1) → neg_a = BoolNegate(r0), neg_b = BoolNegate(r8), v2 = BoolAnd(neg_a, neg_b)
+    fn test_demorgan_negate_or_when_inputs_already_negated() {
+        // !(!r0 || !r8) → De Morgan + double-negate → r0 && r8
+        let r0 = Varnode::reg(0, 1);
+        let r8 = Varnode::reg(8, 1);
+        let na = Varnode::unique(0, 1);
+        let nb = Varnode::unique(8, 1);
+        let v1 = Varnode::unique(16, 1);
+        let v2 = Varnode::unique(24, 1);
+
+        let neg_a = IrInsn::with_output(IrOp::BoolNegate, na, smallvec![r0], 0x1000);
+        let neg_b = IrInsn::with_output(IrOp::BoolNegate, nb, smallvec![r8], 0x1004);
+        let or_insn = IrInsn::with_output(IrOp::BoolOr, v1, smallvec![na, nb], 0x1008);
+        let neg_insn = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x100C);
+
+        let mut ssa = make_single_block_ssa(vec![neg_a, neg_b, or_insn, neg_insn]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        let v2_insn = block.insns.iter().find(|i| i.output == Some(v2)).unwrap();
+        assert_eq!(v2_insn.op, IrOp::BoolAnd);
+    }
+
+    #[test]
+    fn test_demorgan_not_applied_when_inputs_not_negated() {
+        // !(r0 || r8): inputs are plain registers, De Morgan should NOT fire.
         let r0 = Varnode::reg(0, 1);
         let r8 = Varnode::reg(8, 1);
         let v1 = Varnode::unique(0, 1);
@@ -999,51 +1035,39 @@ mod tests {
         let neg_insn = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![or_insn, neg_insn]);
-        let changed = ConditionSimplifyPass
+        let _changed = ConditionSimplifyPass
             .run(&mut ssa)
             .expect("pass should succeed");
-        assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
-        // insn[0] = BoolOr (unchanged)
-        assert_eq!(block.insns[0].op, IrOp::BoolOr);
-        // insn[1] = BoolNegate(r0)
-        assert_eq!(block.insns[1].op, IrOp::BoolNegate);
-        assert_eq!(block.insns[1].inputs[0], r0);
-        // insn[2] = BoolNegate(r8)
-        assert_eq!(block.insns[2].op, IrOp::BoolNegate);
-        assert_eq!(block.insns[2].inputs[0], r8);
-        // insn[3] = BoolAnd(neg_a, neg_b)
-        assert_eq!(block.insns[3].op, IrOp::BoolAnd);
-        assert_eq!(block.insns[3].output, Some(v2));
+        let v2_insn = block.insns.iter().find(|i| i.output == Some(v2)).unwrap();
+        assert_eq!(v2_insn.op, IrOp::BoolNegate, "De Morgan should not fire on non-negated inputs");
     }
 
-    // ── De Morgan: !(a && b) → (!a) || (!b) ────────────────────────
-
     #[test]
-    fn test_demorgan_negate_and() {
+    fn test_demorgan_negate_and_when_inputs_already_negated() {
+        // !(!r0 && !r8) → De Morgan + double-negate → r0 || r8
         let r0 = Varnode::reg(0, 1);
         let r8 = Varnode::reg(8, 1);
-        let v1 = Varnode::unique(0, 1);
-        let v2 = Varnode::unique(8, 1);
+        let na = Varnode::unique(0, 1);
+        let nb = Varnode::unique(8, 1);
+        let v1 = Varnode::unique(16, 1);
+        let v2 = Varnode::unique(24, 1);
 
-        let and_insn = IrInsn::with_output(IrOp::BoolAnd, v1, smallvec![r0, r8], 0x1000);
-        let neg_insn = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x1004);
+        let neg_a = IrInsn::with_output(IrOp::BoolNegate, na, smallvec![r0], 0x1000);
+        let neg_b = IrInsn::with_output(IrOp::BoolNegate, nb, smallvec![r8], 0x1004);
+        let and_insn = IrInsn::with_output(IrOp::BoolAnd, v1, smallvec![na, nb], 0x1008);
+        let neg_insn = IrInsn::with_output(IrOp::BoolNegate, v2, smallvec![v1], 0x100C);
 
-        let mut ssa = make_single_block_ssa(vec![and_insn, neg_insn]);
+        let mut ssa = make_single_block_ssa(vec![neg_a, neg_b, and_insn, neg_insn]);
         let changed = ConditionSimplifyPass
             .run(&mut ssa)
             .expect("pass should succeed");
         assert!(changed);
 
         let block = ssa.function.blocks.values().next().expect("has block");
-        assert_eq!(block.insns[0].op, IrOp::BoolAnd);
-        assert_eq!(block.insns[1].op, IrOp::BoolNegate);
-        assert_eq!(block.insns[1].inputs[0], r0);
-        assert_eq!(block.insns[2].op, IrOp::BoolNegate);
-        assert_eq!(block.insns[2].inputs[0], r8);
-        assert_eq!(block.insns[3].op, IrOp::BoolOr);
-        assert_eq!(block.insns[3].output, Some(v2));
+        let v2_insn = block.insns.iter().find(|i| i.output == Some(v2)).unwrap();
+        assert_eq!(v2_insn.op, IrOp::BoolOr);
     }
 
     #[test]

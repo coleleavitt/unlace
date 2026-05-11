@@ -1,0 +1,560 @@
+//! Stack frame synthesis pass (Wave 24 / t209).
+//!
+//! Walks every LOAD / STORE in the SSA function, resolves the access
+//! address back to an `RSP`/`RBP`-relative byte offset, and groups the
+//! observed access widths into one [`StackLocal`] per distinct offset.
+//! Adjacent offsets whose distance is smaller than the observed access
+//! width are fused into a single slot (this handles the common pattern
+//! of a wide store followed by a narrower partial-load at the same
+//! base — they reference *one* variable, not two).
+//!
+//! The output is a single [`StackFrame`] capturing every recovered slot
+//! plus the inferred frame extents (`min_neg_offset` … `max_pos_offset`).
+//! Both the locals (negative offsets) and the incoming parameter region
+//! (non-negative offsets) live in the same map so downstream type
+//! recovery can render them uniformly.
+//!
+//! Unlike [`crate::stack_vars::StackVarRecoveryPass`] this pass is a
+//! pure function (`recover_stack_frame`) returning a fresh value, not a
+//! mutating [`crate::pass::Pass`] — the SsaFunction field is populated
+//! by the pipeline wiring in `unlace-cli` after the fixed-point loop
+//! reaches steady state.
+
+use std::collections::{BTreeMap, HashMap};
+
+use unlace_ir::ssa::{SsaFunction, StackFrame, StackLocal, VarnodeSlot};
+use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
+
+/// AMD64 register-space offsets for RSP / RBP. These mirror the constants
+/// used by [`crate::stack_vars`] and the Sleigh AMD64 register file.
+const RSP_OFFSET: u64 = 32;
+const RBP_OFFSET: u64 = 40;
+
+const MAX_RESOLVE_DEPTH: u32 = 16;
+
+type DefMap = HashMap<Varnode, Vec<(BlockId, usize)>>;
+type ResolveCache = HashMap<(Varnode, u32), Option<i64>>;
+
+/// Recover the logical stack-frame layout of `func`.
+///
+/// This walks every LOAD/STORE instruction. For each, the address operand
+/// is traced back through [`IrOp::IntAdd`] / [`IrOp::IntSub`] /
+/// [`IrOp::Copy`] until either an RSP/RBP root + constant displacement is
+/// found, or the trace exhausts itself. The resulting set of
+/// `(offset, access_width)` observations is then collapsed into one
+/// [`StackLocal`] per slot — including a width-driven *fusion* step that
+/// merges two consecutive offsets whose distance is smaller than the
+/// later slot's access width (those are partial reads of one variable).
+///
+/// Returns an empty [`StackFrame`] when no stack-relative access is
+/// detected.
+pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
+    let def_map = build_def_map(func);
+    let mut resolve_cache: ResolveCache = HashMap::new();
+
+    // First pass: collect every (offset, width) observation.
+    // BTreeMap keeps offsets sorted for the later fusion sweep.
+    let mut observations: BTreeMap<i64, Vec<u8>> = BTreeMap::new();
+    let record = |off: i64, width: u8, obs: &mut BTreeMap<i64, Vec<u8>>| {
+        let widths = obs.entry(off).or_default();
+        if !widths.contains(&width) {
+            widths.push(width);
+        }
+    };
+
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            match insn.op {
+                IrOp::Store => {
+                    if insn.inputs.len() < 3 {
+                        continue;
+                    }
+                    if let Some(offset) =
+                        extract_stack_offset(insn, func, &def_map, &mut resolve_cache)
+                    {
+                        let width = insn.inputs[2].size;
+                        if width > 0 {
+                            record(offset, width, &mut observations);
+                        }
+                    }
+                }
+                IrOp::Load => {
+                    if insn.inputs.len() < 2 {
+                        continue;
+                    }
+                    if let Some(offset) =
+                        extract_stack_offset(insn, func, &def_map, &mut resolve_cache)
+                    {
+                        let width = insn.output.map(|o| o.size).unwrap_or(0);
+                        if width > 0 {
+                            record(offset, width, &mut observations);
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            // Also pick up direct `SpaceId::Stack` operands — some lifters
+            // emit those instead of `LOAD(ram, RSP+K)`.
+            if let Some(out) = insn.output {
+                if out.space == SpaceId::Stack && out.size > 0 {
+                    record(out.offset as i64, out.size, &mut observations);
+                }
+            }
+            for inp in &insn.inputs {
+                if inp.space == SpaceId::Stack && inp.size > 0 {
+                    record(inp.offset as i64, inp.size, &mut observations);
+                }
+            }
+        }
+    }
+
+    // Second pass: fusion sweep.  Walk offsets in ascending order; whenever
+    // the gap to the previous *kept* slot is smaller than the previous
+    // slot's max width, fold the new observation into it (partial access).
+    let mut locals: BTreeMap<i64, StackLocal> = BTreeMap::new();
+    let mut last_kept: Option<i64> = None;
+    for (offset, widths) in observations {
+        if widths.is_empty() {
+            continue;
+        }
+        let max_w = *widths.iter().max().unwrap();
+
+        if let Some(prev_off) = last_kept {
+            let prev = locals.get_mut(&prev_off).expect("kept slot present");
+            let prev_max = prev.size as i64;
+            if offset - prev_off < prev_max && offset > prev_off {
+                // Partial access *inside* the previous slot — fold widths.
+                for w in &widths {
+                    if !prev.access_widths.contains(w) {
+                        prev.access_widths.push(*w);
+                    }
+                }
+                prev.size = prev.size.max(max_w as u64);
+                continue;
+            }
+        }
+
+        locals.insert(
+            offset,
+            StackLocal {
+                offset,
+                size: max_w as u64,
+                access_widths: widths,
+            },
+        );
+        last_kept = Some(offset);
+    }
+
+    // Third pass: array detection.  If three or more consecutive locals
+    // share the same `size` *and* are spaced by exactly that size we
+    // collapse them into one slot whose `size` covers the whole span.
+    // The surviving slot keeps every observed access width.
+    let array_groups = detect_arrays(&locals);
+    for (start, span, widths) in array_groups {
+        // Remove fused tail slots; keep the head.
+        let to_remove: Vec<i64> = locals
+            .range((start + (widths[0] as i64))..(start + span as i64))
+            .map(|(k, _)| *k)
+            .collect();
+        for k in to_remove {
+            locals.remove(&k);
+        }
+        if let Some(head) = locals.get_mut(&start) {
+            head.size = span;
+            for w in &widths {
+                if !head.access_widths.contains(w) {
+                    head.access_widths.push(*w);
+                }
+            }
+        }
+    }
+
+    // Frame bounds — `min_neg_offset` is the smallest start offset, and
+    // `max_pos_offset` is the largest *end* offset (start + size) across
+    // every slot. They jointly span the frame's footprint.
+    //
+    // We track them unconditionally (not clamped at 0) so that a function
+    // with only locals — no parameter-region access at all — still reports
+    // a meaningful upper edge like `-4` for a 4-byte slot at `-8`.
+    let frame_size: u64;
+    let min_neg_offset: i64;
+    let max_pos_offset: i64;
+    if locals.is_empty() {
+        frame_size = 0;
+        min_neg_offset = 0;
+        max_pos_offset = 0;
+    } else {
+        let mut lo = i64::MAX;
+        let mut hi = i64::MIN;
+        for (&off, local) in &locals {
+            if off < lo {
+                lo = off;
+            }
+            let end = off + local.size as i64;
+            if end > hi {
+                hi = end;
+            }
+        }
+        min_neg_offset = lo;
+        max_pos_offset = hi;
+        frame_size = (hi - lo).max(0) as u64;
+    }
+
+    StackFrame {
+        locals,
+        frame_size,
+        max_pos_offset,
+        min_neg_offset,
+    }
+}
+
+/// Detect repeated stride accesses indicating an array. Returns one entry
+/// per detected array as `(start_offset, total_span, observed_widths)`.
+///
+/// Heuristic: three or more consecutive slots in `locals` whose `size` is
+/// identical and whose spacing equals that size form an array. We bail
+/// out as soon as the pattern breaks (different size or non-stride gap),
+/// emitting the run we just closed if it had ≥3 elements.
+fn detect_arrays(locals: &BTreeMap<i64, StackLocal>) -> Vec<(i64, u64, Vec<u8>)> {
+    let mut out = Vec::new();
+    let entries: Vec<(i64, u64, Vec<u8>)> = locals
+        .iter()
+        .map(|(o, l)| (*o, l.size, l.access_widths.clone()))
+        .collect();
+
+    let mut i = 0;
+    while i < entries.len() {
+        let (start_off, stride, _) = entries[i].clone();
+        if stride == 0 {
+            i += 1;
+            continue;
+        }
+        let mut j = i + 1;
+        let mut widths: Vec<u8> = entries[i].2.clone();
+        while j < entries.len() {
+            let (next_off, next_size, ref next_widths) = entries[j];
+            let expected = entries[j - 1].0 + stride as i64;
+            if next_off != expected || next_size != stride {
+                break;
+            }
+            for w in next_widths {
+                if !widths.contains(w) {
+                    widths.push(*w);
+                }
+            }
+            j += 1;
+        }
+        let count = j - i;
+        if count >= 3 {
+            let span = stride * count as u64;
+            out.push((start_off, span, widths));
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Build a map from defined varnode → list of definition sites.
+///
+/// Mirrors [`crate::stack_vars::build_def_map`] but kept local so this
+/// module can stand alone if the older pass is ever removed.
+fn build_def_map(func: &SsaFunction) -> DefMap {
+    let mut def_map: DefMap = HashMap::new();
+    for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
+        if *slot == VarnodeSlot::Output {
+            def_map.entry(sv.base).or_default().push((bid, insn_idx));
+        }
+    }
+    def_map
+}
+
+/// Resolve a LOAD/STORE address operand to a frame offset, returning
+/// `None` if the trace doesn't terminate at RSP or RBP.
+fn extract_stack_offset(
+    insn: &IrInsn,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+) -> Option<i64> {
+    let addr = &insn.inputs[1];
+
+    if addr.space == SpaceId::Stack {
+        return Some(addr.offset as i64);
+    }
+    if is_rsp_or_rbp(addr) {
+        return Some(0);
+    }
+    if addr.space == SpaceId::Unique || addr.space == SpaceId::Register {
+        return find_relative_offset(addr, func, def_map, resolve_cache, 0);
+    }
+    None
+}
+
+fn find_relative_offset(
+    addr: &Varnode,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+    depth: u32,
+) -> Option<i64> {
+    if depth > MAX_RESOLVE_DEPTH {
+        return None;
+    }
+    if let Some(&cached) = resolve_cache.get(&(*addr, depth)) {
+        return cached;
+    }
+    let resolved = find_relative_offset_uncached(addr, func, def_map, resolve_cache, depth);
+    resolve_cache.insert((*addr, depth), resolved);
+    resolved
+}
+
+fn find_relative_offset_uncached(
+    addr: &Varnode,
+    func: &SsaFunction,
+    def_map: &DefMap,
+    resolve_cache: &mut ResolveCache,
+    depth: u32,
+) -> Option<i64> {
+    let defs = def_map.get(addr)?;
+    for &(bid, insn_idx) in defs {
+        let block = func.function.blocks.get(&bid)?;
+        let def = block.insns.get(insn_idx)?;
+        match def.op {
+            IrOp::IntAdd => {
+                if def.inputs.len() < 2 {
+                    continue;
+                }
+                let (a, b) = (&def.inputs[0], &def.inputs[1]);
+                if is_rsp_or_rbp(a) && b.space == SpaceId::Const {
+                    return Some(b.offset as i64);
+                }
+                if is_rsp_or_rbp(b) && a.space == SpaceId::Const {
+                    return Some(a.offset as i64);
+                }
+                if b.space == SpaceId::Const {
+                    if let Some(base) =
+                        find_relative_offset(a, func, def_map, resolve_cache, depth + 1)
+                    {
+                        return Some(base.wrapping_add(b.offset as i64));
+                    }
+                }
+                if a.space == SpaceId::Const {
+                    if let Some(base) =
+                        find_relative_offset(b, func, def_map, resolve_cache, depth + 1)
+                    {
+                        return Some(base.wrapping_add(a.offset as i64));
+                    }
+                }
+            }
+            IrOp::IntSub => {
+                if def.inputs.len() < 2 {
+                    continue;
+                }
+                let (a, b) = (&def.inputs[0], &def.inputs[1]);
+                if is_rsp_or_rbp(a) && b.space == SpaceId::Const {
+                    return Some(-(b.offset as i64));
+                }
+                if b.space == SpaceId::Const {
+                    if let Some(base) =
+                        find_relative_offset(a, func, def_map, resolve_cache, depth + 1)
+                    {
+                        return Some(base.wrapping_sub(b.offset as i64));
+                    }
+                }
+            }
+            IrOp::Copy => {
+                if def.inputs.is_empty() {
+                    continue;
+                }
+                let src = &def.inputs[0];
+                if is_rsp_or_rbp(src) {
+                    return Some(0);
+                }
+                if src.space == SpaceId::Stack {
+                    return Some(src.offset as i64);
+                }
+                return find_relative_offset(src, func, def_map, resolve_cache, depth + 1);
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn is_rsp_or_rbp(v: &Varnode) -> bool {
+    v.space == SpaceId::Register && (v.offset == RSP_OFFSET || v.offset == RBP_OFFSET)
+}
+
+#[cfg(test)]
+mod tests {
+    use smallvec::smallvec;
+
+    use super::*;
+    use unlace_ir::ssa::build_ssa;
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn};
+
+    fn rsp() -> Varnode {
+        Varnode::reg(RSP_OFFSET, 8)
+    }
+
+    fn make_single_block_ssa(insns: Vec<IrInsn>) -> SsaFunction {
+        let mut func = Function::new("test", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns = insns;
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1FFF,
+        ));
+        func.insert_block(bb);
+        build_ssa(func)
+    }
+
+    /// Test 1: simple int local at -8.
+    /// Pattern:
+    ///   u0 = INT_SUB rsp, 8
+    ///   STORE ram, u0, val  (size 4)
+    #[test]
+    fn t209_simple_int_local_at_minus_8() {
+        let u0 = Varnode::unique(0, 8);
+        let val = Varnode::reg(0, 4);
+        let c8 = Varnode::constant(8, 8);
+        let ram = Varnode::constant(1, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), c8], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![ram, u0, val], 0x1004),
+        ];
+
+        let ssa = make_single_block_ssa(insns);
+        let frame = recover_stack_frame(&ssa);
+
+        assert_eq!(frame.locals.len(), 1);
+        let local = &frame.locals[&-8];
+        assert_eq!(local.offset, -8);
+        assert_eq!(local.size, 4);
+        assert_eq!(local.access_widths, vec![4]);
+        assert_eq!(frame.min_neg_offset, -8);
+        assert_eq!(frame.max_pos_offset, -4);
+        assert_eq!(frame.frame_size, 4);
+    }
+
+    /// Test 2: pair of locals at -8 and -16.  Distinct slots, both 8-byte
+    /// wide, must remain separate after the fusion sweep.
+    #[test]
+    fn t209_pair_of_locals_at_minus_8_and_minus_16() {
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        let v0 = Varnode::reg(0, 8);
+        let v1 = Varnode::reg(8, 8);
+        let c8 = Varnode::constant(8, 8);
+        let c16 = Varnode::constant(16, 8);
+        let ram = Varnode::constant(1, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), c8], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![ram, u0, v0], 0x1004),
+            IrInsn::with_output(IrOp::IntSub, u1, smallvec![rsp(), c16], 0x1008),
+            IrInsn::without_output(IrOp::Store, smallvec![ram, u1, v1], 0x100c),
+        ];
+
+        let ssa = make_single_block_ssa(insns);
+        let frame = recover_stack_frame(&ssa);
+
+        assert_eq!(
+            frame.locals.len(),
+            2,
+            "two distinct slots expected, got {:?}",
+            frame.locals
+        );
+        assert_eq!(frame.locals[&-16].size, 8);
+        assert_eq!(frame.locals[&-8].size, 8);
+        assert_eq!(frame.min_neg_offset, -16);
+        assert_eq!(frame.max_pos_offset, 0);
+        assert_eq!(frame.frame_size, 16);
+    }
+
+    /// Test 3: 8-element int array starting at -32.  Each element is 4
+    /// bytes ⇒ 8 STOREs at -32, -28, -24, ..., -4.  The detector must
+    /// collapse them into one slot of size 32 at offset -32.
+    #[test]
+    fn t209_eight_element_int_array_at_minus_32() {
+        let ram = Varnode::constant(1, 8);
+        let val = Varnode::reg(0, 4);
+        let mut insns = Vec::new();
+        let mut addr_id = 0u64;
+        for i in 0..8 {
+            let offset = 32 - (i * 4); // 32, 28, 24, ..., 4 → -32, -28, ...
+            let u_addr = Varnode::unique(addr_id, 8);
+            addr_id += 8;
+            let cst = Varnode::constant(offset as u64, 8);
+            insns.push(IrInsn::with_output(
+                IrOp::IntSub,
+                u_addr,
+                smallvec![rsp(), cst],
+                0x1000 + (i as u64) * 8,
+            ));
+            insns.push(IrInsn::without_output(
+                IrOp::Store,
+                smallvec![ram, u_addr, val],
+                0x1004 + (i as u64) * 8,
+            ));
+        }
+
+        let ssa = make_single_block_ssa(insns);
+        let frame = recover_stack_frame(&ssa);
+
+        assert_eq!(
+            frame.locals.len(),
+            1,
+            "array should collapse to one slot, got {:?}",
+            frame.locals.keys().collect::<Vec<_>>()
+        );
+        let local = &frame.locals[&-32];
+        assert_eq!(local.offset, -32);
+        assert_eq!(local.size, 32, "8 × 4-byte elements");
+        assert_eq!(local.access_widths, vec![4]);
+        assert_eq!(frame.min_neg_offset, -32);
+        assert_eq!(frame.max_pos_offset, 0);
+        assert_eq!(frame.frame_size, 32);
+    }
+
+    /// Test 4: byref-taken local.  A LOAD whose address operand is
+    /// `INT_ADD(stack_local_addr, K)` — i.e. somebody computed the
+    /// address of `-16` and then dereferenced an inner field.  The
+    /// outer LOAD's address resolves to `-16`; we should see a single
+    /// recovered slot at that offset.
+    #[test]
+    fn t209_byref_taken_local_is_recovered() {
+        let u0 = Varnode::unique(0, 8); // = rsp - 16  (address of local)
+        let u1 = Varnode::unique(8, 8); // = u0 + 0    (Copy-style alias)
+        let loaded = Varnode::reg(0, 8);
+        let c16 = Varnode::constant(16, 8);
+        let ram = Varnode::constant(1, 8);
+
+        let insns = vec![
+            // u0 = &local_16
+            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), c16], 0x1000),
+            // u1 = u0  — propagation of the address-taken pointer.
+            IrInsn::with_output(IrOp::Copy, u1, smallvec![u0], 0x1004),
+            // Dereference through the propagated alias.
+            IrInsn::with_output(IrOp::Load, loaded, smallvec![ram, u1], 0x1008),
+        ];
+
+        let ssa = make_single_block_ssa(insns);
+        let frame = recover_stack_frame(&ssa);
+
+        assert!(
+            frame.locals.contains_key(&-16),
+            "byref-taken local at -16 should be recovered through Copy-chain, got {:?}",
+            frame.locals.keys().collect::<Vec<_>>()
+        );
+        let local = &frame.locals[&-16];
+        assert_eq!(local.offset, -16);
+        assert_eq!(local.size, 8);
+        assert_eq!(local.access_widths, vec![8]);
+    }
+}

@@ -15,7 +15,7 @@ use unlace_passes::{
     DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
     GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
     ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
-    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
+    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass, recover_stack_frame,
     TailCallDetectPass, VariableMergePass, bump_if_signature_changed, run_outer_fixedpoint,
     run_to_fixedpoint,
 };
@@ -807,6 +807,11 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             PrologueElimPass.run(ssa)?;
             TailCallDetectPass.run(ssa)?;
             StackVarRecoveryPass.run(ssa)?;
+            // Wave 24 / t209: synthesise the high-level stack frame layout
+            // (one slot per offset, fused partial-access groups, array
+            // collapsing) so the type-recovery layer can consume a stable
+            // BTreeMap<i64, StackLocal> instead of re-walking the IR.
+            ssa.stack_frame = Some(recover_stack_frame(ssa));
             CppVtablePass.run(ssa)?;
 
             // ---- Type recovery ----

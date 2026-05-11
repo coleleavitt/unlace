@@ -48,6 +48,7 @@ pub mod sccp;
 pub mod printf_type_infer;
 pub mod rep_string_idiom;
 pub mod sizeof_recognition;
+pub mod stack_frame_recovery;
 pub mod stack_pointer_tracking;
 pub mod stack_vars;
 pub mod string_hash_switch;
@@ -114,6 +115,7 @@ pub use rust_panic::RustPanicPass;
 pub use rust_vtable::RustVtablePass;
 pub use sccp::SccpPass;
 pub use sizeof_recognition::{SizeofRecognitionPass, recognize_with_resolver};
+pub use stack_frame_recovery::recover_stack_frame;
 pub use stack_pointer_tracking::StackPointerTrackingPass;
 pub use stack_vars::{StackOffsetSnapshotPass, StackVarRecoveryPass};
 pub use string_hash_switch::{

@@ -7,9 +7,9 @@ void _start(void) {
 __int32 area(__int64 a1 /* BYREF */) {
     int v3; // rdi
     unsigned int v5; // temp
-    // source: /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
+    // /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
     v5 = *(_DWORD *)(0LL);
-    // source: /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
+    // /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
     v1 = v5;
     result = 0LL; return result;
 }

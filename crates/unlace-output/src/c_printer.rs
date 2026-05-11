@@ -5394,9 +5394,14 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
         return;
     }
 
+    // t264 — when DWARF/PDB line-number info maps this instruction
+    // back to a source file:line, emit it as a leading provenance
+    // comment. Format is `// file.c:42` to match the task spec; the
+    // comment is purely informational and survives only when debug
+    // info was present in the original binary.
     if let Some(loc) = ctx.source_map.get(&insn.addr) {
         indent(depth, ctx.config.tab_width, out);
-        let _ = writeln!(out, "// source: {}:{}", loc.file, loc.line);
+        let _ = writeln!(out, "// {}:{}", loc.file, loc.line);
     }
 
     if let Some(comment) = ctx.line_comments.get(&insn.addr).cloned() {
@@ -11805,6 +11810,85 @@ mod tests {
         assert!(
             output.contains("memcpy("),
             "call body must still render as canonical name: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // t264: source-line provenance comments from DWARF/PDB line info
+    // -------------------------------------------------------------------
+
+    /// When the supplied `DwarfInfo::source_map` contains an entry for
+    /// an instruction's VA, the printer emits a leading
+    /// `// file.c:line` comment so a reader can correlate the
+    /// decompiled C with the original source.
+    #[test]
+    fn t264_dwarf_source_line_emitted_as_comment() {
+        use unlace_loader::{DwarfInfo, SourceLocation};
+
+        let stmt_va = 0x1000;
+        let stmt = IrInsn::with_output(
+            IrOp::IntAdd,
+            reg(8, 8),
+            smallvec![reg(0, 8), con(1, 8)],
+            stmt_va,
+        );
+        let body = vec![HirNode::Statement(stmt), HirNode::Return(None)];
+        let func = make_func("source_traced", body);
+
+        let mut source_map = BTreeMap::new();
+        source_map.insert(
+            stmt_va,
+            SourceLocation {
+                file: "foo.c".to_string(),
+                line: 42,
+                column: None,
+            },
+        );
+        let dwarf = DwarfInfo {
+            functions: BTreeMap::new(),
+            source_map,
+            structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
+        };
+
+        let output = super::print_c_with_dwarf(&func, Some(&dwarf));
+        assert!(
+            output.contains("// foo.c:42"),
+            "expected `// foo.c:42` provenance comment, got: {output}",
+        );
+        // The legacy `// source:` prefix was dropped in t264 — must
+        // not reappear (otherwise downstream greps would double-match).
+        assert!(
+            !output.contains("// source:"),
+            "legacy `// source:` prefix should not be emitted: {output}",
+        );
+    }
+
+    /// When no DWARF info is supplied (or the source_map has no entry
+    /// for this VA), no provenance comment is emitted — the output
+    /// must not gain a leading `// …:N` line that would confuse a
+    /// reader expecting clean C.
+    #[test]
+    fn t264_no_debug_info_emits_no_source_comment() {
+        let stmt = IrInsn::with_output(
+            IrOp::IntAdd,
+            reg(8, 8),
+            smallvec![reg(0, 8), con(1, 8)],
+            0x2000,
+        );
+        let body = vec![HirNode::Statement(stmt), HirNode::Return(None)];
+        let func = make_func("no_debug", body);
+
+        // No DWARF info passed.
+        let output = print_c(&func);
+        assert!(
+            !output.contains("// foo.c:"),
+            "no source provenance comment expected without DWARF: {output}",
+        );
+        assert!(
+            !output.contains("// source:"),
+            "legacy `// source:` prefix should not be emitted: {output}",
         );
     }
 

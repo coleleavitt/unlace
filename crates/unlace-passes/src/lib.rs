@@ -43,6 +43,7 @@ pub mod objc_blocks;
 pub mod objc_byref;
 pub mod objc_dispatch;
 pub mod op_type_binding;
+pub mod packet_struct;
 pub mod pass;
 pub mod prologue_elim;
 pub mod reanalysis;
@@ -118,6 +119,7 @@ pub use noreturn_propagation::{DEFAULT_PROPAGATE_CAP, propagate_noreturn};
 pub use objc_blocks::{BLOCK_ISA_SYMBOLS, BlockLiteral, detect_objc_blocks};
 pub use objc_byref::{ByrefBox, apply_objc_byref, detect_objc_byref_boxes};
 pub use objc_dispatch::ObjcDispatchPass;
+pub use packet_struct::{PacketStruct, detect_packet_struct};
 pub use pass::{
     DEFAULT_OUTER_FIXEDPOINT_CAP, OuterFixedpointReport, Pass, PassError, run_outer_fixedpoint,
     run_to_fixedpoint, ssa_type_signature,

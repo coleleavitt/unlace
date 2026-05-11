@@ -18,6 +18,7 @@ pub mod gcc_except_table;
 pub mod gopclntab;
 pub mod image;
 pub mod intel_hex;
+pub mod java_class;
 pub mod macho;
 pub mod msvc_rtti;
 pub mod objc;
@@ -51,6 +52,7 @@ pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gc
 pub use intel_hex::{
     IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
 };
+pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMethod, parse_class};
 pub use image::{
     ArchId, BinaryImage, BoundImport, DebugRecord, DylibDep, DylibKind, Endian, LoadConfig,
     RelocKind, Relocation, ResourceEntry, RichHeader, RichRecord, Section, SectionFlags, Symbol,

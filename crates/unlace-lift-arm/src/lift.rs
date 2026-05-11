@@ -670,8 +670,100 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_REV16 => emit_arm32_byte_rev(ctx, &ops, ArmReverseKind::Rev16),
         ArmInsn::ARM_INS_RBIT => emit_arm32_byte_rev(ctx, &ops, ArmReverseKind::Rbit),
 
+        // t194: saturating + parallel-add families. Each routes to a
+        // Callother intrinsic so downstream passes can identify the
+        // ARM media-extension primitives without re-deriving them.
+        ArmInsn::ARM_INS_UQADD8 => emit_arm32_sat_binop(ctx, &ops, CALLOTHER_ARM_UQADD8),
+        ArmInsn::ARM_INS_UQADD16 => emit_arm32_sat_binop(ctx, &ops, CALLOTHER_ARM_UQADD16),
+        ArmInsn::ARM_INS_SADD16 => emit_arm32_sat_binop(ctx, &ops, CALLOTHER_ARM_SADD16),
+        ArmInsn::ARM_INS_SSUB16 => emit_arm32_sat_binop(ctx, &ops, CALLOTHER_ARM_SSUB16),
+        ArmInsn::ARM_INS_QADD => emit_arm32_sat_binop(ctx, &ops, CALLOTHER_ARM_QADD),
+        ArmInsn::ARM_INS_QSUB => emit_arm32_sat_binop(ctx, &ops, CALLOTHER_ARM_QSUB),
+        ArmInsn::ARM_INS_USAT => emit_arm32_saturate(ctx, &ops, CALLOTHER_ARM_USAT),
+        ArmInsn::ARM_INS_SSAT => emit_arm32_saturate(ctx, &ops, CALLOTHER_ARM_SSAT),
+
         _ => ctx.emit_unimplemented(),
     }
+}
+
+/// t194: Callother tag identifiers for the ARM saturating + parallel-
+/// add intrinsic family. The numbering picks free slots between the
+/// existing byte-reverse tags (0x354..0x356) and the MRS/MSR pair
+/// (0x363..0x364), avoiding collisions with `CALLOTHER_INT_MULT_HIGH`
+/// (0x361) and the AArch64 CCMP tag (0x362). All tags are exported so
+/// downstream passes can match on them by symbol rather than by
+/// number.
+pub const CALLOTHER_ARM_UQADD8: u64 = 0x357;
+/// `__uqadd16(Rn, Rm) -> Rd` — unsigned-saturating parallel add, 16-bit lanes.
+pub const CALLOTHER_ARM_UQADD16: u64 = 0x358;
+/// `__sadd16(Rn, Rm) -> Rd` — signed parallel add (modular, sets GE flags),
+/// 16-bit lanes.
+pub const CALLOTHER_ARM_SADD16: u64 = 0x359;
+/// `__ssub16(Rn, Rm) -> Rd` — signed parallel subtract, 16-bit lanes.
+pub const CALLOTHER_ARM_SSUB16: u64 = 0x35A;
+/// `__usat(Rn, #imm) -> Rd` — unsigned saturate to `imm` bits.
+pub const CALLOTHER_ARM_USAT: u64 = 0x35B;
+/// `__ssat(Rn, #imm) -> Rd` — signed saturate to `imm` bits.
+pub const CALLOTHER_ARM_SSAT: u64 = 0x35C;
+/// `__qadd(Rn, Rm) -> Rd` — signed-saturating 32-bit add. In A32/T32 the
+/// QADD/QSUB mnemonics ARE the signed-saturating variants; the AArch64
+/// `SQADD`/`SQSUB` spellings are SIMD aliases and reach this tag through
+/// a future cross-arch dispatch (out of scope for t194).
+pub const CALLOTHER_ARM_QADD: u64 = 0x35D;
+/// `__qsub(Rn, Rm) -> Rd` — signed-saturating 32-bit subtract.
+pub const CALLOTHER_ARM_QSUB: u64 = 0x35E;
+
+/// Emit `Rd = Callother(tag, Rn, Rm)` for the three-register
+/// saturating/parallel families (UQADD8/UQADD16/SADD16/SSUB16/QADD/
+/// QSUB). All six instructions share the same `Rd, Rn, Rm` operand
+/// shape — what differs is only the lane width / saturation rule, both
+/// of which are encoded in the Callother tag and resolved by the
+/// downstream consumer.
+fn emit_arm32_sat_binop(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rn) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rm) = ops.get(2).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(tag, 8), rn, rm],
+        ctx.addr,
+    ));
+}
+
+/// Emit `Rd = Callother(tag, #imm, Rn)` for USAT/SSAT. Capstone
+/// surfaces these as `(Rd, #imm, Rn)` — same order as the assembly
+/// mnemonic — and the saturation width is an immediate that can also
+/// double as a constant input so a downstream pass can fold it into a
+/// concrete saturate operation without re-decoding the instruction.
+fn emit_arm32_saturate(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(imm) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rn) = ops.get(2).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(tag, 8), imm, rn],
+        ctx.addr,
+    ));
 }
 
 const CALLOTHER_ARM_MRS: u64 = 0x363;

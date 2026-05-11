@@ -161,6 +161,35 @@ mod tests {
         assert_eq!(lifter().arch(), ArchId::AArch64);
     }
 
+    // t222 (closes t127): each constructor reports its own ArchId, and
+    // the 32-bit / 64-bit IDs are distinct.
+    #[test]
+    fn arch_id_aarch64_constructor() {
+        assert_eq!(ArmLifter::new_aarch64().arch(), ArchId::AArch64);
+    }
+
+    #[test]
+    fn arch_id_arm32_constructor() {
+        assert_eq!(ArmLifter::new_arm32().arch(), ArchId::Arm);
+    }
+
+    #[test]
+    fn arch_id_thumb_constructor() {
+        assert_eq!(ArmLifter::new_thumb().arch(), ArchId::Arm);
+    }
+
+    #[test]
+    fn arch_id_arm_vs_aarch64_distinct() {
+        assert_ne!(
+            ArmLifter::new_arm32().arch(),
+            ArmLifter::new_aarch64().arch(),
+        );
+        assert_ne!(
+            ArmLifter::new_thumb().arch(),
+            ArmLifter::new_aarch64().arch(),
+        );
+    }
+
     #[test]
     fn test_register_file() {
         let l = lifter();

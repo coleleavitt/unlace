@@ -6,7 +6,8 @@
 //! workspace level. The scaffold intercepts the encodings the existing
 //! decoder helpers (`decode_arm_ldm_stm`, `decode_thumb1_*`, `decode_it`)
 //! recognise and falls through to `Unimplemented` for everything else.
-//! See `TODO(t127)` markers for the follow-up work.
+//! Note: `arch()` reports `ArchId::Arm` for Arm32/Thumb modes and
+//! `ArchId::AArch64` for the AArch64 mode (t127 / t222).
 
 use std::cell::RefCell;
 use std::sync::Mutex;
@@ -33,7 +34,8 @@ thread_local! {
 /// `Aarch64` is the legacy default (Capstone arm64). `Arm32` and `Thumb`
 /// are 32-bit modes that currently only dispatch the bespoke decoder
 /// helpers in this crate; instructions outside that set fall through to
-/// `Unimplemented` (see `TODO(t127)`).
+/// `Unimplemented`. `arch()` reports `ArchId::Arm` for both 32-bit modes
+/// and `ArchId::AArch64` for the AArch64 mode (t127 / t222).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArmLiftMode {
     Aarch64,
@@ -60,6 +62,14 @@ impl ArmLifter {
             mode: ArmLiftMode::Aarch64,
             it_state: Mutex::new(None),
         }
+    }
+
+    /// Explicit AArch64 constructor — alias of [`Self::new`]. Provided so
+    /// callers can spell the architecture they want at the call site, e.g.
+    /// `ArmLifter::new_aarch64()` alongside [`Self::new_arm32`] and
+    /// [`Self::new_thumb`] (t222 / closes t127).
+    pub fn new_aarch64() -> Self {
+        Self::new()
     }
 
     /// 32-bit ARM scaffold. Decodes LDM/STM via the in-crate helpers and
@@ -130,10 +140,14 @@ impl Default for ArmLifter {
 
 impl Lifter for ArmLifter {
     fn arch(&self) -> ArchId {
-        // Arm32 / Thumb still report AArch64 today; a dedicated `ArchId::Arm`
-        // requires plumbing through the loader/dispatcher and is out of MVP scope.
-        // TODO(t127): introduce ArchId::Arm and wire it through.
-        ArchId::AArch64
+        // t222 (closes t127): dispatch on the lifter mode so 32-bit / Thumb
+        // instances report `ArchId::Arm` and AArch64 keeps reporting `AArch64`.
+        // Loader & dispatcher already understand `ArchId::Arm` (see
+        // `unlace-lift::get_lifter` and the ELF/PE/Mach-O machine maps).
+        match self.mode {
+            ArmLiftMode::Aarch64 => ArchId::AArch64,
+            ArmLiftMode::Arm32 | ArmLiftMode::Thumb => ArchId::Arm,
+        }
     }
 
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {

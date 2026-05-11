@@ -18,7 +18,7 @@ use unlace_passes::{
     StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
     CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     VariableMergePass, annotate_libc_calls, bump_if_signature_changed, detect_byref,
-    recover_stack_frame, run_outer_fixedpoint, run_to_fixedpoint,
+    recover_stack_frame, recover_structs, run_outer_fixedpoint, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -824,6 +824,17 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             // after ParamInferPass so the detector knows how many
             // parameter registers are "live" for this calling convention.
             ssa.byref_info = Some(detect_byref(ssa));
+            // Wave 24 / t213: array-of-structs layout recovery. Runs
+            // after IvElim/LicmPass have stabilised loop induction
+            // variables so `recover_structs` can identify
+            // `(base_sv, stride, iv, offset)` access chains inside
+            // natural loops. The resulting `InferredStruct` layouts
+            // are keyed by base-pointer SSA varnode and consumed by
+            // (a) `emit_inferred_struct_preamble` (t224) for the
+            // `struct __anon<N>` declarations, and (b) the c_printer
+            // Load/Store renderer (t231) which rewrites the matching
+            // address arithmetic as `arr<N>[i].field_<offset>`.
+            ssa.array_struct_layouts = recover_structs(ssa);
             run_type_infer_bounded(ssa);
             // t228: TIE-style constraint solver fills the holes left by
             // the ad-hoc walker (LOAD/STORE addresses as `Ptr`, phi joins,
@@ -1470,11 +1481,25 @@ pub fn emit_output(
             // directly.  Splice the rendered block onto a local clone of
             // the caller's annotations (or build a fresh one) so the
             // upstream `AnnotationDb`-derived view is left untouched.
+            //
+            // t231: alongside the preamble, compute the
+            // `array_struct_indices` map (same numbering as the
+            // preamble) and clone the layouts themselves through so the
+            // printer's `try_array_struct_field_access` can rewrite
+            // Load/Store sites into `arr<N>[i].field_<offset>` form.
             let inferred_preamble = unlace_output::emit_inferred_struct_preamble(ssa);
+            let array_indices = unlace_output::compute_array_struct_indices(ssa);
+            let has_arrays = !ssa.array_struct_layouts.is_empty();
             let mut ann_owned: Option<unlace_output::PrinterAnnotations> = None;
-            if !inferred_preamble.is_empty() {
+            if !inferred_preamble.is_empty() || has_arrays {
                 let mut clone = annotations.cloned().unwrap_or_default();
-                clone.inferred_struct_preamble = Some(inferred_preamble);
+                if !inferred_preamble.is_empty() {
+                    clone.inferred_struct_preamble = Some(inferred_preamble);
+                }
+                if has_arrays {
+                    clone.array_struct_layouts = ssa.array_struct_layouts.clone();
+                    clone.array_struct_indices = array_indices;
+                }
                 ann_owned = Some(clone);
             }
             let ann_ref = ann_owned.as_ref().or(annotations);

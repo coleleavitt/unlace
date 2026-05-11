@@ -110,23 +110,45 @@ pub fn recover_structs(func: &SsaFunction) -> BTreeMap<SsaVarnode, InferredStruc
         .collect()
 }
 
+/// Decomposed address expression: `addr = base_sv + stride * iv + offset`.
+///
+/// Returned by [`decompose_address`] when the access matches the
+/// array-of-struct shape inside a natural loop. Consumed both by this pass
+/// (to build `InferredStruct` layouts) and by the C printer (t231) to
+/// render the matching `*(p + 16*i + 8)` chains as `arr<N>[i].field_8`.
 #[derive(Debug, Clone)]
-struct AddrDecomp {
-    base_sv: SsaVarnode,
-    stride: u64,
-    offset: u64,
+pub struct AddrDecomp {
+    /// The surviving base pointer after stripping out `stride * iv` and any
+    /// constant offsets. Keyed in `SsaFunction::array_struct_layouts`.
+    pub base_sv: SsaVarnode,
+    /// The constant multiplier on the induction variable; equals the struct
+    /// stride (i.e. `sizeof(T)` of the per-element record).
+    pub stride: u64,
+    /// The within-element byte offset of this access; matches the
+    /// `StructField::offset` of the recovered layout.
+    pub offset: u64,
+    /// The induction variable that supplied the `stride * iv` term, so the
+    /// printer can render `arr<N>[<iv_name>]` using `iv_sv`'s existing
+    /// printer name.
+    pub iv_sv: SsaVarnode,
 }
 
-/// Recursively decompose an address SSA varnode into `(base, stride, offset)`
-/// where the address is `base + stride * iv + offset` for some `iv` in
-/// `iv_set`. Returns `None` if no `iv * stride` term is present (i.e. the
-/// address isn't a per-iteration array element).
-fn decompose_address(
+/// Recursively decompose an address SSA varnode into
+/// `(base_sv, stride, iv_sv, offset)` where the address is
+/// `base_sv + stride * iv_sv + offset` for some `iv` in `iv_set`. Returns
+/// `None` if no `iv * stride` term is present (i.e. the address isn't a
+/// per-iteration array element).
+///
+/// `pub` so the c_printer (t231) can re-use the same shape detector when
+/// rendering Load/Store sites — keeping the decomposition logic in one
+/// place avoids the printer drifting out of sync with the pass that
+/// populates `SsaFunction::array_struct_layouts`.
+pub fn decompose_address(
     func: &SsaFunction,
     sv: SsaVarnode,
     iv_set: &std::collections::BTreeSet<SsaVarnode>,
 ) -> Option<AddrDecomp> {
-    let (base_sv, stride, offset) = walk_addr(func, sv, iv_set, 0, 0)?;
+    let (base_sv, stride, iv_sv, offset) = walk_addr(func, sv, iv_set, 0, 0)?;
     if stride == 0 {
         return None;
     }
@@ -134,18 +156,20 @@ fn decompose_address(
         base_sv,
         stride,
         offset,
+        iv_sv,
     })
 }
 
-/// Returns `(remaining_base_sv, accumulated_stride, accumulated_offset)`
-/// or `None` if the chain references no IV.
+/// Returns `(remaining_base_sv, accumulated_stride, iv_sv, accumulated_offset)`
+/// or `None` if the chain references no IV. `iv_sv` is the SSA varnode of
+/// the induction variable that supplied the `stride * iv` term.
 fn walk_addr(
     func: &SsaFunction,
     sv: SsaVarnode,
     iv_set: &std::collections::BTreeSet<SsaVarnode>,
     acc_stride: u64,
     acc_offset: u64,
-) -> Option<(SsaVarnode, u64, u64)> {
+) -> Option<(SsaVarnode, u64, SsaVarnode, u64)> {
     let def = lookup_def(func, sv)?;
     match def.op {
         IrOp::IntAdd => {
@@ -170,12 +194,12 @@ fn walk_addr(
                     // The other side is the surviving base.
                     if left.1 != 0 {
                         // left already supplied a stride; the residual base is whatever it returned.
-                        return Some((*b, left.1, left.2));
+                        return Some((*b, left.1, left.2, left.3));
                     }
                 }
                 if let Some(right) = walk_addr(func, *b, iv_set, acc_stride, acc_offset) {
                     if right.1 != 0 {
-                        return Some((*a, right.1, right.2));
+                        return Some((*a, right.1, right.2, right.3));
                     }
                 }
             }
@@ -201,7 +225,12 @@ fn walk_addr(
                 return None;
             };
             if iv_set.contains(&iv_candidate) {
-                Some((iv_candidate, acc_stride.wrapping_add(k), acc_offset))
+                Some((
+                    iv_candidate,
+                    acc_stride.wrapping_add(k),
+                    iv_candidate,
+                    acc_offset,
+                ))
             } else {
                 None
             }
@@ -212,8 +241,11 @@ fn walk_addr(
             walk_addr(func, *in_sv, iv_set, acc_stride, acc_offset)
         }
         _ => {
-            // Atom: not an IV-bearing expression; surface as the base.
-            Some((sv, acc_stride, acc_offset))
+            // Atom: not an IV-bearing expression; surface as the base. No
+            // IV was found on this branch — return `sv` as the iv-placeholder
+            // (caller checks `stride == 0` first, so this value is only
+            // surfaced when a sibling branch supplied the IV).
+            Some((sv, acc_stride, sv, acc_offset))
         }
     }
 }

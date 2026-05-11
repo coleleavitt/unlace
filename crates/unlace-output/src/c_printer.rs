@@ -372,6 +372,23 @@ pub struct PrinterAnnotations {
     /// than per-platform spellings. Empty for calls to unknown / non-libc
     /// targets — those follow the legacy symbol-table path.
     pub libc_call_canonical: BTreeMap<u64, String>,
+    /// t231: per-function map from array-base SSA varnode → recovered
+    /// `InferredStruct` layout (size + field offsets/widths).  Sourced
+    /// from [`unlace_ir::ssa::SsaFunction::array_struct_layouts`].
+    ///
+    /// When a `Load` / `Store` address decomposes into
+    /// `base_sv + stride * iv + offset` and `base_sv` is a key in this
+    /// map, the printer rewrites the raw `*(arr + 16*i + 8) = …` form
+    /// as `arr<N>[i].field_<offset> = …` where `<N>` matches the
+    /// `struct __anon<N>` index emitted by
+    /// [`emit_inferred_struct_preamble`].
+    pub array_struct_layouts: BTreeMap<SsaVarnode, unlace_ir::types::InferredStruct>,
+    /// t231: per-array-base index into the `__anon<N>` numbering used by
+    /// [`emit_inferred_struct_preamble`].  Must follow the same enumeration
+    /// order — stack composites first, then array-of-struct layouts in
+    /// `BTreeMap` order — so the typed access rendered in the body refers
+    /// to the same `struct __anon<N>` declared in the preamble.
+    pub array_struct_indices: BTreeMap<SsaVarnode, usize>,
 }
 
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
@@ -439,6 +456,8 @@ pub fn print_c_with_annotations(
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
         ctx.auth_calls = ann.auth_calls.clone();
         ctx.libc_call_canonical = ann.libc_call_canonical.clone();
+        ctx.array_struct_layouts = ann.array_struct_layouts.clone();
+        ctx.array_struct_indices = ann.array_struct_indices.clone();
     }
     if let Some(cfg) = config {
         ctx.config = cfg;
@@ -1466,6 +1485,16 @@ struct PrintCtx {
     /// [`resolve_call_target`] before the symbol-table fallback so a
     /// `Call __memcpy_chk` renders as `memcpy(...)`.
     libc_call_canonical: BTreeMap<u64, String>,
+    /// t231: recovered array-of-struct layouts keyed by base-pointer
+    /// SSA varnode. Lifted from
+    /// [`PrinterAnnotations::array_struct_layouts`]; consumed by
+    /// `try_array_struct_field_access` to rewrite the matching
+    /// `*(arr + STRIDE*i + OFF) = …` chains into
+    /// `arr<N>[i].field_<OFF>` form.
+    array_struct_layouts: BTreeMap<SsaVarnode, unlace_ir::types::InferredStruct>,
+    /// t231: per-base `__anon<N>` index, matching the numbering used by
+    /// [`emit_inferred_struct_preamble`].
+    array_struct_indices: BTreeMap<SsaVarnode, usize>,
 }
 
 impl PrintCtx {
@@ -1535,6 +1564,8 @@ impl PrintCtx {
             forwarded_resolutions: BTreeMap::new(),
             auth_calls: BTreeMap::new(),
             libc_call_canonical: BTreeMap::new(),
+            array_struct_layouts: BTreeMap::new(),
+            array_struct_indices: BTreeMap::new(),
         }
     }
 
@@ -1894,6 +1925,237 @@ fn try_struct_field_access(
 
     let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
     Some(format!("{}->{}", base_expr, field_name))
+}
+
+// ---------------------------------------------------------------------------
+// t231 — Array-of-struct field access recovery
+// ---------------------------------------------------------------------------
+//
+// Pairs with `struct_field_recovery::decompose_address` (in
+// `unlace_passes`) and `emit_inferred_struct_preamble` above:
+//
+// 1. `recover_structs` walks every Load / Store inside a natural loop and
+//    decomposes `addr = base + STRIDE*iv + offset`.  The `(base_sv,
+//    stride)` pairs become `InferredStruct` entries in
+//    `SsaFunction::array_struct_layouts`.
+// 2. `emit_inferred_struct_preamble` emits one `struct __anon<N> { … };`
+//    per layout (after the t147 stack-frame composites), numbered in
+//    BTreeMap iteration order.
+// 3. *Here* — `try_array_struct_field_access` — runs the same
+//    decomposition against the printer's own SSA bookkeeping
+//    (`ctx.stmt_inputs` + `ctx.sv_defining_stmt` + `ctx.stmt_insns`) and,
+//    when `base_sv` is a key in `ctx.array_struct_layouts`, emits the
+//    typed access form `arr<N>[<iv>].field_<offset>`.
+//
+// The IV name comes from `ctx.name_overrides` (populated by
+// `compute_loop_counter_names` with `i`/`j`/`k`/…) which `name_of`
+// already consults, so we can just call `name_of(iv_sv)`.
+//
+// The `arr<N>` name uses the same `__anon<N>` index baked into
+// `ctx.array_struct_indices` so the typed access and the preamble
+// declaration stay in lockstep.
+
+/// Decomposed address chain as seen from the printer's data structures.
+/// Mirrors `unlace_passes::struct_field_recovery::AddrDecomp` but is
+/// derived from `PrintCtx` (which carries only foldable statements) so
+/// the printer doesn't need a borrow of the SsaFunction at emit time.
+struct PrintAddrDecomp {
+    base_sv: SsaVarnode,
+    stride: u64,
+    offset: u64,
+    iv_sv: SsaVarnode,
+}
+
+/// Walk an address SSA varnode looking for the canonical
+/// `base + STRIDE*iv + offset` shape using the printer's foldable
+/// statement map. Returns `None` if any leg of the chain is not foldable
+/// or the multiplicative IV term is missing.
+///
+/// The decomposer matches the t213 pass's algorithm: const+ssa folds
+/// into `offset`, `IntMult(sv, const)` contributes `stride * iv`, and
+/// the SSA+SSA `IntAdd` case tries both branches as the IV-bearing one.
+fn decompose_print_addr(
+    sv: SsaVarnode,
+    iv_candidates: &BTreeSet<SsaVarnode>,
+    ctx: &PrintCtx,
+) -> Option<PrintAddrDecomp> {
+    let (base_sv, stride, iv_sv, offset) = walk_print_addr(sv, iv_candidates, ctx, 0, 0)?;
+    if stride == 0 {
+        return None;
+    }
+    Some(PrintAddrDecomp {
+        base_sv,
+        stride,
+        offset,
+        iv_sv,
+    })
+}
+
+fn walk_print_addr(
+    sv: SsaVarnode,
+    iv_candidates: &BTreeSet<SsaVarnode>,
+    ctx: &PrintCtx,
+    acc_stride: u64,
+    acc_offset: u64,
+) -> Option<(SsaVarnode, u64, SsaVarnode, u64)> {
+    let &def_stmt = ctx.sv_defining_stmt.get(&sv)?;
+    let insn = ctx.stmt_insns.get(&def_stmt)?;
+    let inputs = ctx.stmt_inputs.get(&def_stmt);
+
+    fn input_sv(
+        ctx: &PrintCtx,
+        stmt: u32,
+        vn: &unlace_ir::Varnode,
+    ) -> Option<SsaVarnode> {
+        ctx.stmt_inputs
+            .get(&stmt)
+            .and_then(|svs| svs.iter().find(|s| s.base == *vn).copied())
+    }
+
+    match insn.op {
+        IrOp::IntAdd if insn.inputs.len() == 2 => {
+            let lhs = &insn.inputs[0];
+            let rhs = &insn.inputs[1];
+            let lhs_const = (lhs.space == SpaceId::Const).then_some(lhs.offset);
+            let rhs_const = (rhs.space == SpaceId::Const).then_some(rhs.offset);
+
+            // Const + SSA → fold const into offset, recurse on SSA side.
+            if let (Some(c), false) = (lhs_const, rhs.space == SpaceId::Const) {
+                let other = input_sv(ctx, def_stmt, rhs)?;
+                return walk_print_addr(
+                    other,
+                    iv_candidates,
+                    ctx,
+                    acc_stride,
+                    acc_offset.wrapping_add(c),
+                );
+            }
+            if let (Some(c), false) = (rhs_const, lhs.space == SpaceId::Const) {
+                let other = input_sv(ctx, def_stmt, lhs)?;
+                return walk_print_addr(
+                    other,
+                    iv_candidates,
+                    ctx,
+                    acc_stride,
+                    acc_offset.wrapping_add(c),
+                );
+            }
+
+            // SSA + SSA — try both sides as the IV-bearing branch.
+            let lhs_sv = input_sv(ctx, def_stmt, lhs);
+            let rhs_sv = input_sv(ctx, def_stmt, rhs);
+            if let (Some(a), Some(b)) = (lhs_sv, rhs_sv) {
+                if let Some(left) = walk_print_addr(a, iv_candidates, ctx, acc_stride, acc_offset)
+                {
+                    if left.1 != 0 {
+                        return Some((b, left.1, left.2, left.3));
+                    }
+                }
+                if let Some(right) = walk_print_addr(b, iv_candidates, ctx, acc_stride, acc_offset)
+                {
+                    if right.1 != 0 {
+                        return Some((a, right.1, right.2, right.3));
+                    }
+                }
+            }
+            None
+        }
+        IrOp::IntMult if insn.inputs.len() == 2 => {
+            let lhs = &insn.inputs[0];
+            let rhs = &insn.inputs[1];
+            let (iv_sv_in, k) = if rhs.space == SpaceId::Const {
+                let sv_in = input_sv(ctx, def_stmt, lhs)?;
+                (sv_in, rhs.offset)
+            } else if lhs.space == SpaceId::Const {
+                let sv_in = input_sv(ctx, def_stmt, rhs)?;
+                (sv_in, lhs.offset)
+            } else {
+                return None;
+            };
+            let _ = inputs; // silence unused
+            if iv_candidates.contains(&iv_sv_in) {
+                Some((iv_sv_in, acc_stride.wrapping_add(k), iv_sv_in, acc_offset))
+            } else {
+                None
+            }
+        }
+        IrOp::Copy if !insn.inputs.is_empty() => {
+            let in_sv = input_sv(ctx, def_stmt, &insn.inputs[0])?;
+            walk_print_addr(in_sv, iv_candidates, ctx, acc_stride, acc_offset)
+        }
+        _ => {
+            // Atom — surface as base. The iv slot stays as `sv` and is
+            // only meaningful when a sibling branch supplied a non-zero
+            // stride (the caller filters `stride == 0` before use).
+            Some((sv, acc_stride, sv, acc_offset))
+        }
+    }
+}
+
+/// Try to recognise an array-of-struct access of the shape
+/// `*(base + STRIDE*iv + offset)` where `base` matches a recovered
+/// layout in `ctx.array_struct_layouts`.
+///
+/// Returns `Some("arr<N>[<iv>].field_<offset>")` when the access matches.
+/// `None` falls through to the existing `try_struct_field_access` /
+/// `try_array_subscript` / raw `*(T*)(addr)` ladder.
+fn try_array_struct_field_access(
+    addr_vn: &Varnode,
+    stmt_idx: u32,
+    _access_size: u8,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    if ctx.array_struct_layouts.is_empty() || addr_vn.space == SpaceId::Const {
+        return None;
+    }
+
+    let addr_sv = ctx
+        .stmt_inputs
+        .get(&stmt_idx)
+        .cloned()
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *addr_vn).copied())?;
+
+    // Candidate IVs = every SSA varnode whose base [`Varnode`] has a
+    // loop-counter name override.  `compute_loop_counter_names` populates
+    // `ctx.name_overrides` (keyed by base [`Varnode`]) with `i`/`j`/`k`/…
+    // for every `HirNode::For` whose init+update fits the
+    // `i = const; i = i + step` shape, so we scan every recorded SSA use
+    // for a base with a matching override.
+    let mut iv_candidates: BTreeSet<SsaVarnode> = BTreeSet::new();
+    for inputs in ctx.stmt_inputs.values() {
+        for sv in inputs {
+            if ctx.name_overrides.contains_key(&sv.base) {
+                iv_candidates.insert(*sv);
+            }
+        }
+    }
+    for outputs in ctx.stmt_outputs.values() {
+        if let Some(sv) = outputs {
+            if ctx.name_overrides.contains_key(&sv.base) {
+                iv_candidates.insert(*sv);
+            }
+        }
+    }
+    if iv_candidates.is_empty() {
+        return None;
+    }
+
+    let decomp = decompose_print_addr(addr_sv, &iv_candidates, ctx)?;
+
+    let layout = ctx.array_struct_layouts.get(&decomp.base_sv)?;
+    // Stride must agree with the recovered layout, otherwise we'd
+    // emit field offsets into the wrong record type.
+    if layout.size != decomp.stride {
+        return None;
+    }
+    // Offset must be a known field of the recovered layout.
+    if !layout.fields.iter().any(|f| f.offset == decomp.offset) {
+        return None;
+    }
+    let idx = *ctx.array_struct_indices.get(&decomp.base_sv)?;
+
+    let iv_name = ctx.name_of(&decomp.iv_sv);
+    Some(format!("arr{}[{}].field_{}", idx, iv_name, decomp.offset))
 }
 
 /// Minimum address to consider as a global (below this is likely stack-relative).
@@ -4824,6 +5086,34 @@ pub fn emit_inferred_struct_preamble(func: &SsaFunction) -> String {
     out
 }
 
+/// Companion to [`emit_inferred_struct_preamble`]: return the
+/// `__anon<N>` index assigned to every entry in
+/// `SsaFunction::array_struct_layouts`, using the *same* enumeration
+/// order as the preamble emitter (stack-frame composites first, then
+/// array layouts in BTreeMap order).
+///
+/// The c_printer's `try_array_struct_field_access` (t231) consumes this
+/// map to render typed accesses as `arr<N>[i].field_<offset>` whose
+/// `<N>` matches the `struct __anon<N>` declared at the top of the
+/// function.
+pub fn compute_array_struct_indices(func: &SsaFunction) -> BTreeMap<SsaVarnode, usize> {
+    let mut out = BTreeMap::new();
+    let mut idx: usize = 0;
+    // Stack-frame composites (t147) — count one slot each. Their iteration
+    // order must mirror `emit_inferred_struct_preamble`.
+    for ty in func.inferred_structs.values() {
+        if matches!(ty, Type::Struct { .. }) {
+            idx += 1;
+        }
+    }
+    // Array-of-struct layouts (t213).
+    for base in func.array_struct_layouts.keys() {
+        out.insert(*base, idx);
+        idx += 1;
+    }
+    out
+}
+
 /// Map an access width (in bytes) to a C primitive type name used in the
 /// inferred-struct preamble.  Widths outside the recognised set fall back to
 /// `__int64`, matching the conservative-widening convention used elsewhere
@@ -4956,6 +5246,13 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                 } else if let Some(field_expr) =
                     try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx)
                 {
+                    Some(format!("{} = {};", field_expr, val))
+                } else if let Some(field_expr) =
+                    try_array_struct_field_access(&insn.inputs[1], idx, store_size, ctx)
+                {
+                    // t231: see the matching hook in `emit_statement` —
+                    // `inline_statement_text` is the parallel codepath
+                    // used when adjacent stmts get grouped on one line.
                     Some(format!("{} = {};", field_expr, val))
                 } else if let Some(field_expr) =
                     try_struct_field_access(&insn.inputs[1], idx, store_size, ctx)
@@ -5125,6 +5422,14 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     } else if let Some(field_expr) =
                         try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx)
                     {
+                        let _ = writeln!(out, "{} = {};", field_expr, val);
+                    } else if let Some(field_expr) =
+                        try_array_struct_field_access(&insn.inputs[1], idx, store_size, ctx)
+                    {
+                        // t231: array-of-struct typed write — pre-empts
+                        // both the generic struct-field and array-subscript
+                        // paths so per-element field stores render as
+                        // `arr<N>[i].field_<offset> = val;`.
                         let _ = writeln!(out, "{} = {};", field_expr, val);
                     } else if let Some(field_expr) =
                         try_struct_field_access(&insn.inputs[1], idx, store_size, ctx)
@@ -5865,6 +6170,19 @@ fn emit_expr_with_prec(
                     ctx,
                 ) {
                     return resolved;
+                }
+                // t231: array-of-struct field access — runs before the
+                // generic field/subscript paths so the typed form
+                // `arr<N>[i].field_<offset>` wins over the raw
+                // `*(arr + STRIDE*i + offset)` rendering whenever the
+                // base pointer was recovered into `array_struct_layouts`.
+                if let Some(field) = try_array_struct_field_access(
+                    &insn.inputs[addr_idx],
+                    stmt_idx,
+                    load_size,
+                    ctx,
+                ) {
+                    return field;
                 }
                 if let Some(field) =
                     try_struct_field_access(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
@@ -16215,5 +16533,210 @@ mod tests {
         let ssa = empty_ssa_for_preamble();
         let out = super::emit_inferred_struct_preamble(&ssa);
         assert!(out.is_empty(), "expected empty preamble, got: {out:?}");
+    }
+
+    // ──── t231: array-of-struct field-access rendering inside loops ────
+    //
+    // These tests pin the printer's `try_array_struct_field_access`
+    // (the c_printer side of t213's struct-field recovery):
+    //  * Positive: `*(arr + 16*i + 0) = 1` ⇒ `arr0[i].field_0 = 1;`
+    //  * Positive: `*(arr + 16*i + 8) = 2` ⇒ `arr0[i].field_8 = 2;`
+    //  * Negative: `*(p + 8) = 3` outside any recognised layout stays
+    //    rendered as the raw dereference (no `arr<N>[i].field_…` form).
+    //
+    // The test constructs the smallest synthetic HIR that survives the
+    // printer's foldable-stmt pass plus `compute_loop_counter_names`,
+    // then injects the `InferredStruct` layout straight into
+    // `PrinterAnnotations` to bypass the SSA pipeline.
+
+    fn arr_struct_layout_for_field_offsets(
+        field_offsets: &[u64],
+    ) -> unlace_ir::types::InferredStruct {
+        use unlace_ir::types::{InferredStruct, StructField};
+        InferredStruct {
+            size: 16,
+            fields: field_offsets
+                .iter()
+                .map(|&offset| StructField { offset, size: 8 })
+                .collect(),
+        }
+    }
+
+    /// Build a one-block `For` loop whose body stores `val_const` at
+    /// `*(arr + 16*i + field_offset)`. The induction variable lives in
+    /// `reg(0, 4)`; the base pointer lives in `reg(16, 8)`. The trailing
+    /// `extra_const_add` parameter splits the offset application off
+    /// onto its own `IntAdd` instruction (mirrors the t213 const-fold
+    /// behaviour when `offset != 0`).
+    fn build_array_struct_loop(
+        field_offset: u64,
+        val_const: u64,
+        store_addr: u64,
+    ) -> HirFunction {
+        let i = reg(0, 4); // induction variable (i)
+        let arr = reg(16, 8); // base pointer to the array of structs
+        let zero = con(0, 4);
+        let one = con(1, 4);
+        let stride = con(16, 8);
+        let space = con(0, 8); // load/store space operand (RAM)
+
+        // u0 = i (zext to 8-byte for pointer arithmetic — modelled as
+        // a direct mult on the 4-byte `i` since the lifter usually
+        // gives us a single multiplicative term `i * STRIDE`).
+        let mul = IrInsn::with_output(
+            IrOp::IntMult,
+            Varnode::unique(0, 8),
+            smallvec![i, stride],
+            store_addr.wrapping_sub(0x10),
+        );
+        // u1 = arr + (i * 16)
+        let add_base = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(8, 8),
+            smallvec![arr, Varnode::unique(0, 8)],
+            store_addr.wrapping_sub(0x08),
+        );
+
+        // Optional field-offset add: `u2 = u1 + offset`.  Always emit
+        // an explicit IntAdd even for offset == 0, so the chain has a
+        // uniform shape (`decompose_print_addr` handles the const-fold
+        // recursion identically either way).
+        let (addr_input, addr_chain_extra) = if field_offset == 0 {
+            (Varnode::unique(8, 8), None)
+        } else {
+            let off_const = con(field_offset, 8);
+            let add_off = IrInsn::with_output(
+                IrOp::IntAdd,
+                Varnode::unique(16, 8),
+                smallvec![Varnode::unique(8, 8), off_const],
+                store_addr.wrapping_sub(0x04),
+            );
+            (Varnode::unique(16, 8), Some(add_off))
+        };
+
+        let val = con(val_const, 8);
+        let store = IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space, addr_input, val],
+            store_addr,
+        );
+
+        let mut body_stmts: Vec<HirNode> = vec![
+            HirNode::Statement(mul),
+            HirNode::Statement(add_base),
+        ];
+        if let Some(add_off) = addr_chain_extra {
+            body_stmts.push(HirNode::Statement(add_off));
+        }
+        body_stmts.push(HirNode::Statement(store));
+
+        let body = vec![
+            HirNode::For {
+                init: Some(IrInsn::with_output(IrOp::Copy, i, smallvec![zero], 0x1000)),
+                cond: SsaVarnode {
+                    base: i,
+                    version: 0,
+                },
+                update: IrInsn::with_output(IrOp::IntAdd, i, smallvec![i, one], 0x1100),
+                body: body_stmts,
+            },
+            HirNode::Return(None),
+        ];
+
+        make_func("t231_arr_struct_loop", body)
+    }
+
+    fn annotations_with_arr_layout(
+        arr_reg: Varnode,
+        field_offsets: &[u64],
+    ) -> super::PrinterAnnotations {
+        let mut ann = super::PrinterAnnotations::default();
+        let arr_sv = SsaVarnode {
+            base: arr_reg,
+            version: 0,
+        };
+        ann.array_struct_layouts
+            .insert(arr_sv, arr_struct_layout_for_field_offsets(field_offsets));
+        ann.array_struct_indices.insert(arr_sv, 0);
+        ann
+    }
+
+    #[test]
+    fn t231_array_struct_field_offset_zero_renders_indexed() {
+        let func = build_array_struct_loop(0, 1, 0x1020);
+        let ann = annotations_with_arr_layout(reg(16, 8), &[0, 8]);
+
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+
+        assert!(
+            output.contains("arr0[i].field_0 = 1"),
+            "expected `arr0[i].field_0 = 1`, got: {output}"
+        );
+        // The raw-pointer form must NOT appear for this access.
+        assert!(
+            !output.contains("*(_QWORD *)") || !output.contains("16"),
+            "raw `*(arr + 16*i)` should not survive: {output}"
+        );
+    }
+
+    #[test]
+    fn t231_array_struct_field_offset_eight_renders_indexed() {
+        let func = build_array_struct_loop(8, 2, 0x1020);
+        let ann = annotations_with_arr_layout(reg(16, 8), &[0, 8]);
+
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+
+        assert!(
+            output.contains("arr0[i].field_8 = 2"),
+            "expected `arr0[i].field_8 = 2`, got: {output}"
+        );
+    }
+
+    #[test]
+    fn t231_non_array_store_unchanged_without_layout_match() {
+        // `*(p + 8) = 3` — no induction variable, no array-of-struct
+        // layout for `p`. Must fall through to the existing pointer
+        // dereference rendering.
+        let p = reg(32, 8);
+        let off = con(8, 8);
+        let val = con(3, 8);
+        let space = con(0, 8);
+
+        let addr = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(0, 8),
+            smallvec![p, off],
+            0x1000,
+        );
+        let store = IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space, Varnode::unique(0, 8), val],
+            0x1004,
+        );
+        let body = vec![
+            HirNode::Statement(addr),
+            HirNode::Statement(store),
+            HirNode::Return(None),
+        ];
+        let func = make_func("t231_no_layout", body);
+
+        // No `array_struct_layouts` injected — annotations are empty.
+        let ann = super::PrinterAnnotations::default();
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+
+        assert!(
+            !output.contains("arr0["),
+            "raw pointer access must not be rewritten to arr<N>[…]: {output}"
+        );
+        assert!(
+            output.contains("= 3"),
+            "the value `3` should still appear as the RHS: {output}"
+        );
     }
 }

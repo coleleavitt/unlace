@@ -804,6 +804,217 @@ mod tests {
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 
+    // ── t185 — SSE4.1 / SSE4.2 packed ops ─────────────────────────────
+    //
+    // SSE4.1 lives mostly under the `66 0F 38 XX /r` and `66 0F 3A XX /r ib`
+    // opcode escapes. Each test asserts the Callother tag and (where the
+    // shape carries an imm8 or a non-XMM destination) verifies the
+    // corresponding Callother input or output size — that's the contract
+    // downstream recoverers rely on.
+
+    #[test]
+    fn test_lift_sse_pcmpeqq_t185() {
+        // 66 0F 38 29 C1 = pcmpeqq xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x29, 0xC1], sse_tag::PCMPEQQ);
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0x38, 0x29, 0xC1], 0x1000)
+            .expect("pcmpeqq decodes");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PCMPEQQ Callother");
+        let dst = co.output.expect("PCMPEQQ produces a 128-bit result");
+        assert_eq!(dst.size, 16);
+    }
+
+    #[test]
+    fn test_lift_sse_pmovzxbw_t185() {
+        // 66 0F 38 30 C1 = pmovzxbw xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x30, 0xC1], sse_tag::PMOVZXBW);
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0x38, 0x30, 0xC1], 0x1000)
+            .expect("pmovzxbw decodes");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PMOVZXBW Callother");
+        // Widening converts are unary: (tag, src) — two inputs total.
+        assert_eq!(co.inputs.len(), 2, "PMOVZXBW shape is (tag, src)");
+        let dst = co.output.expect("PMOVZXBW writes XMM");
+        assert_eq!(dst.size, 16);
+    }
+
+    #[test]
+    fn test_lift_sse_pmovzx_family_t185() {
+        // The remaining PMOVZX widths share `lift_sse_unop`; assert
+        // the dispatcher picks the correct tag for each.
+        for (bytes, tag) in [
+            (
+                &[0x66u8, 0x0F, 0x38, 0x31, 0xC1] as &[u8],
+                sse_tag::PMOVZXBD,
+            ),
+            (&[0x66, 0x0F, 0x38, 0x32, 0xC1], sse_tag::PMOVZXBQ),
+            (&[0x66, 0x0F, 0x38, 0x33, 0xC1], sse_tag::PMOVZXWD),
+            (&[0x66, 0x0F, 0x38, 0x34, 0xC1], sse_tag::PMOVZXWQ),
+            (&[0x66, 0x0F, 0x38, 0x35, 0xC1], sse_tag::PMOVZXDQ),
+        ] {
+            assert_callother_tag(bytes, tag);
+        }
+    }
+
+    #[test]
+    fn test_lift_sse_pmovsx_family_t185() {
+        for (bytes, tag) in [
+            (
+                &[0x66u8, 0x0F, 0x38, 0x20, 0xC1] as &[u8],
+                sse_tag::PMOVSXBW,
+            ),
+            (&[0x66, 0x0F, 0x38, 0x21, 0xC1], sse_tag::PMOVSXBD),
+            (&[0x66, 0x0F, 0x38, 0x22, 0xC1], sse_tag::PMOVSXBQ),
+            (&[0x66, 0x0F, 0x38, 0x23, 0xC1], sse_tag::PMOVSXWD),
+            (&[0x66, 0x0F, 0x38, 0x24, 0xC1], sse_tag::PMOVSXWQ),
+            (&[0x66, 0x0F, 0x38, 0x25, 0xC1], sse_tag::PMOVSXDQ),
+        ] {
+            assert_callother_tag(bytes, tag);
+        }
+    }
+
+    #[test]
+    fn test_lift_sse_pmuldq_t185() {
+        // 66 0F 38 28 C1 = pmuldq xmm0, xmm1
+        assert_callother_tag(&[0x66, 0x0F, 0x38, 0x28, 0xC1], sse_tag::PMULDQ);
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0x38, 0x28, 0xC1], 0x1000)
+            .expect("pmuldq decodes");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PMULDQ Callother");
+        let dst = co.output.expect("PMULDQ writes XMM");
+        assert_eq!(dst.size, 16, "PMULDQ result is 128-bit");
+    }
+
+    #[test]
+    fn test_lift_sse_pmin_pmax_32_t185() {
+        // PMINSD/PMINUD/PMAXSD/PMAXUD — share lift_sse_binop.
+        for (bytes, tag) in [
+            (&[0x66u8, 0x0F, 0x38, 0x39, 0xC1] as &[u8], sse_tag::PMINSD),
+            (&[0x66, 0x0F, 0x38, 0x3B, 0xC1], sse_tag::PMINUD),
+            (&[0x66, 0x0F, 0x38, 0x3D, 0xC1], sse_tag::PMAXSD),
+            (&[0x66, 0x0F, 0x38, 0x3F, 0xC1], sse_tag::PMAXUD),
+        ] {
+            assert_callother_tag(bytes, tag);
+        }
+    }
+
+    #[test]
+    fn test_lift_sse_pcmpestri_t185() {
+        // 66 0F 3A 61 C1 07 = pcmpestri xmm0, xmm1, 7
+        let bytes = &[0x66, 0x0F, 0x3A, 0x61, 0xC1, 0x07];
+        assert_callother_tag(bytes, sse_tag::PCMPESTRI);
+        let result = lifter()
+            .lift_insn(bytes, 0x1000)
+            .expect("pcmpestri decodes");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PCMPESTRI)
+            .expect("PCMPESTRI Callother");
+        // (tag, xmm0, xmm1, imm) — four inputs, no IR output (ECX is
+        // implicit on x86 and recovered by downstream passes).
+        assert_eq!(co.inputs.len(), 4, "PCMPESTRI shape is (tag, a, b, imm)");
+        assert!(co.output.is_none(), "PCMPESTRI emits no IR output");
+        assert_eq!(co.inputs[3].offset, 7, "imm8 must reach Callother");
+    }
+
+    #[test]
+    fn test_lift_sse_pcmpistri_t185() {
+        // 66 0F 3A 63 C1 07 = pcmpistri xmm0, xmm1, 7
+        let bytes = &[0x66, 0x0F, 0x3A, 0x63, 0xC1, 0x07];
+        assert_callother_tag(bytes, sse_tag::PCMPISTRI);
+        let result = lifter()
+            .lift_insn(bytes, 0x1000)
+            .expect("pcmpistri decodes");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PCMPISTRI)
+            .expect("PCMPISTRI Callother");
+        assert_eq!(co.inputs.len(), 4);
+        assert!(co.output.is_none());
+    }
+
+    #[test]
+    fn test_lift_sse_pinsrb_t185() {
+        // 66 0F 3A 20 C0 03 = pinsrb xmm0, eax, 3
+        let bytes = &[0x66, 0x0F, 0x3A, 0x20, 0xC0, 0x03];
+        assert_callother_tag(bytes, sse_tag::PINSRB);
+        let result = lifter().lift_insn(bytes, 0x1000).expect("pinsrb decodes");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PINSRB Callother");
+        // PINSR* routes through lift_sse_blend → (tag, xmm_old, src, imm).
+        assert_eq!(co.inputs.len(), 4, "PINSRB shape is (tag, dst, src, imm)");
+        assert_eq!(co.inputs[3].offset, 3, "imm8 preserved");
+        let dst = co.output.expect("PINSRB writes XMM");
+        assert_eq!(dst.size, 16);
+    }
+
+    #[test]
+    fn test_lift_sse_pinsrw_pinsrd_pinsrq_t185() {
+        for (bytes, tag) in [
+            // pinsrw xmm0, eax, 3 — uses the older `66 0F C4 /r ib`.
+            (&[0x66u8, 0x0F, 0xC4, 0xC0, 0x03] as &[u8], sse_tag::PINSRW),
+            // pinsrd xmm0, eax, 3
+            (&[0x66, 0x0F, 0x3A, 0x22, 0xC0, 0x03], sse_tag::PINSRD),
+            // pinsrq xmm0, rax, 3 — REX.W
+            (&[0x66, 0x48, 0x0F, 0x3A, 0x22, 0xC0, 0x03], sse_tag::PINSRQ),
+        ] {
+            assert_callother_tag(bytes, tag);
+        }
+    }
+
+    #[test]
+    fn test_lift_sse_pextrb_t185() {
+        // 66 0F 3A 14 C0 03 = pextrb eax, xmm0, 3
+        let bytes = &[0x66, 0x0F, 0x3A, 0x14, 0xC0, 0x03];
+        assert_callother_tag(bytes, sse_tag::PEXTRB);
+        let result = lifter().lift_insn(bytes, 0x1000).expect("pextrb decodes");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("PEXTRB Callother");
+        // (tag, xmm_src, imm) — three inputs, GP destination.
+        assert_eq!(co.inputs.len(), 3, "PEXTRB shape is (tag, src, imm)");
+        assert_eq!(co.inputs[2].offset, 3);
+        let dst = co.output.expect("PEXTRB writes GP destination");
+        assert_eq!(
+            dst.space,
+            unlace_ir::SpaceId::Register,
+            "PEXTRB GP dest lives in the register space"
+        );
+    }
+
+    #[test]
+    fn test_lift_sse_pextrw_pextrd_pextrq_t185() {
+        for (bytes, tag) in [
+            (
+                &[0x66u8, 0x0F, 0x3A, 0x15, 0xC0, 0x03] as &[u8],
+                sse_tag::PEXTRW,
+            ),
+            (&[0x66, 0x0F, 0x3A, 0x16, 0xC0, 0x03], sse_tag::PEXTRD),
+            (&[0x66, 0x48, 0x0F, 0x3A, 0x16, 0xC0, 0x03], sse_tag::PEXTRQ),
+        ] {
+            assert_callother_tag(bytes, tag);
+        }
+    }
+
     /// t163 — PADDQ → PSUBQ chained on XMM0 must share the XMM0 register
     /// varnode (same offset, same 16-byte size) so SSA / liveness sees
     /// the dataflow. This is the downstream-visibility contract: any

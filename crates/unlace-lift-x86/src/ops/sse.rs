@@ -81,6 +81,49 @@ pub mod tag {
 
     pub const BLENDPS: u64 = 0x170;
     pub const PBLENDVB: u64 = 0x171;
+
+    // ── SSE4.1 / SSE4.2 packed ops (t185) ───────────────────────
+    //
+    // Fresh tag range 0x190..0x1BF, chosen to leave room above the
+    // existing SSE/SSSE3 block (which stops at PBLENDVB=0x171 with
+    // SSSE3 living at 0x180..0x188).
+    //
+    /// SSE4.1 packed compare-equal, 64-bit lanes.
+    pub const PCMPEQQ: u64 = 0x190;
+    /// SSE4.1 zero-extending widening converts (PMOVZXBW/BD/BQ/WD/WQ/DQ).
+    pub const PMOVZXBW: u64 = 0x191;
+    pub const PMOVZXBD: u64 = 0x192;
+    pub const PMOVZXBQ: u64 = 0x193;
+    pub const PMOVZXWD: u64 = 0x194;
+    pub const PMOVZXWQ: u64 = 0x195;
+    pub const PMOVZXDQ: u64 = 0x196;
+    /// SSE4.1 sign-extending widening converts (PMOVSXBW/BD/BQ/WD/WQ/DQ).
+    pub const PMOVSXBW: u64 = 0x197;
+    pub const PMOVSXBD: u64 = 0x198;
+    pub const PMOVSXBQ: u64 = 0x199;
+    pub const PMOVSXWD: u64 = 0x19A;
+    pub const PMOVSXWQ: u64 = 0x19B;
+    pub const PMOVSXDQ: u64 = 0x19C;
+    /// SSE4.1 signed 32×32→64 multiply of the low dword of each 64-bit lane.
+    pub const PMULDQ: u64 = 0x19D;
+    /// SSE4.1 packed 32-bit min/max.
+    pub const PMINSD: u64 = 0x19E;
+    pub const PMINUD: u64 = 0x19F;
+    pub const PMAXSD: u64 = 0x1A0;
+    pub const PMAXUD: u64 = 0x1A1;
+    /// SSE4.1 lane insert (3-operand: dst, src, imm8).
+    pub const PINSRB: u64 = 0x1A2;
+    pub const PINSRW: u64 = 0x1A3;
+    pub const PINSRD: u64 = 0x1A4;
+    pub const PINSRQ: u64 = 0x1A5;
+    /// SSE4.1 lane extract (3-operand: dst, xmm, imm8).
+    pub const PEXTRB: u64 = 0x1A6;
+    pub const PEXTRW: u64 = 0x1A7;
+    pub const PEXTRD: u64 = 0x1A8;
+    pub const PEXTRQ: u64 = 0x1A9;
+    /// SSE4.2 packed string compare → ECX/flags (3-operand: xmm1, xmm2, imm8).
+    pub const PCMPESTRI: u64 = 0x1AA;
+    pub const PCMPISTRI: u64 = 0x1AB;
 }
 
 /// MOVDQA / MOVDQU: store form emits without output, load/reg form with output.
@@ -199,6 +242,85 @@ pub fn lift_sse_blend(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother
         IrOp::Callother,
         dst,
         smallvec![tag_vn, src0, src1, mask],
+        ctx.addr,
+    ));
+}
+
+/// SSE4.1 lane extract (PEXTRB/W/D/Q): `dst = Callother(tag, xmm, imm)`.
+///
+/// Shape: op0 is a write-only small GP (or mem) operand, op1 is the
+/// source XMM, op2 is the imm8 lane selector. Unlike the insert and
+/// blend forms, op0 must *not* be read first — it's pure destination.
+pub fn lift_sse_extract(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    use iced_x86::OpKind;
+
+    let tag_vn = Varnode::constant(callother_tag, 8);
+
+    let Some(src) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let imm = ctx
+        .operand_read(insn, 2)
+        .unwrap_or_else(|| Varnode::constant(0, 1));
+
+    if insn.op_kind(0) == OpKind::Memory {
+        // PEXTRB/W/D/Q to memory: emit a Callother into a fresh temp
+        // varnode sized to the lane, then store at the destination
+        // address.
+        let Some(dst_addr) = ctx.memory_address(insn) else {
+            ctx.emit_unimplemented();
+            return;
+        };
+        ctx.emit(IrInsn::without_output(
+            IrOp::Callother,
+            smallvec![tag_vn, dst_addr, src, imm],
+            ctx.addr,
+        ));
+        return;
+    }
+
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![tag_vn, src, imm],
+        ctx.addr,
+    ));
+}
+
+/// SSE4.2 packed string compare (PCMPESTRI / PCMPISTRI):
+/// `Callother(tag, xmm1, xmm2, imm)` *without* an IR output.
+///
+/// PCMPESTRI/PCMPISTRI write their index into ECX implicitly and set
+/// flags; we record only the explicit operand shape here. The recoverer
+/// reads ECX and the flags through later uses to reconstruct the
+/// intrinsic call site.
+pub fn lift_sse_string_compare(
+    ctx: &mut LiftCtx,
+    insn: &iced_x86::Instruction,
+    callother_tag: u64,
+) {
+    let tag_vn = Varnode::constant(callother_tag, 8);
+
+    let Some(src0) = ctx.operand_read(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src1) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let imm = ctx
+        .operand_read(insn, 2)
+        .unwrap_or_else(|| Varnode::constant(0, 1));
+
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![tag_vn, src0, src1, imm],
         ctx.addr,
     ));
 }

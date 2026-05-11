@@ -157,6 +157,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         }
     }
 

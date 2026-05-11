@@ -541,4 +541,11 @@ pub struct HirFunction {
     /// [`Self::params`] / [`Self::return_type`] when emitting the header,
     /// and surfaces `dropped_param_count` as a comment.
     pub finalized_signature: Option<unlace_ir::ssa::FinalizedSignature>,
+    /// Recovered stack frame layout (one [`unlace_ir::ssa::StackLocal`]
+    /// per distinct RSP/RBP-relative offset). Propagated from
+    /// [`unlace_ir::ssa::SsaFunction::stack_frame`] at structuring time.
+    /// The C printer uses this to emit named local declarations
+    /// (`__int32 v_8;`, `char buf_10[16];`) and to name stack accesses
+    /// in expressions (t232).
+    pub stack_frame: Option<unlace_ir::ssa::StackFrame>,
 }

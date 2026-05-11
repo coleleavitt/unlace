@@ -42,7 +42,7 @@ pub use goto_elim::eliminate_forward_gotos;
 pub use goto_to_break::goto_to_break;
 pub use goto_to_continue::goto_to_continue;
 pub use hir::{HirFunction, HirNode, LabelId, ObjcBlockCapture, SwitchCase};
-pub use if_to_switch::if_chain_to_switch;
+pub use if_to_switch::{if_chain_to_switch, range_chain_to_switch};
 pub use irreducible::{IrreducibleRegion, detect_irreducible_regions};
 pub use label_cleanup::cleanup_unreachable_labels;
 pub use label_fallthrough::collapse_label_fallthroughs;

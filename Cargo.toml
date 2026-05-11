@@ -24,6 +24,7 @@ members = [
     "crates/unlace-sbom",
     "crates/unlace-fuzz",
     "crates/unlace-test-harness",
+    "crates/unlace-lumina",
     "xtask",
 ]
 
@@ -100,6 +101,7 @@ unlace-cli = { path = "crates/unlace-cli" }
 unlace-flirt = { path = "crates/unlace-flirt" }
 unlace-sbom = { path = "crates/unlace-sbom" }
 unlace-test-harness = { path = "crates/unlace-test-harness" }
+unlace-lumina = { path = "crates/unlace-lumina" }
 
 [profile.dev]
 incremental = true

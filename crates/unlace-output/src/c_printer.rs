@@ -6111,6 +6111,14 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         // lane size as `inputs[1]`; `emit_callother` peels it off and
         // routes through `aarch64_neon_intrinsic_name` before falling
         // back to this tag-only table.
+
+        // ── AArch64 pointer-auth (t225, 0x40E..0x413) ───────────
+        0x40E => Some("__pacia"),
+        0x40F => Some("__pacib"),
+        0x410 => Some("__autia"),
+        0x411 => Some("__autib"),
+        0x412 => Some("__xpaci"),
+        0x413 => Some("__xpacd"),
         _ => None,
     }
 }
@@ -11550,6 +11558,148 @@ mod tests {
             output.contains("vst1q_u8("),
             "ST1 lane=1 should render as vst1q_u8: {output}",
         );
+    }
+
+    // -------------------------------------------------------------------
+    // t225 — AArch64 PTR_AUTH Callother rendering
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_callother_pacia_renders_as_pacia() {
+        // Callother(0x40E /* PACIA */, X0, X1) → __pacia
+        let r0 = reg(0, 8);
+        let r1 = reg(8, 8);
+        let tag = con(0x40E, 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                r0,
+                smallvec![tag, r0, r1],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r0,
+                version: 0,
+            })),
+        ];
+        let func = make_func("pac_pacia", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("__pacia("),
+            "PACIA Callother should render as __pacia(...): {output}",
+        );
+        assert!(
+            !output.contains("/* CALLOTHER"),
+            "PACIA tag must be resolved (no fallback comment): {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_pacib_renders_as_pacib() {
+        let r2 = reg(16, 8);
+        let r3 = reg(24, 8);
+        let tag = con(0x40F, 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                r2,
+                smallvec![tag, r2, r3],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r2,
+                version: 0,
+            })),
+        ];
+        let func = make_func("pac_pacib", body);
+        let output = print_c(&func);
+        assert!(output.contains("__pacib("), "got: {output}");
+    }
+
+    #[test]
+    fn test_callother_autia_renders_as_autia() {
+        let r0 = reg(0, 8);
+        let tag = con(0x410, 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                r0,
+                smallvec![tag, r0, r0],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r0,
+                version: 0,
+            })),
+        ];
+        let func = make_func("pac_autia", body);
+        let output = print_c(&func);
+        assert!(output.contains("__autia("), "got: {output}");
+    }
+
+    #[test]
+    fn test_callother_autib_renders_as_autib() {
+        let r4 = reg(32, 8);
+        let r5 = reg(40, 8);
+        let tag = con(0x411, 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                r4,
+                smallvec![tag, r4, r5],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r4,
+                version: 0,
+            })),
+        ];
+        let func = make_func("pac_autib", body);
+        let output = print_c(&func);
+        assert!(output.contains("__autib("), "got: {output}");
+    }
+
+    #[test]
+    fn test_callother_xpaci_renders_as_xpaci() {
+        // XPAC* has no modifier — only (tag, value).
+        let r9 = reg(72, 8);
+        let tag = con(0x412, 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                r9,
+                smallvec![tag, r9],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r9,
+                version: 0,
+            })),
+        ];
+        let func = make_func("pac_xpaci", body);
+        let output = print_c(&func);
+        assert!(output.contains("__xpaci("), "got: {output}");
+    }
+
+    #[test]
+    fn test_callother_xpacd_renders_as_xpacd() {
+        let r10 = reg(80, 8);
+        let tag = con(0x413, 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                r10,
+                smallvec![tag, r10],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r10,
+                version: 0,
+            })),
+        ];
+        let func = make_func("pac_xpacd", body);
+        let output = print_c(&func);
+        assert!(output.contains("__xpacd("), "got: {output}");
     }
 
     // -------------------------------------------------------------------

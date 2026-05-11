@@ -170,6 +170,19 @@ impl ArmLifter {
         }
 
         let raw = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        // t225 — register-form PAC/AUTH/XPAC: emit a dedicated Callother
+        // intrinsic instead of folding to a nop. Done before the broader
+        // PAC/BTI nop filter so the explicitly-lifted variants take
+        // precedence; everything that's *not* on the Callother allow-list
+        // (data-key forms, HINT-space SP/1716 variants, BTI) still nops.
+        if let Some(pac) = try_pac_callother(raw) {
+            let mut ctx = LiftCtx::new(addr);
+            emit_pac_callother(&mut ctx, &pac);
+            return Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
         if try_pac_bti_nop(raw) {
             return Ok(LiftedInsn {
                 ir_ops: Vec::new(),
@@ -2656,6 +2669,128 @@ pub fn try_aarch64_ccmp(insn: u32) -> Option<CcmpDecoded> {
 /// — no IR output (NZCV is implicit architectural state). A later pass
 /// can recognize the intrinsic when flag-aware analyses are added.
 pub const CALLOTHER_AARCH64_CCMP: u64 = 0x362;
+
+// ── t225 — AArch64 pointer-authentication Callother tags ────────────
+//
+// The encoding bits[15:10] of the `1101 1010 1100 0001 ____ __nn nnnd dddd`
+// PAC/AUTH/XPAC family fan out to many opcodes, but downstream consumers
+// (recognisers, decompiler output) only care about which *class* of PAC
+// operation ran and what its (value, modifier) inputs were. We collapse:
+//
+//   PACIA / PACIZA   → CALLOTHER_AARCH64_PACIA  (modifier = Xn or const 0)
+//   PACIB / PACIZB   → CALLOTHER_AARCH64_PACIB
+//   AUTIA / AUTIZA   → CALLOTHER_AARCH64_AUTIA
+//   AUTIB / AUTIZB   → CALLOTHER_AARCH64_AUTIB
+//   XPACI            → CALLOTHER_AARCH64_XPACI  (no modifier)
+//   XPACD            → CALLOTHER_AARCH64_XPACD
+//
+// Data-key variants (PAC*D*, AUT*D*) and HINT-space SP/1716 forms still
+// fold to no-ops via [`try_pac_bti_nop`] — they're rarer in user code and
+// the SP/1716 variants have implicit operands that don't fit the
+// Callother (value, modifier) shape. Tags occupy `0x40E..=0x413`, picking
+// up where the NEON block (`0x400..=0x40D`) ends.
+
+/// `Callother` tag for AArch64 `PACIA Xd, Xn` (or `PACIZA Xd`).
+/// Emitted as `Callother(tag, value, modifier) → Xd`.
+pub const CALLOTHER_AARCH64_PACIA: u64 = 0x40E;
+/// `Callother` tag for AArch64 `PACIB Xd, Xn` (or `PACIZB Xd`).
+pub const CALLOTHER_AARCH64_PACIB: u64 = 0x40F;
+/// `Callother` tag for AArch64 `AUTIA Xd, Xn` (or `AUTIZA Xd`).
+pub const CALLOTHER_AARCH64_AUTIA: u64 = 0x410;
+/// `Callother` tag for AArch64 `AUTIB Xd, Xn` (or `AUTIZB Xd`).
+pub const CALLOTHER_AARCH64_AUTIB: u64 = 0x411;
+/// `Callother` tag for AArch64 `XPACI Xd`.
+/// Emitted as `Callother(tag, value) → Xd` (no modifier).
+pub const CALLOTHER_AARCH64_XPACI: u64 = 0x412;
+/// `Callother` tag for AArch64 `XPACD Xd`.
+pub const CALLOTHER_AARCH64_XPACD: u64 = 0x413;
+
+/// Decoded register-form PAC/AUTH/XPAC instruction (t225).
+///
+/// `value` is the X-register being authenticated/signed (the `Xd` operand
+/// — both destination and input value). `modifier` is the X-register
+/// supplying the salt (`Xn`), or `None` for the Z-form (modifier = 0) and
+/// for XPAC* (no modifier).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PacAuthDecoded {
+    pub tag: u64,
+    pub rd: u8,
+    pub rn: Option<u8>,
+}
+
+/// If `insn` is a register-form PAC/AUTH/XPAC instruction we lift to a
+/// `Callother(PTR_AUTH)` (t225), return its decoded shape. Otherwise
+/// return `None` and let the caller fall through to the existing
+/// no-op / dispatch paths.
+pub fn try_pac_callother(insn: u32) -> Option<PacAuthDecoded> {
+    if (insn & 0xFFFF_0000) != 0xDAC1_0000 {
+        return None;
+    }
+    let opcode = (insn >> 10) & 0x3F;
+    let rd = (insn & 0x1F) as u8;
+    let rn = ((insn >> 5) & 0x1F) as u8;
+    let (tag, rn_opt) = match opcode {
+        // Instruction-key PACI* (modifier = Xn)
+        0x00 => (CALLOTHER_AARCH64_PACIA, Some(rn)),
+        0x01 => (CALLOTHER_AARCH64_PACIB, Some(rn)),
+        // Instruction-key AUTI* (modifier = Xn)
+        0x04 => (CALLOTHER_AARCH64_AUTIA, Some(rn)),
+        0x05 => (CALLOTHER_AARCH64_AUTIB, Some(rn)),
+        // PACIZA/PACIZB (Z-form: modifier implicitly 0; Rn must be 0b11111)
+        0x08 if rn == 0x1F => (CALLOTHER_AARCH64_PACIA, None),
+        0x09 if rn == 0x1F => (CALLOTHER_AARCH64_PACIB, None),
+        // AUTIZA/AUTIZB (Z-form)
+        0x0C if rn == 0x1F => (CALLOTHER_AARCH64_AUTIA, None),
+        0x0D if rn == 0x1F => (CALLOTHER_AARCH64_AUTIB, None),
+        // XPACI / XPACD (no modifier; Rn must be 0b11111)
+        0x10 if rn == 0x1F => (CALLOTHER_AARCH64_XPACI, None),
+        0x11 if rn == 0x1F => (CALLOTHER_AARCH64_XPACD, None),
+        _ => return None,
+    };
+    Some(PacAuthDecoded {
+        tag,
+        rd,
+        rn: rn_opt,
+    })
+}
+
+/// Build an `Xn` 64-bit register varnode by index. `n` must be 0..=30
+/// (XZR is *not* a valid Rd for PAC/AUTH; the decoder filters that case
+/// by the Z-form rule `rn == 0x1F` applying only to Rn).
+fn xreg_varnode(n: u8) -> Varnode {
+    debug_assert!(n <= 30, "PAC Rd must be X0..X30, got {n}");
+    Varnode::new(SpaceId::Register, n as u64 * 8, 8)
+}
+
+/// Emit a `Callother(PTR_AUTH)` intrinsic for a register-form PAC/AUTH/XPAC.
+///
+/// Shape:
+///   * PACIA/PACIB/AUTIA/AUTIB  → `Callother(tag, value, modifier) → Xd`
+///   * XPACI/XPACD              → `Callother(tag, value) → Xd`
+///   * `*Z` (zero-modifier) variants pass a constant-0 modifier so
+///     downstream consumers see a uniform 3-operand shape per key.
+///
+/// `value` is `Xd` *as a source* (PAC signs Xd in place; AUTI strips the
+/// PAC bits of Xd; XPAC strips without authenticating). The output is
+/// `Xd` again, modelled correctly so dataflow tracks the auth.
+fn emit_pac_callother(ctx: &mut LiftCtx, pac: &PacAuthDecoded) {
+    let xd = xreg_varnode(pac.rd);
+    let tag_vn = Varnode::constant(pac.tag, 8);
+
+    let is_xpac =
+        pac.tag == CALLOTHER_AARCH64_XPACI || pac.tag == CALLOTHER_AARCH64_XPACD;
+
+    let inputs = if is_xpac {
+        smallvec![tag_vn, xd]
+    } else {
+        let modifier = match pac.rn {
+            Some(rn) => xreg_varnode(rn),
+            None => Varnode::constant(0, 8),
+        };
+        smallvec![tag_vn, xd, modifier]
+    };
+    ctx.emit(IrInsn::with_output(IrOp::Callother, xd, inputs, ctx.addr));
+}
 
 /// Canonical AArch64 CSEL intrinsic tag. Emitted by `lift_csel` as
 /// `Callother(CALLOTHER_AARCH64_CSEL, cond, Rn, Rm) → Rd`, optionally

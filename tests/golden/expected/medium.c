@@ -95,7 +95,7 @@ void f_rec_fib(void) {
     } else {
         *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
         *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
-        for (; v37; v48 = 0) {
+        for (; v37; v49 = 0) {
             if (v34) {
             } else {
                 return result;
@@ -112,7 +112,7 @@ void f_ackermann(void) {
     signed char v37; // temp
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
-    v37 = 0; *(_DWORD *)(0LL) = 0;
+    v37 = 0; *(_QWORD *)(0LL) = 0LL;
     while (v32) {
         *(_DWORD *)(0LL) = 0;
         if (v28) {
@@ -145,7 +145,7 @@ void f_ackermann(void) {
                         if (v32) {
                         } else {
                             if (v25) {
-                                if (v32) {
+                                if (v37) {
                                 } else {
                                 }
                             } else {
@@ -161,9 +161,9 @@ void f_ackermann(void) {
                                 } else {
                                 }
                             }
-                            *(_DWORD *)(0LL) = 0; *(_DWORD *)(0LL) = 0; *(_QWORD *)(0LL) = 0x1978LL;
+                            *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0x1978LL;
                             f_ackermann();
-                            if (v8) {
+                            if (v32) {
                             } else {
                                 if (v37) {
                                 } else {
@@ -198,43 +198,51 @@ void f_ackermann(void) {
     return result;
 }
 /* Function:   f_rec_power.constprop.0 | Address: 0x1b80 | Size: 0x119 (281 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   f_rec_power.constprop.0 | Xrefs from: unknown */
-void f_rec_power.constprop.0(__int64 a1) {
+__int32 f_rec_power.constprop.0(__int64 a1) {
     int v1; // al
+    int v2; // eax
+    int v39; // eax
     int v3; // cl
     int v8; // dil
-    int v23; // temp
+    int v22; // temp
+    long long result; // temp
     if (v8) {
     } else {
-        v23 = -1; cond = 0;
+        v22 = -1;
         if (cond) {
             result = 0LL; return result;
         } else {
+            cond = 1;
             if (cond) {
             } else {
                 if (cond) {
                 } else {
-                    *(_DWORD *)(0LL) = 1; *(_DWORD *)(0LL) = 1; f_rec_power.constprop.0();
-                    return result;
+                    result = 0LL; *(_DWORD *)(0LL) = 1; *(_DWORD *)(0LL) = 1;
+                    f_rec_power.constprop.0(); v22 = 0; return result;
                 }
+                v22 *= v22; v2 = v22; v22 = v22;
+                v39 = v22; v22 *= v22; v2 = v22;
+                v22 = v22; return result;
             }
         }
     }
-    cond = 1;
     if (cond) {
     } else {
-        v23 = 1; cond = 0;
+        v22--; cond = v22 == 0;
         if (cond) {
+            v22 *= v22; v39 = v22; v22 = v22;
+            return result;
         } else {
-            v23 = v23;
+            cond = 1;
             if (cond) {
             } else {
+                v22--;
                 if (cond) {
-                    v23 = 2;
+                    v22 *= v22; v2 = v22;
                 } else {
                 }
             }
         }
-        return result;
     }
     return;
 }
@@ -262,20 +270,14 @@ void sub_1520(void) {
         result = *(_QWORD *)(v10); return result;
     }
 }
-// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
-struct __anon0 {
-    __int64 field_0;
-    __int64 field_8;
-};
-
 /* Function:   sub_1560 | Address: 0x1560 | Size: 0x735 (1845 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 void sub_1560(void) {
-    int v14; // edi
     int v15; // rdi
     signed char v56; // temp
     sub_14e0();
     signed char v44 = LOBYTE(0); // temp
-    if (v14) {
+    v41 = 1;
+    if (v41) {
         return result;
     } else {
         long long v9 = cond; // rsp
@@ -289,11 +291,12 @@ void sub_1560(void) {
             if (v38) {
                 cond = cond; v42 = 0; v44 = v55;
             } else {
-                v46 = LOBYTE(cond); v60 = cond; cond = cond;
+                cond = cond < 0LL; v46 = LOBYTE(cond); v60 = cond;
+                cond = cond; v9 = cond; cond = cond;
                 v9 = cond; cond = cond; v9 = cond;
                 cond = cond; v9 = cond; cond = cond;
                 v9 = cond; cond = cond; v9 = cond;
-                cond = cond; v9 = cond; return result;
+                return result;
             }
         }
     }
@@ -302,13 +305,14 @@ void sub_1560(void) {
 /* Function:   sub_14b0 | Address: 0x14b0 | Size: 0x6c (108 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_14b0(void) {
     int v5; // rip
-    signed char v17; // temp
-    v8 = 1; v17 = LOBYTE(0LL);
+    v8 = 1;
     if (v8) {
+        return result;
     } else {
-        v8 = 1; v17 = v17;
+        result = 0LL; v8 = 1;
         if (v8) {
+            result = 0LL; return result;
         }
     }
-    return result;
+    return;
 }

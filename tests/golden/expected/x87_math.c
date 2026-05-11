@@ -71,13 +71,14 @@ void sub_1120(void) {
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1070(void) {
     int v5; // rip
-    signed char v17; // temp
-    v8 = 1; v17 = LOBYTE(0LL);
+    v8 = 1;
     if (v8) {
+        return result;
     } else {
-        v8 = 1; v17 = v17;
+        result = 0LL; v8 = 1;
         if (v8) {
+            result = 0LL; return result;
         }
     }
-    return result;
+    return;
 }

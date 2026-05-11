@@ -52,13 +52,14 @@ void sub_1140(void) {
 /* Function:   sub_1090 | Address: 0x1090 | Size: 0x6c (108 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1090(void) {
     int v5; // rip
-    signed char v17; // temp
-    v8 = 1; v17 = LOBYTE(0LL);
+    v8 = 1;
     if (v8) {
+        return result;
     } else {
-        v8 = 1; v17 = v17;
+        result = 0LL; v8 = 1;
         if (v8) {
+            result = 0LL; return result;
         }
     }
-    return result;
+    return;
 }

@@ -19,6 +19,7 @@ pub mod copy_prop;
 pub mod cpp_stl;
 pub mod cpp_vtable;
 pub mod crypto_idioms;
+pub mod ct_violation;
 pub mod cse;
 pub mod dce;
 pub mod dead_flag_elim;

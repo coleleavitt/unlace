@@ -4081,6 +4081,79 @@ fn demangle_callee_name(raw: &str) -> String {
     }
 }
 
+/// t202 — printf/scanf-family Call rendering with format-inferred casts.
+///
+/// Returns `Some("printf(\"%d\", (int)x)")`-style output when:
+///
+///   * The callee is in `printf_type_infer::PRINTF_FAMILY` or `SCANF_FAMILY`.
+///   * `inputs[1]` is a `SpaceId::Const` pointer that hits `ctx.string_table`
+///     (i.e. a format string literal we can parse).
+///
+/// Returns `None` otherwise — the caller falls back to the legacy
+/// `target()` rendering (which historically drops args anyway, but
+/// preserves that behaviour for non-format-string calls).
+///
+/// Casts are emitted as `(T)expr` where `T` comes from
+/// [`unlace_passes::printf_type_infer::infer_printf_arg_types`]. Slots
+/// past the inferred-type vector render without a cast — defensive
+/// against format strings whose specifier count doesn't match the
+/// emitted variadic args (mismatched call sites are a bug, but the
+/// printer should still produce valid C).
+fn try_emit_printf_call(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    if insn.op != IrOp::Call || insn.inputs.is_empty() {
+        return None;
+    }
+    let target_vn = &insn.inputs[0];
+    if target_vn.space != SpaceId::Const {
+        return None;
+    }
+    let raw_name = ctx.symbols.get(&target_vn.offset)?;
+    let name = demangle_callee_name(raw_name);
+    if !unlace_passes::printf_type_infer::is_format_string_call(&name) {
+        return None;
+    }
+    // Need at least the format-string slot (inputs[1]); a printf with
+    // zero variadics is still a valid call and rendered as
+    // `printf("hello")` — without args, no casts to emit, but the
+    // format-string literal still surfaces.
+    let fmt_vn = insn.inputs.get(1)?;
+    if fmt_vn.space != SpaceId::Const {
+        // Format string is not a known constant (e.g. taken from a
+        // parameter / global). We can't parse specifiers, so don't
+        // emit casts — but we *also* don't try to render args, since
+        // the legacy path doesn't either. Fall through to the
+        // default `printf();` rendering by returning None.
+        return None;
+    }
+    let fmt = ctx.string_table.get(&fmt_vn.offset)?.clone();
+
+    let inferred = unlace_passes::printf_type_infer::infer_printf_arg_types(&name, &fmt);
+
+    // Render the format-string slot as a quoted C literal.
+    let mut args: Vec<String> = Vec::with_capacity(insn.inputs.len() - 1);
+    args.push(format!("\"{}\"", escape_c_string(&fmt)));
+
+    // Variadic slots — inputs[2..] map onto `inferred[0..]`.
+    for (slot, vn) in insn.inputs.iter().enumerate().skip(2) {
+        let expr = emit_operand_resolved(vn, slot, stmt_idx, ctx);
+        let variadic_idx = slot - 2;
+        let cast = inferred
+            .get(variadic_idx)
+            .map(render_type_as_c)
+            .map(|t| format!("({})", t.trim_end()));
+        match cast {
+            Some(c) => args.push(format!("{}{}", c, expr)),
+            None => args.push(expr),
+        }
+    }
+
+    Some(format!("{}({})", name, args.join(", ")))
+}
+
 /// Resolve a tail-call target address to a C identifier. Falls back to the
 /// IDA-style `sub_<addr>` name when the symbol table has no entry.
 fn tail_call_target_name(target: u64, ctx: &PrintCtx) -> String {
@@ -4494,6 +4567,8 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
         } else if insn.op == IrOp::Call {
             if let Some(bracket) = objc_bracket_call(insn, ctx) {
                 Some(format!("{} = {};", lhs, bracket))
+            } else if let Some(printf_call) = try_emit_printf_call(insn, idx, ctx) {
+                Some(format!("{} = {};", lhs, printf_call))
             } else {
                 Some(format!("{} = {};", lhs, emit_expr(insn, idx, ctx)))
             }
@@ -4540,6 +4615,8 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             IrOp::Call => {
                 let base = if let Some(bracket) = objc_bracket_call(insn, ctx) {
                     format!("{};", bracket)
+                } else if let Some(printf_call) = try_emit_printf_call(insn, idx, ctx) {
+                    format!("{};", printf_call)
                 } else {
                     format!("{}();", resolve_call_target(insn, idx, ctx))
                 };
@@ -5586,6 +5663,8 @@ fn emit_expr_with_prec(
         IrOp::Call | IrOp::Callind => {
             let base = if insn.op == IrOp::Callind {
                 emit_callind_cast(insn, stmt_idx, ctx)
+            } else if let Some(printf_call) = try_emit_printf_call(insn, stmt_idx, ctx) {
+                printf_call
             } else {
                 let target = resolve_call_target(insn, stmt_idx, ctx);
                 format!("{}()", target)
@@ -13929,6 +14008,113 @@ mod tests {
         assert!(
             !body.contains("//   -") && !body.contains("//   +"),
             "empty-method category body must not contain selector lines, got body:\n{body}"
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // t202 — printf/scanf format-string variadic cast rendering
+    // -------------------------------------------------------------------
+
+    /// `printf("%d", x)` where the format-string slot is a `Const`
+    /// pointer to a `string_table` entry must render with an `(int)`
+    /// cast on the variadic argument.
+    #[test]
+    fn t202_printf_int_arg_renders_with_int_cast() {
+        let printf_addr = con(0x401030, 8);
+        let fmt_ptr = con(0x402000, 8); // VA of "%d" in .rodata
+        let x_reg = reg(0, 4);
+
+        let call_insn =
+            IrInsn::without_output(IrOp::Call, smallvec![printf_addr, fmt_ptr, x_reg], 0x1000);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "printf".to_string());
+
+        let mut string_table = BTreeMap::new();
+        string_table.insert(0x402000, "%d".to_string());
+
+        let output =
+            super::print_c_full(&func, None, None, Some(&symbols), Some(&string_table));
+
+        assert!(
+            output.contains("printf(\"%d\", (int)"),
+            "printf(\"%%d\", x) must render with (int) cast on variadic arg:\n{output}",
+        );
+    }
+
+    /// `scanf("%ld", &y)` — scanf-family arguments are pointers to the
+    /// inferred type, so `%ld` produces a `long long *` (per
+    /// `c_type(Int(8))`) cast, not a bare `long long`.
+    #[test]
+    fn t202_scanf_renders_pointer_cast() {
+        let scanf_addr = con(0x401040, 8);
+        let fmt_ptr = con(0x402100, 8);
+        let y_ptr = reg(0, 8);
+
+        let call_insn =
+            IrInsn::without_output(IrOp::Call, smallvec![scanf_addr, fmt_ptr, y_ptr], 0x1000);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401040, "scanf".to_string());
+
+        let mut string_table = BTreeMap::new();
+        string_table.insert(0x402100, "%ld".to_string());
+
+        let output =
+            super::print_c_full(&func, None, None, Some(&symbols), Some(&string_table));
+
+        assert!(
+            output.contains("scanf(\"%ld\", (long long *)"),
+            "scanf(\"%%ld\", &y) must wrap variadic in a pointer cast:\n{output}",
+        );
+    }
+
+    /// When the format-string slot is *not* a const pointer (i.e. the
+    /// fmt comes from a runtime variable / parameter), we can't parse
+    /// specifiers and must not invent any casts. The printer falls
+    /// back to the legacy `printf();` rendering — the test asserts
+    /// neither `(int)` nor a quoted literal leaks into the output.
+    #[test]
+    fn t202_non_const_format_string_emits_no_casts() {
+        let printf_addr = con(0x401030, 8);
+        let dynamic_fmt = reg(0, 8); // not a Const operand
+        let x_reg = reg(8, 4);
+
+        let call_insn =
+            IrInsn::without_output(IrOp::Call, smallvec![printf_addr, dynamic_fmt, x_reg], 0x1000);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "printf".to_string());
+
+        // Empty string_table — even if the printer somehow tried to
+        // look up a literal, there's nothing to find.
+        let string_table = BTreeMap::new();
+
+        let output =
+            super::print_c_full(&func, None, None, Some(&symbols), Some(&string_table));
+
+        assert!(
+            !output.contains("(int)"),
+            "non-const fmt must not produce any (int) casts:\n{output}",
+        );
+        assert!(
+            !output.contains("(long long *)"),
+            "non-const fmt must not produce any (long long *) casts:\n{output}",
+        );
+        // The legacy fallback emits `printf();` — confirm the printer
+        // didn't get confused and start emitting arg expressions.
+        assert!(
+            output.contains("printf();"),
+            "non-const fmt should fall back to legacy printf() rendering:\n{output}",
         );
     }
 }

@@ -18,6 +18,7 @@ pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
 pub mod boost_recognize;
+pub mod builtin_recognize;
 pub mod cpp_stl;
 pub mod cpp_vtable;
 pub mod crypto_idioms;
@@ -93,6 +94,9 @@ pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bitfield_idioms::BitfieldIdiomPass;
 pub use bmi_idioms::BmiIdiomPass;
 pub use crypto_idioms::CryptoIdiomPass;
+pub use builtin_recognize::{
+    BuiltinAnnotation, recognize_builtins, recognize_builtins_with_resolver,
+};
 pub use byref_detect::detect_byref;
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
 pub use caller_param_propagate::{

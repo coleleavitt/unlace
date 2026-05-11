@@ -63,6 +63,7 @@ pub mod rust_result;
 pub mod rust_vtable;
 pub mod sccp;
 pub mod smc_unwrap;
+pub mod source_sink;
 pub mod ssa_cache;
 pub mod printf_type_infer;
 pub mod protobuf_recognize;

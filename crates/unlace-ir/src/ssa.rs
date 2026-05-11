@@ -410,6 +410,79 @@ pub struct SsaFunction {
     /// and consumed by the C printer to render the alloca as
     /// `__block T name;` instead of the unnamed 40-byte struct.
     pub byref_boxes: BTreeMap<Varnode, ByrefBox>,
+    /// Synthesised stack frame layout: one [`StackLocal`] per distinct
+    /// RSP/RBP-relative offset observed in LOAD/STORE addresses, together
+    /// with the inferred frame bounds. Populated by
+    /// [`unlace_passes::stack_frame_recovery::recover_stack_frame`] after
+    /// the SSA pipeline reaches steady state. `None` until the recovery
+    /// pass has run.
+    ///
+    /// This is a higher-level companion to [`Self::stack_vars`]: where
+    /// `stack_vars` keys access lists by raw SSA varnode, `stack_frame`
+    /// groups *only the access widths* together with explicit frame
+    /// bounds, ready for the type-recovery layer to project into
+    /// `local_X`/`arg_X` declarations.
+    pub stack_frame: Option<StackFrame>,
+    /// Parameter-byref / local-byref bookkeeping populated by
+    /// [`unlace_passes::byref_detect::detect_byref`]. `None` until the
+    /// detector has run; an empty `ByrefInfo` means "ran, found nothing".
+    pub byref_info: Option<ByrefInfo>,
+}
+
+/// One synthesised local-frame slot.
+///
+/// Mirrors the spec from Wave 24 / t209: the `access_widths` vector
+/// preserves every distinct byte width observed at this offset (1, 2, 4
+/// or 8) so the type-recovery layer can spot mixed-width unions and
+/// pick the dominant access size for the inferred primitive type.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StackLocal {
+    /// RSP/RBP-relative byte offset. Negative for locals below the frame
+    /// pointer, non-negative for incoming-parameter slots above it.
+    pub offset: i64,
+    /// Inferred slot width in bytes — the *maximum* access width seen at
+    /// this offset (small accesses are typically partial reads of a wider
+    /// slot, not independent variables).
+    pub size: u64,
+    /// All distinct access widths observed at this offset, in insertion
+    /// order. Helps the type-recovery layer notice unions / mixed-size
+    /// uses without re-walking the IR.
+    pub access_widths: Vec<u8>,
+}
+
+/// Recovered logical layout of a function's stack frame.
+///
+/// Produced by [`unlace_passes::stack_frame_recovery::recover_stack_frame`].
+/// `locals` is keyed by signed frame offset so iteration order matches
+/// the slot's lexical position in the frame.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StackFrame {
+    /// All recovered locals, keyed by frame offset.
+    pub locals: BTreeMap<i64, StackLocal>,
+    /// Total local-frame size in bytes: `max_pos_offset - min_neg_offset`
+    /// (clamped at 0 when no locals were recovered).
+    pub frame_size: u64,
+    /// Largest positive offset seen (incoming-parameter region). Zero
+    /// when no parameter-region access was recovered.
+    pub max_pos_offset: i64,
+    /// Smallest (most negative) offset seen (local region). Zero when no
+    /// negative-offset access was recovered.
+    pub min_neg_offset: i64,
+}
+
+/// Per-function byref bookkeeping populated by
+/// [`unlace_passes::byref_detect::detect_byref`].
+///
+/// `byref_params` records parameter indices whose address flows into a
+/// call argument (and so must be emitted as `T *` with a trailing
+/// `// BYREF` comment); `byref_locals` records the frame offsets of
+/// stack-allocated locals whose address is taken anywhere in the body.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ByrefInfo {
+    /// Parameter indices marked `&param`.
+    pub byref_params: std::collections::BTreeSet<u32>,
+    /// Stack-frame offsets of byref-taken locals.
+    pub byref_locals: std::collections::BTreeSet<i64>,
 }
 
 /// Annotation carried on [`SsaFunction::byref_boxes`] for one detected
@@ -529,6 +602,8 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         signature_revision: 0,
         op_bindings: OpTypeBindings::default(),
         byref_boxes: BTreeMap::new(),
+        stack_frame: None,
+        byref_info: None,
     }
 }
 

@@ -2154,10 +2154,19 @@ fn fold_csel_ternary_in_children(node: &mut HirNode) {
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => {
             fold_csel_ternary(try_body);
-            fold_csel_ternary(catch_body);
+            for (_, arm_body) in catch_arms.iter_mut() {
+                fold_csel_ternary(arm_body);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            fold_csel_ternary(try_body);
+            fold_csel_ternary(finally_body);
         }
         HirNode::Commented { inner, .. } => fold_csel_ternary_in_children(inner),
         HirNode::GuardedIf {

@@ -17,6 +17,7 @@ use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{IrOp, SpaceId};
 
 use crate::licm::find_natural_loops;
+use crate::pass::{Pass, PassError};
 
 /// Caller-saved-vs-callee-saved classification per ABI. We special-case the
 /// common SystemV / AArch64 callee-saved sets here; anything else falls
@@ -206,6 +207,77 @@ pub fn suggest_name(role: VarRole, idx: usize) -> String {
         VarRole::SavedRegister(name) => format!("saved_{}", name),
         VarRole::Argument(i) => format!("a{}", i + 1),
         VarRole::Temporary => format!("v{}", idx),
+    }
+}
+
+/// Late-pipeline pass that classifies every SSA varnode via
+/// [`classify_variables`] and writes a human-meaningful name into
+/// [`SsaFunction::var_role_names`] for every non-`Temporary` value
+/// (t227 wiring).
+///
+/// Role-sequence is per-role: the *N*th `LoopCounter` becomes
+/// `i`/`j`/`k`/…, the *N*th `LoopArrayBase` becomes `arr`/`arr1`/…, the
+/// *N*th `SavedRegister(rN)` becomes `saved_rN`, …, while `Argument(k)`
+/// uses the *register-position* index `k` as `a{k+1}` so two functions
+/// with three arguments both produce `a1`/`a2`/`a3` regardless of
+/// classification order.
+///
+/// The pass is idempotent: re-running it overwrites the existing
+/// `var_role_names` map (after clearing it first) so a single
+/// `VarNamingPass.run()` invocation always reflects the current SSA
+/// shape — no stale entries from a prior IR snapshot.
+///
+/// Returns `Ok(false)` because the pass writes to side-map state, not
+/// to the IR proper; the fixed-point runner has no reason to re-iterate
+/// once it has been called.
+pub struct VarNamingPass;
+
+impl Pass for VarNamingPass {
+    fn name(&self) -> &str {
+        "VarNamingPass"
+    }
+
+    fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        let cls = classify_variables(func);
+
+        // Sequence counters per role family. We key each family by a
+        // discriminant tag so distinct `SavedRegister("rbx")` /
+        // `SavedRegister("r12")` instances don't collide in the same
+        // counter — IDA-style "first counter is i, first save is
+        // saved_rbx" naming.
+        #[derive(PartialEq, Eq, Hash)]
+        enum Family {
+            LoopCounter,
+            LoopBound,
+            LoopArrayBase,
+            SavedRegister(&'static str),
+            Argument(u32),
+        }
+        let mut counters: std::collections::HashMap<Family, usize> =
+            std::collections::HashMap::new();
+
+        let mut names: BTreeMap<SsaVarnode, String> = BTreeMap::new();
+
+        // Iterate `roles` in `SsaVarnode` order (BTreeMap iteration) so
+        // the per-role sequence is deterministic across runs.
+        for (sv, role) in &cls.roles {
+            let family = match role {
+                VarRole::Temporary => continue,
+                VarRole::LoopCounter => Family::LoopCounter,
+                VarRole::LoopBound => Family::LoopBound,
+                VarRole::LoopArrayBase => Family::LoopArrayBase,
+                VarRole::SavedRegister(reg) => Family::SavedRegister(reg),
+                VarRole::Argument(k) => Family::Argument(*k),
+            };
+            let counter = counters.entry(family).or_insert(0);
+            let idx = *counter;
+            *counter += 1;
+
+            names.insert(*sv, suggest_name(*role, idx));
+        }
+
+        func.var_role_names = names;
+        Ok(false)
     }
 }
 

@@ -451,6 +451,51 @@ pub struct SsaFunction {
     /// / parameter-pointer struct layouts surfaced by loop induction
     /// strides rather than stack-slot adjacency.
     pub array_struct_layouts: BTreeMap<SsaVarnode, crate::types::InferredStruct>,
+    /// Role-based names for SSA varnodes, keyed per-`SsaVarnode`.
+    ///
+    /// Populated by `unlace_passes::var_naming::VarNamingPass` (t211 +
+    /// t227 wiring): every SSA value classified as a `LoopCounter`,
+    /// `LoopBound`, `SavedRegister`, `Argument`, … gets a human-meaningful
+    /// name like `i`, `j`, `n`, `saved_rbx`, `a1`. Empty for `Temporary`
+    /// values — those fall through to the printer's existing
+    /// `merged_names` / fresh-`vN` chain.
+    ///
+    /// Consulted by the C printer *between* a non-default
+    /// [`Self::merged_names`] entry (which always wins when present and
+    /// non-`vN`) and the default fresh-`vN` allocator.
+    pub var_role_names: BTreeMap<SsaVarnode, String>,
+    /// Late-pipeline finalized prototype, recovered by
+    /// `unlace_passes::calling_conv_finalize::CallingConvFinalizePass`
+    /// (t216 + t230 wiring). `Some` once the pass has run; the C printer
+    /// prefers its `params` / `return_type` over the raw
+    /// [`Self::inferred_params`] / [`Self::inferred_return_type`] when
+    /// emitting the function header, and surfaces
+    /// `dropped_param_count` as a `// dropped N param(s)` comment.
+    pub finalized_signature: Option<FinalizedSignature>,
+}
+
+/// Finalized function prototype produced by
+/// `unlace_passes::calling_conv_finalize::finalize_signature` (t216).
+///
+/// Mirrors the passes-layer type structurally so the IR can store it
+/// without depending on `unlace-passes`. The passes layer constructs
+/// instances of this type and writes them to
+/// [`SsaFunction::finalized_signature`]; the printer consumes them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FinalizedSignature {
+    /// Final parameter list in calling-convention order. Names match
+    /// the originals from [`SsaFunction::inferred_params`] — only
+    /// types may have been narrowed (e.g. `int8` for byte-masked
+    /// params).
+    pub params: Vec<(String, crate::types::Type)>,
+    /// Final return type — either the existing
+    /// [`SsaFunction::inferred_return_type`] (wrapped in
+    /// `Type::Primitive`) or a refinement from consistent caller-side
+    /// use.
+    pub return_type: crate::types::Type,
+    /// Number of parameters dropped relative to
+    /// [`SsaFunction::inferred_params`].
+    pub dropped_param_count: usize,
 }
 
 /// One synthesised local-frame slot.
@@ -633,6 +678,8 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         byref_info: None,
         libc_call_annotations: BTreeMap::new(),
         array_struct_layouts: BTreeMap::new(),
+        var_role_names: BTreeMap::new(),
+        finalized_signature: None,
     }
 }
 

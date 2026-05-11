@@ -133,7 +133,7 @@ pub use string_hash_switch::{
 };
 pub use struct_field_detect::StructFieldDetectPass;
 pub use struct_field_recovery::recover_structs;
-pub use var_naming::{VarClassification, VarRole, classify_variables, suggest_name};
+pub use var_naming::{VarClassification, VarNamingPass, VarRole, classify_variables, suggest_name};
 pub use tail_call::TailCallDetectPass;
 pub use tail_duplication::TailDuplicationPass;
 pub use variable_merge::VariableMergePass;

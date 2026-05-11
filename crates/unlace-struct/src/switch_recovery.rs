@@ -870,6 +870,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         }
     }
 
@@ -907,6 +909,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         recover_switches(&mut func);
@@ -1062,6 +1066,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let targets = [0x4200u64, 0x4210, 0x4220];

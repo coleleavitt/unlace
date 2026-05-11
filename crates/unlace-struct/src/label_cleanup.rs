@@ -343,6 +343,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         }
     }
 

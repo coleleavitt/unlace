@@ -419,6 +419,7 @@ pub fn print_c_with_annotations(
         str_owned,
         func.composite_var_types.clone(),
         func.merged_names.clone(),
+        func.var_role_names.clone(),
     );
     if let Some(ann) = annotations {
         ctx.line_comments = ann.line_comments.clone();
@@ -1355,6 +1356,16 @@ struct PrintCtx {
     /// keyed by the base [`Varnode`]).  Empty when the coalescer was not run,
     /// in which case naming falls back to the printer's `next_var` allocator.
     merged_names: BTreeMap<SsaVarnode, String>,
+    /// Per-SsaVarnode role-based names from
+    /// [`unlace_passes::VarNamingPass`] (t227).
+    ///
+    /// Consulted by [`Self::name_of`] *between* a *meaningful* (non-`vN`)
+    /// [`Self::merged_names`] entry and the fresh-`vN` fallback allocator:
+    /// a role-name like `i` overrides the coalescer's default `v3`, but
+    /// loses to a coalescer name that already carries semantic content
+    /// (a DWARF-derived identifier promoted through the coalescer, or
+    /// any other non-`vN` value).
+    var_role_names: BTreeMap<SsaVarnode, String>,
     /// User-authored per-instruction comments, keyed by instruction VA.
     /// Populated from [`PrinterAnnotations::line_comments`] at construction.
     line_comments: BTreeMap<u64, String>,
@@ -1392,6 +1403,7 @@ impl PrintCtx {
         string_table: BTreeMap<u64, String>,
         composite_var_types: BTreeMap<SsaVarnode, Type>,
         merged_names: BTreeMap<SsaVarnode, String>,
+        var_role_names: BTreeMap<SsaVarnode, String>,
     ) -> Self {
         let field_by_offset = build_field_offset_map(dwarf);
         // Advance the fresh-name allocator past any `vN` already claimed by
@@ -1441,6 +1453,7 @@ impl PrintCtx {
             source_map: dwarf.map(|d| d.source_map.clone()).unwrap_or_default(),
             parent_returns_void: false,
             merged_names,
+            var_role_names,
             line_comments: BTreeMap::new(),
             custom_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
@@ -1458,10 +1471,22 @@ impl PrintCtx {
         let name = if let Some(override_name) = self.name_overrides.get(&sv.base) {
             // DWARF / role-based override (keyed by base) wins over coalescer.
             override_name.clone()
+        } else if let Some(merged) = self.merged_names.get(sv).filter(|n| !is_default_v_name(n)) {
+            // Variable-merge pass result (per-SsaVarnode), and it carries
+            // *semantic* content (not just a generic `vN` placeholder).
+            // Reuse the same name for every SsaVarnode in the same
+            // coalesced cluster, even if their base Varnodes differ
+            // (Unique-space coalescing).
+            merged.clone()
+        } else if let Some(role_name) = self.var_role_names.get(sv) {
+            // t227 — role-based name (e.g. `i`, `j`, `saved_rbx`, `a1`).
+            // Wins over the merger's default `vN` choice but still loses
+            // to the meaningful merger entries handled above.
+            role_name.clone()
         } else if let Some(merged) = self.merged_names.get(sv) {
-            // Variable-merge pass result (per-SsaVarnode).  Reuse the same
-            // name for every SsaVarnode in the same coalesced cluster, even
-            // if their base Varnodes differ (Unique-space coalescing).
+            // Fall through to a generic merged `vN` when no role name
+            // applied — keeps SSA versions on the same coalesced cluster
+            // co-named even without semantic information.
             merged.clone()
         } else if let Some(existing) = self.base_names.get(&sv.base) {
             existing.clone()
@@ -3352,6 +3377,20 @@ fn c_return_type(ty: &PrimitiveType) -> &'static str {
         PrimitiveType::Unknown => "void",
         other => c_type(other),
     }
+}
+
+/// `true` when `name` matches the printer's default fresh-name pattern
+/// (`v` followed by one or more ASCII digits) and therefore carries no
+/// semantic content. Used by the name-lookup chain (t227) to decide
+/// whether a [`PrintCtx::merged_names`] entry should be preferred over
+/// a role-based suggestion: a "meaningful" merger entry (DWARF-derived
+/// or otherwise non-`vN`) always wins, but a default `v3` should yield
+/// to a role-based `i` / `saved_rbx`.
+fn is_default_v_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix('v') else {
+        return false;
+    };
+    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
 }
 
 /// IDA-style type names for function signature parameters.
@@ -7503,6 +7542,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         }
     }
 
@@ -7657,6 +7698,129 @@ mod tests {
         assert!(
             output.contains("result"),
             "fallback path should still produce a Result-role name: {output}",
+        );
+    }
+
+    /// t227 — a `var_role_names` entry for an SSA value overrides the
+    /// printer's default `vN` allocator. We seed the role name directly
+    /// here (the pass-side classification is covered by the var_naming
+    /// unit tests); this test exercises the printer-side wiring.
+    #[test]
+    fn t227_var_role_name_overrides_default_vn() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r8, c1],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let mut func = make_func("role_test", body);
+        // Mark r8's defining SSA value as a loop counter — should
+        // render as `i` rather than the default fresh `vN`.
+        let r8_sv = SsaVarnode {
+            base: r8,
+            version: 0,
+        };
+        func.var_role_names.insert(r8_sv, "i".to_string());
+
+        let output = print_c(&func);
+        assert!(
+            output.contains(" i "),
+            "loop-counter role name `i` should appear in the body: {output}",
+        );
+    }
+
+    /// t227 — with no role names and no loops, the printer keeps using
+    /// its default `vN` allocator (regression guard so the role-name
+    /// path doesn't accidentally start firing when no classification
+    /// data is present).
+    #[test]
+    fn t227_no_roles_no_loops_falls_back_to_default() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+
+        // r0 = r8 + 1; return r0;  — uses r8 as input so a Read-only
+        // base needs a printer name.
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r8, c1],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        // var_role_names is empty in make_func.
+        let func = make_func("no_roles", body);
+        let output = print_c(&func);
+
+        // Body should mention a generic `vN`-style variable for the
+        // unnamed r8 input. The exact index isn't important — only
+        // that no role-style identifier leaked in from anywhere.
+        let has_default = output.contains("v1") || output.contains("v2") || output.contains("v3");
+        assert!(
+            has_default,
+            "with no roles or loops we should see a default vN name: {output}",
+        );
+        for forbidden in [" i ", " j ", " k ", "saved_"] {
+            assert!(
+                !output.contains(forbidden),
+                "unexpected role-style name `{forbidden}` in {output}",
+            );
+        }
+    }
+
+    /// t227 — a *meaningful* `merged_names` entry (anything other than
+    /// the default `vN` pattern) always wins over a role-based
+    /// suggestion. Two distinct passes shouldn't fight over naming: if
+    /// the variable-merge coalescer already picked a semantic name we
+    /// respect it.
+    #[test]
+    fn t227_meaningful_merged_name_beats_role_name() {
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![r8, c1],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let mut func = make_func("conflict", body);
+        let r8_sv = SsaVarnode {
+            base: r8,
+            version: 0,
+        };
+        // VariableMergePass picked the semantic name `counter_total`.
+        func.merged_names.insert(r8_sv, "counter_total".to_string());
+        // VarNamingPass would also like to call this thing `i`.
+        func.var_role_names.insert(r8_sv, "i".to_string());
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("counter_total"),
+            "meaningful merged name should win: {output}",
+        );
+        // The role-name `i` must not leak as a standalone identifier
+        // for this varnode (it can still appear inside e.g. `i32` types
+        // in the preamble, which is fine).
+        assert!(
+            !output.contains(" i ") && !output.contains(" i;") && !output.contains(" i,"),
+            "role name `i` leaked despite meaningful merged name: {output}",
         );
     }
 
@@ -7892,6 +8056,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let output = print_c(&func);
@@ -8448,6 +8614,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let mut functions = BTreeMap::new();
@@ -8550,6 +8718,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let output = super::print_c(&func);
@@ -8580,6 +8750,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let output = super::print_c(&func);
@@ -12579,6 +12751,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let output = print_c(&func);
@@ -12608,6 +12782,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let output = print_c(&func);
@@ -12641,6 +12817,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let output = print_c(&func);
@@ -12670,6 +12848,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let output = print_c(&func);
@@ -12699,6 +12879,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let output = print_c(&func);
@@ -12754,6 +12936,8 @@ mod tests {
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
+            var_role_names: std::collections::BTreeMap::new(),
+            finalized_signature: None,
         };
 
         let output = print_c(&func);
@@ -14386,6 +14570,7 @@ mod tests {
     fn empty_ctx() -> super::PrintCtx {
         super::PrintCtx::new(
             None,
+            BTreeMap::new(),
             BTreeMap::new(),
             BTreeMap::new(),
             BTreeMap::new(),

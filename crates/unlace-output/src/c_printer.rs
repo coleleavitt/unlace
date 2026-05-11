@@ -450,6 +450,11 @@ pub fn print_c_with_annotations(
 
     let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
     compute_dwarf_locals(dwarf_func, header, &mut ctx);
+    // t232: register recovered stack-frame slots as named locals
+    // (`v_<offset>` for scalars, `buf_<offset>` for arrays). DWARF
+    // locals take priority and have already been registered above; this
+    // call only fills in slots DWARF did not name.
+    compute_stack_frame_names(func, &mut ctx);
     compute_loop_counter_names(&func.body, 0, &mut ctx);
     collect_varnodes(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
@@ -758,7 +763,16 @@ pub fn print_c_with_annotations(
         names
     };
 
+    // t232: emit named stack-frame locals first, then suppress duplicates
+    // in the generic var-name loop below.
+    let stack_frame_names: BTreeSet<String> = emit_stack_frame_decls(func, &mut out);
+
     let mut declared_names: BTreeSet<&str> = BTreeSet::new();
+    // Seed `declared_names` with stack-frame slot names so the generic
+    // loop below does not re-emit them.
+    for n in &stack_frame_names {
+        declared_names.insert(n.as_str());
+    }
     for (sv, name) in &ctx.var_names {
         if foldable_svs.contains(sv) {
             continue;
@@ -2930,6 +2944,88 @@ fn compute_dwarf_locals(
             }
         }
     }
+}
+
+/// t232: register recovered stack-frame slots in [`PrintCtx::name_overrides`]
+/// so accesses through `Varnode::stack(offset, size)` print as the
+/// synthesized local name (`v_<abs(offset)>` for scalars or
+/// `buf_<abs(offset)>` for arrays).
+///
+/// One override is installed per common access width (1/2/4/8) so a
+/// narrower load at a wider slot — e.g. an 8-bit MOV out of an 8-byte
+/// long — still resolves to the same name.
+///
+/// DWARF entries take priority: this function never overwrites an
+/// existing key in `name_overrides`.
+fn compute_stack_frame_names(func: &HirFunction, ctx: &mut PrintCtx) {
+    let frame = match func.stack_frame.as_ref() {
+        Some(f) => f,
+        None => return,
+    };
+    for local in frame.locals.values() {
+        let abs = local.offset.unsigned_abs();
+        let name = if local.size > 8 {
+            format!("buf_{}", abs)
+        } else {
+            format!("v_{}", abs)
+        };
+        // Register the override under every plausible access width so a
+        // partial (1/2/4) read of a wider slot still picks up the name.
+        // The base varnode stored in `name_overrides` is keyed by full
+        // `Varnode` identity (space + offset + size), so we expand here.
+        let raw_offset = local.offset as u64;
+        for size in [1u8, 2, 4, 8] {
+            let stk = Varnode::stack(raw_offset, size);
+            ctx.name_overrides
+                .entry(stk)
+                .or_insert_with(|| name.clone());
+        }
+        if local.size > 8 {
+            // Wide buffers may also be addressed at their declared size.
+            let stk = Varnode::stack(raw_offset, local.size.min(255) as u8);
+            ctx.name_overrides
+                .entry(stk)
+                .or_insert_with(|| name.clone());
+        }
+    }
+}
+
+/// t232: emit `__intN v_<offset>;` (or `char buf_<offset>[N];`) declarations
+/// for each [`StackLocal`] in the recovered frame. Called from
+/// [`print_c_with_rtti_config`] at the start of the local-decl block.
+/// Returns the set of names emitted so the caller can suppress duplicate
+/// declarations from the generic `var_names` loop.
+///
+/// Locals are emitted in ascending offset order (BTreeMap iteration).
+fn emit_stack_frame_decls(
+    func: &HirFunction,
+    out: &mut String,
+) -> std::collections::BTreeSet<String> {
+    let mut emitted = std::collections::BTreeSet::new();
+    let frame = match func.stack_frame.as_ref() {
+        Some(f) => f,
+        None => return emitted,
+    };
+    for local in frame.locals.values() {
+        let abs = local.offset.unsigned_abs();
+        if local.size > 8 {
+            let name = format!("buf_{}", abs);
+            let _ = writeln!(out, "    char {}[{}];", name, local.size);
+            emitted.insert(name);
+        } else {
+            let ty = match local.size {
+                1 => "__int8",
+                2 => "__int16",
+                4 => "__int32",
+                8 => "__int64",
+                _ => "__int32",
+            };
+            let name = format!("v_{}", abs);
+            let _ = writeln!(out, "    {} {};", ty, name);
+            emitted.insert(name);
+        }
+    }
+    emitted
 }
 
 fn dwarf_function_for_func<'a>(
@@ -7644,6 +7740,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         }
     }
 
@@ -8249,6 +8346,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let output = print_c(&func);
@@ -8807,6 +8905,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let mut functions = BTreeMap::new();
@@ -8911,6 +9010,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let output = super::print_c(&func);
@@ -8943,6 +9043,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let output = super::print_c(&func);
@@ -12846,6 +12947,155 @@ mod tests {
         );
     }
 
+    // ---------------------------------------------------------------------
+    // t232: stack-frame local declarations
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn test_t232_stack_frame_emits_named_local_decls() {
+        // Two recovered 4-byte locals at offsets -8 and -16 → output
+        // contains `__int32 v_8;` and `__int32 v_16;` declarations.
+        use unlace_ir::ssa::{StackFrame, StackLocal};
+
+        let mut func = make_func("t232_decls", vec![HirNode::Return(None)]);
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -8,
+            StackLocal {
+                offset: -8,
+                size: 4,
+                access_widths: vec![4],
+            },
+        );
+        locals.insert(
+            -16,
+            StackLocal {
+                offset: -16,
+                size: 4,
+                access_widths: vec![4],
+            },
+        );
+        func.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 16,
+            max_pos_offset: 0,
+            min_neg_offset: -16,
+        });
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("__int32 v_8;"),
+            "expected `__int32 v_8;` decl, got:\n{output}",
+        );
+        assert!(
+            output.contains("__int32 v_16;"),
+            "expected `__int32 v_16;` decl, got:\n{output}",
+        );
+    }
+
+    #[test]
+    fn test_t232_stack_frame_access_uses_recovered_name() {
+        // Access `*(rsp+offset)` after a recovered local at the same offset
+        // should render as the local's name instead of the synthetic `vN`.
+        use unlace_ir::ssa::{StackFrame, StackLocal};
+
+        // Use a *positive* RSP-relative offset (8) because stack varnodes
+        // store their offset as u64 — the same convention the recovery
+        // pass uses when a `SpaceId::Stack` varnode appears directly.
+        let stk = Varnode::stack(8, 4);
+        let five = con(5, 4);
+        let r0 = reg(0, 4);
+
+        // Write 5 to the stack slot, then read it twice so the folder
+        // can't inline the constant and the named assignment survives.
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, stk, smallvec![five], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                r0,
+                smallvec![stk, stk],
+                0x1004,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r0,
+                version: 1,
+            })),
+        ];
+        let mut func = make_func("t232_access", body);
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            8,
+            StackLocal {
+                offset: 8,
+                size: 4,
+                access_widths: vec![4],
+            },
+        );
+        func.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 8,
+            max_pos_offset: 12,
+            min_neg_offset: 0,
+        });
+
+        let output = print_c(&func);
+        // Body should refer to `v_8` (the recovered name), not `v1` etc.
+        assert!(
+            output.contains("v_8 = 5"),
+            "expected `v_8 = 5` assignment, got:\n{output}",
+        );
+    }
+
+    #[test]
+    fn test_t232_no_stack_frame_emits_no_decls() {
+        // Function with `stack_frame: None` should emit no `__intN v_*;`
+        // declarations from the new pathway.
+        let func = make_func("t232_empty", vec![HirNode::Return(None)]);
+        let output = print_c(&func);
+        assert!(
+            !output.contains("__int32 v_"),
+            "expected no synthesized stack-frame decls, got:\n{output}",
+        );
+        assert!(
+            !output.contains("__int64 v_"),
+            "expected no synthesized stack-frame decls, got:\n{output}",
+        );
+        assert!(
+            !output.contains("char buf_"),
+            "expected no synthesized stack-frame decls, got:\n{output}",
+        );
+    }
+
+    #[test]
+    fn test_t232_array_slot_renders_as_buf() {
+        // A `StackLocal` whose size exceeds 8 bytes is rendered as a
+        // `char buf_<offset>[size];` declaration.
+        use unlace_ir::ssa::{StackFrame, StackLocal};
+
+        let mut func = make_func("t232_array", vec![HirNode::Return(None)]);
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -32,
+            StackLocal {
+                offset: -32,
+                size: 16,
+                access_widths: vec![1],
+            },
+        );
+        func.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 32,
+            max_pos_offset: 0,
+            min_neg_offset: -32,
+        });
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("char buf_32[16];"),
+            "expected `char buf_32[16];` decl, got:\n{output}",
+        );
+    }
+
     #[test]
     fn test_objc_block_capture_with_int_byref() {
         // t184: a block whose captured varnode is recorded as a __block
@@ -13057,6 +13307,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let output = print_c(&func);
@@ -13088,6 +13339,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let output = print_c(&func);
@@ -13123,6 +13375,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let output = print_c(&func);
@@ -13154,6 +13407,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let output = print_c(&func);
@@ -13185,6 +13439,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let output = print_c(&func);
@@ -13242,6 +13497,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let output = print_c(&func);

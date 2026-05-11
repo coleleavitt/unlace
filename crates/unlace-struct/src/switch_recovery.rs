@@ -872,6 +872,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         }
     }
 
@@ -911,6 +912,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         recover_switches(&mut func);
@@ -1068,6 +1070,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            stack_frame: None,
         };
 
         let targets = [0x4200u64, 0x4210, 0x4220];

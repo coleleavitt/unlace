@@ -116,6 +116,7 @@ pub fn structure_with_arch(
             .unwrap_or_default(),
         var_role_names: func.var_role_names.clone(),
         finalized_signature: func.finalized_signature.clone(),
+        stack_frame: func.stack_frame.clone(),
     })
 }
 

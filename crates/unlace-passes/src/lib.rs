@@ -34,6 +34,7 @@ pub mod func_fingerprint;
 pub mod global_copy_prop;
 pub mod go_closure;
 pub mod go_select;
+pub mod gui_lib_recognize;
 pub mod gvn;
 pub mod idiom_recognition;
 pub mod libc_signatures;

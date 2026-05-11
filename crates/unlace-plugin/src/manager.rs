@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use unlace_ir::ssa::SsaFunction;
+use unlace_loader::BinaryImage;
 
-use crate::{PLUGIN_ENTRY, PluginCreateFn, PluginError, UnlacePlugin};
+use crate::{PLUGIN_ENTRY, PluginCreateFn, PluginError, PluginFinding, UnlacePlugin};
 
 pub struct PluginManager {
     plugins: Vec<Box<dyn UnlacePlugin>>,
@@ -106,11 +107,26 @@ impl PluginManager {
         Ok(())
     }
 
-    pub fn run_all(&self, function: &mut SsaFunction) {
+    /// Dispatch [`UnlacePlugin::on_function`] across every loaded plugin,
+    /// concatenating findings in registration order.
+    pub fn run_all_on_function(&self, function: &SsaFunction) -> Vec<PluginFinding> {
+        let mut findings = Vec::new();
         for plugin in &self.plugins {
-            tracing::debug!(name = plugin.name(), "running plugin pass");
-            plugin.run_pass(function);
+            tracing::debug!(name = plugin.name(), "running plugin on_function");
+            findings.extend(plugin.on_function(function));
         }
+        findings
+    }
+
+    /// Dispatch [`UnlacePlugin::on_binary`] across every loaded plugin,
+    /// concatenating findings in registration order.
+    pub fn run_all_on_binary(&self, image: &BinaryImage) -> Vec<PluginFinding> {
+        let mut findings = Vec::new();
+        for plugin in &self.plugins {
+            tracing::debug!(name = plugin.name(), "running plugin on_binary");
+            findings.extend(plugin.on_binary(image));
+        }
+        findings
     }
 
     pub fn plugins(&self) -> &[Box<dyn UnlacePlugin>] {

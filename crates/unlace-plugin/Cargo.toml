@@ -5,6 +5,10 @@ edition.workspace = true
 
 [dependencies]
 unlace-ir = { workspace = true }
+unlace-loader = { workspace = true }
 libloading = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+smallvec = { workspace = true }

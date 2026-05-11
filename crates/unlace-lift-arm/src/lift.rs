@@ -2152,11 +2152,84 @@ pub fn aarch64_simd_reg_index(reg: capstone::RegId) -> Option<u8> {
     None
 }
 
+/// Decoded summary of a NEON instruction's operand list — the common
+/// shape consumed by both LDn/STn and arithmetic emitters.
+///
+/// Each field is independently optional so a single walker can service
+/// instructions with mixed shapes (memory + register list vs.
+/// register-only vs. register + immediate). Callers validate the
+/// invariants they actually need (e.g. LDn/STn requires `addr`, arith
+/// requires exactly 3 register indices).
+#[derive(Debug, Clone, Default)]
+pub struct NeonOpInfo {
+    /// Lane byte width inferred from the first SIMD operand's `VAS`
+    /// arrangement (1=B, 2=H, 4=S, 8=D, 16=Q). `None` if no SIMD
+    /// register operand carried an arrangement specifier.
+    pub lane_size: Option<u8>,
+    /// SIMD register indices (0..31) in capstone operand order — that
+    /// is, destination first for arithmetic, register-list order for
+    /// LDn/STn.
+    pub reg_indices: Vec<u8>,
+    /// Memory operand address (post `compute_mem_address` lowering),
+    /// present for LDn/STn forms.
+    pub addr: Option<Varnode>,
+    /// Immediate operand if one is present (e.g. shifted-imm NEON
+    /// variants). Reserved for future intrinsics; current emitters
+    /// don't consume it but the walker collects it so adding new
+    /// instructions doesn't require re-deriving the operand iteration.
+    pub imm: Option<i64>,
+}
+
+/// Walk a Capstone AArch64 detail block and project it into a
+/// [`NeonOpInfo`]. This is the shared operand-decoding kernel for both
+/// [`emit_aarch64_neon_ldst`] and [`emit_aarch64_neon_arith`]; keeping
+/// the iteration here means a future NEON family (FMA, shifted-imm,
+/// element-wise lane forms) only needs a thin emitter on top of the
+/// same projection.
+///
+/// Takes `&mut LiftCtx` because `compute_mem_address` may have to
+/// allocate a unique varnode + emit an `IntAdd` for non-zero
+/// displacements; folding that side-effect into the walker keeps both
+/// callers simple.
+pub fn aarch64_neon_op_info(ctx: &mut LiftCtx, detail: &InsnDetail) -> NeonOpInfo {
+    let mut info = NeonOpInfo::default();
+    let arch = detail.arch_detail();
+    let Some(arm64) = arch.arm64() else {
+        return info;
+    };
+    for op in arm64.operands() {
+        match op.op_type {
+            Arm64OperandType::Reg(reg) => {
+                if let Some(idx) = aarch64_simd_reg_index(reg) {
+                    info.reg_indices.push(idx);
+                    if info.lane_size.is_none() {
+                        info.lane_size = aarch64_vas_lane_size(op.vas);
+                    }
+                }
+            }
+            Arm64OperandType::Mem(mem) => {
+                if info.addr.is_none() {
+                    info.addr = compute_mem_address(ctx, &mem);
+                }
+            }
+            Arm64OperandType::Imm(i) => {
+                if info.imm.is_none() {
+                    info.imm = Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    info
+}
+
 /// Emit the `Callother` payload for an AArch64 NEON LDn/STn instruction.
 ///
 /// Capstone exposes one register operand per `Vn.<size>` token in the
 /// register list, followed by a single `Mem` operand for the addressing
-/// mode. We collect them all and emit:
+/// mode. The shared [`aarch64_neon_op_info`] walker decodes both; this
+/// emitter then validates the LDn/STn-specific invariants (non-empty
+/// reg list + a memory operand) and assembles the payload:
 ///
 /// ```text
 /// Callother(tag, lane_size_const, addr, vreg_idx_0, vreg_idx_1, ...)
@@ -2166,53 +2239,22 @@ pub fn aarch64_simd_reg_index(reg: capstone::RegId) -> Option<u8> {
 /// (1=B, 2=H, 4=S, 8=D, 16=Q). The intrinsic name (`vld1q_u8` etc.)
 /// is fully recoverable from `(tag, lane_size, register count)`.
 fn emit_aarch64_neon_ldst(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
-    let arch = detail.arch_detail();
-    let arm64 = match arch.arm64() {
-        Some(a) => a,
-        None => {
-            ctx.emit_unimplemented();
-            return;
-        }
-    };
-
-    let mut vreg_indices: smallvec::SmallVec<[u8; 4]> = smallvec::SmallVec::new();
-    let mut lane_size: Option<u8> = None;
-    let mut addr: Option<Varnode> = None;
-
-    for op in arm64.operands() {
-        match op.op_type {
-            Arm64OperandType::Reg(reg) => {
-                if let Some(idx) = aarch64_simd_reg_index(reg) {
-                    vreg_indices.push(idx);
-                    if lane_size.is_none() {
-                        lane_size = aarch64_vas_lane_size(op.vas);
-                    }
-                }
-            }
-            Arm64OperandType::Mem(mem) => {
-                addr = compute_mem_address(ctx, &mem);
-            }
-            _ => {}
-        }
-    }
-
-    let (Some(lane), Some(addr_vn)) = (lane_size, addr) else {
+    let info = aarch64_neon_op_info(ctx, detail);
+    let (Some(lane), Some(addr_vn)) = (info.lane_size, info.addr) else {
         ctx.emit_unimplemented();
         return;
     };
-    if vreg_indices.is_empty() {
+    if info.reg_indices.is_empty() {
         ctx.emit_unimplemented();
         return;
     }
-
     let mut inputs: smallvec::SmallVec<[Varnode; 3]> = smallvec::SmallVec::new();
     inputs.push(Varnode::constant(tag, 8));
     inputs.push(Varnode::constant(lane as u64, 1));
     inputs.push(addr_vn);
-    for idx in &vreg_indices {
+    for idx in &info.reg_indices {
         inputs.push(Varnode::constant(*idx as u64, 1));
     }
-
     ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
 }
 
@@ -2243,35 +2285,21 @@ pub fn aarch64_is_vector_form(detail: &InsnDetail) -> bool {
 }
 
 /// Emit a `Callother(tag, lane_size, vd_idx, vn_idx, vm_idx)` payload
-/// for a three-register NEON arithmetic op.
+/// for a three-register NEON arithmetic op. Delegates operand decoding
+/// to [`aarch64_neon_op_info`] and just enforces the arith-specific
+/// invariant (exactly three SIMD register operands).
 fn emit_aarch64_neon_arith(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
-    let arch = detail.arch_detail();
-    let Some(arm64) = arch.arm64() else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let mut indices: smallvec::SmallVec<[u8; 3]> = smallvec::SmallVec::new();
-    let mut lane_size: Option<u8> = None;
-    for op in arm64.operands() {
-        if let Arm64OperandType::Reg(reg) = op.op_type {
-            if let Some(idx) = aarch64_simd_reg_index(reg) {
-                indices.push(idx);
-                if lane_size.is_none() {
-                    lane_size = aarch64_vas_lane_size(op.vas);
-                }
-            }
-        }
-    }
-    let (Some(lane), 3) = (lane_size, indices.len()) else {
+    let info = aarch64_neon_op_info(ctx, detail);
+    let (Some(lane), 3) = (info.lane_size, info.reg_indices.len()) else {
         ctx.emit_unimplemented();
         return;
     };
     let inputs: smallvec::SmallVec<[Varnode; 3]> = smallvec::smallvec![
         Varnode::constant(tag, 8),
         Varnode::constant(lane as u64, 1),
-        Varnode::constant(indices[0] as u64, 1),
-        Varnode::constant(indices[1] as u64, 1),
-        Varnode::constant(indices[2] as u64, 1),
+        Varnode::constant(info.reg_indices[0] as u64, 1),
+        Varnode::constant(info.reg_indices[1] as u64, 1),
+        Varnode::constant(info.reg_indices[2] as u64, 1),
     ];
     ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
 }

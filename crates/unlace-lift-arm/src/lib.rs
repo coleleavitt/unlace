@@ -910,6 +910,129 @@ mod tests {
         );
     }
 
+    // ---------------------------------------------------------------
+    // t182 — Capstone-sourced IT-block condition codes. The manual
+    // `decode_it` still arms the state machine (so the lifter knows
+    // we're inside an IT block), but the per-slot cc value comes from
+    // Capstone's `arm_detail.cc` rather than from a re-decode of the
+    // IT mask. Each test asserts the `guard` field stamped on every
+    // emitted IR slot matches the expected ARM cond enum.
+    // ---------------------------------------------------------------
+
+    /// t182 — ITE EQ: two slots, conds = [EQ=0, NE=1]. Capstone marks
+    /// the first conditional insn as `ARM_CC_EQ` and the second as
+    /// `ARM_CC_NE`; the lifter must surface those exact values on the
+    /// `guard` field of each emitted IR insn.
+    #[test]
+    fn t182_ite_eq_capstone_cc_marks_each_slot() {
+        // ITE EQ → mask=0b1100, encoded as 0xBF0C
+        let l = ArmLifter::new_thumb();
+        let _ = l.lift_insn(&0xBF0Cu16.to_le_bytes(), 0x1000).expect("IT");
+
+        // Slot 1 (T = EQ): MOVS r0, #1 → 0x2001
+        let r1 = l
+            .lift_insn(&0x2001u16.to_le_bytes(), 0x1002)
+            .expect("MOVS slot 1");
+        let copy1 = r1
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("Copy in slot 1");
+        assert_eq!(copy1.guard, Some(0), "slot 1 must be guarded EQ");
+
+        // Slot 2 (E = NE): MOVS r0, #2 → 0x2002
+        let r2 = l
+            .lift_insn(&0x2002u16.to_le_bytes(), 0x1004)
+            .expect("MOVS slot 2");
+        let copy2 = r2
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("Copy in slot 2");
+        assert_eq!(copy2.guard, Some(1), "slot 2 must be guarded NE");
+
+        // Block drained — subsequent insn is unguarded.
+        let r3 = l
+            .lift_insn(&0x3001u16.to_le_bytes(), 0x1006)
+            .expect("ADDS");
+        assert!(
+            r3.ir_ops.iter().all(|i| i.guard.is_none()),
+            "post-block insn must be unguarded",
+        );
+    }
+
+    /// t182 — ITT EQ: two slots, conds = [EQ=0, EQ=0]. Both slots
+    /// share `ARM_CC_EQ`; Capstone reports `EQ` for each and the
+    /// lifter must stamp the same `Some(0)` on both.
+    #[test]
+    fn t182_itt_eq_capstone_cc_marks_each_slot() {
+        // ITT EQ → mask=0b0100, encoded as 0xBF04
+        let l = ArmLifter::new_thumb();
+        let _ = l.lift_insn(&0xBF04u16.to_le_bytes(), 0x1000).expect("IT");
+
+        let r1 = l
+            .lift_insn(&0x2001u16.to_le_bytes(), 0x1002)
+            .expect("MOVS slot 1");
+        let copy1 = r1
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("Copy in slot 1");
+        assert_eq!(copy1.guard, Some(0));
+
+        let r2 = l
+            .lift_insn(&0x2002u16.to_le_bytes(), 0x1004)
+            .expect("MOVS slot 2");
+        let copy2 = r2
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("Copy in slot 2");
+        assert_eq!(copy2.guard, Some(0));
+    }
+
+    /// t182 — ITEE EQ: three slots, conds = [EQ=0, NE=1, NE=1]. The
+    /// trailing two slots both invert the firstcond, so Capstone
+    /// surfaces `ARM_CC_EQ`, `ARM_CC_NE`, `ARM_CC_NE`. Mirrors the
+    /// ITEE source-level Go-style notation.
+    #[test]
+    fn t182_itee_eq_capstone_cc_marks_each_slot() {
+        // ITEE EQ → mask=0b1110, encoded as 0xBF0E
+        let l = ArmLifter::new_thumb();
+        let _ = l.lift_insn(&0xBF0Eu16.to_le_bytes(), 0x1000).expect("IT");
+
+        let mut guards = Vec::new();
+        let mut pc = 0x1002u64;
+        for imm in 1u16..=3 {
+            // Thumb-1 MOVS r0, #imm encoding family: 0x2000 | imm.
+            let bytes = (0x2000u16 | imm).to_le_bytes();
+            let r = l.lift_insn(&bytes, pc).expect("MOVS lifts");
+            let copy = r
+                .ir_ops
+                .iter()
+                .find(|i| i.op == IrOp::Copy)
+                .expect("Copy emitted");
+            guards.push(copy.guard);
+            pc += 2;
+        }
+        assert_eq!(
+            guards,
+            vec![Some(0), Some(1), Some(1)],
+            "ITEE EQ slots must be [EQ, NE, NE]",
+        );
+
+        // Block drained — fourth insn falls outside the IT prefix.
+        let post = l
+            .lift_insn(&0x2004u16.to_le_bytes(), pc)
+            .expect("post-block MOVS");
+        let post_copy = post
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("Copy after block");
+        assert!(post_copy.guard.is_none(), "post-block insn unguarded");
+    }
+
     #[test]
     fn arm_capstone_decodes_mul() {
         // MUL R0, R1, R2  →  0xE0000291

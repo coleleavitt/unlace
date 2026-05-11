@@ -277,15 +277,26 @@ impl ArmLifter {
             }
         }
 
-        let mut lifted = THUMB_CS.with(|cell| {
+        let (mut lifted, capstone_cc) = THUMB_CS.with(|cell| {
             let mut slot = cell.borrow_mut();
             if slot.is_none() {
                 *slot = Some(Self::make_capstone_thumb());
             }
             let cs = slot.as_ref().expect("thread-local Capstone thumb initialized");
-            decode_one_arm32(cs, bytes, addr, 2)
+            decode_one_arm32_with_cc(cs, bytes, addr, 2)
         })?;
-        apply_guard(&mut lifted.ir_ops, pending_cond);
+        // t182: prefer Capstone's per-instruction `cc` when we're inside
+        // an IT block. The manual `decode_it` state machine still arms
+        // the block (so `pending_cond` is `Some` for IT-controlled
+        // slots), but the actual cc value comes from `arm_detail.cc`
+        // rather than from the IT mask. Capstone falls back to the
+        // manual value when it returns `None` (defensive — keeps the
+        // pre-t182 path live for unsupported encodings).
+        let effective_cond = match (pending_cond, capstone_cc) {
+            (Some(_), Some(cs_cc)) => Some(cs_cc),
+            (manual, _) => manual,
+        };
+        apply_guard(&mut lifted.ir_ops, effective_cond);
         Ok(lifted)
     }
 
@@ -394,26 +405,70 @@ fn decode_one_arm32(
     addr: u64,
     default_len: usize,
 ) -> Result<LiftedInsn, LiftError> {
+    decode_one_arm32_with_cc(cs, bytes, addr, default_len).map(|(insn, _cc)| insn)
+}
+
+/// Variant of [`decode_one_arm32`] that additionally returns the
+/// instruction's Capstone-reported condition code as a raw ARM 4-bit
+/// cond field (EQ=0, NE=1, …, AL=14). Returns `None` for
+/// `ARM_CC_AL` / `ARM_CC_INVALID` so callers can short-circuit on
+/// "unconditional or unspecified".
+///
+/// Used by the Thumb IT-block path (t182): when the manual IT state
+/// machine flags an in-block slot, the cc value comes from Capstone's
+/// per-instruction `cc` rather than from a re-decode of the IT mask.
+fn decode_one_arm32_with_cc(
+    cs: &Capstone,
+    bytes: &[u8],
+    addr: u64,
+    default_len: usize,
+) -> Result<(LiftedInsn, Option<u8>), LiftError> {
     let insns = cs
         .disasm_count(bytes, addr, 1)
         .map_err(|e| LiftError::Decode(format!("{e}")))?;
     let Some(insn) = insns.as_ref().first() else {
         let mut ctx = LiftCtx::new(addr);
         ctx.emit_unimplemented();
-        return Ok(LiftedInsn {
-            ir_ops: ctx.ops,
-            len: default_len,
-        });
+        return Ok((
+            LiftedInsn {
+                ir_ops: ctx.ops,
+                len: default_len,
+            },
+            None,
+        ));
     };
     let detail = cs
         .insn_detail(insn)
         .map_err(|e| LiftError::Decode(format!("{e}")))?;
     let mut ctx = LiftCtx::new(addr);
     dispatch_arm32_mnemonic(&mut ctx, insn, &detail);
-    Ok(LiftedInsn {
-        ir_ops: ctx.ops,
-        len: insn.len(),
-    })
+    let cc = capstone_arm_cc_to_raw(&detail);
+    Ok((
+        LiftedInsn {
+            ir_ops: ctx.ops,
+            len: insn.len(),
+        },
+        cc,
+    ))
+}
+
+/// Convert Capstone's `ArmCC` (where `ARM_CC_INVALID = 0`,
+/// `ARM_CC_EQ = 1`, …, `ARM_CC_AL = 15`) into the raw ARM ARM 4-bit
+/// `cond` field (EQ=0, NE=1, …, AL=14) — the encoding shared by the
+/// manual `decode_it` decoder so downstream consumers see one shape.
+///
+/// Returns `None` for `ARM_CC_AL` (unconditional) or `ARM_CC_INVALID`
+/// (no condition recorded), so the caller can treat both as "do not
+/// stamp a guard".
+fn capstone_arm_cc_to_raw(detail: &InsnDetail) -> Option<u8> {
+    let cc = detail.arch_detail().arm().map(|a| a.cc())?;
+    if cc == ArmCC::ARM_CC_AL || cc == ArmCC::ARM_CC_INVALID {
+        return None;
+    }
+    // Map ArmCC discriminant -> raw 4-bit cond (subtract 1 for the
+    // INVALID=0 offset).
+    let raw = (cc as u32).checked_sub(1)?;
+    u8::try_from(raw).ok()
 }
 
 fn arm32_operands(detail: &InsnDetail) -> Vec<ArmOperandType> {

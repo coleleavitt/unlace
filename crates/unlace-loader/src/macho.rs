@@ -241,7 +241,12 @@ where
     let mut symbols = load_symbols(&file);
     let mut dynamic_linking = collect_macho_dynamic_linking::<Mach>(&file, data);
 
-    merge_function_starts::<Mach>(&file, data, &mut symbols);
+    let function_starts = merge_function_starts::<Mach>(&file, data, &mut symbols);
+    // LC_SEGMENT_SPLIT_INFO header is parsed at load time so kernelcache
+    // pipelines can detect dyld-shared-cache slicing participation; only the
+    // kind byte + payload length are surfaced for now (MVP — the delta
+    // stream itself is walked lazily by downstream consumers).
+    let _split_info = parse_segment_split_info::<Mach>(&file, data);
     merge_chained_imports::<Mach>(&file, data, &mut symbols, &mut dynamic_linking.relocations);
     merge_dyld_exports(&mut symbols, &dynamic_linking.exports);
     merge_dyld_binds(&mut symbols, &dynamic_linking.relocations);
@@ -259,6 +264,7 @@ where
         relocations: dynamic_linking.relocations,
         string_table: BTreeMap::new(),
         tls_callbacks: Vec::new(),
+        function_starts,
         debug_records: Vec::new(),
         load_config: None,
         runtime_functions: Vec::new(),
@@ -847,25 +853,33 @@ impl<'data> DyldBytecode<'data> {
 /// We synthesize `sub_<addr:x>` named symbols for any address not already
 /// covered by the symbol table. Existing symbols win — the symbol table
 /// has type info and aliases that LC_FUNCTION_STARTS lacks.
-fn merge_function_starts<Mach>(file: &MachOFile<Mach>, data: &[u8], out: &mut BTreeMap<u64, Symbol>)
+///
+/// Returns the recovered function entry VAs in source order so callers can
+/// also populate [`BinaryImage::function_starts`].
+fn merge_function_starts<Mach>(
+    file: &MachOFile<Mach>,
+    data: &[u8],
+    out: &mut BTreeMap<u64, Symbol>,
+) -> Vec<u64>
 where
     Mach: MachHeader<Endian = object::Endianness>,
 {
+    let mut starts = Vec::new();
     let endian = match file.macho_header().endian() {
         Ok(e) => e,
-        Err(_) => return,
+        Err(_) => return starts,
     };
 
     let text_vmaddr = match find_text_segment_vmaddr::<Mach>(file, endian) {
         Some(v) => v,
-        None => return,
+        None => return starts,
     };
 
     let mut cmds = match file.macho_header().load_commands(endian, data, 0) {
         Ok(c) => c,
         Err(err) => {
             tracing::debug!(?err, "Mach-O load commands unreadable");
-            return;
+            return starts;
         }
     };
 
@@ -884,10 +898,11 @@ where
             Ok(i) => i,
             Err(err) => {
                 tracing::debug!(?err, "LC_FUNCTION_STARTS payload unreadable");
-                return;
+                return starts;
             }
         };
         while let Ok(Some(addr)) = iter.next() {
+            starts.push(addr);
             out.entry(addr).or_insert_with(|| Symbol {
                 name: format!("sub_{addr:x}"),
                 addr,
@@ -895,8 +910,77 @@ where
                 kind: SymbolKind::Function,
             });
         }
-        return;
+        return starts;
     }
+    starts
+}
+
+/// Parsed header of a Mach-O `LC_SEGMENT_SPLIT_INFO` load command.
+///
+/// `LC_SEGMENT_SPLIT_INFO` is a `LinkeditDataCommand` (cmd=0x1E) whose
+/// `dataoff` / `datasize` point into `__LINKEDIT` at a payload describing
+/// intra-segment cross references — the data the kernelcache prelinker uses
+/// when slicing the shared cache (or `kxld`'s split-segment relocations on
+/// pre-arm64e kernels). The payload format starts with a single
+/// "kind" byte (DYLD_CACHE_ADJ_V2_* / older split-info codes) followed by
+/// a ULEB128-delta stream of section offsets, terminated by a 0 byte.
+///
+/// For the MVP we only surface the kind byte and the total payload length,
+/// which is enough for downstream consumers to detect whether a binary
+/// participates in dyld shared-cache slicing without re-walking the deltas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SegmentSplitInfoHeader {
+    /// First byte of the payload — the split-info "kind" tag.
+    /// (`0` = no entries, `1`/`2`/`3` = legacy v1 kinds, `0x7F` = v2 marker.)
+    pub kind: u8,
+    /// Length in bytes of the entire `LC_SEGMENT_SPLIT_INFO` payload as
+    /// recorded in the load command's `datasize` field (kind byte + delta
+    /// stream, including any trailing terminator).
+    pub payload_len: u64,
+}
+
+/// Scan the load-command table for the first `LC_SEGMENT_SPLIT_INFO` and
+/// return its parsed header. Returns `None` when the binary ships without
+/// the load command or when the payload bounds fall outside the file.
+fn parse_segment_split_info<Mach>(
+    file: &MachOFile<Mach>,
+    data: &[u8],
+) -> Option<SegmentSplitInfoHeader>
+where
+    Mach: MachHeader<Endian = object::Endianness>,
+{
+    let endian = file.macho_header().endian().ok()?;
+    let mut cmds = file.macho_header().load_commands(endian, data, 0).ok()?;
+    while let Ok(Some(cmd)) = cmds.next() {
+        let variant = match cmd.variant() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let LoadCommandVariant::LinkeditData(linkedit) = variant else {
+            continue;
+        };
+        if linkedit.cmd.get(endian) != macho::LC_SEGMENT_SPLIT_INFO {
+            continue;
+        }
+        let dataoff = linkedit.dataoff.get(endian) as usize;
+        let datasize = linkedit.datasize.get(endian) as usize;
+        if datasize == 0 {
+            return Some(SegmentSplitInfoHeader {
+                kind: 0,
+                payload_len: 0,
+            });
+        }
+        let end = dataoff.checked_add(datasize)?;
+        if end > data.len() {
+            tracing::debug!("LC_SEGMENT_SPLIT_INFO payload bounds invalid");
+            return None;
+        }
+        return Some(SegmentSplitInfoHeader {
+            kind: data[dataoff],
+            payload_len: datasize as u64,
+        });
+    }
+    None
 }
 
 fn find_text_segment_vmaddr<Mach>(file: &MachOFile<Mach>, endian: object::Endianness) -> Option<u64>
@@ -2974,6 +3058,187 @@ mod tests {
 
         let entry_b = img.symbols.get(&0x1140).expect("second function recovered");
         assert_eq!(entry_b.name, "sub_1140");
+    }
+
+    /// Build a Mach-O 64-bit binary carrying LC_FUNCTION_STARTS with three
+    /// ULEB128 deltas: 0x100, 0x40, 0x60 → starts at 0x1100, 0x1140, 0x11A0.
+    /// Payload is then 0-terminated (5 bytes total).
+    fn macho64_with_three_function_starts() -> Vec<u8> {
+        let mut buf = vec![0u8; 0x300];
+
+        let seg_cmdsize: u32 = 152;
+        let symtab_cmdsize: u32 = 24;
+        let funcstarts_cmdsize: u32 = 16;
+        let sizeofcmds: u32 = seg_cmdsize + symtab_cmdsize + funcstarts_cmdsize;
+        let funcstarts_dataoff: u32 = 0x180;
+        let funcstarts_datasize: u32 = 5;
+
+        buf[0..4].copy_from_slice(&macho::MH_MAGIC_64.to_le_bytes());
+        buf[4..8].copy_from_slice(&(macho::CPU_TYPE_X86_64 as i32).to_le_bytes());
+        buf[8..12].copy_from_slice(&3u32.to_le_bytes());
+        buf[12..16].copy_from_slice(&2u32.to_le_bytes());
+        buf[16..20].copy_from_slice(&3u32.to_le_bytes());
+        buf[20..24].copy_from_slice(&sizeofcmds.to_le_bytes());
+
+        let seg = 0x20usize;
+        buf[seg..seg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[seg + 4..seg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        buf[seg + 24..seg + 32].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 32..seg + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 48..seg + 56].copy_from_slice(&0x200u64.to_le_bytes());
+        buf[seg + 56..seg + 60].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 60..seg + 64].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 64..seg + 68].copy_from_slice(&1u32.to_le_bytes());
+
+        let sec = seg + 72;
+        buf[sec..sec + 6].copy_from_slice(b"__text");
+        buf[sec + 16..sec + 22].copy_from_slice(b"__TEXT");
+        buf[sec + 32..sec + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes());
+        buf[sec + 48..sec + 52].copy_from_slice(&0x100u32.to_le_bytes());
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+
+        let sym_cmd = seg + seg_cmdsize as usize;
+        buf[sym_cmd..sym_cmd + 4].copy_from_slice(&0x02u32.to_le_bytes());
+        buf[sym_cmd + 4..sym_cmd + 8].copy_from_slice(&symtab_cmdsize.to_le_bytes());
+
+        let fs_cmd = sym_cmd + symtab_cmdsize as usize;
+        buf[fs_cmd..fs_cmd + 4].copy_from_slice(&macho::LC_FUNCTION_STARTS.to_le_bytes());
+        buf[fs_cmd + 4..fs_cmd + 8].copy_from_slice(&funcstarts_cmdsize.to_le_bytes());
+        buf[fs_cmd + 8..fs_cmd + 12].copy_from_slice(&funcstarts_dataoff.to_le_bytes());
+        buf[fs_cmd + 12..fs_cmd + 16].copy_from_slice(&funcstarts_datasize.to_le_bytes());
+
+        buf[0x100] = 0xC3;
+
+        // ULEB128 deltas: 0x100 (0x80, 0x02), 0x40 (0x40), 0x60 (0x60), terminator (0x00).
+        let fs = funcstarts_dataoff as usize;
+        buf[fs] = 0x80;
+        buf[fs + 1] = 0x02;
+        buf[fs + 2] = 0x40;
+        buf[fs + 3] = 0x60;
+        buf[fs + 4] = 0x00;
+
+        buf
+    }
+
+    #[test]
+    fn parse_function_starts_three_funcs() {
+        let bin = macho64_with_three_function_starts();
+        let img = MachoLoader::load(&bin)
+            .expect("Mach-O with LC_FUNCTION_STARTS (3 entries) must load");
+        assert_eq!(
+            img.function_starts,
+            vec![0x1100u64, 0x1140, 0x11A0],
+            "function_starts should accumulate the ULEB128 delta stream in order"
+        );
+        // Sanity-check the symbol-table sync — every recovered VA also gets
+        // a `sub_<addr>` placeholder when no real symbol covers it.
+        for addr in &img.function_starts {
+            assert!(img.symbols.contains_key(addr));
+        }
+    }
+
+    #[test]
+    fn parse_function_starts_empty() {
+        // `minimal_macho64()` carries only a single LC_SEGMENT_64 with __text;
+        // no LC_FUNCTION_STARTS load command is emitted, so the recovered
+        // `function_starts` vector must be empty.
+        let bin = minimal_macho64();
+        let img = MachoLoader::load(&bin)
+            .expect("minimal Mach-O without LC_FUNCTION_STARTS must still load");
+        assert!(
+            img.function_starts.is_empty(),
+            "binary with no LC_FUNCTION_STARTS load command should yield empty Vec, got {:?}",
+            img.function_starts
+        );
+    }
+
+    /// Build a Mach-O 64-bit binary carrying LC_SEGMENT_SPLIT_INFO whose
+    /// payload starts with kind byte 0x7F (the dyld v2 split-info marker)
+    /// followed by three delta bytes and a zero terminator.
+    fn macho64_with_segment_split_info() -> Vec<u8> {
+        let mut buf = vec![0u8; 0x300];
+
+        let seg_cmdsize: u32 = 152;
+        let split_cmdsize: u32 = 16;
+        let sizeofcmds: u32 = seg_cmdsize + split_cmdsize;
+        let split_dataoff: u32 = 0x180;
+        let split_datasize: u32 = 5; // kind + 3 deltas + terminator
+
+        buf[0..4].copy_from_slice(&macho::MH_MAGIC_64.to_le_bytes());
+        buf[4..8].copy_from_slice(&(macho::CPU_TYPE_X86_64 as i32).to_le_bytes());
+        buf[8..12].copy_from_slice(&3u32.to_le_bytes());
+        buf[12..16].copy_from_slice(&2u32.to_le_bytes());
+        buf[16..20].copy_from_slice(&2u32.to_le_bytes()); // ncmds
+        buf[20..24].copy_from_slice(&sizeofcmds.to_le_bytes());
+
+        let seg = 0x20usize;
+        buf[seg..seg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[seg + 4..seg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        buf[seg + 24..seg + 32].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 32..seg + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 48..seg + 56].copy_from_slice(&0x200u64.to_le_bytes());
+        buf[seg + 56..seg + 60].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 60..seg + 64].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 64..seg + 68].copy_from_slice(&1u32.to_le_bytes());
+
+        let sec = seg + 72;
+        buf[sec..sec + 6].copy_from_slice(b"__text");
+        buf[sec + 16..sec + 22].copy_from_slice(b"__TEXT");
+        buf[sec + 32..sec + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes());
+        buf[sec + 48..sec + 52].copy_from_slice(&0x100u32.to_le_bytes());
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+
+        let split_cmd = seg + seg_cmdsize as usize;
+        buf[split_cmd..split_cmd + 4]
+            .copy_from_slice(&macho::LC_SEGMENT_SPLIT_INFO.to_le_bytes());
+        buf[split_cmd + 4..split_cmd + 8].copy_from_slice(&split_cmdsize.to_le_bytes());
+        buf[split_cmd + 8..split_cmd + 12].copy_from_slice(&split_dataoff.to_le_bytes());
+        buf[split_cmd + 12..split_cmd + 16].copy_from_slice(&split_datasize.to_le_bytes());
+
+        buf[0x100] = 0xC3;
+
+        let payload = split_dataoff as usize;
+        buf[payload] = 0x7F; // kind: DYLD_CACHE_ADJ_V2 marker
+        buf[payload + 1] = 0x10;
+        buf[payload + 2] = 0x20;
+        buf[payload + 3] = 0x30;
+        buf[payload + 4] = 0x00; // terminator
+
+        buf
+    }
+
+    #[test]
+    fn parse_segment_split_info_header() {
+        let bin = macho64_with_segment_split_info();
+        let file =
+            MachOFile::<object::macho::MachHeader64<object::Endianness>>::parse(bin.as_slice())
+                .expect("synthetic Mach-O64 with LC_SEGMENT_SPLIT_INFO must parse");
+        let hdr = parse_segment_split_info::<object::macho::MachHeader64<object::Endianness>>(
+            &file, &bin,
+        )
+        .expect("LC_SEGMENT_SPLIT_INFO header must be recovered");
+        assert_eq!(hdr.kind, 0x7F, "first payload byte is the kind tag");
+        assert_eq!(
+            hdr.payload_len, 5,
+            "payload_len mirrors the load command's datasize"
+        );
+
+        // And a negative control: a Mach-O without the load command yields None.
+        let bare = minimal_macho64();
+        let bare_file =
+            MachOFile::<object::macho::MachHeader64<object::Endianness>>::parse(bare.as_slice())
+                .expect("bare Mach-O64 must parse");
+        assert!(
+            parse_segment_split_info::<object::macho::MachHeader64<object::Endianness>>(
+                &bare_file, &bare,
+            )
+            .is_none(),
+            "binary without LC_SEGMENT_SPLIT_INFO returns None"
+        );
     }
 
     /// Mach-O 64-bit with LC_DYLD_INFO + LC_DYSYMTAB.

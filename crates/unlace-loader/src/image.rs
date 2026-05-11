@@ -338,6 +338,11 @@ pub struct BinaryImage {
     pub string_table: BTreeMap<u64, String>,
     /// TLS callback function virtual addresses (PE only). Empty for ELF/Mach-O.
     pub tls_callbacks: Vec<u64>,
+    /// Mach-O `LC_FUNCTION_STARTS` function entry virtual addresses, in source
+    /// order (Mach-O only). Each entry is the result of accumulating ULEB128
+    /// deltas against the `__TEXT` segment's `vmaddr`. Empty for ELF/PE or
+    /// Mach-O binaries that ship without `LC_FUNCTION_STARTS`.
+    pub function_starts: Vec<u64>,
     /// PE debug directory records. Empty for ELF/Mach-O.
     pub debug_records: Vec<DebugRecord>,
     /// PE load configuration directory. `None` for ELF/Mach-O or if absent.
@@ -496,6 +501,7 @@ mod tests {
             relocations: Vec::new(),
             string_table: BTreeMap::new(),
             tls_callbacks: Vec::new(),
+            function_starts: Vec::new(),
             debug_records: Vec::new(),
             load_config: None,
             runtime_functions: Vec::new(),

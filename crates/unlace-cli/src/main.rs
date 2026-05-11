@@ -1,8 +1,3 @@
-mod annotations;
-mod args;
-mod batch;
-mod pipeline;
-
 use std::fs;
 use std::io::Write;
 use std::time::Duration;
@@ -16,10 +11,10 @@ use unlace_lift::get_lifter;
 use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf};
 use unlace_plugin::PluginManager;
 
-use crate::annotations::AnnotationDb;
-use crate::args::{Args, Cmd};
-use crate::batch::BatchConfig;
-use crate::pipeline::PipelineConfig;
+use unlace_cli::annotations::{self, AnnotationDb};
+use unlace_cli::args::{self, Args, Cmd};
+use unlace_cli::batch::{self, BatchConfig};
+use unlace_cli::pipeline::{self, PipelineConfig};
 
 fn main() {
     let args = Args::parse();
@@ -182,7 +177,7 @@ fn run_decompile(
     tracing::info!(arch = %image.arch, entry = %format_args!("{:#x}", image.entry), "loaded binary");
 
     if let Some(override_str) = arch_override {
-        let requested = parse_arch(override_str)?;
+        let requested = unlace_cli::parse_arch(override_str)?;
         if requested != image.arch {
             bail!(
                 "architecture mismatch: binary is {}, but --arch={} was specified",
@@ -280,19 +275,5 @@ fn run_decompile(
     Ok(())
 }
 
-fn parse_arch(s: &str) -> Result<ArchId> {
-    match s.to_lowercase().as_str() {
-        "x86" | "i386" | "i686" => Ok(ArchId::X86),
-        "x86_64" | "x86-64" | "amd64" => Ok(ArchId::X86_64),
-        "arm" | "armv7" => Ok(ArchId::Arm),
-        "aarch64" | "arm64" => Ok(ArchId::AArch64),
-        "riscv64" | "riscv" => Ok(ArchId::RiscV64),
-        "mips" => Ok(ArchId::Mips),
-        "mips64" => Ok(ArchId::Mips64),
-        "ppc" | "powerpc" => Ok(ArchId::Ppc),
-        "ppc64" | "powerpc64" => Ok(ArchId::Ppc64),
-        "v850" => Ok(ArchId::V850),
-        "arc" => Ok(ArchId::Arc),
-        _ => bail!("unknown architecture: '{s}'"),
-    }
-}
+// `parse_arch` moved to `unlace_cli::parse_arch` (lib.rs) so the
+// library's `batch` module can also use it.

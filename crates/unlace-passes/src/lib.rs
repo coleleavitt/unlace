@@ -52,6 +52,7 @@ pub mod rust_enum;
 pub mod rust_panic;
 pub mod rust_vtable;
 pub mod sccp;
+pub mod source_sink;
 pub mod printf_type_infer;
 pub mod rep_string_idiom;
 pub mod sizeof_recognition;

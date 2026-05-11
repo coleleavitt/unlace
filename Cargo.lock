@@ -1464,6 +1464,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-sbom"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "unlace-struct"
 version = "0.1.0"
 dependencies = [

@@ -53,6 +53,7 @@ pub mod rust_panic;
 pub mod rust_vtable;
 pub mod sccp;
 pub mod printf_type_infer;
+pub mod protobuf_recognize;
 pub mod rep_string_idiom;
 pub mod sizeof_recognition;
 pub mod stack_frame_recovery;

@@ -470,16 +470,19 @@ pub struct StackFrame {
     pub min_neg_offset: i64,
 }
 
+
 /// Per-function byref bookkeeping populated by
 /// [`unlace_passes::byref_detect::detect_byref`].
 ///
-/// `byref_params` records parameter indices whose address flows into a
-/// call argument (and so must be emitted as `T *` with a trailing
-/// `// BYREF` comment); `byref_locals` records the frame offsets of
-/// stack-allocated locals whose address is taken anywhere in the body.
+/// `byref_params` records parameter indices whose address (computed via
+/// `IntAdd(param_value, K)`) appears anywhere in the function — strong
+/// evidence the parameter is logically a pointer/reference rather than
+/// a passed-by-value scalar. `byref_locals` records the RSP/RBP-relative
+/// offsets of stack-allocated locals whose address is observed flowing
+/// (after a `Copy` chain) into a `Call` argument register.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ByrefInfo {
-    /// Parameter indices marked `&param`.
+    /// Parameter indices (zero-based) marked `&param`.
     pub byref_params: std::collections::BTreeSet<u32>,
     /// Stack-frame offsets of byref-taken locals.
     pub byref_locals: std::collections::BTreeSet<i64>,

@@ -613,6 +613,12 @@ pub fn print_c_with_annotations(
                 out.push_str(", ");
             }
             let _ = write!(out, "{} {}", c_sig_type(pty), pname);
+            // t210: mark byref-detected parameters with a trailing comment.
+            // We use the `/* … */` form rather than `//` so it survives
+            // inline in a comma-separated parameter list.
+            if func.byref_params.contains(&(i as u32)) {
+                out.push_str(" /* BYREF */");
+            }
             param_idx += 1;
         }
         if param_idx == 0 && dwarf_func.map_or(true, |df| df.params.is_empty()) {
@@ -7101,6 +7107,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         }
     }
 
@@ -7489,6 +7496,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         };
 
         let output = print_c(&func);
@@ -8044,6 +8052,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         };
 
         let mut functions = BTreeMap::new();
@@ -8145,6 +8154,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         };
 
         let output = super::print_c(&func);
@@ -8174,6 +8184,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         };
 
         let output = super::print_c(&func);
@@ -11681,6 +11692,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         };
 
         let output = print_c(&func);
@@ -11709,6 +11721,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         };
 
         let output = print_c(&func);
@@ -11741,6 +11754,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         };
 
         let output = print_c(&func);
@@ -11769,6 +11783,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         };
 
         let output = print_c(&func);
@@ -11797,6 +11812,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         };
 
         let output = print_c(&func);
@@ -11851,6 +11867,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         };
 
         let output = print_c(&func);

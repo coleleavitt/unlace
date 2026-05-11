@@ -4,7 +4,7 @@ void _start(void) {
     *(_QWORD *)(0LL) = 0x1085LL; return;
 }
 /* Function:   area | Address: 0x1149 | Size: 0xb (11 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-__int32 area(__int64 a1) {
+__int32 area(__int64 a1 /* BYREF */) {
     int v3; // rdi
     unsigned int v5; // temp
     // source: /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4

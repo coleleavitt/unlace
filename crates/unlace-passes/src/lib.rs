@@ -61,6 +61,7 @@ pub mod rust_panic;
 pub mod rust_result;
 pub mod rust_vtable;
 pub mod sccp;
+pub mod smc_unwrap;
 pub mod printf_type_infer;
 pub mod protobuf_recognize;
 pub mod rep_string_idiom;

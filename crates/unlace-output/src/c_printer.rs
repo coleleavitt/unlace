@@ -382,6 +382,24 @@ pub struct PrinterAnnotations {
     /// import table. When canonical == original (the rendered name
     /// already matches the binary), no comment is emitted.
     pub libc_call_original: BTreeMap<u64, String>,
+    /// t265 — direct-call cross-reference table: for each
+    /// callee-function entry VA, the list of `(caller_entry_va,
+    /// call_site_va)` pairs describing every direct call site that
+    /// targets it. Sourced from
+    /// [`unlace_ir::xref::CallGraph::callers_of`] paired with the
+    /// caller's per-instruction VA.
+    ///
+    /// When the function currently being printed has an entry in
+    /// this map, the printer emits a leading comment listing up to
+    /// five caller sites in `sub_<caller_entry>+<delta>` form, where
+    /// `delta` is `call_site_va - caller_entry_va`. The cap matches
+    /// IDA's default xref summary width — beyond five, an "..." is
+    /// appended.
+    ///
+    /// Empty by default; functions with no in-bound direct calls
+    /// (leaves of the call graph, library entry points, statics not
+    /// referenced inside the binary) get no xref comment.
+    pub xref_callers: BTreeMap<u64, Vec<(u64, u64)>>,
     /// t231: per-function map from array-base SSA varnode → recovered
     /// `InferredStruct` layout (size + field offsets/widths).  Sourced
     /// from [`unlace_ir::ssa::SsaFunction::array_struct_layouts`].
@@ -593,6 +611,28 @@ pub fn print_c_with_annotations(
         for line in ann.lines() {
             let _ = writeln!(out, "// {}", line);
         }
+    }
+
+    // t265 — emit a call-graph xref summary listing up to five direct
+    // callers of this function. Format mirrors IDA's `sub_<X>+<off>`
+    // notation, where `off` is the call site's distance from the
+    // caller's entry. Empty when the function has no recorded
+    // callers (leaf / unreferenced).
+    if let Some(callers) = annotations.and_then(|a| a.xref_callers.get(&func.addr))
+        && !callers.is_empty()
+    {
+        let mut parts: Vec<String> = callers
+            .iter()
+            .take(5)
+            .map(|(caller_entry, call_site)| {
+                let delta = call_site.wrapping_sub(*caller_entry);
+                format!("sub_{:x}+{:x}", caller_entry, delta)
+            })
+            .collect();
+        if callers.len() > 5 {
+            parts.push("...".to_string());
+        }
+        let _ = writeln!(out, "// xref: {}", parts.join(", "));
     }
 
     if let Some(hdr) = header {
@@ -11889,6 +11929,70 @@ mod tests {
         assert!(
             !output.contains("// source:"),
             "legacy `// source:` prefix should not be emitted: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // t265: direct-call xref summary above the function header
+    // -------------------------------------------------------------------
+
+    /// A function with two direct callers gets a leading
+    /// `// xref: sub_<X>+<off>, sub_<Y>+<off>` comment above its
+    /// header. `off` is the call site's byte-offset from the caller's
+    /// entry, matching IDA's reference-window notation.
+    #[test]
+    fn t265_callee_with_two_callers_emits_xref_comment() {
+        // Function `callee` lives at 0x1000; the caller list says it
+        // was called from sub_2000 at offset 0x15 and sub_3000 at
+        // offset 0x08.
+        let callee_va: u64 = 0x1000;
+        let mut func = make_func("callee", vec![HirNode::Return(None)]);
+        func.addr = callee_va;
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.xref_callers.insert(
+            callee_va,
+            vec![(0x2000, 0x2015), (0x3000, 0x3008)],
+        );
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(
+            output.contains("// xref: sub_2000+15, sub_3000+8"),
+            "expected xref comment listing two callers: {output}",
+        );
+    }
+
+    /// A function with no recorded callers (leaf in the call graph,
+    /// library entry not referenced internally) gets no xref
+    /// comment — adding one would only add noise.
+    #[test]
+    fn t265_uncalled_function_emits_no_xref_comment() {
+        let func = make_func("isolated", vec![HirNode::Return(None)]);
+        // Default annotations — empty xref_callers map.
+        let ann = super::PrinterAnnotations::default();
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+        assert!(
+            !output.contains("// xref:"),
+            "uncalled function should have no xref comment: {output}",
         );
     }
 

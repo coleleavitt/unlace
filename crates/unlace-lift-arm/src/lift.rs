@@ -1974,6 +1974,26 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
     let id = Arm64Insn::from(insn.id().0);
 
     match id {
+        // t197: route vector-form ADD/SUB/MUL to the NEON arithmetic emitter.
+        // Scalar GP forms (no VAS) continue through the existing lifter.
+        Arm64Insn::ARM64_INS_ADD if aarch64_is_vector_form(detail) => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_ADD)
+        }
+        Arm64Insn::ARM64_INS_SUB if aarch64_is_vector_form(detail) => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_SUB)
+        }
+        Arm64Insn::ARM64_INS_MUL if aarch64_is_vector_form(detail) => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_MUL)
+        }
+        Arm64Insn::ARM64_INS_FADD => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FADD)
+        }
+        Arm64Insn::ARM64_INS_FSUB => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FSUB)
+        }
+        Arm64Insn::ARM64_INS_FMUL => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FMUL)
+        }
         Arm64Insn::ARM64_INS_ADD => arithmetic::lift_add(ctx, &ops),
         Arm64Insn::ARM64_INS_SUB => arithmetic::lift_sub(ctx, &ops),
         Arm64Insn::ARM64_INS_ADDS => arithmetic::lift_adds(ctx, &ops),
@@ -2193,6 +2213,66 @@ fn emit_aarch64_neon_ldst(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
         inputs.push(Varnode::constant(*idx as u64, 1));
     }
 
+    ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
+}
+
+// ---------------------------------------------------------------------
+// t197: AArch64 NEON SIMD arithmetic — ADD/SUB/MUL + FADD/FSUB/FMUL when
+// operands carry a VAS suffix (i.e. vector form, e.g. `ADD V0.4S, V1.4S, V2.4S`).
+//
+// Scalar GP-register forms keep their existing arithmetic lifter; only
+// the vector forms route through these Callother intrinsics so the IR
+// surfaces lane-size + element-type to downstream printers.
+
+pub const CALLOTHER_NEON_ADD: u64 = 0x408;
+pub const CALLOTHER_NEON_SUB: u64 = 0x409;
+pub const CALLOTHER_NEON_MUL: u64 = 0x40A;
+pub const CALLOTHER_NEON_FADD: u64 = 0x40B;
+pub const CALLOTHER_NEON_FSUB: u64 = 0x40C;
+pub const CALLOTHER_NEON_FMUL: u64 = 0x40D;
+
+/// Returns `true` when any operand of `detail` carries a NEON VAS
+/// arrangement specifier — i.e. the instruction is a vector form.
+pub fn aarch64_is_vector_form(detail: &InsnDetail) -> bool {
+    let arch = detail.arch_detail();
+    let Some(arm64) = arch.arm64() else { return false; };
+    use capstone::arch::arm64::Arm64Vas;
+    arm64
+        .operands()
+        .any(|op| op.vas != Arm64Vas::ARM64_VAS_INVALID)
+}
+
+/// Emit a `Callother(tag, lane_size, vd_idx, vn_idx, vm_idx)` payload
+/// for a three-register NEON arithmetic op.
+fn emit_aarch64_neon_arith(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
+    let arch = detail.arch_detail();
+    let Some(arm64) = arch.arm64() else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let mut indices: smallvec::SmallVec<[u8; 3]> = smallvec::SmallVec::new();
+    let mut lane_size: Option<u8> = None;
+    for op in arm64.operands() {
+        if let Arm64OperandType::Reg(reg) = op.op_type {
+            if let Some(idx) = aarch64_simd_reg_index(reg) {
+                indices.push(idx);
+                if lane_size.is_none() {
+                    lane_size = aarch64_vas_lane_size(op.vas);
+                }
+            }
+        }
+    }
+    let (Some(lane), 3) = (lane_size, indices.len()) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let inputs: smallvec::SmallVec<[Varnode; 3]> = smallvec::smallvec![
+        Varnode::constant(tag, 8),
+        Varnode::constant(lane as u64, 1),
+        Varnode::constant(indices[0] as u64, 1),
+        Varnode::constant(indices[1] as u64, 1),
+        Varnode::constant(indices[2] as u64, 1),
+    ];
     ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
 }
 

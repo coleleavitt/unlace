@@ -2504,6 +2504,8 @@ mod tests {
     use crate::lift::{
         CALLOTHER_AARCH64_LD1, CALLOTHER_AARCH64_LD2, CALLOTHER_AARCH64_LD3, CALLOTHER_AARCH64_LD4,
         CALLOTHER_AARCH64_ST1, CALLOTHER_AARCH64_ST2, CALLOTHER_AARCH64_ST3, CALLOTHER_AARCH64_ST4,
+        CALLOTHER_NEON_ADD, CALLOTHER_NEON_FADD, CALLOTHER_NEON_FMUL, CALLOTHER_NEON_FSUB,
+        CALLOTHER_NEON_MUL, CALLOTHER_NEON_SUB,
     };
 
     /// Walk the lifter output, expecting exactly one Callother with the
@@ -2596,6 +2598,89 @@ mod tests {
     fn test_aarch64_st4_v0_v3_2d_t186() {
         // st4 {v0.2d, v1.2d, v2.2d, v3.2d}, [x5]  →  4c000ca0  →  a0 0c 00 4c
         assert_neon_callother(&[0xa0, 0x0c, 0x00, 0x4c], CALLOTHER_AARCH64_ST4, 8, 4);
+    }
+
+    // ── t197: AArch64 NEON SIMD arithmetic (ADD/SUB/MUL + FADD/FSUB/FMUL) ──
+    //
+    // Vector-form ADD/SUB/MUL route through `emit_aarch64_neon_arith`
+    // (one Callother carrying tag + lane-size + the three register indices).
+    // Scalar GP-register forms keep the existing arithmetic lifter — verified
+    // by the negative test below. Encodings via `llvm-mc -triple=aarch64`.
+
+    /// Find the unique Callother with `expected_tag` and assert the lane
+    /// size in input[1] matches. Returns the Callother for further
+    /// assertions if needed.
+    fn assert_neon_arith(bytes: &[u8], expected_tag: u64, expected_lane: u8) {
+        let result = lifter()
+            .lift_insn(bytes, 0x1000)
+            .expect("NEON arithmetic should decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother && i.inputs[0].offset == expected_tag)
+            .unwrap_or_else(|| {
+                panic!(
+                    "expected Callother(tag={expected_tag:#x}) — got {:?}",
+                    result.ir_ops
+                )
+            });
+        assert_eq!(co.inputs[1].offset, expected_lane as u64);
+        // Inputs are (tag, lane, vd, vn, vm).
+        assert_eq!(co.inputs.len(), 5, "neon arith expects 3 register indices");
+    }
+
+    #[test]
+    fn test_aarch64_neon_add_v0_4s_t197() {
+        // add v0.4s, v1.4s, v2.4s  →  encoding [0x20,0x84,0xa2,0x4e]
+        assert_neon_arith(&[0x20, 0x84, 0xa2, 0x4e], CALLOTHER_NEON_ADD, 4);
+    }
+
+    #[test]
+    fn test_aarch64_neon_sub_v0_4s_t197() {
+        // sub v0.4s, v1.4s, v2.4s  →  [0x20,0x84,0xa2,0x6e]
+        assert_neon_arith(&[0x20, 0x84, 0xa2, 0x6e], CALLOTHER_NEON_SUB, 4);
+    }
+
+    #[test]
+    fn test_aarch64_neon_mul_v0_8h_t197() {
+        // mul v0.8h, v1.8h, v2.8h  →  [0x20,0x9c,0x62,0x4e]
+        assert_neon_arith(&[0x20, 0x9c, 0x62, 0x4e], CALLOTHER_NEON_MUL, 2);
+    }
+
+    #[test]
+    fn test_aarch64_neon_fadd_v0_4s_t197() {
+        // fadd v0.4s, v1.4s, v2.4s  →  [0x20,0xd4,0x22,0x4e]
+        assert_neon_arith(&[0x20, 0xd4, 0x22, 0x4e], CALLOTHER_NEON_FADD, 4);
+    }
+
+    #[test]
+    fn test_aarch64_neon_fsub_v0_2d_t197() {
+        // fsub v0.2d, v1.2d, v2.2d  →  [0x20,0xd4,0xe2,0x4e]
+        assert_neon_arith(&[0x20, 0xd4, 0xe2, 0x4e], CALLOTHER_NEON_FSUB, 8);
+    }
+
+    #[test]
+    fn test_aarch64_neon_fmul_v0_4s_t197() {
+        // fmul v0.4s, v1.4s, v2.4s  →  [0x20,0xdc,0x22,0x6e]
+        assert_neon_arith(&[0x20, 0xdc, 0x22, 0x6e], CALLOTHER_NEON_FMUL, 4);
+    }
+
+    #[test]
+    fn test_aarch64_scalar_add_does_not_route_through_neon_t197() {
+        // add x0, x1, x2  →  encoding [0x20,0x00,0x02,0x8b]. Must NOT emit
+        // a CALLOTHER_NEON_ADD — the scalar lifter handles it as IntAdd.
+        let result = lifter()
+            .lift_insn(&[0x20, 0x00, 0x02, 0x8b], 0x1000)
+            .expect("scalar ADD decodes");
+        let has_neon = result
+            .ir_ops
+            .iter()
+            .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_NEON_ADD);
+        assert!(
+            !has_neon,
+            "scalar ADD must not emit a NEON Callother; got {:?}",
+            result.ir_ops
+        );
     }
 
     // ── t194: ARM saturating + parallel-add encodings ──────────────

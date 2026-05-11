@@ -18,6 +18,7 @@ pub mod const_fold;
 pub mod copy_prop;
 pub mod cpp_stl;
 pub mod cpp_vtable;
+pub mod crypto_idioms;
 pub mod cse;
 pub mod dce;
 pub mod dead_flag_elim;
@@ -71,6 +72,7 @@ pub use algebraic_simplify::AlgebraicSimplifyPass;
 pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bitfield_idioms::BitfieldIdiomPass;
 pub use bmi_idioms::BmiIdiomPass;
+pub use crypto_idioms::CryptoIdiomPass;
 pub use byref_detect::detect_byref;
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
 pub use caller_param_propagate::{

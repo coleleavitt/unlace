@@ -6737,6 +6737,20 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x170 => Some("_mm_blend_ps"),    // BLENDPS
         0x171 => Some("_mm_blendv_epi8"), // PBLENDVB
 
+        // ── AES-NI intrinsics (0x1E0..0x1E4) ──────────────────────
+        0x1E0 => Some("_mm_aesenc_si128"),         // AESENC
+        0x1E1 => Some("_mm_aesenclast_si128"),     // AESENCLAST
+        0x1E2 => Some("_mm_aesdec_si128"),         // AESDEC
+        0x1E3 => Some("_mm_aesdeclast_si128"),     // AESDECLAST
+        0x1E4 => Some("_mm_aeskeygenassist_si128"), // AESKEYGENASSIST
+
+        // ── SHA-NI intrinsics (0x1E8..0x1EC) ───────────────────
+        0x1E8 => Some("_mm_sha1rnds4_epu32"),  // SHA1RNDS4
+        0x1E9 => Some("_mm_sha1nexte_epu32"),  // SHA1NEXTE
+        0x1EA => Some("_mm_sha256rnds2_epu32"), // SHA256RNDS2
+        0x1EB => Some("_mm_sha256msg1_epu32"), // SHA256MSG1
+        0x1EC => Some("_mm_sha256msg2_epu32"), // SHA256MSG2
+
         // ── Bit-manipulation builtins (0x200..0x204) ───────────
         0x200 => Some("__builtin_ctz"),      // BSF
         0x201 => Some("__bsr"),              // BSR

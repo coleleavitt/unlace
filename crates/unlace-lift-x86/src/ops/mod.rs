@@ -1,6 +1,7 @@
 pub mod arithmetic;
 pub mod bitwise;
 pub mod control_flow;
+pub mod crypto;
 pub mod data_move;
 pub mod fpu;
 pub mod sse;

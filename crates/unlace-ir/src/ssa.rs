@@ -472,6 +472,23 @@ pub struct SsaFunction {
     /// emitting the function header, and surfaces
     /// `dropped_param_count` as a `// dropped N param(s)` comment.
     pub finalized_signature: Option<FinalizedSignature>,
+    /// Cryptographic algorithm annotations detected by
+    /// `unlace_passes::crypto_idioms::CryptoIdiomPass`. Each entry
+    /// records the algorithm name (e.g. `"AES-128-ECB"`) and the
+    /// `(BlockId, insn_index)` of the first instruction in the matched
+    /// sequence. Empty until the pass runs.
+    pub crypto_annotations: Vec<CryptoAnnotation>,
+}
+
+/// A recognized cryptographic algorithm sequence within a function.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CryptoAnnotation {
+    /// Human-readable algorithm name (e.g. `"AES-128-ECB"`).
+    pub algorithm: String,
+    /// Location of the first instruction in the matched sequence.
+    pub start_loc: (BlockId, usize),
+    /// Location of the last instruction in the matched sequence.
+    pub end_loc: (BlockId, usize),
 }
 
 /// Finalized function prototype produced by
@@ -680,6 +697,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         array_struct_layouts: BTreeMap::new(),
         var_role_names: BTreeMap::new(),
         finalized_signature: None,
+        crypto_annotations: Vec::new(),
     }
 }
 

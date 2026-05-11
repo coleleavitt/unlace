@@ -361,6 +361,17 @@ pub struct PrinterAnnotations {
     /// string is also treated as "nothing to emit" so callers can compute
     /// the string unconditionally.
     pub inferred_struct_preamble: Option<String>,
+    /// Canonical libc family name keyed by Call instruction VA (t229).
+    ///
+    /// Populated by the pipeline from `SsaFunction::libc_call_annotations`,
+    /// which `annotate_libc_calls` writes when a Call's target symbol is
+    /// a known libc alias (`__memcpy_chk`, `_Znwm`, `__aeabi_memcpy4`, …).
+    /// When `resolve_call_target` finds an entry for the current Call's
+    /// VA it uses the canonical name (`memcpy`, `malloc`) instead of the
+    /// raw symbol, so the rendered output reads as portable libc rather
+    /// than per-platform spellings. Empty for calls to unknown / non-libc
+    /// targets — those follow the legacy symbol-table path.
+    pub libc_call_canonical: BTreeMap<u64, String>,
 }
 
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
@@ -427,6 +438,7 @@ pub fn print_c_with_annotations(
         ctx.string_hash_table = ann.string_hash_table.clone();
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
         ctx.auth_calls = ann.auth_calls.clone();
+        ctx.libc_call_canonical = ann.libc_call_canonical.clone();
     }
     if let Some(cfg) = config {
         ctx.config = cfg;
@@ -1435,6 +1447,11 @@ struct PrintCtx {
     /// (t201). Lifted from [`PrinterAnnotations::auth_calls`]; consumed
     /// by `emit_callind_cast` to render `__builtin_arm_authcall(...)`.
     auth_calls: BTreeMap<u64, unlace_passes::AuthCallAnnotation>,
+    /// Canonical libc family name keyed by Call VA (t229). Lifted from
+    /// [`PrinterAnnotations::libc_call_canonical`]; consulted by
+    /// [`resolve_call_target`] before the symbol-table fallback so a
+    /// `Call __memcpy_chk` renders as `memcpy(...)`.
+    libc_call_canonical: BTreeMap<u64, String>,
 }
 
 impl PrintCtx {
@@ -1503,6 +1520,7 @@ impl PrintCtx {
             string_hash_table: BTreeMap::new(),
             forwarded_resolutions: BTreeMap::new(),
             auth_calls: BTreeMap::new(),
+            libc_call_canonical: BTreeMap::new(),
         }
     }
 
@@ -4231,6 +4249,16 @@ fn forwarded_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
 fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     if insn.inputs.is_empty() {
         return "/* unknown */".to_string();
+    }
+    // t229: when the libc family classifier (`annotate_libc_calls`)
+    // recognised this call's target as an alias for a libc function,
+    // prefer the canonical lowercase name (`memcpy`, `malloc`) over the
+    // raw symbol (`__memcpy_chk`, `_Znwm`). The canonical map is keyed
+    // by the Call instruction's VA, which the printer always sees, so
+    // both direct (Const target) and indirect (resolved-elsewhere) calls
+    // can be rewritten if the annotator decided they classify.
+    if let Some(canonical) = ctx.libc_call_canonical.get(&insn.addr) {
+        return canonical.clone();
     }
     let target_vn = &insn.inputs[0];
     if target_vn.space == SpaceId::Const {
@@ -11113,6 +11141,119 @@ mod tests {
         assert!(
             output.contains("kernel32!HeapAlloc"),
             "primary symbol name must still render: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // t229: libc canonical-name rewriting on Call rendering
+    // -------------------------------------------------------------------
+
+    /// A Call whose target is the libc alias `__memcpy_chk` renders as
+    /// `memcpy(...)` once the `libc_call_canonical` annotation is in
+    /// place. The symbol table still maps the address to the raw alias —
+    /// only the canonical map should drive the rewrite.
+    #[test]
+    fn t229_call_rewrites_memcpy_chk_to_memcpy() {
+        let call_va: u64 = 0x1000;
+        let target_va: u64 = 0x401040;
+        let target_addr = con(target_va, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], call_va);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(target_va, "__memcpy_chk".to_string());
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.libc_call_canonical.insert(call_va, "memcpy".to_string());
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            Some(&symbols),
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(
+            output.contains("memcpy("),
+            "Call to __memcpy_chk must render as memcpy(...): {output}",
+        );
+        assert!(
+            !output.contains("__memcpy_chk"),
+            "raw alias must not appear when canonical name is set: {output}",
+        );
+    }
+
+    /// `_Znwm` (Itanium-mangled `operator new(unsigned long)`) is in the
+    /// `Malloc` family — pipeline annotates it to `malloc`. Output must
+    /// reflect the canonical name.
+    #[test]
+    fn t229_call_rewrites_znwm_to_malloc() {
+        let call_va: u64 = 0x1004;
+        let target_va: u64 = 0x401050;
+        let target_addr = con(target_va, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], call_va);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(target_va, "_Znwm".to_string());
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.libc_call_canonical.insert(call_va, "malloc".to_string());
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            Some(&symbols),
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(
+            output.contains("malloc("),
+            "Call to _Znwm must render as malloc(...): {output}",
+        );
+    }
+
+    /// When the call is not in `libc_call_canonical`, the legacy
+    /// symbol-table path takes over and the raw symbol still renders.
+    #[test]
+    fn t229_unknown_call_falls_through_to_legacy_symbol_path() {
+        let call_va: u64 = 0x1008;
+        let target_va: u64 = 0x401060;
+        let target_addr = con(target_va, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], call_va);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(target_va, "my_user_func".to_string());
+
+        // No entry in libc_call_canonical for this call VA.
+        let ann = super::PrinterAnnotations::default();
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            Some(&symbols),
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(
+            output.contains("my_user_func("),
+            "non-libc call must render as the raw symbol name: {output}",
         );
     }
 

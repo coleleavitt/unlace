@@ -149,9 +149,33 @@ pub enum HirNode {
     /// latch (do-while), skipping the rest of the loop body.
     Continue,
 
+    /// A `try { } catch (T e) { } [catch (T2 e) { } …]` construct.
+    ///
+    /// Each catch arm pairs an exception type with its handler body.
+    /// A type of [`Type::Primitive(PrimitiveType::Unknown)`] denotes a
+    /// catch-all handler — the C printer renders it as `catch (...)`.
+    ///
+    /// MSVC SEH lowering (t183) emits this variant when a try-block map
+    /// entry has one or more typed handlers. The historical
+    /// landing-pad-driven structurer also emits it with a single
+    /// catch-all arm to model C++ EH cleanup regions (the printer in
+    /// turn emits these as `__except` for back-compat with the previous
+    /// fixed-shape rendering).
     TryCatch {
         try_body: Vec<HirNode>,
-        catch_body: Vec<HirNode>,
+        catch_arms: Vec<(Type, Vec<HirNode>)>,
+    },
+
+    /// An MSVC `__try { } __finally { }` construct.
+    ///
+    /// Recovered by [`crate::structurer::wrap_seh_try_finally`] from the
+    /// MSVC SEH unwind-map metadata decoded in
+    /// [`unlace_loader::seh`]. Distinct from [`HirNode::TryCatch`] because
+    /// `__finally` always runs (normal flow *or* exception flow) and so
+    /// has no exception-type parameter.
+    TryFinally {
+        try_body: Vec<HirNode>,
+        finally_body: Vec<HirNode>,
     },
 
     /// A wrapper that attaches free-form C comments to an inner node.

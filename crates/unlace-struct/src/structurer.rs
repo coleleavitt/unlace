@@ -238,9 +238,16 @@ fn wrap_try_catch(
     if try_body.is_empty() {
         result.extend(catch_body);
     } else {
+        // Landing-pad recovery produces a single catch-all arm. The
+        // typed-catch shape (`Vec<(Type, Vec<HirNode>)>`) is the t183
+        // generalisation; `PrimitiveType::Unknown` is the printer's
+        // sentinel for `catch (...)`.
+        let catch_all = unlace_ir::types::Type::Primitive(
+            unlace_ir::ssa::PrimitiveType::Unknown,
+        );
         result.push(HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms: vec![(catch_all, catch_body)],
         });
     }
 
@@ -316,10 +323,20 @@ fn recurse_try_catch_children(
         },
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => HirNode::TryCatch {
             try_body: wrap_try_catch(try_body, landing_pad_addrs, func),
-            catch_body: wrap_try_catch(catch_body, landing_pad_addrs, func),
+            catch_arms: catch_arms
+                .into_iter()
+                .map(|(ty, body)| (ty, wrap_try_catch(body, landing_pad_addrs, func)))
+                .collect(),
+        },
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => HirNode::TryFinally {
+            try_body: wrap_try_catch(try_body, landing_pad_addrs, func),
+            finally_body: wrap_try_catch(finally_body, landing_pad_addrs, func),
         },
         other => other,
     }
@@ -1729,10 +1746,19 @@ fn collect_used_labels(nodes: &[HirNode], used: &mut BTreeSet<LabelId>) {
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 collect_used_labels(try_body, used);
-                collect_used_labels(catch_body, used);
+                for (_ty, body) in catch_arms {
+                    collect_used_labels(body, used);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_used_labels(try_body, used);
+                collect_used_labels(finally_body, used);
             }
             _ => {}
         }
@@ -1771,10 +1797,19 @@ fn remove_labels_not_in(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 remove_labels_not_in(try_body, used);
-                remove_labels_not_in(catch_body, used);
+                for (_ty, body) in catch_arms {
+                    remove_labels_not_in(body, used);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                remove_labels_not_in(try_body, used);
+                remove_labels_not_in(finally_body, used);
             }
             _ => {}
         }
@@ -1847,10 +1882,19 @@ fn fold_guarded_ternary_in_children(node: &mut HirNode) {
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => {
             fold_guarded_ternary(try_body);
-            fold_guarded_ternary(catch_body);
+            for (_ty, body) in catch_arms {
+                fold_guarded_ternary(body);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            fold_guarded_ternary(try_body);
+            fold_guarded_ternary(finally_body);
         }
         HirNode::Commented { inner, .. } => fold_guarded_ternary_in_children(inner),
         HirNode::GuardedIf {
@@ -2257,10 +2301,19 @@ fn collect_hir_defs_inner(nodes: &[HirNode], defs: &mut BTreeMap<Varnode, IrInsn
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 collect_hir_defs_inner(try_body, defs);
-                collect_hir_defs_inner(catch_body, defs);
+                for (_ty, body) in catch_arms {
+                    collect_hir_defs_inner(body, defs);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_hir_defs_inner(try_body, defs);
+                collect_hir_defs_inner(finally_body, defs);
             }
             _ => {}
         }
@@ -2294,10 +2347,19 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => {
             recover_for_loops(try_body);
-            recover_for_loops(catch_body);
+            for (_ty, body) in catch_arms {
+                recover_for_loops(body);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            recover_for_loops(try_body);
+            recover_for_loops(finally_body);
         }
         HirNode::Commented { inner, .. } => recover_for_loops_in_children(inner),
         HirNode::GuardedIf {
@@ -3572,9 +3634,10 @@ mod tests {
                 match n {
                     HirNode::TryCatch {
                         try_body,
-                        catch_body,
+                        catch_arms,
                     } => {
-                        return Some((try_body, catch_body));
+                        let arm = catch_arms.first().expect("at least one catch arm");
+                        return Some((try_body, &arm.1));
                     }
                     HirNode::Block(inner) => {
                         if let Some(tc) = get_try_catch(inner) {
@@ -3676,8 +3739,18 @@ mod tests {
                 .map(|n| match n {
                     HirNode::TryCatch {
                         try_body,
-                        catch_body,
-                    } => 1 + count_try_catch(try_body) + count_try_catch(catch_body),
+                        catch_arms,
+                    } => {
+                        1 + count_try_catch(try_body)
+                            + catch_arms
+                                .iter()
+                                .map(|(_, body)| count_try_catch(body))
+                                .sum::<usize>()
+                    }
+                    HirNode::TryFinally {
+                        try_body,
+                        finally_body,
+                    } => 1 + count_try_catch(try_body) + count_try_catch(finally_body),
                     HirNode::Block(inner) => count_try_catch(inner),
                     _ => 0,
                 })
@@ -4137,8 +4210,18 @@ mod tests {
                 }
                 HirNode::TryCatch {
                     try_body,
-                    catch_body,
-                } => count_returns(try_body) + count_returns(catch_body),
+                    catch_arms,
+                } => {
+                    count_returns(try_body)
+                        + catch_arms
+                            .iter()
+                            .map(|(_, body)| count_returns(body))
+                            .sum::<usize>()
+                }
+                HirNode::TryFinally {
+                    try_body,
+                    finally_body,
+                } => count_returns(try_body) + count_returns(finally_body),
                 _ => 0,
             })
             .sum()
@@ -4246,8 +4329,18 @@ mod tests {
                 }
                 HirNode::TryCatch {
                     try_body,
-                    catch_body,
-                } => count_gotos(try_body) + count_gotos(catch_body),
+                    catch_arms,
+                } => {
+                    count_gotos(try_body)
+                        + catch_arms
+                            .iter()
+                            .map(|(_, body)| count_gotos(body))
+                            .sum::<usize>()
+                }
+                HirNode::TryFinally {
+                    try_body,
+                    finally_body,
+                } => count_gotos(try_body) + count_gotos(finally_body),
                 HirNode::For { body, .. } => count_gotos(body),
                 _ => 0,
             })
@@ -4272,8 +4365,18 @@ mod tests {
                 }
                 HirNode::TryCatch {
                     try_body,
-                    catch_body,
-                } => count_labels(try_body) + count_labels(catch_body),
+                    catch_arms,
+                } => {
+                    count_labels(try_body)
+                        + catch_arms
+                            .iter()
+                            .map(|(_, body)| count_labels(body))
+                            .sum::<usize>()
+                }
+                HirNode::TryFinally {
+                    try_body,
+                    finally_body,
+                } => count_labels(try_body) + count_labels(finally_body),
                 HirNode::For { body, .. } => count_labels(body),
                 _ => 0,
             })

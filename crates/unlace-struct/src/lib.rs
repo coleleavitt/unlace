@@ -17,6 +17,7 @@ pub mod label_cleanup;
 pub mod label_hoist;
 pub mod node_split;
 pub mod return_merge;
+pub mod seh_lower;
 pub mod short_circuit;
 pub mod structurer;
 pub mod switch_recovery;
@@ -40,6 +41,7 @@ pub use label_cleanup::cleanup_unreachable_labels;
 pub use label_hoist::hoist_cross_branch_labels;
 pub use node_split::split_irreducible_entries;
 pub use return_merge::return_merge;
+pub use seh_lower::{AddrRange, SehCatchArm, SehHandler, SehRegion, catch_all_type, wrap_seh_regions};
 pub use short_circuit::short_circuit_recovery;
 pub use structurer::{
     StructureError, recover_for_loops, structure, structure_preserve_returns,

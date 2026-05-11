@@ -49,10 +49,19 @@ fn cleanup_children(node: &mut HirNode) {
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => {
             cleanup_scope(try_body);
-            cleanup_scope(catch_body);
+            for (_ty, body) in catch_arms {
+                cleanup_scope(body);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            cleanup_scope(try_body);
+            cleanup_scope(finally_body);
         }
         _ => {}
     }
@@ -204,10 +213,19 @@ fn collect_label_positions_in_node(
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => {
             collect_label_positions(try_body, pos, labels);
-            collect_label_positions(catch_body, pos, labels);
+            for (_ty, body) in catch_arms {
+                collect_label_positions(body, pos, labels);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            collect_label_positions(try_body, pos, labels);
+            collect_label_positions(finally_body, pos, labels);
         }
         _ => {}
     }
@@ -264,10 +282,19 @@ fn retain_nonforward_gotos_in_node(
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => {
             retain_nonforward_gotos(try_body, pos, labels);
-            retain_nonforward_gotos(catch_body, pos, labels);
+            for (_ty, body) in catch_arms {
+                retain_nonforward_gotos(body, pos, labels);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            retain_nonforward_gotos(try_body, pos, labels);
+            retain_nonforward_gotos(finally_body, pos, labels);
         }
         _ => {}
     }
@@ -311,10 +338,19 @@ fn collect_gotos(nodes: &[HirNode], used: &mut BTreeSet<LabelId>) {
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 collect_gotos(try_body, used);
-                collect_gotos(catch_body, used);
+                for (_ty, body) in catch_arms {
+                    collect_gotos(body, used);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_gotos(try_body, used);
+                collect_gotos(finally_body, used);
             }
             _ => {}
         }

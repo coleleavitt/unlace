@@ -33,7 +33,11 @@ enum ScopeStep {
     SwitchCase(usize, usize),
     SwitchDefault(usize),
     Try(usize),
-    Catch(usize),
+    /// `(node_index, arm_index)` — selects the `arm_index`-th catch arm
+    /// of a [`HirNode::TryCatch`] at `node_index`.
+    Catch(usize, usize),
+    /// Finally block of a [`HirNode::TryFinally`] at `node_index`.
+    Finally(usize),
 }
 
 type ScopePath = Vec<ScopeStep>;
@@ -181,13 +185,26 @@ fn collect_positions(
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 scope.push(ScopeStep::Try(index));
                 collect_positions(try_body, scope, labels, gotos);
                 scope.pop();
-                scope.push(ScopeStep::Catch(index));
-                collect_positions(catch_body, scope, labels, gotos);
+                for (arm_idx, (_ty, body)) in catch_arms.iter().enumerate() {
+                    scope.push(ScopeStep::Catch(index, arm_idx));
+                    collect_positions(body, scope, labels, gotos);
+                    scope.pop();
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                scope.push(ScopeStep::Try(index));
+                collect_positions(try_body, scope, labels, gotos);
+                scope.pop();
+                scope.push(ScopeStep::Finally(index));
+                collect_positions(finally_body, scope, labels, gotos);
                 scope.pop();
             }
             _ => {}
@@ -278,10 +295,15 @@ fn scope_ref<'a>(nodes: &'a [HirNode], path: &[ScopeStep]) -> Option<&'a [HirNod
             },
             ScopeStep::Try(index) => match current.get(*index)? {
                 HirNode::TryCatch { try_body, .. } => try_body,
+                HirNode::TryFinally { try_body, .. } => try_body,
                 _ => return None,
             },
-            ScopeStep::Catch(index) => match current.get(*index)? {
-                HirNode::TryCatch { catch_body, .. } => catch_body,
+            ScopeStep::Catch(index, arm_index) => match current.get(*index)? {
+                HirNode::TryCatch { catch_arms, .. } => &catch_arms.get(*arm_index)?.1,
+                _ => return None,
+            },
+            ScopeStep::Finally(index) => match current.get(*index)? {
+                HirNode::TryFinally { finally_body, .. } => finally_body,
                 _ => return None,
             },
         };
@@ -327,10 +349,15 @@ fn scope_mut<'a>(nodes: &'a mut Vec<HirNode>, path: &[ScopeStep]) -> Option<&'a 
             },
             ScopeStep::Try(index) => match current.get_mut(*index)? {
                 HirNode::TryCatch { try_body, .. } => try_body,
+                HirNode::TryFinally { try_body, .. } => try_body,
                 _ => return None,
             },
-            ScopeStep::Catch(index) => match current.get_mut(*index)? {
-                HirNode::TryCatch { catch_body, .. } => catch_body,
+            ScopeStep::Catch(index, arm_index) => match current.get_mut(*index)? {
+                HirNode::TryCatch { catch_arms, .. } => &mut catch_arms.get_mut(*arm_index)?.1,
+                _ => return None,
+            },
+            ScopeStep::Finally(index) => match current.get_mut(*index)? {
+                HirNode::TryFinally { finally_body, .. } => finally_body,
                 _ => return None,
             },
         };

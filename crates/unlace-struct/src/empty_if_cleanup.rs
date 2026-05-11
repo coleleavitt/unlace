@@ -116,10 +116,20 @@ fn cleanup_node(
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => out.push(HirNode::TryCatch {
             try_body: cleanup_scope(try_body, func, synth),
-            catch_body: cleanup_scope(catch_body, func, synth),
+            catch_arms: catch_arms
+                .into_iter()
+                .map(|(ty, body)| (ty, cleanup_scope(body, func, synth)))
+                .collect(),
+        }),
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => out.push(HirNode::TryFinally {
+            try_body: cleanup_scope(try_body, func, synth),
+            finally_body: cleanup_scope(finally_body, func, synth),
         }),
         other => out.push(other),
     }

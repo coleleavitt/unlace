@@ -66,10 +66,20 @@ fn remove_backedges_visible_from_scope(nodes: &mut Vec<HirNode>, inherited: &BTr
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 remove_backedges_visible_from_scope(try_body, &visible);
-                remove_backedges_visible_from_scope(catch_body, &visible);
+                for (_ty, body) in catch_arms.iter_mut() {
+                    remove_backedges_visible_from_scope(body, &visible);
+                }
+                retained.push(node);
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                remove_backedges_visible_from_scope(try_body, &visible);
+                remove_backedges_visible_from_scope(finally_body, &visible);
                 retained.push(node);
             }
             _ => retained.push(node),
@@ -127,10 +137,19 @@ fn collapse_label_clusters(nodes: &mut Vec<HirNode>, aliases: &mut BTreeMap<Labe
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 collapse_label_clusters(try_body, aliases);
-                collapse_label_clusters(catch_body, aliases);
+                for (_ty, body) in catch_arms {
+                    collapse_label_clusters(body, aliases);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collapse_label_clusters(try_body, aliases);
+                collapse_label_clusters(finally_body, aliases);
             }
             _ => {}
         }
@@ -167,10 +186,19 @@ fn rewrite_gotos(nodes: &mut [HirNode], aliases: &BTreeMap<LabelId, LabelId>) {
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 rewrite_gotos(try_body, aliases);
-                rewrite_gotos(catch_body, aliases);
+                for (_ty, body) in catch_arms {
+                    rewrite_gotos(body, aliases);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                rewrite_gotos(try_body, aliases);
+                rewrite_gotos(finally_body, aliases);
             }
             _ => {}
         }
@@ -220,10 +248,19 @@ fn collect_gotos(nodes: &[HirNode], used: &mut BTreeSet<LabelId>) {
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 collect_gotos(try_body, used);
-                collect_gotos(catch_body, used);
+                for (_ty, body) in catch_arms {
+                    collect_gotos(body, used);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_gotos(try_body, used);
+                collect_gotos(finally_body, used);
             }
             _ => {}
         }
@@ -260,10 +297,19 @@ fn remove_unused_labels(nodes: &mut Vec<HirNode>, used: &BTreeSet<LabelId>) {
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 remove_unused_labels(try_body, used);
-                remove_unused_labels(catch_body, used);
+                for (_ty, body) in catch_arms {
+                    remove_unused_labels(body, used);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                remove_unused_labels(try_body, used);
+                remove_unused_labels(finally_body, used);
             }
             _ => {}
         }

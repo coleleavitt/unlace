@@ -129,10 +129,20 @@ fn simplify_node(node: HirNode, def_map: &BTreeMap<SsaVarnode, IrInsn>) -> HirNo
         },
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => HirNode::TryCatch {
             try_body: simplify_nodes(try_body, def_map),
-            catch_body: simplify_nodes(catch_body, def_map),
+            catch_arms: catch_arms
+                .into_iter()
+                .map(|(ty, body)| (ty, simplify_nodes(body, def_map)))
+                .collect(),
+        },
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => HirNode::TryFinally {
+            try_body: simplify_nodes(try_body, def_map),
+            finally_body: simplify_nodes(finally_body, def_map),
         },
         other => other,
     }
@@ -273,10 +283,20 @@ fn flatten_node(node: HirNode) -> HirNode {
         },
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => HirNode::TryCatch {
             try_body: flatten_nodes(try_body),
-            catch_body: flatten_nodes(catch_body),
+            catch_arms: catch_arms
+                .into_iter()
+                .map(|(ty, body)| (ty, flatten_nodes(body)))
+                .collect(),
+        },
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => HirNode::TryFinally {
+            try_body: flatten_nodes(try_body),
+            finally_body: flatten_nodes(finally_body),
         },
         other => other,
     }

@@ -439,13 +439,32 @@ fn refine_node(
         },
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => HirNode::TryCatch {
             try_body: try_body
                 .into_iter()
                 .map(|c| refine_node(c, tables, sections))
                 .collect(),
-            catch_body: catch_body
+            catch_arms: catch_arms
+                .into_iter()
+                .map(|(ty, body)| {
+                    let body = body
+                        .into_iter()
+                        .map(|c| refine_node(c, tables, sections))
+                        .collect();
+                    (ty, body)
+                })
+                .collect(),
+        },
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => HirNode::TryFinally {
+            try_body: try_body
+                .into_iter()
+                .map(|c| refine_node(c, tables, sections))
+                .collect(),
+            finally_body: finally_body
                 .into_iter()
                 .map(|c| refine_node(c, tables, sections))
                 .collect(),

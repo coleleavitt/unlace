@@ -181,11 +181,24 @@ fn recover_into(
 
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => {
             out.push(HirNode::TryCatch {
                 try_body: recover_short_circuits(try_body, func, ctr),
-                catch_body: recover_short_circuits(catch_body, func, ctr),
+                catch_arms: catch_arms
+                    .into_iter()
+                    .map(|(ty, body)| (ty, recover_short_circuits(body, func, ctr)))
+                    .collect(),
+            });
+        }
+
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            out.push(HirNode::TryFinally {
+                try_body: recover_short_circuits(try_body, func, ctr),
+                finally_body: recover_short_circuits(finally_body, func, ctr),
             });
         }
 

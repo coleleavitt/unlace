@@ -84,6 +84,25 @@ pub enum Type {
         name: String,
         methods: Vec<InterfaceMethod>,
     },
+    /// Go slice header `{ ptr *T; len int; cap int }`. Recovered from
+    /// `runtime.slicetype` records (t191). `elem` is the slice's element
+    /// type; the printer renders this as Go-style `[]elem` in
+    /// recovered-type preamble comments.
+    ///
+    /// Storage layout is three words on 64-bit targets (24 bytes), but
+    /// the variant itself encodes only the element shape — the loader
+    /// keeps the `*runtime._type` shape opaque so consumers can decide
+    /// whether to surface it as a C struct or a Go-source comment.
+    Slice { elem: Box<Type> },
+    /// Go map type `map[K]V`. Recovered from `runtime.maptype` records
+    /// (t191). The map is referenced as a single pointer at the value
+    /// level (`*hmap`), but the *type* variant carries both the key and
+    /// value shapes so the printer can render Go-style `map[K]V`
+    /// comments.
+    Map {
+        key: Box<Type>,
+        value: Box<Type>,
+    },
 }
 
 /// A single field within a [`Type::Struct`].
@@ -131,9 +150,16 @@ impl Type {
         matches!(self, Type::Ptr(_) | Type::Primitive(PrimitiveType::Ptr))
     }
 
-    /// `true` when this type contains nested fields (struct or array).
+    /// `true` when this type contains nested fields (struct or array,
+    /// or Go-recovered slice/map shapes).
     pub fn is_composite(&self) -> bool {
-        matches!(self, Type::Struct { .. } | Type::Array { .. })
+        matches!(
+            self,
+            Type::Struct { .. }
+                | Type::Array { .. }
+                | Type::Slice { .. }
+                | Type::Map { .. }
+        )
     }
 
     /// Storage size in bytes, when statically known.
@@ -171,6 +197,14 @@ impl Type {
             // 16 bytes on 64-bit targets. The interface *type* (this
             // variant) describes the method set, not the value layout.
             Type::Interface { .. } => Some(16),
+            // A Go slice header is three machine words on 64-bit
+            // targets — `{ ptr, len, cap }` — so the value-level
+            // footprint is 24 bytes regardless of element shape.
+            Type::Slice { .. } => Some(24),
+            // A Go map value is a single `*hmap` pointer (8 bytes on
+            // 64-bit targets); the map *type* variant only records the
+            // K/V shapes used by the printer.
+            Type::Map { .. } => Some(8),
         }
     }
 
@@ -335,6 +369,11 @@ impl fmt::Display for Type {
             // type still typechecks; the Go-style `interface { … }` text is
             // emitted as a comment by the printer (see `render_go_interface`).
             Type::Interface { .. } => f.write_str("void *"),
+            // Go-style slice and map renderings — the printer surfaces
+            // these directly in recovered-type preamble comments
+            // (`// type_0x…: []int` / `// type_0x…: map[K]V`).
+            Type::Slice { elem } => write!(f, "[]{elem}"),
+            Type::Map { key, value } => write!(f, "map[{key}]{value}"),
         }
     }
 }
@@ -536,5 +575,52 @@ mod tests {
     fn to_c_string_matches_display() {
         let t = Type::ptr_to(Type::int(4));
         assert_eq!(t.to_c_string(), t.to_string());
+    }
+
+    // ── t191: Go slice / map rendering ─────────────────────────────
+
+    #[test]
+    fn t191_slice_display_go_style() {
+        let s = Type::Slice {
+            elem: Box::new(Type::int(4)),
+        };
+        // The `int(4)` primitive renders as `__int32` in C; the slice
+        // wrapper inherits that rendering and prefixes `[]` Go-style.
+        assert_eq!(s.to_string(), "[]__int32");
+        assert!(s.is_composite());
+        // Slice header is three 64-bit words.
+        assert_eq!(s.size(), Some(24));
+    }
+
+    #[test]
+    fn t191_map_display_go_style() {
+        let m = Type::Map {
+            key: Box::new(Type::Primitive(PrimitiveType::Ptr)),
+            value: Box::new(Type::int(4)),
+        };
+        assert_eq!(m.to_string(), "map[void *]__int32");
+        assert!(m.is_composite());
+        // Map is a single `*hmap` pointer at the value level.
+        assert_eq!(m.size(), Some(8));
+    }
+
+    #[test]
+    fn t191_nested_map_of_slices() {
+        // map[int]map[int8][]int — exercises both nested-map and
+        // slice-as-value rendering.
+        let inner = Type::Map {
+            key: Box::new(Type::int(1)),
+            value: Box::new(Type::Slice {
+                elem: Box::new(Type::int(4)),
+            }),
+        };
+        let outer = Type::Map {
+            key: Box::new(Type::int(4)),
+            value: Box::new(inner),
+        };
+        assert_eq!(
+            outer.to_string(),
+            "map[__int32]map[__int8][]__int32",
+        );
     }
 }

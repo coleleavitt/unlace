@@ -524,13 +524,147 @@ pub fn go_interface_to_type(go_type: &GoType) -> Option<unlace_ir::types::Type> 
     })
 }
 
+/// Convert a decoded [`GoType`] of [`GoKind::Slice`] into the
+/// composite [`unlace_ir::types::Type::Slice`] consumed by the C
+/// printer (t191). Returns `None` for any other kind, or when the
+/// resolver can't decode the element type.
+///
+/// `resolve_elem` is a caller-supplied closure that maps an element
+/// VA to its already-recovered [`unlace_ir::types::Type`]. The
+/// `populate_go_types_from_module` driver supplies a recursive
+/// resolver that re-enters `parse_type_at` for nested shapes; tests
+/// can supply a stub returning the element type directly.
+pub fn go_slice_to_type(
+    go_type: &GoType,
+    resolve_elem: &mut dyn FnMut(u64) -> Option<unlace_ir::types::Type>,
+) -> Option<unlace_ir::types::Type> {
+    let GoKind::Slice { elem_va } = &go_type.kind else {
+        return None;
+    };
+    let elem = resolve_elem(*elem_va)?;
+    Some(unlace_ir::types::Type::Slice {
+        elem: Box::new(elem),
+    })
+}
+
+/// Convert a decoded [`GoType`] of [`GoKind::Map`] into the composite
+/// [`unlace_ir::types::Type::Map`] consumed by the C printer (t191).
+/// Returns `None` for any other kind, or when either of the key/value
+/// types can't be resolved.
+pub fn go_map_to_type(
+    go_type: &GoType,
+    resolve: &mut dyn FnMut(u64) -> Option<unlace_ir::types::Type>,
+) -> Option<unlace_ir::types::Type> {
+    let GoKind::Map { key_va, elem_va, .. } = &go_type.kind else {
+        return None;
+    };
+    let key = resolve(*key_va)?;
+    let value = resolve(*elem_va)?;
+    Some(unlace_ir::types::Type::Map {
+        key: Box::new(key),
+        value: Box::new(value),
+    })
+}
+
+/// Map a Go basic-kind type to its primitive [`unlace_ir::types::Type`]
+/// rendering. Returns `None` for composite/unknown kinds — those need
+/// the recursive resolver to follow `*_type` pointers.
+fn basic_go_kind_to_type(go_type: &GoType) -> Option<unlace_ir::types::Type> {
+    use unlace_ir::ssa::PrimitiveType;
+    use unlace_ir::types::Type;
+    let prim = match &go_type.kind {
+        GoKind::Bool => PrimitiveType::Bool,
+        GoKind::Int8 => PrimitiveType::Int(1),
+        GoKind::Int16 => PrimitiveType::Int(2),
+        GoKind::Int32 => PrimitiveType::Int(4),
+        GoKind::Int64 | GoKind::Int | GoKind::Uintptr => PrimitiveType::Int(8),
+        GoKind::Uint8 => PrimitiveType::UnsignedInt(1),
+        GoKind::Uint16 => PrimitiveType::UnsignedInt(2),
+        GoKind::Uint32 => PrimitiveType::UnsignedInt(4),
+        GoKind::Uint64 | GoKind::Uint => PrimitiveType::UnsignedInt(8),
+        GoKind::Float32 => PrimitiveType::Float,
+        GoKind::Float64 => PrimitiveType::Double,
+        // Strings, unsafe.Pointer, and complex numbers don't have a
+        // direct primitive shape — render as `void *` so the recursive
+        // resolver can still type-check downstream slices/maps.
+        GoKind::String | GoKind::UnsafePointer | GoKind::Complex64 | GoKind::Complex128 => {
+            PrimitiveType::Ptr
+        }
+        _ => return None,
+    };
+    Some(Type::Primitive(prim))
+}
+
+/// Recursively resolve a Go `_type` at `va` to the richest matching
+/// [`unlace_ir::types::Type`]. Cycles are broken by a `seen` set so
+/// pathological inputs (mutually recursive struct definitions) can't
+/// loop the loader. Unreachable / undecodable shapes collapse to
+/// `None` so the caller can skip them.
+fn resolve_go_type_at(
+    image_data: &[u8],
+    sec_base: u64,
+    va: u64,
+    seen: &mut std::collections::BTreeSet<u64>,
+) -> Option<unlace_ir::types::Type> {
+    if va == 0 {
+        return None;
+    }
+    if !seen.insert(va) {
+        // Already resolving this VA — break the cycle with a `void *`
+        // placeholder so the outer call still produces a usable type.
+        return Some(unlace_ir::types::Type::void_ptr());
+    }
+    let sec_data_len = image_data.len() as u64;
+    let va_to_offset = |a: u64| {
+        if a >= sec_base && a < sec_base.saturating_add(sec_data_len) {
+            Some((a - sec_base) as usize)
+        } else {
+            None
+        }
+    };
+    let t = parse_type_at(image_data, va, va_to_offset)?;
+
+    if let Some(prim) = basic_go_kind_to_type(&t) {
+        seen.remove(&va);
+        return Some(prim);
+    }
+
+    let result = match &t.kind {
+        GoKind::Slice { elem_va } => {
+            let elem = resolve_go_type_at(image_data, sec_base, *elem_va, seen)
+                .unwrap_or_else(unlace_ir::types::Type::void_ptr);
+            Some(unlace_ir::types::Type::Slice {
+                elem: Box::new(elem),
+            })
+        }
+        GoKind::Map { key_va, elem_va, .. } => {
+            let key = resolve_go_type_at(image_data, sec_base, *key_va, seen)
+                .unwrap_or_else(unlace_ir::types::Type::void_ptr);
+            let value = resolve_go_type_at(image_data, sec_base, *elem_va, seen)
+                .unwrap_or_else(unlace_ir::types::Type::void_ptr);
+            Some(unlace_ir::types::Type::Map {
+                key: Box::new(key),
+                value: Box::new(value),
+            })
+        }
+        GoKind::Interface { .. } => go_interface_to_type(&t),
+        // Pointer / array / struct / func / chan resolution is out of
+        // scope for t191 — surface them as opaque `void *` so a
+        // map/slice that references them still registers cleanly.
+        _ => Some(unlace_ir::types::Type::void_ptr()),
+    };
+    seen.remove(&va);
+    result
+}
+
 /// Walk every offset in `image.go_module.typelinks`, decode the pointed-to
-/// `_type`, and register each [`GoKind::Interface`] hit in
-/// `image.go_types` keyed by its absolute VA (t181).
+/// `_type`, and register each interface / slice / map hit in
+/// `image.go_types` keyed by its absolute VA (t181 / t191).
 ///
 /// No-op when the binary isn't Go (no `go_module`) or when `types_va` is
-/// unreachable. Non-interface kinds are skipped — this map is the
-/// printer's interface registry, not a general Go-type registry.
+/// unreachable. Kinds outside the interface / slice / map set are
+/// skipped — this map is the printer's recovered-Go-type registry,
+/// not a general type registry.
 pub fn populate_go_types_from_module(image: &mut crate::image::BinaryImage) {
     let Some(module) = image.go_module.as_ref() else {
         return;
@@ -558,8 +692,28 @@ pub fn populate_go_types_from_module(image: &mut crate::image::BinaryImage) {
         }) else {
             continue;
         };
-        if let Some(iface_ty) = go_interface_to_type(&t) {
-            image.go_types.insert(va, iface_ty);
+        match &t.kind {
+            GoKind::Interface { .. } => {
+                if let Some(iface_ty) = go_interface_to_type(&t) {
+                    image.go_types.insert(va, iface_ty);
+                }
+            }
+            GoKind::Slice { .. } | GoKind::Map { .. } => {
+                let mut seen = std::collections::BTreeSet::new();
+                seen.insert(va);
+                let mut resolve = |a: u64| {
+                    resolve_go_type_at(&sec_data, sec_base, a, &mut seen)
+                };
+                let recovered = match &t.kind {
+                    GoKind::Slice { .. } => go_slice_to_type(&t, &mut resolve),
+                    GoKind::Map { .. } => go_map_to_type(&t, &mut resolve),
+                    _ => unreachable!(),
+                };
+                if let Some(ty) = recovered {
+                    image.go_types.insert(va, ty);
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -1251,5 +1405,260 @@ mod tests {
 
         // VA outside any mapped section returns None.
         assert!(parse_itab_at(&img, 0xDEAD_BEEF).is_none());
+    }
+
+    // ---------------------------------------------------------------
+    // t191 — `go_slice_to_type` / `go_map_to_type` registration.
+    //
+    // Each test stubs a resolver closure so the helpers don't need a
+    // full `BinaryImage` to verify the conversion contract; one end-
+    // to-end test then drives the populate path through a hand-rolled
+    // typelinks blob.
+    // ---------------------------------------------------------------
+
+    /// t191 — `[]int` (slice of 32-bit int) lifts to `Type::Slice` whose
+    /// element is the matching primitive. Verifies the registry key is
+    /// the slice's own VA — element types live independently.
+    #[test]
+    fn t191_go_slice_of_int_registered() {
+        use unlace_ir::ssa::PrimitiveType;
+        use unlace_ir::types::Type;
+        let go_type = GoType {
+            va: 0x5000,
+            size: 24,
+            kind: GoKind::Slice { elem_va: 0x6000 },
+            name: Some("[]int".into()),
+        };
+        // Resolver stub: any non-zero VA → int32 primitive.
+        let mut resolve = |va: u64| {
+            assert_eq!(va, 0x6000, "resolver should be called with elem_va");
+            Some(Type::Primitive(PrimitiveType::Int(4)))
+        };
+        let ty = go_slice_to_type(&go_type, &mut resolve).expect("slice converts");
+        match &ty {
+            Type::Slice { elem } => {
+                assert_eq!(**elem, Type::Primitive(PrimitiveType::Int(4)));
+            }
+            other => panic!("expected Type::Slice, got {other:?}"),
+        }
+        // The slice itself renders as `[]__int32`.
+        assert_eq!(ty.to_string(), "[]__int32");
+    }
+
+    /// t191 — `map[string]int` lifts to `Type::Map` with both K and V
+    /// resolved through the supplied closure. String maps to `void *`
+    /// since Go strings don't have a single C-primitive shape.
+    #[test]
+    fn t191_go_map_string_int_registered() {
+        use unlace_ir::ssa::PrimitiveType;
+        use unlace_ir::types::Type;
+        let go_type = GoType {
+            va: 0x7000,
+            size: 8,
+            kind: GoKind::Map {
+                key_va: 0x7100,
+                elem_va: 0x7200,
+                bucket_va: 0,
+                hasher_va: 0,
+                key_size: 16,
+                value_size: 8,
+                bucket_size: 0,
+                flags: 0,
+            },
+            name: Some("map[string]int".into()),
+        };
+        let mut resolve = |va: u64| match va {
+            0x7100 => Some(Type::Primitive(PrimitiveType::Ptr)),
+            0x7200 => Some(Type::Primitive(PrimitiveType::Int(4))),
+            _ => None,
+        };
+        let ty = go_map_to_type(&go_type, &mut resolve).expect("map converts");
+        match &ty {
+            Type::Map { key, value } => {
+                assert_eq!(**key, Type::Primitive(PrimitiveType::Ptr));
+                assert_eq!(**value, Type::Primitive(PrimitiveType::Int(4)));
+            }
+            other => panic!("expected Type::Map, got {other:?}"),
+        }
+        assert_eq!(ty.to_string(), "map[void *]__int32");
+    }
+
+    /// t191 — map of `S → []int` (struct keys, slice values). Verifies
+    /// that the resolver may return composite shapes (here a slice)
+    /// without breaking the outer map conversion.
+    #[test]
+    fn t191_go_map_struct_to_slice() {
+        use unlace_ir::ssa::PrimitiveType;
+        use unlace_ir::types::{StructFieldType, Type};
+        let go_type = GoType {
+            va: 0x8000,
+            size: 8,
+            kind: GoKind::Map {
+                key_va: 0x8100,
+                elem_va: 0x8200,
+                bucket_va: 0,
+                hasher_va: 0,
+                key_size: 8,
+                value_size: 24,
+                bucket_size: 0,
+                flags: 0,
+            },
+            name: Some("map[S][]int".into()),
+        };
+        let key_struct = Type::Struct {
+            name: "S".into(),
+            fields: vec![StructFieldType {
+                name: "x".into(),
+                ty: Type::int(4),
+                offset: 0,
+            }],
+        };
+        let value_slice = Type::Slice {
+            elem: Box::new(Type::Primitive(PrimitiveType::Int(4))),
+        };
+        let mut resolve = |va: u64| match va {
+            0x8100 => Some(key_struct.clone()),
+            0x8200 => Some(value_slice.clone()),
+            _ => None,
+        };
+        let ty = go_map_to_type(&go_type, &mut resolve).expect("map converts");
+        match &ty {
+            Type::Map { key, value } => {
+                assert!(matches!(&**key, Type::Struct { name, .. } if name == "S"));
+                assert!(matches!(&**value, Type::Slice { .. }));
+            }
+            other => panic!("expected Type::Map, got {other:?}"),
+        }
+        assert_eq!(ty.to_string(), "map[struct S][]__int32");
+    }
+
+    /// t191 — nested `map[int]map[int8]int32` round-trips through
+    /// `populate_go_types_from_module`. Builds a synthetic rodata blob
+    /// containing two `_type` headers (outer map at offset 0, inner at
+    /// `INNER_OFF`) plus the primitive headers they reference, then
+    /// drives the full populate path and checks the resulting
+    /// `Type::Map`'s nested rendering.
+    #[test]
+    fn t191_populate_nested_map_via_typelinks() {
+        use std::collections::BTreeMap;
+        use unlace_ir::ssa::PrimitiveType;
+        use unlace_ir::types::Type;
+        use unlace_ir::ArchId;
+        use crate::Endian;
+        use crate::go_moduledata::GoModuleInfo;
+        use crate::image::{BinaryImage, Section, SectionFlags};
+
+        // Layout inside a single .rodata section based at RODATA_BASE.
+        // The offsets are chosen so each `_type` header (48 bytes) plus
+        // its tail fits before the next one starts.
+        const RODATA_BASE: u64 = 0x10000;
+        const OUTER_MAP_OFF: u64 = 0x000;
+        const INNER_MAP_OFF: u64 = 0x100;
+        const INT32_OFF: u64 = 0x200;
+        const INT8_OFF: u64 = 0x280;
+
+        let outer_map_va = RODATA_BASE + OUTER_MAP_OFF;
+        let inner_map_va = RODATA_BASE + INNER_MAP_OFF;
+        let int32_va = RODATA_BASE + INT32_OFF;
+        let int8_va = RODATA_BASE + INT8_OFF;
+
+        let mut rodata = vec![0u8; 0x400];
+
+        // Helper to splice a `_type` head at a given offset.
+        let write_head_at = |buf: &mut [u8], off: usize, size: u64, kind: u8| {
+            buf[off..off + 8].copy_from_slice(&size.to_le_bytes()); // size
+            // ptrdata, hash, tflag/align/fieldAlign, kind, equal,
+            // gcdata, str, ptrToThis — all zero except `kind` at +23.
+            buf[off + 23] = kind;
+        };
+
+        // int32 (kind=5), int8 (kind=3) primitive headers.
+        write_head_at(&mut rodata, INT32_OFF as usize, 4, 5);
+        write_head_at(&mut rodata, INT8_OFF as usize, 1, 3);
+
+        // Inner map: map[int8]int32 (kind=21).
+        write_head_at(&mut rodata, INNER_MAP_OFF as usize, 8, 21);
+        let inner_tail = INNER_MAP_OFF as usize + TYPE_HEAD_SIZE;
+        rodata[inner_tail..inner_tail + 8].copy_from_slice(&int8_va.to_le_bytes());
+        rodata[inner_tail + 8..inner_tail + 16].copy_from_slice(&int32_va.to_le_bytes());
+        // bucket_va, hasher_va: zero. key_size/value_size/bucket_size/flags: zero.
+
+        // Outer map: map[int32]<inner-map> (kind=21).
+        write_head_at(&mut rodata, OUTER_MAP_OFF as usize, 8, 21);
+        let outer_tail = OUTER_MAP_OFF as usize + TYPE_HEAD_SIZE;
+        rodata[outer_tail..outer_tail + 8].copy_from_slice(&int32_va.to_le_bytes());
+        rodata[outer_tail + 8..outer_tail + 16].copy_from_slice(&inner_map_va.to_le_bytes());
+
+        let mut img = BinaryImage {
+            arch: ArchId::X86_64,
+            endian: Endian::Little,
+            entry: 0,
+            sections: vec![Section {
+                name: ".rodata".into(),
+                vaddr: RODATA_BASE,
+                size: rodata.len() as u64,
+                data: rodata,
+                flags: SectionFlags::READ,
+            }],
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: Vec::new(),
+            string_table: BTreeMap::new(),
+            tls_callbacks: Vec::new(),
+            function_starts: Vec::new(),
+            debug_records: Vec::new(),
+            load_config: None,
+            runtime_functions: Vec::new(),
+            resources: Vec::new(),
+            bound_imports: Vec::new(),
+            delay_imports: Vec::new(),
+            forwarded_exports: Vec::new(),
+            forwarded_resolutions: BTreeMap::new(),
+            rich_header: None,
+            dylibs: Vec::new(),
+            rpaths: Vec::new(),
+            pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: Some(GoModuleInfo {
+                types_va: RODATA_BASE,
+                etypes_va: RODATA_BASE + 0x400,
+                typelinks: vec![
+                    OUTER_MAP_OFF as i32,
+                    INNER_MAP_OFF as i32,
+                ],
+                ..GoModuleInfo::default()
+            }),
+            go_itabs: BTreeMap::new(),
+            go_types: BTreeMap::new(),
+        };
+
+        populate_go_types_from_module(&mut img);
+
+        // Outer map: map[int32]map[int8]int32.
+        let outer = img
+            .go_types
+            .get(&outer_map_va)
+            .expect("outer map registered");
+        match outer {
+            Type::Map { key, value } => {
+                assert_eq!(**key, Type::Primitive(PrimitiveType::Int(4)));
+                match &**value {
+                    Type::Map {
+                        key: ik,
+                        value: iv,
+                    } => {
+                        assert_eq!(**ik, Type::Primitive(PrimitiveType::Int(1)));
+                        assert_eq!(**iv, Type::Primitive(PrimitiveType::Int(4)));
+                    }
+                    other => panic!("expected nested Type::Map, got {other:?}"),
+                }
+            }
+            other => panic!("expected Type::Map at outer VA, got {other:?}"),
+        }
+        assert_eq!(outer.to_string(), "map[__int32]map[__int8]__int32");
+
+        // Inner map should also be independently registered.
+        assert!(img.go_types.contains_key(&inner_map_va));
     }
 }

@@ -68,6 +68,11 @@ pub fn structure_with_arch(
     let mut body = ctx.structure_region(entry);
     strip_unused_labels(&mut body);
     recover_for_loops(&mut body);
+    // t189: AArch64 CMP+Bcc → HirNode::IfCmp fold. Runs after region
+    // structuring so the pass sees the `Block([pre_stmts…, If {…}])` shapes
+    // that `try_structure_if_else` emits. Mirrors `fold_csel_ternary` (t180)
+    // but for branches.
+    fold_aarch64_bcc_if(&mut body);
 
     let indirect_branch_kinds = classify_unstructured_indirect_branches(func, arch);
 
@@ -1905,6 +1910,16 @@ fn fold_guarded_ternary_in_children(node: &mut HirNode) {
             fold_guarded_ternary(then_body);
             fold_guarded_ternary(else_body);
         }
+        HirNode::IfCmp {
+            then_body,
+            else_body,
+            ..
+        } => {
+            fold_guarded_ternary(then_body);
+            if let Some(eb) = else_body {
+                fold_guarded_ternary(eb);
+            }
+        }
         HirNode::Statement(_)
         | HirNode::Return(_)
         | HirNode::Goto(_)
@@ -2177,6 +2192,16 @@ fn fold_csel_ternary_in_children(node: &mut HirNode) {
             fold_csel_ternary(then_body);
             fold_csel_ternary(else_body);
         }
+        HirNode::IfCmp {
+            then_body,
+            else_body,
+            ..
+        } => {
+            fold_csel_ternary(then_body);
+            if let Some(eb) = else_body {
+                fold_csel_ternary(eb);
+            }
+        }
         HirNode::Statement(_)
         | HirNode::Return(_)
         | HirNode::Goto(_)
@@ -2191,6 +2216,313 @@ fn fold_csel_ternary_in_children(node: &mut HirNode) {
         | HirNode::Asm { .. } => {}
     }
 }
+
+// ---------------------------------------------------------------------------
+// t189: AArch64 CMP+Bcc → HirNode::IfCmp fold
+//
+// Mirror of `fold_csel_ternary` (t180) for conditional branches. The lifter
+// emits Bcc as a `Cbranch` whose cond is one of the NZCV flag bytes (ZF/NF
+// directly for EQ/MI, or a small chain of BoolNegate / BoolXor / BoolAnd /
+// BoolOr over the flag bytes for compound cond codes). After the structurer
+// has rewritten the CFG into an `If` node with the same cond SSA varnode, we
+// walk every `Block` body and look for the shape
+//
+//   Statement(IntSub …)           ; CMP / SUBS
+//   Statement(IntSless → NF)      ; flag-byte writes
+//   Statement(IntEqual → ZF)
+//   …
+//   [Statement(BoolXor(NF, VF)) / BoolNegate(...)]   ; cc dataflow (optional)
+//   If { cond: <ssa of ZF/NF/that-unique>, then, else }
+//
+// and rewrite the trailing If into `HirNode::IfCmp` carrying the explicit
+// (cmp_op, cmp_lhs, cmp_rhs) recovered from the cc + the CMP operands.
+//
+// Like `fold_csel_ternary`, the pass leaves the flag-byte and Bool*
+// statements in place; downstream DCE can prune them when nothing else
+// reads them. Walks all nested bodies. Idempotent.
+// ---------------------------------------------------------------------------
+
+/// Return true if `vn` is one of the AArch64 NZCV per-flag bytes
+/// (NF=264, ZF=265, CF=266, VF=267) or the packed `ARM_NZCV` (272).
+fn is_aarch64_flag_varnode(vn: &Varnode) -> bool {
+    vn.space == SpaceId::Register
+        && ((vn.size == 1 && (264..=267).contains(&vn.offset))
+            || (vn.size == 4 && vn.offset == 272))
+}
+
+/// Return true if `vn` is a 1-byte register-space write that looks like a
+/// flag-byte commit (NZCV per-flag bytes or any other 1-byte register
+/// write — the structurer is tolerant here, matching `fold_csel_ternary`).
+fn is_flag_byte_write(insn: &IrInsn) -> bool {
+    insn.output
+        .map(|o| o.space == SpaceId::Register && (o.size == 1 || (o.size == 4 && o.offset == 272)))
+        .unwrap_or(false)
+}
+
+/// Walk the trailing Bool* statements just before an `If` and recover the
+/// AArch64 condition code that produced them.
+///
+/// Returns the index into `body` *before* the recognized dataflow (so the
+/// caller can keep scanning further back for the IntSub) and the
+/// (IrOp, swap) pair the cc maps to via `aarch64_cc_to_int_op`.
+///
+/// Recognizes:
+///   * direct ZF read (no Bool* dataflow) → cc = EQ
+///   * direct NF read                       → cc = MI
+///   * `BoolNegate(ZF)` → cc = NE
+///   * `BoolNegate(NF)` → cc = PL (no integer mapping — bails)
+///   * `BoolXor(NF, VF)` → cc = LT
+///   * `BoolNegate(BoolXor(NF, VF))` → cc = GE
+///
+/// `cond_base` is the base Varnode of the If's cond SsaVarnode.
+fn recover_aarch64_bcc_cc(
+    body: &[HirNode],
+    if_index: usize,
+    cond_base: &Varnode,
+) -> Option<(u8, usize)> {
+    // Direct ZF / NF read (EQ / MI).
+    if cond_base.space == SpaceId::Register && cond_base.size == 1 {
+        match cond_base.offset {
+            265 => return Some((1, if_index)), // ZF → EQ
+            264 => return Some((4, if_index)), // NF → MI (we bail below since no int mapping)
+            _ => {}
+        }
+    }
+
+    // Look for `Statement(BoolXor | BoolNegate | ...)` immediately before
+    // the If whose output equals `cond_base`.
+    let mut i = if_index;
+    if i == 0 {
+        return None;
+    }
+    i -= 1;
+    let last = match &body[i] {
+        HirNode::Statement(insn) => insn,
+        _ => return None,
+    };
+    if last.output.as_ref() != Some(cond_base) {
+        return None;
+    }
+
+    match last.op {
+        // NE: BoolNegate(ZF)
+        IrOp::BoolNegate if last.inputs.len() == 1 => {
+            let inp = &last.inputs[0];
+            if inp.space == SpaceId::Register && inp.size == 1 && inp.offset == 265 {
+                return Some((2, i)); // NE
+            }
+            // GE: BoolNegate(t) where t = BoolXor(NF, VF) immediately prior.
+            if i > 0 {
+                if let HirNode::Statement(prev) = &body[i - 1] {
+                    if prev.op == IrOp::BoolXor
+                        && prev.inputs.len() == 2
+                        && prev.output.as_ref() == Some(inp)
+                        && is_register_flag(&prev.inputs[0], 264)
+                        && is_register_flag(&prev.inputs[1], 267)
+                    {
+                        return Some((11, i - 1)); // GE
+                    }
+                }
+            }
+            // PL: BoolNegate(NF) — no integer-op mapping, bail.
+            None
+        }
+        // LT: BoolXor(NF, VF)
+        IrOp::BoolXor
+            if last.inputs.len() == 2
+                && is_register_flag(&last.inputs[0], 264)
+                && is_register_flag(&last.inputs[1], 267) =>
+        {
+            Some((12, i)) // LT
+        }
+        _ => None,
+    }
+}
+
+fn is_register_flag(vn: &Varnode, offset: u64) -> bool {
+    vn.space == SpaceId::Register && vn.size == 1 && vn.offset == offset
+}
+
+/// Scan `body` and rewrite trailing `If { cond = NZCV-derived }` patterns
+/// into `HirNode::IfCmp`. Recurses into child bodies. Idempotent.
+fn fold_aarch64_bcc_if(nodes: &mut Vec<HirNode>) {
+    for node in nodes.iter_mut() {
+        fold_aarch64_bcc_if_in_children(node);
+    }
+
+    // Find every `If` whose `cond.base` is a flag-shaped Varnode (or a unique
+    // produced by Bool* dataflow over flag bytes) and try to rewrite it.
+    let mut i = 0;
+    while i < nodes.len() {
+        let (cond_base, addr_hint) = match &nodes[i] {
+            HirNode::If { cond, .. } => (cond.base, 0u64),
+            _ => {
+                i += 1;
+                continue;
+            }
+        };
+
+        // The cc dataflow lives in trailing Statement(Bool*) entries OR the
+        // cond is a raw flag byte. Try to recover the cc.
+        let Some((cc, dataflow_start)) = recover_aarch64_bcc_cc(nodes, i, &cond_base) else {
+            i += 1;
+            continue;
+        };
+
+        // Map cc → (cmp_op, swap). EQ/NE/GE/LT all map cleanly.
+        let (cmp_op, swap) = match aarch64_cc_to_int_op(cc) {
+            Some(p) => p,
+            None => {
+                i += 1;
+                continue;
+            }
+        };
+
+        // Walk further backwards from `dataflow_start` for the IntSub the
+        // CMP/SUBS lifted, skipping flag-byte commits. Anything else aborts.
+        let mut found: Option<&IrInsn> = None;
+        if dataflow_start > 0 {
+            for j in (0..dataflow_start).rev() {
+                match &nodes[j] {
+                    HirNode::Statement(prev) => {
+                        if is_cmp_subs_insn(prev) {
+                            found = Some(prev);
+                            break;
+                        }
+                        if is_flag_byte_write(prev) {
+                            continue;
+                        }
+                        break;
+                    }
+                    _ => break,
+                }
+            }
+        }
+        let Some(cmp_insn) = found else {
+            i += 1;
+            continue;
+        };
+
+        let (cmp_lhs, cmp_rhs) = if swap {
+            (cmp_insn.inputs[1], cmp_insn.inputs[0])
+        } else {
+            (cmp_insn.inputs[0], cmp_insn.inputs[1])
+        };
+
+        let addr = if addr_hint != 0 {
+            addr_hint
+        } else {
+            // Use the IntSub's address as the IfCmp's anchor (no separate Bcc
+            // address is tracked at this layer).
+            cmp_insn.addr
+        };
+
+        // Take the If node and split it into IfCmp.
+        let (then_body, else_body) = match std::mem::replace(&mut nodes[i], HirNode::Block(vec![])) {
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => (then_body, else_body),
+            other => {
+                // Restore and bail (shouldn't happen — we matched If above).
+                nodes[i] = other;
+                i += 1;
+                continue;
+            }
+        };
+
+        nodes[i] = HirNode::IfCmp {
+            cmp_op,
+            cmp_lhs,
+            cmp_rhs,
+            then_body,
+            else_body,
+            addr,
+        };
+        i += 1;
+    }
+}
+
+fn fold_aarch64_bcc_if_in_children(node: &mut HirNode) {
+    match node {
+        HirNode::Block(children) => fold_aarch64_bcc_if(children),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            fold_aarch64_bcc_if(then_body);
+            if let Some(eb) = else_body {
+                fold_aarch64_bcc_if(eb);
+            }
+        }
+        HirNode::IfCmp {
+            then_body,
+            else_body,
+            ..
+        } => {
+            fold_aarch64_bcc_if(then_body);
+            if let Some(eb) = else_body {
+                fold_aarch64_bcc_if(eb);
+            }
+        }
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+            fold_aarch64_bcc_if(body);
+        }
+        HirNode::For { body, .. } => fold_aarch64_bcc_if(body),
+        HirNode::Switch { cases, default, .. } => {
+            for (_, body, _) in cases {
+                fold_aarch64_bcc_if(body);
+            }
+            if let Some(def) = default {
+                fold_aarch64_bcc_if(def);
+            }
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_arms,
+        } => {
+            fold_aarch64_bcc_if(try_body);
+            for (_, arm_body) in catch_arms.iter_mut() {
+                fold_aarch64_bcc_if(arm_body);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            fold_aarch64_bcc_if(try_body);
+            fold_aarch64_bcc_if(finally_body);
+        }
+        HirNode::Commented { inner, .. } => fold_aarch64_bcc_if_in_children(inner),
+        HirNode::GuardedIf {
+            then_body,
+            else_body,
+            ..
+        } => {
+            fold_aarch64_bcc_if(then_body);
+            fold_aarch64_bcc_if(else_body);
+        }
+        HirNode::Statement(_)
+        | HirNode::Return(_)
+        | HirNode::Goto(_)
+        | HirNode::Label(_)
+        | HirNode::Ternary { .. }
+        | HirNode::GuardedTernary { .. }
+        | HirNode::CselTernary { .. }
+        | HirNode::TailCall { .. }
+        | HirNode::Continue
+        | HirNode::Break
+        | HirNode::ObjcBlock { .. }
+        | HirNode::Asm { .. } => {}
+    }
+}
+
+// Suppress the dead_code lint for `is_aarch64_flag_varnode` — it's a helper
+// kept for future expansion (packed-NZCV consumers) but not yet used.
+#[allow(dead_code)]
+const _: fn(&Varnode) -> bool = is_aarch64_flag_varnode;
 
 /// Fuse adjacent [`HirNode::GuardedIf`] pairs whose cond codes are inverses
 /// (`cc_b == cc_a ^ 1`, ARM A8.3) into a single `GuardedIf` carrying the
@@ -2378,6 +2710,16 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
         } => {
             recover_for_loops(then_body);
             recover_for_loops(else_body);
+        }
+        HirNode::IfCmp {
+            then_body,
+            else_body,
+            ..
+        } => {
+            recover_for_loops(then_body);
+            if let Some(eb) = else_body {
+                recover_for_loops(eb);
+            }
         }
         HirNode::Statement(_)
         | HirNode::Return(_)
@@ -5545,6 +5887,258 @@ mod tests {
         let (ternaries, _) = t180_run_csel(12); // ARM64_CC_LT
         assert_eq!(ternaries.len(), 1, "expected 1 CselTernary, got {ternaries:?}");
         let (op, lhs, rhs, _) = ternaries[0];
+        assert_eq!(op, IrOp::IntSless, "LT → IntSless (signed)");
+        assert_eq!(lhs, Varnode::reg(0, 8));
+        assert_eq!(rhs, Varnode::reg(8, 8));
+    }
+
+    // -----------------------------------------------------------------------
+    // t189: AArch64 CMP+Bcc → HirNode::IfCmp fold tests.
+    //
+    // Each test builds a four-block CFG shaped like the lifter output for
+    //     CMP   X0, X1                  ; IntSub(X0, X1) → unique + per-flag bytes
+    //     [BoolNegate/BoolXor over NF/ZF/VF]   ; cc-specific dataflow
+    //     B.<cc> .then_blk               ; Cbranch reading the resulting bool
+    //   .then_blk:
+    //     ... ; trivial
+    //   .else_blk:
+    //     ... ; trivial
+    //   .join:
+    //     RET
+    // and asserts the structurer's `fold_aarch64_bcc_if` pass collapses the
+    // synthesised `If` into a single `HirNode::IfCmp` carrying the explicit
+    // comparison opcode (EQ→IntEqual, NE→IntNotequal, GE→IntSlessequal w/
+    // operands swapped, LT→IntSless).
+    // -----------------------------------------------------------------------
+
+    /// Per-flag byte varnodes mirroring `unlace_lift_arm::register_file`
+    /// (NF=264, ZF=265, CF=266, VF=267 — all 1 byte).
+    fn t189_nf() -> Varnode {
+        Varnode::reg(264, 1)
+    }
+    fn t189_zf() -> Varnode {
+        Varnode::reg(265, 1)
+    }
+    fn t189_cf() -> Varnode {
+        Varnode::reg(266, 1)
+    }
+    fn t189_vf() -> Varnode {
+        Varnode::reg(267, 1)
+    }
+
+    /// Emit the per-flag byte writes a CMP/SUBS would produce.
+    fn t189_flag_writes(sub_dst: Varnode, addr: u64) -> Vec<IrInsn> {
+        let zero = Varnode::constant(0, sub_dst.size);
+        vec![
+            IrInsn::with_output(
+                IrOp::IntSless,
+                t189_nf(),
+                smallvec![sub_dst, zero],
+                addr,
+            ),
+            IrInsn::with_output(
+                IrOp::IntEqual,
+                t189_zf(),
+                smallvec![sub_dst, zero],
+                addr,
+            ),
+            // C/V writes (shape-only — fold treats them as flag-byte commits).
+            IrInsn::with_output(
+                IrOp::IntCarry,
+                t189_cf(),
+                smallvec![sub_dst, zero],
+                addr,
+            ),
+            IrInsn::with_output(
+                IrOp::IntSborrow,
+                t189_vf(),
+                smallvec![sub_dst, zero],
+                addr,
+            ),
+        ]
+    }
+
+    /// Build the synthetic four-block CFG and run the structurer, returning
+    /// every `IfCmp` recovered in the body (cmp_op, cmp_lhs, cmp_rhs).
+    fn t189_run_bcc(
+        cc_dataflow: Vec<IrInsn>,
+        cond_vn: Varnode,
+    ) -> (Vec<(IrOp, Varnode, Varnode)>, Vec<HirNode>) {
+        let x0 = Varnode::reg(0, 8); // CMP LHS
+        let x1 = Varnode::reg(8, 8); // CMP RHS
+        let x2 = Varnode::reg(16, 8); // scratch lvalue for then/else bodies
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+        let sub_dst = Varnode::unique(0, 8);
+
+        let mut func = Function::new("bcc_fold", BlockId(0), 0xE000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        // CMP X0, X1.
+        bb0.insns.push(t180_cmp_insn(x0, x1, sub_dst, 0xE000));
+        // Per-flag byte commits NF/ZF/CF/VF.
+        for f in t189_flag_writes(sub_dst, 0xE000) {
+            bb0.insns.push(f);
+        }
+        // cc-specific BoolNegate/BoolXor dataflow.
+        for d in cc_dataflow {
+            bb0.insns.push(d);
+        }
+        // B.<cc> reading the recovered cond.
+        bb0.insns.push(cbranch_insn(cond_vn, 0xE004));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns
+            .push(IrInsn::with_output(IrOp::IntAdd, x2, smallvec![x0, c1], 0xE010));
+        bb1.insns.push(ctrl_insn(IrOp::Branch, 0xE014));
+        bb1.successors = smallvec![BlockId(3)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns
+            .push(IrInsn::with_output(IrOp::IntAdd, x2, smallvec![x0, c2], 0xE020));
+        bb2.insns.push(ctrl_insn(IrOp::Branch, 0xE024));
+        bb2.successors = smallvec![BlockId(3)];
+
+        let mut bb3 = BasicBlock::new(BlockId(3));
+        bb3.insns.push(ctrl_insn(IrOp::Return, 0xE030));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+        func.insert_block(bb3);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn collect_if_cmps(
+            nodes: &[HirNode],
+            out: &mut Vec<(IrOp, Varnode, Varnode)>,
+        ) {
+            for n in nodes {
+                match n {
+                    HirNode::IfCmp {
+                        cmp_op,
+                        cmp_lhs,
+                        cmp_rhs,
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        out.push((*cmp_op, *cmp_lhs, *cmp_rhs));
+                        collect_if_cmps(then_body, out);
+                        if let Some(eb) = else_body {
+                            collect_if_cmps(eb, out);
+                        }
+                    }
+                    HirNode::Block(inner) => collect_if_cmps(inner, out),
+                    HirNode::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        collect_if_cmps(then_body, out);
+                        if let Some(eb) = else_body {
+                            collect_if_cmps(eb, out);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut if_cmps = Vec::new();
+        collect_if_cmps(&hir.body, &mut if_cmps);
+        (if_cmps, hir.body)
+    }
+
+    #[test]
+    fn t189_cmp_bcc_eq_folds() {
+        // B.EQ: cond = ZF directly. No extra dataflow.
+        let (if_cmps, _) = t189_run_bcc(vec![], t189_zf());
+        assert_eq!(
+            if_cmps.len(),
+            1,
+            "expected 1 IfCmp from B.EQ fold, got {if_cmps:?}"
+        );
+        let (op, lhs, rhs) = if_cmps[0];
+        assert_eq!(op, IrOp::IntEqual, "EQ → IntEqual");
+        assert_eq!(lhs, Varnode::reg(0, 8), "lhs = CMP first operand (X0)");
+        assert_eq!(rhs, Varnode::reg(8, 8), "rhs = CMP second operand (X1)");
+    }
+
+    #[test]
+    fn t189_cmp_bcc_ne_folds() {
+        // B.NE: cond = BoolNegate(ZF). Single Bool* statement.
+        let not_zf = Varnode::unique(8, 1);
+        let dataflow = vec![IrInsn::with_output(
+            IrOp::BoolNegate,
+            not_zf,
+            smallvec![t189_zf()],
+            0xE004,
+        )];
+        let (if_cmps, _) = t189_run_bcc(dataflow, not_zf);
+        assert_eq!(
+            if_cmps.len(),
+            1,
+            "expected 1 IfCmp from B.NE fold, got {if_cmps:?}"
+        );
+        let (op, lhs, rhs) = if_cmps[0];
+        assert_eq!(op, IrOp::IntNotequal, "NE → IntNotequal");
+        assert_eq!(lhs, Varnode::reg(0, 8));
+        assert_eq!(rhs, Varnode::reg(8, 8));
+    }
+
+    #[test]
+    fn t189_cmp_bcc_ge_folds() {
+        // B.GE: cond = BoolNegate(BoolXor(NF, VF)). Two Bool* statements.
+        // The fold rewrites `a >= b` as `IntSlessequal(b, a)` (swap=true),
+        // so the recovered (lhs, rhs) is (X1, X0).
+        let n_xor_v = Varnode::unique(8, 1);
+        let not_xor = Varnode::unique(16, 1);
+        let dataflow = vec![
+            IrInsn::with_output(
+                IrOp::BoolXor,
+                n_xor_v,
+                smallvec![t189_nf(), t189_vf()],
+                0xE004,
+            ),
+            IrInsn::with_output(
+                IrOp::BoolNegate,
+                not_xor,
+                smallvec![n_xor_v],
+                0xE004,
+            ),
+        ];
+        let (if_cmps, _) = t189_run_bcc(dataflow, not_xor);
+        assert_eq!(
+            if_cmps.len(),
+            1,
+            "expected 1 IfCmp from B.GE fold, got {if_cmps:?}"
+        );
+        let (op, lhs, rhs) = if_cmps[0];
+        assert_eq!(op, IrOp::IntSlessequal, "GE → IntSlessequal (signed, swapped)");
+        assert_eq!(lhs, Varnode::reg(8, 8), "lhs after swap = CMP's Rm (X1)");
+        assert_eq!(rhs, Varnode::reg(0, 8), "rhs after swap = CMP's Rn (X0)");
+    }
+
+    #[test]
+    fn t189_cmp_bcc_lt_folds() {
+        // B.LT: cond = BoolXor(NF, VF). Single Bool* statement.
+        let n_xor_v = Varnode::unique(8, 1);
+        let dataflow = vec![IrInsn::with_output(
+            IrOp::BoolXor,
+            n_xor_v,
+            smallvec![t189_nf(), t189_vf()],
+            0xE004,
+        )];
+        let (if_cmps, _) = t189_run_bcc(dataflow, n_xor_v);
+        assert_eq!(
+            if_cmps.len(),
+            1,
+            "expected 1 IfCmp from B.LT fold, got {if_cmps:?}"
+        );
+        let (op, lhs, rhs) = if_cmps[0];
         assert_eq!(op, IrOp::IntSless, "LT → IntSless (signed)");
         assert_eq!(lhs, Varnode::reg(0, 8));
         assert_eq!(rhs, Varnode::reg(8, 8));

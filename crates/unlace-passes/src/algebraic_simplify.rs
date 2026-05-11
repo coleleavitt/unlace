@@ -223,6 +223,12 @@ fn try_simplify(
             .or_else(|| simplify_fsub_negation(func, bid, insn_idx, insn)),
         IrOp::FloatMult => simplify_commutative_float_one(func, bid, insn_idx, insn),
         IrOp::FloatDiv => simplify_rhs_float_one(func, bid, insn_idx, insn),
+        IrOp::IntEqual | IrOp::IntNotequal => {
+            simplify_cmp_xor_zero(func, bid, insn_idx, insn)
+        }
+        IrOp::IntSext => simplify_double_sext(func, bid, insn_idx, insn)
+            .or_else(|| simplify_sext_noop(func, bid, insn_idx, insn)),
+        IrOp::IntZext => simplify_double_zext(func, bid, insn_idx, insn),
         _ => None,
     }
 }
@@ -1026,6 +1032,130 @@ fn simplify_subpiece_or_high_mask(
         op: IrOp::Subpiece,
         inputs: smallvec::smallvec![kept, off_vn],
         input_ssas: smallvec::smallvec![kept_ssa, None],
+    })
+}
+
+// ─── Comparison strengthening ────────────────────────────────────────────────
+// `IntEqual(IntXor(x, y), 0)` → `IntEqual(x, y)`
+// `IntNotequal(IntXor(x, y), 0)` → `IntNotequal(x, y)`
+
+fn simplify_cmp_xor_zero(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    insn: &IrInsn,
+) -> Option<Replacement> {
+    let (lhs, rhs) = two_inputs(insn)?;
+
+    // We need one side to be const 0 and the other to be a XOR result.
+    let (xor_vn, xor_idx) = if is_const(rhs, 0) {
+        (lhs, 0usize)
+    } else if is_const(lhs, 0) {
+        (rhs, 1usize)
+    } else {
+        return None;
+    };
+
+    // The xor operand must not itself be a constant
+    if xor_vn.space == SpaceId::Const {
+        return None;
+    }
+
+    // Look up the defining instruction of the xor operand
+    let xor_ssa = input_ssa(func, bid, insn_idx, xor_idx)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, xor_ssa)?;
+    if def_insn.op != IrOp::IntXor || def_insn.inputs.len() != 2 {
+        return None;
+    }
+
+    let x = def_insn.inputs[0];
+    let y = def_insn.inputs[1];
+    let x_ssa = input_ssa(func, def_bid, def_idx, 0);
+    let y_ssa = input_ssa(func, def_bid, def_idx, 1);
+
+    Some(Replacement::Reop {
+        op: insn.op, // IntEqual or IntNotequal — keep it
+        inputs: smallvec::smallvec![x, y],
+        input_ssas: smallvec::smallvec![x_ssa, y_ssa],
+    })
+}
+
+// ─── Sign/zero-extension elimination ─────────────────────────────────────────
+// `IntSext(IntSext(x))` → `IntSext(x)` (collapse double sign-extend)
+// `IntSext(x)` where x's type already matches target width → `Copy(x)`
+
+fn simplify_double_sext(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    insn: &IrInsn,
+) -> Option<Replacement> {
+    let _input = one_input(insn)?;
+    let _output = insn.output?;
+
+    let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
+    if def_insn.op != IrOp::IntSext || def_insn.inputs.len() != 1 {
+        return None;
+    }
+
+    // Collapse: IntSext(IntSext(x)) → IntSext(x)
+    let inner_x = def_insn.inputs[0];
+    let inner_x_ssa = input_ssa(func, def_bid, def_idx, 0);
+
+    Some(Replacement::Reop {
+        op: IrOp::IntSext,
+        inputs: smallvec::smallvec![inner_x],
+        input_ssas: smallvec::smallvec![inner_x_ssa],
+    })
+}
+
+/// `IntSext(x)` where x's size == output size → `Copy(x)`
+fn simplify_sext_noop(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    insn: &IrInsn,
+) -> Option<Replacement> {
+    let input = one_input(insn)?;
+    let output = insn.output?;
+
+    if input.size == output.size {
+        Some(replacement_for_input(func, bid, insn_idx, 0, input))
+    } else {
+        None
+    }
+}
+
+/// `IntZext(IntZext(x))` → `IntZext(x)` (collapse double zero-extend)
+fn simplify_double_zext(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    insn: &IrInsn,
+) -> Option<Replacement> {
+    let input = one_input(insn)?;
+    let output = insn.output?;
+
+    // First check if it's a no-op (same size)
+    if input.size == output.size {
+        return Some(replacement_for_input(func, bid, insn_idx, 0, input));
+    }
+
+    let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
+    if def_insn.op != IrOp::IntZext || def_insn.inputs.len() != 1 {
+        return None;
+    }
+
+    // Collapse: IntZext(IntZext(x)) → IntZext(x)
+    let inner_x = def_insn.inputs[0];
+    let inner_x_ssa = input_ssa(func, def_bid, def_idx, 0);
+
+    Some(Replacement::Reop {
+        op: IrOp::IntZext,
+        inputs: smallvec::smallvec![inner_x],
+        input_ssas: smallvec::smallvec![inner_x_ssa],
     })
 }
 
@@ -1858,5 +1988,106 @@ mod tests {
         assert_eq!(outer.inputs.len(), 2);
         assert_eq!(outer.inputs[0], mid);
         assert_eq!(outer.inputs[1], Varnode::constant(4, 8));
+    }
+
+    // ─── Task 248: Comparison strengthening tests ─────────────────────────
+
+    /// `IntEqual(IntXor(x, y), 0)` → `IntEqual(x, y)`
+    #[test]
+    fn xor_then_equal_zero_becomes_direct_equal() {
+        let x = Varnode::reg(0, 4);
+        let y = Varnode::reg(8, 4);
+        let xor_out = Varnode::unique(0, 4);
+        let cmp_out = Varnode::unique(4, 1);
+
+        let xor_insn = IrInsn::with_output(IrOp::IntXor, xor_out, smallvec![x, y], 0x1000);
+        let cmp_insn = IrInsn::with_output(
+            IrOp::IntEqual,
+            cmp_out,
+            smallvec![xor_out, Varnode::constant(0, 4)],
+            0x1004,
+        );
+
+        let ssa = run_pass(vec![xor_insn, cmp_insn]);
+        let folded = rewritten_insn(&ssa, 1);
+        assert_eq!(folded.op, IrOp::IntEqual);
+        assert_eq!(folded.inputs.len(), 2);
+        assert_eq!(folded.inputs[0], x);
+        assert_eq!(folded.inputs[1], y);
+    }
+
+    /// `IntNotequal(IntXor(x, y), 0)` → `IntNotequal(x, y)`
+    #[test]
+    fn xor_then_notequal_zero_becomes_direct_notequal() {
+        let x = Varnode::reg(0, 4);
+        let y = Varnode::reg(8, 4);
+        let xor_out = Varnode::unique(0, 4);
+        let cmp_out = Varnode::unique(4, 1);
+
+        let xor_insn = IrInsn::with_output(IrOp::IntXor, xor_out, smallvec![x, y], 0x1000);
+        let cmp_insn = IrInsn::with_output(
+            IrOp::IntNotequal,
+            cmp_out,
+            smallvec![xor_out, Varnode::constant(0, 4)],
+            0x1004,
+        );
+
+        let ssa = run_pass(vec![xor_insn, cmp_insn]);
+        let folded = rewritten_insn(&ssa, 1);
+        assert_eq!(folded.op, IrOp::IntNotequal);
+        assert_eq!(folded.inputs.len(), 2);
+        assert_eq!(folded.inputs[0], x);
+        assert_eq!(folded.inputs[1], y);
+    }
+
+    // ─── Task 249: Sign-extension elimination tests ──────────────────────
+
+    /// `IntSext(IntSext(x))` → `IntSext(x)` (collapse double sign-extend)
+    #[test]
+    fn double_sext_collapses() {
+        let x = Varnode::reg(0, 2); // 2-byte input
+        let mid = Varnode::unique(0, 4); // sext to 4 bytes
+        let out = Varnode::unique(8, 8); // sext to 8 bytes
+
+        let inner = IrInsn::with_output(IrOp::IntSext, mid, smallvec![x], 0x1000);
+        let outer = IrInsn::with_output(IrOp::IntSext, out, smallvec![mid], 0x1004);
+
+        let ssa = run_pass(vec![inner, outer]);
+        let folded = rewritten_insn(&ssa, 1);
+        assert_eq!(folded.op, IrOp::IntSext);
+        assert_eq!(folded.inputs.len(), 1);
+        assert_eq!(folded.inputs[0], x); // directly extends from the original
+    }
+
+    /// `IntSext(x)` where x's size == output size → `Copy(x)`
+    #[test]
+    fn sext_of_already_wide_value_becomes_copy() {
+        let x = Varnode::reg(0, 4);
+        let out = Varnode::unique(0, 4); // same size as input
+
+        let sext_insn = IrInsn::with_output(IrOp::IntSext, out, smallvec![x], 0x1000);
+
+        let ssa = run_pass(vec![sext_insn]);
+        let folded = rewritten_insn(&ssa, 0);
+        assert_eq!(folded.op, IrOp::Copy);
+        assert_eq!(folded.inputs.len(), 1);
+        assert_eq!(folded.inputs[0], x);
+    }
+
+    /// `IntZext(IntZext(x))` → `IntZext(x)` (collapse double zero-extend)
+    #[test]
+    fn double_zext_collapses() {
+        let x = Varnode::reg(0, 2);
+        let mid = Varnode::unique(0, 4);
+        let out = Varnode::unique(8, 8);
+
+        let inner = IrInsn::with_output(IrOp::IntZext, mid, smallvec![x], 0x1000);
+        let outer = IrInsn::with_output(IrOp::IntZext, out, smallvec![mid], 0x1004);
+
+        let ssa = run_pass(vec![inner, outer]);
+        let folded = rewritten_insn(&ssa, 1);
+        assert_eq!(folded.op, IrOp::IntZext);
+        assert_eq!(folded.inputs.len(), 1);
+        assert_eq!(folded.inputs[0], x);
     }
 }

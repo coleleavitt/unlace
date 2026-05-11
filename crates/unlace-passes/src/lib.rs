@@ -1,5 +1,6 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
+pub mod algebraic_simplify;
 pub mod auth_call_resolve;
 pub mod bitfield_idioms;
 pub mod bmi_idioms;
@@ -65,6 +66,7 @@ pub mod type_constraint_solver;
 pub mod type_infer;
 pub mod variable_merge;
 
+pub use algebraic_simplify::AlgebraicSimplifyPass;
 pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bitfield_idioms::BitfieldIdiomPass;
 pub use bmi_idioms::BmiIdiomPass;

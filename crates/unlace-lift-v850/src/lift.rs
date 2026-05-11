@@ -6,6 +6,18 @@ use crate::decode::{BranchCond, V850Insn, V850Op};
 // Register file offsets (each register is 4 bytes, spaced 8 apart for alignment).
 const REG_SIZE: u8 = 4;
 
+// EP (element pointer) is r30 — base for V850 Format IV short loads/stores.
+const EP_REG: u8 = 30;
+
+// --- Callother tag namespace for V850-specific ops (0x800..) -----------------
+// These mark operations that have no direct Pcode equivalent; later passes can
+// recognize them by tag.
+pub const CALLOTHER_V850_SATADD: u64 = 0x800;
+pub const CALLOTHER_V850_SATSUB: u64 = 0x801;
+pub const CALLOTHER_V850_SATSUBR: u64 = 0x802;
+pub const CALLOTHER_V850_BSW: u64 = 0x803;
+pub const CALLOTHER_V850_BSH: u64 = 0x804;
+
 const fn reg_offset(r: u8) -> u64 {
     (r as u64) * 8
 }
@@ -552,6 +564,44 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
         V850Op::StH { src, base, disp } => lift_store(ctx, *src, *base, *disp, 2),
         V850Op::StW { src, base, disp } => lift_store(ctx, *src, *base, *disp, 4),
 
+        // -- Short load (EP-relative) ----------------------------------------
+        // SLD.B/H sign-extend; SLD.W is a full word.
+        V850Op::SldB { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp as i32, 1, true),
+        V850Op::SldH { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp as i32, 2, true),
+        V850Op::SldW { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp as i32, 4, false),
+
+        // -- Saturating arithmetic -------------------------------------------
+        // Saturation requires conditional clamping that doesn't map cleanly to
+        // Pcode primitives; emit a tagged Callother that downstream passes can
+        // recognize. Result flags are not modeled.
+        V850Op::Satadd { dst, src } => lift_sat_binop(ctx, *dst, *src, CALLOTHER_V850_SATADD),
+        V850Op::SataddImm5 { dst, imm } => {
+            lift_sat_binop_imm(ctx, *dst, *imm, CALLOTHER_V850_SATADD)
+        }
+        V850Op::Satsub { dst, src } => lift_sat_binop(ctx, *dst, *src, CALLOTHER_V850_SATSUB),
+        V850Op::Satsubr { dst, src } => lift_sat_binop(ctx, *dst, *src, CALLOTHER_V850_SATSUBR),
+
+        // -- 32x32 multiply (low word into reg2, high word into reg3) --------
+        V850Op::Mul { reg1, reg2, reg3 } => lift_mul32(ctx, *reg1, *reg2, *reg3, true),
+        V850Op::Mulu { reg1, reg2, reg3 } => lift_mul32(ctx, *reg1, *reg2, *reg3, false),
+
+        // -- Divide -----------------------------------------------------------
+        V850Op::Div { reg1, reg2, reg3 } => lift_div32(ctx, *reg1, *reg2, *reg3, true),
+        V850Op::Divu { reg1, reg2, reg3 } => lift_div32(ctx, *reg1, *reg2, *reg3, false),
+        V850Op::Divh { dst, src } => lift_divh(ctx, *dst, *src, true),
+        V850Op::Divhu { reg1, reg2, reg3 } => {
+            // reg2 = sign-narrowed div, reg3 = remainder. Use the 16-bit path
+            // for reg2 and emit a remainder write.
+            lift_divh_reg3(ctx, *reg1, *reg2, *reg3, false);
+        }
+
+        // -- Byte/half swap --------------------------------------------------
+        V850Op::Bsw { src, dst } => lift_swap(ctx, *src, *dst, CALLOTHER_V850_BSW),
+        V850Op::Bsh { src, dst } => lift_swap(ctx, *src, *dst, CALLOTHER_V850_BSH),
+
+        // -- Conditional move ------------------------------------------------
+        V850Op::Cmov { cond, reg1, reg2, reg3 } => lift_cmov(ctx, *cond, *reg1, *reg2, *reg3),
+
         // -- Control flow --
         V850Op::Jmp { reg } => {
             if *reg == 31 {
@@ -758,6 +808,302 @@ fn lift_store(ctx: &mut LiftCtx, src: u8, base: u8, disp: i32, mem_size: u8) {
         smallvec![ram_space, addr_vn, value],
         ctx.addr,
     ));
+}
+
+/// Emit a saturating binary op as a tagged Callother whose result lands in `dst`.
+/// Inputs are read as (dst, src) per V850 semantics: reg2 = sat(reg2 op reg1).
+fn lift_sat_binop(ctx: &mut LiftCtx, dst: u8, src: u8, tag: u64) {
+    if let Some(d) = ctx.reg_write(dst) {
+        let a = ctx.reg_read(dst);
+        let b = ctx.reg_read(src);
+        let tag_vn = Varnode::constant(tag, 8);
+        let result = ctx.alloc_unique(REG_SIZE);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            result,
+            smallvec![tag_vn, a, b],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d,
+            smallvec![result],
+            ctx.addr,
+        ));
+    }
+}
+
+fn lift_sat_binop_imm(ctx: &mut LiftCtx, dst: u8, imm: i32, tag: u64) {
+    if let Some(d) = ctx.reg_write(dst) {
+        let a = ctx.reg_read(dst);
+        let b = Varnode::constant(imm as u32 as u64, REG_SIZE);
+        let tag_vn = Varnode::constant(tag, 8);
+        let result = ctx.alloc_unique(REG_SIZE);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            result,
+            smallvec![tag_vn, a, b],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d,
+            smallvec![result],
+            ctx.addr,
+        ));
+    }
+}
+
+/// MUL/MULU: reg2 ← low32(reg1 * reg2), reg3 ← high32(reg1 * reg2).
+/// Computed as 64-bit multiply, then Subpiece-split.
+fn lift_mul32(ctx: &mut LiftCtx, reg1: u8, reg2: u8, reg3: u8, signed: bool) {
+    let a = ctx.reg_read(reg1);
+    let b = ctx.reg_read(reg2);
+
+    // Extend operands to 64 bits.
+    let a64 = ctx.alloc_unique(8);
+    let b64 = ctx.alloc_unique(8);
+    let ext_op = if signed { IrOp::IntSext } else { IrOp::IntZext };
+    ctx.emit(IrInsn::with_output(ext_op, a64, smallvec![a], ctx.addr));
+    ctx.emit(IrInsn::with_output(ext_op, b64, smallvec![b], ctx.addr));
+
+    let prod = ctx.alloc_unique(8);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntMult,
+        prod,
+        smallvec![a64, b64],
+        ctx.addr,
+    ));
+
+    // Low 32 -> reg2
+    if let Some(d_lo) = ctx.reg_write(reg2) {
+        let lo = ctx.alloc_unique(REG_SIZE);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            lo,
+            smallvec![prod, Varnode::constant(0, 1)],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(IrOp::Copy, d_lo, smallvec![lo], ctx.addr));
+    }
+    // High 32 -> reg3
+    if let Some(d_hi) = ctx.reg_write(reg3) {
+        let hi = ctx.alloc_unique(REG_SIZE);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            hi,
+            smallvec![prod, Varnode::constant(4, 1)],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(IrOp::Copy, d_hi, smallvec![hi], ctx.addr));
+    }
+}
+
+/// DIV/DIVU: reg2 ← reg2 / reg1, reg3 ← reg2 % reg1.
+fn lift_div32(ctx: &mut LiftCtx, reg1: u8, reg2: u8, reg3: u8, signed: bool) {
+    let dividend = ctx.reg_read(reg2);
+    let divisor = ctx.reg_read(reg1);
+
+    let (div_op, rem_op) = if signed {
+        (IrOp::IntSdiv, IrOp::IntSrem)
+    } else {
+        (IrOp::IntDiv, IrOp::IntRem)
+    };
+
+    let quot = ctx.alloc_unique(REG_SIZE);
+    ctx.emit(IrInsn::with_output(
+        div_op,
+        quot,
+        smallvec![dividend, divisor],
+        ctx.addr,
+    ));
+    if let Some(d_q) = ctx.reg_write(reg2) {
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d_q,
+            smallvec![quot],
+            ctx.addr,
+        ));
+    }
+
+    let rem = ctx.alloc_unique(REG_SIZE);
+    ctx.emit(IrInsn::with_output(
+        rem_op,
+        rem,
+        smallvec![dividend, divisor],
+        ctx.addr,
+    ));
+    if let Some(d_r) = ctx.reg_write(reg3) {
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d_r,
+            smallvec![rem],
+            ctx.addr,
+        ));
+    }
+}
+
+/// DIVH 2-operand: reg2 = sign_ext32(reg2) / sign_ext16(reg1[15:0]).
+fn lift_divh(ctx: &mut LiftCtx, dst: u8, src: u8, signed: bool) {
+    if let Some(d) = ctx.reg_write(dst) {
+        let dividend = ctx.reg_read(dst);
+        // Take low 16 bits of src and sign/zero-extend to 32.
+        let src_full = ctx.reg_read(src);
+        let half = ctx.alloc_unique(2);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            half,
+            smallvec![src_full, Varnode::constant(0, 1)],
+            ctx.addr,
+        ));
+        let divisor = ctx.alloc_unique(REG_SIZE);
+        let ext_op = if signed { IrOp::IntSext } else { IrOp::IntZext };
+        ctx.emit(IrInsn::with_output(
+            ext_op,
+            divisor,
+            smallvec![half],
+            ctx.addr,
+        ));
+
+        let div_op = if signed { IrOp::IntSdiv } else { IrOp::IntDiv };
+        let quot = ctx.alloc_unique(REG_SIZE);
+        ctx.emit(IrInsn::with_output(
+            div_op,
+            quot,
+            smallvec![dividend, divisor],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(IrOp::Copy, d, smallvec![quot], ctx.addr));
+    }
+}
+
+/// DIVHU 3-operand: reg2 = reg2 / zero_ext16(reg1), reg3 = remainder.
+fn lift_divh_reg3(ctx: &mut LiftCtx, reg1: u8, reg2: u8, reg3: u8, signed: bool) {
+    let dividend = ctx.reg_read(reg2);
+    let src_full = ctx.reg_read(reg1);
+    let half = ctx.alloc_unique(2);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Subpiece,
+        half,
+        smallvec![src_full, Varnode::constant(0, 1)],
+        ctx.addr,
+    ));
+    let divisor = ctx.alloc_unique(REG_SIZE);
+    let ext_op = if signed { IrOp::IntSext } else { IrOp::IntZext };
+    ctx.emit(IrInsn::with_output(
+        ext_op,
+        divisor,
+        smallvec![half],
+        ctx.addr,
+    ));
+
+    let (div_op, rem_op) = if signed {
+        (IrOp::IntSdiv, IrOp::IntSrem)
+    } else {
+        (IrOp::IntDiv, IrOp::IntRem)
+    };
+
+    let quot = ctx.alloc_unique(REG_SIZE);
+    ctx.emit(IrInsn::with_output(
+        div_op,
+        quot,
+        smallvec![dividend, divisor],
+        ctx.addr,
+    ));
+    if let Some(d_q) = ctx.reg_write(reg2) {
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d_q,
+            smallvec![quot],
+            ctx.addr,
+        ));
+    }
+
+    let rem = ctx.alloc_unique(REG_SIZE);
+    ctx.emit(IrInsn::with_output(
+        rem_op,
+        rem,
+        smallvec![dividend, divisor],
+        ctx.addr,
+    ));
+    if let Some(d_r) = ctx.reg_write(reg3) {
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d_r,
+            smallvec![rem],
+            ctx.addr,
+        ));
+    }
+}
+
+/// BSW/BSH: byte swap. Modeled as a tagged Callother since Pcode lacks bswap.
+fn lift_swap(ctx: &mut LiftCtx, src: u8, dst: u8, tag: u64) {
+    if let Some(d) = ctx.reg_write(dst) {
+        let s = ctx.reg_read(src);
+        let tag_vn = Varnode::constant(tag, 8);
+        let result = ctx.alloc_unique(REG_SIZE);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            result,
+            smallvec![tag_vn, s],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d,
+            smallvec![result],
+            ctx.addr,
+        ));
+    }
+}
+
+/// CMOV: reg3 = cond ? reg1 : reg2.
+/// Lowered to a sequence: evaluate the condition (reusing `build_condition`)
+/// then produce both branches and select via a Cbranch-free pattern using
+/// arithmetic — but Pcode has no `select`, so we emit a small if/else via
+/// Cbranch over the destination write.
+fn lift_cmov(ctx: &mut LiftCtx, cond: BranchCond, reg1: u8, reg2: u8, reg3: u8) {
+    let Some(d) = ctx.reg_write(reg3) else { return };
+
+    // BR (always-true) collapses to a plain copy of reg1.
+    if cond == BranchCond::R {
+        let s = ctx.reg_read(reg1);
+        ctx.emit(IrInsn::with_output(IrOp::Copy, d, smallvec![s], ctx.addr));
+        return;
+    }
+
+    // Default: write reg2 ("false" branch) first, then conditionally overwrite
+    // with reg1 when the condition holds. This mirrors a typical 2-address
+    // CMOV decomposition and keeps the IR pure-Pcode (no Callother).
+    let r2 = ctx.reg_read(reg2);
+    ctx.emit(IrInsn::with_output(IrOp::Copy, d, smallvec![r2], ctx.addr));
+
+    let cond_vn = match build_condition(ctx, cond) {
+        Some(v) => v,
+        None => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+
+    // Cbranch (rel +2) over the "write reg1" insn, predicated on !cond.
+    // We instead express it as: if (cond) dst = reg1 — using a Cbranch that
+    // skips the write. The branch target is a constant offset (skip = 2 ops).
+    let skip = Varnode::constant(ctx.addr.wrapping_add(8), REG_SIZE);
+    let neg = ctx.alloc_unique(1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::BoolNegate,
+        neg,
+        smallvec![cond_vn],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::without_output(
+        IrOp::Cbranch,
+        smallvec![skip, neg],
+        ctx.addr,
+    ));
+    let r1 = ctx.reg_read(reg1);
+    ctx.emit(IrInsn::with_output(IrOp::Copy, d, smallvec![r1], ctx.addr));
 }
 
 fn build_condition(ctx: &mut LiftCtx, cond: BranchCond) -> Option<Varnode> {

@@ -40,14 +40,14 @@ void _start(void) {
     *(_QWORD *)(0LL) = 0x1165LL; return;
 }
 
-/* Function:   identify(Animal*) | Address: 0x1230 | Size: 0xbb (187 bytes) | Convention: unknown | Stack frame: 0x8 (8 bytes) | Xrefs to:   __dynamic_cast | Xrefs from: unknown */
+/* Function:   identify(Animal*) | Address: 0x1230 | Size: 0xbb (187 bytes) | Convention: stdcall | Stack frame: 0x8 (8 bytes) | Xrefs to:   __dynamic_cast | Xrefs from: unknown */
 // identify(Animal*)
-void identify(void) {
+void __stdcall identify(void) {
     int v8; // rip
     if (v7) {
         return result;
     } else {
-        *(_QWORD *)(0LL) = 0x125bLL; __dynamic_cast(); v7 = 0LL;
+        qword_FFFFFFFFFFFFFFE0 = 0x125bLL; __dynamic_cast(); v7 = 0LL;
         if (v11) {
             __dynamic_cast();
             if (v11) {
@@ -132,13 +132,14 @@ void sub_1220(void) {
 /* Function:   sub_1170 | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1170(void) {
     int v5; // rip
-    signed char v17; // temp
-    v8 = 1; v17 = LOBYTE(0LL);
+    v8 = 1;
     if (v8) {
+        return result;
     } else {
-        v8 = 1; v17 = v17;
+        result = 0LL; v8 = 1;
         if (v8) {
+            result = 0LL; return result;
         }
     }
-    return result;
+    return;
 }

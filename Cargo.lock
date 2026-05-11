@@ -1297,6 +1297,7 @@ dependencies = [
  "unlace-ir",
  "unlace-lift-arc",
  "unlace-lift-arm",
+ "unlace-lift-ebpf",
  "unlace-lift-mips",
  "unlace-lift-ppc",
  "unlace-lift-riscv",
@@ -1316,6 +1317,15 @@ name = "unlace-lift-arm"
 version = "0.1.0"
 dependencies = [
  "capstone",
+ "smallvec",
+ "tracing",
+ "unlace-ir",
+]
+
+[[package]]
+name = "unlace-lift-ebpf"
+version = "0.1.0"
+dependencies = [
  "smallvec",
  "tracing",
  "unlace-ir",

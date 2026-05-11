@@ -3744,11 +3744,31 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             if captures.is_empty() {
                 let _ = writeln!(out, "^{{ /* invoke=0x{:x} */ }};", invoke);
             } else {
+                // Cross-reference each capture's SSA varnode against
+                // `ctx.byref_boxes` (lifted from `HirFunction::byref_boxes`,
+                // t176). When the varnode is recognised as a `__block`
+                // box, render the capture as `__block T name`; otherwise
+                // fall back to the plain capture name. This is the
+                // printer side of t184 — block detection (t119) feeds
+                // captures with SSA varnodes, byref detection (t176)
+                // populates `byref_boxes`, and the printer joins them.
+                let rendered: Vec<String> = captures
+                    .iter()
+                    .map(|cap| {
+                        if let Some(sv) = &cap.varnode {
+                            if let Some(bx) = ctx.byref_boxes.get(&sv.base) {
+                                let captured_c = render_type_as_c(&bx.captured_type);
+                                return format!("__block {} {}", captured_c, cap.name);
+                            }
+                        }
+                        cap.name.clone()
+                    })
+                    .collect();
                 let _ = writeln!(
                     out,
                     "^{{ /* invoke=0x{:x} captures=[{}] */ }};",
                     invoke,
-                    captures.join(", ")
+                    rendered.join(", ")
                 );
             }
         }
@@ -10593,6 +10613,81 @@ mod tests {
         assert!(
             byref_line.contains("[rsp+58h]"),
             "BYREF line should reference [rsp+58h]: {byref_line}",
+        );
+    }
+
+    #[test]
+    fn test_objc_block_capture_with_int_byref() {
+        // t184: a block whose captured varnode is recorded as a __block
+        // box in `func.byref_boxes` should be rendered as
+        // `__block int name` inside the block-literal's captures list.
+        use unlace_ir::ssa::ByrefBox;
+        use unlace_ir::types::Type;
+        use unlace_struct::ObjcBlockCapture;
+
+        let captured_base = Varnode::stack(0x30, 8);
+        let captured_sv = SsaVarnode {
+            base: captured_base,
+            version: 1,
+        };
+
+        let body = vec![HirNode::ObjcBlock {
+            invoke: 0x401000,
+            captures: vec![ObjcBlockCapture::resolved("counter", captured_sv)],
+        }];
+
+        let mut func = make_func("with_byref", body);
+        func.byref_boxes.insert(
+            captured_base,
+            ByrefBox {
+                captured_type: Type::int(4),
+                captured_value_sv: captured_sv,
+                captured_offset: 24,
+                captured_store_loc: (unlace_ir::BlockId(0), 0),
+            },
+        );
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("__block int counter"),
+            "byref capture should render as `__block int counter`: {output}",
+        );
+        assert!(
+            output.contains("invoke=0x401000"),
+            "block-invoke address should still appear: {output}",
+        );
+    }
+
+    #[test]
+    fn test_objc_block_capture_without_byref_renders_plainly() {
+        // t184: a block capture whose SSA varnode is NOT in
+        // `func.byref_boxes` should fall back to the plain capture name
+        // (no `__block T` decoration).
+        use unlace_struct::ObjcBlockCapture;
+
+        let captured_sv = SsaVarnode {
+            base: Varnode::reg(0, 8),
+            version: 0,
+        };
+
+        let body = vec![HirNode::ObjcBlock {
+            invoke: 0x402000,
+            captures: vec![
+                ObjcBlockCapture::resolved("plain_a", captured_sv),
+                ObjcBlockCapture::unresolved("plain_b"),
+            ],
+        }];
+
+        let func = make_func("without_byref", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("captures=[plain_a, plain_b]"),
+            "captures with no byref match should render as plain names: {output}",
+        );
+        assert!(
+            !output.contains("__block"),
+            "no `__block` decoration expected when byref_boxes is empty: {output}",
         );
     }
 

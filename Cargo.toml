@@ -15,6 +15,7 @@ members = [
     "crates/unlace-struct",
     "crates/unlace-output",
     "crates/unlace-plugin",
+    "crates/unlace-flirt",
     "crates/unlace-cli",
     "crates/unlace-test-harness",
     "xtask",
@@ -83,6 +84,7 @@ unlace-struct = { path = "crates/unlace-struct" }
 unlace-output = { path = "crates/unlace-output" }
 unlace-plugin = { path = "crates/unlace-plugin" }
 unlace-cli = { path = "crates/unlace-cli" }
+unlace-flirt = { path = "crates/unlace-flirt" }
 unlace-test-harness = { path = "crates/unlace-test-harness" }
 
 [profile.dev]

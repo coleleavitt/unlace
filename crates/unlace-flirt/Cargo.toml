@@ -1,0 +1,15 @@
+[package]
+name = "unlace-flirt"
+description = "FLIRT signature matching for unlace"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]

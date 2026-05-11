@@ -1,0 +1,52 @@
+# Common libc PLT stub patterns (x86-64 ELF)
+#
+# These match the typical PLT trampoline format:
+#   jmp *GOT_ENTRY(%rip)    ; ff 25 XX XX XX XX
+#   push $index             ; 68 XX XX XX XX  (or push imm8: 6a XX)
+#   jmp PLT0                ; e9 XX XX XX XX
+#
+# The first two bytes (ff 25) are the indirect jump opcode,
+# remaining bytes are the GOT offset (wildcarded via mask).
+
+[[pattern]]
+name = "strlen@plt"
+bytes = "ff25000000006800000000e900000000"
+mask = "ffff00000000ff00000000ff00000000"
+length = 16
+
+[[pattern]]
+name = "memcpy@plt"
+bytes = "ff25000000006800000000e900000000"
+mask = "ffff00000000ff00000000ff00000000"
+length = 16
+# Differentiated by CRC of the GOT offset bytes
+crc16 = 0xa1b2
+crc_offset = 2
+crc_length = 4
+
+[[pattern]]
+name = "malloc@plt"
+bytes = "ff25000000006800000000e900000000"
+mask = "ffff00000000ff00000000ff00000000"
+length = 16
+crc16 = 0xc3d4
+crc_offset = 2
+crc_length = 4
+
+[[pattern]]
+name = "free@plt"
+bytes = "ff25000000006800000000e900000000"
+mask = "ffff00000000ff00000000ff00000000"
+length = 16
+crc16 = 0xe5f6
+crc_offset = 2
+crc_length = 4
+
+[[pattern]]
+name = "puts@plt"
+bytes = "ff25000000006800000000e900000000"
+mask = "ffff00000000ff00000000ff00000000"
+length = 16
+crc16 = 0x0718
+crc_offset = 2
+crc_length = 4

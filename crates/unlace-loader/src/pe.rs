@@ -281,8 +281,13 @@ where
 
     let image_base = file.nt_headers().optional_header().image_base();
     let is_pe64 = std::mem::size_of::<Pe::ImageOptionalHeader>() > 96;
+    // IMAGE_TLS_DIRECTORY layout:
+    //   PE32  (24B): Start(4) End(4) Index(4) Callbacks(4) ZeroFill(4) Char(4)
+    //   PE32+ (40B): Start(8) End(8) Index(8) Callbacks(8) ZeroFill(4) Char(4)
+    // We only need AddressOfCallBacks — at offset 12 on PE32, 24 on PE32+ —
+    // so reject any short directory that wouldn't contain the field.
     let callbacks_va = if is_pe64 {
-        if dir_data.len() < 24 {
+        if dir_data.len() < 32 {
             return Vec::new();
         }
         u64::from_le_bytes(dir_data[24..32].try_into().unwrap_or([0; 8]))
@@ -2543,6 +2548,147 @@ mod tests {
             img.forwarded_resolutions.is_empty(),
             "no imports → no resolutions, got {:?}",
             img.forwarded_resolutions
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // IMAGE_DIRECTORY_ENTRY_TLS — callback array recovery (t188)
+    // -----------------------------------------------------------------------
+
+    /// Build a PE64 carrying an `IMAGE_DIRECTORY_ENTRY_TLS` that resolves
+    /// to one TLS callback pointing at `.text + 0`.
+    ///
+    /// Layout:
+    /// ```text
+    /// 0x000  DOS header (MZ + e_lfanew → 0x80)
+    /// 0x080  PE\0\0 + COFF FH (Machine=AMD64, 2 sections, opt_hdr=240)
+    /// 0x098  Optional header (PE32+, 16 data-directory slots; TLS slot set)
+    /// 0x188  Section table: .text, .tls
+    /// 0x200  .text raw data       (1 B: 0xC3 RET)
+    /// 0x400  .tls  raw data       (40 B IMAGE_TLS_DIRECTORY64
+    ///                              followed by callback array)
+    /// ```
+    ///
+    /// Returns `(buf, image_base, expected_callback_va)`.
+    fn pe64_with_tls_callbacks() -> (Vec<u8>, u64, u64) {
+        let nt: usize = 0x80;
+        let opt_hdr_size: u16 = 16 * 8 + 112;
+        let oh = nt + 24;
+        let sh = oh + opt_hdr_size as usize;
+        let section_count: u16 = 2;
+        let text_offset: u32 = 0x200;
+        let tls_offset: u32 = 0x400;
+        let tls_size: u32 = 0x200;
+        let total_size: u32 = tls_offset + tls_size;
+        let mut buf = vec![0u8; total_size as usize];
+
+        // ── DOS header ─────────────────────────────────────────────
+        buf[0] = b'M';
+        buf[1] = b'Z';
+        buf[0x3C..0x40].copy_from_slice(&(nt as u32).to_le_bytes());
+
+        // ── PE signature + COFF FH ─────────────────────────────────
+        buf[nt..nt + 4].copy_from_slice(&[b'P', b'E', 0, 0]);
+        let fh = nt + 4;
+        buf[fh..fh + 2].copy_from_slice(&pe::IMAGE_FILE_MACHINE_AMD64.to_le_bytes());
+        buf[fh + 2..fh + 4].copy_from_slice(&section_count.to_le_bytes());
+        buf[fh + 16..fh + 18].copy_from_slice(&opt_hdr_size.to_le_bytes());
+        buf[fh + 18..fh + 20].copy_from_slice(&pe::IMAGE_FILE_EXECUTABLE_IMAGE.to_le_bytes());
+
+        // ── Optional header (PE32+) ────────────────────────────────
+        buf[oh..oh + 2].copy_from_slice(&pe::IMAGE_NT_OPTIONAL_HDR64_MAGIC.to_le_bytes());
+        // AddressOfEntryPoint
+        buf[oh + 16..oh + 20].copy_from_slice(&0x1000u32.to_le_bytes());
+        // ImageBase
+        let image_base: u64 = 0x0040_0000;
+        buf[oh + 24..oh + 32].copy_from_slice(&image_base.to_le_bytes());
+        // SectionAlignment, FileAlignment
+        buf[oh + 32..oh + 36].copy_from_slice(&0x1000u32.to_le_bytes());
+        buf[oh + 36..oh + 40].copy_from_slice(&0x200u32.to_le_bytes());
+        // SizeOfImage
+        buf[oh + 56..oh + 60].copy_from_slice(&0x4000u32.to_le_bytes());
+        // SizeOfHeaders (must cover section table)
+        buf[oh + 60..oh + 64].copy_from_slice(&0x400u32.to_le_bytes());
+        // NumberOfRvaAndSizes
+        buf[oh + 108..oh + 112].copy_from_slice(&16u32.to_le_bytes());
+
+        // ── IMAGE_DIRECTORY_ENTRY_TLS (index 9) → RVA 0x2000, size 40 ─
+        let tls_dir_slot = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_TLS as usize) * 8;
+        let tls_rva: u32 = 0x2000;
+        buf[tls_dir_slot..tls_dir_slot + 4].copy_from_slice(&tls_rva.to_le_bytes());
+        buf[tls_dir_slot + 4..tls_dir_slot + 8].copy_from_slice(&40u32.to_le_bytes());
+
+        // ── Section: .text @ RVA 0x1000 ────────────────────────────
+        buf[sh..sh + 5].copy_from_slice(b".text");
+        buf[sh + 8..sh + 12].copy_from_slice(&0x200u32.to_le_bytes()); // VirtualSize
+        buf[sh + 12..sh + 16].copy_from_slice(&0x1000u32.to_le_bytes()); // VirtualAddress
+        buf[sh + 16..sh + 20].copy_from_slice(&0x200u32.to_le_bytes()); // SizeOfRawData
+        buf[sh + 20..sh + 24].copy_from_slice(&text_offset.to_le_bytes());
+        buf[sh + 36..sh + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_MEM_EXECUTE | pe::IMAGE_SCN_CNT_CODE)
+                .to_le_bytes(),
+        );
+
+        // ── Section: .tls @ RVA 0x2000 ─────────────────────────────
+        let sh2 = sh + 40;
+        buf[sh2..sh2 + 4].copy_from_slice(b".tls");
+        buf[sh2 + 8..sh2 + 12].copy_from_slice(&tls_size.to_le_bytes());
+        buf[sh2 + 12..sh2 + 16].copy_from_slice(&tls_rva.to_le_bytes());
+        buf[sh2 + 16..sh2 + 20].copy_from_slice(&tls_size.to_le_bytes());
+        buf[sh2 + 20..sh2 + 24].copy_from_slice(&tls_offset.to_le_bytes());
+        buf[sh2 + 36..sh2 + 40].copy_from_slice(
+            &(pe::IMAGE_SCN_MEM_READ | pe::IMAGE_SCN_CNT_INITIALIZED_DATA).to_le_bytes(),
+        );
+
+        // ── .text raw data ─────────────────────────────────────────
+        buf[text_offset as usize] = 0xC3;
+
+        // ── .tls raw data: IMAGE_TLS_DIRECTORY64 (40 B) + callbacks ─
+        let tls = tls_offset as usize;
+        // Place the callback-pointer array at RVA 0x2040 (offset 0x40 inside .tls).
+        let callbacks_rva: u32 = tls_rva + 0x40;
+        let callbacks_va: u64 = image_base + u64::from(callbacks_rva);
+        // StartAddressOfRawData / End / Index — zero is fine for the test.
+        // AddressOfCallBacks at offset 24
+        buf[tls + 24..tls + 32].copy_from_slice(&callbacks_va.to_le_bytes());
+        // SizeOfZeroFill (offset 32..36), Characteristics (36..40) — zero.
+
+        // Callback array @ offset 0x40 inside .tls: one VA, then NUL terminator.
+        let expected_callback_va: u64 = image_base + 0x1000;
+        buf[tls + 0x40..tls + 0x48].copy_from_slice(&expected_callback_va.to_le_bytes());
+        // Bytes 0x48..0x50 already zero → null-terminator.
+
+        (buf, image_base, expected_callback_va)
+    }
+
+    #[test]
+    fn parse_synthetic_pe_with_tls_callbacks() {
+        let (pe, _image_base, expected_cb) = pe64_with_tls_callbacks();
+        let img =
+            PeLoader::load(&pe).expect("synthetic PE64 with TLS directory must parse cleanly");
+        assert_eq!(
+            img.tls_callbacks.len(),
+            1,
+            "exactly one callback recovered before the NUL terminator, got {:?}",
+            img.tls_callbacks
+        );
+        assert_eq!(
+            img.tls_callbacks[0], expected_cb,
+            "callback VA must match the absolute pointer stored in .tls"
+        );
+    }
+
+    #[test]
+    fn pe_without_tls_directory_has_empty_callbacks() {
+        // `minimal_pe64()` sets NumberOfRvaAndSizes = 0 — there is no TLS
+        // data-directory slot at all. The loader must respond by leaving
+        // `tls_callbacks` empty rather than panicking or fabricating entries.
+        let pe = minimal_pe64();
+        let img = PeLoader::load(&pe).expect("minimal PE64 must parse");
+        assert!(
+            img.tls_callbacks.is_empty(),
+            "PE without IMAGE_DIRECTORY_ENTRY_TLS yields empty tls_callbacks, got {:?}",
+            img.tls_callbacks
         );
     }
 }

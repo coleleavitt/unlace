@@ -34,6 +34,9 @@ pub enum IntrinsicCategory {
     AvxArith,
     /// AVX aligned/unaligned moves: VMOVDQA, VMOVDQU.
     AvxMove,
+    /// AVX-512 (EVEX) packed arithmetic, 64-byte / ZMM output:
+    /// VPADDQ_512, VPSUBQ_512, VPMULLQ_512, …
+    Avx512Arith,
     /// x87 FPU instructions: FLD, FSTP, FADD, FMUL, etc.
     X87Fpu,
     /// Anything that doesn't fit the above.
@@ -298,6 +301,14 @@ impl Default for IntrinsicRegistry {
             ("VPAND", info("_mm256_and_si256", 2, 32, AvxArith)),
             ("VPOR", info("_mm256_or_si256", 2, 32, AvxArith)),
             ("VPXOR", info("_mm256_xor_si256", 2, 32, AvxArith)),
+            // ── AVX-512 EVEX 64-bit-lane packed ops (t205) ──────────
+            //
+            // 512-bit / ZMM forms. Distinct entries from the 256-bit
+            // VEX forms so the recoverer can pick the correct C
+            // intrinsic name from the Callother tag alone.
+            ("VPADDQ_512", info("_mm512_add_epi64", 2, 64, Avx512Arith)),
+            ("VPSUBQ_512", info("_mm512_sub_epi64", 2, 64, Avx512Arith)),
+            ("VPMULLQ_512", info("_mm512_mullo_epi64", 2, 64, Avx512Arith)),
             // ── AVX packed float arithmetic ─────────────────────────
             ("VADDPS", info("_mm256_add_ps", 2, 32, AvxArith)),
             ("VSUBPS", info("_mm256_sub_ps", 2, 32, AvxArith)),
@@ -455,6 +466,28 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// t205 — every AVX-512 (EVEX) entry must declare a 64-byte / ZMM
+    /// output size so downstream consumers can rely on the category
+    /// alone to size a Callother destination.
+    #[test]
+    fn test_avx512_output_size_64() {
+        let reg = registry();
+        let mut count = 0usize;
+        for (mnemonic, info) in reg.iter() {
+            if matches!(info.category, IntrinsicCategory::Avx512Arith) {
+                assert_eq!(
+                    info.output_size, 64,
+                    "AVX-512 entry {mnemonic} should have 64-byte output"
+                );
+                count += 1;
+            }
+        }
+        assert!(
+            count >= 3,
+            "expected at least the t205 trio (VPADDQ/VPSUBQ/VPMULLQ_512), found {count}",
+        );
     }
 
     #[test]

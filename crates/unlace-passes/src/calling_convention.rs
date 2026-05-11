@@ -258,7 +258,9 @@ fn has_shadow_space_stores(func: &SsaFunction) -> bool {
 // ---------------------------------------------------------------------------
 
 const VEC_BASE: u64 = 0x400;
-const VEC_STRIDE: u64 = 32;
+// 64-byte stride: each vector slot is sized for a full ZMM (AVX-512).
+// XMM/YMM still alias at the same base offset.
+const VEC_STRIDE: u64 = 64;
 const fn xmm_offset(n: u64) -> u64 {
     VEC_BASE + n * VEC_STRIDE
 }

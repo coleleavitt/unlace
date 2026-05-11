@@ -25,6 +25,8 @@ use std::collections::BTreeMap;
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::IrOp;
 
+use crate::pass::{Pass, PassError};
+
 /// One type-recovery fact about an SSA varnode (or a pair of them).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Constraint {
@@ -217,6 +219,27 @@ pub fn collect_and_apply(func: &mut SsaFunction) -> bool {
         }
     }
     changed
+}
+
+/// TIE-style constraint solver wrapped as a [`Pass`] so it can slot into
+/// the per-function pipeline. Runs once per outer fixed-point iteration
+/// after [`crate::type_infer::TypeInferPass`]: TypeInferPass walks
+/// instructions ad-hoc, this pass closes the gaps by materialising the
+/// implicit constraint graph (LOAD addresses, phi joins, SameType edges
+/// across binops) and joining on the [`PrimitiveType`] lattice.
+///
+/// `name()` returns `"TypeConstraintSolver"` so the pass appears in
+/// fixed-point traces alongside its siblings.
+pub struct TypeConstraintSolverPass;
+
+impl Pass for TypeConstraintSolverPass {
+    fn name(&self) -> &str {
+        "TypeConstraintSolver"
+    }
+
+    fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        Ok(collect_and_apply(func))
+    }
 }
 
 // ----- helpers -----
@@ -487,6 +510,55 @@ mod tests {
             ssa.var_types.get(&wide_sv).copied(),
             Some(PrimitiveType::Int(8)),
             "SEXT output must be Int(8)"
+        );
+    }
+
+    /// t228 smoke test: the pipeline wires `TypeInferPass` then
+    /// `TypeConstraintSolverPass`. Before the constraint solver runs, the
+    /// LOAD's address operand is left as `Unknown` (TypeInferPass models
+    /// some but not all LOAD/STORE address shapes — in particular when
+    /// the address comes through an unannotated COPY chain). The
+    /// constraint solver's `PointsTo` rule must close that gap.
+    #[test]
+    fn t228_pass_wrapper_promotes_load_addr_to_ptr() {
+        use crate::pass::Pass;
+        use crate::type_infer::TypeInferPass;
+
+        let r0 = Varnode::reg(0, 8);
+        let ptr = Varnode::unique(0, 8);
+        let val = Varnode::unique(8, 4);
+        let sum = Varnode::unique(16, 4);
+        let c_space = Varnode::constant(SpaceId::Ram as u64, 8);
+        let c1 = Varnode::constant(1, 4);
+
+        let i0 = IrInsn::with_output(IrOp::Copy, ptr, smallvec![r0], 0x1000);
+        let i1 = IrInsn::with_output(IrOp::Load, val, smallvec![c_space, ptr], 0x1004);
+        let i2 = IrInsn::with_output(IrOp::IntAdd, sum, smallvec![val, c1], 0x1008);
+
+        let mut ssa = make_ssa(vec![i0, i1, i2]);
+
+        // Sanity: address operand should not yet be `Ptr` (it is either
+        // unset or carries whatever TypeInferPass concluded on its own).
+        let addr_sv = lookup_in(&ssa, BlockId(0), 1, 1);
+        let before = ssa.var_types.get(&addr_sv).copied();
+        assert_ne!(
+            before,
+            Some(PrimitiveType::Ptr),
+            "precondition: addr must not yet be Ptr (got {:?})",
+            before
+        );
+
+        // Run the same two passes the CLI pipeline runs.
+        TypeInferPass.run(&mut ssa).expect("type infer");
+        TypeConstraintSolverPass
+            .run(&mut ssa)
+            .expect("type constraint solver");
+
+        assert_eq!(
+            ssa.var_types.get(&addr_sv).copied(),
+            Some(PrimitiveType::Ptr),
+            "LOAD address must be promoted to Ptr after both passes; var_types={:?}",
+            ssa.var_types
         );
     }
 

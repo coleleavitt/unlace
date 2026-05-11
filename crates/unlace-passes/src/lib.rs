@@ -138,6 +138,10 @@ pub use struct_field_recovery::recover_structs;
 pub use var_naming::{VarClassification, VarNamingPass, VarRole, classify_variables, suggest_name};
 pub use tail_call::TailCallDetectPass;
 pub use tail_duplication::TailDuplicationPass;
+pub use type_constraint_solver::{
+    Constraint, TypeConstraintSolverPass, collect_and_apply as solve_type_constraints,
+    collect_constraints, solve_constraints,
+};
 pub use variable_merge::VariableMergePass;
 
 /// Names of the passes scheduled in the default per-function pipeline's

@@ -41,6 +41,7 @@ pub mod gui_lib_recognize;
 pub mod gvn;
 pub mod idiom_recognition;
 pub mod libc_signatures;
+pub mod lazy_lift;
 pub mod libc_idioms;
 pub mod iv_elim;
 pub mod licm;

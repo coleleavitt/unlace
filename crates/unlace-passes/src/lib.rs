@@ -25,6 +25,7 @@ pub mod dead_flag_elim;
 pub mod dead_store_elim;
 pub mod dse_global;
 pub mod division_idiom;
+pub mod embed_interp_recognize;
 pub mod expression_tree;
 pub mod global_copy_prop;
 pub mod go_closure;

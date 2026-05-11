@@ -46,7 +46,7 @@
 //! | `cot_call` (60)        | `f(...)`            | `Call`/`Callind`             | ✅ |
 //! | `cot_var/obj/num/...`  | name / literal      | `emit_operand_with_prec`     | ✅ |
 //! | `cot_str` (63)         | `"..."`             | `emit_operand_with_prec` + `escape_c_string` | ✅ |
-//! | `cot_fnum` (64)        | float literal       | `format_constant_ctx` (TODO floats) | ⚠️ partial |
+//! | `cot_fnum` (64)        | float literal       | `format_constant_ctx` + `format_float_literal` | ✅ |
 //! | `cot_helper` (65)      | `__builtin_*` call  | `callother_intrinsic_name` table; `Popcount`/`Lzcount` direct | ✅ |
 //! | `cot_sizeof` (66)      | `sizeof(x)`         | helper [`emit_sizeof_expr`] / [`emit_sizeof_type`] available; no IR producer yet | ⚠️ deferred |
 //! | `cot_alignof` (67)     | `_Alignof(T)`       | helper [`emit_alignof_type`] available; no IR producer yet | ⚠️ deferred |

@@ -81,7 +81,7 @@ Statuses:
 | 62  | obj         | global object        | `try_global_var_name` / symbol-table fallback  | ✅            |
 | 63  | num         | integer literal      | `format_constant_ctx`                          | ✅            |
 | 64  | str         | `"..."`              | `emit_operand_with_prec` + `escape_c_string`   | ✅            |
-| 65  | fnum        | float literal        | `format_constant_ctx` (TODO floats)            | ⚠️ partial    |
+| 65  | fnum        | float literal        | `format_constant_ctx` + `format_float_literal` | ✅ complete   |
 | 66  | helper      | `__builtin_*` call   | `callother_intrinsic_name` table               | ✅            |
 | 67  | sizeof      | `sizeof(...)`        | `emit_sizeof_type` / `emit_sizeof_expr`        | ⚠️ deferred   |
 | 68  | alignof     | `_Alignof(T)`        | `emit_alignof_type`                            | ⚠️ deferred   |

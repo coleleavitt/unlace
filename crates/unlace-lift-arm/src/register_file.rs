@@ -57,6 +57,42 @@ pub const VF: u64 = 267; // oVerflow flag (byte 3 of NZCV)
 /// in one hop rather than four.
 pub const ARM_NZCV: u64 = 272;
 
+// ── SVE scalable vector registers ──────────────────────────────────────
+// Z0–Z31: 32-byte nominal (256-bit minimum VL). Placed after ARM_NZCV+4.
+pub const SVE_Z_BASE: u64 = 280;
+/// Size of each Z register varnode in bytes (nominal 256-bit).
+pub const SVE_Z_SIZE: u8 = 32;
+
+/// Offset of Z register `n` (0..32).
+pub const fn sve_z_offset(n: u8) -> u64 {
+    SVE_Z_BASE + (n as u64) * SVE_Z_SIZE as u64
+}
+
+// P0–P15: SVE predicate registers, 4 bytes nominal (one bit per byte-lane
+// at VL=256). Placed after Z31.
+pub const SVE_P_BASE: u64 = SVE_Z_BASE + 32 * SVE_Z_SIZE as u64; // 280 + 1024 = 1304
+/// Size of each P register varnode in bytes (nominal).
+pub const SVE_P_SIZE: u8 = 4;
+
+/// Offset of P register `n` (0..16).
+pub const fn sve_p_offset(n: u8) -> u64 {
+    SVE_P_BASE + (n as u64) * SVE_P_SIZE as u64
+}
+
+/// SVE Z-register names.
+const SVE_Z_NAMES: [&str; 32] = [
+    "Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7",
+    "Z8", "Z9", "Z10", "Z11", "Z12", "Z13", "Z14", "Z15",
+    "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23",
+    "Z24", "Z25", "Z26", "Z27", "Z28", "Z29", "Z30", "Z31",
+];
+
+/// SVE P-register names.
+const SVE_P_NAMES: [&str; 16] = [
+    "P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7",
+    "P8", "P9", "P10", "P11", "P12", "P13", "P14", "P15",
+];
+
 /// Names for X0..X30.
 const XREG_NAMES: [&str; 31] = [
     "X0", "X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8", "X9", "X10", "X11", "X12", "X13", "X14",
@@ -64,9 +100,9 @@ const XREG_NAMES: [&str; 31] = [
     "X28", "X29", "X30",
 ];
 
-/// Build the full AArch64 register file.
+/// Build the full AArch64 register file (including SVE Z0–Z31 / P0–P15).
 pub fn aarch64_register_file() -> RegisterFile {
-    let mut regs = Vec::with_capacity(34);
+    let mut regs = Vec::with_capacity(34 + 32 + 16);
     for i in 0..31u64 {
         regs.push(RegisterDef {
             name: XREG_NAMES[i as usize],
@@ -89,6 +125,20 @@ pub fn aarch64_register_file() -> RegisterFile {
         name: "PSTATE_NZCV",
         varnode: Varnode::reg(ARM_NZCV, 4),
     });
+    // SVE Z registers (Z0–Z31, 32 bytes each)
+    for i in 0..32u8 {
+        regs.push(RegisterDef {
+            name: SVE_Z_NAMES[i as usize],
+            varnode: Varnode::reg(sve_z_offset(i), SVE_Z_SIZE),
+        });
+    }
+    // SVE P registers (P0–P15, 4 bytes each)
+    for i in 0..16u8 {
+        regs.push(RegisterDef {
+            name: SVE_P_NAMES[i as usize],
+            varnode: Varnode::reg(sve_p_offset(i), SVE_P_SIZE),
+        });
+    }
     RegisterFile { registers: regs }
 }
 

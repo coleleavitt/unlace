@@ -12,6 +12,7 @@ pub mod dyld_cache;
 pub mod eh_frame;
 pub mod elf;
 pub mod error;
+pub mod esp32_image;
 pub mod flirt;
 pub mod gcc_except_table;
 pub mod gopclntab;

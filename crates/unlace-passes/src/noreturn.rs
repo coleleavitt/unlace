@@ -192,6 +192,7 @@ mod tests {
             byref_boxes: std::collections::BTreeMap::new(),
             stack_frame: None,
             byref_info: None,
+            libc_call_annotations: std::collections::BTreeMap::new(),
         }
     }
 

@@ -13,4 +13,5 @@ unlace-lift-ppc = { workspace = true }
 unlace-lift-v850 = { workspace = true }
 unlace-lift-arc = { workspace = true }
 unlace-lift-ebpf = { workspace = true }
+unlace-lift-avr = { workspace = true }
 thiserror = { workspace = true }

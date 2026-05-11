@@ -41,7 +41,7 @@ use crate::ssa::PrimitiveType;
 ///
 /// Wraps [`PrimitiveType`] for the scalar cases and adds composite variants
 /// (pointers, arrays, structs, function pointers).
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Type {
     /// A scalar primitive type carried over from the SSA pipeline.
     Primitive(PrimitiveType),
@@ -106,7 +106,7 @@ pub enum Type {
 }
 
 /// A single field within a [`Type::Struct`].
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct StructFieldType {
     pub name: String,
     pub ty: Type,
@@ -122,7 +122,7 @@ pub struct StructFieldType {
 /// `fields` lists every distinct `(offset, access_width)` observed across
 /// LOAD/STORE instructions whose address is `arr_ptr + stride*iv + offset`,
 /// sorted ascending by offset.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct InferredStruct {
     pub size: u64,
     pub fields: Vec<StructField>,
@@ -133,7 +133,7 @@ pub struct InferredStruct {
 /// `offset` is the byte offset from the per-element base.
 /// `size` is the access width in bytes (1/2/4/8/16) — the dominant
 /// (maximum) width observed at this offset.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct StructField {
     pub offset: u64,
     pub size: u8,
@@ -144,7 +144,7 @@ pub struct StructField {
 /// `name` is the bare method identifier as it would appear in a Go source
 /// `interface { … }` block. `signature` is an optional Go-syntax parameter
 /// list (e.g. `() error`); when `None` the printer renders just `name()`.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct InterfaceMethod {
     pub name: String,
     pub signature: Option<String>,

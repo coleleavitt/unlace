@@ -1,6 +1,7 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
 pub mod algebraic_simplify;
+pub mod bool_simplify;
 pub mod auth_call_resolve;
 pub mod bitfield_idioms;
 pub mod bmi_idioms;
@@ -87,6 +88,7 @@ pub use calling_convention::{CallingConventionDetectPass, ParamInferPass, Return
 pub use calling_conv_finalize::{
     CallingConvFinalizePass, FinalizedSignature, finalize_signature,
 };
+pub use bool_simplify::BoolSimplifyPass;
 pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;

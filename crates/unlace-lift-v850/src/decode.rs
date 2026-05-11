@@ -51,6 +51,46 @@ pub enum V850Op {
     Mulh { dst: u8, src: u8 },
     /// MULH imm5, reg2
     MulhImm5 { dst: u8, imm: i32 },
+    /// MUL reg1, reg2, reg3  (signed 32x32 -> 64; reg2=low, reg3=high)
+    Mul { reg1: u8, reg2: u8, reg3: u8 },
+    /// MULU reg1, reg2, reg3 (unsigned 32x32 -> 64)
+    Mulu { reg1: u8, reg2: u8, reg3: u8 },
+    /// DIV reg1, reg2, reg3  (signed; reg2=quotient, reg3=remainder)
+    Div { reg1: u8, reg2: u8, reg3: u8 },
+    /// DIVU reg1, reg2, reg3 (unsigned)
+    Divu { reg1: u8, reg2: u8, reg3: u8 },
+    /// DIVH reg1, reg2  (16-bit signed divide: reg2 = reg2 / sign_ext16(reg1))
+    Divh { dst: u8, src: u8 },
+    /// DIVHU reg1, reg2, reg3 (16-bit unsigned)
+    Divhu { reg1: u8, reg2: u8, reg3: u8 },
+
+    // --- Saturating arithmetic ---
+    /// SATADD reg1, reg2 (reg2 = sat32(reg2 + reg1))
+    Satadd { dst: u8, src: u8 },
+    /// SATADD imm5, reg2
+    SataddImm5 { dst: u8, imm: i32 },
+    /// SATSUB reg1, reg2 (reg2 = sat32(reg2 - reg1))
+    Satsub { dst: u8, src: u8 },
+    /// SATSUBR reg1, reg2 (reg2 = sat32(reg1 - reg2))
+    Satsubr { dst: u8, src: u8 },
+
+    // --- Byte/half swap ---
+    /// BSW reg2, reg3  (reverse all 4 bytes in reg2 -> reg3)
+    Bsw { src: u8, dst: u8 },
+    /// BSH reg2, reg3  (swap bytes within each halfword in reg2 -> reg3)
+    Bsh { src: u8, dst: u8 },
+
+    // --- Conditional move ---
+    /// CMOV cond, reg1, reg2, reg3  (reg3 = cond ? reg1 : reg2)
+    Cmov { cond: BranchCond, reg1: u8, reg2: u8, reg3: u8 },
+
+    // --- Short load (EP-relative) ---
+    /// SLD.B disp7, reg2   (reg2 = sign_ext8([ep + disp7]))
+    SldB { dst: u8, disp: u32 },
+    /// SLD.H disp8, reg2   (reg2 = sign_ext16([ep + disp8]))
+    SldH { dst: u8, disp: u32 },
+    /// SLD.W disp8, reg2   (reg2 = [ep + disp8])
+    SldW { dst: u8, disp: u32 },
 
     // --- Bitwise ---
     /// AND reg1, reg2  (reg2 = reg2 & reg1)
@@ -204,14 +244,13 @@ pub fn decode(bytes: &[u8], _addr: u64) -> Option<V850Insn> {
     let reg1 = (hw0 & 0x1F) as u8;
     let reg2 = ((hw0 >> 11) & 0x1F) as u8;
 
-    // Extended 32-bit instructions (bits[10:5] == 0b111111)
-    // We skip these for MVP — emit Unknown
+    // Extended 32-bit instructions (bits[10:5] == 0b111111) — Format XI/XII.
     if opcode_10_5 == 0x3F {
-        let len = if bytes.len() >= 4 { 4 } else { 2 };
-        return Some(V850Insn {
-            op: V850Op::Unknown { hw0 },
-            len,
-        });
+        if bytes.len() < 4 {
+            return None;
+        }
+        let hw1 = u16::from_le_bytes([bytes[2], bytes[3]]);
+        return Some(decode_extended(hw0, hw1, reg1, reg2));
     }
 
     // -----------------------------------------------------------------
@@ -254,8 +293,15 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
             src: reg1,
         },
         (0b0000, 0b10) => {
-            // DIVH / SWITCH / FETRAP / RIE — complex dispatch, emit Unknown for MVP
-            V850Op::Unknown { hw0 }
+            // DIVH / SWITCH / FETRAP / RIE — when reg2!=0 it's DIVH.
+            if reg2 != 0 {
+                V850Op::Divh {
+                    dst: reg2,
+                    src: reg1,
+                }
+            } else {
+                V850Op::Unknown { hw0 }
+            }
         }
         (0b0000, 0b11) => {
             if reg2 == 0 {
@@ -271,21 +317,21 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
             if reg2 == 0 {
                 V850Op::Zxb { reg: reg1 }
             } else {
-                V850Op::Unknown { hw0 } // SATSUBR
+                V850Op::Satsubr { dst: reg2, src: reg1 }
             }
         }
         (0b0001, 0b01) => {
             if reg2 == 0 {
                 V850Op::Sxb { reg: reg1 }
             } else {
-                V850Op::Unknown { hw0 } // SATSUB
+                V850Op::Satsub { dst: reg2, src: reg1 }
             }
         }
         (0b0001, 0b10) => {
             if reg2 == 0 {
                 V850Op::Zxh { reg: reg1 }
             } else {
-                V850Op::Unknown { hw0 } // SATADD
+                V850Op::Satadd { dst: reg2, src: reg1 }
             }
         }
         (0b0001, 0b11) => {
@@ -340,7 +386,16 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
                 V850Op::Unknown { hw0 } // CALLT
             }
         }
-        (0b0100, 0b01) => V850Op::Unknown { hw0 }, // SATADD imm5 / CALLT
+        (0b0100, 0b01) => {
+            if reg2 != 0 {
+                V850Op::SataddImm5 {
+                    dst: reg2,
+                    imm: sign_ext(reg1 as u32, 5),
+                }
+            } else {
+                V850Op::Unknown { hw0 } // CALLT
+            }
+        }
         (0b0100, 0b10) => V850Op::AddImm5 {
             dst: reg2,
             imm: sign_ext(reg1 as u32, 5),
@@ -388,15 +443,75 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
             }
         }
 
-        // Format IV: short load/store (ep-relative) — skip for MVP
-        (0b0110, _) | (0b0111, _) | (0b1000, _) | (0b1001, _) | (0b1010, _) => {
-            V850Op::Unknown { hw0 }
-        }
+        // Format IV: short load (ep-relative). disp7 is the low 7 bits of hw0.
+        (0b0110, _) => V850Op::SldB {
+            dst: reg2,
+            disp: (hw0 & 0x7F) as u32,
+        },
+        (0b1000, _) => V850Op::SldH {
+            dst: reg2,
+            disp: ((hw0 & 0x7F) as u32) << 1,
+        },
+        (0b1010, _) if (hw0 & 1) == 0 => V850Op::SldW {
+            dst: reg2,
+            disp: ((hw0 & 0x7E) as u32) << 1,
+        },
+        // SST.* and other Format IV variants — skip for MVP
+        (0b0111, _) | (0b1001, _) | (0b1010, _) => V850Op::Unknown { hw0 },
 
         _ => V850Op::Unknown { hw0 },
     };
 
     V850Insn { op, len: 2 }
+}
+
+// ---------------------------------------------------------------------------
+// Extended-32 instruction decoder (Format XI / XII).
+// hw0[10:5] == 0b111111. Sub-opcode lives in hw1[10:5] and hw1[0].
+// hw0[15:11] = reg2, hw0[4:0] = reg1, hw1[15:11] = reg3.
+// ---------------------------------------------------------------------------
+
+fn decode_extended(hw0: u16, hw1: u16, reg1: u8, reg2: u8) -> V850Insn {
+    let reg3 = ((hw1 >> 11) & 0x1F) as u8;
+    let sub = (hw1 >> 5) & 0x3F;
+    let bit0 = hw1 & 1;
+
+    let op = match (sub, bit0) {
+        // MUL / MULU (signed/unsigned 32x32 -> 64)
+        (0x22, 0) => V850Op::Mul { reg1, reg2, reg3 },
+        (0x22, 1) => V850Op::Mulu { reg1, reg2, reg3 },
+        // DIVH / DIVHU (reg-reg-reg form)
+        (0x02, 0) => V850Op::Divh {
+            dst: reg2,
+            src: reg1,
+        },
+        (0x02, 1) => V850Op::Divhu { reg1, reg2, reg3 },
+        // DIV / DIVU
+        (0x2C, 0) => V850Op::Div { reg1, reg2, reg3 },
+        (0x2A, 0) => V850Op::Divu { reg1, reg2, reg3 },
+        // BSW / BSH — only reg2 (src) and reg3 (dst) are used.
+        (0x14, 0) => V850Op::Bsw {
+            src: reg2,
+            dst: reg3,
+        },
+        (0x14, 1) => V850Op::Bsh {
+            src: reg2,
+            dst: reg3,
+        },
+        // CMOV reg-reg-reg-reg: cond in hw1[4:1].
+        (0x32, _) => {
+            let cond_bits = ((hw1 >> 1) & 0xF) as u8;
+            V850Op::Cmov {
+                cond: BranchCond::from_bits(cond_bits),
+                reg1,
+                reg2,
+                reg3,
+            }
+        }
+        _ => V850Op::Unknown { hw0 },
+    };
+
+    V850Insn { op, len: 4 }
 }
 
 // ---------------------------------------------------------------------------

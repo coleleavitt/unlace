@@ -5,6 +5,7 @@ pub mod cfg_dot;
 pub mod cpp_class;
 pub mod cpp_stl;
 pub mod demangle;
+pub mod instruction_annotations;
 pub mod ir_dump;
 
 pub use c_printer::{
@@ -20,4 +21,5 @@ pub use cpp_stl::{
     looks_like_vector_layout, recognize_stl,
 };
 pub use demangle::{DemangleResult, SymbolKind, SymbolLanguage, demangle, sanitize_for_c};
+pub use instruction_annotations::collect_function_annotations;
 pub use ir_dump::dump_ir;

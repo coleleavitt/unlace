@@ -2139,6 +2139,45 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.stmt_outputs.insert(idx, Some(out_sv));
             }
 
+            HirNode::IfCmp {
+                cmp_lhs,
+                cmp_rhs,
+                then_body,
+                else_body,
+                ..
+            } => {
+                // Anchor the cmp operand reads at the next-allocated stmt
+                // (mirrors the `If` branch above) so the hoist pass treats
+                // them as uses at the enclosing scope.
+                for input in [cmp_lhs, cmp_rhs] {
+                    if input.space == SpaceId::Const {
+                        continue;
+                    }
+                    let ver = ctx.current_version(input);
+                    let sv = SsaVarnode {
+                        base: *input,
+                        version: ver,
+                    };
+                    ctx.name_of(&sv);
+                    ctx.cond_uses.push(sv);
+                    ctx.cond_use_stmts.push((sv, ctx.next_stmt));
+                }
+                ctx.collect_depth += 1;
+                let then_scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(then_scope);
+                collect_varnodes(then_body, ctx);
+                ctx.current_scope_path.pop();
+                if let Some(eb) = else_body {
+                    let else_scope = ctx.next_scope_id;
+                    ctx.next_scope_id += 1;
+                    ctx.current_scope_path.push(else_scope);
+                    collect_varnodes(eb, ctx);
+                    ctx.current_scope_path.pop();
+                }
+                ctx.collect_depth -= 1;
+            }
+
             HirNode::Return(None)
             | HirNode::Goto(_)
             | HirNode::Label(_)
@@ -3464,6 +3503,49 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             let cond_expr = resolve_sv_expr(cond, ctx);
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "if ({}) {{", cond_expr);
+            emit_nodes(then_body, depth + 1, ctx, out);
+            if let Some(eb) = else_body {
+                indent(depth, ctx.config.tab_width, out);
+                let _ = writeln!(out, "}} else {{");
+                emit_nodes(eb, depth + 1, ctx, out);
+            }
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "}}");
+        }
+
+        HirNode::IfCmp {
+            cmp_op,
+            cmp_lhs,
+            cmp_rhs,
+            then_body,
+            else_body,
+            ..
+        } => {
+            // Mirror `CselTernary`'s operand rendering for the predicate.
+            fn render_one(vn: &Varnode, ctx: &mut PrintCtx) -> String {
+                if vn.space == SpaceId::Const {
+                    format!("0x{:x}", vn.offset)
+                } else {
+                    let ver = ctx.current_version(vn);
+                    ctx.name_of(&SsaVarnode {
+                        base: *vn,
+                        version: ver,
+                    })
+                }
+            }
+            let lhs_s = render_one(cmp_lhs, ctx);
+            let rhs_s = render_one(cmp_rhs, ctx);
+            let op_str = match cmp_op {
+                IrOp::IntEqual => "==",
+                IrOp::IntNotequal => "!=",
+                IrOp::IntLess => "<",
+                IrOp::IntLessequal => "<=",
+                IrOp::IntSless => "<",
+                IrOp::IntSlessequal => "<=",
+                _ => "/*?*/",
+            };
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "if ({} {} {}) {{", lhs_s, op_str, rhs_s);
             emit_nodes(then_body, depth + 1, ctx, out);
             if let Some(eb) = else_body {
                 indent(depth, ctx.config.tab_width, out);

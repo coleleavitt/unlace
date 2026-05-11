@@ -342,6 +342,42 @@ pub enum HirNode {
         addr: u64,
     },
 
+    /// An AArch64 CMP+Bcc fold: an `if`/`else` whose predicate is the
+    /// explicit comparison the preceding CMP/SUBS produced, rather than
+    /// an opaque NZCV flag-byte SSA read.
+    ///
+    /// The lifter emits a `Cbranch` consuming one of the per-flag bytes
+    /// (`NF`/`ZF`/`CF`/`VF` at offsets 264..=267) or the packed `ARM_NZCV`
+    /// (offset 272) that a prior CMP/SUBS wrote. The structurer's
+    /// `fold_aarch64_bcc_if` pass (t189) detects the pattern and rewrites
+    /// the resulting [`HirNode::If`] into this variant, which the C printer
+    /// renders as
+    ///
+    /// ```text
+    /// if (cmp_lhs <cmp_op> cmp_rhs) { … } else { … }
+    /// ```
+    ///
+    /// `cmp_op` is one of the `Int*` comparison opcodes derived from the
+    /// AArch64 condition code (EQ→IntEqual, NE→IntNotequal, GE→IntSlessequal
+    /// with operands swapped, LT→IntSless, …). `cmp_lhs`/`cmp_rhs` are the
+    /// two operands of the preceding `IntSub` (the IR shape that
+    /// `lift_cmp`/`lift_subs` emit). Mirrors [`HirNode::CselTernary`] for
+    /// branches.
+    IfCmp {
+        /// Comparison opcode (e.g. `IrOp::IntEqual`, `IrOp::IntSless`).
+        cmp_op: IrOp,
+        /// Left-hand side of the comparison (the CMP/SUBS Rn).
+        cmp_lhs: Varnode,
+        /// Right-hand side of the comparison (the CMP/SUBS Rm or immediate).
+        cmp_rhs: Varnode,
+        /// Body executed when the predicate is true.
+        then_body: Vec<HirNode>,
+        /// Optional body executed when the predicate is false.
+        else_body: Option<Vec<HirNode>>,
+        /// Machine address of the Bcc instruction (for ordering / debug).
+        addr: u64,
+    },
+
     /// One or more raw assembly lines that the lifter could not translate
     /// into structured IR.
     ///

@@ -2386,4 +2386,104 @@ mod tests {
         assert_eq!(src1.offset, crate::register_file::YMM0);
         assert_eq!(src2.offset, crate::register_file::YMM1);
     }
+
+    // ── t205: AVX-512 EVEX lifting ──────────────────────────────────
+    //
+    // EVEX byte-string layout for `vp{add,sub,mul}q zmm0, zmm1, zmm2`:
+    //   62 F1 F5 48 D4 C2  vpaddq  zmm0, zmm1, zmm2
+    //   62 F1 F5 48 FB C2  vpsubq  zmm0, zmm1, zmm2
+    //   62 F2 F5 48 40 C2  vpmullq zmm0, zmm1, zmm2
+    //
+    // P0=F1 selects map=0F + high R/R'/B/X bits, P1=F5 selects W=1,
+    // vvvv=~src1=~1=0b1110, pp=01 (66 prefix); P2=48 selects L'L=10
+    // (512-bit) and V'=1 (high bit of src1 inverted). VPMULLQ lives in
+    // the 0F38 map so its P0 byte is F2.
+
+    /// Helper: assert a Callother with `expected_tag` is emitted AND
+    /// its output writes a 64-byte register at ZMM0's offset.
+    fn assert_avx512_lift(bytes: &[u8], expected_tag: u64) {
+        let result = lifter()
+            .lift_insn(bytes, 0x1000)
+            .expect("EVEX instruction should decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("EVEX instruction should emit Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(expected_tag, 8),
+            "Callother tag mismatch",
+        );
+        let dst = co.output.expect("EVEX instruction should write a ZMM");
+        assert_eq!(dst.size, 64, "AVX-512 destination must be 64 bytes");
+        assert_eq!(
+            dst.offset,
+            crate::register_file::ZMM0,
+            "destination should be ZMM0",
+        );
+        let unimpl = result
+            .ir_ops
+            .iter()
+            .filter(|i| i.op == IrOp::Unimplemented)
+            .count();
+        assert_eq!(unimpl, 0, "EVEX lift should not emit Unimplemented");
+    }
+
+    /// t205 — VPADDQ zmm0, zmm1, zmm2 → `_mm512_add_epi64`.
+    #[test]
+    fn t205_vpaddq_zmm_lift() {
+        assert_avx512_lift(
+            &[0x62, 0xF1, 0xF5, 0x48, 0xD4, 0xC2],
+            sse_tag::VPADDQ_512,
+        );
+    }
+
+    /// t205 — VPSUBQ zmm0, zmm1, zmm2 → `_mm512_sub_epi64`.
+    #[test]
+    fn t205_vpsubq_zmm_lift() {
+        assert_avx512_lift(
+            &[0x62, 0xF1, 0xF5, 0x48, 0xFB, 0xC2],
+            sse_tag::VPSUBQ_512,
+        );
+    }
+
+    /// t205 — VPMULLQ zmm0, zmm1, zmm2 → `_mm512_mullo_epi64`.
+    #[test]
+    fn t205_vpmullq_zmm_lift() {
+        assert_avx512_lift(
+            &[0x62, 0xF2, 0xF5, 0x48, 0x40, 0xC2],
+            sse_tag::VPMULLQ_512,
+        );
+    }
+
+    /// t205 — ZMM register-write sanity. The Callother destination must
+    /// land at the same base offset as XMM0/YMM0, with size 64. Sources
+    /// must read 64-byte ZMM varnodes (op0 is pure dst under EVEX, so
+    /// the sources come from op1 / op2 just like the AVX2 case).
+    #[test]
+    fn t205_zmm_register_write_sanity() {
+        let result = lifter()
+            .lift_insn(&[0x62, 0xF1, 0xF5, 0x48, 0xD4, 0xC2], 0x1000)
+            .expect("vpaddq zmm should decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("vpaddq zmm should emit Callother");
+        let dst = co.output.expect("vpaddq zmm should write a register");
+
+        assert_eq!(dst.offset, crate::register_file::ZMM0);
+        assert_eq!(dst.offset, crate::register_file::XMM0);
+        assert_eq!(dst.offset, crate::register_file::YMM0);
+        assert_eq!(dst.size, 64, "VPADDQ.512 writes 512 bits / 64 bytes");
+
+        assert_eq!(co.inputs.len(), 3, "VPADDQ.512 shape: (tag, src1, src2)");
+        let src1 = &co.inputs[1];
+        let src2 = &co.inputs[2];
+        assert_eq!(src1.size, 64);
+        assert_eq!(src2.size, 64);
+        assert_eq!(src1.offset, crate::register_file::ZMM1);
+        assert_eq!(src2.offset, crate::register_file::ZMM2);
+    }
 }

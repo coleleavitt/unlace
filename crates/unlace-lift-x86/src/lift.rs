@@ -517,6 +517,21 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Vpxor => sse::lift_avx_binop(ctx, insn, sse::tag::VPXOR),
         M::Vpblendd => sse::lift_avx_blend(ctx, insn, sse::tag::VPBLENDD),
 
+        // ── AVX-512 EVEX 64-bit-lane packed ops (t205) ──────────
+        //
+        // The same iced mnemonic `Vpaddq`/`Vpsubq` covers both the
+        // 256-bit VEX form (ymm dst) and the 512-bit EVEX form (zmm
+        // dst). We only emit the EVEX tags here; the 256-bit AVX2
+        // form is handled by a sibling task. `Vpmullq` is AVX-512
+        // exclusive so it always takes the 512-bit tag.
+        M::Vpaddq if sse::is_zmm_dst(insn) => {
+            sse::lift_avx_binop(ctx, insn, sse::tag::VPADDQ_512)
+        }
+        M::Vpsubq if sse::is_zmm_dst(insn) => {
+            sse::lift_avx_binop(ctx, insn, sse::tag::VPSUBQ_512)
+        }
+        M::Vpmullq => sse::lift_avx_binop(ctx, insn, sse::tag::VPMULLQ_512),
+
         M::Fld => fpu::lift_fld(ctx, insn),
         M::Fst => fpu::lift_fst(ctx, insn),
         M::Fstp => fpu::lift_fstp(ctx, insn),

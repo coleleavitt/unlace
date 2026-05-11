@@ -6695,53 +6695,72 @@ fn varnode_location_comment(vn: &Varnode, frame_size: Option<u64>) -> Option<Str
 ///
 /// Uses the same layout as `unlace-lift-x86/src/register_file.rs`.
 fn x86_64_register_name(offset: u64, size: u8) -> &'static str {
-    // Vector register file: base 0x400, stride 32
+    // Vector register file: base 0x400, stride 64 (ZMM-wide).
+    // XMM/YMM/ZMM of the same index share a base offset.
     const VEC_BASE: u64 = 0x400;
-    const VEC_STRIDE: u64 = 32;
+    const VEC_STRIDE: u64 = 64;
 
     if offset >= VEC_BASE {
         let idx = (offset - VEC_BASE) / VEC_STRIDE;
-        if idx <= 15 && (offset - VEC_BASE) % VEC_STRIDE == 0 {
-            if size <= 16 {
+        if idx <= 31 && (offset - VEC_BASE) % VEC_STRIDE == 0 {
+            // 64-byte writes are ZMM (AVX-512). ZMM16..ZMM31 only exist
+            // in the 512-bit form; they have no XMM/YMM alias.
+            if size > 32 {
                 return match idx {
-                    0 => "xmm0",
-                    1 => "xmm1",
-                    2 => "xmm2",
-                    3 => "xmm3",
-                    4 => "xmm4",
-                    5 => "xmm5",
-                    6 => "xmm6",
-                    7 => "xmm7",
-                    8 => "xmm8",
-                    9 => "xmm9",
-                    10 => "xmm10",
-                    11 => "xmm11",
-                    12 => "xmm12",
-                    13 => "xmm13",
-                    14 => "xmm14",
-                    15 => "xmm15",
-                    _ => "xmm?",
+                    0 => "zmm0",   1 => "zmm1",   2 => "zmm2",   3 => "zmm3",
+                    4 => "zmm4",   5 => "zmm5",   6 => "zmm6",   7 => "zmm7",
+                    8 => "zmm8",   9 => "zmm9",   10 => "zmm10", 11 => "zmm11",
+                    12 => "zmm12", 13 => "zmm13", 14 => "zmm14", 15 => "zmm15",
+                    16 => "zmm16", 17 => "zmm17", 18 => "zmm18", 19 => "zmm19",
+                    20 => "zmm20", 21 => "zmm21", 22 => "zmm22", 23 => "zmm23",
+                    24 => "zmm24", 25 => "zmm25", 26 => "zmm26", 27 => "zmm27",
+                    28 => "zmm28", 29 => "zmm29", 30 => "zmm30", 31 => "zmm31",
+                    _ => "zmm?",
                 };
-            } else {
-                return match idx {
-                    0 => "ymm0",
-                    1 => "ymm1",
-                    2 => "ymm2",
-                    3 => "ymm3",
-                    4 => "ymm4",
-                    5 => "ymm5",
-                    6 => "ymm6",
-                    7 => "ymm7",
-                    8 => "ymm8",
-                    9 => "ymm9",
-                    10 => "ymm10",
-                    11 => "ymm11",
-                    12 => "ymm12",
-                    13 => "ymm13",
-                    14 => "ymm14",
-                    15 => "ymm15",
-                    _ => "ymm?",
-                };
+            }
+            // XMM/YMM only meaningful for idx 0..15.
+            if idx <= 15 {
+                if size <= 16 {
+                    return match idx {
+                        0 => "xmm0",
+                        1 => "xmm1",
+                        2 => "xmm2",
+                        3 => "xmm3",
+                        4 => "xmm4",
+                        5 => "xmm5",
+                        6 => "xmm6",
+                        7 => "xmm7",
+                        8 => "xmm8",
+                        9 => "xmm9",
+                        10 => "xmm10",
+                        11 => "xmm11",
+                        12 => "xmm12",
+                        13 => "xmm13",
+                        14 => "xmm14",
+                        15 => "xmm15",
+                        _ => "xmm?",
+                    };
+                } else {
+                    return match idx {
+                        0 => "ymm0",
+                        1 => "ymm1",
+                        2 => "ymm2",
+                        3 => "ymm3",
+                        4 => "ymm4",
+                        5 => "ymm5",
+                        6 => "ymm6",
+                        7 => "ymm7",
+                        8 => "ymm8",
+                        9 => "ymm9",
+                        10 => "ymm10",
+                        11 => "ymm11",
+                        12 => "ymm12",
+                        13 => "ymm13",
+                        14 => "ymm14",
+                        15 => "ymm15",
+                        _ => "ymm?",
+                    };
+                }
             }
         }
     }

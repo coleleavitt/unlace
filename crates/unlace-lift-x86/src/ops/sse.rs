@@ -149,6 +149,32 @@ pub mod tag {
     pub const VPOR: u64 = 0x1C7;
     /// VPXOR — packed bitwise XOR (256-bit).
     pub const VPXOR: u64 = 0x1C8;
+
+    // ── AVX-512 EVEX packed integer ops (t205) ──────────────────
+    //
+    // Tag range 0x1D0..0x1EF — strictly above the AVX/AVX2 block
+    // (0x1C0..0x1C8) so the recoverer can tell at-a-glance whether a
+    // Callother carries a 256-bit (YMM) or 512-bit (ZMM) destination.
+    // Every EVEX entry writes a 64-byte ZMM register; the legacy SSE
+    // (16-byte) and VEX-AVX (32-byte) forms keep their existing tags.
+    /// VPADDQ (EVEX/ZMM form) — packed add, 64-bit lanes (512-bit).
+    pub const VPADDQ_512: u64 = 0x1D0;
+    /// VPSUBQ (EVEX/ZMM form) — packed sub, 64-bit lanes (512-bit).
+    pub const VPSUBQ_512: u64 = 0x1D1;
+    /// VPMULLQ (EVEX/ZMM form) — packed signed 64×64→low-64 multiply (512-bit).
+    pub const VPMULLQ_512: u64 = 0x1D2;
+}
+
+/// Returns `true` iff operand 0 of `insn` is a ZMM register \u2014 the
+/// signal that an instruction is in its 512-bit EVEX form rather than
+/// the otherwise-identical VEX/256-bit form.
+///
+/// Used to pick the AVX-512 Callother tag for instructions whose iced
+/// mnemonic is shared across widths (`Vpaddq`, `Vpsubq`).
+pub fn is_zmm_dst(insn: &iced_x86::Instruction) -> bool {
+    use iced_x86::Register as R;
+    let dst = insn.op_register(0);
+    (R::ZMM0..=R::ZMM31).contains(&dst)
 }
 
 /// MOVDQA / MOVDQU: store form emits without output, load/reg form with output.

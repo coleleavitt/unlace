@@ -58,19 +58,36 @@ pub fn st_reg(i: u64) -> Varnode {
     Varnode::new(SpaceId::Register, fpu_offset(i), 10)
 }
 
-// ── SSE/AVX vector registers ──────────────────────────────────────────
+// ── SSE/AVX/AVX-512 vector registers ──────────────────────────────────
 //
-// Layout: base offset 0x400, stride 32 bytes per register slot.
-//   XMMn  at  0x400 + n * 32, size 16 (lower half of YMMn).
-//   YMMn  at  0x400 + n * 32, size 32.
+// Layout: base offset 0x400, stride 64 bytes per register slot (ZMM width).
+//   XMMn  at  0x400 + n * 64, size 16 (lower 128 bits of ZMMn).
+//   YMMn  at  0x400 + n * 64, size 32 (lower 256 bits of ZMMn).
+//   ZMMn  at  0x400 + n * 64, size 64 (full 512-bit AVX-512 register).
+//
+// The 64-byte stride guarantees that every consecutive ZMM slot occupies
+// disjoint bytes, while XMM/YMM/ZMM of the same index share a base
+// offset so the byte-range aliasing predicate in `unlace-ir::reg_alias`
+// recognises the subset relation automatically.
 
-/// Base offset for the vector register file (XMM/YMM).
+/// Base offset for the vector register file (XMM/YMM/ZMM).
 const VEC_BASE: u64 = 0x400;
-/// Stride between consecutive vector register slots (32 bytes = YMM width).
-const VEC_STRIDE: u64 = 32;
+/// Stride between consecutive vector register slots (64 bytes = ZMM width).
+const VEC_STRIDE: u64 = 64;
 
 const fn vec_offset(index: u64) -> u64 {
     VEC_BASE + index * VEC_STRIDE
+}
+
+// ── AVX-512 opmask registers (K0..K7) ─────────────────────────────────
+//
+// 64-bit mask registers stored above the vector region. They are
+// independent of XMM/YMM/ZMM bits, so they get their own block.
+const K_BASE: u64 = VEC_BASE + 32 * VEC_STRIDE; // 0x400 + 0x800 = 0xC00
+const K_STRIDE: u64 = 8;
+
+const fn k_offset(index: u64) -> u64 {
+    K_BASE + index * K_STRIDE
 }
 
 pub const XMM0: u64 = vec_offset(0);
@@ -106,6 +123,61 @@ pub const YMM12: u64 = vec_offset(12);
 pub const YMM13: u64 = vec_offset(13);
 pub const YMM14: u64 = vec_offset(14);
 pub const YMM15: u64 = vec_offset(15);
+
+// ── ZMM0..ZMM31 (512-bit AVX-512) ─────────────────────────────────────
+//
+// `ZMMn` for n in 0..16 shares a base offset with `YMMn` / `XMMn` —
+// the only distinguishing feature is the 64-byte varnode size, which
+// lets the SSA/alias machinery realise that a ZMM write subsumes the
+// matching YMM/XMM lane. `ZMM16..ZMM31` are EVEX-only and have no
+// XMM/YMM alias of their own.
+pub const ZMM0: u64 = vec_offset(0);
+pub const ZMM1: u64 = vec_offset(1);
+pub const ZMM2: u64 = vec_offset(2);
+pub const ZMM3: u64 = vec_offset(3);
+pub const ZMM4: u64 = vec_offset(4);
+pub const ZMM5: u64 = vec_offset(5);
+pub const ZMM6: u64 = vec_offset(6);
+pub const ZMM7: u64 = vec_offset(7);
+pub const ZMM8: u64 = vec_offset(8);
+pub const ZMM9: u64 = vec_offset(9);
+pub const ZMM10: u64 = vec_offset(10);
+pub const ZMM11: u64 = vec_offset(11);
+pub const ZMM12: u64 = vec_offset(12);
+pub const ZMM13: u64 = vec_offset(13);
+pub const ZMM14: u64 = vec_offset(14);
+pub const ZMM15: u64 = vec_offset(15);
+pub const ZMM16: u64 = vec_offset(16);
+pub const ZMM17: u64 = vec_offset(17);
+pub const ZMM18: u64 = vec_offset(18);
+pub const ZMM19: u64 = vec_offset(19);
+pub const ZMM20: u64 = vec_offset(20);
+pub const ZMM21: u64 = vec_offset(21);
+pub const ZMM22: u64 = vec_offset(22);
+pub const ZMM23: u64 = vec_offset(23);
+pub const ZMM24: u64 = vec_offset(24);
+pub const ZMM25: u64 = vec_offset(25);
+pub const ZMM26: u64 = vec_offset(26);
+pub const ZMM27: u64 = vec_offset(27);
+pub const ZMM28: u64 = vec_offset(28);
+pub const ZMM29: u64 = vec_offset(29);
+pub const ZMM30: u64 = vec_offset(30);
+pub const ZMM31: u64 = vec_offset(31);
+
+// ── AVX-512 mask registers (K0..K7) ───────────────────────────────────
+pub const K0: u64 = k_offset(0);
+pub const K1: u64 = k_offset(1);
+pub const K2: u64 = k_offset(2);
+pub const K3: u64 = k_offset(3);
+pub const K4: u64 = k_offset(4);
+pub const K5: u64 = k_offset(5);
+pub const K6: u64 = k_offset(6);
+pub const K7: u64 = k_offset(7);
+
+/// 64-byte ZMM varnode constructor (AVX-512).
+pub fn reg512(offset: u64) -> Varnode {
+    Varnode::new(SpaceId::Register, offset, 64)
+}
 
 pub fn reg256(offset: u64) -> Varnode {
     Varnode::new(SpaceId::Register, offset, 32)
@@ -394,6 +466,49 @@ pub fn x86_64_register_file() -> RegisterFile {
                 name: "YMM15",
                 varnode: reg256(YMM15),
             },
+            // ZMM0..ZMM31 (512-bit AVX-512). ZMM0..ZMM15 alias YMM0..YMM15
+            // and XMM0..XMM15 at the same base offset.
+            RegisterDef { name: "ZMM0",  varnode: reg512(ZMM0)  },
+            RegisterDef { name: "ZMM1",  varnode: reg512(ZMM1)  },
+            RegisterDef { name: "ZMM2",  varnode: reg512(ZMM2)  },
+            RegisterDef { name: "ZMM3",  varnode: reg512(ZMM3)  },
+            RegisterDef { name: "ZMM4",  varnode: reg512(ZMM4)  },
+            RegisterDef { name: "ZMM5",  varnode: reg512(ZMM5)  },
+            RegisterDef { name: "ZMM6",  varnode: reg512(ZMM6)  },
+            RegisterDef { name: "ZMM7",  varnode: reg512(ZMM7)  },
+            RegisterDef { name: "ZMM8",  varnode: reg512(ZMM8)  },
+            RegisterDef { name: "ZMM9",  varnode: reg512(ZMM9)  },
+            RegisterDef { name: "ZMM10", varnode: reg512(ZMM10) },
+            RegisterDef { name: "ZMM11", varnode: reg512(ZMM11) },
+            RegisterDef { name: "ZMM12", varnode: reg512(ZMM12) },
+            RegisterDef { name: "ZMM13", varnode: reg512(ZMM13) },
+            RegisterDef { name: "ZMM14", varnode: reg512(ZMM14) },
+            RegisterDef { name: "ZMM15", varnode: reg512(ZMM15) },
+            RegisterDef { name: "ZMM16", varnode: reg512(ZMM16) },
+            RegisterDef { name: "ZMM17", varnode: reg512(ZMM17) },
+            RegisterDef { name: "ZMM18", varnode: reg512(ZMM18) },
+            RegisterDef { name: "ZMM19", varnode: reg512(ZMM19) },
+            RegisterDef { name: "ZMM20", varnode: reg512(ZMM20) },
+            RegisterDef { name: "ZMM21", varnode: reg512(ZMM21) },
+            RegisterDef { name: "ZMM22", varnode: reg512(ZMM22) },
+            RegisterDef { name: "ZMM23", varnode: reg512(ZMM23) },
+            RegisterDef { name: "ZMM24", varnode: reg512(ZMM24) },
+            RegisterDef { name: "ZMM25", varnode: reg512(ZMM25) },
+            RegisterDef { name: "ZMM26", varnode: reg512(ZMM26) },
+            RegisterDef { name: "ZMM27", varnode: reg512(ZMM27) },
+            RegisterDef { name: "ZMM28", varnode: reg512(ZMM28) },
+            RegisterDef { name: "ZMM29", varnode: reg512(ZMM29) },
+            RegisterDef { name: "ZMM30", varnode: reg512(ZMM30) },
+            RegisterDef { name: "ZMM31", varnode: reg512(ZMM31) },
+            // K0..K7 — 8-byte AVX-512 mask registers.
+            RegisterDef { name: "K0", varnode: reg64(K0) },
+            RegisterDef { name: "K1", varnode: reg64(K1) },
+            RegisterDef { name: "K2", varnode: reg64(K2) },
+            RegisterDef { name: "K3", varnode: reg64(K3) },
+            RegisterDef { name: "K4", varnode: reg64(K4) },
+            RegisterDef { name: "K5", varnode: reg64(K5) },
+            RegisterDef { name: "K6", varnode: reg64(K6) },
+            RegisterDef { name: "K7", varnode: reg64(K7) },
             RegisterDef {
                 name: "ST0",
                 varnode: st_reg(0),
@@ -541,6 +656,50 @@ pub fn iced_reg_to_varnode(reg: iced_x86::Register) -> Option<(u64, u8)> {
         R::YMM13 => Some((YMM13, 32)),
         R::YMM14 => Some((YMM14, 32)),
         R::YMM15 => Some((YMM15, 32)),
+
+        // AVX-512 ZMM0..ZMM31 (size 64).
+        R::ZMM0 => Some((ZMM0, 64)),
+        R::ZMM1 => Some((ZMM1, 64)),
+        R::ZMM2 => Some((ZMM2, 64)),
+        R::ZMM3 => Some((ZMM3, 64)),
+        R::ZMM4 => Some((ZMM4, 64)),
+        R::ZMM5 => Some((ZMM5, 64)),
+        R::ZMM6 => Some((ZMM6, 64)),
+        R::ZMM7 => Some((ZMM7, 64)),
+        R::ZMM8 => Some((ZMM8, 64)),
+        R::ZMM9 => Some((ZMM9, 64)),
+        R::ZMM10 => Some((ZMM10, 64)),
+        R::ZMM11 => Some((ZMM11, 64)),
+        R::ZMM12 => Some((ZMM12, 64)),
+        R::ZMM13 => Some((ZMM13, 64)),
+        R::ZMM14 => Some((ZMM14, 64)),
+        R::ZMM15 => Some((ZMM15, 64)),
+        R::ZMM16 => Some((ZMM16, 64)),
+        R::ZMM17 => Some((ZMM17, 64)),
+        R::ZMM18 => Some((ZMM18, 64)),
+        R::ZMM19 => Some((ZMM19, 64)),
+        R::ZMM20 => Some((ZMM20, 64)),
+        R::ZMM21 => Some((ZMM21, 64)),
+        R::ZMM22 => Some((ZMM22, 64)),
+        R::ZMM23 => Some((ZMM23, 64)),
+        R::ZMM24 => Some((ZMM24, 64)),
+        R::ZMM25 => Some((ZMM25, 64)),
+        R::ZMM26 => Some((ZMM26, 64)),
+        R::ZMM27 => Some((ZMM27, 64)),
+        R::ZMM28 => Some((ZMM28, 64)),
+        R::ZMM29 => Some((ZMM29, 64)),
+        R::ZMM30 => Some((ZMM30, 64)),
+        R::ZMM31 => Some((ZMM31, 64)),
+
+        // AVX-512 mask registers K0..K7 (size 8).
+        R::K0 => Some((K0, 8)),
+        R::K1 => Some((K1, 8)),
+        R::K2 => Some((K2, 8)),
+        R::K3 => Some((K3, 8)),
+        R::K4 => Some((K4, 8)),
+        R::K5 => Some((K5, 8)),
+        R::K6 => Some((K6, 8)),
+        R::K7 => Some((K7, 8)),
 
         R::ST0 => Some((ST0, 10)),
         R::ST1 => Some((ST1, 10)),
@@ -718,5 +877,94 @@ mod tests {
 
         let ymm0 = rf.registers.iter().find(|r| r.name == "YMM0").unwrap();
         assert_eq!(ymm0.varnode.size, 32);
+    }
+
+    // ── t205: AVX-512 register varnodes ─────────────────────────────
+
+    /// ZMM0 is declared in the register file as a 64-byte varnode in
+    /// the Register space, sharing a base offset with the existing
+    /// XMM0/YMM0 entries.
+    #[test]
+    fn t205_zmm0_register_write_sanity() {
+        let rf = x86_64_register_file();
+        let zmm0 = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "ZMM0")
+            .expect("ZMM0 should be in the register file");
+        assert_eq!(zmm0.varnode.size, 64, "ZMM0 must be 512 bits / 64 bytes");
+        assert_eq!(zmm0.varnode.space, SpaceId::Register);
+        assert_eq!(zmm0.varnode.offset, ZMM0);
+        assert_eq!(
+            zmm0.varnode.offset, XMM0,
+            "ZMM0 must share base offset with XMM0/YMM0",
+        );
+
+        // ZMM31 (EVEX-only) must also be present and 64 bytes.
+        let zmm31 = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "ZMM31")
+            .expect("ZMM31 should be in the register file");
+        assert_eq!(zmm31.varnode.size, 64);
+    }
+
+    /// K0..K7 mask registers are declared as 8-byte varnodes in the
+    /// Register space, in their own block above the vector region.
+    #[test]
+    fn t205_k_mask_registers_declared() {
+        let rf = x86_64_register_file();
+        for i in 0..8u64 {
+            let name = format!("K{i}");
+            let k = rf
+                .registers
+                .iter()
+                .find(|r| r.name == name)
+                .unwrap_or_else(|| panic!("{name} should be in the register file"));
+            assert_eq!(k.varnode.size, 8, "{name} must be 8 bytes");
+            assert_eq!(k.varnode.space, SpaceId::Register);
+            assert_eq!(k.varnode.offset, k_offset(i));
+        }
+
+        // K-block must sit entirely above the vector region so a ZMM
+        // write never accidentally clobbers a mask register.
+        let vec_end = vec_offset(32);
+        assert!(K0 >= vec_end, "K0 {K0:#x} must sit above ZMM region end {vec_end:#x}");
+
+        // iced mapping round-trips.
+        use iced_x86::Register as R;
+        assert_eq!(iced_reg_to_varnode(R::K0), Some((K0, 8)));
+        assert_eq!(iced_reg_to_varnode(R::K7), Some((K7, 8)));
+    }
+
+    /// XMM0 / YMM0 / ZMM0 must all share the same base offset \u2014 the
+    /// only distinguishing feature is the varnode size. This is the
+    /// aliasing invariant that the SSA / alias machinery relies on to
+    /// recognise that a ZMM write subsumes the matching YMM/XMM lane.
+    #[test]
+    fn t205_xmm_ymm_zmm_alias_same_offset() {
+        use iced_x86::Register as R;
+        let (xoff, xsz) = iced_reg_to_varnode(R::XMM0).unwrap();
+        let (yoff, ysz) = iced_reg_to_varnode(R::YMM0).unwrap();
+        let (zoff, zsz) = iced_reg_to_varnode(R::ZMM0).unwrap();
+        assert_eq!(xoff, yoff);
+        assert_eq!(yoff, zoff);
+        assert_eq!(xsz, 16);
+        assert_eq!(ysz, 32);
+        assert_eq!(zsz, 64);
+
+        // Byte-range overlap predicate must agree.
+        use unlace_ir::reg_alias::aliases;
+        let xmm0 = Varnode::new(SpaceId::Register, xoff, xsz);
+        let ymm0 = Varnode::new(SpaceId::Register, yoff, ysz);
+        let zmm0 = Varnode::new(SpaceId::Register, zoff, zsz);
+        assert!(aliases(xmm0, zmm0));
+        assert!(aliases(ymm0, zmm0));
+        assert!(aliases(xmm0, ymm0));
+
+        // ZMM0 and ZMM1 must NOT overlap \u2014 stride is 64 bytes which
+        // exactly equals the ZMM width.
+        let zmm1 = Varnode::new(SpaceId::Register, ZMM1, 64);
+        assert!(!aliases(zmm0, zmm1));
     }
 }

@@ -56,6 +56,7 @@ pub mod string_hash_switch;
 pub mod struct_field_detect;
 pub mod tail_call;
 pub mod tail_duplication;
+pub mod type_constraint_solver;
 pub mod type_infer;
 pub mod variable_merge;
 

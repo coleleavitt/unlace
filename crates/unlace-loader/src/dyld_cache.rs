@@ -686,9 +686,24 @@ fn rewrite_v5_entry(raw: u64, add: u64) -> u64 {
 /// runtime authentication pass still has the original discriminator; only
 /// the 32-bit image offset is slid.
 pub fn apply_v5_slide(image: &[u8], slide: &SlideInfoV5, slide_amount: u64) -> Vec<u8> {
+    apply_v5_slide_ex(image, slide, slide_amount).0
+}
+
+/// Like [`apply_v5_slide`] but also returns one [`AuthPointer`] per auth
+/// chain entry encountered while walking the page tables. `(image, auths)`
+/// where `image` is the slid buffer and `auths` is ordered by ascending
+/// slot offset within the image. Plain (non-auth) entries are not
+/// reported. Used by [`extract_image_with_slide_ex`] (t190) to feed the
+/// decompiler's pointer-auth-aware printer.
+pub fn apply_v5_slide_ex(
+    image: &[u8],
+    slide: &SlideInfoV5,
+    slide_amount: u64,
+) -> (Vec<u8>, Vec<AuthPointer>) {
     let mut out = image.to_vec();
+    let mut auths = Vec::new();
     if slide.version != 5 || slide.page_size == 0 {
-        return out;
+        return (out, auths);
     }
     let page_size = slide.page_size as usize;
     let add = slide.value_add.wrapping_add(slide_amount);
@@ -700,13 +715,66 @@ pub fn apply_v5_slide(image: &[u8], slide: &SlideInfoV5, slide_amount: u64) -> V
         let mut entries = Vec::new();
         walk_v5_page(&out, page_base, start, |off, raw| entries.push((off, raw)));
         for (off, raw) in entries {
+            let entry = decode_v5_chain_entry(raw);
+            if let Some(a) = entry.auth {
+                auths.push(AuthPointer {
+                    offset: off,
+                    key: a.key,
+                    diversifier: a.diversity,
+                    use_addr_div: a.use_addr,
+                });
+            }
             let new_raw = rewrite_v5_entry(raw, add);
             if off + 8 <= out.len() {
                 out[off..off + 8].copy_from_slice(&new_raw.to_le_bytes());
             }
         }
     }
-    out
+    (out, auths)
+}
+
+/// A single ARM64e v5 auth chain slot recovered from a dyld cache image
+/// (t190). Records the offset inside the extracted image bytes where the
+/// pointer slot lives and the PAC auth-key parameters baked into the v5
+/// chain entry.
+///
+/// The decompiler uses this to render `__ptrauth(...)` annotations on
+/// global pointers and to model auth-stripped runtime behaviour without
+/// re-decoding the chain.
+///
+/// `key` follows the same convention as `dyld_cache_slide_pointer5.auth`:
+/// `0=IA`, `1=IB`, `2=DA`, `3=DB`. `diversifier` is the 15-bit constant
+/// from the chain entry. `use_addr_div` mirrors the entry's
+/// `addr_diversity` bit: when set the runtime XORs the slot's virtual
+/// address into the discriminator before signing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuthPointer {
+    /// Byte offset inside the extracted image bytes where the slot lives.
+    pub offset: usize,
+    /// PAC key selector: 0=IA, 1=IB, 2=DA, 3=DB.
+    pub key: u8,
+    /// 15-bit constant discriminator baked into the chain entry.
+    pub diversifier: u16,
+    /// True when the runtime mixes the slot's address into the
+    /// discriminator (auth's `addr_diversity` bit).
+    pub use_addr_div: bool,
+}
+
+/// Output of [`extract_image_with_slide_ex`]: the slid image bytes plus
+/// every ARM64e v5 auth pointer slot discovered while applying the chain.
+///
+/// For non-v5 caches (v1/v2/v3/v4) `auth_pointers` is empty — those slide
+/// formats either predate arm64e (v1/v2) or pack auth bits differently
+/// in a way that's not currently surfaced here. The plain `Vec<u8>` from
+/// [`extract_image_with_slide`] remains available via `.bytes` for
+/// back-compat with existing consumers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtractedImage {
+    /// Slid image bytes (same as [`extract_image_with_slide`]).
+    pub bytes: Vec<u8>,
+    /// Auth pointer slots encountered while walking v5 chains. Empty for
+    /// non-v5 caches or when the cache has no slide info.
+    pub auth_pointers: Vec<AuthPointer>,
 }
 
 /// Extract a single image from a dyld_shared_cache by index, applying slide
@@ -725,6 +793,23 @@ pub fn extract_image_with_slide(
     image_index: usize,
     slide_amount: u64,
 ) -> Option<Vec<u8>> {
+    extract_image_with_slide_ex(cache, image_index, slide_amount).map(|ei| ei.bytes)
+}
+
+/// Like [`extract_image_with_slide`] but also records every ARM64e v5
+/// auth chain entry encountered while applying the slide, returning an
+/// [`ExtractedImage`] carrying both the slid `bytes` and the per-slot
+/// `auth_pointers` list.
+///
+/// For caches with no slide info — or with v1/v2/v3/v4 slide formats —
+/// the returned `auth_pointers` is empty (those formats either predate
+/// arm64e or pack auth differently than v5). Use the plain
+/// [`extract_image_with_slide`] when only the bytes are needed.
+pub fn extract_image_with_slide_ex(
+    cache: &DyldCache,
+    image_index: usize,
+    slide_amount: u64,
+) -> Option<ExtractedImage> {
     let entry = cache.list_images().get(image_index)?;
     let off = cache.vaddr_to_file_offset(entry.address)? as usize;
     let end = off
@@ -736,19 +821,28 @@ pub fn extract_image_with_slide(
     }
     let raw = cache.data[off..end].to_vec();
     let Some(loc) = cache.slide_info() else {
-        return Some(raw);
+        return Some(ExtractedImage {
+            bytes: raw,
+            auth_pointers: Vec::new(),
+        });
     };
     let Some(version) = apply_slide_info(cache.data, loc.file_offset, loc.size) else {
-        return Some(raw);
+        return Some(ExtractedImage {
+            bytes: raw,
+            auth_pointers: Vec::new(),
+        });
     };
-    let slid = match version {
-        SlideVersion::V1(s) => apply_v1_slide(&raw, &s, slide_amount),
-        SlideVersion::V2(s) => apply_v2_slide(&raw, &s, slide_amount),
-        SlideVersion::V3(s) => apply_v3_slide(&raw, &s, slide_amount),
-        SlideVersion::V4(s) => apply_v4_slide(&raw, &s, slide_amount),
-        SlideVersion::V5(s) => apply_v5_slide(&raw, &s, slide_amount),
+    let (bytes, auth_pointers) = match version {
+        SlideVersion::V1(s) => (apply_v1_slide(&raw, &s, slide_amount), Vec::new()),
+        SlideVersion::V2(s) => (apply_v2_slide(&raw, &s, slide_amount), Vec::new()),
+        SlideVersion::V3(s) => (apply_v3_slide(&raw, &s, slide_amount), Vec::new()),
+        SlideVersion::V4(s) => (apply_v4_slide(&raw, &s, slide_amount), Vec::new()),
+        SlideVersion::V5(s) => apply_v5_slide_ex(&raw, &s, slide_amount),
     };
-    Some(slid)
+    Some(ExtractedImage {
+        bytes,
+        auth_pointers,
+    })
 }
 
 // =============================================================================
@@ -1911,5 +2005,194 @@ mod tests {
             e1.target,
             (0x0001_2345_6789_ABCDu64 + slide_amount) & 0x0003_FFFF_FFFF_FFFF
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // t190: Dyld auth-key apply to extracted images.
+    //
+    // `extract_image_with_slide_ex` records every ARM64e v5 auth chain entry
+    // encountered while walking the slide info, returning an
+    // `ExtractedImage { bytes, auth_pointers }`. The first test builds a
+    // synthetic v5 cache with two auth slots (one IB+addr-div, one DA
+    // plain) and asserts both are surfaced with the correct key/diversity/
+    // addr-div bits and the right offsets inside the extracted bytes.
+    // The second test builds a cache *without* slide info and asserts the
+    // non-v5 path returns an empty `auth_pointers` list.
+    // -----------------------------------------------------------------------
+
+    /// Build a minimal v5 slide-info blob covering one page that starts at
+    /// chain offset 0. Layout matches `parse_v5_slide_info`'s reader:
+    ///   bytes  0..4   = version (=5)
+    ///   bytes  4..8   = page_size
+    ///   bytes  8..12  = page_starts_count
+    ///   bytes 12..16  = (unused; zeros)
+    ///   bytes 16..24  = value_add (u64 LE)
+    ///   bytes 24..    = page_starts u16[]
+    fn t190_build_v5_blob(page_size: u32, value_add: u64, page_starts: &[u16]) -> Vec<u8> {
+        let header = 24usize;
+        let mut blob = vec![0u8; header + page_starts.len() * 2];
+        blob[0..4].copy_from_slice(&5u32.to_le_bytes());
+        blob[4..8].copy_from_slice(&page_size.to_le_bytes());
+        blob[8..12].copy_from_slice(&(page_starts.len() as u32).to_le_bytes());
+        blob[16..24].copy_from_slice(&value_add.to_le_bytes());
+        for (i, &s) in page_starts.iter().enumerate() {
+            let o = header + i * 2;
+            blob[o..o + 2].copy_from_slice(&s.to_le_bytes());
+        }
+        blob
+    }
+
+    #[test]
+    fn extract_image_with_slide_ex_records_v5_auth_pointers() {
+        // Build a single-page image whose chain has three entries:
+        //   page[0]   = auth IB, addr_div=1, diversity=0x2BAD, target=0x1000, next=+8
+        //   page[8]   = plain (next=+16 → page[24]); should NOT appear in
+        //               auth_pointers.
+        //   page[24]  = auth DA, addr_div=0, diversity=0x0123, target=0x3000,
+        //               next=0 (chain end).
+        let page_size: usize = 4096;
+        let mut image = vec![0u8; page_size];
+
+        let auth0_raw: u64 = (1u64 << 51)         // next_offset_div8 = 1 (+8)
+            | (1u64 << 50)                         // is_auth
+            | (1u64 << 48)                         // key = IB (1)
+            | (1u64 << 47)                         // addr_div = 1
+            | (0x2BADu64 << 32)                    // diversity
+            | 0x0000_1000u64;                      // 32-bit target offset
+        let plain_raw: u64 = (2u64 << 51) | 0x0000_2000u64;
+        let auth1_raw: u64 = (1u64 << 50)         // is_auth, next=0
+            | (2u64 << 48)                         // key = DA (2)
+            | (0u64 << 47)                         // addr_div = 0
+            | (0x0123u64 << 32)
+            | 0x0000_3000u64;
+        image[0..8].copy_from_slice(&auth0_raw.to_le_bytes());
+        image[8..16].copy_from_slice(&plain_raw.to_le_bytes());
+        image[24..32].copy_from_slice(&auth1_raw.to_le_bytes());
+
+        let blob = t190_build_v5_blob(page_size as u32, 0x40, &[0]);
+        let (data, slide_off) = build_cache_with_image(
+            0x1_8000_0000,
+            0x1000,
+            &image,
+            &blob,
+        );
+        let mut cache = DyldCache::parse(&data).expect("parse");
+        cache.set_slide_info(SlideInfoLocation {
+            file_offset: slide_off,
+            size: blob.len() as u64,
+        });
+
+        let extracted = extract_image_with_slide_ex(&cache, 0, 0x100)
+            .expect("extract should succeed");
+
+        // Two auth slots (the plain entry must not appear).
+        assert_eq!(
+            extracted.auth_pointers.len(),
+            2,
+            "expected exactly 2 auth slots, got {:?}",
+            extracted.auth_pointers,
+        );
+
+        // First auth slot: offset 0, key=IB, addr_div=1, diversifier=0x2BAD.
+        let a0 = extracted.auth_pointers[0];
+        assert_eq!(a0.offset, 0, "first auth slot lives at image offset 0");
+        assert_eq!(a0.key, 1, "first auth slot key = IB");
+        assert!(a0.use_addr_div, "first auth slot uses addr-diversity");
+        assert_eq!(a0.diversifier, 0x2BAD, "first diversifier matches chain entry");
+
+        // Second auth slot: offset 24, key=DA, addr_div=0, diversifier=0x0123.
+        let a1 = extracted.auth_pointers[1];
+        assert_eq!(a1.offset, 24, "second auth slot lives at image offset 24");
+        assert_eq!(a1.key, 2, "second auth slot key = DA");
+        assert!(!a1.use_addr_div, "second auth slot ignores addr-diversity");
+        assert_eq!(a1.diversifier, 0x0123, "second diversifier matches chain entry");
+
+        // The slid bytes must still preserve auth key/diversity bits and
+        // mutate only the 32-bit offset — same invariant as
+        // `apply_v5_preserves_auth_key_and_diversifier`.
+        let new0 = u64::from_le_bytes(extracted.bytes[0..8].try_into().unwrap());
+        let e0 = decode_v5_chain_entry(new0);
+        let a0_decoded = e0.auth.expect("first slot still auth after slide");
+        assert_eq!(a0_decoded.key, 1);
+        assert!(a0_decoded.use_addr);
+        assert_eq!(a0_decoded.diversity, 0x2BAD);
+        let add = 0x40u64 + 0x100u64;
+        assert_eq!(
+            e0.target,
+            (0x1000u64 + add) & 0xFFFF_FFFF,
+            "auth offset slid by (value_add + slide_amount)"
+        );
+
+        // Plain bytes is also the canonical `extract_image_with_slide` output.
+        let bytes_only =
+            extract_image_with_slide(&cache, 0, 0x100).expect("legacy extract");
+        assert_eq!(
+            extracted.bytes, bytes_only,
+            "ExtractedImage.bytes matches legacy extract_image_with_slide output",
+        );
+    }
+
+    #[test]
+    fn extract_image_with_slide_ex_non_v5_has_empty_auth_pointers() {
+        // Cache with no slide info at all: `extract_image_with_slide_ex`
+        // must still return the raw bytes and an empty auth-pointer list.
+        // This covers both the "no slide info wired" and "non-v5" paths
+        // since the same early-return branches handle both.
+        let mut image = vec![0u8; SLIDE_V1_PAGE_SIZE];
+        image[0x10..0x14].copy_from_slice(&0x0000_0100u32.to_le_bytes());
+
+        let (data, _slide_off) = build_cache_with_image(
+            0x1_8000_0000,
+            0x1000,
+            &image,
+            &[], // no slide blob — set_slide_info not called.
+        );
+        let cache = DyldCache::parse(&data).expect("parse");
+
+        let extracted =
+            extract_image_with_slide_ex(&cache, 0, 0).expect("extract");
+        assert!(
+            extracted.auth_pointers.is_empty(),
+            "non-v5 / unsliced extract must surface no auth pointers, got {:?}",
+            extracted.auth_pointers,
+        );
+        // Bytes still match the legacy path.
+        let bytes_only =
+            extract_image_with_slide(&cache, 0, 0).expect("legacy extract");
+        assert_eq!(extracted.bytes, bytes_only);
+
+        // Also explicitly test the v1 path (non-v5 with slide info wired):
+        // build a v1 blob, wire it, and confirm `auth_pointers` stays empty.
+        let entries_size = 4u32;
+        let toc_offset = 24u32;
+        let entries_offset = toc_offset + 2; // 1 toc entry × 2 bytes
+        let entries_count = 1u32;
+        let total = entries_offset as usize + (entries_count * entries_size) as usize;
+        let mut v1_blob = vec![0u8; total];
+        v1_blob[0..4].copy_from_slice(&1u32.to_le_bytes());
+        v1_blob[4..8].copy_from_slice(&toc_offset.to_le_bytes());
+        v1_blob[8..12].copy_from_slice(&1u32.to_le_bytes()); // toc_count
+        v1_blob[12..16].copy_from_slice(&entries_offset.to_le_bytes());
+        v1_blob[16..20].copy_from_slice(&entries_count.to_le_bytes());
+        v1_blob[20..24].copy_from_slice(&entries_size.to_le_bytes());
+        v1_blob[24..26].copy_from_slice(&0u16.to_le_bytes());
+        v1_blob[entries_offset as usize] = 1 << 4; // mark slot at off 0x10
+
+        let (data2, slide_off2) =
+            build_cache_with_image(0x1_8000_0000, 0x1000, &image, &v1_blob);
+        let mut cache2 = DyldCache::parse(&data2).expect("parse");
+        cache2.set_slide_info(SlideInfoLocation {
+            file_offset: slide_off2,
+            size: v1_blob.len() as u64,
+        });
+        let v1_extracted = extract_image_with_slide_ex(&cache2, 0, 0x40)
+            .expect("v1 extract");
+        assert!(
+            v1_extracted.auth_pointers.is_empty(),
+            "v1 slide-info extract must surface no auth pointers",
+        );
+        // And the v1 slide is actually applied (sanity).
+        let s0 = u32::from_le_bytes(v1_extracted.bytes[0x10..0x14].try_into().unwrap());
+        assert_eq!(s0, 0x0000_0140, "v1 slot rebased by slide_amount");
     }
 }

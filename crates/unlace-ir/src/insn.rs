@@ -11,7 +11,7 @@ use crate::{IrOp, Varnode};
 /// the instruction executes only if the named architecture condition holds —
 /// today this is exclusively populated by the ARM/Thumb lifter for insns
 /// inside an `IT` block (cond codes 0..=15, ARM ARM A8.3 encoding).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct IrInsn {
     pub op: IrOp,
     pub output: Option<Varnode>,

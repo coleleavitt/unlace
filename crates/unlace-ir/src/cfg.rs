@@ -16,7 +16,7 @@ use petgraph::visit::{EdgeRef, IntoEdgeReferences};
 use crate::{BasicBlock, BlockId, Function, IrOp};
 
 /// Describes the nature of a control-flow edge between two basic blocks.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum EdgeKind {
     /// Unconditional branch to a fixed target.
     Unconditional,
@@ -53,6 +53,7 @@ impl fmt::Display for EdgeKind {
 ///
 /// Wraps a `StableDiGraph<BlockId, EdgeKind>` with auxiliary maps for O(1)
 /// lookup by [`BlockId`] and designated entry / exit / unknown-sink nodes.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ControlFlowGraph {
     graph: StableDiGraph<BlockId, EdgeKind>,
     /// Maps each `BlockId` to its petgraph `NodeIndex`.

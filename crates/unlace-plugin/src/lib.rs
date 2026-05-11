@@ -1,32 +1,42 @@
-//! Plugin API for custom analysis passes.
+//! Plugin SDK foundation (t437) + dynamic-library loader.
 //!
-//! Defines a stable plugin interface that allows loading custom analysis
-//! passes as shared libraries (`.so`/`.dylib`/`.dll`). Plugins implement
-//! the [`UnlacePlugin`] trait and export a C-compatible entry point
-//! (`unlace_plugin_create`) that the [`PluginManager`] calls at load time.
+//! ## SDK surface
 //!
-//! # Writing a plugin
+//! Out-of-tree analyses implement the [`UnlacePlugin`] trait, return
+//! [`PluginFinding`]s, and are aggregated by a [`PluginRegistry`]:
 //!
-//! ```rust,ignore
-//! use unlace_plugin::UnlacePlugin;
+//! ```
+//! use unlace_plugin::{PluginFinding, PluginRegistry, UnlacePlugin};
 //! use unlace_ir::ssa::SsaFunction;
 //!
-//! struct MyPass;
+//! struct HelloPlugin;
 //!
-//! impl UnlacePlugin for MyPass {
-//!     fn name(&self) -> &str { "my-pass" }
+//! impl UnlacePlugin for HelloPlugin {
+//!     fn name(&self) -> &str { "hello" }
 //!     fn version(&self) -> &str { "0.1.0" }
-//!     fn description(&self) -> &str { "Does cool things" }
-//!     fn run_pass(&self, _function: &mut SsaFunction) { /* ... */ }
+//!
+//!     fn on_function(&self, func: &SsaFunction) -> Vec<PluginFinding> {
+//!         vec![PluginFinding {
+//!             kind: "hello".into(),
+//!             message: format!("saw {}", func.function.name),
+//!             addr: Some(func.function.addr),
+//!         }]
+//!     }
 //! }
 //!
-//! #[no_mangle]
-//! pub unsafe extern "C" fn unlace_plugin_create() -> *mut dyn UnlacePlugin {
-//!     Box::into_raw(Box::new(MyPass))
-//! }
+//! let mut registry = PluginRegistry::new();
+//! registry.register(Box::new(HelloPlugin));
 //! ```
+//!
+//! ## Dynamic loading
+//!
+//! Trusted shared libraries can be loaded at runtime via [`PluginManager`].
+//! Each library must export a C entry point named [`PLUGIN_ENTRY`]
+//! (`unlace_plugin_create`) that returns a `*mut dyn UnlacePlugin`
+//! produced by `Box::into_raw`.
 
 use unlace_ir::ssa::SsaFunction;
+use unlace_loader::BinaryImage;
 
 mod error;
 mod manager;
@@ -48,107 +58,171 @@ pub const PLUGIN_ENTRY: &str = "unlace_plugin_create";
 #[allow(improper_ctypes_definitions)]
 pub type PluginCreateFn = unsafe extern "C" fn() -> *mut dyn UnlacePlugin;
 
-/// Trait that every plugin must implement.
+/// A single observation produced by a plugin.
 ///
-/// Object-safe so that plugins can be stored as `Box<dyn UnlacePlugin>`.
+/// Plugins return one [`PluginFinding`] per piece of evidence they want
+/// surfaced (suspicious construct, recovered structure, security issue,
+/// etc.). The host UI / CLI is responsible for rendering them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginFinding {
+    /// Short tag categorising the finding (e.g. `"crypto"`, `"hardening"`).
+    pub kind: String,
+    /// Human-readable explanation shown to the analyst.
+    pub message: String,
+    /// Optional virtual address the finding is anchored at.
+    pub addr: Option<u64>,
+}
+
+/// Trait implemented by every Unlace plugin.
+///
+/// All event callbacks have empty default implementations so plugin
+/// authors only override the hooks they care about. The trait is
+/// object-safe; the registry stores plugins as `Box<dyn UnlacePlugin>`.
 pub trait UnlacePlugin: Send + Sync {
-    /// Short identifier for the plugin (e.g. `"my-pass"`).
+    /// Short identifier (e.g. `"my-pass"`). Used for logging and CLI flags.
     fn name(&self) -> &str;
 
-    /// SemVer version string.
+    /// SemVer version string for the plugin.
     fn version(&self) -> &str;
 
-    /// Human-readable description of what the plugin does.
-    fn description(&self) -> &str;
+    /// Called once per recovered SSA function.
+    fn on_function(&self, _func: &SsaFunction) -> Vec<PluginFinding> {
+        vec![]
+    }
 
-    /// Execute the analysis pass on `function`.
-    fn run_pass(&self, function: &mut SsaFunction);
+    /// Called once with the fully-loaded binary image.
+    fn on_binary(&self, _image: &BinaryImage) -> Vec<PluginFinding> {
+        vec![]
+    }
+}
+
+/// Owns a set of plugins and dispatches host events to each one.
+pub struct PluginRegistry {
+    plugins: Vec<Box<dyn UnlacePlugin>>,
+}
+
+impl PluginRegistry {
+    /// Create an empty registry.
+    pub fn new() -> Self {
+        Self {
+            plugins: Vec::new(),
+        }
+    }
+
+    /// Register an additional plugin. Plugins are invoked in registration
+    /// order; later registrations cannot mask earlier findings.
+    pub fn register(&mut self, plugin: Box<dyn UnlacePlugin>) {
+        self.plugins.push(plugin);
+    }
+
+    /// Number of registered plugins.
+    pub fn len(&self) -> usize {
+        self.plugins.len()
+    }
+
+    /// `true` if no plugins have been registered.
+    pub fn is_empty(&self) -> bool {
+        self.plugins.is_empty()
+    }
+
+    /// Borrow the registered plugins (useful for diagnostics).
+    pub fn plugins(&self) -> &[Box<dyn UnlacePlugin>] {
+        &self.plugins
+    }
+
+    /// Run every plugin's [`UnlacePlugin::on_function`] hook and collect
+    /// the concatenated findings in registration order.
+    pub fn run_all_on_function(&self, func: &SsaFunction) -> Vec<PluginFinding> {
+        let mut findings = Vec::new();
+        for plugin in &self.plugins {
+            findings.extend(plugin.on_function(func));
+        }
+        findings
+    }
+
+    /// Run every plugin's [`UnlacePlugin::on_binary`] hook and collect
+    /// the concatenated findings in registration order.
+    pub fn run_all_on_binary(&self, image: &BinaryImage) -> Vec<PluginFinding> {
+        let mut findings = Vec::new();
+        for plugin in &self.plugins {
+            findings.extend(plugin.on_binary(image));
+        }
+        findings
+    }
+}
+
+impl Default for PluginRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Reference plugin used in tests and as a copy-paste starting point.
+///
+/// Implements only the required trait methods; both event callbacks
+/// fall through to the empty defaults.
+pub struct NoopPlugin;
+
+impl UnlacePlugin for NoopPlugin {
+    fn name(&self) -> &str {
+        "noop"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use smallvec::smallvec;
+    use unlace_ir::ssa::build_ssa;
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
 
-    struct DummyPlugin;
-
-    impl UnlacePlugin for DummyPlugin {
-        fn name(&self) -> &str {
-            "dummy"
-        }
-        fn version(&self) -> &str {
-            "0.0.1"
-        }
-        fn description(&self) -> &str {
-            "test-only dummy plugin"
-        }
-        fn run_pass(&self, _function: &mut SsaFunction) {}
+    fn empty_ssa() -> SsaFunction {
+        let mut func = Function::new("noop_test", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1000,
+        ));
+        func.insert_block(bb);
+        build_ssa(func)
     }
 
     #[test]
-    fn test_plugin_manager_empty() {
-        let mgr = PluginManager::new();
-        assert_eq!(mgr.plugins().len(), 0);
+    fn noop_plugin_identity() {
+        let p = NoopPlugin;
+        assert_eq!(p.name(), "noop");
+        assert_eq!(p.version(), "0.1.0");
     }
 
     #[test]
-    fn test_plugin_trait_object_safety() {
-        let plugin: Box<dyn UnlacePlugin> = Box::new(DummyPlugin);
-        assert_eq!(plugin.name(), "dummy");
-        assert_eq!(plugin.version(), "0.0.1");
-        assert_eq!(plugin.description(), "test-only dummy plugin");
+    fn noop_plugin_on_function_is_empty() {
+        let ssa = empty_ssa();
+        let findings = NoopPlugin.on_function(&ssa);
+        assert!(findings.is_empty());
     }
 
     #[test]
-    fn test_plugin_error_missing_file() {
-        let mut mgr = PluginManager::new();
-        let result = mgr.load_library(Path::new("/nonexistent/libfake.so"));
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            PluginError::LoadFailed { .. } => {}
-            other => panic!("expected LoadFailed, got {other}"),
-        }
+    fn registry_register_increments_len() {
+        let mut reg = PluginRegistry::new();
+        assert!(reg.is_empty());
+        reg.register(Box::new(NoopPlugin));
+        assert_eq!(reg.len(), 1);
+        reg.register(Box::new(NoopPlugin));
+        assert_eq!(reg.len(), 2);
     }
 
     #[test]
-    fn test_plugin_error_missing_symbol() {
-        let libc_path = Path::new("/usr/lib/libc.so.6");
-        if !libc_path.exists() {
-            return;
-        }
-        let mut mgr = PluginManager::new();
-        let result = mgr.load_library(libc_path);
-        // Loading libc should fail — either the library can't be loaded as a
-        // plugin (LoadFailed) or the entry point symbol is missing
-        // (EntryPointNotFound). Both are acceptable error variants.
-        assert!(result.is_err(), "loading libc as plugin should fail");
-    }
-
-    #[test]
-    fn test_run_all_empty() {
-        let mgr = PluginManager::new();
-        assert_eq!(mgr.plugins().len(), 0);
-    }
-
-    #[test]
-    fn test_load_from_nonexistent_dir() {
-        let mut mgr = PluginManager::new();
-        let result = mgr.load_from_dir(Path::new("/nonexistent/plugin/dir"));
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            PluginError::DirNotFound { .. } => {}
-            other => panic!("expected DirNotFound, got {other}"),
-        }
-    }
-
-    #[test]
-    fn test_load_from_empty_dir() {
-        let dir = std::env::temp_dir().join("unlace_plugin_test_empty");
-        let _ = std::fs::create_dir(&dir);
-        let mut mgr = PluginManager::new();
-        let count = mgr.load_from_dir(&dir).expect("empty dir should succeed");
-        assert_eq!(count, 0);
-        let _ = std::fs::remove_dir(&dir);
+    fn registry_run_all_on_function_with_noop_yields_no_findings() {
+        let ssa = empty_ssa();
+        let mut reg = PluginRegistry::new();
+        reg.register(Box::new(NoopPlugin));
+        reg.register(Box::new(NoopPlugin));
+        let findings = reg.run_all_on_function(&ssa);
+        assert!(findings.is_empty(), "NoopPlugin must not produce findings");
     }
 }

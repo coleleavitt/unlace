@@ -1437,9 +1437,11 @@ name = "unlace-plugin"
 version = "0.1.0"
 dependencies = [
  "libloading",
+ "smallvec",
  "thiserror",
  "tracing",
  "unlace-ir",
+ "unlace-loader",
 ]
 
 [[package]]

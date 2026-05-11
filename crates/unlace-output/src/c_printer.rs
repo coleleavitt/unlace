@@ -318,13 +318,17 @@ pub struct PrinterAnnotations {
     /// see the final landing site of a forwarder chain without leaving
     /// the C view.
     pub forwarded_resolutions: BTreeMap<u64, String>,
-    /// Recovered Go interface types keyed by `runtime._type` VA (t181).
+    /// Recovered Go types keyed by `runtime._type` VA (t181/t191).
     ///
     /// Populated from [`unlace_loader::BinaryImage::go_types`]. Every
-    /// entry is rendered as a Go-style `// interface { Method() }`
-    /// comment in a preamble block, immediately above the function
-    /// header — analogous to how `objc_classes` surfaces ObjC ivar
-    /// layouts. Empty for non-Go binaries.
+    /// entry is rendered in a preamble block immediately above the
+    /// function header — interfaces as Go-style
+    /// `// interface { Method() }`, slices as `// []elem`, maps as
+    /// `// map[K]V`. Empty for non-Go binaries.
+    ///
+    /// The field name is kept as `go_interfaces` for backwards
+    /// compatibility with t181 call sites; despite the name it carries
+    /// every recovered Go type variant the printer knows how to render.
     pub go_interfaces: BTreeMap<u64, unlace_ir::types::Type>,
 }
 
@@ -428,26 +432,37 @@ pub fn print_c_with_annotations(
         }
     }
 
-    // t181: Go-style `// interface { Method() }` preamble for every
-    // recovered Go interface type. Mirrors the ObjC class block above —
-    // surfaces method sets so analysts can correlate `void *` interface
-    // values back to their source-level shape.
+    // t181/t191: Go-style preamble for every recovered Go type.
+    // Mirrors the ObjC class block above — surfaces interface method
+    // sets (t181) plus slice / map shapes (t191) so analysts can
+    // correlate opaque pointer values back to their source-level type.
     if let Some(ann) = annotations {
         let mut emitted_any = false;
         for (va, ty) in &ann.go_interfaces {
-            if let Some(body) = ty.render_go_interface() {
-                if !emitted_any {
-                    out.push_str("// Go interface types (recovered from runtime.typelinks)\n");
-                    emitted_any = true;
-                }
-                let label = match ty {
-                    unlace_ir::types::Type::Interface { name, .. } if !name.is_empty() => {
+            let (label, body) = match ty {
+                unlace_ir::types::Type::Interface { name, .. } => {
+                    let Some(rendered) = ty.render_go_interface() else {
+                        continue;
+                    };
+                    let label = if !name.is_empty() {
                         name.clone()
-                    }
-                    _ => format!("type_0x{va:x}"),
-                };
-                let _ = writeln!(out, "// {label}: {body}");
+                    } else {
+                        format!("type_0x{va:x}")
+                    };
+                    (label, rendered)
+                }
+                unlace_ir::types::Type::Slice { .. } | unlace_ir::types::Type::Map { .. } => {
+                    // Slices and maps render directly via Display
+                    // (`[]int` / `map[K]V`).
+                    (format!("type_0x{va:x}"), ty.to_string())
+                }
+                _ => continue,
+            };
+            if !emitted_any {
+                out.push_str("// Go types (recovered from runtime.typelinks)\n");
+                emitted_any = true;
             }
+            let _ = writeln!(out, "// {label}: {body}");
         }
         if emitted_any {
             out.push('\n');

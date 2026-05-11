@@ -18,6 +18,7 @@ pub mod image;
 pub mod macho;
 pub mod msvc_rtti;
 pub mod objc;
+pub mod packer_detect;
 pub mod pdb;
 pub mod pdb_types;
 pub mod pe;
@@ -49,6 +50,7 @@ pub use image::{
     SymbolKind,
 };
 pub use macho::MachoLoader;
+pub use packer_detect::{PackerKind, detect_packer};
 pub use pdb_types::{PdbTypes, ProcSig, import_pdb_types};
 pub use pe::PeLoader;
 pub use rtti::{

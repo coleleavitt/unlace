@@ -349,6 +349,18 @@ pub struct PrinterAnnotations {
     /// [`unlace_loader::BinaryImage::auth_pointers`] table. Empty for
     /// every non-cache image and for v1–v4 dyld_shared_caches.
     pub auth_calls: BTreeMap<u64, unlace_passes::AuthCallAnnotation>,
+    /// Pre-rendered preamble block for synthesised composite types
+    /// recovered by the SSA analyses (t147 stack-frame composites in
+    /// `SsaFunction::inferred_structs` and t213 array-of-structs layouts
+    /// in `SsaFunction::array_struct_layouts`).  Built by
+    /// [`emit_inferred_struct_preamble`] from the `SsaFunction` before
+    /// HIR structuring, and emitted immediately above the function header
+    /// alongside the ObjC class / Go type preamble blocks.
+    ///
+    /// `None` (the default) suppresses the preamble entirely.  An empty
+    /// string is also treated as "nothing to emit" so callers can compute
+    /// the string unconditionally.
+    pub inferred_struct_preamble: Option<String>,
 }
 
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
@@ -513,6 +525,20 @@ pub fn print_c_with_annotations(
         // ctor of each class — pinned at the top of the function so it
         // sits *above* the function-header comment.
         emit_class_layout_for_func(func, rtti, &mut out);
+    }
+
+    // t147 / t224: synthesised composite preamble (stack-frame structs +
+    // array-of-structs layouts).  Pre-rendered by the CLI driver via
+    // `emit_inferred_struct_preamble` and piped through `PrinterAnnotations`
+    // because the printer takes a `HirFunction`, not the `SsaFunction` that
+    // owns the recovery maps.
+    if let Some(preamble) = annotations
+        .and_then(|a| a.inferred_struct_preamble.as_deref())
+        .filter(|s| !s.is_empty())
+    {
+        out.push_str("// Recovered composite layouts (t147 stack frame, t213 array-of-structs)\n");
+        out.push_str(preamble);
+        out.push('\n');
     }
 
     if let Some(ann) = annotations.and_then(|a| a.function_comment.as_deref()) {
@@ -4492,11 +4518,84 @@ pub fn render_objc_class_struct(class: &unlace_loader::ObjcClass) -> Option<Stri
         );
     }
     let _ = writeln!(out, "}};");
-    // TODO(t147): wire this into PrintCtx so the synthesised structs are
-    // emitted in the file preamble for every ObjC class referenced by the
-    // function being printed.  Currently the helper is callable but the
-    // c_printer driver does not invoke it.
+    // t147 / t224: ObjC class layouts are wired into the preamble emitter at
+    // the top of `print_c_with_annotations` via `PrinterAnnotations::objc_classes`.
+    // The companion `emit_inferred_struct_preamble` below handles the
+    // SSA-recovered stack-frame and array-of-structs layouts.
     Some(out)
+}
+
+/// Render a preamble block of `struct __anon<N> { ... };` declarations for
+/// every composite type recovered on the [`SsaFunction`]:
+///
+/// * [`SsaFunction::inferred_structs`] — stack-frame composites synthesised
+///   from adjacent same-typed stack slots by `StackVarRecoveryPass` (t147),
+///   keyed by RSP-relative starting offset.
+/// * [`SsaFunction::array_struct_layouts`] — heap / global / parameter-pointer
+///   structs recovered from array-of-structs access patterns inside natural
+///   loops by `struct_field_recovery::recover_structs` (t213), keyed by the
+///   base-pointer SSA varnode.
+///
+/// One `struct __anon0 { … };` block is emitted per layout, numbered in the
+/// fixed order above (stack-frame composites first, then array layouts).
+/// Field names use the byte-offset convention `field_<offset>` so the layout
+/// is self-describing without leaking the synthesised internal name.
+///
+/// Returns an empty string when both maps are empty, so callers can splice
+/// the result unconditionally and only emit a trailing blank line when the
+/// preamble is non-empty.
+pub fn emit_inferred_struct_preamble(func: &SsaFunction) -> String {
+    if func.inferred_structs.is_empty() && func.array_struct_layouts.is_empty() {
+        return String::new();
+    }
+
+    let mut out = String::new();
+    let mut idx: usize = 0;
+
+    // Stack-frame composites (t147).  `inferred_structs` stores `Type::Struct`
+    // values whose field names are sequential (`field_0`, `field_1`, …) but
+    // whose `offset` is a true byte offset.  We re-emit with offset-based
+    // names so the rendered struct is self-describing.
+    for ty in func.inferred_structs.values() {
+        if let Type::Struct { fields, .. } = ty {
+            let _ = writeln!(out, "struct __anon{idx} {{");
+            for f in fields {
+                let _ = writeln!(out, "    {} field_{};", f.ty, f.offset);
+            }
+            let _ = writeln!(out, "}};");
+            idx += 1;
+        }
+    }
+
+    // Array-of-structs layouts (t213).  `InferredStruct` carries raw
+    // `(offset, access_width)` pairs; pick a primitive integer type of the
+    // matching width so the rendered field has a concrete C type.
+    for layout in func.array_struct_layouts.values() {
+        let _ = writeln!(out, "struct __anon{idx} {{");
+        for field in &layout.fields {
+            let ty = primitive_for_width(field.size);
+            let _ = writeln!(out, "    {} field_{};", ty, field.offset);
+        }
+        let _ = writeln!(out, "}};");
+        idx += 1;
+    }
+
+    out
+}
+
+/// Map an access width (in bytes) to a C primitive type name used in the
+/// inferred-struct preamble.  Widths outside the recognised set fall back to
+/// `__int64`, matching the conservative-widening convention used elsewhere
+/// in the printer for unrecovered scalar types.
+fn primitive_for_width(width: u8) -> &'static str {
+    match width {
+        1 => "__int8",
+        2 => "__int16",
+        4 => "__int32",
+        8 => "__int64",
+        16 => "__int128",
+        _ => "__int64",
+    }
 }
 
 /// Render an ObjC category as a commented `@interface` block:
@@ -15052,5 +15151,99 @@ mod tests {
             PrimitiveType::Int(4),
             PrimitiveType::Unknown
         ));
+    }
+
+    // ──── t224: synthesised struct preamble emission ────
+    //
+    // These tests target `emit_inferred_struct_preamble` directly so we can
+    // exercise both source maps (`SsaFunction::inferred_structs` for t147
+    // stack-frame composites, `SsaFunction::array_struct_layouts` for t213
+    // array-of-structs layouts) without standing up the full HIR pipeline.
+
+    fn empty_ssa_for_preamble() -> unlace_ir::ssa::SsaFunction {
+        // Minimal SSA function: one empty entry block. `build_ssa` walks
+        // the CFG even for a single block, which is fine — we don't touch
+        // any of the dominator-tree state in the preamble emitter.
+        use unlace_ir::{BasicBlock, BlockId, Function};
+        let mut f = Function::new("preamble_test", BlockId(0), 0);
+        f.insert_block(BasicBlock::new(BlockId(0)));
+        unlace_ir::ssa::build_ssa(f)
+    }
+
+    #[test]
+    fn test_emit_inferred_struct_preamble_stack_struct() {
+        use unlace_ir::types::{StructFieldType, Type};
+
+        let mut ssa = empty_ssa_for_preamble();
+        ssa.inferred_structs.insert(
+            -0x20,
+            Type::Struct {
+                name: "anon_struct_20".into(),
+                fields: vec![
+                    StructFieldType {
+                        name: "field_0".into(),
+                        ty: Type::int(4),
+                        offset: 0,
+                    },
+                    StructFieldType {
+                        name: "field_1".into(),
+                        ty: Type::int(4),
+                        offset: 4,
+                    },
+                ],
+            },
+        );
+
+        let out = super::emit_inferred_struct_preamble(&ssa);
+        assert!(out.contains("struct __anon0 {"), "header missing: {out}");
+        // Field naming is offset-based, not index-based.
+        assert!(out.contains("field_0"), "field_0 missing: {out}");
+        assert!(out.contains("field_4"), "field_4 missing: {out}");
+        assert!(out.trim_end().ends_with("};"), "close brace: {out}");
+    }
+
+    #[test]
+    fn test_emit_inferred_struct_preamble_array_layout() {
+        use unlace_ir::types::{InferredStruct, StructField};
+        use unlace_ir::{SpaceId, Varnode};
+
+        let mut ssa = empty_ssa_for_preamble();
+        let base = unlace_ir::ssa::SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Register,
+                offset: 0,
+                size: 8,
+            },
+            version: 0,
+        };
+        ssa.array_struct_layouts.insert(
+            base,
+            InferredStruct {
+                size: 16,
+                fields: vec![
+                    StructField {
+                        offset: 0,
+                        size: 4,
+                    },
+                    StructField {
+                        offset: 8,
+                        size: 8,
+                    },
+                ],
+            },
+        );
+
+        let out = super::emit_inferred_struct_preamble(&ssa);
+        assert!(out.contains("struct __anon0 {"), "header missing: {out}");
+        // Width 4 → __int32, width 8 → __int64; offsets verbatim.
+        assert!(out.contains("__int32 field_0;"), "field_0: {out}");
+        assert!(out.contains("__int64 field_8;"), "field_8: {out}");
+    }
+
+    #[test]
+    fn test_emit_inferred_struct_preamble_empty() {
+        let ssa = empty_ssa_for_preamble();
+        let out = super::emit_inferred_struct_preamble(&ssa);
+        assert!(out.is_empty(), "expected empty preamble, got: {out:?}");
     }
 }

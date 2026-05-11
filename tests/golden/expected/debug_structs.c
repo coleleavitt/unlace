@@ -21,6 +21,12 @@ Point offset(Point p, int dx, int dy) {
 int main(void) {
     *(_QWORD *)(0LL) = 0x1191LL; return result;
 }
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    __int64 field_0;
+    __int64 field_8;
+};
+
 /* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
 void sub_1100(void) {
     long long v1; // rsp

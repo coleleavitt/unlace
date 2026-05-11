@@ -17,7 +17,7 @@ use crate::{Function, IrOp, SpaceId};
 /// Maps function entry addresses to their callers and callees, built by
 /// scanning every instruction in the provided function set for `CALL` and
 /// `CALLIND` opcodes.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CallGraph {
     /// For each callee address, the set of caller addresses that call it.
     callers: BTreeMap<u64, BTreeSet<u64>>,

@@ -12,20 +12,21 @@ use petgraph::stable_graph::StableDiGraph;
 use crate::cfg::{ControlFlowGraph, build_cfg};
 use crate::{BlockId, Function, Varnode};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct SsaVarnode {
     pub base: Varnode,
     pub version: u32,
 }
 
 /// A phi (MULTIEQUAL) node at a block entry.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PhiNode {
     pub output: SsaVarnode,
     pub inputs: Vec<(BlockId, SsaVarnode)>,
 }
 
 /// Wrapper around the petgraph dominator tree result.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DominatorTree {
     idom: BTreeMap<BlockId, BlockId>,
     children: BTreeMap<BlockId, Vec<BlockId>>,
@@ -63,7 +64,7 @@ impl DominatorTree {
 /// Determined by [`CallingConventionDetectPass`](https://docs.rs/unlace-passes)
 /// examining which argument registers are read before being written in the
 /// function entry block.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
 pub enum CallingConvention {
     /// System V AMD64 ABI: args in RDI, RSI, RDX, RCX, R8, R9; return in RAX.
     SystemV,
@@ -106,7 +107,7 @@ impl std::fmt::Display for CallingConvention {
 /// Param types are listed in calling-convention order (e.g. for SystemV:
 /// RDI, RSI, RDX, RCX, R8, R9). An entry of [`PrimitiveType::Unknown`]
 /// means the type was not determinable from the callee body alone.
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct FunctionSignature {
     /// Inferred return type (corresponds to the value left in RAX/X0/etc.).
     pub return_type: PrimitiveType,
@@ -129,7 +130,7 @@ pub type FunctionSignatureRegistry = BTreeMap<u64, FunctionSignature>;
 /// The type lattice starts at [`Unknown`](Self::Unknown) and is refined by
 /// [`TypeInferPass`](https://docs.rs/unlace-passes) as it walks instructions.
 /// Width is in **bytes** (matching [`Varnode::size`](crate::Varnode::size)).
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default, serde::Serialize, serde::Deserialize)]
 pub enum PrimitiveType {
     /// No type information yet — joins with anything to become that type.
     #[default]
@@ -183,7 +184,7 @@ impl std::fmt::Display for PrimitiveType {
 }
 
 /// A recovered stack variable at a fixed RSP-relative offset.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StackVar {
     /// RSP-relative offset (negative = below entry RSP, e.g. -8 for first push).
     pub offset: i64,
@@ -195,7 +196,7 @@ pub struct StackVar {
     pub accesses: Vec<SsaVarnode>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub enum PanicKind {
     Panic,
     BoundsCheck,
@@ -222,7 +223,7 @@ impl std::fmt::Display for PanicKind {
 /// is a struct `{ drop_fn, size, align, method_0, method_1, ... }`. A vtable
 /// dispatch loads the vtable pointer from `[obj + 8]`, then loads a method
 /// pointer from `[vtable + offset]`, then calls it indirectly.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct VtableCallInfo {
     /// The SSA varnode holding the base of the fat pointer (the trait object).
     pub base_varnode: SsaVarnode,
@@ -237,6 +238,7 @@ pub struct VtableCallInfo {
     pub slot_index: usize,
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SsaFunction {
     pub function: Function,
     pub cfg: ControlFlowGraph,
@@ -481,7 +483,7 @@ pub struct SsaFunction {
 }
 
 /// A recognized cryptographic algorithm sequence within a function.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CryptoAnnotation {
     /// Human-readable algorithm name (e.g. `"AES-128-ECB"`).
     pub algorithm: String,
@@ -498,7 +500,7 @@ pub struct CryptoAnnotation {
 /// without depending on `unlace-passes`. The passes layer constructs
 /// instances of this type and writes them to
 /// [`SsaFunction::finalized_signature`]; the printer consumes them.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FinalizedSignature {
     /// Final parameter list in calling-convention order. Names match
     /// the originals from [`SsaFunction::inferred_params`] — only
@@ -521,7 +523,7 @@ pub struct FinalizedSignature {
 /// preserves every distinct byte width observed at this offset (1, 2, 4
 /// or 8) so the type-recovery layer can spot mixed-width unions and
 /// pick the dominant access size for the inferred primitive type.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StackLocal {
     /// RSP/RBP-relative byte offset. Negative for locals below the frame
     /// pointer, non-negative for incoming-parameter slots above it.
@@ -541,7 +543,7 @@ pub struct StackLocal {
 /// Produced by [`unlace_passes::stack_frame_recovery::recover_stack_frame`].
 /// `locals` is keyed by signed frame offset so iteration order matches
 /// the slot's lexical position in the frame.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StackFrame {
     /// All recovered locals, keyed by frame offset.
     pub locals: BTreeMap<i64, StackLocal>,
@@ -566,7 +568,7 @@ pub struct StackFrame {
 /// a passed-by-value scalar. `byref_locals` records the RSP/RBP-relative
 /// offsets of stack-allocated locals whose address is observed flowing
 /// (after a `Copy` chain) into a `Call` argument register.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ByrefInfo {
     /// Parameter indices (zero-based) marked `&param`.
     pub byref_params: std::collections::BTreeSet<u32>,
@@ -580,7 +582,7 @@ pub struct ByrefInfo {
 /// Mirrors `unlace_passes::objc_byref::ByrefBox` so the IR layer can
 /// surface byref metadata without taking a dependency on the passes
 /// crate (which depends on `unlace_ir`).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ByrefBox {
     /// User-visible type of the captured payload.
     pub captured_type: crate::types::Type,
@@ -598,7 +600,7 @@ pub struct ByrefBox {
 /// Both maps are keyed by `(block, insn_idx, operand_idx)` — the operand
 /// index references the `IrInsn::inputs` slot whose typed display the
 /// printer should consult.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OpTypeBindings {
     /// Struct-offset bindings: an address operand `base + K` where `base` is
     /// a known struct pointer; the printer renders `base->field` rather than
@@ -611,20 +613,20 @@ pub struct OpTypeBindings {
 }
 
 /// One struct-offset operand binding.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StrOffBinding {
     pub struct_type: crate::types::Type,
     pub field_path: Vec<String>,
 }
 
 /// One enum-constant operand binding.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EnumConstBinding {
     pub enum_name: String,
     pub variant: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EnumDiscriminant {
     pub load_sv: SsaVarnode,
     pub load_loc: (BlockId, usize),
@@ -632,7 +634,7 @@ pub struct EnumDiscriminant {
     pub comparison_locs: Vec<(BlockId, usize)>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub enum VarnodeSlot {
     Output,
     Input(usize),

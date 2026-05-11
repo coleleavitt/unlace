@@ -8,7 +8,7 @@ use crate::SpaceId;
 /// Two Varnodes are equal iff all three fields match. Overlapping Varnodes
 /// (e.g., `EAX` at `(Register, 0, 4)` and `RAX` at `(Register, 0, 8)`)
 /// alias and must be resolved via `SUBPIECE`/`PIECE`/`INDIRECT`.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct Varnode {
     pub space: SpaceId,
     pub offset: u64,

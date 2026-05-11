@@ -4,7 +4,7 @@ use std::fmt;
 
 /// Target architecture identifier, derived from the ELF `e_machine` field
 /// (or equivalent in PE/Mach-O).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ArchId {
     X86,
     X86_64,

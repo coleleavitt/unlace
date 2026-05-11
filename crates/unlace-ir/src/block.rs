@@ -8,7 +8,7 @@ use crate::IrInsn;
 ///
 /// IDs are assigned in reverse-post-order so that `BlockId(0)` is always the
 /// entry block (IR spec SS2.4).
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct BlockId(pub u32);
 
 impl std::fmt::Display for BlockId {
@@ -19,7 +19,7 @@ impl std::fmt::Display for BlockId {
 
 /// A basic block: a linear sequence of IR instructions with a single entry
 /// and (possibly multiple) successor edges.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BasicBlock {
     pub id: BlockId,
     pub insns: Vec<IrInsn>,

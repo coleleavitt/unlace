@@ -47,7 +47,11 @@ pdb = "0.8"
 fallible-iterator = "0.2"
 
 # Graph algorithms (CFG, dominator trees)
-petgraph = "0.8"
+petgraph = { version = "0.8", features = ["serde-1"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+bincode = { version = "2", features = ["serde"] }
 
 # CLI
 clap = { version = "4.6", features = ["derive"] }
@@ -69,7 +73,7 @@ anyhow = "1"
 rayon = "1"
 
 # Data structures
-smallvec = "1"
+smallvec = { version = "1", features = ["serde"] }
 
 # Dynamic library loading
 libloading = "0.8"

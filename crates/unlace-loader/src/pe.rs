@@ -124,6 +124,7 @@ where
         go_types: std::collections::BTreeMap::new(),
         swift_info: None,
         auth_pointers: Vec::new(),
+        auth_ptr_slots: Vec::new(),
     };
 
     image.seh = collect_seh_from_image(&image);
@@ -2810,6 +2811,7 @@ mod tests {
             go_types: BTreeMap::new(),
             swift_info: None,
             auth_pointers: Vec::new(),
+            auth_ptr_slots: Vec::new(),
         }
     }
 

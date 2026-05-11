@@ -316,6 +316,7 @@ mod tests {
             go_types: BTreeMap::new(),
             swift_info: None,
             auth_pointers: Vec::new(),
+            auth_ptr_slots: Vec::new(),
         }
     }
 

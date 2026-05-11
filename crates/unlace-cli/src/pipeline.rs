@@ -1467,6 +1467,7 @@ mod tests {
             go_types: std::collections::BTreeMap::new(),
             swift_info: None,
             auth_pointers: Vec::new(),
+            auth_ptr_slots: Vec::new(),
         }
     }
 

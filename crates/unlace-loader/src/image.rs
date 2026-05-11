@@ -418,6 +418,18 @@ pub struct BinaryImage {
     /// from one of these slots — the printer renders the call as
     /// `__builtin_arm_authcall(target, key, disc)`.
     pub auth_pointers: Vec<crate::dyld_cache::AuthPointer>,
+    /// Mach-O `__DATA_CONST,__auth_ptr` slot virtual addresses (t207).
+    ///
+    /// iOS 13+ moved many globals (vtables, dispatch tables, etc.) into
+    /// the read-only `__DATA_CONST` segment, where they live as arrays
+    /// of 8-byte authenticated function pointers in the `__auth_ptr`
+    /// section. The raw slot value is zeroed at link time and patched
+    /// by `dyld` at load with a PAC-signed pointer; we surface only the
+    /// VA of each slot so later passes can mark them as relocation
+    /// targets. Empty for non-Mach-O images or Mach-O binaries that
+    /// either lack a `__DATA_CONST` segment or carry no `__auth_ptr`
+    /// section within it.
+    pub auth_ptr_slots: Vec<u64>,
 }
 
 /// A PE RUNTIME_FUNCTION entry from the `.pdata` exception directory.
@@ -544,6 +556,7 @@ mod tests {
             go_types: BTreeMap::new(),
             swift_info: None,
             auth_pointers: Vec::new(),
+            auth_ptr_slots: Vec::new(),
         }
     }
 

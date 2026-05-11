@@ -242,6 +242,7 @@ where
     let mut dynamic_linking = collect_macho_dynamic_linking::<Mach>(&file, data);
 
     let function_starts = merge_function_starts::<Mach>(&file, data, &mut symbols);
+    let auth_ptr_slots = parse_auth_ptr_slots::<Mach>(&file, data);
     // LC_SEGMENT_SPLIT_INFO header is parsed at load time so kernelcache
     // pipelines can detect dyld-shared-cache slicing participation; only the
     // kind byte + payload length are surfaced for now (MVP — the delta
@@ -284,6 +285,7 @@ where
         go_types: std::collections::BTreeMap::new(),
         swift_info: None,
         auth_pointers: Vec::new(),
+        auth_ptr_slots,
     };
 
     image.go_module = crate::go_moduledata::parse_firstmoduledata(&image);
@@ -1834,6 +1836,99 @@ where
             })
         })
         .collect()
+}
+
+/// Scan `__DATA_CONST` segments for an `__auth_ptr` section and return
+/// the virtual address of every 8-byte authenticated-pointer slot it
+/// contains (t207).
+///
+/// iOS 13+ moved many runtime tables (vtables, dispatch trees, etc.)
+/// into the read-only `__DATA_CONST` segment, where they live as arrays
+/// of authenticated function pointers in the `__auth_ptr` section. The
+/// raw on-disk slot value is zeroed at link time and patched by `dyld`
+/// at load with a PAC-signed pointer; we surface only the slot VAs so
+/// later passes can mark them as relocation targets.
+///
+/// Returns an empty `Vec` when the binary lacks a `__DATA_CONST`
+/// segment, lacks an `__auth_ptr` section inside it, or when the
+/// section is empty / mis-sized.
+///
+/// Only the 64-bit Mach-O segment layout is mined: Apple's pointer
+/// authentication is an arm64e feature and 32-bit Mach-O does not
+/// participate. Segments other than `__DATA_CONST` are skipped — in
+/// particular `__DATA` (which is writable) is treated as a separate
+/// segment regardless of any section-name collisions.
+fn parse_auth_ptr_slots<Mach>(file: &MachOFile<Mach>, data: &[u8]) -> Vec<u64>
+where
+    Mach: MachHeader<Endian = object::Endianness>,
+{
+    let endian = match file.macho_header().endian() {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut cmds = match file.macho_header().load_commands(endian, data, 0) {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut slots = Vec::new();
+
+    while let Ok(Some(cmd)) = cmds.next() {
+        let variant = match cmd.variant() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let LoadCommandVariant::Segment64(seg, sec_data) = variant else {
+            continue;
+        };
+
+        // Segment name lives in `seg.segname` as a 16-byte fixed-width
+        // C string. Match on `__DATA_CONST` exactly — `__DATA` is a
+        // distinct, writable segment and must not contribute slots.
+        let segname_bytes: &[u8] = &seg.segname;
+        let nul = segname_bytes.iter().position(|&b| b == 0).unwrap_or(16);
+        let segname = std::str::from_utf8(&segname_bytes[..nul]).unwrap_or("");
+        if segname != "__DATA_CONST" {
+            continue;
+        }
+
+        // Section_64 records sit immediately after the segment_command_64
+        // header in the load-command payload. Each is 80 bytes wide.
+        const SECTION64_SIZE: usize = 80;
+        let nsects = seg.nsects.get(endian) as usize;
+        for i in 0..nsects {
+            let soff = i * SECTION64_SIZE;
+            if soff + SECTION64_SIZE > sec_data.len() {
+                break;
+            }
+            let sec_name_bytes = &sec_data[soff..soff + 16];
+            let nul = sec_name_bytes.iter().position(|&b| b == 0).unwrap_or(16);
+            let sec_name = std::str::from_utf8(&sec_name_bytes[..nul]).unwrap_or("");
+            if sec_name != "__auth_ptr" {
+                continue;
+            }
+            let vmaddr = u64::from_le_bytes(
+                sec_data[soff + 32..soff + 40].try_into().unwrap_or([0; 8]),
+            );
+            let size = u64::from_le_bytes(
+                sec_data[soff + 40..soff + 48].try_into().unwrap_or([0; 8]),
+            );
+            // Each slot is an 8-byte authenticated pointer; ignore any
+            // trailing fragment that doesn't fit an 8-byte slot rather
+            // than fabricating an aliased VA.
+            let n = (size / 8) as usize;
+            slots.reserve(n);
+            for k in 0..n {
+                slots.push(vmaddr + (k as u64) * 8);
+            }
+            // A given segment has at most one `__auth_ptr` section in
+            // practice, but keep scanning the rest defensively — the
+            // cost is bounded by `nsects`.
+        }
+    }
+
+    slots
 }
 
 /// Derive [`SectionFlags`] from a Mach-O section's flags.
@@ -4287,5 +4382,193 @@ mod tests {
         let img = MachoLoader::load(&buf).expect("loads");
         assert_eq!(img.arch, ArchId::X86_64);
         assert!(img.relocations.is_empty());
+    }
+
+    // ── t207: __DATA_CONST,__auth_ptr parsing ───────────────────────
+
+    /// Build a 64-bit Mach-O whose load-command stream is:
+    ///   * `LC_SEGMENT_64 __TEXT`      (one `__text` section)
+    ///   * `LC_SEGMENT_64 __DATA_CONST` (one `__auth_ptr` section)
+    ///
+    /// The `__auth_ptr` section spans `slot_count` 8-byte slots
+    /// starting at VA `0x3000`. Slot bytes are left as zero, mirroring
+    /// the on-disk layout dyld patches at load time.
+    fn macho64_with_auth_ptr(slot_count: u64) -> Vec<u8> {
+        let mut buf = vec![0u8; 0x300];
+
+        let seg_cmdsize: u32 = 152; // 72 header + 80 section
+        let sizeofcmds: u32 = seg_cmdsize * 2;
+
+        // ── mach_header_64 ────────────────────────────────────────
+        buf[0..4].copy_from_slice(&macho::MH_MAGIC_64.to_le_bytes());
+        buf[4..8].copy_from_slice(&(macho::CPU_TYPE_X86_64 as i32).to_le_bytes());
+        buf[8..12].copy_from_slice(&3u32.to_le_bytes());
+        buf[12..16].copy_from_slice(&2u32.to_le_bytes()); // MH_EXECUTE
+        buf[16..20].copy_from_slice(&2u32.to_le_bytes()); // ncmds
+        buf[20..24].copy_from_slice(&sizeofcmds.to_le_bytes());
+
+        // ── LC_SEGMENT_64 __TEXT (0x20) ───────────────────────────
+        let seg = 0x20usize;
+        buf[seg..seg + 4].copy_from_slice(&0x19u32.to_le_bytes()); // LC_SEGMENT_64
+        buf[seg + 4..seg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        buf[seg + 24..seg + 32].copy_from_slice(&0x1000u64.to_le_bytes()); // vmaddr
+        buf[seg + 32..seg + 40].copy_from_slice(&0x1000u64.to_le_bytes()); // vmsize
+        buf[seg + 48..seg + 56].copy_from_slice(&0x100u64.to_le_bytes()); // filesize
+        buf[seg + 56..seg + 60].copy_from_slice(&0x05u32.to_le_bytes()); // R|X
+        buf[seg + 60..seg + 64].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 64..seg + 68].copy_from_slice(&1u32.to_le_bytes()); // nsects
+
+        let sec = seg + 72;
+        buf[sec..sec + 6].copy_from_slice(b"__text");
+        buf[sec + 16..sec + 22].copy_from_slice(b"__TEXT");
+        buf[sec + 32..sec + 40].copy_from_slice(&0x1100u64.to_le_bytes());
+        buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes());
+        buf[sec + 48..sec + 52].copy_from_slice(&0x1F0u32.to_le_bytes());
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+
+        // ── LC_SEGMENT_64 __DATA_CONST (0xB8) ─────────────────────
+        let dseg = 0xB8usize;
+        let auth_ptr_va: u64 = 0x3000;
+        let auth_ptr_size: u64 = slot_count * 8;
+
+        buf[dseg..dseg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[dseg + 4..dseg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[dseg + 8..dseg + 20].copy_from_slice(b"__DATA_CONST");
+        buf[dseg + 24..dseg + 32].copy_from_slice(&0x3000u64.to_le_bytes()); // vmaddr
+        buf[dseg + 32..dseg + 40].copy_from_slice(&0x1000u64.to_le_bytes()); // vmsize
+        buf[dseg + 40..dseg + 48].copy_from_slice(&0x200u64.to_le_bytes()); // fileoff
+        buf[dseg + 48..dseg + 56].copy_from_slice(&auth_ptr_size.to_le_bytes()); // filesize
+        buf[dseg + 56..dseg + 60].copy_from_slice(&0x01u32.to_le_bytes()); // R only
+        buf[dseg + 60..dseg + 64].copy_from_slice(&0x01u32.to_le_bytes());
+        buf[dseg + 64..dseg + 68].copy_from_slice(&1u32.to_le_bytes()); // nsects
+
+        // section_64 record sits *immediately after* the segment_command_64
+        // header in the load-command stream, i.e. at dseg + 72 = 0x100.
+        let dsec = dseg + 72;
+        buf[dsec..dsec + 10].copy_from_slice(b"__auth_ptr");
+        buf[dsec + 16..dsec + 28].copy_from_slice(b"__DATA_CONST");
+        buf[dsec + 32..dsec + 40].copy_from_slice(&auth_ptr_va.to_le_bytes());
+        buf[dsec + 40..dsec + 48].copy_from_slice(&auth_ptr_size.to_le_bytes());
+        buf[dsec + 48..dsec + 52].copy_from_slice(&0x200u32.to_le_bytes()); // fileoff
+
+        // Section data — left as zeros, matching the linker's behaviour
+        // for auth-ptr slots (dyld patches them at load).
+
+        // __text payload at fileoff 0x1F0 (after the section_64 record at 0x100).
+        buf[0x1F0] = 0xC3;
+
+        buf
+    }
+
+    /// Build a 64-bit Mach-O with a `__DATA_CONST` segment but **no**
+    /// `__auth_ptr` section. Used as the negative-control fixture.
+    fn macho64_data_const_without_auth_ptr() -> Vec<u8> {
+        let mut buf = vec![0u8; 0x300];
+
+        let seg_cmdsize: u32 = 152;
+        let sizeofcmds: u32 = seg_cmdsize * 2;
+
+        buf[0..4].copy_from_slice(&macho::MH_MAGIC_64.to_le_bytes());
+        buf[4..8].copy_from_slice(&(macho::CPU_TYPE_X86_64 as i32).to_le_bytes());
+        buf[8..12].copy_from_slice(&3u32.to_le_bytes());
+        buf[12..16].copy_from_slice(&2u32.to_le_bytes());
+        buf[16..20].copy_from_slice(&2u32.to_le_bytes());
+        buf[20..24].copy_from_slice(&sizeofcmds.to_le_bytes());
+
+        let seg = 0x20usize;
+        buf[seg..seg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[seg + 4..seg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[seg + 8..seg + 14].copy_from_slice(b"__TEXT");
+        buf[seg + 24..seg + 32].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 32..seg + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[seg + 48..seg + 56].copy_from_slice(&0x100u64.to_le_bytes());
+        buf[seg + 56..seg + 60].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 60..seg + 64].copy_from_slice(&0x05u32.to_le_bytes());
+        buf[seg + 64..seg + 68].copy_from_slice(&1u32.to_le_bytes());
+
+        let sec = seg + 72;
+        buf[sec..sec + 6].copy_from_slice(b"__text");
+        buf[sec + 16..sec + 22].copy_from_slice(b"__TEXT");
+        buf[sec + 32..sec + 40].copy_from_slice(&0x1100u64.to_le_bytes());
+        buf[sec + 40..sec + 48].copy_from_slice(&1u64.to_le_bytes());
+        buf[sec + 48..sec + 52].copy_from_slice(&0x1F0u32.to_le_bytes());
+        buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
+
+        let dseg = 0xB8usize;
+        buf[dseg..dseg + 4].copy_from_slice(&0x19u32.to_le_bytes());
+        buf[dseg + 4..dseg + 8].copy_from_slice(&seg_cmdsize.to_le_bytes());
+        buf[dseg + 8..dseg + 20].copy_from_slice(b"__DATA_CONST");
+        buf[dseg + 24..dseg + 32].copy_from_slice(&0x3000u64.to_le_bytes());
+        buf[dseg + 32..dseg + 40].copy_from_slice(&0x1000u64.to_le_bytes());
+        buf[dseg + 40..dseg + 48].copy_from_slice(&0x200u64.to_le_bytes());
+        buf[dseg + 48..dseg + 56].copy_from_slice(&0x10u64.to_le_bytes());
+        buf[dseg + 56..dseg + 60].copy_from_slice(&0x01u32.to_le_bytes());
+        buf[dseg + 60..dseg + 64].copy_from_slice(&0x01u32.to_le_bytes());
+        buf[dseg + 64..dseg + 68].copy_from_slice(&1u32.to_le_bytes());
+
+        // Section name __const (not __auth_ptr) — read-only data, but
+        // not authenticated pointers. Lives at dseg+72=0x100 so __text
+        // payload moves out of the way to 0x1F0.
+        let dsec = dseg + 72;
+        buf[dsec..dsec + 7].copy_from_slice(b"__const");
+        buf[dsec + 16..dsec + 28].copy_from_slice(b"__DATA_CONST");
+        buf[dsec + 32..dsec + 40].copy_from_slice(&0x3000u64.to_le_bytes());
+        buf[dsec + 40..dsec + 48].copy_from_slice(&0x10u64.to_le_bytes());
+        buf[dsec + 48..dsec + 52].copy_from_slice(&0x200u32.to_le_bytes());
+
+        buf[0x1F0] = 0xC3;
+
+        buf
+    }
+
+    /// t207 — a synthetic Mach-O whose `__DATA_CONST,__auth_ptr`
+    /// section contains exactly three 8-byte slots surfaces three
+    /// entries in `BinaryImage::auth_ptr_slots`, evenly spaced at
+    /// `vmaddr`, `vmaddr+8`, `vmaddr+16`.
+    #[test]
+    fn t207_auth_ptr_slots_recovered_from_data_const() {
+        let buf = macho64_with_auth_ptr(3);
+        let img = MachoLoader::load(&buf).expect("synthetic __auth_ptr Mach-O must load");
+
+        assert_eq!(
+            img.auth_ptr_slots.len(),
+            3,
+            "expected 3 auth-ptr slots, found {:?}",
+            img.auth_ptr_slots,
+        );
+        assert_eq!(img.auth_ptr_slots, vec![0x3000, 0x3008, 0x3010]);
+
+        // `__DATA_CONST` segment is also surfaced as a separate
+        // section block (i.e. it's not silently merged into __DATA).
+        let has_data_const = img
+            .sections
+            .iter()
+            .any(|s| s.name == "__auth_ptr");
+        assert!(
+            has_data_const,
+            "section iterator must expose __auth_ptr; sections: {:?}",
+            img.sections.iter().map(|s| &s.name).collect::<Vec<_>>(),
+        );
+    }
+
+    /// t207 — a Mach-O whose `__DATA_CONST` segment carries only a
+    /// `__const` section (no `__auth_ptr`) must yield an empty
+    /// `auth_ptr_slots` vector. The mere presence of `__DATA_CONST`
+    /// is not enough to fabricate slots.
+    #[test]
+    fn t207_auth_ptr_slots_empty_when_section_absent() {
+        let buf = macho64_data_const_without_auth_ptr();
+        let img = MachoLoader::load(&buf).expect("Mach-O without __auth_ptr must still load");
+        assert!(
+            img.auth_ptr_slots.is_empty(),
+            "expected no auth-ptr slots, found {:?}",
+            img.auth_ptr_slots,
+        );
+
+        // And a binary with no `__DATA_CONST` at all is likewise empty.
+        let bare = minimal_macho64();
+        let bare_img = MachoLoader::load(&bare).expect("bare Mach-O must load");
+        assert!(bare_img.auth_ptr_slots.is_empty());
     }
 }

@@ -6305,6 +6305,79 @@ fn format_constant(value: u64, size: u8) -> String {
     format_constant_ctx(value, size, ConstContext::Signed)
 }
 
+/// Render an integer constant using a radix heuristic that's friendlier
+/// to human readers than the default `0x…` form (t208).
+///
+/// The rules, applied **in order** — the first that matches wins:
+///
+/// 1. **Printable ASCII character** (0x20..=0x7E, no escape needed) →
+///    `'x'` literal. Excludes `'\\'` and `'\''` because those would
+///    require a C escape.
+/// 2. **Byte-sized literal** (`width == 1` and `value < 256`) →
+///    decimal. Bytes are almost always counts, masks, or character
+///    codes; decimal reads more naturally than `0xff`.
+/// 3. **Power of two with bit position >= 8** → `1 << N`. Large
+///    single-bit constants are nearly always flag masks; surfacing the
+///    bit index makes the intent obvious.
+/// 4. **0 / 1 / -1** → decimal. These are universal sentinels and
+///    deserve their canonical signed form even when other rules
+///    would otherwise route them to hex.
+/// 5. **Small magnitude** (`value < 16`) → decimal. Tiny indices,
+///    loop counters, and field offsets read better as `7` than `0x7`.
+/// 6. **Everything else** → `0x…` hexadecimal, the existing default.
+///
+/// `ctx` is currently unused but is retained in the signature so a
+/// future revision can consult per-function display preferences
+/// (e.g. enum bindings) without breaking call sites.
+#[allow(dead_code)]
+fn format_int_literal(value: u64, width: u8, _ctx: &PrintCtx) -> String {
+    // 1. Printable ASCII character — emit a C char literal. We exclude
+    //    backslash and single-quote because rendering those requires an
+    //    escape sequence, and the spec says "no escape needed".
+    if value <= 0x7E && value >= 0x20 && value != b'\\' as u64 && value != b'\'' as u64 {
+        return format!("'{}'", value as u8 as char);
+    }
+
+    // 2. Byte-sized literal — decimal is more readable than hex for
+    //    the [0, 255] range when the user knows the slot is a byte.
+    if width == 1 && value < 256 {
+        return format!("{value}");
+    }
+
+    // 3. Power of two with bit position >= 8 — render as `1 << N`.
+    //    `is_power_of_two()` is false for 0, and `trailing_zeros` on a
+    //    power of two equals the bit index, so the comparison is exact.
+    if value.is_power_of_two() && value.trailing_zeros() >= 8 {
+        return format!("1 << {}", value.trailing_zeros());
+    }
+
+    // 4. 0 / 1 / -1 sentinels — decimal, with -1 rendered against the
+    //    width's unsigned wrap-around (0xFF for u8, 0xFFFF for u16,
+    //    etc.). For widths outside the standard set, fall back to
+    //    `u64::MAX`.
+    if value == 0 || value == 1 {
+        return format!("{value}");
+    }
+    let neg_one = match width {
+        1 => 0xFFu64,
+        2 => 0xFFFFu64,
+        4 => 0xFFFF_FFFFu64,
+        8 => u64::MAX,
+        _ => u64::MAX,
+    };
+    if value == neg_one {
+        return "-1".to_string();
+    }
+
+    // 5. Small magnitude — `0..16` in decimal.
+    if value < 16 {
+        return format!("{value}");
+    }
+
+    // 6. Default — hex.
+    format!("0x{value:x}")
+}
+
 fn format_constant_ctx(value: u64, size: u8, context: ConstContext) -> String {
     if context == ConstContext::Pointer && value == 0 {
         return "nullptr".to_string();
@@ -13095,6 +13168,71 @@ mod tests {
             BTreeMap::new(),
             BTreeMap::new(),
         )
+    }
+
+    // -----------------------------------------------------------------
+    // format_int_literal — t208 radix heuristic
+    //
+    // The function picks a human-friendly rendering for integer
+    // constants. Tests cover one example per branch of the cascade.
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn t208_char_literal_renders_quoted() {
+        let ctx = empty_ctx();
+        // 'x' is 0x78 — well inside the printable-ASCII window and not
+        // one of the escape-requiring characters.
+        assert_eq!(super::format_int_literal(b'x' as u64, 1, &ctx), "'x'");
+        // Width doesn't matter for the char-literal rule; it fires
+        // purely on value.
+        assert_eq!(super::format_int_literal(b'A' as u64, 4, &ctx), "'A'");
+    }
+
+    #[test]
+    fn t208_small_byte_decimal() {
+        let ctx = empty_ctx();
+        // 200 is not printable ASCII (>0x7E) but is a valid byte; the
+        // byte-decimal rule must kick in.
+        assert_eq!(super::format_int_literal(200, 1, &ctx), "200");
+        // 0xFF in a byte falls into the byte-decimal rule too (the
+        // -1 sentinel rule is gated *after* it on purpose).
+        assert_eq!(super::format_int_literal(0xFF, 1, &ctx), "255");
+    }
+
+    #[test]
+    fn t208_power_of_two_renders_as_shift() {
+        let ctx = empty_ctx();
+        // 0x100 = 1 << 8 — bit position 8 hits the threshold.
+        assert_eq!(super::format_int_literal(0x100, 4, &ctx), "1 << 8");
+        // 0x8000_0000 = 1 << 31 — large flag mask, the textbook case.
+        assert_eq!(
+            super::format_int_literal(0x8000_0000, 4, &ctx),
+            "1 << 31"
+        );
+    }
+
+    #[test]
+    fn t208_small_value_decimal() {
+        let ctx = empty_ctx();
+        // 7 is < 16 and not a char-printable / not bytes; the
+        // small-magnitude rule fires.
+        assert_eq!(super::format_int_literal(7, 4, &ctx), "7");
+        // 0 and 1 are the universal sentinels.
+        assert_eq!(super::format_int_literal(0, 4, &ctx), "0");
+        assert_eq!(super::format_int_literal(1, 4, &ctx), "1");
+    }
+
+    #[test]
+    fn t208_large_value_hex() {
+        let ctx = empty_ctx();
+        // 0xDEAD_BEEF is none of: printable char, byte, power of two,
+        // sentinel, small. It must hit the hex fallback.
+        assert_eq!(
+            super::format_int_literal(0xDEAD_BEEF, 4, &ctx),
+            "0xdeadbeef"
+        );
+        // A random 16-bit value also falls through to hex.
+        assert_eq!(super::format_int_literal(0x1234, 2, &ctx), "0x1234");
     }
 
     /// Constants are measured by their rendered length; signed-context

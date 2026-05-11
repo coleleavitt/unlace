@@ -579,17 +579,18 @@ fn detect_symbol_kind_from_demangled(demangled: &str) -> SymbolKind {
 }
 
 fn extract_short_name(full: &str) -> String {
-    if let Some(paren_pos) = full.find('(') {
-        let prefix = &full[..paren_pos];
-        let trimmed = prefix.trim_end();
-        if let Some(space_pos) = trimmed.rfind(' ') {
-            trimmed[space_pos + 1..].to_string()
-        } else {
-            trimmed.to_string()
-        }
-    } else {
-        full.to_string()
-    }
+    // Use depth-aware paren splitting so a `(` inside template arguments —
+    // e.g. function-pointer template parameters like
+    // `std::function<void(int)>::operator()` — isn't mistaken for the start
+    // of the parameter list.
+    let (before_paren, _params) = split_at_top_level_paren(full);
+    let trimmed = before_paren.trim_end();
+    // Then strip a leading return-type token, also depth-aware, so the
+    // space before the trailing `>` in
+    // `std::vector<int, std::allocator<int> >::push_back` (legacy demangler
+    // form with a space between consecutive `>`) isn't treated as the
+    // return-type / name boundary.
+    strip_return_type(trimmed).to_string()
 }
 
 fn detect_language(name: &str) -> Option<SymbolLanguage> {
@@ -873,6 +874,139 @@ mod tests {
         assert!(r.namespaces.is_empty());
         assert!(r.class_name.is_none());
         assert_eq!(r.param_types, vec!["int", "int"]);
+    }
+
+    /// Single-arg template method — short_name and full_signature must
+    /// keep the `<int, ...>` template arguments verbatim instead of being
+    /// truncated by a naive `rfind(' ')` that lands inside the legacy
+    /// demangler's `> >` template-close.
+    #[test]
+    fn template_args_preserved_in_short_name_vector() {
+        let r = demangle("_ZNSt6vectorIiSaIiEE9push_backERKi").expect("demangles");
+        assert!(
+            r.short_name.contains("vector<"),
+            "short_name should retain template args, got: {:?}",
+            r.short_name
+        );
+        assert!(
+            r.short_name.contains("::push_back"),
+            "short_name should include ::push_back, got: {:?}",
+            r.short_name
+        );
+        assert!(
+            !r.short_name.starts_with('>'),
+            "short_name must not start with stray `>`, got: {:?}",
+            r.short_name
+        );
+        assert!(
+            r.full_signature.contains("std::vector<int"),
+            "full_signature should contain std::vector<int…>, got: {:?}",
+            r.full_signature
+        );
+    }
+
+    /// Multi-arg template with a nested template inside an argument
+    /// (`std::less<std::string>`).  Verifies that depth-aware scanning
+    /// keeps every nesting level intact.
+    #[test]
+    fn template_args_preserved_in_short_name_map() {
+        let r = demangle("_ZNSt3mapISsiSt4lessISsESaISt4pairIKSsiEEE4findERKSs")
+            .expect("std::map<…>::find demangles");
+        // Final-component check is the most stable assertion: the demangler
+        // family-version may render the template list slightly differently
+        // (`std::__1::map`, `std::map`, with/without spaces around `>>`),
+        // but the trailing `::find` must always survive.
+        let final_component = r.short_name.rsplit("::").next().expect("non-empty");
+        assert_eq!(final_component, "find", "got short_name: {:?}", r.short_name);
+        assert!(
+            r.short_name.contains("map<"),
+            "short_name should retain template args, got: {:?}",
+            r.short_name
+        );
+        // The class name strips template args by design.
+        assert_eq!(r.class_name.as_deref(), Some("map"));
+        // Top-level template comma must NOT split the namespace.
+        assert!(
+            r.namespaces.last().map_or(false, |s| s.contains(',')),
+            "vector ns should retain top-level commas inside <>, got: {:?}",
+            r.namespaces
+        );
+    }
+
+    /// Template member access on `std::pair<A, B>::first` — a *data*
+    /// member, so the demangled form has no parameter list.  Verifies the
+    /// no-paren branch of `extract_short_name` and that template args
+    /// survive.
+    #[test]
+    fn template_args_preserved_in_short_name_pair_member() {
+        let r = demangle("_ZNSt4pairIiiE5firstE").expect("demangles");
+        assert!(
+            r.short_name.contains("pair<int, int>"),
+            "short_name should retain pair<int, int>, got: {:?}",
+            r.short_name
+        );
+        let final_component = r.short_name.rsplit("::").next().expect("non-empty");
+        assert_eq!(final_component, "first");
+        assert_eq!(r.class_name.as_deref(), Some("pair"));
+        // No params: this is a data member, not a function.
+        assert!(r.param_types.is_empty());
+    }
+
+    /// Function template with a template-deduced return type.  The
+    /// demangler emits `int foo<int>(int)` — the leading `int ` is the
+    /// return type and must be stripped, leaving `foo<int>` as the
+    /// short_name with template args intact.
+    #[test]
+    fn template_function_return_type_stripped() {
+        let r = demangle("_Z3fooIiET_S0_").expect("demangles");
+        assert_eq!(
+            r.short_name, "foo<int>",
+            "expected return type stripped and template args preserved",
+        );
+        assert!(
+            r.full_signature.starts_with("int foo<int>"),
+            "full_signature should still carry the return type, got: {:?}",
+            r.full_signature
+        );
+        assert_eq!(r.param_types, vec!["int"]);
+    }
+
+    /// Variant of the above with no params (`get<T>()` returning T).
+    /// Exercises the empty-parameter-list path.
+    #[test]
+    fn template_function_no_args_return_type_stripped() {
+        let r = demangle("_Z3getIiET_v").expect("demangles");
+        assert_eq!(r.short_name, "get<int>");
+        assert!(r.param_types.is_empty(), "got: {:?}", r.param_types);
+    }
+
+    /// Sanitization for the C output — template args collapse into
+    /// underscore-joined identifier-safe form.  This is the *intended*
+    /// behaviour at the C-identifier site; the template syntax is
+    /// preserved in the `// {full_signature}` comment that accompanies
+    /// the declaration.
+    #[test]
+    fn template_short_name_sanitized_for_c_identifier() {
+        let r = demangle("_ZNSt6vectorIiSaIiEE9push_backERKi").expect("demangles");
+        let c_ident = sanitize_for_c(&r.short_name);
+        // Must not start with `_` (would have, before the fix, because the
+        // bug produced `>::push_back` and `>` sanitized to a leading `_`).
+        assert!(
+            !c_ident.starts_with('_'),
+            "C identifier must not start with underscore (regression: bug \
+             produced `_push_back`), got: {:?}",
+            c_ident
+        );
+        assert!(
+            c_ident.contains("vector"),
+            "C identifier should include the class name, got: {:?}",
+            c_ident
+        );
+        assert!(
+            c_ident.contains("push_back"),
+            "C identifier should include the method name, got: {:?}",
+            c_ident
+        );
     }
 
     #[test]

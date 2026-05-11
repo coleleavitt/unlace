@@ -16,9 +16,12 @@
 //! with a single `Callother(intrinsic_id, ...)` call so a downstream
 //! printer can render it as `memcpy(...)` / `memset(...)` / `memcmp(...)`.
 //!
-//! **MVP scope** — recognises REP MOVSB, REP STOSB, REPE CMPSB
-//! (→ `memcmp`) and REPNE SCASB-with-zero-needle (→ `strlen`).
-//! Wider lane sizes are TODO.
+//! **Scope** — recognises REP MOVSx, REP STOSx (lane sizes 1/2/4/8 →
+//! `memcpy` / `memset` with a `count * lane_size` byte count), REPE CMPSB
+//! (→ `memcmp`) and REPNE SCASB-with-zero-needle (→ `strlen`). The lane
+//! size is read from the access width of the Load/Store inside the loop
+//! (`varnode.size`); loops whose Load and Store disagree, or whose lane
+//! isn't one of {1,2,4,8}, are rejected.
 
 use unlace_ir::IrOp;
 use unlace_ir::ssa::SsaFunction;
@@ -100,10 +103,25 @@ pub fn detect_rep_string_loops(func: &SsaFunction) -> Vec<RepStringLoop> {
         let mut has_decrement = false;
         let mut has_zero_compare = false;
         let mut has_compare = false;
+        // Access-width tracking — every Load's output and every Store's
+        // value-operand should agree on the lane size. We collect them and
+        // require unanimity later.
+        let mut access_widths: smallvec::SmallVec<[u8; 4]> = smallvec::SmallVec::new();
         for insn in &block.insns {
             match insn.op {
-                IrOp::Load => load_count += 1,
-                IrOp::Store => store_count += 1,
+                IrOp::Load => {
+                    load_count += 1;
+                    if let Some(out) = insn.output {
+                        access_widths.push(out.size);
+                    }
+                }
+                IrOp::Store => {
+                    store_count += 1;
+                    // STORE(space, addr, value) — the stored value is input 2.
+                    if let Some(val) = insn.inputs.get(2) {
+                        access_widths.push(val.size);
+                    }
+                }
                 IrOp::IntSub => has_decrement = true,
                 IrOp::IntEqual | IrOp::IntNotequal => {
                     has_compare = true;
@@ -120,18 +138,39 @@ pub fn detect_rep_string_loops(func: &SsaFunction) -> Vec<RepStringLoop> {
         if !has_decrement {
             continue;
         }
+        // Lane size: must be a single agreed-upon value in {1,2,4,8}.
+        // If the body has no memory ops (e.g. malformed), default to 1.
+        let lane_size = if access_widths.is_empty() {
+            1u8
+        } else {
+            let first = access_widths[0];
+            if access_widths.iter().any(|w| *w != first) {
+                continue;
+            }
+            if !matches!(first, 1 | 2 | 4 | 8) {
+                continue;
+            }
+            first
+        };
         let kind = match (load_count, store_count) {
-            // STOS: store-only, no load.
-            (0, s) if s >= 1 => RepStringKind::Stos { elem_size: 1 },
-            // MOVS: one load, one store (data copy).
-            (1, s) if s >= 1 => RepStringKind::Movs { elem_size: 1 },
+            // STOS: store-only, no load. Lane size 1/2/4/8 → STOSB/W/D/Q.
+            (0, s) if s >= 1 => RepStringKind::Stos { elem_size: lane_size },
+            // MOVS: one load, one store (data copy). Lane 1/2/4/8 → MOVSB/W/D/Q.
+            (1, s) if s >= 1 => RepStringKind::Movs { elem_size: lane_size },
             // SCAS used as strlen: one load, no store, compare-vs-zero.
-            (1, 0) if has_zero_compare => RepStringKind::Strlen { elem_size: 1 },
-            // CMPS: two loads, no store, compare between them.
-            (n, 0) if n >= 2 && has_compare => RepStringKind::Memcmp { elem_size: 1 },
+            // strlen() is byte-granular; reject wider lanes.
+            (1, 0) if has_zero_compare && lane_size == 1 => {
+                RepStringKind::Strlen { elem_size: 1 }
+            }
+            // CMPS: two loads, no store, compare between them. memcmp is
+            // emitted as byte-count regardless of lane, but the recognition
+            // here only handles byte CMPS for now.
+            (n, 0) if n >= 2 && has_compare && lane_size == 1 => {
+                RepStringKind::Memcmp { elem_size: 1 }
+            }
             // Generic CMPS shape (compare absent but two loads) — fall back
             // to the bare `Cmps` classification so callers can still see it.
-            (n, 0) if n >= 2 => RepStringKind::Cmps { elem_size: 1 },
+            (n, 0) if n >= 2 && lane_size == 1 => RepStringKind::Cmps { elem_size: 1 },
             _ => continue,
         };
         out.push(RepStringLoop { block_id, kind });
@@ -273,6 +312,98 @@ mod tests {
             "expected Strlen, got {:?}",
             loops[0].kind
         );
+    }
+
+    /// Helper: build a MOVS body at a given lane size.
+    fn movs_body(lane: u8) -> Vec<IrInsn> {
+        let space = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let rdi = Varnode::reg(0x10, 8);
+        let rsi = Varnode::reg(0x18, 8);
+        let rcx = Varnode::reg(0x20, 8);
+        let val = Varnode::reg(0x100, lane);
+        vec![
+            IrInsn::with_output(IrOp::Load, val.clone(), smallvec![space.clone(), rsi], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![space, rdi, val], 0x1004),
+            IrInsn::with_output(
+                IrOp::IntSub,
+                rcx.clone(),
+                smallvec![rcx, Varnode::constant(1, 8)],
+                0x1008,
+            ),
+        ]
+    }
+
+    /// Helper: build a STOS body at a given lane size.
+    fn stos_body(lane: u8) -> Vec<IrInsn> {
+        let space = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
+        let rdi = Varnode::reg(0x10, 8);
+        let rax = Varnode::reg(0x00, lane);
+        let rcx = Varnode::reg(0x20, 8);
+        vec![
+            IrInsn::without_output(IrOp::Store, smallvec![space, rdi, rax], 0x1004),
+            IrInsn::with_output(
+                IrOp::IntSub,
+                rcx.clone(),
+                smallvec![rcx, Varnode::constant(1, 8)],
+                0x1008,
+            ),
+        ]
+    }
+
+    #[test]
+    fn recognizes_rep_movsw_pattern_lane_2() {
+        let ssa = make_self_loop(movs_body(2));
+        let loops = detect_rep_string_loops(&ssa);
+        assert_eq!(loops.len(), 1);
+        assert!(
+            matches!(loops[0].kind, RepStringKind::Movs { elem_size: 2 }),
+            "expected MOVSW (lane 2), got {:?}",
+            loops[0].kind
+        );
+    }
+
+    #[test]
+    fn recognizes_rep_movsd_pattern_lane_4() {
+        let ssa = make_self_loop(movs_body(4));
+        let loops = detect_rep_string_loops(&ssa);
+        assert_eq!(loops.len(), 1);
+        assert!(
+            matches!(loops[0].kind, RepStringKind::Movs { elem_size: 4 }),
+            "expected MOVSD (lane 4), got {:?}",
+            loops[0].kind
+        );
+    }
+
+    #[test]
+    fn recognizes_rep_movsq_pattern_lane_8() {
+        let ssa = make_self_loop(movs_body(8));
+        let loops = detect_rep_string_loops(&ssa);
+        assert_eq!(loops.len(), 1);
+        assert!(
+            matches!(loops[0].kind, RepStringKind::Movs { elem_size: 8 }),
+            "expected MOVSQ (lane 8), got {:?}",
+            loops[0].kind
+        );
+    }
+
+    #[test]
+    fn recognizes_rep_stosd_pattern_lane_4() {
+        let ssa = make_self_loop(stos_body(4));
+        let loops = detect_rep_string_loops(&ssa);
+        assert_eq!(loops.len(), 1);
+        assert!(
+            matches!(loops[0].kind, RepStringKind::Stos { elem_size: 4 }),
+            "expected STOSD (lane 4), got {:?}",
+            loops[0].kind
+        );
+    }
+
+    #[test]
+    fn rejects_unsupported_lane_size() {
+        // A 3-byte access is not a valid REP MOVSx lane.
+        let ssa = make_self_loop(movs_body(3));
+        let loops = detect_rep_string_loops(&ssa);
+        assert!(loops.is_empty(), "lane=3 must not be classified: {:?}", loops);
     }
 
     #[test]

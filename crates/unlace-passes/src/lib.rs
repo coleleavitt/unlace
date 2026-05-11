@@ -71,6 +71,7 @@ pub mod stack_frame_recovery;
 pub mod stack_pointer_tracking;
 pub mod stack_vars;
 pub mod string_hash_switch;
+pub mod struct_boundary;
 pub mod struct_field_detect;
 pub mod struct_field_recovery;
 pub mod var_naming;

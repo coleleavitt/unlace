@@ -281,10 +281,12 @@ where
         seh: None,
         go_module: None,
         go_itabs: std::collections::BTreeMap::new(),
+        go_types: std::collections::BTreeMap::new(),
     };
 
     image.go_module = crate::go_moduledata::parse_firstmoduledata(&image);
     crate::go_types::populate_itabs_from_module(&mut image);
+    crate::go_types::populate_go_types_from_module(&mut image);
 
     Ok(image)
 }

@@ -17,6 +17,7 @@ pub enum ArchId {
     Ppc64,
     V850,
     Arc,
+    Wasm,
     Unknown(u16),
 }
 
@@ -34,6 +35,7 @@ impl fmt::Display for ArchId {
             Self::Ppc64 => f.write_str("ppc64"),
             Self::V850 => f.write_str("v850"),
             Self::Arc => f.write_str("arc"),
+            Self::Wasm => f.write_str("wasm"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

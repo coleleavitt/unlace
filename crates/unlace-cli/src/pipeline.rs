@@ -17,8 +17,8 @@ use unlace_passes::{
     ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
     StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
     CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
-    VariableMergePass, bump_if_signature_changed, detect_byref, recover_stack_frame,
-    run_outer_fixedpoint, run_to_fixedpoint,
+    VariableMergePass, annotate_libc_calls, bump_if_signature_changed, detect_byref,
+    recover_stack_frame, run_outer_fixedpoint, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -1293,6 +1293,27 @@ pub fn decompile_function_with_symbols(
 
     let t = Instant::now();
     let symbols = build_symbol_table_with_functions(image, discovered);
+
+    // t229: classify Call targets against the libc family roster
+    // (memcpy / malloc / printf-family aliases) and stash the canonical
+    // names on ssa.libc_call_annotations. The closure resolves the
+    // constant-target VA of each Call against the just-built symbol
+    // table — the same map the printer will use, so a name only matches
+    // here if the printer would also have rendered it.
+    let _libc_annotations_added =
+        annotate_libc_calls(&mut ssa, &|addr| symbols.get(&addr).cloned());
+
+    // Re-key (BlockId, insn_idx) → canonical name to (call_va → canonical
+    // name) for the printer, which sees instructions only by their VA.
+    let mut libc_call_canonical: BTreeMap<u64, String> = BTreeMap::new();
+    for (&(bid, idx), canonical) in &ssa.libc_call_annotations {
+        if let Some(block) = ssa.function.blocks.get(&bid) {
+            if let Some(insn) = block.insns.get(idx) {
+                libc_call_canonical.insert(insn.addr, canonical.clone());
+            }
+        }
+    }
+
     let mut printer_annotations = config
         .annotations
         .as_ref()
@@ -1302,6 +1323,7 @@ pub fn decompile_function_with_symbols(
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
     let objc_info = unlace_loader::scan_objc_classlist(image);
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
+    printer_annotations.libc_call_canonical = libc_call_canonical;
     let printer_annotations = Some(printer_annotations);
     let result = emit_output(
         emit,

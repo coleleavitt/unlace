@@ -1240,6 +1240,7 @@ mod tests {
             go_module: None,
             go_itabs: BTreeMap::new(),
             go_types: BTreeMap::new(),
+            swift_info: None,
         };
 
         let itab = parse_itab_at(&img, RODATA_BASE).expect("itab decodes");

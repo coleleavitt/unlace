@@ -402,6 +402,11 @@ pub struct BinaryImage {
     /// for non-Go binaries or when no interface types are reachable.
     pub go_types:
         std::collections::BTreeMap<u64, unlace_ir::types::Type>,
+    /// Swift 5+ runtime metadata recovered from Mach-O `__swift5_*`
+    /// sections (t193). `None` for non-Swift binaries (the common
+    /// case) or any image where none of the three sections is
+    /// present.
+    pub swift_info: Option<crate::swift_metadata::SwiftInfo>,
 }
 
 /// A PE RUNTIME_FUNCTION entry from the `.pdata` exception directory.
@@ -526,6 +531,7 @@ mod tests {
             go_module: None,
             go_itabs: BTreeMap::new(),
             go_types: BTreeMap::new(),
+            swift_info: None,
         }
     }
 

@@ -5472,19 +5472,33 @@ fn emit_expr_with_prec(
             if insn.inputs.is_empty() {
                 "0".to_string()
             } else {
-                let copy_ctx =
-                    if insn.inputs[0].space == SpaceId::Const && insn.inputs[0].offset == 0 {
-                        let out_sv = ctx.stmt_outputs.get(&stmt_idx).cloned().flatten();
-                        if out_sv.and_then(|sv| ctx.var_types.get(&sv).copied())
-                            == Some(PrimitiveType::Ptr)
-                        {
+                // For a `COPY const → reg`, pick the rendering context from
+                // the *destination*'s recovered primitive type:
+                //   * `Ptr`   → render `0` as `nullptr`
+                //   * `Float` / `Double` → render the bits as a float literal
+                //   * otherwise → plain signed integer
+                // Non-constant copies fall through to the SSA-name lookup
+                // and never reach `format_constant_ctx`, so the context they
+                // pass is irrelevant.
+                let out_ty = ctx
+                    .stmt_outputs
+                    .get(&stmt_idx)
+                    .cloned()
+                    .flatten()
+                    .and_then(|sv| ctx.var_types.get(&sv).copied());
+                let copy_ctx = if insn.inputs[0].space == SpaceId::Const {
+                    match out_ty {
+                        Some(PrimitiveType::Ptr) if insn.inputs[0].offset == 0 => {
                             ConstContext::Pointer
-                        } else {
-                            ConstContext::Signed
                         }
-                    } else {
-                        ConstContext::Signed
-                    };
+                        Some(PrimitiveType::Float) | Some(PrimitiveType::Double) => {
+                            ConstContext::Float
+                        }
+                        _ => ConstContext::Signed,
+                    }
+                } else {
+                    ConstContext::Signed
+                };
                 emit_operand_with_prec(&insn.inputs[0], 0, stmt_idx, copy_ctx, parent, ctx)
             }
         }
@@ -6487,6 +6501,12 @@ enum ConstContext {
     Char {
         unsigned: bool,
     },
+    /// Float-typed context. The constant's `size` field tells us whether the
+    /// raw bit-pattern is `f32` (4) or `f64` (8); we re-interpret the bytes
+    /// and emit either an IDA macro literal (`NAN`, `INFINITY`, `-INFINITY`)
+    /// or the shortest round-tripping decimal form, matching IDA's
+    /// `sub_11C210` float-printer behaviour.
+    Float,
 }
 
 fn const_context_for_op(op: IrOp) -> ConstContext {
@@ -6497,6 +6517,34 @@ fn const_context_for_op(op: IrOp) -> ConstContext {
         | IrOp::IntLeft
         | IrOp::IntRight
         | IrOp::IntSright => ConstContext::Bitwise,
+
+        // Float operations consume float-typed inputs. A constant Varnode
+        // appearing as an operand of any of these ops is the bit-pattern of
+        // an IEEE-754 value (f32 / f64) and must be rendered as a float
+        // literal rather than an integer constant.
+        //
+        // Note: `FloatInt2float` takes an *integer* input (so it stays
+        // Signed); `FloatFloat2int` and `FloatFloat2float` take *float*
+        // inputs (so they go Float).
+        IrOp::FloatAdd
+        | IrOp::FloatSub
+        | IrOp::FloatMult
+        | IrOp::FloatDiv
+        | IrOp::FloatNeg
+        | IrOp::FloatAbs
+        | IrOp::FloatSqrt
+        | IrOp::FloatCeil
+        | IrOp::FloatFloor
+        | IrOp::FloatRound
+        | IrOp::FloatTrunc
+        | IrOp::FloatNan
+        | IrOp::FloatFloat2float
+        | IrOp::FloatFloat2int
+        | IrOp::FloatEqual
+        | IrOp::FloatNotequal
+        | IrOp::FloatLess
+        | IrOp::FloatLessequal => ConstContext::Float,
+
         _ => ConstContext::Signed,
     }
 }
@@ -6598,6 +6646,19 @@ fn format_constant_ctx(value: u64, size: u8, context: ConstContext) -> String {
             ConstContext::Signed
         };
         return format_constant_ctx(value, size, fallback);
+    }
+
+    if context == ConstContext::Float {
+        // Constants that flow into float ops always have size 4 (f32) or 8
+        // (f64) — long-double constants don't survive packing into a
+        // `Varnode::offset: u64`, so we never see them here. For unexpected
+        // sizes we fall back to the Signed integer rendering rather than
+        // crashing or printing a bogus literal.
+        if size == 4 || size == 8 {
+            let bytes = value.to_le_bytes();
+            return format_float_literal(&bytes[..size as usize], size as usize);
+        }
+        return format_constant_ctx(value, size, ConstContext::Signed);
     }
 
     let msb_threshold = match size {
@@ -6702,6 +6763,99 @@ fn format_char_literal(value: u64, unsigned: bool) -> Option<String> {
         _ => format!("\\x{:02x}", byte),
     };
     Some(format!("'{}'", body))
+}
+
+/// Render a raw IEEE-754 bit-pattern as a C float literal.
+///
+/// Mirrors IDA's `sub_11C210` float-printer:
+/// 1. **Size → C type.**  `≤4` bytes → `float`, `≤8` → `double`, `>8` →
+///    `long double`. The IR can only store 4- or 8-byte float constants in a
+///    `Varnode::offset: u64`, so the long-double branch only fires for the
+///    raw-bytes API used by tests / future passes that hand-roll a slice.
+/// 2. **Classify by exponent / mantissa.**
+///     * all exponent bits set + non-zero mantissa → `NAN`
+///     * all exponent bits set + zero mantissa + sign 0 → `INFINITY`
+///     * all exponent bits set + zero mantissa + sign 1 → `-INFINITY`
+///     * otherwise → format as the shortest round-tripping decimal
+///       (Rust's `Display` impl is Grisu / Ryu and gives this for free).
+/// 3. **Suffix.**  `f` for `f32`, no suffix for `f64`, `L` for long double.
+///
+/// Returns the resulting C literal string. For unsupported sizes we emit a
+/// hex-byte fallback so the output remains compilable.
+pub(crate) fn format_float_literal(bytes: &[u8], size: usize) -> String {
+    debug_assert_eq!(bytes.len(), size, "byte slice length must equal `size`");
+
+    match size {
+        sz if sz <= 4 => {
+            // Pad / truncate to exactly 4 bytes, little-endian.
+            let mut buf = [0u8; 4];
+            let n = sz.min(4);
+            buf[..n].copy_from_slice(&bytes[..n]);
+            let raw = u32::from_le_bytes(buf);
+            // IEEE-754 binary32: sign 1 | exp 8 | mantissa 23.
+            let exp = (raw >> 23) & 0xFF;
+            let mantissa = raw & 0x007F_FFFF;
+            let sign_neg = (raw >> 31) & 1 == 1;
+            if exp == 0xFF {
+                if mantissa != 0 {
+                    return "NAN".to_string();
+                }
+                return if sign_neg {
+                    "-INFINITY".to_string()
+                } else {
+                    "INFINITY".to_string()
+                };
+            }
+            let v = f32::from_bits(raw);
+            // Rust's `{}` for f32 emits the shortest round-trip decimal. We
+            // append `.0` if the representation has no `.` / `e` so the
+            // result parses as a C float literal rather than an integer.
+            let mut s = format!("{}", v);
+            if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+                s.push_str(".0");
+            }
+            s.push('f');
+            s
+        }
+        sz if sz <= 8 => {
+            let mut buf = [0u8; 8];
+            let n = sz.min(8);
+            buf[..n].copy_from_slice(&bytes[..n]);
+            let raw = u64::from_le_bytes(buf);
+            // IEEE-754 binary64: sign 1 | exp 11 | mantissa 52.
+            let exp = (raw >> 52) & 0x7FF;
+            let mantissa = raw & 0x000F_FFFF_FFFF_FFFF;
+            let sign_neg = (raw >> 63) & 1 == 1;
+            if exp == 0x7FF {
+                if mantissa != 0 {
+                    return "NAN".to_string();
+                }
+                return if sign_neg {
+                    "-INFINITY".to_string()
+                } else {
+                    "INFINITY".to_string()
+                };
+            }
+            let v = f64::from_bits(raw);
+            let mut s = format!("{}", v);
+            if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+                s.push_str(".0");
+            }
+            s
+        }
+        _ => {
+            // Long double / 80-bit / 128-bit. We don't have a portable parse
+            // for these in stable Rust; emit IDA's hex-bytes fallback with a
+            // descriptive comment so the output is at least round-trippable
+            // by hand.
+            let mut s = String::from("/* long double 0x");
+            for b in bytes.iter().rev() {
+                s.push_str(&format!("{:02x}", b));
+            }
+            s.push_str(" */ 0.0L");
+            s
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -7202,6 +7356,13 @@ typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD; 
 // FS-segment TLS reads (stack canary, GLIBC TCB).
 _QWORD __readfsqword(unsigned int offset);
 _DWORD __readfsdword(unsigned int offset);
+// IEEE-754 special-value macros (matches IDA's float literal output).
+#ifndef NAN
+#define NAN __builtin_nanf(\"\")
+#endif
+#ifndef INFINITY
+#define INFINITY __builtin_inff()
+#endif
 ";
 
 #[cfg(test)]
@@ -8573,6 +8734,165 @@ mod tests {
             "gcc -fsyntax-only failed on type casts:\n--- source ---\n{}\n--- stderr ---\n{}",
             source,
             String::from_utf8_lossy(&output.stderr),
+        );
+    }
+
+    // ─── format_float_literal: classification + round-trip ────────────
+    //
+    // These exercises cover the four IDA `sub_11C210` branches:
+    //   1. NaN              → emit the bare `NAN` macro
+    //   2. +Infinity        → emit `INFINITY`
+    //   3. -Infinity        → emit `-INFINITY`
+    //   4. Finite values    → shortest round-trip decimal + suffix
+    //
+    // The `f` suffix matches IDA's `float` rendering; `f64` gets no
+    // suffix; `long double` (>8 bytes) gets `L`.
+
+    #[test]
+    fn test_format_float_literal_nan_f32() {
+        let bytes = f32::NAN.to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 4), "NAN");
+    }
+
+    #[test]
+    fn test_format_float_literal_infinity_f32() {
+        let bytes = f32::INFINITY.to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 4), "INFINITY");
+    }
+
+    #[test]
+    fn test_format_float_literal_neg_infinity_f32() {
+        let bytes = f32::NEG_INFINITY.to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 4), "-INFINITY");
+    }
+
+    #[test]
+    fn test_format_float_literal_finite_f32() {
+        let bytes = 1.5f32.to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 4), "1.5f");
+    }
+
+    #[test]
+    fn test_format_float_literal_integral_f32_keeps_decimal() {
+        // 1.0f32 stringifies as "1" via Rust's `Display`. Our helper must
+        // append `.0` so the C output isn't an integer literal.
+        let bytes = 1.0f32.to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 4), "1.0f");
+    }
+
+    #[test]
+    fn test_format_float_literal_nan_f64() {
+        let bytes = f64::NAN.to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 8), "NAN");
+    }
+
+    #[test]
+    fn test_format_float_literal_infinity_f64() {
+        let bytes = f64::INFINITY.to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 8), "INFINITY");
+    }
+
+    #[test]
+    fn test_format_float_literal_neg_infinity_f64() {
+        let bytes = f64::NEG_INFINITY.to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 8), "-INFINITY");
+    }
+
+    #[test]
+    fn test_format_float_literal_finite_f64() {
+        let bytes = 3.14159f64.to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 8), "3.14159");
+    }
+
+    #[test]
+    fn test_format_float_literal_zero_f64() {
+        let bytes = 0.0f64.to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 8), "0.0");
+    }
+
+    #[test]
+    fn test_format_float_literal_negative_f64() {
+        let bytes = (-2.5f64).to_le_bytes();
+        assert_eq!(super::format_float_literal(&bytes, 8), "-2.5");
+    }
+
+    #[test]
+    fn test_format_float_literal_round_trip_f32() {
+        // Pick a few values whose decimal form would normally lose
+        // precision; the helper's output must parse back to the *same* bit
+        // pattern. (Rust's `{}` is Grisu/Ryu, which guarantees this.)
+        for &v in &[1.234567f32, -7.5e-20, 1.0e30, f32::EPSILON] {
+            let bytes = v.to_le_bytes();
+            let s = super::format_float_literal(&bytes, 4);
+            // Strip the trailing `f` suffix before re-parsing.
+            let trimmed = s.trim_end_matches('f');
+            let parsed: f32 = trimmed
+                .parse()
+                .unwrap_or_else(|e| panic!("re-parse {s:?} failed: {e}"));
+            assert_eq!(
+                parsed.to_le_bytes(),
+                bytes,
+                "round-trip mismatch: {v} → {s}",
+            );
+        }
+    }
+
+    #[test]
+    fn test_format_float_literal_round_trip_f64() {
+        for &v in &[1.234567890123456f64, -7.5e-300, 1.0e300, f64::EPSILON] {
+            let bytes = v.to_le_bytes();
+            let s = super::format_float_literal(&bytes, 8);
+            let parsed: f64 = s
+                .parse()
+                .unwrap_or_else(|e| panic!("re-parse {s:?} failed: {e}"));
+            assert_eq!(
+                parsed.to_le_bytes(),
+                bytes,
+                "round-trip mismatch: {v} → {s}",
+            );
+        }
+    }
+
+    #[test]
+    fn test_format_float_literal_long_double_fallback() {
+        // 16-byte path emits IDA's hex-bytes comment + a placeholder `0.0L`
+        // so the surrounding C still compiles.
+        let bytes = [0u8; 16];
+        let s = super::format_float_literal(&bytes, 16);
+        assert!(s.contains("/* long double 0x"), "got: {s}");
+        assert!(s.ends_with("*/ 0.0L"), "got: {s}");
+    }
+
+    // ─── End-to-end: float constants flow through const_context_for_op ──
+
+    #[test]
+    fn test_float_const_context_renders_double_literal() {
+        // `FLOAT_ADD` of two constants should render the operands as
+        // double literals, not integer hex.
+        let r0 = reg(0, 8);
+        let pi = con(3.14159f64.to_bits(), 8);
+        let two = con(2.0f64.to_bits(), 8);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::FloatAdd,
+                r0,
+                smallvec![pi, two],
+                0x1000,
+            )),
+            HirNode::Return(Some(SsaVarnode {
+                base: r0,
+                version: 0,
+            })),
+        ];
+        let func = make_func("fp_add", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("3.14159") && output.contains("2.0"),
+            "should render float constants as decimals: {output}",
+        );
+        assert!(
+            !output.contains("0x40"),
+            "should NOT render float constants as hex: {output}",
         );
     }
 

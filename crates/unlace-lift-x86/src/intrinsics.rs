@@ -289,6 +289,11 @@ impl Default for IntrinsicRegistry {
             ("VPSUBW", info("_mm256_sub_epi16", 2, 32, AvxArith)),
             ("VPSUBD", info("_mm256_sub_epi32", 2, 32, AvxArith)),
             ("VPSUBQ", info("_mm256_sub_epi64", 2, 32, AvxArith)),
+            // ── AVX2 packed integer multiply / shuffle / blend ──────
+            ("VPMULLD", info("_mm256_mullo_epi32", 2, 32, AvxArith)),
+            ("VPSHUFB", info("_mm256_shuffle_epi8", 2, 32, AvxArith)),
+            ("VPERMD", info("_mm256_permutevar8x32_epi32", 2, 32, AvxArith)),
+            ("VPBLENDD", info("_mm256_blend_epi32", 3, 32, AvxArith)),
             // ── AVX packed bitwise logic ────────────────────────────
             ("VPAND", info("_mm256_and_si256", 2, 32, AvxArith)),
             ("VPOR", info("_mm256_or_si256", 2, 32, AvxArith)),

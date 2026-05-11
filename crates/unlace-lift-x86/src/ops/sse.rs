@@ -124,6 +124,31 @@ pub mod tag {
     /// SSE4.2 packed string compare → ECX/flags (3-operand: xmm1, xmm2, imm8).
     pub const PCMPESTRI: u64 = 0x1AA;
     pub const PCMPISTRI: u64 = 0x1AB;
+
+    // ── AVX/AVX2 packed integer ops (t192) ──────────────────────
+    //
+    // Fresh tag range 0x1C0..0x1DF — the SSE block ends at 0x1AB
+    // (PCMPISTRI), leaving 0x1AC..0x1BF reserved for future SSE4
+    // additions. Every AVX entry writes a 32-byte YMM destination,
+    // distinguishing it at the IR level from the 16-byte SSE forms.
+    /// VPADDD — packed add, 32-bit lanes (256-bit).
+    pub const VPADDD: u64 = 0x1C0;
+    /// VPSUBD — packed sub, 32-bit lanes (256-bit).
+    pub const VPSUBD: u64 = 0x1C1;
+    /// VPMULLD — packed signed 32×32→low-32 multiply (256-bit).
+    pub const VPMULLD: u64 = 0x1C2;
+    /// VPSHUFB — per-lane byte shuffle (256-bit, in-lane).
+    pub const VPSHUFB: u64 = 0x1C3;
+    /// VPBLENDD — packed 32-bit lane blend by imm8 mask (3-operand).
+    pub const VPBLENDD: u64 = 0x1C4;
+    /// VPERMD — cross-lane 32-bit dword permute (256-bit).
+    pub const VPERMD: u64 = 0x1C5;
+    /// VPAND — packed bitwise AND (256-bit).
+    pub const VPAND: u64 = 0x1C6;
+    /// VPOR — packed bitwise OR (256-bit).
+    pub const VPOR: u64 = 0x1C7;
+    /// VPXOR — packed bitwise XOR (256-bit).
+    pub const VPXOR: u64 = 0x1C8;
 }
 
 /// MOVDQA / MOVDQU: store form emits without output, load/reg form with output.
@@ -321,6 +346,76 @@ pub fn lift_sse_string_compare(
     ctx.emit(IrInsn::without_output(
         IrOp::Callother,
         smallvec![tag_vn, src0, src1, imm],
+        ctx.addr,
+    ));
+}
+
+/// Three-operand AVX/AVX2 packed binop with VEX layout:
+/// `dst = Callother(tag, src1, src2)` where op0 is a write-only YMM
+/// destination, op1/op2 are the two source YMM registers.
+///
+/// Unlike the legacy SSE form (`lift_sse_binop`) which reads op0 as
+/// src0, VEX-encoded AVX2 ops are non-destructive: op0 is purely the
+/// destination, leaving op1 and op2 untouched on the source side. The
+/// register-file layout already places YMM0..YMM15 at the same base
+/// offsets as XMM0..XMM15 with `size=32`, so a 32-byte write naturally
+/// clobbers the matching XMM alias — the SSA dataflow will see a fresh
+/// YMM definition that subsumes any pre-existing XMM value at the same
+/// base offset.
+pub fn lift_avx_binop(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    let tag_vn = Varnode::constant(callother_tag, 8);
+
+    let Some(src0) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src1) = ctx.operand_read(insn, 2) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![tag_vn, src0, src1],
+        ctx.addr,
+    ));
+}
+
+/// Four-operand AVX2 blend (VPBLENDD): VEX layout with an immediate
+/// mask. Lowered as `dst = Callother(tag, src1, src2, imm8)`.
+///
+/// Mirrors `lift_avx_binop` but pulls a third source from op3 (the
+/// imm8 mask). Falls back to a zero-mask constant when iced can't
+/// decode the operand kind, so a malformed encoding still produces a
+/// well-formed Callother.
+pub fn lift_avx_blend(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    let tag_vn = Varnode::constant(callother_tag, 8);
+
+    let Some(src0) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src1) = ctx.operand_read(insn, 2) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let mask = ctx
+        .operand_read(insn, 3)
+        .unwrap_or_else(|| Varnode::constant(0, 1));
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![tag_vn, src0, src1, mask],
         ctx.addr,
     ));
 }

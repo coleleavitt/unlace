@@ -301,6 +301,7 @@ mod tests {
             relocations: Vec::new(),
             string_table: BTreeMap::new(),
             tls_callbacks: Vec::new(),
+            function_starts: Vec::new(),
             debug_records: Vec::new(),
             load_config: None,
             runtime_functions: Vec::new(),

@@ -564,6 +564,7 @@ mod tests {
             relocations: vec![],
             string_table: BTreeMap::new(),
             tls_callbacks: vec![],
+            function_starts: vec![],
             debug_records: vec![],
             load_config: None,
             runtime_functions: vec![],

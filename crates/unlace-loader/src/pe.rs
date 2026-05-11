@@ -104,6 +104,7 @@ where
         relocations,
         string_table: BTreeMap::new(),
         tls_callbacks,
+        function_starts: Vec::new(),
         debug_records,
         load_config,
         runtime_functions,

@@ -43,12 +43,12 @@ void main(void) {
         }
     }
     if (v5) {
-        for (; v44; v64 = 0) {
+        for (; v34; v55 = 0) {
             if (0) { 0 = 0LL; } if (0) { 0 = 0LL; }
         }
     } else {
-        if (0) { 0 = 0; }
-        if (v30) {
+        v34 = 0; if (0) { 0 = 0; }
+        if (v13) {
         }
     }
     v29 = _mm_xor_si128(v29, v29);
@@ -59,7 +59,7 @@ void main(void) {
     }
     if (v24) {
     }
-    if (v30) {
+    if (v44) {
     }
     for (; v34; v55 = 0) {
     }

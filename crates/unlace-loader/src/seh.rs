@@ -407,6 +407,117 @@ pub fn parse_catchable_type(data: &[u8], off: usize) -> Option<CatchableType> {
     })
 }
 
+// ---------------------------------------------------------------------------
+// t203: high-level FuncInfo → catch-handler region builder.
+//
+// Walks a [`FuncInfo`] record together with its `pTryBlockMap` and per-entry
+// `pHandlerArray` to produce a vec of [`CppEhTryRegion`]s — one per try-block
+// in the function. Each entry carries the raw [`HandlerType`]s plus the
+// already-resolved `TypeDescriptor` name for each catch (or `None` for
+// `catch (...)` whose `p_type == 0`).
+//
+// The RVA-to-offset and type-descriptor resolvers are supplied as closures
+// so this layer stays buffer-only (no PE-specific RVA arithmetic). Callers
+// wiring this into `BinaryImage` are expected to bind closures that
+//   1. convert the RVA to an offset inside the same `data` slice,
+//   2. invoke [`crate::msvc_rtti::parse_type_descriptor`] there.
+// ---------------------------------------------------------------------------
+
+/// One try-block recovered from a [`FuncInfo`] record.
+///
+/// Mirrors a [`TryBlockMapEntry`] plus the fully-decoded handler array. The
+/// `try_low`/`try_high` fields are MSVC unwind-state values, not insn
+/// addresses — translating to address ranges requires walking the
+/// IP-to-state map (deferred).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CppEhTryRegion {
+    /// Lowest unwind state covered by the `try { }` body.
+    pub try_low: i32,
+    /// Highest unwind state covered by the `try { }` body.
+    pub try_high: i32,
+    /// Highest unwind state covered by any of this try's catch handlers.
+    pub catch_high: i32,
+    /// One entry per `catch` clause attached to this try, in source order.
+    pub catches: Vec<CppEhCatch>,
+}
+
+/// One typed (or catch-all) `catch` clause attached to a [`CppEhTryRegion`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CppEhCatch {
+    /// Raw decoded MSVC handler record.
+    pub handler: HandlerType,
+    /// Resolved class name from the `TypeDescriptor` at `handler.p_type`.
+    /// `None` either when `handler.p_type == 0` (catch-all `catch (...)`)
+    /// or when the resolver could not parse a name at that RVA.
+    pub type_name: Option<String>,
+}
+
+/// Build the full set of [`CppEhTryRegion`]s for a function whose
+/// `FuncInfo` record sits at `funcinfo_off` inside `data`.
+///
+/// `rva_to_offset` maps an RVA (`p_try_block_map`, `p_handler_array`) to
+/// an offset inside `data`. `resolve_type_descriptor` maps a
+/// `TypeDescriptor` RVA (`HandlerType::p_type`) to a decoded
+/// [`crate::msvc_rtti::TypeDescriptor`]. Returning `None` from either
+/// closure is tolerated — the affected entry is dropped (or its
+/// `type_name` left empty) rather than failing the whole build.
+///
+/// Returns `None` only when the `FuncInfo` header itself fails to parse.
+pub fn build_cpp_eh_regions<R, T>(
+    data: &[u8],
+    funcinfo_off: usize,
+    rva_to_offset: R,
+    resolve_type_descriptor: T,
+) -> Option<(FuncInfo, Vec<CppEhTryRegion>)>
+where
+    R: Fn(u32) -> Option<usize>,
+    T: Fn(u32) -> Option<crate::msvc_rtti::TypeDescriptor>,
+{
+    let funcinfo = parse_funcinfo(data, funcinfo_off)?;
+
+    // n_try_blocks == 0 short-circuits to an empty region list — still
+    // a valid result (function has no `try` clauses).
+    if funcinfo.n_try_blocks == 0 {
+        return Some((funcinfo, Vec::new()));
+    }
+
+    let try_map_off = match rva_to_offset(funcinfo.p_try_block_map) {
+        Some(o) => o,
+        None => return Some((funcinfo, Vec::new())),
+    };
+    let entries = parse_try_block_map(data, try_map_off, funcinfo.n_try_blocks as usize);
+
+    let handler_size = handler_type_size(funcinfo.magic_number);
+    let mut regions = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let mut catches = Vec::with_capacity(entry.n_catches.max(0) as usize);
+        if entry.n_catches > 0
+            && let Some(handler_array_off) = rva_to_offset(entry.p_handler_array)
+        {
+            for i in 0..entry.n_catches as usize {
+                let off = handler_array_off + i * handler_size;
+                let Some(handler) = parse_handler_type(data, off, funcinfo.magic_number)
+                else {
+                    break;
+                };
+                let type_name = if handler.p_type == 0 {
+                    None
+                } else {
+                    resolve_type_descriptor(handler.p_type).map(|td| td.name)
+                };
+                catches.push(CppEhCatch { handler, type_name });
+            }
+        }
+        regions.push(CppEhTryRegion {
+            try_low: entry.try_low,
+            try_high: entry.try_high,
+            catch_high: entry.catch_high,
+            catches,
+        });
+    }
+    Some((funcinfo, regions))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

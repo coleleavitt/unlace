@@ -3,6 +3,7 @@
 pub mod bitfield_recovery;
 pub mod block_merge;
 pub mod condition_dup;
+pub mod cpp_eh;
 pub mod cross_jump_revert;
 pub mod eager_returns;
 pub mod empty_if_cleanup;
@@ -27,6 +28,7 @@ pub mod while_to_for;
 
 pub use block_merge::merge_linear_blocks;
 pub use condition_dup::duplicate_goto_conditions;
+pub use cpp_eh::cpp_eh_regions_to_seh;
 pub use cross_jump_revert::cross_jump_revert;
 pub use eager_returns::eager_returns;
 pub use empty_if_cleanup::cleanup_empty_ifs;

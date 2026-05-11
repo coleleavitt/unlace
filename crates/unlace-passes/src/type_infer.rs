@@ -180,9 +180,11 @@ fn seed_from_composites(func: &mut SsaFunction) {
                 Type::Primitive(p) => *p,
                 _ => PrimitiveType::Unknown,
             },
-            Type::Ptr(_) | Type::Struct { .. } | Type::Array { .. } | Type::FuncPtr { .. } => {
-                PrimitiveType::Ptr
-            }
+            Type::Ptr(_)
+            | Type::Struct { .. }
+            | Type::Array { .. }
+            | Type::FuncPtr { .. }
+            | Type::Interface { .. } => PrimitiveType::Ptr,
         };
         let entry = func.var_types.entry(*sv).or_insert(primitive);
         *entry = entry.join(primitive);
@@ -634,6 +636,10 @@ fn field_to_primitive(ty: &Type) -> PrimitiveType {
         },
         Type::Ptr(_) | Type::FuncPtr { .. } => PrimitiveType::Ptr,
         Type::Struct { .. } | Type::Array { .. } => PrimitiveType::Ptr,
+        // A Go interface value is `{ *itab, *data }` — at the SSA
+        // primitive level it lowers to a pointer-sized payload, matching
+        // how the printer renders `Type::Interface` as `void *`.
+        Type::Interface { .. } => PrimitiveType::Ptr,
     }
 }
 

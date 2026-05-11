@@ -395,6 +395,13 @@ pub struct BinaryImage {
     /// Populated from `GoModuleInfo.itablinks` when the moduledata parse
     /// succeeds. Empty for non-Go binaries.
     pub go_itabs: std::collections::BTreeMap<u64, crate::go_types::GoItab>,
+    /// Recovered Go interface types keyed by their `runtime._type` VA
+    /// (t181). Populated by `populate_go_types_from_module` after the
+    /// moduledata parse; the C printer consumes this map to render
+    /// `interface { Method() }` Go-style comments above usages. Empty
+    /// for non-Go binaries or when no interface types are reachable.
+    pub go_types:
+        std::collections::BTreeMap<u64, unlace_ir::types::Type>,
 }
 
 /// A PE RUNTIME_FUNCTION entry from the `.pdata` exception directory.
@@ -518,6 +525,7 @@ mod tests {
             seh: None,
             go_module: None,
             go_itabs: BTreeMap::new(),
+            go_types: BTreeMap::new(),
         }
     }
 

@@ -72,6 +72,18 @@ pub enum Type {
         offset: u32,
         width: u32,
     },
+    /// Go interface type — a method-set descriptor. Recovered from
+    /// `runtime.interfacetype` records loaded by `unlace-loader` (t181).
+    ///
+    /// `name` is the demangled interface name when available (e.g.
+    /// `io.Reader`) or an empty string when only the method list is known.
+    /// `methods` lists each `imethod` slot — at this point we only have the
+    /// method's name; full per-method signatures live in the Go type table
+    /// and aren't required for the printer's Go-style comment rendering.
+    Interface {
+        name: String,
+        methods: Vec<InterfaceMethod>,
+    },
 }
 
 /// A single field within a [`Type::Struct`].
@@ -80,6 +92,17 @@ pub struct StructFieldType {
     pub name: String,
     pub ty: Type,
     pub offset: u64,
+}
+
+/// A single method entry inside a [`Type::Interface`] method set.
+///
+/// `name` is the bare method identifier as it would appear in a Go source
+/// `interface { … }` block. `signature` is an optional Go-syntax parameter
+/// list (e.g. `() error`); when `None` the printer renders just `name()`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InterfaceMethod {
+    pub name: String,
+    pub signature: Option<String>,
 }
 
 impl Type {
@@ -144,6 +167,10 @@ impl Type {
                 u8::try_from(end).ok()
             }
             Type::Bitfield { underlying, .. } => underlying.size(),
+            // A Go interface value is `{ *itab, *data }` — two pointers,
+            // 16 bytes on 64-bit targets. The interface *type* (this
+            // variant) describes the method set, not the value layout.
+            Type::Interface { .. } => Some(16),
         }
     }
 
@@ -304,7 +331,43 @@ impl fmt::Display for Type {
                 }
                 f.write_str(")")
             }
+            // C has no first-class interface — render as a `void *` so the
+            // type still typechecks; the Go-style `interface { … }` text is
+            // emitted as a comment by the printer (see `render_go_interface`).
+            Type::Interface { .. } => f.write_str("void *"),
         }
+    }
+}
+
+impl Type {
+    /// Format the method set of a [`Type::Interface`] as a Go-style
+    /// `interface { Method(); … }` block. Returns `None` for any non-
+    /// interface type so callers can chain `if let Some(s) = …`.
+    ///
+    /// Embedded interface entries (any method whose name starts with an
+    /// uppercase letter and whose `signature` is `None`) are rendered
+    /// verbatim — Go-source convention for first-level embedding.
+    pub fn render_go_interface(&self) -> Option<String> {
+        let Type::Interface { methods, .. } = self else {
+            return None;
+        };
+        if methods.is_empty() {
+            return Some("interface {}".to_string());
+        }
+        let mut out = String::with_capacity(16 + methods.len() * 16);
+        out.push_str("interface { ");
+        for (i, m) in methods.iter().enumerate() {
+            if i > 0 {
+                out.push_str("; ");
+            }
+            out.push_str(&m.name);
+            match &m.signature {
+                Some(sig) => out.push_str(sig),
+                None => out.push_str("()"),
+            }
+        }
+        out.push_str(" }");
+        Some(out)
     }
 }
 

@@ -491,6 +491,79 @@ pub fn populate_itabs_from_module(image: &mut crate::image::BinaryImage) {
     }
 }
 
+/// Convert a decoded [`GoType`] of [`GoKind::Interface`] into the
+/// composite [`unlace_ir::types::Type::Interface`] consumed by the C
+/// printer (t181). Returns `None` for any other kind — callers can chain
+/// `if let Some(t) = …` cleanly.
+///
+/// Method names come from the resolved `name` field on each entry when
+/// available (the loader pass below fills these in from Go's name table);
+/// fully-decoded names are unavailable here so we fall back to `m{idx}`
+/// placeholders, which keep the rendered comment readable without
+/// fabricating identifiers.
+pub fn go_interface_to_type(go_type: &GoType) -> Option<unlace_ir::types::Type> {
+    let GoKind::Interface { methods, .. } = &go_type.kind else {
+        return None;
+    };
+    let name = go_type.name.clone().unwrap_or_default();
+    let mut converted = Vec::with_capacity(methods.len());
+    for (i, _m) in methods.iter().enumerate() {
+        // `imethod.name_off` is an offset into Go's name table; the full
+        // name-table resolver lives in `go_moduledata`. Until that lands
+        // we surface placeholder slot names so the printer still has
+        // something meaningful to render. Real names overwrite these
+        // when callers post-process the registry.
+        converted.push(unlace_ir::types::InterfaceMethod {
+            name: format!("m{i}"),
+            signature: None,
+        });
+    }
+    Some(unlace_ir::types::Type::Interface {
+        name,
+        methods: converted,
+    })
+}
+
+/// Walk every offset in `image.go_module.typelinks`, decode the pointed-to
+/// `_type`, and register each [`GoKind::Interface`] hit in
+/// `image.go_types` keyed by its absolute VA (t181).
+///
+/// No-op when the binary isn't Go (no `go_module`) or when `types_va` is
+/// unreachable. Non-interface kinds are skipped — this map is the
+/// printer's interface registry, not a general Go-type registry.
+pub fn populate_go_types_from_module(image: &mut crate::image::BinaryImage) {
+    let Some(module) = image.go_module.as_ref() else {
+        return;
+    };
+    let types_va = module.types_va;
+    let typelinks = module.typelinks.clone();
+    for off in typelinks {
+        // typelinks entries are signed i32 offsets relative to types_va.
+        let va = if off >= 0 {
+            types_va.wrapping_add(off as u64)
+        } else {
+            types_va.wrapping_sub((-(off as i64)) as u64)
+        };
+        let Some((sec, _)) = image_va_to_section(image, va) else {
+            continue;
+        };
+        let sec_base = sec.vaddr;
+        let sec_data = sec.data.clone();
+        let Some(t) = parse_type_at(&sec_data, va, |a: u64| {
+            if a >= sec_base && a < sec_base.saturating_add(sec_data.len() as u64) {
+                Some((a - sec_base) as usize)
+            } else {
+                None
+            }
+        }) else {
+            continue;
+        };
+        if let Some(iface_ty) = go_interface_to_type(&t) {
+            image.go_types.insert(va, iface_ty);
+        }
+    }
+}
+
 /// Look up the method count of a Go interface `_type` at `va`. Returns
 /// `None` if the type isn't reachable, isn't kind=Interface, or its tail
 /// can't be decoded.
@@ -851,6 +924,131 @@ mod tests {
         }
     }
 
+    // ---------------------------------------------------------------
+    // t181 — `go_interface_to_type` + `populate_go_types_from_module`
+    // integration. Three coverage shapes (empty / two-method / embedded
+    // first level) verify the conversion surfaces something the printer
+    // can render in every realistic input shape.
+    // ---------------------------------------------------------------
+
+    /// t181 — empty `interface {}` (zero methods) round-trips through
+    /// `go_interface_to_type` as a `Type::Interface` with an empty method
+    /// list. The printer renders this as `interface {}` (no inner block).
+    #[test]
+    fn t181_go_interface_to_type_empty() {
+        let go_type = GoType {
+            va: 0x1000,
+            size: 16,
+            kind: GoKind::Interface {
+                pkgpath_va: 0,
+                method_count: 0,
+                methods: vec![],
+            },
+            name: Some("io.Empty".into()),
+        };
+        let converted = go_interface_to_type(&go_type).expect("converts");
+        match &converted {
+            unlace_ir::types::Type::Interface { name, methods } => {
+                assert_eq!(name, "io.Empty");
+                assert!(methods.is_empty());
+            }
+            other => panic!("expected Type::Interface, got {other:?}"),
+        }
+        assert_eq!(
+            converted.render_go_interface().as_deref(),
+            Some("interface {}"),
+        );
+    }
+
+    /// t181 — a two-method interface (the canonical `io.ReadWriter`
+    /// shape). The converted method list has one entry per `GoIMethod`
+    /// slot — names default to `m0`/`m1` until the runtime name table
+    /// is wired in (out of scope for t181).
+    #[test]
+    fn t181_go_interface_to_type_two_methods() {
+        let go_type = GoType {
+            va: 0x2000,
+            size: 16,
+            kind: GoKind::Interface {
+                pkgpath_va: 0,
+                method_count: 2,
+                methods: vec![
+                    GoIMethod { name_off: 0x10, typ_off: 0x20 },
+                    GoIMethod { name_off: 0x30, typ_off: 0x40 },
+                ],
+            },
+            name: Some("io.ReadWriter".into()),
+        };
+        let converted = go_interface_to_type(&go_type).expect("converts");
+        let unlace_ir::types::Type::Interface { name, methods } = &converted else {
+            panic!("expected Type::Interface");
+        };
+        assert_eq!(name, "io.ReadWriter");
+        assert_eq!(methods.len(), 2);
+        assert_eq!(methods[0].name, "m0");
+        assert_eq!(methods[1].name, "m1");
+        assert_eq!(
+            converted.render_go_interface().as_deref(),
+            Some("interface { m0(); m1() }"),
+        );
+    }
+
+    /// t181 — first-level embedded interface. Go source-level
+    /// `interface { Reader; Close() }` lowers to a single `mhdr` slice
+    /// whose first entry's `typ_off` references another `interfacetype`.
+    /// The conversion preserves the slot count (no flattening at the
+    /// IR level — embedding is a printer-side concern for t181).
+    #[test]
+    fn t181_go_interface_to_type_embedded_first_level() {
+        // Two slots: one stands for the embedded `Reader` interface,
+        // one for the directly-declared `Close()` method. The decoder
+        // doesn't distinguish embedded from direct at this layer; both
+        // are `GoIMethod` slots. The conversion surface must show both.
+        let go_type = GoType {
+            va: 0x3000,
+            size: 16,
+            kind: GoKind::Interface {
+                pkgpath_va: 0,
+                method_count: 2,
+                methods: vec![
+                    // Slot 0: embedded `Reader` — typ_off points at
+                    // another interfacetype.
+                    GoIMethod { name_off: 0x50, typ_off: 0x80 },
+                    // Slot 1: directly-declared `Close()`.
+                    GoIMethod { name_off: 0x60, typ_off: 0x00 },
+                ],
+            },
+            name: Some("io.ReadCloser".into()),
+        };
+        let converted = go_interface_to_type(&go_type).expect("converts");
+        let unlace_ir::types::Type::Interface { name, methods } = &converted else {
+            panic!("expected Type::Interface");
+        };
+        assert_eq!(name, "io.ReadCloser");
+        // First-level: both the embedded interface's slot and the
+        // direct method's slot are surfaced as separate entries.
+        assert_eq!(methods.len(), 2);
+        assert_eq!(
+            converted.render_go_interface().as_deref(),
+            Some("interface { m0(); m1() }"),
+        );
+    }
+
+    /// Non-interface kinds return `None` from `go_interface_to_type` so
+    /// callers can drive the registry insertion with a simple
+    /// `if let Some(t) = …` — guards the type-registry path against
+    /// accidentally registering non-interface types as interfaces.
+    #[test]
+    fn t181_go_interface_to_type_rejects_non_interface() {
+        let go_type = GoType {
+            va: 0x4000,
+            size: 4,
+            kind: GoKind::Int32,
+            name: None,
+        };
+        assert!(go_interface_to_type(&go_type).is_none());
+    }
+
     /// Kind 21 — `maptype` carries layout metadata that the bucket walker
     /// needs (keysize, valuesize, bucketsize, flags). Pre-t171 the decoder
     /// only captured the three type pointers and dropped everything else.
@@ -1041,6 +1239,7 @@ mod tests {
             seh: None,
             go_module: None,
             go_itabs: BTreeMap::new(),
+            go_types: BTreeMap::new(),
         };
 
         let itab = parse_itab_at(&img, RODATA_BASE).expect("itab decodes");

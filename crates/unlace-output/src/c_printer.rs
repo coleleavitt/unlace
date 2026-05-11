@@ -318,6 +318,14 @@ pub struct PrinterAnnotations {
     /// see the final landing site of a forwarder chain without leaving
     /// the C view.
     pub forwarded_resolutions: BTreeMap<u64, String>,
+    /// Recovered Go interface types keyed by `runtime._type` VA (t181).
+    ///
+    /// Populated from [`unlace_loader::BinaryImage::go_types`]. Every
+    /// entry is rendered as a Go-style `// interface { Method() }`
+    /// comment in a preamble block, immediately above the function
+    /// header — analogous to how `objc_classes` surfaces ObjC ivar
+    /// layouts. Empty for non-Go binaries.
+    pub go_interfaces: BTreeMap<u64, unlace_ir::types::Type>,
 }
 
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
@@ -413,6 +421,32 @@ pub fn print_c_with_annotations(
                     emitted_any = true;
                 }
                 out.push_str(&s);
+            }
+        }
+        if emitted_any {
+            out.push('\n');
+        }
+    }
+
+    // t181: Go-style `// interface { Method() }` preamble for every
+    // recovered Go interface type. Mirrors the ObjC class block above —
+    // surfaces method sets so analysts can correlate `void *` interface
+    // values back to their source-level shape.
+    if let Some(ann) = annotations {
+        let mut emitted_any = false;
+        for (va, ty) in &ann.go_interfaces {
+            if let Some(body) = ty.render_go_interface() {
+                if !emitted_any {
+                    out.push_str("// Go interface types (recovered from runtime.typelinks)\n");
+                    emitted_any = true;
+                }
+                let label = match ty {
+                    unlace_ir::types::Type::Interface { name, .. } if !name.is_empty() => {
+                        name.clone()
+                    }
+                    _ => format!("type_0x{va:x}"),
+                };
+                let _ = writeln!(out, "// {label}: {body}");
             }
         }
         if emitted_any {

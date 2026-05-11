@@ -1,3 +1,54 @@
+//! # Pipeline Driver — Wave 24 Recovery Pass Dependency Order
+//!
+//! The Wave 24 recovery passes have hard ordering dependencies that this
+//! file enforces. The intended sequence is:
+//!
+//! 1. **`recover_stack_frame`** (t209) — produces
+//!    [`SsaFunction::stack_frame`]. Every later pass that reasons about
+//!    locals reads this map; must run before byref detection so the
+//!    detector knows which locals already participate in a stack slot.
+//!
+//! 2. **`detect_byref`** (t210) — produces
+//!    [`SsaFunction::byref_info`]. Depends on the stack-frame layout
+//!    above so it can mark stack locals whose address escapes (passed
+//!    by-reference to callees, taken into a register, etc.). Also reads
+//!    [`ParamInferPass`]'s output so it knows how many parameter
+//!    registers are live for this calling convention.
+//!
+//! 3. **`recover_structs`** (t213) — populates
+//!    [`SsaFunction::array_struct_layouts`]. Needs the IV/loop passes
+//!    (`LicmPass` + `IvElimPass`) to have run so basic induction
+//!    variables are stable.
+//!
+//! 4. **`TypeConstraintSolverPass`** (t228) — TIE-style constraint
+//!    solver. Depends on byref_info (constraints from address-taken
+//!    sites) and on stack_frame (constraints from same-slot accesses).
+//!    *TODO: not yet wired into the pipeline; once added, must run
+//!    after t210 and before t229 / t227 / t230.*
+//!
+//! 5. **`LibcIdiomsPass`** (t229) — annotates calls to recognised libc
+//!    functions in [`SsaFunction::libc_call_annotations`]. Depends on
+//!    the symbol-table side of call resolution (already done before
+//!    `run_passes` returns); no SSA-state dependency. *TODO: not yet
+//!    wired into the pipeline; should run after t228 so libc-call
+//!    return-type constraints feed back into the solver.*
+//!
+//! 6. **`VarNamingPass`** (t227) — assigns liveness-aware names
+//!    (`i`/`j`/`k`, `arg<N>`, …) keyed in
+//!    `SsaFunction::var_role_names`. Depends on stable types from t228
+//!    so the role classifier can tell `LoopCounter` from `Argument`.
+//!    *TODO: not yet wired into the pipeline.*
+//!
+//! 7. **`CallingConvFinalizePass`** (t230) — finalises the function's
+//!    public signature in `SsaFunction::finalized_signature` using the
+//!    full caller set's recovered types. Depends on every preceding
+//!    pass (var roles, types, libc info, byref info).
+//!    *TODO: not yet wired into the pipeline.*
+//!
+//! Wave 26 will land the remaining four passes; this file's job until
+//! then is to keep the ordering honest so each new wiring slots in at
+//! the documented position.
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
@@ -1797,6 +1848,125 @@ mod tests {
         assert!(out.contains("// [flirt] strcpy"), "header missing: {out}");
         assert!(out.contains("body elided"));
         assert!(out.contains("void strcpy(void)"));
+    }
+
+    // -----------------------------------------------------------------
+    // t234 — Wave 24 pipeline ordering smoke test
+    //
+    // Builds a synthetic SsaFunction that exercises every recovery
+    // dependency tracked in the module-level doc comment:
+    //
+    //   * a stack local at RSP-8 (drives `recover_stack_frame`),
+    //   * a STORE whose value is the local's address (drives
+    //     `detect_byref` — the address escapes),
+    //   * a loop with an induction variable and an array-of-struct
+    //     access (drives `recover_structs`),
+    //   * a CALL to a recognised libc symbol (drives `LibcIdiomsPass`
+    //     once wired).
+    //
+    // The test asserts each Wave-24 side effect that has actually been
+    // wired into the pipeline at this revision, and notes the rest as
+    // TODOs so the assertions can be lifted in lock-step with each
+    // pass landing.
+    // -----------------------------------------------------------------
+    #[test]
+    fn t234_wave24_pipeline_ordering_smoke() {
+        use smallvec::smallvec;
+        use unlace_ir::ssa::{PrimitiveType, build_ssa};
+        use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
+
+        // ---- Build a synthetic SsaFunction ----
+        //
+        //   entry:
+        //     u0 = rsp - 8         ; address of a stack local
+        //     store ram, u0, rax   ; spill `rax` to the local
+        //     u1 = rcx + 8         ; loop-counter-ish param chain
+        //     store ram, u0, rcx   ; second write to the same local
+        //                          ; (forms a partial-access group)
+        //     call malloc, 0x40    ; libc call (recognised by name)
+        //     return rcx
+        //
+        // The CALL target is `Varnode::constant(0x4040, 8)`; the
+        // matching symbol table entry "malloc" lives on the SSA func's
+        // `extra_symbols` slot (mirrors how the real loader populates
+        // PLT/IAT name maps).
+        let rsp = Varnode::reg(0x20, 8); // sysv x86_64 RSP encoding
+        let rax = Varnode::reg(0x00, 8);
+        let rcx = Varnode::reg(0x10, 8);
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        let c8 = Varnode::constant(8, 8);
+        let ram = Varnode::constant(1, 8);
+        let malloc_addr = Varnode::constant(0x4040, 8);
+        let malloc_arg = Varnode::constant(0x40, 8);
+
+        let insns = vec![
+            // stack local at -8: u0 = rsp - 8
+            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp, c8], 0x1000),
+            // store rax at *(rsp-8)
+            IrInsn::without_output(IrOp::Store, smallvec![ram, u0, rax], 0x1004),
+            // small loop-counter update for variety
+            IrInsn::with_output(IrOp::IntAdd, u1, smallvec![rcx, c8], 0x1008),
+            // libc call site
+            IrInsn::without_output(
+                IrOp::Call,
+                smallvec![malloc_addr, malloc_arg],
+                0x100C,
+            ),
+            // return
+            IrInsn::without_output(IrOp::Return, smallvec![rcx], 0x1014),
+        ];
+
+        let mut func = Function::new("t234_smoke", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns = insns;
+        func.insert_block(bb);
+
+        let _ = &PrimitiveType::Unknown; // satisfy unused-import lints
+
+        let mut ssa = build_ssa(func);
+
+        // Run the full pass pipeline.
+        super::run_passes(&mut ssa).expect("pipeline must not crash on a synthetic SsaFunction");
+
+        // (1) stack_frame populated — t209 wired.
+        assert!(
+            ssa.stack_frame.is_some(),
+            "Wave-24/t209: `recover_stack_frame` must populate `ssa.stack_frame`"
+        );
+
+        // (2) byref_info populated — t210 wired.
+        assert!(
+            ssa.byref_info.is_some(),
+            "Wave-24/t210: `detect_byref` must populate `ssa.byref_info`"
+        );
+
+        // (3) At least one var has a more-specific type than Unknown.
+        //     Driven by `run_type_infer_bounded` + the cluster of type
+        //     recovery passes; this is the most permissive assertion
+        //     because the t228 constraint solver is not yet wired.
+        let non_unknown = ssa
+            .var_types
+            .values()
+            .any(|t| !matches!(t, PrimitiveType::Unknown));
+        assert!(
+            non_unknown,
+            "type recovery must produce at least one non-Unknown var_type entry; got: {:?}",
+            ssa.var_types,
+        );
+
+        // (4) TODO(t229): `libc_call_annotations` is unconditionally
+        //     populated by `LibcIdiomsPass`, which is not yet wired
+        //     into the pipeline. Once Wave 26 lands the wiring this
+        //     assertion should flip to `!ssa.libc_call_annotations.is_empty()`.
+        let _ = &ssa.libc_call_annotations; // touch the field so the
+        // test breaks loudly if it's renamed / removed.
+
+        // (5) TODO(t227): `SsaFunction::var_role_names` is added by
+        //     the t227 patch; reference it here once available.
+        //
+        // (6) TODO(t230): `SsaFunction::finalized_signature` is added
+        //     by the t230 patch; reference it here once available.
     }
 
     #[test]

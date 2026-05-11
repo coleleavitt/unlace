@@ -6066,6 +6066,14 @@ fn emit_expr_with_prec(
             {
                 return "0".to_string();
             }
+            // t255: recognize IDA-style byte/word truncation masks.
+            //   `x & 0xFF`   → LOBYTE(x)
+            //   `x & 0xFFFF` → LOWORD(x)
+            // These render as Hex-Rays macros (declared in IDA_TYPEDEFS)
+            // rather than raw `&`-expressions to match decompiler output.
+            if let Some(macro_str) = try_emit_int_and_byte_macro(insn, stmt_idx, ctx) {
+                return macro_str;
+            }
             emit_binop(insn, "&", stmt_idx, parent, ctx)
         }
         IrOp::IntOr => {
@@ -6088,7 +6096,18 @@ fn emit_expr_with_prec(
         }
         IrOp::IntLeft => emit_binop(insn, "<<", stmt_idx, parent, ctx),
         IrOp::IntSright => emit_binop(insn, ">>", stmt_idx, parent, ctx),
-        IrOp::IntRight => emit_unsigned_binop(insn, ">>", stmt_idx, parent, ctx),
+        IrOp::IntRight => {
+            // t255: recognize Hex-Rays byte-extract / dword-extract patterns.
+            //   `(x & 0xFF00) >> 8`  → BYTE1(x)
+            //   `(x & 0xFF0000) >> 16` (DWORD result) → BYTE2(x)
+            //   `(x & 0xFF000000) >> 24` (DWORD result) → BYTE3(x)
+            //   `x >> 16` (DWORD)    → HIWORD(x)
+            //   `x >> 32` (QWORD)    → HIDWORD(x)
+            if let Some(macro_str) = try_emit_int_right_byte_macro(insn, stmt_idx, ctx) {
+                return macro_str;
+            }
+            emit_unsigned_binop(insn, ">>", stmt_idx, parent, ctx)
+        }
 
         // -- Boolean ops --
         IrOp::BoolAnd => emit_binop(insn, "&&", stmt_idx, parent, ctx),
@@ -7599,6 +7618,105 @@ pub(crate) fn emit_sizeof_expr(expr: &str) -> String {
 #[allow(dead_code)]
 pub(crate) fn emit_alignof_type(type_str: &str) -> String {
     format!("_Alignof({})", type_str)
+}
+
+/// t255: Recognize IDA-style byte/word truncation masks at the IntAnd emit
+/// site.
+///
+/// Patterns matched (LHS is the IntAnd insn we're emitting):
+///   * `x & 0xFF`   → `LOBYTE(x)`
+///   * `x & 0xFFFF` → `LOWORD(x)`
+///
+/// The constant must live on the right (canonical IR form). Returns `None`
+/// if the mask is unrecognized so the caller can fall back to plain `&`.
+fn try_emit_int_and_byte_macro(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    if insn.inputs.len() < 2 {
+        return None;
+    }
+    let mask_vn = &insn.inputs[1];
+    if mask_vn.space != SpaceId::Const {
+        return None;
+    }
+    let src = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
+    match mask_vn.offset {
+        0xFF => Some(format!("LOBYTE({})", src)),
+        0xFFFF => Some(format!("LOWORD({})", src)),
+        _ => None,
+    }
+}
+
+/// t255: Recognize IDA-style byte-extract patterns at the IntRight emit site.
+///
+/// Patterns (RHS shift amount is a constant; LHS may itself be an IntAnd
+/// against a single-byte mask):
+///   * `(x & 0xFF00)    >> 8`  → `BYTE1(x)`
+///   * `(x & 0xFF0000)  >> 16` → `BYTE2(x)`
+///   * `(x & 0xFF000000)>> 24` → `BYTE3(x)`
+///   * `x >> 16` (output size 4) → `HIWORD(x)`
+///   * `x >> 32` (output size 8) → `HIDWORD(x)`
+///
+/// Walks one step back via `sv_defining_stmt` to inspect the LHS producer
+/// for the chained `(x & mask) >> N` form.
+fn try_emit_int_right_byte_macro(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    if insn.inputs.len() < 2 {
+        return None;
+    }
+    let shift_vn = &insn.inputs[1];
+    if shift_vn.space != SpaceId::Const {
+        return None;
+    }
+    let shift = shift_vn.offset;
+
+    // Try the chained `(x & mask) >> N` form first.
+    let lhs_vn = &insn.inputs[0];
+    if lhs_vn.space != SpaceId::Const {
+        // Look up the producer of the LHS through SSA.
+        let lhs_sv = ctx
+            .stmt_inputs
+            .get(&stmt_idx)
+            .and_then(|svs| svs.iter().find(|s| s.base == *lhs_vn).copied());
+        if let Some(sv) = lhs_sv {
+            if let Some(&def_stmt) = ctx.sv_defining_stmt.get(&sv) {
+                let producer = ctx.stmt_insns.get(&def_stmt).cloned();
+                if let Some(p) = producer {
+                    if p.op == IrOp::IntAnd
+                        && p.inputs.len() >= 2
+                        && p.inputs[1].space == SpaceId::Const
+                    {
+                        let mask = p.inputs[1].offset;
+                        let inner_src = emit_operand_resolved(&p.inputs[0], 0, def_stmt, ctx);
+                        match (mask, shift) {
+                            (0xFF00, 8) => return Some(format!("BYTE1({})", inner_src)),
+                            (0xFF0000, 16) => return Some(format!("BYTE2({})", inner_src)),
+                            (0xFF000000, 24) => return Some(format!("BYTE3({})", inner_src)),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Bare `x >> N` patterns: HIWORD (DWORD result, shift 16) and
+    // HIDWORD (QWORD result, shift 32).
+    let output_size = insn.output.map_or(0, |v| v.size);
+    let src = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
+    match (output_size, shift) {
+        // Note: HIWORD takes the upper word of a DWORD (output size 2 from
+        // a DWORD-typed source). We match on the *input* size via the LHS
+        // varnode width since the IR result of `>>` keeps the source width.
+        _ if shift == 16 && lhs_vn.size == 4 => Some(format!("HIWORD({})", src)),
+        _ if shift == 32 && lhs_vn.size == 8 => Some(format!("HIDWORD({})", src)),
+        _ => None,
+    }
 }
 
 /// Emit an IDA-style SUBPIECE macro based on output size and byte offset.
@@ -16737,6 +16855,102 @@ mod tests {
         assert!(
             output.contains("= 3"),
             "the value `3` should still appear as the RHS: {output}"
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // t255: IDA byte-extract macro emission (LOBYTE / BYTE1 / LOWORD)
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn test_t255_int_and_0xff_emits_lobyte() {
+        // `r0 & 0xFF` → LOBYTE(r0)
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let mask = con(0xFF, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAnd,
+                r8,
+                smallvec![r0, mask],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("t255_lobyte", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("LOBYTE("),
+            "IntAnd(x, 0xFF) should emit LOBYTE(x): {output}"
+        );
+        assert!(
+            !output.lines().any(|l| l.contains("& 0xFF") && !l.contains("LOBYTE")),
+            "raw `& 0xFF` should be replaced by the macro: {output}"
+        );
+    }
+
+    #[test]
+    fn test_t255_shifted_mask_emits_byte1() {
+        // `(r0 & 0xFF00) >> 8` → BYTE1(r0)
+        // The IR is two statements: an IntAnd producing a unique, then an
+        // IntRight that consumes that unique with shift = 8.
+        let r0 = reg(0, 4);
+        let tmp = Varnode::unique(0, 4);
+        let r8 = reg(8, 4);
+        let mask = con(0xFF00, 4);
+        let shift = con(8, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAnd,
+                tmp,
+                smallvec![r0, mask],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntRight,
+                r8,
+                smallvec![tmp, shift],
+                0x1004,
+            )),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("t255_byte1", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("BYTE1("),
+            "(x & 0xFF00) >> 8 should emit BYTE1(x): {output}"
+        );
+    }
+
+    #[test]
+    fn test_t255_int_and_0xffff_emits_loword() {
+        // `r0 & 0xFFFF` → LOWORD(r0)
+        let r0 = reg(0, 4);
+        let r8 = reg(8, 4);
+        let mask = con(0xFFFF, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAnd,
+                r8,
+                smallvec![r0, mask],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("t255_loword", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("LOWORD("),
+            "IntAnd(x, 0xFFFF) should emit LOWORD(x): {output}"
         );
     }
 }

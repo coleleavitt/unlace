@@ -1,0 +1,9 @@
+[package]
+name = "unlace-lift-m68k"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+
+[dev-dependencies]

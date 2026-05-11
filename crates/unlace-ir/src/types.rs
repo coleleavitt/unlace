@@ -113,6 +113,32 @@ pub struct StructFieldType {
     pub offset: u64,
 }
 
+/// A struct layout recovered from array-of-structs access patterns in a
+/// natural loop — see
+/// [`unlace_passes::struct_field_recovery`](https://docs.rs/unlace-passes).
+///
+/// `size` is the per-element stride in bytes (constant multiplier applied
+/// to the loop induction variable when computing the per-element base).
+/// `fields` lists every distinct `(offset, access_width)` observed across
+/// LOAD/STORE instructions whose address is `arr_ptr + stride*iv + offset`,
+/// sorted ascending by offset.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct InferredStruct {
+    pub size: u64,
+    pub fields: Vec<StructField>,
+}
+
+/// One field within an [`InferredStruct`].
+///
+/// `offset` is the byte offset from the per-element base.
+/// `size` is the access width in bytes (1/2/4/8/16) — the dominant
+/// (maximum) width observed at this offset.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct StructField {
+    pub offset: u64,
+    pub size: u8,
+}
+
 /// A single method entry inside a [`Type::Interface`] method set.
 ///
 /// `name` is the bare method identifier as it would appear in a Go source

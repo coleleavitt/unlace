@@ -56,6 +56,7 @@ pub mod stack_pointer_tracking;
 pub mod stack_vars;
 pub mod string_hash_switch;
 pub mod struct_field_detect;
+pub mod struct_field_recovery;
 pub mod tail_call;
 pub mod tail_duplication;
 pub mod type_constraint_solver;
@@ -130,6 +131,7 @@ pub use string_hash_switch::{
     fnv1a as string_hash_fnv1a,
 };
 pub use struct_field_detect::StructFieldDetectPass;
+pub use struct_field_recovery::recover_structs;
 pub use tail_call::TailCallDetectPass;
 pub use tail_duplication::TailDuplicationPass;
 pub use variable_merge::VariableMergePass;

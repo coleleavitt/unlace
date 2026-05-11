@@ -439,6 +439,18 @@ pub struct SsaFunction {
     /// family label that later analyses (e.g. allocator escape, copy
     /// elision, string idiom) gate on.
     pub libc_call_annotations: BTreeMap<(BlockId, usize), String>,
+    /// Array-of-structs layouts recovered from per-loop access patterns:
+    /// `*(arr_ptr + stride * iv + offset) = ...`.
+    /// Keyed by the *base pointer* SSA varnode (`arr_ptr`); value is the
+    /// inferred struct layout (per-element stride + the set of accessed
+    /// fields). Populated by
+    /// [`unlace_passes::struct_field_recovery::recover_structs`].
+    ///
+    /// Distinct from [`Self::inferred_structs`], which keys *stack-frame
+    /// composites* by RSP-relative offset. This map captures heap / global
+    /// / parameter-pointer struct layouts surfaced by loop induction
+    /// strides rather than stack-slot adjacency.
+    pub array_struct_layouts: BTreeMap<SsaVarnode, crate::types::InferredStruct>,
 }
 
 /// One synthesised local-frame slot.
@@ -620,6 +632,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         stack_frame: None,
         byref_info: None,
         libc_call_annotations: BTreeMap::new(),
+        array_struct_layouts: BTreeMap::new(),
     }
 }
 

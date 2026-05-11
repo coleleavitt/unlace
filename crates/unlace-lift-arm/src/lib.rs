@@ -13,10 +13,12 @@ mod tests {
     use crate::ArmLifter;
     use crate::lift::{
         ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
-        CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV, CALLOTHER_ARM_REV16, CALLOTHER_INT_MULT_HIGH,
-        CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
-        decode_thumb1_ldm_stm, decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list,
-        try_aarch64_ccmp, try_aarch64_csel,
+        CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
+        CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
+        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
+        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
+        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
+        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
     };
 
     #[test]
@@ -2594,5 +2596,123 @@ mod tests {
     fn test_aarch64_st4_v0_v3_2d_t186() {
         // st4 {v0.2d, v1.2d, v2.2d, v3.2d}, [x5]  →  4c000ca0  →  a0 0c 00 4c
         assert_neon_callother(&[0xa0, 0x0c, 0x00, 0x4c], CALLOTHER_AARCH64_ST4, 8, 4);
+    }
+
+    // ── t194: ARM saturating + parallel-add encodings ──────────────
+    //
+    // Each opcode lifts to a single Callother whose first input is the
+    // CALLOTHER_ARM_* tag and whose remaining inputs are the source
+    // operands (two regs for the 3-register families, `#imm + Rn` for
+    // USAT/SSAT). The encodings were generated with
+    // `llvm-mc -triple=armv7` to keep the assembler choices canonical;
+    // the byte-order shown below is little-endian word-at-a-time.
+
+    /// Helper: lift a 4-byte A32 word and find the single Callother
+    /// emitted for the saturating/parallel-add families. Returns the
+    /// (`tag`, `inputs.len()`, `has_output`) triple so each test can
+    /// pin down the exact intrinsic without re-deriving the encoding.
+    fn arm32_one_callother(encoding: u32) -> (u64, usize, bool) {
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&encoding.to_le_bytes(), 0x1000)
+            .unwrap_or_else(|e| panic!("encoding {encoding:#x} should decode: {e:?}"));
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "encoding {encoding:#x} must not fall through to Unimplemented"
+        );
+        let co = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap_or_else(|| panic!("encoding {encoding:#x} must emit Callother"));
+        (co.inputs[0].offset, co.inputs.len(), co.output.is_some())
+    }
+
+    #[test]
+    fn arm32_uqadd8_lifts_to_uqadd8_callother() {
+        // uqadd8 r0, r1, r2  →  e6610f92
+        let (tag, n_inputs, has_dst) = arm32_one_callother(0xe661_0f92);
+        assert_eq!(tag, CALLOTHER_ARM_UQADD8);
+        assert_eq!(n_inputs, 3, "tag + Rn + Rm");
+        assert!(has_dst, "UQADD8 writes Rd");
+    }
+
+    #[test]
+    fn arm32_uqadd16_lifts_to_uqadd16_callother() {
+        // uqadd16 r0, r1, r2  →  e6610f12
+        let (tag, n_inputs, has_dst) = arm32_one_callother(0xe661_0f12);
+        assert_eq!(tag, CALLOTHER_ARM_UQADD16);
+        assert_eq!(n_inputs, 3);
+        assert!(has_dst);
+    }
+
+    #[test]
+    fn arm32_sadd16_lifts_to_sadd16_callother() {
+        // sadd16 r0, r1, r2  →  e6110f12
+        let (tag, n_inputs, has_dst) = arm32_one_callother(0xe611_0f12);
+        assert_eq!(tag, CALLOTHER_ARM_SADD16);
+        assert_eq!(n_inputs, 3);
+        assert!(has_dst);
+    }
+
+    #[test]
+    fn arm32_ssub16_lifts_to_ssub16_callother() {
+        // ssub16 r0, r1, r2  →  e6110f72
+        let (tag, n_inputs, has_dst) = arm32_one_callother(0xe611_0f72);
+        assert_eq!(tag, CALLOTHER_ARM_SSUB16);
+        assert_eq!(n_inputs, 3);
+        assert!(has_dst);
+    }
+
+    #[test]
+    fn arm32_qadd_lifts_to_qadd_callother() {
+        // qadd r0, r1, r2  →  e1020051
+        let (tag, n_inputs, has_dst) = arm32_one_callother(0xe102_0051);
+        assert_eq!(tag, CALLOTHER_ARM_QADD);
+        assert_eq!(n_inputs, 3);
+        assert!(has_dst);
+    }
+
+    #[test]
+    fn arm32_qsub_lifts_to_qsub_callother() {
+        // qsub r0, r1, r2  →  e1220051
+        let (tag, n_inputs, has_dst) = arm32_one_callother(0xe122_0051);
+        assert_eq!(tag, CALLOTHER_ARM_QSUB);
+        assert_eq!(n_inputs, 3);
+        assert!(has_dst);
+    }
+
+    #[test]
+    fn arm32_usat_lifts_to_usat_callother_with_imm() {
+        // usat r0, #7, r1  →  e6e70011
+        let (tag, n_inputs, has_dst) = arm32_one_callother(0xe6e7_0011);
+        assert_eq!(tag, CALLOTHER_ARM_USAT);
+        // Tag + #imm + Rn = 3 inputs.
+        assert_eq!(n_inputs, 3);
+        assert!(has_dst);
+        // The immediate must reach the Callother as a constant Varnode
+        // — that's how downstream passes recover the saturation width
+        // without re-decoding.
+        let l = ArmLifter::new_arm32();
+        let r = l.lift_insn(&0xe6e7_0011u32.to_le_bytes(), 0x1000).unwrap();
+        let co = r.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        // inputs[1] is the saturation width; for `usat r0, #7, …` that's 7.
+        assert_eq!(co.inputs[1].space, SpaceId::Const);
+        assert_eq!(co.inputs[1].offset, 7);
+    }
+
+    #[test]
+    fn arm32_ssat_lifts_to_ssat_callother_with_imm() {
+        // ssat r0, #8, r1  →  e6a70011
+        let (tag, n_inputs, has_dst) = arm32_one_callother(0xe6a7_0011);
+        assert_eq!(tag, CALLOTHER_ARM_SSAT);
+        assert_eq!(n_inputs, 3);
+        assert!(has_dst);
+        let l = ArmLifter::new_arm32();
+        let r = l.lift_insn(&0xe6a7_0011u32.to_le_bytes(), 0x1000).unwrap();
+        let co = r.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[1].space, SpaceId::Const);
+        // SSAT immediate is 1-based saturation width (here #8 → "to 8 bits").
+        assert_eq!(co.inputs[1].offset, 8);
     }
 }

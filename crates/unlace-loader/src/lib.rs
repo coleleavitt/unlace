@@ -28,6 +28,7 @@ pub mod go_types;
 pub mod strings;
 pub mod swift_metadata;
 pub mod til;
+pub mod uefi_module;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,

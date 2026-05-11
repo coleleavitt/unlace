@@ -95,6 +95,7 @@ pub mod tail_duplication;
 pub mod type_constraint_solver;
 pub mod type_infer;
 pub mod variable_merge;
+pub mod whole_prog_type_unify;
 
 pub use algebraic_simplify::AlgebraicSimplifyPass;
 pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};

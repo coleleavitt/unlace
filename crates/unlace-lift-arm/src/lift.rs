@@ -1905,8 +1905,148 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_MRS => emit_aarch64_mrs(ctx, &ops),
         Arm64Insn::ARM64_INS_MSR => emit_aarch64_msr(ctx, &ops),
 
+        // t186 — AArch64 NEON LDn/STn multi-structure register-list ops.
+        Arm64Insn::ARM64_INS_LD1 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD1),
+        Arm64Insn::ARM64_INS_LD2 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD2),
+        Arm64Insn::ARM64_INS_LD3 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD3),
+        Arm64Insn::ARM64_INS_LD4 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD4),
+        Arm64Insn::ARM64_INS_ST1 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST1),
+        Arm64Insn::ARM64_INS_ST2 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST2),
+        Arm64Insn::ARM64_INS_ST3 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST3),
+        Arm64Insn::ARM64_INS_ST4 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST4),
+
         _ => ctx.emit_unimplemented(),
     }
+}
+
+// ── t186 — AArch64 NEON LDn/STn register-list lifters ────────────────
+//
+// These tags occupy a fresh `0x400..0x407` range to leave the existing
+// AArch64 Callother block (0x340..0x364) untouched. Each `LDn`/`STn`
+// emits a single `Callother(tag, vas_const, addr, vreg_idx_0, ...)`
+// with no IR output — the lane width is recoverable from `vas_const`,
+// which maps to the intrinsic suffix (b/h/s/d) used by `vld1q_*` etc.
+
+/// `Callother` tag for AArch64 NEON `LD1` (single-structure load).
+pub const CALLOTHER_AARCH64_LD1: u64 = 0x400;
+/// `Callother` tag for AArch64 NEON `LD2` (2-element de-interleaving load).
+pub const CALLOTHER_AARCH64_LD2: u64 = 0x401;
+/// `Callother` tag for AArch64 NEON `LD3` (3-element de-interleaving load).
+pub const CALLOTHER_AARCH64_LD3: u64 = 0x402;
+/// `Callother` tag for AArch64 NEON `LD4` (4-element de-interleaving load).
+pub const CALLOTHER_AARCH64_LD4: u64 = 0x403;
+/// `Callother` tag for AArch64 NEON `ST1` (single-structure store).
+pub const CALLOTHER_AARCH64_ST1: u64 = 0x404;
+/// `Callother` tag for AArch64 NEON `ST2` (2-element interleaving store).
+pub const CALLOTHER_AARCH64_ST2: u64 = 0x405;
+/// `Callother` tag for AArch64 NEON `ST3` (3-element interleaving store).
+pub const CALLOTHER_AARCH64_ST3: u64 = 0x406;
+/// `Callother` tag for AArch64 NEON `ST4` (4-element interleaving store).
+pub const CALLOTHER_AARCH64_ST4: u64 = 0x407;
+
+/// Map an `Arm64Vas` arrangement to its lane byte width.
+///
+/// 16B/8B/4B/1B → 1, 8H/4H/2H/1H → 2, 4S/2S/1S → 4, 2D/1D → 8, 1Q → 16.
+/// The returned value is encoded as a varnode constant in the NEON
+/// `Callother` payload so downstream recoverers can rebuild the
+/// intrinsic suffix (b/h/s/d) without re-parsing the arrangement enum.
+pub fn aarch64_vas_lane_size(vas: capstone::arch::arm64::Arm64Vas) -> Option<u8> {
+    use capstone::arch::arm64::Arm64Vas::*;
+    match vas {
+        ARM64_VAS_16B | ARM64_VAS_8B | ARM64_VAS_4B | ARM64_VAS_1B => Some(1),
+        ARM64_VAS_8H | ARM64_VAS_4H | ARM64_VAS_2H | ARM64_VAS_1H => Some(2),
+        ARM64_VAS_4S | ARM64_VAS_2S | ARM64_VAS_1S => Some(4),
+        ARM64_VAS_2D | ARM64_VAS_1D => Some(8),
+        ARM64_VAS_1Q => Some(16),
+        ARM64_VAS_INVALID => None,
+    }
+}
+
+/// Map a capstone V/Q/D/S/H/B register ID (the SIMD/FP banks) to its
+/// 0..31 register index. We don't model these registers in the main
+/// register file, so the index reaches the Callother payload as a
+/// constant varnode.
+pub fn aarch64_simd_reg_index(reg: capstone::RegId) -> Option<u8> {
+    use capstone::arch::arm64::Arm64Reg;
+    let id = reg.0 as u32;
+    // Each bank is 32 registers laid out contiguously by capstone-sys.
+    for base in [
+        Arm64Reg::ARM64_REG_V0,
+        Arm64Reg::ARM64_REG_Q0,
+        Arm64Reg::ARM64_REG_D0,
+        Arm64Reg::ARM64_REG_S0,
+        Arm64Reg::ARM64_REG_H0,
+        Arm64Reg::ARM64_REG_B0,
+    ] {
+        if (base..=base + 31).contains(&id) {
+            return Some((id - base) as u8);
+        }
+    }
+    None
+}
+
+/// Emit the `Callother` payload for an AArch64 NEON LDn/STn instruction.
+///
+/// Capstone exposes one register operand per `Vn.<size>` token in the
+/// register list, followed by a single `Mem` operand for the addressing
+/// mode. We collect them all and emit:
+///
+/// ```text
+/// Callother(tag, lane_size_const, addr, vreg_idx_0, vreg_idx_1, ...)
+/// ```
+///
+/// where `lane_size_const` is the byte width derived from `vas`
+/// (1=B, 2=H, 4=S, 8=D, 16=Q). The intrinsic name (`vld1q_u8` etc.)
+/// is fully recoverable from `(tag, lane_size, register count)`.
+fn emit_aarch64_neon_ldst(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
+    let arch = detail.arch_detail();
+    let arm64 = match arch.arm64() {
+        Some(a) => a,
+        None => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+
+    let mut vreg_indices: smallvec::SmallVec<[u8; 4]> = smallvec::SmallVec::new();
+    let mut lane_size: Option<u8> = None;
+    let mut addr: Option<Varnode> = None;
+
+    for op in arm64.operands() {
+        match op.op_type {
+            Arm64OperandType::Reg(reg) => {
+                if let Some(idx) = aarch64_simd_reg_index(reg) {
+                    vreg_indices.push(idx);
+                    if lane_size.is_none() {
+                        lane_size = aarch64_vas_lane_size(op.vas);
+                    }
+                }
+            }
+            Arm64OperandType::Mem(mem) => {
+                addr = compute_mem_address(ctx, &mem);
+            }
+            _ => {}
+        }
+    }
+
+    let (Some(lane), Some(addr_vn)) = (lane_size, addr) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    if vreg_indices.is_empty() {
+        ctx.emit_unimplemented();
+        return;
+    }
+
+    let mut inputs: smallvec::SmallVec<[Varnode; 3]> = smallvec::SmallVec::new();
+    inputs.push(Varnode::constant(tag, 8));
+    inputs.push(Varnode::constant(lane as u64, 1));
+    inputs.push(addr_vn);
+    for idx in &vreg_indices {
+        inputs.push(Varnode::constant(*idx as u64, 1));
+    }
+
+    ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
 }
 
 fn aarch64_sysreg_const(op: &Arm64OperandType) -> Option<Varnode> {

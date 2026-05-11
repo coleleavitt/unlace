@@ -2364,4 +2364,112 @@ mod tests {
         // P=1, U=1 (hw1 bits[8:7] = 11) — also reserved here.
         assert!(decode_thumb2_ldm_stm(0xE990, 0x000E).is_none());
     }
+
+    // ── t186 — AArch64 NEON LDn/STn register-list lifters ─────────────
+    //
+    // Each test feeds a real assembled instruction (verified with
+    // `llvm-mc --arch=aarch64`) and asserts:
+    //   1. exactly one Callother appears,
+    //   2. its tag matches the expected `CALLOTHER_AARCH64_*` constant,
+    //   3. the lane-size byte matches the arrangement specifier
+    //      (.16b → 1, .8h → 2, .4s → 4, .2d → 8), and
+    //   4. the number of vreg-index inputs matches the register-list
+    //      length (LD1=1, LD2=2, LD3=3, LD4=4).
+
+    use crate::lift::{
+        CALLOTHER_AARCH64_LD1, CALLOTHER_AARCH64_LD2, CALLOTHER_AARCH64_LD3, CALLOTHER_AARCH64_LD4,
+        CALLOTHER_AARCH64_ST1, CALLOTHER_AARCH64_ST2, CALLOTHER_AARCH64_ST3, CALLOTHER_AARCH64_ST4,
+    };
+
+    /// Walk the lifter output, expecting exactly one Callother with the
+    /// given tag. Returns its inputs so callers can assert payload
+    /// details (lane size, register-list length).
+    fn assert_neon_callother(
+        bytes: &[u8],
+        expected_tag: u64,
+        expected_lane: u8,
+        expected_regs: usize,
+    ) {
+        let result = lifter()
+            .lift_insn(bytes, 0x1000)
+            .expect("NEON instruction should decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother && i.inputs[0].offset == expected_tag)
+            .unwrap_or_else(|| {
+                panic!(
+                    "expected Callother(tag={expected_tag:#x}) — got {:?}",
+                    result.ir_ops
+                )
+            });
+        assert!(
+            co.output.is_none(),
+            "NEON LDn/STn Callother carries dest registers in inputs, no IR output"
+        );
+        assert_eq!(
+            co.inputs[1].offset, expected_lane as u64,
+            "lane size byte should be {expected_lane}"
+        );
+        // Inputs are `(tag, lane, addr, vreg0, vreg1, ...)`.
+        let reg_count = co.inputs.len().saturating_sub(3);
+        assert_eq!(
+            reg_count, expected_regs,
+            "expected {expected_regs} register-list entries"
+        );
+    }
+
+    #[test]
+    fn test_aarch64_ld1_v0_16b_t186() {
+        // ld1 {v0.16b}, [x0]  →  4c407000  →  00 70 40 4c
+        assert_neon_callother(&[0x00, 0x70, 0x40, 0x4c], CALLOTHER_AARCH64_LD1, 1, 1);
+    }
+
+    #[test]
+    fn test_aarch64_ld1_v0_8h_t186() {
+        // ld1 {v0.8h}, [x1]   →  4c407420  →  20 74 40 4c
+        assert_neon_callother(&[0x20, 0x74, 0x40, 0x4c], CALLOTHER_AARCH64_LD1, 2, 1);
+    }
+
+    #[test]
+    fn test_aarch64_ld2_v0_v1_16b_t186() {
+        // ld2 {v0.16b, v1.16b}, [x0]  →  4c408000  →  00 80 40 4c
+        assert_neon_callother(&[0x00, 0x80, 0x40, 0x4c], CALLOTHER_AARCH64_LD2, 1, 2);
+    }
+
+    #[test]
+    fn test_aarch64_ld3_v0_v2_4s_t186() {
+        // ld3 {v0.4s, v1.4s, v2.4s}, [x0]  →  4c404800  →  00 48 40 4c
+        assert_neon_callother(&[0x00, 0x48, 0x40, 0x4c], CALLOTHER_AARCH64_LD3, 4, 3);
+    }
+
+    #[test]
+    fn test_aarch64_ld4_v0_v3_2d_t186() {
+        // ld4 {v0.2d, v1.2d, v2.2d, v3.2d}, [x5]  →  4c400ca0  →  a0 0c 40 4c
+        assert_neon_callother(&[0xa0, 0x0c, 0x40, 0x4c], CALLOTHER_AARCH64_LD4, 8, 4);
+    }
+
+    #[test]
+    fn test_aarch64_st1_v0_16b_t186() {
+        // st1 {v0.16b}, [x0]  →  4c007000  →  00 70 00 4c
+        assert_neon_callother(&[0x00, 0x70, 0x00, 0x4c], CALLOTHER_AARCH64_ST1, 1, 1);
+    }
+
+    #[test]
+    fn test_aarch64_st2_v0_v1_16b_t186() {
+        // st2 {v0.16b, v1.16b}, [x0]  →  4c008000  →  00 80 00 4c
+        assert_neon_callother(&[0x00, 0x80, 0x00, 0x4c], CALLOTHER_AARCH64_ST2, 1, 2);
+    }
+
+    #[test]
+    fn test_aarch64_st3_v0_v2_4s_t186() {
+        // st3 {v0.4s, v1.4s, v2.4s}, [x0]  →  4c004800  →  00 48 00 4c
+        assert_neon_callother(&[0x00, 0x48, 0x00, 0x4c], CALLOTHER_AARCH64_ST3, 4, 3);
+    }
+
+    #[test]
+    fn test_aarch64_st4_v0_v3_2d_t186() {
+        // st4 {v0.2d, v1.2d, v2.2d, v3.2d}, [x5]  →  4c000ca0  →  a0 0c 00 4c
+        assert_neon_callother(&[0xa0, 0x0c, 0x00, 0x4c], CALLOTHER_AARCH64_ST4, 8, 4);
+    }
 }

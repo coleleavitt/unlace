@@ -1,4 +1,10 @@
-/* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   __stack_chk_fail, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    __int64 field_0;
+    __int32 field_8;
+};
+
+/* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: unknown | Stack frame: 0xc (12 bytes) | Xrefs to:   __stack_chk_fail, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 void main(void) {
     int v5; // edx
     long long v13; // rdi

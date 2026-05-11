@@ -16,10 +16,9 @@ use unlace_passes::{
     GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
     ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
     StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    detect_byref, recover_stack_frame,
-    CallingConvFinalizePass, TailCallDetectPass, VarNamingPass, VariableMergePass,
-    bump_if_signature_changed, run_outer_fixedpoint,
-    run_to_fixedpoint,
+    CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
+    VariableMergePass, bump_if_signature_changed, detect_byref, recover_stack_frame,
+    run_outer_fixedpoint, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -826,6 +825,12 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             // parameter registers are "live" for this calling convention.
             ssa.byref_info = Some(detect_byref(ssa));
             run_type_infer_bounded(ssa);
+            // t228: TIE-style constraint solver fills the holes left by
+            // the ad-hoc walker (LOAD/STORE addresses as `Ptr`, phi joins,
+            // binop SameType edges) so the outer fixed-point's type-
+            // signature comparison can settle once the constraint graph
+            // converges.
+            TypeConstraintSolverPass.run(ssa)?;
 
             Ok(())
         },

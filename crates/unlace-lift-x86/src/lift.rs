@@ -4,7 +4,9 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
-use crate::ops::{arithmetic, bitwise, control_flow, data_move, fpu, sse, stack, string_ops};
+use crate::ops::{
+    arithmetic, bitwise, control_flow, crypto, data_move, fpu, sse, stack, string_ops,
+};
 use crate::register_file::{iced_reg_to_varnode, x86_64_register_file};
 
 pub struct X86Lifter {
@@ -531,6 +533,20 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
             sse::lift_avx_binop(ctx, insn, sse::tag::VPSUBQ_512)
         }
         M::Vpmullq => sse::lift_avx_binop(ctx, insn, sse::tag::VPMULLQ_512),
+
+        // ── AES-NI (t309) ───────────────────────────────────────
+        M::Aesenc => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESENC),
+        M::Aesenclast => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESENCLAST),
+        M::Aesdec => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESDEC),
+        M::Aesdeclast => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESDECLAST),
+        M::Aeskeygenassist => crypto::lift_aes_imm(ctx, insn, crypto::tag::AESKEYGENASSIST),
+
+        // ── SHA-NI (t310) ───────────────────────────────────────
+        M::Sha1rnds4 => crypto::lift_aes_imm(ctx, insn, crypto::tag::SHA1RNDS4),
+        M::Sha1nexte => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA1NEXTE),
+        M::Sha256rnds2 => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA256RNDS2),
+        M::Sha256msg1 => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA256MSG1),
+        M::Sha256msg2 => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA256MSG2),
 
         M::Fld => fpu::lift_fld(ctx, insn),
         M::Fst => fpu::lift_fst(ctx, insn),

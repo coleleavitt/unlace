@@ -4,6 +4,7 @@ pub mod algebraic_simplify;
 pub mod bool_simplify;
 pub mod auth_call_resolve;
 pub mod bitfield_idioms;
+pub mod bsim_db;
 pub mod bmi_idioms;
 pub mod byref_detect;
 pub mod call_boundary_copyprop;

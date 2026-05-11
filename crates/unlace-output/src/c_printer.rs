@@ -5840,8 +5840,222 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         // ── x86 conditional move pseudo-intrinsic ───────────────
         0x350 => Some("__cmov__"),
 
+        // ── AArch64 NEON (0x400..0x40D) ─────────────────────────
+        // These are *not* resolved here because the C intrinsic name
+        // depends on the lane-size operand (e.g. ADD lane=4 →
+        // `vaddq_s32` vs. ADD lane=2 → `vaddq_s16`). The lifter encodes
+        // lane size as `inputs[1]`; `emit_callother` peels it off and
+        // routes through `aarch64_neon_intrinsic_name` before falling
+        // back to this tag-only table.
         _ => None,
     }
+}
+
+// ── AArch64 NEON Callother tags (mirror of `unlace-lift-arm`) ──────────
+// Duplicated here as private consts to keep the output crate from taking
+// a cross-arch lifter dependency just for these eight u64s.
+const CALLOTHER_AARCH64_LD1: u64 = 0x400;
+const CALLOTHER_AARCH64_LD2: u64 = 0x401;
+const CALLOTHER_AARCH64_LD3: u64 = 0x402;
+const CALLOTHER_AARCH64_LD4: u64 = 0x403;
+const CALLOTHER_AARCH64_ST1: u64 = 0x404;
+const CALLOTHER_AARCH64_ST2: u64 = 0x405;
+const CALLOTHER_AARCH64_ST3: u64 = 0x406;
+const CALLOTHER_AARCH64_ST4: u64 = 0x407;
+const CALLOTHER_NEON_ADD: u64 = 0x408;
+const CALLOTHER_NEON_SUB: u64 = 0x409;
+const CALLOTHER_NEON_MUL: u64 = 0x40A;
+const CALLOTHER_NEON_FADD: u64 = 0x40B;
+const CALLOTHER_NEON_FSUB: u64 = 0x40C;
+const CALLOTHER_NEON_FMUL: u64 = 0x40D;
+
+/// Map an AArch64 NEON `Callother` `(tag, lane_size, signed)` triple to
+/// its Apple/ARM C intrinsic name (e.g. `vaddq_s32`).
+///
+/// `lane_size` is the byte width of one element (1=B, 2=H, 4=S, 8=D)
+/// as encoded by `aarch64_vas_lane_size` in the lifter. `signed=true`
+/// selects the `s<bits>` element suffix, `false` selects `u<bits>`.
+/// Float ops ignore `signed` and always render as `f<bits>`.
+///
+/// Returns `""` when the `(tag, lane)` combination isn't representable
+/// as a NEON intrinsic — callers treat the empty string as "fall
+/// through to the generic Callother fallback comment".
+///
+/// **Vector-width caveat**: we currently always emit the `q` suffix
+/// (128-bit), matching the spec's worked examples. The lifter doesn't
+/// yet propagate whether the source VAS was a 64-bit or 128-bit form
+/// (e.g. `2S` vs `4S`), so a future task — once op_info carries the
+/// concrete VAS — will demote 64-bit ops to the non-`q` mnemonic
+/// (`vadd_s32` vs `vaddq_s32`).
+///
+/// **Signedness caveat**: the prompt specifies "treat all int ops as
+/// signed" for now; the `signed` parameter is plumbed through so a
+/// future inference pass can wire it without churning this signature.
+pub fn aarch64_neon_intrinsic_name(tag: u64, lane_size: u8, signed: bool) -> &'static str {
+    // Float ops: lane=4 → f32, lane=8 → f64. Anything else is unmapped.
+    match (tag, lane_size) {
+        (CALLOTHER_NEON_FADD, 4) => return "vaddq_f32",
+        (CALLOTHER_NEON_FADD, 8) => return "vaddq_f64",
+        (CALLOTHER_NEON_FSUB, 4) => return "vsubq_f32",
+        (CALLOTHER_NEON_FSUB, 8) => return "vsubq_f64",
+        (CALLOTHER_NEON_FMUL, 4) => return "vmulq_f32",
+        (CALLOTHER_NEON_FMUL, 8) => return "vmulq_f64",
+        _ => {}
+    }
+
+    // Integer arith: ADD/SUB/MUL × {1,2,4,8} × {signed,unsigned}.
+    // The element-bit suffix is lane*8; the s/u prefix comes from
+    // `signed`.
+    let bits = match lane_size {
+        1 => 8u8,
+        2 => 16,
+        4 => 32,
+        8 => 64,
+        _ => return "",
+    };
+    let int_op = match tag {
+        CALLOTHER_NEON_ADD => Some("add"),
+        CALLOTHER_NEON_SUB => Some("sub"),
+        CALLOTHER_NEON_MUL => Some("mul"),
+        _ => None,
+    };
+    if let Some(op) = int_op {
+        return match (op, bits, signed) {
+            // ADD ─────────────────
+            ("add", 8, true) => "vaddq_s8",
+            ("add", 16, true) => "vaddq_s16",
+            ("add", 32, true) => "vaddq_s32",
+            ("add", 64, true) => "vaddq_s64",
+            ("add", 8, false) => "vaddq_u8",
+            ("add", 16, false) => "vaddq_u16",
+            ("add", 32, false) => "vaddq_u32",
+            ("add", 64, false) => "vaddq_u64",
+            // SUB ─────────────────
+            ("sub", 8, true) => "vsubq_s8",
+            ("sub", 16, true) => "vsubq_s16",
+            ("sub", 32, true) => "vsubq_s32",
+            ("sub", 64, true) => "vsubq_s64",
+            ("sub", 8, false) => "vsubq_u8",
+            ("sub", 16, false) => "vsubq_u16",
+            ("sub", 32, false) => "vsubq_u32",
+            ("sub", 64, false) => "vsubq_u64",
+            // MUL ─────────────────
+            ("mul", 8, true) => "vmulq_s8",
+            ("mul", 16, true) => "vmulq_s16",
+            ("mul", 32, true) => "vmulq_s32",
+            // `vmulq_s64` doesn't exist in the NEON intrinsic set
+            // (no MUL.2D); leave unmapped.
+            ("mul", 8, false) => "vmulq_u8",
+            ("mul", 16, false) => "vmulq_u16",
+            ("mul", 32, false) => "vmulq_u32",
+            _ => "",
+        };
+    }
+
+    // LDn/STn: element type is u8/u16/u32/u64 per the spec's
+    // `vld1q_u8` example. The `n` in LDn/STn picks the intrinsic
+    // family (vld1q / vld2q / …); lane_size picks the element bit
+    // width. We honour `signed` so a later inference pass can route
+    // to `vld1q_s*`, but default callers pass `signed=true` only for
+    // arith — load/store typically pass `false`.
+    let elt_suffix = match (signed, bits) {
+        (false, 8) => "u8",
+        (false, 16) => "u16",
+        (false, 32) => "u32",
+        (false, 64) => "u64",
+        (true, 8) => "s8",
+        (true, 16) => "s16",
+        (true, 32) => "s32",
+        (true, 64) => "s64",
+        _ => return "",
+    };
+    match tag {
+        CALLOTHER_AARCH64_LD1 => match elt_suffix {
+            "u8" => "vld1q_u8",
+            "u16" => "vld1q_u16",
+            "u32" => "vld1q_u32",
+            "u64" => "vld1q_u64",
+            "s8" => "vld1q_s8",
+            "s16" => "vld1q_s16",
+            "s32" => "vld1q_s32",
+            "s64" => "vld1q_s64",
+            _ => "",
+        },
+        CALLOTHER_AARCH64_LD2 => match elt_suffix {
+            "u8" => "vld2q_u8",
+            "u16" => "vld2q_u16",
+            "u32" => "vld2q_u32",
+            "s8" => "vld2q_s8",
+            "s16" => "vld2q_s16",
+            "s32" => "vld2q_s32",
+            _ => "",
+        },
+        CALLOTHER_AARCH64_LD3 => match elt_suffix {
+            "u8" => "vld3q_u8",
+            "u16" => "vld3q_u16",
+            "u32" => "vld3q_u32",
+            "s8" => "vld3q_s8",
+            "s16" => "vld3q_s16",
+            "s32" => "vld3q_s32",
+            _ => "",
+        },
+        CALLOTHER_AARCH64_LD4 => match elt_suffix {
+            "u8" => "vld4q_u8",
+            "u16" => "vld4q_u16",
+            "u32" => "vld4q_u32",
+            "s8" => "vld4q_s8",
+            "s16" => "vld4q_s16",
+            "s32" => "vld4q_s32",
+            _ => "",
+        },
+        CALLOTHER_AARCH64_ST1 => match elt_suffix {
+            "u8" => "vst1q_u8",
+            "u16" => "vst1q_u16",
+            "u32" => "vst1q_u32",
+            "u64" => "vst1q_u64",
+            "s8" => "vst1q_s8",
+            "s16" => "vst1q_s16",
+            "s32" => "vst1q_s32",
+            "s64" => "vst1q_s64",
+            _ => "",
+        },
+        CALLOTHER_AARCH64_ST2 => match elt_suffix {
+            "u8" => "vst2q_u8",
+            "u16" => "vst2q_u16",
+            "u32" => "vst2q_u32",
+            "s8" => "vst2q_s8",
+            "s16" => "vst2q_s16",
+            "s32" => "vst2q_s32",
+            _ => "",
+        },
+        CALLOTHER_AARCH64_ST3 => match elt_suffix {
+            "u8" => "vst3q_u8",
+            "u16" => "vst3q_u16",
+            "u32" => "vst3q_u32",
+            "s8" => "vst3q_s8",
+            "s16" => "vst3q_s16",
+            "s32" => "vst3q_s32",
+            _ => "",
+        },
+        CALLOTHER_AARCH64_ST4 => match elt_suffix {
+            "u8" => "vst4q_u8",
+            "u16" => "vst4q_u16",
+            "u32" => "vst4q_u32",
+            "s8" => "vst4q_s8",
+            "s16" => "vst4q_s16",
+            "s32" => "vst4q_s32",
+            _ => "",
+        },
+        _ => "",
+    }
+}
+
+/// `true` if `tag` falls in the AArch64 NEON Callother range
+/// `(0x400..=0x40D)` — used by `emit_callother` to route through the
+/// lane-aware [`aarch64_neon_intrinsic_name`] helper instead of the
+/// tag-only [`callother_intrinsic_name`] table.
+fn is_aarch64_neon_tag(tag: u64) -> bool {
+    (CALLOTHER_AARCH64_LD1..=CALLOTHER_NEON_FMUL).contains(&tag)
 }
 
 fn is_csel_callother(insn: &IrInsn) -> bool {
@@ -5880,6 +6094,34 @@ fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     }
 
     let tag = tag_vn.offset;
+
+    // AArch64 NEON intrinsics carry their lane size as a constant in
+    // `inputs[1]` — peel it off and route through the lane-aware
+    // registry. Per the t200 spec, integer arith ops are treated as
+    // signed (full signedness inference is a future task); LDn/STn
+    // default to unsigned (matching the `vld1q_u8` example).
+    if is_aarch64_neon_tag(tag) && insn.inputs.len() >= 2 {
+        let lane_vn = &insn.inputs[1];
+        if lane_vn.space == SpaceId::Const {
+            let lane = lane_vn.offset as u8;
+            let signed_default = matches!(
+                tag,
+                CALLOTHER_NEON_ADD | CALLOTHER_NEON_SUB | CALLOTHER_NEON_MUL
+            );
+            let name = aarch64_neon_intrinsic_name(tag, lane, signed_default);
+            if !name.is_empty() {
+                // Skip the lane constant from the rendered arg list —
+                // it's baked into the intrinsic name.
+                let args: Vec<String> = insn.inputs[2..]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, vn)| emit_operand_resolved(vn, i + 2, stmt_idx, ctx))
+                    .collect();
+                return format!("{}({})", name, args.join(", "));
+            }
+        }
+    }
+
     match callother_intrinsic_name(tag) {
         Some(name) => {
             let args: Vec<String> = insn.inputs[1..]
@@ -10295,6 +10537,153 @@ mod tests {
         assert!(
             output.contains("_mm_mul_ps("),
             "CALLOTHER with MULPS tag should emit _mm_mul_ps: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // t200: AArch64 NEON intrinsic-name registry
+    //
+    // Each test feeds a Callother whose tag + lane operand together
+    // pick a NEON intrinsic, and asserts the printer routes through
+    // `aarch64_neon_intrinsic_name` rather than emitting the generic
+    // `/* CALLOTHER tag=... */` fallback. The lane constant in
+    // `inputs[1]` must be peeled off (it's baked into the name).
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_callother_neon_add_v4s_emits_vaddq_s32_t200() {
+        // Callother(0x408 /* NEON_ADD */, lane=4, vd, vn, vm) → vaddq_s32
+        let tag = con(0x408, 8);
+        let lane = con(4, 1);
+        let vd = con(0, 1);
+        let vn = con(1, 1);
+        let vm = con(2, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, lane, vd, vn, vm],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("neon_add_s32", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("vaddq_s32("),
+            "NEON ADD lane=4 should render as vaddq_s32: {output}",
+        );
+        assert!(
+            !output.contains("/* CALLOTHER"),
+            "NEON ADD should not fall back to comment: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_neon_sub_v8h_emits_vsubq_s16_t200() {
+        // Callother(0x409 /* NEON_SUB */, lane=2, vd, vn, vm) → vsubq_s16
+        let tag = con(0x409, 8);
+        let lane = con(2, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, lane, con(0, 1), con(1, 1), con(2, 1)],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("neon_sub_s16", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("vsubq_s16("),
+            "NEON SUB lane=2 should render as vsubq_s16: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_neon_mul_v4s_emits_vmulq_s32_t200() {
+        // Callother(0x40A /* NEON_MUL */, lane=4, vd, vn, vm) → vmulq_s32
+        let tag = con(0x40A, 8);
+        let lane = con(4, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, lane, con(0, 1), con(1, 1), con(2, 1)],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("neon_mul_s32", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("vmulq_s32("),
+            "NEON MUL lane=4 should render as vmulq_s32: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_neon_fadd_v4s_emits_vaddq_f32_t200() {
+        // Callother(0x40B /* NEON_FADD */, lane=4, vd, vn, vm) → vaddq_f32
+        let tag = con(0x40B, 8);
+        let lane = con(4, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, lane, con(0, 1), con(1, 1), con(2, 1)],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("neon_fadd_f32", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("vaddq_f32("),
+            "NEON FADD lane=4 should render as vaddq_f32 (signedness ignored): {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_aarch64_ld1_16b_emits_vld1q_u8_t200() {
+        // Callother(0x400 /* LD1 */, lane=1, addr, vreg0) → vld1q_u8
+        let tag = con(0x400, 8);
+        let lane = con(1, 1);
+        let addr = reg(0, 8);
+        let vreg = con(0, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, lane, addr, vreg],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("neon_ld1_u8", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("vld1q_u8("),
+            "LD1 lane=1 should render as vld1q_u8 (default-unsigned for loads): {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_aarch64_st1_16b_emits_vst1q_u8_t200() {
+        // Callother(0x404 /* ST1 */, lane=1, addr, vreg0) → vst1q_u8
+        let tag = con(0x404, 8);
+        let lane = con(1, 1);
+        let addr = reg(0, 8);
+        let vreg = con(0, 1);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, lane, addr, vreg],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("neon_st1_u8", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("vst1q_u8("),
+            "ST1 lane=1 should render as vst1q_u8: {output}",
         );
     }
 

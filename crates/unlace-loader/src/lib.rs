@@ -4,6 +4,7 @@
 //! uniform [`BinaryImage`] representation, plus concrete implementations
 //! starting with [`ElfLoader`].
 
+pub mod android_boot;
 pub mod demangle_rust;
 pub mod demangle_swift;
 pub mod dwarf;

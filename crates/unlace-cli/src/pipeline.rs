@@ -23,31 +23,30 @@
 //! 4. **`TypeConstraintSolverPass`** (t228) — TIE-style constraint
 //!    solver. Depends on byref_info (constraints from address-taken
 //!    sites) and on stack_frame (constraints from same-slot accesses).
-//!    *TODO: not yet wired into the pipeline; once added, must run
-//!    after t210 and before t229 / t227 / t230.*
+//!    *Wired (Wave 26): runs inside the outer fixedpoint immediately
+//!    after `run_type_infer_bounded`.*
 //!
-//! 5. **`LibcIdiomsPass`** (t229) — annotates calls to recognised libc
-//!    functions in [`SsaFunction::libc_call_annotations`]. Depends on
-//!    the symbol-table side of call resolution (already done before
-//!    `run_passes` returns); no SSA-state dependency. *TODO: not yet
-//!    wired into the pipeline; should run after t228 so libc-call
-//!    return-type constraints feed back into the solver.*
+//! 5. **`annotate_libc_calls`** (t229) — annotates calls to recognised
+//!    libc functions in [`SsaFunction::libc_call_annotations`]. Depends
+//!    on the symbol-table side of call resolution. *Wired (Wave 26):
+//!    runs once after the outer fixedpoint, with the symbol table as
+//!    the resolver closure.*
 //!
 //! 6. **`VarNamingPass`** (t227) — assigns liveness-aware names
 //!    (`i`/`j`/`k`, `arg<N>`, …) keyed in
 //!    `SsaFunction::var_role_names`. Depends on stable types from t228
 //!    so the role classifier can tell `LoopCounter` from `Argument`.
-//!    *TODO: not yet wired into the pipeline.*
+//!    *Wired (Wave 26): runs after `VariableMergePass`.*
 //!
 //! 7. **`CallingConvFinalizePass`** (t230) — finalises the function's
 //!    public signature in `SsaFunction::finalized_signature` using the
 //!    full caller set's recovered types. Depends on every preceding
-//!    pass (var roles, types, libc info, byref info).
-//!    *TODO: not yet wired into the pipeline.*
+//!    pass (var roles, types, libc info, byref info). *Wired (Wave 26):
+//!    final per-function pass, after `VarNamingPass`.*
 //!
-//! Wave 26 will land the remaining four passes; this file's job until
-//! then is to keep the ordering honest so each new wiring slots in at
-//! the documented position.
+//! Wave 26 landed all four wirings; this file's job from here is to
+//! keep the ordering honest as new passes slot into the documented
+//! sequence.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -1955,18 +1954,30 @@ mod tests {
             ssa.var_types,
         );
 
-        // (4) TODO(t229): `libc_call_annotations` is unconditionally
-        //     populated by `LibcIdiomsPass`, which is not yet wired
-        //     into the pipeline. Once Wave 26 lands the wiring this
-        //     assertion should flip to `!ssa.libc_call_annotations.is_empty()`.
-        let _ = &ssa.libc_call_annotations; // touch the field so the
-        // test breaks loudly if it's renamed / removed.
+        // (4) t229: `annotate_libc_calls` runs at the tail of
+        //     `run_passes`, but only inside the CLI driver — the bare
+        //     `run_passes(&mut ssa)` smoke path used by this test does
+        //     NOT thread a symbol-table resolver in. Touch the field to
+        //     guard against rename / removal; the genuine assertion
+        //     lives in `unlace-output`'s c_printer tests
+        //     (`t229_call_rewrites_*`).
+        let _ = &ssa.libc_call_annotations;
 
-        // (5) TODO(t227): `SsaFunction::var_role_names` is added by
-        //     the t227 patch; reference it here once available.
-        //
-        // (6) TODO(t230): `SsaFunction::finalized_signature` is added
-        //     by the t230 patch; reference it here once available.
+        // (5) t227: `VarNamingPass` always runs and writes into
+        //     `var_role_names`. The synthetic body is too tight to
+        //     classify as a loop, so `var_role_names` may legitimately
+        //     stay empty here; we just touch the field to ensure the
+        //     pass didn't crash.
+        let _ = &ssa.var_role_names;
+
+        // (6) t230: `CallingConvFinalizePass` always populates
+        //     `finalized_signature` (with empty params if no callers
+        //     are supplied to this single-function smoke test).
+        assert!(
+            ssa.finalized_signature.is_some(),
+            "Wave-26/t230: `CallingConvFinalizePass` must populate \
+             `ssa.finalized_signature`"
+        );
     }
 
     #[test]

@@ -19,6 +19,7 @@ pub mod gopclntab;
 pub mod image;
 pub mod intel_hex;
 pub mod java_class;
+pub mod ios_img4;
 pub mod macho;
 pub mod msvc_rtti;
 pub mod objc;
@@ -46,6 +47,7 @@ pub use dwarf::{
 };
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;
+pub use ios_img4::{Img4Container, Img4Error, parse_img4};
 pub use error::LoadError;
 pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};

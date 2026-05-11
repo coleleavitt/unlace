@@ -1328,6 +1328,75 @@ where
     }
 }
 
+/// Maximum forwarder hops we will follow inside a single image.
+///
+/// Forward chains on Windows are typically 1–2 hops (`kernel32 → KernelBase`,
+/// or `KernelBase → ntdll`). The API-set redirects can stack 3–4 deep, so a
+/// fixed bound of `5` covers any realistic chain while keeping the worst-case
+/// walk cheap and protecting us from cycles that slipped past the
+/// already-visited check.
+const FORWARD_CHAIN_MAX_HOPS: usize = 5;
+
+/// Walk a forwarder chain inside a single [`BinaryImage`] up to
+/// [`FORWARD_CHAIN_MAX_HOPS`] levels deep and return the ordered list of
+/// resolved targets as `"target_dll!target_symbol"` strings.
+///
+/// In static analysis we usually cannot see the *target* DLL's export table,
+/// so we model transitive resolution as: the current hop's `target_symbol`
+/// matches another `ForwardedExport.name` in the *same* image, in which case
+/// we treat that record as the next hop and continue. The walk terminates
+/// when either:
+///
+/// 1. No `ForwardedExport.name` in this image matches the current
+///    `target_symbol` (the loader is done — runtime will resolve to a real
+///    function inside the named target DLL), or
+/// 2. We would revisit a source name already used as a hop on this walk
+///    (cycle protection — e.g. `A → B → A`), or
+/// 3. We hit the depth cap (`FORWARD_CHAIN_MAX_HOPS`).
+///
+/// The returned vector always has at least one element (the root's
+/// immediate `target_dll!target_symbol`); single-hop chains are length 1,
+/// two-hop chains are length 2, and so on.
+///
+/// Time complexity: `O(N × forwarded_exports.len())` for `N` hops; we keep
+/// the lookup linear since `forwarded_exports` is typically small (tens of
+/// entries) and the depth cap is a tight constant.
+pub fn build_forward_chain(image: &BinaryImage, root: &ForwardedExport) -> Vec<String> {
+    let mut chain: Vec<String> = Vec::new();
+    // Track source-`name`s we have already used to resolve a hop, so an
+    // entry like `A.name="B", B.name="A"` cycle is caught after both
+    // members have been recorded once.
+    let mut visited: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+
+    let mut current_dll: &str = &root.target_dll;
+    let mut current_sym: &str = &root.target_symbol;
+    chain.push(format!("{current_dll}!{current_sym}"));
+    visited.insert(root.name.as_str());
+
+    for _ in 0..FORWARD_CHAIN_MAX_HOPS {
+        // Cycle: the next hop's *source* name is one we've already used.
+        if visited.contains(current_sym) {
+            break;
+        }
+        // Find the next forwarder in this image whose source name matches
+        // the current target symbol. If none, the runtime would resolve
+        // this in the target DLL — we're done.
+        let Some(next) = image
+            .forwarded_exports
+            .iter()
+            .find(|f| f.name == current_sym)
+        else {
+            break;
+        };
+        visited.insert(next.name.as_str());
+        current_dll = &next.target_dll;
+        current_sym = &next.target_symbol;
+        chain.push(format!("{current_dll}!{current_sym}"));
+    }
+
+    chain
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2692,6 +2761,106 @@ mod tests {
             img.tls_callbacks.is_empty(),
             "PE without IMAGE_DIRECTORY_ENTRY_TLS yields empty tls_callbacks, got {:?}",
             img.tls_callbacks
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // t195: transitive forwarder chain resolution
+    //
+    // `build_forward_chain` walks the in-image `forwarded_exports` set using
+    // a simple model: when one forwarder's `target_symbol` *also* appears as
+    // another forwarder's source `name` in the same image, we treat that as
+    // an additional hop. Termination is bounded by `FORWARD_CHAIN_MAX_HOPS`
+    // and by a visited-set cycle guard.
+    // -----------------------------------------------------------------------
+
+    /// Construct a `BinaryImage` populated only with the fields
+    /// `build_forward_chain` reads (`forwarded_exports`). Every other field
+    /// stays at its empty/zero baseline so the test surface is just the
+    /// chain-walk logic.
+    fn image_with_forwards(forwards: Vec<ForwardedExport>) -> BinaryImage {
+        BinaryImage {
+            arch: ArchId::Unknown(0),
+            endian: Endian::Little,
+            entry: 0,
+            sections: Vec::new(),
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: Vec::new(),
+            string_table: BTreeMap::new(),
+            tls_callbacks: Vec::new(),
+            function_starts: Vec::new(),
+            debug_records: Vec::new(),
+            load_config: None,
+            runtime_functions: Vec::new(),
+            resources: Vec::new(),
+            bound_imports: Vec::new(),
+            delay_imports: Vec::new(),
+            forwarded_exports: forwards,
+            forwarded_resolutions: BTreeMap::new(),
+            rich_header: None,
+            dylibs: Vec::new(),
+            rpaths: Vec::new(),
+            pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: None,
+            go_itabs: BTreeMap::new(),
+            go_types: BTreeMap::new(),
+        }
+    }
+
+    fn fwd(name: &str, target_dll: &str, target_symbol: &str) -> ForwardedExport {
+        ForwardedExport {
+            name: name.to_string(),
+            target_dll: target_dll.to_string(),
+            target_symbol: target_symbol.to_string(),
+            target_ordinal: None,
+        }
+    }
+
+    #[test]
+    fn forward_chain_single_hop_terminates_at_root_target() {
+        // Root forwards `Func1` → `LibB.Func2`. `Func2` is NOT a source name
+        // in this image, so the walk terminates immediately and the chain
+        // contains only the root's resolved target.
+        let root = fwd("Func1", "LibB", "Func2");
+        let img = image_with_forwards(vec![root.clone()]);
+        let chain = build_forward_chain(&img, &root);
+        assert_eq!(chain, vec!["LibB!Func2".to_string()]);
+    }
+
+    #[test]
+    fn forward_chain_two_hop_follows_in_image_redirect() {
+        // Root `Func1 → LibB.Func2`, and `Func2 → LibC.Func3` is also a
+        // forwarder in this image (e.g. an API-set thunk). The walk follows
+        // the second hop and stops because `Func3` has no further entry.
+        let root = fwd("Func1", "LibB", "Func2");
+        let hop2 = fwd("Func2", "LibC", "Func3");
+        let img = image_with_forwards(vec![root.clone(), hop2]);
+        let chain = build_forward_chain(&img, &root);
+        assert_eq!(
+            chain,
+            vec!["LibB!Func2".to_string(), "LibC!Func3".to_string()]
+        );
+    }
+
+    #[test]
+    fn forward_chain_cycle_a_b_a_stops_after_two_entries() {
+        // `A → LibX.B`, `B → LibX.A`. Walking from root `A`:
+        //   step 0: push "LibX!B", mark `A` visited.
+        //   step 1: find `B` in image, push "LibX!A", mark `B` visited.
+        //   step 2: would look up `A`, but `A` is already in the visited
+        //           set → cycle detected → stop.
+        // Resulting chain has exactly two entries, matching the spec.
+        let root = fwd("A", "LibX", "B");
+        let back = fwd("B", "LibX", "A");
+        let img = image_with_forwards(vec![root.clone(), back]);
+        let chain = build_forward_chain(&img, &root);
+        assert_eq!(
+            chain,
+            vec!["LibX!B".to_string(), "LibX!A".to_string()],
+            "cycle A→B→A must record both hops then halt without recursing"
         );
     }
 }

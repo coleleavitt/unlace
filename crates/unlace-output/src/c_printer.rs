@@ -3008,9 +3008,15 @@ fn emit_stack_frame_decls(
     };
     for local in frame.locals.values() {
         let abs = local.offset.unsigned_abs();
+        // t233: append `/* BYREF */` to slots whose address escapes.
+        let byref_marker = if func.byref_locals.contains(&local.offset) {
+            " /* BYREF */"
+        } else {
+            ""
+        };
         if local.size > 8 {
             let name = format!("buf_{}", abs);
-            let _ = writeln!(out, "    char {}[{}];", name, local.size);
+            let _ = writeln!(out, "    char {}[{}]{};", name, local.size, byref_marker);
             emitted.insert(name);
         } else {
             let ty = match local.size {
@@ -3021,7 +3027,7 @@ fn emit_stack_frame_decls(
                 _ => "__int32",
             };
             let name = format!("v_{}", abs);
-            let _ = writeln!(out, "    {} {};", ty, name);
+            let _ = writeln!(out, "    {} {}{};", ty, name, byref_marker);
             emitted.insert(name);
         }
     }
@@ -7740,6 +7746,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         }
     }
@@ -8346,6 +8353,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         };
 
@@ -8905,6 +8913,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         };
 
@@ -9010,6 +9019,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         };
 
@@ -9043,6 +9053,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         };
 
@@ -13096,6 +13107,64 @@ mod tests {
         );
     }
 
+    // ---------------------------------------------------------------------
+    // t233: BYREF annotations on params + stack locals
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn test_t233_byref_param_renders_annotation() {
+        // A parameter whose index is in `func.byref_params` should
+        // render with a trailing `/* BYREF */` comment in the signature.
+        let mut func = make_func("t233_byref_param", vec![HirNode::Return(None)]);
+        func.params = vec![("a".to_string(), PrimitiveType::Int(4))];
+        func.byref_params.insert(0);
+
+        let output = print_c(&func);
+        let sig_line = output
+            .lines()
+            .find(|l| l.contains("t233_byref_param("))
+            .expect("expected to find the function signature line");
+        assert!(
+            sig_line.contains("/* BYREF */"),
+            "expected `/* BYREF */` after the param, got:\n{sig_line}",
+        );
+    }
+
+    #[test]
+    fn test_t233_byref_local_renders_annotation() {
+        // A stack local whose offset is in `func.byref_locals` should
+        // render with a trailing `/* BYREF */` on its declaration.
+        use unlace_ir::ssa::{StackFrame, StackLocal};
+
+        let mut func = make_func("t233_byref_local", vec![HirNode::Return(None)]);
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -8,
+            StackLocal {
+                offset: -8,
+                size: 4,
+                access_widths: vec![4],
+            },
+        );
+        func.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 8,
+            max_pos_offset: 0,
+            min_neg_offset: -8,
+        });
+        func.byref_locals.insert(-8);
+
+        let output = print_c(&func);
+        let decl_line = output
+            .lines()
+            .find(|l| l.contains("v_8"))
+            .expect("expected to find `v_8` declaration line");
+        assert!(
+            decl_line.contains("/* BYREF */"),
+            "expected `/* BYREF */` on the local decl, got:\n{decl_line}",
+        );
+    }
+
     #[test]
     fn test_objc_block_capture_with_int_byref() {
         // t184: a block whose captured varnode is recorded as a __block
@@ -13307,6 +13376,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         };
 
@@ -13339,6 +13409,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         };
 
@@ -13375,6 +13446,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         };
 
@@ -13407,6 +13479,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         };
 
@@ -13439,6 +13512,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         };
 
@@ -13497,6 +13571,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         };
 

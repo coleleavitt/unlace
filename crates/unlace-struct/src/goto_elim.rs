@@ -394,6 +394,7 @@ mod tests {
             byref_params: std::collections::BTreeSet::new(),
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
+            byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
         }
     }

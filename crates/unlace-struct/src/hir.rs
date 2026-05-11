@@ -541,6 +541,11 @@ pub struct HirFunction {
     /// [`Self::params`] / [`Self::return_type`] when emitting the header,
     /// and surfaces `dropped_param_count` as a comment.
     pub finalized_signature: Option<unlace_ir::ssa::FinalizedSignature>,
+    /// Frame-relative offsets of stack locals whose address is taken.
+    /// Propagated from [`unlace_ir::ssa::SsaFunction::byref_info`] at
+    /// structuring time. The C printer appends `/* BYREF */` to each
+    /// stack-local declaration whose offset is in this set (t233).
+    pub byref_locals: std::collections::BTreeSet<i64>,
     /// Recovered stack frame layout (one [`unlace_ir::ssa::StackLocal`]
     /// per distinct RSP/RBP-relative offset). Propagated from
     /// [`unlace_ir::ssa::SsaFunction::stack_frame`] at structuring time.

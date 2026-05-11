@@ -20,6 +20,7 @@ pub mod cpp_stl;
 pub mod cpp_vtable;
 pub mod crypto_idioms;
 pub mod cse;
+pub mod db_recognize;
 pub mod dce;
 pub mod dead_flag_elim;
 pub mod dead_store_elim;

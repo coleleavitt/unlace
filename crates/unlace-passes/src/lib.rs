@@ -1,6 +1,7 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
 pub mod auth_call_resolve;
+pub mod bitfield_idioms;
 pub mod bmi_idioms;
 pub mod byref_detect;
 pub mod call_boundary_copyprop;
@@ -65,6 +66,7 @@ pub mod type_infer;
 pub mod variable_merge;
 
 pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
+pub use bitfield_idioms::BitfieldIdiomPass;
 pub use bmi_idioms::BmiIdiomPass;
 pub use byref_detect::detect_byref;
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;

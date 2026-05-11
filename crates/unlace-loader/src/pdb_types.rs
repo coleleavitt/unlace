@@ -399,6 +399,411 @@ fn ti_to_u32(t: TypeIndex) -> u32 {
     u32::from(t)
 }
 
+// ---------------------------------------------------------------------------
+// Low-level TPI stream walker.
+//
+// Decodes CodeView leaf records directly from a byte slice, without going
+// through the `pdb` crate. Useful when the host has the raw TPI stream
+// data (e.g. extracted from a `.pdb` MSF stream) and just wants the
+// aggregate record shapes for analysis or tooling.
+//
+// Layout of one record (PE/COFF CodeView):
+//   +0  u16  length     // bytes that follow (does NOT include the length
+//                       // field itself); kind is the first two of those.
+//   +2  u16  leaf_kind  // e.g. LF_STRUCTURE
+//   +4  ...             // payload of (length - 2) bytes
+//
+// Numeric leaves: a u16 prefix decides how to read the value. Values
+// < 0x8000 are the value itself; otherwise the prefix encodes the width
+// (LF_CHAR=0x8000, LF_SHORT=0x8001, LF_USHORT=0x8002, LF_LONG=0x8003,
+// LF_ULONG=0x8004, LF_QUADWORD=0x8009, LF_UQUADWORD=0x800A) of the
+// following little-endian integer.
+// ---------------------------------------------------------------------------
+
+/// Errors returned by the raw TPI walker.
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum PdbError {
+    /// Reader hit end-of-stream mid-record.
+    #[error("unexpected end of stream at offset {0}")]
+    UnexpectedEof(usize),
+
+    /// A `length` field encoded a record extending beyond the stream.
+    #[error("record length {len} at offset {at} exceeds remaining stream")]
+    BadLength { at: usize, len: usize },
+
+    /// A numeric leaf used a tag the walker doesn't understand.
+    #[error("unsupported numeric leaf tag {0:#06x}")]
+    UnsupportedNumericLeaf(u16),
+
+    /// A null-terminated string ran past the record's payload boundary.
+    #[error("unterminated string in record at offset {0}")]
+    UnterminatedString(usize),
+}
+
+/// High-level kind of a top-level [`PdbType`] decoded by [`walk_tpi`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PdbTypeKind {
+    /// `LF_STRUCTURE` (0x1505).
+    Structure,
+    /// `LF_CLASS` (0x1504).
+    Class,
+    /// `LF_UNION` (0x1506).
+    Union,
+    /// `LF_ENUM` (0x1507).
+    Enum,
+}
+
+/// One member decoded from an `LF_FIELDLIST` referenced by an aggregate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PdbField {
+    /// Member name (UTF-8; raw PDB bytes are reinterpreted lossily).
+    pub name: String,
+    /// Byte offset from the start of the parent aggregate. Always 0 for
+    /// union members.
+    pub offset: u64,
+    /// Type index (CodeView TI) of the member's type.
+    pub field_type: u32,
+}
+
+/// Top-level aggregate type decoded from a TPI stream by [`walk_tpi`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PdbType {
+    /// Aggregate name as it appears in the leaf.
+    pub name: String,
+    /// Reported size in bytes from the leaf's numeric leaf field. For
+    /// `Enum` this is 0 (the leaf has no size; the underlying type
+    /// supplies width).
+    pub size: u32,
+    /// Discriminant identifying which CodeView leaf produced this record.
+    pub kind: PdbTypeKind,
+    /// Members extracted from the aggregate's `LF_FIELDLIST`. Empty for
+    /// forward references or aggregates pointing at a missing field list.
+    pub fields: Vec<PdbField>,
+}
+
+// CodeView leaf kinds we recognize.
+const LF_CLASS: u16 = 0x1504;
+const LF_STRUCTURE: u16 = 0x1505;
+const LF_UNION: u16 = 0x1506;
+const LF_ENUM: u16 = 0x1507;
+const LF_FIELDLIST: u16 = 0x1203;
+const LF_MEMBER: u16 = 0x150D;
+
+// Numeric-leaf tag space.
+const LF_NUMERIC_CHAR: u16 = 0x8000;
+const LF_NUMERIC_SHORT: u16 = 0x8001;
+const LF_NUMERIC_USHORT: u16 = 0x8002;
+const LF_NUMERIC_LONG: u16 = 0x8003;
+const LF_NUMERIC_ULONG: u16 = 0x8004;
+const LF_NUMERIC_QUAD: u16 = 0x8009;
+const LF_NUMERIC_UQUAD: u16 = 0x800A;
+
+/// Walk a raw TPI stream of CodeView leaf records and return every
+/// `LF_STRUCTURE` / `LF_CLASS` / `LF_UNION` / `LF_ENUM` aggregate, with
+/// fields resolved via the referenced `LF_FIELDLIST`.
+///
+/// The input is interpreted as a contiguous sequence of records starting at
+/// offset 0; pass the bytes *after* the TPI header. Unknown leaf kinds are
+/// skipped over using their `length` prefix.
+pub fn walk_tpi(stream_data: &[u8]) -> Result<Vec<PdbType>, PdbError> {
+    // First pass: collect every record's bounds + kind. Under the
+    // CodeView convention the first record is TI 0x1000 and each
+    // subsequent record gets the next TI; we use that for field-list
+    // resolution.
+    let mut records: Vec<RawRecord> = Vec::new();
+    let mut cursor = 0usize;
+    while cursor < stream_data.len() {
+        let rec = read_record(stream_data, cursor)?;
+        cursor = rec.next;
+        records.push(rec);
+    }
+
+    let mut ti_to_idx: BTreeMap<u32, usize> = BTreeMap::new();
+    for (i, _) in records.iter().enumerate() {
+        ti_to_idx.insert(0x1000 + i as u32, i);
+    }
+
+    // Second pass: decode aggregates.
+    let mut out = Vec::new();
+    for rec in &records {
+        let payload = &stream_data[rec.payload_start..rec.payload_end];
+        match rec.kind {
+            LF_STRUCTURE | LF_CLASS => {
+                let agg = decode_struct_or_class(payload, rec.payload_start)?;
+                let fields = resolve_fields(agg.field_list_ti, &records, &ti_to_idx, stream_data)?;
+                out.push(PdbType {
+                    name: agg.name,
+                    size: agg.size,
+                    kind: if rec.kind == LF_CLASS {
+                        PdbTypeKind::Class
+                    } else {
+                        PdbTypeKind::Structure
+                    },
+                    fields,
+                });
+            }
+            LF_UNION => {
+                let u = decode_union(payload, rec.payload_start)?;
+                let fields = resolve_fields(u.field_list_ti, &records, &ti_to_idx, stream_data)?;
+                out.push(PdbType {
+                    name: u.name,
+                    size: u.size,
+                    kind: PdbTypeKind::Union,
+                    fields,
+                });
+            }
+            LF_ENUM => {
+                let e = decode_enum(payload, rec.payload_start)?;
+                let fields = resolve_fields(e.field_list_ti, &records, &ti_to_idx, stream_data)?;
+                out.push(PdbType {
+                    name: e.name,
+                    size: 0,
+                    kind: PdbTypeKind::Enum,
+                    fields,
+                });
+            }
+            _ => {}
+        }
+    }
+    Ok(out)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RawRecord {
+    kind: u16,
+    payload_start: usize,
+    payload_end: usize,
+    next: usize,
+}
+
+fn read_record(buf: &[u8], at: usize) -> Result<RawRecord, PdbError> {
+    let len = read_u16(buf, at)? as usize;
+    // length covers kind + payload, so total record size = 2 + len.
+    let total_end = at
+        .checked_add(2 + len)
+        .ok_or(PdbError::BadLength { at, len })?;
+    if total_end > buf.len() {
+        return Err(PdbError::BadLength { at, len });
+    }
+    let kind = read_u16(buf, at + 2)?;
+    Ok(RawRecord {
+        kind,
+        payload_start: at + 4,
+        payload_end: total_end,
+        next: total_end,
+    })
+}
+
+struct AggregateHeader {
+    size: u32,
+    field_list_ti: u32,
+    name: String,
+}
+
+fn decode_struct_or_class(payload: &[u8], abs_off: usize) -> Result<AggregateHeader, PdbError> {
+    // count u16, property u16, field_list u32, derived u32, vshape u32,
+    // numeric size, name.
+    let _count = read_u16(payload, 0)?;
+    let _property = read_u16(payload, 2)?;
+    let field_list_ti = read_u32(payload, 4)?;
+    let _derived = read_u32(payload, 8)?;
+    let _vshape = read_u32(payload, 12)?;
+    let (size, after_size) = read_numeric_leaf(payload, 16)?;
+    let name = read_cstr(payload, after_size, abs_off)?;
+    Ok(AggregateHeader {
+        size: size as u32,
+        field_list_ti,
+        name,
+    })
+}
+
+fn decode_union(payload: &[u8], abs_off: usize) -> Result<AggregateHeader, PdbError> {
+    // count u16, property u16, field_list u32, numeric size, name.
+    let _count = read_u16(payload, 0)?;
+    let _property = read_u16(payload, 2)?;
+    let field_list_ti = read_u32(payload, 4)?;
+    let (size, after_size) = read_numeric_leaf(payload, 8)?;
+    let name = read_cstr(payload, after_size, abs_off)?;
+    Ok(AggregateHeader {
+        size: size as u32,
+        field_list_ti,
+        name,
+    })
+}
+
+struct EnumHeader {
+    field_list_ti: u32,
+    name: String,
+}
+
+fn decode_enum(payload: &[u8], abs_off: usize) -> Result<EnumHeader, PdbError> {
+    // count u16, property u16, underlying_type u32, field_list u32, name.
+    let _count = read_u16(payload, 0)?;
+    let _property = read_u16(payload, 2)?;
+    let _underlying = read_u32(payload, 4)?;
+    let field_list_ti = read_u32(payload, 8)?;
+    let name = read_cstr(payload, 12, abs_off)?;
+    Ok(EnumHeader {
+        field_list_ti,
+        name,
+    })
+}
+
+fn resolve_fields(
+    field_list_ti: u32,
+    records: &[RawRecord],
+    ti_to_idx: &BTreeMap<u32, usize>,
+    stream: &[u8],
+) -> Result<Vec<PdbField>, PdbError> {
+    // 0 is the "no field list" sentinel; some forward refs use this.
+    if field_list_ti == 0 {
+        return Ok(Vec::new());
+    }
+    let Some(&idx) = ti_to_idx.get(&field_list_ti) else {
+        return Ok(Vec::new());
+    };
+    let rec = &records[idx];
+    if rec.kind != LF_FIELDLIST {
+        return Ok(Vec::new());
+    }
+    let payload = &stream[rec.payload_start..rec.payload_end];
+    decode_field_list(payload, rec.payload_start)
+}
+
+fn decode_field_list(payload: &[u8], abs_off: usize) -> Result<Vec<PdbField>, PdbError> {
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < payload.len() {
+        // Skip pad bytes (0xF0 | n where n is bytes-to-skip including
+        // this one).
+        let b = payload[i];
+        if b >= 0xF0 {
+            let pad = (b & 0x0F) as usize;
+            if pad == 0 || i + pad > payload.len() {
+                break;
+            }
+            i += pad;
+            continue;
+        }
+        // Each subrecord starts with a u16 leaf kind (no length prefix).
+        if i + 2 > payload.len() {
+            return Err(PdbError::UnexpectedEof(abs_off + i));
+        }
+        let leaf = read_u16(payload, i)?;
+        i += 2;
+        match leaf {
+            LF_MEMBER => {
+                // attribute u16, field_type u32 (TI), numeric offset, name.
+                if i + 6 > payload.len() {
+                    return Err(PdbError::UnexpectedEof(abs_off + i));
+                }
+                let _attribute = read_u16(payload, i)?;
+                let field_type = read_u32(payload, i + 2)?;
+                let (offset, after_off) = read_numeric_leaf(payload, i + 6)?;
+                let name = read_cstr(payload, after_off, abs_off)?;
+                let next = name_end(payload, after_off);
+                out.push(PdbField {
+                    name,
+                    offset: offset as u64,
+                    field_type,
+                });
+                i = next;
+            }
+            _ => {
+                // We don't model other subrecord kinds here; without a
+                // length prefix, we can't safely skip. Stop parsing this
+                // field list rather than mis-aligning.
+                break;
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn read_u16(buf: &[u8], at: usize) -> Result<u16, PdbError> {
+    if at + 2 > buf.len() {
+        return Err(PdbError::UnexpectedEof(at));
+    }
+    Ok(u16::from_le_bytes([buf[at], buf[at + 1]]))
+}
+
+fn read_u32(buf: &[u8], at: usize) -> Result<u32, PdbError> {
+    if at + 4 > buf.len() {
+        return Err(PdbError::UnexpectedEof(at));
+    }
+    Ok(u32::from_le_bytes([
+        buf[at],
+        buf[at + 1],
+        buf[at + 2],
+        buf[at + 3],
+    ]))
+}
+
+/// Decode a CodeView "numeric leaf" at `at`. Returns `(value_as_i64, next_offset)`.
+fn read_numeric_leaf(buf: &[u8], at: usize) -> Result<(i64, usize), PdbError> {
+    let tag = read_u16(buf, at)?;
+    if tag < 0x8000 {
+        // The tag IS the value (u16, zero-extended).
+        return Ok((tag as i64, at + 2));
+    }
+    let body = at + 2;
+    let (val, end) = match tag {
+        LF_NUMERIC_CHAR => {
+            if body + 1 > buf.len() {
+                return Err(PdbError::UnexpectedEof(body));
+            }
+            ((buf[body] as i8) as i64, body + 1)
+        }
+        LF_NUMERIC_SHORT => {
+            let v = read_u16(buf, body)? as i16;
+            (v as i64, body + 2)
+        }
+        LF_NUMERIC_USHORT => {
+            let v = read_u16(buf, body)?;
+            (v as i64, body + 2)
+        }
+        LF_NUMERIC_LONG => {
+            let v = read_u32(buf, body)? as i32;
+            (v as i64, body + 4)
+        }
+        LF_NUMERIC_ULONG => {
+            let v = read_u32(buf, body)?;
+            (v as i64, body + 4)
+        }
+        LF_NUMERIC_QUAD | LF_NUMERIC_UQUAD => {
+            if body + 8 > buf.len() {
+                return Err(PdbError::UnexpectedEof(body));
+            }
+            let mut bs = [0u8; 8];
+            bs.copy_from_slice(&buf[body..body + 8]);
+            (i64::from_le_bytes(bs), body + 8)
+        }
+        other => return Err(PdbError::UnsupportedNumericLeaf(other)),
+    };
+    Ok((val, end))
+}
+
+/// Read a NUL-terminated UTF-8(-ish) string starting at `at` within `buf`.
+fn read_cstr(buf: &[u8], at: usize, abs_off: usize) -> Result<String, PdbError> {
+    if at > buf.len() {
+        return Err(PdbError::UnexpectedEof(abs_off + at));
+    }
+    let tail = &buf[at..];
+    let nul = tail
+        .iter()
+        .position(|&b| b == 0)
+        .ok_or(PdbError::UnterminatedString(abs_off + at))?;
+    Ok(String::from_utf8_lossy(&tail[..nul]).into_owned())
+}
+
+/// Offset of the byte *after* the NUL terminator of the string starting at `at`.
+fn name_end(buf: &[u8], at: usize) -> usize {
+    match buf[at..].iter().position(|&b| b == 0) {
+        Some(p) => at + p + 1,
+        None => buf.len(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -560,6 +965,167 @@ mod tests {
             } => assert_eq!(**element, Type::int(4)),
             other => panic!("expected sized array, got {other:?}"),
         }
+    }
+
+    // -------------------------------------------------------------------
+    // Raw TPI walker tests — synthesize byte streams matching the on-disk
+    // CodeView leaf format and assert that `walk_tpi` produces the
+    // expected aggregate / member shapes.
+    // -------------------------------------------------------------------
+
+    /// Build one record: emits the `length` u16 (= 2 + payload.len()),
+    /// the leaf kind u16, then the payload.
+    fn record(kind: u16, payload: &[u8]) -> Vec<u8> {
+        let len = (2 + payload.len()) as u16;
+        let mut v = Vec::with_capacity(2 + 2 + payload.len());
+        v.extend_from_slice(&len.to_le_bytes());
+        v.extend_from_slice(&kind.to_le_bytes());
+        v.extend_from_slice(payload);
+        v
+    }
+
+    /// Build an LF_MEMBER subrecord (leaf kind included, no outer length
+    /// prefix — field-list subrecords don't have one).
+    fn member_subrecord(name: &str, offset: u16, field_type: u32) -> Vec<u8> {
+        let mut p = Vec::new();
+        p.extend_from_slice(&LF_MEMBER.to_le_bytes());
+        p.extend_from_slice(&0u16.to_le_bytes()); // attribute
+        p.extend_from_slice(&field_type.to_le_bytes());
+        // numeric leaf: small offset fits in u16 tag space (< 0x8000).
+        p.extend_from_slice(&offset.to_le_bytes());
+        p.extend_from_slice(name.as_bytes());
+        p.push(0);
+        p
+    }
+
+    fn struct_payload(field_list_ti: u32, size: u16, name: &str) -> Vec<u8> {
+        let mut p = Vec::new();
+        p.extend_from_slice(&0u16.to_le_bytes()); // count
+        p.extend_from_slice(&0u16.to_le_bytes()); // property
+        p.extend_from_slice(&field_list_ti.to_le_bytes());
+        p.extend_from_slice(&0u32.to_le_bytes()); // derived
+        p.extend_from_slice(&0u32.to_le_bytes()); // vshape
+        p.extend_from_slice(&size.to_le_bytes()); // numeric leaf (<0x8000)
+        p.extend_from_slice(name.as_bytes());
+        p.push(0);
+        p
+    }
+
+    fn union_payload(field_list_ti: u32, size: u16, name: &str) -> Vec<u8> {
+        let mut p = Vec::new();
+        p.extend_from_slice(&0u16.to_le_bytes()); // count
+        p.extend_from_slice(&0u16.to_le_bytes()); // property
+        p.extend_from_slice(&field_list_ti.to_le_bytes());
+        p.extend_from_slice(&size.to_le_bytes()); // numeric leaf
+        p.extend_from_slice(name.as_bytes());
+        p.push(0);
+        p
+    }
+
+    fn enum_payload(underlying_ti: u32, field_list_ti: u32, name: &str) -> Vec<u8> {
+        let mut p = Vec::new();
+        p.extend_from_slice(&0u16.to_le_bytes()); // count
+        p.extend_from_slice(&0u16.to_le_bytes()); // property
+        p.extend_from_slice(&underlying_ti.to_le_bytes());
+        p.extend_from_slice(&field_list_ti.to_le_bytes());
+        p.extend_from_slice(name.as_bytes());
+        p.push(0);
+        p
+    }
+
+    #[test]
+    fn walk_tpi_decodes_struct() {
+        // TI 0x1000: LF_FIELDLIST with two LF_MEMBER subrecords.
+        // TI 0x1001: LF_STRUCTURE referencing 0x1000.
+        let fl_payload = {
+            let mut p = Vec::new();
+            p.extend_from_slice(&member_subrecord("x", 0, 0x0074)); // T_INT4
+            p.extend_from_slice(&member_subrecord("y", 4, 0x0074));
+            p
+        };
+        let mut stream = record(LF_FIELDLIST, &fl_payload);
+        stream.extend(record(LF_STRUCTURE, &struct_payload(0x1000, 8, "Point")));
+
+        let types = walk_tpi(&stream).expect("walk succeeds");
+        assert_eq!(types.len(), 1);
+        let t = &types[0];
+        assert_eq!(t.name, "Point");
+        assert_eq!(t.size, 8);
+        assert_eq!(t.kind, PdbTypeKind::Structure);
+        assert_eq!(t.fields.len(), 2);
+        assert_eq!(t.fields[0].name, "x");
+        assert_eq!(t.fields[0].offset, 0);
+        assert_eq!(t.fields[0].field_type, 0x0074);
+        assert_eq!(t.fields[1].name, "y");
+        assert_eq!(t.fields[1].offset, 4);
+    }
+
+    #[test]
+    fn walk_tpi_decodes_class() {
+        // Same shape as struct test but tagged LF_CLASS.
+        let fl_payload = {
+            let mut p = Vec::new();
+            p.extend_from_slice(&member_subrecord("vptr", 0, 0x0603)); // T_PVOID
+            p.extend_from_slice(&member_subrecord("count", 8, 0x0074));
+            p
+        };
+        let mut stream = record(LF_FIELDLIST, &fl_payload);
+        stream.extend(record(LF_CLASS, &struct_payload(0x1000, 16, "Widget")));
+
+        let types = walk_tpi(&stream).expect("walk succeeds");
+        assert_eq!(types.len(), 1);
+        let t = &types[0];
+        assert_eq!(t.name, "Widget");
+        assert_eq!(t.size, 16);
+        assert_eq!(t.kind, PdbTypeKind::Class);
+        assert_eq!(t.fields.len(), 2);
+        assert_eq!(t.fields[0].name, "vptr");
+        assert_eq!(t.fields[1].name, "count");
+        assert_eq!(t.fields[1].offset, 8);
+    }
+
+    #[test]
+    fn walk_tpi_decodes_union() {
+        let fl_payload = {
+            let mut p = Vec::new();
+            p.extend_from_slice(&member_subrecord("i", 0, 0x0074));
+            p.extend_from_slice(&member_subrecord("f", 0, 0x0040)); // T_REAL32
+            p
+        };
+        let mut stream = record(LF_FIELDLIST, &fl_payload);
+        stream.extend(record(LF_UNION, &union_payload(0x1000, 4, "Variant")));
+
+        let types = walk_tpi(&stream).expect("walk succeeds");
+        assert_eq!(types.len(), 1);
+        let t = &types[0];
+        assert_eq!(t.name, "Variant");
+        assert_eq!(t.size, 4);
+        assert_eq!(t.kind, PdbTypeKind::Union);
+        assert_eq!(t.fields.len(), 2);
+        assert_eq!(t.fields[0].name, "i");
+        assert_eq!(t.fields[0].offset, 0);
+        assert_eq!(t.fields[1].name, "f");
+        assert_eq!(t.fields[1].offset, 0);
+        assert_eq!(t.fields[1].field_type, 0x0040);
+    }
+
+    #[test]
+    fn walk_tpi_decodes_enum() {
+        // LF_FIELDLIST with no recognized subrecords (we don't model
+        // LF_ENUMERATE here) — walker should still produce the enum with
+        // empty fields. We pass an empty field list to exercise that
+        // path while still giving the enum's `field_list_ti` a valid
+        // target.
+        let mut stream = record(LF_FIELDLIST, &[]);
+        stream.extend(record(LF_ENUM, &enum_payload(0x0074, 0x1000, "Color")));
+
+        let types = walk_tpi(&stream).expect("walk succeeds");
+        assert_eq!(types.len(), 1);
+        let t = &types[0];
+        assert_eq!(t.name, "Color");
+        assert_eq!(t.kind, PdbTypeKind::Enum);
+        assert_eq!(t.size, 0);
+        assert!(t.fields.is_empty());
     }
 
     #[test]

@@ -14,6 +14,7 @@ pub mod goto_to_continue;
 pub mod hir;
 pub mod if_to_switch;
 pub mod irreducible;
+pub mod loop_normalize;
 pub mod label_cleanup;
 pub mod label_hoist;
 pub mod node_split;
@@ -42,6 +43,7 @@ pub use if_to_switch::if_chain_to_switch;
 pub use irreducible::{IrreducibleRegion, detect_irreducible_regions};
 pub use label_cleanup::cleanup_unreachable_labels;
 pub use label_hoist::hoist_cross_branch_labels;
+pub use loop_normalize::normalize_dowhile_to_while;
 pub use node_split::split_irreducible_entries;
 pub use region_structurer::{Region, count_gotos, regions_to_hir, structure_regions};
 pub use return_merge::return_merge;
@@ -57,6 +59,6 @@ pub use switch_recovery::{
     classify_indirect_branch, find_default_target, read_jump_table, recover_switches,
     refine_switches_with_tables, validate_table_base,
 };
-pub use tail_duplication::tail_duplicate_small_blocks;
+pub use tail_duplication::{tail_duplicate_aggressive, tail_duplicate_small_blocks};
 pub use ternary_recovery::ternary_recovery;
 pub use while_to_for::{recover_guarded_whiles, while_to_for};

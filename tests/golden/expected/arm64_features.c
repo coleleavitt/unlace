@@ -23,9 +23,9 @@ void __fastcall csel_test(__int64 a1) {
     _Bool cond = v13 == 0LL; // reg?
     v16 = LOBYTE(v13 < 0LL); v9 = v16;
     if (v16 ^ __OFSUB__(v1, v2)) { cond = v1; } else { cond = v2; }
-    __csinv__(v16 ^ __OFSUB__(v1, v2), v1, v2);
+    __csinv__(v16 ^ __OFSUB__(v1, v2), v1, v2, 2);
     /* COPY */; /* BOOL_NEGATE */;
-    __csneg__(!cond, v1, v2);
+    __csneg__(!cond, v1, v2, 0xb);
     if (cond) {
     } else {
         /* INT_ADD */;

@@ -10,7 +10,7 @@ use std::fmt;
 
 use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaVarnode};
 use unlace_ir::types::Type;
-use unlace_ir::{IrInsn, Varnode};
+use unlace_ir::{IrInsn, IrOp, Varnode};
 
 use crate::switch_recovery::IndirectBranchKind;
 
@@ -234,6 +234,43 @@ pub enum HirNode {
         else_insn: IrInsn,
         /// Output varnode both branches write to.
         output: Varnode,
+    },
+
+    /// An AArch64 CSEL ternary recovered from a CMP/SUBS+CSEL pair.
+    ///
+    /// The lifter emits CSEL as
+    /// `Callother(CALLOTHER_AARCH64_CSEL, cond, true_val, false_val) → dst`
+    /// preceded by a CMP/SUBS that wrote NZCV. The structurer's
+    /// `fold_csel_ternary` pass (t180) collapses the pair into this node,
+    /// which the C printer renders as
+    ///
+    /// ```text
+    /// dst = (cmp_lhs <cmp_op> cmp_rhs) ? true_val : false_val;
+    /// ```
+    ///
+    /// `cmp_op` is one of the `Int*` comparison opcodes derived from the
+    /// AArch64 condition code (EQ→IntEqual, NE→IntNotequal, GE→IntSlessequal
+    /// with operands swapped, LT→IntSless, etc.). `cmp_lhs`/`cmp_rhs` are
+    /// the two operands of the preceding `IntSub` (the IR shape that
+    /// `lift_cmp`/`lift_subs` emit). Unlike [`HirNode::GuardedTernary`],
+    /// which carries an opaque ARM A8.3 cond_code, this node materializes
+    /// the comparison explicitly so downstream type-inference / value
+    /// tracking can reason about the predicate.
+    CselTernary {
+        /// Comparison opcode (e.g. `IrOp::IntEqual`, `IrOp::IntSless`).
+        cmp_op: IrOp,
+        /// Left-hand side of the comparison (the CMP/SUBS Rn).
+        cmp_lhs: Varnode,
+        /// Right-hand side of the comparison (the CMP/SUBS Rm or immediate).
+        cmp_rhs: Varnode,
+        /// Value taken when the predicate is true (CSEL Rn).
+        true_val: Varnode,
+        /// Value taken when the predicate is false (CSEL Rm).
+        false_val: Varnode,
+        /// Destination register (CSEL Rd).
+        output: Varnode,
+        /// Machine address of the CSEL instruction (for ordering / debug).
+        addr: u64,
     },
 
     /// One or more raw assembly lines that the lifter could not translate

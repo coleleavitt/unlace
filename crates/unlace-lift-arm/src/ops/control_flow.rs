@@ -608,6 +608,12 @@ pub fn lift_csel(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, tag: u64) {
             return;
         }
     };
+    // Capstone returns `Arm64CC` here; we want the raw u8 (1..=14) so the
+    // structurer can pick the right Int* comparison opcode without
+    // re-doing the cond-varnode dataflow analysis. `cc` is non-None
+    // because `build_condition` above already short-circuited the None
+    // branch via `emit_unimplemented`.
+    let cc_u8 = cc.map(|c| c as u8).unwrap_or(0);
     let rn = operand_to_varnode(ctx, &ops[1].0);
     let rm = operand_to_varnode(ctx, &ops[2].0);
     let dst = match ops.first() {
@@ -622,7 +628,13 @@ pub fn lift_csel(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, tag: u64) {
         (Some(dst), Some(rn), Some(rm)) => ctx.emit(IrInsn::with_output(
             IrOp::Callother,
             dst,
-            smallvec![Varnode::constant(tag, 8), cond, rn, rm],
+            smallvec![
+                Varnode::constant(tag, 8),
+                cond,
+                rn,
+                rm,
+                Varnode::constant(cc_u8 as u64, 1),
+            ],
             ctx.addr,
         )),
         _ => ctx.emit_unimplemented(),

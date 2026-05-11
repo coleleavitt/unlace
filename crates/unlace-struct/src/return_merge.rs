@@ -74,10 +74,19 @@ fn collect_label_returns_inner(nodes: &[HirNode], map: &mut BTreeMap<LabelId, Op
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 collect_label_returns_inner(try_body, map);
-                collect_label_returns_inner(catch_body, map);
+                for (_ty, body) in catch_arms {
+                    collect_label_returns_inner(body, map);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_label_returns_inner(try_body, map);
+                collect_label_returns_inner(finally_body, map);
             }
             _ => {}
         }
@@ -139,10 +148,19 @@ fn replace_rax_assign_goto_with_return(
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 changed |= replace_rax_assign_goto_with_return(try_body, label_returns);
-                changed |= replace_rax_assign_goto_with_return(catch_body, label_returns);
+                for (_ty, body) in catch_arms {
+                    changed |= replace_rax_assign_goto_with_return(body, label_returns);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                changed |= replace_rax_assign_goto_with_return(try_body, label_returns);
+                changed |= replace_rax_assign_goto_with_return(finally_body, label_returns);
             }
             _ => {}
         }
@@ -213,10 +231,19 @@ fn replace_goto_with_return(
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 changed |= replace_goto_with_return(try_body, label_returns);
-                changed |= replace_goto_with_return(catch_body, label_returns);
+                for (_ty, body) in catch_arms {
+                    changed |= replace_goto_with_return(body, label_returns);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                changed |= replace_goto_with_return(try_body, label_returns);
+                changed |= replace_goto_with_return(finally_body, label_returns);
             }
             _ => {}
         }
@@ -269,10 +296,19 @@ fn collect_remaining_gotos(nodes: &[HirNode], used: &mut std::collections::BTree
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 collect_remaining_gotos(try_body, used);
-                collect_remaining_gotos(catch_body, used);
+                for (_ty, body) in catch_arms {
+                    collect_remaining_gotos(body, used);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_remaining_gotos(try_body, used);
+                collect_remaining_gotos(finally_body, used);
             }
             _ => {}
         }
@@ -329,10 +365,19 @@ fn strip_label_return_pairs(
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 strip_label_return_pairs(try_body, label_returns, still_used);
-                strip_label_return_pairs(catch_body, label_returns, still_used);
+                for (_ty, body) in catch_arms {
+                    strip_label_return_pairs(body, label_returns, still_used);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                strip_label_return_pairs(try_body, label_returns, still_used);
+                strip_label_return_pairs(finally_body, label_returns, still_used);
             }
             _ => {}
         }

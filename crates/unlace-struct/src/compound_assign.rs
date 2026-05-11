@@ -94,10 +94,21 @@ fn recover_node(node: HirNode) -> HirNode {
 
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => HirNode::TryCatch {
             try_body: recover_compound(try_body),
-            catch_body: recover_compound(catch_body),
+            catch_arms: catch_arms
+                .into_iter()
+                .map(|(ty, body)| (ty, recover_compound(body)))
+                .collect(),
+        },
+
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => HirNode::TryFinally {
+            try_body: recover_compound(try_body),
+            finally_body: recover_compound(finally_body),
         },
 
         other => other,

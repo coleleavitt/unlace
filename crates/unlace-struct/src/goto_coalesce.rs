@@ -89,10 +89,19 @@ fn collect_aliases(nodes: &[HirNode], aliases: &mut BTreeMap<LabelId, LabelId>) 
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 collect_aliases(try_body, aliases);
-                collect_aliases(catch_body, aliases);
+                for (_ty, body) in catch_arms {
+                    collect_aliases(body, aliases);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_aliases(try_body, aliases);
+                collect_aliases(finally_body, aliases);
             }
             _ => {}
         }
@@ -160,10 +169,19 @@ fn rewrite_gotos(nodes: &mut [HirNode], aliases: &BTreeMap<LabelId, LabelId>) {
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 rewrite_gotos(try_body, aliases);
-                rewrite_gotos(catch_body, aliases);
+                for (_ty, body) in catch_arms {
+                    rewrite_gotos(body, aliases);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                rewrite_gotos(try_body, aliases);
+                rewrite_gotos(finally_body, aliases);
             }
             _ => {}
         }

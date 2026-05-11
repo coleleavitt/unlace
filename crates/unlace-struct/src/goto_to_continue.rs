@@ -65,10 +65,19 @@ fn rewrite_children(node: &mut HirNode) {
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => {
             rewrite_scope(try_body);
-            rewrite_scope(catch_body);
+            for (_ty, body) in catch_arms {
+                rewrite_scope(body);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            rewrite_scope(try_body);
+            rewrite_scope(finally_body);
         }
         _ => {}
     }
@@ -99,10 +108,19 @@ fn replace_gotos_in_loop_body(nodes: &mut [HirNode], target: LabelId) {
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 replace_gotos_in_loop_body(try_body, target);
-                replace_gotos_in_loop_body(catch_body, target);
+                for (_ty, body) in catch_arms {
+                    replace_gotos_in_loop_body(body, target);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                replace_gotos_in_loop_body(try_body, target);
+                replace_gotos_in_loop_body(finally_body, target);
             }
             HirNode::While { .. } | HirNode::DoWhile { .. } | HirNode::For { .. } => {}
             _ => {}

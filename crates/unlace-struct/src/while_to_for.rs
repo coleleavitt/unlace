@@ -81,11 +81,21 @@ fn recover_guarded_whiles_in_node(node: &mut HirNode, budget: &mut usize) {
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
             ..
         } => {
             recover_guarded_whiles_in_scope(try_body, budget);
-            recover_guarded_whiles_in_scope(catch_body, budget);
+            for (_ty, body) in catch_arms {
+                recover_guarded_whiles_in_scope(body, budget);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+            ..
+        } => {
+            recover_guarded_whiles_in_scope(try_body, budget);
+            recover_guarded_whiles_in_scope(finally_body, budget);
         }
         _ => {}
     }
@@ -119,9 +129,20 @@ fn count_child_nodes(node: &HirNode) -> usize {
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
             ..
-        } => count_nodes(try_body) + count_nodes(catch_body),
+        } => {
+            count_nodes(try_body)
+                + catch_arms
+                    .iter()
+                    .map(|(_, body)| count_nodes(body))
+                    .sum::<usize>()
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+            ..
+        } => count_nodes(try_body) + count_nodes(finally_body),
         _ => 0,
     }
 }
@@ -168,9 +189,20 @@ fn count_child_nodes_matching(node: &HirNode, f: fn(&[HirNode]) -> usize) -> usi
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
             ..
-        } => f(try_body) + f(catch_body),
+        } => {
+            f(try_body)
+                + catch_arms
+                    .iter()
+                    .map(|(_, body)| f(body))
+                    .sum::<usize>()
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+            ..
+        } => f(try_body) + f(finally_body),
         _ => 0,
     }
 }
@@ -240,10 +272,19 @@ fn promote_children(
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => {
             promote_scope(try_body, defs, fallback_budget);
-            promote_scope(catch_body, defs, fallback_budget);
+            for (_ty, body) in catch_arms {
+                promote_scope(body, defs, fallback_budget);
+            }
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            promote_scope(try_body, defs, fallback_budget);
+            promote_scope(finally_body, defs, fallback_budget);
         }
         _ => {}
     }
@@ -291,10 +332,19 @@ fn collect_defs_inner(nodes: &[HirNode], defs: &mut BTreeMap<Varnode, IrInsn>) {
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 collect_defs_inner(try_body, defs);
-                collect_defs_inner(catch_body, defs);
+                for (_ty, body) in catch_arms {
+                    collect_defs_inner(body, defs);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_defs_inner(try_body, defs);
+                collect_defs_inner(finally_body, defs);
             }
             _ => {}
         }
@@ -441,8 +491,17 @@ fn contains_label_or_goto(nodes: &[HirNode]) -> bool {
         }
         HirNode::TryCatch {
             try_body,
-            catch_body,
-        } => contains_label_or_goto(try_body) || contains_label_or_goto(catch_body),
+            catch_arms,
+        } => {
+            contains_label_or_goto(try_body)
+                || catch_arms
+                    .iter()
+                    .any(|(_, body)| contains_label_or_goto(body))
+        }
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => contains_label_or_goto(try_body) || contains_label_or_goto(finally_body),
         _ => false,
     })
 }

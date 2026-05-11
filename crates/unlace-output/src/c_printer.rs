@@ -2150,7 +2150,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
 
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 ctx.collect_depth += 1;
                 let try_scope = ctx.next_scope_id;
@@ -2158,10 +2158,29 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.current_scope_path.push(try_scope);
                 collect_varnodes(try_body, ctx);
                 ctx.current_scope_path.pop();
-                let catch_scope = ctx.next_scope_id;
+                for (_ty, body) in catch_arms {
+                    let catch_scope = ctx.next_scope_id;
+                    ctx.next_scope_id += 1;
+                    ctx.current_scope_path.push(catch_scope);
+                    collect_varnodes(body, ctx);
+                    ctx.current_scope_path.pop();
+                }
+                ctx.collect_depth -= 1;
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                ctx.collect_depth += 1;
+                let try_scope = ctx.next_scope_id;
                 ctx.next_scope_id += 1;
-                ctx.current_scope_path.push(catch_scope);
-                collect_varnodes(catch_body, ctx);
+                ctx.current_scope_path.push(try_scope);
+                collect_varnodes(try_body, ctx);
+                ctx.current_scope_path.pop();
+                let finally_scope = ctx.next_scope_id;
+                ctx.next_scope_id += 1;
+                ctx.current_scope_path.push(finally_scope);
+                collect_varnodes(finally_body, ctx);
                 ctx.current_scope_path.pop();
                 ctx.collect_depth -= 1;
             }
@@ -2773,10 +2792,19 @@ fn compute_loop_counter_names(nodes: &[HirNode], depth: usize, ctx: &mut PrintCt
             HirNode::Block(children) => compute_loop_counter_names(children, depth, ctx),
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 compute_loop_counter_names(try_body, depth, ctx);
-                compute_loop_counter_names(catch_body, depth, ctx);
+                for (_ty, body) in catch_arms {
+                    compute_loop_counter_names(body, depth, ctx);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                compute_loop_counter_names(try_body, depth, ctx);
+                compute_loop_counter_names(finally_body, depth, ctx);
             }
             _ => {}
         }
@@ -2977,10 +3005,19 @@ fn walk_collect_roles(nodes: &[HirNode], ctx: &PrintCtx, roles: &mut BTreeMap<Va
             }
             HirNode::TryCatch {
                 try_body,
-                catch_body,
+                catch_arms,
             } => {
                 walk_collect_roles(try_body, ctx, roles);
-                walk_collect_roles(catch_body, ctx, roles);
+                for (_ty, body) in catch_arms {
+                    walk_collect_roles(body, ctx, roles);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                walk_collect_roles(try_body, ctx, roles);
+                walk_collect_roles(finally_body, ctx, roles);
             }
             HirNode::Ternary { cond, .. } => {
                 if cond_is_comparison(cond, ctx) {
@@ -3106,6 +3143,20 @@ fn render_type_as_c(ty: &unlace_ir::types::Type) -> String {
         Type::Ptr(inner) => format!("{} *", render_type_as_c(inner)),
         other => other.to_string(),
     }
+}
+
+/// `true` when `ty` is the sentinel used to encode a catch-all clause
+/// inside [`HirNode::TryCatch`]'s `catch_arms`.
+///
+/// The HIR represents `catch (...)` (C++) and the historical
+/// `__except { ... }` (MSVC SEH catch-all) by pairing the handler body
+/// with `Type::Primitive(PrimitiveType::Unknown)`. Concrete exception
+/// types render as `catch (T e) { ... }`.
+fn is_catch_all_type(ty: &unlace_ir::types::Type) -> bool {
+    matches!(
+        ty,
+        unlace_ir::types::Type::Primitive(unlace_ir::ssa::PrimitiveType::Unknown)
+    )
 }
 
 fn c_type(ty: &PrimitiveType) -> &'static str {
@@ -3597,14 +3648,51 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 
         HirNode::TryCatch {
             try_body,
-            catch_body,
+            catch_arms,
         } => {
+            // t183: when *every* arm is the catch-all sentinel
+            // (`PrimitiveType::Unknown`), render the historical MSVC
+            // SEH shape `__try { ... } __except { ... }` to preserve
+            // back-compat with the landing-pad-driven structurer.
+            // Otherwise emit C++-style `try { ... } catch (T e) { ... }`
+            // arms (one `catch (...)` for any catch-all arm).
+            let all_catch_all = catch_arms.iter().all(|(ty, _)| is_catch_all_type(ty));
+            indent(depth, ctx.config.tab_width, out);
+            if all_catch_all {
+                let _ = writeln!(out, "__try {{");
+            } else {
+                let _ = writeln!(out, "try {{");
+            }
+            emit_nodes(try_body, depth + 1, ctx, out);
+            for (ty, body) in catch_arms {
+                indent(depth, ctx.config.tab_width, out);
+                if all_catch_all {
+                    let _ = writeln!(out, "}} __except {{");
+                } else if is_catch_all_type(ty) {
+                    let _ = writeln!(out, "}} catch (...) {{");
+                } else {
+                    let captured_c = render_type_as_c(ty);
+                    let _ = writeln!(out, "}} catch ({} e) {{", captured_c);
+                }
+                emit_nodes(body, depth + 1, ctx, out);
+            }
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(out, "}}");
+        }
+
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
+            // t183: MSVC `__try { ... } __finally { ... }`. The finally
+            // block runs on both normal and exceptional control-flow
+            // paths, distinguishing it from `__except`.
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "__try {{");
             emit_nodes(try_body, depth + 1, ctx, out);
             indent(depth, ctx.config.tab_width, out);
-            let _ = writeln!(out, "}} __except {{");
-            emit_nodes(catch_body, depth + 1, ctx, out);
+            let _ = writeln!(out, "}} __finally {{");
+            emit_nodes(finally_body, depth + 1, ctx, out);
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
         }
@@ -7963,12 +8051,15 @@ mod tests {
                     smallvec![r0, c1],
                     0x1000,
                 ))],
-                catch_body: vec![HirNode::Statement(IrInsn::with_output(
-                    IrOp::Copy,
-                    r8,
-                    smallvec![con(0, 4)],
-                    0x1010,
-                ))],
+                catch_arms: vec![(
+                    unlace_ir::types::Type::Primitive(PrimitiveType::Unknown),
+                    vec![HirNode::Statement(IrInsn::with_output(
+                        IrOp::Copy,
+                        r8,
+                        smallvec![con(0, 4)],
+                        0x1010,
+                    ))],
+                )],
             },
             HirNode::Return(Some(sv(0, 4))),
         ];
@@ -8022,12 +8113,15 @@ mod tests {
                     smallvec![r0, c1],
                     0x1000,
                 ))],
-                catch_body: vec![HirNode::Statement(IrInsn::with_output(
-                    IrOp::IntAdd,
-                    r0,
-                    smallvec![r0, c1],
-                    0x1010,
-                ))],
+                catch_arms: vec![(
+                    unlace_ir::types::Type::Primitive(PrimitiveType::Unknown),
+                    vec![HirNode::Statement(IrInsn::with_output(
+                        IrOp::IntAdd,
+                        r0,
+                        smallvec![r0, c1],
+                        0x1010,
+                    ))],
+                )],
             },
             HirNode::Return(Some(sv(8, 4))),
         ];

@@ -15,7 +15,7 @@
 //!    switches.
 //! 4. Default-case detection from the out-of-bounds branch.
 
-use unlace_ir::{ArchId, IrInsn, IrOp};
+use unlace_ir::{ArchId, IrInsn, IrOp, SpaceId};
 
 use crate::hir::{HirFunction, HirNode, SwitchCase};
 
@@ -686,6 +686,131 @@ pub fn classify_indirect_branch(arch: ArchId, insns: &[IrInsn]) -> Option<Indire
     // Fall through to the architecture-agnostic LOAD→BRANCHIND match
     // (the x86-style table dispatch).
     arch::try_generic_table(insns)
+}
+
+// ---------------------------------------------------------------------------
+// Computed-goto (&&label) recovery (t245)
+// ---------------------------------------------------------------------------
+
+/// Result of a successful computed-goto detection.
+///
+/// Represents the pattern `goto *table[idx]` where `table` is a label-address
+/// array in a read-only data section.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ComputedGoto {
+    /// Base virtual address of the label-address table.
+    pub table_base: u64,
+    /// Size of each pointer entry in bytes (4 or 8).
+    pub ptr_size: u8,
+    /// Number of entries in the table.
+    pub num_entries: u32,
+    /// The resolved target addresses from the table.
+    pub targets: Vec<u64>,
+}
+
+/// Detect a computed-goto pattern: `Branchind` whose target is
+/// `Load(table_base + idx * ptr_size)` where:
+/// - `table_base` is a constant pointing into a read-only data section
+/// - All table entries are code addresses within `func_range`
+///
+/// `insns` is the instruction window ending in `Branchind`.
+/// `sections` provides the binary section data for table validation.
+/// `func_range` is the `(start, end)` address range of the current function;
+/// all table entries must fall within it.
+///
+/// Returns `Some(ComputedGoto)` when the pattern matches, `None` otherwise.
+pub fn detect_computed_goto(
+    insns: &[IrInsn],
+    sections: &[SectionView<'_>],
+    func_range: (u64, u64),
+) -> Option<ComputedGoto> {
+    // Must end in Branchind.
+    let bi = insns.last()?;
+    if bi.op != IrOp::Branchind {
+        return None;
+    }
+
+    // Find the Load that feeds the Branchind -- walk backwards.
+    let load = insns.iter().rev().skip(1).find(|i| i.op == IrOp::Load)?;
+
+    // The Load should produce a pointer-sized output.
+    let ptr_size = load.output.map(|o| o.size)?;
+    if ptr_size != 4 && ptr_size != 8 {
+        return None;
+    }
+
+    // Extract the table_base from the instruction stream.
+    let table_base = find_table_base_in_insns(insns, sections)?;
+
+    // Validate that table_base falls in a read-only section.
+    let section = validate_table_base(table_base, sections)?;
+
+    // Read entries from the table until we hit one outside func_range.
+    let endian = TableEndian::Little;
+    let mut targets = Vec::new();
+    let mut addr = table_base;
+    loop {
+        let entry = match ptr_size {
+            4 => section.read_u32(addr, endian).map(|v| v as u64),
+            8 => section.read_u64(addr, endian),
+            _ => None,
+        };
+        let Some(target) = entry else { break };
+
+        if target < func_range.0 || target >= func_range.1 {
+            break;
+        }
+        targets.push(target);
+        addr = addr.checked_add(ptr_size as u64)?;
+
+        if targets.len() > 1024 {
+            break;
+        }
+    }
+
+    if targets.is_empty() {
+        return None;
+    }
+
+    Some(ComputedGoto {
+        table_base,
+        ptr_size,
+        num_entries: targets.len() as u32,
+        targets,
+    })
+}
+
+/// Search the instruction window for a constant pointing into a read-only section.
+fn find_table_base_in_insns(insns: &[IrInsn], sections: &[SectionView<'_>]) -> Option<u64> {
+    for insn in insns.iter().rev() {
+        for input in &insn.inputs {
+            if input.space == SpaceId::Const {
+                let candidate = input.offset;
+                if validate_table_base(candidate, sections).is_some() {
+                    return Some(candidate);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Convert a detected [`ComputedGoto`] into a [`HirNode::Switch`].
+pub fn computed_goto_to_switch(
+    goto: &ComputedGoto,
+    cond: unlace_ir::ssa::SsaVarnode,
+) -> HirNode {
+    let cases: Vec<(SwitchCase, Vec<HirNode>, bool)> = (0..goto.num_entries)
+        .map(|i| (SwitchCase::Value(i as u64), Vec::new(), false))
+        .collect();
+
+    HirNode::Switch {
+        cond,
+        cases,
+        default: None,
+        jumptable_addr: Some(goto.table_base),
+        jumptable_cases: Some(goto.num_entries as usize),
+    }
 }
 
 /// Per-architecture jump-table pattern detectors.
@@ -1743,5 +1868,86 @@ mod tests {
             "AArch64 ADRP+ADD+BR is documented as not yet classified; got {:?}",
             kind
         );
+    }
+
+    // ----- t245: Computed-goto (&&label) recovery -----
+
+    #[test]
+    fn computed_goto_table_pattern_yields_switch() {
+        let func_start = 0x1000u64;
+        let func_end = 0x2000u64;
+
+        let targets = [0x1100u64, 0x1200, 0x1300];
+        let table_base = 0x3000u64;
+        let table_bytes = build_le_u64_table(&targets);
+        let section = SectionView {
+            name: ".rodata",
+            vaddr: table_base,
+            data: &table_bytes,
+            perms: SectionPerms::RO,
+        };
+
+        let add = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::reg(0x10, 8),
+            smallvec![Varnode::constant(table_base, 8), Varnode::reg(0x20, 8)],
+            0x1050,
+        );
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::reg(0x30, 8),
+            smallvec![Varnode::constant(0, 8), Varnode::reg(0x10, 8)],
+            0x1054,
+        );
+        let bi = IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![Varnode::reg(0x30, 8)],
+            0x1058,
+        );
+
+        let result = detect_computed_goto(&[add, load, bi], &[section], (func_start, func_end));
+        assert!(result.is_some(), "computed-goto pattern should be detected");
+        let goto = result.unwrap();
+        assert_eq!(goto.table_base, table_base);
+        assert_eq!(goto.ptr_size, 8);
+        assert_eq!(goto.num_entries, 3);
+        assert_eq!(goto.targets, vec![0x1100, 0x1200, 0x1300]);
+
+        let cond_sv = SsaVarnode { base: Varnode::reg(0x20, 8), version: 0 };
+        let switch_node = computed_goto_to_switch(&goto, cond_sv);
+        match switch_node {
+            HirNode::Switch { cases, .. } => {
+                assert_eq!(cases.len(), 3);
+                assert_eq!(cases[0].0, SwitchCase::Value(0));
+                assert_eq!(cases[1].0, SwitchCase::Value(1));
+                assert_eq!(cases[2].0, SwitchCase::Value(2));
+            }
+            _ => panic!("expected Switch node"),
+        }
+    }
+
+    #[test]
+    fn branchind_without_table_not_matched() {
+        let bi = IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![Varnode::reg(0x30, 8)],
+            0x1058,
+        );
+        let result = detect_computed_goto(&[bi], &[], (0x1000, 0x2000));
+        assert!(result.is_none(), "Branchind without table Load should not match");
+
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::reg(0x30, 8),
+            smallvec![Varnode::constant(0, 8), Varnode::reg(0x10, 8)],
+            0x1054,
+        );
+        let bi2 = IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![Varnode::reg(0x30, 8)],
+            0x1058,
+        );
+        let result2 = detect_computed_goto(&[load, bi2], &[], (0x1000, 0x2000));
+        assert!(result2.is_none(), "Load with no valid table section should not match");
     }
 }

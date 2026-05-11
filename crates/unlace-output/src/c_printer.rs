@@ -527,6 +527,7 @@ pub fn print_c_with_annotations(
     compute_byref_bases(&mut ctx);
     compute_heuristic_names(&func.body, &mut ctx);
     compute_hoist_plan(&mut ctx);
+    detect_mmio_addrs(&mut ctx);
 
     let mut out = String::with_capacity(1024);
 
@@ -1595,6 +1596,14 @@ struct PrintCtx {
     /// has annotated the function with conflicting BYREF consumption-site
     /// types. See [`PrinterAnnotations::byref_union_types`].
     byref_union_types: BTreeMap<u32, Vec<PrimitiveType>>,
+    /// t259: constant absolute addresses heuristically classified as
+    /// memory-mapped I/O registers. An address lands here when it is
+    /// loaded at least twice in tight succession with no intervening
+    /// Store to the *same* address (or stored at least twice with no
+    /// intervening Load). The C printer adds `volatile` to the
+    /// dereference cast at every Load/Store through these addresses
+    /// to surface the side-effecting nature of the access.
+    mmio_addrs: BTreeSet<u64>,
 }
 
 impl PrintCtx {
@@ -1668,6 +1677,7 @@ impl PrintCtx {
             array_struct_layouts: BTreeMap::new(),
             array_struct_indices: BTreeMap::new(),
             byref_union_types: BTreeMap::new(),
+            mmio_addrs: BTreeSet::new(),
         }
     }
 
@@ -3121,6 +3131,79 @@ fn compute_byref_bases(ctx: &mut PrintCtx) {
                     ctx.byref_bases.insert(stk);
                 }
             }
+        }
+    }
+}
+
+/// t259: Classify constant absolute addresses as MMIO registers when they
+/// exhibit the canonical memory-mapped-I/O access shape: multiple reads in
+/// tight succession with no intervening write to the same address, or
+/// multiple writes with no intervening read.
+///
+/// Why this heuristic: a non-volatile compiler is free to coalesce repeated
+/// reads of the same address into a single load. When the source *did*
+/// re-read (or re-write) the address back-to-back, the compiler-visible
+/// shape only survives when the address is volatile-qualified. Conversely,
+/// a normal global typically has interleaved reads and writes via locals,
+/// so successive raw Loads of the same constant address are a strong
+/// MMIO signal.
+///
+/// Threshold: ≥ 2 successive accesses of the same kind, with no
+/// intervening opposite-kind access to that address. The scan iterates
+/// `stmt_insns` in `next_stmt`-order (canonical emission order set up
+/// by [`collect_varnodes`]). Non-constant addresses are ignored — those
+/// could be aliasing pointers and we have no taint analysis here.
+fn detect_mmio_addrs(ctx: &mut PrintCtx) {
+    use std::collections::BTreeMap;
+    // Per-address state: (consecutive_loads, consecutive_stores).
+    // A Load resets the store-streak (and vice-versa); the very first
+    // access starts a streak of length 1.
+    let mut state: BTreeMap<u64, (u32, u32)> = BTreeMap::new();
+
+    // Filter: only classify addresses that look like plausible MMIO
+    // register windows. Address 0 (and tiny constants) are typically
+    // either FS-segment TLS offsets, null-deref placeholders, or
+    // synthesized IR fixtures — definitely not MMIO. We use the same
+    // 0x1000 floor as `try_emit_memory_annotation` so the two
+    // analyses agree on "is this a real global address?"
+    const MMIO_ADDR_FLOOR: u64 = 0x1000;
+
+    // Iterate in statement order. `stmt_insns` is keyed by stmt_idx so
+    // BTreeMap order is the canonical emit order.
+    for (_idx, insn) in ctx.stmt_insns.iter() {
+        match insn.op {
+            IrOp::Load => {
+                // Load inputs = [space, address]. Only constant addresses
+                // are candidates.
+                if insn.inputs.len() >= 2 && insn.inputs[1].space == SpaceId::Const {
+                    let addr = insn.inputs[1].offset;
+                    if addr < MMIO_ADDR_FLOOR {
+                        continue;
+                    }
+                    let entry = state.entry(addr).or_insert((0, 0));
+                    entry.0 += 1;
+                    entry.1 = 0;
+                    if entry.0 >= 2 {
+                        ctx.mmio_addrs.insert(addr);
+                    }
+                }
+            }
+            IrOp::Store => {
+                // Store inputs = [space, address, value].
+                if insn.inputs.len() >= 3 && insn.inputs[1].space == SpaceId::Const {
+                    let addr = insn.inputs[1].offset;
+                    if addr < MMIO_ADDR_FLOOR {
+                        continue;
+                    }
+                    let entry = state.entry(addr).or_insert((0, 0));
+                    entry.1 += 1;
+                    entry.0 = 0;
+                    if entry.1 >= 2 {
+                        ctx.mmio_addrs.insert(addr);
+                    }
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -5620,7 +5703,14 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     } else {
                         let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
                         let cast = ida_ptr_type(store_size);
-                        let _ = writeln!(out, "*({})({}) = {};", cast, addr, val);
+                        // t259: surface MMIO writes by qualifying the cast.
+                        let is_mmio = insn.inputs[1].space == SpaceId::Const
+                            && ctx.mmio_addrs.contains(&insn.inputs[1].offset);
+                        if is_mmio {
+                            let _ = writeln!(out, "*(volatile {})({}) = {};", cast, addr, val);
+                        } else {
+                            let _ = writeln!(out, "*({})({}) = {};", cast, addr, val);
+                        }
                     }
                 } else {
                     let _ = writeln!(out, "/* STORE (bad arity) */;");
@@ -6404,22 +6494,31 @@ fn emit_expr_with_prec(
                 {
                     return format!("{}[{}]", sub.base, sub.index);
                 }
+                let is_mmio = insn.inputs[addr_idx].space == SpaceId::Const
+                    && ctx.mmio_addrs.contains(&insn.inputs[addr_idx].offset);
                 if let Some(memory) = try_emit_memory_annotation(&insn.inputs[addr_idx], ctx) {
-                    // t257: wrap the MEMORY[…] sigil with the load-sized cast
-                    // so the read-through-pointer is explicit, matching IDA's
-                    //   *(_QWORD *)MEMORY[0x4000]
-                    // rendering. We skip the cast for byte loads since
-                    // MEMORY is already `volatile unsigned char *`.
+                    // t257: wrap MEMORY[…] with load-sized cast. t259: add
+                    // `volatile` when classified as MMIO.
                     let cast = ida_ptr_type(load_size);
-                    return if load_size == 1 {
+                    let cast_prim = cast.trim_end_matches(" *");
+                    return if load_size == 1 && !is_mmio {
                         memory
+                    } else if is_mmio {
+                        format!("*(volatile {} *){}", cast_prim, memory)
                     } else {
-                        format!("*({} *){}", cast.trim_end_matches(" *"), memory)
+                        format!("*({} *){}", cast_prim, memory)
                     };
                 }
                 let addr = emit_operand_resolved(&insn.inputs[addr_idx], addr_idx, stmt_idx, ctx);
                 let cast = ida_ptr_type(load_size);
-                format!("*({})({})", cast, addr)
+                // t259: when the address was classified as MMIO by the
+                // tight-succession heuristic, qualify the dereference cast
+                // with `volatile`.
+                if is_mmio {
+                    format!("*(volatile {})({})", cast, addr)
+                } else {
+                    format!("*({})({})", cast, addr)
+                }
             } else {
                 "/* LOAD (bad arity) */ 0".to_string()
             }
@@ -17866,6 +17965,76 @@ mod tests {
         assert!(
             header.contains("/* BYREF */"),
             "single-type BYREF keeps the BYREF comment: {header:?}"
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // t259: volatile annotation for MMIO patterns
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn test_t259_repeated_loads_get_volatile() {
+        // Two back-to-back Loads of the same constant address (in the
+        // MEMORY[…] range, 0x1000..0x10000) → MMIO classification →
+        // the dereference cast wears `volatile`.
+        let space = con(0, 8);
+        let addr = con(0x4000, 8);
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r0,
+                smallvec![space, addr],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r8,
+                smallvec![space, addr],
+                0x1008,
+            )),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("t259_mmio", body);
+        let output = print_c(&func);
+        let body_only = super::strip_ida_typedefs(&output);
+
+        assert!(
+            body_only.contains("volatile _QWORD"),
+            "QWORD MMIO load should render as `*(volatile _QWORD *)…`: {body_only}"
+        );
+    }
+
+    #[test]
+    fn test_t259_single_load_no_volatile() {
+        // A single Load of a constant address is a normal global access —
+        // no MMIO signal, no volatile qualifier.
+        let space = con(0, 8);
+        let addr = con(0x5000, 8);
+        let r8 = reg(8, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r8,
+                smallvec![space, addr],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("t259_normal_global", body);
+        let output = print_c(&func);
+        // The IDA_TYPEDEFS preamble itself mentions `volatile` (for the
+        // MEMORY sigil declaration). Strip the typedefs before asserting.
+        let body_only = super::strip_ida_typedefs(&output);
+
+        assert!(
+            !body_only.contains("volatile"),
+            "single load of a constant address must NOT be volatile: {body_only}"
         );
     }
 }

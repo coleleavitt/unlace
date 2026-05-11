@@ -15,7 +15,8 @@ use unlace_passes::{
     DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
     GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
     ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
-    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass, recover_stack_frame,
+    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
+    detect_byref, recover_stack_frame,
     TailCallDetectPass, VariableMergePass, bump_if_signature_changed, run_outer_fixedpoint,
     run_to_fixedpoint,
 };
@@ -819,6 +820,10 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             ParamInferPass.run(ssa)?;
             ReturnTypeInferPass.run(ssa)?;
             StructFieldDetectPass.run(ssa)?;
+            // Wave 24 / t210: address-taken / byref bookkeeping. Runs
+            // after ParamInferPass so the detector knows how many
+            // parameter registers are "live" for this calling convention.
+            ssa.byref_info = Some(detect_byref(ssa));
             run_type_infer_bounded(ssa);
 
             Ok(())

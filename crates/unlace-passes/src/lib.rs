@@ -2,6 +2,7 @@
 
 pub mod auth_call_resolve;
 pub mod bmi_idioms;
+pub mod byref_detect;
 pub mod call_boundary_copyprop;
 pub mod caller_param_propagate;
 pub mod calling_convention;
@@ -60,6 +61,7 @@ pub mod variable_merge;
 
 pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bmi_idioms::BmiIdiomPass;
+pub use byref_detect::detect_byref;
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
 pub use caller_param_propagate::{
     apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,

@@ -342,6 +342,7 @@ mod tests {
             objc_dispatch_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
+            byref_params: std::collections::BTreeSet::new(),
         }
     }
 

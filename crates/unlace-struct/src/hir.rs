@@ -520,4 +520,11 @@ pub struct HirFunction {
     /// time; consumed by the C printer to render the alloca as
     /// `__block T name;` instead of a 40-byte anonymous struct.
     pub byref_boxes: BTreeMap<unlace_ir::Varnode, unlace_ir::ssa::ByrefBox>,
+    /// Indices (zero-based) of parameters whose address is taken — i.e.
+    /// the parameter is logically a pointer/reference and the C printer
+    /// should append a trailing `// BYREF` comment to the declaration.
+    /// Propagated from [`unlace_ir::ssa::SsaFunction::byref_info`] at
+    /// structuring time; empty when the byref detector found nothing or
+    /// hasn't been run.
+    pub byref_params: std::collections::BTreeSet<u32>,
 }

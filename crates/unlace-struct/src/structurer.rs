@@ -109,6 +109,11 @@ pub fn structure_with_arch(
             .collect(),
         indirect_branch_kinds,
         byref_boxes: func.byref_boxes.clone(),
+        byref_params: func
+            .byref_info
+            .as_ref()
+            .map(|i| i.byref_params.clone())
+            .unwrap_or_default(),
     })
 }
 

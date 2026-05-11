@@ -223,9 +223,11 @@ fn try_simplify(
             .or_else(|| simplify_fsub_negation(func, bid, insn_idx, insn)),
         IrOp::FloatMult => simplify_commutative_float_one(func, bid, insn_idx, insn),
         IrOp::FloatDiv => simplify_rhs_float_one(func, bid, insn_idx, insn),
-        IrOp::IntEqual | IrOp::IntNotequal => {
-            simplify_cmp_xor_zero(func, bid, insn_idx, insn)
-        }
+        IrOp::IntEqual => simplify_cmp_xor_zero(func, bid, insn_idx, insn)
+            .or_else(|| simplify_same_ssa_to_const(func, bid, insn_idx, insn, 1)),
+        IrOp::IntNotequal => simplify_cmp_xor_zero(func, bid, insn_idx, insn)
+            .or_else(|| simplify_same_ssa_to_const(func, bid, insn_idx, insn, 0)),
+        IrOp::Multiequal => simplify_multiequal_all_same(func, bid, insn_idx, insn),
         IrOp::IntSext => simplify_double_sext(func, bid, insn_idx, insn)
             .or_else(|| simplify_sext_noop(func, bid, insn_idx, insn)),
         IrOp::IntZext => simplify_double_zext(func, bid, insn_idx, insn),
@@ -1159,6 +1161,40 @@ fn simplify_double_zext(
     })
 }
 
+// ─── Self-referential expression collapse (t252) ─────────────────────────────
+// `Multiequal(x, x, …, x)` → `Copy(x)`  (phi/select with identical inputs)
+//
+// This generalizes the "Select(cond, x, x) → x" rule: an SSA phi merging the
+// same SSA value from every predecessor is a no-op and may be rewritten as a
+// copy of that single source operand. Requires at least one input and that
+// every input map to the same SSA varnode (so two distinct uses of an
+// identical-valued constant don't trigger — they have no `input_ssa`).
+fn simplify_multiequal_all_same(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    insn: &IrInsn,
+) -> Option<Replacement> {
+    insn.output?;
+    if insn.inputs.is_empty() {
+        return None;
+    }
+    let first_ssa = input_ssa(func, bid, insn_idx, 0)?;
+    for idx in 1..insn.inputs.len() {
+        let ssa = input_ssa(func, bid, insn_idx, idx)?;
+        if ssa != first_ssa {
+            return None;
+        }
+    }
+    Some(replacement_for_input(
+        func,
+        bid,
+        insn_idx,
+        0,
+        insn.inputs[0],
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
@@ -2087,6 +2123,69 @@ mod tests {
         let ssa = run_pass(vec![inner, outer]);
         let folded = rewritten_insn(&ssa, 1);
         assert_eq!(folded.op, IrOp::IntZext);
+        assert_eq!(folded.inputs.len(), 1);
+        assert_eq!(folded.inputs[0], x);
+    }
+
+    // ─── Task 252: self-referential expression collapse ──────────────────
+
+    /// `IntSub(x, x)` → `Const(0)`  (Sub variant of self-reference collapse).
+    /// Verifies the existing same-SSA rule is wired up for IntSub.
+    #[test]
+    fn sub_self_collapses_to_zero_t252() {
+        let out = Varnode::unique(0, 8);
+        let x = Varnode::reg(0, 8);
+        let insn = IrInsn::with_output(IrOp::IntSub, out, smallvec![x, x], 0x1000);
+
+        let ssa = run_pass(vec![insn]);
+        assert_copy_const(rewritten_insn(&ssa, 0), 0, 8);
+    }
+
+    /// `IntEqual(x, x)` → `Const(1)`  (always true).
+    #[test]
+    fn equal_self_collapses_to_one_t252() {
+        let out = Varnode::unique(0, 1);
+        let x = Varnode::reg(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntEqual, out, smallvec![x, x], 0x1000);
+
+        let ssa = run_pass(vec![insn]);
+        assert_copy_const(rewritten_insn(&ssa, 0), 1, 1);
+    }
+
+    /// `IntNotequal(x, x)` → `Const(0)`  (always false).
+    #[test]
+    fn notequal_self_collapses_to_zero_t252() {
+        let out = Varnode::unique(0, 1);
+        let x = Varnode::reg(0, 4);
+        let insn = IrInsn::with_output(IrOp::IntNotequal, out, smallvec![x, x], 0x1000);
+
+        let ssa = run_pass(vec![insn]);
+        assert_copy_const(rewritten_insn(&ssa, 0), 0, 1);
+    }
+
+    /// `Multiequal(x, x)` → `Copy(x)` (phi/select with identical SSA inputs
+    /// collapses to the underlying value — the "Select(cond, x, x) → x"
+    /// idiom expressed at SSA level).
+    #[test]
+    fn select_same_collapses_to_identity_t252() {
+        // Build a two-block SSA function where both predecessors feed the
+        // same SSA varnode into a Multiequal at the join point.
+        //
+        //  bb0:  out0 = COPY x         (defines v_x)
+        //        BRANCH bb1
+        //  bb1:  phi  = MULTIEQUAL v_x, v_x
+        //        (this is the degenerate "select(cond, x, x)" case)
+        //
+        // Single-block is simpler though: emit a Multiequal whose two
+        // inputs both reference the same SSA def. Both inputs use the
+        // same source varnode so build_ssa assigns identical SSA ids.
+        let x = Varnode::reg(0, 4);
+        let phi_out = Varnode::unique(0, 4);
+        let phi_insn = IrInsn::with_output(IrOp::Multiequal, phi_out, smallvec![x, x], 0x1000);
+
+        let ssa = run_pass(vec![phi_insn]);
+        let folded = rewritten_insn(&ssa, 0);
+        assert_eq!(folded.op, IrOp::Copy);
         assert_eq!(folded.inputs.len(), 1);
         assert_eq!(folded.inputs[0], x);
     }

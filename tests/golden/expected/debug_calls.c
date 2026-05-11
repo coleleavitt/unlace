@@ -41,9 +41,9 @@ int abs_val(int x) {
     int v5; // edi
     int v8; // temp
     *(_QWORD *)(0LL) = 0LL; *(_DWORD *)(0LL) = v5;
-    // source: fixtures/src/calls.c:6
+    // fixtures/src/calls.c:6
     unsigned int cond = *(_DWORD *)(0LL); // temp
-    // source: fixtures/src/calls.c:6
+    // fixtures/src/calls.c:6
     v1 = cond;
     v2 = cond; v8 = v8; cond = v8 < 0;
     v11 = LOBYTE(cond); v2 = v8; if (!v11) { cond = v8; }

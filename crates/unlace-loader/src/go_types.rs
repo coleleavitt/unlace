@@ -1631,6 +1631,7 @@ mod tests {
             }),
             go_itabs: BTreeMap::new(),
             go_types: BTreeMap::new(),
+            swift_info: None,
         };
 
         populate_go_types_from_module(&mut img);

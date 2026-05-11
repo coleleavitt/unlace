@@ -407,6 +407,17 @@ pub struct BinaryImage {
     /// case) or any image where none of the three sections is
     /// present.
     pub swift_info: Option<crate::swift_metadata::SwiftInfo>,
+    /// PAC-authenticated pointer slots recovered from a dyld_shared_cache
+    /// ARM64e v5 slide chain (t190 / t201). Each entry records one slot
+    /// — by image-local byte offset — that the runtime authenticates
+    /// before loading. Empty for non-cache images (ELF / PE / standalone
+    /// Mach-O), for v1–v4 caches, and for v5 caches with no auth chain
+    /// entries. Consumed by
+    /// [`unlace_passes::auth_call_resolve`](https://docs.rs/unlace-passes)
+    /// to annotate `Callind` / `Callother` sites whose target is loaded
+    /// from one of these slots — the printer renders the call as
+    /// `__builtin_arm_authcall(target, key, disc)`.
+    pub auth_pointers: Vec<crate::dyld_cache::AuthPointer>,
 }
 
 /// A PE RUNTIME_FUNCTION entry from the `.pdata` exception directory.
@@ -532,6 +543,7 @@ mod tests {
             go_itabs: BTreeMap::new(),
             go_types: BTreeMap::new(),
             swift_info: None,
+            auth_pointers: Vec::new(),
         }
     }
 

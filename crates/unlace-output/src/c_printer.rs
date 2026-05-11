@@ -372,6 +372,16 @@ pub struct PrinterAnnotations {
     /// than per-platform spellings. Empty for calls to unknown / non-libc
     /// targets — those follow the legacy symbol-table path.
     pub libc_call_canonical: BTreeMap<u64, String>,
+    /// t262 — original (pre-canonicalization) symbol name at a libc
+    /// call site, keyed by Call instruction VA. When this map and
+    /// [`Self::libc_call_canonical`] both have an entry for a Call,
+    /// AND the values differ (e.g. `__memcpy_chk` vs canonical
+    /// `memcpy`), the printer emits a leading comment
+    /// `// memcpy(...) — recognized from __memcpy_chk` so a reader
+    /// can see why the rendered symbol no longer matches the binary's
+    /// import table. When canonical == original (the rendered name
+    /// already matches the binary), no comment is emitted.
+    pub libc_call_original: BTreeMap<u64, String>,
     /// t231: per-function map from array-base SSA varnode → recovered
     /// `InferredStruct` layout (size + field offsets/widths).  Sourced
     /// from [`unlace_ir::ssa::SsaFunction::array_struct_layouts`].
@@ -456,6 +466,7 @@ pub fn print_c_with_annotations(
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
         ctx.auth_calls = ann.auth_calls.clone();
         ctx.libc_call_canonical = ann.libc_call_canonical.clone();
+        ctx.libc_call_original = ann.libc_call_original.clone();
         ctx.array_struct_layouts = ann.array_struct_layouts.clone();
         ctx.array_struct_indices = ann.array_struct_indices.clone();
     }
@@ -1485,6 +1496,13 @@ struct PrintCtx {
     /// [`resolve_call_target`] before the symbol-table fallback so a
     /// `Call __memcpy_chk` renders as `memcpy(...)`.
     libc_call_canonical: BTreeMap<u64, String>,
+    /// t262 — original (pre-canonicalization) symbol name at a libc
+    /// call site, keyed by Call VA. Lifted from
+    /// [`PrinterAnnotations::libc_call_original`]; consulted by
+    /// [`emit_statement`] which emits a leading comment
+    /// `// memcpy(...) — recognized from __memcpy_chk` when canonical
+    /// and original disagree.
+    libc_call_original: BTreeMap<u64, String>,
     /// t231: recovered array-of-struct layouts keyed by base-pointer
     /// SSA varnode. Lifted from
     /// [`PrinterAnnotations::array_struct_layouts`]; consumed by
@@ -1564,6 +1582,7 @@ impl PrintCtx {
             forwarded_resolutions: BTreeMap::new(),
             auth_calls: BTreeMap::new(),
             libc_call_canonical: BTreeMap::new(),
+            libc_call_original: BTreeMap::new(),
             array_struct_layouts: BTreeMap::new(),
             array_struct_indices: BTreeMap::new(),
         }
@@ -5194,6 +5213,16 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     {
         return None;
     }
+    // t262 — when a libc-canonicalized Call has an origin comment to
+    // emit, defer to emit_statement so the comment goes on its own
+    // line above the call rather than inline.
+    if matches!(insn.op, IrOp::Call | IrOp::Callind)
+        && let Some(canonical) = ctx.libc_call_canonical.get(&insn.addr)
+        && let Some(original) = ctx.libc_call_original.get(&insn.addr)
+        && canonical != original
+    {
+        return None;
+    }
     // CSEL must go through emit_statement for if-else expansion
     if is_csel_callother(insn) {
         ctx.emit_stmt += 1;
@@ -5373,6 +5402,20 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "// {}", line);
         }
+    }
+
+    // t262 — when a Call's canonical libc name differs from the
+    // original (binary's import-table) name, prepend a leading
+    // comment so a reader can map the rendered `memcpy(...)` back to
+    // the actual binary symbol (`__memcpy_chk`, `_Znwm`, …). Skipped
+    // when the names match — no information to surface.
+    if matches!(insn.op, IrOp::Call | IrOp::Callind)
+        && let Some(canonical) = ctx.libc_call_canonical.get(&insn.addr).cloned()
+        && let Some(original) = ctx.libc_call_original.get(&insn.addr).cloned()
+        && canonical != original
+    {
+        indent(depth, ctx.config.tab_width, out);
+        let _ = writeln!(out, "// {}(...) — recognized from {}", canonical, original);
     }
 
     indent(depth, ctx.config.tab_width, out);
@@ -11684,6 +11727,88 @@ mod tests {
         assert!(
             output.contains("my_user_func("),
             "non-libc call must render as the raw symbol name: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // t262: leading provenance comment when libc canonical != original
+    // -------------------------------------------------------------------
+
+    /// When `libc_call_canonical` and `libc_call_original` disagree for
+    /// a Call VA, the printer emits a leading
+    /// `// <canonical>(...) — recognized from <original>` comment so a
+    /// reader can map the rendered name back to the binary's import.
+    #[test]
+    fn t262_aliased_libc_call_emits_origin_comment() {
+        let call_va: u64 = 0x1000;
+        let target_va: u64 = 0x401040;
+        let target_addr = con(target_va, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], call_va);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(target_va, "__memcpy_chk".to_string());
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.libc_call_canonical.insert(call_va, "memcpy".to_string());
+        ann.libc_call_original
+            .insert(call_va, "__memcpy_chk".to_string());
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            Some(&symbols),
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(
+            output.contains("// memcpy(...) — recognized from __memcpy_chk"),
+            "expected origin comment for aliased libc call: {output}",
+        );
+        // The Call itself still renders as the canonical name.
+        assert!(
+            output.contains("memcpy("),
+            "call body must still render as canonical name: {output}",
+        );
+    }
+
+    /// When canonical == original, the rendered name already matches
+    /// the binary — no informational gap, so no comment is emitted.
+    #[test]
+    fn t262_canonical_matching_original_emits_no_comment() {
+        let call_va: u64 = 0x1004;
+        let target_va: u64 = 0x401050;
+        let target_addr = con(target_va, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], call_va);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(target_va, "memcpy".to_string());
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.libc_call_canonical.insert(call_va, "memcpy".to_string());
+        ann.libc_call_original.insert(call_va, "memcpy".to_string());
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            Some(&symbols),
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(
+            !output.contains("recognized from"),
+            "no origin comment expected when canonical == original: {output}",
         );
     }
 

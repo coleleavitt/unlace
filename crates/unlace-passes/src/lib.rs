@@ -21,6 +21,7 @@ pub mod boost_recognize;
 pub mod cpp_stl;
 pub mod cpp_vtable;
 pub mod crypto_idioms;
+pub mod crypto_lib_recognize;
 pub mod cse;
 pub mod dce;
 pub mod dead_flag_elim;

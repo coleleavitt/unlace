@@ -1,5 +1,6 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
+pub mod auth_call_resolve;
 pub mod bmi_idioms;
 pub mod call_boundary_copyprop;
 pub mod caller_param_propagate;
@@ -56,6 +57,7 @@ pub mod tail_duplication;
 pub mod type_infer;
 pub mod variable_merge;
 
+pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bmi_idioms::BmiIdiomPass;
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
 pub use caller_param_propagate::{

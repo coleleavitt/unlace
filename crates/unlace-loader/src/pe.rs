@@ -123,6 +123,7 @@ where
         go_itabs: std::collections::BTreeMap::new(),
         go_types: std::collections::BTreeMap::new(),
         swift_info: None,
+        auth_pointers: Vec::new(),
     };
 
     image.seh = collect_seh_from_image(&image);
@@ -2808,6 +2809,7 @@ mod tests {
             go_itabs: BTreeMap::new(),
             go_types: BTreeMap::new(),
             swift_info: None,
+            auth_pointers: Vec::new(),
         }
     }
 

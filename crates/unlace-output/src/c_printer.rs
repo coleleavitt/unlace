@@ -339,6 +339,16 @@ pub struct PrinterAnnotations {
     /// compatibility with t181 call sites; despite the name it carries
     /// every recovered Go type variant the printer knows how to render.
     pub go_interfaces: BTreeMap<u64, unlace_ir::types::Type>,
+    /// PAC-authenticated indirect call annotations keyed by the call
+    /// instruction's VA (t201). When a `Callind` / `Callother` site is
+    /// present in this map, the printer emits the call as
+    /// `__builtin_arm_authcall(target, /*key=*/K, /*disc=*/0xDDDD)`
+    /// instead of the IDA-style `((ret (*)(...))target)(...)` cast.
+    ///
+    /// Populated by [`unlace_passes::resolve_auth_calls`] from a
+    /// [`unlace_loader::BinaryImage::auth_pointers`] table. Empty for
+    /// every non-cache image and for v1–v4 dyld_shared_caches.
+    pub auth_calls: BTreeMap<u64, unlace_passes::AuthCallAnnotation>,
 }
 
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
@@ -403,6 +413,7 @@ pub fn print_c_with_annotations(
         ctx.custom_names = ann.custom_names.clone();
         ctx.string_hash_table = ann.string_hash_table.clone();
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
+        ctx.auth_calls = ann.auth_calls.clone();
     }
     if let Some(cfg) = config {
         ctx.config = cfg;
@@ -1310,6 +1321,10 @@ struct PrintCtx {
     /// [`PrinterAnnotations::forwarded_resolutions`]. Empty when the caller
     /// didn't pass annotations or the binary has no resolved forwarders.
     forwarded_resolutions: BTreeMap<u64, String>,
+    /// PAC-authenticated indirect call annotations keyed by call VA
+    /// (t201). Lifted from [`PrinterAnnotations::auth_calls`]; consumed
+    /// by `emit_callind_cast` to render `__builtin_arm_authcall(...)`.
+    auth_calls: BTreeMap<u64, unlace_passes::AuthCallAnnotation>,
 }
 
 impl PrintCtx {
@@ -1375,6 +1390,7 @@ impl PrintCtx {
             byref_boxes: BTreeMap::new(),
             string_hash_table: BTreeMap::new(),
             forwarded_resolutions: BTreeMap::new(),
+            auth_calls: BTreeMap::new(),
         }
     }
 
@@ -4110,6 +4126,20 @@ fn format_tail_call_text(target: u64, ctx: &PrintCtx) -> String {
 /// return type, e.g. `((__int64 (*)())pfn)()`.
 fn emit_callind_cast(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     let target = resolve_call_target(insn, stmt_idx, ctx);
+
+    // t201: when this call site is in the auth-call annotation table,
+    // render the IDA-cast form as a `__builtin_arm_authcall` intrinsic
+    // instead. The builtin signature is
+    // `__builtin_arm_authcall(target, key, discriminator)` — keys 0..=3
+    // map IA / IB / DA / DB, the discriminator is the 15-bit constant
+    // recovered from the dyld v5 chain entry.
+    if let Some(ann) = ctx.auth_calls.get(&insn.addr).copied() {
+        return format!(
+            "__builtin_arm_authcall({}, /*key=*/{}, /*disc=*/{:#x})",
+            target, ann.key, ann.diversifier
+        );
+    }
+
     let return_ty = match insn.output {
         Some(out) => type_for_size(out.size, true).to_string(),
         None => "void".to_string(),

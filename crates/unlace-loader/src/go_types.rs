@@ -1395,6 +1395,7 @@ mod tests {
             go_itabs: BTreeMap::new(),
             go_types: BTreeMap::new(),
             swift_info: None,
+            auth_pointers: Vec::new(),
         };
 
         let itab = parse_itab_at(&img, RODATA_BASE).expect("itab decodes");
@@ -1632,6 +1633,7 @@ mod tests {
             go_itabs: BTreeMap::new(),
             go_types: BTreeMap::new(),
             swift_info: None,
+            auth_pointers: Vec::new(),
         };
 
         populate_go_types_from_module(&mut img);

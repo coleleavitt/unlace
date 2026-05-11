@@ -24,6 +24,41 @@ impl fmt::Display for LabelId {
     }
 }
 
+/// A single captured value inside an [`HirNode::ObjcBlock`].
+///
+/// `name` is the source-level identifier (or a synthesized placeholder
+/// when the lifter could not recover one). `varnode` records the SSA
+/// varnode that the capture loads from — populated when the block
+/// recovery pass has high confidence in the value's provenance, `None`
+/// otherwise.
+///
+/// The C printer uses `varnode` to look the capture up in
+/// [`HirFunction::byref_boxes`]; a hit renders the capture as
+/// `__block T name`, a miss falls back to plain `name`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjcBlockCapture {
+    pub name: String,
+    pub varnode: Option<SsaVarnode>,
+}
+
+impl ObjcBlockCapture {
+    /// Build a capture with an unresolved SSA varnode.
+    pub fn unresolved(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            varnode: None,
+        }
+    }
+
+    /// Build a capture whose value was resolved to `sv`.
+    pub fn resolved(name: impl Into<String>, sv: SsaVarnode) -> Self {
+        Self {
+            name: name.into(),
+            varnode: Some(sv),
+        }
+    }
+}
+
 /// A single case in a switch statement.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SwitchCase {
@@ -207,9 +242,19 @@ pub enum HirNode {
     ///
     /// MVP rendering: emitted as a placeholder `^{ /* invoke=0x... */ }`
     /// expression with the recovered `invoke` function-pointer address and
-    /// captured-variable names. Future work: lower as a proper block
+    /// captured-variable list. Future work: lower as a proper block
     /// closure with typed parameter list and body.
-    ObjcBlock { invoke: u64, captures: Vec<String> },
+    ///
+    /// Each capture carries the source-level name and (optionally) the
+    /// SSA varnode it was lowered from. The C printer cross-references
+    /// the varnode against [`HirFunction::byref_boxes`] to decide whether
+    /// to render the capture as `__block T name` (when the varnode is a
+    /// `__block` box, t176) or as the plain `name` (the fallback used
+    /// when no byref metadata is available).
+    ObjcBlock {
+        invoke: u64,
+        captures: Vec<ObjcBlockCapture>,
+    },
 
     /// An ARM/Thumb IT-block guarded region: a contiguous run of statements
     /// that execute only when an architecture condition code holds.

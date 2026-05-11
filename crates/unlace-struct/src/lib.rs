@@ -34,7 +34,7 @@ pub use flatten_if_else::{flatten_if_else_chains, simplify_chain_conditions};
 pub use goto_elim::eliminate_forward_gotos;
 pub use goto_to_break::goto_to_break;
 pub use goto_to_continue::goto_to_continue;
-pub use hir::{HirFunction, HirNode, LabelId, SwitchCase};
+pub use hir::{HirFunction, HirNode, LabelId, ObjcBlockCapture, SwitchCase};
 pub use if_to_switch::if_chain_to_switch;
 pub use irreducible::{IrreducibleRegion, detect_irreducible_regions};
 pub use label_cleanup::cleanup_unreachable_labels;

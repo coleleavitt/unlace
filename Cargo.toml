@@ -15,6 +15,7 @@ members = [
     "crates/unlace-lift-ebpf",
     "crates/unlace-lift-avr",
     "crates/unlace-lift-z80",
+    "crates/unlace-lift-sh",
     "crates/unlace-passes",
     "crates/unlace-struct",
     "crates/unlace-output",

@@ -19,6 +19,7 @@ members = [
     "crates/unlace-plugin",
     "crates/unlace-flirt",
     "crates/unlace-cli",
+    "crates/unlace-fuzz",
     "crates/unlace-test-harness",
     "xtask",
 ]

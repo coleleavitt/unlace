@@ -1,0 +1,12 @@
+[package]
+name = "unlace-lift-wasm"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+wasmparser = "0.225"
+smallvec = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]

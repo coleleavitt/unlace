@@ -418,22 +418,18 @@ pub struct PrinterAnnotations {
     /// to the same `struct __anon<N>` declared in the preamble.
     pub array_struct_indices: BTreeMap<SsaVarnode, usize>,
     /// t258: per-byref-parameter union-tag types.
-    ///
-    /// Keyed by zero-based parameter index (must be a member of
-    /// [`HirFunction::byref_params`]). The value is the ordered list of
-    /// distinct primitive types observed at the parameter's BYREF
-    /// consumption sites — i.e. the dereferenced types written to /
-    /// read from the address held by this parameter. When the list has
-    /// **two or more entries**, the printer renders the parameter as
-    /// `union { T1 *a; T2 *b; …; } *name` instead of the regular
-    /// `T *name` form, surfacing the type-punning at the signature site.
-    ///
-    /// One-entry lists are tolerated (printer falls back to the regular
-    /// rendering); zero-entry lists are equivalent to "no annotation".
-    /// Empty by default. Populated by the byref-detection pass after
-    /// it has cross-referenced callee signatures for each consumption
-    /// site.
     pub byref_union_types: BTreeMap<u32, Vec<PrimitiveType>>,
+    /// t260: __usercall / __userpurge spec for functions whose register-
+    /// passing scheme diverges from the active ABI's canonical sequence.
+    pub usercall: Option<UsercallSpec>,
+}
+
+/// t260: per-function `__usercall` / `__userpurge` annotation payload.
+#[derive(Default, Debug, Clone)]
+pub struct UsercallSpec {
+    pub return_reg: String,
+    pub param_regs: Vec<String>,
+    pub purge: bool,
 }
 
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
@@ -707,7 +703,26 @@ pub fn print_c_with_annotations(
 
     let conv_annotation = header.and_then(|h| calling_convention_annotation(&h.convention));
     let noreturn_mod = if func.noreturn { " __noreturn" } else { "" };
-    if let Some(conv) = conv_annotation {
+    // t260: per-function __usercall / __userpurge spec from annotations.
+    // When present, this wins over the generic `__cdecl`/`__fastcall`
+    // annotation since IDA only emits one calling-convention sigil per
+    // header and __usercall already encodes the full register sequence.
+    let usercall_spec = annotations.and_then(|a| a.usercall.as_ref());
+    if let Some(uc) = usercall_spec {
+        let kind = if uc.purge { "__userpurge" } else { "__usercall" };
+        // `<ret>` suffix is omitted for void returns or when the spec
+        // didn't pin a return register.
+        let ret_suffix = if uc.return_reg.is_empty() {
+            String::new()
+        } else {
+            format!("@<{}>", uc.return_reg)
+        };
+        let _ = write!(
+            out,
+            "{}{} {} {}{}(",
+            return_type_str, noreturn_mod, kind, emit_name, ret_suffix
+        );
+    } else if let Some(conv) = conv_annotation {
         let _ = write!(
             out,
             "{}{} {} {}(",
@@ -769,6 +784,13 @@ pub fn print_c_with_annotations(
                     out.push_str(&union_decl);
                 } else {
                     let _ = write!(out, "{} {}", c_sig_type_for_type(pty), pname);
+                    // t260: __usercall register-location suffix.
+                    if let Some(reg) = usercall_spec
+                        .and_then(|uc| uc.param_regs.get(i))
+                        .filter(|r| !r.is_empty())
+                    {
+                        let _ = write!(out, "@<{}>", reg);
+                    }
                     if func.byref_params.contains(&(i as u32)) {
                         out.push_str(" /* BYREF */");
                     }
@@ -789,10 +811,13 @@ pub fn print_c_with_annotations(
                     out.push_str(&union_decl);
                 } else {
                     let _ = write!(out, "{} {}", c_sig_type(pty), pname);
-                    // t210: mark byref-detected parameters with a trailing
-                    // comment. We use the `/* … */` form rather than `//`
-                    // so it survives inline in a comma-separated parameter
-                    // list.
+                    // t260: __usercall register-location suffix.
+                    if let Some(reg) = usercall_spec
+                        .and_then(|uc| uc.param_regs.get(i))
+                        .filter(|r| !r.is_empty())
+                    {
+                        let _ = write!(out, "@<{}>", reg);
+                    }
                     if func.byref_params.contains(&(i as u32)) {
                         out.push_str(" /* BYREF */");
                     }
@@ -18035,6 +18060,90 @@ mod tests {
         assert!(
             !body_only.contains("volatile"),
             "single load of a constant address must NOT be volatile: {body_only}"
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // t260: __usercall / __userpurge annotation for non-ABI calling conventions
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn test_t260_nonstandard_regs_emit_usercall() {
+        // Function whose params live in R10 and RDX — diverges from the
+        // SysV x86-64 RDI/RSI sequence → the pipeline-side detector pins
+        // a usercall spec with these registers, and the header emits:
+        //   __int64 __usercall fn@<rax>(int p0@<r10>, int p1@<rdx>) { … }
+        let mut func = make_func(
+            "t260_usercall",
+            vec![HirNode::Return(None)],
+        );
+        func.params = vec![
+            ("p0".to_string(), PrimitiveType::Int(4)),
+            ("p1".to_string(), PrimitiveType::Int(4)),
+        ];
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.usercall = Some(super::UsercallSpec {
+            return_reg: "rax".to_string(),
+            param_regs: vec!["r10".to_string(), "rdx".to_string()],
+            purge: false,
+        });
+
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+
+        let header = output
+            .lines()
+            .find(|l| l.contains("t260_usercall"))
+            .unwrap_or_else(|| panic!("function header missing: {output}"));
+        assert!(
+            header.contains("__usercall"),
+            "non-standard regs should pin __usercall: {header:?}"
+        );
+        assert!(
+            header.contains("t260_usercall@<rax>"),
+            "header should carry the return-reg sigil: {header:?}"
+        );
+        assert!(
+            header.contains("p0@<r10>"),
+            "param 0 should be tagged with @<r10>: {header:?}"
+        );
+        assert!(
+            header.contains("p1@<rdx>"),
+            "param 1 should be tagged with @<rdx>: {header:?}"
+        );
+    }
+
+    #[test]
+    fn test_t260_standard_regs_no_usercall() {
+        // No usercall spec attached → no __usercall annotation; the
+        // regular header form (with whatever calling-convention sigil
+        // the FunctionHeaderInfo carries) is emitted instead.
+        let mut func = make_func(
+            "t260_standard",
+            vec![HirNode::Return(None)],
+        );
+        func.params = vec![("p0".to_string(), PrimitiveType::Int(4))];
+
+        let ann = super::PrinterAnnotations::default();
+        // `ann.usercall == None` → standard path.
+
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+
+        let header = output
+            .lines()
+            .find(|l| l.contains("t260_standard"))
+            .unwrap_or_else(|| panic!("function header missing: {output}"));
+        assert!(
+            !header.contains("__usercall"),
+            "standard SysV registers must NOT trigger __usercall: {header:?}"
+        );
+        assert!(
+            !header.contains("@<"),
+            "standard header must not carry @<reg> suffixes: {header:?}"
         );
     }
 }

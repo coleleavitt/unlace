@@ -87,6 +87,7 @@ where
         go_types: std::collections::BTreeMap::new(),
         swift_info: None,
         auth_pointers: Vec::new(),
+        auth_ptr_slots: Vec::new(),
     };
 
     image.go_module = crate::go_moduledata::parse_firstmoduledata(&image);

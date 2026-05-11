@@ -427,6 +427,18 @@ pub struct SsaFunction {
     /// [`unlace_passes::byref_detect::detect_byref`]. `None` until the
     /// detector has run; an empty `ByrefInfo` means "ran, found nothing".
     pub byref_info: Option<ByrefInfo>,
+    /// Canonical libc-family name recognised at a `Call` site, keyed by
+    /// `(BlockId, insn_idx)` of the `Call`. Value is the lowercase
+    /// canonical name (`"memcpy"`, `"memset"`, `"malloc"`, …) chosen
+    /// from a small fixed roster of memory / string / allocator idioms,
+    /// produced by [`unlace_passes::libc_idioms`].
+    ///
+    /// Populated independently of the verbose
+    /// [`unlace_passes::libc_signatures`] database — that one carries
+    /// per-symbol prototypes; this map only carries the canonical
+    /// family label that later analyses (e.g. allocator escape, copy
+    /// elision, string idiom) gate on.
+    pub libc_call_annotations: BTreeMap<(BlockId, usize), String>,
 }
 
 /// One synthesised local-frame slot.
@@ -607,6 +619,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         byref_boxes: BTreeMap::new(),
         stack_frame: None,
         byref_info: None,
+        libc_call_annotations: BTreeMap::new(),
     }
 }
 

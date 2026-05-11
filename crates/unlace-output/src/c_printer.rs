@@ -728,16 +728,18 @@ pub fn print_c_with_annotations(
         }
     }
     out.push(')');
-    // t230 — surface the dead-param drop count as a trailing comment so
-    // a reader can cross-check the recovered prototype against an
-    // external declaration.
+    // t230 / t263 — surface the dead-param drop count as a trailing
+    // comment so a reader can cross-check the recovered prototype
+    // against an external declaration. Format mirrors the t263 task
+    // spec: `// dropped N param(s) (dead in body)` — the `(s)`
+    // bracket is literal (no singular/plural variation) so the comment
+    // string is stable across functions.
     if let Some(sig) = func.finalized_signature.as_ref() {
         if sig.dropped_param_count > 0 {
             let _ = write!(
                 out,
-                " // dropped {} param{}",
+                " // dropped {} param(s) (dead in body)",
                 sig.dropped_param_count,
-                if sig.dropped_param_count == 1 { "" } else { "s" },
             );
         }
     }
@@ -8377,6 +8379,35 @@ mod tests {
         assert!(
             output.contains("// dropped 1 param"),
             "dropped-param comment missing: {output}",
+        );
+    }
+
+    /// t263 — the dropped-param comment uses the
+    /// `// dropped N param(s) (dead in body)` format spelled out in
+    /// the task spec, so a downstream tool can grep on the literal
+    /// `(dead in body)` qualifier to find calling-convention-shrunk
+    /// signatures.
+    #[test]
+    fn t263_dropped_param_comment_uses_dead_in_body_phrasing() {
+        use unlace_ir::ssa::FinalizedSignature;
+        use unlace_ir::types::Type;
+
+        let body = vec![HirNode::Return(None)];
+        let mut func = make_func("drop_param_dead", body);
+        func.params = vec![
+            ("a1".into(), PrimitiveType::Int(8)),
+            ("a2".into(), PrimitiveType::Int(8)),
+            ("a3".into(), PrimitiveType::Int(8)),
+        ];
+        func.finalized_signature = Some(FinalizedSignature {
+            params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(8)))],
+            return_type: Type::Primitive(PrimitiveType::Unknown),
+            dropped_param_count: 2,
+        });
+        let output = print_c(&func);
+        assert!(
+            output.contains("// dropped 2 param(s) (dead in body)"),
+            "expected `// dropped N param(s) (dead in body)` format, got: {output}",
         );
     }
 

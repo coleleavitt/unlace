@@ -2221,4 +2221,169 @@ mod tests {
             assert!(callother > 0, "{label}: no Callother emitted");
         }
     }
+
+    // ── t192 — AVX/AVX2 packed integer ops MVP ─────────────────────────
+    //
+    // Each AVX2 op is exercised via its canonical VEX byte encoding
+    // (verified by round-tripping through iced-x86's `Encoder`). The
+    // assertion shape:
+    //   * Callother is emitted with the expected `sse_tag::*` constant.
+    //   * The destination varnode is the 32-byte YMM register at YMM0.
+    //   * No `IrOp::Unimplemented` slips through.
+    // A separate sanity test confirms the register file places YMM0..
+    // YMM15 at the same base offsets as XMM0..XMM15 with size=32 — the
+    // alias layout AVX2 lifting relies on for clobber semantics.
+
+    /// Helper: assert a Callother with `expected_tag` is emitted AND its
+    /// output writes a `expected_dst_size`-byte register at YMM0's offset.
+    fn assert_avx_lift(bytes: &[u8], expected_tag: u64, expected_dst_size: u8) {
+        let result = lifter()
+            .lift_insn(bytes, 0x1000)
+            .expect("AVX instruction should decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("AVX instruction should emit Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(expected_tag, 8),
+            "Callother tag mismatch",
+        );
+        let dst = co.output.expect("AVX instruction should have a YMM dst");
+        assert_eq!(
+            dst.size, expected_dst_size,
+            "AVX destination should be {expected_dst_size}-byte YMM",
+        );
+        assert_eq!(
+            dst.offset,
+            crate::register_file::YMM0,
+            "AVX destination should be YMM0",
+        );
+        let unimpl = result
+            .ir_ops
+            .iter()
+            .filter(|i| i.op == IrOp::Unimplemented)
+            .count();
+        assert_eq!(unimpl, 0, "AVX lift should not emit Unimplemented");
+    }
+
+    /// t192 — VPADDD ymm0, ymm0, ymm1 → `_mm256_add_epi32`.
+    #[test]
+    fn t192_vpaddd_lift() {
+        // c5 fd fe c1 = vpaddd ymm0, ymm0, ymm1.
+        assert_avx_lift(&[0xC5, 0xFD, 0xFE, 0xC1], sse_tag::VPADDD, 32);
+    }
+
+    /// t192 — VPSUBD ymm0, ymm0, ymm1 → `_mm256_sub_epi32`.
+    #[test]
+    fn t192_vpsubd_lift() {
+        // c5 fd fa c1 = vpsubd ymm0, ymm0, ymm1.
+        assert_avx_lift(&[0xC5, 0xFD, 0xFA, 0xC1], sse_tag::VPSUBD, 32);
+    }
+
+    /// t192 — VPMULLD ymm0, ymm0, ymm1 → `_mm256_mullo_epi32`.
+    /// Encoded via the 3-byte VEX prefix (`0F 38` map) since PMULLD
+    /// lives in the SSSE3 opcode block.
+    #[test]
+    fn t192_vpmulld_lift() {
+        // c4 e2 7d 40 c1 = vpmulld ymm0, ymm0, ymm1.
+        assert_avx_lift(&[0xC4, 0xE2, 0x7D, 0x40, 0xC1], sse_tag::VPMULLD, 32);
+    }
+
+    /// t192 — VPSHUFB ymm0, ymm0, ymm1 → `_mm256_shuffle_epi8`.
+    #[test]
+    fn t192_vpshufb_lift() {
+        // c4 e2 7d 00 c1 = vpshufb ymm0, ymm0, ymm1.
+        assert_avx_lift(&[0xC4, 0xE2, 0x7D, 0x00, 0xC1], sse_tag::VPSHUFB, 32);
+    }
+
+    /// t192 — VPBLENDD ymm0, ymm0, ymm1, 0 → `_mm256_blend_epi32`.
+    /// Verifies the 3-source shape (src1, src2, imm8) is preserved on
+    /// the Callother inputs after the tag.
+    #[test]
+    fn t192_vpblendd_lift() {
+        // c4 e3 7d 02 c1 00 = vpblendd ymm0, ymm0, ymm1, 0.
+        let bytes = &[0xC4, 0xE3, 0x7D, 0x02, 0xC1, 0x00];
+        assert_avx_lift(bytes, sse_tag::VPBLENDD, 32);
+        let result = lifter().lift_insn(bytes, 0x1000).unwrap();
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        // Inputs: tag, src1 (ymm0), src2 (ymm1), imm8 mask.
+        assert_eq!(co.inputs.len(), 4, "VPBLENDD should pass an imm8 mask");
+        assert_eq!(
+            co.inputs[3],
+            unlace_ir::Varnode::constant(0, 1),
+            "VPBLENDD mask should round-trip as imm8=0",
+        );
+    }
+
+    /// t192 — VPERMD ymm0, ymm0, ymm1 → `_mm256_permutevar8x32_epi32`.
+    #[test]
+    fn t192_vpermd_lift() {
+        // c4 e2 7d 36 c1 = vpermd ymm0, ymm0, ymm1.
+        assert_avx_lift(&[0xC4, 0xE2, 0x7D, 0x36, 0xC1], sse_tag::VPERMD, 32);
+    }
+
+    /// t192 — VPAND ymm0, ymm0, ymm1 → `_mm256_and_si256`.
+    #[test]
+    fn t192_vpand_lift() {
+        // c5 fd db c1 = vpand ymm0, ymm0, ymm1.
+        assert_avx_lift(&[0xC5, 0xFD, 0xDB, 0xC1], sse_tag::VPAND, 32);
+    }
+
+    /// t192 — VPOR ymm0, ymm0, ymm1 → `_mm256_or_si256`.
+    #[test]
+    fn t192_vpor_lift() {
+        // c5 fd eb c1 = vpor ymm0, ymm0, ymm1.
+        assert_avx_lift(&[0xC5, 0xFD, 0xEB, 0xC1], sse_tag::VPOR, 32);
+    }
+
+    /// t192 — VPXOR ymm0, ymm0, ymm1 → `_mm256_xor_si256`.
+    #[test]
+    fn t192_vpxor_lift() {
+        // c5 fd ef c1 = vpxor ymm0, ymm0, ymm1.
+        assert_avx_lift(&[0xC5, 0xFD, 0xEF, 0xC1], sse_tag::VPXOR, 32);
+    }
+
+    /// t192 — YMM register-write sanity: every lifted AVX2 op produces
+    /// a Callother whose destination is a 32-byte register at the YMM
+    /// base offset, and that base offset matches the XMM alias of the
+    /// same lane. The register-file invariant (XMM/YMM share base) is
+    /// already covered in `register_file::tests`; here we confirm the
+    /// *lifter* preserves it on a representative op.
+    #[test]
+    fn t192_ymm_register_write_sanity() {
+        // c5 fd fe c1 = vpaddd ymm0, ymm0, ymm1 — picks the simplest
+        // 2-byte-VEX form to keep the assertion focused on register
+        // selection rather than encoding quirks.
+        let result = lifter()
+            .lift_insn(&[0xC5, 0xFD, 0xFE, 0xC1], 0x1000)
+            .expect("vpaddd should decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("vpaddd should emit Callother");
+        let dst = co.output.expect("vpaddd should write a register");
+
+        // The destination occupies the full 256-bit YMM0 — its base
+        // offset aliases XMM0, distinguished only by size=32.
+        assert_eq!(dst.offset, crate::register_file::YMM0);
+        assert_eq!(dst.offset, crate::register_file::XMM0);
+        assert_eq!(dst.size, 32, "VPADDD writes 256 bits / 32 bytes");
+
+        // Sources are operand 1 and operand 2 (VEX layout — op0 is
+        // pure destination, *not* read). Both are 32-byte YMM reads.
+        assert_eq!(co.inputs.len(), 3, "VPADDD shape: (tag, src1, src2)");
+        let src1 = &co.inputs[1];
+        let src2 = &co.inputs[2];
+        assert_eq!(src1.size, 32, "src1 should be a YMM register");
+        assert_eq!(src2.size, 32, "src2 should be a YMM register");
+        assert_eq!(src1.offset, crate::register_file::YMM0);
+        assert_eq!(src2.offset, crate::register_file::YMM1);
+    }
 }

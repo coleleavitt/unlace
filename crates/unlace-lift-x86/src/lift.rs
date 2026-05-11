@@ -500,6 +500,23 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         }
         M::Pcmpistri => sse::lift_sse_string_compare(ctx, insn, sse::tag::PCMPISTRI),
 
+        // ── AVX/AVX2 packed integer ops (t192) ──────────────────
+        //
+        // VEX-encoded 3-operand layout (dst, src1, src2). VPBLENDD
+        // additionally consumes a 4th imm8 mask operand. The shared
+        // `lift_avx_binop` helper differs from `lift_sse_binop` in
+        // that op0 is treated as write-only — non-destructive AVX
+        // doesn't read the destination.
+        M::Vpaddd => sse::lift_avx_binop(ctx, insn, sse::tag::VPADDD),
+        M::Vpsubd => sse::lift_avx_binop(ctx, insn, sse::tag::VPSUBD),
+        M::Vpmulld => sse::lift_avx_binop(ctx, insn, sse::tag::VPMULLD),
+        M::Vpshufb => sse::lift_avx_binop(ctx, insn, sse::tag::VPSHUFB),
+        M::Vpermd => sse::lift_avx_binop(ctx, insn, sse::tag::VPERMD),
+        M::Vpand => sse::lift_avx_binop(ctx, insn, sse::tag::VPAND),
+        M::Vpor => sse::lift_avx_binop(ctx, insn, sse::tag::VPOR),
+        M::Vpxor => sse::lift_avx_binop(ctx, insn, sse::tag::VPXOR),
+        M::Vpblendd => sse::lift_avx_blend(ctx, insn, sse::tag::VPBLENDD),
+
         M::Fld => fpu::lift_fld(ctx, insn),
         M::Fst => fpu::lift_fst(ctx, insn),
         M::Fstp => fpu::lift_fstp(ctx, insn),

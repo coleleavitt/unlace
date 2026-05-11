@@ -59,26 +59,19 @@ const AARCH64_X0: u64 = 0;
 
 /// Finalized prototype emitted for a function.
 ///
-/// Wraps the user-facing parameter list (post-dead-drop, post-narrow)
-/// and the inferred return type. `dropped_param_count` records the
+/// The shape mirrors what IDA prints for the function header:
+/// dead-param–dropped, byte-mask–narrowed parameter list plus a
+/// caller-corroborated return type. `dropped_param_count` records the
 /// number of parameters dropped from the original
 /// [`SsaFunction::inferred_params`] so the caller can sanity-check
 /// against external prototypes (mismatched `dropped_param_count`
 /// against a known ABI = analysis bug, not just style choice).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FinalizedSignature {
-    /// Final parameter list in calling-convention order. Names match
-    /// the originals from [`SsaFunction::inferred_params`] — only
-    /// types may have been narrowed.
-    pub params: Vec<(String, Type)>,
-    /// Final return type — either the existing
-    /// [`SsaFunction::inferred_return_type`] or a refinement from
-    /// consistent caller-side use.
-    pub return_type: Type,
-    /// Number of parameters dropped relative to
-    /// [`SsaFunction::inferred_params`].
-    pub dropped_param_count: usize,
-}
+///
+/// The type itself lives in [`unlace_ir::ssa`] (t227) so an
+/// `SsaFunction` can carry the result without a cyclic dependency on
+/// `unlace-passes`. We re-export it here for ergonomic use at the
+/// pass-layer call sites.
+pub use unlace_ir::ssa::FinalizedSignature;
 
 /// Finalize `func`'s signature using its body and a slice of known
 /// callers.
@@ -318,6 +311,36 @@ fn infer_consumer_type(insn: &unlace_ir::IrInsn, reg_input: &Varnode) -> Type {
     // Generic copy / move / store / further arithmetic on the full
     // register treats it as the register's full width.
     Type::Primitive(PrimitiveType::Int(reg_input.size))
+}
+
+/// Late-pipeline pass that runs [`finalize_signature`] against the
+/// function and its known callers and stores the result on
+/// [`SsaFunction::finalized_signature`] (t230 wiring).
+///
+/// `callers` is taken from
+/// [`SsaFunction::external_signatures`] when populated (whole-program
+/// driver) — but since we only have access to the current function's
+/// view of the world, the pass calls `finalize_signature` with an
+/// empty caller slice. The single-function path still applies the
+/// dead-param and byte-mask narrowing refinements; return-type
+/// inference from consistent caller use simply degenerates to the
+/// existing [`SsaFunction::inferred_return_type`], which is what we
+/// want when no callers are visible.
+///
+/// Returns `Ok(false)` — the pass writes to a side-map, not to the
+/// IR proper, so the fixed-point runner has no reason to re-iterate.
+pub struct CallingConvFinalizePass;
+
+impl crate::pass::Pass for CallingConvFinalizePass {
+    fn name(&self) -> &str {
+        "CallingConvFinalizePass"
+    }
+
+    fn run(&self, func: &mut SsaFunction) -> Result<bool, crate::pass::PassError> {
+        let sig = finalize_signature(func, &[]);
+        func.finalized_signature = Some(sig);
+        Ok(false)
+    }
 }
 
 #[cfg(test)]

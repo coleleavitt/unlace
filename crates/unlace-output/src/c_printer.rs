@@ -585,9 +585,18 @@ pub fn print_c_with_annotations(
         (None, None, None) => func.name.clone(),
     };
 
+    // t230 — prefer the finalized signature over the raw inferred
+    // params/return when the late calling-convention pass has run.
+    // DWARF still wins above it (DWARF carries source-level truth that
+    // the inference can only approximate).
     let return_type_str = dwarf_func
         .and_then(|df| df.return_type.as_deref())
         .map(|s| dwarf_type_to_c(s))
+        .or_else(|| {
+            func.finalized_signature
+                .as_ref()
+                .map(|sig| c_sig_return_type_for_type(&sig.return_type))
+        })
         .unwrap_or_else(|| c_sig_return_type(&func.return_type).to_string());
 
     let conv_annotation = header.and_then(|h| calling_convention_annotation(&h.convention));
@@ -635,24 +644,57 @@ pub fn print_c_with_annotations(
             let _ = write!(out, "{} *this", this_ty);
             param_idx = 1;
         }
-        for (i, (pname, pty)) in func.params.iter().enumerate() {
-            if param_idx > 0 || i > 0 {
-                out.push_str(", ");
+        // t230 — when finalize-signature has run, use its `params` list
+        // (post-dead-drop, post-byte-mask-narrow) instead of the raw
+        // `func.params`. This is how the dead-param drop becomes
+        // visible in the header and `int8` byte-masked params show up
+        // as `__int8` instead of `__int64`.
+        if let Some(sig) = func.finalized_signature.as_ref() {
+            for (i, (pname, pty)) in sig.params.iter().enumerate() {
+                if param_idx > 0 || i > 0 {
+                    out.push_str(", ");
+                }
+                let _ = write!(out, "{} {}", c_sig_type_for_type(pty), pname);
+                if func.byref_params.contains(&(i as u32)) {
+                    out.push_str(" /* BYREF */");
+                }
+                param_idx += 1;
             }
-            let _ = write!(out, "{} {}", c_sig_type(pty), pname);
-            // t210: mark byref-detected parameters with a trailing comment.
-            // We use the `/* … */` form rather than `//` so it survives
-            // inline in a comma-separated parameter list.
-            if func.byref_params.contains(&(i as u32)) {
-                out.push_str(" /* BYREF */");
+        } else {
+            for (i, (pname, pty)) in func.params.iter().enumerate() {
+                if param_idx > 0 || i > 0 {
+                    out.push_str(", ");
+                }
+                let _ = write!(out, "{} {}", c_sig_type(pty), pname);
+                // t210: mark byref-detected parameters with a trailing
+                // comment. We use the `/* … */` form rather than `//`
+                // so it survives inline in a comma-separated parameter
+                // list.
+                if func.byref_params.contains(&(i as u32)) {
+                    out.push_str(" /* BYREF */");
+                }
+                param_idx += 1;
             }
-            param_idx += 1;
         }
         if param_idx == 0 && dwarf_func.map_or(true, |df| df.params.is_empty()) {
             out.push_str("void");
         }
     }
-    let _ = writeln!(out, ") {{");
+    out.push(')');
+    // t230 — surface the dead-param drop count as a trailing comment so
+    // a reader can cross-check the recovered prototype against an
+    // external declaration.
+    if let Some(sig) = func.finalized_signature.as_ref() {
+        if sig.dropped_param_count > 0 {
+            let _ = write!(
+                out,
+                " // dropped {} param{}",
+                sig.dropped_param_count,
+                if sig.dropped_param_count == 1 { "" } else { "s" },
+            );
+        }
+    }
+    out.push_str(" {\n");
 
     let mut foldable_svs: BTreeSet<SsaVarnode> = ctx.sv_defining_stmt.keys().copied().collect();
     // Also suppress variables that the expression tree pass marked as
@@ -3391,6 +3433,36 @@ fn is_default_v_name(name: &str) -> bool {
         return false;
     };
     !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// IDA-style signature type rendering for a [`unlace_ir::types::Type`].
+///
+/// Wraps the primitive-only [`c_sig_type`] helper: primitives go through
+/// the legacy `__intN`/`unsigned …` cascade so `int8`/`int16` parameters
+/// render exactly the way the caller-side prototype consumer expects;
+/// composite types (`Ptr` / `Struct` / `Array` / …) fall back to the
+/// general [`render_type_as_c`] so a `T *` param survives intact when
+/// the finalized signature widens a pointer-typed param into a typed
+/// pointer.
+fn c_sig_type_for_type(ty: &Type) -> String {
+    match ty {
+        Type::Primitive(p) => c_sig_type(p).to_string(),
+        other => render_type_as_c(other),
+    }
+}
+
+/// IDA-style return-type rendering for a [`unlace_ir::types::Type`].
+///
+/// Primitives are routed through [`c_sig_return_type`] so
+/// `PrimitiveType::Unknown` still renders as `void` (matching the
+/// printer's legacy treatment of "no inferred return"); concrete
+/// types go through the general [`render_type_as_c`] path so
+/// `int *` / struct returns survive unmolested.
+fn c_sig_return_type_for_type(ty: &Type) -> String {
+    match ty {
+        Type::Primitive(p) => c_sig_return_type(p).to_string(),
+        other => render_type_as_c(other),
+    }
 }
 
 /// IDA-style type names for function signature parameters.
@@ -7777,6 +7849,97 @@ mod tests {
                 "unexpected role-style name `{forbidden}` in {output}",
             );
         }
+    }
+
+    /// t230 — when a function carries a finalized signature with one
+    /// dropped param, the printed header has one fewer parameter and
+    /// surfaces the count via a trailing `// dropped 1 param` comment.
+    #[test]
+    fn t230_dropped_param_shrinks_header() {
+        use unlace_ir::ssa::FinalizedSignature;
+        use unlace_ir::types::Type;
+
+        let body = vec![HirNode::Return(None)];
+        let mut func = make_func("drop_param", body);
+        // The raw `inferred_params` view says there are two args; the
+        // finalized signature drops the second.
+        func.params = vec![
+            ("a1".into(), PrimitiveType::Int(8)),
+            ("a2".into(), PrimitiveType::Int(8)),
+        ];
+        func.finalized_signature = Some(FinalizedSignature {
+            params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(8)))],
+            return_type: Type::Primitive(PrimitiveType::Unknown),
+            dropped_param_count: 1,
+        });
+        let output = print_c(&func);
+        assert!(
+            output.contains("(__int64 a1)"),
+            "header should have exactly one param: {output}",
+        );
+        assert!(
+            !output.contains(" a2"),
+            "dropped param `a2` should not appear: {output}",
+        );
+        assert!(
+            output.contains("// dropped 1 param"),
+            "dropped-param comment missing: {output}",
+        );
+    }
+
+    /// t230 — a finalized parameter narrowed to `Int(1)` renders as
+    /// `__int8` in the header (instead of the raw `__int64` we'd see
+    /// from a pre-narrow `inferred_params` entry).
+    #[test]
+    fn t230_narrowed_byte_param_renders_as_int8() {
+        use unlace_ir::ssa::FinalizedSignature;
+        use unlace_ir::types::Type;
+
+        let body = vec![HirNode::Return(None)];
+        let mut func = make_func("narrow_byte", body);
+        func.params = vec![("a1".into(), PrimitiveType::Int(8))];
+        func.finalized_signature = Some(FinalizedSignature {
+            params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(1)))],
+            return_type: Type::Primitive(PrimitiveType::Unknown),
+            dropped_param_count: 0,
+        });
+        let output = print_c(&func);
+        assert!(
+            output.contains("__int8 a1"),
+            "byte-narrowed param should render as __int8: {output}",
+        );
+        // No dropped-param comment should appear when count is zero.
+        assert!(
+            !output.contains("// dropped"),
+            "unexpected dropped-param comment: {output}",
+        );
+    }
+
+    /// t230 — a finalized return type set from consistent caller use
+    /// shows up in the rendered header, overriding the raw
+    /// `func.return_type`.
+    #[test]
+    fn t230_finalized_return_type_drives_header() {
+        use unlace_ir::ssa::FinalizedSignature;
+        use unlace_ir::types::Type;
+
+        let body = vec![HirNode::Return(None)];
+        let mut func = make_func("ret_finalize", body);
+        // Raw return type is the printer's `void` sentinel (Unknown).
+        func.return_type = PrimitiveType::Unknown;
+        // Finalized return type narrowed from consistent caller use to int8.
+        func.finalized_signature = Some(FinalizedSignature {
+            params: vec![],
+            return_type: Type::Primitive(PrimitiveType::Int(1)),
+            dropped_param_count: 0,
+        });
+        let output = print_c(&func);
+        // First line of the body is the function decl; that should
+        // start with `__int8` now rather than `void`.
+        assert!(
+            output.contains("__int8") && output.contains("ret_finalize"),
+            "finalized return type should drive header: {output}",
+        );
     }
 
     /// t227 — a *meaningful* `merged_names` entry (anything other than

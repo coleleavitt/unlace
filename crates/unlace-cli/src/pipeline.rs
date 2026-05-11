@@ -17,8 +17,8 @@ use unlace_passes::{
     ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
     StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
     detect_byref, recover_stack_frame,
-    TailCallDetectPass, VarNamingPass, VariableMergePass, bump_if_signature_changed,
-    run_outer_fixedpoint,
+    CallingConvFinalizePass, TailCallDetectPass, VarNamingPass, VariableMergePass,
+    bump_if_signature_changed, run_outer_fixedpoint,
     run_to_fixedpoint,
 };
 
@@ -859,6 +859,13 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
     VarNamingPass
         .run(ssa)
         .context("var naming pass failed")?;
+
+    // t230 — calling-convention finalization. Runs last so the
+    // dead-param drop, byte-mask narrowing, and caller-side
+    // return-type inference all see the fully-stabilised IR + names.
+    CallingConvFinalizePass
+        .run(ssa)
+        .context("calling-conv finalization pass failed")?;
 
     // Bump the signature revision iff the pipeline mutated any of the three
     // observable signature components. Whole-program drivers can compare

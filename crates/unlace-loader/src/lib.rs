@@ -24,6 +24,7 @@ pub mod objc;
 pub mod pdb;
 pub mod pdb_types;
 pub mod pe;
+pub mod python_pyc;
 pub mod rtti;
 pub mod seh;
 pub mod go_moduledata;

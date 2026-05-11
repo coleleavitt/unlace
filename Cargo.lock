@@ -1390,6 +1390,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-lift-z80"
+version = "0.1.0"
+dependencies = [
+ "smallvec",
+ "tracing",
+ "unlace-ir",
+]
+
+[[package]]
 name = "unlace-loader"
 version = "0.1.0"
 dependencies = [

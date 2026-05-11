@@ -1280,6 +1280,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-fuzz"
+version = "0.1.0"
+dependencies = [
+ "unlace-cli",
+ "unlace-ir",
+ "unlace-lift",
+ "unlace-loader",
+ "unlace-output",
+ "unlace-passes",
+]
+
+[[package]]
 name = "unlace-ir"
 version = "0.1.0"
 dependencies = [

@@ -74,6 +74,12 @@ void _start(void) {
     int v6; // rip
     *(_QWORD *)(0LL) = 0x14a5LL; return;
 }
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    __int64 field_0;
+    __int64 field_8;
+};
+
 /* Function:   f_rec_fib | Address: 0x1570 | Size: 0x2b1 (689 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_rec_fib | Xrefs from: unknown */
 void f_rec_fib(void) {
     int v12; // rdi
@@ -226,6 +232,12 @@ void f_rec_power.constprop.0(__int64 a1) {
     }
     return;
 }
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    __int64 field_0;
+    __int64 field_8;
+};
+
 /* Function:   sub_1520 | Address: 0x1520 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_14b0 | Xrefs from: unknown */
 void sub_1520(void) {
     long long v1; // rsp
@@ -244,6 +256,12 @@ void sub_1520(void) {
         result = *(_QWORD *)(v10); return result;
     }
 }
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    __int64 field_0;
+    __int64 field_8;
+};
+
 /* Function:   sub_1560 | Address: 0x1560 | Size: 0x735 (1845 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 void sub_1560(void) {
     int v14; // edi

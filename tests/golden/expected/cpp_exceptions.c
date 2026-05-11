@@ -92,6 +92,12 @@ void __aapcs sub_1176(void * a1) {
     return;
 }
 
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    __int64 field_0;
+    __int64 field_8;
+};
+
 /* Function:   sub_11c4 | Address: 0x11c4 | Size: 0x54 (84 bytes) | Convention: unknown | Stack frame: 0x20 (32 bytes) | Xrefs to:   __cxa_begin_catch, __cxa_free_exception | Xrefs from: unknown */
 void sub_11c4(void) {
     long long v4; // rsp
@@ -124,6 +130,12 @@ void __aapcs sub_122d(__int64 a1) {
     __cxa_end_catch();
     *(_QWORD *)(0LL) = 0x1241LL; _Unwind_Resume(); return;
 }
+
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    __int64 field_0;
+    __int64 field_8;
+};
 
 /* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
 void sub_1300(void) {

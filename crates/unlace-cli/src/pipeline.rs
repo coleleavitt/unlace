@@ -1419,6 +1419,22 @@ pub fn emit_output(
             unlace_struct::recover_guarded_whiles(&mut hir);
             unlace_struct::cleanup_empty_ifs(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
+
+            // t224: precompute the recovered-composite preamble from the
+            // SsaFunction here — the printer sees only HirFunction and so
+            // can't reach `inferred_structs` / `array_struct_layouts`
+            // directly.  Splice the rendered block onto a local clone of
+            // the caller's annotations (or build a fresh one) so the
+            // upstream `AnnotationDb`-derived view is left untouched.
+            let inferred_preamble = unlace_output::emit_inferred_struct_preamble(ssa);
+            let mut ann_owned: Option<unlace_output::PrinterAnnotations> = None;
+            if !inferred_preamble.is_empty() {
+                let mut clone = annotations.cloned().unwrap_or_default();
+                clone.inferred_struct_preamble = Some(inferred_preamble);
+                ann_owned = Some(clone);
+            }
+            let ann_ref = ann_owned.as_ref().or(annotations);
+
             Ok(unlace_output::print_c_with_annotations(
                 &hir,
                 dwarf,
@@ -1427,7 +1443,7 @@ pub fn emit_output(
                 Some(string_table),
                 rtti,
                 print_config,
-                annotations,
+                ann_ref,
             ))
         }
     }

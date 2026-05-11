@@ -40,6 +40,12 @@ void main(void) {
     long long result = 0LL; // temp
     return result;
 }
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    __int64 field_0;
+    __int64 field_8;
+};
+
 /* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
 void sub_10e0(void) {
     long long v1; // rsp

@@ -15,7 +15,7 @@
 /// | `Const`    | `c`          | Immediate constants in the offset field. |
 /// | `Unique`   | `u`          | Lifter-private temporaries.              |
 /// | `Stack`    | `s`          | Stack-frame slots (signed displacement). |
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 #[repr(u8)]
 pub enum SpaceId {

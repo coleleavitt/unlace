@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use crate::{BasicBlock, BlockId};
 
 /// An IR function: a named collection of basic blocks with a designated entry.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Function {
     pub name: String,
     pub entry: BlockId,

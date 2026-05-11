@@ -29,7 +29,7 @@ use crate::space::SpaceId;
 use crate::ssa::SsaFunction;
 
 /// Classification of a single data cross-reference.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub enum DataXrefKind {
     /// `Load` from the global address (read).
     Read,
@@ -47,7 +47,7 @@ pub enum DataXrefKind {
 
 /// One data cross-reference: an instruction in some function reads,
 /// writes, or takes the address of a global at `to_addr`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DataXref {
     pub from_func: u64,
     pub from_insn: (BlockId, usize),
@@ -60,7 +60,7 @@ pub struct DataXref {
 /// `to[addr]` is the canonical "who references this global?" lookup the
 /// printer uses when rendering a global; `from` is the inverse mapping
 /// useful for "what does this instruction touch?" queries.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct DataXrefGraph {
     to: BTreeMap<u64, Vec<DataXref>>,
     from: BTreeMap<(u64, BlockId, usize), Vec<DataXref>>,

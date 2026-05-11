@@ -59,9 +59,10 @@ pub use structurer::{
     structure_with_landing_pads, structure_with_landing_pads_and_arch,
 };
 pub use switch_recovery::{
-    IndirectBranchKind, JumpTable, JumpTableKind, SectionPerms, SectionView, TableEndian,
-    classify_indirect_branch, find_default_target, read_jump_table, recover_switches,
-    refine_switches_with_tables, validate_table_base,
+    ComputedGoto, IndirectBranchKind, JumpTable, JumpTableKind, SectionPerms, SectionView,
+    TableEndian, classify_indirect_branch, computed_goto_to_switch, detect_computed_goto,
+    find_default_target, read_jump_table, recover_switches, refine_switches_with_tables,
+    validate_table_base,
 };
 pub use tail_duplication::{tail_duplicate_aggressive, tail_duplicate_small_blocks};
 pub use ternary_recovery::ternary_recovery;

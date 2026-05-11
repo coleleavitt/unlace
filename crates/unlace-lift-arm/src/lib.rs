@@ -713,23 +713,145 @@ mod tests {
     }
 
     #[test]
-    fn autia_xn_remains_nop() {
-        // t135 — AUTIA X0, X0  →  dac11000
+    fn autia_xn_lifts_to_callother() {
+        // t225 (closes t135 TODO) — AUTIA X0, X0  →  dac11000
         //
-        // PAC AUTI* instructions currently lift as no-ops via try_pac_bti_nop.
-        // Statically modeling the auth-and-fail behavior (whereby the CPU sets
-        // a poison bit on auth failure) yields little practical signal because
-        // the decoder cannot know whether auth will succeed at runtime. We keep
-        // the no-op semantics and document the deferred work here.
-        //
-        // TODO(t135): emit a dedicated Callother(PTR_AUTH) intrinsic so a later
-        // pass can recognize auth-and-branch idioms when modeling speculative
-        // execution attacks (e.g. PACMAN-style gadgets).
+        // Register-form PAC/AUTI/XPAC instructions now lift to a dedicated
+        // `Callother(PTR_AUTH)` intrinsic so a later pass can recognise
+        // auth-and-branch idioms (e.g. PACMAN-style speculative gadgets).
+        // Statically modelling the auth-or-fail outcome is still beyond
+        // scope — Callother semantics deliberately leave the success bit
+        // out so dataflow continues to flow through Xd.
+        use crate::lift::CALLOTHER_AARCH64_AUTIA;
         let result = lifter()
             .lift_insn(&[0x00, 0x10, 0xc1, 0xda], 0x1000)
             .expect("should decode");
         assert_eq!(result.len, 4);
-        assert!(result.ir_ops.is_empty(), "AUTIA Xn must remain a no-op");
+        assert_eq!(result.ir_ops.len(), 1, "AUTIA must emit one Callother");
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTIA);
+        assert_eq!(ir.inputs[0].space, SpaceId::Const);
+        // value = X0 (offset 0), modifier = X0 (offset 0)
+        assert_eq!(ir.inputs[1].space, SpaceId::Register);
+        assert_eq!(ir.inputs[1].offset, 0);
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, 0);
+        // output = X0
+        let out = ir.output.as_ref().expect("AUTIA must have output");
+        assert_eq!(out.space, SpaceId::Register);
+        assert_eq!(out.offset, 0);
+    }
+
+    #[test]
+    fn pacia_lifts_to_callother() {
+        // t225 — PACIA X0, X1  →  dac10020
+        use crate::lift::CALLOTHER_AARCH64_PACIA;
+        let result = lifter()
+            .lift_insn(&[0x20, 0x00, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACIA);
+        // value = X0
+        assert_eq!(ir.inputs[1].offset, 0);
+        // modifier = X1 (offset 8)
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, 8);
+        assert_eq!(ir.output.as_ref().unwrap().offset, 0);
+    }
+
+    #[test]
+    fn pacib_lifts_to_callother() {
+        // t225 — PACIB X2, X3  →  dac10462
+        use crate::lift::CALLOTHER_AARCH64_PACIB;
+        let result = lifter()
+            .lift_insn(&[0x62, 0x04, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACIB);
+        // value = X2 (offset 16)
+        assert_eq!(ir.inputs[1].offset, 16);
+        // modifier = X3 (offset 24)
+        assert_eq!(ir.inputs[2].offset, 24);
+        // output = X2
+        assert_eq!(ir.output.as_ref().unwrap().offset, 16);
+    }
+
+    #[test]
+    fn autib_lifts_to_callother() {
+        // t225 — AUTIB X4, X5  →  dac114a4
+        use crate::lift::CALLOTHER_AARCH64_AUTIB;
+        let result = lifter()
+            .lift_insn(&[0xa4, 0x14, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTIB);
+        // value = X4 (offset 32), modifier = X5 (offset 40)
+        assert_eq!(ir.inputs[1].offset, 32);
+        assert_eq!(ir.inputs[2].offset, 40);
+        assert_eq!(ir.output.as_ref().unwrap().offset, 32);
+    }
+
+    #[test]
+    fn paciza_zero_modifier_lifts_to_callother() {
+        // t225 — PACIZA X7  →  dac123e7   (opcode=0x08, Rn=0b11111)
+        // Encoded as `1101_1010_1100_0001_0010_0011_1110_0111` = 0xDAC123E7.
+        use crate::lift::CALLOTHER_AARCH64_PACIA;
+        let result = lifter()
+            .lift_insn(&[0xe7, 0x23, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACIA);
+        // value = X7 (offset 56), modifier = const 0
+        assert_eq!(ir.inputs[1].offset, 56);
+        assert_eq!(ir.inputs[2].space, SpaceId::Const);
+        assert_eq!(ir.inputs[2].offset, 0);
+    }
+
+    #[test]
+    fn xpaci_lifts_to_callother_no_modifier() {
+        // t225 — XPACI X9  →  opcode=0x10, Rn=0b11111, Rd=9
+        // `1101_1010_1100_0001_0100_0011_1110_1001` = 0xDAC143E9.
+        use crate::lift::CALLOTHER_AARCH64_XPACI;
+        let result = lifter()
+            .lift_insn(&[0xe9, 0x43, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_XPACI);
+        // XPAC* has only (tag, value) — no modifier slot.
+        assert_eq!(ir.inputs.len(), 2);
+        // value = X9 (offset 72)
+        assert_eq!(ir.inputs[1].offset, 72);
+        // output = X9
+        assert_eq!(ir.output.as_ref().unwrap().offset, 72);
+    }
+
+    #[test]
+    fn xpacd_lifts_to_callother_no_modifier() {
+        // t225 — XPACD X10  →  opcode=0x11, Rn=0b11111, Rd=10
+        // `1101_1010_1100_0001_0100_0111_1110_1010` = 0xDAC147EA.
+        use crate::lift::CALLOTHER_AARCH64_XPACD;
+        let result = lifter()
+            .lift_insn(&[0xea, 0x47, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_XPACD);
+        assert_eq!(ir.inputs.len(), 2);
+        // value = X10 (offset 80)
+        assert_eq!(ir.inputs[1].offset, 80);
+        assert_eq!(ir.output.as_ref().unwrap().offset, 80);
     }
 
     #[test]

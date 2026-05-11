@@ -683,7 +683,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
     }
 }
 
-fn build_dominator_tree(cfg: &ControlFlowGraph) -> DominatorTree {
+pub fn build_dominator_tree(cfg: &ControlFlowGraph) -> DominatorTree {
     let entry = cfg.entry_block();
     let Some(entry_ni) = cfg.node_index(entry) else {
         return DominatorTree {

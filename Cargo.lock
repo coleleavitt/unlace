@@ -1777,6 +1777,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-lift-rx"
+version = "0.1.0"
+dependencies = [
+ "smallvec",
+ "unlace-ir",
+]
+
+[[package]]
 name = "unlace-lift-v850"
 version = "0.1.0"
 dependencies = [

@@ -47,6 +47,7 @@ pub mod gvn;
 pub mod idiom_recognition;
 pub mod inline_foldback;
 pub mod libc_signatures;
+pub mod lazy_lift;
 pub mod libc_idioms;
 pub mod iv_elim;
 pub mod licm;

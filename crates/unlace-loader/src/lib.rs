@@ -15,6 +15,7 @@ pub mod flirt;
 pub mod gcc_except_table;
 pub mod gopclntab;
 pub mod image;
+pub mod java_class;
 pub mod macho;
 pub mod msvc_rtti;
 pub mod objc;
@@ -43,6 +44,7 @@ pub use elf::ElfLoader;
 pub use error::LoadError;
 pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
+pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMethod, parse_class};
 pub use image::{
     ArchId, BinaryImage, BoundImport, DebugRecord, DylibDep, DylibKind, Endian, LoadConfig,
     RelocKind, Relocation, ResourceEntry, RichHeader, RichRecord, Section, SectionFlags, Symbol,

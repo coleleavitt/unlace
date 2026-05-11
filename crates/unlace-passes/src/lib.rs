@@ -6,6 +6,7 @@ pub mod byref_detect;
 pub mod call_boundary_copyprop;
 pub mod caller_param_propagate;
 pub mod calling_convention;
+pub mod calling_conv_finalize;
 pub mod indirect_call_resolve;
 pub mod interproc_fixpoint;
 pub mod vararg_detect;
@@ -77,6 +78,7 @@ pub use vararg_detect::{
     detect_variadic_callees, parse_format_string, parse_printf_format_strings,
 };
 pub use calling_convention::{CallingConventionDetectPass, ParamInferPass, ReturnTypeInferPass};
+pub use calling_conv_finalize::{FinalizedSignature, finalize_signature};
 pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;

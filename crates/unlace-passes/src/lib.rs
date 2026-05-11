@@ -16,6 +16,7 @@ pub mod vararg_detect;
 pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
+pub mod boost_recognize;
 pub mod cpp_stl;
 pub mod cpp_vtable;
 pub mod crypto_idioms;

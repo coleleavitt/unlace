@@ -2443,6 +2443,14 @@ pub fn try_aarch64_ccmp(insn: u32) -> Option<CcmpDecoded> {
 /// can recognize the intrinsic when flag-aware analyses are added.
 pub const CALLOTHER_AARCH64_CCMP: u64 = 0x362;
 
+/// Canonical AArch64 CSEL intrinsic tag. Emitted by `lift_csel` as
+/// `Callother(CALLOTHER_AARCH64_CSEL, cond, Rn, Rm) → Rd`, optionally
+/// followed by a trailing `Varnode::constant(cc, 1)` input carrying the
+/// architectural condition code (capstone `ARM64_CC_*` value, 1..=14).
+/// The `unlace-struct` `fold_csel_ternary` pass (t180) recognizes this
+/// tag and collapses CMP/SUBS+CSEL pairs into [`HirNode::CselTernary`].
+pub const CALLOTHER_AARCH64_CSEL: u64 = 0x330;
+
 /// Return `true` if `insn` is an AArch64 pointer-authentication or BTI
 /// instruction with no architectural effects relevant to lifting; the
 /// caller should consume 4 bytes and emit no IR.

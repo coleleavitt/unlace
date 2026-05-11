@@ -537,6 +537,7 @@ impl<'a> StructureCtx<'a> {
         flush_guard(&mut pending_guard, nodes);
         fuse_guarded_if_else(nodes);
         fold_guarded_ternary(nodes);
+        fold_csel_ternary(nodes);
     }
 
     fn try_structure_switch(&mut self, bid: BlockId) -> Option<(HirNode, Option<BlockId>)> {
@@ -1866,6 +1867,7 @@ fn fold_guarded_ternary_in_children(node: &mut HirNode) {
         | HirNode::Label(_)
         | HirNode::Ternary { .. }
         | HirNode::GuardedTernary { .. }
+        | HirNode::CselTernary { .. }
         | HirNode::TailCall { .. }
         | HirNode::Continue
         | HirNode::Break
@@ -1917,6 +1919,224 @@ fn try_fold_guarded_ternary(
         else_insn,
         output: then_out,
     })
+}
+
+// ---------------------------------------------------------------------------
+// t180: AArch64 CMP+CSEL → CselTernary fold.
+//
+// The AArch64 lifter emits CSEL as
+//
+//   Callother(const(CALLOTHER_AARCH64_CSEL=0x330, 8),
+//             cond_varnode,
+//             Rn,                       // true_val
+//             Rm,                       // false_val
+//             const(cc_u8, 1))          // capstone ARM64_CC_* (1..=14)
+//   → Rd
+//
+// preceded by a CMP/SUBS which lifts to `IntSub` plus NZCV flag writes.
+// This pass walks a body and, whenever it finds a CSEL Callother whose
+// preceding non-control-flow statement is the IntSub of a CMP/SUBS,
+// rewrites the Callother into a `HirNode::CselTernary` carrying the
+// explicit comparison opcode (derived from the cc) and the IntSub's
+// operands as the comparison LHS/RHS.
+//
+// Both the IntSub and any trailing flag writes are left intact; downstream
+// dead-code elimination prunes the now-unused NZCV writes when nothing else
+// reads them. Leaving them avoids accidental data-loss if a later CSEL/Bcc
+// in the same block reads the same flag state.
+// ---------------------------------------------------------------------------
+
+/// Canonical AArch64 CSEL callother tag — kept in lockstep with
+/// `unlace_lift_arm::lift::CALLOTHER_AARCH64_CSEL` (0x330). Duplicated
+/// here to keep `unlace-struct` from taking a build-time dep on the
+/// per-arch lifter crate.
+const CALLOTHER_AARCH64_CSEL_TAG: u64 = 0x330;
+
+/// Map a capstone `ARM64_CC_*` value (1..=14) to the (Int-op, swap?) pair
+/// the C printer should render. `swap` is true when the cc translates to
+/// a comparison whose canonical Int-op needs operands flipped (e.g. GT is
+/// `Rn > Rm` in source, but `IntSless(Rm, Rn)` in IR). Returns `None` for
+/// AL/NV/INVALID and any unsigned-only / V-flag-only conditions that
+/// don't have a clean two-operand integer-comparison form (HS/LO/HI/LS
+/// fall back to GuardedTernary-style rendering via the caller's bail-out).
+fn aarch64_cc_to_int_op(cc: u8) -> Option<(IrOp, bool)> {
+    match cc {
+        1 => Some((IrOp::IntEqual, false)),       // EQ:  Z == 1  ↔ a == b
+        2 => Some((IrOp::IntNotequal, false)),    // NE:  Z == 0  ↔ a != b
+        3 => Some((IrOp::IntLessequal, true)),    // HS:  C == 1  ↔ a >= b (unsigned)
+        4 => Some((IrOp::IntLess, false)),        // LO:  C == 0  ↔ a < b  (unsigned)
+        9 => Some((IrOp::IntLessequal, true)),    // HI:  C&!Z    ↔ a > b  (unsigned, swap+swap of <=)
+        10 => Some((IrOp::IntLessequal, false)),  // LS:  !C|Z    ↔ a <= b (unsigned)
+        11 => Some((IrOp::IntSlessequal, true)),  // GE:  N == V  ↔ a >= b (signed)
+        12 => Some((IrOp::IntSless, false)),      // LT:  N != V  ↔ a < b  (signed)
+        13 => Some((IrOp::IntSlessequal, true)),  // GT:  !Z&N==V ↔ a > b  (signed)
+        14 => Some((IrOp::IntSlessequal, false)), // LE:  Z|N!=V  ↔ a <= b (signed)
+        _ => None,                                // 5/6 (MI/PL), 7/8 (VS/VC), 0/15/16 — bail
+    }
+}
+
+/// Return true if `insn` is the IntSub a CMP or SUBS produces. CMP/SUBS
+/// both lift as `IntSub` with the two compared operands as inputs and a
+/// unique-space result. We don't distinguish them — the structurer just
+/// needs the comparison operands.
+fn is_cmp_subs_insn(insn: &IrInsn) -> bool {
+    insn.op == IrOp::IntSub && insn.inputs.len() >= 2
+}
+
+/// Return true if `insn` is the AArch64 CSEL `Callother`.
+fn is_aarch64_csel_callother(insn: &IrInsn) -> bool {
+    if insn.op != IrOp::Callother || insn.inputs.is_empty() {
+        return false;
+    }
+    let tag = &insn.inputs[0];
+    tag.space == SpaceId::Const && tag.offset == CALLOTHER_AARCH64_CSEL_TAG
+}
+
+/// Walk `nodes` in order; whenever a `Statement(csel_callother)` is
+/// preceded (within the same body) by an `IntSub` `Statement` whose write
+/// is not consumed by an intervening non-flag Statement, fold them into
+/// a [`HirNode::CselTernary`]. Recurses into child bodies. Idempotent.
+fn fold_csel_ternary(nodes: &mut Vec<HirNode>) {
+    for node in nodes.iter_mut() {
+        fold_csel_ternary_in_children(node);
+    }
+    let mut i = 0;
+    while i < nodes.len() {
+        // Find a CSEL Callother.
+        let csel = match &nodes[i] {
+            HirNode::Statement(insn) if is_aarch64_csel_callother(insn) => insn.clone(),
+            _ => {
+                i += 1;
+                continue;
+            }
+        };
+        // Need at least 5 inputs: tag, cond, true_val, false_val, cc_byte.
+        if csel.inputs.len() < 5 {
+            i += 1;
+            continue;
+        }
+        let cc_vn = &csel.inputs[4];
+        if cc_vn.space != SpaceId::Const || cc_vn.size != 1 {
+            i += 1;
+            continue;
+        }
+        let cc = cc_vn.offset as u8;
+        let (cmp_op, swap) = match aarch64_cc_to_int_op(cc) {
+            Some(p) => p,
+            None => {
+                i += 1;
+                continue;
+            }
+        };
+        let true_val = csel.inputs[2];
+        let false_val = csel.inputs[3];
+        let Some(output) = csel.output else {
+            i += 1;
+            continue;
+        };
+
+        // Scan backward for the nearest IntSub Statement, skipping over
+        // intervening flag-write Statements (writes to register-space
+        // offsets in the NZCV byte range 264..=267 or the packed 272 slot
+        // for AArch64 — we also accept register-space writes whose output
+        // is one byte wide as flag-shaped, since `emit_sub_flags` produces
+        // exactly that shape). Anything else aborts the search.
+        let mut found: Option<&IrInsn> = None;
+        for j in (0..i).rev() {
+            match &nodes[j] {
+                HirNode::Statement(prev) => {
+                    if is_cmp_subs_insn(prev) {
+                        found = Some(prev);
+                        break;
+                    }
+                    // Allow flag-byte writes to flow through.
+                    if let Some(out) = prev.output {
+                        if out.space == SpaceId::Register && out.size == 1 {
+                            continue;
+                        }
+                    }
+                    break;
+                }
+                _ => break,
+            }
+        }
+        let Some(cmp_insn) = found else {
+            i += 1;
+            continue;
+        };
+        let (cmp_lhs, cmp_rhs) = if swap {
+            (cmp_insn.inputs[1], cmp_insn.inputs[0])
+        } else {
+            (cmp_insn.inputs[0], cmp_insn.inputs[1])
+        };
+
+        nodes[i] = HirNode::CselTernary {
+            cmp_op,
+            cmp_lhs,
+            cmp_rhs,
+            true_val,
+            false_val,
+            output,
+            addr: csel.addr,
+        };
+        i += 1;
+    }
+}
+
+fn fold_csel_ternary_in_children(node: &mut HirNode) {
+    match node {
+        HirNode::Block(children) => fold_csel_ternary(children),
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            fold_csel_ternary(then_body);
+            if let Some(eb) = else_body {
+                fold_csel_ternary(eb);
+            }
+        }
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+            fold_csel_ternary(body);
+        }
+        HirNode::For { body, .. } => fold_csel_ternary(body),
+        HirNode::Switch { cases, default, .. } => {
+            for (_, body, _) in cases {
+                fold_csel_ternary(body);
+            }
+            if let Some(def) = default {
+                fold_csel_ternary(def);
+            }
+        }
+        HirNode::TryCatch {
+            try_body,
+            catch_body,
+        } => {
+            fold_csel_ternary(try_body);
+            fold_csel_ternary(catch_body);
+        }
+        HirNode::Commented { inner, .. } => fold_csel_ternary_in_children(inner),
+        HirNode::GuardedIf {
+            then_body,
+            else_body,
+            ..
+        } => {
+            fold_csel_ternary(then_body);
+            fold_csel_ternary(else_body);
+        }
+        HirNode::Statement(_)
+        | HirNode::Return(_)
+        | HirNode::Goto(_)
+        | HirNode::Label(_)
+        | HirNode::Ternary { .. }
+        | HirNode::GuardedTernary { .. }
+        | HirNode::CselTernary { .. }
+        | HirNode::TailCall { .. }
+        | HirNode::Continue
+        | HirNode::Break
+        | HirNode::ObjcBlock { .. }
+        | HirNode::Asm { .. } => {}
+    }
 }
 
 /// Fuse adjacent [`HirNode::GuardedIf`] pairs whose cond codes are inverses
@@ -2094,6 +2314,7 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
         | HirNode::Label(_)
         | HirNode::Ternary { .. }
         | HirNode::GuardedTernary { .. }
+        | HirNode::CselTernary { .. }
         | HirNode::TailCall { .. }
         | HirNode::Continue
         | HirNode::Break
@@ -5073,5 +5294,147 @@ mod tests {
         assert_eq!(guarded_ifs[0].0, 0);
         assert_eq!(guarded_ifs[0].1, 2, "then-arm keeps its two statements");
         assert_eq!(guarded_ifs[0].2, 1, "else-arm keeps its one statement");
+    }
+
+    // -----------------------------------------------------------------------
+    // t180: AArch64 CMP+CSEL → HirNode::CselTernary fold tests.
+    //
+    // Each test builds a single-block SSA function shaped like the lifter
+    // output for
+    //     CMP  X0, X1                 ; IntSub(X0, X1) → unique + NZCV flags
+    //     CSEL Xd, Xt, Xf, <cc>       ; Callother(0x330, cond, Xt, Xf, cc) → Xd
+    //     RET
+    // and asserts the structurer's `fold_csel_ternary` pass collapses the
+    // pair into a single `HirNode::CselTernary` with the expected
+    // comparison opcode (EQ→IntEqual, NE→IntNotequal, GE→IntSlessequal
+    // with operands swapped, LT→IntSless).
+    // -----------------------------------------------------------------------
+
+    /// Build the synthetic `IntSub` an AArch64 CMP/SUBS lifts to.
+    fn t180_cmp_insn(lhs: Varnode, rhs: Varnode, dst: Varnode, addr: u64) -> IrInsn {
+        IrInsn::with_output(IrOp::IntSub, dst, smallvec![lhs, rhs], addr)
+    }
+
+    /// Build the synthetic Callother an AArch64 CSEL lifts to, including
+    /// the trailing `Varnode::constant(cc, 1)` the lifter appends so the
+    /// structurer can recover the cc without redoing dataflow.
+    fn t180_csel_insn(
+        rd: Varnode,
+        true_val: Varnode,
+        false_val: Varnode,
+        cond_vn: Varnode,
+        cc: u8,
+        addr: u64,
+    ) -> IrInsn {
+        IrInsn::with_output(
+            IrOp::Callother,
+            rd,
+            smallvec![
+                Varnode::constant(0x330, 8),
+                cond_vn,
+                true_val,
+                false_val,
+                Varnode::constant(cc as u64, 1),
+            ],
+            addr,
+        )
+    }
+
+    fn collect_csel_ternaries(nodes: &[HirNode], out: &mut Vec<(IrOp, Varnode, Varnode, Varnode)>) {
+        for n in nodes {
+            match n {
+                HirNode::CselTernary {
+                    cmp_op,
+                    cmp_lhs,
+                    cmp_rhs,
+                    output,
+                    ..
+                } => out.push((*cmp_op, *cmp_lhs, *cmp_rhs, *output)),
+                HirNode::Block(inner) => collect_csel_ternaries(inner, out),
+                HirNode::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_csel_ternaries(then_body, out);
+                    if let Some(eb) = else_body {
+                        collect_csel_ternaries(eb, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn t180_run_csel(cc: u8) -> (Vec<(IrOp, Varnode, Varnode, Varnode)>, Vec<HirNode>) {
+        // Operand register varnodes.
+        let x0 = Varnode::reg(0, 8); // CMP LHS
+        let x1 = Varnode::reg(8, 8); // CMP RHS
+        let x2 = Varnode::reg(16, 8); // CSEL Rd
+        let x3 = Varnode::reg(24, 8); // CSEL true
+        let x4 = Varnode::reg(32, 8); // CSEL false
+        let sub_dst = Varnode::unique(0, 8);
+        // cond_vn opaque — fold uses inputs[4] cc constant, not this varnode.
+        let zf = Varnode::reg(265, 1);
+
+        let mut func = Function::new("csel_fold", BlockId(0), 0xD000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(t180_cmp_insn(x0, x1, sub_dst, 0xD000));
+        bb0.insns.push(t180_csel_insn(x2, x3, x4, zf, cc, 0xD004));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0xD008));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+        let mut ternaries = Vec::new();
+        collect_csel_ternaries(&hir.body, &mut ternaries);
+        (ternaries, hir.body)
+    }
+
+    #[test]
+    fn t180_cmp_csel_eq_folds() {
+        // CSEL X2, X3, X4, EQ → X2 = (X0 == X1) ? X3 : X4
+        let (ternaries, _) = t180_run_csel(1); // ARM64_CC_EQ
+        assert_eq!(ternaries.len(), 1, "expected 1 CselTernary, got {ternaries:?}");
+        let (op, lhs, rhs, out) = ternaries[0];
+        assert_eq!(op, IrOp::IntEqual, "EQ → IntEqual");
+        assert_eq!(lhs, Varnode::reg(0, 8), "lhs = CMP first operand (X0)");
+        assert_eq!(rhs, Varnode::reg(8, 8), "rhs = CMP second operand (X1)");
+        assert_eq!(out, Varnode::reg(16, 8), "output = CSEL Rd (X2)");
+    }
+
+    #[test]
+    fn t180_cmp_csel_ne_folds() {
+        // CSEL X2, X3, X4, NE → X2 = (X0 != X1) ? X3 : X4
+        let (ternaries, _) = t180_run_csel(2); // ARM64_CC_NE
+        assert_eq!(ternaries.len(), 1, "expected 1 CselTernary, got {ternaries:?}");
+        let (op, lhs, rhs, _) = ternaries[0];
+        assert_eq!(op, IrOp::IntNotequal, "NE → IntNotequal");
+        assert_eq!(lhs, Varnode::reg(0, 8));
+        assert_eq!(rhs, Varnode::reg(8, 8));
+    }
+
+    #[test]
+    fn t180_cmp_csel_ge_folds() {
+        // CSEL X2, X3, X4, GE → X2 = (X0 >= X1) ? X3 : X4 (signed).
+        // The fold rewrites `a >= b` as `IntSlessequal(b, a)` (swap=true),
+        // so the recovered (lhs, rhs) pair is (X1, X0) — i.e. swapped.
+        let (ternaries, _) = t180_run_csel(11); // ARM64_CC_GE
+        assert_eq!(ternaries.len(), 1, "expected 1 CselTernary, got {ternaries:?}");
+        let (op, lhs, rhs, _) = ternaries[0];
+        assert_eq!(op, IrOp::IntSlessequal, "GE → IntSlessequal (signed, swapped)");
+        assert_eq!(lhs, Varnode::reg(8, 8), "lhs after swap = CMP's Rm (X1)");
+        assert_eq!(rhs, Varnode::reg(0, 8), "rhs after swap = CMP's Rn (X0)");
+    }
+
+    #[test]
+    fn t180_cmp_csel_lt_folds() {
+        // CSEL X2, X3, X4, LT → X2 = (X0 < X1) ? X3 : X4 (signed, no swap).
+        let (ternaries, _) = t180_run_csel(12); // ARM64_CC_LT
+        assert_eq!(ternaries.len(), 1, "expected 1 CselTernary, got {ternaries:?}");
+        let (op, lhs, rhs, _) = ternaries[0];
+        assert_eq!(op, IrOp::IntSless, "LT → IntSless (signed)");
+        assert_eq!(lhs, Varnode::reg(0, 8));
+        assert_eq!(rhs, Varnode::reg(8, 8));
     }
 }

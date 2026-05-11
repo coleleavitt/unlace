@@ -2066,6 +2066,45 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 }
             }
 
+            HirNode::CselTernary {
+                cmp_lhs,
+                cmp_rhs,
+                true_val,
+                false_val,
+                output,
+                ..
+            } => {
+                // Reserve one stmt slot for the CSEL ternary itself.
+                let idx = ctx.next_stmt;
+                ctx.next_stmt += 1;
+                ctx.stmt_depths.insert(idx, ctx.collect_depth);
+                ctx.stmt_scope_paths
+                    .insert(idx, ctx.current_scope_path.clone());
+
+                let mut input_svs = Vec::new();
+                for input in [cmp_lhs, cmp_rhs, true_val, false_val] {
+                    if input.space == SpaceId::Const {
+                        continue;
+                    }
+                    let ver = ctx.current_version(input);
+                    let sv = SsaVarnode {
+                        base: *input,
+                        version: ver,
+                    };
+                    ctx.name_of(&sv);
+                    input_svs.push(sv);
+                }
+                ctx.stmt_inputs.insert(idx, input_svs);
+
+                let ver = ctx.next_version(output);
+                let out_sv = SsaVarnode {
+                    base: *output,
+                    version: ver,
+                };
+                ctx.name_of(&out_sv);
+                ctx.stmt_outputs.insert(idx, Some(out_sv));
+            }
+
             HirNode::Return(None)
             | HirNode::Goto(_)
             | HirNode::Label(_)
@@ -3622,6 +3661,62 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 out,
                 "{} = cond_{} ? {} : {};",
                 lhs, mnem, then_expr, else_expr
+            );
+        }
+
+        HirNode::CselTernary {
+            cmp_op,
+            cmp_lhs,
+            cmp_rhs,
+            true_val,
+            false_val,
+            output,
+            ..
+        } => {
+            // The collect pass allocated one stmt slot for this node and
+            // bumped versions for `output`, so we can recover the LHS
+            // name. Reads of cmp_lhs/cmp_rhs/true_val/false_val use the
+            // *current* version (the latest write visible to this point).
+            let idx = ctx.emit_stmt;
+            ctx.emit_stmt += 1;
+            let lhs = if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
+                ctx.name_of(&sv)
+            } else {
+                let ver = ctx.current_version(output);
+                ctx.name_of(&SsaVarnode {
+                    base: *output,
+                    version: ver,
+                })
+            };
+            fn render_one(vn: &Varnode, ctx: &mut PrintCtx) -> String {
+                if vn.space == SpaceId::Const {
+                    format!("0x{:x}", vn.offset)
+                } else {
+                    let ver = ctx.current_version(vn);
+                    ctx.name_of(&SsaVarnode {
+                        base: *vn,
+                        version: ver,
+                    })
+                }
+            }
+            let lhs_s = render_one(cmp_lhs, ctx);
+            let rhs_s = render_one(cmp_rhs, ctx);
+            let tv_s = render_one(true_val, ctx);
+            let fv_s = render_one(false_val, ctx);
+            let op_str = match cmp_op {
+                IrOp::IntEqual => "==",
+                IrOp::IntNotequal => "!=",
+                IrOp::IntLess => "<",
+                IrOp::IntLessequal => "<=",
+                IrOp::IntSless => "<",
+                IrOp::IntSlessequal => "<=",
+                _ => "/*?*/",
+            };
+            indent(depth, ctx.config.tab_width, out);
+            let _ = writeln!(
+                out,
+                "{} = ({} {} {}) ? {} : {};",
+                lhs, lhs_s, op_str, rhs_s, tv_s, fv_s,
             );
         }
     }

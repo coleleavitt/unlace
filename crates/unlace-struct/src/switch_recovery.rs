@@ -63,6 +63,16 @@ impl<'a> SectionView<'a> {
         self.data.get(off).copied()
     }
 
+    pub fn read_u16(&self, addr: u64, endian: TableEndian) -> Option<u16> {
+        let off = addr.checked_sub(self.vaddr)? as usize;
+        let bytes = self.data.get(off..off + 2)?;
+        let arr = [bytes[0], bytes[1]];
+        Some(match endian {
+            TableEndian::Little => u16::from_le_bytes(arr),
+            TableEndian::Big => u16::from_be_bytes(arr),
+        })
+    }
+
     pub fn read_u32(&self, addr: u64, endian: TableEndian) -> Option<u32> {
         let off = addr.checked_sub(self.vaddr)? as usize;
         let bytes = self.data.get(off..off + 4)?;
@@ -132,6 +142,15 @@ pub enum JumpTableKind {
     /// target may have its low bit set to indicate Thumb encoding. The
     /// reader strips bit 0 before returning the address.
     ArmThumbAbsolute,
+    /// Compressed jump table: 1/2-byte offsets relative to base_addr.
+    CompressedOffset {
+        base_addr: u64,
+        sign_extend: bool,
+    },
+    /// Branch-table-of-branches: each entry is a direct branch instruction.
+    BranchTable {
+        branch_size: u8,
+    },
 }
 
 /// Architecture / instruction-set mode of a recovered switch target,
@@ -199,8 +218,31 @@ pub fn read_jump_table_full(
             continue;
         }
 
+        // BranchTable: each slot is a branch instruction, not a data value.
+        if let JumpTableKind::BranchTable { branch_size } = table.kind {
+            let insn_addr = addr;
+            let opcode = section.read_u8(insn_addr)?;
+            if opcode == 0xE9 && branch_size == 5 {
+                let rel = section.read_u32(insn_addr.checked_add(1)?, table.endian)? as i32;
+                let target = insn_addr
+                    .wrapping_add(branch_size as u64)
+                    .wrapping_add(rel as i64 as u64);
+                out.push((target, TargetMode::Default));
+            } else if opcode == 0xE9 && branch_size == 3 {
+                let rel = section.read_u16(insn_addr.checked_add(1)?, table.endian)? as i16;
+                let target = insn_addr
+                    .wrapping_add(branch_size as u64)
+                    .wrapping_add(rel as i64 as u64);
+                out.push((target, TargetMode::Default));
+            } else {
+                return None;
+            }
+            continue;
+        }
+
         let raw = match table.entry_size {
             1 => section.read_u8(addr)? as u64,
+            2 => section.read_u16(addr, table.endian)? as u64,
             4 => section.read_u32(addr, table.endian)? as u64,
             8 => section.read_u64(addr, table.endian)?,
             _ => return None,
@@ -215,6 +257,18 @@ pub fn read_jump_table_full(
             }
             JumpTableKind::RipRelative => {
                 (table.base.wrapping_add(raw), TargetMode::Default)
+            }
+            JumpTableKind::CompressedOffset { base_addr, sign_extend } => {
+                let offset = if sign_extend {
+                    match table.entry_size {
+                        1 => raw as u8 as i8 as i64 as u64,
+                        2 => raw as u16 as i16 as i64 as u64,
+                        _ => raw,
+                    }
+                } else {
+                    raw
+                };
+                (base_addr.wrapping_add(offset), TargetMode::Default)
             }
             JumpTableKind::ArmThumbAbsolute => {
                 let mode = if raw & 1 != 0 {
@@ -248,6 +302,7 @@ pub fn read_jump_table_full(
                 };
                 (target, TargetMode::Default)
             }
+            JumpTableKind::BranchTable { .. } => unreachable!(),
             JumpTableKind::DenseAbsolute
             | JumpTableKind::DenseWithOffset { .. }
             | JumpTableKind::SparseAbsolute { .. } => (raw, TargetMode::Default),
@@ -564,7 +619,9 @@ fn refine_cases(
                     | JumpTableKind::DenseRelative
                     | JumpTableKind::RipRelative
                     | JumpTableKind::ArmThumbAbsolute
-                    | JumpTableKind::ByteIndexedSecondary { .. } => i as u64,
+                    | JumpTableKind::ByteIndexedSecondary { .. }
+                    | JumpTableKind::CompressedOffset { .. }
+                    | JumpTableKind::BranchTable { .. } => i as u64,
                     JumpTableKind::DenseWithOffset { lo } => (lo + i as i64) as u64,
                     JumpTableKind::SparseAbsolute { .. } => unreachable!(),
                 };
@@ -1743,5 +1800,123 @@ mod tests {
             "AArch64 ADRP+ADD+BR is documented as not yet classified; got {:?}",
             kind
         );
+    }
+}
+
+
+#[cfg(test)]
+mod tests_t241_t242 {
+    use super::*;
+
+    #[test]
+    fn compressed_u8_offset_table_recovers_targets() {
+        let base_addr: u64 = 0x401000;
+        let offsets: Vec<u8> = vec![0x10, 0x20, 0x30, 0x40];
+        let table_vaddr: u64 = 0x500000;
+        let section = SectionView {
+            name: ".rodata",
+            vaddr: table_vaddr,
+            data: &offsets,
+            perms: SectionPerms::RO,
+        };
+        let table = JumpTable {
+            base: table_vaddr,
+            entry_size: 1,
+            num_entries: 4,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::CompressedOffset {
+                base_addr,
+                sign_extend: false,
+            },
+        };
+        let targets = read_jump_table(&table, &section).expect("read should succeed");
+        assert_eq!(
+            targets,
+            vec![base_addr + 0x10, base_addr + 0x20, base_addr + 0x30, base_addr + 0x40],
+        );
+    }
+
+    #[test]
+    fn compressed_i16_offset_table_recovers_targets() {
+        let base_addr: u64 = 0x401000;
+        let mut table_bytes = Vec::new();
+        table_bytes.extend_from_slice(&0x0100u16.to_le_bytes());
+        table_bytes.extend_from_slice(&0xFF80u16.to_le_bytes());
+        table_bytes.extend_from_slice(&0x0200u16.to_le_bytes());
+        let table_vaddr: u64 = 0x600000;
+        let section = SectionView {
+            name: ".rodata",
+            vaddr: table_vaddr,
+            data: &table_bytes,
+            perms: SectionPerms::RO,
+        };
+        let table = JumpTable {
+            base: table_vaddr,
+            entry_size: 2,
+            num_entries: 3,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::CompressedOffset {
+                base_addr,
+                sign_extend: true,
+            },
+        };
+        let targets = read_jump_table(&table, &section).expect("read should succeed");
+        assert_eq!(
+            targets,
+            vec![
+                base_addr.wrapping_add(0x100),
+                base_addr.wrapping_add(-128i64 as u64),
+                base_addr.wrapping_add(0x200),
+            ],
+        );
+    }
+
+    #[test]
+    fn branch_table_x86_jmp_rel32_recovers_targets() {
+        let table_vaddr: u64 = 0x700000;
+        let case_targets: Vec<u64> = vec![0x700100, 0x700200, 0x700300];
+        let mut table_bytes = Vec::new();
+        for (i, &target) in case_targets.iter().enumerate() {
+            let insn_addr = table_vaddr + (i as u64) * 5;
+            let rel: i32 = (target as i64 - (insn_addr as i64 + 5)) as i32;
+            table_bytes.push(0xE9);
+            table_bytes.extend_from_slice(&rel.to_le_bytes());
+        }
+        let section = SectionView {
+            name: ".text",
+            vaddr: table_vaddr,
+            data: &table_bytes,
+            perms: SectionPerms::RX,
+        };
+        let table = JumpTable {
+            base: table_vaddr,
+            entry_size: 5,
+            num_entries: 3,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::BranchTable { branch_size: 5 },
+        };
+        let targets = read_jump_table(&table, &section).expect("read should succeed");
+        assert_eq!(targets, case_targets);
+    }
+
+    #[test]
+    fn branch_table_rejects_non_branch_data() {
+        let table_vaddr: u64 = 0x800000;
+        let table_bytes: Vec<u8> = vec![0x90, 0x90, 0x90, 0x90, 0x90];
+        let section = SectionView {
+            name: ".text",
+            vaddr: table_vaddr,
+            data: &table_bytes,
+            perms: SectionPerms::RX,
+        };
+        let table = JumpTable {
+            base: table_vaddr,
+            entry_size: 5,
+            num_entries: 1,
+            endian: TableEndian::Little,
+            kind: JumpTableKind::BranchTable { branch_size: 5 },
+        };
+        let result = read_jump_table(&table, &section);
+        assert!(result.is_none());
     }
 }

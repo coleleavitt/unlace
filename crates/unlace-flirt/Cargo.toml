@@ -11,5 +11,6 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 toml = "0.8"
 serde = { version = "1", features = ["derive"] }
+object = { workspace = true }
 
 [dev-dependencies]

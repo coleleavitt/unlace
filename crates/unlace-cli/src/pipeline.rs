@@ -1364,6 +1364,10 @@ pub fn decompile_function_with_symbols(
     let _libc_annotations_added =
         annotate_libc_calls(&mut ssa, &|addr| symbols.get(&addr).cloned());
 
+    // t302: Go `defer` / `recover` helpers are symbol-driven too. Record
+    // source-style annotations before structuring/printing.
+    populate_go_defer_recover_annotations(&mut ssa, &symbols);
+
     // Re-key (BlockId, insn_idx) → canonical name to (call_va → canonical
     // name) for the printer, which sees instructions only by their VA.
     let mut libc_call_canonical: BTreeMap<u64, String> = BTreeMap::new();
@@ -1408,6 +1412,37 @@ fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
         bail!("timeout exceeded for function '{func_name}'");
     }
     Ok(())
+}
+
+/// Populate source-style annotations for Go `defer` / `recover` runtime helpers.
+fn populate_go_defer_recover_annotations(ssa: &mut SsaFunction, symbols: &BTreeMap<u64, String>) {
+    let ops = unlace_passes::detect_go_defer_recover_ops(ssa, |addr| {
+        symbols.get(&addr).map(String::as_str)
+    });
+
+    for op in ops {
+        let text = match op.kind {
+            unlace_passes::GoDeferRecoverKind::Defer => op
+                .funcval
+                .map(|funcval| format!("defer {}", format_go_funcval_for_annotation(&funcval)))
+                .unwrap_or_else(|| "defer /* funcval */".to_string()),
+            unlace_passes::GoDeferRecoverKind::DeferReturn => "deferreturn".to_string(),
+            unlace_passes::GoDeferRecoverKind::Recover => "recover()".to_string(),
+        };
+        ssa.go_defer_recover_calls
+            .insert((op.block_id, op.insn_idx), text);
+    }
+}
+
+fn format_go_funcval_for_annotation(funcval: &unlace_ir::ssa::SsaVarnode) -> String {
+    let base = funcval.base;
+    match base.space {
+        unlace_ir::SpaceId::Const => format!("sub_{:x}", base.offset),
+        unlace_ir::SpaceId::Register => format!("reg_{:x}", base.offset),
+        unlace_ir::SpaceId::Stack => format!("stack_{:x}", base.offset),
+        unlace_ir::SpaceId::Unique => format!("tmp_{:x}", base.offset),
+        other => format!("{:?}_{:x}", other, base.offset),
+    }
 }
 
 /// Recover precise try/catch boundaries for `entry` from the binary's

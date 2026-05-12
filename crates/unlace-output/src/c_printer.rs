@@ -508,6 +508,7 @@ pub fn print_c_with_annotations(
     ctx.parent_returns_void = matches!(func.return_type, PrimitiveType::Unknown);
     ctx.frame_size = header.map(|h| h.stack_frame);
     ctx.objc_dispatch_calls = func.objc_dispatch_calls.clone();
+    ctx.go_defer_recover_calls = func.go_defer_recover_calls.clone();
     ctx.byref_boxes = func.byref_boxes.clone();
 
     let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
@@ -1578,6 +1579,8 @@ struct PrintCtx {
     /// ObjC dispatch annotations keyed by instruction VA. Lifted from
     /// [`HirFunction::objc_dispatch_calls`].
     objc_dispatch_calls: BTreeMap<u64, String>,
+    /// Go `defer` / `recover` source-style annotations keyed by runtime-call VA.
+    go_defer_recover_calls: BTreeMap<u64, String>,
     /// Recovered ObjC `__block` (byref) boxes keyed by the alloca's base
     /// [`Varnode`]. Lifted from [`HirFunction::byref_boxes`] and consulted
     /// by local-decl emission to render `__block T name;` in place of the
@@ -1693,6 +1696,7 @@ impl PrintCtx {
             line_comments: BTreeMap::new(),
             custom_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             string_hash_table: BTreeMap::new(),
             forwarded_resolutions: BTreeMap::new(),
@@ -5176,6 +5180,15 @@ fn objc_bracket_call(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
     }
 }
 
+/// Return a printer-ready Go `defer` / `recover` annotation for this runtime
+/// helper call, when the SSA-level Go recovery pass identified one.
+fn go_defer_recover_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
+    if !matches!(insn.op, IrOp::Call) {
+        return None;
+    }
+    ctx.go_defer_recover_calls.get(&insn.addr).cloned()
+}
+
 /// Translate a single ObjC `@encoding` type code into the closest C type
 /// spelling.  Unknown encodings fall back to `void*` with an inline comment
 /// preserving the original code so the reader can still recover the
@@ -5447,7 +5460,9 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
         return None;
     }
     if matches!(insn.op, IrOp::Call | IrOp::Callind)
-        && (ctx.panic_sites.contains_key(&insn.addr) || cxa_call_annotation(insn, ctx).is_some())
+        && (ctx.panic_sites.contains_key(&insn.addr)
+            || cxa_call_annotation(insn, ctx).is_some()
+            || go_defer_recover_annotation(insn, ctx).is_some())
     {
         return None;
     }
@@ -5666,6 +5681,15 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
         let lhs = ctx.name_of(&sv);
 
+        if let Some(ann) = go_defer_recover_annotation(insn, ctx) {
+            if ann == "recover()" {
+                let _ = writeln!(out, "{} = recover();", lhs);
+                return;
+            }
+            let _ = writeln!(out, "/* Go: {} */", ann);
+            indent(depth, ctx.config.tab_width, out);
+        }
+
         if matches!(insn.op, IrOp::Call | IrOp::Callind) {
             if let Some(ann) = cxa_call_annotation(insn, ctx) {
                 let _ = writeln!(out, "/* {} */", ann);
@@ -5742,6 +5766,10 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 }
             }
             IrOp::Call | IrOp::Callind => {
+                if let Some(ann) = go_defer_recover_annotation(insn, ctx) {
+                    let _ = writeln!(out, "{};", ann);
+                    return;
+                }
                 if let Some(kind) = ctx.panic_sites.get(&insn.addr) {
                     let _ = writeln!(out, "/* PANIC: {} */", kind);
                     indent(depth, ctx.config.tab_width, out);
@@ -6719,6 +6747,11 @@ fn emit_expr_with_prec(
 
         // -- Call with output --
         IrOp::Call | IrOp::Callind => {
+            if let Some(ann) = go_defer_recover_annotation(insn, ctx)
+                && ann == "recover()"
+            {
+                return ann;
+            }
             let base = if insn.op == IrOp::Callind {
                 emit_callind_cast(insn, stmt_idx, ctx)
             } else if let Some(printf_call) = try_emit_printf_call(insn, stmt_idx, ctx) {
@@ -8703,6 +8736,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -8726,6 +8760,37 @@ mod tests {
             base: Varnode::reg(offset, size),
             version: 0,
         }
+    }
+
+    #[test]
+    fn t302_prints_go_defer_and_recover_source_style() {
+        let defer_call =
+            IrInsn::without_output(IrOp::Call, smallvec![con(0x1000, 8), reg(0, 8)], 0x1010);
+        let recover_ret = reg(8, 8);
+        let recover_call = IrInsn::with_output(
+            IrOp::Call,
+            recover_ret,
+            smallvec![con(0x2000, 8), con(0, 8)],
+            0x2020,
+        );
+        let mut func = make_func(
+            "go_defer_recover",
+            vec![
+                HirNode::Statement(defer_call),
+                HirNode::Statement(recover_call),
+                HirNode::Return(Some(sv(8, 8))),
+            ],
+        );
+        func.go_defer_recover_calls
+            .insert(0x1010, "defer reg_0".to_string());
+        func.go_defer_recover_calls
+            .insert(0x2020, "recover()".to_string());
+
+        let output = print_c(&func);
+        assert!(output.contains("defer reg_0;"), "{output}");
+        assert!(output.contains(" = recover();"), "{output}");
+        assert!(!output.contains("sub_1000"), "{output}");
+        assert!(!output.contains("sub_2000"), "{output}");
     }
 
     #[test]
@@ -9339,6 +9404,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -9899,6 +9965,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -10005,6 +10072,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -10039,6 +10107,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -14587,6 +14656,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -14620,6 +14690,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -14657,6 +14728,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -14690,6 +14762,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -14723,6 +14796,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -14782,6 +14856,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),

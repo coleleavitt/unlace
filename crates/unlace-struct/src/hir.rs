@@ -394,7 +394,9 @@ pub enum HirNode {
     /// Each string in `instructions` represents one raw asm line and is
     /// emitted verbatim (no leading indentation; the printer adds it).
     /// Empty `instructions` produces an empty `__asm { }` block.
-    Asm { instructions: Vec<String> },
+    Asm {
+        instructions: Vec<String>,
+    },
 }
 
 impl HirNode {
@@ -507,6 +509,10 @@ pub struct HirFunction {
     /// a bracket-form `[Class method:]` the C printer should emit it as the
     /// statement text in place of the synthesized `objc_msgSend(...)` call.
     pub objc_dispatch_calls: BTreeMap<u64, String>,
+    /// Go `defer` / `recover` annotations keyed by runtime-call VA. Values are
+    /// printer-ready source-style strings (`defer ...`, `recover()`,
+    /// `deferreturn`) propagated from `SsaFunction::go_defer_recover_calls`.
+    pub go_defer_recover_calls: BTreeMap<u64, String>,
     /// Per-arch indirect-branch classifications keyed by the BRANCHIND
     /// instruction's machine address. Populated by the structurer when an
     /// indirect branch did not resolve as a structured `Switch` and the

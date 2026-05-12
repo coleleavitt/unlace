@@ -73,9 +73,9 @@ where
         runtime_functions: Vec::new(),
         resources: Vec::new(),
         bound_imports: Vec::new(),
-            delay_imports: Vec::new(),
-            forwarded_exports: Vec::new(),
-            forwarded_resolutions: std::collections::BTreeMap::new(),
+        delay_imports: Vec::new(),
+        forwarded_exports: Vec::new(),
+        forwarded_resolutions: std::collections::BTreeMap::new(),
         rich_header: None,
         dylibs: Vec::new(),
         rpaths: Vec::new(),
@@ -113,6 +113,7 @@ where
         elf::EM_ARM => ArchId::Arm,
         elf::EM_AARCH64 => ArchId::AArch64,
         elf::EM_RISCV => ArchId::RiscV64,
+        elf::EM_68K => ArchId::M68k,
         elf::EM_MIPS => {
             if class == elf::ELFCLASS64 {
                 ArchId::Mips64

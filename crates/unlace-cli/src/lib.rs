@@ -34,6 +34,7 @@ pub fn parse_arch(s: &str) -> Result<ArchId> {
         "ppc64" | "powerpc64" => Ok(ArchId::Ppc64),
         "v850" => Ok(ArchId::V850),
         "arc" => Ok(ArchId::Arc),
+        "m68k" | "m68000" | "68000" | "68020" | "coldfire" => Ok(ArchId::M68k),
         _ => bail!("unknown architecture: '{s}'"),
     }
 }

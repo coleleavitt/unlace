@@ -3096,42 +3096,44 @@ pub fn try_aarch64_ccmp(insn: u32) -> Option<CcmpDecoded> {
 /// can recognize the intrinsic when flag-aware analyses are added.
 pub const CALLOTHER_AARCH64_CCMP: u64 = 0x362;
 
-// ── t225 — AArch64 pointer-authentication Callother tags ────────────
+// ── t300 — AArch64 pointer-authentication Callother tags ────────────
 //
-// The encoding bits[15:10] of the `1101 1010 1100 0001 ____ __nn nnnd dddd`
-// PAC/AUTH/XPAC family fan out to many opcodes, but downstream consumers
-// (recognisers, decompiler output) only care about which *class* of PAC
-// operation ran and what its (value, modifier) inputs were. We collapse:
+// t300 models the full register-form key/data family. We preserve the key
+// choice (IA/IB/DA/DB) in distinct tags, while folding zero-modifier forms
+// into the same tag with a constant-0 modifier:
 //
-//   PACIA / PACIZA   → CALLOTHER_AARCH64_PACIA  (modifier = Xn or const 0)
-//   PACIB / PACIZB   → CALLOTHER_AARCH64_PACIB
-//   AUTIA / AUTIZA   → CALLOTHER_AARCH64_AUTIA
-//   AUTIB / AUTIZB   → CALLOTHER_AARCH64_AUTIB
-//   XPACI            → CALLOTHER_AARCH64_XPACI  (no modifier)
-//   XPACD            → CALLOTHER_AARCH64_XPACD
+//   PACIA/PACIZA → CALLOTHER_AARCH64_PACIA; PACIB/PACIZB → PACIB
+//   PACDA/PACDZA → CALLOTHER_AARCH64_PACDA; PACDB/PACDZB → PACDB
+//   AUTIA/AUTIZA → CALLOTHER_AARCH64_AUTIA; AUTIB/AUTIZB → AUTIB
+//   AUTDA/AUTDZA → CALLOTHER_AARCH64_AUTDA; AUTDB/AUTDZB → AUTDB
+//   XPACI/XPACD  → no-modifier stripping intrinsics.
 //
-// Data-key variants (PAC*D*, AUT*D*) and HINT-space SP/1716 forms still
-// fold to no-ops via [`try_pac_bti_nop`] — they're rarer in user code and
-// the SP/1716 variants have implicit operands that don't fit the
-// Callother (value, modifier) shape. Tags occupy `0x40E..=0x413`, picking
-// up where the NEON block (`0x400..=0x40D`) ends.
+// HINT-space SP/1716 forms still fold to no-ops via [`try_pac_bti_nop`].
 
 /// `Callother` tag for AArch64 `PACIA Xd, Xn` (or `PACIZA Xd`).
 /// Emitted as `Callother(tag, value, modifier) → Xd`.
 pub const CALLOTHER_AARCH64_PACIA: u64 = 0x40E;
 /// `Callother` tag for AArch64 `PACIB Xd, Xn` (or `PACIZB Xd`).
 pub const CALLOTHER_AARCH64_PACIB: u64 = 0x40F;
+/// `Callother` tag for AArch64 `PACDA Xd, Xn` (or `PACDZA Xd`).
+pub const CALLOTHER_AARCH64_PACDA: u64 = 0x410;
+/// `Callother` tag for AArch64 `PACDB Xd, Xn` (or `PACDZB Xd`).
+pub const CALLOTHER_AARCH64_PACDB: u64 = 0x411;
 /// `Callother` tag for AArch64 `AUTIA Xd, Xn` (or `AUTIZA Xd`).
-pub const CALLOTHER_AARCH64_AUTIA: u64 = 0x410;
+pub const CALLOTHER_AARCH64_AUTIA: u64 = 0x412;
 /// `Callother` tag for AArch64 `AUTIB Xd, Xn` (or `AUTIZB Xd`).
-pub const CALLOTHER_AARCH64_AUTIB: u64 = 0x411;
+pub const CALLOTHER_AARCH64_AUTIB: u64 = 0x413;
+/// `Callother` tag for AArch64 `AUTDA Xd, Xn` (or `AUTDZA Xd`).
+pub const CALLOTHER_AARCH64_AUTDA: u64 = 0x414;
+/// `Callother` tag for AArch64 `AUTDB Xd, Xn` (or `AUTDZB Xd`).
+pub const CALLOTHER_AARCH64_AUTDB: u64 = 0x415;
 /// `Callother` tag for AArch64 `XPACI Xd`.
 /// Emitted as `Callother(tag, value) → Xd` (no modifier).
-pub const CALLOTHER_AARCH64_XPACI: u64 = 0x412;
+pub const CALLOTHER_AARCH64_XPACI: u64 = 0x416;
 /// `Callother` tag for AArch64 `XPACD Xd`.
-pub const CALLOTHER_AARCH64_XPACD: u64 = 0x413;
+pub const CALLOTHER_AARCH64_XPACD: u64 = 0x417;
 
-/// Decoded register-form PAC/AUTH/XPAC instruction (t225).
+/// Decoded register-form PAC/AUTH/XPAC instruction (t300).
 ///
 /// `value` is the X-register being authenticated/signed (the `Xd` operand
 /// — both destination and input value). `modifier` is the X-register
@@ -3145,7 +3147,7 @@ pub struct PacAuthDecoded {
 }
 
 /// If `insn` is a register-form PAC/AUTH/XPAC instruction we lift to a
-/// `Callother(PTR_AUTH)` (t225), return its decoded shape. Otherwise
+/// `Callother(PTR_AUTH)` (t300), return its decoded shape. Otherwise
 /// return `None` and let the caller fall through to the existing
 /// no-op / dispatch paths.
 pub fn try_pac_callother(insn: u32) -> Option<PacAuthDecoded> {
@@ -3156,18 +3158,25 @@ pub fn try_pac_callother(insn: u32) -> Option<PacAuthDecoded> {
     let rd = (insn & 0x1F) as u8;
     let rn = ((insn >> 5) & 0x1F) as u8;
     let (tag, rn_opt) = match opcode {
-        // Instruction-key PACI* (modifier = Xn)
+        // PACI*/PACD* (modifier = Xn/SP)
         0x00 => (CALLOTHER_AARCH64_PACIA, Some(rn)),
         0x01 => (CALLOTHER_AARCH64_PACIB, Some(rn)),
-        // Instruction-key AUTI* (modifier = Xn)
+        0x02 => (CALLOTHER_AARCH64_PACDA, Some(rn)),
+        0x03 => (CALLOTHER_AARCH64_PACDB, Some(rn)),
+        // AUTI*/AUTD* (modifier = Xn/SP)
         0x04 => (CALLOTHER_AARCH64_AUTIA, Some(rn)),
         0x05 => (CALLOTHER_AARCH64_AUTIB, Some(rn)),
-        // PACIZA/PACIZB (Z-form: modifier implicitly 0; Rn must be 0b11111)
+        0x06 => (CALLOTHER_AARCH64_AUTDA, Some(rn)),
+        0x07 => (CALLOTHER_AARCH64_AUTDB, Some(rn)),
+        // Z-form: modifier implicitly 0; Rn must be 0b11111
         0x08 if rn == 0x1F => (CALLOTHER_AARCH64_PACIA, None),
         0x09 if rn == 0x1F => (CALLOTHER_AARCH64_PACIB, None),
-        // AUTIZA/AUTIZB (Z-form)
+        0x0A if rn == 0x1F => (CALLOTHER_AARCH64_PACDA, None),
+        0x0B if rn == 0x1F => (CALLOTHER_AARCH64_PACDB, None),
         0x0C if rn == 0x1F => (CALLOTHER_AARCH64_AUTIA, None),
         0x0D if rn == 0x1F => (CALLOTHER_AARCH64_AUTIB, None),
+        0x0E if rn == 0x1F => (CALLOTHER_AARCH64_AUTDA, None),
+        0x0F if rn == 0x1F => (CALLOTHER_AARCH64_AUTDB, None),
         // XPACI / XPACD (no modifier; Rn must be 0b11111)
         0x10 if rn == 0x1F => (CALLOTHER_AARCH64_XPACI, None),
         0x11 if rn == 0x1F => (CALLOTHER_AARCH64_XPACD, None),
@@ -3180,18 +3189,21 @@ pub fn try_pac_callother(insn: u32) -> Option<PacAuthDecoded> {
     })
 }
 
-/// Build an `Xn` 64-bit register varnode by index. `n` must be 0..=30
-/// (XZR is *not* a valid Rd for PAC/AUTH; the decoder filters that case
-/// by the Z-form rule `rn == 0x1F` applying only to Rn).
+/// Build an `Xn`/`SP` 64-bit register varnode by encoding index. For PAC/AUTH
+/// modifier operands, index 31 names SP rather than XZR.
 fn xreg_varnode(n: u8) -> Varnode {
-    debug_assert!(n <= 30, "PAC Rd must be X0..X30, got {n}");
-    Varnode::new(SpaceId::Register, n as u64 * 8, 8)
+    let offset = if n == 31 {
+        crate::register_file::SP
+    } else {
+        n as u64 * 8
+    };
+    Varnode::new(SpaceId::Register, offset, 8)
 }
 
 /// Emit a `Callother(PTR_AUTH)` intrinsic for a register-form PAC/AUTH/XPAC.
 ///
 /// Shape:
-///   * PACIA/PACIB/AUTIA/AUTIB  → `Callother(tag, value, modifier) → Xd`
+///   * PAC*/AUT*                → `Callother(tag, value, modifier) → Xd`
 ///   * XPACI/XPACD              → `Callother(tag, value) → Xd`
 ///   * `*Z` (zero-modifier) variants pass a constant-0 modifier so
 ///     downstream consumers see a uniform 3-operand shape per key.
@@ -3265,13 +3277,6 @@ pub fn emit_sve_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varno
 /// instruction with no architectural effects relevant to lifting; the
 /// caller should consume 4 bytes and emit no IR.
 pub fn try_pac_bti_nop(insn: u32) -> bool {
-    if (insn & 0xFFFF_0000) == 0xDAC1_0000 {
-        let opcode = (insn >> 10) & 0x3F;
-        if opcode <= 0x11 {
-            return true;
-        }
-    }
-
     const HINT_NOPS: &[u32] = &[
         0xD503_233F,
         0xD503_237F,
@@ -3293,16 +3298,16 @@ pub fn try_pac_bti_nop(insn: u32) -> bool {
 /// If `insn` is a PAC-authenticated branch (BR*A*/BLR*A*/RET*A*), return the
 /// equivalent unauthenticated encoding so Capstone can lift it normally.
 fn pac_auth_branch_rewrite(insn: u32) -> Option<u32> {
-    const AUTH_MASK: u32 = 0xFFFF_F800;
-    match insn & AUTH_MASK {
-        0xD61F_0800 | 0xD71F_0800 => {
-            let rn = (insn >> 5) & 0x1F;
-            Some(0xD61F_0000 | (rn << 5))
-        }
-        0xD63F_0800 | 0xD73F_0800 => {
-            let rn = (insn >> 5) & 0x1F;
-            Some(0xD63F_0000 | (rn << 5))
-        }
+    let rn = (insn >> 5) & 0x1F;
+    match insn & 0xFFFF_F800 {
+        // BRAA/BRAB Xn, Xm -> BR Xn.
+        0xD71F_0800 => Some(0xD61F_0000 | (rn << 5)),
+        // BLRAA/BLRAB Xn, Xm -> BLR Xn.
+        0xD73F_0800 => Some(0xD63F_0000 | (rn << 5)),
+        // BRAAZ/BRABZ Xn -> BR Xn.
+        0xD61F_0800 if (insn & 0x1F) == 0x1F => Some(0xD61F_0000 | (rn << 5)),
+        // BLRAAZ/BLRABZ Xn -> BLR Xn.
+        0xD63F_0800 if (insn & 0x1F) == 0x1F => Some(0xD63F_0000 | (rn << 5)),
         _ => {
             if insn == 0xD65F_0BFF || insn == 0xD65F_0FFF {
                 Some(0xD65F_03C0)

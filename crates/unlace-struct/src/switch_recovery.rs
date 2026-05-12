@@ -143,14 +143,9 @@ pub enum JumpTableKind {
     /// reader strips bit 0 before returning the address.
     ArmThumbAbsolute,
     /// Compressed jump table: 1/2-byte offsets relative to base_addr.
-    CompressedOffset {
-        base_addr: u64,
-        sign_extend: bool,
-    },
+    CompressedOffset { base_addr: u64, sign_extend: bool },
     /// Branch-table-of-branches: each entry is a direct branch instruction.
-    BranchTable {
-        branch_size: u8,
-    },
+    BranchTable { branch_size: u8 },
 }
 
 /// Architecture / instruction-set mode of a recovered switch target,
@@ -248,17 +243,16 @@ pub fn read_jump_table_full(
             _ => return None,
         };
         let (resolved, mode) = match table.kind {
-            JumpTableKind::DenseRelative => {
-                (table.base.wrapping_add(raw), TargetMode::Default)
-            }
+            JumpTableKind::DenseRelative => (table.base.wrapping_add(raw), TargetMode::Default),
             JumpTableKind::RipRelative if table.entry_size == 4 => {
                 let signed = raw as i32 as i64 as u64;
                 (table.base.wrapping_add(signed), TargetMode::Default)
             }
-            JumpTableKind::RipRelative => {
-                (table.base.wrapping_add(raw), TargetMode::Default)
-            }
-            JumpTableKind::CompressedOffset { base_addr, sign_extend } => {
+            JumpTableKind::RipRelative => (table.base.wrapping_add(raw), TargetMode::Default),
+            JumpTableKind::CompressedOffset {
+                base_addr,
+                sign_extend,
+            } => {
                 let offset = if sign_extend {
                     match table.entry_size {
                         1 => raw as u8 as i8 as i64 as u64,
@@ -282,9 +276,8 @@ pub fn read_jump_table_full(
                 secondary_base,
                 secondary_entry_size,
             } => {
-                let secondary_addr = secondary_base.checked_add(
-                    raw.checked_mul(secondary_entry_size as u64)?,
-                )?;
+                let secondary_addr =
+                    secondary_base.checked_add(raw.checked_mul(secondary_entry_size as u64)?)?;
                 let secondary = secondary_sections
                     .iter()
                     .find(|s| s.contains_addr(secondary_addr))
@@ -752,12 +745,12 @@ pub fn classify_indirect_branch(arch: ArchId, insns: &[IrInsn]) -> Option<Indire
 /// Result of a successful computed-goto detection.
 ///
 /// Represents the pattern `goto *table[idx]` where `table` is a label-address
-/// array in a read-only data section.
+/// array in a readable section.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComputedGoto {
     /// Base virtual address of the label-address table.
     pub table_base: u64,
-    /// Size of each pointer entry in bytes (4 or 8).
+    /// Size of each table entry in bytes.
     pub ptr_size: u8,
     /// Number of entries in the table.
     pub num_entries: u32,
@@ -765,61 +758,166 @@ pub struct ComputedGoto {
     pub targets: Vec<u64>,
 }
 
-/// Detect a computed-goto pattern: `Branchind` whose target is
-/// `Load(table_base + idx * ptr_size)` where:
-/// - `table_base` is a constant pointing into a read-only data section
-/// - All table entries are code addresses within `func_range`
+/// Architecture-aware table reader used by computed-goto / switch-table
+/// recovery. Implementors own target ABI details such as entry width,
+/// endianness, and relative-offset interpretation.
+pub trait AddrRangeProvider {
+    fn entry_size(&self) -> u8;
+    fn read_target(&self, section: &SectionView<'_>, addr: u64, table_base: u64) -> Option<u64>;
+}
+
+/// Absolute-address jump-table reader.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct AbsoluteAddrProvider {
+    pub entry_size: u8,
+    pub endian: TableEndian,
+}
+
+impl AddrRangeProvider for AbsoluteAddrProvider {
+    fn entry_size(&self) -> u8 {
+        self.entry_size
+    }
+
+    fn read_target(&self, section: &SectionView<'_>, addr: u64, _table_base: u64) -> Option<u64> {
+        read_sized_value(section, addr, self.entry_size, self.endian)
+    }
+}
+
+/// Signed relative-offset jump-table reader.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct RelativeOffsetProvider {
+    pub entry_size: u8,
+    pub endian: TableEndian,
+    pub base: RelativeBase,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RelativeBase {
+    TableBase,
+    Fixed(u64),
+}
+
+impl AddrRangeProvider for RelativeOffsetProvider {
+    fn entry_size(&self) -> u8 {
+        self.entry_size
+    }
+
+    fn read_target(&self, section: &SectionView<'_>, addr: u64, table_base: u64) -> Option<u64> {
+        let raw = read_sized_value(section, addr, self.entry_size, self.endian)?;
+        let off = sign_extend_sized(raw, self.entry_size)?;
+        let base = match self.base {
+            RelativeBase::TableBase => table_base,
+            RelativeBase::Fixed(base) => base,
+        };
+        Some(base.wrapping_add(off as u64))
+    }
+}
+
+fn read_sized_value(
+    section: &SectionView<'_>,
+    addr: u64,
+    size: u8,
+    endian: TableEndian,
+) -> Option<u64> {
+    match size {
+        1 => section.read_u8(addr).map(u64::from),
+        2 => section.read_u16(addr, endian).map(u64::from),
+        4 => section.read_u32(addr, endian).map(u64::from),
+        8 => section.read_u64(addr, endian),
+        _ => None,
+    }
+}
+
+fn sign_extend_sized(raw: u64, size: u8) -> Option<i64> {
+    match size {
+        1 => Some(raw as u8 as i8 as i64),
+        2 => Some(raw as u16 as i16 as i64),
+        4 => Some(raw as u32 as i32 as i64),
+        8 => Some(raw as i64),
+        _ => None,
+    }
+}
+
+/// Default switch-table reader for an architecture and IR load width.
+pub fn default_addr_provider_for_arch(
+    arch: ArchId,
+    entry_size: u8,
+    table_base: u64,
+) -> Option<Box<dyn AddrRangeProvider>> {
+    match arch {
+        ArchId::Mips | ArchId::Mips64 | ArchId::Ppc | ArchId::Ppc64 => {
+            Some(Box::new(AbsoluteAddrProvider {
+                entry_size,
+                endian: TableEndian::Big,
+            }))
+        }
+        ArchId::AArch64 | ArchId::RiscV64 if entry_size == 4 => {
+            Some(Box::new(RelativeOffsetProvider {
+                entry_size,
+                endian: TableEndian::Little,
+                base: RelativeBase::Fixed(table_base),
+            }))
+        }
+        ArchId::X86 | ArchId::X86_64 | ArchId::Arm | ArchId::AArch64 | ArchId::RiscV64 => {
+            Some(Box::new(AbsoluteAddrProvider {
+                entry_size,
+                endian: TableEndian::Little,
+            }))
+        }
+        _ => None,
+    }
+}
+
+/// Detect a computed-goto pattern using the default provider for `arch`.
 ///
-/// `insns` is the instruction window ending in `Branchind`.
-/// `sections` provides the binary section data for table validation.
-/// `func_range` is the `(start, end)` address range of the current function;
-/// all table entries must fall within it.
-///
-/// Returns `Some(ComputedGoto)` when the pattern matches, `None` otherwise.
-pub fn detect_computed_goto(
+/// Recognizes the architecture-independent IR shape
+/// `IntAdd(base_const, IntMult(index, stride)) -> Load(addr) -> Branchind(loaded)`
+/// (and equivalent constant-containing address expressions), while delegating
+/// table-entry interpretation to [`AddrRangeProvider`].
+pub fn detect_computed_goto_for_arch(
+    arch: ArchId,
     insns: &[IrInsn],
     sections: &[SectionView<'_>],
     func_range: (u64, u64),
 ) -> Option<ComputedGoto> {
-    // Must end in Branchind.
+    let table_base = find_table_base_in_insns(insns, sections)?;
+    let entry_size = find_load_feeding_branchind(insns)?.output.map(|o| o.size)?;
+    let provider = default_addr_provider_for_arch(arch, entry_size, table_base)?;
+    detect_computed_goto_with_provider(insns, sections, func_range, provider.as_ref())
+}
+
+/// Detect a computed-goto pattern with an explicit provider.
+pub fn detect_computed_goto_with_provider(
+    insns: &[IrInsn],
+    sections: &[SectionView<'_>],
+    func_range: (u64, u64),
+    provider: &dyn AddrRangeProvider,
+) -> Option<ComputedGoto> {
     let bi = insns.last()?;
     if bi.op != IrOp::Branchind {
         return None;
     }
 
-    // Find the Load that feeds the Branchind -- walk backwards.
-    let load = insns.iter().rev().skip(1).find(|i| i.op == IrOp::Load)?;
-
-    // The Load should produce a pointer-sized output.
-    let ptr_size = load.output.map(|o| o.size)?;
-    if ptr_size != 4 && ptr_size != 8 {
+    let load = find_load_feeding_branchind(insns)?;
+    let entry_size = load.output.map(|o| o.size)?;
+    if entry_size != provider.entry_size() || !matches!(entry_size, 1 | 2 | 4 | 8) {
         return None;
     }
 
-    // Extract the table_base from the instruction stream.
     let table_base = find_table_base_in_insns(insns, sections)?;
-
-    // Validate that table_base falls in a read-only section.
     let section = validate_table_base(table_base, sections)?;
 
-    // Read entries from the table until we hit one outside func_range.
-    let endian = TableEndian::Little;
     let mut targets = Vec::new();
     let mut addr = table_base;
     loop {
-        let entry = match ptr_size {
-            4 => section.read_u32(addr, endian).map(|v| v as u64),
-            8 => section.read_u64(addr, endian),
-            _ => None,
+        let Some(target) = provider.read_target(section, addr, table_base) else {
+            break;
         };
-        let Some(target) = entry else { break };
-
         if target < func_range.0 || target >= func_range.1 {
             break;
         }
         targets.push(target);
-        addr = addr.checked_add(ptr_size as u64)?;
-
+        addr = addr.checked_add(entry_size as u64)?;
         if targets.len() > 1024 {
             break;
         }
@@ -831,10 +929,27 @@ pub fn detect_computed_goto(
 
     Some(ComputedGoto {
         table_base,
-        ptr_size,
+        ptr_size: entry_size,
         num_entries: targets.len() as u32,
         targets,
     })
+}
+
+/// Backward-compatible x86_64/little-endian entry point.
+pub fn detect_computed_goto(
+    insns: &[IrInsn],
+    sections: &[SectionView<'_>],
+    func_range: (u64, u64),
+) -> Option<ComputedGoto> {
+    detect_computed_goto_for_arch(ArchId::X86_64, insns, sections, func_range)
+}
+
+fn find_load_feeding_branchind(insns: &[IrInsn]) -> Option<&IrInsn> {
+    let bi = insns.last()?;
+    if bi.op != IrOp::Branchind {
+        return None;
+    }
+    insns.iter().rev().skip(1).find(|i| i.op == IrOp::Load)
 }
 
 /// Search the instruction window for a constant pointing into a read-only section.
@@ -853,10 +968,7 @@ fn find_table_base_in_insns(insns: &[IrInsn], sections: &[SectionView<'_>]) -> O
 }
 
 /// Convert a detected [`ComputedGoto`] into a [`HirNode::Switch`].
-pub fn computed_goto_to_switch(
-    goto: &ComputedGoto,
-    cond: unlace_ir::ssa::SsaVarnode,
-) -> HirNode {
+pub fn computed_goto_to_switch(goto: &ComputedGoto, cond: unlace_ir::ssa::SsaVarnode) -> HirNode {
     let cases: Vec<(SwitchCase, Vec<HirNode>, bool)> = (0..goto.num_entries)
         .map(|i| (SwitchCase::Value(i as u64), Vec::new(), false))
         .collect();
@@ -901,9 +1013,10 @@ pub(crate) mod arch {
         let bi = branchind_idx(insns)?;
         // Walk backwards skipping non-control ops; the immediately
         // preceding non-trivial op should be a LOAD.
-        let prev = insns[..bi].iter().rev().find(|i| {
-            !matches!(i.op, IrOp::Branch | IrOp::Cbranch | IrOp::Branchind)
-        })?;
+        let prev = insns[..bi]
+            .iter()
+            .rev()
+            .find(|i| !matches!(i.op, IrOp::Branch | IrOp::Cbranch | IrOp::Branchind))?;
         if prev.op == IrOp::Load {
             Some(IndirectBranchKind::Generic)
         } else {
@@ -923,10 +1036,9 @@ pub(crate) mod arch {
         if !ends_in_branchind(insns) {
             return None;
         }
-        let has_byte_load = insns.iter().any(|i| {
-            i.op == IrOp::Load
-                && i.output.map(|o| o.size <= 2).unwrap_or(false)
-        });
+        let has_byte_load = insns
+            .iter()
+            .any(|i| i.op == IrOp::Load && i.output.map(|o| o.size <= 2).unwrap_or(false));
         let has_pc_add = insns.iter().any(|i| i.op == IrOp::IntAdd);
         if has_byte_load && has_pc_add {
             Some(IndirectBranchKind::ArmThumbTable)
@@ -955,10 +1067,9 @@ pub(crate) mod arch {
                     .map(|v| v.space == unlace_ir::SpaceId::Const)
                     .unwrap_or(false)
         });
-        let has_word_load = insns.iter().any(|i| {
-            i.op == IrOp::Load
-                && i.output.map(|o| o.size == 4).unwrap_or(false)
-        });
+        let has_word_load = insns
+            .iter()
+            .any(|i| i.op == IrOp::Load && i.output.map(|o| o.size == 4).unwrap_or(false));
         if has_lui_like && has_word_load {
             Some(IndirectBranchKind::MipsLuiLwJr)
         } else {
@@ -1366,7 +1477,11 @@ mod tests {
                     smallvec![Varnode::constant(i as u64, 8)],
                     0x1000 + i as u64,
                 );
-                (SwitchCase::Value(i as u64), vec![HirNode::Statement(stmt)], false)
+                (
+                    SwitchCase::Value(i as u64),
+                    vec![HirNode::Statement(stmt)],
+                    false,
+                )
             })
             .collect();
 
@@ -1441,8 +1556,8 @@ mod tests {
             kind: JumpTableKind::DenseAbsolute,
         };
         let relocs = vec![(base, 0xCAFEu64), (base + 8, 0xBEEFu64)];
-        let read = read_jump_table_with_relocs(&table, &section, &relocs)
-            .expect("read should succeed");
+        let read =
+            read_jump_table_with_relocs(&table, &section, &relocs).expect("read should succeed");
         assert_eq!(
             read,
             vec![0xCAFE, 0xBEEF],
@@ -1609,12 +1724,8 @@ mod tests {
         let next_only = infer_num_entries_from_xrefs(base, Some(base + 64), &[], entry_size);
         assert_eq!(next_only, Some(8), "next symbol at +64 → 8 slots of size 8");
 
-        let xref_only = infer_num_entries_from_xrefs(
-            base,
-            None,
-            &[base, base + 8, base + 24],
-            entry_size,
-        );
+        let xref_only =
+            infer_num_entries_from_xrefs(base, None, &[base, base + 8, base + 24], entry_size);
         assert_eq!(
             xref_only,
             Some(4),
@@ -1662,7 +1773,11 @@ mod tests {
                     smallvec![Varnode::constant(i as u64, 8)],
                     0x1000 + i as u64,
                 );
-                (SwitchCase::Value(i as u64), vec![HirNode::Statement(stmt)], false)
+                (
+                    SwitchCase::Value(i as u64),
+                    vec![HirNode::Statement(stmt)],
+                    false,
+                )
             })
             .collect();
 
@@ -1698,7 +1813,11 @@ mod tests {
             smallvec![Varnode::reg(0, 8), Varnode::unique(0x100, 1)],
             0x1004,
         );
-        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::unique(0x108, 8)], 0x1008);
+        let bi = IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![Varnode::unique(0x108, 8)],
+            0x1008,
+        );
 
         let kind = classify_indirect_branch(ArchId::Arm, &[load_byte, add_pc, bi]);
         assert_eq!(
@@ -1752,7 +1871,8 @@ mod tests {
             smallvec![Varnode::reg(3, 8)],
             0x3004,
         );
-        let bctr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x100, 8)], 0x3008);
+        let bctr =
+            IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x100, 8)], 0x3008);
 
         let kind = classify_indirect_branch(ArchId::Ppc64, &[toc_load, mtctr, bctr]);
         assert_eq!(
@@ -1772,7 +1892,8 @@ mod tests {
             smallvec![Varnode::reg(0, 8), Varnode::constant(0x1000, 8)],
             0x4000,
         );
-        let jalr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x28, 8)], 0x4004);
+        let jalr =
+            IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x28, 8)], 0x4004);
 
         let kind = classify_indirect_branch(ArchId::RiscV64, &[auipc, jalr]);
         assert_eq!(
@@ -1833,7 +1954,11 @@ mod tests {
             smallvec![Varnode::reg(0, 8), Varnode::unique(0x100, 2)],
             0x1004,
         );
-        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::unique(0x108, 8)], 0x1008);
+        let bi = IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![Varnode::unique(0x108, 8)],
+            0x1008,
+        );
         let kind = classify_indirect_branch(ArchId::Arm, &[load_half, add_pc, bi]);
         assert_eq!(kind, Some(IndirectBranchKind::ArmThumbTable));
     }
@@ -1865,11 +1990,16 @@ mod tests {
             smallvec![Varnode::reg(0, 8), Varnode::constant(0x1000, 8)],
             0x3000,
         );
-        let jalr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x28, 8)], 0x3004);
+        let jalr =
+            IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x28, 8)], 0x3004);
         // Declared PPC, but pattern shape is RISC-V: PPC detector returns None
         // and the generic LOAD→BRANCHIND path also returns None (no LOAD).
         let kind = classify_indirect_branch(ArchId::Ppc64, &[auipc, jalr]);
-        assert!(kind.is_none(), "PPC detector should not claim RISC-V shape; got {:?}", kind);
+        assert!(
+            kind.is_none(),
+            "PPC detector should not claim RISC-V shape; got {:?}",
+            kind
+        );
     }
 
     /// RISC-V classifier should not match a MIPS lui+lw+jr triple as
@@ -1956,11 +2086,7 @@ mod tests {
             smallvec![Varnode::constant(0, 8), Varnode::reg(0x10, 8)],
             0x1054,
         );
-        let bi = IrInsn::without_output(
-            IrOp::Branchind,
-            smallvec![Varnode::reg(0x30, 8)],
-            0x1058,
-        );
+        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x30, 8)], 0x1058);
 
         let result = detect_computed_goto(&[add, load, bi], &[section], (func_start, func_end));
         assert!(result.is_some(), "computed-goto pattern should be detected");
@@ -1970,7 +2096,10 @@ mod tests {
         assert_eq!(goto.num_entries, 3);
         assert_eq!(goto.targets, vec![0x1100, 0x1200, 0x1300]);
 
-        let cond_sv = SsaVarnode { base: Varnode::reg(0x20, 8), version: 0 };
+        let cond_sv = SsaVarnode {
+            base: Varnode::reg(0x20, 8),
+            version: 0,
+        };
         let switch_node = computed_goto_to_switch(&goto, cond_sv);
         match switch_node {
             HirNode::Switch { cases, .. } => {
@@ -1983,15 +2112,130 @@ mod tests {
         }
     }
 
-    #[test]
-    fn branchind_without_table_not_matched() {
+    fn computed_goto_ir_window(table_base: u64, entry_size: u8) -> [IrInsn; 4] {
+        let scale = IrInsn::with_output(
+            IrOp::IntMult,
+            Varnode::unique(0x90, 8),
+            smallvec![
+                Varnode::reg(0x20, 8),
+                Varnode::constant(entry_size as u64, 8),
+            ],
+            0x1048,
+        );
+        let add = IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::reg(0x10, 8),
+            smallvec![Varnode::constant(table_base, 8), Varnode::unique(0x90, 8)],
+            0x1050,
+        );
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::reg(0x30, entry_size),
+            smallvec![Varnode::constant(0, 8), Varnode::reg(0x10, 8)],
+            0x1054,
+        );
         let bi = IrInsn::without_output(
             IrOp::Branchind,
-            smallvec![Varnode::reg(0x30, 8)],
+            smallvec![Varnode::reg(0x30, entry_size)],
             0x1058,
         );
+        [scale, add, load, bi]
+    }
+
+    #[test]
+    fn computed_goto_x86_64_absolute_provider_yields_switch() {
+        let targets = [0x1100u64, 0x1200, 0x1300];
+        let table_base = 0x3100u64;
+        let table_bytes = build_le_u64_table(&targets);
+        let section = SectionView {
+            name: ".rodata",
+            vaddr: table_base,
+            data: &table_bytes,
+            perms: SectionPerms::RO,
+        };
+        let insns = computed_goto_ir_window(table_base, 8);
+        let got =
+            detect_computed_goto_for_arch(ArchId::X86_64, &insns, &[section], (0x1000, 0x2000))
+                .expect("x86_64 absolute table should recover");
+        assert_eq!(got.ptr_size, 8);
+        assert_eq!(got.targets, vec![0x1100, 0x1200, 0x1300]);
+    }
+
+    #[test]
+    fn computed_goto_aarch64_relative_offsets_yield_switch() {
+        let table_base = 0x8000u64;
+        let targets = [0x8100u64, 0x8200, 0x7f00];
+        let mut table_bytes = Vec::new();
+        for target in targets {
+            let off = (target as i64 - table_base as i64) as i32;
+            table_bytes.extend_from_slice(&off.to_le_bytes());
+        }
+        let section = SectionView {
+            name: ".rodata",
+            vaddr: table_base,
+            data: &table_bytes,
+            perms: SectionPerms::RO,
+        };
+        let insns = computed_goto_ir_window(table_base, 4);
+        let got =
+            detect_computed_goto_for_arch(ArchId::AArch64, &insns, &[section], (0x7000, 0x9000))
+                .expect("AArch64 relative-offset table should recover");
+        assert_eq!(got.ptr_size, 4);
+        assert_eq!(got.targets, vec![0x8100, 0x8200, 0x7f00]);
+    }
+
+    #[test]
+    fn computed_goto_riscv_relative_offsets_yield_switch() {
+        let table_base = 0x9000u64;
+        let targets = [0x9040u64, 0x9080, 0x9100];
+        let mut table_bytes = Vec::new();
+        for target in targets {
+            let off = (target as i64 - table_base as i64) as i32;
+            table_bytes.extend_from_slice(&off.to_le_bytes());
+        }
+        let section = SectionView {
+            name: ".rodata",
+            vaddr: table_base,
+            data: &table_bytes,
+            perms: SectionPerms::RO,
+        };
+        let insns = computed_goto_ir_window(table_base, 4);
+        let got =
+            detect_computed_goto_for_arch(ArchId::RiscV64, &insns, &[section], (0x9000, 0x9200))
+                .expect("RISC-V relative-offset table should recover");
+        assert_eq!(got.ptr_size, 4);
+        assert_eq!(got.targets, vec![0x9040, 0x9080, 0x9100]);
+    }
+
+    #[test]
+    fn computed_goto_mips_big_endian_absolute_yields_switch() {
+        let targets = [0x4100u32, 0x4200, 0x4300];
+        let table_base = 0xa000u64;
+        let mut table_bytes = Vec::new();
+        for target in targets {
+            table_bytes.extend_from_slice(&target.to_be_bytes());
+        }
+        let section = SectionView {
+            name: ".rodata",
+            vaddr: table_base,
+            data: &table_bytes,
+            perms: SectionPerms::RO,
+        };
+        let insns = computed_goto_ir_window(table_base, 4);
+        let got = detect_computed_goto_for_arch(ArchId::Mips, &insns, &[section], (0x4000, 0x5000))
+            .expect("MIPS big-endian absolute table should recover");
+        assert_eq!(got.ptr_size, 4);
+        assert_eq!(got.targets, vec![0x4100, 0x4200, 0x4300]);
+    }
+
+    #[test]
+    fn branchind_without_table_not_matched() {
+        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x30, 8)], 0x1058);
         let result = detect_computed_goto(&[bi], &[], (0x1000, 0x2000));
-        assert!(result.is_none(), "Branchind without table Load should not match");
+        assert!(
+            result.is_none(),
+            "Branchind without table Load should not match"
+        );
 
         let load = IrInsn::with_output(
             IrOp::Load,
@@ -1999,16 +2243,14 @@ mod tests {
             smallvec![Varnode::constant(0, 8), Varnode::reg(0x10, 8)],
             0x1054,
         );
-        let bi2 = IrInsn::without_output(
-            IrOp::Branchind,
-            smallvec![Varnode::reg(0x30, 8)],
-            0x1058,
-        );
+        let bi2 = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x30, 8)], 0x1058);
         let result2 = detect_computed_goto(&[load, bi2], &[], (0x1000, 0x2000));
-        assert!(result2.is_none(), "Load with no valid table section should not match");
+        assert!(
+            result2.is_none(),
+            "Load with no valid table section should not match"
+        );
     }
 }
-
 
 #[cfg(test)]
 mod tests_t241_t242 {
@@ -2038,7 +2280,12 @@ mod tests_t241_t242 {
         let targets = read_jump_table(&table, &section).expect("read should succeed");
         assert_eq!(
             targets,
-            vec![base_addr + 0x10, base_addr + 0x20, base_addr + 0x30, base_addr + 0x40],
+            vec![
+                base_addr + 0x10,
+                base_addr + 0x20,
+                base_addr + 0x30,
+                base_addr + 0x40
+            ],
         );
     }
 

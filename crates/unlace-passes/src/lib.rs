@@ -19,6 +19,7 @@ pub mod const_fold;
 pub mod copy_prop;
 pub mod boost_recognize;
 pub mod cpp_stl;
+pub mod cpp_lambda;
 pub mod cpp_vtable;
 pub mod crypto_idioms;
 pub mod crypto_lib_recognize;
@@ -113,6 +114,7 @@ pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;
 pub use cpp_stl::recognize_stl_type;
+pub use cpp_lambda::{CppLambdaCapturePass, recover_lambda_captures};
 pub use serial_recognize::{SerialKind, recognize_serial_api};
 pub use cpp_vtable::CppVtablePass;
 pub use cse::CsePass;
@@ -193,6 +195,7 @@ pub fn default_pass_names() -> Vec<&'static str> {
         "cse",
         "gvn",
         "bmi-idioms",
+        "cpp-lambda-captures",
         "licm",
         "iv-elim",
         "strength-reduce",

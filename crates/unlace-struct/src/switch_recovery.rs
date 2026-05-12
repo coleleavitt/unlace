@@ -1056,6 +1056,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         }
     }
 
@@ -1097,6 +1098,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         recover_switches(&mut func);
@@ -1256,6 +1258,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let targets = [0x4200u64, 0x4210, 0x4220];

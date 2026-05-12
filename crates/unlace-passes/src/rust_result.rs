@@ -323,6 +323,7 @@ mod tests {
             var_role_names: BTreeMap::new(),
             finalized_signature: None,
             crypto_annotations: Vec::new(),
+            cpp_lambda_captures: Vec::new(),
         }
     }
 

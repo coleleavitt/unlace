@@ -9,6 +9,7 @@ pub use unlace_lift_avr::AvrLifter;
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_ppc::PpcLifter;
 pub use unlace_lift_riscv::RiscVLifter;
+pub use unlace_lift_tricore::TriCoreLifter;
 pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_x86::X86Lifter;
 
@@ -51,6 +52,7 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::Ppc | ArchId::Ppc64 => Box::new(PpcLifter::new()),
         ArchId::V850 => Box::new(V850Lifter::new()),
         ArchId::Arc => Box::new(ArcLifter::new()),
+        ArchId::TriCore => Box::new(TriCoreLifter::new()),
         ArchId::Ebpf => Box::new(EbpfLifter::new()),
         ArchId::Avr => Box::new(AvrLifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
@@ -101,6 +103,13 @@ mod tests {
     fn test_get_lifter_arc() {
         let l = get_lifter(ArchId::Arc);
         assert_eq!(l.arch(), ArchId::Arc);
+        assert!(!l.register_file().registers.is_empty());
+    }
+
+    #[test]
+    fn test_get_lifter_tricore() {
+        let l = get_lifter(ArchId::TriCore);
+        assert_eq!(l.arch(), ArchId::TriCore);
         assert!(!l.register_file().registers.is_empty());
     }
 

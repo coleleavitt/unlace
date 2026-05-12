@@ -11,6 +11,7 @@ members = [
     "crates/unlace-lift-ppc",
     "crates/unlace-lift-v850",
     "crates/unlace-lift-arc",
+    "crates/unlace-lift-tricore",
     "crates/unlace-lift-wasm",
     "crates/unlace-lift-ebpf",
     "crates/unlace-lift-avr",
@@ -89,6 +90,7 @@ unlace-lift-mips = { path = "crates/unlace-lift-mips" }
 unlace-lift-ppc = { path = "crates/unlace-lift-ppc" }
 unlace-lift-v850 = { path = "crates/unlace-lift-v850" }
 unlace-lift-arc = { path = "crates/unlace-lift-arc" }
+unlace-lift-tricore = { path = "crates/unlace-lift-tricore" }
 unlace-lift-wasm = { path = "crates/unlace-lift-wasm" }
 unlace-lift-ebpf = { path = "crates/unlace-lift-ebpf" }
 unlace-lift-avr = { path = "crates/unlace-lift-avr" }

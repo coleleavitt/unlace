@@ -110,7 +110,21 @@ pub enum GoKind {
         in_types: Vec<u64>,
         out_types: Vec<u64>,
     },
+    /// Post-1.18 generic dictionary (`runtime.dictabi`) carrying the
+    /// instantiation's type-parameter surface names/constraints. Go's
+    /// real layout varies by compiler/runtime version; this decoder keeps
+    /// the MVP intentionally narrow: a header with a `count` followed by
+    /// fixed-size `(name_ptr, constraint_ptr)` pairs.
+    DictAbi {
+        params: Vec<GoTypeParam>,
+    },
     Other(u8),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoTypeParam {
+    pub name: String,
+    pub constraint: String,
 }
 
 /// Convenience alias used by some external docs; the canonical name is
@@ -158,6 +172,11 @@ fn read_i32(data: &[u8], off: usize) -> Option<i32> {
 
 fn read_u8(data: &[u8], off: usize) -> Option<u8> {
     data.get(off).copied()
+}
+
+fn read_u32_le(data: &[u8], off: usize) -> Option<u32> {
+    data.get(off..off + 4)
+        .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
 }
 
 /// Decode an encoded Go `Name`: `[flag u8][len varint][bytes...]`.
@@ -212,11 +231,67 @@ fn basic_kind(k: u8) -> Option<GoKind> {
     })
 }
 
+fn parse_dictabi_at(
+    image_data: &[u8],
+    va: u64,
+    va_to_offset: &impl Fn(u64) -> Option<usize>,
+) -> Option<GoType> {
+    let off = va_to_offset(va)?;
+    let count = read_u32_le(image_data, off)? as usize;
+    if count == 0 || count > 16 {
+        return None;
+    }
+    let table_off = off + 8;
+    if image_data.get(table_off..table_off + count * 16).is_none() {
+        return None;
+    }
+    let mut params = Vec::with_capacity(count);
+    for i in 0..count {
+        let ent = table_off + i * 16;
+        let name_ptr = read_u64(image_data, ent)?;
+        let constraint_ptr = read_u64(image_data, ent + 8)?;
+        let Some(name_off) = va_to_offset(name_ptr) else {
+            return None;
+        };
+        let Some(name) = decode_name(image_data, name_off) else {
+            return None;
+        };
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return None;
+        }
+        let constraint = if constraint_ptr == 0 {
+            "any".to_string()
+        } else {
+            let Some(constraint_off) = va_to_offset(constraint_ptr) else {
+                return None;
+            };
+            let Some(decoded) = decode_name(image_data, constraint_off) else {
+                return None;
+            };
+            if decoded.is_empty() {
+                return None;
+            }
+            decoded
+        };
+        params.push(GoTypeParam { name, constraint });
+    }
+    Some(GoType {
+        va,
+        size: 8 + (count as u64) * 16,
+        kind: GoKind::DictAbi { params },
+        name: Some("runtime.dictabi".into()),
+    })
+}
+
 pub fn parse_type_at(
     image_data: &[u8],
     va: u64,
     va_to_offset: impl Fn(u64) -> Option<usize>,
 ) -> Option<GoType> {
+    if let Some(dict) = parse_dictabi_at(image_data, va, &va_to_offset) {
+        return Some(dict);
+    }
+
     let head_off = va_to_offset(va)?;
     let head = image_data.get(head_off..head_off + TYPE_HEAD_SIZE)?;
 
@@ -648,6 +723,10 @@ fn resolve_go_type_at(
             })
         }
         GoKind::Interface { .. } => go_interface_to_type(&t),
+        GoKind::DictAbi { params } => params.first().map(|param| unlace_ir::types::Type::TypeParam {
+            name: param.name.clone(),
+            constraint: param.constraint.clone(),
+        }),
         // Pointer / array / struct / func / chan resolution is out of
         // scope for t191 — surface them as opaque `void *` so a
         // map/slice that references them still registers cleanly.
@@ -711,6 +790,17 @@ pub fn populate_go_types_from_module(image: &mut crate::image::BinaryImage) {
                 };
                 if let Some(ty) = recovered {
                     image.go_types.insert(va, ty);
+                }
+            }
+            GoKind::DictAbi { params } => {
+                for (idx, param) in params.iter().enumerate() {
+                    image.go_types.insert(
+                        va + idx as u64,
+                        unlace_ir::types::Type::TypeParam {
+                            name: param.name.clone(),
+                            constraint: param.constraint.clone(),
+                        },
+                    );
                 }
             }
             _ => {}
@@ -1532,6 +1622,107 @@ mod tests {
             other => panic!("expected Type::Map, got {other:?}"),
         }
         assert_eq!(ty.to_string(), "map[struct S][]__int32");
+    }
+
+    #[test]
+    fn t297_parse_runtime_dictabi_type_params() {
+        // Synthetic MVP layout:
+        //   0x000: count u32 = 2, pad u32 = 0
+        //   0x008: entry[0] { name=0x40, constraint=0x50 }
+        //   0x018: entry[1] { name=0x60, constraint=0 }
+        //   0x040: encoded name "T"
+        //   0x050: encoded name "any"
+        //   0x060: encoded name "U"
+        let mut buf = vec![0u8; 0x100];
+        buf[0..4].copy_from_slice(&2u32.to_le_bytes());
+        buf[8..16].copy_from_slice(&0x40u64.to_le_bytes());
+        buf[16..24].copy_from_slice(&0x50u64.to_le_bytes());
+        buf[24..32].copy_from_slice(&0x60u64.to_le_bytes());
+        buf[32..40].copy_from_slice(&0u64.to_le_bytes());
+        // name blobs: flag=0, len, bytes
+        buf[0x40] = 0; buf[0x41] = 1; buf[0x42] = b'T';
+        buf[0x50] = 0; buf[0x51] = 3; buf[0x52] = b'a'; buf[0x53] = b'n'; buf[0x54] = b'y';
+        buf[0x60] = 0; buf[0x61] = 1; buf[0x62] = b'U';
+
+        let t = parse_type_at(&buf, 0, ident).expect("decode dictabi");
+        match t.kind {
+            GoKind::DictAbi { params } => {
+                assert_eq!(params.len(), 2);
+                assert_eq!(params[0], GoTypeParam { name: "T".into(), constraint: "any".into() });
+                assert_eq!(params[1], GoTypeParam { name: "U".into(), constraint: "any".into() });
+            }
+            other => panic!("expected DictAbi, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn t297_populate_dictabi_registers_type_params() {
+        use std::collections::BTreeMap;
+        use unlace_ir::types::Type;
+        use unlace_ir::ArchId;
+        use crate::Endian;
+        use crate::go_moduledata::GoModuleInfo;
+        use crate::image::{BinaryImage, Section, SectionFlags};
+
+        const RODATA_BASE: u64 = 0x20000;
+        let dict_off = 0x80usize;
+        let dict_va = RODATA_BASE + dict_off as u64;
+        let mut rodata = vec![0u8; 0x200];
+        rodata[dict_off..dict_off + 4].copy_from_slice(&1u32.to_le_bytes());
+        rodata[dict_off + 8..dict_off + 16].copy_from_slice(&(RODATA_BASE + 0x140).to_le_bytes());
+        rodata[dict_off + 16..dict_off + 24].copy_from_slice(&(RODATA_BASE + 0x150).to_le_bytes());
+        rodata[0x140] = 0; rodata[0x141] = 1; rodata[0x142] = b'T';
+        rodata[0x150] = 0; rodata[0x151] = 3; rodata[0x152] = b'a'; rodata[0x153] = b'n'; rodata[0x154] = b'y';
+
+        let mut img = BinaryImage {
+            arch: ArchId::X86_64,
+            endian: Endian::Little,
+            entry: 0,
+            sections: vec![Section {
+                name: ".rodata".into(),
+                vaddr: RODATA_BASE,
+                size: rodata.len() as u64,
+                data: rodata,
+                flags: SectionFlags::READ,
+            }],
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: Vec::new(),
+            string_table: BTreeMap::new(),
+            tls_callbacks: Vec::new(),
+            function_starts: Vec::new(),
+            debug_records: Vec::new(),
+            load_config: None,
+            runtime_functions: Vec::new(),
+            resources: Vec::new(),
+            bound_imports: Vec::new(),
+            delay_imports: Vec::new(),
+            forwarded_exports: Vec::new(),
+            forwarded_resolutions: BTreeMap::new(),
+            rich_header: None,
+            dylibs: Vec::new(),
+            rpaths: Vec::new(),
+            pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: Some(GoModuleInfo {
+                types_va: RODATA_BASE,
+                etypes_va: RODATA_BASE + 0x200,
+                typelinks: vec![dict_off as i32],
+                ..GoModuleInfo::default()
+            }),
+            go_itabs: BTreeMap::new(),
+            go_types: BTreeMap::new(),
+            swift_info: None,
+            auth_pointers: Vec::new(),
+            auth_ptr_slots: Vec::new(),
+        };
+
+        populate_go_types_from_module(&mut img);
+        assert_eq!(
+            img.go_types.get(&dict_va),
+            Some(&Type::TypeParam { name: "T".into(), constraint: "any".into() })
+        );
     }
 
     /// t191 — nested `map[int]map[int8]int32` round-trips through

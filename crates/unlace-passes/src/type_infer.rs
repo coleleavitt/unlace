@@ -186,7 +186,8 @@ fn seed_from_composites(func: &mut SsaFunction) {
             | Type::FuncPtr { .. }
             | Type::Interface { .. }
             | Type::Slice { .. }
-            | Type::Map { .. } => PrimitiveType::Ptr,
+            | Type::Map { .. }
+            | Type::TypeParam { .. } => PrimitiveType::Ptr,
         };
         let entry = func.var_types.entry(*sv).or_insert(primitive);
         *entry = entry.join(primitive);
@@ -642,7 +643,9 @@ fn field_to_primitive(ty: &Type) -> PrimitiveType {
         // primitive level it lowers to a pointer-sized payload, matching
         // how the printer renders `Type::Interface` as `void *`.
         // Slices reduce to their `*T` data pointer; maps to `*hmap`.
-        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } => PrimitiveType::Ptr,
+        // Generic type parameters flow via runtime dictionaries / iface words,
+        // so model them as pointer-sized too.
+        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } | Type::TypeParam { .. } => PrimitiveType::Ptr,
     }
 }
 

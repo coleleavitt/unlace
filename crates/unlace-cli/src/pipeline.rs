@@ -1459,6 +1459,7 @@ pub fn decompile_function_with_symbols(
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
     let objc_info = unlace_loader::scan_objc_classlist(image);
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
+    printer_annotations.go_interfaces = image.go_types.clone();
     printer_annotations.libc_call_canonical = libc_call_canonical;
     printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
     let printer_annotations = Some(printer_annotations);

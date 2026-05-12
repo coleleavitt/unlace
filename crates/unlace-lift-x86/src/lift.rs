@@ -5,7 +5,7 @@ use unlace_ir::{
 };
 
 use crate::ops::{
-    arithmetic, bitwise, control_flow, crypto, data_move, fpu, sse, stack, string_ops,
+    amx, arithmetic, bitwise, control_flow, crypto, data_move, fpu, sse, stack, string_ops,
 };
 use crate::register_file::{iced_reg_to_varnode, x86_64_register_file};
 
@@ -518,6 +518,17 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Vpor => sse::lift_avx_binop(ctx, insn, sse::tag::VPOR),
         M::Vpxor => sse::lift_avx_binop(ctx, insn, sse::tag::VPXOR),
         M::Vpblendd => sse::lift_avx_blend(ctx, insn, sse::tag::VPBLENDD),
+
+        // ── Intel AMX tile ops (t309 / parity t307) ─────────────
+        M::Tileloadd => amx::lift_tile_loadd(ctx, insn),
+        M::Tileloaddt1 => amx::lift_tile_loadd(ctx, insn),
+        M::Tilestored => amx::lift_tile_stored(ctx, insn),
+        M::Tilerelease => amx::lift_tile_release(ctx, insn),
+        M::Tdpbssd => amx::lift_tdpb(ctx, insn, amx::tag::TDPBSSD),
+        M::Tdpbsud => amx::lift_tdpb(ctx, insn, amx::tag::TDPBSUD),
+        M::Tdpbusd => amx::lift_tdpb(ctx, insn, amx::tag::TDPBUSD),
+        M::Tdpbuud => amx::lift_tdpb(ctx, insn, amx::tag::TDPBUUD),
+        M::Tdpbf16ps => amx::lift_tdpb(ctx, insn, amx::tag::TDPBF16PS),
 
         // ── AVX-512 EVEX 64-bit-lane packed ops (t205) ──────────
         //

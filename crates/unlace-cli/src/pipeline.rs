@@ -64,7 +64,7 @@ use unlace_passes::{
     CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
     DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
     GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
-    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
+    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, RustVtablePass, SccpPass, SignatureSnapshot,
     StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
     CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     VariableMergePass, annotate_libc_calls, bump_if_signature_changed, detect_byref,
@@ -858,6 +858,7 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             PrologueElimPass.run(ssa)?;
             TailCallDetectPass.run(ssa)?;
             StackVarRecoveryPass.run(ssa)?;
+            RustVtablePass.run(ssa)?;
             // Wave 24 / t209: synthesise the high-level stack frame layout
             // (one slot per offset, fused partial-access groups, array
             // collapsing) so the type-recovery layer can consume a stable
@@ -1375,6 +1376,23 @@ pub fn decompile_function_with_symbols(
         }
     }
 
+    let mut rust_vtable_calls: BTreeMap<u64, unlace_ir::ssa::VtableCallInfo> = BTreeMap::new();
+    for (&(bid, idx), info) in &ssa.vtable_calls {
+        if let Some(block) = ssa.function.blocks.get(&bid) {
+            if let Some(insn) = block.insns.get(idx) {
+                rust_vtable_calls.insert(insn.addr, info.clone());
+            }
+        }
+    }
+    let mut cpp_vtable_calls: BTreeMap<u64, unlace_ir::ssa::VtableCallInfo> = BTreeMap::new();
+    for (&(bid, idx), info) in &ssa.cpp_vtable_calls {
+        if let Some(block) = ssa.function.blocks.get(&bid) {
+            if let Some(insn) = block.insns.get(idx) {
+                cpp_vtable_calls.insert(insn.addr, info.clone());
+            }
+        }
+    }
+
     let mut printer_annotations = config
         .annotations
         .as_ref()
@@ -1385,6 +1403,8 @@ pub fn decompile_function_with_symbols(
     let objc_info = unlace_loader::scan_objc_classlist(image);
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
     printer_annotations.libc_call_canonical = libc_call_canonical;
+    printer_annotations.rust_vtable_calls = rust_vtable_calls;
+    printer_annotations.cpp_vtable_calls = cpp_vtable_calls;
     let printer_annotations = Some(printer_annotations);
     let result = emit_output(
         emit,

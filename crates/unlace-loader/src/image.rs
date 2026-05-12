@@ -400,8 +400,7 @@ pub struct BinaryImage {
     /// moduledata parse; the C printer consumes this map to render
     /// `interface { Method() }` Go-style comments above usages. Empty
     /// for non-Go binaries or when no interface types are reachable.
-    pub go_types:
-        std::collections::BTreeMap<u64, unlace_ir::types::Type>,
+    pub go_types: std::collections::BTreeMap<u64, unlace_ir::types::Type>,
     /// Swift 5+ runtime metadata recovered from Mach-O `__swift5_*`
     /// sections (t193). `None` for non-Swift binaries (the common
     /// case) or any image where none of the three sections is
@@ -418,6 +417,12 @@ pub struct BinaryImage {
     /// from one of these slots — the printer renders the call as
     /// `__builtin_arm_authcall(target, key, disc)`.
     pub auth_pointers: Vec<crate::dyld_cache::AuthPointer>,
+    /// WebAssembly component-model / WASI metadata recovered from `.wasm`
+    /// modules or components. `None` for non-wasm images. This side-channel
+    /// unwraps host-facing component imports/exports and canonical ABI adapter
+    /// records without requiring the rest of the pipeline to understand the
+    /// component binary encoding.
+    pub wasm_component: Option<crate::wasm_component::WasmComponentInfo>,
     /// Mach-O `__DATA_CONST,__auth_ptr` slot virtual addresses (t207).
     ///
     /// iOS 13+ moved many globals (vtables, dispatch tables, etc.) into
@@ -557,6 +562,7 @@ mod tests {
             swift_info: None,
             auth_pointers: Vec::new(),
             auth_ptr_slots: Vec::new(),
+            wasm_component: None,
         }
     }
 

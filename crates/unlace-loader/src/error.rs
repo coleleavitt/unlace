@@ -32,4 +32,8 @@ pub enum LoadError {
     /// I/O error while reading a file.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// WebAssembly / component-model parser failed.
+    #[error("WebAssembly parse error: {0}")]
+    Wasm(String),
 }

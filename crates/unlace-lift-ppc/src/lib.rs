@@ -1,4 +1,4 @@
-//! PowerPC PPC64 → IR lifter (via capstone).
+//! PowerPC 32/64, LE/BE → IR lifter (via capstone).
 
 pub mod lift;
 mod ops;
@@ -11,14 +11,30 @@ mod tests {
     use unlace_ir::{ArchId, IrOp, Lifter};
 
     use crate::PpcLifter;
+    use crate::lift::PpcLiftMode;
 
     fn lifter() -> PpcLifter {
-        PpcLifter::new()
+        PpcLifter::new_ppc32_be()
+    }
+
+    fn lifter_le() -> PpcLifter {
+        PpcLifter::new_ppc32_le()
+    }
+
+    fn lifter64() -> PpcLifter {
+        PpcLifter::new_ppc64_be()
+    }
+
+    fn lifter64_le() -> PpcLifter {
+        PpcLifter::new_ppc64_le()
     }
 
     #[test]
     fn test_arch() {
         assert_eq!(lifter().arch(), ArchId::Ppc);
+        assert_eq!(lifter().mode(), PpcLiftMode::Ppc32);
+        assert_eq!(lifter64().arch(), ArchId::Ppc64);
+        assert_eq!(lifter64().mode(), PpcLiftMode::Ppc64);
     }
 
     #[test]
@@ -27,6 +43,7 @@ mod tests {
         let rf = l.register_file();
         // r0–r31 + CR + LR + CTR + XER + PC = 37
         assert_eq!(rf.registers.len(), 37);
+        assert_eq!(rf.registers[0].varnode.size, 4);
         assert_eq!(rf.registers[0].name, "r0");
         assert_eq!(rf.registers[31].name, "r31");
         assert_eq!(rf.registers[32].name, "CR");
@@ -34,9 +51,15 @@ mod tests {
         assert_eq!(rf.registers[34].name, "CTR");
         assert_eq!(rf.registers[35].name, "XER");
         assert_eq!(rf.registers[36].name, "PC");
+
+        let l64 = lifter64();
+        let rf64 = l64.register_file();
+        assert_eq!(rf64.registers.len(), 37);
+        assert_eq!(rf64.registers[0].varnode.size, 8);
+        assert_eq!(rf64.registers[31].varnode.size, 8);
     }
 
-    // PPC is big-endian; all test bytes are BE-encoded PPC instructions.
+    // Most tests use BE-encoded PPC instructions. LE variants reverse the byte order.
 
     #[test]
     fn test_nop() {
@@ -277,6 +300,50 @@ mod tests {
     fn test_short_buffer() {
         let result = lifter().lift_insn(&[0x60, 0x00], 0x1000);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn constructors_distinguish_variants() {
+        assert_eq!(PpcLifter::new().arch(), ArchId::Ppc);
+        assert_eq!(PpcLifter::new_ppc32_be().arch(), ArchId::Ppc);
+        assert_eq!(PpcLifter::new_ppc32_le().arch(), ArchId::Ppc);
+        assert_eq!(PpcLifter::new_ppc64_be().arch(), ArchId::Ppc64);
+        assert_eq!(PpcLifter::new_ppc64_le().arch(), ArchId::Ppc64);
+    }
+
+    #[test]
+    fn test_li_little_endian_ppc32() {
+        let result = lifter_le()
+            .lift_insn(&[0x2a, 0x00, 0x60, 0x38], 0x1000_0000)
+            .expect("should decode LE LI");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_li_ppc64() {
+        let result = lifter64()
+            .lift_insn(&[0x38, 0x60, 0x00, 0x2a], 0x1000_0000)
+            .expect("should decode PPC64 LI");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_li_little_endian_ppc64() {
+        let result = lifter64_le()
+            .lift_insn(&[0x2a, 0x00, 0x60, 0x38], 0x1000_0000)
+            .expect("should decode LE PPC64 LI");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_ld_ppc32_still_decodes() {
+        let result = lifter()
+            .lift_insn(&[0xe8, 0x61, 0x00, 0x08], 0x1000_0000)
+            .expect("should decode LD in PPC32 mode");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
     }
 
     #[test]

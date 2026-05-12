@@ -1,17 +1,16 @@
-//! PPC64 register file layout.
+//! PowerPC register file layouts.
 //!
-//! r0–r31 as 64-bit GPRs, plus CR, LR, CTR, XER, and PC.
+//! PPC32: r0–r31 as 32-bit GPRs, plus CR, LR, CTR, XER, and PC.
+//! PPC64: r0–r31 as 64-bit GPRs, plus CR, LR, CTR, XER, and PC.
 
 use capstone::RegId;
 use unlace_ir::{RegisterDef, RegisterFile, SpaceId, Varnode};
 
 pub const GPR_BASE: u64 = 0;
-pub const GPR_SIZE: u8 = 8;
+pub const GPR_COUNT: usize = 32;
 
-#[inline]
-pub const fn gpr_offset(n: u64) -> u64 {
-    GPR_BASE + n * (GPR_SIZE as u64)
-}
+pub const PPC32_GPR_SIZE: u8 = 4;
+pub const PPC64_GPR_SIZE: u8 = 8;
 
 pub const CR_OFFSET: u64 = 256;
 pub const CR_SIZE: u8 = 4;
@@ -24,18 +23,23 @@ pub const XER_SIZE: u8 = 4;
 pub const PC_OFFSET: u64 = 288;
 pub const PC_SIZE: u8 = 8;
 
-const PPC_GPR_NAMES: [&str; 32] = [
+const PPC_GPR_NAMES: [&str; GPR_COUNT] = [
     "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14",
     "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27",
     "r28", "r29", "r30", "r31",
 ];
 
-pub fn ppc64_register_file() -> RegisterFile {
+#[inline]
+pub const fn gpr_offset(n: u64, gpr_size: u8) -> u64 {
+    GPR_BASE + n * (gpr_size as u64)
+}
+
+fn build_register_file(gpr_size: u8) -> RegisterFile {
     let mut regs = Vec::with_capacity(37);
     for (i, name) in PPC_GPR_NAMES.iter().enumerate() {
         regs.push(RegisterDef {
             name,
-            varnode: Varnode::reg(gpr_offset(i as u64), GPR_SIZE),
+            varnode: Varnode::reg(gpr_offset(i as u64, gpr_size), gpr_size),
         });
     }
     regs.push(RegisterDef {
@@ -61,10 +65,22 @@ pub fn ppc64_register_file() -> RegisterFile {
     RegisterFile { registers: regs }
 }
 
+pub fn ppc32_register_file() -> RegisterFile {
+    build_register_file(PPC32_GPR_SIZE)
+}
+
+pub fn ppc64_register_file() -> RegisterFile {
+    build_register_file(PPC64_GPR_SIZE)
+}
+
 /// Helper: 64-bit GPR varnode.
 #[inline]
 pub fn gpr(n: u64) -> Varnode {
-    Varnode::new(SpaceId::Register, gpr_offset(n), GPR_SIZE)
+    Varnode::new(
+        SpaceId::Register,
+        gpr_offset(n, PPC64_GPR_SIZE),
+        PPC64_GPR_SIZE,
+    )
 }
 
 #[inline]

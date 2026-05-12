@@ -44,8 +44,51 @@ const RV_REG_NAMES: [&str; 32] = [
     "x28", "x29", "x30", "x31",
 ];
 
+const RVV_REG_NAMES: [&str; 32] = [
+    "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14",
+    "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27",
+    "v28", "v29", "v30", "v31",
+];
+
 /// Offset of the pc register in the register file.
 const PC_OFFSET: u64 = 256;
+
+/// Offset of the RVV vector register bank (`v0`..`v31`).  RVV allows an
+/// implementation-defined VLEN, so the lifter models each architectural vector
+/// register as a conservative 128-byte register-space varnode.  LMUL groups are
+/// represented by the first register plus an LMUL metadata operand in the RVV
+/// callother rather than by fabricating variable-width register names.
+const RVV_REG_OFFSET: u64 = 512;
+const RVV_REG_SIZE: u8 = 128;
+const RVV_REG_STRIDE: u64 = RVV_REG_SIZE as u64;
+
+/// RVV CSRs/configuration registers modeled in the register file.
+const VTYPE_OFFSET: u64 = 4608;
+const VL_OFFSET: u64 = 4616;
+const VSTART_OFFSET: u64 = 4624;
+const VXRM_OFFSET: u64 = 4632;
+const VXSAT_OFFSET: u64 = 4640;
+
+/// RISC-V lifter callother identifiers for RVV instructions.
+///
+/// The first callother input is always one of these constants.  RVV operations
+/// also include policy/mask/configuration metadata so downstream passes can
+/// distinguish masked vs unmasked execution, tail/mask policy, SEW, LMUL and
+/// vector length configuration even when the bundled Capstone does not decode
+/// RVV instructions.
+pub const CALLOTHER_RVV_VSETVLI: u64 = 0x5256_5601;
+pub const CALLOTHER_RVV_VSETIVLI: u64 = 0x5256_5602;
+pub const CALLOTHER_RVV_VSETVL: u64 = 0x5256_5603;
+pub const CALLOTHER_RVV_LOAD: u64 = 0x5256_5610;
+pub const CALLOTHER_RVV_STORE: u64 = 0x5256_5611;
+pub const CALLOTHER_RVV_OPIVV: u64 = 0x5256_5620;
+pub const CALLOTHER_RVV_OPFVV: u64 = 0x5256_5621;
+pub const CALLOTHER_RVV_OPMVV: u64 = 0x5256_5622;
+pub const CALLOTHER_RVV_OPIVI: u64 = 0x5256_5623;
+pub const CALLOTHER_RVV_OPIVX: u64 = 0x5256_5624;
+pub const CALLOTHER_RVV_OPFVF: u64 = 0x5256_5625;
+pub const CALLOTHER_RVV_OPMVX: u64 = 0x5256_5626;
+pub const CALLOTHER_RVV_MASK_OP: u64 = 0x5256_5630;
 
 /// Convert a capstone `RegId` to a register-space `Varnode`.
 /// Returns `None` for x0 (hardwired zero — callers should use `Varnode::constant(0, 8)`).
@@ -65,6 +108,31 @@ fn cs_reg_to_varnode(reg: RegId) -> Option<Varnode> {
 /// Read a register operand: x0 produces constant zero, others produce register varnodes.
 fn read_reg(reg: RegId) -> Varnode {
     cs_reg_to_varnode(reg).unwrap_or(Varnode::constant(0, 8))
+}
+
+#[inline]
+fn rvv_reg(index: u32) -> Varnode {
+    Varnode::reg(
+        RVV_REG_OFFSET + (index as u64) * RVV_REG_STRIDE,
+        RVV_REG_SIZE,
+    )
+}
+
+#[inline]
+fn rvv_mask_reg(index: u32) -> Varnode {
+    // Mask registers alias vector registers in RVV, but consumers need to know
+    // only the mask-producing/consuming mode.  We therefore reuse the vector
+    // varnode and put mask semantics in the callother identifier/metadata.
+    rvv_reg(index)
+}
+
+#[inline]
+fn rvv_config_inputs() -> [Varnode; 3] {
+    [
+        Varnode::reg(VTYPE_OFFSET, 8),
+        Varnode::reg(VL_OFFSET, 8),
+        Varnode::reg(VSTART_OFFSET, 8),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -500,7 +568,7 @@ pub struct RiscVLifter {
 
 impl RiscVLifter {
     pub fn new() -> Self {
-        let mut regs = Vec::with_capacity(33);
+        let mut regs = Vec::with_capacity(70);
         for (i, name) in RV_REG_NAMES.iter().enumerate() {
             regs.push(RegisterDef {
                 name,
@@ -511,6 +579,38 @@ impl RiscVLifter {
             name: "pc",
             varnode: Varnode::reg(PC_OFFSET, 8),
         });
+
+        // RVV architectural vector registers.  The fixed 128-byte model is an
+        // IR storage convention; exact SEW/LMUL/VL semantics are carried by the
+        // RVV callother metadata emitted for each instruction.
+        for (i, name) in RVV_REG_NAMES.iter().enumerate() {
+            regs.push(RegisterDef {
+                name,
+                varnode: rvv_reg(i as u32),
+            });
+        }
+        regs.extend([
+            RegisterDef {
+                name: "vtype",
+                varnode: Varnode::reg(VTYPE_OFFSET, 8),
+            },
+            RegisterDef {
+                name: "vl",
+                varnode: Varnode::reg(VL_OFFSET, 8),
+            },
+            RegisterDef {
+                name: "vstart",
+                varnode: Varnode::reg(VSTART_OFFSET, 8),
+            },
+            RegisterDef {
+                name: "vxrm",
+                varnode: Varnode::reg(VXRM_OFFSET, 8),
+            },
+            RegisterDef {
+                name: "vxsat",
+                varnode: Varnode::reg(VXSAT_OFFSET, 8),
+            },
+        ]);
 
         let cs = Capstone::new()
             .riscv()
@@ -554,6 +654,10 @@ impl Lifter for RiscVLifter {
                     return Ok(lifted);
                 }
             }
+        }
+
+        if let Some(lifted) = lift_rvv_direct(bytes, addr) {
+            return Ok(lifted);
         }
 
         if let Some(lifted) = lift_rv64i_direct(bytes, addr) {
@@ -612,6 +716,218 @@ fn rv_reg(index: u32) -> RegId {
 fn sign_extend(value: u32, bits: u8) -> i64 {
     let shift = 64 - bits;
     ((value as i64) << shift) >> shift
+}
+
+#[inline]
+fn rvv_const(value: u64) -> Varnode {
+    Varnode::constant(value, 8)
+}
+
+fn emit_rvv_callother(
+    ctx: &mut LiftCtx,
+    tag: u64,
+    output: Option<Varnode>,
+    mut inputs: Vec<Varnode>,
+) {
+    let mut all = smallvec![rvv_const(tag)];
+    all.extend(inputs.drain(..));
+    match output {
+        Some(out) => ctx.emit(IrInsn::with_output(IrOp::Callother, out, all, ctx.addr)),
+        None => ctx.emit(IrInsn::without_output(IrOp::Callother, all, ctx.addr)),
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum RvvMajor {
+    Opivv = 0,
+    Opfvv = 1,
+    Opmvv = 2,
+    Opivi = 3,
+    Opivx = 4,
+    Opfvf = 5,
+    Opmvx = 6,
+}
+
+impl RvvMajor {
+    fn from_funct3(funct3: u32) -> Option<Self> {
+        match funct3 {
+            0b000 => Some(Self::Opivv),
+            0b001 => Some(Self::Opfvv),
+            0b010 => Some(Self::Opmvv),
+            0b011 => Some(Self::Opivi),
+            0b100 => Some(Self::Opivx),
+            0b101 => Some(Self::Opfvf),
+            0b110 => Some(Self::Opmvx),
+            _ => None,
+        }
+    }
+
+    fn tag(self) -> u64 {
+        match self {
+            Self::Opivv => CALLOTHER_RVV_OPIVV,
+            Self::Opfvv => CALLOTHER_RVV_OPFVV,
+            Self::Opmvv => CALLOTHER_RVV_OPMVV,
+            Self::Opivi => CALLOTHER_RVV_OPIVI,
+            Self::Opivx => CALLOTHER_RVV_OPIVX,
+            Self::Opfvf => CALLOTHER_RVV_OPFVF,
+            Self::Opmvx => CALLOTHER_RVV_OPMVX,
+        }
+    }
+
+    fn is_scalar_or_imm(self) -> bool {
+        matches!(self, Self::Opivi | Self::Opivx | Self::Opfvf | Self::Opmvx)
+    }
+}
+
+fn lift_rvv_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
+    if bytes.len() < 4 {
+        return None;
+    }
+
+    let word = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    let opcode = word & 0x7f;
+    let rd = (word >> 7) & 0x1f;
+    let funct3 = (word >> 12) & 0x7;
+    let rs1 = (word >> 15) & 0x1f;
+    let rs2 = (word >> 20) & 0x1f;
+    let vm = (word >> 25) & 0x1;
+    let funct6 = (word >> 26) & 0x3f;
+    let mut ctx = LiftCtx::new(addr);
+
+    match opcode {
+        // vsetvli rd, rs1, vtypei
+        0x57 if funct3 == 0b111 && ((word >> 31) & 1) == 0 => {
+            let vtypei = (word >> 20) & 0x7ff;
+            let avl = read_reg(rv_reg(rs1));
+            let vl = Varnode::reg(VL_OFFSET, 8);
+            emit_rvv_callother(
+                &mut ctx,
+                CALLOTHER_RVV_VSETVLI,
+                Some(vl),
+                vec![avl, rvv_const(vtypei as u64)],
+            );
+            ctx.write_reg(rv_reg(rd), vl);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                Varnode::reg(VTYPE_OFFSET, 8),
+                smallvec![rvv_const(vtypei as u64)],
+                addr,
+            ));
+        }
+        // vsetivli rd, uimm, vtypei
+        0x57 if funct3 == 0b111 && ((word >> 30) & 0x3) == 0b11 => {
+            let uimm = rs1;
+            let vtypei = (word >> 20) & 0x3ff;
+            let vl = Varnode::reg(VL_OFFSET, 8);
+            emit_rvv_callother(
+                &mut ctx,
+                CALLOTHER_RVV_VSETIVLI,
+                Some(vl),
+                vec![rvv_const(uimm as u64), rvv_const(vtypei as u64)],
+            );
+            ctx.write_reg(rv_reg(rd), vl);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                Varnode::reg(VTYPE_OFFSET, 8),
+                smallvec![rvv_const(vtypei as u64)],
+                addr,
+            ));
+        }
+        // vsetvl rd, rs1, rs2
+        0x57 if funct3 == 0b111 && funct6 == 0b100000 => {
+            let avl = read_reg(rv_reg(rs1));
+            let vtype_src = read_reg(rv_reg(rs2));
+            let vl = Varnode::reg(VL_OFFSET, 8);
+            emit_rvv_callother(
+                &mut ctx,
+                CALLOTHER_RVV_VSETVL,
+                Some(vl),
+                vec![avl, vtype_src],
+            );
+            ctx.write_reg(rv_reg(rd), vl);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                Varnode::reg(VTYPE_OFFSET, 8),
+                smallvec![vtype_src],
+                addr,
+            ));
+        }
+        // Unit-stride vector loads: vle{8,16,32,64}.v vd, (rs1), vm
+        0x07 if matches!(funct3, 0b000 | 0b101 | 0b110 | 0b111) && ((word >> 28) & 0xf) == 0 => {
+            let width = match funct3 {
+                0b000 => 1,
+                0b101 => 2,
+                0b110 => 4,
+                0b111 => 8,
+                _ => unreachable!(),
+            };
+            let mut inputs = vec![
+                read_reg(rv_reg(rs1)),
+                rvv_const(width),
+                rvv_const(vm as u64),
+            ];
+            inputs.extend(rvv_config_inputs());
+            emit_rvv_callother(&mut ctx, CALLOTHER_RVV_LOAD, Some(rvv_reg(rd)), inputs);
+        }
+        // Unit-stride vector stores: vse{8,16,32,64}.v vs3, (rs1), vm
+        0x27 if matches!(funct3, 0b000 | 0b101 | 0b110 | 0b111) && ((word >> 28) & 0xf) == 0 => {
+            let width = match funct3 {
+                0b000 => 1,
+                0b101 => 2,
+                0b110 => 4,
+                0b111 => 8,
+                _ => unreachable!(),
+            };
+            let mut inputs = vec![
+                rvv_reg(rs2),
+                read_reg(rv_reg(rs1)),
+                rvv_const(width),
+                rvv_const(vm as u64),
+            ];
+            inputs.extend(rvv_config_inputs());
+            emit_rvv_callother(&mut ctx, CALLOTHER_RVV_STORE, None, inputs);
+        }
+        // Vector arithmetic/logical/move/mask operations.  The exact funct6 is
+        // preserved as metadata, giving downstream passes full opcode-mode
+        // visibility while avoiding dependence on Capstone's RVV tables.
+        0x57 => {
+            let major = RvvMajor::from_funct3(funct3)?;
+            let is_mask_op = matches!(major, RvvMajor::Opmvv | RvvMajor::Opmvx);
+            let tag = if is_mask_op {
+                CALLOTHER_RVV_MASK_OP
+            } else {
+                major.tag()
+            };
+            let mut inputs = vec![rvv_reg(rs2)];
+            if major.is_scalar_or_imm() {
+                if matches!(major, RvvMajor::Opivi) {
+                    inputs.push(rvv_const(sign_extend(rs1, 5) as u64));
+                } else {
+                    inputs.push(read_reg(rv_reg(rs1)));
+                }
+            } else {
+                inputs.push(rvv_reg(rs1));
+            }
+            inputs.extend([
+                rvv_const(funct6 as u64),
+                rvv_const(vm as u64),
+                rvv_const(major as u64),
+            ]);
+            inputs.extend(rvv_config_inputs());
+            let out = if is_mask_op {
+                rvv_mask_reg(rd)
+            } else {
+                rvv_reg(rd)
+            };
+            emit_rvv_callother(&mut ctx, tag, Some(out), inputs);
+        }
+        _ => return None,
+    }
+
+    Some(LiftedInsn {
+        ir_ops: ctx.ops,
+        len: 4,
+    })
 }
 
 fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
@@ -1737,16 +2053,144 @@ mod tests {
     fn test_register_file() {
         let l = lifter();
         let rf = l.register_file();
-        assert_eq!(rf.registers.len(), 33);
+        assert_eq!(rf.registers.len(), 70);
         assert_eq!(rf.registers[0].name, "x0");
         assert_eq!(rf.registers[31].name, "x31");
         assert_eq!(rf.registers[32].name, "pc");
+        assert_eq!(rf.registers[33].name, "v0");
+        assert_eq!(rf.registers[64].name, "v31");
+        assert_eq!(rf.registers[65].name, "vtype");
+        assert_eq!(rf.registers[66].name, "vl");
+        assert_eq!(rf.registers[67].name, "vstart");
+        assert_eq!(rf.registers[68].name, "vxrm");
+        assert_eq!(rf.registers[69].name, "vxsat");
     }
 
     #[test]
     fn test_short_buffer() {
         let result = lifter().lift_insn(&[0x00], 0x1000);
         assert!(result.is_err());
+    }
+
+    fn rvv_tag(result: &LiftedInsn) -> Option<u64> {
+        result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .and_then(|i| i.inputs.first())
+            .map(|v| v.offset)
+    }
+
+    #[test]
+    fn test_rvv_vsetvli() {
+        // vsetvli x1, x2, e32,m1,ta,ma (vtypei carries SEW/LMUL/tail/mask policy)
+        let vtypei = 0b1101_0000u32;
+        let word = (vtypei << 20) | (2 << 15) | (0b111 << 12) | (1 << 7) | 0x57;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift vsetvli without capstone RVV support");
+        assert_eq!(result.len, 4);
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_VSETVLI));
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::Callother && i.output == Some(Varnode::reg(VL_OFFSET, 8))
+            })
+        );
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 8)) })
+        );
+    }
+
+    #[test]
+    fn test_rvv_vsetivli() {
+        // vsetivli x3, 7, e8,mf2,tu,mu
+        let vtypei = 0b0000_0101u32;
+        let word = (0b11 << 30) | (vtypei << 20) | (7 << 15) | (0b111 << 12) | (3 << 7) | 0x57;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift vsetivli");
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_VSETIVLI));
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert!(call.inputs.contains(&Varnode::constant(7, 8)));
+    }
+
+    #[test]
+    fn test_rvv_vsetvl() {
+        // vsetvl x1, x2, x3
+        let word: u32 = (0b100000 << 26) | (3 << 20) | (2 << 15) | (0b111 << 12) | (1 << 7) | 0x57;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift vsetvl");
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_VSETVL));
+    }
+
+    #[test]
+    fn test_rvv_vector_add_masked() {
+        // vadd.vv v1, v2, v3, v0.t (vm=0, funct6=0)
+        let word: u32 = (0 << 25) | (3 << 20) | (2 << 15) | (0b000 << 12) | (1 << 7) | 0x57;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift vector op");
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_OPIVV));
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(call.output, Some(rvv_reg(1)));
+        assert!(call.inputs.contains(&rvv_reg(2)));
+        assert!(call.inputs.contains(&rvv_reg(3)));
+        assert!(call.inputs.contains(&Varnode::reg(VTYPE_OFFSET, 8)));
+        assert!(call.inputs.contains(&Varnode::reg(VL_OFFSET, 8)));
+    }
+
+    #[test]
+    fn test_rvv_mask_register_op() {
+        // vmand.mm v1, v2, v3 (OPMVV mode); result is a mask/vector-register alias.
+        let word: u32 =
+            (0b011001 << 26) | (1 << 25) | (3 << 20) | (2 << 15) | (0b010 << 12) | (1 << 7) | 0x57;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift mask op");
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_MASK_OP));
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(call.output, Some(rvv_mask_reg(1)));
+    }
+
+    #[test]
+    fn test_rvv_load_store_unit_stride() {
+        // vle8.v v1, (x2), vm=1 and vse16.v v3, (x4), vm=0
+        let load: u32 = (1 << 25) | (2 << 15) | (0b000 << 12) | (1 << 7) | 0x07;
+        let load_result = lifter()
+            .lift_insn(&load.to_le_bytes(), 0x1000)
+            .expect("should lift vector load");
+        assert_eq!(rvv_tag(&load_result), Some(CALLOTHER_RVV_LOAD));
+        assert_eq!(
+            load_result
+                .ir_ops
+                .iter()
+                .find(|i| i.op == IrOp::Callother)
+                .unwrap()
+                .output,
+            Some(rvv_reg(1))
+        );
+
+        let store: u32 = (0 << 25) | (3 << 20) | (4 << 15) | (0b101 << 12) | (0 << 7) | 0x27;
+        let store_result = lifter()
+            .lift_insn(&store.to_le_bytes(), 0x1000)
+            .expect("should lift vector store");
+        assert_eq!(rvv_tag(&store_result), Some(CALLOTHER_RVV_STORE));
     }
 
     // -- ADD rd, rs1, rs2 -------------------------------------------------

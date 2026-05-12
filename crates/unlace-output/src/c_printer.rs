@@ -682,6 +682,9 @@ pub fn print_c_with_annotations(
             if dr.is_lambda {
                 out.push_str("// lambda closure operator()\n");
             }
+            if let Some(target) = crate::cpp_stl::recognize_std_function_sbo_target(dr) {
+                let _ = writeln!(out, "// std::function SBO target: {target}");
+            }
             crate::demangle::sanitize_for_c(&dr.short_name)
         }
         (None, None, None) => func.name.clone(),

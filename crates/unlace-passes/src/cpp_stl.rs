@@ -25,6 +25,7 @@
 //! * `std::unordered_set<T>`
 //! * `std::shared_ptr<T>`
 //! * `std::unique_ptr<T>`        — drops trailing `std::default_delete<…>`
+//! * `std::function<R(Args...)>` — keeps the callable signature
 //! * `std::list<T>` / `std::deque<T>`
 //!
 //! Inline namespaces (`std::__1`, `std::__cxx11`) are folded back to plain
@@ -106,7 +107,10 @@ pub fn recognize_stl_type(namespaces: &[String], class_name: &str) -> Option<Str
         }
         "unordered_set" => {
             let elem = first_template_arg(&template_args)?;
-            Some(format!("std::unordered_set<{}>", clean_inline_ns(elem.trim())))
+            Some(format!(
+                "std::unordered_set<{}>",
+                clean_inline_ns(elem.trim())
+            ))
         }
         "shared_ptr" => {
             let elem = first_template_arg(&template_args)?;
@@ -115,6 +119,10 @@ pub fn recognize_stl_type(namespaces: &[String], class_name: &str) -> Option<Str
         "unique_ptr" => {
             let elem = first_template_arg(&template_args)?;
             Some(format!("std::unique_ptr<{}>", clean_inline_ns(elem.trim())))
+        }
+        "function" => {
+            let sig = first_template_arg(&template_args)?;
+            Some(format!("std::function<{}>", clean_inline_ns(sig.trim())))
         }
         _ => None,
     }
@@ -208,11 +216,7 @@ mod tests {
     #[test]
     fn recognises_vector_int_libcxx() {
         // _ZNSt3__16vectorIiNS_9allocatorIiEEE9push_backERKi
-        let n = ns(&[
-            "std",
-            "__1",
-            "vector<int, std::__1::allocator<int> >",
-        ]);
+        let n = ns(&["std", "__1", "vector<int, std::__1::allocator<int> >"]);
         assert_eq!(
             recognize_stl_type(&n, "vector").as_deref(),
             Some("std::vector<int>"),
@@ -292,6 +296,15 @@ mod tests {
     }
 
     #[test]
+    fn recognises_std_function_signature() {
+        let n = ns(&["std", "function<void (int)>"]);
+        assert_eq!(
+            recognize_stl_type(&n, "function").as_deref(),
+            Some("std::function<void (int)>"),
+        );
+    }
+
+    #[test]
     fn recognises_set_and_unordered() {
         let n = ns(&["std", "set<int, std::less<int>, std::allocator<int> >"]);
         assert_eq!(
@@ -354,7 +367,10 @@ mod tests {
     #[test]
     fn top_level_args_does_not_split_inside_brackets() {
         let s = "int, std::pair<int, int>, double";
-        assert_eq!(top_level_args(s), vec!["int", "std::pair<int, int>", "double"]);
+        assert_eq!(
+            top_level_args(s),
+            vec!["int", "std::pair<int, int>", "double"]
+        );
     }
 
     #[test]

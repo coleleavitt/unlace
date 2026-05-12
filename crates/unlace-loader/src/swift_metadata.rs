@@ -1,11 +1,12 @@
 //! Swift 5+ runtime metadata extraction from Mach-O `__TEXT` sections.
 //!
-//! Modern Swift binaries advertise their type system through three
-//! `__TEXT` sections, each carrying *32-bit relative offsets* (Swift's
+//! Modern Swift binaries advertise their type system through several
+//! `__TEXT` sections, most carrying *32-bit relative offsets* (Swift's
 //! one-pass equivalent of RVAs):
 //!
 //! * `__swift5_types`   — `i32` offset → [`TypeContextDescriptor`].
 //! * `__swift5_protos`  — `i32` offset → protocol descriptor.
+//! * `__swift5_builtin` — async-function records pointing at async entry points.
 //! * `__swift5_proto`   — `i32` offset → protocol-conformance descriptor.
 //!
 //! On ARM64e the offset's high bits may carry pointer-authentication
@@ -19,6 +20,7 @@
 //! * Type descriptors: `name` (UTF-8) and `flags` (u32).
 //! * Protocol descriptors: the descriptor VA and (if reachable) its
 //!   name.
+//! * Builtin async-function records: target function VA + symbol name, if any.
 //! * Conformance descriptors: the descriptor VA only.
 //!
 //! Field/generic-parameter/method-vtable walking is deliberately out
@@ -60,6 +62,18 @@ pub struct SwiftProtocolDescriptor {
     pub name: Option<String>,
 }
 
+/// One entry parsed from `__swift5_builtin`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwiftBuiltinAsyncFunction {
+    /// VA of the async-function pointer record.
+    pub record_va: u64,
+    /// Target function VA named by the record's first relative pointer.
+    pub function_va: u64,
+    /// Demangled-or-raw symbol name for the function, if a matching
+    /// symbol table entry exists at [`Self::function_va`].
+    pub function_name: Option<String>,
+}
+
 /// One entry parsed from `__swift5_proto`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SwiftConformance {
@@ -76,6 +90,13 @@ pub struct SwiftConformance {
 pub struct SwiftInfo {
     pub types: Vec<SwiftTypeDescriptor>,
     pub protocols: Vec<SwiftProtocolDescriptor>,
+    /// Swift async function records recovered from `__swift5_builtin`.
+    ///
+    /// The Swift concurrency runtime uses this section to point at
+    /// async entry points. Recovering these records gives the decompiler
+    /// a concrete binary-side signal that a function should eventually
+    /// surface as `func foo() async` rather than an ordinary function.
+    pub async_functions: Vec<SwiftBuiltinAsyncFunction>,
     pub conformances: Vec<SwiftConformance>,
 }
 
@@ -84,23 +105,27 @@ impl SwiftInfo {
     /// can use this to decide whether to store `Some(info)` or just
     /// `None` on the image.
     pub fn is_empty(&self) -> bool {
-        self.types.is_empty() && self.protocols.is_empty() && self.conformances.is_empty()
+        self.types.is_empty()
+            && self.protocols.is_empty()
+            && self.async_functions.is_empty()
+            && self.conformances.is_empty()
     }
 }
 
 /// Scan an already-loaded [`BinaryImage`] for Swift 5 metadata.
 ///
-/// Returns `None` if none of the three sections exist (the common
-/// non-Swift case). Returns `Some(info)` whenever *any* of the three
+/// Returns `None` if none of the Swift metadata sections exist (the common
+/// non-Swift case). Returns `Some(info)` whenever *any* of them
 /// sections is present, even if all parsed entries turned out to be
 /// invalid; that way downstream code can distinguish "didn't look"
 /// from "looked, found nothing".
 pub fn scan_swift_metadata(image: &BinaryImage) -> Option<SwiftInfo> {
     let types_sec = find_section(image, "__swift5_types");
     let protos_sec = find_section(image, "__swift5_protos");
+    let builtin_sec = find_section(image, "__swift5_builtin");
     let proto_sec = find_section(image, "__swift5_proto");
 
-    if types_sec.is_none() && protos_sec.is_none() && proto_sec.is_none() {
+    if types_sec.is_none() && protos_sec.is_none() && builtin_sec.is_none() && proto_sec.is_none() {
         return None;
     }
 
@@ -110,6 +135,9 @@ pub fn scan_swift_metadata(image: &BinaryImage) -> Option<SwiftInfo> {
     }
     if let Some(sec) = protos_sec {
         info.protocols = parse_protocol_table(image, sec);
+    }
+    if let Some(sec) = builtin_sec {
+        info.async_functions = parse_builtin_async_table(image, sec);
     }
     if let Some(sec) = proto_sec {
         info.conformances = parse_conformance_table(sec);
@@ -254,6 +282,41 @@ fn parse_protocol_table(image: &BinaryImage, sec: &Section) -> Vec<SwiftProtocol
     out
 }
 
+/// Parse `__swift5_builtin` looking for async function records.
+///
+/// Apple uses this section to describe compiler-known builtin metadata.
+/// For async/await recovery we exploit the simplest stable signal: each
+/// 4-byte slot names a target function by relative pointer. We resolve
+/// the pointed-to VA and, when a symbol table entry exists at that VA,
+/// preserve its demangled-or-raw name so later pipeline stages can mark
+/// the function as Swift `async`.
+fn parse_builtin_async_table(image: &BinaryImage, sec: &Section) -> Vec<SwiftBuiltinAsyncFunction> {
+    let mut out = Vec::new();
+    let mut off = 0usize;
+    while off + 4 <= sec.data.len() {
+        let record_va = sec.vaddr.wrapping_add(off as u64);
+        let raw = match read_i32_le(&sec.data, off) {
+            Some(v) => v,
+            None => break,
+        };
+        off += 4;
+        if raw == 0 {
+            continue;
+        }
+        let function_va = resolve_relative(record_va, raw);
+        let function_name = image
+            .symbols
+            .get(&function_va)
+            .map(|sym| crate::demangle_swift::try_demangle_swift(&sym.name).unwrap_or_else(|| sym.name.clone()));
+        out.push(SwiftBuiltinAsyncFunction {
+            record_va,
+            function_va,
+            function_name,
+        });
+    }
+    out
+}
+
 /// Parse `__swift5_proto`. Conformance descriptors have a richer
 /// layout (protocol ref, type ref, witness table accessor, …) but for
 /// the MVP we just surface the descriptor VA so consumers can
@@ -284,6 +347,18 @@ mod tests {
     use super::*;
     use crate::image::{ArchId, Endian, Section, SectionFlags};
     use std::collections::BTreeMap;
+
+    fn push_symbol(img: &mut BinaryImage, va: u64, name: &str) {
+        img.symbols.insert(
+            va,
+            crate::image::Symbol {
+                name: name.to_string(),
+                addr: va,
+                size: 0,
+                kind: crate::image::SymbolKind::Function,
+            },
+        );
+    }
 
     fn empty_image() -> BinaryImage {
         BinaryImage {
@@ -411,6 +486,35 @@ mod tests {
         assert!(info.conformances.is_empty());
     }
 
+    #[test]
+    fn parses_swift_async_builtin_record_and_symbol_name() {
+        let builtin_va: u64 = 0x7100;
+        let func_va: u64 = 0x8000;
+        let mut img = empty_image();
+        push_symbol(&mut img, func_va, "$s4main5fetchyyYaF");
+
+        let rel = (func_va as i64 - builtin_va as i64) as i32;
+        img.sections.push(Section {
+            name: "__swift5_builtin".to_string(),
+            vaddr: builtin_va,
+            size: 4,
+            data: rel.to_le_bytes().to_vec(),
+            flags: SectionFlags::READ,
+        });
+
+        let info = scan_swift_metadata(&img).expect("section present → Some(_)");
+        assert!(info.types.is_empty());
+        assert!(info.protocols.is_empty());
+        assert_eq!(info.async_functions.len(), 1);
+        assert_eq!(info.async_functions[0].record_va, builtin_va);
+        assert_eq!(info.async_functions[0].function_va, func_va);
+        assert_eq!(
+            info.async_functions[0].function_name.as_deref(),
+            Some("main.fetch")
+        );
+        assert!(info.conformances.is_empty());
+    }
+
     /// An empty `__swift5_protos` (section exists but its data is
     /// zero-length) must produce `Some(SwiftInfo)` with an empty
     /// `protocols` vec, not a parse error and not `None`.
@@ -428,6 +532,7 @@ mod tests {
             scan_swift_metadata(&img).expect("presence of section forces Some(_) even if empty");
         assert!(info.types.is_empty());
         assert!(info.protocols.is_empty());
+        assert!(info.async_functions.is_empty());
         assert!(info.conformances.is_empty());
         assert!(info.is_empty());
     }

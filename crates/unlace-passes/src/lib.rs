@@ -162,9 +162,13 @@ pub use stack_frame_recovery::recover_stack_frame;
 pub use stack_pointer_tracking::StackPointerTrackingPass;
 pub use stack_vars::{StackOffsetSnapshotPass, StackVarRecoveryPass};
 pub use string_hash_switch::{
-    HashFamily, StringHashSwitchPass, crc32 as string_hash_crc32, djb2 as string_hash_djb2,
-    fnv1a as string_hash_fnv1a, identify_hash_pattern, is_crc32_pattern, is_djb2_pattern,
-    is_fnv1a_pattern, is_murmur3_pattern, is_sdbm_pattern, murmur3 as string_hash_murmur3,
+    HashFamily, StringHashSwitchPass, crc32 as string_hash_crc32,
+    crc32c as string_hash_crc32c, djb2 as string_hash_djb2, djb2a as string_hash_djb2a,
+    fnv1 as string_hash_fnv1, fnv1a as string_hash_fnv1a, fnv1a32 as string_hash_fnv1a32,
+    identify_hash_pattern, is_crc32_pattern, is_crc32c_pattern, is_djb2_pattern,
+    is_fnv1_pattern, is_fnv1a_pattern, is_java_string_pattern, is_jenkins_oaat_pattern,
+    is_murmur3_pattern, is_sdbm_pattern, java_string_hash as string_hash_java_string,
+    jenkins_oaat as string_hash_jenkins_oaat, murmur3 as string_hash_murmur3,
     sdbm as string_hash_sdbm,
 };
 pub use struct_field_detect::StructFieldDetectPass;

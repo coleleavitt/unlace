@@ -198,6 +198,8 @@ fn run_decompile(
             | ArchId::Arc
             | ArchId::Ppc
             | ArchId::Ppc64
+            | ArchId::TiC6x
+            | ArchId::TiC28x
     ) {
         bail!(
             "architecture {} is not yet supported for decompilation",

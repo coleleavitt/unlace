@@ -1666,6 +1666,7 @@ dependencies = [
 name = "unlace-flirt"
 version = "0.1.0"
 dependencies = [
+ "object",
  "serde",
  "thiserror",
  "toml",
@@ -1709,6 +1710,7 @@ dependencies = [
  "unlace-lift-mips",
  "unlace-lift-ppc",
  "unlace-lift-riscv",
+ "unlace-lift-ti",
  "unlace-lift-v850",
  "unlace-lift-x86",
 ]
@@ -1785,6 +1787,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-lift-ti"
+version = "0.1.0"
+dependencies = [
+ "smallvec",
+ "unlace-ir",
+]
+
+[[package]]
 name = "unlace-lift-v850"
 version = "0.1.0"
 dependencies = [
@@ -1833,6 +1843,7 @@ dependencies = [
  "object",
  "pdb",
  "rustc-demangle",
+ "tempfile",
  "thiserror",
  "tracing",
  "unlace-ir",

@@ -14,8 +14,9 @@ mod tests {
     use crate::lift::{
         ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
         CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
-        CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
-        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
+        CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SMC, CALLOTHER_ARM_SSAT,
+        CALLOTHER_ARM_SSUB16, CALLOTHER_ARM_SVC, CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8,
+        CALLOTHER_ARM_USAT,
         CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
         decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
         decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
@@ -2956,6 +2957,58 @@ mod tests {
         assert_eq!(co.inputs[1].space, SpaceId::Const);
         // SSAT immediate is 1-based saturation width (here #8 → "to 8 bits").
         assert_eq!(co.inputs[1].offset, 8);
+    }
+
+    // ── t317: TrustZone secure-world / trap annotation ───────────────
+
+    #[test]
+    fn arm32_smc_lifts_to_callother_with_imm() {
+        // smc #1  →  e1600071
+        let l = ArmLifter::new_arm32();
+        let r = l.lift_insn(&0xe160_0071u32.to_le_bytes(), 0x1000).unwrap();
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "SMC must not fall through to Unimplemented: {:?}",
+            r.ir_ops
+        );
+        let co = r.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SMC);
+        assert_eq!(co.inputs.len(), 2, "tag + imm24");
+        assert_eq!(co.inputs[1].space, SpaceId::Const);
+        assert_eq!(co.inputs[1].offset, 1);
+        assert!(co.output.is_none(), "SMC does not produce a destination register");
+    }
+
+    #[test]
+    fn arm32_svc_lifts_to_callother_with_imm() {
+        // svc #0x42  →  ef000042
+        let l = ArmLifter::new_arm32();
+        let r = l.lift_insn(&0xef00_0042u32.to_le_bytes(), 0x1000).unwrap();
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "SVC must not fall through to Unimplemented: {:?}",
+            r.ir_ops
+        );
+        let co = r.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SVC);
+        assert_eq!(co.inputs.len(), 2, "tag + imm24");
+        assert_eq!(co.inputs[1].space, SpaceId::Const);
+        assert_eq!(co.inputs[1].offset, 0x42);
+        assert!(co.output.is_none(), "SVC does not produce a destination register");
+    }
+
+    #[test]
+    fn thumb_svc_in_it_block_keeps_guard() {
+        let l = ArmLifter::new_thumb();
+        // IT EQ
+        let it = l.lift_insn(&[0x08, 0xBF], 0x2000).unwrap();
+        assert_eq!(it.len, 2);
+        // svc #0x7 (Thumb encoding 0xDF07)
+        let svc = l.lift_insn(&[0x07, 0xDF], 0x2002).unwrap();
+        let co = svc.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SVC);
+        assert_eq!(co.inputs[1].offset, 7);
+        assert_eq!(co.guard, Some(0), "IT EQ should guard the trapped instruction");
     }
 
     // ── t300: SVE scaffolding tests ───────────────────────────────────

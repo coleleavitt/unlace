@@ -237,6 +237,13 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
     let ops = ppc_operands(detail);
     let id = insn_id(insn);
 
+    if let Some(mnemonic) = insn.mnemonic() {
+        if ops::spe::classify_spe_mnemonic(mnemonic).is_some() {
+            ops::spe::lift_spe(ctx, mnemonic, &ops);
+            return;
+        }
+    }
+
     match id {
         // Arithmetic
         PpcInsn::PPC_INS_ADD => ops::arithmetic::lift_add(ctx, &ops),

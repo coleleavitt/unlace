@@ -349,6 +349,14 @@ pub struct PrinterAnnotations {
     /// [`unlace_loader::BinaryImage::auth_pointers`] table. Empty for
     /// every non-cache image and for v1–v4 dyld_shared_caches.
     pub auth_calls: BTreeMap<u64, unlace_passes::AuthCallAnnotation>,
+    /// t298 — Go iface-to-concrete devirtualization keyed by indirect-call
+    /// instruction VA. When an indirect call target can be tied to a unique
+    /// `runtime.itab` method slot, the pipeline records the resolved concrete
+    /// callee symbol here. The printer prefers this name over the raw
+    /// function-pointer expression so `iface.Method()`-style calls surface as
+    /// direct source-like calls when the concrete receiver type is statically
+    /// determinable.
+    pub go_iface_devirtualized_calls: BTreeMap<u64, String>,
     /// Pre-rendered preamble block for synthesised composite types
     /// recovered by the SSA analyses (t147 stack-frame composites in
     /// `SsaFunction::inferred_structs` and t213 array-of-structs layouts
@@ -496,6 +504,7 @@ pub fn print_c_with_annotations(
         ctx.string_hash_table = ann.string_hash_table.clone();
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
         ctx.auth_calls = ann.auth_calls.clone();
+        ctx.go_iface_devirtualized_calls = ann.go_iface_devirtualized_calls.clone();
         ctx.libc_call_canonical = ann.libc_call_canonical.clone();
         ctx.libc_call_original = ann.libc_call_original.clone();
         ctx.array_struct_layouts = ann.array_struct_layouts.clone();
@@ -1595,6 +1604,10 @@ struct PrintCtx {
     /// (t201). Lifted from [`PrinterAnnotations::auth_calls`]; consumed
     /// by `emit_callind_cast` to render `__builtin_arm_authcall(...)`.
     auth_calls: BTreeMap<u64, unlace_passes::AuthCallAnnotation>,
+    /// t298 — Go iface-to-concrete devirtualization keyed by indirect-call
+    /// VA. When present, [`resolve_call_target`] renders the concrete callee
+    /// name instead of the opaque function-pointer expression.
+    go_iface_devirtualized_calls: BTreeMap<u64, String>,
     /// Canonical libc family name keyed by Call VA (t229). Lifted from
     /// [`PrinterAnnotations::libc_call_canonical`]; consulted by
     /// [`resolve_call_target`] before the symbol-table fallback so a
@@ -1697,6 +1710,7 @@ impl PrintCtx {
             string_hash_table: BTreeMap::new(),
             forwarded_resolutions: BTreeMap::new(),
             auth_calls: BTreeMap::new(),
+            go_iface_devirtualized_calls: BTreeMap::new(),
             libc_call_canonical: BTreeMap::new(),
             libc_call_original: BTreeMap::new(),
             array_struct_layouts: BTreeMap::new(),
@@ -4880,6 +4894,9 @@ fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Stri
     // can be rewritten if the annotator decided they classify.
     if let Some(canonical) = ctx.libc_call_canonical.get(&insn.addr) {
         return canonical.clone();
+    }
+    if let Some(go_name) = ctx.go_iface_devirtualized_calls.get(&insn.addr) {
+        return go_name.clone();
     }
     let target_vn = &insn.inputs[0];
     if target_vn.space == SpaceId::Const {
@@ -15022,6 +15039,32 @@ mod tests {
             output.contains("((void (*)(__int64))pfn)("),
             "CALLIND with no output should emit void return: {output}",
         );
+    }
+
+    #[test]
+    fn t298_callind_uses_go_iface_devirtualized_name_when_present() {
+        let fptr = reg(0, 8);
+        let arg1 = reg(8, 8);
+        let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr, arg1], 0x1337);
+        let body = vec![HirNode::Statement(callind), HirNode::Return(None)];
+        let func = make_func("go_iface_call", body);
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.go_iface_devirtualized_calls
+            .insert(0x1337, "main__MyType_Do".to_string());
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(output.contains("main__MyType_Do)("), "got: {output}");
+        assert!(!output.contains("((void (*)(__int64))pfn)("), "got: {output}");
     }
 
     // P8-12: Demangled C++ names in C output

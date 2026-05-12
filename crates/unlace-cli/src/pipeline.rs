@@ -1223,6 +1223,15 @@ fn flirt_db() -> &'static FlirtDb {
 /// mirrors IDA's behaviour where FLIRT only renames `unknown_libname`
 /// entries.
 pub fn flirt_match(image: &BinaryImage, entry: &FunctionEntry) -> Option<String> {
+    let resolved = flirt_resolved_names(image);
+    flirt_match_with_resolved(image, entry, &resolved)
+}
+
+fn flirt_match_with_resolved(
+    image: &BinaryImage,
+    entry: &FunctionEntry,
+    resolved: &BTreeMap<u64, String>,
+) -> Option<String> {
     if !is_flirt_eligible_name(&entry.name) {
         return None;
     }
@@ -1237,7 +1246,51 @@ pub fn flirt_match(image: &BinaryImage, entry: &FunctionEntry) -> Option<String>
         return None;
     }
     let bytes = &text.data[off_start..off_end];
-    flirt_db().match_function(bytes).map(str::to_string)
+    flirt_db()
+        .match_function_with_refs(bytes, resolved)
+        .map(|m| m.name.to_string())
+}
+
+fn flirt_resolved_names(image: &BinaryImage) -> BTreeMap<u64, String> {
+    let mut resolved = BTreeMap::new();
+    for (&addr, sym) in &image.symbols {
+        if sym.kind == SymbolKind::Function && !is_flirt_eligible_name(&sym.name) {
+            resolved.insert(addr, sym.name.clone());
+        }
+    }
+    for (&addr, name) in &image.plt_symbols {
+        resolved.insert(addr, name.clone());
+    }
+
+    let mut changed = true;
+    while changed {
+        changed = false;
+        let mut candidates: Vec<(u64, String)> = image
+            .symbols
+            .iter()
+            .filter(|(addr, sym)| {
+                sym.kind == SymbolKind::Function
+                    && is_flirt_eligible_name(&sym.name)
+                    && !resolved.contains_key(addr)
+            })
+            .filter_map(|(_addr, sym)| {
+                let entry = FunctionEntry {
+                    name: sym.name.clone(),
+                    addr: sym.addr,
+                    size: sym.size,
+                };
+                flirt_match_with_resolved(image, &entry, &resolved).map(|name| (sym.addr, name))
+            })
+            .collect();
+        candidates.sort_by_key(|(addr, _)| *addr);
+        for (addr, name) in candidates {
+            if resolved.insert(addr, name).is_none() {
+                changed = true;
+            }
+        }
+    }
+
+    resolved
 }
 
 /// Whether `name` looks like a stripped-binary placeholder that FLIRT is
@@ -1996,5 +2049,43 @@ mod tests {
         };
         let canonical = super::flirt_match(&image, &entry);
         assert_eq!(canonical.as_deref(), Some("memcpy"));
+    }
+
+    #[test]
+    fn flirt_match_resolves_reference_name_lists() {
+        let mut code = vec![
+            0x55, 0x48, 0x89, 0xE5, 0xE8, 0x37, 0x00, 0x00, 0x00,
+        ];
+        code.resize(0x40, 0x90);
+        code.extend_from_slice(&[
+            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
+        ]);
+        let base: u64 = 0x1000;
+        let mut image = make_text_image(code, base);
+        image.symbols.insert(
+            base,
+            unlace_loader::Symbol {
+                name: "sub_1000".into(),
+                addr: base,
+                size: 9,
+                kind: SymbolKind::Function,
+            },
+        );
+        image.symbols.insert(
+            base + 0x40,
+            unlace_loader::Symbol {
+                name: "sub_1040".into(),
+                addr: base + 0x40,
+                size: 13,
+                kind: SymbolKind::Function,
+            },
+        );
+        let entry = FunctionEntry {
+            name: "sub_1000".into(),
+            addr: base,
+            size: 9,
+        };
+        let canonical = super::flirt_match(&image, &entry);
+        assert_eq!(canonical.as_deref(), Some("__memcpy_chk"));
     }
 }

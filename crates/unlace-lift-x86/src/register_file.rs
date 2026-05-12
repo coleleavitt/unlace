@@ -18,6 +18,28 @@ pub const R12: u64 = 96;
 pub const R13: u64 = 104;
 pub const R14: u64 = 112;
 pub const R15: u64 = 120;
+
+// Intel APX (Advanced Performance Extensions) extends the GP register set to
+// 32 architectural registers. R16..R31 use the natural 8-byte GP stride after
+// R15. The legacy RIP/RFLAGS offsets stay unchanged below so existing IR and
+// downstream tests continue to address flags at their historical locations.
+pub const R16: u64 = 128;
+pub const R17: u64 = 136;
+pub const R18: u64 = 144;
+pub const R19: u64 = 152;
+pub const R20: u64 = 160;
+pub const R21: u64 = 168;
+pub const R22: u64 = 176;
+pub const R23: u64 = 184;
+pub const R24: u64 = 192;
+pub const R25: u64 = 200;
+pub const R26: u64 = 208;
+pub const R27: u64 = 216;
+pub const R28: u64 = 224;
+pub const R29: u64 = 232;
+pub const R30: u64 = 240;
+pub const R31: u64 = 248;
+
 pub const RIP: u64 = 128;
 
 // RFLAGS individual bits at offsets 256+.
@@ -35,6 +57,12 @@ pub const OF: u64 = 261;
 // and don't collide with the GP/flag region above (highest used flag is OF
 // at offset 261).
 const FPU_BASE: u64 = 0x300;
+
+/// Offset of GP register `index` (0..31), including APX EGPRs R16..R31.
+pub const fn egpr_offset(index: u8) -> u64 {
+    (index as u64) * 8
+}
+
 const FPU_STRIDE: u64 = 16;
 
 const fn fpu_offset(index: u64) -> u64 {
@@ -276,6 +304,22 @@ pub fn x86_64_register_file() -> RegisterFile {
                 name: "R15",
                 varnode: reg64(R15),
             },
+            RegisterDef { name: "R16", varnode: reg64(R16) },
+            RegisterDef { name: "R17", varnode: reg64(R17) },
+            RegisterDef { name: "R18", varnode: reg64(R18) },
+            RegisterDef { name: "R19", varnode: reg64(R19) },
+            RegisterDef { name: "R20", varnode: reg64(R20) },
+            RegisterDef { name: "R21", varnode: reg64(R21) },
+            RegisterDef { name: "R22", varnode: reg64(R22) },
+            RegisterDef { name: "R23", varnode: reg64(R23) },
+            RegisterDef { name: "R24", varnode: reg64(R24) },
+            RegisterDef { name: "R25", varnode: reg64(R25) },
+            RegisterDef { name: "R26", varnode: reg64(R26) },
+            RegisterDef { name: "R27", varnode: reg64(R27) },
+            RegisterDef { name: "R28", varnode: reg64(R28) },
+            RegisterDef { name: "R29", varnode: reg64(R29) },
+            RegisterDef { name: "R30", varnode: reg64(R30) },
+            RegisterDef { name: "R31", varnode: reg64(R31) },
             RegisterDef {
                 name: "RIP",
                 varnode: reg64(RIP),
@@ -738,7 +782,7 @@ mod tests {
     #[test]
     fn test_xmm_no_overlap_with_gp() {
         let gp_offsets = [
-            RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15, RIP,
+            RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15, R16, R17, R18, R19, R20, R21, R22, R23, R24, R25, R26, R27, R28, R29, R30, R31, RIP,
         ];
         let gp_max = gp_offsets.iter().copied().max().unwrap() + 8;
         let flag_max = OF + 1;

@@ -1,5 +1,6 @@
 //! x86 / x86-64 → IR lifter (via iced-x86).
 
+pub mod apx;
 pub mod intrinsics;
 pub mod lift;
 mod ops;

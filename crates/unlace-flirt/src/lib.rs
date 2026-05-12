@@ -4,7 +4,15 @@
 //! with optional masks and CRC16 checksums against raw function bytes.
 
 mod error;
+mod generator;
 mod pattern;
 
 pub use error::FlirtError;
-pub use pattern::{FlirtDb, FlirtMatch, FlirtPattern, load_patterns_from_toml, match_functions};
+pub use generator::{
+    GeneratorOptions, generate_patterns_from_archive, generate_patterns_from_archive_bytes,
+    render_db_as_toml,
+};
+pub use pattern::{
+    FlirtDb, FlirtMatch, FlirtPattern, FunctionBytes, load_patterns_from_toml,
+    load_patterns_from_toml_str, match_functions,
+};

@@ -426,6 +426,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: Default::default(),
             panic_sites: Default::default(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: Default::default(),
             is_ctor: false,

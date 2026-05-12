@@ -206,6 +206,7 @@ mod tests {
             addr: 0,
             foldable_exprs: BTreeSet::new(),
             panic_sites: BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: BTreeMap::new(),
             cpp_vtable_calls: BTreeMap::new(),

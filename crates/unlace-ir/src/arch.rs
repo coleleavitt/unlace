@@ -20,6 +20,7 @@ pub enum ArchId {
     Wasm,
     Ebpf,
     Avr,
+    AmdGpu,
     Z80,
     Unknown(u16),
 }
@@ -41,6 +42,7 @@ impl fmt::Display for ArchId {
             Self::Wasm => f.write_str("wasm"),
             Self::Ebpf => f.write_str("ebpf"),
             Self::Avr => f.write_str("avr"),
+            Self::AmdGpu => f.write_str("amdgpu"),
             Self::Z80 => f.write_str("z80"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }

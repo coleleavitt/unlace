@@ -6,6 +6,7 @@
 //! resolved via a fixpoint pass.
 
 use std::collections::BTreeMap;
+use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 use pdb::{FallibleIterator, PDB, TypeData, TypeIndex};
@@ -21,7 +22,18 @@ pub struct PdbTypes {
     /// CodeView type index → resolved unlace `Type`.
     pub by_index: BTreeMap<u32, Type>,
     /// Named structs/classes for top-level lookup (non-forward-ref entries).
+    ///
+    /// When multiple DLLs contribute the same concrete layout, entries with
+    /// distinct names but identical IPI-like layout hashes are canonicalized to
+    /// a single shared `Type` instance so downstream consumers see one nominal
+    /// definition instead of near-duplicate declarations.
     pub structs: BTreeMap<String, Type>,
+    /// Canonicalized aggregate layout hash → shared struct/class/union type.
+    ///
+    /// The hash is derived from the fully lowered aggregate shape (field names,
+    /// offsets, nested field types) and serves as a stable cross-DLL identity
+    /// even when CodeView type indices differ between PDBs.
+    pub struct_hashes: BTreeMap<u64, Type>,
     /// Named enums (variant name → integer value).
     pub enums: BTreeMap<String, Vec<(String, i64)>>,
     /// Function signatures keyed by ProcedureType type-index.
@@ -103,10 +115,11 @@ pub(crate) fn lower_cv_table(table: &BTreeMap<u32, CvType>) -> PdbTypes {
         let mut changed = false;
         for (&idx, cv) in table {
             let ty = lower_one(cv, table, &out);
+            let canonical_ty = canonicalize_aggregate_type(&ty, &mut out.struct_hashes);
             match out.by_index.get(&idx) {
-                Some(prev) if prev == &ty => {}
+                Some(prev) if prev == &canonical_ty => {}
                 _ => {
-                    out.by_index.insert(idx, ty);
+                    out.by_index.insert(idx, canonical_ty);
                     changed = true;
                 }
             }
@@ -127,6 +140,8 @@ pub(crate) fn lower_cv_table(table: &BTreeMap<u32, CvType>) -> PdbTypes {
             } if !forward_ref => {
                 if let Some(t) = out.by_index.get(idx) {
                     out.structs.insert(name.clone(), t.clone());
+                    let hash = aggregate_layout_hash(t);
+                    out.struct_hashes.entry(hash).or_insert_with(|| t.clone());
                 }
             }
             CvType::Enum {
@@ -302,6 +317,120 @@ fn find_named_struct(
         }
     }
     None
+}
+
+fn canonicalize_aggregate_type(ty: &Type, hashes: &mut BTreeMap<u64, Type>) -> Type {
+    if !matches!(ty, Type::Struct { .. }) {
+        return ty.clone();
+    }
+    let hash = aggregate_layout_hash(ty);
+    if let Some(existing) = hashes.get(&hash) {
+        existing.clone()
+    } else {
+        hashes.insert(hash, ty.clone());
+        ty.clone()
+    }
+}
+
+fn aggregate_layout_hash(ty: &Type) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    hash_type_layout(ty, &mut hasher);
+    hasher.finish()
+}
+
+fn hash_type_layout<H: Hasher>(ty: &Type, state: &mut H) {
+    match ty {
+        Type::Primitive(p) => {
+            0u8.hash(state);
+            p.hash(state);
+        }
+        Type::Ptr(inner) => {
+            1u8.hash(state);
+            hash_type_layout(inner, state);
+        }
+        Type::Array { element, size } => {
+            2u8.hash(state);
+            size.hash(state);
+            hash_type_layout(element, state);
+        }
+        Type::Struct { fields, .. } => {
+            3u8.hash(state);
+            for field in fields {
+                field.name.hash(state);
+                field.offset.hash(state);
+                hash_type_layout(&field.ty, state);
+            }
+        }
+        Type::FuncPtr {
+            params,
+            return_type,
+            variadic,
+        } => {
+            4u8.hash(state);
+            variadic.hash(state);
+            params.len().hash(state);
+            for param in params {
+                hash_type_layout(param, state);
+            }
+            hash_type_layout(return_type, state);
+        }
+        Type::Bitfield {
+            underlying,
+            offset,
+            width,
+        } => {
+            5u8.hash(state);
+            offset.hash(state);
+            width.hash(state);
+            hash_type_layout(underlying, state);
+        }
+        Type::Interface { name, methods } => {
+            6u8.hash(state);
+            name.hash(state);
+            for method in methods {
+                method.name.hash(state);
+                method.signature.hash(state);
+            }
+        }
+        Type::Slice { elem } => {
+            7u8.hash(state);
+            hash_type_layout(elem, state);
+        }
+        Type::Map { key, value } => {
+            8u8.hash(state);
+            hash_type_layout(key, state);
+            hash_type_layout(value, state);
+        }
+    }
+}
+
+/// Merge one PDB type table into another, canonicalizing aggregate layouts
+/// across DLL boundaries via their lowered layout hash.
+pub fn merge_pdb_types(into: &mut PdbTypes, incoming: &PdbTypes) {
+    for ty in incoming.by_index.values() {
+        let canonical = canonicalize_aggregate_type(ty, &mut into.struct_hashes);
+        if let Type::Struct { name, .. } = ty {
+            into.structs.entry(name.clone()).or_insert(canonical);
+        }
+    }
+
+    for (idx, ty) in &incoming.by_index {
+        let canonical = canonicalize_aggregate_type(ty, &mut into.struct_hashes);
+        into.by_index.entry(*idx).or_insert(canonical);
+    }
+
+    for (name, ty) in &incoming.structs {
+        let canonical = canonicalize_aggregate_type(ty, &mut into.struct_hashes);
+        into.structs.entry(name.clone()).or_insert(canonical);
+    }
+
+    for (name, variants) in &incoming.enums {
+        into.enums.entry(name.clone()).or_insert_with(|| variants.clone());
+    }
+
+    for (idx, sig) in &incoming.procedures {
+        into.procedures.entry(*idx).or_insert_with(|| sig.clone());
+    }
 }
 
 /// Map a CodeView primitive kind to an unlace `Type`.
@@ -1138,5 +1267,94 @@ mod tests {
         // Pointer-to-i32 via indirection.
         let p = primitive_to_type(pdb::PrimitiveKind::I32, Some(pdb::Indirection::Near32));
         assert!(p.is_pointer());
+    }
+
+    #[test]
+    fn canonicalizes_same_layout_with_different_names() {
+        let point = Type::Struct {
+            name: "foo!Point".into(),
+            fields: vec![
+                StructFieldType {
+                    name: "x".into(),
+                    ty: Type::int(4),
+                    offset: 0,
+                },
+                StructFieldType {
+                    name: "y".into(),
+                    ty: Type::int(4),
+                    offset: 4,
+                },
+            ],
+        };
+        let vec2 = Type::Struct {
+            name: "bar!Vec2".into(),
+            fields: vec![
+                StructFieldType {
+                    name: "x".into(),
+                    ty: Type::int(4),
+                    offset: 0,
+                },
+                StructFieldType {
+                    name: "y".into(),
+                    ty: Type::int(4),
+                    offset: 4,
+                },
+            ],
+        };
+
+        let mut hashes = BTreeMap::new();
+        let canonical_point = canonicalize_aggregate_type(&point, &mut hashes);
+        let canonical_vec2 = canonicalize_aggregate_type(&vec2, &mut hashes);
+
+        assert_eq!(hashes.len(), 1);
+        assert_eq!(canonical_point, canonical_vec2);
+        match canonical_vec2 {
+            Type::Struct { name, .. } => assert_eq!(name, "foo!Point"),
+            other => panic!("expected canonical struct, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn merge_pdb_types_dedupes_cross_dll_layouts_by_hash() {
+        let shared_layout = vec![
+            StructFieldType {
+                name: "len".into(),
+                ty: Type::uint(4),
+                offset: 0,
+            },
+            StructFieldType {
+                name: "cap".into(),
+                ty: Type::uint(4),
+                offset: 4,
+            },
+        ];
+        let first = Type::Struct {
+            name: "kernel32!BUFFER".into(),
+            fields: shared_layout.clone(),
+        };
+        let second = Type::Struct {
+            name: "user32!SCRATCH_BUFFER".into(),
+            fields: shared_layout,
+        };
+
+        let mut left = PdbTypes::default();
+        left.by_index.insert(0x1000, first.clone());
+        left.structs.insert("BUFFER".into(), first.clone());
+        left.struct_hashes.insert(aggregate_layout_hash(&first), first.clone());
+
+        let mut right = PdbTypes::default();
+        right.by_index.insert(0x2000, second.clone());
+        right.structs.insert("SCRATCH_BUFFER".into(), second.clone());
+        right.struct_hashes.insert(aggregate_layout_hash(&second), second.clone());
+
+        merge_pdb_types(&mut left, &right);
+
+        assert_eq!(left.struct_hashes.len(), 1, "same layout should share one hash bucket");
+        assert_eq!(left.by_index[&0x1000], left.by_index[&0x2000]);
+        assert_eq!(left.structs["BUFFER"], left.structs["SCRATCH_BUFFER"]);
+        match &left.structs["SCRATCH_BUFFER"] {
+            Type::Struct { name, .. } => assert_eq!(name, "kernel32!BUFFER"),
+            other => panic!("expected canonical struct, got {other:?}"),
+        }
     }
 }

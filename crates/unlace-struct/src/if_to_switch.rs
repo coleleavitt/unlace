@@ -877,6 +877,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: BTreeSet::new(),
             panic_sites: BTreeMap::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: BTreeMap::new(),
             is_ctor: false,

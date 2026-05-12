@@ -145,6 +145,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,

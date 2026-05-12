@@ -29,15 +29,15 @@
 //! every public surface end-to-end.
 
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use gimli::{
     AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_data_member_location, DW_AT_high_pc,
     DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_type, DW_TAG_base_type,
     DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter,
     DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type,
-    DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable, DW_TAG_volatile_type,
-    EndianSlice, RunTimeEndian,
+    DW_TAG_subprogram, DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type,
+    DW_TAG_variable, DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
 };
 
 use crate::error::LoadError;
@@ -100,6 +100,7 @@ pub struct SourceLocation {
 pub struct StructType {
     pub name: String,
     pub size: u64,
+    pub template_params: Vec<String>,
     pub fields: Vec<StructField>,
 }
 
@@ -125,6 +126,7 @@ pub struct EnumType {
 pub struct UnionType {
     pub name: String,
     pub size: u64,
+    pub template_params: Vec<String>,
     pub members: Vec<StructField>,
 }
 
@@ -305,9 +307,15 @@ fn extract_struct_type(
         .and_then(|v| v.udata_value())
         .unwrap_or(0);
 
+    let template_params = extract_template_params_for_type_die(dwarf, unit, entry)?;
     let fields = extract_members(dwarf, unit, node)?;
 
-    Ok(Some(StructType { name, size, fields }))
+    Ok(Some(StructType {
+        name,
+        size,
+        template_params,
+        fields,
+    }))
 }
 
 fn extract_enum_type(
@@ -376,13 +384,24 @@ fn extract_union_type(
         .and_then(|v| v.udata_value())
         .unwrap_or(0);
 
+    let template_params = extract_template_params_for_type_die(dwarf, unit, entry)?;
     let members = extract_members(dwarf, unit, node)?;
 
     Ok(Some(UnionType {
         name,
         size,
+        template_params,
         members,
     }))
+}
+
+
+fn render_type_with_template_params(name: &str, template_params: &[String]) -> String {
+    if template_params.is_empty() || name.contains('<') {
+        name.to_owned()
+    } else {
+        format!("{}<{}>", name, template_params.join(", "))
+    }
 }
 
 fn extract_members(
@@ -609,9 +628,54 @@ fn resolve_type_name(
         Ok(inner_type()?.map(|t| format!("volatile {t}")))
     } else if tag == DW_TAG_restrict_type {
         Ok(inner_type()?.map(|t| format!("{t} restrict")))
+    } else if tag == DW_TAG_structure_type || tag == DW_TAG_union_type {
+        let base_name = attr_string(dwarf, unit, type_die, DW_AT_name)?;
+        let template_params = extract_template_params_for_type_die(dwarf, unit, type_die)?;
+        Ok(base_name.map(|name| render_type_with_template_params(&name, &template_params)))
     } else {
         attr_string(dwarf, unit, type_die, DW_AT_name)
     }
+}
+
+fn extract_template_params_for_type_die(
+    dwarf: &gimli::Dwarf<R<'_>>,
+    unit: &gimli::Unit<R<'_>>,
+    type_die: &gimli::DebuggingInformationEntry<R<'_>>,
+) -> Result<Vec<String>, gimli::Error> {
+    let mut cursor = unit.entries_at_offset(type_die.offset())?;
+    cursor.next_entry()?;
+    let current_depth = cursor.depth();
+    let mut params = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    while let Some(entry) = cursor.next_dfs()? {
+        if entry.depth() <= current_depth {
+            break;
+        }
+        if entry.tag() != DW_TAG_template_type_parameter {
+            continue;
+        }
+
+        let type_name = entry
+            .attr_value(DW_AT_type)
+            .map(|val| resolve_type_name(dwarf, unit, val))
+            .transpose()?
+            .flatten();
+        let param_name = attr_string(dwarf, unit, entry, DW_AT_name)?;
+
+        let rendered = match (param_name, type_name) {
+            (Some(name), Some(type_name)) if !name.is_empty() => format!("{} = {}", name, type_name),
+            (Some(name), None) if !name.is_empty() => name,
+            (_, Some(type_name)) if !type_name.is_empty() => type_name,
+            _ => continue,
+        };
+
+        if seen.insert(rendered.clone()) {
+            params.push(rendered);
+        }
+    }
+
+    Ok(params)
 }
 
 fn attr_string(
@@ -969,6 +1033,119 @@ mod tests {
         assert_eq!(rect.fields[1].offset, 8);
         assert_eq!(rect.fields[1].size, 8);
         assert_eq!(rect.fields[1].type_name, "Point");
+    }
+
+    #[test]
+    fn test_dwarf_type_name_surfaces_template_type_arguments() {
+        use std::collections::BTreeMap;
+
+        use gimli::write::{AttributeValue, Dwarf, EndianVec, LineProgram, Sections, Unit};
+        use gimli::{Encoding, Format, LittleEndian};
+        use unlace_ir::ArchId;
+
+        let encoding = Encoding {
+            format: Format::Dwarf32,
+            version: 5,
+            address_size: 8,
+        };
+        let mut dwarf = Dwarf::default();
+        let unit_id = dwarf.units.add(Unit::new(encoding, LineProgram::none()));
+        let unit = dwarf.units.get_mut(unit_id);
+        let root = unit.root();
+
+        let int_ty = unit.add(root, DW_TAG_base_type);
+        unit.get_mut(int_ty)
+            .set(DW_AT_name, AttributeValue::String(b"int".to_vec()));
+        unit.get_mut(int_ty)
+            .set(DW_AT_byte_size, AttributeValue::Data1(4));
+
+        let vec_ty = unit.add(root, DW_TAG_structure_type);
+        unit.get_mut(vec_ty)
+            .set(DW_AT_name, AttributeValue::String(b"Vec".to_vec()));
+        unit.get_mut(vec_ty)
+            .set(DW_AT_byte_size, AttributeValue::Data1(24));
+
+        let template_param = unit.add(vec_ty, DW_TAG_template_type_parameter);
+        unit.get_mut(template_param)
+            .set(DW_AT_name, AttributeValue::String(b"T".to_vec()));
+        unit.get_mut(template_param)
+            .set(DW_AT_type, AttributeValue::UnitRef(int_ty));
+
+        let holder_ty = unit.add(root, DW_TAG_structure_type);
+        unit.get_mut(holder_ty)
+            .set(DW_AT_name, AttributeValue::String(b"Holder".to_vec()));
+        unit.get_mut(holder_ty)
+            .set(DW_AT_byte_size, AttributeValue::Data1(24));
+
+        let member = unit.add(holder_ty, DW_TAG_member);
+        unit.get_mut(member)
+            .set(DW_AT_name, AttributeValue::String(b"value".to_vec()));
+        unit.get_mut(member)
+            .set(DW_AT_type, AttributeValue::UnitRef(vec_ty));
+        unit.get_mut(member)
+            .set(DW_AT_data_member_location, AttributeValue::Data1(0));
+
+        let mut sections = Sections::new(EndianVec::new(LittleEndian));
+        dwarf.write(&mut sections).expect("should write synthetic DWARF");
+
+        let section = |id: gimli::SectionId| -> crate::image::Section {
+            let data = sections
+                .get(id)
+                .expect("section should exist")
+                .slice()
+                .to_vec();
+            crate::image::Section {
+                name: id.name().to_string(),
+                vaddr: 0,
+                size: data.len() as u64,
+                data,
+                flags: crate::image::SectionFlags::READ,
+            }
+        };
+
+        let img = BinaryImage {
+            arch: ArchId::X86_64,
+            endian: crate::image::Endian::Little,
+            entry: 0,
+            sections: vec![
+                section(gimli::SectionId::DebugAbbrev),
+                section(gimli::SectionId::DebugInfo),
+                section(gimli::SectionId::DebugStr),
+            ],
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: vec![],
+            string_table: BTreeMap::new(),
+            tls_callbacks: vec![],
+            function_starts: vec![],
+            debug_records: vec![],
+            load_config: None,
+            runtime_functions: vec![],
+            resources: vec![],
+            bound_imports: vec![],
+            delay_imports: vec![],
+            forwarded_exports: vec![],
+            forwarded_resolutions: BTreeMap::new(),
+            rich_header: None,
+            dylibs: vec![],
+            rpaths: vec![],
+            pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: None,
+            go_itabs: BTreeMap::new(),
+            go_types: BTreeMap::new(),
+            swift_info: None,
+            auth_pointers: vec![],
+            auth_ptr_slots: vec![],
+        };
+
+        let info = import_dwarf(&img).expect("should parse synthetic DWARF");
+        let holder = info.structs.get("Holder").expect("Holder struct should exist");
+        assert_eq!(holder.fields[0].type_name, "Vec<T = int>");
+
+        let vec = info.structs.get("Vec").expect("Vec struct should exist");
+        assert_eq!(vec.template_params, vec!["T = int"]);
     }
 
     #[test]

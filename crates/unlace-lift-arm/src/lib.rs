@@ -212,6 +212,20 @@ mod tests {
     }
 
     #[test]
+    fn arm32_register_file_includes_vfp_registers() {
+        let l = ArmLifter::new_arm32();
+        let rf = l.register_file();
+        assert_eq!(rf.registers[16].name, "APSR");
+        assert_eq!(rf.registers[17].name, "FPSCR");
+        assert_eq!(rf.registers[18].name, "S0");
+        assert_eq!(rf.registers[49].name, "S31");
+        assert_eq!(rf.registers[50].name, "D0");
+        assert_eq!(rf.registers[81].name, "D31");
+        assert_eq!(rf.registers[18].varnode.offset, rf.registers[50].varnode.offset);
+        assert_eq!(rf.registers[50].varnode.size, 8);
+    }
+
+    #[test]
     fn test_add_reg_reg() {
         // ADD X0, X1, X2  →  8b020020
         let result = lifter()
@@ -2956,6 +2970,91 @@ mod tests {
         assert_eq!(co.inputs[1].space, SpaceId::Const);
         // SSAT immediate is 1-based saturation width (here #8 → "to 8 bits").
         assert_eq!(co.inputs[1].offset, 8);
+    }
+
+    #[test]
+    fn arm32_vfp_vmov_s_lifts_to_copy() {
+        let l = ArmLifter::new_arm32();
+        let r = l.lift_insn(&0xeeb0_0a40u32.to_le_bytes(), 0x1000).unwrap(); // vmov.f32 s0, s0
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm32_vfp_vadd_f32_lifts_to_float_add() {
+        let l = ArmLifter::new_arm32();
+        let r = l.lift_insn(&0xee30_0a20u32.to_le_bytes(), 0x1000).unwrap(); // vadd.f32 s0, s0, s1
+        let add = r.ir_ops.iter().find(|i| i.op == IrOp::FloatAdd).expect("FLOAT_ADD");
+        assert_eq!(add.output.expect("dst").size, 4);
+    }
+
+    #[test]
+    fn arm32_vfp_vdiv_f64_lifts_to_float_div() {
+        let l = ArmLifter::new_arm32();
+        let r = l.lift_insn(&0xee80_0b00u32.to_le_bytes(), 0x1000).unwrap(); // vdiv.f64 d0, d0, d0
+        let div = r.ir_ops.iter().find(|i| i.op == IrOp::FloatDiv).expect("FLOAT_DIV");
+        assert_eq!(div.output.expect("dst").size, 8);
+    }
+
+    #[test]
+    fn arm32_vfp_vldr_vstr_use_float_register_sizes() {
+        let l = ArmLifter::new_arm32();
+        let load = l.lift_insn(&0xed91_0a00u32.to_le_bytes(), 0x1000).unwrap(); // vldr s0, [r1]
+        let loaded = load.ir_ops.iter().find(|i| i.op == IrOp::Load).expect("LOAD");
+        assert_eq!(loaded.output.expect("dst").size, 4);
+
+        let store = l.lift_insn(&0xed81_0a00u32.to_le_bytes(), 0x1000).unwrap(); // vstr s0, [r1]
+        let st = store.ir_ops.iter().find(|i| i.op == IrOp::Store).expect("STORE");
+        assert_eq!(st.inputs[1].size, 4);
+    }
+
+    #[test]
+    fn arm32_vfp_vsqrt_vabs_vneg_lift_to_float_unops() {
+        let l = ArmLifter::new_arm32();
+        let sqrt = l.lift_insn(&0xeeb1_0bc0u32.to_le_bytes(), 0x1000).unwrap(); // vsqrt.f64 d0, d0
+        assert!(sqrt.ir_ops.iter().any(|i| i.op == IrOp::FloatSqrt));
+
+        let abs = l.lift_insn(&0xeeb0_0bc0u32.to_le_bytes(), 0x1000).unwrap(); // vabs.f64 d0, d0
+        assert!(abs.ir_ops.iter().any(|i| i.op == IrOp::FloatAbs));
+
+        let neg = l.lift_insn(&0xeeb1_0a40u32.to_le_bytes(), 0x1000).unwrap(); // vneg.f32 s0, s0
+        assert!(neg.ir_ops.iter().any(|i| i.op == IrOp::FloatNeg));
+    }
+
+    #[test]
+    fn arm32_vfp_vcvt_selects_float_conversion_ops() {
+        let l = ArmLifter::new_arm32();
+        let i2f = l.lift_insn(&0xeef8_0ae7u32.to_le_bytes(), 0x1000).unwrap(); // vcvt.f32.s32 s1, s15
+        assert!(i2f.ir_ops.iter().any(|i| i.op == IrOp::FloatInt2float));
+
+        let f2i = l.lift_insn(&0xeebd_0ac0u32.to_le_bytes(), 0x1000).unwrap(); // vcvt.s32.f32 s0, s0
+        assert!(f2i.ir_ops.iter().any(|i| i.op == IrOp::FloatFloat2int));
+
+        let f2f = l.lift_insn(&0xeeb7_0ac0u32.to_le_bytes(), 0x1000).unwrap(); // vcvt.f64.f32 d0, s0
+        assert!(f2f.ir_ops.iter().any(|i| i.op == IrOp::FloatFloat2float));
+    }
+
+    #[test]
+    fn arm32_vfp_vcmp_updates_fp_compare_flags() {
+        let l = ArmLifter::new_arm32();
+        let r = l.lift_insn(&0xeeb4_0a40u32.to_le_bytes(), 0x1000).unwrap(); // vcmp.f32 s0, s0
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::FloatNan));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::FloatLess));
+        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::FloatEqual));
+        assert!(r.ir_ops.iter().any(|i| i.output == Some(ARM_FLAG_N)));
+        assert!(r.ir_ops.iter().any(|i| i.output == Some(ARM_FLAG_Z)));
+        assert!(r.ir_ops.iter().any(|i| i.output == Some(ARM_FLAG_C)));
+        assert!(r.ir_ops.iter().any(|i| i.output == Some(ARM_FLAG_V)));
+    }
+
+    #[test]
+    fn arm32_vmrs_vmsr_move_fpscr() {
+        let l = ArmLifter::new_arm32();
+        let vmrs = l.lift_insn(&0xeef1_0a10u32.to_le_bytes(), 0x1000).unwrap(); // vmrs r0, fpscr
+        assert!(vmrs.ir_ops.iter().any(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(0, 4))));
+
+        let vmsr = l.lift_insn(&0xeee1_0a10u32.to_le_bytes(), 0x1000).unwrap(); // vmsr fpscr, r0
+        assert!(vmsr.ir_ops.iter().any(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(68, 4))));
     }
 
     // ── t300: SVE scaffolding tests ───────────────────────────────────

@@ -5,13 +5,13 @@
 //! `LF_ARRAY` records into the unlace `Type` model. Forward references are
 //! resolved via a fixpoint pass.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use pdb::{FallibleIterator, PDB, TypeData, TypeIndex};
 
 use unlace_ir::ssa::PrimitiveType;
-use unlace_ir::types::{StructFieldType, Type};
+use unlace_ir::types::{InterfaceMethod, StructFieldType, Type};
 
 use crate::error::LoadError;
 
@@ -26,6 +26,10 @@ pub struct PdbTypes {
     pub enums: BTreeMap<String, Vec<(String, i64)>>,
     /// Function signatures keyed by ProcedureType type-index.
     pub procedures: BTreeMap<u32, ProcSig>,
+    /// Deterministic CodeView/IPI-style structural hash for every lowered type index.
+    pub type_hashes: BTreeMap<u32, u64>,
+    /// Deterministic structural hash for each named struct/class/union.
+    pub struct_hashes: BTreeMap<String, u64>,
 }
 
 /// A function signature lowered from `LF_PROCEDURE`.
@@ -168,7 +172,302 @@ pub(crate) fn lower_cv_table(table: &BTreeMap<u32, CvType>) -> PdbTypes {
         }
     }
 
+    out.refresh_hashes();
     out
+}
+
+impl PdbTypes {
+    /// Recompute deterministic structural hashes after the type maps are built
+    /// or canonicalized.
+    pub fn refresh_hashes(&mut self) {
+        self.type_hashes = self
+            .by_index
+            .iter()
+            .map(|(&idx, ty)| (idx, ipi_type_hash(ty)))
+            .collect();
+        self.struct_hashes = self
+            .structs
+            .iter()
+            .map(|(name, ty)| (name.clone(), ipi_type_hash(ty)))
+            .collect();
+    }
+}
+
+/// A canonical cross-module UDT entry selected by [`unify_pdb_type_sets`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanonicalPdbType {
+    /// Stable structural hash shared by all aliases of this UDT.
+    pub hash: u64,
+    /// Name chosen for output. The first module/name in deterministic input order wins.
+    pub canonical_name: String,
+    /// Index in the input slice of the module that supplied the canonical name.
+    pub defining_module: usize,
+    /// Every original name observed for this same structural hash.
+    pub original_names: BTreeSet<String>,
+}
+
+/// A per-module alias applied while canonicalizing PDB types.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PdbTypeAlias {
+    pub module_index: usize,
+    pub original_name: String,
+    pub canonical_name: String,
+    pub hash: u64,
+}
+
+/// Summary returned by [`unify_pdb_type_sets`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PdbTypeUnification {
+    /// Canonical UDTs keyed by deterministic structural hash.
+    pub canonical_structs: BTreeMap<u64, CanonicalPdbType>,
+    /// Aliases whose local name was rewritten to an already-seen canonical name.
+    pub aliases: Vec<PdbTypeAlias>,
+}
+
+/// Return a deterministic CodeView/IPI-style structural hash for a lowered type.
+///
+/// PDB TPI/IPI indexes are module-local, so comparing raw indexes cannot identify
+/// the same declaration across DLLs. This hash serializes the lowered shape
+/// instead. Struct names are deliberately excluded; field names remain part of
+/// the shape to avoid collapsing unrelated layout-compatible records.
+pub fn ipi_type_hash(ty: &Type) -> u64 {
+    let mut h = StableHasher::new();
+    hash_type(ty, &mut h, 32);
+    h.finish()
+}
+
+/// Canonicalize same-shape PDB UDTs across DLL/PDB modules.
+///
+/// The first occurrence in the input slice (and then lexicographic struct-name
+/// order within a module) becomes canonical. Later UDTs with the same structural
+/// hash are rewritten in-place to the canonical name in `structs`, `by_index`,
+/// and procedure signatures.
+pub fn unify_pdb_type_sets(modules: &mut [PdbTypes]) -> PdbTypeUnification {
+    let mut summary = PdbTypeUnification::default();
+    let mut hash_to_name: BTreeMap<u64, String> = BTreeMap::new();
+
+    for (module_index, module) in modules.iter_mut().enumerate() {
+        module.refresh_hashes();
+        let entries: Vec<_> = module
+            .struct_hashes
+            .iter()
+            .map(|(n, &h)| (n.clone(), h))
+            .collect();
+        for (name, hash) in entries {
+            if let Some(canonical_name) = hash_to_name.get(&hash).cloned() {
+                if let Some(canon) = summary.canonical_structs.get_mut(&hash) {
+                    canon.original_names.insert(name.clone());
+                }
+                if canonical_name != name {
+                    summary.aliases.push(PdbTypeAlias {
+                        module_index,
+                        original_name: name,
+                        canonical_name,
+                        hash,
+                    });
+                }
+            } else {
+                hash_to_name.insert(hash, name.clone());
+                let mut original_names = BTreeSet::new();
+                original_names.insert(name.clone());
+                summary.canonical_structs.insert(
+                    hash,
+                    CanonicalPdbType {
+                        hash,
+                        canonical_name: name,
+                        defining_module: module_index,
+                        original_names,
+                    },
+                );
+            }
+        }
+    }
+
+    for module in modules.iter_mut() {
+        rewrite_module_struct_names(module, &hash_to_name);
+        module.refresh_hashes();
+    }
+
+    summary
+}
+
+fn rewrite_module_struct_names(module: &mut PdbTypes, hash_to_name: &BTreeMap<u64, String>) {
+    let old_structs = std::mem::take(&mut module.structs);
+    for (_old_name, mut ty) in old_structs {
+        rewrite_type_struct_names(&mut ty, hash_to_name);
+        if let Type::Struct { name, .. } = &ty {
+            module.structs.entry(name.clone()).or_insert(ty);
+        }
+    }
+
+    for ty in module.by_index.values_mut() {
+        rewrite_type_struct_names(ty, hash_to_name);
+    }
+    for sig in module.procedures.values_mut() {
+        rewrite_type_struct_names(&mut sig.return_type, hash_to_name);
+        for param in &mut sig.params {
+            rewrite_type_struct_names(param, hash_to_name);
+        }
+    }
+}
+
+fn rewrite_type_struct_names(ty: &mut Type, hash_to_name: &BTreeMap<u64, String>) {
+    match ty {
+        Type::Struct { name, fields } => {
+            let hash = ipi_type_hash(&Type::Struct {
+                name: String::new(),
+                fields: fields.clone(),
+            });
+            if let Some(canonical) = hash_to_name.get(&hash) {
+                *name = canonical.clone();
+            }
+            for field in fields {
+                rewrite_type_struct_names(&mut field.ty, hash_to_name);
+            }
+        }
+        Type::Ptr(inner)
+        | Type::Bitfield {
+            underlying: inner, ..
+        }
+        | Type::Slice { elem: inner } => rewrite_type_struct_names(inner, hash_to_name),
+        Type::Array { element, .. } => rewrite_type_struct_names(element, hash_to_name),
+        Type::FuncPtr {
+            params,
+            return_type,
+            ..
+        } => {
+            rewrite_type_struct_names(return_type, hash_to_name);
+            for param in params {
+                rewrite_type_struct_names(param, hash_to_name);
+            }
+        }
+        Type::Map { key, value } => {
+            rewrite_type_struct_names(key, hash_to_name);
+            rewrite_type_struct_names(value, hash_to_name);
+        }
+        Type::Primitive(_) | Type::Interface { .. } => {}
+    }
+}
+
+struct StableHasher(u64);
+
+impl StableHasher {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+
+    fn new() -> Self {
+        Self(Self::OFFSET)
+    }
+    fn byte(&mut self, b: u8) {
+        self.0 ^= u64::from(b);
+        self.0 = self.0.wrapping_mul(Self::PRIME);
+    }
+    fn bytes(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.byte(b);
+        }
+        self.byte(0xff);
+    }
+    fn u8(&mut self, v: u8) {
+        self.byte(v);
+    }
+    fn u32(&mut self, v: u32) {
+        self.bytes(&v.to_le_bytes());
+    }
+    fn u64(&mut self, v: u64) {
+        self.bytes(&v.to_le_bytes());
+    }
+    fn str(&mut self, s: &str) {
+        self.u64(s.len() as u64);
+        self.bytes(s.as_bytes());
+    }
+    fn finish(self) -> u64 {
+        self.0
+    }
+}
+
+fn hash_type(ty: &Type, h: &mut StableHasher, depth: u8) {
+    if depth == 0 {
+        h.u8(0xfe);
+        return;
+    }
+    match ty {
+        Type::Primitive(p) => {
+            h.u8(0x01);
+            h.str(&format!("{p:?}"));
+        }
+        Type::Ptr(inner) => {
+            h.u8(0x02);
+            hash_type(inner, h, depth - 1);
+        }
+        Type::Array { element, size } => {
+            h.u8(0x03);
+            match size {
+                Some(n) => {
+                    h.u8(1);
+                    h.u64(*n);
+                }
+                None => h.u8(0),
+            }
+            hash_type(element, h, depth - 1);
+        }
+        Type::Struct { fields, .. } => {
+            h.u8(0x04);
+            h.u64(fields.len() as u64);
+            for field in fields {
+                h.str(&field.name);
+                h.u64(field.offset);
+                hash_type(&field.ty, h, depth - 1);
+            }
+        }
+        Type::FuncPtr {
+            params,
+            return_type,
+            variadic,
+        } => {
+            h.u8(0x05);
+            h.u8(u8::from(*variadic));
+            h.u64(params.len() as u64);
+            for param in params {
+                hash_type(param, h, depth - 1);
+            }
+            hash_type(return_type, h, depth - 1);
+        }
+        Type::Bitfield {
+            underlying,
+            offset,
+            width,
+        } => {
+            h.u8(0x06);
+            h.u32(*offset);
+            h.u32(*width);
+            hash_type(underlying, h, depth - 1);
+        }
+        Type::Interface { name, methods } => {
+            h.u8(0x07);
+            h.str(name);
+            h.u64(methods.len() as u64);
+            for InterfaceMethod { name, signature } in methods {
+                h.str(name);
+                match signature {
+                    Some(sig) => {
+                        h.u8(1);
+                        h.str(sig);
+                    }
+                    None => h.u8(0),
+                }
+            }
+        }
+        Type::Slice { elem } => {
+            h.u8(0x08);
+            hash_type(elem, h, depth - 1);
+        }
+        Type::Map { key, value } => {
+            h.u8(0x09);
+            hash_type(key, h, depth - 1);
+            hash_type(value, h, depth - 1);
+        }
+    }
 }
 
 fn lower_one(cv: &CvType, table: &BTreeMap<u32, CvType>, out: &PdbTypes) -> Type {
@@ -178,10 +477,7 @@ fn lower_one(cv: &CvType, table: &BTreeMap<u32, CvType>, out: &PdbTypes) -> Type
             let inner = resolve(*underlying, table, out);
             Type::Ptr(Box::new(inner))
         }
-        CvType::Array {
-            element,
-            len_bytes,
-        } => {
+        CvType::Array { element, len_bytes } => {
             let elem = resolve(*element, table, out);
             let elem_size = elem.size().map(|s| s as u32).unwrap_or(0);
             let count = if elem_size > 0 {
@@ -284,11 +580,7 @@ fn resolve(idx: u32, table: &BTreeMap<u32, CvType>, out: &PdbTypes) -> Type {
     Type::Primitive(PrimitiveType::Unknown)
 }
 
-fn find_named_struct(
-    name: &str,
-    table: &BTreeMap<u32, CvType>,
-    out: &PdbTypes,
-) -> Option<Type> {
+fn find_named_struct(name: &str, table: &BTreeMap<u32, CvType>, out: &PdbTypes) -> Option<Type> {
     for (idx, cv) in table {
         if let CvType::Struct {
             name: n,
@@ -1128,9 +1420,88 @@ mod tests {
         assert!(t.fields.is_empty());
     }
 
+    fn point_struct(name: &str) -> Type {
+        Type::Struct {
+            name: name.into(),
+            fields: vec![
+                StructFieldType {
+                    name: "x".into(),
+                    ty: Type::int(4),
+                    offset: 0,
+                },
+                StructFieldType {
+                    name: "y".into(),
+                    ty: Type::int(4),
+                    offset: 4,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn ipi_hash_ignores_struct_name_but_keeps_shape() {
+        let a = point_struct("PointA");
+        let b = point_struct("PointB");
+        let mut c = point_struct("PointC");
+        if let Type::Struct { fields, .. } = &mut c {
+            fields[1].offset = 8;
+        }
+
+        assert_eq!(ipi_type_hash(&a), ipi_type_hash(&b));
+        assert_ne!(ipi_type_hash(&a), ipi_type_hash(&c));
+    }
+
+    #[test]
+    fn unifies_cross_dll_structs_by_ipi_hash() {
+        let mut module_a = PdbTypes::default();
+        module_a.by_index.insert(0x1000, point_struct("Point"));
+        module_a
+            .structs
+            .insert("Point".into(), point_struct("Point"));
+
+        let mut module_b = PdbTypes::default();
+        module_b
+            .by_index
+            .insert(0x1000, point_struct("GeometryPoint"));
+        module_b
+            .structs
+            .insert("GeometryPoint".into(), point_struct("GeometryPoint"));
+        module_b.procedures.insert(
+            0x2000,
+            ProcSig {
+                return_type: Type::Primitive(PrimitiveType::Unknown),
+                params: vec![Type::Ptr(Box::new(point_struct("GeometryPoint")))],
+            },
+        );
+
+        let mut modules = vec![module_a, module_b];
+        let summary = unify_pdb_type_sets(&mut modules);
+
+        assert_eq!(summary.canonical_structs.len(), 1);
+        assert_eq!(summary.aliases.len(), 1);
+        assert_eq!(summary.aliases[0].original_name, "GeometryPoint");
+        assert_eq!(summary.aliases[0].canonical_name, "Point");
+        assert!(modules[1].structs.contains_key("Point"));
+        assert!(!modules[1].structs.contains_key("GeometryPoint"));
+        match &modules[1].by_index[&0x1000] {
+            Type::Struct { name, .. } => assert_eq!(name, "Point"),
+            other => panic!("expected struct, got {other:?}"),
+        }
+        match &modules[1].procedures[&0x2000].params[0] {
+            Type::Ptr(inner) => match &**inner {
+                Type::Struct { name, .. } => assert_eq!(name, "Point"),
+                other => panic!("expected struct ptr, got {other:?}"),
+            },
+            other => panic!("expected ptr, got {other:?}"),
+        }
+    }
+
     #[test]
     fn primitive_kind_conversion() {
-        assert_eq!(primitive_to_type(pdb::PrimitiveKind::I32, None), Type::int(4));
+        assert_eq!(
+            primitive_to_type(pdb::PrimitiveKind::I32, None),
+            Type::int(4)
+        );
         assert_eq!(
             primitive_to_type(pdb::PrimitiveKind::U64, None),
             Type::uint(8)

@@ -63,7 +63,8 @@ pub use image::{
 };
 pub use macho::MachoLoader;
 pub use pdb_types::{
-    PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types, walk_tpi,
+    CanonicalPdbType, PdbError, PdbField, PdbType, PdbTypeAlias, PdbTypeKind, PdbTypeUnification,
+    PdbTypes, ProcSig, import_pdb_types, ipi_type_hash, unify_pdb_type_sets, walk_tpi,
 };
 pub use pe::PeLoader;
 pub use rtti::{

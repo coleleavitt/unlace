@@ -1237,7 +1237,9 @@ pub fn flirt_match(image: &BinaryImage, entry: &FunctionEntry) -> Option<String>
         return None;
     }
     let bytes = &text.data[off_start..off_end];
-    flirt_db().match_function(bytes).map(str::to_string)
+    flirt_db()
+        .match_function_for_arch(image.arch, bytes)
+        .map(str::to_string)
 }
 
 /// Whether `name` looks like a stripped-binary placeholder that FLIRT is

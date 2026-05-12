@@ -392,6 +392,7 @@ mod tests {
             swift_info: None,
             auth_pointers: Vec::new(),
             auth_ptr_slots: Vec::new(),
+            wasm_component: None,
         }
     }
 

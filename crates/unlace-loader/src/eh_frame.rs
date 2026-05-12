@@ -277,6 +277,7 @@ mod tests {
             swift_info: None,
             auth_pointers: Vec::new(),
             auth_ptr_slots: Vec::new(),
+            wasm_component: None,
         };
 
         let info = parse_eh_frame(&img).expect("missing .eh_frame should not error");
@@ -327,6 +328,7 @@ mod tests {
             swift_info: None,
             auth_pointers: Vec::new(),
             auth_ptr_slots: Vec::new(),
+            wasm_component: None,
         };
 
         let result = parse_eh_frame(&img);

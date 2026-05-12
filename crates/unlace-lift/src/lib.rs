@@ -9,6 +9,7 @@ pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_ppc::PpcLifter;
 pub use unlace_lift_riscv::RiscVLifter;
+pub use unlace_lift_ti::TiLifter;
 pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_x86::X86Lifter;
 
@@ -54,6 +55,8 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::Arc => Box::new(ArcLifter::new()),
         ArchId::Ebpf => Box::new(EbpfLifter::new()),
         ArchId::Avr => Box::new(AvrLifter::new()),
+        ArchId::TiC6x => Box::new(TiLifter::new_c6x()),
+        ArchId::TiC28x => Box::new(TiLifter::new_c28x()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -112,6 +115,16 @@ mod tests {
         let l = get_lifter(ArchId::Arc);
         assert_eq!(l.arch(), ArchId::Arc);
         assert!(!l.register_file().registers.is_empty());
+    }
+
+    #[test]
+    fn test_get_lifter_ti() {
+        let c6x = get_lifter(ArchId::TiC6x);
+        assert_eq!(c6x.arch(), ArchId::TiC6x);
+        assert!(!c6x.register_file().registers.is_empty());
+        let c28x = get_lifter(ArchId::TiC28x);
+        assert_eq!(c28x.arch(), ArchId::TiC28x);
+        assert!(!c28x.register_file().registers.is_empty());
     }
 
     #[test]

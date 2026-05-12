@@ -9523,6 +9523,7 @@ mod tests {
             StructType {
                 name: "Rect".to_string(),
                 size: 16,
+                template_params: vec![],
                 fields: vec![
                     StructField {
                         name: "origin".to_string(),
@@ -9582,6 +9583,7 @@ mod tests {
             StructType {
                 name: "Point".to_string(),
                 size: 8,
+                template_params: vec![],
                 fields: vec![
                     StructField {
                         name: "x".to_string(),
@@ -9645,6 +9647,7 @@ mod tests {
             StructType {
                 name: "Point".to_string(),
                 size: 8,
+                template_params: vec![],
                 fields: vec![
                     StructField {
                         name: "x".to_string(),

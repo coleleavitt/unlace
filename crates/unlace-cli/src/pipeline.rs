@@ -93,7 +93,7 @@ pub struct FunctionEntry {
 pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<Vec<FunctionEntry>> {
     let permissive_symbol_sizes = matches!(
         image.arch,
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
+        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::M68k
     );
     let text_range = image.section_by_name(".text").map(|text| {
         let start = text.vaddr;
@@ -229,7 +229,7 @@ fn add_symbol_gap_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>)
 }
 
 fn add_post_entry_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
-    if !matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850) {
+    if !matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::M68k) {
         return;
     }
     let Some(text) = image.section_by_name(".text") else {

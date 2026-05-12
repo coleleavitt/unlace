@@ -19,7 +19,8 @@
 //! * Type descriptors: `name` (UTF-8) and `flags` (u32).
 //! * Protocol descriptors: the descriptor VA and (if reachable) its
 //!   name.
-//! * Conformance descriptors: the descriptor VA only.
+//! * Conformance descriptors: descriptor VA plus resolved type/protocol names
+//!   and witness-table accessor VA when present.
 //!
 //! Field/generic-parameter/method-vtable walking is deliberately out
 //! of scope — adding those is a follow-up task once a consumer needs
@@ -65,6 +66,21 @@ pub struct SwiftProtocolDescriptor {
 pub struct SwiftConformance {
     /// VA of the conformance descriptor.
     pub descriptor_va: u64,
+    /// Resolved protocol descriptor VA from the conformance's protocol
+    /// relative reference.
+    pub protocol_va: Option<u64>,
+    /// Protocol name when the referenced descriptor is mapped and readable.
+    pub protocol_name: Option<String>,
+    /// Resolved nominal type descriptor VA for the conforming type when the
+    /// descriptor encodes a direct type-reference.
+    pub type_va: Option<u64>,
+    /// Conforming type name when the type descriptor is mapped and readable.
+    pub type_name: Option<String>,
+    /// Resolved witness-table/accessor function VA when the conformance
+    /// descriptor carries a non-zero relative method slot.
+    pub witness_table_va: Option<u64>,
+    /// Raw conformance flags word (offset 12).
+    pub flags: u32,
 }
 
 /// Aggregate Swift runtime metadata recovered from a Mach-O image.
@@ -112,7 +128,7 @@ pub fn scan_swift_metadata(image: &BinaryImage) -> Option<SwiftInfo> {
         info.protocols = parse_protocol_table(image, sec);
     }
     if let Some(sec) = proto_sec {
-        info.conformances = parse_conformance_table(sec);
+        info.conformances = parse_conformance_table(image, sec);
     }
     Some(info)
 }
@@ -122,9 +138,10 @@ pub fn scan_swift_metadata(image: &BinaryImage) -> Option<SwiftInfo> {
 /// in this crate emit the bare form, but external tools sometimes
 /// concatenate the segment.
 fn find_section<'a>(image: &'a BinaryImage, name: &str) -> Option<&'a Section> {
-    image.sections.iter().find(|s| {
-        s.name == name || s.name.ends_with(name) || s.name.ends_with(&format!(",{name}"))
-    })
+    image
+        .sections
+        .iter()
+        .find(|s| s.name == name || s.name.ends_with(name) || s.name.ends_with(&format!(",{name}")))
 }
 
 /// Read a 32-bit little-endian word at `offset` within `data`, or
@@ -254,11 +271,44 @@ fn parse_protocol_table(image: &BinaryImage, sec: &Section) -> Vec<SwiftProtocol
     out
 }
 
-/// Parse `__swift5_proto`. Conformance descriptors have a richer
-/// layout (protocol ref, type ref, witness table accessor, …) but for
-/// the MVP we just surface the descriptor VA so consumers can
-/// cross-reference symbols.
-fn parse_conformance_table(sec: &Section) -> Vec<SwiftConformance> {
+fn parse_descriptor_name(image: &BinaryImage, desc_va: u64) -> Option<(u32, Option<String>)> {
+    let (desc_off, desc_bytes) = locate(image, desc_va)?;
+    let flags = read_u32_le(desc_bytes, desc_off)?;
+    let name_slot_va = desc_va.wrapping_add(8);
+    let name = read_i32_le(desc_bytes, desc_off + 8)
+        .map(|rel| resolve_relative(name_slot_va, rel))
+        .and_then(|name_va| read_cstr(image, name_va));
+    Some((flags, name))
+}
+
+/// Decode the direct nominal-type-reference form used by Swift protocol
+/// conformance descriptors.  The low two bits are a kind tag; kind zero is a
+/// direct relative reference to a nominal type descriptor.  Other forms
+/// (indirect, Objective-C class name, metadata accessor) are intentionally
+/// reported as unknown until a later task needs them.
+fn resolve_direct_type_reference(slot_va: u64, raw: i32) -> Option<u64> {
+    let raw_u = raw as u32;
+    if raw_u & 0b11 == 0 {
+        Some(resolve_relative(slot_va, raw))
+    } else {
+        None
+    }
+}
+
+/// Parse `__swift5_proto`. Each section entry is a relative pointer to a
+/// TargetProtocolConformanceDescriptor.  The prefix is:
+///
+/// ```text
+/// protocol:        RelativeProtocolDescriptorPointer  (i32)
+/// nominalType:     RelativeDirectPointer/TypeRef      (i32)
+/// witnessTable:    RelativeDirectPointer              (i32)
+/// flags:           ConformanceFlags                   (u32)
+/// ```
+///
+/// Surfacing the protocol/type pair lets the C printer render source-style
+/// breadcrumbs such as `protocol Equatable conformance: Widget` instead of
+/// an opaque conformance descriptor address.
+fn parse_conformance_table(image: &BinaryImage, sec: &Section) -> Vec<SwiftConformance> {
     let mut out = Vec::new();
     let mut off = 0usize;
     while off + 4 <= sec.data.len() {
@@ -272,8 +322,49 @@ fn parse_conformance_table(sec: &Section) -> Vec<SwiftConformance> {
             continue;
         }
         let desc_va = resolve_relative(slot_va, raw);
+        let Some((desc_off, desc_bytes)) = locate(image, desc_va) else {
+            out.push(SwiftConformance {
+                descriptor_va: desc_va,
+                protocol_va: None,
+                protocol_name: None,
+                type_va: None,
+                type_name: None,
+                witness_table_va: None,
+                flags: 0,
+            });
+            continue;
+        };
+
+        let protocol_slot_va = desc_va;
+        let protocol_va = read_i32_le(desc_bytes, desc_off)
+            .filter(|rel| *rel != 0)
+            .map(|rel| resolve_relative(protocol_slot_va, rel));
+        let protocol_name = protocol_va
+            .and_then(|va| parse_descriptor_name(image, va))
+            .and_then(|(_, name)| name);
+
+        let type_slot_va = desc_va.wrapping_add(4);
+        let type_va = read_i32_le(desc_bytes, desc_off + 4)
+            .filter(|rel| *rel != 0)
+            .and_then(|rel| resolve_direct_type_reference(type_slot_va, rel));
+        let type_name = type_va
+            .and_then(|va| parse_descriptor_name(image, va))
+            .and_then(|(_, name)| name);
+
+        let witness_slot_va = desc_va.wrapping_add(8);
+        let witness_table_va = read_i32_le(desc_bytes, desc_off + 8)
+            .filter(|rel| *rel != 0)
+            .map(|rel| resolve_relative(witness_slot_va, rel));
+        let flags = read_u32_le(desc_bytes, desc_off + 12).unwrap_or(0);
+
         out.push(SwiftConformance {
             descriptor_va: desc_va,
+            protocol_va,
+            protocol_name,
+            type_va,
+            type_name,
+            witness_table_va,
+            flags,
         });
     }
     out
@@ -409,6 +500,90 @@ mod tests {
         // Other tables weren't present → stayed empty.
         assert!(info.protocols.is_empty());
         assert!(info.conformances.is_empty());
+    }
+
+    #[test]
+    fn parses_protocol_conformance_type_protocol_and_witness() {
+        let names_va: u64 = 0x4000;
+        let descs_va: u64 = 0x5000;
+        let conf_va: u64 = 0x6000;
+        let table_va: u64 = 0x7000;
+        let witness_va: u64 = 0x8000;
+
+        let mut names = Vec::new();
+        names.extend_from_slice(b"Widget\0Drawable\0");
+        let type_name_va = names_va;
+        let proto_name_va = names_va + 7;
+
+        let type_desc_va = descs_va;
+        let proto_desc_va = descs_va + 20;
+        let mut descs = Vec::new();
+        descs.extend_from_slice(&0x51u32.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+        descs.extend_from_slice(
+            &((type_name_va as i64 - (type_desc_va as i64 + 8)) as i32).to_le_bytes(),
+        );
+        descs.extend_from_slice(&0i32.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+        descs.extend_from_slice(&0x52u32.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+        descs.extend_from_slice(
+            &((proto_name_va as i64 - (proto_desc_va as i64 + 8)) as i32).to_le_bytes(),
+        );
+        descs.extend_from_slice(&0i32.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+
+        let mut conf = Vec::new();
+        conf.extend_from_slice(&((proto_desc_va as i64 - conf_va as i64) as i32).to_le_bytes());
+        conf.extend_from_slice(
+            &((type_desc_va as i64 - (conf_va as i64 + 4)) as i32).to_le_bytes(),
+        );
+        conf.extend_from_slice(&((witness_va as i64 - (conf_va as i64 + 8)) as i32).to_le_bytes());
+        conf.extend_from_slice(&0x1234u32.to_le_bytes());
+
+        let mut table = Vec::new();
+        table.extend_from_slice(&((conf_va as i64 - table_va as i64) as i32).to_le_bytes());
+
+        let mut img = empty_image();
+        img.sections.push(Section {
+            name: "__cstring".into(),
+            vaddr: names_va,
+            size: names.len() as u64,
+            data: names,
+            flags: SectionFlags::READ,
+        });
+        img.sections.push(Section {
+            name: "__const".into(),
+            vaddr: descs_va,
+            size: descs.len() as u64,
+            data: descs,
+            flags: SectionFlags::READ,
+        });
+        img.sections.push(Section {
+            name: "__swift5_proto_desc".into(),
+            vaddr: conf_va,
+            size: conf.len() as u64,
+            data: conf,
+            flags: SectionFlags::READ,
+        });
+        img.sections.push(Section {
+            name: "__swift5_proto".into(),
+            vaddr: table_va,
+            size: table.len() as u64,
+            data: table,
+            flags: SectionFlags::READ,
+        });
+
+        let info = scan_swift_metadata(&img).expect("swift section present");
+        assert_eq!(info.conformances.len(), 1);
+        let c = &info.conformances[0];
+        assert_eq!(c.descriptor_va, conf_va);
+        assert_eq!(c.protocol_va, Some(proto_desc_va));
+        assert_eq!(c.protocol_name.as_deref(), Some("Drawable"));
+        assert_eq!(c.type_va, Some(type_desc_va));
+        assert_eq!(c.type_name.as_deref(), Some("Widget"));
+        assert_eq!(c.witness_table_va, Some(witness_va));
+        assert_eq!(c.flags, 0x1234);
     }
 
     /// An empty `__swift5_protos` (section exists but its data is

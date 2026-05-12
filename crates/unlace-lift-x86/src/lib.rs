@@ -2486,4 +2486,132 @@ mod tests {
         assert_eq!(src1.offset, crate::register_file::ZMM1);
         assert_eq!(src2.offset, crate::register_file::ZMM2);
     }
+    // ── t312 — Intel TSX hardware transactional memory ─────────────
+    //
+    // XBEGIN/XEND/XABORT/XTEST each must reach a single `Callother`
+    // with the tag from `crate::ops::tsx::tag` in `inputs[0]`. These
+    // tests pin the encoding of all four opcodes so the c_printer's
+    // 0x1B0..0x1B3 intrinsic-name table stays in sync.
+
+    use crate::ops::tsx::tag as tsx_tag;
+
+    /// `XBEGIN rel32` — encoded `C7 F8 <disp32>`. The fallback target
+    /// (disp = 0 → IP+6 = 0x1006) must surface as `inputs[1]`.
+    #[test]
+    fn t312_xbegin_emits_callother_with_fallback_target() {
+        // C7 F8 00 00 00 00 = xbegin +0 (fallback = next insn)
+        let bytes = [0xC7, 0xF8, 0x00, 0x00, 0x00, 0x00];
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("XBEGIN should decode");
+        assert_eq!(result.len, 6, "XBEGIN rel32 is 6 bytes");
+
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("XBEGIN should emit Callother");
+        assert!(
+            co.output.is_none(),
+            "XBEGIN writes EAX implicitly; no IR output"
+        );
+        assert_eq!(co.inputs.len(), 2, "XBEGIN shape: (tag, fallback_target)");
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(tsx_tag::XBEGIN, 8));
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(0x1B0, 8),
+            "XBEGIN tag is pinned at 0x1B0"
+        );
+        // Fallback target = IP + insn.len + disp32 = 0x1000 + 6 + 0.
+        assert_eq!(
+            co.inputs[1],
+            unlace_ir::Varnode::constant(0x1006, 8),
+            "fallback should resolve to absolute target",
+        );
+    }
+
+    /// `XEND` — encoded `0F 01 D5`. No explicit operands; emits a
+    /// tag-only Callother (same shape as `UD2`).
+    #[test]
+    fn t312_xend_emits_tag_only_callother() {
+        let bytes = [0x0F, 0x01, 0xD5];
+        let result = lifter()
+            .lift_insn(&bytes, 0x2000)
+            .expect("XEND should decode");
+        assert_eq!(result.len, 3);
+
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("XEND should emit Callother");
+        assert!(co.output.is_none(), "XEND has no architectural output");
+        assert_eq!(co.inputs.len(), 1, "XEND shape: (tag,)");
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(tsx_tag::XEND, 8));
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(0x1B1, 8),
+            "XEND tag is pinned at 0x1B1"
+        );
+    }
+
+    /// `XABORT 0x42` — encoded `C6 F8 42`. The imm8 status code must
+    /// reach `inputs[1]` as a 1-byte constant so `_xabort(0x42)` is
+    /// recoverable.
+    #[test]
+    fn t312_xabort_carries_imm8_status_code() {
+        let bytes = [0xC6, 0xF8, 0x42];
+        let result = lifter()
+            .lift_insn(&bytes, 0x3000)
+            .expect("XABORT should decode");
+        assert_eq!(result.len, 3);
+
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("XABORT should emit Callother");
+        assert!(co.output.is_none(), "XABORT does not write an output");
+        assert_eq!(co.inputs.len(), 2, "XABORT shape: (tag, imm8)");
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(tsx_tag::XABORT, 8));
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(0x1B2, 8),
+            "XABORT tag is pinned at 0x1B2"
+        );
+        assert_eq!(
+            co.inputs[1],
+            unlace_ir::Varnode::constant(0x42, 1),
+            "imm8 must reach IR verbatim as a 1-byte constant",
+        );
+    }
+
+    /// `XTEST` — encoded `0F 01 D6`. Writes ZF implicitly; surfaced
+    /// as a tag-only Callother (the in-transaction flag is recovered
+    /// from the subsequent ZF consumer).
+    #[test]
+    fn t312_xtest_emits_tag_only_callother() {
+        let bytes = [0x0F, 0x01, 0xD6];
+        let result = lifter()
+            .lift_insn(&bytes, 0x4000)
+            .expect("XTEST should decode");
+        assert_eq!(result.len, 3);
+
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("XTEST should emit Callother");
+        assert!(
+            co.output.is_none(),
+            "XTEST writes ZF implicitly; no explicit IR output"
+        );
+        assert_eq!(co.inputs.len(), 1, "XTEST shape: (tag,)");
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(tsx_tag::XTEST, 8));
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(0x1B3, 8),
+            "XTEST tag is pinned at 0x1B3"
+        );
+    }
 }

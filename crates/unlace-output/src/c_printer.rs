@@ -6986,6 +6986,17 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x1EB => Some("_mm_sha256msg1_epu32"), // SHA256MSG1
         0x1EC => Some("_mm_sha256msg2_epu32"), // SHA256MSG2
 
+        // ── Intel TSX intrinsics (0x1B0..0x1B3, t312) ──────────
+        // Hardware transactional-memory primitives. _xbegin returns
+        // the 32-bit abort status (0xFFFFFFFF on success); _xend
+        // commits; _xabort takes an imm8 status code; _xtest returns
+        // 1 iff inside an active transaction. Matches GCC's
+        // <immintrin.h> / Intel's RTM intrinsic spelling.
+        0x1B0 => Some("_xbegin"),  // XBEGIN
+        0x1B1 => Some("_xend"),    // XEND
+        0x1B2 => Some("_xabort"),  // XABORT
+        0x1B3 => Some("_xtest"),   // XTEST
+
         // ── Bit-manipulation builtins (0x200..0x204) ───────────
         0x200 => Some("__builtin_ctz"),      // BSF
         0x201 => Some("__bsr"),              // BSR

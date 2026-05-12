@@ -4,8 +4,8 @@ use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterFile};
 
 pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
-pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_avr::AvrLifter;
+pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_ppc::PpcLifter;
 pub use unlace_lift_riscv::RiscVLifter;
@@ -48,7 +48,8 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::Arm | ArchId::AArch64 => Box::new(ArmLifter::new()),
         ArchId::RiscV64 => Box::new(RiscVLifter::new()),
         ArchId::Mips | ArchId::Mips64 => Box::new(MipsLifter::new()),
-        ArchId::Ppc | ArchId::Ppc64 => Box::new(PpcLifter::new()),
+        ArchId::Ppc => Box::new(PpcLifter::new_ppc32_be()),
+        ArchId::Ppc64 => Box::new(PpcLifter::new_ppc64_be()),
         ArchId::V850 => Box::new(V850Lifter::new()),
         ArchId::Arc => Box::new(ArcLifter::new()),
         ArchId::Ebpf => Box::new(EbpfLifter::new()),
@@ -88,6 +89,15 @@ mod tests {
         let l = get_lifter(ArchId::Ppc);
         assert_eq!(l.arch(), ArchId::Ppc);
         assert!(!l.register_file().registers.is_empty());
+        assert_eq!(l.register_file().registers[0].varnode.size, 4);
+    }
+
+    #[test]
+    fn test_get_lifter_ppc64() {
+        let l = get_lifter(ArchId::Ppc64);
+        assert_eq!(l.arch(), ArchId::Ppc64);
+        assert!(!l.register_file().registers.is_empty());
+        assert_eq!(l.register_file().registers[0].varnode.size, 8);
     }
 
     #[test]

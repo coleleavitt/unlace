@@ -49,7 +49,11 @@ pub use dwarf::{
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;
 pub use error::LoadError;
-pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
+pub use flirt::{
+    FlirtDb, FlirtSignature, GeneratedSigPattern, SigGenerateError, SigGenerateOptions,
+    default_db as default_flirt_db, generate_archive_patterns, generate_archive_patterns_from_bytes,
+    render_patterns_toml,
+};
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
 pub use image::{
     ArchId, BinaryImage, BoundImport, DebugRecord, DylibDep, DylibKind, Endian, LoadConfig,

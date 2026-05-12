@@ -71,8 +71,8 @@ pub use rtti::{
     scan_rtti,
 };
 pub use swift_metadata::{
-    SwiftConformance, SwiftInfo, SwiftProtocolDescriptor, SwiftTypeDescriptor,
-    scan_swift_metadata,
+    SwiftConformance, SwiftGenericContext, SwiftInfo, SwiftProtocolDescriptor,
+    SwiftTypeDescriptor, scan_swift_metadata,
 };
 
 /// Trait for binary format loaders.

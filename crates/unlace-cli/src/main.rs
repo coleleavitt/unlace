@@ -196,6 +196,7 @@ fn run_decompile(
             | ArchId::RiscV64
             | ArchId::V850
             | ArchId::Arc
+            | ArchId::Agx
             | ArchId::Ppc
             | ArchId::Ppc64
     ) {

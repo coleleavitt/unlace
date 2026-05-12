@@ -922,9 +922,7 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
     // `vN` choices, while still losing to *meaningful* (non-`vN`) names
     // produced by the merger (it occasionally promotes a DWARF name into
     // its output map).
-    VarNamingPass
-        .run(ssa)
-        .context("var naming pass failed")?;
+    VarNamingPass.run(ssa).context("var naming pass failed")?;
 
     // t230 — calling-convention finalization. Runs last so the
     // dead-param drop, byte-mask narrowing, and caller-side
@@ -1384,6 +1382,9 @@ pub fn decompile_function_with_symbols(
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
     let objc_info = unlace_loader::scan_objc_classlist(image);
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
+    if let Some(swift_info) = image.swift_info.as_ref() {
+        printer_annotations.swift_conformances = swift_info.conformances.clone();
+    }
     printer_annotations.libc_call_canonical = libc_call_canonical;
     let printer_annotations = Some(printer_annotations);
     let result = emit_output(
@@ -1604,7 +1605,7 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
-        pdb_types: None,
+            pdb_types: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,

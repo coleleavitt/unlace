@@ -5,7 +5,8 @@ use unlace_ir::{
 };
 
 use crate::ops::{
-    arithmetic, bitwise, control_flow, crypto, data_move, fpu, sse, stack, string_ops,
+    arithmetic, bitwise, control_flow, crypto, data_move, fpu, perfmon, sse, stack,
+    string_ops,
 };
 use crate::register_file::{iced_reg_to_varnode, x86_64_register_file};
 
@@ -547,6 +548,9 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Sha256rnds2 => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA256RNDS2),
         M::Sha256msg1 => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA256MSG1),
         M::Sha256msg2 => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA256MSG2),
+
+        // ── x86 perf-monitor counters (t313) ───────────────────
+        M::Rdpmc => perfmon::lift_rdpmc(ctx, insn),
 
         M::Fld => fpu::lift_fld(ctx, insn),
         M::Fst => fpu::lift_fst(ctx, insn),

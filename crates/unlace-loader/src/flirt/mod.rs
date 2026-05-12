@@ -14,10 +14,15 @@
 //! rather than loaded from `.sig` files; that's enough for the parity push
 //! and avoids a runtime IO + parsing dependency.
 
+mod generator;
 mod signatures;
 
 use std::collections::BTreeMap;
 
+pub use generator::{
+    GeneratedSigPattern, SigGenerateError, SigGenerateOptions, generate_archive_patterns,
+    generate_archive_patterns_from_bytes, render_patterns_toml,
+};
 pub use signatures::default_db;
 
 /// One library-function fingerprint.

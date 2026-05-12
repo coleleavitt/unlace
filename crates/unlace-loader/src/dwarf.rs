@@ -5,15 +5,15 @@
 //! [`DwarfInfo`] struct:
 //!
 //!  * `DW_TAG_subprogram`     → [`FunctionDebugInfo`] (name, low_pc,
-//!    high_pc, return type, parameters, locals, decl location).
+//!    high_pc/ranges, return type, parameters, locals, decl location).
 //!  * `DW_TAG_structure_type` → [`StructType`] with [`StructField`]
 //!    members.
 //!  * `DW_TAG_union_type`     → [`UnionType`] with member list.
 //!  * `DW_TAG_enumeration_type` → [`EnumType`] with `(name, value)`
 //!    variant list.
 //!  * `DW_TAG_variable` (inside a subprogram) → [`LocalVariable`] with
-//!    optional `frame_offset` decoded from a single-op `DW_OP_fbreg`
-//!    location expression.
+//!    optional `frame_offset` decoded from a single `DW_OP_fbreg` expression
+//!    or from `.debug_loc` / DWARF v5 `.debug_loclists`.
 //!
 //! Recursive types are resolved through [`resolve_type_name`], which
 //! recurses through `DW_TAG_pointer_type`, `DW_TAG_const_type`,
@@ -33,11 +33,11 @@ use std::collections::BTreeMap;
 
 use gimli::{
     AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_data_member_location, DW_AT_high_pc,
-    DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_type, DW_TAG_base_type,
-    DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter,
-    DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type,
-    DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable, DW_TAG_volatile_type,
-    EndianSlice, RunTimeEndian,
+    DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_ranges, DW_AT_type,
+    DW_TAG_base_type, DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator,
+    DW_TAG_formal_parameter, DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type,
+    DW_TAG_structure_type, DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable,
+    DW_TAG_volatile_type, EndianSlice, Reader, RunTimeEndian,
 };
 
 use crate::error::LoadError;
@@ -60,6 +60,11 @@ pub struct FunctionDebugInfo {
     pub linkage_name: Option<String>,
     pub low_pc: u64,
     pub high_pc: Option<u64>,
+    /// Address ranges covered by this function.  DWARF v5 commonly represents
+    /// non-contiguous functions with `DW_AT_ranges` pointing into
+    /// `.debug_rnglists`; when no range list is present this contains the
+    /// single `low_pc..high_pc` interval when available.
+    pub ranges: Vec<AddressRange>,
     pub params: Vec<ParameterInfo>,
     pub return_type: Option<String>,
     pub decl: Option<SourceLocation>,
@@ -70,6 +75,8 @@ pub struct FunctionDebugInfo {
 pub struct ParameterInfo {
     pub name: Option<String>,
     pub type_name: Option<String>,
+    pub frame_offset: Option<i64>,
+    pub locations: Vec<VariableLocationRange>,
 }
 
 /// A local variable extracted from `DW_TAG_variable` inside a subprogram.
@@ -83,6 +90,23 @@ pub struct ParameterInfo {
 pub struct LocalVariable {
     pub name: String,
     pub type_name: Option<String>,
+    pub frame_offset: Option<i64>,
+    /// Location-list entries for variables whose `DW_AT_location` is encoded
+    /// as a DWARF v5 `.debug_loclists` reference (or legacy `.debug_loc`).
+    /// Empty for variables with a single inline expression such as `DW_OP_fbreg`.
+    pub locations: Vec<VariableLocationRange>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddressRange {
+    pub begin: u64,
+    pub end: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariableLocationRange {
+    pub begin: u64,
+    pub end: u64,
     pub frame_offset: Option<i64>,
 }
 
@@ -205,6 +229,7 @@ fn extract_functions_from_unit(
             Some(AttributeValue::Udata(size)) => Some(low_pc + size),
             _ => None,
         };
+        let ranges = extract_die_ranges(dwarf, unit, entry, low_pc, high_pc)?;
 
         let return_type = match entry.attr_value(DW_AT_type) {
             Some(val) => resolve_type_name(dwarf, unit, val)?,
@@ -221,6 +246,7 @@ fn extract_functions_from_unit(
                 linkage_name,
                 low_pc,
                 high_pc,
+                ranges,
                 params,
                 return_type,
                 decl,
@@ -471,7 +497,13 @@ fn extract_params_and_locals(
                 Some(val) => resolve_type_name(dwarf, unit, val)?,
                 None => None,
             };
-            params.push(ParameterInfo { name, type_name });
+            let (frame_offset, locations) = decode_variable_location(dwarf, unit, entry)?;
+            params.push(ParameterInfo {
+                name,
+                type_name,
+                frame_offset,
+                locations,
+            });
         } else if tag == DW_TAG_variable {
             let name = match attr_string(dwarf, unit, entry, DW_AT_name)? {
                 Some(n) => n,
@@ -481,18 +513,84 @@ fn extract_params_and_locals(
                 Some(val) => resolve_type_name(dwarf, unit, val)?,
                 None => None,
             };
-            let frame_offset = entry
-                .attr_value(DW_AT_location)
-                .and_then(decode_fbreg_offset);
+            let (frame_offset, locations) = decode_variable_location(dwarf, unit, entry)?;
             locals.push(LocalVariable {
                 name,
                 type_name,
                 frame_offset,
+                locations,
             });
         }
     }
 
     Ok((params, locals))
+}
+
+fn extract_die_ranges(
+    dwarf: &gimli::Dwarf<R<'_>>,
+    unit: &gimli::Unit<R<'_>>,
+    entry: &gimli::DebuggingInformationEntry<R<'_>>,
+    low_pc: u64,
+    high_pc: Option<u64>,
+) -> Result<Vec<AddressRange>, gimli::Error> {
+    if let Some(attr) = entry.attr_value(DW_AT_ranges) {
+        if let Some(mut ranges) = dwarf.attr_ranges(unit, attr)? {
+            let mut out = Vec::new();
+            while let Some(range) = ranges.next()? {
+                if range.begin < range.end {
+                    out.push(AddressRange {
+                        begin: range.begin,
+                        end: range.end,
+                    });
+                }
+            }
+            return Ok(out);
+        }
+    }
+
+    Ok(high_pc
+        .filter(|end| low_pc < *end)
+        .map(|end| vec![AddressRange { begin: low_pc, end }])
+        .unwrap_or_default())
+}
+
+fn decode_variable_location(
+    dwarf: &gimli::Dwarf<R<'_>>,
+    unit: &gimli::Unit<R<'_>>,
+    entry: &gimli::DebuggingInformationEntry<R<'_>>,
+) -> Result<(Option<i64>, Vec<VariableLocationRange>), gimli::Error> {
+    let Some(value) = entry.attr_value(DW_AT_location) else {
+        return Ok((None, Vec::new()));
+    };
+
+    if let Some(frame_offset) = decode_fbreg_offset(value.clone()) {
+        return Ok((Some(frame_offset), Vec::new()));
+    }
+
+    let mut ranges = Vec::new();
+    if let Some(mut locations) = dwarf.attr_locations(unit, value)? {
+        while let Some(location) = locations.next()? {
+            if location.range.begin >= location.range.end {
+                continue;
+            }
+            ranges.push(VariableLocationRange {
+                begin: location.range.begin,
+                end: location.range.end,
+                frame_offset: decode_fbreg_expr(location.data),
+            });
+        }
+    }
+
+    let frame_offset = ranges.iter().find_map(|range| range.frame_offset);
+    Ok((frame_offset, ranges))
+}
+
+fn decode_fbreg_expr<Rdr>(expr: gimli::Expression<Rdr>) -> Option<i64>
+where
+    Rdr: Reader,
+{
+    let bytes = expr.0.to_slice().ok()?;
+    decode_fbreg_bytes(bytes.as_ref())
 }
 
 /// Decode a `DW_AT_location` value as a single `DW_OP_fbreg <sleb>` opcode.
@@ -506,6 +604,10 @@ fn decode_fbreg_offset(value: AttributeValue<R<'_>>) -> Option<i64> {
         AttributeValue::Block(b) | AttributeValue::Exprloc(gimli::Expression(b)) => b.slice(),
         _ => return None,
     };
+    decode_fbreg_bytes(bytes)
+}
+
+fn decode_fbreg_bytes(bytes: &[u8]) -> Option<i64> {
     if bytes.first().copied() != Some(0x91) {
         return None;
     }
@@ -762,6 +864,14 @@ mod tests {
                     func.low_pc,
                     func.name,
                 );
+                assert_eq!(
+                    func.ranges,
+                    vec![AddressRange {
+                        begin: func.low_pc,
+                        end: high,
+                    }],
+                    "contiguous functions should expose a low_pc..high_pc range"
+                );
             }
         }
     }
@@ -925,6 +1035,36 @@ mod tests {
         assert_eq!(rect.fields[1].offset, 8);
         assert_eq!(rect.fields[1].size, 8);
         assert_eq!(rect.fields[1].type_name, "Point");
+    }
+
+    #[test]
+    fn test_dwarf_v5_loclists_recovery() {
+        let img = load_structs_fixture();
+        assert!(
+            img.section_by_name(".debug_loclists").is_some(),
+            "fixture must carry DWARF v5 loclists"
+        );
+        let info = import_dwarf(&img).expect("should parse DWARF v5 loclists");
+
+        let offset = info
+            .functions
+            .values()
+            .find(|f| f.name == "offset")
+            .expect("should find offset function");
+        let dy = offset
+            .params
+            .iter()
+            .find(|param| param.name.as_deref() == Some("dy"))
+            .expect("offset should have dy parameter");
+        assert_eq!(dy.type_name.as_deref(), Some("int"));
+
+        assert!(
+            !dy.locations.is_empty(),
+            "dy is encoded with DW_AT_location as a DWARF v5 location list"
+        );
+        assert!(dy.locations.iter().all(|loc| loc.begin < loc.end));
+        assert!(offset.high_pc.is_some());
+        assert!(!offset.ranges.is_empty());
     }
 
     #[test]

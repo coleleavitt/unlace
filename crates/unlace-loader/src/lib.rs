@@ -43,8 +43,8 @@ pub use objc::{
 };
 
 pub use dwarf::{
-    DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo, SourceLocation,
-    StructField, StructType, UnionType, import_dwarf,
+    AddressRange, DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo,
+    SourceLocation, StructField, StructType, UnionType, VariableLocationRange, import_dwarf,
 };
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;

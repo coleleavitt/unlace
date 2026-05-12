@@ -6585,17 +6585,25 @@ fn emit_expr_with_prec(
         }
 
         // -- Extensions --
-        // `IntZext` / `IntSext` are explicit type-changing ops: the cast IS
-        // the operation, not optional surface noise. We keep emitting it
-        // unless the existing `is_redundant_widen` heuristic fires (e.g. the
-        // implicit C i32→i64 widening). The flow-sensitive
-        // [`should_emit_cast`] minimizer applies to the generic [`IrOp::Cast`]
-        // path below, where the cast's meaning is genuinely ambiguous.
+        // `IntZext` / `IntSext` are explicit type-changing ops, but the
+        // surface cast is redundant when flow-sensitive inference already
+        // knows the operand has the extension source type and signedness.
+        // This catches patterns like `(int)(short)x` where `x` is already a
+        // signed 16-bit value: the C usual integer promotions perform the same
+        // widening in expression context, so the printed cast is pure noise.
         IrOp::IntZext | IrOp::IntSext => {
             if !insn.inputs.is_empty() {
+                let from_ty = flow_type_for_input(&insn.inputs[0], stmt_idx, ctx);
                 let op = emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx);
                 if let Some(output) = insn.output {
-                    if is_redundant_widen(insn.op, &insn.inputs[0], output.size) {
+                    if is_redundant_widen(insn.op, &insn.inputs[0], output.size)
+                        || is_redundant_typed_extension(
+                            insn.op,
+                            from_ty,
+                            insn.inputs[0].size,
+                            output.size,
+                        )
+                    {
                         return op;
                     }
                     let ty = type_for_size(output.size, insn.op == IrOp::IntSext);
@@ -8575,6 +8583,27 @@ fn is_redundant_widen(op: IrOp, input: &Varnode, output_size: u8) -> bool {
     false
 }
 
+/// Returns true when a typed source already carries the same signedness that an
+/// integer extension would impose. In that case the C usual integer promotions
+/// make the explicit wider cast cosmetic: e.g. `(int)(short)x` when `x` is
+/// already `short`, or `(unsigned int)(unsigned short)x`.
+fn is_redundant_typed_extension(
+    op: IrOp,
+    from_ty: PrimitiveType,
+    input_size: u8,
+    output_size: u8,
+) -> bool {
+    if output_size <= input_size {
+        return false;
+    }
+
+    match (op, from_ty) {
+        (IrOp::IntSext, PrimitiveType::Int(width)) => width == input_size,
+        (IrOp::IntZext, PrimitiveType::UnsignedInt(width)) => width == input_size,
+        _ => false,
+    }
+}
+
 /// `(type)(x)` is redundant when the operand already has the target width.
 fn is_redundant_same_size_cast(input: &Varnode, output_size: u8) -> bool {
     input.size == output_size
@@ -10308,6 +10337,90 @@ mod tests {
         assert!(
             !output.contains("(unsigned __int64)") && !output.contains("(__int64)"),
             "same-size IntZext must not emit a cast: {output}",
+        );
+    }
+
+    #[test]
+    fn redundant_typed_extension_recognizes_already_typed_sources() {
+        assert!(super::is_redundant_typed_extension(
+            IrOp::IntSext,
+            PrimitiveType::Int(2),
+            2,
+            4,
+        ));
+        assert!(super::is_redundant_typed_extension(
+            IrOp::IntZext,
+            PrimitiveType::UnsignedInt(2),
+            2,
+            4,
+        ));
+        assert!(!super::is_redundant_typed_extension(
+            IrOp::IntSext,
+            PrimitiveType::UnsignedInt(2),
+            2,
+            4,
+        ));
+        assert!(!super::is_redundant_typed_extension(
+            IrOp::IntSext,
+            PrimitiveType::Int(4),
+            2,
+            4,
+        ));
+    }
+
+    #[test]
+    fn test_type_casts_sign_extension_from_already_short_elided() {
+        let r0 = reg(0, 2);
+        let r8 = reg(8, 4);
+        let r16 = reg(16, 2);
+
+        let define_short = IrInsn::with_output(
+            IrOp::IntAdd,
+            r0,
+            smallvec![r16, Varnode::constant(0, 2)],
+            0x0ff8,
+        );
+        let sext = IrInsn::with_output(IrOp::IntSext, r8, smallvec![r0], 0x1000);
+        let body = vec![
+            HirNode::Statement(define_short),
+            HirNode::Statement(sext),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("short_signext_elided", body);
+        let output = print_c(&func);
+
+        assert!(
+            !output.contains("(__int32)") && !output.contains("(int)(short)"),
+            "sign-extension from an already-short value should not emit a redundant cast: {output}",
+        );
+    }
+
+    #[test]
+    fn test_type_casts_zero_extension_from_already_unsigned_short_elided() {
+        let r0 = reg(0, 2);
+        let r8 = reg(8, 4);
+        let addr = reg(16, 8);
+
+        let define_ushort = IrInsn::with_output(
+            IrOp::Load,
+            r0,
+            smallvec![Varnode::constant(0, 8), addr],
+            0x0ff8,
+        );
+        let zext = IrInsn::with_output(IrOp::IntZext, r8, smallvec![r0], 0x1000);
+        let body = vec![
+            HirNode::Statement(define_ushort),
+            HirNode::Statement(zext),
+            HirNode::Return(Some(sv(8, 4))),
+        ];
+
+        let func = make_func("ushort_zext_elided", body);
+        let output = print_c(&func);
+
+        assert!(
+            !output.contains("(unsigned __int32)"),
+            "zero-extension from an already-unsigned-short value should not emit a redundant cast: {output}",
         );
     }
 

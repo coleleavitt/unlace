@@ -8,7 +8,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
-use crate::ops::{arithmetic, bitwise, control_flow, data_move, memory};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, dsp, memory};
 use crate::register_file::{self, ZERO, capstone_reg_to_offset, mips64_register_file};
 
 // Capstone contains a raw `*mut c_void` handle to the C library.
@@ -206,6 +206,11 @@ impl LiftCtx {
             self.addr,
         ));
     }
+
+    #[cfg(test)]
+    pub fn ir_ops(&self) -> &[IrInsn] {
+        &self.ops
+    }
 }
 
 fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand]) {
@@ -256,6 +261,66 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand]) {
         x if x == MIPS_INS_DSLL as u32 => bitwise::lift_sll(ctx, ops),
         x if x == MIPS_INS_DSRL as u32 => bitwise::lift_srl(ctx, ops),
         x if x == MIPS_INS_DSRA as u32 => bitwise::lift_sra(ctx, ops),
+        x if x == MIPS_INS_ADDQ as u32 => dsp::lift_addq(ctx, ops),
+        x if x == MIPS_INS_ADDQ_S as u32 => dsp::lift_addq_s(ctx, ops),
+        x if x == MIPS_INS_ADDQH as u32 => dsp::lift_addqh(ctx, ops),
+        x if x == MIPS_INS_ADDQH_R as u32 => dsp::lift_addqh_r(ctx, ops),
+        x if x == MIPS_INS_SUBQ as u32 => dsp::lift_subq(ctx, ops),
+        x if x == MIPS_INS_SUBQ_S as u32 => dsp::lift_subq_s(ctx, ops),
+        x if x == MIPS_INS_SUBQH as u32 => dsp::lift_subqh(ctx, ops),
+        x if x == MIPS_INS_SUBQH_R as u32 => dsp::lift_subqh_r(ctx, ops),
+        x if x == MIPS_INS_APPEND as u32 => dsp::lift_append(ctx, ops),
+        x if x == MIPS_INS_BALIGN as u32 => dsp::lift_balign(ctx, ops),
+        x if x == MIPS_INS_PREPEND as u32 => dsp::lift_prepend(ctx, ops),
+        x if x == MIPS_INS_PACKRL as u32 => dsp::lift_packrl(ctx, ops),
+        x if x == MIPS_INS_PICK as u32 => dsp::lift_pick(ctx, ops),
+        x if x == MIPS_INS_PRECEQ as u32 => dsp::lift_preceq(ctx, ops),
+        x if x == MIPS_INS_PRECEQU as u32 => dsp::lift_precequ(ctx, ops),
+        x if x == MIPS_INS_PRECEU as u32 => dsp::lift_preceu(ctx, ops),
+        x if x == MIPS_INS_PRECRQ as u32 => dsp::lift_precrq(ctx, ops),
+        x if x == MIPS_INS_PRECRQU_S as u32 => dsp::lift_precrqu_s(ctx, ops),
+        x if x == MIPS_INS_PRECRQ_RS as u32 => dsp::lift_precrq_rs(ctx, ops),
+        x if x == MIPS_INS_PRECR as u32 => dsp::lift_precr(ctx, ops),
+        x if x == MIPS_INS_PRECR_SRA as u32 => dsp::lift_precr_sra(ctx, ops),
+        x if x == MIPS_INS_PRECR_SRA_R as u32 => dsp::lift_precr_sra_r(ctx, ops),
+        x if x == MIPS_INS_REPL as u32 => dsp::lift_repl(ctx, ops),
+        x if x == MIPS_INS_REPLV as u32 => dsp::lift_replv(ctx, ops),
+        x if x == MIPS_INS_CMP as u32 => dsp::lift_cmp(ctx, ops),
+        x if x == MIPS_INS_DPA as u32 => dsp::lift_dpa(ctx, ops),
+        x if x == MIPS_INS_DPAQ_S as u32 => dsp::lift_dpa(ctx, ops),
+        x if x == MIPS_INS_DPAQ_SA as u32 => dsp::lift_dpa(ctx, ops),
+        x if x == MIPS_INS_DPAQX_S as u32 => dsp::lift_dpa(ctx, ops),
+        x if x == MIPS_INS_DPAQX_SA as u32 => dsp::lift_dpa(ctx, ops),
+        x if x == MIPS_INS_DPAU as u32 => dsp::lift_dpa(ctx, ops),
+        x if x == MIPS_INS_DPAX as u32 => dsp::lift_dpa(ctx, ops),
+        x if x == MIPS_INS_DPS as u32 => dsp::lift_dps(ctx, ops),
+        x if x == MIPS_INS_DPSQ_S as u32 => dsp::lift_dps(ctx, ops),
+        x if x == MIPS_INS_DPSQ_SA as u32 => dsp::lift_dps(ctx, ops),
+        x if x == MIPS_INS_DPSQX_S as u32 => dsp::lift_dps(ctx, ops),
+        x if x == MIPS_INS_DPSQX_SA as u32 => dsp::lift_dps(ctx, ops),
+        x if x == MIPS_INS_DPSU as u32 => dsp::lift_dps(ctx, ops),
+        x if x == MIPS_INS_DPSX as u32 => dsp::lift_dps(ctx, ops),
+        x if x == MIPS_INS_MULQ_RS as u32 => dsp::lift_mulq(ctx, ops),
+        x if x == MIPS_INS_MULQ_S as u32 => dsp::lift_mulq(ctx, ops),
+        x if x == MIPS_INS_SHILO as u32 => dsp::lift_shilo(ctx, ops),
+        x if x == MIPS_INS_SHILOV as u32 => dsp::lift_shilov(ctx, ops),
+        x if x == MIPS_INS_SHLL as u32 => dsp::lift_shll(ctx, ops),
+        x if x == MIPS_INS_SHLL_S as u32 => dsp::lift_shll_s(ctx, ops),
+        x if x == MIPS_INS_SHRA as u32 => dsp::lift_shra(ctx, ops),
+        x if x == MIPS_INS_SHRA_R as u32 => dsp::lift_shra_r(ctx, ops),
+        x if x == MIPS_INS_SHRL as u32 => dsp::lift_shrl(ctx, ops),
+        x if x == MIPS_INS_SHLLV as u32 => dsp::lift_shllv(ctx, ops),
+        x if x == MIPS_INS_SHLLV_S as u32 => dsp::lift_shllv_s(ctx, ops),
+        x if x == MIPS_INS_SHRAV as u32 => dsp::lift_shrav(ctx, ops),
+        x if x == MIPS_INS_SHRAV_R as u32 => dsp::lift_shrav_r(ctx, ops),
+        x if x == MIPS_INS_SHRLV as u32 => dsp::lift_shrlv(ctx, ops),
+        x if x == MIPS_INS_EXTP as u32 => dsp::lift_extp(ctx, ops),
+        x if x == MIPS_INS_EXTPV as u32 => dsp::lift_extpv(ctx, ops),
+        x if x == MIPS_INS_EXTPDP as u32 => dsp::lift_extpdp(ctx, ops),
+        x if x == MIPS_INS_EXTPDPV as u32 => dsp::lift_extpdpv(ctx, ops),
+        x if x == MIPS_INS_INSV as u32 => dsp::lift_insv(ctx, ops),
+        x if x == MIPS_INS_RDDSP as u32 => dsp::lift_rddsp(ctx, ops),
+        x if x == MIPS_INS_WRDSP as u32 => dsp::lift_wrdsp(ctx, ops),
 
         x if x == MIPS_INS_BEQ as u32 => control_flow::lift_beq(ctx, ops),
         x if x == MIPS_INS_BNE as u32 => control_flow::lift_bne(ctx, ops),
@@ -307,12 +372,19 @@ mod tests {
     fn test_register_file() {
         let l = lifter();
         let rf = l.register_file();
-        assert_eq!(rf.registers.len(), 35);
+        assert_eq!(rf.registers.len(), 44);
         assert_eq!(rf.registers[0].name, "$zero");
         assert_eq!(rf.registers[31].name, "$ra");
         assert_eq!(rf.registers[32].name, "HI");
         assert_eq!(rf.registers[33].name, "LO");
         assert_eq!(rf.registers[34].name, "PC");
+        assert_eq!(rf.registers[35].name, "DSPCARRY");
+        assert_eq!(rf.registers[36].name, "DSPCCOND");
+        assert_eq!(rf.registers[37].name, "DSPOUTFLAG");
+        assert_eq!(rf.registers[38].name, "DSPPOS");
+        assert_eq!(rf.registers[39].name, "DSPSCOUNT");
+        assert_eq!(rf.registers[40].name, "AC0");
+        assert_eq!(rf.registers[43].name, "AC3");
     }
 
     #[test]
@@ -537,6 +609,31 @@ mod tests {
                 }
             }
         }
+    }
+
+
+    #[test]
+    fn test_addq_updates_dsp_outflag() {
+        let mut ctx = LiftCtx::new(0x1000);
+        let ops = [
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_2 as u16)),
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_4 as u16)),
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_5 as u16)),
+        ];
+        crate::ops::dsp::lift_addq(&mut ctx, &ops);
+        assert!(ctx.ir_ops().iter().any(|op| op.op == IrOp::IntAdd));
+        assert!(ctx.ir_ops().iter().any(|op| op.output == Some(Varnode::reg(crate::register_file::DSPOUTFLAG, 8))));
+    }
+
+    #[test]
+    fn test_rddsp_lowers_to_callother() {
+        let mut ctx = LiftCtx::new(0x1000);
+        let ops = [
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_2 as u16)),
+            MipsOperand::Imm(0x1f),
+        ];
+        crate::ops::dsp::lift_rddsp(&mut ctx, &ops);
+        assert!(ctx.ir_ops().iter().any(|op| op.op == IrOp::Callother));
     }
 
     // Unknown instruction falls back to Unimplemented

@@ -73,6 +73,32 @@ pub enum Cmd {
         annotations_save: Option<PathBuf>,
     },
 
+    /// Generate FLIRT patterns from a compiled static library archive (.a).
+    Siggen {
+        /// Path to the input static archive (.a).
+        archive: PathBuf,
+
+        /// Write TOML pattern output to a file instead of stdout.
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+
+        /// Number of leading function bytes to include in each pattern.
+        #[arg(long, default_value_t = 32)]
+        pattern_len: usize,
+
+        /// Number of tail bytes to checksum for disambiguation.
+        #[arg(long, default_value_t = 32)]
+        crc_len: usize,
+
+        /// Skip functions shorter than this many bytes.
+        #[arg(long, default_value_t = 1)]
+        min_function_len: usize,
+
+        /// Increase verbosity (-v, -vv, -vvv).
+        #[arg(long, short, action = clap::ArgAction::Count)]
+        verbose: u8,
+    },
+
     /// Batch-decompile all functions in a binary in parallel.
     Batch {
         /// Path to the binary file.

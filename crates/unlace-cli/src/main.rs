@@ -7,7 +7,7 @@ use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use unlace_ir::ArchId;
-use unlace_lift::get_lifter;
+use unlace_lift::{LifterEndian, get_lifter_with_endian};
 use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf};
 use unlace_plugin::PluginManager;
 
@@ -48,8 +48,8 @@ fn main() {
             } else {
                 None
             };
-            let annotation_db =
-                resolve_annotations(&binary, annotations_load.as_deref()).unwrap_or_else(|e| {
+            let annotation_db = resolve_annotations(&binary, annotations_load.as_deref())
+                .unwrap_or_else(|e| {
                     tracing::warn!(err = %e, "failed to load annotations; continuing without");
                     None
                 });
@@ -205,7 +205,13 @@ fn run_decompile(
         );
     }
 
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter_with_endian(
+        image.arch,
+        Some(match image.endian {
+            unlace_loader::Endian::Little => LifterEndian::Little,
+            unlace_loader::Endian::Big => LifterEndian::Big,
+        }),
+    );
     let mut functions = pipeline::discover_functions(&image, function_filter)?;
 
     let dwarf = match import_dwarf(&image) {

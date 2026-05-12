@@ -7,27 +7,110 @@ use unlace_ir::{
 };
 
 use crate::ops;
-use crate::register_file::{cs_reg_to_varnode, ppc64_register_file};
+use crate::register_file::{
+    PPC32_GPR_SIZE, PPC64_GPR_SIZE, cs_reg_to_varnode_with_size, ppc32_register_file,
+    ppc64_register_file,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PpcMode {
+    Ppc32,
+    Ppc64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PpcEndian {
+    Big,
+    Little,
+}
+
+impl PpcMode {
+    fn arch(self) -> ArchId {
+        match self {
+            Self::Ppc32 => ArchId::Ppc,
+            Self::Ppc64 => ArchId::Ppc64,
+        }
+    }
+
+    pub(crate) fn ptr_size(self) -> u8 {
+        match self {
+            Self::Ppc32 => PPC32_GPR_SIZE,
+            Self::Ppc64 => PPC64_GPR_SIZE,
+        }
+    }
+
+    fn capstone_mode(self) -> capstone::arch::ppc::ArchMode {
+        match self {
+            Self::Ppc32 => capstone::arch::ppc::ArchMode::Mode32,
+            Self::Ppc64 => capstone::arch::ppc::ArchMode::Mode64,
+        }
+    }
+}
+
+impl PpcEndian {
+    fn capstone_endian(self) -> Endian {
+        match self {
+            Self::Big => Endian::Big,
+            Self::Little => Endian::Little,
+        }
+    }
+}
 
 pub struct PpcLifter {
     reg_file: RegisterFile,
+    mode: PpcMode,
+    endian: PpcEndian,
 }
 
-fn make_capstone() -> Capstone {
+fn make_capstone(mode: PpcMode, endian: PpcEndian) -> Capstone {
     Capstone::new()
         .ppc()
-        .mode(capstone::arch::ppc::ArchMode::Mode64)
-        .endian(Endian::Big)
+        .mode(mode.capstone_mode())
+        .endian(endian.capstone_endian())
         .detail(true)
         .build()
-        .expect("failed to create PPC64 capstone engine")
+        .expect("failed to create PowerPC capstone engine")
 }
 
 impl PpcLifter {
     pub fn new() -> Self {
+        Self::ppc32_be()
+    }
+
+    pub fn ppc32_be() -> Self {
+        Self::with_mode_endian(PpcMode::Ppc32, PpcEndian::Big)
+    }
+
+    pub fn ppc32_le() -> Self {
+        Self::with_mode_endian(PpcMode::Ppc32, PpcEndian::Little)
+    }
+
+    pub fn ppc64_be() -> Self {
+        Self::with_mode_endian(PpcMode::Ppc64, PpcEndian::Big)
+    }
+
+    pub fn ppc64_le() -> Self {
+        Self::with_mode_endian(PpcMode::Ppc64, PpcEndian::Little)
+    }
+
+    pub fn with_mode_endian(mode: PpcMode, endian: PpcEndian) -> Self {
+        let reg_file = match mode {
+            PpcMode::Ppc32 => ppc32_register_file(),
+            PpcMode::Ppc64 => ppc64_register_file(),
+        };
         Self {
-            reg_file: ppc64_register_file(),
+            reg_file,
+            mode,
+            endian,
         }
+    }
+
+    pub fn mode(&self) -> PpcMode {
+        self.mode
+    }
+
+    pub fn endian(&self) -> PpcEndian {
+        self.endian
     }
 }
 
@@ -39,7 +122,7 @@ impl Default for PpcLifter {
 
 impl Lifter for PpcLifter {
     fn arch(&self) -> ArchId {
-        ArchId::Ppc
+        self.mode.arch()
     }
 
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
@@ -47,7 +130,7 @@ impl Lifter for PpcLifter {
             return Err(LiftError::ShortBuffer);
         }
 
-        let cs = make_capstone();
+        let cs = make_capstone(self.mode, self.endian);
 
         let insns = cs
             .disasm_count(bytes, addr, 1)
@@ -62,7 +145,7 @@ impl Lifter for PpcLifter {
             .insn_detail(insn)
             .map_err(|e| LiftError::Decode(format!("{e}")))?;
 
-        let mut ctx = LiftCtx::new(addr);
+        let mut ctx = LiftCtx::new(addr, self.mode.ptr_size());
         dispatch(&cs, &mut ctx, insn, &detail);
 
         Ok(LiftedInsn {
@@ -79,14 +162,16 @@ impl Lifter for PpcLifter {
 pub struct LiftCtx {
     pub ops: Vec<IrInsn>,
     pub addr: u64,
+    pub ptr_size: u8,
     unique_counter: u64,
 }
 
 impl LiftCtx {
-    fn new(addr: u64) -> Self {
+    fn new(addr: u64, ptr_size: u8) -> Self {
         Self {
             ops: Vec::new(),
             addr,
+            ptr_size,
             unique_counter: 0,
         }
     }
@@ -110,7 +195,7 @@ impl LiftCtx {
     }
 
     pub fn emit_store(&mut self, mem_addr: Varnode, value: Varnode) {
-        let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+        let ram_space = Varnode::constant(SpaceId::Ram as u64, self.ptr_size);
         self.emit(IrInsn::without_output(
             IrOp::Store,
             smallvec![ram_space, mem_addr, value],
@@ -127,9 +212,9 @@ fn ppc_operands(detail: &InsnDetail<'_>) -> Vec<PpcOperand> {
         .unwrap_or_default()
 }
 
-pub(crate) fn operand_reg(op: &PpcOperand) -> Option<Varnode> {
+pub(crate) fn operand_reg(ctx: &LiftCtx, op: &PpcOperand) -> Option<Varnode> {
     match op {
-        PpcOperand::Reg(id) => cs_reg_to_varnode(*id),
+        PpcOperand::Reg(id) => cs_reg_to_varnode_with_size(*id, ctx.ptr_size),
         _ => None,
     }
 }
@@ -144,13 +229,13 @@ pub(crate) fn operand_imm(op: &PpcOperand) -> Option<i64> {
 pub(crate) fn operand_mem_addr(ctx: &mut LiftCtx, op: &PpcOperand) -> Option<Varnode> {
     match op {
         PpcOperand::Mem(mem) => {
-            let base = cs_reg_to_varnode(mem.base());
+            let base = cs_reg_to_varnode_with_size(mem.base(), ctx.ptr_size);
             let disp = mem.disp();
             match (base, disp) {
                 (Some(b), 0) => Some(b),
                 (Some(b), d) => {
-                    let disp_vn = Varnode::constant(d as i64 as u64, 8);
-                    let t = Varnode::unique(ctx.alloc_unique(), 8);
+                    let disp_vn = Varnode::constant(d as i64 as u64, ctx.ptr_size);
+                    let t = Varnode::unique(ctx.alloc_unique(), ctx.ptr_size);
                     ctx.emit(IrInsn::with_output(
                         IrOp::IntAdd,
                         t,
@@ -159,7 +244,7 @@ pub(crate) fn operand_mem_addr(ctx: &mut LiftCtx, op: &PpcOperand) -> Option<Var
                     ));
                     Some(t)
                 }
-                (None, d) => Some(Varnode::constant(d as i64 as u64, 8)),
+                (None, d) => Some(Varnode::constant(d as i64 as u64, ctx.ptr_size)),
             }
         }
         _ => None,
@@ -223,14 +308,15 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
         }
 
         // Loads
-        PpcInsn::PPC_INS_LWZ => ops::data_move::lift_lwz(ctx, &ops),
-        PpcInsn::PPC_INS_LD => ops::data_move::lift_ld(ctx, &ops),
+        PpcInsn::PPC_INS_LWZ | PpcInsn::PPC_INS_LWZX => ops::data_move::lift_lwz(ctx, &ops),
+        PpcInsn::PPC_INS_LD | PpcInsn::PPC_INS_LDX => ops::data_move::lift_ld(ctx, &ops),
+        PpcInsn::PPC_INS_LWA | PpcInsn::PPC_INS_LWAX => ops::data_move::lift_lwa(ctx, &ops),
         PpcInsn::PPC_INS_LBZ => ops::data_move::lift_lbz(ctx, &ops),
         PpcInsn::PPC_INS_LHZ => ops::data_move::lift_lhz(ctx, &ops),
 
         // Stores
         PpcInsn::PPC_INS_STW => ops::data_move::lift_stw(ctx, &ops),
-        PpcInsn::PPC_INS_STD => ops::data_move::lift_std(ctx, &ops),
+        PpcInsn::PPC_INS_STD | PpcInsn::PPC_INS_STDX => ops::data_move::lift_std(ctx, &ops),
         PpcInsn::PPC_INS_STB => ops::data_move::lift_stb(ctx, &ops),
         PpcInsn::PPC_INS_STH => ops::data_move::lift_sth(ctx, &ops),
 
@@ -239,6 +325,9 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
         PpcInsn::PPC_INS_LIS => ops::data_move::lift_lis(ctx, &ops),
 
         PpcInsn::PPC_INS_MR => ops::data_move::lift_mr(ctx, &ops),
+        PpcInsn::PPC_INS_EXTSB => ops::data_move::lift_exts(ctx, &ops, 1),
+        PpcInsn::PPC_INS_EXTSH => ops::data_move::lift_exts(ctx, &ops, 2),
+        PpcInsn::PPC_INS_EXTSW => ops::data_move::lift_exts(ctx, &ops, 4),
 
         // SPR moves
         PpcInsn::PPC_INS_MFSPR | PpcInsn::PPC_INS_MFLR | PpcInsn::PPC_INS_MFCTR => {

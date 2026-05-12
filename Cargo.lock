@@ -1458,6 +1458,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "unlace-ir",
+ "wasmparser 0.225.0",
 ]
 
 [[package]]

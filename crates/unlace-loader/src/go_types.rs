@@ -1397,6 +1397,7 @@ mod tests {
             swift_info: None,
             auth_pointers: Vec::new(),
             auth_ptr_slots: Vec::new(),
+            wasm_component: None,
         };
 
         let itab = parse_itab_at(&img, RODATA_BASE).expect("itab decodes");
@@ -1636,6 +1637,7 @@ mod tests {
             swift_info: None,
             auth_pointers: Vec::new(),
             auth_ptr_slots: Vec::new(),
+            wasm_component: None,
         };
 
         populate_go_types_from_module(&mut img);

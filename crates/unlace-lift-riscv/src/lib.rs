@@ -1502,6 +1502,28 @@ fn dispatch_insn(
             }
         }
 
+        // -- Privileged/Hypervisor system instructions --
+        x if x == RISCV_INS_SRET as u32 => {
+            ctx.emit(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![Varnode::constant(2, 4)], // supervisor return
+                addr,
+            ));
+        }
+        x if x == RISCV_INS_WFI as u32 => {
+            ctx.emit(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![Varnode::constant(3, 4)], // wait-for-interrupt hint
+                addr,
+            ));
+        }
+        x if x == RISCV_INS_SFENCE_VMA as u32 => {
+            ctx.emit(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![Varnode::constant(4, 4)], // supervisor TLB fence
+                addr,
+            ));
+        }
         // -- ECALL / EBREAK --
         x if x == RISCV_INS_ECALL as u32 => {
             ctx.emit(IrInsn::without_output(
@@ -2004,6 +2026,42 @@ mod tests {
         let result = lifter()
             .lift_insn(&bytes, 0x1000)
             .expect("should decode EBREAK");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
+    // -- SRET ------------------------------------------------------------
+    // sret  → 0x10200073
+    #[test]
+    fn test_sret() {
+        let bytes = 0x10200073u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SRET");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
+    // -- WFI -------------------------------------------------------------
+    // wfi  → 0x10500073
+    #[test]
+    fn test_wfi() {
+        let bytes = 0x10500073u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode WFI");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
+    // -- SFENCE.VMA ------------------------------------------------------
+    // sfence.vma x0, x0  → 0x12000073
+    #[test]
+    fn test_sfence_vma() {
+        let bytes = 0x12000073u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SFENCE.VMA");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
     }

@@ -12,7 +12,9 @@ use petgraph::stable_graph::StableDiGraph;
 use crate::cfg::{ControlFlowGraph, build_cfg};
 use crate::{BlockId, Function, Varnode};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct SsaVarnode {
     pub base: Varnode,
     pub version: u32,
@@ -64,7 +66,9 @@ impl DominatorTree {
 /// Determined by [`CallingConventionDetectPass`](https://docs.rs/unlace-passes)
 /// examining which argument registers are read before being written in the
 /// function entry block.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Copy, Clone, Debug, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize,
+)]
 pub enum CallingConvention {
     /// System V AMD64 ABI: args in RDI, RSI, RDX, RCX, R8, R9; return in RAX.
     SystemV,
@@ -125,12 +129,44 @@ pub struct FunctionSignature {
 /// return-value types.
 pub type FunctionSignatureRegistry = BTreeMap<u64, FunctionSignature>;
 
+/// Counterexample-guided explanation for an ambiguous primitive type.
+///
+/// Type refinement records these when two concrete candidates are both
+/// locally plausible and a witness value can distinguish their semantics.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TypeCounterexample {
+    /// The SSA value whose candidate type set was ambiguous.
+    pub varnode: SsaVarnode,
+    /// Candidate selected by the refinement step.
+    pub preferred: PrimitiveType,
+    /// Other locally plausible candidate rejected by the witness.
+    pub alternative: PrimitiveType,
+    /// Concrete bit-vector value that exercises a semantic difference.
+    pub witness: u64,
+    /// Width of the witness in bits.
+    pub width_bits: u8,
+    /// Human-readable reason suitable for trace/debug output.
+    pub reason: String,
+}
+
 /// Inferred primitive type for an SSA varnode.
 ///
 /// The type lattice starts at [`Unknown`](Self::Unknown) and is refined by
 /// [`TypeInferPass`](https://docs.rs/unlace-passes) as it walks instructions.
 /// Width is in **bytes** (matching [`Varnode::size`](crate::Varnode::size)).
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum PrimitiveType {
     /// No type information yet — joins with anything to become that type.
     #[default]
@@ -196,7 +232,9 @@ pub struct StackVar {
     pub accesses: Vec<SsaVarnode>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum PanicKind {
     Panic,
     BoundsCheck,
@@ -249,6 +287,10 @@ pub struct SsaFunction {
     pub phi_map: BTreeMap<BlockId, Vec<PhiNode>>,
     pub var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
     pub var_types: BTreeMap<SsaVarnode, PrimitiveType>,
+    /// Counterexample-guided refinements recorded for ambiguous primitive
+    /// inferences. Populated by `TypeConstraintSolverPass` when Z3-style
+    /// witness search finds a concrete value separating two candidates.
+    pub type_counterexamples: Vec<TypeCounterexample>,
     pub calling_convention: CallingConvention,
     /// Recovered stack variables keyed by RSP-relative offset.
     pub stack_vars: BTreeMap<i64, StackVar>,
@@ -558,7 +600,6 @@ pub struct StackFrame {
     pub min_neg_offset: i64,
 }
 
-
 /// Per-function byref bookkeeping populated by
 /// [`unlace_passes::byref_detect::detect_byref`].
 ///
@@ -634,7 +675,9 @@ pub struct EnumDiscriminant {
     pub comparison_locs: Vec<(BlockId, usize)>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum VarnodeSlot {
     Output,
     Input(usize),
@@ -660,6 +703,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         phi_map,
         var_map,
         var_types: BTreeMap::new(),
+        type_counterexamples: Vec::new(),
         calling_convention: CallingConvention::Unknown,
         stack_vars: BTreeMap::new(),
         stack_offset_hints: BTreeMap::new(),

@@ -81,16 +81,15 @@ pub const fn sve_p_offset(n: u8) -> u64 {
 
 /// SVE Z-register names.
 const SVE_Z_NAMES: [&str; 32] = [
-    "Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7",
-    "Z8", "Z9", "Z10", "Z11", "Z12", "Z13", "Z14", "Z15",
-    "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23",
-    "Z24", "Z25", "Z26", "Z27", "Z28", "Z29", "Z30", "Z31",
+    "Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10", "Z11", "Z12", "Z13", "Z14",
+    "Z15", "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23", "Z24", "Z25", "Z26", "Z27",
+    "Z28", "Z29", "Z30", "Z31",
 ];
 
 /// SVE P-register names.
 const SVE_P_NAMES: [&str; 16] = [
-    "P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7",
-    "P8", "P9", "P10", "P11", "P12", "P13", "P14", "P15",
+    "P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14",
+    "P15",
 ];
 
 /// Names for X0..X30.
@@ -157,6 +156,11 @@ const ARM64_REG_W30: u16 = 217;
 
 const ARM64_REG_X0: u16 = 218;
 const ARM64_REG_X28: u16 = 246;
+const ARM64_REG_Z0: u16 = 247;
+const ARM64_REG_Z31: u16 = 278;
+
+const ARM64_REG_P0: u16 = 107;
+const ARM64_REG_P15: u16 = 122;
 
 /// Map a capstone RegId to `(register_space_offset, size)`.
 ///
@@ -189,6 +193,18 @@ pub fn cs_reg_to_varnode(reg: RegId) -> Option<(u64, u8)> {
         x if x == ARM64_REG_W30 => Some((X30, 4)),
         // WZR — 32-bit zero register, handled separately in reg_varnode
         x if x == ARM64_REG_WZR => None,
+
+        // SVE Z0–Z31
+        _ if (ARM64_REG_Z0..=ARM64_REG_Z31).contains(&id) => {
+            let idx = (id - ARM64_REG_Z0) as u8;
+            Some((sve_z_offset(idx), SVE_Z_SIZE))
+        }
+
+        // SVE P0–P15
+        _ if (ARM64_REG_P0..=ARM64_REG_P15).contains(&id) => {
+            let idx = (id - ARM64_REG_P0) as u8;
+            Some((sve_p_offset(idx), SVE_P_SIZE))
+        }
 
         _ => None,
     }

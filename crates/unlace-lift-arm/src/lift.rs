@@ -242,7 +242,9 @@ impl ArmLifter {
             if slot.is_none() {
                 *slot = Some(Self::make_capstone_arm32());
             }
-            let cs = slot.as_ref().expect("thread-local Capstone arm32 initialized");
+            let cs = slot
+                .as_ref()
+                .expect("thread-local Capstone arm32 initialized");
             decode_one_arm32(cs, bytes, addr, 4)
         })
     }
@@ -309,7 +311,9 @@ impl ArmLifter {
             if slot.is_none() {
                 *slot = Some(Self::make_capstone_thumb());
             }
-            let cs = slot.as_ref().expect("thread-local Capstone thumb initialized");
+            let cs = slot
+                .as_ref()
+                .expect("thread-local Capstone thumb initialized");
             decode_one_arm32_with_cc(cs, bytes, addr, 2)
         })?;
         // t182: prefer Capstone's per-instruction `cc` when we're inside
@@ -351,8 +355,8 @@ impl ArmLifter {
 pub fn arm32_register_file() -> RegisterFile {
     use unlace_ir::RegisterDef;
     const NAMES: [&str; 16] = [
-        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
-        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
+        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "SP",
+        "LR", "PC",
     ];
     let mut regs = Vec::with_capacity(17);
     for (i, name) in NAMES.iter().enumerate() {
@@ -572,19 +576,27 @@ fn apply_arm32_shift(ctx: &mut LiftCtx, v: Varnode, shift: ArmShift) -> Varnode 
             return dst;
         }
         ArmShift::LslReg(reg) => {
-            let Some(idx) = arm32_reg_index(reg) else { return v };
+            let Some(idx) = arm32_reg_index(reg) else {
+                return v;
+            };
             (IrOp::IntLeft, arm32_reg_varnode(idx))
         }
         ArmShift::LsrReg(reg) => {
-            let Some(idx) = arm32_reg_index(reg) else { return v };
+            let Some(idx) = arm32_reg_index(reg) else {
+                return v;
+            };
             (IrOp::IntRight, arm32_reg_varnode(idx))
         }
         ArmShift::AsrReg(reg) => {
-            let Some(idx) = arm32_reg_index(reg) else { return v };
+            let Some(idx) = arm32_reg_index(reg) else {
+                return v;
+            };
             (IrOp::IntSright, arm32_reg_varnode(idx))
         }
         ArmShift::RorReg(reg) => {
-            let Some(idx) = arm32_reg_index(reg) else { return v };
+            let Some(idx) = arm32_reg_index(reg) else {
+                return v;
+            };
             (IrOp::IntRight, arm32_reg_varnode(idx))
         }
         ArmShift::RrxReg(_) => return v,
@@ -846,12 +858,7 @@ fn arm32_first_dst(ops: &[ArmOperandType]) -> Option<Varnode> {
     arm32_reg_index(*reg).map(arm32_reg_varnode)
 }
 
-fn emit_arm32_copy(
-    ctx: &mut LiftCtx,
-    ops: &[ArmOperandType],
-    shifts: &[ArmShift],
-    invert: bool,
-) {
+fn emit_arm32_copy(ctx: &mut LiftCtx, ops: &[ArmOperandType], shifts: &[ArmShift], invert: bool) {
     let Some(dst) = arm32_first_dst(ops) else {
         ctx.emit_unimplemented();
         return;
@@ -874,12 +881,7 @@ fn emit_arm32_copy(
     }
 }
 
-fn emit_arm32_binop(
-    ctx: &mut LiftCtx,
-    ops: &[ArmOperandType],
-    shifts: &[ArmShift],
-    op: IrOp,
-) {
+fn emit_arm32_binop(ctx: &mut LiftCtx, ops: &[ArmOperandType], shifts: &[ArmShift], op: IrOp) {
     let Some(dst) = arm32_first_dst(ops) else {
         ctx.emit_unimplemented();
         return;
@@ -1137,7 +1139,12 @@ fn emit_arm32_flags(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
         return;
     };
     let result = Varnode::unique(ctx.alloc_unique(), 4);
-    ctx.emit(IrInsn::with_output(op, result, smallvec![lhs, rhs], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        op,
+        result,
+        smallvec![lhs, rhs],
+        ctx.addr,
+    ));
     match op {
         IrOp::IntSub => {
             emit_arm32_nz_flags(ctx, result);
@@ -1159,7 +1166,11 @@ fn emit_arm32_branch(ctx: &mut LiftCtx, ops: &[ArmOperandType], insn: &Insn, det
         .first()
         .and_then(|o| arm32_operand_to_varnode(ctx, o))
         .unwrap_or_else(|| Varnode::constant(insn.address(), 4));
-    let cc = detail.arch_detail().arm().map(|a| a.cc()).unwrap_or(ArmCC::ARM_CC_AL);
+    let cc = detail
+        .arch_detail()
+        .arm()
+        .map(|a| a.cc())
+        .unwrap_or(ArmCC::ARM_CC_AL);
     if cc == ArmCC::ARM_CC_AL || cc == ArmCC::ARM_CC_INVALID {
         ctx.emit(IrInsn::without_output(
             IrOp::Branch,
@@ -1204,7 +1215,10 @@ fn emit_arm32_branch(ctx: &mut LiftCtx, ops: &[ArmOperandType], insn: &Insn, det
         ctx.emit(IrInsn::with_output(
             IrOp::Callother,
             c,
-            smallvec![Varnode::constant(0x360, 8), Varnode::constant(cc as u32 as u64, 1)],
+            smallvec![
+                Varnode::constant(0x360, 8),
+                Varnode::constant(cc as u32 as u64, 1)
+            ],
             ctx.addr,
         ));
         c
@@ -1277,11 +1291,26 @@ fn emit_arm32_movt(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
     };
     let mask = Varnode::constant(0xFFFF, 4);
     let low = Varnode::unique(ctx.alloc_unique(), 4);
-    ctx.emit(IrInsn::with_output(IrOp::IntAnd, low, smallvec![dst, mask], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAnd,
+        low,
+        smallvec![dst, mask],
+        ctx.addr,
+    ));
     let shift_amt = Varnode::constant(16, 4);
     let high = Varnode::unique(ctx.alloc_unique(), 4);
-    ctx.emit(IrInsn::with_output(IrOp::IntLeft, high, smallvec![imm, shift_amt], ctx.addr));
-    ctx.emit(IrInsn::with_output(IrOp::IntOr, dst, smallvec![low, high], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntLeft,
+        high,
+        smallvec![imm, shift_amt],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntOr,
+        dst,
+        smallvec![low, high],
+        ctx.addr,
+    ));
 }
 
 /// MLA Rd, Rn, Rm, Ra → `Rd = Ra + Rn*Rm`. MLS → `Rd = Ra - Rn*Rm`.
@@ -1307,7 +1336,12 @@ fn emit_arm32_mla(ctx: &mut LiftCtx, ops: &[ArmOperandType], subtract: bool) {
         return;
     };
     let prod = Varnode::unique(ctx.alloc_unique(), 4);
-    ctx.emit(IrInsn::with_output(IrOp::IntMult, prod, smallvec![rn, rm], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntMult,
+        prod,
+        smallvec![rn, rm],
+        ctx.addr,
+    ));
     let op = if subtract { IrOp::IntSub } else { IrOp::IntAdd };
     ctx.emit(IrInsn::with_output(op, dst, smallvec![ra, prod], ctx.addr));
 }
@@ -1346,7 +1380,12 @@ fn emit_arm32_long_mul(ctx: &mut LiftCtx, ops: &[ArmOperandType], signed: bool) 
     } else {
         CALLOTHER_INT_MULT_HIGH
     };
-    ctx.emit(IrInsn::with_output(IrOp::IntMult, rdlo, smallvec![rn, rm], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntMult,
+        rdlo,
+        smallvec![rn, rm],
+        ctx.addr,
+    ));
     ctx.emit(IrInsn::with_output(
         IrOp::Callother,
         rdhi,
@@ -1523,7 +1562,12 @@ fn emit_arm32_load_pair(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
     ctx.emit_copy(dst1, lo);
     let four = Varnode::constant(4, 4);
     let addr2 = Varnode::unique(ctx.alloc_unique(), 4);
-    ctx.emit(IrInsn::with_output(IrOp::IntAdd, addr2, smallvec![addr_vn, four], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAdd,
+        addr2,
+        smallvec![addr_vn, four],
+        ctx.addr,
+    ));
     let hi = ctx.emit_load(4, addr2);
     ctx.emit_copy(dst2, hi);
 }
@@ -1549,7 +1593,12 @@ fn emit_arm32_store_pair(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
     ctx.emit_store(addr_vn, v1);
     let four = Varnode::constant(4, 4);
     let addr2 = Varnode::unique(ctx.alloc_unique(), 4);
-    ctx.emit(IrInsn::with_output(IrOp::IntAdd, addr2, smallvec![addr_vn, four], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAdd,
+        addr2,
+        smallvec![addr_vn, four],
+        ctx.addr,
+    ));
     ctx.emit_store(addr2, v2);
 }
 
@@ -1627,7 +1676,11 @@ fn emit_arm32_bfi(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
         ctx.emit_unimplemented();
         return;
     }
-    let width_mask: u32 = if width == 32 { 0xFFFF_FFFF } else { (1u32 << width) - 1 };
+    let width_mask: u32 = if width == 32 {
+        0xFFFF_FFFF
+    } else {
+        (1u32 << width) - 1
+    };
     let field_mask: u32 = width_mask.checked_shl(lsb).unwrap_or(0);
 
     // src_low = Rn & width_mask
@@ -1737,7 +1790,11 @@ fn emit_arm32_ubfx(ctx: &mut LiftCtx, ops: &[ArmOperandType], signed: bool) {
             ));
             t
         };
-        let width_mask: u32 = if width == 32 { 0xFFFF_FFFF } else { (1u32 << width) - 1 };
+        let width_mask: u32 = if width == 32 {
+            0xFFFF_FFFF
+        } else {
+            (1u32 << width) - 1
+        };
         ctx.emit(IrInsn::with_output(
             IrOp::IntAnd,
             dst,
@@ -1814,8 +1871,17 @@ fn emit_arm32_cbz(ctx: &mut LiftCtx, ops: &[ArmOperandType], not_zero: bool) {
     };
     let zero = Varnode::constant(0, reg.size);
     let cond = Varnode::unique(ctx.alloc_unique(), 1);
-    let cmp_op = if not_zero { IrOp::IntNotequal } else { IrOp::IntEqual };
-    ctx.emit(IrInsn::with_output(cmp_op, cond, smallvec![reg, zero], ctx.addr));
+    let cmp_op = if not_zero {
+        IrOp::IntNotequal
+    } else {
+        IrOp::IntEqual
+    };
+    ctx.emit(IrInsn::with_output(
+        cmp_op,
+        cond,
+        smallvec![reg, zero],
+        ctx.addr,
+    ));
     ctx.emit(IrInsn::without_output(
         IrOp::Cbranch,
         smallvec![target, cond],
@@ -1829,7 +1895,11 @@ fn emit_arm32_cbz(ctx: &mut LiftCtx, ops: &[ArmOperandType], not_zero: bool) {
 fn emit_arm32_tbb(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
     let target = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o));
     match target {
-        Some(t) => ctx.emit(IrInsn::without_output(IrOp::Branchind, smallvec![t], ctx.addr)),
+        Some(t) => ctx.emit(IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![t],
+            ctx.addr,
+        )),
         None => ctx.emit_unimplemented(),
     }
 }
@@ -2012,14 +2082,17 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_MUL if aarch64_is_vector_form(detail) => {
             emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_MUL)
         }
-        Arm64Insn::ARM64_INS_FADD => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FADD)
+        Arm64Insn::ARM64_INS_FADD => emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FADD),
+        Arm64Insn::ARM64_INS_FSUB => emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FSUB),
+        Arm64Insn::ARM64_INS_FMUL => emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FMUL),
+        Arm64Insn::ARM64_INS_ADD if aarch64_is_sve_form(detail) => {
+            emit_aarch64_sve_arith(ctx, detail, CALLOTHER_SVE_ADD)
         }
-        Arm64Insn::ARM64_INS_FSUB => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FSUB)
+        Arm64Insn::ARM64_INS_SUB if aarch64_is_sve_form(detail) => {
+            emit_aarch64_sve_arith(ctx, detail, CALLOTHER_SVE_SUB)
         }
-        Arm64Insn::ARM64_INS_FMUL => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FMUL)
+        Arm64Insn::ARM64_INS_MUL if aarch64_is_sve_form(detail) => {
+            emit_aarch64_sve_arith(ctx, detail, CALLOTHER_SVE_MUL)
         }
         Arm64Insn::ARM64_INS_ADD => arithmetic::lift_add(ctx, &ops),
         Arm64Insn::ARM64_INS_SUB => arithmetic::lift_sub(ctx, &ops),
@@ -2101,13 +2174,18 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
 
         // t186 — AArch64 NEON LDn/STn multi-structure register-list ops.
         Arm64Insn::ARM64_INS_LD1 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD1),
+        Arm64Insn::ARM64_INS_LD1B => emit_aarch64_sve_ldst(ctx, detail, CALLOTHER_SVE_LD1),
         Arm64Insn::ARM64_INS_LD2 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD2),
         Arm64Insn::ARM64_INS_LD3 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD3),
         Arm64Insn::ARM64_INS_LD4 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD4),
         Arm64Insn::ARM64_INS_ST1 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST1),
+        Arm64Insn::ARM64_INS_ST1B => emit_aarch64_sve_ldst(ctx, detail, CALLOTHER_SVE_ST1),
         Arm64Insn::ARM64_INS_ST2 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST2),
         Arm64Insn::ARM64_INS_ST3 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST3),
         Arm64Insn::ARM64_INS_ST4 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST4),
+        Arm64Insn::ARM64_INS_PTRUE | Arm64Insn::ARM64_INS_PTRUES => {
+            emit_aarch64_sve_ptrue(ctx, detail)
+        }
 
         _ => ctx.emit_unimplemented(),
     }
@@ -2250,6 +2328,110 @@ pub fn aarch64_neon_op_info(ctx: &mut LiftCtx, detail: &InsnDetail) -> NeonOpInf
     info
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct SveOpInfo {
+    pub lane_size: Option<u8>,
+    pub z_regs: Vec<Varnode>,
+    pub p_regs: Vec<Varnode>,
+    pub addr: Option<Varnode>,
+    pub imm: Option<i64>,
+}
+
+fn aarch64_sve_lane_size(vas: capstone::arch::arm64::Arm64Vas) -> Option<u8> {
+    aarch64_vas_lane_size(vas)
+}
+
+fn aarch64_sve_op_info(ctx: &mut LiftCtx, detail: &InsnDetail) -> SveOpInfo {
+    use crate::register_file::{SVE_P_SIZE, SVE_Z_SIZE, reg_varnode};
+
+    let mut info = SveOpInfo::default();
+    let arch = detail.arch_detail();
+    let Some(arm64) = arch.arm64() else {
+        return info;
+    };
+    for op in arm64.operands() {
+        match op.op_type {
+            Arm64OperandType::Reg(reg) => {
+                if let Some(vn) = reg_varnode(reg) {
+                    match vn.size {
+                        SVE_Z_SIZE => info.z_regs.push(vn),
+                        SVE_P_SIZE => info.p_regs.push(vn),
+                        _ => {}
+                    }
+                    if info.lane_size.is_none() {
+                        info.lane_size = aarch64_sve_lane_size(op.vas);
+                    }
+                }
+            }
+            Arm64OperandType::Mem(mem) => {
+                if info.addr.is_none() {
+                    info.addr = compute_mem_address(ctx, &mem);
+                }
+            }
+            Arm64OperandType::Imm(i) => {
+                if info.imm.is_none() {
+                    info.imm = Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    info
+}
+
+fn emit_aarch64_sve_arith(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
+    let info = aarch64_sve_op_info(ctx, detail);
+    let pg = info
+        .p_regs
+        .first()
+        .and_then(|p| {
+            u8::try_from(
+                (p.offset - crate::register_file::SVE_P_BASE)
+                    / crate::register_file::SVE_P_SIZE as u64,
+            )
+            .ok()
+        })
+        .unwrap_or(0xFF);
+    if info.z_regs.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    emit_sve_callother(ctx, tag, pg, &info.z_regs[..3]);
+}
+
+fn emit_aarch64_sve_ldst(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
+    let info = aarch64_sve_op_info(ctx, detail);
+    let Some(addr) = info.addr else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(zt) = info.z_regs.first().copied() else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let pg = info
+        .p_regs
+        .first()
+        .and_then(|p| {
+            u8::try_from(
+                (p.offset - crate::register_file::SVE_P_BASE)
+                    / crate::register_file::SVE_P_SIZE as u64,
+            )
+            .ok()
+        })
+        .unwrap_or(0xFF);
+    emit_sve_callother(ctx, tag, pg, &[zt, addr]);
+}
+
+fn emit_aarch64_sve_ptrue(ctx: &mut LiftCtx, detail: &InsnDetail) {
+    let info = aarch64_sve_op_info(ctx, detail);
+    let Some(pd) = info.p_regs.first().copied() else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    emit_sve_callother(ctx, CALLOTHER_SVE_PTRUE, 0xFF, &[pd]);
+}
+
 /// Emit the `Callother` payload for an AArch64 NEON LDn/STn instruction.
 ///
 /// Capstone exposes one register operand per `Vn.<size>` token in the
@@ -2304,11 +2486,28 @@ pub const CALLOTHER_NEON_FMUL: u64 = 0x40D;
 /// arrangement specifier — i.e. the instruction is a vector form.
 pub fn aarch64_is_vector_form(detail: &InsnDetail) -> bool {
     let arch = detail.arch_detail();
-    let Some(arm64) = arch.arm64() else { return false; };
+    let Some(arm64) = arch.arm64() else {
+        return false;
+    };
     use capstone::arch::arm64::Arm64Vas;
     arm64
         .operands()
         .any(|op| op.vas != Arm64Vas::ARM64_VAS_INVALID)
+}
+
+pub fn aarch64_is_sve_form(detail: &InsnDetail) -> bool {
+    use crate::register_file::{SVE_P_SIZE, SVE_Z_SIZE, reg_varnode};
+
+    let arch = detail.arch_detail();
+    let Some(arm64) = arch.arm64() else {
+        return false;
+    };
+    arm64.operands().any(|op| match op.op_type {
+        Arm64OperandType::Reg(reg) => reg_varnode(reg)
+            .map(|vn| vn.size == SVE_Z_SIZE || vn.size == SVE_P_SIZE)
+            .unwrap_or(false),
+        _ => false,
+    })
 }
 
 /// Emit a `Callother(tag, lane_size, vd_idx, vn_idx, vm_idx)` payload
@@ -2612,7 +2811,14 @@ pub fn try_aarch64_csel(insn: u32) -> Option<CselDecoded> {
     let cond = ((insn >> 12) & 0xF) as u8;
     let rn = ((insn >> 5) & 0x1F) as u8;
     let rd = (insn & 0x1F) as u8;
-    Some(CselDecoded { sf, op, rd, rn, rm, cond })
+    Some(CselDecoded {
+        sf,
+        op,
+        rd,
+        rn,
+        rm,
+        cond,
+    })
 }
 
 /// AArch64 conditional-compare decoded fields (CCMP/CCMN, register and
@@ -2777,8 +2983,7 @@ fn emit_pac_callother(ctx: &mut LiftCtx, pac: &PacAuthDecoded) {
     let xd = xreg_varnode(pac.rd);
     let tag_vn = Varnode::constant(pac.tag, 8);
 
-    let is_xpac =
-        pac.tag == CALLOTHER_AARCH64_XPACI || pac.tag == CALLOTHER_AARCH64_XPACD;
+    let is_xpac = pac.tag == CALLOTHER_AARCH64_XPACI || pac.tag == CALLOTHER_AARCH64_XPACD;
 
     let inputs = if is_xpac {
         smallvec![tag_vn, xd]
@@ -2830,10 +3035,8 @@ pub const CALLOTHER_SVE_PTRUE: u64 = 0x429;
 /// mask.  For non-predicated operations (e.g. `PTRUE`), `pg` should be
 /// 0xFF (sentinel meaning "all lanes").
 pub fn emit_sve_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varnode]) {
-    let mut inputs: smallvec::SmallVec<[Varnode; 3]> = smallvec::smallvec![
-        Varnode::constant(tag, 8),
-        Varnode::constant(pg as u64, 1),
-    ];
+    let mut inputs: smallvec::SmallVec<[Varnode; 3]> =
+        smallvec::smallvec![Varnode::constant(tag, 8), Varnode::constant(pg as u64, 1),];
     inputs.extend_from_slice(operands);
     ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
 }

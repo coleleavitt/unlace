@@ -35,6 +35,10 @@ pub const RA: u64 = 248;
 pub const HI: u64 = 256;
 pub const LO: u64 = 264;
 pub const PC: u64 = 272;
+pub const FPR_BASE: u64 = 280;
+pub const FPR_STRIDE: u64 = 8;
+pub const FCC0: u64 = FPR_BASE + 32 * FPR_STRIDE;
+pub const FCSR: u64 = FCC0 + 8;
 
 const MIPS_REG_NAMES: [&str; 32] = [
     "$zero", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3", "$t0", "$t1", "$t2", "$t3", "$t4",
@@ -46,8 +50,20 @@ pub fn reg64(offset: u64) -> Varnode {
     Varnode::new(SpaceId::Register, offset, 4)
 }
 
+pub fn fpr_offset(index: u8) -> u64 {
+    FPR_BASE + u64::from(index) * FPR_STRIDE
+}
+
+pub fn fpr_reg(reg: capstone::RegId, size: u8) -> Option<Varnode> {
+    fpr_index(reg).map(|index| Varnode::new(SpaceId::Register, fpr_offset(index), size))
+}
+
+pub fn fcc_reg(index: u8) -> Varnode {
+    Varnode::new(SpaceId::Register, FCC0 + u64::from(index), 1)
+}
+
 pub fn mips64_register_file() -> RegisterFile {
-    let mut regs = Vec::with_capacity(35);
+    let mut regs = Vec::with_capacity(68);
     for (i, name) in MIPS_REG_NAMES.iter().enumerate() {
         regs.push(RegisterDef {
             name,
@@ -66,7 +82,62 @@ pub fn mips64_register_file() -> RegisterFile {
         name: "PC",
         varnode: reg64(PC),
     });
+    for i in 0..32 {
+        let name: &'static str = Box::leak(format!("$f{i}").into_boxed_str());
+        regs.push(RegisterDef {
+            name,
+            varnode: Varnode::new(SpaceId::Register, fpr_offset(i as u8), 8),
+        });
+    }
+    regs.push(RegisterDef {
+        name: "FCC0",
+        varnode: fcc_reg(0),
+    });
+    regs.push(RegisterDef {
+        name: "FCSR",
+        varnode: Varnode::new(SpaceId::Register, FCSR, 4),
+    });
     RegisterFile { registers: regs }
+}
+
+pub fn fpr_index(reg: capstone::RegId) -> Option<u8> {
+    use capstone::arch::mips::MipsReg::*;
+    let reg_u16: u16 = reg.0;
+    match reg_u16 {
+        x if x == MIPS_REG_F0 as u16 => Some(0),
+        x if x == MIPS_REG_F1 as u16 => Some(1),
+        x if x == MIPS_REG_F2 as u16 => Some(2),
+        x if x == MIPS_REG_F3 as u16 => Some(3),
+        x if x == MIPS_REG_F4 as u16 => Some(4),
+        x if x == MIPS_REG_F5 as u16 => Some(5),
+        x if x == MIPS_REG_F6 as u16 => Some(6),
+        x if x == MIPS_REG_F7 as u16 => Some(7),
+        x if x == MIPS_REG_F8 as u16 => Some(8),
+        x if x == MIPS_REG_F9 as u16 => Some(9),
+        x if x == MIPS_REG_F10 as u16 => Some(10),
+        x if x == MIPS_REG_F11 as u16 => Some(11),
+        x if x == MIPS_REG_F12 as u16 => Some(12),
+        x if x == MIPS_REG_F13 as u16 => Some(13),
+        x if x == MIPS_REG_F14 as u16 => Some(14),
+        x if x == MIPS_REG_F15 as u16 => Some(15),
+        x if x == MIPS_REG_F16 as u16 => Some(16),
+        x if x == MIPS_REG_F17 as u16 => Some(17),
+        x if x == MIPS_REG_F18 as u16 => Some(18),
+        x if x == MIPS_REG_F19 as u16 => Some(19),
+        x if x == MIPS_REG_F20 as u16 => Some(20),
+        x if x == MIPS_REG_F21 as u16 => Some(21),
+        x if x == MIPS_REG_F22 as u16 => Some(22),
+        x if x == MIPS_REG_F23 as u16 => Some(23),
+        x if x == MIPS_REG_F24 as u16 => Some(24),
+        x if x == MIPS_REG_F25 as u16 => Some(25),
+        x if x == MIPS_REG_F26 as u16 => Some(26),
+        x if x == MIPS_REG_F27 as u16 => Some(27),
+        x if x == MIPS_REG_F28 as u16 => Some(28),
+        x if x == MIPS_REG_F29 as u16 => Some(29),
+        x if x == MIPS_REG_F30 as u16 => Some(30),
+        x if x == MIPS_REG_F31 as u16 => Some(31),
+        _ => None,
+    }
 }
 
 pub fn capstone_reg_to_offset(reg: capstone::RegId) -> Option<u64> {

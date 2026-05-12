@@ -8,7 +8,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
-use crate::ops::{arithmetic, bitwise, control_flow, data_move, memory};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, fpu, memory};
 use crate::register_file::{self, ZERO, capstone_reg_to_offset, mips64_register_file};
 
 // Capstone contains a raw `*mut c_void` handle to the C library.
@@ -84,7 +84,7 @@ impl Lifter for MipsLifter {
 
         let operands: Vec<MipsOperand> = mips_detail.operands().collect();
 
-        let mut ctx = LiftCtx::new(addr);
+        let mut ctx = LiftCtx::new(addr, bytes);
         dispatch_insn(&mut ctx, insn.id(), &operands);
 
         Ok(LiftedInsn {
@@ -98,17 +98,19 @@ impl Lifter for MipsLifter {
     }
 }
 
-pub struct LiftCtx {
+pub struct LiftCtx<'a> {
     pub ops: Vec<IrInsn>,
     pub addr: u64,
+    pub bytes: &'a [u8],
     unique_counter: u64,
 }
 
-impl LiftCtx {
-    fn new(addr: u64) -> Self {
+impl<'a> LiftCtx<'a> {
+    fn new(addr: u64, bytes: &'a [u8]) -> Self {
         Self {
             ops: Vec::new(),
             addr,
+            bytes,
             unique_counter: 0,
         }
     }
@@ -208,9 +210,98 @@ impl LiftCtx {
     }
 }
 
+fn raw_word(ctx: &LiftCtx) -> Option<u32> {
+    ctx.bytes
+        .get(..4)
+        .map(|bytes| u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn try_dispatch_raw_fpu(ctx: &mut LiftCtx, _id: InsnId, ops: &[MipsOperand]) -> bool {
+    let Some(word) = raw_word(ctx) else {
+        return false;
+    };
+
+    let opcode = (word >> 26) & 0x3f;
+    match opcode {
+        0x11 => dispatch_cop1_fpu(ctx, word, ops),
+        0x31 => {
+            fpu::lift_fpu_load(ctx, ops, 4);
+            true
+        }
+        0x35 => {
+            fpu::lift_fpu_load(ctx, ops, 8);
+            true
+        }
+        0x39 => {
+            fpu::lift_fpu_store(ctx, ops, 4);
+            true
+        }
+        0x3d => {
+            fpu::lift_fpu_store(ctx, ops, 8);
+            true
+        }
+        _ => false,
+    }
+}
+
+fn dispatch_cop1_fpu(ctx: &mut LiftCtx, word: u32, ops: &[MipsOperand]) -> bool {
+    let fmt = ((word >> 21) & 0x1f) as u8;
+    let funct = (word & 0x3f) as u8;
+    let size = match fmt {
+        16 => 4, // .s
+        17 => 8, // .d
+        _ => 0,
+    };
+
+    match fmt {
+        0 => fpu::lift_mfc1(ctx, ops, 4),
+        1 => fpu::lift_dmfc1(ctx, ops),
+        2 => fpu::lift_cfc1(ctx, ops),
+        4 => fpu::lift_mtc1(ctx, ops, 4),
+        5 => fpu::lift_dmtc1(ctx, ops),
+        6 => fpu::lift_ctc1(ctx, ops),
+        8 => {
+            let tf = ((word >> 16) & 1) != 0;
+            fpu::lift_bc1(ctx, ops, tf);
+        }
+        16 | 17 => match funct {
+            0x00 => fpu::lift_fp_add(ctx, ops, size),
+            0x01 => fpu::lift_fp_sub(ctx, ops, size),
+            0x02 => fpu::lift_fp_mul(ctx, ops, size),
+            0x03 => fpu::lift_fp_div(ctx, ops, size),
+            0x04 => fpu::lift_fp_sqrt(ctx, ops, size),
+            0x05 => fpu::lift_fp_abs(ctx, ops, size),
+            0x06 => fpu::lift_fp_mov(ctx, ops, size),
+            0x07 => fpu::lift_fp_neg(ctx, ops, size),
+            0x20 => fpu::lift_fp_convert(ctx, ops, 4, size), // cvt.s
+            0x21 => fpu::lift_fp_convert(ctx, ops, 8, size), // cvt.d
+            0x24 => fpu::lift_fp_round_to_int(ctx, ops, 4, size, IrOp::FloatRound),
+            0x25 => fpu::lift_fp_round_to_int(ctx, ops, 4, size, IrOp::FloatTrunc),
+            0x26 => fpu::lift_fp_round_to_int(ctx, ops, 4, size, IrOp::FloatCeil),
+            0x27 => fpu::lift_fp_round_to_int(ctx, ops, 4, size, IrOp::FloatFloor),
+            0x30 | 0x32 => fpu::lift_fp_compare(ctx, ops, size, IrOp::FloatLess),
+            0x31 | 0x33 => fpu::lift_fp_compare(ctx, ops, size, IrOp::FloatEqual),
+            0x34 | 0x36 => fpu::lift_fp_compare(ctx, ops, size, IrOp::FloatLessequal),
+            0x35 | 0x37 => fpu::lift_fp_compare(ctx, ops, size, IrOp::FloatNotequal),
+            _ => fpu::lift_fp_unimplemented_callother(ctx, u64::from(funct), ops),
+        },
+        20 | 21 => match funct {
+            0x20 => fpu::lift_fp_int_to_float(ctx, ops, 4, fmt),
+            0x21 => fpu::lift_fp_int_to_float(ctx, ops, 8, fmt),
+            _ => fpu::lift_fp_unimplemented_callother(ctx, u64::from(funct), ops),
+        },
+        _ => return false,
+    }
+    true
+}
+
 fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand]) {
     use MipsInsn::*;
     let insn_id = id.0;
+
+    if try_dispatch_raw_fpu(ctx, id, ops) {
+        return;
+    }
 
     match insn_id {
         x if x == MIPS_INS_NOP as u32 => data_move::lift_nop(ctx),
@@ -285,6 +376,29 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand]) {
         x if x == MIPS_INS_SH as u32 => memory::lift_store(ctx, ops, 2),
         x if x == MIPS_INS_SB as u32 => memory::lift_store(ctx, ops, 1),
 
+        // MIPS Coprocessor 1 / FPU loads, stores, register moves, and branches.
+        x if x == MIPS_INS_LWC1 as u32 => fpu::lift_fpu_load(ctx, ops, 4),
+        x if x == MIPS_INS_LDC1 as u32 => fpu::lift_fpu_load(ctx, ops, 8),
+        x if x == MIPS_INS_SWC1 as u32 => fpu::lift_fpu_store(ctx, ops, 4),
+        x if x == MIPS_INS_SDC1 as u32 => fpu::lift_fpu_store(ctx, ops, 8),
+        x if x == MIPS_INS_MFC1 as u32 => fpu::lift_mfc1(ctx, ops, 4),
+        x if x == MIPS_INS_DMFC1 as u32 => fpu::lift_mfc1(ctx, ops, 8),
+        x if x == MIPS_INS_MTC1 as u32 => fpu::lift_mtc1(ctx, ops, 4),
+        x if x == MIPS_INS_DMTC1 as u32 => fpu::lift_mtc1(ctx, ops, 8),
+        x if x == MIPS_INS_CFC1 as u32 => fpu::lift_cfc1(ctx, ops),
+        x if x == MIPS_INS_CTC1 as u32 => fpu::lift_ctc1(ctx, ops),
+        x if x == MIPS_INS_BC1F as u32 => fpu::lift_bc1(ctx, ops, false),
+        x if x == MIPS_INS_BC1T as u32 => fpu::lift_bc1(ctx, ops, true),
+
+        // Capstone's MIPS ids distinguish float single-precision aliases for
+        // arithmetic and comparisons.  Generic ids cover fmt-qualified forms
+        // such as add.d/sub.d/mov.d; the raw decoder below refines their sizes.
+        x if x == MIPS_INS_MUL_S as u32 => fpu::lift_fp_mul(ctx, ops, 4),
+        x if x == MIPS_INS_DIV_S as u32 => fpu::lift_fp_div(ctx, ops, 4),
+        x if x == MIPS_INS_CMPGDU as u32 => fpu::lift_fp_compare(ctx, ops, 4, IrOp::FloatLess),
+        x if x == MIPS_INS_CMPGU as u32 => fpu::lift_fp_compare(ctx, ops, 4, IrOp::FloatLess),
+        x if x == MIPS_INS_CMPU as u32 => fpu::lift_fp_compare(ctx, ops, 4, IrOp::FloatEqual),
+
         _ => ctx.emit_unimplemented(),
     }
 }
@@ -307,12 +421,16 @@ mod tests {
     fn test_register_file() {
         let l = lifter();
         let rf = l.register_file();
-        assert_eq!(rf.registers.len(), 35);
+        assert_eq!(rf.registers.len(), 69);
         assert_eq!(rf.registers[0].name, "$zero");
         assert_eq!(rf.registers[31].name, "$ra");
         assert_eq!(rf.registers[32].name, "HI");
         assert_eq!(rf.registers[33].name, "LO");
         assert_eq!(rf.registers[34].name, "PC");
+        assert_eq!(rf.registers[35].name, "$f0");
+        assert_eq!(rf.registers[66].name, "$f31");
+        assert_eq!(rf.registers[67].name, "FCC0");
+        assert_eq!(rf.registers[68].name, "FCSR");
     }
 
     #[test]
@@ -516,6 +634,80 @@ mod tests {
         assert_eq!(result.len, 4);
         let has_mult = result.ir_ops.iter().any(|op| op.op == IrOp::IntMult);
         assert!(has_mult, "MULT should produce IntMult: {:?}", result.ir_ops);
+    }
+
+    #[test]
+    fn test_fpu_add_s() {
+        let l = lifter();
+        // add.s $f0, $f1, $f2 = COP1 fmt=S ft=2 fs=1 fd=0 funct=0
+        let result = l
+            .lift_insn(&[0x46, 0x02, 0x08, 0x00], 0x1000)
+            .expect("should decode add.s");
+        assert_eq!(result.len, 4);
+        assert!(
+            result.ir_ops.iter().any(|op| op.op == IrOp::FloatAdd),
+            "add.s should produce FloatAdd: {:?}",
+            result.ir_ops
+        );
+    }
+
+    #[test]
+    fn test_fpu_add_d() {
+        let l = lifter();
+        // add.d $f0, $f1, $f2 = COP1 fmt=D ft=2 fs=1 fd=0 funct=0
+        let result = l
+            .lift_insn(&[0x46, 0x22, 0x08, 0x00], 0x1000)
+            .expect("should decode add.d");
+        assert_eq!(result.len, 4);
+        assert!(
+            result.ir_ops.iter().any(|op| op.op == IrOp::FloatAdd),
+            "add.d should produce FloatAdd: {:?}",
+            result.ir_ops
+        );
+    }
+
+    #[test]
+    fn test_lwc1_and_swc1() {
+        let l = lifter();
+        let load = l
+            .lift_insn(&[0xC7, 0xA0, 0x00, 0x00], 0x1000)
+            .expect("should decode lwc1");
+        assert!(
+            load.ir_ops.iter().any(|op| op.op == IrOp::Load),
+            "lwc1 should produce Load: {:?}",
+            load.ir_ops
+        );
+
+        let store = l
+            .lift_insn(&[0xE7, 0xA0, 0x00, 0x00], 0x1000)
+            .expect("should decode swc1");
+        assert!(
+            store.ir_ops.iter().any(|op| op.op == IrOp::Store),
+            "swc1 should produce Store: {:?}",
+            store.ir_ops
+        );
+    }
+
+    #[test]
+    fn test_mfc1_mtc1_moves() {
+        let l = lifter();
+        let mfc1 = l
+            .lift_insn(&[0x44, 0x02, 0x00, 0x00], 0x1000)
+            .expect("should decode mfc1");
+        assert!(
+            mfc1.ir_ops.iter().any(|op| op.op == IrOp::Copy),
+            "mfc1 should copy from FPR to GPR: {:?}",
+            mfc1.ir_ops
+        );
+
+        let mtc1 = l
+            .lift_insn(&[0x44, 0x82, 0x00, 0x00], 0x1000)
+            .expect("should decode mtc1");
+        assert!(
+            mtc1.ir_ops.iter().any(|op| op.op == IrOp::Copy),
+            "mtc1 should copy from GPR to FPR: {:?}",
+            mtc1.ir_ops
+        );
     }
 
     // $zero writes are suppressed (write to $zero is no-op)

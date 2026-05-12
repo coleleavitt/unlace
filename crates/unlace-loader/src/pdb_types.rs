@@ -226,8 +226,6 @@ fn lower_one(cv: &CvType, table: &BTreeMap<u32, CvType>, out: &PdbTypes) -> Type
             }
         }
         CvType::Union { name, fields, .. } => {
-            // Lower as a struct with all-zero offsets — sufficient for
-            // downstream consumers that just need name + member types.
             let fs = fields
                 .iter()
                 .map(|f| StructFieldType {
@@ -236,7 +234,7 @@ fn lower_one(cv: &CvType, table: &BTreeMap<u32, CvType>, out: &PdbTypes) -> Type
                     offset: 0,
                 })
                 .collect();
-            Type::Struct {
+            Type::Union {
                 name: name.clone(),
                 fields: fs,
             }

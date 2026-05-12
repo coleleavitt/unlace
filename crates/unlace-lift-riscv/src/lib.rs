@@ -1,6 +1,8 @@
-//! RISC-V (RV64I) → IR lifter via capstone.
+//! RISC-V (RV32I/RV32E/RV64I/RV128I base) → IR lifter via capstone.
 //!
-//! Lifts the RV64I base integer instruction set. Registers x0-x31 plus pc.
+//! Lifts the base integer instruction set across RISC-V widths. The current
+//! IR register file remains 64-bit wide, so RV32 results are normalized into the
+//! existing representation while RV64I instructions retain their native width.
 //! x0 is hardwired to zero: reads produce `Varnode::constant(0, 8)`,
 //! writes are silently dropped.
 
@@ -308,11 +310,9 @@ impl LiftCtx {
             self.addr,
         ));
 
-        // Extend to 8 bytes (RV64I register width)
+        // Extend to 8 bytes (current register-file width)
         let value = if load_size < 8 {
-            // LW sign-extends to 64 bits; LD is already 8 bytes
-            // LW is 4 bytes (sign-extend), LD is 8 bytes (no extend needed)
-            // We use IntSext for signed loads (LW, LH, LB) by default
+            // Narrow signed integer loads are sign-extended into the register file.
             let ext = self.alloc_unique(8);
             self.emit(IrInsn::with_output(
                 IrOp::IntSext,
@@ -1303,7 +1303,7 @@ fn dispatch_insn(
             }
         }
 
-        // -- Loads: LW (4, sign-ext), LD (8) --
+        // -- Loads: LB/LH/LW/LD + unsigned variants --
         x if x == RISCV_INS_LW as u32 => {
             if let Some((rd, base, offset)) = ops_load(operands) {
                 ctx.lift_load(rd, base, offset, 4);
@@ -1554,6 +1554,13 @@ fn dispatch_insn(
                 ctx.emit_unimplemented();
             }
         }
+        x if x == RISCV_INS_DIVUW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntDiv, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
         x if x == RISCV_INS_REM as u32 => {
             if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
                 ctx.lift_alu_rr(IrOp::IntSrem, rd, rs1, rs2);
@@ -1571,6 +1578,13 @@ fn dispatch_insn(
         x if x == RISCV_INS_REMW as u32 => {
             if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
                 ctx.lift_alu_rr_w(IrOp::IntSrem, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_REMUW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntRem, rd, rs1, rs2);
             } else {
                 ctx.emit_unimplemented();
             }
@@ -1707,6 +1721,30 @@ mod tests {
             .expect("should decode ORI");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
+    }
+
+    #[test]
+    fn test_divuw() {
+        // divuw x1, x2, x3 -> funct7=0000001 funct3=101 opcode=0111011
+        let bytes = 0x023150BBu32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode DIVUW");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntDiv));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
+    }
+
+    #[test]
+    fn test_remuw() {
+        // remuw x1, x2, x3 -> funct7=0000001 funct3=111 opcode=0111011
+        let bytes = 0x023170BBu32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode REMUW");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRem));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
     }
 
     // -- XOR rd, rs1, rs2 ------------------------------------------------

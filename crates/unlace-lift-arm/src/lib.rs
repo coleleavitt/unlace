@@ -652,7 +652,7 @@ mod tests {
     #[test]
     fn arm64_ldaxr_lifts_to_callother() {
         // LDAXR X0, [X1]  →  c85ffc20
-        assert_callother_tag(&[0x20, 0xfc, 0x5f, 0xc8], 0x340);
+        assert_callother_tag(&[0x20, 0xfc, 0x5f, 0xc8], 0x345);
     }
 
     #[test]
@@ -664,7 +664,27 @@ mod tests {
     #[test]
     fn arm64_stlxr_lifts_to_callother() {
         // STLXR W2, X0, [X1]  →  c802fc20
-        assert_callother_tag(&[0x20, 0xfc, 0x02, 0xc8], 0x341);
+        assert_callother_tag(&[0x20, 0xfc, 0x02, 0xc8], 0x346);
+    }
+
+    #[test]
+    fn arm64_ldar_stlr_lift_to_c11_atomic_tags_t299() {
+        // LDAR X0, [X1] / STLR X0, [X1]
+        assert_callother_tag(&[0x20, 0xfc, 0xdf, 0xc8], 0x347);
+        assert_callother_tag(&[0x20, 0xfc, 0x9f, 0xc8], 0x348);
+        // Byte/halfword acquire/release forms are size-tagged variants of
+        // the same C11 atomic load/store operation.
+        assert_callother_tag(&[0x20, 0xfc, 0xdf, 0x08], 0x347);
+        assert_callother_tag(&[0x20, 0xfc, 0x9f, 0x48], 0x348);
+    }
+
+    #[test]
+    fn arm64_lse_atomics_lift_to_c11_atomic_tags_t299() {
+        // Encodings from llvm-mc -triple=aarch64 -mattr=+lse.
+        assert_callother_tag(&[0x20, 0x00, 0x22, 0xf8], 0x349); // LDADD
+        assert_callother_tag(&[0x20, 0x00, 0xe2, 0xf8], 0x349); // LDADDAL
+        assert_callother_tag(&[0x20, 0x80, 0x22, 0xf8], 0x34A); // SWP
+        assert_callother_tag(&[0x22, 0x7c, 0xa0, 0xc8], 0x34B); // CAS
     }
 
     #[test]

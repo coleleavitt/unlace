@@ -2363,12 +2363,120 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_STRB => data_move::lift_str_sized(ctx, &ops, 1),
         Arm64Insn::ARM64_INS_STRH => data_move::lift_str_sized(ctx, &ops, 2),
         Arm64Insn::ARM64_INS_STP => data_move::lift_stp(ctx, &ops),
-        Arm64Insn::ARM64_INS_LDXR | Arm64Insn::ARM64_INS_LDAXR => {
-            data_move::lift_exclusive_load(ctx, &ops)
+        Arm64Insn::ARM64_INS_LDXR => {
+            data_move::lift_exclusive_load(ctx, &ops, CALLOTHER_AARCH64_LDXR)
         }
-        Arm64Insn::ARM64_INS_STXR | Arm64Insn::ARM64_INS_STLXR => {
-            data_move::lift_exclusive_store(ctx, &ops)
+        Arm64Insn::ARM64_INS_LDAXR => {
+            data_move::lift_exclusive_load(ctx, &ops, CALLOTHER_AARCH64_LDAXR)
         }
+        Arm64Insn::ARM64_INS_LDAXRB => {
+            data_move::lift_exclusive_load(ctx, &ops, CALLOTHER_AARCH64_LDAXR)
+        }
+        Arm64Insn::ARM64_INS_LDAXRH => {
+            data_move::lift_exclusive_load(ctx, &ops, CALLOTHER_AARCH64_LDAXR)
+        }
+        Arm64Insn::ARM64_INS_STXR => {
+            data_move::lift_exclusive_store(ctx, &ops, CALLOTHER_AARCH64_STXR)
+        }
+        Arm64Insn::ARM64_INS_STLXR => {
+            data_move::lift_exclusive_store(ctx, &ops, CALLOTHER_AARCH64_STLXR)
+        }
+        Arm64Insn::ARM64_INS_STLXRB => {
+            data_move::lift_exclusive_store(ctx, &ops, CALLOTHER_AARCH64_STLXR)
+        }
+        Arm64Insn::ARM64_INS_STLXRH => {
+            data_move::lift_exclusive_store(ctx, &ops, CALLOTHER_AARCH64_STLXR)
+        }
+        Arm64Insn::ARM64_INS_LDAR => {
+            data_move::lift_atomic_load(ctx, &ops, 8, CALLOTHER_AARCH64_ATOMIC_LOAD_ACQUIRE)
+        }
+        Arm64Insn::ARM64_INS_LDARB => {
+            data_move::lift_atomic_load(ctx, &ops, 1, CALLOTHER_AARCH64_ATOMIC_LOAD_ACQUIRE)
+        }
+        Arm64Insn::ARM64_INS_LDARH => {
+            data_move::lift_atomic_load(ctx, &ops, 2, CALLOTHER_AARCH64_ATOMIC_LOAD_ACQUIRE)
+        }
+        Arm64Insn::ARM64_INS_STLR => {
+            data_move::lift_atomic_store(ctx, &ops, 8, CALLOTHER_AARCH64_ATOMIC_STORE_RELEASE)
+        }
+        Arm64Insn::ARM64_INS_STLRB => {
+            data_move::lift_atomic_store(ctx, &ops, 1, CALLOTHER_AARCH64_ATOMIC_STORE_RELEASE)
+        }
+        Arm64Insn::ARM64_INS_STLRH => {
+            data_move::lift_atomic_store(ctx, &ops, 2, CALLOTHER_AARCH64_ATOMIC_STORE_RELEASE)
+        }
+        Arm64Insn::ARM64_INS_LDADD => data_move::lift_atomic_rmw(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_FETCH_ADD,
+            AARCH64_ATOMIC_RELAXED,
+        ),
+        Arm64Insn::ARM64_INS_LDADDA => data_move::lift_atomic_rmw(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_FETCH_ADD,
+            AARCH64_ATOMIC_ACQUIRE,
+        ),
+        Arm64Insn::ARM64_INS_LDADDL => data_move::lift_atomic_rmw(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_FETCH_ADD,
+            AARCH64_ATOMIC_RELEASE,
+        ),
+        Arm64Insn::ARM64_INS_LDADDAL => data_move::lift_atomic_rmw(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_FETCH_ADD,
+            AARCH64_ATOMIC_ACQ_REL,
+        ),
+        Arm64Insn::ARM64_INS_SWP => data_move::lift_atomic_rmw(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_EXCHANGE,
+            AARCH64_ATOMIC_RELAXED,
+        ),
+        Arm64Insn::ARM64_INS_SWPA => data_move::lift_atomic_rmw(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_EXCHANGE,
+            AARCH64_ATOMIC_ACQUIRE,
+        ),
+        Arm64Insn::ARM64_INS_SWPL => data_move::lift_atomic_rmw(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_EXCHANGE,
+            AARCH64_ATOMIC_RELEASE,
+        ),
+        Arm64Insn::ARM64_INS_SWPAL => data_move::lift_atomic_rmw(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_EXCHANGE,
+            AARCH64_ATOMIC_ACQ_REL,
+        ),
+        Arm64Insn::ARM64_INS_CAS => data_move::lift_atomic_cas(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_CMPXCHG,
+            AARCH64_ATOMIC_RELAXED,
+        ),
+        Arm64Insn::ARM64_INS_CASA => data_move::lift_atomic_cas(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_CMPXCHG,
+            AARCH64_ATOMIC_ACQUIRE,
+        ),
+        Arm64Insn::ARM64_INS_CASL => data_move::lift_atomic_cas(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_CMPXCHG,
+            AARCH64_ATOMIC_RELEASE,
+        ),
+        Arm64Insn::ARM64_INS_CASAL => data_move::lift_atomic_cas(
+            ctx,
+            &ops,
+            CALLOTHER_AARCH64_ATOMIC_CMPXCHG,
+            AARCH64_ATOMIC_ACQ_REL,
+        ),
         Arm64Insn::ARM64_INS_DMB => data_move::lift_barrier(ctx, 0x342),
         Arm64Insn::ARM64_INS_DSB => data_move::lift_barrier(ctx, 0x343),
         Arm64Insn::ARM64_INS_ISB => data_move::lift_barrier(ctx, 0x344),
@@ -2410,6 +2518,25 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         _ => ctx.emit_unimplemented(),
     }
 }
+
+// ── t299 — AArch64 atomics as C11 atomic Callother tags ────────────────
+// 0x340/0x341 were the historical exclusive-load/store tags. Keep LDXR/STXR
+// there for compatibility and assign the acquire/release variants and LSE
+// atomics stable, adjacent tags for the output printer.
+pub const CALLOTHER_AARCH64_LDXR: u64 = 0x340;
+pub const CALLOTHER_AARCH64_STXR: u64 = 0x341;
+pub const CALLOTHER_AARCH64_LDAXR: u64 = 0x345;
+pub const CALLOTHER_AARCH64_STLXR: u64 = 0x346;
+pub const CALLOTHER_AARCH64_ATOMIC_LOAD_ACQUIRE: u64 = 0x347;
+pub const CALLOTHER_AARCH64_ATOMIC_STORE_RELEASE: u64 = 0x348;
+pub const CALLOTHER_AARCH64_ATOMIC_FETCH_ADD: u64 = 0x349;
+pub const CALLOTHER_AARCH64_ATOMIC_EXCHANGE: u64 = 0x34A;
+pub const CALLOTHER_AARCH64_ATOMIC_CMPXCHG: u64 = 0x34B;
+
+pub const AARCH64_ATOMIC_RELAXED: u64 = 0;
+pub const AARCH64_ATOMIC_ACQUIRE: u64 = 1;
+pub const AARCH64_ATOMIC_RELEASE: u64 = 2;
+pub const AARCH64_ATOMIC_ACQ_REL: u64 = 3;
 
 // ── t186 — AArch64 NEON LDn/STn register-list lifters ────────────────
 //

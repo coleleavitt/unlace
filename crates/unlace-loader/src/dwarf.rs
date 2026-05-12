@@ -5,9 +5,9 @@
 //! [`DwarfInfo`] struct:
 //!
 //!  * `DW_TAG_subprogram`     → [`FunctionDebugInfo`] (name, low_pc,
-//!    high_pc, return type, parameters, locals, decl location).
-//!  * `DW_TAG_structure_type` → [`StructType`] with [`StructField`]
-//!    members.
+//!    high_pc, return type, parameters, locals, template args, decl location).
+//!  * `DW_TAG_structure_type` / `DW_TAG_class_type` → [`StructType`] with
+//!    [`StructField`] members and C++ template arguments.
 //!  * `DW_TAG_union_type`     → [`UnionType`] with member list.
 //!  * `DW_TAG_enumeration_type` → [`EnumType`] with `(name, value)`
 //!    variant list.
@@ -34,10 +34,11 @@ use std::collections::BTreeMap;
 use gimli::{
     AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_data_member_location, DW_AT_high_pc,
     DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_type, DW_TAG_base_type,
-    DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter,
-    DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type,
-    DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable, DW_TAG_volatile_type,
-    EndianSlice, RunTimeEndian,
+    DW_TAG_class_type, DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator,
+    DW_TAG_formal_parameter, DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type,
+    DW_TAG_structure_type, DW_TAG_subprogram, DW_TAG_template_type_parameter,
+    DW_TAG_template_value_parameter, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable,
+    DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
 };
 
 use crate::error::LoadError;
@@ -64,12 +65,24 @@ pub struct FunctionDebugInfo {
     pub return_type: Option<String>,
     pub decl: Option<SourceLocation>,
     pub locals: Vec<LocalVariable>,
+    /// Template arguments recovered from child `DW_TAG_template_type_parameter`
+    /// and `DW_TAG_template_value_parameter` DIEs, in declaration order.
+    pub template_args: Vec<TemplateArgument>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParameterInfo {
     pub name: Option<String>,
     pub type_name: Option<String>,
+}
+
+/// A C++ template argument recovered from a DWARF template-parameter DIE.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateArgument {
+    /// Source parameter name, such as `T` or `N`, when present.
+    pub name: Option<String>,
+    /// Concrete argument spelling (`int`, `long int`, `4`, ...).
+    pub value: String,
 }
 
 /// A local variable extracted from `DW_TAG_variable` inside a subprogram.
@@ -99,6 +112,9 @@ pub struct StructType {
     pub name: String,
     pub size: u64,
     pub fields: Vec<StructField>,
+    /// Template arguments recovered from child `DW_TAG_template_type_parameter`
+    /// and `DW_TAG_template_value_parameter` DIEs, in declaration order.
+    pub template_args: Vec<TemplateArgument>,
 }
 
 /// A single field within a struct or union.
@@ -212,7 +228,7 @@ fn extract_functions_from_unit(
         };
 
         let decl = extract_decl_location(dwarf, unit, entry)?;
-        let (params, locals) = extract_params_and_locals(dwarf, unit, child)?;
+        let (params, locals, template_args) = extract_params_locals_and_template_args(dwarf, unit, child)?;
 
         functions.insert(
             low_pc,
@@ -225,6 +241,7 @@ fn extract_functions_from_unit(
                 return_type,
                 decl,
                 locals,
+                template_args,
             },
         );
     }
@@ -266,7 +283,7 @@ fn extract_composites_from_unit(
     while let Some(child) = children.next()? {
         let tag = child.entry().tag();
 
-        if tag == DW_TAG_structure_type {
+        if tag == DW_TAG_structure_type || tag == DW_TAG_class_type {
             if let Some(st) = extract_struct_type(dwarf, unit, child)? {
                 structs.insert(st.name.clone(), st);
             }
@@ -301,9 +318,15 @@ fn extract_struct_type(
         .and_then(|v| v.udata_value())
         .unwrap_or(0);
 
-    let fields = extract_members(dwarf, unit, node)?;
+    let (fields, template_args) = extract_members_and_template_args(dwarf, unit, node)?;
+    let name = surface_template_args(name, &template_args);
 
-    Ok(Some(StructType { name, size, fields }))
+    Ok(Some(StructType {
+        name,
+        size,
+        fields,
+        template_args,
+    }))
 }
 
 fn extract_enum_type(
@@ -386,14 +409,32 @@ fn extract_members(
     unit: &gimli::Unit<R<'_>>,
     node: gimli::EntriesTreeNode<'_, '_, R<'_>>,
 ) -> Result<Vec<StructField>, gimli::Error> {
+    Ok(extract_members_and_template_args(dwarf, unit, node)?.0)
+}
+
+fn extract_members_and_template_args(
+    dwarf: &gimli::Dwarf<R<'_>>,
+    unit: &gimli::Unit<R<'_>>,
+    node: gimli::EntriesTreeNode<'_, '_, R<'_>>,
+) -> Result<(Vec<StructField>, Vec<TemplateArgument>), gimli::Error> {
     let mut fields = Vec::new();
+    let mut template_args = Vec::new();
     let mut children = node.children();
 
     while let Some(child) = children.next()? {
-        if child.entry().tag() != DW_TAG_member {
+        let child_entry = child.entry();
+        let tag = child_entry.tag();
+
+        if tag == DW_TAG_template_type_parameter || tag == DW_TAG_template_value_parameter {
+            if let Some(arg) = extract_template_argument(dwarf, unit, child_entry)? {
+                template_args.push(arg);
+            }
             continue;
         }
-        let child_entry = child.entry();
+
+        if tag != DW_TAG_member {
+            continue;
+        }
 
         let name = match attr_string(dwarf, unit, child_entry, DW_AT_name)? {
             Some(n) => n,
@@ -431,7 +472,7 @@ fn extract_members(
         });
     }
 
-    Ok(fields)
+    Ok((fields, template_args))
 }
 
 fn resolve_type_size(
@@ -452,20 +493,25 @@ fn resolve_type_size(
         .and_then(|v| v.udata_value())
 }
 
-fn extract_params_and_locals(
+fn extract_params_locals_and_template_args(
     dwarf: &gimli::Dwarf<R<'_>>,
     unit: &gimli::Unit<R<'_>>,
     func_node: gimli::EntriesTreeNode<'_, '_, R<'_>>,
-) -> Result<(Vec<ParameterInfo>, Vec<LocalVariable>), gimli::Error> {
+) -> Result<(Vec<ParameterInfo>, Vec<LocalVariable>, Vec<TemplateArgument>), gimli::Error> {
     let mut params = Vec::new();
     let mut locals = Vec::new();
+    let mut template_args = Vec::new();
     let mut children = func_node.children();
 
     while let Some(child) = children.next()? {
         let tag = child.entry().tag();
         let entry = child.entry();
 
-        if tag == DW_TAG_formal_parameter {
+        if tag == DW_TAG_template_type_parameter || tag == DW_TAG_template_value_parameter {
+            if let Some(arg) = extract_template_argument(dwarf, unit, entry)? {
+                template_args.push(arg);
+            }
+        } else if tag == DW_TAG_formal_parameter {
             let name = attr_string(dwarf, unit, entry, DW_AT_name)?;
             let type_name = match entry.attr_value(DW_AT_type) {
                 Some(val) => resolve_type_name(dwarf, unit, val)?,
@@ -492,7 +538,83 @@ fn extract_params_and_locals(
         }
     }
 
-    Ok((params, locals))
+    Ok((params, locals, template_args))
+}
+
+fn extract_template_argument(
+    dwarf: &gimli::Dwarf<R<'_>>,
+    unit: &gimli::Unit<R<'_>>,
+    entry: &gimli::DebuggingInformationEntry<R<'_>>,
+) -> Result<Option<TemplateArgument>, gimli::Error> {
+    let name = attr_string(dwarf, unit, entry, DW_AT_name)?;
+    let value = if entry.tag() == DW_TAG_template_type_parameter {
+        match entry.attr_value(DW_AT_type) {
+            Some(val) => resolve_type_name(dwarf, unit, val)?.unwrap_or_else(|| {
+                name.clone()
+                    .unwrap_or_else(|| "<unknown type template arg>".to_string())
+            }),
+            None => name
+                .clone()
+                .unwrap_or_else(|| "<unknown type template arg>".to_string()),
+        }
+    } else if let Some(value) = entry.attr_value(DW_AT_const_value) {
+        format_template_const_value(dwarf, unit, value)?
+    } else if let Some(val) = entry.attr_value(DW_AT_type) {
+        resolve_type_name(dwarf, unit, val)?.unwrap_or_else(|| {
+            name.clone()
+                .unwrap_or_else(|| "<unknown value template arg>".to_string())
+        })
+    } else {
+        name.clone()
+            .unwrap_or_else(|| "<unknown value template arg>".to_string())
+    };
+
+    Ok(Some(TemplateArgument { name, value }))
+}
+
+fn format_template_const_value(
+    dwarf: &gimli::Dwarf<R<'_>>,
+    unit: &gimli::Unit<R<'_>>,
+    value: AttributeValue<R<'_>>,
+) -> Result<String, gimli::Error> {
+    if let Some(s) = value.sdata_value() {
+        return Ok(s.to_string());
+    }
+    if let Some(u) = value.udata_value() {
+        return Ok(u.to_string());
+    }
+    match value {
+        AttributeValue::String(_) | AttributeValue::DebugStrRef(_) | AttributeValue::DebugLineStrRef(_) => {
+            Ok(dwarf.attr_string(unit, value)?.to_string_lossy().into_owned())
+        }
+        AttributeValue::Flag(b) => Ok(if b { "true" } else { "false" }.to_string()),
+        AttributeValue::Addr(a) => Ok(format!("0x{a:x}")),
+        _ => Ok("<template value>".to_string()),
+    }
+}
+
+fn surface_template_args(name: String, args: &[TemplateArgument]) -> String {
+    if args.is_empty() || has_template_args(&name) {
+        return name;
+    }
+    let rendered = args
+        .iter()
+        .map(|arg| arg.value.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("{name}<{rendered}>")
+}
+
+fn has_template_args(name: &str) -> bool {
+    let mut depth = 0usize;
+    for c in name.chars() {
+        match c {
+            '<' => depth += 1,
+            '>' if depth > 0 => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 /// Decode a `DW_AT_location` value as a single `DW_OP_fbreg <sleb>` opcode.
@@ -925,6 +1047,57 @@ mod tests {
         assert_eq!(rect.fields[1].offset, 8);
         assert_eq!(rect.fields[1].size, 8);
         assert_eq!(rect.fields[1].type_name, "Point");
+    }
+
+    fn load_templates_fixture() -> BinaryImage {
+        let data = std::fs::read("../../fixtures/debug_templates.elf")
+            .expect("fixture debug_templates.elf must exist");
+        ElfLoader::load(&data).expect("should parse debug_templates.elf")
+    }
+
+    #[test]
+    fn cxx_template_type_parameters_surface_in_struct_declarations() {
+        let img = load_templates_fixture();
+        let info = import_dwarf(&img).expect("should parse DWARF");
+
+        let box_int = info
+            .structs
+            .get("Box<int>")
+            .expect("Box<int> should be keyed by its surfaced template declaration");
+        assert_eq!(box_int.template_args.len(), 1);
+        assert_eq!(box_int.template_args[0].name.as_deref(), Some("T"));
+        assert_eq!(box_int.template_args[0].value, "int");
+        assert_eq!(box_int.fields[0].type_name, "int");
+
+        let array = info
+            .structs
+            .get("Array<long int, 4>")
+            .expect("Array<long int, 4> should include type and value template args");
+        assert_eq!(array.template_args.len(), 2);
+        assert_eq!(array.template_args[0].name.as_deref(), Some("T"));
+        assert_eq!(array.template_args[0].value, "long int");
+        assert_eq!(array.template_args[1].name.as_deref(), Some("N"));
+        assert_eq!(array.template_args[1].value, "4");
+    }
+
+    #[test]
+    fn cxx_function_template_parameters_surface_in_function_declarations() {
+        let img = load_templates_fixture();
+        let info = import_dwarf(&img).expect("should parse DWARF");
+
+        let add_t = info
+            .functions
+            .values()
+            .find(|f| f.name == "addT<int>")
+            .expect("should recover instantiated function template name");
+        assert_eq!(add_t.template_args.len(), 1);
+        assert_eq!(add_t.template_args[0].name.as_deref(), Some("T"));
+        assert_eq!(add_t.template_args[0].value, "int");
+        assert_eq!(add_t.return_type.as_deref(), Some("int"));
+        assert!(add_t
+            .params
+            .iter()
+            .all(|param| param.type_name.as_deref() == Some("int")));
     }
 
     #[test]

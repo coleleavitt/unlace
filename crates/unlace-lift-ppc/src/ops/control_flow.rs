@@ -5,11 +5,11 @@ use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
 use crate::lift::{LiftCtx, operand_imm};
-use crate::register_file::{cr, ctr, lr};
+use crate::register_file::{cr, ctr_with_size, lr_with_size};
 
 pub fn lift_b(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
-    let target = match ops.first().and_then(|o| operand_imm(o)) {
-        Some(t) => Varnode::constant(t as u64, 8),
+    let target = match ops.first().and_then(operand_imm) {
+        Some(t) => Varnode::constant(t as u64, ctx.ptr_size),
         None => return ctx.emit_unimplemented(),
     };
     ctx.emit(IrInsn::without_output(
@@ -21,16 +21,16 @@ pub fn lift_b(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
 
 pub fn lift_bl(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     // BL target: LR = addr + 4, then call target
-    let return_addr = Varnode::constant(ctx.addr.wrapping_add(4), 8);
+    let return_addr = Varnode::constant(ctx.addr.wrapping_add(4), ctx.ptr_size);
     ctx.emit(IrInsn::with_output(
         IrOp::Copy,
-        lr(),
+        lr_with_size(ctx.ptr_size),
         smallvec![return_addr],
         ctx.addr,
     ));
 
-    let target = match ops.first().and_then(|o| operand_imm(o)) {
-        Some(t) => Varnode::constant(t as u64, 8),
+    let target = match ops.first().and_then(operand_imm) {
+        Some(t) => Varnode::constant(t as u64, ctx.ptr_size),
         None => return ctx.emit_unimplemented(),
     };
     ctx.emit(IrInsn::without_output(
@@ -56,7 +56,7 @@ pub fn lift_bc(ctx: &mut LiftCtx, _cs: &Capstone, _insn: &Insn<'_>, detail: &Ins
     });
 
     let target_vn = match target {
-        Some(t) => Varnode::constant(*t as u64, 8),
+        Some(t) => Varnode::constant(*t as u64, ctx.ptr_size),
         None => return ctx.emit_unimplemented(),
     };
 
@@ -73,7 +73,7 @@ pub fn lift_bc(ctx: &mut LiftCtx, _cs: &Capstone, _insn: &Insn<'_>, detail: &Ins
 pub fn lift_bctr(ctx: &mut LiftCtx) {
     ctx.emit(IrInsn::without_output(
         IrOp::Branchind,
-        smallvec![ctr()],
+        smallvec![ctr_with_size(ctx.ptr_size)],
         ctx.addr,
     ));
 }
@@ -81,7 +81,7 @@ pub fn lift_bctr(ctx: &mut LiftCtx) {
 pub fn lift_blr(ctx: &mut LiftCtx) {
     ctx.emit(IrInsn::without_output(
         IrOp::Return,
-        smallvec![lr()],
+        smallvec![lr_with_size(ctx.ptr_size)],
         ctx.addr,
     ));
 }

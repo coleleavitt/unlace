@@ -6,14 +6,14 @@ use crate::lift::{LiftCtx, operand_imm, operand_reg};
 
 fn lift_reg_binop(ctx: &mut LiftCtx, ops: &[PpcOperand], ir_op: IrOp) {
     let (rd, ra, rb) = match (
-        ops.first().and_then(operand_reg),
-        ops.get(1).and_then(operand_reg),
-        ops.get(2).and_then(operand_reg),
+        ops.first().and_then(|o| operand_reg(ctx, o)),
+        ops.get(1).and_then(|o| operand_reg(ctx, o)),
+        ops.get(2).and_then(|o| operand_reg(ctx, o)),
     ) {
         (Some(d), Some(a), Some(b)) => (d, a, b),
         _ => return ctx.emit_unimplemented(),
     };
-    let result = Varnode::unique(ctx.alloc_unique(), 8);
+    let result = Varnode::unique(ctx.alloc_unique(), rd.size);
     ctx.emit(IrInsn::with_output(
         ir_op,
         result,
@@ -30,18 +30,18 @@ fn lift_reg_binop(ctx: &mut LiftCtx, ops: &[PpcOperand], ir_op: IrOp) {
 
 fn lift_imm_binop(ctx: &mut LiftCtx, ops: &[PpcOperand], ir_op: IrOp) {
     let (rd, ra) = match (
-        ops.first().and_then(operand_reg),
-        ops.get(1).and_then(operand_reg),
+        ops.first().and_then(|o| operand_reg(ctx, o)),
+        ops.get(1).and_then(|o| operand_reg(ctx, o)),
     ) {
         (Some(d), Some(a)) => (d, a),
         _ => return ctx.emit_unimplemented(),
     };
-    let imm = match ops.get(2).and_then(|o| operand_imm(o)) {
+    let imm = match ops.get(2).and_then(operand_imm) {
         Some(v) => v,
         None => return ctx.emit_unimplemented(),
     };
-    let imm_vn = Varnode::constant(imm as u64, 8);
-    let result = Varnode::unique(ctx.alloc_unique(), 8);
+    let imm_vn = Varnode::constant(imm as u64, rd.size);
+    let result = Varnode::unique(ctx.alloc_unique(), rd.size);
     ctx.emit(IrInsn::with_output(
         ir_op,
         result,
@@ -90,26 +90,26 @@ pub fn lift_srw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
 
 pub fn lift_sraw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     let (rd, ra) = match (
-        ops.first().and_then(operand_reg),
-        ops.get(1).and_then(operand_reg),
+        ops.first().and_then(|o| operand_reg(ctx, o)),
+        ops.get(1).and_then(|o| operand_reg(ctx, o)),
     ) {
         (Some(d), Some(a)) => (d, a),
         _ => return ctx.emit_unimplemented(),
     };
 
     let shift = ops.get(2).and_then(|o| {
-        operand_reg(o)
+        operand_reg(ctx, o)
             .map(ShiftSource::Reg)
             .or_else(|| operand_imm(o).map(ShiftSource::Imm))
     });
 
     let shift_vn = match shift {
         Some(ShiftSource::Reg(v)) => v,
-        Some(ShiftSource::Imm(i)) => Varnode::constant(i as u64, 8),
+        Some(ShiftSource::Imm(i)) => Varnode::constant(i as u64, rd.size),
         None => return ctx.emit_unimplemented(),
     };
 
-    let result = Varnode::unique(ctx.alloc_unique(), 8);
+    let result = Varnode::unique(ctx.alloc_unique(), rd.size);
     ctx.emit(IrInsn::with_output(
         IrOp::IntSright,
         result,

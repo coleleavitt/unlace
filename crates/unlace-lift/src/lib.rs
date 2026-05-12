@@ -4,10 +4,16 @@ use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterFile};
 
 pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
-pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_avr::AvrLifter;
+pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_mips::MipsLifter;
-pub use unlace_lift_ppc::PpcLifter;
+pub use unlace_lift_ppc::{PpcEndian, PpcLifter, PpcMode};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LifterEndian {
+    Little,
+    Big,
+}
 pub use unlace_lift_riscv::RiscVLifter;
 pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_x86::X86Lifter;
@@ -43,12 +49,23 @@ impl Lifter for UnimplementedLifter {
 }
 
 pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
+    get_lifter_with_endian(arch, None)
+}
+
+pub fn get_lifter_with_endian(arch: ArchId, endian: Option<LifterEndian>) -> Box<dyn Lifter> {
     match arch {
         ArchId::X86 | ArchId::X86_64 => Box::new(X86Lifter::new()),
         ArchId::Arm | ArchId::AArch64 => Box::new(ArmLifter::new()),
         ArchId::RiscV64 => Box::new(RiscVLifter::new()),
         ArchId::Mips | ArchId::Mips64 => Box::new(MipsLifter::new()),
-        ArchId::Ppc | ArchId::Ppc64 => Box::new(PpcLifter::new()),
+        ArchId::Ppc => match endian {
+            Some(LifterEndian::Little) => Box::new(PpcLifter::ppc32_le()),
+            _ => Box::new(PpcLifter::ppc32_be()),
+        },
+        ArchId::Ppc64 => match endian {
+            Some(LifterEndian::Little) => Box::new(PpcLifter::ppc64_le()),
+            _ => Box::new(PpcLifter::ppc64_be()),
+        },
         ArchId::V850 => Box::new(V850Lifter::new()),
         ArchId::Arc => Box::new(ArcLifter::new()),
         ArchId::Ebpf => Box::new(EbpfLifter::new()),
@@ -87,7 +104,12 @@ mod tests {
     fn test_get_lifter_ppc() {
         let l = get_lifter(ArchId::Ppc);
         assert_eq!(l.arch(), ArchId::Ppc);
+        assert_eq!(l.register_file().registers[0].varnode.size, 4);
         assert!(!l.register_file().registers.is_empty());
+
+        let l64 = get_lifter(ArchId::Ppc64);
+        assert_eq!(l64.arch(), ArchId::Ppc64);
+        assert_eq!(l64.register_file().registers[0].varnode.size, 8);
     }
 
     #[test]

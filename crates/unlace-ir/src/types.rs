@@ -103,6 +103,14 @@ pub enum Type {
         key: Box<Type>,
         value: Box<Type>,
     },
+    /// Go generic type parameter surfaced from post-1.18 metadata
+    /// (`runtime.dictabi`, t297). `name` is the source-style identifier
+    /// when known (e.g. `T`); `constraint` is the rendered Go syntax for
+    /// the bound (usually `any` for dictionary-only recovery).
+    TypeParam {
+        name: String,
+        constraint: String,
+    },
 }
 
 /// A single field within a [`Type::Struct`].
@@ -231,6 +239,10 @@ impl Type {
             // 64-bit targets); the map *type* variant only records the
             // K/V shapes used by the printer.
             Type::Map { .. } => Some(8),
+            // Type parameters are compile-time-only surface syntax; when
+            // materialised as values in recovered metadata they flow through
+            // dictionaries / interface words. Model them as pointer-sized.
+            Type::TypeParam { .. } => Some(8),
         }
     }
 
@@ -400,6 +412,13 @@ impl fmt::Display for Type {
             // (`// type_0x…: []int` / `// type_0x…: map[K]V`).
             Type::Slice { elem } => write!(f, "[]{elem}"),
             Type::Map { key, value } => write!(f, "map[{key}]{value}"),
+            Type::TypeParam { name, constraint } => {
+                if constraint.is_empty() {
+                    f.write_str(name)
+                } else {
+                    write!(f, "{name} {constraint}")
+                }
+            }
         }
     }
 }
@@ -648,5 +667,15 @@ mod tests {
             outer.to_string(),
             "map[__int32]map[__int8][]__int32",
         );
+    }
+
+    #[test]
+    fn t297_type_param_display_and_size() {
+        let t = Type::TypeParam {
+            name: "T".into(),
+            constraint: "any".into(),
+        };
+        assert_eq!(t.to_string(), "T any");
+        assert_eq!(t.size(), Some(8));
     }
 }

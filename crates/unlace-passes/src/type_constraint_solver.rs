@@ -5,9 +5,16 @@
 //! [`PrimitiveType::join`] lattice. Where [`crate::type_infer::TypeInferPass`]
 //! walks instructions and mutates `var_types` in-place, this pass first
 //! collects a constraint list (no mutation, easy to inspect / test) and then
-//! solves it. The two passes intentionally overlap on the easy cases; this
-//! one exists to make the constraint graph explicit so future work
-//! (subtyping / unification / pointer chasing) has a clean substrate.
+//! solves it. The two passes intentionally overlap on the easy cases.
+//!
+//! The solver also carries a Retypd-inspired layer of polymorphic type
+//! variables: every SSA varnode has a symbolic type variable whose lower
+//! and upper bounds are expressed in a small capability lattice (integer,
+//! unsigned, pointer, boolean, floating point, memory-addressable, callable).
+//! Equality and subtype constraints propagate those capability bounds before
+//! materialising them back to [`PrimitiveType`]. This keeps ambiguous
+//! same-width values polymorphic until enough use-site evidence (LOAD/STORE,
+//! signed/unsigned operations, pointer arithmetic, calls) refines them.
 //!
 //! ## Constraint kinds
 //!
@@ -20,10 +27,10 @@
 //! * [`Constraint::SameType`] — two vars share whatever type either one
 //!   resolves to. Mutual lattice join.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::IrOp;
+use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 
 use crate::pass::{Pass, PassError};
 
@@ -46,6 +53,50 @@ pub enum Constraint {
     /// `a` and `b` must agree on a type. Implemented as a bidirectional
     /// join: whichever side is more specific propagates to the other.
     SameType(SsaVarnode, SsaVarnode),
+    /// Retypd-style symbolic subtype relation: every capability inferred for
+    /// `lower` is also valid for `upper`, and every concrete upper bound on
+    /// `upper` constrains `lower`. This is distinct from [`Constraint::Subtype`],
+    /// which records a concrete primitive lower bound.
+    PolySubtype {
+        lower: SsaVarnode,
+        upper: SsaVarnode,
+    },
+    /// Attach a symbolic capability to a varnode's polymorphic type variable.
+    /// Capabilities are solved in the Retypd layer and then materialised back
+    /// to primitive types when unambiguous.
+    HasCapability(SsaVarnode, TypeCapability),
+}
+
+/// A Retypd-inspired capability over a polymorphic type variable.
+///
+/// The lattice is intentionally compact and monotone: `Any` is the top/empty
+/// fact, while concrete capabilities can coexist until their best primitive
+/// representative is chosen. Pointer-like facts imply integer/address
+/// capabilities, and signed/unsigned arithmetic are represented separately so
+/// same-width integer variables can stay polymorphic until a use-site forces a
+/// choice.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum TypeCapability {
+    Any,
+    Bool,
+    Integer { width: u8, signed: Option<bool> },
+    Float32,
+    Float64,
+    Pointer,
+    Address,
+    Callable,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct PolyTypeBounds {
+    pub lower: BTreeSet<TypeCapability>,
+    pub upper: BTreeSet<TypeCapability>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct PolyTypeSolution {
+    pub bounds: BTreeMap<SsaVarnode, PolyTypeBounds>,
+    pub primitive_types: BTreeMap<SsaVarnode, PrimitiveType>,
 }
 
 /// Walk every instruction in `func` and emit the constraint list dictated
@@ -91,10 +142,50 @@ pub fn collect_constraints(func: &SsaFunction) -> Vec<Constraint> {
                     }
                 }
 
+                IrOp::IntDiv | IrOp::IntRem | IrOp::IntRight => {
+                    add_integer_op_constraints(&mut cs, out_sv, in_sv(0), in_sv(1), false);
+                }
+
+                IrOp::IntSdiv
+                | IrOp::IntSrem
+                | IrOp::IntSright
+                | IrOp::IntSless
+                | IrOp::IntSlessequal => {
+                    add_integer_op_constraints(&mut cs, out_sv, in_sv(0), in_sv(1), true);
+                    if matches!(insn.op, IrOp::IntSless | IrOp::IntSlessequal) {
+                        if let Some(z) = out_sv {
+                            cs.push(Constraint::Equal(z, PrimitiveType::Bool));
+                        }
+                    }
+                }
+
+                IrOp::IntEqual | IrOp::IntNotequal | IrOp::IntLess | IrOp::IntLessequal => {
+                    if let (Some(x), Some(y)) = (in_sv(0), in_sv(1)) {
+                        cs.push(Constraint::SameType(x, y));
+                    }
+                    if let Some(z) = out_sv {
+                        cs.push(Constraint::Equal(z, PrimitiveType::Bool));
+                    }
+                }
+
+                IrOp::BoolNegate | IrOp::BoolAnd | IrOp::BoolOr | IrOp::BoolXor => {
+                    for sv in [in_sv(0), in_sv(1), out_sv].into_iter().flatten() {
+                        cs.push(Constraint::Equal(sv, PrimitiveType::Bool));
+                    }
+                }
+
                 // LOAD (space, addr) → v.  addr points to v.
                 IrOp::Load => {
                     if let (Some(addr), Some(v)) = (in_sv(1), out_sv) {
                         cs.push(Constraint::PointsTo(addr, v));
+                        cs.push(Constraint::HasCapability(addr, TypeCapability::Address));
+                        // The loaded value's type is constrained by the memory
+                        // cell addressed by `addr`, but not equal to the
+                        // address itself. Preserve this as a symbolic flow edge.
+                        cs.push(Constraint::PolySubtype {
+                            lower: v,
+                            upper: addr,
+                        });
                     }
                 }
 
@@ -102,6 +193,11 @@ pub fn collect_constraints(func: &SsaFunction) -> Vec<Constraint> {
                 IrOp::Store => {
                     if let (Some(addr), Some(val)) = (in_sv(1), in_sv(2)) {
                         cs.push(Constraint::PointsTo(addr, val));
+                        cs.push(Constraint::HasCapability(addr, TypeCapability::Address));
+                        cs.push(Constraint::PolySubtype {
+                            lower: val,
+                            upper: addr,
+                        });
                     }
                 }
 
@@ -115,7 +211,10 @@ pub fn collect_constraints(func: &SsaFunction) -> Vec<Constraint> {
                 // Zero-extend: output is unsigned and wider.
                 IrOp::IntZext => {
                     if let Some(y) = out_sv {
-                        cs.push(Constraint::Equal(y, PrimitiveType::UnsignedInt(y.base.size)));
+                        cs.push(Constraint::Equal(
+                            y,
+                            PrimitiveType::UnsignedInt(y.base.size),
+                        ));
                     }
                 }
 
@@ -123,6 +222,62 @@ pub fn collect_constraints(func: &SsaFunction) -> Vec<Constraint> {
                 IrOp::IntSext => {
                     if let Some(y) = out_sv {
                         cs.push(Constraint::Equal(y, PrimitiveType::Int(y.base.size)));
+                    }
+                }
+
+                IrOp::Ptradd | IrOp::Ptrsub => {
+                    if let Some(base) = in_sv(0) {
+                        cs.push(Constraint::HasCapability(base, TypeCapability::Pointer));
+                    }
+                    if let Some(idx) = in_sv(1) {
+                        cs.push(Constraint::HasCapability(
+                            idx,
+                            TypeCapability::Integer {
+                                width: idx.base.size,
+                                signed: None,
+                            },
+                        ));
+                    }
+                    if let Some(out) = out_sv {
+                        cs.push(Constraint::Subtype(out, PrimitiveType::Ptr));
+                        cs.push(Constraint::HasCapability(out, TypeCapability::Pointer));
+                        if let Some(base) = in_sv(0) {
+                            cs.push(Constraint::PolySubtype {
+                                lower: base,
+                                upper: out,
+                            });
+                        }
+                    }
+                }
+
+                IrOp::Cast => {
+                    if let (Some(x), Some(y)) = (in_sv(0), out_sv) {
+                        cs.push(Constraint::PolySubtype { lower: x, upper: y });
+                    }
+                }
+
+                IrOp::Callind | IrOp::Branchind => {
+                    if let Some(target) = in_sv(0) {
+                        cs.push(Constraint::HasCapability(target, TypeCapability::Callable));
+                    }
+                }
+
+                IrOp::FloatAdd | IrOp::FloatSub | IrOp::FloatMult | IrOp::FloatDiv => {
+                    let cap = out_sv.map(float_cap_for).unwrap_or(TypeCapability::Float64);
+                    for sv in [in_sv(0), in_sv(1), out_sv].into_iter().flatten() {
+                        cs.push(Constraint::HasCapability(sv, cap));
+                    }
+                }
+
+                IrOp::FloatEqual | IrOp::FloatNotequal | IrOp::FloatLess | IrOp::FloatLessequal => {
+                    if let Some(z) = out_sv {
+                        cs.push(Constraint::Equal(z, PrimitiveType::Bool));
+                    }
+                    let cap = in_sv(0)
+                        .map(float_cap_for)
+                        .unwrap_or(TypeCapability::Float64);
+                    for sv in [in_sv(0), in_sv(1)].into_iter().flatten() {
+                        cs.push(Constraint::HasCapability(sv, cap));
                     }
                 }
 
@@ -151,9 +306,29 @@ pub fn solve_constraints(
     func: &SsaFunction,
     constraints: Vec<Constraint>,
 ) -> BTreeMap<SsaVarnode, PrimitiveType> {
-    let mut types: BTreeMap<SsaVarnode, PrimitiveType> = func.var_types.clone();
+    solve_polymorphic_constraints(func, constraints).primitive_types
+}
 
-    // Cap iterations so a pathological constraint graph can't hang the pass.
+/// Solve primitive and polymorphic subtype/capability constraints together.
+///
+/// This is the public Retypd-style entry point for tests and future passes that
+/// need to inspect symbolic bounds instead of only the materialised primitive
+/// map. The fixed point is monotone: concrete primitive constraints seed lower
+/// bounds, equality creates bidirectional subtype edges, and capabilities flow
+/// across [`Constraint::PolySubtype`] edges until saturation.
+pub fn solve_polymorphic_constraints(
+    func: &SsaFunction,
+    constraints: Vec<Constraint>,
+) -> PolyTypeSolution {
+    let mut types: BTreeMap<SsaVarnode, PrimitiveType> = func.var_types.clone();
+    let mut bounds: BTreeMap<SsaVarnode, PolyTypeBounds> = BTreeMap::new();
+
+    for (sv, ty) in &func.var_types {
+        if let Some(cap) = primitive_to_capability(*ty, sv.base.size) {
+            insert_lower(&mut bounds, *sv, cap);
+        }
+    }
+
     let max_iters = 64usize;
     let mut iters = 0usize;
     loop {
@@ -169,29 +344,58 @@ pub fn solve_constraints(
         let mut changed = false;
         for c in &constraints {
             match c {
-                Constraint::Equal(v, t) | Constraint::Subtype(v, t) => {
+                Constraint::Equal(v, t) => {
                     changed |= meet(&mut types, *v, *t);
+                    changed |= add_primitive_bound(&mut bounds, *v, *t);
+                }
+                Constraint::Subtype(v, t) => {
+                    changed |= meet(&mut types, *v, *t);
+                    changed |= add_primitive_bound(&mut bounds, *v, *t);
                 }
                 Constraint::PointsTo(addr, _val) => {
                     changed |= meet(&mut types, *addr, PrimitiveType::Ptr);
+                    changed |= insert_lower(&mut bounds, *addr, TypeCapability::Pointer);
+                    changed |= insert_lower(&mut bounds, *addr, TypeCapability::Address);
                 }
                 Constraint::SameType(a, b) => {
+                    changed |= propagate_between(&mut bounds, *a, *b);
                     let ta = get(&types, *a);
                     let tb = get(&types, *b);
                     let j = ta.join(tb);
                     if j != PrimitiveType::Unknown {
                         changed |= meet(&mut types, *a, j);
                         changed |= meet(&mut types, *b, j);
+                        changed |= add_primitive_bound(&mut bounds, *a, j);
+                        changed |= add_primitive_bound(&mut bounds, *b, j);
                     }
+                }
+                Constraint::PolySubtype { lower, upper } => {
+                    changed |= propagate_lower_to_upper(&mut bounds, *lower, *upper);
+                    changed |= propagate_upper_to_lower(&mut bounds, *lower, *upper);
+                }
+                Constraint::HasCapability(v, cap) => {
+                    changed |= insert_lower(&mut bounds, *v, *cap);
                 }
             }
         }
+
+        let snapshot: Vec<_> = bounds
+            .iter()
+            .filter_map(|(sv, b)| materialize_primitive(*sv, b).map(|ty| (*sv, ty)))
+            .collect();
+        for (sv, ty) in snapshot {
+            changed |= meet(&mut types, sv, ty);
+        }
+
         if !changed {
             break;
         }
     }
 
-    types
+    PolyTypeSolution {
+        bounds,
+        primitive_types: types,
+    }
 }
 
 /// Convenience wrapper used by [`TypeConstraintSolverPass`]: collect, solve,
@@ -242,6 +446,39 @@ impl Pass for TypeConstraintSolverPass {
     }
 }
 
+fn add_integer_op_constraints(
+    cs: &mut Vec<Constraint>,
+    out: Option<SsaVarnode>,
+    lhs: Option<SsaVarnode>,
+    rhs: Option<SsaVarnode>,
+    signed: bool,
+) {
+    if let (Some(x), Some(y)) = (lhs, rhs) {
+        cs.push(Constraint::SameType(x, y));
+    }
+    if let (Some(x), Some(z)) = (lhs, out) {
+        cs.push(Constraint::SameType(x, z));
+    }
+    let vars = [lhs, rhs, out];
+    for sv in vars.into_iter().flatten() {
+        cs.push(Constraint::HasCapability(
+            sv,
+            TypeCapability::Integer {
+                width: sv.base.size,
+                signed: Some(signed),
+            },
+        ));
+    }
+}
+
+fn float_cap_for(sv: SsaVarnode) -> TypeCapability {
+    match sv.base.size {
+        4 => TypeCapability::Float32,
+        8 => TypeCapability::Float64,
+        _ => TypeCapability::Any,
+    }
+}
+
 // ----- helpers -----
 
 fn get(types: &BTreeMap<SsaVarnode, PrimitiveType>, sv: SsaVarnode) -> PrimitiveType {
@@ -266,6 +503,164 @@ fn meet(
     } else {
         false
     }
+}
+
+fn primitive_to_capability(ty: PrimitiveType, fallback_width: u8) -> Option<TypeCapability> {
+    match ty {
+        PrimitiveType::Unknown => None,
+        PrimitiveType::Bool => Some(TypeCapability::Bool),
+        PrimitiveType::Int(w) => Some(TypeCapability::Integer {
+            width: w,
+            signed: None,
+        }),
+        PrimitiveType::UnsignedInt(w) => Some(TypeCapability::Integer {
+            width: w,
+            signed: Some(false),
+        }),
+        PrimitiveType::Float => Some(TypeCapability::Float32),
+        PrimitiveType::Double => Some(TypeCapability::Float64),
+        PrimitiveType::Ptr => Some(if fallback_width == 0 {
+            TypeCapability::Address
+        } else {
+            TypeCapability::Pointer
+        }),
+    }
+}
+
+fn add_primitive_bound(
+    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
+    sv: SsaVarnode,
+    ty: PrimitiveType,
+) -> bool {
+    primitive_to_capability(ty, sv.base.size).is_some_and(|cap| insert_lower(bounds, sv, cap))
+}
+
+fn insert_lower(
+    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
+    sv: SsaVarnode,
+    cap: TypeCapability,
+) -> bool {
+    let mut changed = bounds.entry(sv).or_default().lower.insert(cap);
+    match cap {
+        TypeCapability::Pointer => {
+            changed |= bounds
+                .entry(sv)
+                .or_default()
+                .lower
+                .insert(TypeCapability::Address);
+            changed |= bounds
+                .entry(sv)
+                .or_default()
+                .lower
+                .insert(TypeCapability::Integer {
+                    width: sv.base.size,
+                    signed: None,
+                });
+        }
+        TypeCapability::Callable => {
+            changed |= bounds
+                .entry(sv)
+                .or_default()
+                .lower
+                .insert(TypeCapability::Pointer);
+            changed |= bounds
+                .entry(sv)
+                .or_default()
+                .lower
+                .insert(TypeCapability::Address);
+        }
+        _ => {}
+    }
+    changed
+}
+
+fn insert_upper(
+    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
+    sv: SsaVarnode,
+    cap: TypeCapability,
+) -> bool {
+    bounds.entry(sv).or_default().upper.insert(cap)
+}
+
+fn propagate_between(
+    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
+    a: SsaVarnode,
+    b: SsaVarnode,
+) -> bool {
+    let mut changed = propagate_lower_to_upper(bounds, a, b);
+    changed |= propagate_lower_to_upper(bounds, b, a);
+    changed |= propagate_upper_to_lower(bounds, a, b);
+    changed |= propagate_upper_to_lower(bounds, b, a);
+    changed
+}
+
+fn propagate_lower_to_upper(
+    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
+    lower: SsaVarnode,
+    upper: SsaVarnode,
+) -> bool {
+    let caps: Vec<_> = bounds
+        .get(&lower)
+        .map(|b| b.lower.iter().copied().collect())
+        .unwrap_or_default();
+    caps.into_iter().fold(false, |changed, cap| {
+        insert_lower(bounds, upper, cap) || changed
+    })
+}
+
+fn propagate_upper_to_lower(
+    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
+    lower: SsaVarnode,
+    upper: SsaVarnode,
+) -> bool {
+    let caps: Vec<_> = bounds
+        .get(&upper)
+        .map(|b| {
+            b.upper
+                .iter()
+                .copied()
+                .chain(b.lower.iter().copied())
+                .collect()
+        })
+        .unwrap_or_default();
+    caps.into_iter().fold(false, |changed, cap| {
+        insert_upper(bounds, lower, cap) || changed
+    })
+}
+
+fn materialize_primitive(sv: SsaVarnode, bounds: &PolyTypeBounds) -> Option<PrimitiveType> {
+    if bounds.lower.contains(&TypeCapability::Callable)
+        || bounds.lower.contains(&TypeCapability::Pointer)
+    {
+        return Some(PrimitiveType::Ptr);
+    }
+    if bounds.lower.contains(&TypeCapability::Bool) {
+        return Some(PrimitiveType::Bool);
+    }
+    if bounds.lower.contains(&TypeCapability::Float64) {
+        return Some(PrimitiveType::Double);
+    }
+    if bounds.lower.contains(&TypeCapability::Float32) {
+        return Some(PrimitiveType::Float);
+    }
+
+    let mut best: Option<(u8, Option<bool>)> = None;
+    for cap in &bounds.lower {
+        if let TypeCapability::Integer { width, signed } = *cap {
+            let width = if width == 0 { sv.base.size } else { width };
+            best = Some(match (best, signed) {
+                (None, s) => (width, s),
+                (Some((w, old)), s) => {
+                    let sign = if old == s { old } else { None };
+                    (w.max(width), sign)
+                }
+            });
+        }
+    }
+    best.map(|(w, signed)| match signed {
+        Some(false) => PrimitiveType::UnsignedInt(w),
+        Some(true) | None => PrimitiveType::Int(w),
+    })
 }
 
 // ----- tests -----
@@ -390,13 +785,21 @@ mod tests {
         // Block 1 (else): r0 = INT_ADD c1, c1  → version A of r0
         let else_b = vec![
             IrInsn::with_output(IrOp::IntAdd, r0, smallvec![c1, c1], 0x1010),
-            IrInsn::without_output(IrOp::Branch, smallvec![Varnode::constant(0x1200, 8)], 0x1014),
+            IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![Varnode::constant(0x1200, 8)],
+                0x1014,
+            ),
         ];
 
         // Block 2 (then): r0 = INT_ADD c2, c2  → version B of r0
         let then_b = vec![
             IrInsn::with_output(IrOp::IntAdd, r0, smallvec![c2, c2], 0x1100),
-            IrInsn::without_output(IrOp::Branch, smallvec![Varnode::constant(0x1200, 8)], 0x1104),
+            IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![Varnode::constant(0x1200, 8)],
+                0x1104,
+            ),
         ];
 
         // Block 3 (join): use r0
@@ -562,6 +965,93 @@ mod tests {
         );
     }
 
+    /// t362: symbolic subtype edges should propagate capabilities without
+    /// requiring both variables to be primitive-equal up front.
+    #[test]
+    fn t362_polymorphic_subtype_propagates_capabilities() {
+        let a = SsaVarnode {
+            base: Varnode::reg(0, 8),
+            version: 1,
+        };
+        let b = SsaVarnode {
+            base: Varnode::reg(8, 8),
+            version: 1,
+        };
+        let ssa = make_ssa(vec![IrInsn::with_output(
+            IrOp::Copy,
+            a.base,
+            smallvec![b.base],
+            0x1000,
+        )]);
+
+        let sol = solve_polymorphic_constraints(
+            &ssa,
+            vec![
+                Constraint::PolySubtype { lower: a, upper: b },
+                Constraint::HasCapability(a, TypeCapability::Pointer),
+            ],
+        );
+
+        let b_bounds = sol.bounds.get(&b).expect("upper bounds");
+        assert!(
+            b_bounds.lower.contains(&TypeCapability::Pointer),
+            "pointer lower bound should flow lower→upper: {b_bounds:?}"
+        );
+        assert_eq!(sol.primitive_types.get(&b), Some(&PrimitiveType::Ptr));
+    }
+
+    /// t362: unsigned use-site evidence in the capability lattice should beat
+    /// ambiguous same-width integer facts when materialising primitive types.
+    #[test]
+    fn t362_unsigned_capability_materializes_u32() {
+        let x = SsaVarnode {
+            base: Varnode::reg(0, 4),
+            version: 1,
+        };
+        let ssa = make_ssa(vec![IrInsn::with_output(
+            IrOp::Copy,
+            x.base,
+            smallvec![Varnode::constant(1, 4)],
+            0x1000,
+        )]);
+
+        let sol = solve_polymorphic_constraints(
+            &ssa,
+            vec![Constraint::HasCapability(
+                x,
+                TypeCapability::Integer {
+                    width: 4,
+                    signed: Some(false),
+                },
+            )],
+        );
+
+        assert_eq!(
+            sol.primitive_types.get(&x),
+            Some(&PrimitiveType::UnsignedInt(4))
+        );
+    }
+
+    /// t362: CALLIND targets are callable pointers in the polymorphic lattice.
+    #[test]
+    fn t362_callind_target_gets_callable_pointer_capability() {
+        let target = Varnode::reg(0, 8);
+        let i0 = IrInsn::without_output(IrOp::Callind, smallvec![target], 0x1000);
+        let ssa = make_ssa(vec![i0]);
+        let sv = lookup_in(&ssa, BlockId(0), 0, 0);
+
+        let cs = collect_constraints(&ssa);
+        assert!(cs.iter().any(|c| matches!(
+            c,
+            Constraint::HasCapability(v, TypeCapability::Callable) if *v == sv
+        )));
+
+        let sol = solve_polymorphic_constraints(&ssa, cs);
+        let bounds = sol.bounds.get(&sv).expect("call target bounds");
+        assert!(bounds.lower.contains(&TypeCapability::Callable));
+        assert_eq!(sol.primitive_types.get(&sv), Some(&PrimitiveType::Ptr));
+    }
+
     /// A varnode mentioned only in an opcode we don't model (e.g. POPCOUNT)
     /// must stay `Unknown` — the solver must not invent types.
     #[test]
@@ -577,7 +1067,10 @@ mod tests {
 
         let x_sv = lookup_out(&ssa, BlockId(0), 0);
         assert!(
-            ssa.var_types.get(&x_sv).copied().unwrap_or(PrimitiveType::Unknown)
+            ssa.var_types
+                .get(&x_sv)
+                .copied()
+                .unwrap_or(PrimitiveType::Unknown)
                 == PrimitiveType::Unknown,
             "unmodelled opcode output must stay Unknown, got {:?}",
             ssa.var_types.get(&x_sv)

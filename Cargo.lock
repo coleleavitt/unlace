@@ -1703,6 +1703,7 @@ version = "0.1.0"
 dependencies = [
  "thiserror",
  "unlace-ir",
+ "unlace-lift-agx",
  "unlace-lift-arc",
  "unlace-lift-arm",
  "unlace-lift-avr",
@@ -1712,6 +1713,15 @@ dependencies = [
  "unlace-lift-riscv",
  "unlace-lift-v850",
  "unlace-lift-x86",
+]
+
+[[package]]
+name = "unlace-lift-agx"
+version = "0.1.0"
+dependencies = [
+ "smallvec",
+ "tracing",
+ "unlace-ir",
 ]
 
 [[package]]

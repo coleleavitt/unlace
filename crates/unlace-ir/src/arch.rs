@@ -22,6 +22,7 @@ pub enum ArchId {
     Avr,
     Z80,
     RxRenesas,
+    Agx,
     Unknown(u16),
 }
 
@@ -44,6 +45,7 @@ impl fmt::Display for ArchId {
             Self::Avr => f.write_str("avr"),
             Self::Z80 => f.write_str("z80"),
             Self::RxRenesas => f.write_str("rx"),
+            Self::Agx => f.write_str("agx"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

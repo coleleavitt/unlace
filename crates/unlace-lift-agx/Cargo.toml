@@ -1,0 +1,11 @@
+[package]
+name = "unlace-lift-agx"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+smallvec = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]

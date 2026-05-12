@@ -14,6 +14,8 @@
 //!  * `DW_TAG_variable` (inside a subprogram) → [`LocalVariable`] with
 //!    optional `frame_offset` decoded from a single-op `DW_OP_fbreg`
 //!    location expression.
+//!  * `.debug_macro` opcode streams → [`MacroEntry`] via
+//!    [`parse_debug_macro`] for inline macro recovery.
 //!
 //! Recursive types are resolved through [`resolve_type_name`], which
 //! recurses through `DW_TAG_pointer_type`, `DW_TAG_const_type`,
@@ -703,6 +705,225 @@ fn build_source_map(
     Ok(map)
 }
 
+// ---------------------------------------------------------------------------
+// `.debug_macro` parser (t279)
+// ---------------------------------------------------------------------------
+
+/// A single macro entry recovered from a DWARF 5 `.debug_macro` section.
+///
+/// This is intentionally a compact public representation: line/file operands
+/// needed only for stream structure are consumed, while inline define/undef
+/// text is surfaced for source-oriented recovery passes. Indirect string
+/// opcodes (`*_strp`, `*_strx`) are represented with an empty body/name because
+/// resolving them requires companion `.debug_str` / `.debug_str_offsets`
+/// sections that this standalone parser does not receive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MacroEntry {
+    /// `DW_MACRO_define` (and indirect define forms once consumed).
+    Define { line: u32, body: String },
+    /// `DW_MACRO_undef` (and indirect undef forms once consumed).
+    Undef { line: u32, name: String },
+    /// `DW_MACRO_start_file`; line/file operands are consumed and dropped.
+    StartFile,
+    /// `DW_MACRO_end_file`.
+    EndFile,
+}
+
+const DW_MACRO_DEFINE: u8 = 0x01;
+const DW_MACRO_UNDEF: u8 = 0x02;
+const DW_MACRO_START_FILE: u8 = 0x03;
+const DW_MACRO_END_FILE: u8 = 0x04;
+const DW_MACRO_DEFINE_STRP: u8 = 0x05;
+const DW_MACRO_UNDEF_STRP: u8 = 0x06;
+const DW_MACRO_DEFINE_STRX: u8 = 0x07;
+const DW_MACRO_UNDEF_STRX: u8 = 0x08;
+
+/// Parse a DWARF 5 `.debug_macro` section into simplified macro entries.
+///
+/// The parser accepts either a full DWARF 5 macro section beginning with the
+/// standard `version, flags` header, or a headerless opcode stream for small
+/// synthetic tests. It handles opcodes 0x01 through 0x08, stops at the 0x00
+/// terminator, and returns all entries decoded before malformed/truncated input
+/// rather than panicking.
+pub fn parse_debug_macro(data: &[u8]) -> Vec<MacroEntry> {
+    let mut out = Vec::new();
+    let mut cur = DwarfMacroCursor::new(data);
+
+    // Optional DWARF 5 header: u16 version, u8 flags, optional
+    // debug_line_offset, optional opcode/form table. Headerless streams are
+    // useful for tests and mirror the opcode walk below.
+    if data.len() >= 3 {
+        let version = u16::from_le_bytes([data[0], data[1]]);
+        if version == 4 || version == 5 {
+            cur.pos = 3;
+            let flags = data[2];
+            if flags & 0x01 != 0 {
+                let offset_size = if flags & 0x02 != 0 { 8 } else { 4 };
+                if cur.skip(offset_size).is_none() {
+                    return out;
+                }
+            }
+            if flags & 0x04 != 0 {
+                let table_len = match cur.read_uleb128() {
+                    Some(v) => v,
+                    None => return out,
+                };
+                for _ in 0..table_len {
+                    if cur.read_u8().is_none() {
+                        return out;
+                    }
+                    let operands = match cur.read_uleb128() {
+                        Some(v) => v,
+                        None => return out,
+                    };
+                    for _ in 0..operands {
+                        if cur.read_uleb128().is_none() {
+                            return out;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    while let Some(opcode) = cur.read_u8() {
+        match opcode {
+            0x00 => break,
+            DW_MACRO_DEFINE => {
+                let Some(line) = cur.read_uleb128() else {
+                    break;
+                };
+                let Some(body) = cur.read_cstring() else {
+                    break;
+                };
+                out.push(MacroEntry::Define {
+                    line: saturating_u32(line),
+                    body,
+                });
+            }
+            DW_MACRO_UNDEF => {
+                let Some(line) = cur.read_uleb128() else {
+                    break;
+                };
+                let Some(name) = cur.read_cstring() else {
+                    break;
+                };
+                out.push(MacroEntry::Undef {
+                    line: saturating_u32(line),
+                    name,
+                });
+            }
+            DW_MACRO_START_FILE => {
+                if cur.read_uleb128().is_none() || cur.read_uleb128().is_none() {
+                    break;
+                }
+                out.push(MacroEntry::StartFile);
+            }
+            DW_MACRO_END_FILE => out.push(MacroEntry::EndFile),
+            DW_MACRO_DEFINE_STRP | DW_MACRO_UNDEF_STRP => {
+                let Some(line) = cur.read_uleb128() else {
+                    break;
+                };
+                if cur.skip(4).is_none() {
+                    break;
+                }
+                if opcode == DW_MACRO_DEFINE_STRP {
+                    out.push(MacroEntry::Define {
+                        line: saturating_u32(line),
+                        body: String::new(),
+                    });
+                } else {
+                    out.push(MacroEntry::Undef {
+                        line: saturating_u32(line),
+                        name: String::new(),
+                    });
+                }
+            }
+            DW_MACRO_DEFINE_STRX | DW_MACRO_UNDEF_STRX => {
+                let Some(line) = cur.read_uleb128() else {
+                    break;
+                };
+                if cur.read_uleb128().is_none() {
+                    break;
+                }
+                if opcode == DW_MACRO_DEFINE_STRX {
+                    out.push(MacroEntry::Define {
+                        line: saturating_u32(line),
+                        body: String::new(),
+                    });
+                } else {
+                    out.push(MacroEntry::Undef {
+                        line: saturating_u32(line),
+                        name: String::new(),
+                    });
+                }
+            }
+            _ => break,
+        }
+    }
+
+    out
+}
+
+fn saturating_u32(value: u64) -> u32 {
+    value.min(u64::from(u32::MAX)) as u32
+}
+
+struct DwarfMacroCursor<'a> {
+    buf: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> DwarfMacroCursor<'a> {
+    fn new(buf: &'a [u8]) -> Self {
+        Self { buf, pos: 0 }
+    }
+
+    fn read_u8(&mut self) -> Option<u8> {
+        let byte = *self.buf.get(self.pos)?;
+        self.pos += 1;
+        Some(byte)
+    }
+
+    fn skip(&mut self, n: usize) -> Option<()> {
+        let end = self.pos.checked_add(n)?;
+        if end > self.buf.len() {
+            return None;
+        }
+        self.pos = end;
+        Some(())
+    }
+
+    fn read_uleb128(&mut self) -> Option<u64> {
+        let mut result = 0u64;
+        let mut shift = 0u32;
+        loop {
+            let byte = self.read_u8()?;
+            result |= u64::from(byte & 0x7f) << shift;
+            if byte & 0x80 == 0 {
+                return Some(result);
+            }
+            shift = shift.checked_add(7)?;
+            if shift >= 64 {
+                return None;
+            }
+        }
+    }
+
+    fn read_cstring(&mut self) -> Option<String> {
+        let start = self.pos;
+        while self.pos < self.buf.len() && self.buf[self.pos] != 0 {
+            self.pos += 1;
+        }
+        if self.pos >= self.buf.len() {
+            return None;
+        }
+        let text = String::from_utf8_lossy(&self.buf[start..self.pos]).into_owned();
+        self.pos += 1;
+        Some(text)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -945,6 +1166,134 @@ mod tests {
         assert!(
             info.unions.is_empty(),
             "hello_world.elf (no -g) should have no unions"
+        );
+    }
+    fn encode_uleb(mut value: u64, out: &mut Vec<u8>) {
+        loop {
+            let mut byte = (value & 0x7f) as u8;
+            value >>= 7;
+            if value != 0 {
+                byte |= 0x80;
+            }
+            out.push(byte);
+            if value == 0 {
+                break;
+            }
+        }
+    }
+
+    #[test]
+    fn debug_macro_empty_and_terminator_return_no_entries() {
+        assert!(parse_debug_macro(&[]).is_empty());
+        assert!(parse_debug_macro(&[0x00]).is_empty());
+    }
+
+    #[test]
+    fn debug_macro_parses_inline_define_and_undef() {
+        let mut data = Vec::new();
+        data.push(DW_MACRO_DEFINE);
+        encode_uleb(42, &mut data);
+        data.extend_from_slice(b"FOO(x) ((x) + 1)\0");
+        data.push(DW_MACRO_UNDEF);
+        encode_uleb(43, &mut data);
+        data.extend_from_slice(b"FOO\0");
+        data.push(0x00);
+
+        let entries = parse_debug_macro(&data);
+        assert_eq!(entries.len(), 2, "unexpected entries: {entries:?}");
+        assert_eq!(
+            entries[0],
+            MacroEntry::Define {
+                line: 42,
+                body: "FOO(x) ((x) + 1)".to_string(),
+            }
+        );
+        assert_eq!(
+            entries[1],
+            MacroEntry::Undef {
+                line: 43,
+                name: "FOO".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn debug_macro_parses_start_and_end_file() {
+        let mut data = Vec::new();
+        data.push(DW_MACRO_START_FILE);
+        encode_uleb(7, &mut data);
+        encode_uleb(3, &mut data);
+        data.push(DW_MACRO_DEFINE);
+        encode_uleb(8, &mut data);
+        data.extend_from_slice(b"INSIDE 1\0");
+        data.push(DW_MACRO_END_FILE);
+        data.push(0x00);
+
+        let entries = parse_debug_macro(&data);
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0], MacroEntry::StartFile);
+        assert_eq!(
+            entries[1],
+            MacroEntry::Define {
+                line: 8,
+                body: "INSIDE 1".to_string(),
+            }
+        );
+        assert_eq!(entries[2], MacroEntry::EndFile);
+    }
+
+    #[test]
+    fn debug_macro_parses_header_and_indirect_string_forms() {
+        let mut data = Vec::new();
+        data.extend_from_slice(&5u16.to_le_bytes());
+        data.push(0x00); // no debug_line_offset and no opcode operand table
+
+        data.push(DW_MACRO_DEFINE_STRP);
+        encode_uleb(10, &mut data);
+        data.extend_from_slice(&0x1122_3344u32.to_le_bytes());
+
+        data.push(DW_MACRO_UNDEF_STRP);
+        encode_uleb(11, &mut data);
+        data.extend_from_slice(&0x5566_7788u32.to_le_bytes());
+
+        data.push(DW_MACRO_DEFINE_STRX);
+        encode_uleb(12, &mut data);
+        encode_uleb(2, &mut data);
+
+        data.push(DW_MACRO_UNDEF_STRX);
+        encode_uleb(13, &mut data);
+        encode_uleb(3, &mut data);
+
+        data.push(DW_MACRO_DEFINE);
+        encode_uleb(14, &mut data);
+        data.extend_from_slice(b"TAIL 1\0");
+        data.push(0x00);
+
+        let entries = parse_debug_macro(&data);
+        assert_eq!(
+            entries,
+            vec![
+                MacroEntry::Define {
+                    line: 10,
+                    body: String::new(),
+                },
+                MacroEntry::Undef {
+                    line: 11,
+                    name: String::new(),
+                },
+                MacroEntry::Define {
+                    line: 12,
+                    body: String::new(),
+                },
+                MacroEntry::Undef {
+                    line: 13,
+                    name: String::new(),
+                },
+                MacroEntry::Define {
+                    line: 14,
+                    body: "TAIL 1".to_string(),
+                },
+            ]
         );
     }
 }

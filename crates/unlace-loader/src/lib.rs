@@ -62,6 +62,10 @@ pub use image::{
     SymbolKind,
 };
 pub use macho::MachoLoader;
+pub use msvc_rtti::{
+    MsvcBaseClass, MsvcClass, MsvcHierarchy, MsvcRtti, MsvcVbtable, MsvcVftable,
+    MsvcVftableMethod, scan_vtables as scan_msvc_vtables,
+};
 pub use pdb_types::{
     PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types, walk_tpi,
 };

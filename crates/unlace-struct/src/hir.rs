@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaVarnode};
+use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaVarnode};
 use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
@@ -462,6 +462,8 @@ pub struct HirFunction {
     pub foldable_exprs: BTreeSet<SsaVarnode>,
     /// Panic call sites keyed by instruction machine address.
     pub panic_sites: BTreeMap<u64, PanicKind>,
+    /// Recovered Go `defer` registrations in this function.
+    pub go_defer_sites: Vec<GoDeferSite>,
     /// `true` when the function never returns to its caller (e.g. tail-calls
     /// `exit`/`abort`/`panic`). Mirrors [`unlace_ir::ssa::SsaFunction::noreturn`]
     /// and triggers an `__noreturn` annotation in the C output.

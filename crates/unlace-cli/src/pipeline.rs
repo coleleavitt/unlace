@@ -68,7 +68,7 @@ use unlace_passes::{
     StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
     CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     VariableMergePass, annotate_libc_calls, bump_if_signature_changed, detect_byref,
-    recover_stack_frame, recover_structs, run_outer_fixedpoint, run_to_fixedpoint,
+    detect_go_defer, recover_stack_frame, recover_structs, run_outer_fixedpoint, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -1355,6 +1355,21 @@ pub fn decompile_function_with_symbols(
     let t = Instant::now();
     let symbols = build_symbol_table_with_functions(image, discovered);
 
+    if !symbols.is_empty() {
+        let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
+        for (&addr, name) in &symbols {
+            stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
+        }
+        ssa.go_defer_sites = detect_go_defer(&ssa, |addr| stable_symbol_names.get(&addr).copied())
+            .into_iter()
+            .map(|site| unlace_ir::ssa::GoDeferSite {
+                defer_block: site.defer_block,
+                deferred_func: site.deferred_func,
+                has_recover: site.has_recover,
+            })
+            .collect();
+    }
+
     // t229: classify Call targets against the libc family roster
     // (memcpy / malloc / printf-family aliases) and stash the canonical
     // names on ssa.libc_call_annotations. The closure resolves the
@@ -1380,6 +1395,7 @@ pub fn decompile_function_with_symbols(
         .as_ref()
         .map(|db| build_printer_annotations(db, entry.addr))
         .unwrap_or_default();
+    printer_annotations.go_defer_sites = ssa.go_defer_sites.clone();
     let hash_pass = unlace_passes::StringHashSwitchPass::from_strings(&image.string_table);
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
     let objc_info = unlace_loader::scan_objc_classlist(image);

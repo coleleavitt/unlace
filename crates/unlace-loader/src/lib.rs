@@ -36,6 +36,7 @@ pub mod strings;
 pub mod swift_metadata;
 pub mod til;
 pub mod uefi_module;
+pub mod wasm_component;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,
@@ -72,6 +73,11 @@ pub use pdb_types::{
     PdbTypes, ProcSig, import_pdb_types, ipi_type_hash, unify_pdb_type_sets, walk_tpi,
 };
 pub use pe::PeLoader;
+pub use wasm_component::{
+    WasmCanonicalFunction, WasmComponentExport, WasmComponentImport, WasmComponentInfo,
+    WasmComponentStart, WasmCoreExport, WasmCoreImport, WasmEncoding, WasmLoader,
+    WasmNestedComponent, WasmNestedModule, WasmStartFunction,
+};
 pub use rtti::{
     BaseClass, CppClass, InheritanceKind, RttiInfo, VtableLayout, VtableSlotKind, VtableSubtable,
     scan_rtti,

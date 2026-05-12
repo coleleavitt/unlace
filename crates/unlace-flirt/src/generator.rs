@@ -63,9 +63,11 @@ pub fn generate_patterns_from_archive_bytes(
             detail: err.to_string(),
         })?;
         let member_name = String::from_utf8_lossy(member.name()).into_owned();
-        let member_bytes = member.data(archive_bytes).map_err(|err| FlirtError::ArchiveParse {
-            detail: err.to_string(),
-        })?;
+        let member_bytes = member
+            .data(archive_bytes)
+            .map_err(|err| FlirtError::ArchiveParse {
+                detail: err.to_string(),
+            })?;
         if member_bytes.is_empty() {
             continue;
         }
@@ -194,7 +196,10 @@ pub fn render_db_as_toml(db: &FlirtDb) -> String {
     let mut out = String::new();
     for pattern in &db.patterns {
         out.push_str("[[pattern]]\n");
-        out.push_str(&format!("name = \"{}\"\n", escape_toml_string(&pattern.name)));
+        out.push_str(&format!(
+            "name = \"{}\"\n",
+            escape_toml_string(&pattern.name)
+        ));
         out.push_str(&format!("bytes = \"{}\"\n", encode_hex(&pattern.bytes)));
         out.push_str(&format!("mask = \"{}\"\n", encode_hex(&pattern.mask)));
         out.push_str(&format!("length = {}\n", pattern.length));

@@ -82,7 +82,8 @@ pub fn resolve_auth_calls(
             // target. If the target was loaded from a constant address
             // inside an auth slot, we record the annotation.
             let Some(&target_sv) =
-                func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(target_idx)))
+                func.var_map
+                    .get(&(bid, insn_idx, VarnodeSlot::Input(target_idx)))
             else {
                 continue;
             };
@@ -154,15 +155,13 @@ fn trace_load_address(func: &SsaFunction, sv: SsaVarnode) -> Option<u64> {
 /// definitions are ignored (only direct instruction outputs are
 /// considered, mirroring `indirect_call_resolve::find_def`).
 fn find_def(func: &SsaFunction, sv: SsaVarnode) -> Option<(BlockId, usize)> {
-    func.var_map
-        .iter()
-        .find_map(|((bid, idx, slot), other)| {
-            if *other == sv && matches!(slot, VarnodeSlot::Output) {
-                Some((*bid, *idx))
-            } else {
-                None
-            }
-        })
+    func.var_map.iter().find_map(|((bid, idx, slot), other)| {
+        if *other == sv && matches!(slot, VarnodeSlot::Output) {
+            Some((*bid, *idx))
+        } else {
+            None
+        }
+    })
 }
 
 #[cfg(test)]
@@ -254,6 +253,9 @@ mod tests {
     fn t201_non_cache_image_passes_through() {
         let func = callind_from_load(IMAGE_BASE + 0x40);
         let ann = resolve_auth_calls(&func, IMAGE_BASE, &[]);
-        assert!(ann.is_empty(), "empty auth_pointers must produce no annotations");
+        assert!(
+            ann.is_empty(),
+            "empty auth_pointers must produce no annotations"
+        );
     }
 }

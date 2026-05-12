@@ -22,8 +22,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::IrOp;
+use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 
 use crate::pass::{Pass, PassError};
 
@@ -115,7 +115,10 @@ pub fn collect_constraints(func: &SsaFunction) -> Vec<Constraint> {
                 // Zero-extend: output is unsigned and wider.
                 IrOp::IntZext => {
                     if let Some(y) = out_sv {
-                        cs.push(Constraint::Equal(y, PrimitiveType::UnsignedInt(y.base.size)));
+                        cs.push(Constraint::Equal(
+                            y,
+                            PrimitiveType::UnsignedInt(y.base.size),
+                        ));
                     }
                 }
 
@@ -390,13 +393,21 @@ mod tests {
         // Block 1 (else): r0 = INT_ADD c1, c1  → version A of r0
         let else_b = vec![
             IrInsn::with_output(IrOp::IntAdd, r0, smallvec![c1, c1], 0x1010),
-            IrInsn::without_output(IrOp::Branch, smallvec![Varnode::constant(0x1200, 8)], 0x1014),
+            IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![Varnode::constant(0x1200, 8)],
+                0x1014,
+            ),
         ];
 
         // Block 2 (then): r0 = INT_ADD c2, c2  → version B of r0
         let then_b = vec![
             IrInsn::with_output(IrOp::IntAdd, r0, smallvec![c2, c2], 0x1100),
-            IrInsn::without_output(IrOp::Branch, smallvec![Varnode::constant(0x1200, 8)], 0x1104),
+            IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![Varnode::constant(0x1200, 8)],
+                0x1104,
+            ),
         ];
 
         // Block 3 (join): use r0
@@ -577,7 +588,10 @@ mod tests {
 
         let x_sv = lookup_out(&ssa, BlockId(0), 0);
         assert!(
-            ssa.var_types.get(&x_sv).copied().unwrap_or(PrimitiveType::Unknown)
+            ssa.var_types
+                .get(&x_sv)
+                .copied()
+                .unwrap_or(PrimitiveType::Unknown)
                 == PrimitiveType::Unknown,
             "unmodelled opcode output must stay Unknown, got {:?}",
             ssa.var_types.get(&x_sv)

@@ -150,9 +150,10 @@ pub fn scan_swift_metadata(image: &BinaryImage) -> Option<SwiftInfo> {
 /// in this crate emit the bare form, but external tools sometimes
 /// concatenate the segment.
 fn find_section<'a>(image: &'a BinaryImage, name: &str) -> Option<&'a Section> {
-    image.sections.iter().find(|s| {
-        s.name == name || s.name.ends_with(name) || s.name.ends_with(&format!(",{name}"))
-    })
+    image
+        .sections
+        .iter()
+        .find(|s| s.name == name || s.name.ends_with(name) || s.name.ends_with(&format!(",{name}")))
 }
 
 /// Read a 32-bit little-endian word at `offset` within `data`, or
@@ -304,10 +305,9 @@ fn parse_builtin_async_table(image: &BinaryImage, sec: &Section) -> Vec<SwiftBui
             continue;
         }
         let function_va = resolve_relative(record_va, raw);
-        let function_name = image
-            .symbols
-            .get(&function_va)
-            .map(|sym| crate::demangle_swift::try_demangle_swift(&sym.name).unwrap_or_else(|| sym.name.clone()));
+        let function_name = image.symbols.get(&function_va).map(|sym| {
+            crate::demangle_swift::try_demangle_swift(&sym.name).unwrap_or_else(|| sym.name.clone())
+        });
         out.push(SwiftBuiltinAsyncFunction {
             record_va,
             function_va,

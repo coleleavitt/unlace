@@ -91,7 +91,9 @@ pub enum AndroidBootError {
     InvalidPageSize(u32),
 
     /// A payload section (kernel/ramdisk) extended past the end of the input.
-    #[error("payload section {section} (offset {offset}, size {size}) exceeds input length {input_len}")]
+    #[error(
+        "payload section {section} (offset {offset}, size {size}) exceeds input length {input_len}"
+    )]
     PayloadOutOfBounds {
         /// Name of the offending section (`"kernel"` or `"ramdisk"`).
         section: &'static str,
@@ -191,14 +193,15 @@ pub fn parse_android_boot(data: &[u8]) -> Result<AndroidBoot, AndroidBootError> 
     // Payload layout: every section is padded up to `page_size`. The header
     // itself counts as one such block.
     let kernel_offset = align_up(ANDROID_BOOT_HEADER_SIZE, page_size);
-    let kernel_end = kernel_offset.checked_add(kernel_size).ok_or(
-        AndroidBootError::PayloadOutOfBounds {
-            section: "kernel",
-            offset: kernel_offset,
-            size: kernel_size,
-            input_len: data.len(),
-        },
-    )?;
+    let kernel_end =
+        kernel_offset
+            .checked_add(kernel_size)
+            .ok_or(AndroidBootError::PayloadOutOfBounds {
+                section: "kernel",
+                offset: kernel_offset,
+                size: kernel_size,
+                input_len: data.len(),
+            })?;
     if kernel_end > data.len() {
         return Err(AndroidBootError::PayloadOutOfBounds {
             section: "kernel",
@@ -210,14 +213,15 @@ pub fn parse_android_boot(data: &[u8]) -> Result<AndroidBoot, AndroidBootError> 
     let kernel = data[kernel_offset..kernel_end].to_vec();
 
     let ramdisk_offset = align_up(kernel_end, page_size);
-    let ramdisk_end = ramdisk_offset.checked_add(ramdisk_size).ok_or(
-        AndroidBootError::PayloadOutOfBounds {
-            section: "ramdisk",
-            offset: ramdisk_offset,
-            size: ramdisk_size,
-            input_len: data.len(),
-        },
-    )?;
+    let ramdisk_end =
+        ramdisk_offset
+            .checked_add(ramdisk_size)
+            .ok_or(AndroidBootError::PayloadOutOfBounds {
+                section: "ramdisk",
+                offset: ramdisk_offset,
+                size: ramdisk_size,
+                input_len: data.len(),
+            })?;
     if ramdisk_end > data.len() {
         return Err(AndroidBootError::PayloadOutOfBounds {
             section: "ramdisk",
@@ -287,8 +291,8 @@ mod tests {
         for b in &mut buf[header_blocks..header_blocks + kernel_size as usize] {
             *b = 0xAA;
         }
-        for b in &mut buf[header_blocks + kernel_blocks
-            ..header_blocks + kernel_blocks + ramdisk_size as usize]
+        for b in &mut buf
+            [header_blocks + kernel_blocks..header_blocks + kernel_blocks + ramdisk_size as usize]
         {
             *b = 0xBB;
         }
@@ -321,10 +325,7 @@ mod tests {
 
         assert_eq!(parsed.kernel.len(), 8);
         assert_eq!(parsed.ramdisk.len(), 8);
-        assert_eq!(
-            parsed.cmdline,
-            "root=/dev/ram0 androidboot.hardware=marlin"
-        );
+        assert_eq!(parsed.cmdline, "root=/dev/ram0 androidboot.hardware=marlin");
         assert_eq!(parsed.version, 2);
     }
 
@@ -351,7 +352,10 @@ mod tests {
         let err = parse_android_boot(&img).expect_err("OOB kernel must fail");
         assert!(matches!(
             err,
-            AndroidBootError::PayloadOutOfBounds { section: "kernel", .. }
+            AndroidBootError::PayloadOutOfBounds {
+                section: "kernel",
+                ..
+            }
         ));
     }
 }

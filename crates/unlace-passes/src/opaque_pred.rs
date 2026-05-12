@@ -125,11 +125,7 @@ fn evaluate_condition(cond: Varnode, prior: &[IrInsn]) -> Option<bool> {
         IrOp::IntXor | IrOp::IntSub => {
             let b = b?;
             // x ^ x → 0, x - x → 0 (same SSA varnode).
-            if a == b {
-                Some(false)
-            } else {
-                None
-            }
+            if a == b { Some(false) } else { None }
         }
         IrOp::IntEqual => {
             let b = b?;

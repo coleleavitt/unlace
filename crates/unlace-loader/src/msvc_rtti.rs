@@ -159,8 +159,7 @@ pub fn scan_vtables(image: &BinaryImage) -> MsvcRtti {
         if let Some(col_offset) = vaddr_to_rdata_offset(rdata, col_ptr)
             && let Some(col) = parse_complete_object_locator(&rdata.data[col_offset..])
             && (col.signature == 0 || col.signature == 1)
-            && let Some(td_offset) =
-                vaddr_to_rdata_offset(rdata, col.p_type_descriptor as u64)
+            && let Some(td_offset) = vaddr_to_rdata_offset(rdata, col.p_type_descriptor as u64)
             && let Some(td) = parse_type_descriptor(&rdata.data, td_offset, ptr_size)
         {
             let vtable_addr = rdata.vaddr + (off + ptr_size) as u64;
@@ -168,8 +167,7 @@ pub fn scan_vtables(image: &BinaryImage) -> MsvcRtti {
             let mut p = off + ptr_size;
             while p + ptr_size <= rdata.data.len() {
                 let candidate = read_ptr(&rdata.data, p, ptr_size);
-                let in_text = text_range
-                    .is_some_and(|(s, e)| candidate >= s && candidate < e);
+                let in_text = text_range.is_some_and(|(s, e)| candidate >= s && candidate < e);
                 if !in_text {
                     break;
                 }
@@ -222,8 +220,7 @@ fn walk_base_class_array(
     let Some(chd) = parse_class_hierarchy_descriptor(&rdata.data[chd_offset..]) else {
         return (Vec::new(), 0);
     };
-    let Some(bca_offset) = vaddr_to_rdata_offset(rdata, chd.p_base_class_array as u64)
-    else {
+    let Some(bca_offset) = vaddr_to_rdata_offset(rdata, chd.p_base_class_array as u64) else {
         return (Vec::new(), chd.attributes);
     };
 
@@ -233,17 +230,14 @@ fn walk_base_class_array(
         if entry_off + 4 > rdata.data.len() {
             break;
         }
-        let bcd_rva = u32::from_le_bytes(
-            rdata.data[entry_off..entry_off + 4].try_into().unwrap(),
-        );
+        let bcd_rva = u32::from_le_bytes(rdata.data[entry_off..entry_off + 4].try_into().unwrap());
         let Some(bcd_off) = vaddr_to_rdata_offset(rdata, bcd_rva as u64) else {
             continue;
         };
         let Some(bcd) = parse_base_class_descriptor(&rdata.data[bcd_off..]) else {
             continue;
         };
-        let Some(td_off) = vaddr_to_rdata_offset(rdata, bcd.p_type_descriptor as u64)
-        else {
+        let Some(td_off) = vaddr_to_rdata_offset(rdata, bcd.p_type_descriptor as u64) else {
             continue;
         };
         let Some(td) = parse_type_descriptor(&rdata.data, td_off, ptr_size) else {
@@ -339,8 +333,7 @@ mod tests {
         let mut rdata = vec![0u8; 0x400];
 
         let col_va = RDATA_BASE + col_off;
-        rdata[vtable_off as usize..vtable_off as usize + 8]
-            .copy_from_slice(&col_va.to_le_bytes());
+        rdata[vtable_off as usize..vtable_off as usize + 8].copy_from_slice(&col_va.to_le_bytes());
 
         for i in 0..3u64 {
             let slot = (vtable_off + 8 + i * 8) as usize;
@@ -454,8 +447,7 @@ mod tests {
         rdata[0..8].copy_from_slice(&col_va.to_le_bytes());
         for i in 0..3u64 {
             let slot = (8 + i * 8) as usize;
-            rdata[slot..slot + 8]
-                .copy_from_slice(&(TEXT_BASE + i * 0x10).to_le_bytes());
+            rdata[slot..slot + 8].copy_from_slice(&(TEXT_BASE + i * 0x10).to_le_bytes());
         }
 
         let td_self_va = (RDATA_BASE + 0x200) as u32;
@@ -498,8 +490,7 @@ mod tests {
             let td_va = (RDATA_BASE + td_off as u64) as u32;
             rdata[bcd_off..bcd_off + 4].copy_from_slice(&td_va.to_le_bytes());
             rdata[bcd_off + 4..bcd_off + 8].copy_from_slice(&0u32.to_le_bytes());
-            rdata[bcd_off + 8..bcd_off + 12]
-                .copy_from_slice(&((i as i32) * 8).to_le_bytes());
+            rdata[bcd_off + 8..bcd_off + 12].copy_from_slice(&((i as i32) * 8).to_le_bytes());
             rdata[bcd_off + 12..bcd_off + 16].copy_from_slice(&(-1i32).to_le_bytes());
             rdata[bcd_off + 16..bcd_off + 20].copy_from_slice(&(-1i32).to_le_bytes());
             rdata[bcd_off + 20..bcd_off + 24].copy_from_slice(&0u32.to_le_bytes());
@@ -542,11 +533,8 @@ mod tests {
 
     #[test]
     fn scan_vtables_recovers_multiple_inheritance() {
-        let img = synthetic_pe_with_bases(
-            ".?AVChild@@",
-            &[".?AVParent1@@", ".?AVParent2@@"],
-            0b001,
-        );
+        let img =
+            synthetic_pe_with_bases(".?AVChild@@", &[".?AVParent1@@", ".?AVParent2@@"], 0b001);
         let rtti = scan_vtables(&img);
         let class = rtti.classes.get(".?AVChild@@").expect("Child recovered");
         assert_eq!(class.bases.len(), 2);

@@ -67,10 +67,7 @@ pub fn collect_function_annotations(func: &SsaFunction) -> Vec<(BlockId, usize, 
 /// supplied a non-null pointer, or behaviour is UB. We surface that as
 /// a comment so a reader can immediately see "yes, this param is
 /// promised non-null" rather than chase null-check passes.
-fn collect_non_null_param_hints(
-    func: &SsaFunction,
-    out: &mut Vec<(BlockId, usize, String)>,
-) {
+fn collect_non_null_param_hints(func: &SsaFunction, out: &mut Vec<(BlockId, usize, String)>) {
     let entry = func.function.entry;
     let Some(block) = func.function.blocks.get(&entry) else {
         return;
@@ -129,8 +126,10 @@ fn collect_non_null_param_hints(
             IrOp::Copy => {
                 // Propagate taint: if the source is a param-derived SV,
                 // the output is too.
-                if let Some(out_sv) =
-                    func.var_map.get(&(entry, idx, VarnodeSlot::Output)).copied()
+                if let Some(out_sv) = func
+                    .var_map
+                    .get(&(entry, idx, VarnodeSlot::Output))
+                    .copied()
                     && let Some(src_sv) = ssa_for_input(func, entry, idx, 0)
                     && tainted.contains(&src_sv)
                 {
@@ -146,10 +145,7 @@ fn collect_non_null_param_hints(
 /// [`classify_variables`]). The IDA convention is to write `i++` so we
 /// match on the increment-by-constant shape; the comment goes on the
 /// counter's defining instruction.
-fn collect_loop_counter_hints(
-    func: &SsaFunction,
-    out: &mut Vec<(BlockId, usize, String)>,
-) {
+fn collect_loop_counter_hints(func: &SsaFunction, out: &mut Vec<(BlockId, usize, String)>) {
     let classification = classify_variables(func);
     let counters: BTreeSet<SsaVarnode> = classification
         .roles
@@ -188,10 +184,7 @@ fn collect_loop_counter_hints(
 /// Detect call sites where the third argument is the byte count of a
 /// memory copy / clear. Uses `libc_call_annotations` (populated by
 /// [`unlace_passes::libc_idioms::annotate_libc_calls`]).
-fn collect_buffer_size_hints(
-    func: &SsaFunction,
-    out: &mut Vec<(BlockId, usize, String)>,
-) {
+fn collect_buffer_size_hints(func: &SsaFunction, out: &mut Vec<(BlockId, usize, String)>) {
     for ((bid, idx), canonical) in &func.libc_call_annotations {
         let is_sized_copy = matches!(canonical.as_str(), "memcpy" | "memset" | "memcmp");
         if !is_sized_copy {
@@ -238,12 +231,7 @@ fn param_ssa_values(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
 
 /// Resolve an instruction's `Input(slot)` operand to the SSA value
 /// flowing into that slot, if recorded.
-fn ssa_for_input(
-    func: &SsaFunction,
-    bid: BlockId,
-    idx: usize,
-    slot: usize,
-) -> Option<SsaVarnode> {
+fn ssa_for_input(func: &SsaFunction, bid: BlockId, idx: usize, slot: usize) -> Option<SsaVarnode> {
     func.var_map
         .get(&(bid, idx, VarnodeSlot::Input(slot)))
         .copied()

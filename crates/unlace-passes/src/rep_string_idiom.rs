@@ -59,16 +59,26 @@ impl Pass for RepStringIdiomPass {
 /// Recovered REP-string-loop classification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepStringKind {
-    Movs { elem_size: u8 },
-    Stos { elem_size: u8 },
-    Cmps { elem_size: u8 },
+    Movs {
+        elem_size: u8,
+    },
+    Stos {
+        elem_size: u8,
+    },
+    Cmps {
+        elem_size: u8,
+    },
     /// REPE CMPSB → `memcmp(rsi, rdi, rcx)`: two Loads (rsi, rdi),
     /// no Store, IntSub on the counter, and a compare exit.
-    Memcmp { elem_size: u8 },
+    Memcmp {
+        elem_size: u8,
+    },
     /// REPNE SCASB scanning for a zero needle (AL == 0) → `strlen(rdi)`:
     /// one Load (rdi), no Store, IntSub on the counter, and a compare
     /// against a constant-zero operand.
-    Strlen { elem_size: u8 },
+    Strlen {
+        elem_size: u8,
+    },
 }
 
 /// A detected REP-string loop: the SSA block id and the recognised kind.
@@ -126,9 +136,11 @@ pub fn detect_rep_string_loops(func: &SsaFunction) -> Vec<RepStringLoop> {
                 IrOp::IntEqual | IrOp::IntNotequal => {
                     has_compare = true;
                     // "Known base" for strlen: one side is a constant 0.
-                    if insn.inputs.iter().any(|v| {
-                        v.space == unlace_ir::SpaceId::Const && v.offset == 0
-                    }) {
+                    if insn
+                        .inputs
+                        .iter()
+                        .any(|v| v.space == unlace_ir::SpaceId::Const && v.offset == 0)
+                    {
                         has_zero_compare = true;
                     }
                 }
@@ -154,14 +166,16 @@ pub fn detect_rep_string_loops(func: &SsaFunction) -> Vec<RepStringLoop> {
         };
         let kind = match (load_count, store_count) {
             // STOS: store-only, no load. Lane size 1/2/4/8 → STOSB/W/D/Q.
-            (0, s) if s >= 1 => RepStringKind::Stos { elem_size: lane_size },
+            (0, s) if s >= 1 => RepStringKind::Stos {
+                elem_size: lane_size,
+            },
             // MOVS: one load, one store (data copy). Lane 1/2/4/8 → MOVSB/W/D/Q.
-            (1, s) if s >= 1 => RepStringKind::Movs { elem_size: lane_size },
+            (1, s) if s >= 1 => RepStringKind::Movs {
+                elem_size: lane_size,
+            },
             // SCAS used as strlen: one load, no store, compare-vs-zero.
             // strlen() is byte-granular; reject wider lanes.
-            (1, 0) if has_zero_compare && lane_size == 1 => {
-                RepStringKind::Strlen { elem_size: 1 }
-            }
+            (1, 0) if has_zero_compare && lane_size == 1 => RepStringKind::Strlen { elem_size: 1 },
             // CMPS: two loads, no store, compare between them. memcmp is
             // emitted as byte-count regardless of lane, but the recognition
             // here only handles byte CMPS for now.
@@ -210,8 +224,17 @@ mod tests {
         let rcx = Varnode::reg(0x20, 8);
         let val = Varnode::reg(0x100, 1);
         let insns = vec![
-            IrInsn::with_output(IrOp::Load, val.clone(), smallvec![space.clone(), rsi.clone()], 0x1000),
-            IrInsn::without_output(IrOp::Store, smallvec![space.clone(), rdi.clone(), val], 0x1004),
+            IrInsn::with_output(
+                IrOp::Load,
+                val.clone(),
+                smallvec![space.clone(), rsi.clone()],
+                0x1000,
+            ),
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![space.clone(), rdi.clone(), val],
+                0x1004,
+            ),
             IrInsn::with_output(
                 IrOp::IntSub,
                 rcx.clone(),
@@ -322,7 +345,12 @@ mod tests {
         let rcx = Varnode::reg(0x20, 8);
         let val = Varnode::reg(0x100, lane);
         vec![
-            IrInsn::with_output(IrOp::Load, val.clone(), smallvec![space.clone(), rsi], 0x1000),
+            IrInsn::with_output(
+                IrOp::Load,
+                val.clone(),
+                smallvec![space.clone(), rsi],
+                0x1000,
+            ),
             IrInsn::without_output(IrOp::Store, smallvec![space, rdi, val], 0x1004),
             IrInsn::with_output(
                 IrOp::IntSub,
@@ -403,7 +431,11 @@ mod tests {
         // A 3-byte access is not a valid REP MOVSx lane.
         let ssa = make_self_loop(movs_body(3));
         let loops = detect_rep_string_loops(&ssa);
-        assert!(loops.is_empty(), "lane=3 must not be classified: {:?}", loops);
+        assert!(
+            loops.is_empty(),
+            "lane=3 must not be classified: {:?}",
+            loops
+        );
     }
 
     #[test]

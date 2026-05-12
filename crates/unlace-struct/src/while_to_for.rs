@@ -191,13 +191,7 @@ fn count_child_nodes_matching(node: &HirNode, f: fn(&[HirNode]) -> usize) -> usi
             try_body,
             catch_arms,
             ..
-        } => {
-            f(try_body)
-                + catch_arms
-                    .iter()
-                    .map(|(_, body)| f(body))
-                    .sum::<usize>()
-        }
+        } => f(try_body) + catch_arms.iter().map(|(_, body)| f(body)).sum::<usize>(),
         HirNode::TryFinally {
             try_body,
             finally_body,

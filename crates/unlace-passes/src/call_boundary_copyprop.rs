@@ -48,7 +48,9 @@ impl Pass for CallBoundaryCopyPropPass {
             .iter()
             .filter_map(|((bid, idx, slot), sv)| {
                 if let VarnodeSlot::Input(i) = slot {
-                    sv_replacements.get(sv).map(|new_sv| (*bid, *idx, *i, *new_sv))
+                    sv_replacements
+                        .get(sv)
+                        .map(|new_sv| (*bid, *idx, *i, *new_sv))
                 } else {
                     None
                 }
@@ -107,9 +109,7 @@ fn collect_restore_pairs(func: &SsaFunction) -> Vec<(SsaVarnode, SsaVarnode)> {
                     let (val_slot, addr_raw) = store_addr_and_val(insn);
                     if let (Some(addr), Some(val_slot)) = (addr_raw, val_slot) {
                         if let Some(off) = stack_offset_of(&addr, func) {
-                            if let Some(&val_sv) =
-                                func.var_map.get(&(bid, idx, val_slot))
-                            {
+                            if let Some(&val_sv) = func.var_map.get(&(bid, idx, val_slot)) {
                                 if val_sv.base.space == SpaceId::Register {
                                     saves.insert(off, val_sv);
                                 }

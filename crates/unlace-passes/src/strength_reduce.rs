@@ -60,11 +60,7 @@ impl Pass for StrengthReducePass {
     }
 }
 
-fn find_unique_preheader(
-    func: &SsaFunction,
-    header: BlockId,
-    body: &[BlockId],
-) -> Option<BlockId> {
+fn find_unique_preheader(func: &SsaFunction, header: BlockId, body: &[BlockId]) -> Option<BlockId> {
     let mut outside: Vec<BlockId> = func
         .cfg
         .predecessors(header)
@@ -248,7 +244,12 @@ fn rewrite_var_iv(
     let pre = func.function.blocks.get_mut(&preheader).unwrap();
     pre.insns.insert(
         pre_term_idx,
-        IrInsn::with_output(IrOp::IntMult, base, smallvec![init_i_varnode, mult_varnode], pre_addr),
+        IrInsn::with_output(
+            IrOp::IntMult,
+            base,
+            smallvec![init_i_varnode, mult_varnode],
+            pre_addr,
+        ),
     );
     pre.insns.insert(
         pre_term_idx + 1,
@@ -261,8 +262,10 @@ fn rewrite_var_iv(
     );
     func.var_map
         .insert((preheader, pre_term_idx, VarnodeSlot::Output), init_sv);
-    func.var_map
-        .insert((preheader, pre_term_idx, VarnodeSlot::Input(0)), d.iv.init_sv);
+    func.var_map.insert(
+        (preheader, pre_term_idx, VarnodeSlot::Input(0)),
+        d.iv.init_sv,
+    );
     func.var_map
         .insert((preheader, pre_term_idx + 1, VarnodeSlot::Output), step_sv);
 
@@ -312,7 +315,8 @@ fn rewrite_var_iv(
     }
     func.var_map
         .insert((d.block, d.idx, VarnodeSlot::Input(0)), iv_sv);
-    func.var_map.remove(&(d.block, d.idx, VarnodeSlot::Input(1)));
+    func.var_map
+        .remove(&(d.block, d.idx, VarnodeSlot::Input(1)));
     true
 }
 
@@ -351,8 +355,12 @@ mod tests {
         b0.successors = smallvec![BlockId(1)];
 
         let mut b1 = BasicBlock::new(BlockId(1));
-        b1.insns
-            .push(IrInsn::with_output(IrOp::IntMult, j, smallvec![i, x], 0x1100));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            j,
+            smallvec![i, x],
+            0x1100,
+        ));
         b1.insns.push(IrInsn::with_output(
             IrOp::IntAdd,
             i,

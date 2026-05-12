@@ -17,9 +17,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{
-    FunctionSignature, FunctionSignatureRegistry, PrimitiveType, SsaFunction,
-};
+use unlace_ir::ssa::{FunctionSignature, FunctionSignatureRegistry, PrimitiveType, SsaFunction};
 use unlace_ir::xref::{CallGraph, build_call_graph};
 
 use crate::caller_param_propagate::{
@@ -41,19 +39,13 @@ pub struct InterprocReport {
 }
 
 /// Build a per-function signature snapshot keyed by entry address.
-fn snapshot_signatures(
-    funcs: &BTreeMap<u64, SsaFunction>,
-) -> FunctionSignatureRegistry {
+fn snapshot_signatures(funcs: &BTreeMap<u64, SsaFunction>) -> FunctionSignatureRegistry {
     let mut out = BTreeMap::new();
     for (&addr, ssa) in funcs {
         let mut sig = FunctionSignature::default();
         sig.calling_convention = ssa.calling_convention;
         sig.return_type = ssa.inferred_return_type;
-        sig.param_types = ssa
-            .inferred_params
-            .iter()
-            .map(|(_, ty)| *ty)
-            .collect();
+        sig.param_types = ssa.inferred_params.iter().map(|(_, ty)| *ty).collect();
         out.insert(addr, sig);
     }
     out
@@ -90,8 +82,10 @@ where
 
         let new_sigs = snapshot_signatures(funcs);
 
-        let ir_funcs: BTreeMap<u64, _> =
-            funcs.iter().map(|(a, s)| (*a, s.function.clone())).collect();
+        let ir_funcs: BTreeMap<u64, _> = funcs
+            .iter()
+            .map(|(a, s)| (*a, s.function.clone()))
+            .collect();
         let cg: CallGraph = build_call_graph(&ir_funcs);
 
         seed_registry_from_funcs(funcs, &mut registry);
@@ -110,10 +104,7 @@ where
     Ok(report)
 }
 
-fn signatures_diff_count(
-    a: &FunctionSignatureRegistry,
-    b: &FunctionSignatureRegistry,
-) -> usize {
+fn signatures_diff_count(a: &FunctionSignatureRegistry, b: &FunctionSignatureRegistry) -> usize {
     let mut count = 0usize;
     for (addr, sig) in b {
         match a.get(addr) {
@@ -138,9 +129,7 @@ pub fn return_type_of(funcs: &BTreeMap<u64, SsaFunction>, addr: u64) -> Primitiv
 mod tests {
     use super::*;
     use smallvec::smallvec;
-    use unlace_ir::ssa::{
-        CallingConvention, PrimitiveType, VarnodeSlot, build_ssa,
-    };
+    use unlace_ir::ssa::{CallingConvention, PrimitiveType, VarnodeSlot, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     const RDI: u64 = 56;
@@ -180,9 +169,7 @@ mod tests {
             func.insert_block(bb);
             let mut ssa = build_ssa(func);
             ssa.calling_convention = CallingConvention::SystemV;
-            if let Some(&sv) =
-                ssa.var_map.get(&(BlockId(0), 0, VarnodeSlot::Output))
-            {
+            if let Some(&sv) = ssa.var_map.get(&(BlockId(0), 0, VarnodeSlot::Output)) {
                 ssa.var_types.insert(sv, PrimitiveType::Int(4));
             }
             funcs.insert(a_addr, ssa);

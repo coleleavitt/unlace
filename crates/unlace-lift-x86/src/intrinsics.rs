@@ -295,7 +295,10 @@ impl Default for IntrinsicRegistry {
             // ── AVX2 packed integer multiply / shuffle / blend ──────
             ("VPMULLD", info("_mm256_mullo_epi32", 2, 32, AvxArith)),
             ("VPSHUFB", info("_mm256_shuffle_epi8", 2, 32, AvxArith)),
-            ("VPERMD", info("_mm256_permutevar8x32_epi32", 2, 32, AvxArith)),
+            (
+                "VPERMD",
+                info("_mm256_permutevar8x32_epi32", 2, 32, AvxArith),
+            ),
             ("VPBLENDD", info("_mm256_blend_epi32", 3, 32, AvxArith)),
             // ── AVX packed bitwise logic ────────────────────────────
             ("VPAND", info("_mm256_and_si256", 2, 32, AvxArith)),
@@ -308,7 +311,10 @@ impl Default for IntrinsicRegistry {
             // intrinsic name from the Callother tag alone.
             ("VPADDQ_512", info("_mm512_add_epi64", 2, 64, Avx512Arith)),
             ("VPSUBQ_512", info("_mm512_sub_epi64", 2, 64, Avx512Arith)),
-            ("VPMULLQ_512", info("_mm512_mullo_epi64", 2, 64, Avx512Arith)),
+            (
+                "VPMULLQ_512",
+                info("_mm512_mullo_epi64", 2, 64, Avx512Arith),
+            ),
             // ── AVX packed float arithmetic ─────────────────────────
             ("VADDPS", info("_mm256_add_ps", 2, 32, AvxArith)),
             ("VSUBPS", info("_mm256_sub_ps", 2, 32, AvxArith)),
@@ -682,10 +688,8 @@ mod tests {
         // t185 — PCMPESTRI / PCMPISTRI surface as `_mm_cmpestri` /
         // `_mm_cmpistri`; the index result is a 4-byte value (ECX).
         let reg = registry();
-        for (mnemonic, expected_c) in [
-            ("PCMPESTRI", "_mm_cmpestri"),
-            ("PCMPISTRI", "_mm_cmpistri"),
-        ] {
+        for (mnemonic, expected_c) in [("PCMPESTRI", "_mm_cmpestri"), ("PCMPISTRI", "_mm_cmpistri")]
+        {
             let info = reg
                 .lookup(mnemonic)
                 .unwrap_or_else(|| panic!("{mnemonic} missing"));

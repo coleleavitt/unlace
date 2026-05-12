@@ -44,8 +44,7 @@ impl Pass for IndirectCallResolvePass {
                     continue;
                 }
 
-                let Some(&target_sv) =
-                    func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0)))
+                let Some(&target_sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0)))
                 else {
                     continue;
                 };
@@ -117,15 +116,13 @@ fn trace_constant(
 /// scan through `var_map`. Phi-defined values are intentionally not
 /// returned (they imply a multi-source join).
 fn find_def(func: &SsaFunction, sv: SsaVarnode) -> Option<(BlockId, usize)> {
-    func.var_map
-        .iter()
-        .find_map(|((bid, idx, slot), other)| {
-            if *other == sv && matches!(slot, VarnodeSlot::Output) {
-                Some((*bid, *idx))
-            } else {
-                None
-            }
-        })
+    func.var_map.iter().find_map(|((bid, idx, slot), other)| {
+        if *other == sv && matches!(slot, VarnodeSlot::Output) {
+            Some((*bid, *idx))
+        } else {
+            None
+        }
+    })
 }
 
 #[cfg(test)]
@@ -239,17 +236,10 @@ mod tests {
             smallvec![Varnode::constant(0xFEED_FACE, 8)],
             0x1000,
         ));
-        bb.insns.push(IrInsn::with_output(
-            IrOp::Copy,
-            u1,
-            smallvec![u0],
-            0x1004,
-        ));
-        bb.insns.push(IrInsn::without_output(
-            IrOp::Callind,
-            smallvec![u1],
-            0x1008,
-        ));
+        bb.insns
+            .push(IrInsn::with_output(IrOp::Copy, u1, smallvec![u0], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Callind, smallvec![u1], 0x1008));
         bb.insns.push(IrInsn::without_output(
             IrOp::Return,
             smallvec![Varnode::constant(0, 8)],

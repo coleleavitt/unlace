@@ -562,6 +562,117 @@ mod tests {
         build_ssa(func)
     }
 
+    // -------------------------------------------------------------------
+    // Architecture calling-convention spec tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_call_conv_registry_is_complete_for_wave50() {
+        const EXPECTED: &[&str] = &[
+            "SystemV-x86_64",
+            "MS-x64",
+            "SysV-x86-cdecl",
+            "SysV-x86-stdcall",
+            "SysV-x86-fastcall",
+            "SysV-x86-thiscall",
+            "AArch64-AAPCS64",
+            "AArch64-Darwin",
+            "ARM-AAPCS-soft",
+            "ARM-AAPCS-hard",
+            "MIPS-O32",
+            "MIPS-N32",
+            "MIPS-N64",
+            "RISC-V-LP64",
+            "PowerPC-ELFv1",
+            "PowerPC-ELFv2",
+            "SPARC-v8",
+            "SPARC-v9",
+        ];
+
+        assert_eq!(CALL_CONV_SPECS.len(), EXPECTED.len());
+        for name in EXPECTED {
+            assert!(call_conv_spec(name).is_some(), "missing {name}");
+        }
+    }
+
+    #[test]
+    fn test_x86_64_specs_capture_sysv_vs_ms_x64() {
+        let sysv = call_conv_spec("SystemV-x86_64").unwrap();
+        let ms = call_conv_spec("MS-x64").unwrap();
+
+        assert_eq!(sysv.param_int_regs, &[7, 6, 2, 1, 8, 9]);
+        assert_eq!(sysv.param_float_regs.len(), 8);
+        assert_eq!(sysv.return_int_regs, &[0, 2]);
+        assert_eq!(sysv.stack_align, 16);
+        assert_eq!(sysv.shadow_space, 0);
+
+        assert_eq!(ms.param_int_regs, &[1, 2, 8, 9]);
+        assert_eq!(ms.param_float_regs.len(), 4);
+        assert_eq!(ms.shadow_space, 32);
+        assert!(ms.callee_saved.contains(&6));
+        assert!(ms.callee_saved.contains(&115));
+    }
+
+    #[test]
+    fn test_x86_32_stack_and_register_variants() {
+        let cdecl = call_conv_spec("SysV-x86-cdecl").unwrap();
+        let stdcall = call_conv_spec("SysV-x86-stdcall").unwrap();
+        let fastcall = call_conv_spec("SysV-x86-fastcall").unwrap();
+        let thiscall = call_conv_spec("SysV-x86-thiscall").unwrap();
+
+        assert!(cdecl.stack_params);
+        assert!(!cdecl.callee_pops_stack);
+        assert!(stdcall.stack_params);
+        assert!(stdcall.callee_pops_stack);
+        assert_eq!(fastcall.param_int_regs, &[1, 2]);
+        assert_eq!(thiscall.param_int_regs, &[1]);
+        assert_eq!(cdecl.stack_align, 4);
+    }
+
+    #[test]
+    fn test_arm_and_aarch64_specs_model_hard_float() {
+        let aapcs64 = call_conv_spec("AArch64-AAPCS64").unwrap();
+        let darwin = call_conv_spec("AArch64-Darwin").unwrap();
+        let arm_soft = call_conv_spec("ARM-AAPCS-soft").unwrap();
+        let arm_hard = call_conv_spec("ARM-AAPCS-hard").unwrap();
+
+        assert_eq!(aapcs64.param_int_regs, &[0, 1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(aapcs64.param_float_regs.len(), 8);
+        assert_eq!(darwin.stack_align, 16);
+        assert!(arm_soft.param_float_regs.is_empty());
+        assert_eq!(arm_hard.param_float_regs, &[100, 101, 102, 103, 104, 105, 106, 107]);
+        assert_eq!(arm_hard.stack_align, 8);
+    }
+
+    #[test]
+    fn test_mips_riscv_powerpc_specs_have_expected_register_windows() {
+        let o32 = call_conv_spec("MIPS-O32").unwrap();
+        let n64 = call_conv_spec("MIPS-N64").unwrap();
+        let riscv = call_conv_spec("RISC-V-LP64").unwrap();
+        let ppc64 = call_conv_spec("PowerPC-ELFv2").unwrap();
+
+        assert_eq!(o32.param_int_regs, &[4, 5, 6, 7]);
+        assert_eq!(n64.param_int_regs, &[4, 5, 6, 7, 8, 9, 10, 11]);
+        assert_eq!(n64.stack_align, 16);
+        assert_eq!(riscv.param_int_regs, &[10, 11, 12, 13, 14, 15, 16, 17]);
+        assert!(riscv.callee_saved.contains(&2));
+        assert_eq!(ppc64.param_int_regs, &[3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(ppc64.param_float_regs.len(), 13);
+    }
+
+    #[test]
+    fn test_sparc_v8_v9_specs_capture_alignment_and_fp_params() {
+        let v8 = call_conv_spec("SPARC-v8").unwrap();
+        let v9 = call_conv_spec("SPARC-v9").unwrap();
+
+        assert_eq!(v8.param_int_regs, &[8, 9, 10, 11, 12, 13]);
+        assert!(v8.param_float_regs.is_empty());
+        assert_eq!(v8.stack_align, 8);
+        assert_eq!(v9.param_float_regs.len(), 16);
+        assert_eq!(v9.stack_align, 16);
+        assert!(v9.callee_saved.contains(&31));
+    }
+
     // --- Register helpers (x86-64 offsets) ---
     fn rdi() -> Varnode {
         Varnode::reg(RDI, 8)

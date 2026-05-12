@@ -92,7 +92,10 @@ pub fn detect_protobuf_message(
 
     for sub in &vtable.subtables {
         for slot in &sub.functions {
-            let VtableSlotKind::Function { name: Some(name), .. } = slot else {
+            let VtableSlotKind::Function {
+                name: Some(name), ..
+            } = slot
+            else {
                 continue;
             };
             let tail = method_tail(name);
@@ -273,7 +276,13 @@ mod tests {
         let msg = detect_protobuf_message("BareNames", Some(&vt))
             .expect("bare-named methods should still match");
         assert!(msg.has_serialize);
-        assert!(msg.has_parse, "MergePartialFromZeroCopyStream is a parse variant");
-        assert!(msg.has_byte_size, "legacy ByteSize should still set the flag");
+        assert!(
+            msg.has_parse,
+            "MergePartialFromZeroCopyStream is a parse variant"
+        );
+        assert!(
+            msg.has_byte_size,
+            "legacy ByteSize should still set the flag"
+        );
     }
 }

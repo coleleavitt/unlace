@@ -47,7 +47,10 @@ mod tests {
     #[test]
     fn recognizes_sqlite() {
         assert_eq!(recognize_db_api("sqlite3_open"), Some(DbApiKind::Sqlite));
-        assert_eq!(recognize_db_api("sqlite3_prepare_v2"), Some(DbApiKind::Sqlite));
+        assert_eq!(
+            recognize_db_api("sqlite3_prepare_v2"),
+            Some(DbApiKind::Sqlite)
+        );
         assert_eq!(recognize_db_api("sqlite3_step"), Some(DbApiKind::Sqlite));
     }
 
@@ -62,13 +65,19 @@ mod tests {
     fn recognizes_rocksdb() {
         assert_eq!(recognize_db_api("rocksdb_open"), Some(DbApiKind::RocksDb));
         assert_eq!(recognize_db_api("rocksdb_put"), Some(DbApiKind::RocksDb));
-        assert_eq!(recognize_db_api("rocksdb_iter_next"), Some(DbApiKind::RocksDb));
+        assert_eq!(
+            recognize_db_api("rocksdb_iter_next"),
+            Some(DbApiKind::RocksDb)
+        );
     }
 
     #[test]
     fn recognizes_leveldb() {
         assert_eq!(recognize_db_api("leveldb_open"), Some(DbApiKind::LevelDb));
-        assert_eq!(recognize_db_api("leveldb_writebatch_put"), Some(DbApiKind::LevelDb));
+        assert_eq!(
+            recognize_db_api("leveldb_writebatch_put"),
+            Some(DbApiKind::LevelDb)
+        );
     }
 
     #[test]

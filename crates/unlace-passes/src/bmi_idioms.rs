@@ -83,7 +83,9 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
             try_blsi(insn, output, &insn.inputs[0], &insn.inputs[1], def_map)
                 .or_else(|| try_blsr(insn, output, &insn.inputs[0], &insn.inputs[1], def_map))
                 .or_else(|| try_andn(insn, output, &insn.inputs[0], &insn.inputs[1], def_map))
-                .or_else(|| try_bextr_const(insn, output, &insn.inputs[0], &insn.inputs[1], def_map))
+                .or_else(|| {
+                    try_bextr_const(insn, output, &insn.inputs[0], &insn.inputs[1], def_map)
+                })
         }
         IrOp::IntXor if insn.inputs.len() == 2 => {
             try_blsmsk(insn, output, &insn.inputs[0], &insn.inputs[1], def_map)
@@ -172,12 +174,7 @@ fn try_andn(
         (None, Some(x)) => (x, *a),
         _ => return None,
     };
-    Some(make_callother(
-        output,
-        CALLOTHER_ANDN,
-        &[x, y],
-        insn.addr,
-    ))
+    Some(make_callother(output, CALLOTHER_ANDN, &[x, y], insn.addr))
 }
 
 /// If `v` is defined as `IntNegate(x)` or `IntXor(x, -1)` (bitwise NOT in either
@@ -252,11 +249,7 @@ fn try_bextr_const(
     Some(make_callother(
         output,
         CALLOTHER_BEXTR_CONST,
-        &[
-            src,
-            Varnode::constant(lo, 8),
-            Varnode::constant(width, 8),
-        ],
+        &[src, Varnode::constant(lo, 8), Varnode::constant(width, 8)],
         insn.addr,
     ))
 }
@@ -302,7 +295,8 @@ fn is_negation_of(neg: Varnode, x: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>
 }
 
 fn make_callother(output: Varnode, tag: u64, args: &[Varnode], addr: u64) -> IrInsn {
-    let mut inputs: smallvec::SmallVec<[Varnode; 3]> = smallvec::smallvec![Varnode::constant(tag, 8)];
+    let mut inputs: smallvec::SmallVec<[Varnode; 3]> =
+        smallvec::smallvec![Varnode::constant(tag, 8)];
     for a in args {
         inputs.push(*a);
     }
@@ -453,7 +447,10 @@ mod tests {
             "default pipeline must include the BMI idiom pass; got {names:?}"
         );
         let bmi_idx = names.iter().position(|n| *n == bmi_name).unwrap();
-        let gvn_idx = names.iter().position(|n| *n == "gvn").expect("gvn scheduled");
+        let gvn_idx = names
+            .iter()
+            .position(|n| *n == "gvn")
+            .expect("gvn scheduled");
         assert!(
             bmi_idx > gvn_idx,
             "BMI must run after gvn (gvn={gvn_idx}, bmi={bmi_idx})"

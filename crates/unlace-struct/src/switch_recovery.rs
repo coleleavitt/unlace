@@ -143,14 +143,9 @@ pub enum JumpTableKind {
     /// reader strips bit 0 before returning the address.
     ArmThumbAbsolute,
     /// Compressed jump table: 1/2-byte offsets relative to base_addr.
-    CompressedOffset {
-        base_addr: u64,
-        sign_extend: bool,
-    },
+    CompressedOffset { base_addr: u64, sign_extend: bool },
     /// Branch-table-of-branches: each entry is a direct branch instruction.
-    BranchTable {
-        branch_size: u8,
-    },
+    BranchTable { branch_size: u8 },
 }
 
 /// Architecture / instruction-set mode of a recovered switch target,
@@ -248,17 +243,16 @@ pub fn read_jump_table_full(
             _ => return None,
         };
         let (resolved, mode) = match table.kind {
-            JumpTableKind::DenseRelative => {
-                (table.base.wrapping_add(raw), TargetMode::Default)
-            }
+            JumpTableKind::DenseRelative => (table.base.wrapping_add(raw), TargetMode::Default),
             JumpTableKind::RipRelative if table.entry_size == 4 => {
                 let signed = raw as i32 as i64 as u64;
                 (table.base.wrapping_add(signed), TargetMode::Default)
             }
-            JumpTableKind::RipRelative => {
-                (table.base.wrapping_add(raw), TargetMode::Default)
-            }
-            JumpTableKind::CompressedOffset { base_addr, sign_extend } => {
+            JumpTableKind::RipRelative => (table.base.wrapping_add(raw), TargetMode::Default),
+            JumpTableKind::CompressedOffset {
+                base_addr,
+                sign_extend,
+            } => {
                 let offset = if sign_extend {
                     match table.entry_size {
                         1 => raw as u8 as i8 as i64 as u64,
@@ -282,9 +276,8 @@ pub fn read_jump_table_full(
                 secondary_base,
                 secondary_entry_size,
             } => {
-                let secondary_addr = secondary_base.checked_add(
-                    raw.checked_mul(secondary_entry_size as u64)?,
-                )?;
+                let secondary_addr =
+                    secondary_base.checked_add(raw.checked_mul(secondary_entry_size as u64)?)?;
                 let secondary = secondary_sections
                     .iter()
                     .find(|s| s.contains_addr(secondary_addr))
@@ -853,10 +846,7 @@ fn find_table_base_in_insns(insns: &[IrInsn], sections: &[SectionView<'_>]) -> O
 }
 
 /// Convert a detected [`ComputedGoto`] into a [`HirNode::Switch`].
-pub fn computed_goto_to_switch(
-    goto: &ComputedGoto,
-    cond: unlace_ir::ssa::SsaVarnode,
-) -> HirNode {
+pub fn computed_goto_to_switch(goto: &ComputedGoto, cond: unlace_ir::ssa::SsaVarnode) -> HirNode {
     let cases: Vec<(SwitchCase, Vec<HirNode>, bool)> = (0..goto.num_entries)
         .map(|i| (SwitchCase::Value(i as u64), Vec::new(), false))
         .collect();
@@ -901,9 +891,10 @@ pub(crate) mod arch {
         let bi = branchind_idx(insns)?;
         // Walk backwards skipping non-control ops; the immediately
         // preceding non-trivial op should be a LOAD.
-        let prev = insns[..bi].iter().rev().find(|i| {
-            !matches!(i.op, IrOp::Branch | IrOp::Cbranch | IrOp::Branchind)
-        })?;
+        let prev = insns[..bi]
+            .iter()
+            .rev()
+            .find(|i| !matches!(i.op, IrOp::Branch | IrOp::Cbranch | IrOp::Branchind))?;
         if prev.op == IrOp::Load {
             Some(IndirectBranchKind::Generic)
         } else {
@@ -923,10 +914,9 @@ pub(crate) mod arch {
         if !ends_in_branchind(insns) {
             return None;
         }
-        let has_byte_load = insns.iter().any(|i| {
-            i.op == IrOp::Load
-                && i.output.map(|o| o.size <= 2).unwrap_or(false)
-        });
+        let has_byte_load = insns
+            .iter()
+            .any(|i| i.op == IrOp::Load && i.output.map(|o| o.size <= 2).unwrap_or(false));
         let has_pc_add = insns.iter().any(|i| i.op == IrOp::IntAdd);
         if has_byte_load && has_pc_add {
             Some(IndirectBranchKind::ArmThumbTable)
@@ -955,10 +945,9 @@ pub(crate) mod arch {
                     .map(|v| v.space == unlace_ir::SpaceId::Const)
                     .unwrap_or(false)
         });
-        let has_word_load = insns.iter().any(|i| {
-            i.op == IrOp::Load
-                && i.output.map(|o| o.size == 4).unwrap_or(false)
-        });
+        let has_word_load = insns
+            .iter()
+            .any(|i| i.op == IrOp::Load && i.output.map(|o| o.size == 4).unwrap_or(false));
         if has_lui_like && has_word_load {
             Some(IndirectBranchKind::MipsLuiLwJr)
         } else {
@@ -1369,7 +1358,11 @@ mod tests {
                     smallvec![Varnode::constant(i as u64, 8)],
                     0x1000 + i as u64,
                 );
-                (SwitchCase::Value(i as u64), vec![HirNode::Statement(stmt)], false)
+                (
+                    SwitchCase::Value(i as u64),
+                    vec![HirNode::Statement(stmt)],
+                    false,
+                )
             })
             .collect();
 
@@ -1444,8 +1437,8 @@ mod tests {
             kind: JumpTableKind::DenseAbsolute,
         };
         let relocs = vec![(base, 0xCAFEu64), (base + 8, 0xBEEFu64)];
-        let read = read_jump_table_with_relocs(&table, &section, &relocs)
-            .expect("read should succeed");
+        let read =
+            read_jump_table_with_relocs(&table, &section, &relocs).expect("read should succeed");
         assert_eq!(
             read,
             vec![0xCAFE, 0xBEEF],
@@ -1612,12 +1605,8 @@ mod tests {
         let next_only = infer_num_entries_from_xrefs(base, Some(base + 64), &[], entry_size);
         assert_eq!(next_only, Some(8), "next symbol at +64 → 8 slots of size 8");
 
-        let xref_only = infer_num_entries_from_xrefs(
-            base,
-            None,
-            &[base, base + 8, base + 24],
-            entry_size,
-        );
+        let xref_only =
+            infer_num_entries_from_xrefs(base, None, &[base, base + 8, base + 24], entry_size);
         assert_eq!(
             xref_only,
             Some(4),
@@ -1665,7 +1654,11 @@ mod tests {
                     smallvec![Varnode::constant(i as u64, 8)],
                     0x1000 + i as u64,
                 );
-                (SwitchCase::Value(i as u64), vec![HirNode::Statement(stmt)], false)
+                (
+                    SwitchCase::Value(i as u64),
+                    vec![HirNode::Statement(stmt)],
+                    false,
+                )
             })
             .collect();
 
@@ -1701,7 +1694,11 @@ mod tests {
             smallvec![Varnode::reg(0, 8), Varnode::unique(0x100, 1)],
             0x1004,
         );
-        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::unique(0x108, 8)], 0x1008);
+        let bi = IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![Varnode::unique(0x108, 8)],
+            0x1008,
+        );
 
         let kind = classify_indirect_branch(ArchId::Arm, &[load_byte, add_pc, bi]);
         assert_eq!(
@@ -1755,7 +1752,8 @@ mod tests {
             smallvec![Varnode::reg(3, 8)],
             0x3004,
         );
-        let bctr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x100, 8)], 0x3008);
+        let bctr =
+            IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x100, 8)], 0x3008);
 
         let kind = classify_indirect_branch(ArchId::Ppc64, &[toc_load, mtctr, bctr]);
         assert_eq!(
@@ -1775,7 +1773,8 @@ mod tests {
             smallvec![Varnode::reg(0, 8), Varnode::constant(0x1000, 8)],
             0x4000,
         );
-        let jalr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x28, 8)], 0x4004);
+        let jalr =
+            IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x28, 8)], 0x4004);
 
         let kind = classify_indirect_branch(ArchId::RiscV64, &[auipc, jalr]);
         assert_eq!(
@@ -1836,7 +1835,11 @@ mod tests {
             smallvec![Varnode::reg(0, 8), Varnode::unique(0x100, 2)],
             0x1004,
         );
-        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::unique(0x108, 8)], 0x1008);
+        let bi = IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![Varnode::unique(0x108, 8)],
+            0x1008,
+        );
         let kind = classify_indirect_branch(ArchId::Arm, &[load_half, add_pc, bi]);
         assert_eq!(kind, Some(IndirectBranchKind::ArmThumbTable));
     }
@@ -1868,11 +1871,16 @@ mod tests {
             smallvec![Varnode::reg(0, 8), Varnode::constant(0x1000, 8)],
             0x3000,
         );
-        let jalr = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x28, 8)], 0x3004);
+        let jalr =
+            IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x28, 8)], 0x3004);
         // Declared PPC, but pattern shape is RISC-V: PPC detector returns None
         // and the generic LOAD→BRANCHIND path also returns None (no LOAD).
         let kind = classify_indirect_branch(ArchId::Ppc64, &[auipc, jalr]);
-        assert!(kind.is_none(), "PPC detector should not claim RISC-V shape; got {:?}", kind);
+        assert!(
+            kind.is_none(),
+            "PPC detector should not claim RISC-V shape; got {:?}",
+            kind
+        );
     }
 
     /// RISC-V classifier should not match a MIPS lui+lw+jr triple as
@@ -1959,11 +1967,7 @@ mod tests {
             smallvec![Varnode::constant(0, 8), Varnode::reg(0x10, 8)],
             0x1054,
         );
-        let bi = IrInsn::without_output(
-            IrOp::Branchind,
-            smallvec![Varnode::reg(0x30, 8)],
-            0x1058,
-        );
+        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x30, 8)], 0x1058);
 
         let result = detect_computed_goto(&[add, load, bi], &[section], (func_start, func_end));
         assert!(result.is_some(), "computed-goto pattern should be detected");
@@ -1973,7 +1977,10 @@ mod tests {
         assert_eq!(goto.num_entries, 3);
         assert_eq!(goto.targets, vec![0x1100, 0x1200, 0x1300]);
 
-        let cond_sv = SsaVarnode { base: Varnode::reg(0x20, 8), version: 0 };
+        let cond_sv = SsaVarnode {
+            base: Varnode::reg(0x20, 8),
+            version: 0,
+        };
         let switch_node = computed_goto_to_switch(&goto, cond_sv);
         match switch_node {
             HirNode::Switch { cases, .. } => {
@@ -1988,13 +1995,12 @@ mod tests {
 
     #[test]
     fn branchind_without_table_not_matched() {
-        let bi = IrInsn::without_output(
-            IrOp::Branchind,
-            smallvec![Varnode::reg(0x30, 8)],
-            0x1058,
-        );
+        let bi = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x30, 8)], 0x1058);
         let result = detect_computed_goto(&[bi], &[], (0x1000, 0x2000));
-        assert!(result.is_none(), "Branchind without table Load should not match");
+        assert!(
+            result.is_none(),
+            "Branchind without table Load should not match"
+        );
 
         let load = IrInsn::with_output(
             IrOp::Load,
@@ -2002,16 +2008,14 @@ mod tests {
             smallvec![Varnode::constant(0, 8), Varnode::reg(0x10, 8)],
             0x1054,
         );
-        let bi2 = IrInsn::without_output(
-            IrOp::Branchind,
-            smallvec![Varnode::reg(0x30, 8)],
-            0x1058,
-        );
+        let bi2 = IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::reg(0x30, 8)], 0x1058);
         let result2 = detect_computed_goto(&[load, bi2], &[], (0x1000, 0x2000));
-        assert!(result2.is_none(), "Load with no valid table section should not match");
+        assert!(
+            result2.is_none(),
+            "Load with no valid table section should not match"
+        );
     }
 }
-
 
 #[cfg(test)]
 mod tests_t241_t242 {
@@ -2041,7 +2045,12 @@ mod tests_t241_t242 {
         let targets = read_jump_table(&table, &section).expect("read should succeed");
         assert_eq!(
             targets,
-            vec![base_addr + 0x10, base_addr + 0x20, base_addr + 0x30, base_addr + 0x40],
+            vec![
+                base_addr + 0x10,
+                base_addr + 0x20,
+                base_addr + 0x30,
+                base_addr + 0x40
+            ],
         );
     }
 

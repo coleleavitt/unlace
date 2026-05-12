@@ -37,12 +37,7 @@ impl Pass for TailDuplicationPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        let total_insns: usize = func
-            .function
-            .blocks
-            .values()
-            .map(|b| b.insns.len())
-            .sum();
+        let total_insns: usize = func.function.blocks.values().map(|b| b.insns.len()).sum();
         // 10% of IR, but at least enough room for one duplication of a
         // maximally-sized tail; otherwise small functions never get the
         // chance to specialise their switch tails.
@@ -56,14 +51,7 @@ impl Pass for TailDuplicationPass {
 
         let mut spent = 0usize;
         let mut changed = false;
-        let mut next_block_id = func
-            .function
-            .blocks
-            .keys()
-            .map(|b| b.0)
-            .max()
-            .unwrap_or(0)
-            + 1;
+        let mut next_block_id = func.function.blocks.keys().map(|b| b.0).max().unwrap_or(0) + 1;
 
         for tail_id in candidates {
             let tail_insns_len = func
@@ -128,11 +116,7 @@ impl Pass for TailDuplicationPass {
     }
 }
 
-fn pred_uses_unconditional_branch(
-    func: &SsaFunction,
-    pred: BlockId,
-    tail: BlockId,
-) -> bool {
+fn pred_uses_unconditional_branch(func: &SsaFunction, pred: BlockId, tail: BlockId) -> bool {
     let block = match func.function.blocks.get(&pred) {
         Some(b) => b,
         None => return false,
@@ -278,8 +262,11 @@ mod tests {
         let c1 = Varnode::constant(1, 8);
 
         let mut b0 = BasicBlock::new(BlockId(0));
-        b0.insns
-            .push(IrInsn::without_output(IrOp::Branchind, smallvec![r0], 0x1000));
+        b0.insns.push(IrInsn::without_output(
+            IrOp::Branchind,
+            smallvec![r0],
+            0x1000,
+        ));
         b0.successors = smallvec![BlockId(1), BlockId(2), BlockId(3), BlockId(4)];
 
         let mut b1 = BasicBlock::new(BlockId(1));

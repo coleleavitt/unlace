@@ -155,7 +155,10 @@ fn collect_seh_from_image(image: &BinaryImage) -> Option<crate::seh::SehInfo> {
             unwind_codes_raw: Vec::new(),
             handler_rva: None,
         });
-        let handler = unwind_info_raw.as_ref().and_then(|ui| ui.handler_rva).map(u64::from);
+        let handler = unwind_info_raw
+            .as_ref()
+            .and_then(|ui| ui.handler_rva)
+            .map(u64::from);
         functions.push(crate::seh::SehFunction {
             begin: rf.begin_address,
             end: rf.end_address,
@@ -1274,9 +1277,8 @@ where
                             if let Some(resolved) =
                                 by_name.get(std::str::from_utf8(name).unwrap_or(""))
                             {
-                                let slot_va = image_base
-                                    + u64::from(iat_rva)
-                                    + slot_idx * thunk_size;
+                                let slot_va =
+                                    image_base + u64::from(iat_rva) + slot_idx * thunk_size;
                                 out.insert(slot_va, resolved.clone());
                             }
                         }
@@ -2282,8 +2284,7 @@ mod tests {
         // export_dir
         // Characteristics .. MinorVersion: leave zero.
         // Name RVA
-        buf[rd + 12..rd + 16]
-            .copy_from_slice(&(rdata_rva + dll_name_off as u32).to_le_bytes());
+        buf[rd + 12..rd + 16].copy_from_slice(&(rdata_rva + dll_name_off as u32).to_le_bytes());
         // Base ordinal = 1
         buf[rd + 16..rd + 20].copy_from_slice(&1u32.to_le_bytes());
         // NumberOfFunctions = 2
@@ -2291,14 +2292,11 @@ mod tests {
         // NumberOfNames = 2
         buf[rd + 24..rd + 28].copy_from_slice(&2u32.to_le_bytes());
         // AddressOfFunctions RVA
-        buf[rd + 28..rd + 32]
-            .copy_from_slice(&(rdata_rva + funcs_off as u32).to_le_bytes());
+        buf[rd + 28..rd + 32].copy_from_slice(&(rdata_rva + funcs_off as u32).to_le_bytes());
         // AddressOfNames RVA
-        buf[rd + 32..rd + 36]
-            .copy_from_slice(&(rdata_rva + names_off as u32).to_le_bytes());
+        buf[rd + 32..rd + 36].copy_from_slice(&(rdata_rva + names_off as u32).to_le_bytes());
         // AddressOfNameOrdinals RVA
-        buf[rd + 36..rd + 40]
-            .copy_from_slice(&(rdata_rva + ords_off as u32).to_le_bytes());
+        buf[rd + 36..rd + 40].copy_from_slice(&(rdata_rva + ords_off as u32).to_le_bytes());
 
         // Address-of-functions: both RVAs point *inside* the export directory
         // range → `is_forward` returns true.
@@ -2330,8 +2328,7 @@ mod tests {
 
         // Wire the EXPORT data directory entry.
         let export_dir_entry = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_EXPORT as usize) * 8;
-        buf[export_dir_entry..export_dir_entry + 4]
-            .copy_from_slice(&export_dir_rva.to_le_bytes());
+        buf[export_dir_entry..export_dir_entry + 4].copy_from_slice(&export_dir_rva.to_le_bytes());
         buf[export_dir_entry + 4..export_dir_entry + 8]
             .copy_from_slice(&export_dir_size.to_le_bytes());
 
@@ -2476,17 +2473,13 @@ mod tests {
         let blob_end = 0x84usize;
         let export_dir_size = blob_end as u32;
 
-        buf[rd + 12..rd + 16]
-            .copy_from_slice(&(rdata_rva + dll_name_off as u32).to_le_bytes());
+        buf[rd + 12..rd + 16].copy_from_slice(&(rdata_rva + dll_name_off as u32).to_le_bytes());
         buf[rd + 16..rd + 20].copy_from_slice(&1u32.to_le_bytes());
         buf[rd + 20..rd + 24].copy_from_slice(&2u32.to_le_bytes());
         buf[rd + 24..rd + 28].copy_from_slice(&2u32.to_le_bytes());
-        buf[rd + 28..rd + 32]
-            .copy_from_slice(&(rdata_rva + funcs_off as u32).to_le_bytes());
-        buf[rd + 32..rd + 36]
-            .copy_from_slice(&(rdata_rva + names_off as u32).to_le_bytes());
-        buf[rd + 36..rd + 40]
-            .copy_from_slice(&(rdata_rva + ords_off as u32).to_le_bytes());
+        buf[rd + 28..rd + 32].copy_from_slice(&(rdata_rva + funcs_off as u32).to_le_bytes());
+        buf[rd + 32..rd + 36].copy_from_slice(&(rdata_rva + names_off as u32).to_le_bytes());
+        buf[rd + 36..rd + 40].copy_from_slice(&(rdata_rva + ords_off as u32).to_le_bytes());
 
         buf[rd + funcs_off..rd + funcs_off + 4]
             .copy_from_slice(&(rdata_rva + fwd1_off as u32).to_le_bytes());
@@ -2564,17 +2557,14 @@ mod tests {
 
         // Wire EXPORT and IMPORT data directory entries.
         let export_dir_entry = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_EXPORT as usize) * 8;
-        buf[export_dir_entry..export_dir_entry + 4]
-            .copy_from_slice(&export_dir_rva.to_le_bytes());
+        buf[export_dir_entry..export_dir_entry + 4].copy_from_slice(&export_dir_rva.to_le_bytes());
         buf[export_dir_entry + 4..export_dir_entry + 8]
             .copy_from_slice(&export_dir_size.to_le_bytes());
 
         let import_dir_entry = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_IMPORT as usize) * 8;
-        buf[import_dir_entry..import_dir_entry + 4]
-            .copy_from_slice(&idata_rva.to_le_bytes());
+        buf[import_dir_entry..import_dir_entry + 4].copy_from_slice(&idata_rva.to_le_bytes());
         // size = two descriptors (the loader doesn't actually use this).
-        buf[import_dir_entry + 4..import_dir_entry + 8]
-            .copy_from_slice(&40u32.to_le_bytes());
+        buf[import_dir_entry + 4..import_dir_entry + 8].copy_from_slice(&40u32.to_le_bytes());
 
         // IAT slot VAs the test will assert on. FT thunks are u64-sized for
         // PE32+; slot 0 → HeapAlloc, slot 1 → ZwQuerySystem.

@@ -37,15 +37,9 @@ pub enum Region {
         else_region: Box<Region>,
     },
     /// A while loop (condition tested before the body).
-    WhileLoop {
-        cond: BlockId,
-        body: Box<Region>,
-    },
+    WhileLoop { cond: BlockId, body: Box<Region> },
     /// A do-while loop (condition tested after the body).
-    DoWhileLoop {
-        body: Box<Region>,
-        cond: BlockId,
-    },
+    DoWhileLoop { body: Box<Region>, cond: BlockId },
     /// A sequence of regions.
     Sequence(Vec<Region>),
     /// An unstructurable fragment (renders as goto).
@@ -357,10 +351,8 @@ fn structure_loop(
         .filter(|(t, _)| *t != exit_block && *t != unknown_block)
         .collect();
 
-    let is_header_cond = header_edges.len() == 2
-        && header_edges
-            .iter()
-            .any(|(t, _)| !body_blocks.contains(t));
+    let is_header_cond =
+        header_edges.len() == 2 && header_edges.iter().any(|(t, _)| !body_blocks.contains(t));
 
     if is_header_cond {
         // While-loop: condition at header.
@@ -416,11 +408,7 @@ fn structure_loop(
     // Check for do-while: latch has the exit condition.
     let latches: Vec<BlockId> = body_blocks
         .iter()
-        .filter(|&&b| {
-            cfg.edges_from(b)
-                .iter()
-                .any(|(t, _)| *t == header)
-        })
+        .filter(|&&b| cfg.edges_from(b).iter().any(|(t, _)| *t == header))
         .copied()
         .collect();
 
@@ -577,7 +565,10 @@ pub fn count_gotos(regions: &[Region]) -> usize {
 
 fn count_gotos_in_region(region: &Region) -> usize {
     match region {
-        Region::Linear(nodes) => nodes.iter().filter(|n| matches!(n, HirNode::Goto(_))).count(),
+        Region::Linear(nodes) => nodes
+            .iter()
+            .filter(|n| matches!(n, HirNode::Goto(_)))
+            .count(),
         Region::IfThenElse {
             then_region,
             else_region,
@@ -653,31 +644,24 @@ mod tests {
         let cfg = build_cfg(&func);
 
         let mut hir_blocks: BTreeMap<BlockId, Vec<HirNode>> = BTreeMap::new();
-        hir_blocks.insert(
-            BlockId(0),
-            vec![HirNode::Statement(arith_insn(0x1000))],
-        );
-        hir_blocks.insert(
-            BlockId(1),
-            vec![HirNode::Statement(arith_insn(0x1010))],
-        );
-        hir_blocks.insert(
-            BlockId(2),
-            vec![HirNode::Statement(arith_insn(0x1020))],
-        );
-        hir_blocks.insert(
-            BlockId(3),
-            vec![HirNode::Statement(arith_insn(0x1030))],
-        );
+        hir_blocks.insert(BlockId(0), vec![HirNode::Statement(arith_insn(0x1000))]);
+        hir_blocks.insert(BlockId(1), vec![HirNode::Statement(arith_insn(0x1010))]);
+        hir_blocks.insert(BlockId(2), vec![HirNode::Statement(arith_insn(0x1020))]);
+        hir_blocks.insert(BlockId(3), vec![HirNode::Statement(arith_insn(0x1030))]);
 
         let regions = structure_regions(&cfg, &func, &hir_blocks);
 
         // Should contain no gotos.
         let gotos = count_gotos(&regions);
-        assert_eq!(gotos, 0, "diamond CFG should produce no gotos; regions: {regions:#?}");
+        assert_eq!(
+            gotos, 0,
+            "diamond CFG should produce no gotos; regions: {regions:#?}"
+        );
 
         // Should have produced an IfThenElse region.
-        let has_if = regions.iter().any(|r| matches!(r, Region::IfThenElse { .. }));
+        let has_if = regions
+            .iter()
+            .any(|r| matches!(r, Region::IfThenElse { .. }));
         assert!(has_if, "should have IfThenElse region; got: {regions:#?}");
     }
 
@@ -707,20 +691,16 @@ mod tests {
         let cfg = build_cfg(&func);
 
         let mut hir_blocks: BTreeMap<BlockId, Vec<HirNode>> = BTreeMap::new();
-        hir_blocks.insert(
-            BlockId(0),
-            vec![HirNode::Statement(arith_insn(0x2000))],
-        );
-        hir_blocks.insert(
-            BlockId(1),
-            vec![HirNode::Statement(arith_insn(0x2010))],
-        );
+        hir_blocks.insert(BlockId(0), vec![HirNode::Statement(arith_insn(0x2000))]);
+        hir_blocks.insert(BlockId(1), vec![HirNode::Statement(arith_insn(0x2010))]);
         hir_blocks.insert(BlockId(2), vec![]);
 
         let regions = structure_regions(&cfg, &func, &hir_blocks);
 
         // Should contain a WhileLoop.
-        let has_while = regions.iter().any(|r| matches!(r, Region::WhileLoop { .. }));
+        let has_while = regions
+            .iter()
+            .any(|r| matches!(r, Region::WhileLoop { .. }));
         assert!(
             has_while,
             "simple loop should produce WhileLoop region; got: {regions:#?}"

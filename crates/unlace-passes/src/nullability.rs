@@ -303,9 +303,7 @@ fn classify_insn(insn: &unlace_ir::IrInsn, aliases: &BTreeSet<Varnode>) -> Optio
                 let a = insn.inputs[0];
                 let b = insn.inputs[1];
                 let is_zero = |v: Varnode| v.space == SpaceId::Const && v.offset == 0;
-                if (aliases.contains(&a) && is_zero(b))
-                    || (aliases.contains(&b) && is_zero(a))
-                {
+                if (aliases.contains(&a) && is_zero(b)) || (aliases.contains(&b) && is_zero(a)) {
                     return Some(FirstEvent::Check);
                 }
             }
@@ -338,7 +336,7 @@ fn forwarding_output(insn: &unlace_ir::IrInsn, aliases: &BTreeSet<Varnode>) -> O
 mod tests {
     use super::*;
     use smallvec::smallvec;
-    use unlace_ir::ssa::{build_ssa, CallingConvention};
+    use unlace_ir::ssa::{CallingConvention, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     // RDI = parameter 0 under System V.
@@ -441,8 +439,11 @@ mod tests {
         ));
 
         let mut bb2 = BasicBlock::new(BlockId(2));
-        bb2.insns
-            .push(IrInsn::without_output(IrOp::Return, smallvec![k0()], 0x1020));
+        bb2.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![k0()],
+            0x1020,
+        ));
 
         let ssa = build(vec![bb0, bb1, bb2]);
         let res = infer_param_nullability(&ssa);

@@ -94,7 +94,11 @@ pub fn reanalysis_fixpoint<F>(
 where
     F: FnMut(&mut SsaFunction) -> Result<(), PassError>,
 {
-    let cap = if max_iters == 0 { DEFAULT_REANALYSIS_CAP } else { max_iters };
+    let cap = if max_iters == 0 {
+        DEFAULT_REANALYSIS_CAP
+    } else {
+        max_iters
+    };
     let mut report = ReanalysisReport::default();
 
     let mut worklist: VecDeque<u64> = funcs.keys().copied().collect();
@@ -174,8 +178,10 @@ mod tests {
         // re-enqueued; when B's flips, A must be re-enqueued.
         let addrs = [0x1000_u64, 0x2000, 0x3000];
         let mut funcs = make_chain(&addrs);
-        let ir_funcs: BTreeMap<u64, _> =
-            funcs.iter().map(|(a, s)| (*a, s.function.clone())).collect();
+        let ir_funcs: BTreeMap<u64, _> = funcs
+            .iter()
+            .map(|(a, s)| (*a, s.function.clone()))
+            .collect();
         let cg = build_call_graph(&ir_funcs);
 
         let mut visit_order: Vec<u64> = Vec::new();
@@ -205,7 +211,10 @@ mod tests {
         assert!(!report.hit_cap, "loop should converge: {report:?}");
         assert_eq!(report.total_revisions, 2);
         let a_visits = visit_order.iter().filter(|&&a| a == 0x1000).count();
-        assert!(a_visits >= 2, "A must be re-visited; visits={visit_order:?}");
+        assert!(
+            a_visits >= 2,
+            "A must be re-visited; visits={visit_order:?}"
+        );
         let c_visits = visit_order.iter().filter(|&&a| a == 0x3000).count();
         assert_eq!(c_visits, 1, "C visited only once; got {visit_order:?}");
         assert_eq!(funcs[&0x3000].signature_revision, 1);
@@ -228,15 +237,13 @@ mod tests {
             let idx = block.insns.len() - 1;
             block.insns.insert(
                 idx,
-                IrInsn::without_output(
-                    IrOp::Call,
-                    smallvec![Varnode::constant(0x1000, 8)],
-                    0x3004,
-                ),
+                IrInsn::without_output(IrOp::Call, smallvec![Varnode::constant(0x1000, 8)], 0x3004),
             );
         }
-        let ir_funcs: BTreeMap<u64, _> =
-            funcs.iter().map(|(a, s)| (*a, s.function.clone())).collect();
+        let ir_funcs: BTreeMap<u64, _> = funcs
+            .iter()
+            .map(|(a, s)| (*a, s.function.clone()))
+            .collect();
         let cg = build_call_graph(&ir_funcs);
 
         // Per-function toggle so each pop of *that function* alternates
@@ -255,7 +262,10 @@ mod tests {
         })
         .expect("ok");
 
-        assert!(report.hit_cap, "non-converging cycle must hit cap: {report:?}");
+        assert!(
+            report.hit_cap,
+            "non-converging cycle must hit cap: {report:?}"
+        );
         assert_eq!(report.iterations, cap);
         assert!(report.total_revisions >= cap as u64);
     }
@@ -266,8 +276,10 @@ mod tests {
         // drains in exactly N steps where N = #functions.
         let addrs = [0x1000_u64, 0x2000, 0x3000];
         let mut funcs = make_chain(&addrs);
-        let ir_funcs: BTreeMap<u64, _> =
-            funcs.iter().map(|(a, s)| (*a, s.function.clone())).collect();
+        let ir_funcs: BTreeMap<u64, _> = funcs
+            .iter()
+            .map(|(a, s)| (*a, s.function.clone()))
+            .collect();
         let cg = build_call_graph(&ir_funcs);
 
         let report = reanalysis_fixpoint(&mut funcs, &cg, 10, |_ssa| Ok(())).expect("ok");

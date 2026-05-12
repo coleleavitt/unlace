@@ -273,8 +273,8 @@ mod tests {
             msgsend_addrs: addrs,
             class_symbols: BTreeMap::new(),
             selector_strings: BTreeMap::new(),
-        category_methods: BTreeMap::new(),
-        category_lookup: BTreeMap::new(),
+            category_methods: BTreeMap::new(),
+            category_lookup: BTreeMap::new(),
         };
 
         let changed = pass.run(&mut ssa).expect("pass succeeds");
@@ -363,8 +363,8 @@ mod tests {
             msgsend_addrs: addrs,
             class_symbols: classes,
             selector_strings: sels,
-        category_methods: BTreeMap::new(),
-        category_lookup: BTreeMap::new(),
+            category_methods: BTreeMap::new(),
+            category_lookup: BTreeMap::new(),
         };
         pass.run(&mut ssa).expect("ok");
 
@@ -408,8 +408,8 @@ mod tests {
             msgsend_addrs: addrs,
             class_symbols: classes,
             selector_strings: BTreeMap::new(),
-        category_methods: BTreeMap::new(),
-        category_lookup: BTreeMap::new(),
+            category_methods: BTreeMap::new(),
+            category_lookup: BTreeMap::new(),
         };
         pass.run(&mut ssa).expect("ok");
 
@@ -435,8 +435,8 @@ mod tests {
             msgsend_addrs: addrs,
             class_symbols: BTreeMap::new(),
             selector_strings: BTreeMap::new(),
-        category_methods: BTreeMap::new(),
-        category_lookup: BTreeMap::new(),
+            category_methods: BTreeMap::new(),
+            category_lookup: BTreeMap::new(),
         };
 
         let changed = pass.run(&mut ssa).expect("pass succeeds");
@@ -472,7 +472,8 @@ mod tests {
         );
         assert_eq!(pass.category_lookup.len(), 2);
         assert_eq!(
-            pass.category_lookup.get(&("MyClass".to_string(), "extraMethod".to_string())),
+            pass.category_lookup
+                .get(&("MyClass".to_string(), "extraMethod".to_string())),
             Some(&"MyCat".to_string())
         );
     }
@@ -489,8 +490,18 @@ mod tests {
         let rsi = Varnode::reg(48, 8);
         let space = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
         let insns = vec![
-            IrInsn::with_output(IrOp::Load, rdi, smallvec![space, Varnode::constant(class_va, 8)], 0x1000),
-            IrInsn::with_output(IrOp::Load, rsi, smallvec![space, Varnode::constant(sel_va, 8)], 0x1004),
+            IrInsn::with_output(
+                IrOp::Load,
+                rdi,
+                smallvec![space, Varnode::constant(class_va, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(
+                IrOp::Load,
+                rsi,
+                smallvec![space, Varnode::constant(sel_va, 8)],
+                0x1004,
+            ),
             IrInsn::without_output(
                 IrOp::Call,
                 smallvec![Varnode::constant(msgsend_addr, 8), rdi, rsi],
@@ -531,8 +542,18 @@ mod tests {
         let rsi = Varnode::reg(48, 8);
         let space = Varnode::constant(unlace_ir::SpaceId::Ram as u64, 8);
         let insns = vec![
-            IrInsn::with_output(IrOp::Load, rdi, smallvec![space, Varnode::constant(class_va, 8)], 0x1000),
-            IrInsn::with_output(IrOp::Load, rsi, smallvec![space, Varnode::constant(sel_va, 8)], 0x1004),
+            IrInsn::with_output(
+                IrOp::Load,
+                rdi,
+                smallvec![space, Varnode::constant(class_va, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(
+                IrOp::Load,
+                rsi,
+                smallvec![space, Varnode::constant(sel_va, 8)],
+                0x1004,
+            ),
             IrInsn::without_output(
                 IrOp::Call,
                 smallvec![Varnode::constant(msgsend_addr, 8), rdi, rsi],

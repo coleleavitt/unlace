@@ -100,8 +100,7 @@ pub fn detect_uefi_module(pe_data: &[u8]) -> Option<UefiModule> {
     if &pe_data[0..2] != b"MZ" {
         return None;
     }
-    let nt_offset =
-        u32::from_le_bytes(pe_data[0x3C..0x40].try_into().ok()?) as usize;
+    let nt_offset = u32::from_le_bytes(pe_data[0x3C..0x40].try_into().ok()?) as usize;
 
     // NT signature: "PE\0\0".
     if nt_offset.checked_add(4)? > pe_data.len() {
@@ -117,8 +116,7 @@ pub fn detect_uefi_module(pe_data: &[u8]) -> Option<UefiModule> {
         return None;
     }
     let num_sections = u16::from_le_bytes(pe_data[fh + 2..fh + 4].try_into().ok()?) as usize;
-    let size_of_opt_hdr =
-        u16::from_le_bytes(pe_data[fh + 16..fh + 18].try_into().ok()?) as usize;
+    let size_of_opt_hdr = u16::from_le_bytes(pe_data[fh + 16..fh + 18].try_into().ok()?) as usize;
 
     // Optional header starts at nt_offset + 24.
     let oh = nt_offset.checked_add(24)?;
@@ -168,11 +166,7 @@ pub fn detect_uefi_module(pe_data: &[u8]) -> Option<UefiModule> {
 /// possibly non-NUL-terminated) name. We compare against well-known UEFI
 /// firmware section name prefixes used by EDK II and various firmware
 /// build systems.
-fn classify_module_kind(
-    pe_data: &[u8],
-    sh_start: usize,
-    num_sections: usize,
-) -> UefiModuleKind {
+fn classify_module_kind(pe_data: &[u8], sh_start: usize, num_sections: usize) -> UefiModuleKind {
     const SH_SIZE: usize = 40;
 
     let end = match sh_start.checked_add(num_sections.saturating_mul(SH_SIZE)) {

@@ -29,7 +29,9 @@ use crate::space::SpaceId;
 use crate::ssa::SsaFunction;
 
 /// Classification of a single data cross-reference.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum DataXrefKind {
     /// `Load` from the global address (read).
     Read,
@@ -102,7 +104,9 @@ impl DataXrefGraph {
 
     /// Iterator over every (target_addr, xref) pair.
     pub fn iter(&self) -> impl Iterator<Item = (u64, &DataXref)> {
-        self.to.iter().flat_map(|(&a, v)| v.iter().map(move |x| (a, x)))
+        self.to
+            .iter()
+            .flat_map(|(&a, v)| v.iter().map(move |x| (a, x)))
     }
 
     /// Suggest a printer-friendly name for `addr` derived from a string
@@ -182,10 +186,7 @@ pub fn build_data_xref_graph(
     graph
 }
 
-fn classify(
-    insn: &IrInsn,
-    is_global_addr: impl Fn(u64) -> bool,
-) -> Option<(DataXrefKind, u64)> {
+fn classify(insn: &IrInsn, is_global_addr: impl Fn(u64) -> bool) -> Option<(DataXrefKind, u64)> {
     let const_input = |i: usize| -> Option<u64> {
         let vn = insn.inputs.get(i)?;
         (vn.space == SpaceId::Const).then_some(vn.offset)
@@ -255,12 +256,7 @@ mod tests {
         let const_space = Varnode::constant(0, 4); // address-space-id placeholder
         let global_vn = Varnode::constant(global, 8);
         let out = Varnode::reg(0, 8);
-        let load = IrInsn::with_output(
-            IrOp::Load,
-            out,
-            smallvec![const_space, global_vn],
-            0x1000,
-        );
+        let load = IrInsn::with_output(IrOp::Load, out, smallvec![const_space, global_vn], 0x1000);
         let store = IrInsn::without_output(
             IrOp::Store,
             smallvec![const_space, global_vn, Varnode::constant(0xFF, 1)],
@@ -288,12 +284,7 @@ mod tests {
         let lit_vn = Varnode::constant(lit, 8);
         let idx = Varnode::reg(0, 8);
         let out = Varnode::reg(8, 8);
-        let lea = IrInsn::with_output(
-            IrOp::IntAdd,
-            out,
-            smallvec![lit_vn, idx],
-            0x1000,
-        );
+        let lea = IrInsn::with_output(IrOp::IntAdd, out, smallvec![lit_vn, idx], 0x1000);
         let mut funcs = BTreeMap::new();
         funcs.insert(0x1000, make_func_with_insns(0x1000, vec![lea]));
 
@@ -309,18 +300,10 @@ mod tests {
         let const_space = Varnode::constant(0, 4);
         let global_vn = Varnode::constant(global, 8);
         let out = Varnode::reg(0, 8);
-        let load = IrInsn::with_output(
-            IrOp::Load,
-            out,
-            smallvec![const_space, global_vn],
-            0x1000,
-        );
+        let load = IrInsn::with_output(IrOp::Load, out, smallvec![const_space, global_vn], 0x1000);
         let mut funcs = BTreeMap::new();
         for &fn_addr in &[0x1000_u64, 0x2000, 0x3000] {
-            funcs.insert(
-                fn_addr,
-                make_func_with_insns(fn_addr, vec![load.clone()]),
-            );
+            funcs.insert(fn_addr, make_func_with_insns(fn_addr, vec![load.clone()]));
         }
 
         let g = build_data_xref_graph(&funcs, is_global);
@@ -339,20 +322,17 @@ mod tests {
         let const_space = Varnode::constant(0, 4);
         let global_vn = Varnode::constant(global, 8);
         let out = Varnode::reg(0, 8);
-        let load = IrInsn::with_output(
-            IrOp::Load,
-            out,
-            smallvec![const_space, global_vn],
-            0x1000,
-        );
+        let load = IrInsn::with_output(IrOp::Load, out, smallvec![const_space, global_vn], 0x1000);
         let mut funcs = BTreeMap::new();
         funcs.insert(0x1000, make_func_with_insns(0x1000, vec![load]));
         let g = build_data_xref_graph(&funcs, is_global);
 
-        let lookup = move |a: u64| -> Option<&'static str> {
-            (a == global).then_some("hello world")
-        };
-        assert_eq!(g.suggest_name(global, lookup).as_deref(), Some("&aHelloWorld"));
+        let lookup =
+            move |a: u64| -> Option<&'static str> { (a == global).then_some("hello world") };
+        assert_eq!(
+            g.suggest_name(global, lookup).as_deref(),
+            Some("&aHelloWorld")
+        );
         // No xrefs to a different address ⇒ no suggestion.
         assert!(g.suggest_name(0xDEAD, lookup).is_none());
     }

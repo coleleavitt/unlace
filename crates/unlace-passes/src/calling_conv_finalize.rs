@@ -114,8 +114,8 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
     }
 
     // Rule 3: infer return type from caller-side use.
-    let return_type =
-        infer_return_from_callers(func, callers).unwrap_or(Type::Primitive(func.inferred_return_type));
+    let return_type = infer_return_from_callers(func, callers)
+        .unwrap_or(Type::Primitive(func.inferred_return_type));
 
     FinalizedSignature {
         params: final_params,
@@ -143,9 +143,7 @@ fn arg_register_list(cc: CallingConvention) -> &'static [u64] {
         CallingConvention::MicrosoftX64 => MSX64_ARG_REGS,
         CallingConvention::AArch64 => AARCH64_ARG_REGS,
         CallingConvention::Thiscall => &[RCX],
-        CallingConvention::Cdecl
-        | CallingConvention::Stdcall
-        | CallingConvention::Unknown => &[],
+        CallingConvention::Cdecl | CallingConvention::Stdcall | CallingConvention::Unknown => &[],
     }
 }
 
@@ -266,11 +264,7 @@ fn infer_return_from_callers(func: &SsaFunction, callers: &[&SsaFunction]) -> Op
 
 /// Walk `block` starting at the insn *after* `call_idx` and return the
 /// `Type` implied by the first instruction that reads `ret_reg`.
-fn first_return_use(
-    block: &unlace_ir::BasicBlock,
-    call_idx: usize,
-    ret_reg: u64,
-) -> Option<Type> {
+fn first_return_use(block: &unlace_ir::BasicBlock, call_idx: usize, ret_reg: u64) -> Option<Type> {
     let start = call_idx + 1;
     for insn in block.insns.iter().skip(start) {
         for input in &insn.inputs {
@@ -363,7 +357,11 @@ mod tests {
 
     /// Build a one-block function at the given entry address whose
     /// body is `insns` followed by `RETURN`.
-    fn make_func(addr: u64, insns: Vec<IrInsn>, params: Vec<(String, PrimitiveType)>) -> SsaFunction {
+    fn make_func(
+        addr: u64,
+        insns: Vec<IrInsn>,
+        params: Vec<(String, PrimitiveType)>,
+    ) -> SsaFunction {
         let mut f = Function::new("f", BlockId(0), addr);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns = insns;
@@ -417,11 +415,7 @@ mod tests {
             // rax = t1
             IrInsn::with_output(IrOp::Copy, rax(), smallvec![t1], 0x1004),
         ];
-        let ssa = make_func(
-            0x1000,
-            insns,
-            vec![("a1".into(), PrimitiveType::Int(8))],
-        );
+        let ssa = make_func(0x1000, insns, vec![("a1".into(), PrimitiveType::Int(8))]);
 
         let sig = finalize_signature(&ssa, &[]);
         assert_eq!(sig.params.len(), 1);
@@ -495,11 +489,7 @@ mod tests {
         let caller_a = make_func(
             0x2000,
             vec![
-                IrInsn::without_output(
-                    IrOp::Call,
-                    smallvec![Varnode::constant(0x1000, 8)],
-                    0x2000,
-                ),
+                IrInsn::without_output(IrOp::Call, smallvec![Varnode::constant(0x1000, 8)], 0x2000),
                 IrInsn::with_output(
                     IrOp::IntAnd,
                     t1,
@@ -514,11 +504,7 @@ mod tests {
         let caller_b = make_func(
             0x3000,
             vec![
-                IrInsn::without_output(
-                    IrOp::Call,
-                    smallvec![Varnode::constant(0x1000, 8)],
-                    0x3000,
-                ),
+                IrInsn::without_output(IrOp::Call, smallvec![Varnode::constant(0x1000, 8)], 0x3000),
                 IrInsn::with_output(
                     IrOp::IntAnd,
                     t2,

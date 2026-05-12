@@ -483,9 +483,6 @@ mod tests {
         func.blocks.get_mut(&BlockId(0)).unwrap().successors = smallvec![BlockId(1)];
 
         let dups = tail_duplicate_aggressive(&mut func);
-        assert_eq!(
-            dups, 5,
-            "should hit the per-function cap at 5; got {dups}"
-        );
+        assert_eq!(dups, 5, "should hit the per-function cap at 5; got {dups}");
     }
 }

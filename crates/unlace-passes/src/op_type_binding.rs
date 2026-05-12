@@ -185,13 +185,21 @@ fn build_enum_const(func: &SsaFunction) -> BTreeMap<(BlockId, usize, usize), Enu
 
             // Identify the (variable_sv, const_value, const_op_idx) triple.
             let (var_sv, const_value, const_op_idx) = if raw0.space == SpaceId::Const {
-                let var_sv = match func.var_map.get(&(*bid, idx, VarnodeSlot::Input(1))).copied() {
+                let var_sv = match func
+                    .var_map
+                    .get(&(*bid, idx, VarnodeSlot::Input(1)))
+                    .copied()
+                {
                     Some(v) => v,
                     None => continue,
                 };
                 (var_sv, raw0.offset, 0)
             } else if raw1.space == SpaceId::Const {
-                let var_sv = match func.var_map.get(&(*bid, idx, VarnodeSlot::Input(0))).copied() {
+                let var_sv = match func
+                    .var_map
+                    .get(&(*bid, idx, VarnodeSlot::Input(0)))
+                    .copied()
+                {
                     Some(v) => v,
                     None => continue,
                 };
@@ -395,7 +403,10 @@ mod tests {
         OpTypeBindingPass.run(&mut ssa).unwrap();
 
         let binding = ssa.op_bindings.stroff.get(&(bid, 1, 1)).unwrap();
-        assert_eq!(binding.field_path, vec!["inner".to_string(), "b".to_string()]);
+        assert_eq!(
+            binding.field_path,
+            vec!["inner".to_string(), "b".to_string()]
+        );
     }
 
     #[test]

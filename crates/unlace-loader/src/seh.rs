@@ -496,8 +496,7 @@ where
         {
             for i in 0..entry.n_catches as usize {
                 let off = handler_array_off + i * handler_size;
-                let Some(handler) = parse_handler_type(data, off, funcinfo.magic_number)
-                else {
+                let Some(handler) = parse_handler_type(data, off, funcinfo.magic_number) else {
                     break;
                 };
                 let type_name = if handler.p_type == 0 {
@@ -635,10 +634,9 @@ mod tests {
         //   block 0: tryLow=1, tryHigh=2, catchHigh=3, nCatches=1, pHandlerArray=0xA000
         //   block 1: tryLow=4, tryHigh=5, catchHigh=7, nCatches=2, pHandlerArray=0xA040
         let mut data = vec![0u8; 8]; // leading pad
-        for (try_low, try_high, catch_high, n_catches, p_handler_array) in [
-            (1i32, 2i32, 3i32, 1i32, 0xA000u32),
-            (4, 5, 7, 2, 0xA040),
-        ] {
+        for (try_low, try_high, catch_high, n_catches, p_handler_array) in
+            [(1i32, 2i32, 3i32, 1i32, 0xA000u32), (4, 5, 7, 2, 0xA040)]
+        {
             data.extend_from_slice(&try_low.to_le_bytes());
             data.extend_from_slice(&try_high.to_le_bytes());
             data.extend_from_slice(&catch_high.to_le_bytes());
@@ -708,8 +706,8 @@ mod tests {
         for r in &rvas {
             data.extend_from_slice(&r.to_le_bytes());
         }
-        let cta = super::parse_catchable_type_array(&data, 4)
-            .expect("CatchableTypeArray must parse");
+        let cta =
+            super::parse_catchable_type_array(&data, 4).expect("CatchableTypeArray must parse");
         assert_eq!(cta.n_catchable_types, 3);
         assert_eq!(cta.array_of_catchable_types, rvas);
 
@@ -731,8 +729,7 @@ mod tests {
         ct_bytes.extend_from_slice(&0i32.to_le_bytes()); // PMD.vdisp
         ct_bytes.extend_from_slice(&8i32.to_le_bytes()); // sizeOrOffset
         ct_bytes.extend_from_slice(&0x0010_9000u32.to_le_bytes()); // copyFunction
-        let ct = super::parse_catchable_type(&ct_bytes, 0)
-            .expect("CatchableType must parse");
+        let ct = super::parse_catchable_type(&ct_bytes, 0).expect("CatchableType must parse");
         assert_eq!(ct.properties, 1);
         assert_eq!(ct.p_type, 0x0010_8000);
         assert_eq!(ct.this_displacement.mdisp, 4);

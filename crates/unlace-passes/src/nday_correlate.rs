@@ -174,8 +174,18 @@ mod tests {
         bin.insert(0x5000, 0x9999_9999_9999_9999); // unrelated
 
         let patterns = vec![
-            pat("CVE-2024-0010", 0x2222_2222_2222_2222, 0x3333_3333_3333_3333, "do_decode"),
-            pat("CVE-2024-0002", 0x1111_1111_1111_1111, 0x4444_4444_4444_4444, "do_parse"),
+            pat(
+                "CVE-2024-0010",
+                0x2222_2222_2222_2222,
+                0x3333_3333_3333_3333,
+                "do_decode",
+            ),
+            pat(
+                "CVE-2024-0002",
+                0x1111_1111_1111_1111,
+                0x4444_4444_4444_4444,
+                "do_parse",
+            ),
         ];
 
         let hits = match_against_binary(&bin, &patterns);

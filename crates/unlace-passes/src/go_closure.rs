@@ -80,9 +80,7 @@ pub fn detect_go_closures(func: &SsaFunction) -> Vec<ClosureCall> {
             if insn.op != IrOp::Callind || insn.inputs.is_empty() {
                 continue;
             }
-            let Some(closure) =
-                try_match_closure_call(func, bid, insns, callind_idx)
-            else {
+            let Some(closure) = try_match_closure_call(func, bid, insns, callind_idx) else {
                 continue;
             };
             out.push(closure);
@@ -311,9 +309,7 @@ fn lookup_ssa(func: &SsaFunction, bid: BlockId, vn: &Varnode) -> SsaVarnode {
     for (i, insn) in block.insns.iter().enumerate() {
         for (slot_idx, inp) in insn.inputs.iter().enumerate() {
             if inp == vn {
-                if let Some(sv) =
-                    func.var_map.get(&(bid, i, VarnodeSlot::Input(slot_idx)))
-                {
+                if let Some(sv) = func.var_map.get(&(bid, i, VarnodeSlot::Input(slot_idx))) {
                     return *sv;
                 }
             }

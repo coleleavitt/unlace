@@ -79,10 +79,20 @@ pub enum JavaError {
 #[allow(dead_code)]
 enum CpEntry {
     Utf8(String),
-    Class { name_index: u16 },
-    String { string_index: u16 },
-    NameAndType { name_index: u16, descriptor_index: u16 },
-    Methodref { class_index: u16, name_and_type_index: u16 },
+    Class {
+        name_index: u16,
+    },
+    String {
+        string_index: u16,
+    },
+    NameAndType {
+        name_index: u16,
+        descriptor_index: u16,
+    },
+    Methodref {
+        class_index: u16,
+        name_and_type_index: u16,
+    },
     /// Placeholder for tags we skip (Integer, Float, etc.) or the second
     /// slot of a Long / Double pair (JVMS §4.4.5).
     Other,
@@ -259,7 +269,10 @@ pub fn parse_class(data: &[u8]) -> Result<JavaClass, JavaError> {
                 let class_index = cur.u16()?;
                 let name_and_type_index = cur.u16()?;
                 if tag == CP_METHODREF {
-                    CpEntry::Methodref { class_index, name_and_type_index }
+                    CpEntry::Methodref {
+                        class_index,
+                        name_and_type_index,
+                    }
                 } else {
                     CpEntry::Other
                 }
@@ -267,7 +280,10 @@ pub fn parse_class(data: &[u8]) -> Result<JavaClass, JavaError> {
             CP_NAME_AND_TYPE => {
                 let name_index = cur.u16()?;
                 let descriptor_index = cur.u16()?;
-                CpEntry::NameAndType { name_index, descriptor_index }
+                CpEntry::NameAndType {
+                    name_index,
+                    descriptor_index,
+                }
             }
             CP_METHOD_HANDLE => {
                 cur.u8()?; // reference_kind
@@ -324,7 +340,11 @@ pub fn parse_class(data: &[u8]) -> Result<JavaClass, JavaError> {
         let name = cp_utf8(&pool, name_index)?;
         let descriptor = cp_utf8(&pool, descriptor_index)?;
         skip_attributes(&mut cur)?;
-        fields.push(JavaField { access_flags, name, descriptor });
+        fields.push(JavaField {
+            access_flags,
+            name,
+            descriptor,
+        });
     }
 
     // Methods.
@@ -337,13 +357,22 @@ pub fn parse_class(data: &[u8]) -> Result<JavaClass, JavaError> {
         let name = cp_utf8(&pool, name_index)?;
         let descriptor = cp_utf8(&pool, descriptor_index)?;
         skip_attributes(&mut cur)?;
-        methods.push(JavaMethod { access_flags, name, descriptor });
+        methods.push(JavaMethod {
+            access_flags,
+            name,
+            descriptor,
+        });
     }
 
     // Class-level attributes — also skipped.
     skip_attributes(&mut cur)?;
 
-    Ok(JavaClass { class_name, super_name, methods, fields })
+    Ok(JavaClass {
+        class_name,
+        super_name,
+        methods,
+        fields,
+    })
 }
 
 /// Skip an `attributes_count` followed by `attributes_count` attribute_info
@@ -383,7 +412,8 @@ mod tests {
         fn add_utf8(&mut self, s: &str) -> u16 {
             self.out.push(CP_UTF8);
             let bytes = s.as_bytes();
-            self.out.extend_from_slice(&(bytes.len() as u16).to_be_bytes());
+            self.out
+                .extend_from_slice(&(bytes.len() as u16).to_be_bytes());
             self.out.extend_from_slice(bytes);
             self.cp_entries += 1;
             self.cp_entries
@@ -537,6 +567,9 @@ mod tests {
 
         // Truncated: only the magic, nothing else.
         let tiny = 0xCAFE_BABE_u32.to_be_bytes().to_vec();
-        assert!(matches!(parse_class(&tiny), Err(JavaError::Truncated { .. })));
+        assert!(matches!(
+            parse_class(&tiny),
+            Err(JavaError::Truncated { .. })
+        ));
     }
 }

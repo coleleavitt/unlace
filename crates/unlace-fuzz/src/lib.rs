@@ -83,7 +83,10 @@ pub enum FuzzResult {
     /// `stage` names the pipeline stage that was running when the panic
     /// fired so triage knows where to start. The payload string is the
     /// best-effort downcast of the panic value.
-    Panicked { stage: &'static str, payload: String },
+    Panicked {
+        stage: &'static str,
+        payload: String,
+    },
 }
 
 /// Drive one fuzz iteration over `bytes`.
@@ -120,8 +123,9 @@ pub fn fuzz_iteration(bytes: &[u8]) -> FuzzResult {
     };
 
     // -- Stage 3: function discovery --------------------------------
-    let discover_outcome =
-        catch_unwind(AssertUnwindSafe(|| pipeline::discover_functions(&image, None)));
+    let discover_outcome = catch_unwind(AssertUnwindSafe(|| {
+        pipeline::discover_functions(&image, None)
+    }));
     let functions = match discover_outcome {
         Ok(Ok(funcs)) => funcs,
         Ok(Err(e)) => {

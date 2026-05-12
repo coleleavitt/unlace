@@ -4,7 +4,9 @@
 ///
 /// Discriminants `0..=74` follow the stable ordering defined in IR spec SS4.4.
 /// New opcodes must be appended at position >= 75 with a spec version bump.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 #[non_exhaustive]
 #[repr(u8)]
 pub enum IrOp {

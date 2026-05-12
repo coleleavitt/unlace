@@ -269,7 +269,10 @@ mod tests {
     /// Emit a DER TLV with short-form length (<128 bytes is enough
     /// for every test fixture here).
     fn tlv(tag: u8, value: &[u8]) -> Vec<u8> {
-        assert!(value.len() < 128, "test helper only supports short-form length");
+        assert!(
+            value.len() < 128,
+            "test helper only supports short-form length"
+        );
         let mut out = Vec::with_capacity(2 + value.len());
         out.push(tag);
         out.push(value.len() as u8);
@@ -348,7 +351,10 @@ mod tests {
         let mut wrong_tag = good.clone();
         wrong_tag[0] = TAG_IA5STRING;
         match parse_img4(&wrong_tag) {
-            Err(Img4Error::UnexpectedTag { expected: TAG_SEQUENCE, .. }) => {}
+            Err(Img4Error::UnexpectedTag {
+                expected: TAG_SEQUENCE,
+                ..
+            }) => {}
             other => panic!("expected UnexpectedTag, got {:?}", other),
         }
     }

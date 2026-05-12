@@ -600,7 +600,12 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
         V850Op::Bsh { src, dst } => lift_swap(ctx, *src, *dst, CALLOTHER_V850_BSH),
 
         // -- Conditional move ------------------------------------------------
-        V850Op::Cmov { cond, reg1, reg2, reg3 } => lift_cmov(ctx, *cond, *reg1, *reg2, *reg3),
+        V850Op::Cmov {
+            cond,
+            reg1,
+            reg2,
+            reg3,
+        } => lift_cmov(ctx, *cond, *reg1, *reg2, *reg3),
 
         // -- Control flow --
         V850Op::Jmp { reg } => {
@@ -884,7 +889,12 @@ fn lift_mul32(ctx: &mut LiftCtx, reg1: u8, reg2: u8, reg3: u8, signed: bool) {
             smallvec![prod, Varnode::constant(0, 1)],
             ctx.addr,
         ));
-        ctx.emit(IrInsn::with_output(IrOp::Copy, d_lo, smallvec![lo], ctx.addr));
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d_lo,
+            smallvec![lo],
+            ctx.addr,
+        ));
     }
     // High 32 -> reg3
     if let Some(d_hi) = ctx.reg_write(reg3) {
@@ -895,7 +905,12 @@ fn lift_mul32(ctx: &mut LiftCtx, reg1: u8, reg2: u8, reg3: u8, signed: bool) {
             smallvec![prod, Varnode::constant(4, 1)],
             ctx.addr,
         ));
-        ctx.emit(IrInsn::with_output(IrOp::Copy, d_hi, smallvec![hi], ctx.addr));
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d_hi,
+            smallvec![hi],
+            ctx.addr,
+        ));
     }
 }
 
@@ -973,7 +988,12 @@ fn lift_divh(ctx: &mut LiftCtx, dst: u8, src: u8, signed: bool) {
             smallvec![dividend, divisor],
             ctx.addr,
         ));
-        ctx.emit(IrInsn::with_output(IrOp::Copy, d, smallvec![quot], ctx.addr));
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d,
+            smallvec![quot],
+            ctx.addr,
+        ));
     }
 }
 

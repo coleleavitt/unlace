@@ -590,8 +590,12 @@ fn demorgan(
 
 /// Returns true if both `a` and `b` are defined by `BoolNegate` instructions.
 fn both_negated(a: &Varnode, b: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>) -> bool {
-    let a_neg = def_map.get(a).map_or(false, |insn| insn.op == IrOp::BoolNegate);
-    let b_neg = def_map.get(b).map_or(false, |insn| insn.op == IrOp::BoolNegate);
+    let a_neg = def_map
+        .get(a)
+        .map_or(false, |insn| insn.op == IrOp::BoolNegate);
+    let b_neg = def_map
+        .get(b)
+        .map_or(false, |insn| insn.op == IrOp::BoolNegate);
     a_neg && b_neg
 }
 
@@ -1041,7 +1045,11 @@ mod tests {
 
         let block = ssa.function.blocks.values().next().expect("has block");
         let v2_insn = block.insns.iter().find(|i| i.output == Some(v2)).unwrap();
-        assert_eq!(v2_insn.op, IrOp::BoolNegate, "De Morgan should not fire on non-negated inputs");
+        assert_eq!(
+            v2_insn.op,
+            IrOp::BoolNegate,
+            "De Morgan should not fire on non-negated inputs"
+        );
     }
 
     #[test]

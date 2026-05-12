@@ -237,7 +237,9 @@ fn walk_addr(
         }
         IrOp::Copy => {
             // Pass through copy.
-            let in_sv = func.var_map.get(&(def.bid, def.idx, VarnodeSlot::Input(0)))?;
+            let in_sv = func
+                .var_map
+                .get(&(def.bid, def.idx, VarnodeSlot::Input(0)))?;
             walk_addr(func, *in_sv, iv_set, acc_stride, acc_offset)
         }
         _ => {
@@ -334,19 +336,29 @@ mod tests {
 
         let mut bb0 = BasicBlock::new(BlockId(0));
         // r1 = 0
-        bb0.insns
-            .push(IrInsn::with_output(IrOp::Copy, r_i, smallvec![con(0, 8)], 0x1000));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            r_i,
+            smallvec![con(0, 8)],
+            0x1000,
+        ));
         bb0.successors.push(BlockId(1));
 
         let mut bb1 = BasicBlock::new(BlockId(1));
         // t1 = r1 * 16
-        bb1.insns.push(
-            IrInsn::with_output(IrOp::IntMult, t1, smallvec![r_i, con(16, 8)], 0x1010),
-        );
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            t1,
+            smallvec![r_i, con(16, 8)],
+            0x1010,
+        ));
         // t2 = base + t1
-        bb1.insns.push(
-            IrInsn::with_output(IrOp::IntAdd, t2, smallvec![r_base, t1], 0x1014),
-        );
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            t2,
+            smallvec![r_base, t1],
+            0x1014,
+        ));
         // store(ram, t2, 1) - 4-byte store
         bb1.insns.push(IrInsn::without_output(
             IrOp::Store,
@@ -354,8 +366,12 @@ mod tests {
             0x1018,
         ));
         // t3 = t2 + 8
-        bb1.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, t3, smallvec![t2, con(8, 8)], 0x101C));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            t3,
+            smallvec![t2, con(8, 8)],
+            0x101C,
+        ));
         // store(ram, t3, 2) - 4-byte store
         bb1.insns.push(IrInsn::without_output(
             IrOp::Store,
@@ -363,9 +379,12 @@ mod tests {
             0x1020,
         ));
         // r1 = r1 + 1
-        bb1.insns.push(
-            IrInsn::with_output(IrOp::IntAdd, r_i_inc, smallvec![r_i, con(1, 8)], 0x1024),
-        );
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            r_i_inc,
+            smallvec![r_i, con(1, 8)],
+            0x1024,
+        ));
         // cbranch r1<4 -> bb1
         bb1.insns.push(IrInsn::without_output(
             IrOp::Cbranch,
@@ -424,17 +443,27 @@ mod tests {
         let r_i_inc = reg(0x08, 8);
 
         let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns
-            .push(IrInsn::with_output(IrOp::Copy, r_i, smallvec![con(0, 8)], 0x1000));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            r_i,
+            smallvec![con(0, 8)],
+            0x1000,
+        ));
         bb0.successors.push(BlockId(1));
 
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns.push(
-            IrInsn::with_output(IrOp::IntMult, t1, smallvec![r_i, con(8, 8)], 0x1010),
-        );
-        bb1.insns.push(
-            IrInsn::with_output(IrOp::IntAdd, t2, smallvec![r_base, t1], 0x1014),
-        );
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            t1,
+            smallvec![r_i, con(8, 8)],
+            0x1010,
+        ));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            t2,
+            smallvec![r_base, t1],
+            0x1014,
+        ));
         // store 1-byte at offset 0
         bb1.insns.push(IrInsn::without_output(
             IrOp::Store,
@@ -442,24 +471,35 @@ mod tests {
             0x1018,
         ));
         // t3 = t2 + 2; 2-byte store
-        bb1.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, t3, smallvec![t2, con(2, 8)], 0x101C));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            t3,
+            smallvec![t2, con(2, 8)],
+            0x101C,
+        ));
         bb1.insns.push(IrInsn::without_output(
             IrOp::Store,
             smallvec![con(SpaceId::Ram as u64, 8), t3, con(2, 2)],
             0x1020,
         ));
         // t4 = t2 + 4; 4-byte store
-        bb1.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, t4, smallvec![t2, con(4, 8)], 0x1024));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            t4,
+            smallvec![t2, con(4, 8)],
+            0x1024,
+        ));
         bb1.insns.push(IrInsn::without_output(
             IrOp::Store,
             smallvec![con(SpaceId::Ram as u64, 8), t4, con(3, 4)],
             0x1028,
         ));
-        bb1.insns.push(
-            IrInsn::with_output(IrOp::IntAdd, r_i_inc, smallvec![r_i, con(1, 8)], 0x102C),
-        );
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            r_i_inc,
+            smallvec![r_i, con(1, 8)],
+            0x102C,
+        ));
         bb1.insns.push(IrInsn::without_output(
             IrOp::Cbranch,
             smallvec![con(0x1010, 8), r_i_inc],

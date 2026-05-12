@@ -61,13 +61,13 @@ use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
 use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
 use unlace_passes::{
-    BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
-    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
-    GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
-    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
-    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
+    BmiIdiomPass, CallingConvFinalizePass, CallingConventionDetectPass, ConditionSimplifyPass,
+    ConstantFoldPass, CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
+    DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass,
+    GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass,
+    OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
+    SignatureSnapshot, StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass,
+    StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     VariableMergePass, annotate_libc_calls, bump_if_signature_changed, detect_byref,
     detect_go_defer, recover_stack_frame, recover_structs, run_outer_fixedpoint, run_to_fixedpoint,
 };
@@ -923,9 +923,7 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
     // `vN` choices, while still losing to *meaningful* (non-`vN`) names
     // produced by the merger (it occasionally promotes a DWARF name into
     // its output map).
-    VarNamingPass
-        .run(ssa)
-        .context("var naming pass failed")?;
+    VarNamingPass.run(ssa).context("var naming pass failed")?;
 
     // t230 — calling-convention finalization. Runs last so the
     // dead-param drop, byte-mask narrowing, and caller-side
@@ -1704,9 +1702,9 @@ pub fn emit_output(
 mod tests {
     use super::*;
     use smallvec::smallvec;
+    use unlace_ir::ArchId;
     use unlace_ir::ssa::build_ssa;
     use unlace_ir::{Function, IrInsn, Varnode};
-    use unlace_ir::ArchId;
     use unlace_loader::{BinaryImage, Endian, Section, SectionFlags};
 
     fn make_text_image(code: Vec<u8>, base: u64) -> BinaryImage {
@@ -1739,7 +1737,7 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
-        pdb_types: None,
+            pdb_types: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,
@@ -1774,7 +1772,9 @@ mod tests {
         ));
         func.insert_block(bb);
         let mut ssa = build_ssa(func);
-        unlace_passes::IndirectCallResolvePass.run(&mut ssa).unwrap();
+        unlace_passes::IndirectCallResolvePass
+            .run(&mut ssa)
+            .unwrap();
 
         let mut image = make_text_image(vec![0xC3], 0x1000);
         image.go_itabs.insert(
@@ -1791,7 +1791,10 @@ mod tests {
         symbols.insert(0x4010, "main.(*MyType).Do".to_string());
 
         let resolved = collect_go_iface_devirtualized_calls(&ssa, &image, &symbols);
-        assert_eq!(resolved.get(&0x1004).map(String::as_str), Some("main_MyType_Do"));
+        assert_eq!(
+            resolved.get(&0x1004).map(String::as_str),
+            Some("main_MyType_Do")
+        );
     }
 
     #[test]
@@ -2085,11 +2088,7 @@ mod tests {
             // small loop-counter update for variety
             IrInsn::with_output(IrOp::IntAdd, u1, smallvec![rcx, c8], 0x1008),
             // libc call site
-            IrInsn::without_output(
-                IrOp::Call,
-                smallvec![malloc_addr, malloc_arg],
-                0x100C,
-            ),
+            IrInsn::without_output(IrOp::Call, smallvec![malloc_addr, malloc_arg], 0x100C),
             // return
             IrInsn::without_output(IrOp::Return, smallvec![rcx], 0x1014),
         ];
@@ -2178,9 +2177,7 @@ mod tests {
 
     #[test]
     fn flirt_match_resolves_reference_name_lists() {
-        let mut code = vec![
-            0x55, 0x48, 0x89, 0xE5, 0xE8, 0x37, 0x00, 0x00, 0x00,
-        ];
+        let mut code = vec![0x55, 0x48, 0x89, 0xE5, 0xE8, 0x37, 0x00, 0x00, 0x00];
         code.resize(0x40, 0x90);
         code.extend_from_slice(&[
             0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,

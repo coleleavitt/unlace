@@ -3055,7 +3055,10 @@ mod tests {
             .iter()
             .find(|i| i.op == IrOp::Callother)
             .unwrap_or_else(|| panic!("encoding {encoding:#x} must emit Callother"));
-        (co.inputs[0].offset, co.inputs.iter().skip(1).map(|v| v.offset).collect())
+        (
+            co.inputs[0].offset,
+            co.inputs.iter().skip(1).map(|v| v.offset).collect(),
+        )
     }
 
     #[test]

@@ -333,13 +333,12 @@ impl EbpfLifter {
                 } else {
                     const_vn(insn.imm as i64 as u64, 8)
                 };
-                let target =
-                    addr.wrapping_add((INSN_SIZE as i64 + insn.offset as i64) as u64);
+                let target = addr.wrapping_add((INSN_SIZE as i64 + insn.offset as i64) as u64);
                 let target_vn = ram_target(target);
 
                 let cmp_op = match jmp_op {
                     BPF_JEQ => IrOp::IntEqual,
-                    BPF_JGT => IrOp::IntLess, // dst > src => src < dst
+                    BPF_JGT => IrOp::IntLess,      // dst > src => src < dst
                     BPF_JGE => IrOp::IntLessequal, // dst >= src => src <= dst
                     BPF_JNE => IrOp::IntNotequal,
                     BPF_JSGT => IrOp::IntSless,
@@ -356,12 +355,7 @@ impl EbpfLifter {
                 };
 
                 Ok(vec![
-                    IrInsn::with_output(
-                        cmp_op,
-                        cond,
-                        SmallVec::from_slice(&[lhs, rhs]),
-                        addr,
-                    ),
+                    IrInsn::with_output(cmp_op, cond, SmallVec::from_slice(&[lhs, rhs]), addr),
                     IrInsn::without_output(
                         IrOp::Cbranch,
                         SmallVec::from_slice(&[target_vn, cond]),

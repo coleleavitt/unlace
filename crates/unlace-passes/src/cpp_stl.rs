@@ -107,7 +107,10 @@ pub fn recognize_stl_type(namespaces: &[String], class_name: &str) -> Option<Str
         }
         "unordered_set" => {
             let elem = first_template_arg(&template_args)?;
-            Some(format!("std::unordered_set<{}>", clean_inline_ns(elem.trim())))
+            Some(format!(
+                "std::unordered_set<{}>",
+                clean_inline_ns(elem.trim())
+            ))
         }
         "shared_ptr" => {
             let elem = first_template_arg(&template_args)?;
@@ -213,11 +216,7 @@ mod tests {
     #[test]
     fn recognises_vector_int_libcxx() {
         // _ZNSt3__16vectorIiNS_9allocatorIiEEE9push_backERKi
-        let n = ns(&[
-            "std",
-            "__1",
-            "vector<int, std::__1::allocator<int> >",
-        ]);
+        let n = ns(&["std", "__1", "vector<int, std::__1::allocator<int> >"]);
         assert_eq!(
             recognize_stl_type(&n, "vector").as_deref(),
             Some("std::vector<int>"),
@@ -307,7 +306,11 @@ mod tests {
 
     #[test]
     fn recognises_function_signature_with_inline_namespace_types() {
-        let n = ns(&["std", "__1", "function<bool (std::__1::basic_string<char>)>"]);
+        let n = ns(&[
+            "std",
+            "__1",
+            "function<bool (std::__1::basic_string<char>)>",
+        ]);
         assert_eq!(
             recognize_stl_type(&n, "function").as_deref(),
             Some("std::function<bool (std::basic_string<char>)>"),
@@ -377,7 +380,10 @@ mod tests {
     #[test]
     fn top_level_args_does_not_split_inside_brackets() {
         let s = "int, std::pair<int, int>, double";
-        assert_eq!(top_level_args(s), vec!["int", "std::pair<int, int>", "double"]);
+        assert_eq!(
+            top_level_args(s),
+            vec!["int", "std::pair<int, int>", "double"]
+        );
     }
 
     #[test]

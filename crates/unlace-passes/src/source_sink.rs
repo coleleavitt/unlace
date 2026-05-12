@@ -77,22 +77,19 @@ pub fn classify_source(symbol: &str) -> Option<SourceKind> {
         }
 
         // File / stream reads
-        "read" | "pread" | "pread64" | "readv" | "preadv" | "fread"
-        | "fgets" | "fgetc" | "getc" | "getchar" | "getline" | "getdelim" => {
-            Some(SourceKind::FileRead)
-        }
+        "read" | "pread" | "pread64" | "readv" | "preadv" | "fread" | "fgets" | "fgetc"
+        | "getc" | "getchar" | "getline" | "getdelim" => Some(SourceKind::FileRead),
 
         // Environment
         "getenv" | "secure_getenv" | "getenv_r" => Some(SourceKind::EnvVar),
 
         // Interactive user input
-        "scanf" | "fscanf" | "sscanf" | "vscanf" | "vfscanf" | "vsscanf"
-        | "gets" | "gets_s" => Some(SourceKind::UserInput),
+        "scanf" | "fscanf" | "sscanf" | "vscanf" | "vfscanf" | "vsscanf" | "gets" | "gets_s" => {
+            Some(SourceKind::UserInput)
+        }
 
         // IPC
-        "msgrcv" | "mq_receive" | "mq_timedreceive" | "shmat" => {
-            Some(SourceKind::IpcRecv)
-        }
+        "msgrcv" | "mq_receive" | "mq_timedreceive" | "shmat" => Some(SourceKind::IpcRecv),
 
         _ => None,
     }
@@ -107,30 +104,23 @@ pub fn classify_sink(symbol: &str) -> Option<SinkKind> {
     let name = normalize(symbol);
     match name {
         // Command execution
-        "system" | "popen" | "execve" | "execv" | "execvp" | "execvpe"
-        | "execl" | "execlp" | "execle" | "posix_spawn" | "posix_spawnp" => {
-            Some(SinkKind::CommandExec)
-        }
+        "system" | "popen" | "execve" | "execv" | "execvp" | "execvpe" | "execl" | "execlp"
+        | "execle" | "posix_spawn" | "posix_spawnp" => Some(SinkKind::CommandExec),
 
         // Bulk memory copy (classic overflow sinks)
-        "memcpy" | "memmove" | "mempcpy" | "strcpy" | "stpcpy" | "strncpy"
-        | "strcat" | "strncat" | "bcopy" => Some(SinkKind::MemoryCopy),
+        "memcpy" | "memmove" | "mempcpy" | "strcpy" | "stpcpy" | "strncpy" | "strcat"
+        | "strncat" | "bcopy" => Some(SinkKind::MemoryCopy),
 
         // Direct memory write
-        "memset" | "bzero" | "write" | "pwrite" | "pwrite64" | "writev"
-        | "pwritev" | "fwrite" | "fputs" | "fputc" | "putc" => {
-            Some(SinkKind::MemoryWrite)
-        }
+        "memset" | "bzero" | "write" | "pwrite" | "pwrite64" | "writev" | "pwritev" | "fwrite"
+        | "fputs" | "fputc" | "putc" => Some(SinkKind::MemoryWrite),
 
         // Format / log output (format-string sinks)
-        "printf" | "fprintf" | "sprintf" | "snprintf" | "vprintf" | "vfprintf"
-        | "vsprintf" | "vsnprintf" | "dprintf" | "vdprintf"
-        | "syslog" | "vsyslog" => Some(SinkKind::LogOutput),
+        "printf" | "fprintf" | "sprintf" | "snprintf" | "vprintf" | "vfprintf" | "vsprintf"
+        | "vsnprintf" | "dprintf" | "vdprintf" | "syslog" | "vsyslog" => Some(SinkKind::LogOutput),
 
         // Network egress
-        "send" | "sendto" | "sendmsg" | "sendmmsg" | "sendfile" => {
-            Some(SinkKind::NetworkWrite)
-        }
+        "send" | "sendto" | "sendmsg" | "sendmmsg" | "sendfile" => Some(SinkKind::NetworkWrite),
 
         _ => None,
     }
@@ -192,10 +182,7 @@ mod tests {
         );
 
         // glibc internal prefixes.
-        assert_eq!(
-            classify_source("__libc_read"),
-            Some(SourceKind::FileRead)
-        );
+        assert_eq!(classify_source("__libc_read"), Some(SourceKind::FileRead));
         assert_eq!(
             classify_source("__isoc99_scanf"),
             Some(SourceKind::UserInput)
@@ -205,10 +192,7 @@ mod tests {
     #[test]
     fn extended_sources_categorized() {
         // Network family.
-        assert_eq!(
-            classify_source("recvfrom"),
-            Some(SourceKind::NetworkRead)
-        );
+        assert_eq!(classify_source("recvfrom"), Some(SourceKind::NetworkRead));
         assert_eq!(classify_source("recvmsg"), Some(SourceKind::NetworkRead));
 
         // File family.
@@ -216,10 +200,7 @@ mod tests {
         assert_eq!(classify_source("getdelim"), Some(SourceKind::FileRead));
 
         // Env family.
-        assert_eq!(
-            classify_source("secure_getenv"),
-            Some(SourceKind::EnvVar)
-        );
+        assert_eq!(classify_source("secure_getenv"), Some(SourceKind::EnvVar));
 
         // User input family.
         assert_eq!(classify_source("gets"), Some(SourceKind::UserInput));
@@ -227,20 +208,14 @@ mod tests {
 
         // IPC family.
         assert_eq!(classify_source("msgrcv"), Some(SourceKind::IpcRecv));
-        assert_eq!(
-            classify_source("mq_receive"),
-            Some(SourceKind::IpcRecv)
-        );
+        assert_eq!(classify_source("mq_receive"), Some(SourceKind::IpcRecv));
     }
 
     #[test]
     fn extended_sinks_categorized() {
         // Command exec family.
         assert_eq!(classify_sink("execvp"), Some(SinkKind::CommandExec));
-        assert_eq!(
-            classify_sink("posix_spawn"),
-            Some(SinkKind::CommandExec)
-        );
+        assert_eq!(classify_sink("posix_spawn"), Some(SinkKind::CommandExec));
 
         // Memory copy family.
         assert_eq!(classify_sink("memmove"), Some(SinkKind::MemoryCopy));

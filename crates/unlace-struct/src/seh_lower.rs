@@ -92,7 +92,10 @@ pub struct AddrRange {
 impl AddrRange {
     /// Construct a closed range. Panics if `start > end`.
     pub fn new(start: u64, end: u64) -> Self {
-        debug_assert!(start <= end, "AddrRange start > end ({start:#x} > {end:#x})");
+        debug_assert!(
+            start <= end,
+            "AddrRange start > end ({start:#x} > {end:#x})"
+        );
         Self { start, end }
     }
 
@@ -152,9 +155,9 @@ fn recurse_into_node(node: &mut HirNode, region: &SehRegion) -> bool {
             }
             false
         }
-        HirNode::While { body, .. }
-        | HirNode::DoWhile { body, .. }
-        | HirNode::For { body, .. } => wrap_one_region(body, region),
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            wrap_one_region(body, region)
+        }
         HirNode::Switch { cases, default, .. } => {
             for (_, body, _) in cases {
                 if wrap_one_region(body, region) {
@@ -197,8 +200,7 @@ fn apply_region_at(
     match &region.handler {
         SehHandler::Catch(arms) => {
             // Slice out the try-body run.
-            let try_body: Vec<HirNode> =
-                body.drain(try_start..try_end_exclusive).collect();
+            let try_body: Vec<HirNode> = body.drain(try_start..try_end_exclusive).collect();
 
             // For each arm, slice its handler insns out of the parent
             // scope at the current insertion point (where the try-body
@@ -235,8 +237,7 @@ fn apply_region_at(
             true
         }
         SehHandler::Finally(fin_range) => {
-            let try_body: Vec<HirNode> =
-                body.drain(try_start..try_end_exclusive).collect();
+            let try_body: Vec<HirNode> = body.drain(try_start..try_end_exclusive).collect();
             let insert_at = try_start;
             let finally_body: Vec<HirNode> =
                 if let Some((s, e)) = find_node_range_from(body, insert_at, *fin_range) {
@@ -263,11 +264,7 @@ fn find_node_range(body: &[HirNode], range: AddrRange) -> Option<(usize, usize)>
     find_node_range_from(body, 0, range)
 }
 
-fn find_node_range_from(
-    body: &[HirNode],
-    from: usize,
-    range: AddrRange,
-) -> Option<(usize, usize)> {
+fn find_node_range_from(body: &[HirNode], from: usize, range: AddrRange) -> Option<(usize, usize)> {
     let mut start = None;
     let mut end = from;
     for (idx, node) in body.iter().enumerate().skip(from) {
@@ -296,9 +293,9 @@ fn node_first_addr(node: &HirNode) -> Option<u64> {
         HirNode::Block(children) => children.iter().find_map(node_first_addr),
         HirNode::Commented { inner, .. } => node_first_addr(inner),
         HirNode::If { then_body, .. } => then_body.iter().find_map(node_first_addr),
-        HirNode::While { body, .. }
-        | HirNode::DoWhile { body, .. }
-        | HirNode::For { body, .. } => body.iter().find_map(node_first_addr),
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            body.iter().find_map(node_first_addr)
+        }
         HirNode::Switch { cases, default, .. } => cases
             .iter()
             .find_map(|(_, b, _)| b.iter().find_map(node_first_addr))
@@ -345,7 +342,12 @@ mod tests {
         // A no-op statement is enough — we only inspect `insn.addr`.
         let r0 = Varnode::reg(0, 8);
         let c1 = Varnode::constant(1, 8);
-        HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, r0, smallvec![r0, c1], addr))
+        HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            r0,
+            smallvec![r0, c1],
+            addr,
+        ))
     }
 
     #[test]

@@ -52,17 +52,34 @@ pub fn hoist_loop_invariants(body: &mut Vec<HirNode>) {
     let mut out: Vec<HirNode> = Vec::with_capacity(body.len());
     for node in std::mem::take(body) {
         match node {
-            HirNode::While { cond, body: mut loop_body } => {
+            HirNode::While {
+                cond,
+                body: mut loop_body,
+            } => {
                 let hoisted = extract_invariants(&mut loop_body, None);
                 out.extend(hoisted);
-                out.push(HirNode::While { cond, body: loop_body });
+                out.push(HirNode::While {
+                    cond,
+                    body: loop_body,
+                });
             }
-            HirNode::DoWhile { body: mut loop_body, cond } => {
+            HirNode::DoWhile {
+                body: mut loop_body,
+                cond,
+            } => {
                 let hoisted = extract_invariants(&mut loop_body, None);
                 out.extend(hoisted);
-                out.push(HirNode::DoWhile { body: loop_body, cond });
+                out.push(HirNode::DoWhile {
+                    body: loop_body,
+                    cond,
+                });
             }
-            HirNode::For { init, cond, update, body: mut loop_body } => {
+            HirNode::For {
+                init,
+                cond,
+                update,
+                body: mut loop_body,
+            } => {
                 // Protect the For's induction variable: the `update` insn's
                 // output (if any) must continue to be written inside the
                 // loop step. We forbid hoisting any statement that writes
@@ -71,7 +88,12 @@ pub fn hoist_loop_invariants(body: &mut Vec<HirNode>) {
                 let iv = update.output;
                 let hoisted = extract_invariants(&mut loop_body, iv);
                 out.extend(hoisted);
-                out.push(HirNode::For { init, cond, update, body: loop_body });
+                out.push(HirNode::For {
+                    init,
+                    cond,
+                    update,
+                    body: loop_body,
+                });
             }
             other => out.push(other),
         }
@@ -84,7 +106,11 @@ pub fn hoist_loop_invariants(body: &mut Vec<HirNode>) {
 fn recurse_into_children(node: &mut HirNode) {
     match node {
         HirNode::Block(children) => hoist_loop_invariants(children),
-        HirNode::If { then_body, else_body, .. } => {
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
             hoist_loop_invariants(then_body);
             if let Some(eb) = else_body {
                 hoist_loop_invariants(eb);
@@ -104,22 +130,36 @@ fn recurse_into_children(node: &mut HirNode) {
                 hoist_loop_invariants(d);
             }
         }
-        HirNode::TryCatch { try_body, catch_arms } => {
+        HirNode::TryCatch {
+            try_body,
+            catch_arms,
+        } => {
             hoist_loop_invariants(try_body);
             for (_, body) in catch_arms.iter_mut() {
                 hoist_loop_invariants(body);
             }
         }
-        HirNode::TryFinally { try_body, finally_body } => {
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
             hoist_loop_invariants(try_body);
             hoist_loop_invariants(finally_body);
         }
         HirNode::Commented { inner, .. } => recurse_into_children(inner),
-        HirNode::GuardedIf { then_body, else_body, .. } => {
+        HirNode::GuardedIf {
+            then_body,
+            else_body,
+            ..
+        } => {
             hoist_loop_invariants(then_body);
             hoist_loop_invariants(else_body);
         }
-        HirNode::IfCmp { then_body, else_body, .. } => {
+        HirNode::IfCmp {
+            then_body,
+            else_body,
+            ..
+        } => {
             hoist_loop_invariants(then_body);
             if let Some(eb) = else_body {
                 hoist_loop_invariants(eb);
@@ -136,10 +176,7 @@ fn recurse_into_children(node: &mut HirNode) {
 /// Scan `loop_body` top-level statements; pull out invariant ones and
 /// return them in source order. `iv_guard` (when `Some(v)`) is the For-loop
 /// induction varnode that must NOT be hoisted as a write target.
-fn extract_invariants(
-    loop_body: &mut Vec<HirNode>,
-    iv_guard: Option<Varnode>,
-) -> Vec<HirNode> {
+fn extract_invariants(loop_body: &mut Vec<HirNode>, iv_guard: Option<Varnode>) -> Vec<HirNode> {
     // Pass 1: compute the "modified inside the loop" varnode set. We
     // conservatively flag the output of every node we walk through —
     // including those inside nested constructs — as modified.
@@ -191,7 +228,11 @@ fn collect_modified(node: &HirNode, modified: &mut BTreeSet<Varnode>) {
                 collect_modified(c, modified);
             }
         }
-        HirNode::If { then_body, else_body, .. } => {
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
             for c in then_body {
                 collect_modified(c, modified);
             }
@@ -201,9 +242,7 @@ fn collect_modified(node: &HirNode, modified: &mut BTreeSet<Varnode>) {
                 }
             }
         }
-        HirNode::While { body, .. }
-        | HirNode::DoWhile { body, .. }
-        | HirNode::For { body, .. } => {
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
             for c in body {
                 collect_modified(c, modified);
             }
@@ -230,7 +269,10 @@ fn collect_modified(node: &HirNode, modified: &mut BTreeSet<Varnode>) {
                 }
             }
         }
-        HirNode::TryCatch { try_body, catch_arms } => {
+        HirNode::TryCatch {
+            try_body,
+            catch_arms,
+        } => {
             for c in try_body {
                 collect_modified(c, modified);
             }
@@ -240,7 +282,10 @@ fn collect_modified(node: &HirNode, modified: &mut BTreeSet<Varnode>) {
                 }
             }
         }
-        HirNode::TryFinally { try_body, finally_body } => {
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
             for c in try_body {
                 collect_modified(c, modified);
             }
@@ -252,7 +297,11 @@ fn collect_modified(node: &HirNode, modified: &mut BTreeSet<Varnode>) {
         HirNode::Ternary { output, .. } => {
             modified.insert(*output);
         }
-        HirNode::GuardedIf { then_body, else_body, .. } => {
+        HirNode::GuardedIf {
+            then_body,
+            else_body,
+            ..
+        } => {
             for c in then_body {
                 collect_modified(c, modified);
             }
@@ -266,7 +315,11 @@ fn collect_modified(node: &HirNode, modified: &mut BTreeSet<Varnode>) {
         HirNode::CselTernary { output, .. } => {
             modified.insert(*output);
         }
-        HirNode::IfCmp { then_body, else_body, .. } => {
+        HirNode::IfCmp {
+            then_body,
+            else_body,
+            ..
+        } => {
             for c in then_body {
                 collect_modified(c, modified);
             }

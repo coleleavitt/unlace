@@ -126,8 +126,7 @@ fn walk_sp_deltas(func: &SsaFunction) -> (BTreeMap<(BlockId, usize), i64>, bool,
                 }
                 IrOp::Copy if writes_rsp => {
                     if let Some(src) = insn.inputs.first() {
-                        if let Some((sign, k, is_dynamic)) =
-                            trace_copy_source(func, bid, idx, src)
+                        if let Some((sign, k, is_dynamic)) = trace_copy_source(func, bid, idx, src)
                         {
                             if is_dynamic {
                                 dynamic_sp = true;

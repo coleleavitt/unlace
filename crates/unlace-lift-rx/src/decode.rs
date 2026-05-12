@@ -45,8 +45,18 @@ pub fn decode(bytes: &[u8]) -> Option<RxInsn> {
     let b0 = *bytes.first()?;
 
     match b0 {
-        0x03 => return Some(RxInsn { op: RxOp::Nop, len: 1 }),
-        0x02 => return Some(RxInsn { op: RxOp::Rts, len: 1 }),
+        0x03 => {
+            return Some(RxInsn {
+                op: RxOp::Nop,
+                len: 1,
+            });
+        }
+        0x02 => {
+            return Some(RxInsn {
+                op: RxOp::Rts,
+                len: 1,
+            });
+        }
         _ => {}
     }
 
@@ -62,7 +72,10 @@ pub fn decode(bytes: &[u8]) -> Option<RxInsn> {
             0x2B => BranchCond::Le,
             _ => unreachable!(),
         };
-        return Some(RxInsn { op: RxOp::BcondB { cond, disp }, len: 2 });
+        return Some(RxInsn {
+            op: RxOp::BcondB { cond, disp },
+            len: 2,
+        });
     }
 
     if b0 == 0x2E {
@@ -70,7 +83,10 @@ pub fn decode(bytes: &[u8]) -> Option<RxInsn> {
             return None;
         }
         let disp = bytes[1] as i8 as i32;
-        return Some(RxInsn { op: RxOp::BraB { disp }, len: 2 });
+        return Some(RxInsn {
+            op: RxOp::BraB { disp },
+            len: 2,
+        });
     }
 
     if b0 == 0x39 {
@@ -78,7 +94,10 @@ pub fn decode(bytes: &[u8]) -> Option<RxInsn> {
             return None;
         }
         let disp = i16::from_le_bytes([bytes[1], bytes[2]]) as i32;
-        return Some(RxInsn { op: RxOp::BsrW { disp }, len: 3 });
+        return Some(RxInsn {
+            op: RxOp::BsrW { disp },
+            len: 3,
+        });
     }
 
     let two_byte_regreg: &[(u8, fn(u8, u8) -> RxOp)] = &[
@@ -90,7 +109,10 @@ pub fn decode(bytes: &[u8]) -> Option<RxInsn> {
         (0x53, |src, dst| RxOp::And { dst, src }),
         (0x55, |src, dst| RxOp::Or { dst, src }),
         (0x4F, |src, dst| RxOp::Mul { dst, src }),
-        (0x47, |src, dst| RxOp::Cmp { src1: src, src2: dst }),
+        (0x47, |src, dst| RxOp::Cmp {
+            src1: src,
+            src2: dst,
+        }),
     ];
     for &(op, ctor) in two_byte_regreg {
         if b0 == op {
@@ -100,7 +122,10 @@ pub fn decode(bytes: &[u8]) -> Option<RxInsn> {
             let b1 = bytes[1];
             let src = (b1 >> 4) & 0x0F;
             let dst = b1 & 0x0F;
-            return Some(RxInsn { op: ctor(src, dst), len: 2 });
+            return Some(RxInsn {
+                op: ctor(src, dst),
+                len: 2,
+            });
         }
     }
 
@@ -111,7 +136,10 @@ pub fn decode(bytes: &[u8]) -> Option<RxInsn> {
         let b1 = bytes[1];
         let imm = ((b1 >> 4) & 0x0F) as u32;
         let dst = b1 & 0x0F;
-        return Some(RxInsn { op: RxOp::MovImm4L { dst, imm }, len: 2 });
+        return Some(RxInsn {
+            op: RxOp::MovImm4L { dst, imm },
+            len: 2,
+        });
     }
 
     if b0 == 0xFC {
@@ -122,10 +150,19 @@ pub fn decode(bytes: &[u8]) -> Option<RxInsn> {
             let b2 = bytes[2];
             let src = (b2 >> 4) & 0x0F;
             let dst = b2 & 0x0F;
-            return Some(RxInsn { op: RxOp::Xor { dst, src }, len: 3 });
+            return Some(RxInsn {
+                op: RxOp::Xor { dst, src },
+                len: 3,
+            });
         }
-        return Some(RxInsn { op: RxOp::Unknown, len: 1 });
+        return Some(RxInsn {
+            op: RxOp::Unknown,
+            len: 1,
+        });
     }
 
-    Some(RxInsn { op: RxOp::Unknown, len: 1 })
+    Some(RxInsn {
+        op: RxOp::Unknown,
+        len: 1,
+    })
 }

@@ -186,8 +186,9 @@ pub fn parse_til(bytes: &[u8]) -> Result<TilFile, TilError> {
         format,
         flags,
         tag: String::from_utf8(tag_bytes).map_err(|_| TilError::BadUtf8 { field: "tag" })?,
-        description: String::from_utf8(desc_bytes)
-            .map_err(|_| TilError::BadUtf8 { field: "description" })?,
+        description: String::from_utf8(desc_bytes).map_err(|_| TilError::BadUtf8 {
+            field: "description",
+        })?,
         id,
         cm,
         size_i,
@@ -219,10 +220,13 @@ pub fn parse_til(bytes: &[u8]) -> Result<TilFile, TilError> {
 
             let name = String::from_utf8(name_bytes)
                 .map_err(|_| TilError::BadUtf8 { field: "sym name" })?;
-            let comment = String::from_utf8(comment)
-                .map_err(|_| TilError::BadUtf8 { field: "sym comment" })?;
-            let fields_comment = String::from_utf8(fields_comment)
-                .map_err(|_| TilError::BadUtf8 { field: "sym fields_comment" })?;
+            let comment = String::from_utf8(comment).map_err(|_| TilError::BadUtf8 {
+                field: "sym comment",
+            })?;
+            let fields_comment =
+                String::from_utf8(fields_comment).map_err(|_| TilError::BadUtf8 {
+                    field: "sym fields_comment",
+                })?;
 
             let (decoded, complex_body) = decode_typestring_with_body(&typestring);
             syms.insert(
@@ -343,8 +347,7 @@ fn decode_one(bytes: &[u8], pos: &mut usize) -> Option<Type> {
         }
         BT_ARRAY => {
             let dim = read_da(bytes, pos).unwrap_or(0);
-            let element =
-                decode_one(bytes, pos).unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+            let element = decode_one(bytes, pos).unwrap_or(Type::Primitive(PrimitiveType::Unknown));
             Some(Type::Array {
                 element: Box::new(element),
                 size: if dim == 0 { None } else { Some(dim) },
@@ -362,8 +365,7 @@ fn decode_one(bytes: &[u8], pos: &mut usize) -> Option<Type> {
             let argc = read_dt(bytes, pos).unwrap_or(0);
             let mut params = Vec::with_capacity(argc as usize);
             for _ in 0..argc {
-                let p =
-                    decode_one(bytes, pos).unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+                let p = decode_one(bytes, pos).unwrap_or(Type::Primitive(PrimitiveType::Unknown));
                 params.push(p);
             }
             Some(Type::FuncPtr {
@@ -416,11 +418,7 @@ fn int_type(width: u8, unsigned: bool) -> Type {
 /// advances past the consumed bytes on success and is left at the failure
 /// offset otherwise (callers should treat its position as undefined after
 /// `None`).
-pub fn parse_bt_complex_body(
-    modifier: u8,
-    bytes: &[u8],
-    pos: &mut usize,
-) -> Option<BtComplexBody> {
+pub fn parse_bt_complex_body(modifier: u8, bytes: &[u8], pos: &mut usize) -> Option<BtComplexBody> {
     match modifier {
         BTMT_STRUCT => parse_member_list(bytes, pos).map(|fields| BtComplexBody::Struct { fields }),
         BTMT_UNION => parse_member_list(bytes, pos).map(|fields| BtComplexBody::Union { fields }),
@@ -444,10 +442,7 @@ pub fn parse_bt_complex_body(
     }
 }
 
-fn parse_member_list(
-    bytes: &[u8],
-    pos: &mut usize,
-) -> Option<Vec<(Option<String>, Vec<u8>)>> {
+fn parse_member_list(bytes: &[u8], pos: &mut usize) -> Option<Vec<(Option<String>, Vec<u8>)>> {
     let count = read_dt(bytes, pos)?;
     let mut out = Vec::with_capacity(count as usize);
     for _ in 0..count {
@@ -497,11 +492,8 @@ fn complex_body_to_type(body: Option<&BtComplexBody>) -> Type {
             let mut out_fields = Vec::with_capacity(fields.len());
             let mut offset: u64 = 0;
             for (idx, (name, raw)) in fields.iter().enumerate() {
-                let ty = decode_typestring(raw)
-                    .unwrap_or(Type::Primitive(PrimitiveType::Unknown));
-                let field_name = name
-                    .clone()
-                    .unwrap_or_else(|| format!("field_{idx}"));
+                let ty = decode_typestring(raw).unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+                let field_name = name.clone().unwrap_or_else(|| format!("field_{idx}"));
                 out_fields.push(StructFieldType {
                     name: field_name,
                     ty,
@@ -716,8 +708,8 @@ mod tests {
         bytes.extend_from_slice(&pname("b"));
 
         let mut pos = 1usize; // skip the BT_COMPLEX tag (already consumed)
-        let body = parse_bt_complex_body(BTMT_STRUCT, &bytes, &mut pos)
-            .expect("struct body parses");
+        let body =
+            parse_bt_complex_body(BTMT_STRUCT, &bytes, &mut pos).expect("struct body parses");
         match body {
             BtComplexBody::Struct { fields } => {
                 assert_eq!(fields.len(), 2);
@@ -744,8 +736,7 @@ mod tests {
         }
 
         let mut pos = 1usize;
-        let body =
-            parse_bt_complex_body(BTMT_ENUM, &bytes, &mut pos).expect("enum body parses");
+        let body = parse_bt_complex_body(BTMT_ENUM, &bytes, &mut pos).expect("enum body parses");
         match body {
             BtComplexBody::Enum { values } => {
                 assert_eq!(
@@ -769,8 +760,8 @@ mod tests {
         bytes.extend_from_slice(&pname("size_t"));
 
         let mut pos = 1usize;
-        let body = parse_bt_complex_body(BTMT_TYPEDEF, &bytes, &mut pos)
-            .expect("typedef body parses");
+        let body =
+            parse_bt_complex_body(BTMT_TYPEDEF, &bytes, &mut pos).expect("typedef body parses");
         assert_eq!(body, BtComplexBody::Typedef("size_t".to_string()));
         assert_eq!(pos, bytes.len());
 

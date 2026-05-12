@@ -86,9 +86,19 @@ fn binary_reg_with_dsp_outflag(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: Ir
     ctx.emit(IrInsn::with_output(ir_op, tmp, smallvec![a, b], ctx.addr));
     ctx.write_to_reg(dst, tmp);
     let carry = ctx.alloc_unique(1);
-    ctx.emit(IrInsn::with_output(IrOp::IntCarry, carry, smallvec![a, b], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntCarry,
+        carry,
+        smallvec![a, b],
+        ctx.addr,
+    ));
     let carry64 = ctx.alloc_unique(8);
-    ctx.emit(IrInsn::with_output(IrOp::IntZext, carry64, smallvec![carry], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntZext,
+        carry64,
+        smallvec![carry],
+        ctx.addr,
+    ));
     ctx.write_to_reg(dsp::reg64(dsp::DSPOUTFLAG), carry64);
 }
 
@@ -110,7 +120,12 @@ fn unary_shift_imm(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
         return;
     };
     let tmp = ctx.alloc_unique(8);
-    ctx.emit(IrInsn::with_output(ir_op, tmp, smallvec![value, amount], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        ir_op,
+        tmp,
+        smallvec![value, amount],
+        ctx.addr,
+    ));
     ctx.write_to_reg(dst, tmp);
 }
 
@@ -302,7 +317,12 @@ pub fn lift_dpa(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         _ => 0,
     };
     let dst = read_ac128(acc_index);
-    dsp::emit_callother_with_output(ctx, dst, dsp::CALLOTHER_DSP_DPA, [a, b, Varnode::constant(acc_index, 1)]);
+    dsp::emit_callother_with_output(
+        ctx,
+        dst,
+        dsp::CALLOTHER_DSP_DPA,
+        [a, b, Varnode::constant(acc_index, 1)],
+    );
 }
 
 pub fn lift_dps(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
@@ -320,7 +340,12 @@ pub fn lift_dps(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         _ => 0,
     };
     let dst = read_ac128(acc_index);
-    dsp::emit_callother_with_output(ctx, dst, dsp::CALLOTHER_DSP_DPS, [a, b, Varnode::constant(acc_index, 1)]);
+    dsp::emit_callother_with_output(
+        ctx,
+        dst,
+        dsp::CALLOTHER_DSP_DPS,
+        [a, b, Varnode::constant(acc_index, 1)],
+    );
 }
 
 pub fn lift_shilo(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
@@ -360,7 +385,10 @@ pub fn lift_rddsp(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         ctx.emit_unimplemented();
         return;
     };
-    let selector = ops.get(1).and_then(imm_u8).unwrap_or_else(|| Varnode::constant(0, 1));
+    let selector = ops
+        .get(1)
+        .and_then(imm_u8)
+        .unwrap_or_else(|| Varnode::constant(0, 1));
     dsp::emit_callother_with_output(ctx, dst, dsp::CALLOTHER_DSP_RDDSP, [selector]);
 }
 
@@ -373,6 +401,9 @@ pub fn lift_wrdsp(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         ctx.emit_unimplemented();
         return;
     };
-    let mask = ops.get(1).and_then(imm_u8).unwrap_or_else(|| Varnode::constant(0xff, 1));
+    let mask = ops
+        .get(1)
+        .and_then(imm_u8)
+        .unwrap_or_else(|| Varnode::constant(0xff, 1));
     dsp::emit_callother(ctx, dsp::CALLOTHER_DSP_WRDSP, [value, mask]);
 }

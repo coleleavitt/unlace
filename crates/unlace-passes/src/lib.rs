@@ -1,43 +1,40 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
 pub mod algebraic_simplify;
-pub mod bool_simplify;
 pub mod auth_call_resolve;
 pub mod bitfield_idioms;
-pub mod bsim_db;
 pub mod bmi_idioms;
+pub mod bool_simplify;
+pub mod boost_recognize;
+pub mod bsim_db;
+pub mod builtin_recognize;
 pub mod byref_detect;
 pub mod call_boundary_copyprop;
 pub mod caller_param_propagate;
-pub mod calling_convention;
 pub mod calling_conv_finalize;
-pub mod indirect_call_resolve;
-pub mod interproc_fixpoint;
-pub mod vararg_detect;
+pub mod calling_convention;
 pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
 pub mod coverage_ingest;
-pub mod boost_recognize;
-pub mod builtin_recognize;
 pub mod cpp_stl;
 pub mod cpp_vtable;
 pub mod crypto_idioms;
 pub mod crypto_lib_recognize;
+pub mod cse;
 pub mod ct_violation;
 pub mod cwe_detect;
-pub mod cse;
 pub mod db_recognize;
 pub mod dce;
 pub mod dead_flag_elim;
-pub mod deflat;
 pub mod dead_store_elim;
-pub mod dse_global;
+pub mod deflat;
 pub mod division_idiom;
+pub mod dse_global;
 pub mod embed_interp_recognize;
 pub mod expression_tree;
-pub mod func_fingerprint;
 pub mod format_magic;
+pub mod func_fingerprint;
 pub mod global_copy_prop;
 pub mod go_closure;
 pub mod go_defer;
@@ -45,18 +42,19 @@ pub mod go_select;
 pub mod gui_lib_recognize;
 pub mod gvn;
 pub mod idiom_recognition;
+pub mod indirect_call_resolve;
 pub mod inline_foldback;
-pub mod libc_signatures;
+pub mod interproc_fixpoint;
+pub mod iv_elim;
 pub mod lazy_lift;
 pub mod libc_idioms;
-pub mod iv_elim;
+pub mod libc_signatures;
 pub mod licm;
-pub mod strength_reduce;
 pub mod modulo_idiom;
 pub mod nday_correlate;
 pub mod noreturn;
-pub mod nullability;
 pub mod noreturn_propagation;
+pub mod nullability;
 pub mod objc_blocks;
 pub mod objc_byref;
 pub mod objc_dispatch;
@@ -64,36 +62,38 @@ pub mod op_type_binding;
 pub mod opaque_pred;
 pub mod packet_struct;
 pub mod pass;
+pub mod printf_type_infer;
 pub mod prologue_elim;
+pub mod protobuf_recognize;
+pub mod qt_recognize;
 pub mod reanalysis;
 pub mod redundant_flag_elim;
 pub mod register_coalesce;
+pub mod rep_string_idiom;
 pub mod rust_enum;
 pub mod rust_panic;
 pub mod rust_result;
 pub mod rust_vtable;
 pub mod sccp;
+pub mod serial_recognize;
+pub mod sizeof_recognition;
 pub mod smc_unwrap;
 pub mod source_sink;
 pub mod ssa_cache;
-pub mod printf_type_infer;
-pub mod protobuf_recognize;
-pub mod qt_recognize;
-pub mod rep_string_idiom;
-pub mod serial_recognize;
-pub mod sizeof_recognition;
 pub mod stack_frame_recovery;
 pub mod stack_pointer_tracking;
 pub mod stack_vars;
+pub mod strength_reduce;
 pub mod string_hash_switch;
 pub mod struct_boundary;
 pub mod struct_field_detect;
 pub mod struct_field_recovery;
-pub mod var_naming;
 pub mod tail_call;
 pub mod tail_duplication;
 pub mod type_constraint_solver;
 pub mod type_infer;
+pub mod var_naming;
+pub mod vararg_detect;
 pub mod variable_merge;
 pub mod whole_prog_type_unify;
 
@@ -101,7 +101,7 @@ pub use algebraic_simplify::AlgebraicSimplifyPass;
 pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bitfield_idioms::BitfieldIdiomPass;
 pub use bmi_idioms::BmiIdiomPass;
-pub use crypto_idioms::CryptoIdiomPass;
+pub use bool_simplify::BoolSimplifyPass;
 pub use builtin_recognize::{
     BuiltinAnnotation, recognize_builtins, recognize_builtins_with_resolver,
 };
@@ -110,19 +110,8 @@ pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
 pub use caller_param_propagate::{
     apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,
 };
-pub use indirect_call_resolve::IndirectCallResolvePass;
-pub use op_type_binding::{OpTypeBindingPass, render_enum_const, render_field_access};
-pub use interproc_fixpoint::{
-    DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint,
-};
-pub use vararg_detect::{
-    detect_variadic_callees, parse_format_string, parse_printf_format_strings,
-};
+pub use calling_conv_finalize::{CallingConvFinalizePass, FinalizedSignature, finalize_signature};
 pub use calling_convention::{CallingConventionDetectPass, ParamInferPass, ReturnTypeInferPass};
-pub use calling_conv_finalize::{
-    CallingConvFinalizePass, FinalizedSignature, finalize_signature,
-};
-pub use bool_simplify::BoolSimplifyPass;
 pub use condition_simplify::ConditionSimplifyPass;
 pub use const_fold::ConstantFoldPass;
 pub use copy_prop::CopyPropagationPass;
@@ -131,29 +120,30 @@ pub use coverage_ingest::{
     ProfRaw, parse_afl_coverage, parse_profraw,
 };
 pub use cpp_stl::recognize_stl_type;
-pub use serial_recognize::{SerialKind, recognize_serial_api};
 pub use cpp_vtable::CppVtablePass;
+pub use crypto_idioms::CryptoIdiomPass;
 pub use cse::CsePass;
 pub use dce::DeadCodeElimPass;
 pub use dead_flag_elim::DeadFlagElimPass;
-pub use deflat::{CaseSuccessors, FlattenedCfg, detect_flattened_dispatch, recover_original_cfg};
 pub use dead_store_elim::DeadStoreElimPass;
-pub use dse_global::DeadStoreElimGlobalPass;
+pub use deflat::{CaseSuccessors, FlattenedCfg, detect_flattened_dispatch, recover_original_cfg};
 pub use division_idiom::DivisionIdiomPass;
+pub use dse_global::DeadStoreElimGlobalPass;
 pub use expression_tree::ExpressionTreePass;
-pub use func_fingerprint::{build_feature_vector, fingerprint_function, similarity};
 pub use format_magic::{MagicCheck, detect_magic_check};
+pub use func_fingerprint::{build_feature_vector, fingerprint_function, similarity};
 pub use global_copy_prop::GlobalCopyPropPass;
 pub use go_closure::{ClosureAllocation, ClosureCall, detect_go_closures};
 pub use go_defer::{GoDeferSite, detect_go_defer};
 pub use go_select::{GoChannelOp, GoChannelOpKind, detect_go_channel_ops};
 pub use gvn::GvnPass;
 pub use idiom_recognition::IdiomRecognitionPass;
+pub use indirect_call_resolve::IndirectCallResolvePass;
 pub use inline_foldback::{InlineFoldback, detect_inlined_calls};
+pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint};
 pub use iv_elim::IvElimPass;
 pub use libc_idioms::{LibcKind, annotate_libc_calls, recognize_libc};
 pub use licm::{LicmPass, NaturalLoop, find_natural_loops};
-pub use strength_reduce::StrengthReducePass;
 pub use modulo_idiom::ModuloIdiomPass;
 pub use nday_correlate::{NdayHit, NdayPattern, match_against_binary as match_nday_patterns};
 pub use noreturn::NoreturnDetectPass;
@@ -162,6 +152,7 @@ pub use nullability::{Nullability, infer_param_nullability};
 pub use objc_blocks::{BLOCK_ISA_SYMBOLS, BlockLiteral, detect_objc_blocks};
 pub use objc_byref::{ByrefBox, apply_objc_byref, detect_objc_byref_boxes};
 pub use objc_dispatch::ObjcDispatchPass;
+pub use op_type_binding::{OpTypeBindingPass, render_enum_const, render_field_access};
 pub use opaque_pred::opaque_predicate_detect;
 pub use packet_struct::{PacketStruct, detect_packet_struct};
 pub use pass::{
@@ -180,28 +171,32 @@ pub use rust_panic::RustPanicPass;
 pub use rust_result::{RustTaggedUnion, detect_rust_tagged_unions};
 pub use rust_vtable::RustVtablePass;
 pub use sccp::SccpPass;
+pub use serial_recognize::{SerialKind, recognize_serial_api};
 pub use sizeof_recognition::{SizeofRecognitionPass, recognize_with_resolver};
 pub use stack_frame_recovery::recover_stack_frame;
 pub use stack_pointer_tracking::StackPointerTrackingPass;
 pub use stack_vars::{StackOffsetSnapshotPass, StackVarRecoveryPass};
+pub use strength_reduce::StrengthReducePass;
 pub use string_hash_switch::{
-    HashFamily, StringHashSwitchPass, crc32 as string_hash_crc32,
-    crc32c as string_hash_crc32c, djb2 as string_hash_djb2, djb2a as string_hash_djb2a,
-    fnv1 as string_hash_fnv1, fnv1a as string_hash_fnv1a, fnv1a32 as string_hash_fnv1a32,
-    identify_hash_pattern, is_crc32_pattern, is_crc32c_pattern, is_djb2_pattern,
-    is_fnv1_pattern, is_fnv1a_pattern, is_java_string_pattern, is_jenkins_oaat_pattern,
-    is_murmur3_pattern, is_sdbm_pattern, java_string_hash as string_hash_java_string,
-    jenkins_oaat as string_hash_jenkins_oaat, murmur3 as string_hash_murmur3,
-    sdbm as string_hash_sdbm,
+    HashFamily, StringHashSwitchPass, crc32 as string_hash_crc32, crc32c as string_hash_crc32c,
+    djb2 as string_hash_djb2, djb2a as string_hash_djb2a, fnv1 as string_hash_fnv1,
+    fnv1a as string_hash_fnv1a, fnv1a32 as string_hash_fnv1a32, identify_hash_pattern,
+    is_crc32_pattern, is_crc32c_pattern, is_djb2_pattern, is_fnv1_pattern, is_fnv1a_pattern,
+    is_java_string_pattern, is_jenkins_oaat_pattern, is_murmur3_pattern, is_sdbm_pattern,
+    java_string_hash as string_hash_java_string, jenkins_oaat as string_hash_jenkins_oaat,
+    murmur3 as string_hash_murmur3, sdbm as string_hash_sdbm,
 };
 pub use struct_field_detect::StructFieldDetectPass;
 pub use struct_field_recovery::recover_structs;
-pub use var_naming::{VarClassification, VarNamingPass, VarRole, classify_variables, suggest_name};
 pub use tail_call::TailCallDetectPass;
 pub use tail_duplication::TailDuplicationPass;
 pub use type_constraint_solver::{
     Constraint, TypeConstraintSolverPass, collect_and_apply as solve_type_constraints,
     collect_constraints, solve_constraints,
+};
+pub use var_naming::{VarClassification, VarNamingPass, VarRole, classify_variables, suggest_name};
+pub use vararg_detect::{
+    detect_variadic_callees, parse_format_string, parse_printf_format_strings,
 };
 pub use variable_merge::VariableMergePass;
 

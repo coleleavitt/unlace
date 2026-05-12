@@ -115,16 +115,46 @@ impl Z80Lifter {
     /// Create a new Z80 lifter.
     pub fn new() -> Self {
         let registers = vec![
-            RegisterDef { name: "A", varnode: reg(REG_A, 1) },
-            RegisterDef { name: "F", varnode: reg(REG_F, 1) },
-            RegisterDef { name: "B", varnode: reg(REG_B, 1) },
-            RegisterDef { name: "C", varnode: reg(REG_C, 1) },
-            RegisterDef { name: "D", varnode: reg(REG_D, 1) },
-            RegisterDef { name: "E", varnode: reg(REG_E, 1) },
-            RegisterDef { name: "H", varnode: reg(REG_H, 1) },
-            RegisterDef { name: "L", varnode: reg(REG_L, 1) },
-            RegisterDef { name: "SP", varnode: reg(REG_SP, 2) },
-            RegisterDef { name: "PC", varnode: reg(REG_PC, 2) },
+            RegisterDef {
+                name: "A",
+                varnode: reg(REG_A, 1),
+            },
+            RegisterDef {
+                name: "F",
+                varnode: reg(REG_F, 1),
+            },
+            RegisterDef {
+                name: "B",
+                varnode: reg(REG_B, 1),
+            },
+            RegisterDef {
+                name: "C",
+                varnode: reg(REG_C, 1),
+            },
+            RegisterDef {
+                name: "D",
+                varnode: reg(REG_D, 1),
+            },
+            RegisterDef {
+                name: "E",
+                varnode: reg(REG_E, 1),
+            },
+            RegisterDef {
+                name: "H",
+                varnode: reg(REG_H, 1),
+            },
+            RegisterDef {
+                name: "L",
+                varnode: reg(REG_L, 1),
+            },
+            RegisterDef {
+                name: "SP",
+                varnode: reg(REG_SP, 2),
+            },
+            RegisterDef {
+                name: "PC",
+                varnode: reg(REG_PC, 2),
+            },
         ];
         Self {
             register_file: RegisterFile { registers },
@@ -138,11 +168,11 @@ impl Z80Lifter {
         let src_enc = opcode & 0x07;
 
         let ir_op = match op_sel {
-            0 => IrOp::IntAdd,  // ADD
-            2 => IrOp::IntSub,  // SUB
-            4 => IrOp::IntAnd,  // AND
-            6 => IrOp::IntOr,   // OR
-            5 => IrOp::IntXor,  // XOR
+            0 => IrOp::IntAdd, // ADD
+            2 => IrOp::IntSub, // SUB
+            4 => IrOp::IntAnd, // AND
+            6 => IrOp::IntOr,  // OR
+            5 => IrOp::IntXor, // XOR
             _ => return Err(LiftError::Unsupported),
         };
 
@@ -166,8 +196,7 @@ impl Z80Lifter {
         let reg_enc = (opcode >> 3) & 0x07;
         let is_dec = (opcode & 0x01) != 0;
 
-        let r_off = reg_offset_from_encoding(reg_enc)
-            .ok_or(LiftError::Unsupported)?;
+        let r_off = reg_offset_from_encoding(reg_enc).ok_or(LiftError::Unsupported)?;
         let r = reg(r_off, 1);
         let one = const_vn(1, 1);
         let op = if is_dec { IrOp::IntSub } else { IrOp::IntAdd };
@@ -186,10 +215,8 @@ impl Z80Lifter {
         let dst_enc = (opcode >> 3) & 0x07;
         let src_enc = opcode & 0x07;
 
-        let dst_off = reg_offset_from_encoding(dst_enc)
-            .ok_or(LiftError::Unsupported)?;
-        let src_off = reg_offset_from_encoding(src_enc)
-            .ok_or(LiftError::Unsupported)?;
+        let dst_off = reg_offset_from_encoding(dst_enc).ok_or(LiftError::Unsupported)?;
+        let src_off = reg_offset_from_encoding(src_enc).ok_or(LiftError::Unsupported)?;
 
         Ok(vec![IrInsn::with_output(
             IrOp::Copy,
@@ -203,8 +230,7 @@ impl Z80Lifter {
     fn lift_ld_r_n(&self, opcode: u8, imm: u8, addr: u64) -> Result<Vec<IrInsn>, LiftError> {
         // 00rrr110 nn
         let dst_enc = (opcode >> 3) & 0x07;
-        let dst_off = reg_offset_from_encoding(dst_enc)
-            .ok_or(LiftError::Unsupported)?;
+        let dst_off = reg_offset_from_encoding(dst_enc).ok_or(LiftError::Unsupported)?;
 
         Ok(vec![IrInsn::with_output(
             IrOp::Copy,
@@ -233,14 +259,14 @@ impl Z80Lifter {
         // cc: 0=NZ, 1=Z, 2=NC, 3=C, 4=PO, 5=PE, 6=P, 7=M
         // Bit positions: Z=bit6, C=bit0, P/V=bit2, S=bit7
         let (bit_pos, invert) = match cc {
-            0 => (6u64, true),  // NZ: Z flag == 0
-            1 => (6, false),    // Z: Z flag == 1
-            2 => (0, true),     // NC: C flag == 0
-            3 => (0, false),    // C: C flag == 1
-            4 => (2, true),     // PO: P/V flag == 0
-            5 => (2, false),    // PE: P/V flag == 1
-            6 => (7, true),     // P (positive): S flag == 0
-            7 => (7, false),    // M (minus): S flag == 1
+            0 => (6u64, true), // NZ: Z flag == 0
+            1 => (6, false),   // Z: Z flag == 1
+            2 => (0, true),    // NC: C flag == 0
+            3 => (0, false),   // C: C flag == 1
+            4 => (2, true),    // PO: P/V flag == 0
+            5 => (2, false),   // PE: P/V flag == 1
+            6 => (7, true),    // P (positive): S flag == 0
+            7 => (7, false),   // M (minus): S flag == 1
             _ => return Err(LiftError::Unsupported),
         };
 
@@ -251,9 +277,19 @@ impl Z80Lifter {
 
         let mut ops = vec![
             // shifted = F >> bit_pos
-            IrInsn::with_output(IrOp::IntRight, shifted, SmallVec::from_slice(&[f, shift_amt]), addr),
+            IrInsn::with_output(
+                IrOp::IntRight,
+                shifted,
+                SmallVec::from_slice(&[f, shift_amt]),
+                addr,
+            ),
             // cond = shifted & 1
-            IrInsn::with_output(IrOp::IntAnd, cond, SmallVec::from_slice(&[shifted, one]), addr),
+            IrInsn::with_output(
+                IrOp::IntAnd,
+                cond,
+                SmallVec::from_slice(&[shifted, one]),
+                addr,
+            ),
         ];
 
         if invert {
@@ -383,7 +419,10 @@ impl Lifter for Z80Lifter {
         // LD r, r': 01dddsss (but not 01110110 which is HALT)
         if opcode & 0xC0 == 0x40 && opcode != 0x76 {
             let ops = self.lift_ld_r_r(opcode, addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 1 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 1,
+            });
         }
 
         // LD r, n: 00rrr110 nn
@@ -393,19 +432,28 @@ impl Lifter for Z80Lifter {
             }
             let imm = bytes[1];
             let ops = self.lift_ld_r_n(opcode, imm, addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 2 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 2,
+            });
         }
 
         // ALU A,r: 10ooo_rrr (ADD=000, SUB=010, AND=100, XOR=101, OR=110)
         if opcode & 0xC0 == 0x80 {
             let ops = self.lift_alu_a_r(opcode, addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 1 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 1,
+            });
         }
 
         // INC r: 00rrr100, DEC r: 00rrr101
         if opcode & 0xC6 == 0x04 {
             let ops = self.lift_inc_dec(opcode, addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 1 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 1,
+            });
         }
 
         // JP nn: 0xC3 nn nn
@@ -415,7 +463,10 @@ impl Lifter for Z80Lifter {
             }
             let target = u16::from_le_bytes([bytes[1], bytes[2]]);
             let ops = self.lift_jp_nn(target, addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 3 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 3,
+            });
         }
 
         // JP cc, nn: 11ccc010 nn nn
@@ -426,7 +477,10 @@ impl Lifter for Z80Lifter {
             let cc = (opcode >> 3) & 0x07;
             let target = u16::from_le_bytes([bytes[1], bytes[2]]);
             let ops = self.lift_jp_cc_nn(cc, target, addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 3 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 3,
+            });
         }
 
         // JR e: 0x18 ee
@@ -436,7 +490,10 @@ impl Lifter for Z80Lifter {
             }
             let offset = bytes[1] as i8;
             let ops = self.lift_jr_e(offset, addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 2 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 2,
+            });
         }
 
         // CALL nn: 0xCD nn nn
@@ -446,27 +503,39 @@ impl Lifter for Z80Lifter {
             }
             let target = u16::from_le_bytes([bytes[1], bytes[2]]);
             let ops = self.lift_call_nn(target, addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 3 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 3,
+            });
         }
 
         // RET: 0xC9
         if opcode == 0xC9 {
             let ops = self.lift_ret(addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 1 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 1,
+            });
         }
 
         // PUSH rr: 11rr0101  (rr: 00=BC, 01=DE, 10=HL, 11=AF)
         if opcode & 0xCF == 0xC5 {
             let pair_enc = (opcode >> 4) & 0x03;
             let ops = self.lift_push(pair_enc, addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 1 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 1,
+            });
         }
 
         // POP rr: 11rr0001
         if opcode & 0xCF == 0xC1 {
             let pair_enc = (opcode >> 4) & 0x03;
             let ops = self.lift_pop(pair_enc, addr)?;
-            return Ok(LiftedInsn { ir_ops: ops, len: 1 });
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 1,
+            });
         }
 
         Err(LiftError::Unsupported)

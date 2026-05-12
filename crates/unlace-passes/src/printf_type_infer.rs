@@ -32,9 +32,7 @@ pub const PRINTF_FAMILY: &[&str] = &[
 
 /// Known scanf-style routines — same format-string syntax but argument
 /// types are pointers to the format-specifier type (e.g. `%d` → `int*`).
-pub const SCANF_FAMILY: &[&str] = &[
-    "scanf", "fscanf", "sscanf", "vscanf", "vfscanf", "vsscanf",
-];
+pub const SCANF_FAMILY: &[&str] = &["scanf", "fscanf", "sscanf", "vscanf", "vfscanf", "vsscanf"];
 
 /// Returns `true` when `name` is a known variadic libc routine that
 /// expects a printf/scanf-style format string in its first argument.
@@ -152,30 +150,57 @@ struct Length {
 
 fn parse_length_modifier(bytes: &[u8]) -> Length {
     if bytes.starts_with(b"hh") {
-        return Length { kind: LengthKind::HH, consumed: 2 };
+        return Length {
+            kind: LengthKind::HH,
+            consumed: 2,
+        };
     }
     if bytes.starts_with(b"ll") {
-        return Length { kind: LengthKind::LL, consumed: 2 };
+        return Length {
+            kind: LengthKind::LL,
+            consumed: 2,
+        };
     }
     if bytes.first() == Some(&b'h') {
-        return Length { kind: LengthKind::H, consumed: 1 };
+        return Length {
+            kind: LengthKind::H,
+            consumed: 1,
+        };
     }
     if bytes.first() == Some(&b'l') {
-        return Length { kind: LengthKind::L, consumed: 1 };
+        return Length {
+            kind: LengthKind::L,
+            consumed: 1,
+        };
     }
     if bytes.first() == Some(&b'L') {
-        return Length { kind: LengthKind::CapitalL, consumed: 1 };
+        return Length {
+            kind: LengthKind::CapitalL,
+            consumed: 1,
+        };
     }
     if bytes.first() == Some(&b'j') {
-        return Length { kind: LengthKind::J, consumed: 1 };
+        return Length {
+            kind: LengthKind::J,
+            consumed: 1,
+        };
     }
     if bytes.first() == Some(&b'z') {
-        return Length { kind: LengthKind::Z, consumed: 1 };
+        return Length {
+            kind: LengthKind::Z,
+            consumed: 1,
+        };
     }
     if bytes.first() == Some(&b't') {
-        return Length { kind: LengthKind::T, consumed: 1 };
+        return Length {
+            kind: LengthKind::T,
+            consumed: 1,
+        };
     }
-    Length { kind: LengthKind::None, consumed: 0 }
+    Length {
+        kind: LengthKind::None,
+        consumed: 0,
+    }
 }
 
 /// Full driver: parse a format string and apply the scanf pointer-wrap

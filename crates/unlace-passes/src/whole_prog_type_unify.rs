@@ -336,7 +336,10 @@ mod tests {
             _ => unreachable!(),
         };
         assert_eq!(n1, n2, "both functions must now share the canonical name");
-        assert!(n1.starts_with("__anon_"), "canonical name must use the __anon_ prefix, got {n1}");
+        assert!(
+            n1.starts_with("__anon_"),
+            "canonical name must use the __anon_ prefix, got {n1}"
+        );
     }
 
     #[test]
@@ -398,7 +401,8 @@ mod tests {
             base: unlace_ir::Varnode::reg(0, 8),
             version: 0,
         };
-        f1.inferred_structs.insert(-16, point_struct("locally_named"));
+        f1.inferred_structs
+            .insert(-16, point_struct("locally_named"));
         f1.composite_var_types
             .insert(sv, Type::Ptr(Box::new(point_struct("also_local"))));
 

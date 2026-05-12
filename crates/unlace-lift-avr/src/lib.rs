@@ -128,11 +128,7 @@ fn offset12(word: u16) -> i16 {
 fn offset7(word: u16) -> i16 {
     let raw = ((word >> 3) & 0x7F) as i16;
     // sign-extend from 7 bits
-    if raw & 0x40 != 0 {
-        raw | !0x7F
-    } else {
-        raw
-    }
+    if raw & 0x40 != 0 { raw | !0x7F } else { raw }
 }
 
 // ---------------------------------------------------------------------------
@@ -152,14 +148,38 @@ impl AvrLifter {
         for i in 0..NUM_GP_REGS {
             // Use static strings for register names
             let name: &'static str = match i {
-                0 => "r0", 1 => "r1", 2 => "r2", 3 => "r3",
-                4 => "r4", 5 => "r5", 6 => "r6", 7 => "r7",
-                8 => "r8", 9 => "r9", 10 => "r10", 11 => "r11",
-                12 => "r12", 13 => "r13", 14 => "r14", 15 => "r15",
-                16 => "r16", 17 => "r17", 18 => "r18", 19 => "r19",
-                20 => "r20", 21 => "r21", 22 => "r22", 23 => "r23",
-                24 => "r24", 25 => "r25", 26 => "r26", 27 => "r27",
-                28 => "r28", 29 => "r29", 30 => "r30", 31 => "r31",
+                0 => "r0",
+                1 => "r1",
+                2 => "r2",
+                3 => "r3",
+                4 => "r4",
+                5 => "r5",
+                6 => "r6",
+                7 => "r7",
+                8 => "r8",
+                9 => "r9",
+                10 => "r10",
+                11 => "r11",
+                12 => "r12",
+                13 => "r13",
+                14 => "r14",
+                15 => "r15",
+                16 => "r16",
+                17 => "r17",
+                18 => "r18",
+                19 => "r19",
+                20 => "r20",
+                21 => "r21",
+                22 => "r22",
+                23 => "r23",
+                24 => "r24",
+                25 => "r25",
+                26 => "r26",
+                27 => "r27",
+                28 => "r28",
+                29 => "r29",
+                30 => "r30",
+                31 => "r31",
                 _ => unreachable!(),
             };
             regs.push(RegisterDef {
@@ -340,22 +360,14 @@ impl AvrLifter {
         // RET: 1001 0101 0000 1000
         if word == 0x9508 {
             return Ok(LiftedInsn {
-                ir_ops: vec![IrInsn::without_output(
-                    IrOp::Return,
-                    SmallVec::new(),
-                    addr,
-                )],
+                ir_ops: vec![IrInsn::without_output(IrOp::Return, SmallVec::new(), addr)],
                 len: 2,
             });
         }
         // RETI: 1001 0101 0001 1000
         if word == 0x9518 {
             return Ok(LiftedInsn {
-                ir_ops: vec![IrInsn::without_output(
-                    IrOp::Return,
-                    SmallVec::new(),
-                    addr,
-                )],
+                ir_ops: vec![IrInsn::without_output(IrOp::Return, SmallVec::new(), addr)],
                 len: 2,
             });
         }
@@ -409,12 +421,7 @@ impl AvrLifter {
                     addr,
                 ),
                 // Rd = Load(ptr16)
-                IrInsn::with_output(
-                    IrOp::Load,
-                    loaded,
-                    SmallVec::from_slice(&[ptr16]),
-                    addr,
-                ),
+                IrInsn::with_output(IrOp::Load, loaded, SmallVec::from_slice(&[ptr16]), addr),
             ],
             len: 2,
         })
@@ -442,11 +449,7 @@ impl AvrLifter {
                     addr,
                 ),
                 // Store(ptr16, Rr)
-                IrInsn::without_output(
-                    IrOp::Store,
-                    SmallVec::from_slice(&[ptr16, src]),
-                    addr,
-                ),
+                IrInsn::without_output(IrOp::Store, SmallVec::from_slice(&[ptr16, src]), addr),
             ],
             len: 2,
         })
@@ -461,11 +464,7 @@ impl AvrLifter {
         Ok(LiftedInsn {
             ir_ops: vec![
                 // Store(SP, Rr)
-                IrInsn::without_output(
-                    IrOp::Store,
-                    SmallVec::from_slice(&[sp_vn, src]),
-                    addr,
-                ),
+                IrInsn::without_output(IrOp::Store, SmallVec::from_slice(&[sp_vn, src]), addr),
                 // SP = SP - 1
                 IrInsn::with_output(
                     IrOp::IntSub,
@@ -473,12 +472,7 @@ impl AvrLifter {
                     SmallVec::from_slice(&[sp_vn, const_vn(1, 2)]),
                     addr,
                 ),
-                IrInsn::with_output(
-                    IrOp::Copy,
-                    sp_vn,
-                    SmallVec::from_slice(&[new_sp]),
-                    addr,
-                ),
+                IrInsn::with_output(IrOp::Copy, sp_vn, SmallVec::from_slice(&[new_sp]), addr),
             ],
             len: 2,
         })
@@ -499,19 +493,9 @@ impl AvrLifter {
                     SmallVec::from_slice(&[sp_vn, const_vn(1, 2)]),
                     addr,
                 ),
-                IrInsn::with_output(
-                    IrOp::Copy,
-                    sp_vn,
-                    SmallVec::from_slice(&[new_sp]),
-                    addr,
-                ),
+                IrInsn::with_output(IrOp::Copy, sp_vn, SmallVec::from_slice(&[new_sp]), addr),
                 // Rd = Load(SP)
-                IrInsn::with_output(
-                    IrOp::Load,
-                    dst,
-                    SmallVec::from_slice(&[sp_vn]),
-                    addr,
-                ),
+                IrInsn::with_output(IrOp::Load, dst, SmallVec::from_slice(&[sp_vn]), addr),
             ],
             len: 2,
         })
@@ -567,7 +551,10 @@ impl AvrLifter {
             addr,
         ));
 
-        Ok(LiftedInsn { ir_ops: ops, len: 2 })
+        Ok(LiftedInsn {
+            ir_ops: ops,
+            len: 2,
+        })
     }
 }
 

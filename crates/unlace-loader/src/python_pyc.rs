@@ -234,10 +234,7 @@ fn magic_to_version(magic_lo: u16) -> Option<(u8, u8)> {
         (3571, (3, 13)),
     ];
 
-    TABLE
-        .iter()
-        .find(|(m, _)| *m == magic_lo)
-        .map(|(_, v)| *v)
+    TABLE.iter().find(|(m, _)| *m == magic_lo).map(|(_, v)| *v)
 }
 
 #[cfg(test)]

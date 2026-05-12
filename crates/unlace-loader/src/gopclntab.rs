@@ -163,7 +163,9 @@ fn decode_pcdata_table(
 ) -> Option<PcDataTable> {
     // off==0 is the Go sentinel "no table".
     if off == 0 {
-        return Some(PcDataTable { entries: Vec::new() });
+        return Some(PcDataTable {
+            entries: Vec::new(),
+        });
     }
     let mut cursor = off;
     let mut pc = entry_pc;
@@ -262,16 +264,21 @@ fn decode_func_meta(
         let off_u32 = match read_u32_le(data, trailer_off + i * 4) {
             Some(v) => v as usize,
             None => {
-                pc_data.push(PcDataTable { entries: Vec::new() });
+                pc_data.push(PcDataTable {
+                    entries: Vec::new(),
+                });
                 continue;
             }
         };
         // Sentinel: 0 → no table. Anything else is an offset into pctab.
         let table = if off_u32 == 0 || pctab.is_empty() {
-            PcDataTable { entries: Vec::new() }
+            PcDataTable {
+                entries: Vec::new(),
+            }
         } else {
-            decode_pcdata_table(pctab, off_u32, entry_pc, quantum)
-                .unwrap_or(PcDataTable { entries: Vec::new() })
+            decode_pcdata_table(pctab, off_u32, entry_pc, quantum).unwrap_or(PcDataTable {
+                entries: Vec::new(),
+            })
         };
         pc_data.push(table);
     }
@@ -604,7 +611,7 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
-        pdb_types: None,
+            pdb_types: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,
@@ -819,7 +826,10 @@ mod tests {
         assert_eq!(f.addr, 0x401000);
         assert_eq!(f.name, "main.main");
 
-        let meta = f.meta.as_ref().expect("FuncMeta should be populated for Go 1.18+");
+        let meta = f
+            .meta
+            .as_ref()
+            .expect("FuncMeta should be populated for Go 1.18+");
         assert_eq!(meta.pc_data.len(), 2, "npcdata=2");
         assert_eq!(meta.func_data.len(), 3, "nfuncdata=3");
 
@@ -850,7 +860,10 @@ mod tests {
 
         // off==0 is the documented Go "no table" sentinel.
         let empty = decode_pcdata_table(&[], 0, 0x401000, 1).expect("sentinel decodes");
-        assert!(empty.entries.is_empty(), "off=0 ⇒ empty table per Go runtime");
+        assert!(
+            empty.entries.is_empty(),
+            "off=0 ⇒ empty table per Go runtime"
+        );
 
         // off==1 with single-byte buffer ⇒ first uvarint succeeds but the
         // pcdelta read runs off the end ⇒ None.

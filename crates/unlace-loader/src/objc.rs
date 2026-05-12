@@ -153,16 +153,40 @@ fn parse_class_at(image: &BinaryImage, class_ptr: u64) -> Option<ObjcClass> {
     }
 
     let methods = read_u64_at_va(image, class_ro_ptr + 32)
-        .map(|p| if p == 0 { Vec::new() } else { parse_method_list(image, p).unwrap_or_default() })
+        .map(|p| {
+            if p == 0 {
+                Vec::new()
+            } else {
+                parse_method_list(image, p).unwrap_or_default()
+            }
+        })
         .unwrap_or_default();
     let protocols = read_u64_at_va(image, class_ro_ptr + 40)
-        .map(|p| if p == 0 { Vec::new() } else { parse_protocol_list(image, p).unwrap_or_default() })
+        .map(|p| {
+            if p == 0 {
+                Vec::new()
+            } else {
+                parse_protocol_list(image, p).unwrap_or_default()
+            }
+        })
         .unwrap_or_default();
     let ivars = read_u64_at_va(image, class_ro_ptr + 48)
-        .map(|p| if p == 0 { Vec::new() } else { parse_ivar_list(image, p).unwrap_or_default() })
+        .map(|p| {
+            if p == 0 {
+                Vec::new()
+            } else {
+                parse_ivar_list(image, p).unwrap_or_default()
+            }
+        })
         .unwrap_or_default();
     let properties = read_u64_at_va(image, class_ro_ptr + 64)
-        .map(|p| if p == 0 { Vec::new() } else { parse_property_list(image, p).unwrap_or_default() })
+        .map(|p| {
+            if p == 0 {
+                Vec::new()
+            } else {
+                parse_property_list(image, p).unwrap_or_default()
+            }
+        })
         .unwrap_or_default();
 
     Some(ObjcClass {
@@ -198,7 +222,11 @@ fn parse_method_list(image: &BinaryImage, list_va: u64) -> Option<Vec<ObjcMethod
             if name.is_empty() {
                 continue;
             }
-            out.push(ObjcMethod { name, type_encoding, imp_addr });
+            out.push(ObjcMethod {
+                name,
+                type_encoding,
+                imp_addr,
+            });
         }
     }
     Some(out)
@@ -228,7 +256,11 @@ fn parse_ivar_list(image: &BinaryImage, list_va: u64) -> Option<Vec<ObjcIvar>> {
         if name.is_empty() {
             continue;
         }
-        out.push(ObjcIvar { name, offset, type_encoding });
+        out.push(ObjcIvar {
+            name,
+            offset,
+            type_encoding,
+        });
     }
     Some(out)
 }
@@ -305,7 +337,10 @@ pub fn scan_objc_classlist(image: &BinaryImage) -> ObjcInfo {
 
     let categories = scan_objc_categories_with_classes(image, &classes);
 
-    ObjcInfo { classes, categories }
+    ObjcInfo {
+        classes,
+        categories,
+    }
 }
 
 /// category_t (64-bit):
@@ -430,7 +465,7 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
-        pdb_types: None,
+            pdb_types: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,
@@ -653,11 +688,41 @@ mod tests {
         let classlist = class_va.to_le_bytes().to_vec();
 
         let sections = vec![
-            Section { name: "__objc_classlist".into(), vaddr: classlist_va, size: classlist.len() as u64, data: classlist, flags: SectionFlags::READ },
-            Section { name: "__DATA".into(), vaddr: class_va, size: class.len() as u64, data: class, flags: SectionFlags::READ },
-            Section { name: "__DATA_CONST".into(), vaddr: ro_va, size: ro.len() as u64, data: ro, flags: SectionFlags::READ },
-            Section { name: "__objc_methlist".into(), vaddr: mlist_va, size: mlist.len() as u64, data: mlist, flags: SectionFlags::READ },
-            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+            Section {
+                name: "__objc_classlist".into(),
+                vaddr: classlist_va,
+                size: classlist.len() as u64,
+                data: classlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: class_va,
+                size: class.len() as u64,
+                data: class,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA_CONST".into(),
+                vaddr: ro_va,
+                size: ro.len() as u64,
+                data: ro,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_methlist".into(),
+                vaddr: mlist_va,
+                size: mlist.len() as u64,
+                data: mlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
         ];
 
         let info = scan_objc_classlist(&make_test_image(sections));
@@ -718,12 +783,48 @@ mod tests {
         class.extend_from_slice(&ro_va.to_le_bytes());
 
         let sections = vec![
-            Section { name: "__objc_classlist".into(), vaddr: 0x10000, size: 8, data: class_va.to_le_bytes().to_vec(), flags: SectionFlags::READ },
-            Section { name: "__DATA".into(), vaddr: class_va, size: class.len() as u64, data: class, flags: SectionFlags::READ },
-            Section { name: "__DATA_CONST".into(), vaddr: ro_va, size: ro.len() as u64, data: ro, flags: SectionFlags::READ },
-            Section { name: "__objc_ivars".into(), vaddr: ivar_list_va, size: ivars.len() as u64, data: ivars, flags: SectionFlags::READ },
-            Section { name: "__objc_props".into(), vaddr: prop_list_va, size: props.len() as u64, data: props, flags: SectionFlags::READ },
-            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+            Section {
+                name: "__objc_classlist".into(),
+                vaddr: 0x10000,
+                size: 8,
+                data: class_va.to_le_bytes().to_vec(),
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: class_va,
+                size: class.len() as u64,
+                data: class,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA_CONST".into(),
+                vaddr: ro_va,
+                size: ro.len() as u64,
+                data: ro,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_ivars".into(),
+                vaddr: ivar_list_va,
+                size: ivars.len() as u64,
+                data: ivars,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_props".into(),
+                vaddr: prop_list_va,
+                size: props.len() as u64,
+                data: props,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
         ];
 
         let info = scan_objc_classlist(&make_test_image(sections));
@@ -738,10 +839,7 @@ mod tests {
         assert_eq!(cls.properties[0].attributes, "T@");
     }
 
-    fn build_method_list_section(
-        list_va: u64,
-        entries: &[(u64, u64, u64)],
-    ) -> Vec<u8> {
+    fn build_method_list_section(list_va: u64, entries: &[(u64, u64, u64)]) -> Vec<u8> {
         let mut mlist = Vec::new();
         mlist.extend_from_slice(&24u32.to_le_bytes());
         mlist.extend_from_slice(&(entries.len() as u32).to_le_bytes());

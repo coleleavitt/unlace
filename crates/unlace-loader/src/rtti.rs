@@ -630,10 +630,7 @@ fn reconstruct_vtable_layout(
         let rtti = slots[start + 1];
         let address_point = vtable_addr + ((start + 2) as u64) * 8;
 
-        let end = subtable_starts
-            .get(idx + 1)
-            .copied()
-            .unwrap_or(slots.len());
+        let end = subtable_starts.get(idx + 1).copied().unwrap_or(slots.len());
         let mut fns = Vec::new();
         for j in (start + 2)..end {
             let v = slots[j];
@@ -1013,10 +1010,7 @@ mod tests {
         // Every legacy VA should appear in the primary subtable's
         // Function slots. (Legacy stops at the first non-function slot,
         // so it can be a strict prefix.)
-        assert!(
-            !legacy_vas.is_empty(),
-            "legacy view should report ≥1 entry"
-        );
+        assert!(!legacy_vas.is_empty(), "legacy view should report ≥1 entry");
         for va in &legacy_vas {
             assert!(
                 primary.contains(va),

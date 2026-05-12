@@ -79,10 +79,7 @@ mod tests {
         let mangled = "_ZN4core3fmt5Write9write_fmt17h0123456789abcdefE";
         assert!(is_rust_mangled(mangled));
         let out = try_demangle_rust(mangled).expect("legacy symbol should demangle");
-        assert!(
-            out.contains("write_fmt"),
-            "expected write_fmt in {out}",
-        );
+        assert!(out.contains("write_fmt"), "expected write_fmt in {out}",);
     }
 
     #[test]

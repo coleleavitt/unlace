@@ -167,18 +167,9 @@ mod tests {
     #[test]
     fn detects_read_pattern() {
         // out = IntAnd(IntRight(field, 5), 0x7)  → bitfield at +5, width 3.
-        let inner = IrInsn::with_output(
-            IrOp::IntRight,
-            reg(0),
-            smallvec![reg(8), cnst(5)],
-            0x1000,
-        );
-        let outer = IrInsn::with_output(
-            IrOp::IntAnd,
-            reg(16),
-            smallvec![reg(0), cnst(0x7)],
-            0x1004,
-        );
+        let inner = IrInsn::with_output(IrOp::IntRight, reg(0), smallvec![reg(8), cnst(5)], 0x1000);
+        let outer =
+            IrInsn::with_output(IrOp::IntAnd, reg(16), smallvec![reg(0), cnst(0x7)], 0x1004);
 
         let bf = decode_read(&outer, &inner).expect("recognised");
         assert_eq!(bf.offset, 5);
@@ -198,18 +189,8 @@ mod tests {
             smallvec![reg(8), cnst(inv_mask)],
             0x2000,
         );
-        let set = IrInsn::with_output(
-            IrOp::IntLeft,
-            reg(16),
-            smallvec![reg(24), cnst(4)],
-            0x2004,
-        );
-        let or = IrInsn::with_output(
-            IrOp::IntOr,
-            reg(32),
-            smallvec![reg(0), reg(16)],
-            0x2008,
-        );
+        let set = IrInsn::with_output(IrOp::IntLeft, reg(16), smallvec![reg(24), cnst(4)], 0x2004);
+        let or = IrInsn::with_output(IrOp::IntOr, reg(32), smallvec![reg(0), reg(16)], 0x2008);
 
         let bf = decode_write(&or, &clear, &set).expect("recognised");
         assert_eq!(bf.offset, 4);
@@ -273,12 +254,7 @@ mod tests {
     fn ignores_full_byte_mask() {
         // out = IntAnd(IntRight(field, 0), 0xFFFFFFFF) is a plain load,
         // not a bitfield read.
-        let inner = IrInsn::with_output(
-            IrOp::IntRight,
-            reg(0),
-            smallvec![reg(8), cnst(0)],
-            0x3000,
-        );
+        let inner = IrInsn::with_output(IrOp::IntRight, reg(0), smallvec![reg(8), cnst(0)], 0x3000);
         let outer = IrInsn::with_output(
             IrOp::IntAnd,
             reg(16),

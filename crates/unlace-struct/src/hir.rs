@@ -394,7 +394,9 @@ pub enum HirNode {
     /// Each string in `instructions` represents one raw asm line and is
     /// emitted verbatim (no leading indentation; the printer adds it).
     /// Empty `instructions` produces an empty `__asm { }` block.
-    Asm { instructions: Vec<String> },
+    Asm {
+        instructions: Vec<String>,
+    },
 }
 
 impl HirNode {

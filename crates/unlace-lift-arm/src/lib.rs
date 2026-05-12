@@ -13,6 +13,8 @@ mod tests {
     use crate::ArmLifter;
     use crate::lift::{
         ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
+        CALLOTHER_ARM_NEON_VADD_F, CALLOTHER_ARM_NEON_VADD_I, CALLOTHER_ARM_NEON_VLD1,
+        CALLOTHER_ARM_NEON_VQADD, CALLOTHER_ARM_NEON_VQSUB, CALLOTHER_ARM_NEON_VST1,
         CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
         CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
         CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
@@ -2956,6 +2958,79 @@ mod tests {
         assert_eq!(co.inputs[1].space, SpaceId::Const);
         // SSAT immediate is 1-based saturation width (here #8 → "to 8 bits").
         assert_eq!(co.inputs[1].offset, 8);
+    }
+
+    // ── t315: ARM32 NEON / Adv-SIMD ──────────────────────────────────
+
+    fn arm32_neon_callother(encoding: u32) -> (u64, Vec<u64>) {
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&encoding.to_le_bytes(), 0x1000)
+            .unwrap_or_else(|e| panic!("encoding {encoding:#x} should decode: {e:?}"));
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "encoding {encoding:#x} must not fall through to Unimplemented: {:?}",
+            r.ir_ops
+        );
+        let co = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap_or_else(|| panic!("encoding {encoding:#x} must emit Callother"));
+        (co.inputs[0].offset, co.inputs.iter().skip(1).map(|v| v.offset).collect())
+    }
+
+    #[test]
+    fn arm32_neon_vadd_i8_d_form() {
+        // vadd.i8 d0, d1, d2
+        let (tag, inputs) = arm32_neon_callother(0xf201_0802);
+        assert_eq!(tag, CALLOTHER_ARM_NEON_VADD_I);
+        assert_eq!(inputs, vec![1, 0, 0, 1, 2]);
+    }
+
+    #[test]
+    fn arm32_neon_vadd_f32_q_form() {
+        // vadd.f32 q0, q1, q2
+        let (tag, inputs) = arm32_neon_callother(0xf202_0d44);
+        assert_eq!(tag, CALLOTHER_ARM_NEON_VADD_F);
+        assert_eq!(inputs, vec![4, 1, 0, 1, 2]);
+    }
+
+    #[test]
+    fn arm32_neon_vqadd_q_form() {
+        // vqadd.s8 q0, q1, q2
+        let (tag, inputs) = arm32_neon_callother(0xf202_0054);
+        assert_eq!(tag, CALLOTHER_ARM_NEON_VQADD);
+        assert_eq!(inputs, vec![1, 1, 0, 1, 2]);
+    }
+
+    #[test]
+    fn arm32_neon_vqsub_d_form() {
+        // vqsub.s16 d0, d1, d2
+        let (tag, inputs) = arm32_neon_callother(0xf211_0212);
+        assert_eq!(tag, CALLOTHER_ARM_NEON_VQSUB);
+        assert_eq!(inputs, vec![2, 0, 0, 1, 2]);
+    }
+
+    #[test]
+    fn arm32_neon_vld1_register_list_carries_lane_width_and_addr() {
+        // vld1.8 {d0}, [r0]
+        let (tag, inputs) = arm32_neon_callother(0xf420_070f);
+        assert_eq!(tag, CALLOTHER_ARM_NEON_VLD1);
+        assert_eq!(inputs.len(), 4, "lane, wide-flag, addr, reg0");
+        assert_eq!(inputs[0], 1);
+        assert_eq!(inputs[1], 0);
+        assert_eq!(inputs[3], 0);
+    }
+
+    #[test]
+    fn arm32_neon_vst1_two_register_list_marks_d_bank() {
+        // vst1.32 {d0, d1}, [r0]
+        let (tag, inputs) = arm32_neon_callother(0xf400_0a8f);
+        assert_eq!(tag, CALLOTHER_ARM_NEON_VST1);
+        assert_eq!(inputs[0], 4);
+        assert_eq!(inputs[1], 0);
+        assert_eq!(&inputs[3..], &[0, 1]);
     }
 
     // ── t300: SVE scaffolding tests ───────────────────────────────────

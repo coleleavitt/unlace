@@ -107,6 +107,15 @@ pub fn structure_with_arch(
                 Some((insn.addr, ann.clone()))
             })
             .collect(),
+        go_defer_recover_calls: func
+            .go_defer_recover_calls
+            .iter()
+            .filter_map(|(&(bid, idx), ann)| {
+                let block = func.function.blocks.get(&bid)?;
+                let insn = block.insns.get(idx)?;
+                Some((insn.addr, ann.clone()))
+            })
+            .collect(),
         indirect_branch_kinds,
         byref_boxes: func.byref_boxes.clone(),
         byref_params: func

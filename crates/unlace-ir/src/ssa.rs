@@ -287,6 +287,11 @@ pub struct SsaFunction {
     /// Keyed by `(BlockId, insn_index)` of the `CALL`/`CALLIND` instruction.
     /// Value is the annotation string (e.g. `"objc_msgSend(self, selector)"`).
     pub objc_dispatch_calls: BTreeMap<(BlockId, usize), String>,
+    /// Go `defer` / `recover` runtime calls rendered in source style.
+    /// Keyed by `(BlockId, insn_index)` of the runtime `CALL`; the value is a
+    /// printer-ready annotation such as `"defer funcval"`, `"recover()"`, or
+    /// `"deferreturn"`.
+    pub go_defer_recover_calls: BTreeMap<(BlockId, usize), String>,
     /// Inferred function parameters from calling convention register usage.
     /// Each entry is `(name, type)` — e.g. `("a1", PrimitiveType::Int(8))`.
     /// Populated by [`ParamInferPass`](https://docs.rs/unlace-passes).
@@ -672,6 +677,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         vtable_calls: BTreeMap::new(),
         cpp_vtable_calls: BTreeMap::new(),
         objc_dispatch_calls: BTreeMap::new(),
+        go_defer_recover_calls: BTreeMap::new(),
         inferred_params: Vec::new(),
         inferred_return_type: PrimitiveType::Unknown,
         frame_setup_insns: BTreeSet::new(),

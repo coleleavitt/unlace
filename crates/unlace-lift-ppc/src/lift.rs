@@ -1,4 +1,7 @@
-use capstone::arch::ppc::{PpcInsn, PpcOperand};
+use std::sync::Mutex;
+
+use capstone::arch::ppc::{ArchMode, PpcInsn, PpcOperand};
+use capstone::arch::{BuildsCapstone, BuildsCapstoneEndian};
 use capstone::prelude::*;
 use capstone::{Capstone, Endian, Insn, InsnDetail};
 use smallvec::smallvec;
@@ -7,26 +10,82 @@ use unlace_ir::{
 };
 
 use crate::ops;
-use crate::register_file::{cs_reg_to_varnode, ppc64_register_file};
+use crate::register_file::{cs_reg_to_varnode, ppc32_register_file, ppc64_register_file};
+
+struct SendCapstone(Capstone);
+unsafe impl Send for SendCapstone {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PpcLiftMode {
+    Ppc32,
+    Ppc64,
+}
 
 pub struct PpcLifter {
     reg_file: RegisterFile,
+    arch: ArchId,
+    cs: Mutex<SendCapstone>,
 }
 
-fn make_capstone() -> Capstone {
+fn make_capstone(mode: ArchMode, endian: Endian) -> Capstone {
     Capstone::new()
         .ppc()
-        .mode(capstone::arch::ppc::ArchMode::Mode64)
-        .endian(Endian::Big)
+        .mode(mode)
+        .endian(endian)
         .detail(true)
         .build()
-        .expect("failed to create PPC64 capstone engine")
+        .expect("failed to create PowerPC capstone engine")
 }
 
 impl PpcLifter {
+    /// Legacy constructor kept for existing callers; defaults to 32-bit big-endian PowerPC.
     pub fn new() -> Self {
+        Self::new_ppc32_be()
+    }
+
+    pub fn new_ppc32_be() -> Self {
+        Self {
+            reg_file: ppc32_register_file(),
+            arch: ArchId::Ppc,
+            cs: Mutex::new(SendCapstone(make_capstone(ArchMode::Mode32, Endian::Big))),
+        }
+    }
+
+    pub fn new_ppc32_le() -> Self {
+        Self {
+            reg_file: ppc32_register_file(),
+            arch: ArchId::Ppc,
+            cs: Mutex::new(SendCapstone(make_capstone(
+                ArchMode::Mode32,
+                Endian::Little,
+            ))),
+        }
+    }
+
+    pub fn new_ppc64_be() -> Self {
         Self {
             reg_file: ppc64_register_file(),
+            arch: ArchId::Ppc64,
+            cs: Mutex::new(SendCapstone(make_capstone(ArchMode::Mode64, Endian::Big))),
+        }
+    }
+
+    pub fn new_ppc64_le() -> Self {
+        Self {
+            reg_file: ppc64_register_file(),
+            arch: ArchId::Ppc64,
+            cs: Mutex::new(SendCapstone(make_capstone(
+                ArchMode::Mode64,
+                Endian::Little,
+            ))),
+        }
+    }
+
+    pub fn mode(&self) -> PpcLiftMode {
+        match self.arch {
+            ArchId::Ppc => PpcLiftMode::Ppc32,
+            ArchId::Ppc64 => PpcLiftMode::Ppc64,
+            _ => unreachable!("PpcLifter only exposes PPC/PPC64 architectures"),
         }
     }
 }
@@ -39,7 +98,7 @@ impl Default for PpcLifter {
 
 impl Lifter for PpcLifter {
     fn arch(&self) -> ArchId {
-        ArchId::Ppc
+        self.arch
     }
 
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
@@ -47,7 +106,11 @@ impl Lifter for PpcLifter {
             return Err(LiftError::ShortBuffer);
         }
 
-        let cs = make_capstone();
+        let guard = self
+            .cs
+            .lock()
+            .map_err(|e| LiftError::Decode(format!("lock poisoned: {e}")))?;
+        let cs = &guard.0;
 
         let insns = cs
             .disasm_count(bytes, addr, 1)
@@ -63,7 +126,7 @@ impl Lifter for PpcLifter {
             .map_err(|e| LiftError::Decode(format!("{e}")))?;
 
         let mut ctx = LiftCtx::new(addr);
-        dispatch(&cs, &mut ctx, insn, &detail);
+        dispatch(cs, &mut ctx, insn, &detail);
 
         Ok(LiftedInsn {
             ir_ops: ctx.ops,

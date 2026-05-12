@@ -9,7 +9,7 @@ pub use lift::X86Lifter;
 
 #[cfg(test)]
 mod tests {
-    use unlace_ir::{ArchId, IrOp, Lifter};
+    use unlace_ir::{ArchId, IrOp, Lifter, SpaceId};
 
     use crate::X86Lifter;
 
@@ -383,6 +383,7 @@ mod tests {
             &[0xf4],                   // hlt
             &[0x0f, 0x05],             // syscall
             &[0x0f, 0x0b],             // ud2
+            &[0x0f, 0x33],             // rdpmc
             &[0xf3, 0x0f, 0x1e, 0xfa], // endbr64
         ];
         for bytes in cases {
@@ -394,6 +395,42 @@ mod tests {
                 "should produce at least one op for {bytes:?}"
             );
         }
+    }
+
+    #[test]
+    fn test_rdpmc_lifts_to_named_callother_and_split_result() {
+        // 0F 33 = RDPMC
+        let result = lifter()
+            .lift_insn(&[0x0f, 0x33], 0x1000)
+            .expect("should decode RDPMC");
+        assert_eq!(result.len, 2);
+
+        let callother = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("RDPMC should emit Callother");
+        assert_eq!(
+            callother.inputs[0],
+            unlace_ir::Varnode::constant(crate::ops::perfmon::RDPMC_CALLOTHER_TAG, 8)
+        );
+        assert_eq!(callother.inputs.len(), 2, "RDPMC takes (tag, ecx)");
+        assert_eq!(callother.inputs[1].space, SpaceId::Register);
+        assert_eq!(callother.inputs[1].offset, crate::register_file::RCX);
+        assert_eq!(callother.inputs[1].size, 4);
+        assert_eq!(
+            callother.output.expect("RDPMC returns a 64-bit counter").size,
+            8
+        );
+
+        let subpieces: Vec<_> = result
+            .ir_ops
+            .iter()
+            .filter(|i| i.op == IrOp::Subpiece)
+            .collect();
+        assert_eq!(subpieces.len(), 2, "RDPMC should split result into EAX/EDX");
+        assert!(subpieces.iter().any(|i| i.output.map(|o| o.offset) == Some(crate::register_file::RAX)));
+        assert!(subpieces.iter().any(|i| i.output.map(|o| o.offset) == Some(crate::register_file::RDX)));
     }
 
     // -- REP string operations -------------------------------------------

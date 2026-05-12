@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use fallible_iterator::FallibleIterator;
-use pdb::{PDB, Rva, SymbolData};
+use pdb::{PDB, Rva, SymbolData, TypeData, TypeIndex};
+use unlace_ir::ssa::CallingConvention;
 
 use crate::error::LoadError;
 use crate::image::{Symbol, SymbolKind};
@@ -25,6 +26,8 @@ pub struct SourceLocation {
 pub struct PdbInfo {
     pub symbols: BTreeMap<u64, Symbol>,
     pub lines: BTreeMap<u64, SourceLocation>,
+    /// Procedure/member-function type index → calling convention metadata.
+    pub calling_conventions: BTreeMap<u32, CallingConvention>,
 }
 
 /// Parse a `.pdb` file and extract function symbols and line information.
@@ -39,6 +42,7 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
     let dbi = pdb.debug_information()?;
     let mut symbols = BTreeMap::new();
     let mut lines = BTreeMap::new();
+    let calling_conventions = collect_type_calling_conventions(&mut pdb)?;
 
     collect_global_symbols(&mut pdb, &address_map, &mut symbols)?;
 
@@ -59,7 +63,58 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
         "PDB import complete"
     );
 
-    Ok(PdbInfo { symbols, lines })
+    Ok(PdbInfo {
+        symbols,
+        lines,
+        calling_conventions,
+    })
+}
+
+fn collect_type_calling_conventions(
+    pdb: &mut PDB<std::fs::File>,
+) -> Result<BTreeMap<u32, CallingConvention>, LoadError> {
+    let type_info = pdb.type_information()?;
+    let mut out = BTreeMap::new();
+    let mut iter = type_info.iter();
+
+    while let Some(typ) = iter.next()? {
+        let idx = ti_to_u32(typ.index());
+        let Ok(parsed) = typ.parse() else {
+            continue;
+        };
+
+        let convention = match parsed {
+            TypeData::Procedure(proc) => map_pdb_calling_convention(proc.attributes.calling_convention()),
+            TypeData::MemberFunction(proc) => {
+                map_pdb_calling_convention(proc.attributes.calling_convention())
+            }
+            _ => None,
+        };
+
+        if let Some(cc) = convention {
+            out.insert(idx, cc);
+        }
+    }
+
+    Ok(out)
+}
+
+fn map_pdb_calling_convention(raw: u8) -> Option<CallingConvention> {
+    match raw {
+        // CV_CALL_NEAR_C / CV_CALL_FAR_C
+        0x00 | 0x01 => Some(CallingConvention::Cdecl),
+        // CV_CALL_NEAR_PASCAL / CV_CALL_FAR_PASCAL / CV_CALL_NEAR_STD / CV_CALL_FAR_STD
+        0x02 | 0x03 | 0x07 | 0x08 => Some(CallingConvention::Stdcall),
+        // CV_CALL_NEAR_FAST / CV_CALL_FAR_FAST
+        0x04 | 0x05 => Some(CallingConvention::MicrosoftX64),
+        // CV_CALL_THISCALL
+        0x0b => Some(CallingConvention::Thiscall),
+        _ => None,
+    }
+}
+
+fn ti_to_u32(t: TypeIndex) -> u32 {
+    u32::from(t)
 }
 
 fn collect_global_symbols(
@@ -271,6 +326,7 @@ mod tests {
                 },
             )]),
             lines: BTreeMap::new(),
+            calling_conventions: BTreeMap::new(),
         };
 
         let image_base = 0x0040_0000u64;
@@ -306,6 +362,7 @@ mod tests {
                 },
             )]),
             lines: BTreeMap::new(),
+            calling_conventions: BTreeMap::new(),
         };
 
         merge_pdb_symbols(&mut target, &pdb_info, 0x0040_0000);
@@ -329,6 +386,15 @@ mod tests {
             column: Some(5),
         };
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn maps_pdb_calling_conventions() {
+        assert_eq!(map_pdb_calling_convention(0x00), Some(CallingConvention::Cdecl));
+        assert_eq!(map_pdb_calling_convention(0x07), Some(CallingConvention::Stdcall));
+        assert_eq!(map_pdb_calling_convention(0x04), Some(CallingConvention::MicrosoftX64));
+        assert_eq!(map_pdb_calling_convention(0x0b), Some(CallingConvention::Thiscall));
+        assert_eq!(map_pdb_calling_convention(0xff), None);
     }
 
     #[test]

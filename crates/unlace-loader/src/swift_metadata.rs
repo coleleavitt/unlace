@@ -65,6 +65,16 @@ pub struct SwiftProtocolDescriptor {
 pub struct SwiftConformance {
     /// VA of the conformance descriptor.
     pub descriptor_va: u64,
+    /// Resolved protocol descriptor VA, when the first relative reference
+    /// in the conformance descriptor points at a mapped protocol descriptor.
+    pub protocol_descriptor_va: Option<u64>,
+    /// Best-effort decoded protocol name.
+    pub protocol_name: Option<String>,
+    /// Resolved nominal-type descriptor VA for the conforming type when the
+    /// second relative reference points at a mapped type descriptor.
+    pub type_descriptor_va: Option<u64>,
+    /// Best-effort decoded conforming type name.
+    pub type_name: Option<String>,
 }
 
 /// Aggregate Swift runtime metadata recovered from a Mach-O image.
@@ -112,7 +122,7 @@ pub fn scan_swift_metadata(image: &BinaryImage) -> Option<SwiftInfo> {
         info.protocols = parse_protocol_table(image, sec);
     }
     if let Some(sec) = proto_sec {
-        info.conformances = parse_conformance_table(sec);
+        info.conformances = parse_conformance_table(image, sec);
     }
     Some(info)
 }
@@ -122,9 +132,10 @@ pub fn scan_swift_metadata(image: &BinaryImage) -> Option<SwiftInfo> {
 /// in this crate emit the bare form, but external tools sometimes
 /// concatenate the segment.
 fn find_section<'a>(image: &'a BinaryImage, name: &str) -> Option<&'a Section> {
-    image.sections.iter().find(|s| {
-        s.name == name || s.name.ends_with(name) || s.name.ends_with(&format!(",{name}"))
-    })
+    image
+        .sections
+        .iter()
+        .find(|s| s.name == name || s.name.ends_with(name) || s.name.ends_with(&format!(",{name}")))
 }
 
 /// Read a 32-bit little-endian word at `offset` within `data`, or
@@ -258,7 +269,7 @@ fn parse_protocol_table(image: &BinaryImage, sec: &Section) -> Vec<SwiftProtocol
 /// layout (protocol ref, type ref, witness table accessor, …) but for
 /// the MVP we just surface the descriptor VA so consumers can
 /// cross-reference symbols.
-fn parse_conformance_table(sec: &Section) -> Vec<SwiftConformance> {
+fn parse_conformance_table(image: &BinaryImage, sec: &Section) -> Vec<SwiftConformance> {
     let mut out = Vec::new();
     let mut off = 0usize;
     while off + 4 <= sec.data.len() {
@@ -272,8 +283,51 @@ fn parse_conformance_table(sec: &Section) -> Vec<SwiftConformance> {
             continue;
         }
         let desc_va = resolve_relative(slot_va, raw);
+        let Some((desc_off, desc_bytes)) = locate(image, desc_va) else {
+            out.push(SwiftConformance {
+                descriptor_va: desc_va,
+                protocol_descriptor_va: None,
+                protocol_name: None,
+                type_descriptor_va: None,
+                type_name: None,
+            });
+            continue;
+        };
+
+        let protocol_slot_va = desc_va;
+        let (protocol_descriptor_va, protocol_name) = read_i32_le(desc_bytes, desc_off)
+            .map(|rel| resolve_relative(protocol_slot_va, rel))
+            .map(|proto_va| {
+                let name = locate(image, proto_va).and_then(|(proto_off, proto_bytes)| {
+                    let name_slot_va = proto_va.wrapping_add(8);
+                    read_i32_le(proto_bytes, proto_off + 8)
+                        .map(|name_rel| resolve_relative(name_slot_va, name_rel))
+                        .and_then(|name_va| read_cstr(image, name_va))
+                });
+                (Some(proto_va), name)
+            })
+            .unwrap_or((None, None));
+
+        let type_slot_va = desc_va.wrapping_add(4);
+        let (type_descriptor_va, type_name) = read_i32_le(desc_bytes, desc_off + 4)
+            .map(|rel| resolve_relative(type_slot_va, rel))
+            .map(|type_va| {
+                let name = locate(image, type_va).and_then(|(type_off, type_bytes)| {
+                    let name_slot_va = type_va.wrapping_add(8);
+                    read_i32_le(type_bytes, type_off + 8)
+                        .map(|name_rel| resolve_relative(name_slot_va, name_rel))
+                        .and_then(|name_va| read_cstr(image, name_va))
+                });
+                (Some(type_va), name)
+            })
+            .unwrap_or((None, None));
+
         out.push(SwiftConformance {
             descriptor_va: desc_va,
+            protocol_descriptor_va,
+            protocol_name,
+            type_descriptor_va,
+            type_name,
         });
     }
     out
@@ -409,6 +463,93 @@ mod tests {
         // Other tables weren't present → stayed empty.
         assert!(info.protocols.is_empty());
         assert!(info.conformances.is_empty());
+    }
+
+    #[test]
+    fn parses_swift_protocol_conformance_names() {
+        let names_va: u64 = 0x4000;
+        let descs_va: u64 = 0x5000;
+        let protos_va: u64 = 0x6000;
+        let proto_table_va: u64 = 0x7000;
+
+        let mut names = Vec::new();
+        names.extend_from_slice(b"Cat Pettable ");
+        let cat_name_va = names_va;
+        let proto_name_va = names_va + 4;
+
+        let mut descs = Vec::new();
+        let type_desc_va = descs_va;
+        descs.extend_from_slice(&0x11u32.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+        let cat_name_rel = (cat_name_va as i64 - (type_desc_va as i64 + 8)) as i32;
+        descs.extend_from_slice(&cat_name_rel.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+
+        let proto_desc_va = descs_va + 20;
+        descs.extend_from_slice(&0x22u32.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+        let proto_name_rel = (proto_name_va as i64 - (proto_desc_va as i64 + 8)) as i32;
+        descs.extend_from_slice(&proto_name_rel.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+
+        let conf_desc_va = descs_va + 40;
+        let proto_rel = (proto_desc_va as i64 - conf_desc_va as i64) as i32;
+        descs.extend_from_slice(&proto_rel.to_le_bytes());
+        let type_rel = (type_desc_va as i64 - (conf_desc_va as i64 + 4)) as i32;
+        descs.extend_from_slice(&type_rel.to_le_bytes());
+        descs.extend_from_slice(&0i32.to_le_bytes());
+
+        let mut protos = Vec::new();
+        let proto_slot_va = protos_va;
+        let proto_delta = (proto_desc_va as i64 - proto_slot_va as i64) as i32;
+        protos.extend_from_slice(&proto_delta.to_le_bytes());
+
+        let mut proto_table = Vec::new();
+        let conf_slot_va = proto_table_va;
+        let conf_delta = (conf_desc_va as i64 - conf_slot_va as i64) as i32;
+        proto_table.extend_from_slice(&conf_delta.to_le_bytes());
+
+        let mut img = empty_image();
+        img.sections.push(Section {
+            name: "__cstring".to_string(),
+            vaddr: names_va,
+            size: names.len() as u64,
+            data: names,
+            flags: SectionFlags::READ,
+        });
+        img.sections.push(Section {
+            name: "__const".to_string(),
+            vaddr: descs_va,
+            size: descs.len() as u64,
+            data: descs,
+            flags: SectionFlags::READ,
+        });
+        img.sections.push(Section {
+            name: "__swift5_protos".to_string(),
+            vaddr: protos_va,
+            size: protos.len() as u64,
+            data: protos,
+            flags: SectionFlags::READ,
+        });
+        img.sections.push(Section {
+            name: "__swift5_proto".to_string(),
+            vaddr: proto_table_va,
+            size: proto_table.len() as u64,
+            data: proto_table,
+            flags: SectionFlags::READ,
+        });
+
+        let info = scan_swift_metadata(&img).expect("Swift sections present");
+        assert_eq!(info.protocols.len(), 1);
+        assert_eq!(info.protocols[0].name.as_deref(), Some("Pettable"));
+        assert_eq!(info.conformances.len(), 1);
+        let conf = &info.conformances[0];
+        assert_eq!(conf.protocol_descriptor_va, Some(proto_desc_va));
+        assert_eq!(conf.protocol_name.as_deref(), Some("Pettable"));
+        assert_eq!(conf.type_descriptor_va, Some(type_desc_va));
+        assert_eq!(conf.type_name.as_deref(), Some("Cat"));
     }
 
     /// An empty `__swift5_protos` (section exists but its data is

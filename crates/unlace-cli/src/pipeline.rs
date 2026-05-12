@@ -60,13 +60,13 @@ use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
 use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
 use unlace_passes::{
-    BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
-    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
-    GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
-    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
-    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
+    BmiIdiomPass, CallingConvFinalizePass, CallingConventionDetectPass, ConditionSimplifyPass,
+    ConstantFoldPass, CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
+    DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass,
+    GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass,
+    OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
+    SignatureSnapshot, StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass,
+    StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     VariableMergePass, annotate_libc_calls, bump_if_signature_changed, detect_byref,
     recover_stack_frame, recover_structs, run_outer_fixedpoint, run_to_fixedpoint,
 };
@@ -922,9 +922,7 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
     // `vN` choices, while still losing to *meaningful* (non-`vN`) names
     // produced by the merger (it occasionally promotes a DWARF name into
     // its output map).
-    VarNamingPass
-        .run(ssa)
-        .context("var naming pass failed")?;
+    VarNamingPass.run(ssa).context("var naming pass failed")?;
 
     // t230 — calling-convention finalization. Runs last so the
     // dead-param drop, byte-mask narrowing, and caller-side
@@ -1384,6 +1382,9 @@ pub fn decompile_function_with_symbols(
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
     let objc_info = unlace_loader::scan_objc_classlist(image);
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
+    if let Some(swift_info) = &image.swift_info {
+        printer_annotations.swift_conformances = swift_info.conformances.clone();
+    }
     printer_annotations.libc_call_canonical = libc_call_canonical;
     let printer_annotations = Some(printer_annotations);
     let result = emit_output(
@@ -1604,7 +1605,7 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
-        pdb_types: None,
+            pdb_types: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,
@@ -1907,11 +1908,7 @@ mod tests {
             // small loop-counter update for variety
             IrInsn::with_output(IrOp::IntAdd, u1, smallvec![rcx, c8], 0x1008),
             // libc call site
-            IrInsn::without_output(
-                IrOp::Call,
-                smallvec![malloc_addr, malloc_arg],
-                0x100C,
-            ),
+            IrInsn::without_output(IrOp::Call, smallvec![malloc_addr, malloc_arg], 0x100C),
             // return
             IrInsn::without_output(IrOp::Return, smallvec![rcx], 0x1014),
         ];

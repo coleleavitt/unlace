@@ -604,9 +604,7 @@ fn collect_bst_leaves(
             else_body,
         } => {
             // Case 1: This node is a bisection node (IntLess/IntSless).
-            if let Some(BisectCmp::LessThan { expr_base, .. }) =
-                extract_bisect_cmp(cond, def_map)
-            {
+            if let Some(BisectCmp::LessThan { expr_base, .. }) = extract_bisect_cmp(cond, def_map) {
                 if expr_base != *target_base {
                     return false;
                 }
@@ -1500,9 +1498,7 @@ mod tests {
 
         let result = rewrite_range_node(if_node, &def_map);
         match &result {
-            HirNode::Switch {
-                cases, default, ..
-            } => {
+            HirNode::Switch { cases, default, .. } => {
                 assert_eq!(cases.len(), 1);
                 assert_eq!(
                     cases[0].0,
@@ -1541,9 +1537,7 @@ mod tests {
 
         let result = rewrite_range_node(if_chain, &def_map);
         match &result {
-            HirNode::Switch {
-                cases, default, ..
-            } => {
+            HirNode::Switch { cases, default, .. } => {
                 assert_eq!(cases.len(), 2);
                 assert_eq!(
                     cases[0].0,

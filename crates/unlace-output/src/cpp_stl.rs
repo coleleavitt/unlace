@@ -400,8 +400,7 @@ mod tests {
 
     #[test]
     fn recognise_shared_ptr_int() {
-        let ty = recognize_stl(&d("_ZNSt10shared_ptrIiE5resetEv"))
-            .expect("shared_ptr<int>::reset");
+        let ty = recognize_stl(&d("_ZNSt10shared_ptrIiE5resetEv")).expect("shared_ptr<int>::reset");
         assert_eq!(ty.display(), "std::shared_ptr<int>");
         assert_eq!(ty.size_bytes(), Some(16));
     }
@@ -575,7 +574,12 @@ mod tests {
 
     #[test]
     fn function_sbo_layout_matches_split_buffer() {
-        assert!(looks_like_function_sbo_layout(&[(0, 8), (8, 8), (16, 8), (24, 8)]));
+        assert!(looks_like_function_sbo_layout(&[
+            (0, 8),
+            (8, 8),
+            (16, 8),
+            (24, 8)
+        ]));
     }
 
     #[test]

@@ -66,7 +66,9 @@ pub fn detect_variadic_callees(
                 if insn.op != IrOp::Call {
                     continue;
                 }
-                let Some(t) = insn.inputs.first() else { continue };
+                let Some(t) = insn.inputs.first() else {
+                    continue;
+                };
                 if t.space != SpaceId::Const {
                     continue;
                 }
@@ -132,7 +134,9 @@ pub fn parse_printf_format_strings(
             if insn.op != IrOp::Call {
                 continue;
             }
-            let Some(t) = insn.inputs.first() else { continue };
+            let Some(t) = insn.inputs.first() else {
+                continue;
+            };
             if t.space != SpaceId::Const {
                 continue;
             }
@@ -362,22 +366,13 @@ mod tests {
 
     #[test]
     fn parse_basic_specifiers() {
-        assert_eq!(
-            parse_format_string("%d"),
-            vec![PrimitiveType::Int(4)]
-        );
-        assert_eq!(
-            parse_format_string("%lld"),
-            vec![PrimitiveType::Int(8)]
-        );
+        assert_eq!(parse_format_string("%d"), vec![PrimitiveType::Int(4)]);
+        assert_eq!(parse_format_string("%lld"), vec![PrimitiveType::Int(8)]);
         assert_eq!(
             parse_format_string("%s %p"),
             vec![PrimitiveType::Ptr, PrimitiveType::Ptr]
         );
-        assert_eq!(
-            parse_format_string("%f"),
-            vec![PrimitiveType::Double]
-        );
+        assert_eq!(parse_format_string("%f"), vec![PrimitiveType::Double]);
         assert_eq!(
             parse_format_string("plain string with %%"),
             Vec::<PrimitiveType>::new()
@@ -386,10 +381,7 @@ mod tests {
             parse_format_string("%hd %hhx"),
             vec![PrimitiveType::Int(2), PrimitiveType::Int(1)]
         );
-        assert_eq!(
-            parse_format_string("%5.2f"),
-            vec![PrimitiveType::Double]
-        );
+        assert_eq!(parse_format_string("%5.2f"), vec![PrimitiveType::Double]);
     }
 
     #[test]
@@ -441,7 +433,11 @@ mod tests {
         strings.insert(fmt_addr, "%d %s".to_string());
 
         let resolver = move |addr: u64| -> Option<&'static str> {
-            if addr == printf_addr { Some("printf") } else { None }
+            if addr == printf_addr {
+                Some("printf")
+            } else {
+                None
+            }
         };
 
         let changed = parse_printf_format_strings(&mut ssa, &resolver, &strings);
@@ -510,8 +506,10 @@ mod tests {
         target_ssa.calling_convention = CallingConvention::SystemV;
         funcs.insert(target, target_ssa);
 
-        let ir_funcs: BTreeMap<u64, _> =
-            funcs.iter().map(|(a, s)| (*a, s.function.clone())).collect();
+        let ir_funcs: BTreeMap<u64, _> = funcs
+            .iter()
+            .map(|(a, s)| (*a, s.function.clone()))
+            .collect();
         let cg = unlace_ir::xref::build_call_graph(&ir_funcs);
 
         let mut registry = FunctionSignatureRegistry::new();

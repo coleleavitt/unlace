@@ -237,7 +237,11 @@ mod tests {
         let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
         let store = IrInsn::without_output(
             IrOp::Store,
-            smallvec![ram_space, Varnode::constant(0x2010, 8), Varnode::constant(0x90, 1)],
+            smallvec![
+                ram_space,
+                Varnode::constant(0x2010, 8),
+                Varnode::constant(0x90, 1)
+            ],
             0x4000,
         );
         let ssa = single_block_func(vec![store], 0x4000);
@@ -260,18 +264,30 @@ mod tests {
         // Two stores: one inside, one outside.
         let inside = IrInsn::without_output(
             IrOp::Store,
-            smallvec![ram_space, Varnode::constant(0x2050, 8), Varnode::constant(0xCC, 1)],
+            smallvec![
+                ram_space,
+                Varnode::constant(0x2050, 8),
+                Varnode::constant(0xCC, 1)
+            ],
             0x4000,
         );
         let outside = IrInsn::without_output(
             IrOp::Store,
-            smallvec![ram_space, Varnode::constant(0x8000, 8), Varnode::constant(0xDE, 1)],
+            smallvec![
+                ram_space,
+                Varnode::constant(0x8000, 8),
+                Varnode::constant(0xDE, 1)
+            ],
             0x4004,
         );
         let ssa = single_block_func(vec![inside, outside], 0x4000);
 
         let rewrites = detect_smc(&ssa, (0x2000, 0x3000));
-        assert_eq!(rewrites.len(), 1, "only the in-range store should be reported");
+        assert_eq!(
+            rewrites.len(),
+            1,
+            "only the in-range store should be reported"
+        );
         assert_eq!(rewrites[0].addr, 0x2050);
         assert_eq!(rewrites[0].new_bytes, vec![0xCC]);
     }
@@ -298,11 +314,7 @@ mod tests {
         let rewrites = detect_smc(&ssa, (0x2000, 0x3000));
         assert_eq!(rewrites.len(), 1, "XOR of two constants should fold");
         assert_eq!(rewrites[0].addr, 0x2020);
-        assert_eq!(
-            rewrites[0].new_bytes,
-            vec![0x55],
-            "0xAA ^ 0xFF = 0x55"
-        );
+        assert_eq!(rewrites[0].new_bytes, vec![0x55], "0xAA ^ 0xFF = 0x55");
     }
 
     /// A STORE whose destination address is itself a register (not a

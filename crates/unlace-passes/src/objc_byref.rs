@@ -52,8 +52,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 pub use unlace_ir::ssa::ByrefBox;
+use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
@@ -307,11 +307,11 @@ mod tests {
         let captured = Varnode::constant(42, 4);
 
         let insns = vec![
-            store(base, isa, 0x1000),               // +0  isa
-            store(at(8, 8), forwarding, 0x1004),    // +8  forwarding (self)
-            store(at(16, 4), flags, 0x1008),        // +16 flags
-            store(at(20, 4), size, 0x100C),         // +20 size
-            store(at(24, 4), captured, 0x1010),     // +24 captured int
+            store(base, isa, 0x1000),            // +0  isa
+            store(at(8, 8), forwarding, 0x1004), // +8  forwarding (self)
+            store(at(16, 4), flags, 0x1008),     // +16 flags
+            store(at(20, 4), size, 0x100C),      // +20 size
+            store(at(24, 4), captured, 0x1010),  // +24 captured int
         ];
 
         let func = make_func_with_block(insns);

@@ -98,7 +98,8 @@ impl FlirtDb {
     /// byte/CRC match by registration order so callers control priority via
     /// the signature table layout.
     pub fn match_function(&self, bytes: &[u8]) -> Option<&str> {
-        self.match_function_with_refs(bytes, &BTreeMap::new()).map(|m| m.name)
+        self.match_function_with_refs(bytes, &BTreeMap::new())
+            .map(|m| m.name)
     }
 
     /// Match `bytes` against the DB, preferring candidates whose recorded
@@ -166,7 +167,11 @@ fn signature_matches(sig: &FlirtSignature, bytes: &[u8]) -> bool {
     true
 }
 
-fn references_match(sig: &FlirtSignature, bytes: &[u8], resolved_names: &BTreeMap<u64, String>) -> bool {
+fn references_match(
+    sig: &FlirtSignature,
+    bytes: &[u8],
+    resolved_names: &BTreeMap<u64, String>,
+) -> bool {
     if sig.refs.is_empty() {
         return true;
     }
@@ -265,19 +270,9 @@ mod tests {
     #[test]
     fn pattern_match_with_wildcards() {
         let mut db = FlirtDb::new();
-        db.push(sig(
-            "memcpy",
-            &[0x48, 0x00, 0xC3],
-            &[0xFF, 0x00, 0xFF],
-        ));
-        assert_eq!(
-            db.match_function(&[0x48, 0x77, 0xC3, 0x00]),
-            Some("memcpy")
-        );
-        assert_eq!(
-            db.match_function(&[0x48, 0xAB, 0xC3, 0x00]),
-            Some("memcpy")
-        );
+        db.push(sig("memcpy", &[0x48, 0x00, 0xC3], &[0xFF, 0x00, 0xFF]));
+        assert_eq!(db.match_function(&[0x48, 0x77, 0xC3, 0x00]), Some("memcpy"));
+        assert_eq!(db.match_function(&[0x48, 0xAB, 0xC3, 0x00]), Some("memcpy"));
         assert!(db.match_function(&[0x49, 0xAB, 0xC3, 0x00]).is_none());
     }
 
@@ -378,7 +373,9 @@ mod tests {
             }],
         });
 
-        let m = db.match_function_with_refs(&bytes, &BTreeMap::new()).unwrap();
+        let m = db
+            .match_function_with_refs(&bytes, &BTreeMap::new())
+            .unwrap();
         assert_eq!(m.name, "calls_malloc");
         assert!(!m.refs_matched);
     }
@@ -399,7 +396,9 @@ mod tests {
                 name: "malloc".into(),
             }],
         });
-        let m = db.match_function_with_refs(&bytes, &BTreeMap::new()).unwrap();
+        let m = db
+            .match_function_with_refs(&bytes, &BTreeMap::new())
+            .unwrap();
         assert!(!m.refs_matched);
     }
 
@@ -422,8 +421,15 @@ mod tests {
         assert!(db.len() >= 30, "expected ≥30 signatures, got {}", db.len());
         let names: Vec<&str> = db.entries.iter().map(|s| s.name.as_str()).collect();
         for required in &[
-            "strcpy", "strlen", "memcpy", "memset", "malloc", "free",
-            "__cxa_throw", "operator new", "pthread_create",
+            "strcpy",
+            "strlen",
+            "memcpy",
+            "memset",
+            "malloc",
+            "free",
+            "__cxa_throw",
+            "operator new",
+            "pthread_create",
         ] {
             assert!(
                 names.iter().any(|n| n == required),

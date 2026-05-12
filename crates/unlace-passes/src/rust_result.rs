@@ -204,11 +204,17 @@ fn find_int_equal_comparisons(
 
             if a.space != SpaceId::Const && b.space == SpaceId::Const {
                 if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0))) {
-                    result.entry(sv).or_default().push((b.offset, bid, insn_idx));
+                    result
+                        .entry(sv)
+                        .or_default()
+                        .push((b.offset, bid, insn_idx));
                 }
             } else if a.space == SpaceId::Const && b.space != SpaceId::Const {
                 if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(1))) {
-                    result.entry(sv).or_default().push((a.offset, bid, insn_idx));
+                    result
+                        .entry(sv)
+                        .or_default()
+                        .push((a.offset, bid, insn_idx));
                 }
             }
         }
@@ -230,9 +236,7 @@ mod tests {
 
     // ── Helpers ─────────────────────────────────────────────────────
 
-    fn build_trivial_dom(
-        cfg: &unlace_ir::cfg::ControlFlowGraph,
-    ) -> unlace_ir::ssa::DominatorTree {
+    fn build_trivial_dom(cfg: &unlace_ir::cfg::ControlFlowGraph) -> unlace_ir::ssa::DominatorTree {
         use petgraph::algo::dominators::simple_fast;
 
         let entry_ni = cfg
@@ -416,7 +420,10 @@ mod tests {
         let ssa = make_ssa(blocks, var_map);
 
         let unions = detect_rust_tagged_unions(&ssa);
-        assert!(unions.is_empty(), "single comparison should not detect a tagged union");
+        assert!(
+            unions.is_empty(),
+            "single comparison should not detect a tagged union"
+        );
     }
 
     /// No detection when the load is not 1-byte (e.g. 4-byte load is a general
@@ -476,7 +483,10 @@ mod tests {
 
         let ssa = make_ssa(vec![bb], var_map);
         let unions = detect_rust_tagged_unions(&ssa);
-        assert!(unions.is_empty(), "4-byte load should not match byte-tag pattern");
+        assert!(
+            unions.is_empty(),
+            "4-byte load should not match byte-tag pattern"
+        );
     }
 
     /// Detect pattern when load address is computed via INT_ADD(base, 0).

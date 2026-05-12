@@ -319,8 +319,12 @@ mod tests {
         let r_i = reg(0x10, 8);
         let r_i_inc = reg(0x10, 8);
         let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns
-            .push(IrInsn::with_output(IrOp::Copy, r_i, smallvec![con(0, 8)], 0x1000));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            r_i,
+            smallvec![con(0, 8)],
+            0x1000,
+        ));
         bb0.successors.push(BlockId(1));
 
         let mut bb1 = BasicBlock::new(BlockId(1));
@@ -386,9 +390,10 @@ mod tests {
 
         let func = build_func(vec![bb0]);
         let cls = classify_variables(&func);
-        let saved = cls.roles.iter().find(|(_, r)| {
-            matches!(r, VarRole::SavedRegister("rbx"))
-        });
+        let saved = cls
+            .roles
+            .iter()
+            .find(|(_, r)| matches!(r, VarRole::SavedRegister("rbx")));
         assert!(
             saved.is_some(),
             "expected SavedRegister(\"rbx\"), got {:?}",
@@ -402,8 +407,12 @@ mod tests {
         // Block 0: t = const 42; return
         let t = reg(0x200, 8);
         let mut bb0 = BasicBlock::new(BlockId(0));
-        bb0.insns
-            .push(IrInsn::with_output(IrOp::Copy, t, smallvec![con(42, 8)], 0x1000));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            t,
+            smallvec![con(42, 8)],
+            0x1000,
+        ));
         bb0.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 

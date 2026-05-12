@@ -645,7 +645,9 @@ fn field_to_primitive(ty: &Type) -> PrimitiveType {
         // Slices reduce to their `*T` data pointer; maps to `*hmap`.
         // Generic type parameters flow via runtime dictionaries / iface words,
         // so model them as pointer-sized too.
-        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } | Type::TypeParam { .. } => PrimitiveType::Ptr,
+        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } | Type::TypeParam { .. } => {
+            PrimitiveType::Ptr
+        }
     }
 }
 

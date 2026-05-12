@@ -386,7 +386,10 @@ mod tests {
         let eof = ihex_line(0x01, 0x0000, &[]);
         let text = format!("{}\n{}\n", l1, eof);
         let img = load_intel_hex(&text).unwrap();
-        assert_eq!(img.segments, vec![(0x0000_0100, vec![0xDE, 0xAD, 0xBE, 0xEF])]);
+        assert_eq!(
+            img.segments,
+            vec![(0x0000_0100, vec![0xDE, 0xAD, 0xBE, 0xEF])]
+        );
         assert_eq!(img.start_addr, None);
     }
 
@@ -409,7 +412,10 @@ mod tests {
         // Hand-crafted invalid checksum.
         let bad = ":0401000001020304AA\n:00000001FF\n";
         let err = load_intel_hex(bad).unwrap_err();
-        assert!(matches!(err, IntelHexError::BadChecksum { .. }), "got {err:?}");
+        assert!(
+            matches!(err, IntelHexError::BadChecksum { .. }),
+            "got {err:?}"
+        );
     }
 
     // ----- S-record helpers -----
@@ -467,6 +473,9 @@ mod tests {
         // count=04, addr=0000, data=FF, cksum should be !(04+00+00+FF)=00 — we give 11.
         let bad = "S1040000FF11\nS9030000FC\n";
         let err = load_s_record(bad).unwrap_err();
-        assert!(matches!(err, SRecordError::BadChecksum { .. }), "got {err:?}");
+        assert!(
+            matches!(err, SRecordError::BadChecksum { .. }),
+            "got {err:?}"
+        );
     }
 }

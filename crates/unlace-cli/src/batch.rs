@@ -128,9 +128,8 @@ pub fn run_batch(
     let rtti = unlace_loader::scan_rtti(&image);
     let rtti_opt = if rtti.is_empty() { None } else { Some(&rtti) };
 
-    let results: Vec<BatchResult> = pool.install(|| {
-        decompile_all_parallel(&image, &functions, config, dwarf.as_ref(), rtti_opt)
-    });
+    let results: Vec<BatchResult> = pool
+        .install(|| decompile_all_parallel(&image, &functions, config, dwarf.as_ref(), rtti_opt));
 
     if let Some(dir) = output_dir {
         write_per_file(dir, &results)?;

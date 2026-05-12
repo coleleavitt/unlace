@@ -61,7 +61,8 @@ impl Pass for DeadStoreElimGlobalPass {
                 if new_idx != old_idx {
                     let in_count = block.insns.last().map_or(0, |i| i.inputs.len());
                     if let Some(sv) = func.var_map.remove(&(*bid, old_idx, VarnodeSlot::Output)) {
-                        func.var_map.insert((*bid, new_idx, VarnodeSlot::Output), sv);
+                        func.var_map
+                            .insert((*bid, new_idx, VarnodeSlot::Output), sv);
                     }
                     for i in 0..in_count {
                         if let Some(sv) =

@@ -89,13 +89,8 @@ impl LibcKind {
 /// reject without false positives.
 pub fn recognize_libc(callee_name: &str) -> Option<LibcKind> {
     match callee_name {
-        "memcpy"
-        | "memmove"
-        | "__aeabi_memcpy"
-        | "__aeabi_memcpy4"
-        | "__memcpy_chk"
-        | "___memcpy_chk"
-        | "__builtin_memcpy" => Some(LibcKind::Memcpy),
+        "memcpy" | "memmove" | "__aeabi_memcpy" | "__aeabi_memcpy4" | "__memcpy_chk"
+        | "___memcpy_chk" | "__builtin_memcpy" => Some(LibcKind::Memcpy),
 
         "memset" | "bzero" | "__memset_chk" | "__builtin_memset" => Some(LibcKind::Memset),
 
@@ -200,7 +195,9 @@ mod tests {
         let added = annotate_libc_calls(&mut ssa, &|_| Some("__aeabi_memcpy4".to_string()));
         assert_eq!(added, 1);
         assert_eq!(
-            ssa.libc_call_annotations.get(&(BlockId(0), 0)).map(String::as_str),
+            ssa.libc_call_annotations
+                .get(&(BlockId(0), 0))
+                .map(String::as_str),
             Some("memcpy"),
         );
     }
@@ -210,7 +207,9 @@ mod tests {
         let mut ssa = make_func_with_call(0x2000);
         annotate_libc_calls(&mut ssa, &|_| Some("bzero".to_string()));
         assert_eq!(
-            ssa.libc_call_annotations.get(&(BlockId(0), 0)).map(String::as_str),
+            ssa.libc_call_annotations
+                .get(&(BlockId(0), 0))
+                .map(String::as_str),
             Some("memset"),
         );
     }
@@ -220,7 +219,9 @@ mod tests {
         let mut ssa = make_func_with_call(0x2000);
         annotate_libc_calls(&mut ssa, &|_| Some("strlen".to_string()));
         assert_eq!(
-            ssa.libc_call_annotations.get(&(BlockId(0), 0)).map(String::as_str),
+            ssa.libc_call_annotations
+                .get(&(BlockId(0), 0))
+                .map(String::as_str),
             Some("strlen"),
         );
     }
@@ -230,7 +231,9 @@ mod tests {
         let mut ssa = make_func_with_call(0x2000);
         annotate_libc_calls(&mut ssa, &|_| Some("_Znwm".to_string()));
         assert_eq!(
-            ssa.libc_call_annotations.get(&(BlockId(0), 0)).map(String::as_str),
+            ssa.libc_call_annotations
+                .get(&(BlockId(0), 0))
+                .map(String::as_str),
             Some("malloc"),
         );
     }
@@ -240,7 +243,9 @@ mod tests {
         let mut ssa = make_func_with_call(0x2000);
         annotate_libc_calls(&mut ssa, &|_| Some("_ZdlPv".to_string()));
         assert_eq!(
-            ssa.libc_call_annotations.get(&(BlockId(0), 0)).map(String::as_str),
+            ssa.libc_call_annotations
+                .get(&(BlockId(0), 0))
+                .map(String::as_str),
             Some("free"),
         );
     }

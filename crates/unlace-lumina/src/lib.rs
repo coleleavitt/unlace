@@ -282,9 +282,8 @@ mod tests {
             .map(|(a, p)| (a, format!("/{p}")))
             .unwrap_or((rest, "/".into()));
 
-        let mut req = format!(
-            "{method} {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n"
-        );
+        let mut req =
+            format!("{method} {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n");
         if let Some(b) = body {
             req.push_str(&format!(
                 "Content-Type: application/json\r\nContent-Length: {}\r\n",
@@ -320,7 +319,10 @@ mod tests {
 
         // Strip chunked-encoding framing if axum used it. Connection: close
         // means the body up to EOF is the payload, but axum may still chunk it.
-        let body = if header.to_ascii_lowercase().contains("transfer-encoding: chunked") {
+        let body = if header
+            .to_ascii_lowercase()
+            .contains("transfer-encoding: chunked")
+        {
             dechunk(&body)
         } else {
             body

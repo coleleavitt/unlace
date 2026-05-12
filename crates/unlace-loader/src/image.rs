@@ -403,8 +403,7 @@ pub struct BinaryImage {
     /// function body (`interface { Method() }`, `[]T`, `map[K]V`,
     /// `[T any]`). Empty for non-Go binaries or when no Go metadata is
     /// reachable.
-    pub go_types:
-        std::collections::BTreeMap<u64, unlace_ir::types::Type>,
+    pub go_types: std::collections::BTreeMap<u64, unlace_ir::types::Type>,
     /// Swift 5+ runtime metadata recovered from Mach-O `__swift5_*`
     /// sections (t193). `None` for non-Swift binaries (the common
     /// case) or any image where none of the three sections is

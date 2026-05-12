@@ -88,7 +88,7 @@ fn find_max_unique_offset(func: &SsaFunction) -> u64 {
 /// A boolean expression tree suitable for truth-table evaluation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum BoolExpr {
-    Var(usize),        // index into the variable list
+    Var(usize), // index into the variable list
     Not(Box<BoolExpr>),
     And(Box<BoolExpr>, Box<BoolExpr>),
     Or(Box<BoolExpr>, Box<BoolExpr>),
@@ -564,14 +564,16 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let changed = BoolSimplifyPass
-            .run(&mut ssa)
-            .expect("pass should succeed");
+        let changed = BoolSimplifyPass.run(&mut ssa).expect("pass should succeed");
         assert!(changed);
 
         // The result should be simplified to just `a` (via Copy)
         let block = ssa.function.blocks.values().next().expect("has block");
-        let result_insn = block.insns.iter().find(|i| i.output == Some(result)).unwrap();
+        let result_insn = block
+            .insns
+            .iter()
+            .find(|i| i.output == Some(result))
+            .unwrap();
         assert_eq!(result_insn.op, IrOp::Copy);
         assert_eq!(result_insn.inputs[0], a);
     }
@@ -596,14 +598,16 @@ mod tests {
         ];
 
         let mut ssa = make_single_block_ssa(insns);
-        let changed = BoolSimplifyPass
-            .run(&mut ssa)
-            .expect("pass should succeed");
+        let changed = BoolSimplifyPass.run(&mut ssa).expect("pass should succeed");
         assert!(changed);
 
         // The result should be simplified to just `a` (via Copy)
         let block = ssa.function.blocks.values().next().expect("has block");
-        let result_insn = block.insns.iter().find(|i| i.output == Some(result)).unwrap();
+        let result_insn = block
+            .insns
+            .iter()
+            .find(|i| i.output == Some(result))
+            .unwrap();
         assert_eq!(result_insn.op, IrOp::Copy);
         assert_eq!(result_insn.inputs[0], a);
     }

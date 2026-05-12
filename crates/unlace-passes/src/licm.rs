@@ -355,24 +355,13 @@ pub(crate) fn ensure_preheader(
         let only = outside_preds[0];
         let block = &func.function.blocks[&only];
         let single_succ = block.successors.len() == 1 && block.successors[0] == header;
-        let term_is_branch = matches!(
-            block.insns.last().map(|i| i.op),
-            Some(IrOp::Branch) | None
-        );
+        let term_is_branch = matches!(block.insns.last().map(|i| i.op), Some(IrOp::Branch) | None);
         if single_succ && term_is_branch {
             return only;
         }
     }
 
-    let new_id = BlockId(
-        func.function
-            .blocks
-            .keys()
-            .map(|b| b.0)
-            .max()
-            .unwrap_or(0)
-            + 1,
-    );
+    let new_id = BlockId(func.function.blocks.keys().map(|b| b.0).max().unwrap_or(0) + 1);
 
     let mut pre = BasicBlock::new(new_id);
     pre.successors = SmallVec::new();
@@ -437,8 +426,7 @@ fn move_insn(func: &mut SsaFunction, src: BlockId, src_idx: usize, dest: BlockId
             Some(ins) => ins.inputs.len(),
             None => 0,
         };
-        for slot in std::iter::once(VarnodeSlot::Output)
-            .chain((0..max_in).map(VarnodeSlot::Input))
+        for slot in std::iter::once(VarnodeSlot::Output).chain((0..max_in).map(VarnodeSlot::Input))
         {
             if let Some(sv) = func.var_map.remove(&(src, j, slot.clone())) {
                 func.var_map.insert((src, j - 1, slot), sv);
@@ -451,8 +439,7 @@ fn move_insn(func: &mut SsaFunction, src: BlockId, src_idx: usize, dest: BlockId
 
     for j in (insert_at..dest_block.insns.len()).rev() {
         let max_in = dest_block.insns[j].inputs.len();
-        for slot in std::iter::once(VarnodeSlot::Output)
-            .chain((0..max_in).map(VarnodeSlot::Input))
+        for slot in std::iter::once(VarnodeSlot::Output).chain((0..max_in).map(VarnodeSlot::Input))
         {
             if let Some(sv) = func.var_map.remove(&(dest, j, slot.clone())) {
                 func.var_map.insert((dest, j + 1, slot), sv);
@@ -594,7 +581,9 @@ mod tests {
                 b.id != BlockId(1)
                     && b.successors.len() == 1
                     && b.successors[0] == BlockId(1)
-                    && b.insns.iter().any(|i| i.op == IrOp::IntAdd && i.output == Some(c))
+                    && b.insns
+                        .iter()
+                        .any(|i| i.op == IrOp::IntAdd && i.output == Some(c))
             })
             .expect("preheader with hoisted ADD");
         assert!(

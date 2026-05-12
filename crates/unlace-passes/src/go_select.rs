@@ -110,9 +110,7 @@ pub fn detect_go_channel_ops(
             // synthetic zero varnode to keep the annotation shape
             // uniform.
             let channel = match kind {
-                GoChannelOpKind::Send
-                | GoChannelOpKind::Recv
-                | GoChannelOpKind::RecvOk => {
+                GoChannelOpKind::Send | GoChannelOpKind::Recv | GoChannelOpKind::RecvOk => {
                     if insn.inputs.len() < 2 {
                         // Malformed runtime call — skip rather than
                         // mis-annotate.

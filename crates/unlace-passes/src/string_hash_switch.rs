@@ -375,7 +375,10 @@ pub fn is_djb2_pattern(loop_body: &[IrInsn]) -> bool {
     // Option A: direct multiply by 33.
     let has_mult_33 = loop_body.iter().any(|insn| {
         insn.op == IrOp::IntMult
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 33)
+            && insn
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 33)
     });
     if has_mult_33 {
         let has_mix = loop_body
@@ -387,7 +390,10 @@ pub fn is_djb2_pattern(loop_body: &[IrInsn]) -> bool {
     // Option B: shift-left by 5 + add (equivalent to *33 via `(h << 5) + h`).
     let has_shl5 = loop_body.iter().any(|insn| {
         insn.op == IrOp::IntLeft
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 5)
+            && insn
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 5)
     });
     if has_shl5 {
         let add_or_sub_count = loop_body
@@ -408,11 +414,17 @@ pub fn is_crc32_pattern(loop_body: &[IrInsn]) -> bool {
     let has_xor = loop_body.iter().any(|insn| insn.op == IrOp::IntXor);
     let has_shr8 = loop_body.iter().any(|insn| {
         insn.op == IrOp::IntRight
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 8)
+            && insn
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 8)
     });
     let has_and_ff = loop_body.iter().any(|insn| {
         insn.op == IrOp::IntAnd
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 0xFF)
+            && insn
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 0xFF)
     });
     let has_load = loop_body.iter().any(|insn| insn.op == IrOp::Load);
 
@@ -464,11 +476,17 @@ pub fn is_murmur3_pattern(loop_body: &[IrInsn]) -> bool {
 pub fn is_sdbm_pattern(loop_body: &[IrInsn]) -> bool {
     let has_shl6 = loop_body.iter().any(|insn| {
         insn.op == IrOp::IntLeft
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 6)
+            && insn
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 6)
     });
     let has_shl16 = loop_body.iter().any(|insn| {
         insn.op == IrOp::IntLeft
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 16)
+            && insn
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 16)
     });
     let has_sub = loop_body.iter().any(|insn| insn.op == IrOp::IntSub);
     let has_add = loop_body.iter().any(|insn| insn.op == IrOp::IntAdd);
@@ -480,11 +498,17 @@ pub fn is_sdbm_pattern(loop_body: &[IrInsn]) -> bool {
 pub fn is_jenkins_oaat_pattern(loop_body: &[IrInsn]) -> bool {
     let has_shl10 = loop_body.iter().any(|insn| {
         insn.op == IrOp::IntLeft
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 10)
+            && insn
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 10)
     });
     let has_shr6 = loop_body.iter().any(|insn| {
         insn.op == IrOp::IntRight
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 6)
+            && insn
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 6)
     });
     let has_add = loop_body.iter().any(|insn| insn.op == IrOp::IntAdd);
     let has_xor = loop_body.iter().any(|insn| insn.op == IrOp::IntXor);
@@ -495,7 +519,10 @@ pub fn is_jenkins_oaat_pattern(loop_body: &[IrInsn]) -> bool {
 pub fn is_java_string_pattern(loop_body: &[IrInsn]) -> bool {
     let has_mult_31 = loop_body.iter().any(|insn| {
         insn.op == IrOp::IntMult
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 31)
+            && insn
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 31)
     });
     if has_mult_31 && loop_body.iter().any(|insn| insn.op == IrOp::IntAdd) {
         return true;
@@ -503,7 +530,10 @@ pub fn is_java_string_pattern(loop_body: &[IrInsn]) -> bool {
 
     let has_shl5 = loop_body.iter().any(|insn| {
         insn.op == IrOp::IntLeft
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 5)
+            && insn
+                .inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Const && v.offset == 5)
     });
     let has_sub = loop_body.iter().any(|insn| insn.op == IrOp::IntSub);
     let has_add = loop_body.iter().any(|insn| insn.op == IrOp::IntAdd);
@@ -655,10 +685,7 @@ mod tests {
     /// djb2 pattern: IntMult by 33 + IntAdd recognised.
     #[test]
     fn test_djb2_pattern_recognised() {
-        let loop_body = vec![
-            make_insn(IrOp::IntMult, 33),
-            make_insn(IrOp::IntAdd, 0),
-        ];
+        let loop_body = vec![make_insn(IrOp::IntMult, 33), make_insn(IrOp::IntAdd, 0)];
         assert!(is_djb2_pattern(&loop_body));
         assert_eq!(identify_hash_pattern(&loop_body), Some(HashFamily::Djb2));
     }
@@ -692,7 +719,10 @@ mod tests {
             make_insn_no_const(IrOp::IntXor),
         ];
         assert!(is_jenkins_oaat_pattern(&loop_body));
-        assert_eq!(identify_hash_pattern(&loop_body), Some(HashFamily::JenkinsOaat));
+        assert_eq!(
+            identify_hash_pattern(&loop_body),
+            Some(HashFamily::JenkinsOaat)
+        );
     }
 
     #[test]
@@ -702,7 +732,10 @@ mod tests {
             make_insn_no_const(IrOp::IntAdd),
         ];
         assert!(is_java_string_pattern(&loop_body));
-        assert_eq!(identify_hash_pattern(&loop_body), Some(HashFamily::JavaString));
+        assert_eq!(
+            identify_hash_pattern(&loop_body),
+            Some(HashFamily::JavaString)
+        );
     }
 
     /// sdbm pattern: IntLeft by 6, IntLeft by 16, IntSub, IntAdd recognised.

@@ -86,13 +86,7 @@ fn try_coalesce_briggs(
     let merged_neighbours: BTreeSet<&SsaVarnode> = neigh_a.iter().chain(neigh_b.iter()).collect();
     let high_degree = merged_neighbours
         .iter()
-        .filter(|n| {
-            interference
-                .get(n)
-                .map(|s| s.len())
-                .unwrap_or(0)
-                >= NUM_COLOURS
-        })
+        .filter(|n| interference.get(n).map(|s| s.len()).unwrap_or(0) >= NUM_COLOURS)
         .count();
     if high_degree >= NUM_COLOURS {
         return false;
@@ -226,10 +220,7 @@ fn emit_merged_names(
         let r = uf.find(v);
         groups.entry(r).or_default().push(v);
     }
-    let multi_groups: Vec<&Vec<SsaVarnode>> = groups
-        .values()
-        .filter(|g| g.len() > 1)
-        .collect();
+    let multi_groups: Vec<&Vec<SsaVarnode>> = groups.values().filter(|g| g.len() > 1).collect();
     if multi_groups.is_empty() {
         return Ok(false);
     }
@@ -378,20 +369,31 @@ mod tests {
         let c2 = Varnode::constant(2, 8);
 
         let mut b0 = BasicBlock::new(BlockId(0));
-        b0.insns
-            .push(IrInsn::without_output(IrOp::Cbranch, smallvec![c1, c1], 0x1000));
+        b0.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![c1, c1],
+            0x1000,
+        ));
         b0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut b1 = BasicBlock::new(BlockId(1));
-        b1.insns
-            .push(IrInsn::with_output(IrOp::Copy, ua.base, smallvec![c1], 0x1010));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            ua.base,
+            smallvec![c1],
+            0x1010,
+        ));
         b1.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1014));
         b1.successors = smallvec![BlockId(3)];
 
         let mut b2 = BasicBlock::new(BlockId(2));
-        b2.insns
-            .push(IrInsn::with_output(IrOp::Copy, ub.base, smallvec![c2], 0x1020));
+        b2.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            ub.base,
+            smallvec![c2],
+            0x1020,
+        ));
         b2.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1024));
         b2.successors = smallvec![BlockId(3)];
@@ -445,20 +447,31 @@ mod tests {
         let c1 = Varnode::constant(1, 8);
 
         let mut b0 = BasicBlock::new(BlockId(0));
-        b0.insns
-            .push(IrInsn::without_output(IrOp::Cbranch, smallvec![c1, c1], 0x1000));
+        b0.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![c1, c1],
+            0x1000,
+        ));
         b0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut b1 = BasicBlock::new(BlockId(1));
-        b1.insns
-            .push(IrInsn::with_output(IrOp::Copy, rax.base, smallvec![c1], 0x1010));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rax.base,
+            smallvec![c1],
+            0x1010,
+        ));
         b1.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1014));
         b1.successors = smallvec![BlockId(3)];
 
         let mut b2 = BasicBlock::new(BlockId(2));
-        b2.insns
-            .push(IrInsn::with_output(IrOp::Copy, rbx.base, smallvec![c1], 0x1020));
+        b2.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rbx.base,
+            smallvec![c1],
+            0x1020,
+        ));
         b2.insns
             .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1024));
         b2.successors = smallvec![BlockId(3)];

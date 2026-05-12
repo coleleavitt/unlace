@@ -333,16 +333,12 @@ pub fn parse_type_at(
             let mut out_types = Vec::with_capacity(out_count as usize);
             // Bounds-check the trailing array up front. If truncated, fall
             // back to an empty list rather than refusing to decode the kind.
-            if image_data
-                .get(arr_off..arr_off + total * 8)
-                .is_some()
-            {
+            if image_data.get(arr_off..arr_off + total * 8).is_some() {
                 for i in 0..in_count as usize {
                     in_types.push(read_u64(image_data, arr_off + i * 8)?);
                 }
                 for i in 0..out_count as usize {
-                    out_types
-                        .push(read_u64(image_data, arr_off + (in_count as usize + i) * 8)?);
+                    out_types.push(read_u64(image_data, arr_off + (in_count as usize + i) * 8)?);
                 }
             }
             GoKind::Func {
@@ -411,10 +407,7 @@ pub fn parse_type_at(
                 fields_len as usize,
                 &va_to_offset,
             );
-            GoKind::Struct {
-                pkgpath_va,
-                fields,
-            }
+            GoKind::Struct { pkgpath_va, fields }
         }
         other => basic_kind(other).unwrap_or(GoKind::Other(other)),
     };
@@ -529,8 +522,8 @@ pub fn parse_itab_at(image: &crate::image::BinaryImage, va: u64) -> Option<GoIta
     let concrete_type_va = u64::from_le_bytes(head[8..16].try_into().ok()?);
     let hash = u32::from_le_bytes(head[16..20].try_into().ok()?);
 
-    let method_count = resolve_inter_method_count(image, inter_type_va)
-        .unwrap_or(ITAB_MAX_METHODS_FALLBACK);
+    let method_count =
+        resolve_inter_method_count(image, inter_type_va).unwrap_or(ITAB_MAX_METHODS_FALLBACK);
 
     let mut methods = Vec::with_capacity(method_count);
     let fun_off = off + ITAB_HEADER_SIZE;
@@ -630,7 +623,10 @@ pub fn go_map_to_type(
     go_type: &GoType,
     resolve: &mut dyn FnMut(u64) -> Option<unlace_ir::types::Type>,
 ) -> Option<unlace_ir::types::Type> {
-    let GoKind::Map { key_va, elem_va, .. } = &go_type.kind else {
+    let GoKind::Map {
+        key_va, elem_va, ..
+    } = &go_type.kind
+    else {
         return None;
     };
     let key = resolve(*key_va)?;
@@ -712,7 +708,9 @@ fn resolve_go_type_at(
                 elem: Box::new(elem),
             })
         }
-        GoKind::Map { key_va, elem_va, .. } => {
+        GoKind::Map {
+            key_va, elem_va, ..
+        } => {
             let key = resolve_go_type_at(image_data, sec_base, *key_va, seen)
                 .unwrap_or_else(unlace_ir::types::Type::void_ptr);
             let value = resolve_go_type_at(image_data, sec_base, *elem_va, seen)
@@ -723,10 +721,14 @@ fn resolve_go_type_at(
             })
         }
         GoKind::Interface { .. } => go_interface_to_type(&t),
-        GoKind::DictAbi { params } => params.first().map(|param| unlace_ir::types::Type::TypeParam {
-            name: param.name.clone(),
-            constraint: param.constraint.clone(),
-        }),
+        GoKind::DictAbi { params } => {
+            params
+                .first()
+                .map(|param| unlace_ir::types::Type::TypeParam {
+                    name: param.name.clone(),
+                    constraint: param.constraint.clone(),
+                })
+        }
         // Pointer / array / struct / func / chan resolution is out of
         // scope for t191 — surface them as opaque `void *` so a
         // map/slice that references them still registers cleanly.
@@ -780,9 +782,7 @@ pub fn populate_go_types_from_module(image: &mut crate::image::BinaryImage) {
             GoKind::Slice { .. } | GoKind::Map { .. } => {
                 let mut seen = std::collections::BTreeSet::new();
                 seen.insert(va);
-                let mut resolve = |a: u64| {
-                    resolve_go_type_at(&sec_data, sec_base, a, &mut seen)
-                };
+                let mut resolve = |a: u64| resolve_go_type_at(&sec_data, sec_base, a, &mut seen);
                 let recovered = match &t.kind {
                     GoKind::Slice { .. } => go_slice_to_type(&t, &mut resolve),
                     GoKind::Map { .. } => go_map_to_type(&t, &mut resolve),
@@ -811,10 +811,7 @@ pub fn populate_go_types_from_module(image: &mut crate::image::BinaryImage) {
 /// Look up the method count of a Go interface `_type` at `va`. Returns
 /// `None` if the type isn't reachable, isn't kind=Interface, or its tail
 /// can't be decoded.
-fn resolve_inter_method_count(
-    image: &crate::image::BinaryImage,
-    va: u64,
-) -> Option<usize> {
+fn resolve_inter_method_count(image: &crate::image::BinaryImage, va: u64) -> Option<usize> {
     if va == 0 {
         return None;
     }
@@ -1161,8 +1158,20 @@ mod tests {
                 assert_eq!(pkgpath_va, 0x77AA);
                 assert_eq!(method_count, 2);
                 assert_eq!(methods.len(), 2);
-                assert_eq!(methods[0], GoIMethod { name_off: 0x11, typ_off: 0x22 });
-                assert_eq!(methods[1], GoIMethod { name_off: 0x33, typ_off: 0x44 });
+                assert_eq!(
+                    methods[0],
+                    GoIMethod {
+                        name_off: 0x11,
+                        typ_off: 0x22
+                    }
+                );
+                assert_eq!(
+                    methods[1],
+                    GoIMethod {
+                        name_off: 0x33,
+                        typ_off: 0x44
+                    }
+                );
             }
             other => panic!("expected Interface, got {other:?}"),
         }
@@ -1217,8 +1226,14 @@ mod tests {
                 pkgpath_va: 0,
                 method_count: 2,
                 methods: vec![
-                    GoIMethod { name_off: 0x10, typ_off: 0x20 },
-                    GoIMethod { name_off: 0x30, typ_off: 0x40 },
+                    GoIMethod {
+                        name_off: 0x10,
+                        typ_off: 0x20,
+                    },
+                    GoIMethod {
+                        name_off: 0x30,
+                        typ_off: 0x40,
+                    },
                 ],
             },
             name: Some("io.ReadWriter".into()),
@@ -1257,9 +1272,15 @@ mod tests {
                 methods: vec![
                     // Slot 0: embedded `Reader` — typ_off points at
                     // another interfacetype.
-                    GoIMethod { name_off: 0x50, typ_off: 0x80 },
+                    GoIMethod {
+                        name_off: 0x50,
+                        typ_off: 0x80,
+                    },
                     // Slot 1: directly-declared `Close()`.
-                    GoIMethod { name_off: 0x60, typ_off: 0x00 },
+                    GoIMethod {
+                        name_off: 0x60,
+                        typ_off: 0x00,
+                    },
                 ],
             },
             name: Some("io.ReadCloser".into()),
@@ -1382,10 +1403,7 @@ mod tests {
 
         let t = parse_type_at(&buf, 0, ident).expect("decode");
         match t.kind {
-            GoKind::Struct {
-                pkgpath_va,
-                fields,
-            } => {
+            GoKind::Struct { pkgpath_va, fields } => {
                 assert_eq!(pkgpath_va, 0x9000);
                 assert_eq!(fields.len(), 1);
                 assert_eq!(fields[0].name, "z");
@@ -1423,8 +1441,7 @@ mod tests {
         buf[0..8].copy_from_slice(&0x1u64.to_le_bytes());
         buf[8..16].copy_from_slice(&0x2u64.to_le_bytes());
         buf[16..20].copy_from_slice(&0x1234u32.to_le_bytes());
-        buf[ITAB_HEADER_SIZE..ITAB_HEADER_SIZE + 8]
-            .copy_from_slice(&0x4010_0000u64.to_le_bytes());
+        buf[ITAB_HEADER_SIZE..ITAB_HEADER_SIZE + 8].copy_from_slice(&0x4010_0000u64.to_le_bytes());
         buf[ITAB_HEADER_SIZE + 8..ITAB_HEADER_SIZE + 16]
             .copy_from_slice(&0x4010_1000u64.to_le_bytes());
 
@@ -1436,9 +1453,7 @@ mod tests {
 
     #[test]
     fn parse_itab_at_resolves_va_to_section() {
-        use crate::image::{
-            ArchId, BinaryImage, Endian, Section, SectionFlags,
-        };
+        use crate::image::{ArchId, BinaryImage, Endian, Section, SectionFlags};
         use std::collections::BTreeMap;
 
         const RODATA_BASE: u64 = 0x4010_0000;
@@ -1640,16 +1655,36 @@ mod tests {
         buf[24..32].copy_from_slice(&0x60u64.to_le_bytes());
         buf[32..40].copy_from_slice(&0u64.to_le_bytes());
         // name blobs: flag=0, len, bytes
-        buf[0x40] = 0; buf[0x41] = 1; buf[0x42] = b'T';
-        buf[0x50] = 0; buf[0x51] = 3; buf[0x52] = b'a'; buf[0x53] = b'n'; buf[0x54] = b'y';
-        buf[0x60] = 0; buf[0x61] = 1; buf[0x62] = b'U';
+        buf[0x40] = 0;
+        buf[0x41] = 1;
+        buf[0x42] = b'T';
+        buf[0x50] = 0;
+        buf[0x51] = 3;
+        buf[0x52] = b'a';
+        buf[0x53] = b'n';
+        buf[0x54] = b'y';
+        buf[0x60] = 0;
+        buf[0x61] = 1;
+        buf[0x62] = b'U';
 
         let t = parse_type_at(&buf, 0, ident).expect("decode dictabi");
         match t.kind {
             GoKind::DictAbi { params } => {
                 assert_eq!(params.len(), 2);
-                assert_eq!(params[0], GoTypeParam { name: "T".into(), constraint: "any".into() });
-                assert_eq!(params[1], GoTypeParam { name: "U".into(), constraint: "any".into() });
+                assert_eq!(
+                    params[0],
+                    GoTypeParam {
+                        name: "T".into(),
+                        constraint: "any".into()
+                    }
+                );
+                assert_eq!(
+                    params[1],
+                    GoTypeParam {
+                        name: "U".into(),
+                        constraint: "any".into()
+                    }
+                );
             }
             other => panic!("expected DictAbi, got {other:?}"),
         }
@@ -1657,12 +1692,12 @@ mod tests {
 
     #[test]
     fn t297_populate_dictabi_registers_type_params() {
-        use std::collections::BTreeMap;
-        use unlace_ir::types::Type;
-        use unlace_ir::ArchId;
         use crate::Endian;
         use crate::go_moduledata::GoModuleInfo;
         use crate::image::{BinaryImage, Section, SectionFlags};
+        use std::collections::BTreeMap;
+        use unlace_ir::ArchId;
+        use unlace_ir::types::Type;
 
         const RODATA_BASE: u64 = 0x20000;
         let dict_off = 0x80usize;
@@ -1671,8 +1706,14 @@ mod tests {
         rodata[dict_off..dict_off + 4].copy_from_slice(&1u32.to_le_bytes());
         rodata[dict_off + 8..dict_off + 16].copy_from_slice(&(RODATA_BASE + 0x140).to_le_bytes());
         rodata[dict_off + 16..dict_off + 24].copy_from_slice(&(RODATA_BASE + 0x150).to_le_bytes());
-        rodata[0x140] = 0; rodata[0x141] = 1; rodata[0x142] = b'T';
-        rodata[0x150] = 0; rodata[0x151] = 3; rodata[0x152] = b'a'; rodata[0x153] = b'n'; rodata[0x154] = b'y';
+        rodata[0x140] = 0;
+        rodata[0x141] = 1;
+        rodata[0x142] = b'T';
+        rodata[0x150] = 0;
+        rodata[0x151] = 3;
+        rodata[0x152] = b'a';
+        rodata[0x153] = b'n';
+        rodata[0x154] = b'y';
 
         let mut img = BinaryImage {
             arch: ArchId::X86_64,
@@ -1721,7 +1762,10 @@ mod tests {
         populate_go_types_from_module(&mut img);
         assert_eq!(
             img.go_types.get(&dict_va),
-            Some(&Type::TypeParam { name: "T".into(), constraint: "any".into() })
+            Some(&Type::TypeParam {
+                name: "T".into(),
+                constraint: "any".into()
+            })
         );
     }
 
@@ -1733,13 +1777,13 @@ mod tests {
     /// `Type::Map`'s nested rendering.
     #[test]
     fn t191_populate_nested_map_via_typelinks() {
-        use std::collections::BTreeMap;
-        use unlace_ir::ssa::PrimitiveType;
-        use unlace_ir::types::Type;
-        use unlace_ir::ArchId;
         use crate::Endian;
         use crate::go_moduledata::GoModuleInfo;
         use crate::image::{BinaryImage, Section, SectionFlags};
+        use std::collections::BTreeMap;
+        use unlace_ir::ArchId;
+        use unlace_ir::ssa::PrimitiveType;
+        use unlace_ir::types::Type;
 
         // Layout inside a single .rodata section based at RODATA_BASE.
         // The offsets are chosen so each `_type` header (48 bytes) plus
@@ -1816,10 +1860,7 @@ mod tests {
             go_module: Some(GoModuleInfo {
                 types_va: RODATA_BASE,
                 etypes_va: RODATA_BASE + 0x400,
-                typelinks: vec![
-                    OUTER_MAP_OFF as i32,
-                    INNER_MAP_OFF as i32,
-                ],
+                typelinks: vec![OUTER_MAP_OFF as i32, INNER_MAP_OFF as i32],
                 ..GoModuleInfo::default()
             }),
             go_itabs: BTreeMap::new(),
@@ -1840,10 +1881,7 @@ mod tests {
             Type::Map { key, value } => {
                 assert_eq!(**key, Type::Primitive(PrimitiveType::Int(4)));
                 match &**value {
-                    Type::Map {
-                        key: ik,
-                        value: iv,
-                    } => {
+                    Type::Map { key: ik, value: iv } => {
                         assert_eq!(**ik, Type::Primitive(PrimitiveType::Int(1)));
                         assert_eq!(**iv, Type::Primitive(PrimitiveType::Int(4)));
                     }

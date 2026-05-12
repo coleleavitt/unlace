@@ -105,10 +105,7 @@ pub fn recognize_gui_lib(symbol: &str) -> Option<GuiLibKind> {
     }
 
     // GTK / GDK / GObject — three sibling C-API prefixes.
-    if symbol.starts_with("gtk_")
-        || symbol.starts_with("gdk_")
-        || symbol.starts_with("g_object_")
-    {
+    if symbol.starts_with("gtk_") || symbol.starts_with("gdk_") || symbol.starts_with("g_object_") {
         return Some(GuiLibKind::Gtk);
     }
 
@@ -164,38 +161,17 @@ mod tests {
 
     #[test]
     fn recognises_gtk_family_prefixes() {
-        assert_eq!(
-            recognize_gui_lib("gtk_window_new"),
-            Some(GuiLibKind::Gtk),
-        );
-        assert_eq!(
-            recognize_gui_lib("gdk_display_open"),
-            Some(GuiLibKind::Gtk),
-        );
-        assert_eq!(
-            recognize_gui_lib("g_object_ref"),
-            Some(GuiLibKind::Gtk),
-        );
-        assert_eq!(
-            recognize_gui_lib("g_object_unref"),
-            Some(GuiLibKind::Gtk),
-        );
+        assert_eq!(recognize_gui_lib("gtk_window_new"), Some(GuiLibKind::Gtk),);
+        assert_eq!(recognize_gui_lib("gdk_display_open"), Some(GuiLibKind::Gtk),);
+        assert_eq!(recognize_gui_lib("g_object_ref"), Some(GuiLibKind::Gtk),);
+        assert_eq!(recognize_gui_lib("g_object_unref"), Some(GuiLibKind::Gtk),);
     }
 
     #[test]
     fn recognises_mfc_demangled_and_afx() {
-        assert_eq!(
-            recognize_gui_lib("CWnd::Create"),
-            Some(GuiLibKind::Mfc),
-        );
-        assert_eq!(
-            recognize_gui_lib("CDialog::DoModal"),
-            Some(GuiLibKind::Mfc),
-        );
-        assert_eq!(
-            recognize_gui_lib("AfxBeginThread"),
-            Some(GuiLibKind::Mfc),
-        );
+        assert_eq!(recognize_gui_lib("CWnd::Create"), Some(GuiLibKind::Mfc),);
+        assert_eq!(recognize_gui_lib("CDialog::DoModal"), Some(GuiLibKind::Mfc),);
+        assert_eq!(recognize_gui_lib("AfxBeginThread"), Some(GuiLibKind::Mfc),);
         // Itanium-mangled CWnd member (clang-on-Windows shape).
         assert_eq!(
             recognize_gui_lib("_ZN4CWnd11ShowWindowEi"),
@@ -206,10 +182,7 @@ mod tests {
     #[test]
     fn recognises_cocoa_classes_methods_and_metadata() {
         // Bare class reference.
-        assert_eq!(
-            recognize_gui_lib("NSWindow"),
-            Some(GuiLibKind::Cocoa),
-        );
+        assert_eq!(recognize_gui_lib("NSWindow"), Some(GuiLibKind::Cocoa),);
         // Demangled Obj-C instance method.
         assert_eq!(
             recognize_gui_lib("-[NSWindow init]"),
@@ -233,18 +206,12 @@ mod tests {
             recognize_gui_lib("CreateWindowExA"),
             Some(GuiLibKind::Win32),
         );
-        assert_eq!(
-            recognize_gui_lib("CreateWindowW"),
-            Some(GuiLibKind::Win32),
-        );
+        assert_eq!(recognize_gui_lib("CreateWindowW"), Some(GuiLibKind::Win32),);
         assert_eq!(
             recognize_gui_lib("DispatchMessageW"),
             Some(GuiLibKind::Win32),
         );
-        assert_eq!(
-            recognize_gui_lib("GetMessageA"),
-            Some(GuiLibKind::Win32),
-        );
+        assert_eq!(recognize_gui_lib("GetMessageA"), Some(GuiLibKind::Win32),);
         assert_eq!(
             recognize_gui_lib("RegisterClassExW"),
             Some(GuiLibKind::Win32),

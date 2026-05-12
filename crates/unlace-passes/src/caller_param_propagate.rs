@@ -38,9 +38,7 @@ fn arg_regs(cc: CallingConvention) -> &'static [u64] {
         CallingConvention::MicrosoftX64 => MSX64_INT_REGS,
         CallingConvention::AArch64 => AARCH64_INT_REGS,
         CallingConvention::Thiscall => &[RCX],
-        CallingConvention::Cdecl
-        | CallingConvention::Stdcall
-        | CallingConvention::Unknown => &[],
+        CallingConvention::Cdecl | CallingConvention::Stdcall | CallingConvention::Unknown => &[],
     }
 }
 
@@ -122,10 +120,7 @@ fn collect_arg_types_at_call(
         }
         let Some(out) = insn.output else { continue };
         if out.space == SpaceId::Register {
-            if let Some(&sv) = ssa
-                .var_map
-                .get(&(bid, idx, VarnodeSlot::Output))
-            {
+            if let Some(&sv) = ssa.var_map.get(&(bid, idx, VarnodeSlot::Output)) {
                 last_def.insert(out.offset, sv);
             }
         }
@@ -161,9 +156,7 @@ fn merge_into_registry(
         .or_insert_with(FunctionSignature::default);
 
     let mut changed = false;
-    if entry.calling_convention == CallingConvention::Unknown
-        && cc != CallingConvention::Unknown
-    {
+    if entry.calling_convention == CallingConvention::Unknown && cc != CallingConvention::Unknown {
         entry.calling_convention = cc;
         changed = true;
     }
@@ -358,7 +351,10 @@ mod tests {
         let sig = registry
             .get(&callee_addr)
             .expect("callee must have a signature");
-        assert!(!sig.param_types.is_empty(), "callee should have at least 1 param");
+        assert!(
+            !sig.param_types.is_empty(),
+            "callee should have at least 1 param"
+        );
         assert_eq!(sig.param_types[0], PrimitiveType::Int(4));
     }
 

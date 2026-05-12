@@ -175,8 +175,8 @@ fn mangled_has_itanium_lambda(s: &str) -> bool {
     while i + 1 < bytes.len() {
         if bytes[i] == b'U' && bytes[i + 1] == b'l' {
             let prev = if i == 0 { b'\0' } else { bytes[i - 1] };
-            let boundary = matches!(prev, b'\0' | b'N' | b'E' | b'K' | b'V' | b'r')
-                || prev.is_ascii_digit();
+            let boundary =
+                matches!(prev, b'\0' | b'N' | b'E' | b'K' | b'V' | b'r') || prev.is_ascii_digit();
             if boundary && itanium_lambda_terminator_after(&bytes[i + 2..]) {
                 return true;
             }
@@ -224,10 +224,7 @@ fn mangled_has_clang_dollar_name(s: &str) -> bool {
     let bytes = s.as_bytes();
     let mut i = 0usize;
     while i + 2 < bytes.len() {
-        if bytes[i] == b'$'
-            && bytes[i + 1] == b'_'
-            && bytes[i + 2].is_ascii_digit()
-        {
+        if bytes[i] == b'$' && bytes[i + 1] == b'_' && bytes[i + 2].is_ascii_digit() {
             return true;
         }
         i += 1;
@@ -245,10 +242,7 @@ fn demangled_has_clang_dollar_name(s: &str) -> bool {
     let bytes = s.as_bytes();
     let mut i = 0usize;
     while i + 2 < bytes.len() {
-        if bytes[i] == b'$'
-            && bytes[i + 1] == b'_'
-            && bytes[i + 2].is_ascii_digit()
-        {
+        if bytes[i] == b'$' && bytes[i + 1] == b'_' && bytes[i + 2].is_ascii_digit() {
             let prev = if i == 0 { b'\0' } else { bytes[i - 1] };
             if matches!(prev, b'\0' | b':' | b' ' | b'(') {
                 return true;
@@ -819,8 +813,6 @@ mod tests {
         assert_eq!(t.symbol_kind, SymbolKind::VirtualThunk);
     }
 
-
-
     #[test]
     fn detect_normal_function() {
         let r = demangle("_ZN3foo3barEv").expect("normal func demangles");
@@ -917,7 +909,11 @@ mod tests {
         // (`std::__1::map`, `std::map`, with/without spaces around `>>`),
         // but the trailing `::find` must always survive.
         let final_component = r.short_name.rsplit("::").next().expect("non-empty");
-        assert_eq!(final_component, "find", "got short_name: {:?}", r.short_name);
+        assert_eq!(
+            final_component, "find",
+            "got short_name: {:?}",
+            r.short_name
+        );
         assert!(
             r.short_name.contains("map<"),
             "short_name should retain template args, got: {:?}",
@@ -1091,11 +1087,7 @@ mod tests {
     #[test]
     fn detect_lambda_clang_dollar_name() {
         let r = demangle("_ZZ11call_lambdaiENK3$_0clEi").expect("demangles");
-        assert!(
-            r.is_lambda,
-            "clang $_0 closure not detected; got: {:?}",
-            r
-        );
+        assert!(r.is_lambda, "clang $_0 closure not detected; got: {:?}", r);
     }
 
     #[test]
@@ -1150,7 +1142,9 @@ mod tests {
     /// Direct unit test of the clang `$_<n>` scanner — both code paths.
     #[test]
     fn clang_dollar_scanner_units() {
-        assert!(mangled_has_clang_dollar_name("_ZZ11call_lambdaiENK3$_0clEi"));
+        assert!(mangled_has_clang_dollar_name(
+            "_ZZ11call_lambdaiENK3$_0clEi"
+        ));
         assert!(demangled_has_clang_dollar_name(
             "call_lambda(int)::$_0::operator()(int) const"
         ));

@@ -885,10 +885,16 @@ struct Arm32NeonOpInfo {
 fn arm32_neon_op_info(ctx: &mut LiftCtx, detail: &InsnDetail) -> Arm32NeonOpInfo {
     let mut info = Arm32NeonOpInfo::default();
     let arch = detail.arch_detail();
-    let Some(arm) = arch.arm() else { return info; };
+    let Some(arm) = arch.arm() else {
+        return info;
+    };
     info.lane_size = arm32_neon_lane_size(detail).or_else(|| {
         let bits = arm.vector_size();
-        if bits > 0 { Some((bits / 8) as u8) } else { None }
+        if bits > 0 {
+            Some((bits / 8) as u8)
+        } else {
+            None
+        }
     });
     for op in arm.operands() {
         match op.op_type {
@@ -919,8 +925,18 @@ fn emit_arm32_neon_arith(ctx: &mut LiftCtx, detail: &InsnDetail, sub: bool) {
     let arch = detail.arch_detail();
     let arm = arch.arm().expect("arm detail");
     let tag = match (sub, arm.vector_data()) {
-        (false, ArmVectorData::ARM_VECTORDATA_F16 | ArmVectorData::ARM_VECTORDATA_F32 | ArmVectorData::ARM_VECTORDATA_F64) => CALLOTHER_ARM_NEON_VADD_F,
-        (true, ArmVectorData::ARM_VECTORDATA_F16 | ArmVectorData::ARM_VECTORDATA_F32 | ArmVectorData::ARM_VECTORDATA_F64) => CALLOTHER_ARM_NEON_VSUB_F,
+        (
+            false,
+            ArmVectorData::ARM_VECTORDATA_F16
+            | ArmVectorData::ARM_VECTORDATA_F32
+            | ArmVectorData::ARM_VECTORDATA_F64,
+        ) => CALLOTHER_ARM_NEON_VADD_F,
+        (
+            true,
+            ArmVectorData::ARM_VECTORDATA_F16
+            | ArmVectorData::ARM_VECTORDATA_F32
+            | ArmVectorData::ARM_VECTORDATA_F64,
+        ) => CALLOTHER_ARM_NEON_VSUB_F,
         (false, _) => CALLOTHER_ARM_NEON_VADD_I,
         (true, _) => CALLOTHER_ARM_NEON_VSUB_I,
     };
@@ -948,7 +964,9 @@ fn emit_arm32_neon_mul(ctx: &mut LiftCtx, detail: &InsnDetail) {
     let arch = detail.arch_detail();
     let arm = arch.arm().expect("arm detail");
     let tag = match arm.vector_data() {
-        ArmVectorData::ARM_VECTORDATA_F16 | ArmVectorData::ARM_VECTORDATA_F32 | ArmVectorData::ARM_VECTORDATA_F64 => CALLOTHER_ARM_NEON_VMUL_F,
+        ArmVectorData::ARM_VECTORDATA_F16
+        | ArmVectorData::ARM_VECTORDATA_F32
+        | ArmVectorData::ARM_VECTORDATA_F64 => CALLOTHER_ARM_NEON_VMUL_F,
         _ => CALLOTHER_ARM_NEON_VMUL_I,
     };
     ctx.emit(IrInsn::without_output(

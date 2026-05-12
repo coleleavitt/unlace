@@ -132,13 +132,12 @@ pub fn detect_go_defer(
                     // constant we surface its address; otherwise we
                     // stamp 0 so the site is still visible but flagged
                     // as opaque.
-                    let fn_addr = if insn.inputs.len() >= 3
-                        && insn.inputs[2].space == SpaceId::Const
-                    {
-                        insn.inputs[2].offset
-                    } else {
-                        0
-                    };
+                    let fn_addr =
+                        if insn.inputs.len() >= 3 && insn.inputs[2].space == SpaceId::Const {
+                            insn.inputs[2].offset
+                        } else {
+                            0
+                        };
                     registrations.push((bid, fn_addr));
                 }
                 DeferHelper::GoRecover => {
@@ -219,7 +218,10 @@ mod tests {
         let site = sites[0];
         assert_eq!(site.defer_block, BlockId(0));
         assert_eq!(site.deferred_func, 0xCAFE);
-        assert!(!site.has_recover, "no gorecover in frame → has_recover=false");
+        assert!(
+            !site.has_recover,
+            "no gorecover in frame → has_recover=false"
+        );
     }
 
     // -------------------------------------------------------------------
@@ -284,11 +286,7 @@ mod tests {
             ),
             // deferreturn at function exit — recognised but does not
             // generate a site on its own.
-            IrInsn::without_output(
-                IrOp::Call,
-                smallvec![Varnode::constant(0x2000, 8)],
-                0x118,
-            ),
+            IrInsn::without_output(IrOp::Call, smallvec![Varnode::constant(0x2000, 8)], 0x118),
         ];
 
         let ssa = make_func(insns);

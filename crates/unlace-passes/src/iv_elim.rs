@@ -63,11 +63,7 @@ impl Pass for IvElimPass {
     }
 }
 
-fn find_unique_preheader(
-    func: &SsaFunction,
-    header: BlockId,
-    body: &[BlockId],
-) -> Option<BlockId> {
+fn find_unique_preheader(func: &SsaFunction, header: BlockId, body: &[BlockId]) -> Option<BlockId> {
     let mut outside: Vec<BlockId> = func
         .cfg
         .predecessors(header)
@@ -108,14 +104,13 @@ pub(crate) fn detect_basic_ivs(
         }
         let (a_pred, a_sv) = phi.inputs[0];
         let (b_pred, b_sv) = phi.inputs[1];
-        let (init_sv, latch_pred, back_sv) =
-            if !body.contains(&a_pred) && body.contains(&b_pred) {
-                (a_sv, b_pred, b_sv)
-            } else if !body.contains(&b_pred) && body.contains(&a_pred) {
-                (b_sv, a_pred, a_sv)
-            } else {
-                continue;
-            };
+        let (init_sv, latch_pred, back_sv) = if !body.contains(&a_pred) && body.contains(&b_pred) {
+            (a_sv, b_pred, b_sv)
+        } else if !body.contains(&b_pred) && body.contains(&a_pred) {
+            (b_sv, a_pred, a_sv)
+        } else {
+            continue;
+        };
         let Some((bid, idx, op, inputs_const_step)) = find_def_with_step(func, back_sv, body)
         else {
             continue;
@@ -299,8 +294,10 @@ fn rewrite_derived_iv(
     pre_block.insns.insert(pre_term_idx, pre_insn);
     func.var_map
         .insert((preheader, pre_term_idx, VarnodeSlot::Output), init_sv);
-    func.var_map
-        .insert((preheader, pre_term_idx, VarnodeSlot::Input(0)), d.iv.init_sv);
+    func.var_map.insert(
+        (preheader, pre_term_idx, VarnodeSlot::Input(0)),
+        d.iv.init_sv,
+    );
 
     // Insert latch IntAdd(iv_sv, step_const) -> next_sv before terminator.
     let latch_block = match func.function.blocks.get_mut(&d.iv.latch_block) {
@@ -343,7 +340,8 @@ fn rewrite_derived_iv(
     // var_map: keep Output, replace Input(0), drop Input(1).
     func.var_map
         .insert((d.block, d.idx, VarnodeSlot::Input(0)), iv_sv);
-    func.var_map.remove(&(d.block, d.idx, VarnodeSlot::Input(1)));
+    func.var_map
+        .remove(&(d.block, d.idx, VarnodeSlot::Input(1)));
     true
 }
 
@@ -464,8 +462,7 @@ mod tests {
         let extra_b = Varnode::reg(108, 4);
         let k = Varnode::reg(116, 4);
         // k = extra_a + extra_b — both loop-invariant, but additive (not the IV pattern).
-        let unrelated =
-            IrInsn::with_output(IrOp::IntAdd, k, smallvec![extra_a, extra_b], 0x1104);
+        let unrelated = IrInsn::with_output(IrOp::IntAdd, k, smallvec![extra_a, extra_b], 0x1104);
 
         let mut ssa = build_loop(Some(unrelated));
         let _ = IvElimPass.run(&mut ssa).expect("ok");

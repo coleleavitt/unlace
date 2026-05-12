@@ -111,12 +111,7 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
                     continue;
                 };
 
-                *insn = IrInsn::with_output(
-                    IrOp::Copy,
-                    output,
-                    smallvec::smallvec![input],
-                    addr,
-                );
+                *insn = IrInsn::with_output(IrOp::Copy, output, smallvec::smallvec![input], addr);
 
                 for input_idx in 0..original_input_count {
                     func.var_map.remove(&(
@@ -236,7 +231,11 @@ fn try_simplify(
 }
 
 fn all_inputs_const(insn: &IrInsn) -> bool {
-    !insn.inputs.is_empty() && insn.inputs.iter().all(|input| input.space == SpaceId::Const)
+    !insn.inputs.is_empty()
+        && insn
+            .inputs
+            .iter()
+            .all(|input| input.space == SpaceId::Const)
 }
 
 fn two_inputs(insn: &IrInsn) -> Option<(Varnode, Varnode)> {
@@ -383,7 +382,10 @@ fn simplify_commutative_all_ones_to_all_ones(insn: &IrInsn) -> Option<Replacemen
     let output = insn.output?;
     let (lhs, rhs) = two_inputs(insn)?;
     if is_all_ones(lhs) || is_all_ones(rhs) {
-        Some(replacement_for_const(mask_for_size(output.size), output.size))
+        Some(replacement_for_const(
+            mask_for_size(output.size),
+            output.size,
+        ))
     } else {
         None
     }
@@ -421,12 +423,7 @@ fn simplify_double_negate(
             continue;
         }
 
-        let def_insn = func
-            .function
-            .blocks
-            .get(&def_bid)?
-            .insns
-            .get(def_idx)?;
+        let def_insn = func.function.blocks.get(&def_bid)?.insns.get(def_idx)?;
         if def_insn.op != insn.op {
             return None;
         }
@@ -1689,8 +1686,7 @@ mod tests {
             smallvec![x, Varnode::constant(0, 1)],
             0x1001,
         );
-        let piece_insn =
-            IrInsn::with_output(IrOp::Piece, out, smallvec![hi_part, lo_part], 0x1002);
+        let piece_insn = IrInsn::with_output(IrOp::Piece, out, smallvec![hi_part, lo_part], 0x1002);
 
         let ssa = run_pass(vec![hi_insn, lo_insn, piece_insn]);
         assert_copy_var(rewritten_insn(&ssa, 2), x);
@@ -1746,7 +1742,10 @@ mod tests {
         let changed = AlgebraicSimplifyPass
             .run(&mut ssa)
             .expect("pass should succeed");
-        assert!(!changed, "subpiece should not simplify when mask touches low bytes");
+        assert!(
+            !changed,
+            "subpiece should not simplify when mask touches low bytes"
+        );
         let rewritten = rewritten_insn(&ssa, 1);
         assert_eq!(rewritten.op, IrOp::Subpiece);
         assert_eq!(rewritten.inputs[0], or_out);
@@ -1770,8 +1769,7 @@ mod tests {
             0x1000,
         );
         // val = LOAD ram, addr
-        let load_insn =
-            IrInsn::with_output(IrOp::Load, val, smallvec![space, addr], 0x1004);
+        let load_insn = IrInsn::with_output(IrOp::Load, val, smallvec![space, addr], 0x1004);
 
         let ssa = run_pass(vec![add_insn, load_insn]);
         // The LOAD's address operand should now refer to `p` directly.
@@ -1796,8 +1794,7 @@ mod tests {
             smallvec![Varnode::constant(0, 8), p],
             0x1000,
         );
-        let load_insn =
-            IrInsn::with_output(IrOp::Load, val, smallvec![space, addr], 0x1004);
+        let load_insn = IrInsn::with_output(IrOp::Load, val, smallvec![space, addr], 0x1004);
 
         let ssa = run_pass(vec![add_insn, load_insn]);
         let load = rewritten_insn(&ssa, 1);
@@ -1819,8 +1816,7 @@ mod tests {
             smallvec![p, Varnode::constant(0, 8)],
             0x1000,
         );
-        let store_insn =
-            IrInsn::without_output(IrOp::Store, smallvec![space, addr, v], 0x1004);
+        let store_insn = IrInsn::without_output(IrOp::Store, smallvec![space, addr, v], 0x1004);
 
         let ssa = run_pass(vec![add_insn, store_insn]);
         let store = rewritten_insn(&ssa, 1);
@@ -1864,8 +1860,7 @@ mod tests {
             smallvec![p, Varnode::constant(0, 8)],
             0x1000,
         );
-        let load_insn =
-            IrInsn::with_output(IrOp::Load, val, smallvec![space, addr], 0x1004);
+        let load_insn = IrInsn::with_output(IrOp::Load, val, smallvec![space, addr], 0x1004);
 
         let ssa = run_pass(vec![sub_insn, load_insn]);
         let load = rewritten_insn(&ssa, 1);
@@ -1882,8 +1877,7 @@ mod tests {
         let p = Varnode::reg(0, 8);
         let val = Varnode::unique(0, 4);
         let space = Varnode::constant(SpaceId::Ram as u64, 8);
-        let load_insn =
-            IrInsn::with_output(IrOp::Load, val, smallvec![space, p], 0x1000);
+        let load_insn = IrInsn::with_output(IrOp::Load, val, smallvec![space, p], 0x1000);
 
         // No other instructions; the helper appends a RETURN automatically.
         let mut ssa = make_single_block_ssa(vec![load_insn]);

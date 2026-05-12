@@ -99,18 +99,12 @@ pub enum Type {
     /// level (`*hmap`), but the *type* variant carries both the key and
     /// value shapes so the printer can render Go-style `map[K]V`
     /// comments.
-    Map {
-        key: Box<Type>,
-        value: Box<Type>,
-    },
+    Map { key: Box<Type>, value: Box<Type> },
     /// Go generic type parameter surfaced from post-1.18 metadata
     /// (`runtime.dictabi`, t297). `name` is the source-style identifier
     /// when known (e.g. `T`); `constraint` is the rendered Go syntax for
     /// the bound (usually `any` for dictionary-only recovery).
-    TypeParam {
-        name: String,
-        constraint: String,
-    },
+    TypeParam { name: String, constraint: String },
 }
 
 /// A single field within a [`Type::Struct`].
@@ -141,7 +135,19 @@ pub struct InferredStruct {
 /// `offset` is the byte offset from the per-element base.
 /// `size` is the access width in bytes (1/2/4/8/16) — the dominant
 /// (maximum) width observed at this offset.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct StructField {
     pub offset: u64,
     pub size: u8,
@@ -189,10 +195,7 @@ impl Type {
     pub fn is_composite(&self) -> bool {
         matches!(
             self,
-            Type::Struct { .. }
-                | Type::Array { .. }
-                | Type::Slice { .. }
-                | Type::Map { .. }
+            Type::Struct { .. } | Type::Array { .. } | Type::Slice { .. } | Type::Map { .. }
         )
     }
 
@@ -663,10 +666,7 @@ mod tests {
             key: Box::new(Type::int(4)),
             value: Box::new(inner),
         };
-        assert_eq!(
-            outer.to_string(),
-            "map[__int32]map[__int8][]__int32",
-        );
+        assert_eq!(outer.to_string(), "map[__int32]map[__int8][]__int32",);
     }
 
     #[test]

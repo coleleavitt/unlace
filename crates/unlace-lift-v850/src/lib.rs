@@ -574,7 +574,10 @@ mod tests {
                     v.space == unlace_ir::SpaceId::Const && v.offset == 0x800
                 })
         });
-        assert!(has_satadd_tag, "SATADD should emit Callother(tag=0x800, ...)");
+        assert!(
+            has_satadd_tag,
+            "SATADD should emit Callother(tag=0x800, ...)"
+        );
     }
 
     /// SATSUB reg-reg uses the SATSUB tag (0x801).
@@ -589,7 +592,10 @@ mod tests {
                     v.space == unlace_ir::SpaceId::Const && v.offset == 0x801
                 })
         });
-        assert!(has_satsub_tag, "SATSUB should emit Callother(tag=0x801, ...)");
+        assert!(
+            has_satsub_tag,
+            "SATSUB should emit Callother(tag=0x801, ...)"
+        );
     }
 
     /// MUL Format XI emits a 64-bit IntMult split into low/high subpieces.
@@ -639,9 +645,9 @@ mod tests {
         // Base address calc should reference EP = r30 (offset 30*8 = 240).
         let reads_ep = lifted.ir_ops.iter().any(|i| {
             i.op == IrOp::IntAdd
-                && i.inputs.iter().any(|v| {
-                    v.space == unlace_ir::SpaceId::Register && v.offset == 30 * 8
-                })
+                && i.inputs
+                    .iter()
+                    .any(|v| v.space == unlace_ir::SpaceId::Register && v.offset == 30 * 8)
         });
         assert!(reads_ep, "SLD.W should compute address as EP + disp");
     }

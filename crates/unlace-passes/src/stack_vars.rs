@@ -969,8 +969,7 @@ mod tests {
     fn t70_padding_gap_is_suppressed() {
         use unlace_ir::ssa::StackVar;
 
-        let mut func =
-            unlace_ir::Function::new("padding", BlockId(0), 0x1000);
+        let mut func = unlace_ir::Function::new("padding", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));
         let u0 = Varnode::unique(0, 8);
         let c24 = Varnode::constant(24, 8);
@@ -1078,8 +1077,7 @@ mod tests {
 
     #[test]
     fn t70_no_prologue_no_gaps() {
-        let mut func =
-            unlace_ir::Function::new("noprologue", BlockId(0), 0x1000);
+        let mut func = unlace_ir::Function::new("noprologue", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns.push(IrInsn::without_output(
             IrOp::Return,

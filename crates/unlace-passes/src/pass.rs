@@ -228,7 +228,11 @@ where
 
     // We hit the cap. Run one final cycle to check whether the *next* pass
     // would have changed anything; if it would, mark `hit_cap`.
-    let last_changed = report.changed_per_iteration.last().copied().unwrap_or(false);
+    let last_changed = report
+        .changed_per_iteration
+        .last()
+        .copied()
+        .unwrap_or(false);
     if last_changed {
         report.hit_cap = true;
         tracing::debug!(

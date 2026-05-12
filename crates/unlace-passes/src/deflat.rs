@@ -354,10 +354,7 @@ fn remove_state_assignments(block: &mut BasicBlock, state_var: &Varnode) {
 fn rewrite_terminator_unconditional(block: &mut BasicBlock, target: BlockId) {
     // Remove existing branch/cbranch terminator at the end.
     if let Some(last) = block.insns.last() {
-        if matches!(
-            last.op,
-            IrOp::Branch | IrOp::Cbranch | IrOp::Branchind
-        ) {
+        if matches!(last.op, IrOp::Branch | IrOp::Cbranch | IrOp::Branchind) {
             let addr = last.addr;
             block.insns.pop();
             // Insert an unconditional branch.
@@ -392,10 +389,7 @@ fn rewrite_terminator_conditional(
             if let Some(cond) = condition {
                 block.insns.push(unlace_ir::IrInsn::without_output(
                     IrOp::Cbranch,
-                    smallvec::smallvec![
-                        cond,
-                        Varnode::constant(true_target.0 as u64, 8),
-                    ],
+                    smallvec::smallvec![cond, Varnode::constant(true_target.0 as u64, 8),],
                     addr,
                 ));
             } else {
@@ -585,7 +579,10 @@ mod tests {
 
         let ssa = build_ssa(func);
         let flat = detect_flattened_dispatch(&ssa);
-        assert!(flat.is_none(), "normal CFG should not be detected as flattened");
+        assert!(
+            flat.is_none(),
+            "normal CFG should not be detected as flattened"
+        );
     }
 
     #[test]

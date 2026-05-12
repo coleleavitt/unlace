@@ -75,10 +75,7 @@ fn is_callother_tag(insn: &unlace_ir::IrInsn, tag: u64) -> bool {
 }
 
 /// Scan a block's instructions for runs of AESENC followed by AESENCLAST.
-fn detect_aes_sequences(
-    block_id: BlockId,
-    insns: &[unlace_ir::IrInsn],
-) -> Vec<CryptoAnnotation> {
+fn detect_aes_sequences(block_id: BlockId, insns: &[unlace_ir::IrInsn]) -> Vec<CryptoAnnotation> {
     let mut results = Vec::new();
     let mut i = 0;
 
@@ -237,7 +234,12 @@ mod tests {
         let src0 = Varnode::reg(idx as u64 * 16, 16);
         let src1 = Varnode::reg(256 + idx as u64 * 16, 16);
         let dst = Varnode::reg(idx as u64 * 16, 16);
-        IrInsn::with_output(IrOp::Callother, dst, smallvec![tag_vn, src0, src1], 0x1000 + idx as u64)
+        IrInsn::with_output(
+            IrOp::Callother,
+            dst,
+            smallvec![tag_vn, src0, src1],
+            0x1000 + idx as u64,
+        )
     }
 
     fn build_func_with_insns(insns: Vec<IrInsn>) -> SsaFunction {
@@ -268,9 +270,7 @@ mod tests {
     #[test]
     fn detect_aes128_sequence() {
         // 10 AESENC + 1 AESENCLAST = AES-128
-        let mut insns: Vec<IrInsn> = (0..10)
-            .map(|i| make_aes_insn(TAG_AESENC, i))
-            .collect();
+        let mut insns: Vec<IrInsn> = (0..10).map(|i| make_aes_insn(TAG_AESENC, i)).collect();
         insns.push(make_aes_insn(TAG_AESENCLAST, 10));
 
         let mut ssa = build_func_with_insns(insns);
@@ -287,9 +287,7 @@ mod tests {
     #[test]
     fn detect_aes256_sequence() {
         // 14 AESENC + 1 AESENCLAST = AES-256
-        let mut insns: Vec<IrInsn> = (0..14)
-            .map(|i| make_aes_insn(TAG_AESENC, i))
-            .collect();
+        let mut insns: Vec<IrInsn> = (0..14).map(|i| make_aes_insn(TAG_AESENC, i)).collect();
         insns.push(make_aes_insn(TAG_AESENCLAST, 14));
 
         let mut ssa = build_func_with_insns(insns);
@@ -304,9 +302,7 @@ mod tests {
     #[test]
     fn no_match_wrong_count() {
         // 9 AESENC + 1 AESENCLAST — not a standard AES key length
-        let mut insns: Vec<IrInsn> = (0..9)
-            .map(|i| make_aes_insn(TAG_AESENC, i))
-            .collect();
+        let mut insns: Vec<IrInsn> = (0..9).map(|i| make_aes_insn(TAG_AESENC, i)).collect();
         insns.push(make_aes_insn(TAG_AESENCLAST, 9));
 
         let mut ssa = build_func_with_insns(insns);
@@ -320,9 +316,7 @@ mod tests {
     #[test]
     fn no_match_missing_aesenclast() {
         // 10 AESENC but no AESENCLAST
-        let insns: Vec<IrInsn> = (0..10)
-            .map(|i| make_aes_insn(TAG_AESENC, i))
-            .collect();
+        let insns: Vec<IrInsn> = (0..10).map(|i| make_aes_insn(TAG_AESENC, i)).collect();
 
         let mut ssa = build_func_with_insns(insns);
         let pass = CryptoIdiomPass;

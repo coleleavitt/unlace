@@ -213,11 +213,7 @@ pub fn lift_cset(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, tag: u64) {
         ctx.emit_unimplemented();
         return;
     };
-    let (true_val, false_val): (u64, u64) = if tag == 0x331 {
-        (1, 0)
-    } else {
-        (u64::MAX, 0)
-    };
+    let (true_val, false_val): (u64, u64) = if tag == 0x331 { (1, 0) } else { (u64::MAX, 0) };
     ctx.emit(IrInsn::with_output(
         IrOp::Callother,
         dst,

@@ -248,8 +248,7 @@ fn expand_q10(h: u16, funct3: u32) -> Option<u32> {
             if rd == 0 {
                 return None;
             }
-            let imm =
-                (bit(h, 12) << 5) | (bits(h, 6, 4) << 2) | (bits(h, 3, 2) << 6);
+            let imm = (bit(h, 12) << 5) | (bits(h, 6, 4) << 2) | (bits(h, 3, 2) << 6);
             Some(encode_i(LOAD, rd, 0b010, 2, imm as i32))
         }
         0b011 => {
@@ -258,8 +257,7 @@ fn expand_q10(h: u16, funct3: u32) -> Option<u32> {
             if rd == 0 {
                 return None;
             }
-            let imm =
-                (bit(h, 12) << 5) | (bits(h, 6, 5) << 3) | (bits(h, 4, 2) << 6);
+            let imm = (bit(h, 12) << 5) | (bits(h, 6, 5) << 3) | (bits(h, 4, 2) << 6);
             Some(encode_i(LOAD, rd, 0b011, 2, imm as i32))
         }
         0b100 => {

@@ -139,12 +139,8 @@ pub fn parse_fat_arches(data: &[u8]) -> Option<Vec<FatArch>> {
     let mut arches = Vec::with_capacity(count);
     for i in 0..count {
         let base = 8 + i * entry_size;
-        let cputype = u32::from_be_bytes([
-            data[base],
-            data[base + 1],
-            data[base + 2],
-            data[base + 3],
-        ]);
+        let cputype =
+            u32::from_be_bytes([data[base], data[base + 1], data[base + 2], data[base + 3]]);
         let cpusubtype = u32::from_be_bytes([
             data[base + 4],
             data[base + 5],
@@ -271,9 +267,9 @@ where
         runtime_functions: Vec::new(),
         resources: Vec::new(),
         bound_imports: Vec::new(),
-            delay_imports: Vec::new(),
-            forwarded_exports: Vec::new(),
-            forwarded_resolutions: std::collections::BTreeMap::new(),
+        delay_imports: Vec::new(),
+        forwarded_exports: Vec::new(),
+        forwarded_resolutions: std::collections::BTreeMap::new(),
         rich_header: None,
         dylibs,
         rpaths,
@@ -1908,12 +1904,10 @@ where
             if sec_name != "__auth_ptr" {
                 continue;
             }
-            let vmaddr = u64::from_le_bytes(
-                sec_data[soff + 32..soff + 40].try_into().unwrap_or([0; 8]),
-            );
-            let size = u64::from_le_bytes(
-                sec_data[soff + 40..soff + 48].try_into().unwrap_or([0; 8]),
-            );
+            let vmaddr =
+                u64::from_le_bytes(sec_data[soff + 32..soff + 40].try_into().unwrap_or([0; 8]));
+            let size =
+                u64::from_le_bytes(sec_data[soff + 40..soff + 48].try_into().unwrap_or([0; 8]));
             // Each slot is an 8-byte authenticated pointer; ignore any
             // trailing fragment that doesn't fit an 8-byte slot rather
             // than fabricating an aliased VA.
@@ -2082,7 +2076,9 @@ impl ChainedPointerFormat {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChainedFixupKind {
-    Rebase { target: u64 },
+    Rebase {
+        target: u64,
+    },
     Bind {
         ordinal: u32,
         addend: i64,
@@ -2141,9 +2137,8 @@ impl ChainedStartsInSegment {
             return None;
         }
         let page_size = u16::from_le_bytes(bytes[4..6].try_into().ok()?) as u32;
-        let pointer_format = ChainedPointerFormat::from_raw(
-            u16::from_le_bytes(bytes[6..8].try_into().ok()?),
-        );
+        let pointer_format =
+            ChainedPointerFormat::from_raw(u16::from_le_bytes(bytes[6..8].try_into().ok()?));
         let segment_offset = u64::from_le_bytes(bytes[8..16].try_into().ok()?);
         let page_count = u16::from_le_bytes(bytes[20..22].try_into().ok()?);
         if bytes.len() < 22 + (page_count as usize) * 2 {
@@ -2174,7 +2169,11 @@ impl ChainedStartsInSegment {
 /// Supported pointer formats (MVP): `PTR_64` (2), `PTR_64_OFFSET` (6),
 /// `ARM64E_USERLAND` (9), `ARM64E_USERLAND24` (12). Other formats are
 /// skipped with a debug trace.
-pub fn parse_chained_fixups(data: &[u8], lc_offset: u64, lc_size: u64) -> Option<Vec<ChainedFixup>> {
+pub fn parse_chained_fixups(
+    data: &[u8],
+    lc_offset: u64,
+    lc_size: u64,
+) -> Option<Vec<ChainedFixup>> {
     let off = usize::try_from(lc_offset).ok()?;
     let len = usize::try_from(lc_size).ok()?;
     let end = off.checked_add(len)?;
@@ -2214,11 +2213,14 @@ pub fn parse_chained_fixups(data: &[u8], lc_offset: u64, lc_size: u64) -> Option
     Some(out)
 }
 
-fn decode_chained_imports_table(payload: &[u8], header: &ChainedFixupsHeader) -> Vec<ChainedImport> {
+fn decode_chained_imports_table(
+    payload: &[u8],
+    header: &ChainedFixupsHeader,
+) -> Vec<ChainedImport> {
     let mut imports = Vec::new();
     let entry_size = match header.imports_format {
-        1 => 4usize, // DYLD_CHAINED_IMPORT
-        2 => 8usize, // DYLD_CHAINED_IMPORT_ADDEND
+        1 => 4usize,  // DYLD_CHAINED_IMPORT
+        2 => 8usize,  // DYLD_CHAINED_IMPORT_ADDEND
         3 => 16usize, // DYLD_CHAINED_IMPORT_ADDEND64
         _ => return imports,
     };
@@ -2249,7 +2251,8 @@ fn decode_chained_imports_table(payload: &[u8], header: &ChainedFixupsHeader) ->
             }
             3 => {
                 let lo = u64::from_le_bytes(payload[base..base + 8].try_into().unwrap_or([0; 8]));
-                let hi = u64::from_le_bytes(payload[base + 8..base + 16].try_into().unwrap_or([0; 8]));
+                let hi =
+                    u64::from_le_bytes(payload[base + 8..base + 16].try_into().unwrap_or([0; 8]));
                 let name_off = (lo >> 32) as usize;
                 (name_off, hi as i64)
             }
@@ -2283,10 +2286,8 @@ fn decode_segment_chains(
     out: &mut Vec<ChainedFixup>,
 ) {
     let stride = match seg.pointer_format {
-        ChainedPointerFormat::Ptr64
-        | ChainedPointerFormat::Ptr64Offset => 4u64,
-        ChainedPointerFormat::Arm64eUserland
-        | ChainedPointerFormat::Arm64eUserland24 => 8u64,
+        ChainedPointerFormat::Ptr64 | ChainedPointerFormat::Ptr64Offset => 4u64,
+        ChainedPointerFormat::Arm64eUserland | ChainedPointerFormat::Arm64eUserland24 => 8u64,
         ChainedPointerFormat::Unsupported(raw) => {
             tracing::debug!(raw, "chained pointer format skipped");
             return;
@@ -2298,12 +2299,15 @@ fn decode_segment_chains(
     };
 
     for page_idx in 0..seg.page_count as u64 {
-        let start = seg.page_starts.get(page_idx as usize).copied().unwrap_or(DYLD_CHAINED_PTR_START_NONE);
+        let start = seg
+            .page_starts
+            .get(page_idx as usize)
+            .copied()
+            .unwrap_or(DYLD_CHAINED_PTR_START_NONE);
         if start == DYLD_CHAINED_PTR_START_NONE {
             continue;
         }
-        let page_base = seg.segment_offset
-            + page_idx * seg.page_size as u64;
+        let page_base = seg.segment_offset + page_idx * seg.page_size as u64;
         let mut chain_off = page_base + start as u64;
         let mut count = 0usize;
         loop {
@@ -2329,7 +2333,8 @@ fn decode_segment_chains(
             // the chain into the same buffer, we degrade gracefully: if the
             // chain offset falls back inside the supplied data slice (the
             // unit-test pattern), decode it; otherwise emit one head-marker.
-            let target = decode_chain_entry_from_blob(_payload, fixup_addr, seg.pointer_format, imports);
+            let target =
+                decode_chain_entry_from_blob(_payload, fixup_addr, seg.pointer_format, imports);
             match target {
                 Some((entry, next_delta)) => {
                     out.push(ChainedFixup {
@@ -2619,10 +2624,12 @@ pub fn parse_bind_opcodes(
         let opcode = byte & 0xF0;
         let imm = byte & 0x0F;
         match opcode {
-            0x00 => break, // BIND_OPCODE_DONE
+            0x00 => break,                // BIND_OPCODE_DONE
             0x10 => ordinal = imm as i32, // SET_DYLIB_ORDINAL_IMM
             0x20 => {
-                let Some(v) = reader.read_uleb128() else { break };
+                let Some(v) = reader.read_uleb128() else {
+                    break;
+                };
                 ordinal = v as i32;
             }
             0x30 => {
@@ -2636,47 +2643,69 @@ pub fn parse_bind_opcodes(
             0x40 => {
                 // SET_SYMBOL_TRAILING_FLAGS_IMM: imm = flags, then C string.
                 let _flags = imm;
-                let Some(s) = reader.read_c_string() else { break };
+                let Some(s) = reader.read_c_string() else {
+                    break;
+                };
                 symbol = s.to_string();
             }
             0x50 => kind = BindKind::from_imm(imm), // SET_TYPE_IMM
             0x60 => {
-                let Some(v) = reader.read_sleb128() else { break };
+                let Some(v) = reader.read_sleb128() else {
+                    break;
+                };
                 addend = v;
             }
             0x70 => {
-                let Some(o) = reader.read_uleb128() else { break };
+                let Some(o) = reader.read_uleb128() else {
+                    break;
+                };
                 seg_idx = imm as usize;
                 seg_off = o;
             }
             0x80 => {
-                let Some(d) = reader.read_uleb128() else { break };
+                let Some(d) = reader.read_uleb128() else {
+                    break;
+                };
                 seg_off = seg_off.saturating_add(d);
             }
             0x90 => {
-                push(&mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind);
+                push(
+                    &mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind,
+                );
                 seg_off = seg_off.saturating_add(pointer_size);
             }
             0xA0 => {
-                push(&mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind);
-                let Some(d) = reader.read_uleb128() else { break };
+                push(
+                    &mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind,
+                );
+                let Some(d) = reader.read_uleb128() else {
+                    break;
+                };
                 seg_off = seg_off.saturating_add(d).saturating_add(pointer_size);
             }
             0xB0 => {
-                push(&mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind);
+                push(
+                    &mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind,
+                );
                 seg_off = seg_off
                     .saturating_add(u64::from(imm) * pointer_size)
                     .saturating_add(pointer_size);
             }
             0xC0 => {
-                let Some(count) = reader.read_uleb128() else { break };
-                let Some(skip) = reader.read_uleb128() else { break };
+                let Some(count) = reader.read_uleb128() else {
+                    break;
+                };
+                let Some(skip) = reader.read_uleb128() else {
+                    break;
+                };
                 for _ in 0..count {
                     if ops >= DYLD_MAX_OPCODE_OPS {
                         break;
                     }
                     ops += 1;
-                    push(&mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind);
+                    push(
+                        &mut out, segments, seg_idx, seg_off, &symbol, ordinal, addend, kind,
+                    );
                     seg_off = seg_off.saturating_add(pointer_size).saturating_add(skip);
                 }
             }
@@ -3227,8 +3256,8 @@ mod tests {
     #[test]
     fn parse_function_starts_three_funcs() {
         let bin = macho64_with_three_function_starts();
-        let img = MachoLoader::load(&bin)
-            .expect("Mach-O with LC_FUNCTION_STARTS (3 entries) must load");
+        let img =
+            MachoLoader::load(&bin).expect("Mach-O with LC_FUNCTION_STARTS (3 entries) must load");
         assert_eq!(
             img.function_starts,
             vec![0x1100u64, 0x1140, 0x11A0],
@@ -3295,8 +3324,7 @@ mod tests {
         buf[sec + 64..sec + 68].copy_from_slice(&macho::S_ATTR_PURE_INSTRUCTIONS.to_le_bytes());
 
         let split_cmd = seg + seg_cmdsize as usize;
-        buf[split_cmd..split_cmd + 4]
-            .copy_from_slice(&macho::LC_SEGMENT_SPLIT_INFO.to_le_bytes());
+        buf[split_cmd..split_cmd + 4].copy_from_slice(&macho::LC_SEGMENT_SPLIT_INFO.to_le_bytes());
         buf[split_cmd + 4..split_cmd + 8].copy_from_slice(&split_cmdsize.to_le_bytes());
         buf[split_cmd + 8..split_cmd + 12].copy_from_slice(&split_dataoff.to_le_bytes());
         buf[split_cmd + 12..split_cmd + 16].copy_from_slice(&split_datasize.to_le_bytes());
@@ -4541,10 +4569,7 @@ mod tests {
 
         // `__DATA_CONST` segment is also surfaced as a separate
         // section block (i.e. it's not silently merged into __DATA).
-        let has_data_const = img
-            .sections
-            .iter()
-            .any(|s| s.name == "__auth_ptr");
+        let has_data_const = img.sections.iter().any(|s| s.name == "__auth_ptr");
         assert!(
             has_data_const,
             "section iterator must expose __auth_ptr; sections: {:?}",

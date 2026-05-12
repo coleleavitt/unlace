@@ -201,7 +201,12 @@ fn try_bswap32(
         }
     }
 
-    Some(make_callother(output, CALLOTHER_BSWAP32, &[source], insn.addr))
+    Some(make_callother(
+        output,
+        CALLOTHER_BSWAP32,
+        &[source],
+        insn.addr,
+    ))
 }
 
 /// Represents one byte-lane extraction.
@@ -263,11 +268,7 @@ fn flatten_or(
     flatten_or_one(b, def_map, leaves);
 }
 
-fn flatten_or_one(
-    v: &Varnode,
-    def_map: &BTreeMap<Varnode, IrInsn>,
-    leaves: &mut Vec<Varnode>,
-) {
+fn flatten_or_one(v: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>, leaves: &mut Vec<Varnode>) {
     if let Some(def) = def_of(v, def_map) {
         if def.op == IrOp::IntOr && def.inputs.len() == 2 {
             flatten_or_one(&def.inputs[0], def_map, leaves);

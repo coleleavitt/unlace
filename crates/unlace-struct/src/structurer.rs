@@ -261,9 +261,7 @@ fn wrap_try_catch(
         // typed-catch shape (`Vec<(Type, Vec<HirNode>)>`) is the t183
         // generalisation; `PrimitiveType::Unknown` is the printer's
         // sentinel for `catch (...)`.
-        let catch_all = unlace_ir::types::Type::Primitive(
-            unlace_ir::ssa::PrimitiveType::Unknown,
-        );
+        let catch_all = unlace_ir::types::Type::Primitive(unlace_ir::ssa::PrimitiveType::Unknown);
         result.push(HirNode::TryCatch {
             try_body,
             catch_arms: vec![(catch_all, catch_body)],
@@ -697,7 +695,8 @@ impl<'a> StructureCtx<'a> {
 
         for (i, insn) in block.insns.iter().enumerate().take(cbranch_idx).rev() {
             let out = self.resolve_ssa_varnode(pred, i, VarnodeSlot::Output);
-            let matches = matches!(out, Some(o) if o.base == cond_sv.base && o.version == cond_sv.version);
+            let matches =
+                matches!(out, Some(o) if o.base == cond_sv.base && o.version == cond_sv.version);
             if !matches {
                 continue;
             }
@@ -788,12 +787,7 @@ impl<'a> StructureCtx<'a> {
     /// classes when versions diverge across SSA-rename boundaries — switch
     /// bounds checks often live one block before the dispatch where the
     /// SSA renamer assigned a different version of the same register.
-    fn varnode_aliases(
-        &self,
-        bid: BlockId,
-        candidate: &SsaVarnode,
-        target: &SsaVarnode,
-    ) -> bool {
+    fn varnode_aliases(&self, bid: BlockId, candidate: &SsaVarnode, target: &SsaVarnode) -> bool {
         if candidate.base == target.base && candidate.version == target.version {
             return true;
         }
@@ -902,16 +896,12 @@ impl<'a> StructureCtx<'a> {
                 let lhs_const = insn.inputs[0].space == SpaceId::Const;
                 let rhs_const = insn.inputs[1].space == SpaceId::Const;
                 if rhs_const {
-                    if let Some(lhs_sv) =
-                        self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0))
-                    {
+                    if let Some(lhs_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(0)) {
                         return self.extract_index_from_scale(bid, &lhs_sv);
                     }
                 }
                 if lhs_const {
-                    if let Some(rhs_sv) =
-                        self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1))
-                    {
+                    if let Some(rhs_sv) = self.resolve_ssa_varnode(bid, i, VarnodeSlot::Input(1)) {
                         return self.extract_index_from_scale(bid, &rhs_sv);
                     }
                 }
@@ -977,12 +967,7 @@ impl<'a> StructureCtx<'a> {
     /// Walk through a chain of `IntAnd(x, mask_const)`, `IntRight(x, shift_const)`,
     /// `IntSright(x, shift_const)`, and `IntZext/Sext` ops to dig down to the
     /// underlying index source. Stops at non-bitwise ops or at depth zero.
-    fn walk_bitwise_chain(
-        &self,
-        bid: BlockId,
-        start: &SsaVarnode,
-        depth: u32,
-    ) -> SsaVarnode {
+    fn walk_bitwise_chain(&self, bid: BlockId, start: &SsaVarnode, depth: u32) -> SsaVarnode {
         if depth == 0 {
             return *start;
         }
@@ -2038,13 +2023,13 @@ fn aarch64_cc_to_int_op(cc: u8) -> Option<(IrOp, bool)> {
         2 => Some((IrOp::IntNotequal, false)),    // NE:  Z == 0  ↔ a != b
         3 => Some((IrOp::IntLessequal, true)),    // HS:  C == 1  ↔ a >= b (unsigned)
         4 => Some((IrOp::IntLess, false)),        // LO:  C == 0  ↔ a < b  (unsigned)
-        9 => Some((IrOp::IntLessequal, true)),    // HI:  C&!Z    ↔ a > b  (unsigned, swap+swap of <=)
-        10 => Some((IrOp::IntLessequal, false)),  // LS:  !C|Z    ↔ a <= b (unsigned)
-        11 => Some((IrOp::IntSlessequal, true)),  // GE:  N == V  ↔ a >= b (signed)
-        12 => Some((IrOp::IntSless, false)),      // LT:  N != V  ↔ a < b  (signed)
-        13 => Some((IrOp::IntSlessequal, true)),  // GT:  !Z&N==V ↔ a > b  (signed)
+        9 => Some((IrOp::IntLessequal, true)), // HI:  C&!Z    ↔ a > b  (unsigned, swap+swap of <=)
+        10 => Some((IrOp::IntLessequal, false)), // LS:  !C|Z    ↔ a <= b (unsigned)
+        11 => Some((IrOp::IntSlessequal, true)), // GE:  N == V  ↔ a >= b (signed)
+        12 => Some((IrOp::IntSless, false)),   // LT:  N != V  ↔ a < b  (signed)
+        13 => Some((IrOp::IntSlessequal, true)), // GT:  !Z&N==V ↔ a > b  (signed)
         14 => Some((IrOp::IntSlessequal, false)), // LE:  Z|N!=V  ↔ a <= b (signed)
-        _ => None,                                // 5/6 (MI/PL), 7/8 (VS/VC), 0/15/16 — bail
+        _ => None,                             // 5/6 (MI/PL), 7/8 (VS/VC), 0/15/16 — bail
     }
 }
 
@@ -2432,7 +2417,8 @@ fn fold_aarch64_bcc_if(nodes: &mut Vec<HirNode>) {
         };
 
         // Take the If node and split it into IfCmp.
-        let (then_body, else_body) = match std::mem::replace(&mut nodes[i], HirNode::Block(vec![])) {
+        let (then_body, else_body) = match std::mem::replace(&mut nodes[i], HirNode::Block(vec![]))
+        {
             HirNode::If {
                 then_body,
                 else_body,
@@ -5393,8 +5379,7 @@ mod tests {
         func.insert_block(bb2);
 
         let ssa = build_ssa(func);
-        let hir =
-            structure_with_arch(&ssa, ArchId::X86_64).expect("structuring should succeed");
+        let hir = structure_with_arch(&ssa, ArchId::X86_64).expect("structuring should succeed");
 
         assert!(
             hir.indirect_branch_kinds.is_empty(),
@@ -5461,7 +5446,10 @@ mod tests {
         collect_guarded_ifs(&hir.body, &mut found);
         assert_eq!(found.len(), 1, "expected one GuardedIf, got {found:?}");
         assert_eq!(found[0].0, 0, "cond_code should be EQ (0)");
-        assert_eq!(found[0].1, 1, "then_body should hold the single guarded insn");
+        assert_eq!(
+            found[0].1, 1,
+            "then_body should hold the single guarded insn"
+        );
         assert_eq!(found[0].2, 0, "else_body empty for pure IT");
     }
 
@@ -5557,7 +5545,11 @@ mod tests {
 
         let mut found = Vec::new();
         collect_guarded_ifs(&hir.body, &mut found);
-        assert_eq!(found.len(), 1, "ITEEE fuses to one GuardedIf, got {found:?}");
+        assert_eq!(
+            found.len(),
+            1,
+            "ITEEE fuses to one GuardedIf, got {found:?}"
+        );
         assert_eq!(found[0].0, 0);
         assert_eq!(found[0].1, 1, "single T-lane insn");
         assert_eq!(found[0].2, 3, "three E-lane insns");
@@ -5863,7 +5855,11 @@ mod tests {
     fn t180_cmp_csel_eq_folds() {
         // CSEL X2, X3, X4, EQ → X2 = (X0 == X1) ? X3 : X4
         let (ternaries, _) = t180_run_csel(1); // ARM64_CC_EQ
-        assert_eq!(ternaries.len(), 1, "expected 1 CselTernary, got {ternaries:?}");
+        assert_eq!(
+            ternaries.len(),
+            1,
+            "expected 1 CselTernary, got {ternaries:?}"
+        );
         let (op, lhs, rhs, out) = ternaries[0];
         assert_eq!(op, IrOp::IntEqual, "EQ → IntEqual");
         assert_eq!(lhs, Varnode::reg(0, 8), "lhs = CMP first operand (X0)");
@@ -5875,7 +5871,11 @@ mod tests {
     fn t180_cmp_csel_ne_folds() {
         // CSEL X2, X3, X4, NE → X2 = (X0 != X1) ? X3 : X4
         let (ternaries, _) = t180_run_csel(2); // ARM64_CC_NE
-        assert_eq!(ternaries.len(), 1, "expected 1 CselTernary, got {ternaries:?}");
+        assert_eq!(
+            ternaries.len(),
+            1,
+            "expected 1 CselTernary, got {ternaries:?}"
+        );
         let (op, lhs, rhs, _) = ternaries[0];
         assert_eq!(op, IrOp::IntNotequal, "NE → IntNotequal");
         assert_eq!(lhs, Varnode::reg(0, 8));
@@ -5888,9 +5888,17 @@ mod tests {
         // The fold rewrites `a >= b` as `IntSlessequal(b, a)` (swap=true),
         // so the recovered (lhs, rhs) pair is (X1, X0) — i.e. swapped.
         let (ternaries, _) = t180_run_csel(11); // ARM64_CC_GE
-        assert_eq!(ternaries.len(), 1, "expected 1 CselTernary, got {ternaries:?}");
+        assert_eq!(
+            ternaries.len(),
+            1,
+            "expected 1 CselTernary, got {ternaries:?}"
+        );
         let (op, lhs, rhs, _) = ternaries[0];
-        assert_eq!(op, IrOp::IntSlessequal, "GE → IntSlessequal (signed, swapped)");
+        assert_eq!(
+            op,
+            IrOp::IntSlessequal,
+            "GE → IntSlessequal (signed, swapped)"
+        );
         assert_eq!(lhs, Varnode::reg(8, 8), "lhs after swap = CMP's Rm (X1)");
         assert_eq!(rhs, Varnode::reg(0, 8), "rhs after swap = CMP's Rn (X0)");
     }
@@ -5899,7 +5907,11 @@ mod tests {
     fn t180_cmp_csel_lt_folds() {
         // CSEL X2, X3, X4, LT → X2 = (X0 < X1) ? X3 : X4 (signed, no swap).
         let (ternaries, _) = t180_run_csel(12); // ARM64_CC_LT
-        assert_eq!(ternaries.len(), 1, "expected 1 CselTernary, got {ternaries:?}");
+        assert_eq!(
+            ternaries.len(),
+            1,
+            "expected 1 CselTernary, got {ternaries:?}"
+        );
         let (op, lhs, rhs, _) = ternaries[0];
         assert_eq!(op, IrOp::IntSless, "LT → IntSless (signed)");
         assert_eq!(lhs, Varnode::reg(0, 8));
@@ -5944,31 +5956,11 @@ mod tests {
     fn t189_flag_writes(sub_dst: Varnode, addr: u64) -> Vec<IrInsn> {
         let zero = Varnode::constant(0, sub_dst.size);
         vec![
-            IrInsn::with_output(
-                IrOp::IntSless,
-                t189_nf(),
-                smallvec![sub_dst, zero],
-                addr,
-            ),
-            IrInsn::with_output(
-                IrOp::IntEqual,
-                t189_zf(),
-                smallvec![sub_dst, zero],
-                addr,
-            ),
+            IrInsn::with_output(IrOp::IntSless, t189_nf(), smallvec![sub_dst, zero], addr),
+            IrInsn::with_output(IrOp::IntEqual, t189_zf(), smallvec![sub_dst, zero], addr),
             // C/V writes (shape-only — fold treats them as flag-byte commits).
-            IrInsn::with_output(
-                IrOp::IntCarry,
-                t189_cf(),
-                smallvec![sub_dst, zero],
-                addr,
-            ),
-            IrInsn::with_output(
-                IrOp::IntSborrow,
-                t189_vf(),
-                smallvec![sub_dst, zero],
-                addr,
-            ),
+            IrInsn::with_output(IrOp::IntCarry, t189_cf(), smallvec![sub_dst, zero], addr),
+            IrInsn::with_output(IrOp::IntSborrow, t189_vf(), smallvec![sub_dst, zero], addr),
         ]
     }
 
@@ -6003,14 +5995,22 @@ mod tests {
         bb0.successors = smallvec![BlockId(1), BlockId(2)];
 
         let mut bb1 = BasicBlock::new(BlockId(1));
-        bb1.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, x2, smallvec![x0, c1], 0xE010));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            x2,
+            smallvec![x0, c1],
+            0xE010,
+        ));
         bb1.insns.push(ctrl_insn(IrOp::Branch, 0xE014));
         bb1.successors = smallvec![BlockId(3)];
 
         let mut bb2 = BasicBlock::new(BlockId(2));
-        bb2.insns
-            .push(IrInsn::with_output(IrOp::IntAdd, x2, smallvec![x0, c2], 0xE020));
+        bb2.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            x2,
+            smallvec![x0, c2],
+            0xE020,
+        ));
         bb2.insns.push(ctrl_insn(IrOp::Branch, 0xE024));
         bb2.successors = smallvec![BlockId(3)];
 
@@ -6025,10 +6025,7 @@ mod tests {
         let ssa = build_ssa(func);
         let hir = structure(&ssa).expect("structuring should succeed");
 
-        fn collect_if_cmps(
-            nodes: &[HirNode],
-            out: &mut Vec<(IrOp, Varnode, Varnode)>,
-        ) {
+        fn collect_if_cmps(nodes: &[HirNode], out: &mut Vec<(IrOp, Varnode, Varnode)>) {
             for n in nodes {
                 match n {
                     HirNode::IfCmp {
@@ -6117,12 +6114,7 @@ mod tests {
                 smallvec![t189_nf(), t189_vf()],
                 0xE004,
             ),
-            IrInsn::with_output(
-                IrOp::BoolNegate,
-                not_xor,
-                smallvec![n_xor_v],
-                0xE004,
-            ),
+            IrInsn::with_output(IrOp::BoolNegate, not_xor, smallvec![n_xor_v], 0xE004),
         ];
         let (if_cmps, _) = t189_run_bcc(dataflow, not_xor);
         assert_eq!(
@@ -6131,7 +6123,11 @@ mod tests {
             "expected 1 IfCmp from B.GE fold, got {if_cmps:?}"
         );
         let (op, lhs, rhs) = if_cmps[0];
-        assert_eq!(op, IrOp::IntSlessequal, "GE → IntSlessequal (signed, swapped)");
+        assert_eq!(
+            op,
+            IrOp::IntSlessequal,
+            "GE → IntSlessequal (signed, swapped)"
+        );
         assert_eq!(lhs, Varnode::reg(8, 8), "lhs after swap = CMP's Rm (X1)");
         assert_eq!(rhs, Varnode::reg(0, 8), "rhs after swap = CMP's Rn (X0)");
     }

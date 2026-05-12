@@ -772,18 +772,42 @@ fn lift_riscv_crypto_direct(word: u32, addr: u64) -> Option<LiftedInsn> {
     let (funct7, rd, rs1, rs2, funct3) = decode_crypto_r_type(word)?;
     let mut ctx = LiftCtx::new(addr);
     match (funct7, funct3) {
-        (0b1100111, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_SHA256SIG0, rd, read_reg(rs1), read_reg(rs2)),
-        (0b1101001, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_SHA256SIG1, rd, read_reg(rs1), read_reg(rs2)),
-        (0b0001000, 0b010) => ctx.emit_crypto_callother(TAG_RISCV_SHA256SUM0, rd, read_reg(rs1), read_reg(rs2)),
-        (0b0001000, 0b100) => ctx.emit_crypto_callother(TAG_RISCV_SHA256SUM1, rd, read_reg(rs1), read_reg(rs2)),
-        (0b0000101, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_SHA512SIG0, rd, read_reg(rs1), read_reg(rs2)),
-        (0b0000101, 0b001) => ctx.emit_crypto_callother(TAG_RISCV_SHA512SIG1, rd, read_reg(rs1), read_reg(rs2)),
-        (0b0000100, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_SHA512SUM0, rd, read_reg(rs1), read_reg(rs2)),
-        (0b0000100, 0b001) => ctx.emit_crypto_callother(TAG_RISCV_SHA512SUM1, rd, read_reg(rs1), read_reg(rs2)),
-        (0b0010010, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_AES32ESI, rd, read_reg(rs1), read_reg(rs2)),
-        (0b0010011, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_AES32ESMI, rd, read_reg(rs1), read_reg(rs2)),
-        (0b0010101, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_AES32DSI, rd, read_reg(rs1), read_reg(rs2)),
-        (0b0010111, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_AES32DSMI, rd, read_reg(rs1), read_reg(rs2)),
+        (0b1100111, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA256SIG0, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b1101001, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA256SIG1, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0001000, 0b010) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA256SUM0, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0001000, 0b100) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA256SUM1, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0000101, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA512SIG0, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0000101, 0b001) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA512SIG1, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0000100, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA512SUM0, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0000100, 0b001) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA512SUM1, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0010010, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES32ESI, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0010011, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES32ESMI, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0010101, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES32DSI, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0010111, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES32DSMI, rd, read_reg(rs1), read_reg(rs2))
+        }
         _ => return None,
     }
 

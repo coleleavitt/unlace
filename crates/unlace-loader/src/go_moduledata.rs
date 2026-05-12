@@ -436,7 +436,8 @@ mod tests {
         let typelinks_va = 0x500000u64 + typelinks_off as u64;
         let entries: [i32; 3] = [0x10, 0x20, -4];
         for (i, e) in entries.iter().enumerate() {
-            data[typelinks_off + i * 4..typelinks_off + i * 4 + 4].copy_from_slice(&e.to_le_bytes());
+            data[typelinks_off + i * 4..typelinks_off + i * 4 + 4]
+                .copy_from_slice(&e.to_le_bytes());
         }
 
         let moduledata_off = 0x010usize;

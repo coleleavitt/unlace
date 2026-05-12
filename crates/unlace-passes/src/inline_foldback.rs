@@ -34,8 +34,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::{BlockId, IrOp, SpaceId};
 use unlace_ir::ssa::SsaFunction;
+use unlace_ir::{BlockId, IrOp, SpaceId};
 
 /// Result of an inline fold-back scan: one entry per recognised inline copy.
 ///
@@ -180,8 +180,7 @@ fn passes_heuristic(name: &str, insns: &[unlace_ir::IrInsn]) -> bool {
         }),
         // memcpy requires at least one Load and one Store in the block.
         "memcpy" => {
-            insns.iter().any(|i| i.op == IrOp::Load)
-                && insns.iter().any(|i| i.op == IrOp::Store)
+            insns.iter().any(|i| i.op == IrOp::Load) && insns.iter().any(|i| i.op == IrOp::Store)
         }
         // strcmp requires at least two Loads (one per pointer).
         "strcmp" => insns.iter().filter(|i| i.op == IrOp::Load).count() >= 2,
@@ -215,7 +214,12 @@ mod tests {
         let loaded = Varnode::reg(0x100, 1);
         let zf = Varnode::reg(0x200, 1);
         let insns = vec![
-            IrInsn::with_output(IrOp::Load, loaded.clone(), smallvec![space, ptr.clone()], 0x1000),
+            IrInsn::with_output(
+                IrOp::Load,
+                loaded.clone(),
+                smallvec![space, ptr.clone()],
+                0x1000,
+            ),
             IrInsn::with_output(
                 IrOp::IntEqual,
                 zf,
@@ -253,7 +257,12 @@ mod tests {
         let cnt = Varnode::reg(0x20, 8);
         let val = Varnode::reg(0x100, 1);
         let insns = vec![
-            IrInsn::with_output(IrOp::Load, val.clone(), smallvec![space.clone(), src.clone()], 0x1000),
+            IrInsn::with_output(
+                IrOp::Load,
+                val.clone(),
+                smallvec![space.clone(), src.clone()],
+                0x1000,
+            ),
             IrInsn::without_output(IrOp::Store, smallvec![space, dst.clone(), val], 0x1004),
             IrInsn::with_output(
                 IrOp::IntAdd,
@@ -300,7 +309,12 @@ mod tests {
         let byte = Varnode::reg(0x100, 1);
         let mixed = Varnode::reg(0x108, 4);
         let insns = vec![
-            IrInsn::with_output(IrOp::Load, byte.clone(), smallvec![space, ptr.clone()], 0x1000),
+            IrInsn::with_output(
+                IrOp::Load,
+                byte.clone(),
+                smallvec![space, ptr.clone()],
+                0x1000,
+            ),
             IrInsn::with_output(IrOp::IntXor, mixed.clone(), smallvec![crc, byte], 0x1004),
             IrInsn::with_output(
                 IrOp::IntAdd,
@@ -334,7 +348,12 @@ mod tests {
         let r1 = Varnode::reg(0x08, 8);
         let out = Varnode::reg(0x100, 8);
         let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, out.clone(), smallvec![r0.clone(), r1.clone()], 0x1000),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                out.clone(),
+                smallvec![r0.clone(), r1.clone()],
+                0x1000,
+            ),
             IrInsn::with_output(IrOp::IntMult, out, smallvec![r0, r1], 0x1004),
         ];
         let ssa = make_block(insns);

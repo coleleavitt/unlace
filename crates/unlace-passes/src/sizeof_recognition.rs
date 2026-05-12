@@ -47,13 +47,13 @@ const R9: u64 = 72;
 /// `calloc` the *element-size* (second arg) is what we tag.
 const ALLOC_FAMILY: &[(&str, usize)] = &[
     ("malloc", 0),
-    ("_Znwm", 0),     // operator new(unsigned long)
-    ("_Znam", 0),     // operator new[](unsigned long)
-    ("realloc", 1),   // realloc(void *, size_t)
-    ("calloc", 1),    // calloc(nmemb, size)
-    ("memcpy", 2),    // memcpy(dst, src, n)
+    ("_Znwm", 0),   // operator new(unsigned long)
+    ("_Znam", 0),   // operator new[](unsigned long)
+    ("realloc", 1), // realloc(void *, size_t)
+    ("calloc", 1),  // calloc(nmemb, size)
+    ("memcpy", 2),  // memcpy(dst, src, n)
     ("memmove", 2),
-    ("memset", 2),    // memset(dst, byte, n)
+    ("memset", 2), // memset(dst, byte, n)
 ];
 
 /// Struct type plus its byte size, used by the recognition scan.
@@ -68,17 +68,18 @@ struct SizedType {
 /// `(name, struct_type)` pairs in scope.
 ///
 /// Returns `true` when at least one new entry was added.
-pub fn recognize_with_resolver<F>(
-    func: &mut SsaFunction,
-    resolve_name: F,
-    structs: &[Type],
-) -> bool
+pub fn recognize_with_resolver<F>(func: &mut SsaFunction, resolve_name: F, structs: &[Type]) -> bool
 where
     F: Fn(u64) -> Option<&'static str>,
 {
     let sized: Vec<SizedType> = structs
         .iter()
-        .filter_map(|ty| ty.size().map(|sz| SizedType { ty: ty.clone(), size: sz as u64 }))
+        .filter_map(|ty| {
+            ty.size().map(|sz| SizedType {
+                ty: ty.clone(),
+                size: sz as u64,
+            })
+        })
         .collect();
 
     if sized.is_empty() {
@@ -101,9 +102,7 @@ where
             // Pattern 1-3: allocators — Call with a Const target whose
             // resolved name is in ALLOC_FAMILY.
             if insn.op == IrOp::Call {
-                if let Some((target_name, sz_pos)) =
-                    resolve_call_alloc(insn, &resolve_name)
-                {
+                if let Some((target_name, sz_pos)) = resolve_call_alloc(insn, &resolve_name) {
                     if let Some(reg) = arg_regs.get(sz_pos).copied() {
                         if let Some(c) = trace_const_into_reg(block, idx, reg) {
                             if let Some(t) = sized.iter().find(|s| s.size == c) {
@@ -174,20 +173,13 @@ where
         return None;
     }
     let name = resolve_name(target_vn.offset)?;
-    ALLOC_FAMILY
-        .iter()
-        .copied()
-        .find(|(n, _)| *n == name)
+    ALLOC_FAMILY.iter().copied().find(|(n, _)| *n == name)
 }
 
 /// Walk the block backwards from just before `call_idx` looking for the
 /// most recent `Copy` whose output is `reg` and whose input is a const.
 /// Returns the const value when found.
-fn trace_const_into_reg(
-    block: &unlace_ir::BasicBlock,
-    call_idx: usize,
-    reg: u64,
-) -> Option<u64> {
+fn trace_const_into_reg(block: &unlace_ir::BasicBlock, call_idx: usize, reg: u64) -> Option<u64> {
     for prev_idx in (0..call_idx).rev() {
         let insn = &block.insns[prev_idx];
         let Some(out) = insn.output.as_ref() else {
@@ -225,11 +217,7 @@ fn mask_to_alignment(mask: u64, width: u8) -> Option<u64> {
         return None;
     }
     let n = n_minus_1.checked_add(1)?;
-    if n.is_power_of_two() {
-        Some(n)
-    } else {
-        None
-    }
+    if n.is_power_of_two() { Some(n) } else { None }
 }
 
 /// `Pass` adapter: recognises `sizeof`/`alignof` against the function's
@@ -257,15 +245,13 @@ impl Pass for SizeofRecognitionPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        let mut structs: Vec<Type> =
-            func.composite_var_types.values().cloned().collect();
+        let mut structs: Vec<Type> = func.composite_var_types.values().cloned().collect();
         structs.extend(func.inferred_structs.values().cloned());
 
-        let resolver: Box<dyn Fn(u64) -> Option<&'static str>> =
-            match &self.name_resolver {
-                Some(r) => Box::new(|addr| r(addr)),
-                None => Box::new(|_| None),
-            };
+        let resolver: Box<dyn Fn(u64) -> Option<&'static str>> = match &self.name_resolver {
+            Some(r) => Box::new(|addr| r(addr)),
+            None => Box::new(|_| None),
+        };
 
         Ok(recognize_with_resolver(func, &resolver, &structs))
     }
@@ -275,7 +261,7 @@ impl Pass for SizeofRecognitionPass {
 mod tests {
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{build_ssa, PrimitiveType};
+    use unlace_ir::ssa::{PrimitiveType, build_ssa};
     use unlace_ir::types::{StructFieldType, Type};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 

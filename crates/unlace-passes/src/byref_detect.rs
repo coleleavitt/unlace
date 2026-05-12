@@ -71,7 +71,11 @@ pub fn detect_byref(func: &SsaFunction) -> ByrefInfo {
 
     let param_regs = param_register_list(func.calling_convention);
     let param_count = func.inferred_params.len().min(param_regs.len()) as u32;
-    let active_param_regs: Vec<u64> = param_regs.iter().take(param_count as usize).copied().collect();
+    let active_param_regs: Vec<u64> = param_regs
+        .iter()
+        .take(param_count as usize)
+        .copied()
+        .collect();
 
     let def_map = build_def_map(func);
 
@@ -158,9 +162,7 @@ fn param_register_list(cc: CallingConvention) -> &'static [u64] {
         CallingConvention::MicrosoftX64 => MSX64_ARG_REGS,
         CallingConvention::AArch64 => AARCH64_ARG_REGS,
         CallingConvention::Thiscall => &[8], // RCX only
-        CallingConvention::Cdecl
-        | CallingConvention::Stdcall
-        | CallingConvention::Unknown => &[],
+        CallingConvention::Cdecl | CallingConvention::Stdcall | CallingConvention::Unknown => &[],
     }
 }
 
@@ -227,13 +229,17 @@ fn resolve_root(
                 let (a, b) = (&def.inputs[0], &def.inputs[1]);
                 if b.space == SpaceId::Const {
                     match resolve_root(a, func, def_map, active_param_regs, depth + 1)? {
-                        AddrRoot::Stack(k) => return Some(AddrRoot::Stack(k.wrapping_add(b.offset as i64))),
+                        AddrRoot::Stack(k) => {
+                            return Some(AddrRoot::Stack(k.wrapping_add(b.offset as i64)));
+                        }
                         AddrRoot::Param(p) => return Some(AddrRoot::Param(p)),
                     }
                 }
                 if a.space == SpaceId::Const {
                     match resolve_root(b, func, def_map, active_param_regs, depth + 1)? {
-                        AddrRoot::Stack(k) => return Some(AddrRoot::Stack(k.wrapping_add(a.offset as i64))),
+                        AddrRoot::Stack(k) => {
+                            return Some(AddrRoot::Stack(k.wrapping_add(a.offset as i64)));
+                        }
                         AddrRoot::Param(p) => return Some(AddrRoot::Param(p)),
                     }
                 }
@@ -245,7 +251,9 @@ fn resolve_root(
                 let (a, b) = (&def.inputs[0], &def.inputs[1]);
                 if b.space == SpaceId::Const {
                     match resolve_root(a, func, def_map, active_param_regs, depth + 1)? {
-                        AddrRoot::Stack(k) => return Some(AddrRoot::Stack(k.wrapping_sub(b.offset as i64))),
+                        AddrRoot::Stack(k) => {
+                            return Some(AddrRoot::Stack(k.wrapping_sub(b.offset as i64)));
+                        }
                         AddrRoot::Param(p) => return Some(AddrRoot::Param(p)),
                     }
                 }
@@ -325,7 +333,7 @@ mod tests {
     use smallvec::smallvec;
 
     use super::*;
-    use unlace_ir::ssa::{build_ssa, PrimitiveType};
+    use unlace_ir::ssa::{PrimitiveType, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn};
 
     fn rsp() -> Varnode {
@@ -338,10 +346,7 @@ mod tests {
         Varnode::reg(RSI, 8)
     }
 
-    fn make_func_with(
-        params: Vec<(String, PrimitiveType)>,
-        insns: Vec<IrInsn>,
-    ) -> SsaFunction {
+    fn make_func_with(params: Vec<(String, PrimitiveType)>, insns: Vec<IrInsn>) -> SsaFunction {
         let mut func = Function::new("test", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns = insns;
@@ -381,10 +386,7 @@ mod tests {
             IrInsn::without_output(IrOp::Call, smallvec![bar_addr, rdi()], 0x1008),
         ];
 
-        let ssa = make_func_with(
-            vec![("p".into(), PrimitiveType::Ptr)],
-            insns,
-        );
+        let ssa = make_func_with(vec![("p".into(), PrimitiveType::Ptr)], insns);
         let info = detect_byref(&ssa);
 
         assert!(
@@ -417,10 +419,7 @@ mod tests {
 
         // Give the function 1 param (a1 = RDI). We're not testing that
         // it's byref; we're testing the local-address detection.
-        let ssa = make_func_with(
-            vec![("a1".into(), PrimitiveType::Int(8))],
-            insns,
-        );
+        let ssa = make_func_with(vec![("a1".into(), PrimitiveType::Int(8))], insns);
         let info = detect_byref(&ssa);
 
         assert!(
@@ -442,13 +441,11 @@ mod tests {
         let bar_addr = Varnode::constant(0x2000, 8);
         // The arguments are just the parameter registers as-is.  No
         // IntAdd anywhere on rdi/rsi, no stack-address forwarded.
-        let insns = vec![
-            IrInsn::without_output(
-                IrOp::Call,
-                smallvec![bar_addr, rdi(), rsi()],
-                0x1000,
-            ),
-        ];
+        let insns = vec![IrInsn::without_output(
+            IrOp::Call,
+            smallvec![bar_addr, rdi(), rsi()],
+            0x1000,
+        )];
 
         let ssa = make_func_with(
             vec![

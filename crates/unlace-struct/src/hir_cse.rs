@@ -58,15 +58,17 @@ pub fn eliminate_common_subexpressions(body: &mut Vec<HirNode>) {
 fn recurse_into_children(node: &mut HirNode) {
     match node {
         HirNode::Block(children) => eliminate_common_subexpressions(children),
-        HirNode::If { then_body, else_body, .. } => {
+        HirNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
             eliminate_common_subexpressions(then_body);
             if let Some(eb) = else_body {
                 eliminate_common_subexpressions(eb);
             }
         }
-        HirNode::While { body, .. }
-        | HirNode::DoWhile { body, .. }
-        | HirNode::For { body, .. } => {
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
             eliminate_common_subexpressions(body);
         }
         HirNode::Switch { cases, default, .. } => {
@@ -77,22 +79,36 @@ fn recurse_into_children(node: &mut HirNode) {
                 eliminate_common_subexpressions(d);
             }
         }
-        HirNode::TryCatch { try_body, catch_arms } => {
+        HirNode::TryCatch {
+            try_body,
+            catch_arms,
+        } => {
             eliminate_common_subexpressions(try_body);
             for (_, body) in catch_arms.iter_mut() {
                 eliminate_common_subexpressions(body);
             }
         }
-        HirNode::TryFinally { try_body, finally_body } => {
+        HirNode::TryFinally {
+            try_body,
+            finally_body,
+        } => {
             eliminate_common_subexpressions(try_body);
             eliminate_common_subexpressions(finally_body);
         }
         HirNode::Commented { inner, .. } => recurse_into_children(inner),
-        HirNode::GuardedIf { then_body, else_body, .. } => {
+        HirNode::GuardedIf {
+            then_body,
+            else_body,
+            ..
+        } => {
             eliminate_common_subexpressions(then_body);
             eliminate_common_subexpressions(else_body);
         }
-        HirNode::IfCmp { then_body, else_body, .. } => {
+        HirNode::IfCmp {
+            then_body,
+            else_body,
+            ..
+        } => {
             eliminate_common_subexpressions(then_body);
             if let Some(eb) = else_body {
                 eliminate_common_subexpressions(eb);
@@ -149,12 +165,12 @@ fn cse_flat(nodes: &mut [HirNode]) {
                         if let Some(&(prior_out, recorded_gen)) = available.get(&key) {
                             // Verify no intervening write to any operand
                             // OR to the prior output.
-                            let operands_ok = insn.inputs.iter().all(|v| {
-                                last_write.get(v).copied().unwrap_or(0) <= recorded_gen
-                            });
+                            let operands_ok = insn
+                                .inputs
+                                .iter()
+                                .all(|v| last_write.get(v).copied().unwrap_or(0) <= recorded_gen);
                             let prior_out_ok =
-                                last_write.get(&prior_out).copied().unwrap_or(0)
-                                    <= recorded_gen;
+                                last_write.get(&prior_out).copied().unwrap_or(0) <= recorded_gen;
                             if operands_ok && prior_out_ok {
                                 cse_target = Some(prior_out);
                             }

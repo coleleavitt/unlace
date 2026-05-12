@@ -47,7 +47,10 @@ pub fn try_demangle_swift(name: &str) -> Option<String> {
 }
 
 fn strip_swift_prefix(name: &str) -> Option<&str> {
-    if let Some(rest) = name.strip_prefix("_$s").or_else(|| name.strip_prefix("_$S")) {
+    if let Some(rest) = name
+        .strip_prefix("_$s")
+        .or_else(|| name.strip_prefix("_$S"))
+    {
         return Some(rest);
     }
     if let Some(rest) = name.strip_prefix("$s").or_else(|| name.strip_prefix("$S")) {
@@ -57,7 +60,11 @@ fn strip_swift_prefix(name: &str) -> Option<&str> {
         return Some(rest);
     }
     if let Some(rest) = name.strip_prefix("_T") {
-        if rest.as_bytes().first().is_some_and(|b| b.is_ascii_uppercase()) {
+        if rest
+            .as_bytes()
+            .first()
+            .is_some_and(|b| b.is_ascii_uppercase())
+        {
             return Some(rest);
         }
     }
@@ -73,7 +80,9 @@ fn decode_length_prefixed(s: &str) -> Vec<String> {
     while i < bytes.len() && bytes[i].is_ascii_digit() {
         let mut len: usize = 0;
         while i < bytes.len() && bytes[i].is_ascii_digit() {
-            len = len.saturating_mul(10).saturating_add((bytes[i] - b'0') as usize);
+            len = len
+                .saturating_mul(10)
+                .saturating_add((bytes[i] - b'0') as usize);
             i += 1;
         }
         if len == 0 || i + len > bytes.len() {
@@ -108,7 +117,10 @@ mod tests {
     #[test]
     fn decodes_simple_module_function() {
         let out = try_demangle_swift("$s4main6sayHiyyF").expect("demangles");
-        assert!(out.starts_with("main"), "expected leading module 'main', got: {out}");
+        assert!(
+            out.starts_with("main"),
+            "expected leading module 'main', got: {out}"
+        );
         assert!(out.contains("sayHi"), "expected method 'sayHi', got: {out}");
     }
 

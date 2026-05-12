@@ -114,8 +114,10 @@ impl Pass for RedundantFlagElimPass {
                     }
                 }
             }
-            func.var_map.remove(&(rw.bid, rw.idx, VarnodeSlot::Input(0)));
-            func.var_map.remove(&(rw.bid, rw.idx, VarnodeSlot::Input(1)));
+            func.var_map
+                .remove(&(rw.bid, rw.idx, VarnodeSlot::Input(0)));
+            func.var_map
+                .remove(&(rw.bid, rw.idx, VarnodeSlot::Input(1)));
             if let Some(sv) = rw.new_in_sv[0] {
                 func.var_map
                     .insert((rw.bid, rw.idx, VarnodeSlot::Input(0)), sv);
@@ -398,9 +400,6 @@ mod tests {
         let mut ssa = make_ssa(vec![bb], var_map);
         let changed = RedundantFlagElimPass.run(&mut ssa).expect("ok");
         assert!(!changed);
-        assert_eq!(
-            ssa.function.blocks[&BlockId(0)].insns[0].inputs[0],
-            a.base
-        );
+        assert_eq!(ssa.function.blocks[&BlockId(0)].insns[0].inputs[0], a.base);
     }
 }

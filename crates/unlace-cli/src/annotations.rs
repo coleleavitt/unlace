@@ -57,8 +57,7 @@ impl AnnotationDb {
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
-        let bytes = serde_json::to_vec_pretty(self)
-            .context("failed to serialize annotations")?;
+        let bytes = serde_json::to_vec_pretty(self).context("failed to serialize annotations")?;
         fs::write(path, bytes)
             .with_context(|| format!("failed to write annotations '{}'", path.display()))?;
         Ok(())

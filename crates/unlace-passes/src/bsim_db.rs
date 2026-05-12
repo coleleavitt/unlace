@@ -35,7 +35,9 @@ pub struct BSimDb {
 impl BSimDb {
     /// Create an empty database.
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 
     /// Number of stored entries.
@@ -73,9 +75,7 @@ impl BSimDb {
             .collect();
 
         // Sort descending by score; stable so equal scores keep insertion order.
-        scored.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         scored.truncate(top_k);
         scored
     }

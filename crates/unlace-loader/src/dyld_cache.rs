@@ -303,7 +303,12 @@ const SLIDE_V3_MAX_CHAIN: usize = 1 << 14;
 ///
 /// Returns the number of chain entries visited (capped at
 /// `SLIDE_V3_MAX_CHAIN` to guard against malformed loops).
-fn walk_v3_page<F: FnMut(usize, u64)>(image: &[u8], page_base: usize, page_start: u16, mut visit: F) -> usize {
+fn walk_v3_page<F: FnMut(usize, u64)>(
+    image: &[u8],
+    page_base: usize,
+    page_start: u16,
+    mut visit: F,
+) -> usize {
     if page_start == SLIDE_V3_PAGE_NONE {
         return 0;
     }
@@ -627,11 +632,19 @@ pub fn decode_v5_chain_entry(raw: u64) -> SlideEntry {
         SlideEntry {
             offset: 0,
             target,
-            auth: Some(SlideEntryAuth { key, diversity, use_addr }),
+            auth: Some(SlideEntryAuth {
+                key,
+                diversity,
+                use_addr,
+            }),
         }
     } else {
         let target = raw & 0x0003_FFFF_FFFF_FFFF;
-        SlideEntry { offset: 0, target, auth: None }
+        SlideEntry {
+            offset: 0,
+            target,
+            auth: None,
+        }
     }
 }
 
@@ -967,7 +980,8 @@ pub fn apply_v1_slide(image: &[u8], slide: &SlideInfoV1, slide_amount: u64) -> V
                 if slot_off + 4 > out.len() {
                     continue;
                 }
-                let raw = u32::from_le_bytes(out[slot_off..slot_off + 4].try_into().unwrap_or([0; 4]));
+                let raw =
+                    u32::from_le_bytes(out[slot_off..slot_off + 4].try_into().unwrap_or([0; 4]));
                 let new_raw = raw.wrapping_add(slide_lo);
                 out[slot_off..slot_off + 4].copy_from_slice(&new_raw.to_le_bytes());
             }
@@ -1102,10 +1116,7 @@ pub fn apply_v4_slide(image: &[u8], slide: &SlideInfoV4, slide_amount: u64) -> V
     // v4 stores 32-bit chain entries; only the low 32 bits of `delta_mask`
     // are meaningful.
     let delta_mask32 = (slide.delta_mask & 0xFFFF_FFFF) as u32;
-    let add = slide
-        .value_add
-        .wrapping_add(slide_amount)
-        & 0xFFFF_FFFF;
+    let add = slide.value_add.wrapping_add(slide_amount) & 0xFFFF_FFFF;
     let add32 = add as u32;
 
     for (page_idx, &start) in slide.page_starts.iter().enumerate() {
@@ -1352,9 +1363,8 @@ mod tests {
         let page_size = 0x4000usize;
         let mut image = vec![0u8; page_size];
 
-        let mk = |target: u64, next: u64| -> u64 {
-            (next << 51) | (target & 0x0007_FFFF_FFFF_FFFF)
-        };
+        let mk =
+            |target: u64, next: u64| -> u64 { (next << 51) | (target & 0x0007_FFFF_FFFF_FFFF) };
         let e0 = mk(0xAAA, 2);
         let e1 = mk(0xBBB, 1);
         let e2 = mk(0xCCC, 0);
@@ -1377,9 +1387,8 @@ mod tests {
         // slide_amount = 0x40 -> rewritten target = 0x1140.
         let page_size = 0x4000usize;
         let mut image = vec![0u8; page_size];
-        let mk = |target: u64, next: u64| -> u64 {
-            (next << 51) | (target & 0x0007_FFFF_FFFF_FFFF)
-        };
+        let mk =
+            |target: u64, next: u64| -> u64 { (next << 51) | (target & 0x0007_FFFF_FFFF_FFFF) };
         image[0..8].copy_from_slice(&mk(0x100, 0).to_le_bytes());
 
         let slide = SlideInfo {
@@ -1524,7 +1533,7 @@ mod tests {
             | (0u64 << 48)                 // key = IA
             | (0u64 << 47)                 // addr_div=0
             | (0x1234u64 << 32)            // diversity
-            | 0xCAFEu64;                   // target offset
+            | 0xCAFEu64; // target offset
         let entry = decode_v5_chain_entry(raw);
         let auth = entry.auth.expect("auth pointer");
         assert_eq!(auth.key, 0);
@@ -1725,12 +1734,7 @@ mod tests {
         // bitmap byte 1 bit 0 → page off (1*8 + 0)*4 = 0x20
         slide[entries_offset as usize + 1] = 1 << 0;
 
-        let (data, slide_off) = build_cache_with_image(
-            0x1_8000_0000,
-            0x1000,
-            &image,
-            &slide,
-        );
+        let (data, slide_off) = build_cache_with_image(0x1_8000_0000, 0x1000, &image, &slide);
         let mut cache = DyldCache::parse(&data).expect("parse");
         cache.set_slide_info(SlideInfoLocation {
             file_offset: slide_off,
@@ -1779,12 +1783,7 @@ mod tests {
         slide[32..40].copy_from_slice(&value_add.to_le_bytes());
         slide[40..42].copy_from_slice(&0u16.to_le_bytes()); // page_start = 0 (offset 0)
 
-        let (data, slide_off) = build_cache_with_image(
-            0x1_8000_0000,
-            0x1000,
-            &image,
-            &slide,
-        );
+        let (data, slide_off) = build_cache_with_image(0x1_8000_0000, 0x1000, &image, &slide);
         let mut cache = DyldCache::parse(&data).expect("parse");
         cache.set_slide_info(SlideInfoLocation {
             file_offset: slide_off,
@@ -1795,8 +1794,14 @@ mod tests {
         let r0 = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
         let r1 = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
         let add32 = (value_add.wrapping_add(slide_amount) & 0xFFFF_FFFF) as u32;
-        assert_eq!(r0 & !delta_mask, (0x1000u32.wrapping_add(add32)) & !delta_mask);
-        assert_eq!(r1 & !delta_mask, (0x2000u32.wrapping_add(add32)) & !delta_mask);
+        assert_eq!(
+            r0 & !delta_mask,
+            (0x1000u32.wrapping_add(add32)) & !delta_mask
+        );
+        assert_eq!(
+            r1 & !delta_mask,
+            (0x2000u32.wrapping_add(add32)) & !delta_mask
+        );
         // Delta bits preserved.
         assert_eq!((r0 & delta_mask) >> delta_shift, 2);
         assert_eq!((r1 & delta_mask) >> delta_shift, 0);
@@ -1819,12 +1824,7 @@ mod tests {
         slide[16..24].copy_from_slice(&0x1000u64.to_le_bytes()); // value_add
         slide[24..26].copy_from_slice(&0u16.to_le_bytes()); // page_starts[0] = 0
 
-        let (data, slide_off) = build_cache_with_image(
-            0x1_8000_0000,
-            0x1000,
-            &image,
-            &slide,
-        );
+        let (data, slide_off) = build_cache_with_image(0x1_8000_0000, 0x1000, &image, &slide);
         let mut cache = DyldCache::parse(&data).expect("parse");
         cache.set_slide_info(SlideInfoLocation {
             file_offset: slide_off,
@@ -1882,7 +1882,7 @@ mod tests {
             | (1u64 << 48)                            // key = IB
             | (1u64 << 47)                            // addr_div = 1
             | (0x2BADu64 << 32)                       // diversity
-            | 0x0000_1000u64;                         // 32-bit target offset
+            | 0x0000_1000u64; // 32-bit target offset
         // Plain entry: target=0x2000, next=2
         let plain_raw: u64 = (2u64 << 51) | 0x0000_2000u64;
         // Auth entry: key=DA(2), addr_div=0, diversity=0x0123, target=0x3000, next=0 (end)
@@ -2058,7 +2058,7 @@ mod tests {
             | (1u64 << 48)                         // key = IB (1)
             | (1u64 << 47)                         // addr_div = 1
             | (0x2BADu64 << 32)                    // diversity
-            | 0x0000_1000u64;                      // 32-bit target offset
+            | 0x0000_1000u64; // 32-bit target offset
         let plain_raw: u64 = (2u64 << 51) | 0x0000_2000u64;
         let auth1_raw: u64 = (1u64 << 50)         // is_auth, next=0
             | (2u64 << 48)                         // key = DA (2)
@@ -2070,20 +2070,15 @@ mod tests {
         image[24..32].copy_from_slice(&auth1_raw.to_le_bytes());
 
         let blob = t190_build_v5_blob(page_size as u32, 0x40, &[0]);
-        let (data, slide_off) = build_cache_with_image(
-            0x1_8000_0000,
-            0x1000,
-            &image,
-            &blob,
-        );
+        let (data, slide_off) = build_cache_with_image(0x1_8000_0000, 0x1000, &image, &blob);
         let mut cache = DyldCache::parse(&data).expect("parse");
         cache.set_slide_info(SlideInfoLocation {
             file_offset: slide_off,
             size: blob.len() as u64,
         });
 
-        let extracted = extract_image_with_slide_ex(&cache, 0, 0x100)
-            .expect("extract should succeed");
+        let extracted =
+            extract_image_with_slide_ex(&cache, 0, 0x100).expect("extract should succeed");
 
         // Two auth slots (the plain entry must not appear).
         assert_eq!(
@@ -2098,14 +2093,20 @@ mod tests {
         assert_eq!(a0.offset, 0, "first auth slot lives at image offset 0");
         assert_eq!(a0.key, 1, "first auth slot key = IB");
         assert!(a0.use_addr_div, "first auth slot uses addr-diversity");
-        assert_eq!(a0.diversifier, 0x2BAD, "first diversifier matches chain entry");
+        assert_eq!(
+            a0.diversifier, 0x2BAD,
+            "first diversifier matches chain entry"
+        );
 
         // Second auth slot: offset 24, key=DA, addr_div=0, diversifier=0x0123.
         let a1 = extracted.auth_pointers[1];
         assert_eq!(a1.offset, 24, "second auth slot lives at image offset 24");
         assert_eq!(a1.key, 2, "second auth slot key = DA");
         assert!(!a1.use_addr_div, "second auth slot ignores addr-diversity");
-        assert_eq!(a1.diversifier, 0x0123, "second diversifier matches chain entry");
+        assert_eq!(
+            a1.diversifier, 0x0123,
+            "second diversifier matches chain entry"
+        );
 
         // The slid bytes must still preserve auth key/diversity bits and
         // mutate only the 32-bit offset — same invariant as
@@ -2124,8 +2125,7 @@ mod tests {
         );
 
         // Plain bytes is also the canonical `extract_image_with_slide` output.
-        let bytes_only =
-            extract_image_with_slide(&cache, 0, 0x100).expect("legacy extract");
+        let bytes_only = extract_image_with_slide(&cache, 0, 0x100).expect("legacy extract");
         assert_eq!(
             extracted.bytes, bytes_only,
             "ExtractedImage.bytes matches legacy extract_image_with_slide output",
@@ -2149,16 +2149,14 @@ mod tests {
         );
         let cache = DyldCache::parse(&data).expect("parse");
 
-        let extracted =
-            extract_image_with_slide_ex(&cache, 0, 0).expect("extract");
+        let extracted = extract_image_with_slide_ex(&cache, 0, 0).expect("extract");
         assert!(
             extracted.auth_pointers.is_empty(),
             "non-v5 / unsliced extract must surface no auth pointers, got {:?}",
             extracted.auth_pointers,
         );
         // Bytes still match the legacy path.
-        let bytes_only =
-            extract_image_with_slide(&cache, 0, 0).expect("legacy extract");
+        let bytes_only = extract_image_with_slide(&cache, 0, 0).expect("legacy extract");
         assert_eq!(extracted.bytes, bytes_only);
 
         // Also explicitly test the v1 path (non-v5 with slide info wired):
@@ -2178,15 +2176,13 @@ mod tests {
         v1_blob[24..26].copy_from_slice(&0u16.to_le_bytes());
         v1_blob[entries_offset as usize] = 1 << 4; // mark slot at off 0x10
 
-        let (data2, slide_off2) =
-            build_cache_with_image(0x1_8000_0000, 0x1000, &image, &v1_blob);
+        let (data2, slide_off2) = build_cache_with_image(0x1_8000_0000, 0x1000, &image, &v1_blob);
         let mut cache2 = DyldCache::parse(&data2).expect("parse");
         cache2.set_slide_info(SlideInfoLocation {
             file_offset: slide_off2,
             size: v1_blob.len() as u64,
         });
-        let v1_extracted = extract_image_with_slide_ex(&cache2, 0, 0x40)
-            .expect("v1 extract");
+        let v1_extracted = extract_image_with_slide_ex(&cache2, 0, 0x40).expect("v1 extract");
         assert!(
             v1_extracted.auth_pointers.is_empty(),
             "v1 slide-info extract must surface no auth pointers",

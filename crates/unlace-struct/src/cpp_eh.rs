@@ -78,9 +78,7 @@ mod tests {
     use smallvec::smallvec;
     use unlace_ir::{IrInsn, IrOp, Varnode};
     use unlace_loader::msvc_rtti::TypeDescriptor;
-    use unlace_loader::seh::{
-        FUNCINFO_MAGIC_X86, build_cpp_eh_regions, handler_type_size,
-    };
+    use unlace_loader::seh::{FUNCINFO_MAGIC_X86, build_cpp_eh_regions, handler_type_size};
 
     use crate::hir::HirNode;
     use crate::seh_lower::wrap_seh_regions;
@@ -97,10 +95,7 @@ mod tests {
     }
 
     /// Pack a x86 `FuncInfo` (28 bytes, magic 0x19930520).
-    fn build_funcinfo_x86(
-        n_try_blocks: u32,
-        p_try_block_map: u32,
-    ) -> Vec<u8> {
+    fn build_funcinfo_x86(n_try_blocks: u32, p_try_block_map: u32) -> Vec<u8> {
         let mut v = Vec::with_capacity(28);
         v.extend_from_slice(&FUNCINFO_MAGIC_X86.to_le_bytes());
         v.extend_from_slice(&0i32.to_le_bytes()); // max_state
@@ -185,24 +180,22 @@ mod tests {
 
         // Resolver: when asked for our one descriptor, hand back a
         // `TypeDescriptor` carrying a class name.
-        let (_fi, regions) = build_cpp_eh_regions(
-            &data,
-            0,
-            id_rva_to_offset,
-            |rva| {
-                if rva == p_type_descriptor {
-                    Some(TypeDescriptor {
-                        name: "MyException".into(),
-                    })
-                } else {
-                    None
-                }
-            },
-        )
+        let (_fi, regions) = build_cpp_eh_regions(&data, 0, id_rva_to_offset, |rva| {
+            if rva == p_type_descriptor {
+                Some(TypeDescriptor {
+                    name: "MyException".into(),
+                })
+            } else {
+                None
+            }
+        })
         .expect("FuncInfo should parse");
         assert_eq!(regions.len(), 1);
         assert_eq!(regions[0].catches.len(), 1);
-        assert_eq!(regions[0].catches[0].type_name.as_deref(), Some("MyException"));
+        assert_eq!(
+            regions[0].catches[0].type_name.as_deref(),
+            Some("MyException")
+        );
 
         // Now lower into HIR.
         let seh_regions = cpp_eh_regions_to_seh(&regions);
@@ -298,13 +291,8 @@ mod tests {
     #[test]
     fn test_no_try_blocks_emits_no_trycatch() {
         let data = build_funcinfo_x86(0, 0);
-        let (_fi, regions) = build_cpp_eh_regions(
-            &data,
-            0,
-            id_rva_to_offset,
-            |_rva| None,
-        )
-        .expect("FuncInfo should parse even with zero try-blocks");
+        let (_fi, regions) = build_cpp_eh_regions(&data, 0, id_rva_to_offset, |_rva| None)
+            .expect("FuncInfo should parse even with zero try-blocks");
         assert!(regions.is_empty(), "no try-blocks means no regions");
 
         let seh_regions = cpp_eh_regions_to_seh(&regions);

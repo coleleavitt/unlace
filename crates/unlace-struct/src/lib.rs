@@ -17,10 +17,10 @@ pub mod hir_cse;
 pub mod hir_licm;
 pub mod if_to_switch;
 pub mod irreducible;
-pub mod loop_normalize;
 pub mod label_cleanup;
 pub mod label_fallthrough;
 pub mod label_hoist;
+pub mod loop_normalize;
 pub mod node_split;
 pub mod region_structurer;
 pub mod return_merge;
@@ -55,12 +55,14 @@ pub use loop_normalize::normalize_dowhile_to_while;
 pub use node_split::split_irreducible_entries;
 pub use region_structurer::{Region, count_gotos, regions_to_hir, structure_regions};
 pub use return_merge::return_merge;
-pub use seh_lower::{AddrRange, SehCatchArm, SehHandler, SehRegion, catch_all_type, wrap_seh_regions};
+pub use seh_lower::{
+    AddrRange, SehCatchArm, SehHandler, SehRegion, catch_all_type, wrap_seh_regions,
+};
 pub use short_circuit::short_circuit_recovery;
 pub use structurer::{
     StructureError, recover_for_loops, structure, structure_preserve_returns,
-    structure_preserve_returns_with_landing_pads, structure_with_arch,
-    structure_with_landing_pads, structure_with_landing_pads_and_arch,
+    structure_preserve_returns_with_landing_pads, structure_with_arch, structure_with_landing_pads,
+    structure_with_landing_pads_and_arch,
 };
 pub use switch_recovery::{
     ComputedGoto, IndirectBranchKind, JumpTable, JumpTableKind, SectionPerms, SectionView,

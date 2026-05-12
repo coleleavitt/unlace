@@ -241,7 +241,7 @@ mod tests {
 
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{build_ssa, SsaFunction};
+    use unlace_ir::ssa::{SsaFunction, build_ssa};
     use unlace_ir::xref::build_call_graph;
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
@@ -272,8 +272,7 @@ mod tests {
 
     /// Construct a `funcs` map plus its call graph, lift each function.
     fn build(funcs: Vec<Function>) -> (BTreeMap<u64, SsaFunction>, CallGraph) {
-        let raw: BTreeMap<u64, Function> =
-            funcs.into_iter().map(|f| (f.addr, f)).collect();
+        let raw: BTreeMap<u64, Function> = funcs.into_iter().map(|f| (f.addr, f)).collect();
         let cg = build_call_graph(&raw);
         let lifted: BTreeMap<u64, SsaFunction> =
             raw.into_iter().map(|(a, f)| (a, lift(f))).collect();

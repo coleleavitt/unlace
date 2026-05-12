@@ -171,7 +171,6 @@ pub fn import_dwarf(image: &BinaryImage) -> Result<DwarfInfo, LoadError> {
     })
 }
 
-
 fn extract_macros(dwarf: &gimli::Dwarf<R<'_>>) -> Result<Vec<MacroDefinition>, gimli::Error> {
     let mut out = Vec::new();
     let mut seen = BTreeSet::new();
@@ -185,21 +184,31 @@ fn extract_macros(dwarf: &gimli::Dwarf<R<'_>>) -> Result<Vec<MacroDefinition>, g
 
         let mut visit = |body: String, file: Option<String>, line: Option<u64>| {
             if let Some(def) = parse_macro_definition(&body, file, line) {
-                let key = (def.name.clone(), def.value.clone(), def.file.clone(), def.line);
+                let key = (
+                    def.name.clone(),
+                    def.value.clone(),
+                    def.file.clone(),
+                    def.line,
+                );
                 if seen.insert(key) {
                     out.push(def);
                 }
             }
         };
 
-        if let Some(gimli::AttributeValue::DebugMacroRef(offset)) = entry.attr_value(gimli::DW_AT_macros) {
+        if let Some(gimli::AttributeValue::DebugMacroRef(offset)) =
+            entry.attr_value(gimli::DW_AT_macros)
+        {
             let mut macros = dwarf.macros(offset)?;
             let mut current_file = None;
             while let Some(op) = macros.next()? {
                 use gimli::read::MacroEntry::*;
                 match op {
                     Define { line, text } => {
-                        let body = text.string(unit.unit_ref(dwarf))?.to_string_lossy().into_owned();
+                        let body = text
+                            .string(unit.unit_ref(dwarf))?
+                            .to_string_lossy()
+                            .into_owned();
                         visit(body, current_file.clone(), Some(line));
                     }
                     StartFile { file, .. } => {
@@ -211,14 +220,19 @@ fn extract_macros(dwarf: &gimli::Dwarf<R<'_>>) -> Result<Vec<MacroDefinition>, g
             }
         }
 
-        if let Some(gimli::AttributeValue::DebugMacinfoRef(offset)) = entry.attr_value(gimli::DW_AT_macro_info) {
+        if let Some(gimli::AttributeValue::DebugMacinfoRef(offset)) =
+            entry.attr_value(gimli::DW_AT_macro_info)
+        {
             let mut macros = dwarf.macinfo(offset)?;
             let mut current_file = None;
             while let Some(op) = macros.next()? {
                 use gimli::read::MacroEntry::*;
                 match op {
                     Define { line, text } => {
-                        let body = text.string(unit.unit_ref(dwarf))?.to_string_lossy().into_owned();
+                        let body = text
+                            .string(unit.unit_ref(dwarf))?
+                            .to_string_lossy()
+                            .into_owned();
                         visit(body, current_file.clone(), Some(line));
                     }
                     StartFile { file, .. } => {
@@ -234,7 +248,11 @@ fn extract_macros(dwarf: &gimli::Dwarf<R<'_>>) -> Result<Vec<MacroDefinition>, g
     Ok(out)
 }
 
-fn parse_macro_definition(body: &str, file: Option<String>, line: Option<u64>) -> Option<MacroDefinition> {
+fn parse_macro_definition(
+    body: &str,
+    file: Option<String>,
+    line: Option<u64>,
+) -> Option<MacroDefinition> {
     let trimmed = body.trim();
     if trimmed.is_empty() {
         return None;
@@ -498,7 +516,6 @@ fn extract_union_type(
         members,
     }))
 }
-
 
 fn render_type_with_template_params(name: &str, template_params: &[String]) -> String {
     if template_params.is_empty() || name.contains('<') {
@@ -768,7 +785,9 @@ fn extract_template_params_for_type_die(
         let param_name = attr_string(dwarf, unit, entry, DW_AT_name)?;
 
         let rendered = match (param_name, type_name) {
-            (Some(name), Some(type_name)) if !name.is_empty() => format!("{} = {}", name, type_name),
+            (Some(name), Some(type_name)) if !name.is_empty() => {
+                format!("{} = {}", name, type_name)
+            }
             (Some(name), None) if !name.is_empty() => name,
             (_, Some(type_name)) if !type_name.is_empty() => type_name,
             _ => continue,
@@ -1190,7 +1209,9 @@ mod tests {
             .set(DW_AT_data_member_location, AttributeValue::Data1(0));
 
         let mut sections = Sections::new(EndianVec::new(LittleEndian));
-        dwarf.write(&mut sections).expect("should write synthetic DWARF");
+        dwarf
+            .write(&mut sections)
+            .expect("should write synthetic DWARF");
 
         let section = |id: gimli::SectionId| -> crate::image::Section {
             let data = sections
@@ -1245,7 +1266,10 @@ mod tests {
         };
 
         let info = import_dwarf(&img).expect("should parse synthetic DWARF");
-        let holder = info.structs.get("Holder").expect("Holder struct should exist");
+        let holder = info
+            .structs
+            .get("Holder")
+            .expect("Holder struct should exist");
         assert_eq!(holder.fields[0].type_name, "Vec<T = int>");
 
         let vec = info.structs.get("Vec").expect("Vec struct should exist");

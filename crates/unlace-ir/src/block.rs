@@ -8,7 +8,9 @@ use crate::IrInsn;
 ///
 /// IDs are assigned in reverse-post-order so that `BlockId(0)` is always the
 /// entry block (IR spec SS2.4).
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct BlockId(pub u32);
 
 impl std::fmt::Display for BlockId {

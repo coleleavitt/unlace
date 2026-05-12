@@ -84,7 +84,9 @@ fn collect_type_calling_conventions(
         };
 
         let convention = match parsed {
-            TypeData::Procedure(proc) => map_pdb_calling_convention(proc.attributes.calling_convention()),
+            TypeData::Procedure(proc) => {
+                map_pdb_calling_convention(proc.attributes.calling_convention())
+            }
             TypeData::MemberFunction(proc) => {
                 map_pdb_calling_convention(proc.attributes.calling_convention())
             }
@@ -390,10 +392,22 @@ mod tests {
 
     #[test]
     fn maps_pdb_calling_conventions() {
-        assert_eq!(map_pdb_calling_convention(0x00), Some(CallingConvention::Cdecl));
-        assert_eq!(map_pdb_calling_convention(0x07), Some(CallingConvention::Stdcall));
-        assert_eq!(map_pdb_calling_convention(0x04), Some(CallingConvention::MicrosoftX64));
-        assert_eq!(map_pdb_calling_convention(0x0b), Some(CallingConvention::Thiscall));
+        assert_eq!(
+            map_pdb_calling_convention(0x00),
+            Some(CallingConvention::Cdecl)
+        );
+        assert_eq!(
+            map_pdb_calling_convention(0x07),
+            Some(CallingConvention::Stdcall)
+        );
+        assert_eq!(
+            map_pdb_calling_convention(0x04),
+            Some(CallingConvention::MicrosoftX64)
+        );
+        assert_eq!(
+            map_pdb_calling_convention(0x0b),
+            Some(CallingConvention::Thiscall)
+        );
         assert_eq!(map_pdb_calling_convention(0xff), None);
     }
 

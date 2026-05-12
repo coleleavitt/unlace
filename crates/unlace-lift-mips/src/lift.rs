@@ -8,7 +8,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
-use crate::ops::{arithmetic, bitwise, control_flow, data_move, memory};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, memory, msa};
 use crate::register_file::{self, ZERO, capstone_reg_to_offset, mips64_register_file};
 
 // Capstone contains a raw `*mut c_void` handle to the C library.
@@ -85,7 +85,8 @@ impl Lifter for MipsLifter {
         let operands: Vec<MipsOperand> = mips_detail.operands().collect();
 
         let mut ctx = LiftCtx::new(addr);
-        dispatch_insn(&mut ctx, insn.id(), &operands);
+        let mnemonic = insn.mnemonic().unwrap_or("");
+        dispatch_insn(&mut ctx, insn.id(), &operands, mnemonic);
 
         Ok(LiftedInsn {
             ir_ops: ctx.ops,
@@ -208,9 +209,13 @@ impl LiftCtx {
     }
 }
 
-fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand]) {
+fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand], mnemonic: &str) {
     use MipsInsn::*;
     let insn_id = id.0;
+
+    if msa::lift_if_msa(ctx, insn_id, ops, mnemonic) {
+        return;
+    }
 
     match insn_id {
         x if x == MIPS_INS_NOP as u32 => data_move::lift_nop(ctx),
@@ -537,6 +542,54 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_msa_addv_lifts_to_128_bit_callother() {
+        let l = lifter();
+        // addv.b $w0, $w0, $w0 = 0x7800000e (big-endian)
+        let result = l
+            .lift_insn(&[0x78, 0x00, 0x00, 0x0e], 0x1000)
+            .expect("should decode MSA addv.b");
+        assert_eq!(result.len, 4);
+        assert_eq!(result.ir_ops.len(), 1);
+        let op = &result.ir_ops[0];
+        assert_eq!(op.op, IrOp::Callother);
+        assert_eq!(op.output.expect("MSA addv output").size, 16);
+        assert_eq!(op.inputs[0].offset, msa::CALLOTHER_MSA_ADDV);
+        assert_eq!(op.inputs[1].offset, 1);
+    }
+
+    #[test]
+    fn test_msa_subv_and_minmax_lift_to_distinct_intrinsics() {
+        let l = lifter();
+        let subv = l
+            .lift_insn(&[0x78, 0x80, 0x00, 0x0e], 0x1000)
+            .expect("should decode MSA subv.b");
+        assert_eq!(subv.ir_ops[0].op, IrOp::Callother);
+        assert_eq!(subv.ir_ops[0].inputs[0].offset, msa::CALLOTHER_MSA_SUBV);
+
+        let max_s = l
+            .lift_insn(&[0x79, 0x40, 0x00, 0x0e], 0x1000)
+            .expect("should decode MSA max_s.w");
+        assert_eq!(max_s.ir_ops[0].op, IrOp::Callother);
+        assert_eq!(max_s.ir_ops[0].inputs[0].offset, msa::CALLOTHER_MSA_MINMAX);
+        assert_eq!(max_s.ir_ops[0].inputs[1].offset, 4);
+    }
+
+    #[test]
+    fn test_msa_bitwise_lifts_only_for_vector_registers() {
+        let l = lifter();
+        // and.v $w0, $w0, $w0 = 0x7800001e (big-endian)
+        let result = l
+            .lift_insn(&[0x78, 0x00, 0x00, 0x1e], 0x1000)
+            .expect("should decode MSA and.v");
+        assert_eq!(result.ir_ops[0].op, IrOp::Callother);
+        assert_eq!(
+            result.ir_ops[0].inputs[0].offset,
+            msa::CALLOTHER_MSA_BITWISE
+        );
+        assert_eq!(result.ir_ops[0].output.expect("and.v output").size, 16);
     }
 
     // Unknown instruction falls back to Unimplemented

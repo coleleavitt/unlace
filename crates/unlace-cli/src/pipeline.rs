@@ -1455,6 +1455,9 @@ pub fn decompile_function_with_symbols(
     printer_annotations.go_defer_sites = ssa.go_defer_sites.clone();
     let hash_pass = unlace_passes::StringHashSwitchPass::from_strings(&image.string_table);
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
+    if let Some(pdb_types) = image.pdb_types.as_ref() {
+        printer_annotations.pdb_constants_by_value = pdb_types.constants_by_value.clone();
+    }
     let objc_info = unlace_loader::scan_objc_classlist(image);
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
     printer_annotations.go_interfaces = image.go_types.clone();

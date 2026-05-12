@@ -2537,48 +2537,66 @@ fn fold_aarch64_bcc_if_in_children(node: &mut HirNode) {
 #[allow(dead_code)]
 const _: fn(&Varnode) -> bool = is_aarch64_flag_varnode;
 
-/// Fuse adjacent [`HirNode::GuardedIf`] pairs whose cond codes are inverses
-/// (`cc_b == cc_a ^ 1`, ARM A8.3) into a single `GuardedIf` carrying the
-/// second group as `else_body`. The lifter emits one `GuardedIf` per
-/// contiguous IT-lane run; this pass collapses `ITE`/`ITTE`/etc. patterns
-/// into proper `if/else`. AL (0xE) has no architectural inverse and is
-/// skipped to keep the post-pass safe for any future AL-guarded emission.
+/// Fuse adjacent [`HirNode::GuardedIf`] lanes whose cond codes are either the
+/// first lane's condition or its inverse (`cc ^ 1`, ARM A8.3) into one
+/// `GuardedIf` carrying all true-lane nodes in `then_body` and all false-lane
+/// nodes in `else_body`.
+///
+/// The lifter emits one `GuardedIf` per contiguous IT-lane run. A shallow
+/// pairwise fuse is enough for `ITE` and one-sided 4-slot blocks like `ITEEE`,
+/// but it leaves deep alternating blocks (`ITETE`, `ITET`, `ITTE`) as multiple
+/// sibling if/else statements. Collapse the whole maximal T/E lane run at once
+/// so any legal 1..=4-slot IT block structures as a single source-level
+/// conditional. AL (0xE) has no architectural inverse and is skipped to keep
+/// the post-pass safe for any future AL-guarded emission.
 fn fuse_guarded_if_else(nodes: &mut Vec<HirNode>) {
     let mut i = 0;
-    while i + 1 < nodes.len() {
-        let inverse_pair = match (&nodes[i], &nodes[i + 1]) {
-            (
-                HirNode::GuardedIf {
-                    cond_code: cc_a,
-                    else_body: ea,
-                    ..
-                },
-                HirNode::GuardedIf {
-                    cond_code: cc_b,
-                    else_body: eb,
-                    ..
-                },
-            ) => {
-                ea.is_empty()
-                    && eb.is_empty()
-                    && *cc_a != 0xE
-                    && *cc_b != 0xE
-                    && *cc_b == (*cc_a ^ 1)
-            }
-            _ => false,
+    while i < nodes.len() {
+        let HirNode::GuardedIf { cond_code: first_cc, else_body, .. } = &nodes[i] else {
+            i += 1;
+            continue;
         };
-        if inverse_pair {
-            let second = nodes.remove(i + 1);
+        if !else_body.is_empty() || *first_cc == 0xE {
+            i += 1;
+            continue;
+        }
+
+        let first_cc = *first_cc;
+        let inverse_cc = first_cc ^ 1;
+        let mut end = i;
+        let mut then_body = Vec::new();
+        let mut else_body = Vec::new();
+        let mut saw_inverse = false;
+
+        while end < nodes.len() {
             let HirNode::GuardedIf {
-                then_body: second_then,
-                ..
-            } = second
+                cond_code,
+                then_body: lane_body,
+                else_body: lane_else,
+            } = &nodes[end]
             else {
-                unreachable!()
+                break;
             };
-            if let HirNode::GuardedIf { else_body, .. } = &mut nodes[i] {
-                *else_body = second_then;
+            if !lane_else.is_empty() || *cond_code == 0xE {
+                break;
             }
+            if *cond_code == first_cc {
+                then_body.extend(lane_body.iter().cloned());
+            } else if *cond_code == inverse_cc {
+                saw_inverse = true;
+                else_body.extend(lane_body.iter().cloned());
+            } else {
+                break;
+            }
+            end += 1;
+        }
+
+        if saw_inverse && end > i + 1 {
+            nodes.splice(
+                i..end,
+                [HirNode::GuardedIf { cond_code: first_cc, then_body, else_body }],
+            );
+            i += 1;
         } else {
             i += 1;
         }
@@ -5560,6 +5578,38 @@ mod tests {
         assert_eq!(found[0].0, 0);
         assert_eq!(found[0].1, 1, "single T-lane insn");
         assert_eq!(found[0].2, 3, "three E-lane insns");
+    }
+
+    #[test]
+    fn t316_four_slot_alternating_it_fuses_to_one_if_else() {
+        let r0 = Varnode::reg(0, 8);
+        let r1 = Varnode::reg(8, 8);
+        let r2 = Varnode::reg(16, 8);
+        let r3 = Varnode::reg(24, 8);
+        let r4 = Varnode::reg(32, 8);
+        let c1 = Varnode::constant(1, 8);
+
+        let mut func = Function::new("it_alt4_fuse", BlockId(0), 0xA0000);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        // ITETE EQ lowers to four guarded slots: T, E, T, E. A shallow
+        // pairwise fuse would leave two sibling if/else nodes; deep IT
+        // recovery must collect all T lanes and all E lanes into one node.
+        bb0.insns.push(guarded_arith(r0, &[r1, c1], 0xA0000, 0));
+        bb0.insns.push(guarded_arith(r2, &[r1, c1], 0xA0002, 1));
+        bb0.insns.push(guarded_arith(r3, &[r1, c1], 0xA0004, 0));
+        bb0.insns.push(guarded_arith(r4, &[r1, c1], 0xA0006, 1));
+        bb0.insns.push(ctrl_insn(IrOp::Return, 0xA0008));
+        func.insert_block(bb0);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        let mut found = Vec::new();
+        collect_guarded_ifs(&hir.body, &mut found);
+        assert_eq!(found.len(), 1, "ITETE should become one GuardedIf, got {found:?}");
+        assert_eq!(found[0].0, 0);
+        assert_eq!(found[0].1, 2, "two T-lane statements in then_body");
+        assert_eq!(found[0].2, 2, "two E-lane statements in else_body");
     }
 
     #[test]

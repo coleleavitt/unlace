@@ -437,6 +437,80 @@ pub fn scan_objc_categories(image: &BinaryImage) -> Vec<ObjcCategory> {
     scan_objc_categories_with_classes(image, &BTreeMap::new())
 }
 
+/// Strip the `_OBJC_CLASS_$_` prefix (Apple's external ObjC class symbol
+/// convention) and return the bare class name. Returns `None` for symbols
+/// that don't match either the leading-underscore (Mach-O) or unprefixed
+/// (some tooling normalizes the leading `_`) forms.
+fn strip_objc_class_symbol(sym: &str) -> Option<&str> {
+    sym.strip_prefix("_OBJC_CLASS_$_")
+        .or_else(|| sym.strip_prefix("OBJC_CLASS_$_"))
+}
+
+/// Resolve the target class name for a category whose `cls` field points to
+/// a class defined in this image *or* bound from another dylib (e.g. UIKit
+/// extending `NSObject` from `libobjc.dylib`).
+///
+/// Resolution order:
+///   1. `cat.class_name` — already filled in by the categorylist scan when
+///      the class lives in `__objc_classlist` of this image.
+///   2. `image.relocations` — Mach-O bind opcodes record the class slot VA
+///      as a relocation against `_OBJC_CLASS_$_<Name>`.
+///   3. `image.symbols` — local symbol at the class slot VA, same convention.
+fn resolve_category_target(image: &BinaryImage, cat: &ObjcCategory) -> Option<String> {
+    if let Some(name) = &cat.class_name {
+        return Some(name.clone());
+    }
+    if cat.class_addr == 0 {
+        return None;
+    }
+    for reloc in &image.relocations {
+        if reloc.addr == cat.class_addr {
+            if let Some(name) = strip_objc_class_symbol(&reloc.sym_name) {
+                return Some(name.to_string());
+            }
+        }
+    }
+    if let Some(sym) = image.symbols.get(&cat.class_addr) {
+        if let Some(name) = strip_objc_class_symbol(&sym.name) {
+            return Some(name.to_string());
+        }
+    }
+    None
+}
+
+/// Build a map from method implementation address to its fully-qualified
+/// category namespace (`"Class+CategoryName"`).
+///
+/// ObjC categories splice methods into existing classes at runtime — including
+/// classes defined in other dylibs (e.g. UIKit extends `NSObject` which lives
+/// in `libobjc.dylib`). When rendering disassembly we want those category
+/// methods to surface under the host class's namespace, not a synthetic
+/// `<unknown>` bucket. The convention is to print them as
+/// `+[Class(Category) selector]` in the symbolic listing; this map is the
+/// lookup table the printer consumes (one entry per method `imp` address,
+/// covering both instance and class methods on the category).
+///
+/// Categories whose target class can't be resolved (no `class_name`, no
+/// matching relocation, no matching local symbol) are skipped — those methods
+/// stay anonymous rather than getting mislabelled.
+pub fn build_category_namespace_map(image: &BinaryImage) -> BTreeMap<u64, String> {
+    let info = scan_objc_classlist(image);
+    let mut out = BTreeMap::new();
+    for cat in &info.categories {
+        let class_name = match resolve_category_target(image, cat) {
+            Some(n) => n,
+            None => continue,
+        };
+        let qualified = format!("{class_name}+{}", cat.name);
+        for m in cat.instance_methods.iter().chain(cat.class_methods.iter()) {
+            if m.imp_addr != 0 {
+                out.insert(m.imp_addr, qualified.clone());
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1086,5 +1160,237 @@ mod tests {
 
         // KCM may or may not have ObjC — just document the finding
         // The test passes regardless
+    }
+
+    // -------- build_category_namespace_map tests (t293) --------
+
+    /// Build a complete synthetic image containing one internal class
+    /// `MyClass` plus one category `Helpers` on it that adds two instance
+    /// methods and one class method. The returned image is fed to
+    /// `build_category_namespace_map` directly.
+    fn make_image_with_internal_category() -> BinaryImage {
+        // ---- class MyClass ----
+        let class_name_va: u64 = 0x40000;
+        let class_ro_va: u64 = 0x30000;
+        let mut class_ro = vec![0u8; 24];
+        class_ro.extend_from_slice(&class_name_va.to_le_bytes());
+        let class_va: u64 = 0x20000;
+        let mut class = vec![0u8; 32];
+        class.extend_from_slice(&class_ro_va.to_le_bytes());
+        let classlist_va: u64 = 0x10000;
+        let classlist = class_va.to_le_bytes().to_vec();
+
+        // ---- category "Helpers" on MyClass ----
+        let cat_name_va: u64 = 0x40080;
+        let foo_name_va: u64 = 0x40090;
+        let bar_name_va: u64 = 0x400a0;
+        let cm_name_va: u64 = 0x400b0;
+        let types_va: u64 = 0x400c0;
+        let mut text = vec![0u8; 0x200];
+        text[..b"MyClass\0".len()].copy_from_slice(b"MyClass\0");
+        text[0x80..0x88].copy_from_slice(b"Helpers\0");
+        text[0x90..0x94].copy_from_slice(b"foo\0");
+        text[0xa0..0xa4].copy_from_slice(b"bar\0");
+        text[0xb0..0xb6].copy_from_slice(b"cMet\0\0");
+        text[0xc0..0xc4].copy_from_slice(b"v@:\0");
+
+        // instance method list at 0x50000: foo→0x1234, bar→0x5678
+        let imlist_va: u64 = 0x50000;
+        let imlist = build_method_list_section(
+            imlist_va,
+            &[(foo_name_va, types_va, 0x1234), (bar_name_va, types_va, 0x5678)],
+        );
+
+        // class method list at 0x50100: cMet→0x9abc
+        let cmlist_va: u64 = 0x50100;
+        let cmlist =
+            build_method_list_section(cmlist_va, &[(cm_name_va, types_va, 0x9abc)]);
+
+        // category struct at 0x60000
+        let cat_va: u64 = 0x60000;
+        let mut cat = Vec::new();
+        cat.extend_from_slice(&cat_name_va.to_le_bytes());
+        cat.extend_from_slice(&class_va.to_le_bytes()); // cls -> our internal class
+        cat.extend_from_slice(&imlist_va.to_le_bytes());
+        cat.extend_from_slice(&cmlist_va.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes()); // protocols
+        cat.extend_from_slice(&0u64.to_le_bytes()); // properties
+
+        let catlist_va: u64 = 0x70000;
+        let catlist = cat_va.to_le_bytes().to_vec();
+
+        let sections = vec![
+            Section { name: "__objc_classlist".into(), vaddr: classlist_va, size: classlist.len() as u64, data: classlist, flags: SectionFlags::READ },
+            Section { name: "__objc_catlist".into(), vaddr: catlist_va, size: catlist.len() as u64, data: catlist, flags: SectionFlags::READ },
+            Section { name: "__DATA".into(), vaddr: class_va, size: class.len() as u64, data: class, flags: SectionFlags::READ },
+            Section { name: "__DATA_CONST".into(), vaddr: class_ro_va, size: class_ro.len() as u64, data: class_ro, flags: SectionFlags::READ },
+            Section { name: "__DATA2".into(), vaddr: cat_va, size: cat.len() as u64, data: cat, flags: SectionFlags::READ },
+            Section { name: "__objc_methlist".into(), vaddr: imlist_va, size: imlist.len() as u64, data: imlist, flags: SectionFlags::READ },
+            Section { name: "__objc_methlist2".into(), vaddr: cmlist_va, size: cmlist.len() as u64, data: cmlist, flags: SectionFlags::READ },
+            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+        ];
+        make_test_image(sections)
+    }
+
+    #[test]
+    fn category_namespace_map_internal_class() {
+        let image = make_image_with_internal_category();
+        let map = build_category_namespace_map(&image);
+
+        // Three methods (2 instance + 1 class), all in the MyClass+Helpers
+        // namespace.
+        assert_eq!(map.len(), 3);
+        assert_eq!(map.get(&0x1234).map(String::as_str), Some("MyClass+Helpers"));
+        assert_eq!(map.get(&0x5678).map(String::as_str), Some("MyClass+Helpers"));
+        assert_eq!(map.get(&0x9abc).map(String::as_str), Some("MyClass+Helpers"));
+    }
+
+    #[test]
+    fn category_namespace_map_external_class_via_relocation() {
+        // Category targeting NSObject from libobjc — class isn't in our
+        // __objc_classlist; the cls slot is a bound pointer recorded as a
+        // relocation against `_OBJC_CLASS_$_NSObject`.
+        let cat_name_va: u64 = 0x40000;
+        let foo_name_va: u64 = 0x40010;
+        let types_va: u64 = 0x40020;
+        let mut text = vec![0u8; 0x100];
+        text[..7].copy_from_slice(b"UIExtra"); // category name
+        text[0x10..0x14].copy_from_slice(b"foo\0");
+        text[0x20..0x24].copy_from_slice(b"v@:\0");
+
+        let mlist_va: u64 = 0x50000;
+        let mlist = build_method_list_section(mlist_va, &[(foo_name_va, types_va, 0xAA00)]);
+
+        // The "external class slot" — category's cls field points here.
+        let class_slot_va: u64 = 0x80000;
+
+        let cat_va: u64 = 0x60000;
+        let mut cat = Vec::new();
+        cat.extend_from_slice(&cat_name_va.to_le_bytes());
+        cat.extend_from_slice(&class_slot_va.to_le_bytes()); // cls -> external slot
+        cat.extend_from_slice(&mlist_va.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+
+        let catlist_va: u64 = 0x70000;
+        let catlist = cat_va.to_le_bytes().to_vec();
+
+        let sections = vec![
+            Section { name: "__objc_catlist".into(), vaddr: catlist_va, size: catlist.len() as u64, data: catlist, flags: SectionFlags::READ },
+            Section { name: "__DATA".into(), vaddr: cat_va, size: cat.len() as u64, data: cat, flags: SectionFlags::READ },
+            Section { name: "__objc_methlist".into(), vaddr: mlist_va, size: mlist.len() as u64, data: mlist, flags: SectionFlags::READ },
+            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+        ];
+
+        let mut image = make_test_image(sections);
+        image.relocations.push(crate::image::Relocation {
+            addr: class_slot_va,
+            sym_name: "_OBJC_CLASS_$_NSObject".to_string(),
+            kind: crate::image::RelocKind::GlobDat,
+        });
+
+        let map = build_category_namespace_map(&image);
+        assert_eq!(map.len(), 1);
+        // Note: cat.name is read as "UIExtra" — the b"UIExtra" wrote 7 bytes
+        // followed by zeros from the pre-allocated buffer, so the C string
+        // terminates at byte 7.
+        assert_eq!(map.get(&0xAA00).map(String::as_str), Some("NSObject+UIExtra"));
+    }
+
+    #[test]
+    fn category_namespace_map_external_class_via_symbol() {
+        // Same as above but no relocation entry — instead the class slot VA
+        // appears in `image.symbols` as `_OBJC_CLASS_$_NSString`.
+        let cat_name_va: u64 = 0x40000;
+        let foo_name_va: u64 = 0x40010;
+        let types_va: u64 = 0x40020;
+        let mut text = vec![0u8; 0x100];
+        text[..6].copy_from_slice(b"Trim\0\0");
+        text[0x10..0x14].copy_from_slice(b"foo\0");
+        text[0x20..0x24].copy_from_slice(b"v@:\0");
+
+        let mlist_va: u64 = 0x50000;
+        let mlist = build_method_list_section(mlist_va, &[(foo_name_va, types_va, 0xBB00)]);
+
+        let class_slot_va: u64 = 0x80000;
+
+        let cat_va: u64 = 0x60000;
+        let mut cat = Vec::new();
+        cat.extend_from_slice(&cat_name_va.to_le_bytes());
+        cat.extend_from_slice(&class_slot_va.to_le_bytes());
+        cat.extend_from_slice(&mlist_va.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+
+        let catlist_va: u64 = 0x70000;
+        let catlist = cat_va.to_le_bytes().to_vec();
+
+        let sections = vec![
+            Section { name: "__objc_catlist".into(), vaddr: catlist_va, size: catlist.len() as u64, data: catlist, flags: SectionFlags::READ },
+            Section { name: "__DATA".into(), vaddr: cat_va, size: cat.len() as u64, data: cat, flags: SectionFlags::READ },
+            Section { name: "__objc_methlist".into(), vaddr: mlist_va, size: mlist.len() as u64, data: mlist, flags: SectionFlags::READ },
+            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+        ];
+
+        let mut image = make_test_image(sections);
+        image.symbols.insert(class_slot_va, crate::image::Symbol {
+            name: "_OBJC_CLASS_$_NSString".to_string(),
+            addr: class_slot_va,
+            size: 8,
+            kind: crate::image::SymbolKind::Object,
+        });
+
+        let map = build_category_namespace_map(&image);
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get(&0xBB00).map(String::as_str), Some("NSString+Trim"));
+    }
+
+    #[test]
+    fn category_namespace_map_skips_unresolved_target() {
+        // Category whose cls slot is neither in our classlist nor in any
+        // relocation/symbol — methods MUST NOT be inserted (we'd rather have
+        // an anonymous method than mislabel it).
+        let cat_name_va: u64 = 0x40000;
+        let foo_name_va: u64 = 0x40010;
+        let types_va: u64 = 0x40020;
+        let mut text = vec![0u8; 0x100];
+        text[..5].copy_from_slice(b"Lost\0");
+        text[0x10..0x14].copy_from_slice(b"foo\0");
+        text[0x20..0x24].copy_from_slice(b"v@:\0");
+
+        let mlist_va: u64 = 0x50000;
+        let mlist = build_method_list_section(mlist_va, &[(foo_name_va, types_va, 0xCC00)]);
+
+        let cat_va: u64 = 0x60000;
+        let mut cat = Vec::new();
+        cat.extend_from_slice(&cat_name_va.to_le_bytes());
+        cat.extend_from_slice(&0xDEADBEEFu64.to_le_bytes()); // unresolvable
+        cat.extend_from_slice(&mlist_va.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+        cat.extend_from_slice(&0u64.to_le_bytes());
+
+        let catlist_va: u64 = 0x70000;
+        let catlist = cat_va.to_le_bytes().to_vec();
+
+        let sections = vec![
+            Section { name: "__objc_catlist".into(), vaddr: catlist_va, size: catlist.len() as u64, data: catlist, flags: SectionFlags::READ },
+            Section { name: "__DATA".into(), vaddr: cat_va, size: cat.len() as u64, data: cat, flags: SectionFlags::READ },
+            Section { name: "__objc_methlist".into(), vaddr: mlist_va, size: mlist.len() as u64, data: mlist, flags: SectionFlags::READ },
+            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+        ];
+        let image = make_test_image(sections);
+
+        // Sanity: scan_objc_classlist should still see the category itself
+        // (just with class_name=None), so this isn't a "category dropped"
+        // test — it's specifically about the namespace map's resolution.
+        let info = scan_objc_classlist(&image);
+        assert_eq!(info.categories.len(), 1);
+        assert!(info.categories[0].class_name.is_none());
+
+        let map = build_category_namespace_map(&image);
+        assert!(map.is_empty(), "unresolved category target must not pollute the namespace map");
     }
 }

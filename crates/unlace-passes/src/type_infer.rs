@@ -182,6 +182,7 @@ fn seed_from_composites(func: &mut SsaFunction) {
             },
             Type::Ptr(_)
             | Type::Struct { .. }
+            | Type::Union { .. }
             | Type::Array { .. }
             | Type::FuncPtr { .. }
             | Type::Interface { .. }
@@ -602,7 +603,7 @@ fn lookup_struct_field_type(
 
     let struct_ty = composite_var_types.get(&base_sv)?;
     match struct_ty {
-        Type::Struct { fields, .. } => {
+        Type::Struct { fields, .. } | Type::Union { fields, .. } => {
             let field = fields.iter().find(|f| f.offset == offset)?;
             Some(field_to_primitive(&field.ty))
         }
@@ -637,7 +638,7 @@ fn field_to_primitive(ty: &Type) -> PrimitiveType {
             _ => PrimitiveType::Unknown,
         },
         Type::Ptr(_) | Type::FuncPtr { .. } => PrimitiveType::Ptr,
-        Type::Struct { .. } | Type::Array { .. } => PrimitiveType::Ptr,
+        Type::Struct { .. } | Type::Union { .. } | Type::Array { .. } => PrimitiveType::Ptr,
         // A Go interface value is `{ *itab, *data }` — at the SSA
         // primitive level it lowers to a pointer-sized payload, matching
         // how the printer renders `Type::Interface` as `void *`.

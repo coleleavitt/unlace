@@ -94,15 +94,17 @@ fn resolve_field_path(ty: &Type, offset: u64, _size: Option<u64>) -> Option<Vec<
     let mut remaining = offset;
     loop {
         let fields = match current {
-            Type::Struct { fields, .. } => fields,
+            Type::Struct { fields, .. } | Type::Union { fields, .. } => fields,
             _ => return None,
         };
         let field = best_field_for_offset(fields, remaining)?;
         path.push(field.name.clone());
-        if field.offset == remaining && !matches!(field.ty, Type::Struct { .. }) {
+        if field.offset == remaining
+            && !matches!(field.ty, Type::Struct { .. } | Type::Union { .. })
+        {
             return Some(path);
         }
-        if matches!(field.ty, Type::Struct { .. }) && remaining > field.offset {
+        if matches!(field.ty, Type::Struct { .. } | Type::Union { .. }) && remaining > field.offset {
             remaining -= field.offset;
             current = &field.ty;
             continue;

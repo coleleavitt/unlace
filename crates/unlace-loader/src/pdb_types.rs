@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use pdb::{FallibleIterator, PDB, TypeData, TypeIndex};
+use pdb::{FallibleIterator, PDB, SymbolData, TypeData, TypeIndex, Variant};
 
 use unlace_ir::ssa::PrimitiveType;
 use unlace_ir::types::{InterfaceMethod, StructFieldType, Type};
@@ -30,6 +30,10 @@ pub struct PdbTypes {
     pub type_hashes: BTreeMap<u32, u64>,
     /// Deterministic structural hash for each named struct/class/union.
     pub struct_hashes: BTreeMap<String, u64>,
+    /// PDB `S_CONSTANT` / `S_MANCONSTANT` symbols keyed by their source name.
+    pub constants: BTreeMap<String, i64>,
+    /// Reverse index for [`Self::constants`]: integer value → constant names.
+    pub constants_by_value: BTreeMap<i64, Vec<String>>,
 }
 
 /// A function signature lowered from `LF_PROCEDURE`.
@@ -643,7 +647,65 @@ pub fn import_pdb_types(pdb_path: &Path) -> Result<PdbTypes, LoadError> {
         }
     }
 
-    Ok(lower_cv_table(&table))
+    let mut out = lower_cv_table(&table);
+    collect_pdb_constants(&mut pdb, &mut out)?;
+
+    Ok(out)
+}
+
+fn collect_pdb_constants(
+    pdb: &mut PDB<std::fs::File>,
+    out: &mut PdbTypes,
+) -> Result<(), LoadError> {
+    let global_symbols = pdb.global_symbols()?;
+    let mut iter = global_symbols.iter();
+    while let Some(sym) = iter.next()? {
+        if let Ok(SymbolData::Constant(c)) = sym.parse()
+            && let Some(value) = variant_to_i64(c.value)
+        {
+            insert_constant(out, c.name.to_string().to_string(), value);
+        }
+    }
+
+    let dbi = pdb.debug_information()?;
+    let mut modules = dbi.modules()?;
+    while let Some(module) = modules.next()? {
+        let module_info = match pdb.module_info(&module)? {
+            Some(info) => info,
+            None => continue,
+        };
+        let mut iter = module_info.symbols()?;
+        while let Some(sym) = iter.next()? {
+            if let Ok(SymbolData::Constant(c)) = sym.parse()
+                && let Some(value) = variant_to_i64(c.value)
+            {
+                insert_constant(out, c.name.to_string().to_string(), value);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn insert_constant(out: &mut PdbTypes, name: String, value: i64) {
+    out.constants.insert(name.clone(), value);
+    let names = out.constants_by_value.entry(value).or_default();
+    if !names.contains(&name) {
+        names.push(name);
+    }
+}
+
+fn variant_to_i64(value: Variant) -> Option<i64> {
+    match value {
+        Variant::U8(v) => Some(i64::from(v)),
+        Variant::U16(v) => Some(i64::from(v)),
+        Variant::U32(v) => Some(i64::from(v)),
+        Variant::U64(v) => i64::try_from(v).ok(),
+        Variant::I8(v) => Some(i64::from(v)),
+        Variant::I16(v) => Some(i64::from(v)),
+        Variant::I32(v) => Some(i64::from(v)),
+        Variant::I64(v) => Some(v),
+    }
 }
 
 fn lower_typedata(td: &TypeData<'_>) -> Option<CvType> {
@@ -1364,6 +1426,34 @@ mod tests {
             } => assert_eq!(**element, Type::int(4)),
             other => panic!("expected sized array, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn pdb_constant_insert_builds_forward_and_reverse_maps() {
+        let mut out = PdbTypes::default();
+
+        insert_constant(&mut out, "kAnswer".into(), 42);
+        insert_constant(&mut out, "kAlsoAnswer".into(), 42);
+        insert_constant(&mut out, "kMinusOne".into(), -1);
+        insert_constant(&mut out, "kAnswer".into(), 42);
+
+        assert_eq!(out.constants.get("kAnswer"), Some(&42));
+        assert_eq!(out.constants.get("kMinusOne"), Some(&-1));
+        assert_eq!(
+            out.constants_by_value.get(&42).cloned().unwrap_or_default(),
+            vec!["kAnswer".to_string(), "kAlsoAnswer".to_string()]
+        );
+        assert_eq!(
+            out.constants_by_value.get(&-1).cloned().unwrap_or_default(),
+            vec!["kMinusOne".to_string()]
+        );
+    }
+
+    #[test]
+    fn pdb_constant_variant_conversion_rejects_out_of_range_unsigned() {
+        assert_eq!(variant_to_i64(Variant::U32(7)), Some(7));
+        assert_eq!(variant_to_i64(Variant::I16(-3)), Some(-3));
+        assert_eq!(variant_to_i64(Variant::U64(i64::MAX as u64 + 1)), None);
     }
 
     // -------------------------------------------------------------------

@@ -36,6 +36,7 @@ pub mod func_fingerprint;
 pub mod format_magic;
 pub mod global_copy_prop;
 pub mod go_closure;
+pub mod go_defer;
 pub mod go_select;
 pub mod gui_lib_recognize;
 pub mod gvn;
@@ -126,6 +127,7 @@ pub use func_fingerprint::{build_feature_vector, fingerprint_function, similarit
 pub use format_magic::{MagicCheck, detect_magic_check};
 pub use global_copy_prop::GlobalCopyPropPass;
 pub use go_closure::{ClosureAllocation, ClosureCall, detect_go_closures};
+pub use go_defer::{GoDeferSite, detect_go_defer};
 pub use go_select::{GoChannelOp, GoChannelOpKind, detect_go_channel_ops};
 pub use gvn::GvnPass;
 pub use idiom_recognition::IdiomRecognitionPass;

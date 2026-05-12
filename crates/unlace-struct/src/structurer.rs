@@ -92,6 +92,7 @@ pub fn structure_with_arch(
                 Some((insn.addr, kind.clone()))
             })
             .collect(),
+        go_defer_sites: func.go_defer_sites.clone(),
         noreturn: func.noreturn,
         composite_var_types: func.composite_var_types.clone(),
         is_ctor: false,

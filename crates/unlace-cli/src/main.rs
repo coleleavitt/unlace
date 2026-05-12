@@ -48,8 +48,8 @@ fn main() {
             } else {
                 None
             };
-            let annotation_db =
-                resolve_annotations(&binary, annotations_load.as_deref()).unwrap_or_else(|e| {
+            let annotation_db = resolve_annotations(&binary, annotations_load.as_deref())
+                .unwrap_or_else(|e| {
                     tracing::warn!(err = %e, "failed to load annotations; continuing without");
                     None
                 });
@@ -196,6 +196,7 @@ fn run_decompile(
             | ArchId::RiscV64
             | ArchId::V850
             | ArchId::Arc
+            | ArchId::SharcBlackfin
             | ArchId::Ppc
             | ArchId::Ppc64
     ) {

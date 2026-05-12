@@ -217,6 +217,33 @@ impl std::fmt::Display for PanicKind {
     }
 }
 
+/// Metadata for a Rust `Future::poll` state machine recovered from an async fn.
+///
+/// The pass records the pinned future base (`Pin<&mut T>`'s underlying `T`),
+/// the generator-state byte/word offset, observed state constants, recursive
+/// or nested poll call sites, and `Poll::{Ready, Pending}`-shaped returns.
+/// Printers surface this as a recovered `async fn` while leaving the original
+/// state-machine body available for inspection.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RustAsyncInfo {
+    /// SSA varnode holding the future/generator object base.
+    pub future_base: SsaVarnode,
+    /// Byte offset of the generator state/discriminant field from `future_base`.
+    pub state_offset: u64,
+    /// Observed state constants from comparisons and state-field stores.
+    pub states: Vec<u64>,
+    /// Call sites in the poll path, keyed as `(BlockId, insn_index)`.
+    pub poll_calls: Vec<(BlockId, usize)>,
+    /// `Poll::Ready` / `Poll::Pending` return shapes observed in this function.
+    pub poll_returns: Vec<RustPollReturnKind>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+pub enum RustPollReturnKind {
+    Ready,
+    Pending,
+}
+
 /// Metadata for an indirect call resolved as a Rust trait object vtable dispatch.
 ///
 /// Rust trait objects are fat pointers `(data_ptr, vtable_ptr)`. The vtable
@@ -275,6 +302,9 @@ pub struct SsaFunction {
     pub merged_names: BTreeMap<SsaVarnode, String>,
     pub enum_discriminants: Vec<EnumDiscriminant>,
     pub panic_sites: BTreeMap<(BlockId, usize), PanicKind>,
+    /// Rust async state-machine metadata, when this function looks like a
+    /// lowered `Future::poll` implementation for an `async fn`.
+    pub rust_async: Option<RustAsyncInfo>,
     /// Indirect calls resolved as Rust trait object vtable dispatches.
     /// Keyed by `(BlockId, insn_index)` of the `CALLIND` instruction.
     /// Populated by [`RustVtablePass`](https://docs.rs/unlace-passes).
@@ -669,6 +699,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         merged_names: BTreeMap::new(),
         enum_discriminants: Vec::new(),
         panic_sites: BTreeMap::new(),
+        rust_async: None,
         vtable_calls: BTreeMap::new(),
         cpp_vtable_calls: BTreeMap::new(),
         objc_dispatch_calls: BTreeMap::new(),

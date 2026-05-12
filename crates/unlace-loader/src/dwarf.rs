@@ -1263,6 +1263,7 @@ mod tests {
             swift_info: None,
             auth_pointers: vec![],
             auth_ptr_slots: vec![],
+            wasm_component: None,
         };
 
         let info = import_dwarf(&img).expect("should parse synthetic DWARF");

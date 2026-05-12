@@ -94,7 +94,7 @@ pub struct FunctionEntry {
 pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<Vec<FunctionEntry>> {
     let permissive_symbol_sizes = matches!(
         image.arch,
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
+        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::Agx
     );
     let text_range = image.section_by_name(".text").map(|text| {
         let start = text.vaddr;

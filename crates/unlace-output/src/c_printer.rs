@@ -109,7 +109,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
-use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
+use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaFunction, SsaVarnode, VtableCallInfo};
 use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::DwarfInfo;
@@ -419,6 +419,10 @@ pub struct PrinterAnnotations {
     pub array_struct_indices: BTreeMap<SsaVarnode, usize>,
     /// t258: per-byref-parameter union-tag types.
     pub byref_union_types: BTreeMap<u32, Vec<PrimitiveType>>,
+    /// Rust trait-object vtable dispatches keyed by CALLIND instruction VA.
+    pub rust_vtable_calls: BTreeMap<u64, VtableCallInfo>,
+    /// C++ virtual dispatches keyed by CALLIND instruction VA.
+    pub cpp_vtable_calls: BTreeMap<u64, VtableCallInfo>,
     /// t260: __usercall / __userpurge spec for functions whose register-
     /// passing scheme diverges from the active ABI's canonical sequence.
     pub usercall: Option<UsercallSpec>,
@@ -501,6 +505,8 @@ pub fn print_c_with_annotations(
         ctx.array_struct_layouts = ann.array_struct_layouts.clone();
         ctx.array_struct_indices = ann.array_struct_indices.clone();
         ctx.byref_union_types = ann.byref_union_types.clone();
+        ctx.rust_vtable_calls = ann.rust_vtable_calls.clone();
+        ctx.cpp_vtable_calls = ann.cpp_vtable_calls.clone();
     }
     if let Some(cfg) = config {
         ctx.config = cfg;
@@ -1621,6 +1627,10 @@ struct PrintCtx {
     /// has annotated the function with conflicting BYREF consumption-site
     /// types. See [`PrinterAnnotations::byref_union_types`].
     byref_union_types: BTreeMap<u32, Vec<PrimitiveType>>,
+    /// Rust trait-object vtable dispatch annotations keyed by CALLIND VA.
+    rust_vtable_calls: BTreeMap<u64, VtableCallInfo>,
+    /// C++ virtual dispatch annotations keyed by CALLIND VA.
+    cpp_vtable_calls: BTreeMap<u64, VtableCallInfo>,
     /// t259: constant absolute addresses heuristically classified as
     /// memory-mapped I/O registers. An address lands here when it is
     /// loaded at least twice in tight succession with no intervening
@@ -1702,6 +1712,8 @@ impl PrintCtx {
             array_struct_layouts: BTreeMap::new(),
             array_struct_indices: BTreeMap::new(),
             byref_union_types: BTreeMap::new(),
+            rust_vtable_calls: BTreeMap::new(),
+            cpp_vtable_calls: BTreeMap::new(),
             mmio_addrs: BTreeSet::new(),
         }
     }
@@ -4867,6 +4879,34 @@ fn forwarded_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
     Some(format!("/* -> {} */", resolved))
 }
 
+fn rust_vtable_call_comment(info: &VtableCallInfo) -> String {
+    let label = match info.slot_index {
+        0 => "drop_in_place",
+        1 => "size",
+        2 => "align",
+        _ => "method",
+    };
+    format!(
+        "Rust dyn Trait vtable call: slot {} ({}, offset {:#x})",
+        info.slot_index, label, info.vtable_offset
+    )
+}
+
+fn vtable_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
+    if insn.op != IrOp::Callind {
+        return None;
+    }
+    if let Some(info) = ctx.rust_vtable_calls.get(&insn.addr) {
+        return Some(rust_vtable_call_comment(info));
+    }
+    ctx.cpp_vtable_calls.get(&insn.addr).map(|info| {
+        format!(
+            "C++ virtual call: vtable slot {} (offset {:#x})",
+            info.slot_index, info.vtable_offset
+        )
+    })
+}
+
 fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     if insn.inputs.is_empty() {
         return "/* unknown */".to_string();
@@ -5540,7 +5580,13 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             }
             IrOp::Store => Some("/* STORE (bad arity) */;".to_string()),
             IrOp::Callind => {
-                let mut s = format!("{};", emit_callind_cast(insn, idx, ctx));
+                let mut s = String::new();
+                if let Some(comment) = vtable_call_comment(insn, ctx) {
+                    s.push_str("// ");
+                    s.push_str(&comment);
+                    s.push('\n');
+                }
+                s.push_str(&format!("{};", emit_callind_cast(insn, idx, ctx)));
                 if let Some(c) = forwarded_call_comment(insn, ctx) {
                     s.push(' ');
                     s.push_str(&c);
@@ -5749,6 +5795,10 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 let cxa_annotation = cxa_call_annotation(insn, ctx);
                 if let Some(ref ann) = cxa_annotation {
                     let _ = writeln!(out, "/* {} */", ann);
+                    indent(depth, ctx.config.tab_width, out);
+                }
+                if let Some(comment) = vtable_call_comment(insn, ctx) {
+                    let _ = writeln!(out, "// {}", comment);
                     indent(depth, ctx.config.tab_width, out);
                 }
                 let fwd = forwarded_call_comment(insn, ctx);
@@ -16714,6 +16764,45 @@ mod tests {
         assert!(
             output.contains("// patched for CVE-2024-x"),
             "missing line comment: {output}"
+        );
+    }
+
+
+    #[test]
+    fn t296_rust_trait_object_vtable_call_is_annotated() {
+        let fptr = reg(0, 8);
+        let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr], 0x1100);
+        let func = make_func(
+            "dyn_trait_dispatch",
+            vec![HirNode::Statement(callind), HirNode::Return(None)],
+        );
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.rust_vtable_calls.insert(
+            0x1100,
+            unlace_ir::ssa::VtableCallInfo {
+                base_varnode: SsaVarnode {
+                    base: reg(16, 8),
+                    version: 0,
+                },
+                vtable_offset: 24,
+                slot_index: 3,
+            },
+        );
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+        assert!(
+            output.contains("// Rust dyn Trait vtable call: slot 3 (method, offset 0x18)"),
+            "missing Rust vtable annotation: {output}"
         );
     }
 

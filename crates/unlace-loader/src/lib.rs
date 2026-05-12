@@ -46,6 +46,7 @@ pub use dwarf::{
     DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo, SourceLocation,
     StructField, StructType, UnionType, import_dwarf,
 };
+pub use pdb::{InlineeSite, PdbInfo, import_pdb, merge_pdb_symbols};
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;
 pub use ios_img4::{Img4Container, Img4Error, parse_img4};

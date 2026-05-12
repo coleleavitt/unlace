@@ -75,6 +75,7 @@ pub fn run_batch(
             | ArchId::RiscV64
             | ArchId::V850
             | ArchId::Arc
+            | ArchId::Msp430
             | ArchId::Ppc
             | ArchId::Ppc64
     ) {

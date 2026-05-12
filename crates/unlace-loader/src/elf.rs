@@ -16,6 +16,11 @@ use crate::image::{
 /// ELF magic bytes: `\x7fELF`.
 const ELF_MAGIC: [u8; 4] = [0x7f, b'E', b'L', b'F'];
 
+/// Solana sBPF ELF machine ID used by the Solana toolchain.
+const EM_SBPF: u16 = 263;
+/// Solana BPF version flag used in older EM_BPF objects.
+const EF_SBPF_V2: u32 = 0x20;
+
 /// Loader for ELF binaries (32-bit and 64-bit, little and big endian).
 pub struct ElfLoader;
 
@@ -73,9 +78,9 @@ where
         runtime_functions: Vec::new(),
         resources: Vec::new(),
         bound_imports: Vec::new(),
-            delay_imports: Vec::new(),
-            forwarded_exports: Vec::new(),
-            forwarded_resolutions: std::collections::BTreeMap::new(),
+        delay_imports: Vec::new(),
+        forwarded_exports: Vec::new(),
+        forwarded_resolutions: std::collections::BTreeMap::new(),
         rich_header: None,
         dylibs: Vec::new(),
         rpaths: Vec::new(),
@@ -124,6 +129,15 @@ where
         elf::EM_PPC64 => ArchId::Ppc64,
         elf::EM_V850 => ArchId::V850,
         elf::EM_ARC_COMPACT | elf::EM_ARC_COMPACT2 => ArchId::Arc,
+        EM_SBPF => ArchId::Sbpf,
+        elf::EM_BPF => {
+            let flags = header.e_flags(endian);
+            if flags & EF_SBPF_V2 != 0 {
+                ArchId::Sbpf
+            } else {
+                ArchId::Ebpf
+            }
+        }
         _ => ArchId::Unknown(machine),
     };
 
@@ -369,6 +383,8 @@ fn classify_reloc(reloc: &object::read::Relocation) -> RelocKind {
             }
 
             elf::R_X86_64_RELATIVE | elf::R_AARCH64_RELATIVE => RelocKind::Relative,
+
+            elf::R_BPF_64_64 | elf::R_BPF_64_32 => RelocKind::GlobDat,
 
             _ => RelocKind::Other,
         },

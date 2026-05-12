@@ -15,10 +15,11 @@ mod tests {
         ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
         CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
         CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
-        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
-        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
-        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
-        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
+        CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
+        CALLOTHER_INT_SMULT_HIGH, CALLOTHER_SME_FMOPA, CALLOTHER_SME_SMOPA, CALLOTHER_SME_UMOPA,
+        ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm,
+        decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp,
+        try_aarch64_csel,
     };
 
     #[test]
@@ -195,8 +196,8 @@ mod tests {
         let l = lifter();
         let rf = l.register_file();
         assert!(!rf.registers.is_empty());
-        // 31 Xn + SP + PC + NZCV + PSTATE_NZCV + 32 Zn + 16 Pn = 83
-        assert_eq!(rf.registers.len(), 83);
+        // 31 Xn + SP + PC + NZCV + PSTATE_NZCV + 32 Zn + 16 Pn + ZA + ZT0 = 85
+        assert_eq!(rf.registers.len(), 85);
         assert_eq!(rf.registers[0].name, "X0");
         assert_eq!(rf.registers[30].name, "X30");
         assert_eq!(rf.registers[31].name, "SP");
@@ -910,7 +911,9 @@ mod tests {
         let l = ArmLifter::new_thumb();
         assert_eq!(l.mode(), ArmLiftMode::Thumb);
         // IT EQ — encoded as 0xBF08 (little-endian: 0x08, 0xBF).
-        let r = l.lift_insn(&[0x08, 0xBF], 0x1000).expect("IT should decode");
+        let r = l
+            .lift_insn(&[0x08, 0xBF], 0x1000)
+            .expect("IT should decode");
         assert_eq!(r.len, 2);
         assert!(r.ir_ops.is_empty(), "IT itself emits no IR");
         let st = l.current_it_state().expect("IT must arm the state machine");
@@ -1007,9 +1010,7 @@ mod tests {
         // MOVS r0, #1  →  0x2001 (Thumb-1, fits in IT block; cond is EQ=0)
         let l = ArmLifter::new_thumb();
         let _ = l.lift_insn(&0xBF08u16.to_le_bytes(), 0x1000).expect("IT");
-        let r = l
-            .lift_insn(&0x2001u16.to_le_bytes(), 0x1002)
-            .expect("MOVS");
+        let r = l.lift_insn(&0x2001u16.to_le_bytes(), 0x1002).expect("MOVS");
         let copy = r
             .ir_ops
             .iter()
@@ -1048,9 +1049,7 @@ mod tests {
         // IT EQ; MOVS; ADDS  →  third insn falls outside the block
         let l = ArmLifter::new_thumb();
         let _ = l.lift_insn(&0xBF08u16.to_le_bytes(), 0x1000).expect("IT");
-        let movs = l
-            .lift_insn(&0x2001u16.to_le_bytes(), 0x1002)
-            .expect("MOVS");
+        let movs = l.lift_insn(&0x2001u16.to_le_bytes(), 0x1002).expect("MOVS");
         let movs_copy = movs
             .ir_ops
             .iter()
@@ -1059,9 +1058,7 @@ mod tests {
         assert_eq!(movs_copy.guard, Some(0));
 
         // ADDS r0, #1  →  0x3001 (post-IT, must be unguarded)
-        let adds = l
-            .lift_insn(&0x3001u16.to_le_bytes(), 0x1004)
-            .expect("ADDS");
+        let adds = l.lift_insn(&0x3001u16.to_le_bytes(), 0x1004).expect("ADDS");
         assert!(
             adds.ir_ops.iter().all(|i| i.guard.is_none()),
             "post-IT insn must not carry a guard: {:?}",
@@ -1111,9 +1108,7 @@ mod tests {
         assert_eq!(copy2.guard, Some(1), "slot 2 must be guarded NE");
 
         // Block drained — subsequent insn is unguarded.
-        let r3 = l
-            .lift_insn(&0x3001u16.to_le_bytes(), 0x1006)
-            .expect("ADDS");
+        let r3 = l.lift_insn(&0x3001u16.to_le_bytes(), 0x1006).expect("ADDS");
         assert!(
             r3.ir_ops.iter().all(|i| i.guard.is_none()),
             "post-block insn must be unguarded",
@@ -1217,9 +1212,7 @@ mod tests {
             (0xE021_0002, IrOp::IntXor),
         ];
         for (enc, expected) in cases {
-            let r = l
-                .lift_insn(&enc.to_le_bytes(), 0x1000)
-                .expect("decodes");
+            let r = l.lift_insn(&enc.to_le_bytes(), 0x1000).expect("decodes");
             assert!(
                 r.ir_ops.iter().any(|i| i.op == *expected),
                 "encoding {enc:#x} should produce {expected:?}"
@@ -1316,9 +1309,7 @@ mod tests {
         let high = r
             .ir_ops
             .iter()
-            .find(|i| {
-                i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH
-            })
+            .find(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH)
             .expect("UMULL must emit a MULT_HIGH Callother for the high half");
         assert_eq!(mult.inputs[0], high.inputs[1]);
         assert_eq!(mult.inputs[1], high.inputs[2]);
@@ -1335,8 +1326,9 @@ mod tests {
             .expect("SMULL decodes");
         assert!(r.ir_ops.iter().any(|i| i.op == IrOp::IntMult));
         assert!(
-            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
-                && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
             "SMULL must emit the signed-MULT_HIGH Callother"
         );
         assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
@@ -1361,13 +1353,15 @@ mod tests {
         );
         // Unsigned MULT_HIGH callother — NOT the signed variant.
         assert!(
-            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
-                && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH),
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH),
             "UMLAL must emit unsigned MULT_HIGH Callother"
         );
         assert!(
-            !r.ir_ops.iter().any(|i| i.op == IrOp::Callother
-                && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
+            !r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
             "UMLAL must NOT emit signed MULT_HIGH"
         );
         // 64-bit add → expect at least two IntAdd ops (low + hi-chain).
@@ -1399,13 +1393,15 @@ mod tests {
             .expect("SMLAL decodes");
 
         assert!(
-            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
-                && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
             "SMLAL must emit signed MULT_HIGH Callother"
         );
         assert!(
-            !r.ir_ops.iter().any(|i| i.op == IrOp::Callother
-                && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH),
+            !r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH),
             "SMLAL must NOT emit unsigned MULT_HIGH"
         );
         // Same accumulate structure as UMLAL.
@@ -1423,8 +1419,9 @@ mod tests {
             .lift_insn(&0x9BC2_7C20u32.to_le_bytes(), 0x1000)
             .expect("UMULH decodes");
         assert!(
-            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
-                && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH),
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_INT_MULT_HIGH),
             "UMULH must emit a MULT_HIGH Callother"
         );
         assert!(
@@ -1441,8 +1438,9 @@ mod tests {
             .lift_insn(&0x9B42_7C20u32.to_le_bytes(), 0x1000)
             .expect("SMULH decodes");
         assert!(
-            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
-                && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == CALLOTHER_INT_SMULT_HIGH),
             "SMULH must emit a signed-MULT_HIGH Callother"
         );
         assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
@@ -1646,11 +1644,7 @@ mod tests {
         // CCMP must write the packed ARM_NZCV (size 4, offset 272).
         let writes_arm_nzcv = ccmp.ir_ops.iter().any(|i| {
             i.output
-                .map(|o| {
-                    o.space == SpaceId::Register
-                        && o.offset == ARM_NZCV_OFFSET
-                        && o.size == 4
-                })
+                .map(|o| o.space == SpaceId::Register && o.offset == ARM_NZCV_OFFSET && o.size == 4)
                 .unwrap_or(false)
         });
         assert!(
@@ -1666,9 +1660,9 @@ mod tests {
         // CSEL's condition build reads ZF (offset 265, size 1) — the same
         // flag-bearing storage that CCMP wrote via its blend chain.
         let reads_zf = csel.ir_ops.iter().any(|i| {
-            i.inputs.iter().any(|v| {
-                v.space == SpaceId::Register && v.offset == 265 && v.size == 1
-            })
+            i.inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Register && v.offset == 265 && v.size == 1)
         });
         assert!(
             reads_zf,
@@ -1694,11 +1688,7 @@ mod tests {
         // SUBS must commit a 4-byte write to ARM_NZCV.
         let writes_arm_nzcv = subs.ir_ops.iter().any(|i| {
             i.output
-                .map(|o| {
-                    o.space == SpaceId::Register
-                        && o.offset == ARM_NZCV_OFFSET
-                        && o.size == 4
-                })
+                .map(|o| o.space == SpaceId::Register && o.offset == ARM_NZCV_OFFSET && o.size == 4)
                 .unwrap_or(false)
         });
         assert!(
@@ -1721,9 +1711,9 @@ mod tests {
             .lift_insn(&0x5400_0080u32.to_le_bytes(), 0x1004)
             .expect("B.EQ should decode");
         let reads_zf = beq.ir_ops.iter().any(|i| {
-            i.inputs.iter().any(|v| {
-                v.space == SpaceId::Register && v.offset == 265 && v.size == 1
-            })
+            i.inputs
+                .iter()
+                .any(|v| v.space == SpaceId::Register && v.offset == 265 && v.size == 1)
         });
         assert!(
             reads_zf,
@@ -1799,7 +1789,10 @@ mod tests {
         assert!(
             r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_N)),
             "CMP must emit a write to ARM_FLAG_N; got {:?}",
-            r.ir_ops.iter().map(|i| (i.op, i.output)).collect::<Vec<_>>()
+            r.ir_ops
+                .iter()
+                .map(|i| (i.op, i.output))
+                .collect::<Vec<_>>()
         );
         assert!(
             r.ir_ops.iter().any(|i| writes_to(i, ARM_FLAG_Z)),
@@ -1844,7 +1837,10 @@ mod tests {
                 .iter()
                 .any(|i| i.op == IrOp::IntSborrow && i.output == Some(ARM_FLAG_V)),
             "CMP must emit IntSborrow → ARM_FLAG_V; got {:?}",
-            r.ir_ops.iter().map(|i| (i.op, i.output)).collect::<Vec<_>>()
+            r.ir_ops
+                .iter()
+                .map(|i| (i.op, i.output))
+                .collect::<Vec<_>>()
         );
     }
 
@@ -1932,7 +1928,10 @@ mod tests {
                 || writes_to(i, ARM_FLAG_C)
                 || writes_to(i, ARM_FLAG_V)),
             "non-S ADD must not touch NZCV; got {:?}",
-            r.ir_ops.iter().map(|i| (i.op, i.output)).collect::<Vec<_>>()
+            r.ir_ops
+                .iter()
+                .map(|i| (i.op, i.output))
+                .collect::<Vec<_>>()
         );
     }
 
@@ -1958,8 +1957,9 @@ mod tests {
         let pred = cbr.inputs.get(1).expect("Cbranch has predicate input");
         assert_eq!(*pred, ARM_FLAG_Z, "BEQ predicate must be ARM_FLAG_Z");
         assert!(
-            !all.iter().any(|i| i.op == IrOp::Callother
-                && i.inputs.first().map(|v| v.offset) == Some(0x360)),
+            !all.iter()
+                .any(|i| i.op == IrOp::Callother
+                    && i.inputs.first().map(|v| v.offset) == Some(0x360)),
             "BEQ must not fall back to Callother(0x360) predicate"
         );
     }
@@ -1973,8 +1973,10 @@ mod tests {
             .lift_insn(&0x6AFF_FFFEu32.to_le_bytes(), 0x1000)
             .expect("BVS decodes");
         assert!(
-            r.ir_ops.iter().any(|i| i.op == IrOp::Callother
-                && i.inputs.first().map(|v| v.offset) == Some(0x360)),
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother
+                    && i.inputs.first().map(|v| v.offset) == Some(0x360)),
             "BVS still uses Callother(0x360) predicate (V deferred)"
         );
     }
@@ -2017,10 +2019,16 @@ mod tests {
             .iter()
             .find(|i| {
                 i.op == IrOp::IntLeft
-                    && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 4)
+                    && i.inputs
+                        .iter()
+                        .any(|v| v.space == SpaceId::Const && v.offset == 4)
             })
             .expect("ADD with LSL #4 must emit a pre-shift IntLeft on the rhs");
-        let add = r.ir_ops.iter().find(|i| i.op == IrOp::IntAdd).expect("IntAdd present");
+        let add = r
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntAdd)
+            .expect("IntAdd present");
         // The IntAdd should consume the unique varnode produced by the shift.
         assert!(
             add.inputs.iter().any(|v| Some(*v) == pre_shift.output),
@@ -2069,7 +2077,10 @@ mod tests {
             .expect("BL must emit a Copy writing LR");
         let lr_write = &r.ir_ops[lr_pos];
         let val = lr_write.inputs.first().expect("Copy has source");
-        assert!(val.space == SpaceId::Const, "LR write should source a constant");
+        assert!(
+            val.space == SpaceId::Const,
+            "LR write should source a constant"
+        );
         assert_eq!(val.offset, 0x1004, "LR must hold insn_addr + 4");
         // The Call must follow the LR write.
         let call_pos = r
@@ -2117,19 +2128,24 @@ mod tests {
         // Must mask Rd with 0xFFFF (preserving the low half).
         assert!(
             r.ir_ops.iter().any(|i| i.op == IrOp::IntAnd
-                && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 0xFFFF)),
+                && i.inputs
+                    .iter()
+                    .any(|v| v.space == SpaceId::Const && v.offset == 0xFFFF)),
             "MOVT must mask Rd by 0xFFFF to preserve the low half"
         );
         // Must shift the immediate left by 16.
         assert!(
             r.ir_ops.iter().any(|i| i.op == IrOp::IntLeft
-                && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 16)),
+                && i.inputs
+                    .iter()
+                    .any(|v| v.space == SpaceId::Const && v.offset == 16)),
             "MOVT must shift the immediate left by 16"
         );
         // Final merge: IntOr into R0.
         assert!(
-            r.ir_ops.iter().any(|i| i.op == IrOp::IntOr
-                && i.output.map(|v| v.offset == 0).unwrap_or(false)),
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntOr && i.output.map(|v| v.offset == 0).unwrap_or(false)),
             "MOVT must finish with IntOr into R0"
         );
     }
@@ -2180,19 +2196,24 @@ mod tests {
         // width=8 mask = 0xFF
         assert!(
             r.ir_ops.iter().any(|i| i.op == IrOp::IntAnd
-                && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 0xFF)),
+                && i.inputs
+                    .iter()
+                    .any(|v| v.space == SpaceId::Const && v.offset == 0xFF)),
             "BFI must mask the source by ((1<<width)-1)"
         );
         // field_mask = 0xFF << 4 = 0xFF0; inverse mask = !0xFF0 = 0xFFFFF00F
         assert!(
             r.ir_ops.iter().any(|i| i.op == IrOp::IntAnd
-                && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 0xFFFF_F00F)),
+                && i.inputs
+                    .iter()
+                    .any(|v| v.space == SpaceId::Const && v.offset == 0xFFFF_F00F)),
             "BFI must mask Rd by the inverse field-mask"
         );
         // Final merge into R0.
         assert!(
-            r.ir_ops.iter().any(|i| i.op == IrOp::IntOr
-                && i.output.map(|v| v.offset == 0).unwrap_or(false)),
+            r.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntOr && i.output.map(|v| v.offset == 0).unwrap_or(false)),
             "BFI must finish with IntOr into Rd"
         );
     }
@@ -2210,7 +2231,9 @@ mod tests {
         // Right-shift by lsb=4.
         assert!(
             r.ir_ops.iter().any(|i| i.op == IrOp::IntRight
-                && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 4)),
+                && i.inputs
+                    .iter()
+                    .any(|v| v.space == SpaceId::Const && v.offset == 4)),
             "UBFX must right-shift Rn by lsb"
         );
         // Mask by 0xFF (width=8).
@@ -2219,10 +2242,16 @@ mod tests {
             .iter()
             .find(|i| {
                 i.op == IrOp::IntAnd
-                    && i.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 0xFF)
+                    && i.inputs
+                        .iter()
+                        .any(|v| v.space == SpaceId::Const && v.offset == 0xFF)
             })
             .expect("UBFX must mask by ((1<<width)-1)");
-        assert_eq!(mask_op.output.map(|v| v.offset), Some(0), "result lands in R0");
+        assert_eq!(
+            mask_op.output.map(|v| v.offset),
+            Some(0),
+            "result lands in R0"
+        );
         // Must NOT emit a sign-extending IntSright (that's SBFX's path).
         assert!(
             !r.ir_ops.iter().any(|i| i.op == IrOp::IntSright),
@@ -2963,8 +2992,8 @@ mod tests {
     #[test]
     fn test_sve_add_z0_z1_z2_lifts_t300() {
         // Exercise emit_sve_callother for SVE ADD: tag=0x420, pg=0, zd=z0, zn=z1, zm=z2.
-        use crate::lift::{emit_sve_callother, LiftCtx, CALLOTHER_SVE_ADD};
-        use crate::register_file::{sve_z_offset, SVE_Z_SIZE};
+        use crate::lift::{CALLOTHER_SVE_ADD, LiftCtx, emit_sve_callother};
+        use crate::register_file::{SVE_Z_SIZE, sve_z_offset};
 
         let mut ctx = LiftCtx::new(0x2000);
         let zd = Varnode::reg(sve_z_offset(0), SVE_Z_SIZE);
@@ -2986,8 +3015,8 @@ mod tests {
     #[test]
     fn test_sve_ld1_lifts_t300() {
         // Exercise emit_sve_callother for SVE LD1.
-        use crate::lift::{emit_sve_callother, LiftCtx, CALLOTHER_SVE_LD1};
-        use crate::register_file::{sve_z_offset, SVE_Z_SIZE};
+        use crate::lift::{CALLOTHER_SVE_LD1, LiftCtx, emit_sve_callother};
+        use crate::register_file::{SVE_Z_SIZE, sve_z_offset};
 
         let mut ctx = LiftCtx::new(0x3000);
         let zt = Varnode::reg(sve_z_offset(5), SVE_Z_SIZE);
@@ -3006,12 +3035,63 @@ mod tests {
     fn test_sve_predicate_reg_accessed_t300() {
         // Verify that P registers appear in the register file with correct
         // offset and size.
-        use crate::register_file::{aarch64_register_file, sve_p_offset, SVE_P_SIZE};
+        use crate::register_file::{SVE_P_SIZE, aarch64_register_file, sve_p_offset};
 
         let rf = aarch64_register_file();
         let p3 = rf.registers.iter().find(|r| r.name == "P3").unwrap();
         assert_eq!(p3.varnode.offset, sve_p_offset(3));
         assert_eq!(p3.varnode.size, SVE_P_SIZE);
         assert_eq!(p3.varnode.space, SpaceId::Register);
+    }
+
+    #[test]
+    fn test_sme_registers_present_t301() {
+        use crate::register_file::{
+            SME_ZA, SME_ZA_SIZE, SME_ZT0, SME_ZT0_SIZE, aarch64_register_file,
+        };
+
+        let rf = aarch64_register_file();
+        let za = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "ZA")
+            .expect("ZA register");
+        assert_eq!(za.varnode.offset, SME_ZA);
+        assert_eq!(za.varnode.size, SME_ZA_SIZE);
+
+        let zt0 = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "ZT0")
+            .expect("ZT0 register");
+        assert_eq!(zt0.varnode.offset, SME_ZT0);
+        assert_eq!(zt0.varnode.size, SME_ZT0_SIZE);
+    }
+
+    #[test]
+    fn test_sme_emit_fmopa_t301() {
+        use crate::lift::LiftCtx;
+        use crate::register_file::{SME_ZA, SME_ZA_SIZE, SVE_Z_SIZE, sve_z_offset};
+
+        let mut ctx = LiftCtx::new(0x4000);
+        let za = Varnode::reg(SME_ZA, SME_ZA_SIZE);
+        let zn = Varnode::reg(sve_z_offset(1), SVE_Z_SIZE);
+        let zm = Varnode::reg(sve_z_offset(2), SVE_Z_SIZE);
+        crate::lift::emit_sme_callother(&mut ctx, CALLOTHER_SME_FMOPA, 3, &[za, zn, zm]);
+
+        assert_eq!(ctx.ops.len(), 1);
+        let co = &ctx.ops[0];
+        assert_eq!(co.op, IrOp::Callother);
+        assert_eq!(co.inputs[0].offset, CALLOTHER_SME_FMOPA);
+        assert_eq!(co.inputs[1].offset, 3);
+        assert_eq!(co.inputs[2].offset, SME_ZA);
+        assert_eq!(co.inputs[3].offset, sve_z_offset(1));
+        assert_eq!(co.inputs[4].offset, sve_z_offset(2));
+    }
+
+    #[test]
+    fn test_sme_tag_constants_t301() {
+        assert!(CALLOTHER_SME_FMOPA < CALLOTHER_SME_SMOPA);
+        assert!(CALLOTHER_SME_SMOPA < CALLOTHER_SME_UMOPA);
     }
 }

@@ -89,6 +89,18 @@ pub enum V850Op {
     StH { src: u8, base: u8, disp: i32 },
     /// ST.W reg2, disp16[reg1]
     StW { src: u8, base: u8, disp: i32 },
+    /// SLD.B disp[ep], reg2 (16-bit EP-relative short load)
+    SldB { dst: u8, disp: i32 },
+    /// SLD.H disp[ep], reg2 (16-bit EP-relative short load)
+    SldH { dst: u8, disp: i32 },
+    /// SLD.W disp[ep], reg2 (16-bit EP-relative short load)
+    SldW { dst: u8, disp: i32 },
+    /// SST.B reg2, disp[ep] (16-bit EP-relative short store)
+    SstB { src: u8, disp: i32 },
+    /// SST.H reg2, disp[ep] (16-bit EP-relative short store)
+    SstH { src: u8, disp: i32 },
+    /// SST.W reg2, disp[ep] (16-bit EP-relative short store)
+    SstW { src: u8, disp: i32 },
 
     // --- Control flow ---
     /// JMP [reg1]  (PC = reg1, indirect jump)
@@ -388,9 +400,37 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
             }
         }
 
-        // Format IV: short load/store (ep-relative) — skip for MVP
-        (0b0110, _) | (0b0111, _) | (0b1000, _) | (0b1001, _) | (0b1010, _) => {
-            V850Op::Unknown { hw0 }
+        // Format IV: short load/store (EP-relative, base register r30).
+        // The 7-bit displacement occupies bits[6:0]. Halfword forms scale it
+        // by 2. The word format shares the 0b1010 major group with a subset
+        // of Bcond encodings above; bit0 selects load (0) vs store (1), and
+        // store displacements are word-aligned by clearing the low two bits.
+        (0b0110, _) => V850Op::SldB {
+            dst: reg2,
+            disp: (hw0 & 0x7F) as i32,
+        },
+        (0b0111, _) => V850Op::SstB {
+            src: reg2,
+            disp: (hw0 & 0x7F) as i32,
+        },
+        (0b1000, _) => V850Op::SldH {
+            dst: reg2,
+            disp: ((hw0 & 0x7F) as i32) * 2,
+        },
+        (0b1001, _) => V850Op::SstH {
+            src: reg2,
+            disp: ((hw0 & 0x7F) as i32) * 2,
+        },
+        (0b1010, _) => {
+            let disp = ((hw0 & 0x7F) as i32) * 2;
+            if hw0 & 1 == 0 {
+                V850Op::SldW { dst: reg2, disp }
+            } else {
+                V850Op::SstW {
+                    src: reg2,
+                    disp: disp & !3,
+                }
+            }
         }
 
         _ => V850Op::Unknown { hw0 },
@@ -759,6 +799,33 @@ mod tests {
                 base: 3,
                 disp: 0x20
             }
+        );
+    }
+
+    #[test]
+    fn decode_short_ep_relative_load_store() {
+        let sld_b: u16 = (4 << 11) | (0b0110 << 7) | 0x12;
+        assert_eq!(
+            decode(&sld_b.to_le_bytes(), 0).unwrap().op,
+            V850Op::SldB { dst: 4, disp: 0x12 }
+        );
+
+        let sst_h: u16 = (7 << 11) | (0b1001 << 7) | 0x0C;
+        assert_eq!(
+            decode(&sst_h.to_le_bytes(), 0).unwrap().op,
+            V850Op::SstH { src: 7, disp: 0x18 }
+        );
+
+        let sld_w: u16 = (8 << 11) | (0b1010 << 7) | 0x10;
+        assert_eq!(
+            decode(&sld_w.to_le_bytes(), 0).unwrap().op,
+            V850Op::SldW { dst: 8, disp: 0x20 }
+        );
+
+        let sst_w: u16 = (9 << 11) | (0b1010 << 7) | 0x11;
+        assert_eq!(
+            decode(&sst_w.to_le_bytes(), 0).unwrap().op,
+            V850Op::SstW { src: 9, disp: 0x20 }
         );
     }
 

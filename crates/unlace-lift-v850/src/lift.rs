@@ -17,6 +17,7 @@ const SF: u64 = 280;
 const OVF: u64 = 288;
 const CYF: u64 = 296;
 const SATF: u64 = 304;
+const EP_REG: u8 = 30;
 
 pub struct LiftCtx {
     pub ops: Vec<IrInsn>,
@@ -551,6 +552,12 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
         V850Op::StB { src, base, disp } => lift_store(ctx, *src, *base, *disp, 1),
         V850Op::StH { src, base, disp } => lift_store(ctx, *src, *base, *disp, 2),
         V850Op::StW { src, base, disp } => lift_store(ctx, *src, *base, *disp, 4),
+        V850Op::SldB { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp, 1, true),
+        V850Op::SldH { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp, 2, true),
+        V850Op::SldW { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp, 4, false),
+        V850Op::SstB { src, disp } => lift_store(ctx, *src, EP_REG, *disp, 1),
+        V850Op::SstH { src, disp } => lift_store(ctx, *src, EP_REG, *disp, 2),
+        V850Op::SstW { src, disp } => lift_store(ctx, *src, EP_REG, *disp, 4),
 
         // -- Control flow --
         V850Op::Jmp { reg } => {

@@ -805,6 +805,63 @@ mod tests {
     }
 
     #[test]
+    fn pacda_lifts_to_callother_t300() {
+        use crate::lift::CALLOTHER_AARCH64_PACDA;
+        let result = lifter()
+            .lift_insn(&[0x41, 0x08, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACDA);
+        assert_eq!(ir.inputs[1].offset, 8);
+        assert_eq!(ir.inputs[2].offset, 16);
+        assert_eq!(ir.output.as_ref().unwrap().offset, 8);
+    }
+
+    #[test]
+    fn pacdb_sp_modifier_lifts_to_callother_t300() {
+        use crate::lift::CALLOTHER_AARCH64_PACDB;
+        use crate::register_file::SP;
+        let result = lifter()
+            .lift_insn(&[0xe0, 0x0f, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACDB);
+        assert_eq!(ir.inputs[1].offset, 0);
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, SP);
+    }
+
+    #[test]
+    fn autda_lifts_to_callother_t300() {
+        use crate::lift::CALLOTHER_AARCH64_AUTDA;
+        let result = lifter()
+            .lift_insn(&[0xc5, 0x18, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTDA);
+        assert_eq!(ir.inputs[1].offset, 40);
+        assert_eq!(ir.inputs[2].offset, 48);
+        assert_eq!(ir.output.as_ref().unwrap().offset, 40);
+    }
+
+    #[test]
+    fn autdzb_zero_modifier_lifts_to_callother_t300() {
+        use crate::lift::CALLOTHER_AARCH64_AUTDB;
+        let result = lifter()
+            .lift_insn(&[0xec, 0x3f, 0xc1, 0xda], 0x1000)
+            .expect("should decode");
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTDB);
+        assert_eq!(ir.inputs[1].offset, 96);
+        assert_eq!(ir.inputs[2].space, SpaceId::Const);
+        assert_eq!(ir.inputs[2].offset, 0);
+    }
+
+    #[test]
     fn paciza_zero_modifier_lifts_to_callother() {
         // t225 — PACIZA X7  →  dac123e7   (opcode=0x08, Rn=0b11111)
         // Encoded as `1101_1010_1100_0001_0010_0011_1110_0111` = 0xDAC123E7.

@@ -709,7 +709,11 @@ pub fn print_c_with_annotations(
     // header and __usercall already encodes the full register sequence.
     let usercall_spec = annotations.and_then(|a| a.usercall.as_ref());
     if let Some(uc) = usercall_spec {
-        let kind = if uc.purge { "__userpurge" } else { "__usercall" };
+        let kind = if uc.purge {
+            "__userpurge"
+        } else {
+            "__usercall"
+        };
         // `<ret>` suffix is omitted for void returns or when the spec
         // didn't pin a return register.
         let ret_suffix = if uc.return_reg.is_empty() {
@@ -936,11 +940,7 @@ pub fn print_c_with_annotations(
         if let Some(bx) = ctx.byref_boxes.get(&sv.base) {
             let captured_c = render_type_as_c(&bx.captured_type);
             if let Some(comment) = varnode_location_comment(&sv.base, frame_size) {
-                let _ = writeln!(
-                    out,
-                    "    __block {} {}; // {}",
-                    captured_c, name, comment,
-                );
+                let _ = writeln!(out, "    __block {} {}; // {}", captured_c, name, comment,);
             } else {
                 let _ = writeln!(out, "    __block {} {};", captured_c, name);
             }
@@ -1108,9 +1108,7 @@ fn emit_rtti_hierarchy(rtti: &unlace_loader::RttiInfo, out: &mut String) {
             let _ = writeln!(out, " *       typeinfo      = &typeinfo for {rtti_disp}");
             for (slot, kind) in sub.functions.iter().enumerate() {
                 match kind {
-                    unlace_loader::VtableSlotKind::Function {
-                        va, name, is_thunk,
-                    } => {
+                    unlace_loader::VtableSlotKind::Function { va, name, is_thunk } => {
                         let display = match name {
                             Some(n) => match crate::demangle::demangle(n) {
                                 Some(d) => d.full_signature,
@@ -1135,8 +1133,7 @@ fn emit_rtti_hierarchy(rtti: &unlace_loader::RttiInfo, out: &mut String) {
                                 }
                             }
                         }
-                        let _ =
-                            writeln!(out, " *       vfunc[{slot}] = {display}{tag}");
+                        let _ = writeln!(out, " *       vfunc[{slot}] = {display}{tag}");
                     }
                     unlace_loader::VtableSlotKind::Zero => {
                         let _ = writeln!(out, " *       vfunc[{slot}] = (null)");
@@ -1260,9 +1257,7 @@ fn emit_class_layout_for_func(
     let _ = writeln!(out, "/* {header} {{");
     for (slot, kind) in primary.functions.iter().enumerate() {
         match kind {
-            unlace_loader::VtableSlotKind::Function {
-                va, name, is_thunk,
-            } => {
+            unlace_loader::VtableSlotKind::Function { va, name, is_thunk } => {
                 let display = match name {
                     Some(n) => match crate::demangle::demangle(n) {
                         Some(d) => d.full_signature,
@@ -1338,9 +1333,7 @@ fn rtti_this_param_type(
 /// when [`crate::demangle::demangle`] already classified the symbol as a
 /// member function of one of the supported classes — see
 /// [`unlace_passes::recognize_stl_type`].
-fn stl_this_param_type(
-    demangled: &Option<crate::demangle::DemangleResult>,
-) -> Option<String> {
+fn stl_this_param_type(demangled: &Option<crate::demangle::DemangleResult>) -> Option<String> {
     let dr = demangled.as_ref()?;
     let class_name = dr.class_name.as_ref()?;
     unlace_passes::recognize_stl_type(&dr.namespaces, class_name)
@@ -1462,7 +1455,9 @@ impl PrintConfig {
 }
 
 fn read_usize_env(name: &str) -> Option<usize> {
-    std::env::var(name).ok().and_then(|v| v.parse::<usize>().ok())
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
 }
 
 struct PrintCtx {
@@ -2139,11 +2134,7 @@ fn walk_print_addr(
     let insn = ctx.stmt_insns.get(&def_stmt)?;
     let inputs = ctx.stmt_inputs.get(&def_stmt);
 
-    fn input_sv(
-        ctx: &PrintCtx,
-        stmt: u32,
-        vn: &unlace_ir::Varnode,
-    ) -> Option<SsaVarnode> {
+    fn input_sv(ctx: &PrintCtx, stmt: u32, vn: &unlace_ir::Varnode) -> Option<SsaVarnode> {
         ctx.stmt_inputs
             .get(&stmt)
             .and_then(|svs| svs.iter().find(|s| s.base == *vn).copied())
@@ -2182,8 +2173,7 @@ fn walk_print_addr(
             let lhs_sv = input_sv(ctx, def_stmt, lhs);
             let rhs_sv = input_sv(ctx, def_stmt, rhs);
             if let (Some(a), Some(b)) = (lhs_sv, rhs_sv) {
-                if let Some(left) = walk_print_addr(a, iv_candidates, ctx, acc_stride, acc_offset)
-                {
+                if let Some(left) = walk_print_addr(a, iv_candidates, ctx, acc_stride, acc_offset) {
                     if left.1 != 0 {
                         return Some((b, left.1, left.2, left.3));
                     }
@@ -3370,11 +3360,7 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
         // Sanity: every other use's path must extend the LCA prefix.
         let mut all_dominated = true;
         for &s in &stmts {
-            let p = ctx
-                .stmt_scope_paths
-                .get(&s)
-                .cloned()
-                .unwrap_or_default();
+            let p = ctx.stmt_scope_paths.get(&s).cloned().unwrap_or_default();
             if !p.starts_with(&lca) {
                 all_dominated = false;
                 break;
@@ -3395,11 +3381,7 @@ fn compute_hoist_plan(ctx: &mut PrintCtx) {
 }
 
 /// Longest common prefix of the scope paths for every statement in `stmts`.
-fn lca_scope_path(
-    stmts: &[u32],
-    paths: &BTreeMap<u32, Vec<u32>>,
-    fallback: &Vec<u32>,
-) -> Vec<u32> {
+fn lca_scope_path(stmts: &[u32], paths: &BTreeMap<u32, Vec<u32>>, fallback: &Vec<u32>) -> Vec<u32> {
     let mut iter = stmts.iter();
     let first = match iter.next() {
         Some(s) => paths.get(s).unwrap_or(fallback).clone(),
@@ -3408,11 +3390,7 @@ fn lca_scope_path(
     let mut lca = first;
     for s in iter {
         let p = paths.get(s).unwrap_or(fallback);
-        let common = lca
-            .iter()
-            .zip(p.iter())
-            .take_while(|(a, b)| a == b)
-            .count();
+        let common = lca.iter().zip(p.iter()).take_while(|(a, b)| a == b).count();
         lca.truncate(common);
         if lca.is_empty() {
             break;
@@ -4477,7 +4455,10 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
         } => {
             let cond_expr = resolve_sv_expr(cond, ctx);
             let cond_is_char = matches!(
-                ctx.var_types.get(cond).copied().unwrap_or(PrimitiveType::Unknown),
+                ctx.var_types
+                    .get(cond)
+                    .copied()
+                    .unwrap_or(PrimitiveType::Unknown),
                 PrimitiveType::Int(1) | PrimitiveType::UnsignedInt(1),
             );
             indent(depth, ctx.config.tab_width, out);
@@ -4489,12 +4470,8 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                         if let Some(lit) = format_char_case(*v, cond_is_char) {
                             let _ = writeln!(out, "case {}:", lit);
                         } else if let Some(s) = ctx.string_hash_table.get(v) {
-                            let _ = writeln!(
-                                out,
-                                "case 0x{:X}u:  /* \"{}\" */",
-                                v,
-                                s.escape_default()
-                            );
+                            let _ =
+                                writeln!(out, "case 0x{:X}u:  /* \"{}\" */", v, s.escape_default());
                         } else {
                             let _ = writeln!(out, "case {}:", v);
                         }
@@ -4916,11 +4893,7 @@ fn demangle_callee_name(raw: &str) -> String {
 /// against format strings whose specifier count doesn't match the
 /// emitted variadic args (mismatched call sites are a bug, but the
 /// printer should still produce valid C).
-fn try_emit_printf_call(
-    insn: &IrInsn,
-    stmt_idx: u32,
-    ctx: &mut PrintCtx,
-) -> Option<String> {
+fn try_emit_printf_call(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Option<String> {
     if insn.op != IrOp::Call || insn.inputs.is_empty() {
         return None;
     }
@@ -5182,9 +5155,8 @@ fn objc_bracket_call(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
 /// intended type.  Compound encodings (`^X`, `[N X]`) recurse on `X`.
 pub fn objc_type_encoding_to_c(encoding: &str) -> String {
     let trimmed = encoding.trim();
-    let trimmed = trimmed.trim_start_matches(|c: char| {
-        matches!(c, 'r' | 'n' | 'N' | 'o' | 'O' | 'R' | 'V')
-    });
+    let trimmed =
+        trimmed.trim_start_matches(|c: char| matches!(c, 'r' | 'n' | 'N' | 'o' | 'O' | 'R' | 'V'));
     match trimmed {
         "c" => return "char".into(),
         "C" => return "unsigned char".into(),
@@ -5422,7 +5394,6 @@ pub fn render_objc_category(cat: &unlace_loader::ObjcCategory) -> String {
     out
 }
 
-
 fn cxa_call_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<&'static str> {
     if insn.op != IrOp::Call || insn.inputs.is_empty() {
         return None;
@@ -5588,11 +5559,7 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
 ///   * `prefix` is `"<type> "` to prepend to the assignment LHS, and
 ///   * `terminator` is `";"` followed by an optional ` // <location>` comment
 ///     mirroring the function-top declaration block's annotation.
-fn hoisted_decl_for_stmt(
-    idx: u32,
-    sv: &SsaVarnode,
-    ctx: &PrintCtx,
-) -> Option<(String, String)> {
+fn hoisted_decl_for_stmt(idx: u32, sv: &SsaVarnode, ctx: &PrintCtx) -> Option<(String, String)> {
     let plan = ctx.hoist_decl_plan.get(&sv.base)?;
     if plan.stmt_idx != idx || !plan.fold_into_assignment {
         return None;
@@ -6221,7 +6188,10 @@ fn measure_expr_width(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> usize {
 
         // Casts: `(<type>)<child>`. Type-string width is approximated
         // as 8 columns (`unsigned`, `__int64`, etc. cluster around 6-9).
-        IrOp::IntZext | IrOp::IntSext | IrOp::FloatInt2float | IrOp::FloatFloat2float
+        IrOp::IntZext
+        | IrOp::IntSext
+        | IrOp::FloatInt2float
+        | IrOp::FloatFloat2float
         | IrOp::FloatFloat2int => {
             let widths = measure_inputs(insn, stmt_idx, ctx);
             let child = widths.first().copied().unwrap_or(0);
@@ -6409,9 +6379,7 @@ fn emit_expr_with_prec(
 
         // -- Comparisons --
         IrOp::IntEqual | IrOp::FloatEqual => emit_binop(insn, "==", stmt_idx, parent, ctx),
-        IrOp::IntNotequal | IrOp::FloatNotequal => {
-            emit_binop(insn, "!=", stmt_idx, parent, ctx)
-        }
+        IrOp::IntNotequal | IrOp::FloatNotequal => emit_binop(insn, "!=", stmt_idx, parent, ctx),
         IrOp::IntSless | IrOp::FloatLess => {
             // t256: recognize the open-coded signed-overflow polynomial
             //   (a^b^-1) & (a^(a+b)) < 0  → __OFADD__(a, b)
@@ -6427,9 +6395,7 @@ fn emit_expr_with_prec(
             emit_binop(insn, "<", stmt_idx, parent, ctx)
         }
         IrOp::IntLess => emit_unsigned_binop(insn, "<", stmt_idx, parent, ctx),
-        IrOp::IntSlessequal | IrOp::FloatLessequal => {
-            emit_binop(insn, "<=", stmt_idx, parent, ctx)
-        }
+        IrOp::IntSlessequal | IrOp::FloatLessequal => emit_binop(insn, "<=", stmt_idx, parent, ctx),
         IrOp::IntLessequal => emit_unsigned_binop(insn, "<=", stmt_idx, parent, ctx),
 
         // -- Unary ops --
@@ -6501,12 +6467,9 @@ fn emit_expr_with_prec(
                 // `arr<N>[i].field_<offset>` wins over the raw
                 // `*(arr + STRIDE*i + offset)` rendering whenever the
                 // base pointer was recovered into `array_struct_layouts`.
-                if let Some(field) = try_array_struct_field_access(
-                    &insn.inputs[addr_idx],
-                    stmt_idx,
-                    load_size,
-                    ctx,
-                ) {
+                if let Some(field) =
+                    try_array_struct_field_access(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
+                {
                     return field;
                 }
                 if let Some(field) =
@@ -6973,18 +6936,18 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x171 => Some("_mm_blendv_epi8"), // PBLENDVB
 
         // ── AES-NI intrinsics (0x1E0..0x1E4) ──────────────────────
-        0x1E0 => Some("_mm_aesenc_si128"),         // AESENC
-        0x1E1 => Some("_mm_aesenclast_si128"),     // AESENCLAST
-        0x1E2 => Some("_mm_aesdec_si128"),         // AESDEC
-        0x1E3 => Some("_mm_aesdeclast_si128"),     // AESDECLAST
+        0x1E0 => Some("_mm_aesenc_si128"),          // AESENC
+        0x1E1 => Some("_mm_aesenclast_si128"),      // AESENCLAST
+        0x1E2 => Some("_mm_aesdec_si128"),          // AESDEC
+        0x1E3 => Some("_mm_aesdeclast_si128"),      // AESDECLAST
         0x1E4 => Some("_mm_aeskeygenassist_si128"), // AESKEYGENASSIST
 
         // ── SHA-NI intrinsics (0x1E8..0x1EC) ───────────────────
-        0x1E8 => Some("_mm_sha1rnds4_epu32"),  // SHA1RNDS4
-        0x1E9 => Some("_mm_sha1nexte_epu32"),  // SHA1NEXTE
+        0x1E8 => Some("_mm_sha1rnds4_epu32"),   // SHA1RNDS4
+        0x1E9 => Some("_mm_sha1nexte_epu32"),   // SHA1NEXTE
         0x1EA => Some("_mm_sha256rnds2_epu32"), // SHA256RNDS2
-        0x1EB => Some("_mm_sha256msg1_epu32"), // SHA256MSG1
-        0x1EC => Some("_mm_sha256msg2_epu32"), // SHA256MSG2
+        0x1EB => Some("_mm_sha256msg1_epu32"),  // SHA256MSG1
+        0x1EC => Some("_mm_sha256msg2_epu32"),  // SHA256MSG2
 
         // ── Bit-manipulation builtins (0x200..0x204) ───────────
         0x200 => Some("__builtin_ctz"),      // BSF
@@ -7037,7 +7000,7 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x412 => Some("__xpaci"),
         0x413 => Some("__xpacd"),
 
-        // ── AArch64 SVE (0x420..0x429) ──────────────────────────────
+        // ── AArch64 SVE/SME (0x420..0x42D) ──────────────────────────
         0x420 => Some("svadd_s32"),
         0x421 => Some("svsub_s32"),
         0x422 => Some("svmul_s32"),
@@ -7048,6 +7011,10 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x427 => Some("svst1_s32"),
         0x428 => Some("svand_pred"),
         0x429 => Some("svptrue_b32"),
+        0x42A => Some("svfmopa_f32"),
+        0x42B => Some("svfmops_f32"),
+        0x42C => Some("svsmopa_s32"),
+        0x42D => Some("svumopa_u32"),
         _ => None,
     }
 }
@@ -7091,6 +7058,14 @@ const CALLOTHER_SVE_ST1: u64 = 0x427;
 const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
 #[allow(dead_code)]
 const CALLOTHER_SVE_PTRUE: u64 = 0x429;
+#[allow(dead_code)]
+const CALLOTHER_SME_FMOPA: u64 = 0x42A;
+#[allow(dead_code)]
+const CALLOTHER_SME_FMOPS: u64 = 0x42B;
+#[allow(dead_code)]
+const CALLOTHER_SME_SMOPA: u64 = 0x42C;
+#[allow(dead_code)]
+const CALLOTHER_SME_UMOPA: u64 = 0x42D;
 
 /// Map an AArch64 NEON `Callother` `(tag, lane_size, signed)` triple to
 /// its Apple/ARM C intrinsic name (e.g. `vaddq_s32`).
@@ -8002,11 +7977,7 @@ pub(crate) fn emit_alignof_type(type_str: &str) -> String {
 ///
 /// The constant must live on the right (canonical IR form). Returns `None`
 /// if the mask is unrecognized so the caller can fall back to plain `&`.
-fn try_emit_int_and_byte_macro(
-    insn: &IrInsn,
-    stmt_idx: u32,
-    ctx: &mut PrintCtx,
-) -> Option<String> {
+fn try_emit_int_and_byte_macro(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Option<String> {
     if insn.inputs.len() < 2 {
         return None;
     }
@@ -8136,8 +8107,7 @@ fn try_emit_open_overflow_macro(
         return None;
     }
 
-    let (a_vn, b_vn, is_add) =
-        decode_open_overflow(&and_lhs_prod, &and_rhs_prod, and_stmt, ctx)?;
+    let (a_vn, b_vn, is_add) = decode_open_overflow(&and_lhs_prod, &and_rhs_prod, and_stmt, ctx)?;
     let a = emit_operand_resolved(&a_vn, 0, stmt_idx, ctx);
     let b = emit_operand_resolved(&b_vn, 1, stmt_idx, ctx);
     Some(if is_add {
@@ -8150,11 +8120,7 @@ fn try_emit_open_overflow_macro(
 /// Lookup helper: from a Varnode that appears as an input of `at_stmt`,
 /// follow SSA to the producer `IrInsn`. Returns `(insn, def_stmt_idx)`
 /// so callers can resolve the producer's own inputs.
-fn producer_insn_with_stmt(
-    vn: &Varnode,
-    at_stmt: u32,
-    ctx: &PrintCtx,
-) -> Option<(IrInsn, u32)> {
+fn producer_insn_with_stmt(vn: &Varnode, at_stmt: u32, ctx: &PrintCtx) -> Option<(IrInsn, u32)> {
     if vn.space == SpaceId::Const {
         return None;
     }
@@ -8186,7 +8152,9 @@ fn decode_open_overflow(
 
     // Try both orderings.
     for (a_side, sum_side) in [(r0, r1), (r1, r0)] {
-        let Some(sum_prod) = producer_insn(sum_side, at_stmt, ctx) else { continue };
+        let Some(sum_prod) = producer_insn(sum_side, at_stmt, ctx) else {
+            continue;
+        };
         let is_add = match sum_prod.op {
             IrOp::IntAdd => true,
             IrOp::IntSub => false,
@@ -8205,18 +8173,20 @@ fn decode_open_overflow(
         // and_lhs_xor: `a ^ b [^ -1]`. For OFADD we expect a nested xor with -1.
         // Walk it: the constant `-1` appears either as a direct operand or as
         // the second xor input. Accept either flat (3-input) or nested xor.
-        let saw_neg_one =
-            and_lhs_xor.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset as i64 == -1)
-                || and_lhs_xor.inputs.iter().any(|v| {
-                    producer_insn(v, at_stmt, ctx)
-                        .map(|p| {
-                            p.op == IrOp::IntXor
-                                && p.inputs.iter().any(|inner| {
-                                    inner.space == SpaceId::Const && inner.offset as i64 == -1
-                                })
-                        })
-                        .unwrap_or(false)
-                });
+        let saw_neg_one = and_lhs_xor
+            .inputs
+            .iter()
+            .any(|v| v.space == SpaceId::Const && v.offset as i64 == -1)
+            || and_lhs_xor.inputs.iter().any(|v| {
+                producer_insn(v, at_stmt, ctx)
+                    .map(|p| {
+                        p.op == IrOp::IntXor
+                            && p.inputs.iter().any(|inner| {
+                                inner.space == SpaceId::Const && inner.offset as i64 == -1
+                            })
+                    })
+                    .unwrap_or(false)
+            });
         // For OFSUB, `a_lhs` is plain `a ^ b` (no -1).
         let ofadd_match = is_add && saw_neg_one;
         let ofsub_match = !is_add && !saw_neg_one;
@@ -8315,14 +8285,38 @@ fn x86_64_register_name(offset: u64, size: u8) -> &'static str {
             // in the 512-bit form; they have no XMM/YMM alias.
             if size > 32 {
                 return match idx {
-                    0 => "zmm0",   1 => "zmm1",   2 => "zmm2",   3 => "zmm3",
-                    4 => "zmm4",   5 => "zmm5",   6 => "zmm6",   7 => "zmm7",
-                    8 => "zmm8",   9 => "zmm9",   10 => "zmm10", 11 => "zmm11",
-                    12 => "zmm12", 13 => "zmm13", 14 => "zmm14", 15 => "zmm15",
-                    16 => "zmm16", 17 => "zmm17", 18 => "zmm18", 19 => "zmm19",
-                    20 => "zmm20", 21 => "zmm21", 22 => "zmm22", 23 => "zmm23",
-                    24 => "zmm24", 25 => "zmm25", 26 => "zmm26", 27 => "zmm27",
-                    28 => "zmm28", 29 => "zmm29", 30 => "zmm30", 31 => "zmm31",
+                    0 => "zmm0",
+                    1 => "zmm1",
+                    2 => "zmm2",
+                    3 => "zmm3",
+                    4 => "zmm4",
+                    5 => "zmm5",
+                    6 => "zmm6",
+                    7 => "zmm7",
+                    8 => "zmm8",
+                    9 => "zmm9",
+                    10 => "zmm10",
+                    11 => "zmm11",
+                    12 => "zmm12",
+                    13 => "zmm13",
+                    14 => "zmm14",
+                    15 => "zmm15",
+                    16 => "zmm16",
+                    17 => "zmm17",
+                    18 => "zmm18",
+                    19 => "zmm19",
+                    20 => "zmm20",
+                    21 => "zmm21",
+                    22 => "zmm22",
+                    23 => "zmm23",
+                    24 => "zmm24",
+                    25 => "zmm25",
+                    26 => "zmm26",
+                    27 => "zmm27",
+                    28 => "zmm28",
+                    29 => "zmm29",
+                    30 => "zmm30",
+                    31 => "zmm31",
                     _ => "zmm?",
                 };
             }
@@ -8553,11 +8547,7 @@ fn is_redundant_same_size_cast(input: &Varnode, output_size: u8) -> bool {
 /// a concrete type. This is the bridge between the raw `Varnode` operands
 /// the printer sees and the SSA-keyed `var_types` map produced by
 /// `TypeInferPass`.
-fn flow_type_for_input(
-    input: &Varnode,
-    stmt_idx: u32,
-    ctx: &PrintCtx,
-) -> PrimitiveType {
+fn flow_type_for_input(input: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> PrimitiveType {
     if input.space == SpaceId::Const {
         return PrimitiveType::Unknown;
     }
@@ -12117,7 +12107,10 @@ mod tests {
     #[test]
     fn test_emit_alignof_type() {
         assert_eq!(super::emit_alignof_type("int"), "_Alignof(int)");
-        assert_eq!(super::emit_alignof_type("struct foo"), "_Alignof(struct foo)");
+        assert_eq!(
+            super::emit_alignof_type("struct foo"),
+            "_Alignof(struct foo)"
+        );
         assert_eq!(super::emit_alignof_type("int *"), "_Alignof(int *)");
     }
 
@@ -12268,7 +12261,8 @@ mod tests {
         symbols.insert(target_va, "__memcpy_chk".to_string());
 
         let mut ann = super::PrinterAnnotations::default();
-        ann.libc_call_canonical.insert(call_va, "memcpy".to_string());
+        ann.libc_call_canonical
+            .insert(call_va, "memcpy".to_string());
 
         let output = super::print_c_with_annotations(
             &func,
@@ -12307,7 +12301,8 @@ mod tests {
         symbols.insert(target_va, "_Znwm".to_string());
 
         let mut ann = super::PrinterAnnotations::default();
-        ann.libc_call_canonical.insert(call_va, "malloc".to_string());
+        ann.libc_call_canonical
+            .insert(call_va, "malloc".to_string());
 
         let output = super::print_c_with_annotations(
             &func,
@@ -12381,7 +12376,8 @@ mod tests {
         symbols.insert(target_va, "__memcpy_chk".to_string());
 
         let mut ann = super::PrinterAnnotations::default();
-        ann.libc_call_canonical.insert(call_va, "memcpy".to_string());
+        ann.libc_call_canonical
+            .insert(call_va, "memcpy".to_string());
         ann.libc_call_original
             .insert(call_va, "__memcpy_chk".to_string());
 
@@ -12504,21 +12500,11 @@ mod tests {
         func.addr = callee_va;
 
         let mut ann = super::PrinterAnnotations::default();
-        ann.xref_callers.insert(
-            callee_va,
-            vec![(0x2000, 0x2015), (0x3000, 0x3008)],
-        );
+        ann.xref_callers
+            .insert(callee_va, vec![(0x2000, 0x2015), (0x3000, 0x3008)]);
 
-        let output = super::print_c_with_annotations(
-            &func,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
 
         assert!(
             output.contains("// xref: sub_2000+15, sub_3000+8"),
@@ -12534,16 +12520,8 @@ mod tests {
         let func = make_func("isolated", vec![HirNode::Return(None)]);
         // Default annotations — empty xref_callers map.
         let ann = super::PrinterAnnotations::default();
-        let output = super::print_c_with_annotations(
-            &func,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
         assert!(
             !output.contains("// xref:"),
             "uncalled function should have no xref comment: {output}",
@@ -12565,7 +12543,8 @@ mod tests {
         symbols.insert(target_va, "memcpy".to_string());
 
         let mut ann = super::PrinterAnnotations::default();
-        ann.libc_call_canonical.insert(call_va, "memcpy".to_string());
+        ann.libc_call_canonical
+            .insert(call_va, "memcpy".to_string());
         ann.libc_call_original.insert(call_va, "memcpy".to_string());
 
         let output = super::print_c_with_annotations(
@@ -13808,35 +13787,19 @@ mod tests {
     #[test]
     fn test_format_constant_char_context() {
         assert_eq!(
-            super::format_constant_ctx(
-                0x41,
-                1,
-                super::ConstContext::Char { unsigned: false }
-            ),
+            super::format_constant_ctx(0x41, 1, super::ConstContext::Char { unsigned: false }),
             "'A'",
         );
         assert_eq!(
-            super::format_constant_ctx(
-                0x0A,
-                1,
-                super::ConstContext::Char { unsigned: false }
-            ),
+            super::format_constant_ctx(0x0A, 1, super::ConstContext::Char { unsigned: false }),
             "'\\n'",
         );
         assert_eq!(
-            super::format_constant_ctx(
-                0x00,
-                1,
-                super::ConstContext::Char { unsigned: false }
-            ),
+            super::format_constant_ctx(0x00, 1, super::ConstContext::Char { unsigned: false }),
             "'\\0'",
         );
         assert_eq!(
-            super::format_constant_ctx(
-                0xFF,
-                1,
-                super::ConstContext::Char { unsigned: true }
-            ),
+            super::format_constant_ctx(0xFF, 1, super::ConstContext::Char { unsigned: true }),
             "'\\xff'",
         );
     }
@@ -13862,19 +13825,11 @@ mod tests {
     #[test]
     fn test_format_constant_char_context_falls_through_when_oversized() {
         assert_eq!(
-            super::format_constant_ctx(
-                0x41,
-                4,
-                super::ConstContext::Char { unsigned: false }
-            ),
+            super::format_constant_ctx(0x41, 4, super::ConstContext::Char { unsigned: false }),
             "0x41",
         );
         assert_eq!(
-            super::format_constant_ctx(
-                0x80,
-                1,
-                super::ConstContext::Char { unsigned: false }
-            ),
+            super::format_constant_ctx(0x80, 1, super::ConstContext::Char { unsigned: false }),
             "0x80ULL",
         );
     }
@@ -13882,19 +13837,11 @@ mod tests {
     #[test]
     fn test_format_constant_quote_and_backslash() {
         assert_eq!(
-            super::format_constant_ctx(
-                0x27,
-                1,
-                super::ConstContext::Char { unsigned: false }
-            ),
+            super::format_constant_ctx(0x27, 1, super::ConstContext::Char { unsigned: false }),
             "'\\''",
         );
         assert_eq!(
-            super::format_constant_ctx(
-                0x5C,
-                1,
-                super::ConstContext::Char { unsigned: false }
-            ),
+            super::format_constant_ctx(0x5C, 1, super::ConstContext::Char { unsigned: false }),
             "'\\\\'",
         );
     }
@@ -14236,7 +14183,12 @@ mod tests {
         // Write 5 to the stack slot, then read it twice so the folder
         // can't inline the constant and the named assignment survives.
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::Copy, stk, smallvec![five], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                stk,
+                smallvec![five],
+                0x1000,
+            )),
             HirNode::Statement(IrInsn::with_output(
                 IrOp::IntAdd,
                 r0,
@@ -15069,8 +15021,6 @@ mod tests {
         );
     }
 
-
-
     #[test]
     fn test_non_mangled_call_target_unchanged() {
         let target_addr = con(0x401030, 8);
@@ -15481,12 +15431,7 @@ mod tests {
     fn test_commented_pre_renders_before_statement() {
         let r0 = reg(0, 4);
         let c5 = con(5, 4);
-        let copy = HirNode::Statement(IrInsn::with_output(
-            IrOp::Copy,
-            r0,
-            smallvec![c5],
-            0x1000,
-        ));
+        let copy = HirNode::Statement(IrInsn::with_output(IrOp::Copy, r0, smallvec![c5], 0x1000));
         let body = vec![
             HirNode::Commented {
                 pre: vec!["from /tmp/source.c:42".to_string()],
@@ -15517,12 +15462,7 @@ mod tests {
     fn test_commented_post_renders_after_statement() {
         let r0 = reg(0, 4);
         let c7 = con(7, 4);
-        let copy = HirNode::Statement(IrInsn::with_output(
-            IrOp::Copy,
-            r0,
-            smallvec![c7],
-            0x1000,
-        ));
+        let copy = HirNode::Statement(IrInsn::with_output(IrOp::Copy, r0, smallvec![c7], 0x1000));
         let body = vec![
             HirNode::Commented {
                 pre: vec![],
@@ -15554,12 +15494,7 @@ mod tests {
     fn test_commented_multiline_preserved() {
         let r0 = reg(0, 4);
         let c3 = con(3, 4);
-        let copy = HirNode::Statement(IrInsn::with_output(
-            IrOp::Copy,
-            r0,
-            smallvec![c3],
-            0x1000,
-        ));
+        let copy = HirNode::Statement(IrInsn::with_output(IrOp::Copy, r0, smallvec![c3], 0x1000));
         let body = vec![
             HirNode::Commented {
                 pre: vec!["first pre line\nsecond pre line".to_string()],
@@ -15591,7 +15526,10 @@ mod tests {
         let post1 = output.find("// first post line").unwrap();
         let post2 = output.find("// second post line").unwrap();
         assert!(pre1 < pre2 && pre2 < stmt, "pre ordering wrong:\n{output}");
-        assert!(stmt < post1 && post1 < post2, "post ordering wrong:\n{output}");
+        assert!(
+            stmt < post1 && post1 < post2,
+            "post ordering wrong:\n{output}"
+        );
     }
 
     /// `Commented` is transparent for non-`Statement` nodes — a
@@ -15627,12 +15565,7 @@ mod tests {
     fn test_commented_exact_render_shape() {
         let r0 = reg(0, 4);
         let c9 = con(9, 4);
-        let copy = HirNode::Statement(IrInsn::with_output(
-            IrOp::Copy,
-            r0,
-            smallvec![c9],
-            0x1000,
-        ));
+        let copy = HirNode::Statement(IrInsn::with_output(IrOp::Copy, r0, smallvec![c9], 0x1000));
         let body = vec![
             HirNode::Commented {
                 pre: vec!["hint".to_string()],
@@ -15672,12 +15605,7 @@ mod tests {
     fn test_commented_builder_helpers_flatten() {
         let r0 = reg(0, 4);
         let c1 = con(1, 4);
-        let stmt = HirNode::Statement(IrInsn::with_output(
-            IrOp::Copy,
-            r0,
-            smallvec![c1],
-            0x1000,
-        ));
+        let stmt = HirNode::Statement(IrInsn::with_output(IrOp::Copy, r0, smallvec![c1], 0x1000));
 
         let wrapped = stmt
             .with_pre_comment("alpha")
@@ -15694,10 +15622,7 @@ mod tests {
         }
 
         // unwrap_commented should peel the wrapper.
-        assert!(matches!(
-            wrapped.unwrap_commented(),
-            HirNode::Statement(_)
-        ));
+        assert!(matches!(wrapped.unwrap_commented(), HirNode::Statement(_)));
     }
 
     /// `_ZNSt6vectorIiSaIiEE9push_backERKi` →
@@ -15889,10 +15814,7 @@ mod tests {
             "expected `cli` indented deeper than `__asm {{`, got asm={asm_indent} cli={cli_indent}\n{output}",
         );
         // The closing brace lives on its own line at the asm-opener depth.
-        let close_lines = output
-            .lines()
-            .filter(|l| l.trim() == "}")
-            .count();
+        let close_lines = output.lines().filter(|l| l.trim() == "}").count();
         assert!(
             close_lines >= 1,
             "expected at least one bare `}}` closing line, got:\n{output}",
@@ -15918,14 +15840,8 @@ mod tests {
 
         assert!(output.contains("__asm {"), "missing block opener: {output}");
         assert!(output.contains("rdtsc"), "missing rdtsc: {output}");
-        assert!(
-            output.contains("mov rcx, rax"),
-            "missing mov: {output}",
-        );
-        assert!(
-            output.contains("shl rcx, 32"),
-            "missing shl: {output}",
-        );
+        assert!(output.contains("mov rcx, rax"), "missing mov: {output}",);
+        assert!(output.contains("shl rcx, 32"), "missing shl: {output}",);
 
         // The three lines must appear in order, each on its own line.
         let rdtsc_pos = output.find("rdtsc").unwrap();
@@ -16050,9 +15966,18 @@ mod tests {
         let cfg = PrintConfig::default();
         assert_eq!(cfg.max_line_width, 100, "max_line_width default");
         assert_eq!(cfg.tab_width, 4, "tab_width default");
-        assert_eq!(cfg.indent_width, 2, "indent_width default (IDA module_data+592)");
-        assert_eq!(cfg.wrap_floor, 80, "wrap_floor default (IDA Options dialog)");
-        assert_eq!(cfg.format_flags, 0, "format_flags default (IDA module_data+719)");
+        assert_eq!(
+            cfg.indent_width, 2,
+            "indent_width default (IDA module_data+592)"
+        );
+        assert_eq!(
+            cfg.wrap_floor, 80,
+            "wrap_floor default (IDA Options dialog)"
+        );
+        assert_eq!(
+            cfg.format_flags, 0,
+            "format_flags default (IDA module_data+719)"
+        );
     }
 
     /// With no `UNLACE_*` env vars set, `PrintConfig::from_env`
@@ -16172,9 +16097,13 @@ mod tests {
     fn print_config_format_flags_roundtrip() {
         let _lock = ENV_LOCK.lock().unwrap();
         let _g = EnvGuard::new("UNLACE_FORMAT_FLAGS");
-        unsafe { std::env::remove_var("UNLACE_FORMAT_FLAGS"); }
+        unsafe {
+            std::env::remove_var("UNLACE_FORMAT_FLAGS");
+        }
         assert_eq!(PrintConfig::default().format_flags, 0);
-        unsafe { std::env::set_var("UNLACE_FORMAT_FLAGS", "42"); }
+        unsafe {
+            std::env::set_var("UNLACE_FORMAT_FLAGS", "42");
+        }
         assert_eq!(PrintConfig::from_env().format_flags, 42);
     }
 
@@ -16208,13 +16137,22 @@ mod tests {
             format_flags: 0,
         };
         let out = crate::c_printer::print_c_with_rtti_config(
-            &func, None, None, None, None, None, Some(narrow),
+            &func,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(narrow),
         );
         // tab_width=2 forced through config: depth-2 body line indents by
         // 4 spaces (2 × 2), not the default 8 (2 × 4).
         let body_line = out.lines().find(|l| l.contains("v1++;")).expect("body");
         let lead = body_line.len() - body_line.trim_start().len();
-        assert_eq!(lead, 4, "expected 4-space indent under tab_width=2: {body_line:?}");
+        assert_eq!(
+            lead, 4,
+            "expected 4-space indent under tab_width=2: {body_line:?}"
+        );
     }
 
     /// Sanity check that the *default* indent (no env vars set) still
@@ -16465,10 +16403,7 @@ mod tests {
         // 0x100 = 1 << 8 — bit position 8 hits the threshold.
         assert_eq!(super::format_int_literal(0x100, 4, &ctx), "1 << 8");
         // 0x8000_0000 = 1 << 31 — large flag mask, the textbook case.
-        assert_eq!(
-            super::format_int_literal(0x8000_0000, 4, &ctx),
-            "1 << 31"
-        );
+        assert_eq!(super::format_int_literal(0x8000_0000, 4, &ctx), "1 << 31");
     }
 
     #[test]
@@ -16528,11 +16463,8 @@ mod tests {
     #[test]
     fn measure_expr_width_call() {
         let ctx = empty_ctx();
-        let call = IrInsn::without_output(
-            IrOp::Call,
-            smallvec![reg(0, 4), con(1, 4), con(2, 4)],
-            0,
-        );
+        let call =
+            IrInsn::without_output(IrOp::Call, smallvec![reg(0, 4), con(1, 4), con(2, 4)], 0);
         let w = measure_expr_width(&call, 0, &ctx);
         // target(4) + '(' + 1 + ', ' + 1 + ')' = 4+1+1+2+1+1 = 10.
         assert_eq!(w, 10);
@@ -16621,12 +16553,7 @@ mod tests {
         let r8 = reg(8, 4);
         let c1 = con(1, 4);
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(
-                IrOp::Copy,
-                r8,
-                smallvec![c1],
-                0x1004,
-            )),
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, r8, smallvec![c1], 0x1004)),
             HirNode::Return(Some(sv(8, 4))),
         ];
         let mut f = make_func("sub_1000", body);
@@ -16860,8 +16787,16 @@ mod tests {
             superclass_addr: 0,
             methods: vec![],
             ivars: vec![
-                ObjcIvar { name: "name".into(), offset: 8, type_encoding: "@".into() },
-                ObjcIvar { name: "count".into(), offset: 16, type_encoding: "q".into() },
+                ObjcIvar {
+                    name: "name".into(),
+                    offset: 8,
+                    type_encoding: "@".into(),
+                },
+                ObjcIvar {
+                    name: "count".into(),
+                    offset: 16,
+                    type_encoding: "q".into(),
+                },
             ],
             properties: vec![],
             protocols: vec![],
@@ -16918,12 +16853,7 @@ mod tests {
         let r0 = reg(0, 4);
         let c0 = con(0, 4);
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(
-                IrOp::Copy,
-                r0,
-                smallvec![c0],
-                0x1000,
-            )),
+            HirNode::Statement(IrInsn::with_output(IrOp::Copy, r0, smallvec![c0], 0x1000)),
             HirNode::Switch {
                 cond: sv(0, 4),
                 cases: vec![(
@@ -16944,9 +16874,8 @@ mod tests {
         let func = hash_switch_func(0x3610_A686);
         let mut ann = super::PrinterAnnotations::default();
         ann.string_hash_table.insert(0x3610_A686, "hello".into());
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
         assert!(
             output.contains("case 0x3610A686u:") && output.contains("/* \"hello\" */"),
             "expected hash case with string comment, got:\n{output}"
@@ -16958,9 +16887,8 @@ mod tests {
         let func = hash_switch_func(0xDEAD_BEEF);
         let mut ann = super::PrinterAnnotations::default();
         ann.string_hash_table.insert(0x3610_A686, "hello".into());
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
         assert!(
             output.contains("case 3735928559:") || output.contains("case 0xDEADBEEF"),
             "expected plain integer case for unknown hash, got:\n{output}"
@@ -16975,11 +16903,9 @@ mod tests {
     fn c_printer_escapes_special_chars_in_string_comment() {
         let func = hash_switch_func(0x1234_5678);
         let mut ann = super::PrinterAnnotations::default();
-        ann.string_hash_table
-            .insert(0x1234_5678, "a\"b\\c".into());
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        ann.string_hash_table.insert(0x1234_5678, "a\"b\\c".into());
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
         assert!(
             output.contains(r#"/* "a\"b\\c" */"#),
             "expected escape_default-rendered string, got:\n{output}"
@@ -17013,13 +16939,20 @@ mod tests {
         ann.objc_classes.push(objc_class(
             "ClassName",
             vec![
-                unlace_loader::ObjcIvar { name: "name".into(), offset: 8, type_encoding: "@".into() },
-                unlace_loader::ObjcIvar { name: "count".into(), offset: 16, type_encoding: "q".into() },
+                unlace_loader::ObjcIvar {
+                    name: "name".into(),
+                    offset: 8,
+                    type_encoding: "@".into(),
+                },
+                unlace_loader::ObjcIvar {
+                    name: "count".into(),
+                    offset: 16,
+                    type_encoding: "q".into(),
+                },
             ],
         ));
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
         assert!(
             output.contains("struct ClassName {"),
             "expected preamble to contain ObjC class struct, got:\n{output}"
@@ -17035,9 +16968,8 @@ mod tests {
         let func = minimal_func();
         let mut ann = super::PrinterAnnotations::default();
         ann.objc_classes.push(objc_class("Empty", vec![]));
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
         assert!(
             !output.contains("struct Empty"),
             "ivar-less class should not produce a struct decl, got:\n{output}"
@@ -17054,16 +16986,26 @@ mod tests {
         let mut ann = super::PrinterAnnotations::default();
         ann.objc_classes.push(objc_class(
             "Alpha",
-            vec![unlace_loader::ObjcIvar { name: "a".into(), offset: 0, type_encoding: "i".into() }],
+            vec![unlace_loader::ObjcIvar {
+                name: "a".into(),
+                offset: 0,
+                type_encoding: "i".into(),
+            }],
         ));
         ann.objc_classes.push(objc_class(
             "Beta",
-            vec![unlace_loader::ObjcIvar { name: "b".into(), offset: 0, type_encoding: "q".into() }],
+            vec![unlace_loader::ObjcIvar {
+                name: "b".into(),
+                offset: 0,
+                type_encoding: "q".into(),
+            }],
         ));
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+        assert!(
+            output.contains("struct Alpha {"),
+            "missing Alpha:\n{output}"
         );
-        assert!(output.contains("struct Alpha {"), "missing Alpha:\n{output}");
         assert!(output.contains("struct Beta {"), "missing Beta:\n{output}");
     }
 
@@ -17102,9 +17044,8 @@ mod tests {
             Some("MyController"),
             vec![objc_method("methodA"), objc_method("methodB")],
         ));
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
         assert!(
             output.contains("// ObjC categories (recovered from __objc_catlist)"),
             "expected category section heading, got:\n{output}"
@@ -17133,9 +17074,8 @@ mod tests {
         let mut ann = super::PrinterAnnotations::default();
         ann.objc_categories
             .push(objc_category("Stubs", Some("WidgetView"), vec![]));
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
         // Header + @end must be present even though the body is empty;
         // that's the whole point of surfacing zero-method categories.
         assert!(
@@ -17187,8 +17127,7 @@ mod tests {
         let mut string_table = BTreeMap::new();
         string_table.insert(0x402000, "%d".to_string());
 
-        let output =
-            super::print_c_full(&func, None, None, Some(&symbols), Some(&string_table));
+        let output = super::print_c_full(&func, None, None, Some(&symbols), Some(&string_table));
 
         assert!(
             output.contains("printf(\"%d\", (int)"),
@@ -17217,8 +17156,7 @@ mod tests {
         let mut string_table = BTreeMap::new();
         string_table.insert(0x402100, "%ld".to_string());
 
-        let output =
-            super::print_c_full(&func, None, None, Some(&symbols), Some(&string_table));
+        let output = super::print_c_full(&func, None, None, Some(&symbols), Some(&string_table));
 
         assert!(
             output.contains("scanf(\"%ld\", (long long *)"),
@@ -17237,8 +17175,11 @@ mod tests {
         let dynamic_fmt = reg(0, 8); // not a Const operand
         let x_reg = reg(8, 4);
 
-        let call_insn =
-            IrInsn::without_output(IrOp::Call, smallvec![printf_addr, dynamic_fmt, x_reg], 0x1000);
+        let call_insn = IrInsn::without_output(
+            IrOp::Call,
+            smallvec![printf_addr, dynamic_fmt, x_reg],
+            0x1000,
+        );
         let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
 
         let func = make_func("caller", body);
@@ -17250,8 +17191,7 @@ mod tests {
         // look up a literal, there's nothing to find.
         let string_table = BTreeMap::new();
 
-        let output =
-            super::print_c_full(&func, None, None, Some(&symbols), Some(&string_table));
+        let output = super::print_c_full(&func, None, None, Some(&symbols), Some(&string_table));
 
         assert!(
             !output.contains("(int)"),
@@ -17407,14 +17347,8 @@ mod tests {
             InferredStruct {
                 size: 16,
                 fields: vec![
-                    StructField {
-                        offset: 0,
-                        size: 4,
-                    },
-                    StructField {
-                        offset: 8,
-                        size: 8,
-                    },
+                    StructField { offset: 0, size: 4 },
+                    StructField { offset: 8, size: 8 },
                 ],
             },
         );
@@ -17466,11 +17400,7 @@ mod tests {
     /// `extra_const_add` parameter splits the offset application off
     /// onto its own `IntAdd` instruction (mirrors the t213 const-fold
     /// behaviour when `offset != 0`).
-    fn build_array_struct_loop(
-        field_offset: u64,
-        val_const: u64,
-        store_addr: u64,
-    ) -> HirFunction {
+    fn build_array_struct_loop(field_offset: u64, val_const: u64, store_addr: u64) -> HirFunction {
         let i = reg(0, 4); // induction variable (i)
         let arr = reg(16, 8); // base pointer to the array of structs
         let zero = con(0, 4);
@@ -17513,16 +17443,11 @@ mod tests {
         };
 
         let val = con(val_const, 8);
-        let store = IrInsn::without_output(
-            IrOp::Store,
-            smallvec![space, addr_input, val],
-            store_addr,
-        );
+        let store =
+            IrInsn::without_output(IrOp::Store, smallvec![space, addr_input, val], store_addr);
 
-        let mut body_stmts: Vec<HirNode> = vec![
-            HirNode::Statement(mul),
-            HirNode::Statement(add_base),
-        ];
+        let mut body_stmts: Vec<HirNode> =
+            vec![HirNode::Statement(mul), HirNode::Statement(add_base)];
         if let Some(add_off) = addr_chain_extra {
             body_stmts.push(HirNode::Statement(add_off));
         }
@@ -17564,9 +17489,8 @@ mod tests {
         let func = build_array_struct_loop(0, 1, 0x1020);
         let ann = annotations_with_arr_layout(reg(16, 8), &[0, 8]);
 
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
 
         assert!(
             output.contains("arr0[i].field_0 = 1"),
@@ -17584,9 +17508,8 @@ mod tests {
         let func = build_array_struct_loop(8, 2, 0x1020);
         let ann = annotations_with_arr_layout(reg(16, 8), &[0, 8]);
 
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
 
         assert!(
             output.contains("arr0[i].field_8 = 2"),
@@ -17624,9 +17547,8 @@ mod tests {
 
         // No `array_struct_layouts` injected — annotations are empty.
         let ann = super::PrinterAnnotations::default();
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
 
         assert!(
             !output.contains("arr0["),
@@ -17667,7 +17589,9 @@ mod tests {
             "IntAnd(x, 0xFF) should emit LOBYTE(x): {output}"
         );
         assert!(
-            !output.lines().any(|l| l.contains("& 0xFF") && !l.contains("LOBYTE")),
+            !output
+                .lines()
+                .any(|l| l.contains("& 0xFF") && !l.contains("LOBYTE")),
             "raw `& 0xFF` should be replaced by the macro: {output}"
         );
     }
@@ -17783,16 +17707,36 @@ mod tests {
         let zero = con(0, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::IntXor, t0, smallvec![a, b], 0x1000)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntXor,
+                t0,
+                smallvec![a, b],
+                0x1000,
+            )),
             HirNode::Statement(IrInsn::with_output(
                 IrOp::IntXor,
                 t1,
                 smallvec![t0, neg_one],
                 0x1004,
             )),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAdd, t2, smallvec![a, b], 0x1008)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntXor, t3, smallvec![a, t2], 0x100c)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAnd, t4, smallvec![t1, t3], 0x1010)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAdd,
+                t2,
+                smallvec![a, b],
+                0x1008,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntXor,
+                t3,
+                smallvec![a, t2],
+                0x100c,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAnd,
+                t4,
+                smallvec![t1, t3],
+                0x1010,
+            )),
             HirNode::Statement(IrInsn::with_output(
                 IrOp::IntSless,
                 out,
@@ -17829,10 +17773,30 @@ mod tests {
         let zero = con(0, 4);
 
         let body = vec![
-            HirNode::Statement(IrInsn::with_output(IrOp::IntXor, t0, smallvec![a, b], 0x1000)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntSub, t2, smallvec![a, b], 0x1004)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntXor, t3, smallvec![a, t2], 0x1008)),
-            HirNode::Statement(IrInsn::with_output(IrOp::IntAnd, t4, smallvec![t0, t3], 0x100c)),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntXor,
+                t0,
+                smallvec![a, b],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSub,
+                t2,
+                smallvec![a, b],
+                0x1004,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntXor,
+                t3,
+                smallvec![a, t2],
+                0x1008,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntAnd,
+                t4,
+                smallvec![t0, t3],
+                0x100c,
+            )),
             HirNode::Statement(IrInsn::with_output(
                 IrOp::IntSless,
                 out,
@@ -17921,10 +17885,7 @@ mod tests {
         // (Int(4) + Float) → header renders as
         //   `union { int *a; float *b; } *p0`
         // instead of the regular `int *p0 /* BYREF */`.
-        let mut func = make_func(
-            "t258_two_types",
-            vec![HirNode::Return(None)],
-        );
+        let mut func = make_func("t258_two_types", vec![HirNode::Return(None)]);
         // params[0] is the BYREF candidate. The base type is whatever
         // signature recovery inferred; the union annotation overrides it.
         func.params = vec![("p0".to_string(), PrimitiveType::Int(4))];
@@ -17934,9 +17895,8 @@ mod tests {
         ann.byref_union_types
             .insert(0, vec![PrimitiveType::Int(4), PrimitiveType::Float]);
 
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
 
         let header = output
             .lines()
@@ -17964,20 +17924,15 @@ mod tests {
     fn test_t258_byref_param_single_type_keeps_regular_form() {
         // BYREF param with only one observed consumption type → no union,
         // standard `T name /* BYREF */` rendering.
-        let mut func = make_func(
-            "t258_one_type",
-            vec![HirNode::Return(None)],
-        );
+        let mut func = make_func("t258_one_type", vec![HirNode::Return(None)]);
         func.params = vec![("p0".to_string(), PrimitiveType::Int(4))];
         func.byref_params.insert(0);
 
         let mut ann = super::PrinterAnnotations::default();
-        ann.byref_union_types
-            .insert(0, vec![PrimitiveType::Int(4)]);
+        ann.byref_union_types.insert(0, vec![PrimitiveType::Int(4)]);
 
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
 
         let header = output
             .lines()
@@ -18073,10 +18028,7 @@ mod tests {
         // SysV x86-64 RDI/RSI sequence → the pipeline-side detector pins
         // a usercall spec with these registers, and the header emits:
         //   __int64 __usercall fn@<rax>(int p0@<r10>, int p1@<rdx>) { … }
-        let mut func = make_func(
-            "t260_usercall",
-            vec![HirNode::Return(None)],
-        );
+        let mut func = make_func("t260_usercall", vec![HirNode::Return(None)]);
         func.params = vec![
             ("p0".to_string(), PrimitiveType::Int(4)),
             ("p1".to_string(), PrimitiveType::Int(4)),
@@ -18089,9 +18041,8 @@ mod tests {
             purge: false,
         });
 
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
 
         let header = output
             .lines()
@@ -18120,18 +18071,14 @@ mod tests {
         // No usercall spec attached → no __usercall annotation; the
         // regular header form (with whatever calling-convention sigil
         // the FunctionHeaderInfo carries) is emitted instead.
-        let mut func = make_func(
-            "t260_standard",
-            vec![HirNode::Return(None)],
-        );
+        let mut func = make_func("t260_standard", vec![HirNode::Return(None)]);
         func.params = vec![("p0".to_string(), PrimitiveType::Int(4))];
 
         let ann = super::PrinterAnnotations::default();
         // `ann.usercall == None` → standard path.
 
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
 
         let header = output
             .lines()
@@ -18144,6 +18091,29 @@ mod tests {
         assert!(
             !header.contains("@<"),
             "standard header must not carry @<reg> suffixes: {header:?}"
+        );
+    }
+
+    #[test]
+    fn test_callother_sme_fmopa_emits_svfmopa_f32_t301() {
+        let tag = con(0x42A, 8);
+        let pg = con(3, 1);
+        let za = reg(0x558, 0x20);
+        let zn = reg(0x118, 0x20);
+        let zm = reg(0x138, 0x20);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, pg, za, zn, zm],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("sme_fmopa", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("svfmopa_f32("),
+            "SME FMOPA should render as svfmopa_f32: {output}"
         );
     }
 }

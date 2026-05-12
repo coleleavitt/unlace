@@ -79,18 +79,27 @@ pub const fn sve_p_offset(n: u8) -> u64 {
     SVE_P_BASE + (n as u64) * SVE_P_SIZE as u64
 }
 
+// ── SME scaffolding registers ──────────────────────────────────────────
+// Model ZA as a nominal 256-byte matrix tile (minimum architectural
+// footprint at VL=256) and ZT0 as one 32-byte streaming tile slice. This
+// gives the IR stable register identities for SME outer-product intrinsics
+// without having to model scalable storage yet.
+pub const SME_ZA: u64 = SVE_P_BASE + 16 * SVE_P_SIZE as u64; // 1368
+pub const SME_ZA_SIZE: u8 = 32;
+pub const SME_ZT0: u64 = SME_ZA + SME_ZA_SIZE as u64; // 1624
+pub const SME_ZT0_SIZE: u8 = SVE_Z_SIZE;
+
 /// SVE Z-register names.
 const SVE_Z_NAMES: [&str; 32] = [
-    "Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7",
-    "Z8", "Z9", "Z10", "Z11", "Z12", "Z13", "Z14", "Z15",
-    "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23",
-    "Z24", "Z25", "Z26", "Z27", "Z28", "Z29", "Z30", "Z31",
+    "Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10", "Z11", "Z12", "Z13", "Z14",
+    "Z15", "Z16", "Z17", "Z18", "Z19", "Z20", "Z21", "Z22", "Z23", "Z24", "Z25", "Z26", "Z27",
+    "Z28", "Z29", "Z30", "Z31",
 ];
 
 /// SVE P-register names.
 const SVE_P_NAMES: [&str; 16] = [
-    "P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7",
-    "P8", "P9", "P10", "P11", "P12", "P13", "P14", "P15",
+    "P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P14",
+    "P15",
 ];
 
 /// Names for X0..X30.
@@ -100,9 +109,9 @@ const XREG_NAMES: [&str; 31] = [
     "X28", "X29", "X30",
 ];
 
-/// Build the full AArch64 register file (including SVE Z0–Z31 / P0–P15).
+/// Build the full AArch64 register file (including SVE Z0–Z31 / P0–P15 and SME ZA/ZT0 scaffolding).
 pub fn aarch64_register_file() -> RegisterFile {
-    let mut regs = Vec::with_capacity(34 + 32 + 16);
+    let mut regs = Vec::with_capacity(34 + 32 + 16 + 2);
     for i in 0..31u64 {
         regs.push(RegisterDef {
             name: XREG_NAMES[i as usize],
@@ -139,6 +148,14 @@ pub fn aarch64_register_file() -> RegisterFile {
             varnode: Varnode::reg(sve_p_offset(i), SVE_P_SIZE),
         });
     }
+    regs.push(RegisterDef {
+        name: "ZA",
+        varnode: Varnode::reg(SME_ZA, SME_ZA_SIZE),
+    });
+    regs.push(RegisterDef {
+        name: "ZT0",
+        varnode: Varnode::reg(SME_ZT0, SME_ZT0_SIZE),
+    });
     RegisterFile { registers: regs }
 }
 

@@ -1455,6 +1455,7 @@ dependencies = [
  "object",
  "pdb",
  "rustc-demangle",
+ "tempfile",
  "thiserror",
  "tracing",
  "unlace-ir",

@@ -62,7 +62,7 @@ use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
 use unlace_passes::{
     BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
     CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
-    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
+    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GoIfaceDevirtPass,
     GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
     ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
     StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
@@ -753,6 +753,11 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     Ok(report.ir_changes)
 }
 
+pub fn run_passes_with_image(ssa: &mut SsaFunction, image: &BinaryImage) -> Result<usize> {
+    let report = run_passes_with_report_and_image(ssa, Some(image))?;
+    Ok(report.ir_changes)
+}
+
 /// Detailed report from one [`run_passes`] invocation.
 ///
 /// Captures the outer-fixed-point behaviour: how many outer iterations ran,
@@ -793,6 +798,13 @@ pub struct PassesReport {
 ///    presentation-layer concerns and re-running them inside the loop
 ///    would either be redundant or risk oscillation.
 pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
+    run_passes_with_report_and_image(ssa, None)
+}
+
+pub fn run_passes_with_report_and_image(
+    ssa: &mut SsaFunction,
+    image: Option<&BinaryImage>,
+) -> Result<PassesReport> {
     // (1) One-time pre-pass: snapshot pre-optimization stack offsets so
     // later iterations of stack-var recovery still see the original
     // RSP/RBP-relative addressing.
@@ -864,6 +876,9 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             // BTreeMap<i64, StackLocal> instead of re-walking the IR.
             ssa.stack_frame = Some(recover_stack_frame(ssa));
             CppVtablePass.run(ssa)?;
+            if let Some(image) = image {
+                GoIfaceDevirtPass::new(&image.go_itabs).run(ssa)?;
+            }
 
             // ---- Type recovery ----
             CallingConventionDetectPass.run(ssa)?;
@@ -904,6 +919,12 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             cap = DEFAULT_OUTER_FIXEDPOINT_CAP,
             "pass pipeline outer loop hit iteration cap without converging"
         );
+    }
+
+    if let Some(image) = image {
+        GoIfaceDevirtPass::new(&image.go_itabs)
+            .run(ssa)
+            .context("Go interface devirtualization failed")?;
     }
 
     // (3) Presentation-layer post-passes. These run once, after the type
@@ -1342,7 +1363,7 @@ pub fn decompile_function_with_symbols(
     check_timeout(deadline, &entry.name)?;
 
     let t = Instant::now();
-    if let Err(e) = run_passes(&mut ssa) {
+    if let Err(e) = run_passes_with_image(&mut ssa, image) {
         tracing::warn!(err = %e, "pass pipeline failed; emitting unoptimized");
     }
     tracing::trace!(
@@ -1385,6 +1406,15 @@ pub fn decompile_function_with_symbols(
     let objc_info = unlace_loader::scan_objc_classlist(image);
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
     printer_annotations.libc_call_canonical = libc_call_canonical;
+    printer_annotations.resolved_indirect_calls = ssa
+        .resolved_indirect_calls
+        .iter()
+        .filter_map(|(&(bid, idx), &target)| {
+            let block = ssa.function.blocks.get(&bid)?;
+            let insn = block.insns.get(idx)?;
+            Some((insn.addr, target))
+        })
+        .collect();
     let printer_annotations = Some(printer_annotations);
     let result = emit_output(
         emit,

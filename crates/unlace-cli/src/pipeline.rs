@@ -1382,6 +1382,9 @@ pub fn decompile_function_with_symbols(
         .unwrap_or_default();
     let hash_pass = unlace_passes::StringHashSwitchPass::from_strings(&image.string_table);
     printer_annotations.string_hash_table = hash_pass.hash_table().clone();
+    if let Some(pdb_types) = image.pdb_types.as_ref() {
+        printer_annotations.pdb_constants_by_value = pdb_types.constants_by_value.clone();
+    }
     let objc_info = unlace_loader::scan_objc_classlist(image);
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
     printer_annotations.libc_call_canonical = libc_call_canonical;

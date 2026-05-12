@@ -305,6 +305,9 @@ pub struct PrinterAnnotations {
     /// When a switch case constant matches a key the printer emits the
     /// original string as a trailing comment (`case 0x...: /* "name" */`).
     pub string_hash_table: BTreeMap<u64, String>,
+    /// PDB constant-pool reverse index (`value → names`) from
+    /// [`unlace_loader::PdbTypes::constants_by_value`].
+    pub pdb_constants_by_value: BTreeMap<i64, Vec<String>>,
     /// ObjC classes whose synthetic ivar struct layouts should be emitted
     /// at the top of the C output preamble.  Classes without ivars are
     /// skipped (no empty `struct {};` would be a C constraint violation).
@@ -494,6 +497,7 @@ pub fn print_c_with_annotations(
         ctx.line_comments = ann.line_comments.clone();
         ctx.custom_names = ann.custom_names.clone();
         ctx.string_hash_table = ann.string_hash_table.clone();
+        ctx.pdb_constants_by_value = ann.pdb_constants_by_value.clone();
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
         ctx.auth_calls = ann.auth_calls.clone();
         ctx.libc_call_canonical = ann.libc_call_canonical.clone();
@@ -1587,6 +1591,8 @@ struct PrintCtx {
     /// so a case constant matching a recognised CRC32/FNV-1a/djb2 of a
     /// binary string renders as `case 0xN: /* "name" */`.
     string_hash_table: BTreeMap<u64, String>,
+    /// PDB constant-pool reverse index consulted by switch-case emission.
+    pdb_constants_by_value: BTreeMap<i64, Vec<String>>,
     /// IAT slot VA → resolved forwarder target, lifted from
     /// [`PrinterAnnotations::forwarded_resolutions`]. Empty when the caller
     /// didn't pass annotations or the binary has no resolved forwarders.
@@ -1695,6 +1701,7 @@ impl PrintCtx {
             objc_dispatch_calls: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             string_hash_table: BTreeMap::new(),
+            pdb_constants_by_value: BTreeMap::new(),
             forwarded_resolutions: BTreeMap::new(),
             auth_calls: BTreeMap::new(),
             libc_call_canonical: BTreeMap::new(),
@@ -4494,6 +4501,20 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                                 "case 0x{:X}u:  /* \"{}\" */",
                                 v,
                                 s.escape_default()
+                            );
+                        } else if let Some(names) = i64::try_from(*v)
+                            .ok()
+                            .and_then(|value| ctx.pdb_constants_by_value.get(&value))
+                        {
+                            let _ = writeln!(
+                                out,
+                                "case {}:  /* {} */",
+                                v,
+                                names
+                                    .iter()
+                                    .map(|name| name.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
                             );
                         } else {
                             let _ = writeln!(out, "case {}:", v);
@@ -16983,6 +17004,23 @@ mod tests {
         assert!(
             output.contains(r#"/* "a\"b\\c" */"#),
             "expected escape_default-rendered string, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_printer_renders_pdb_constant_comment_for_switch_case() {
+        let func = hash_switch_func(42);
+        let mut ann = super::PrinterAnnotations::default();
+        ann.pdb_constants_by_value
+            .insert(42, vec!["kAnswer".into(), "kAlsoAnswer".into()]);
+
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+
+        assert!(
+            output.contains("case 42:  /* kAnswer, kAlsoAnswer */"),
+            "expected PDB constant-pool annotation, got:\n{output}"
         );
     }
 

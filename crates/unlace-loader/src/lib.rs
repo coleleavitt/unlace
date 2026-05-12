@@ -62,6 +62,7 @@ pub use image::{
     SymbolKind,
 };
 pub use macho::MachoLoader;
+pub use pdb::{PdbInfo, import_pdb, merge_pdb_symbols};
 pub use pdb_types::{
     PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types, walk_tpi,
 };

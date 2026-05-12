@@ -1296,6 +1296,7 @@ dependencies = [
 name = "unlace-flirt"
 version = "0.1.0"
 dependencies = [
+ "object",
  "serde",
  "thiserror",
  "toml",

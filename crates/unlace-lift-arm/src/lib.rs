@@ -147,6 +147,14 @@ mod tests {
     }
 
     #[test]
+    fn decode_itett_eq() {
+        // firstcond=EQ=0, mask=0b0011 → ITETT → insn = 0xBF03
+        let s = decode_it(0xBF03).expect("ITETT EQ");
+        assert_eq!(s.firstcond, 0);
+        assert_eq!(s.conds, vec![0, 0, 0, 1]);
+    }
+
+    #[test]
     fn decode_it_rejects_non_it() {
         assert!(decode_it(0x4770).is_none()); // BX LR
         assert!(decode_it(0xBF00).is_none()); // mask=0 → NOP hint
@@ -1183,6 +1191,48 @@ mod tests {
         // Block drained — fourth insn falls outside the IT prefix.
         let post = l
             .lift_insn(&0x2004u16.to_le_bytes(), pc)
+            .expect("post-block MOVS");
+        let post_copy = post
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Copy)
+            .expect("Copy after block");
+        assert!(post_copy.guard.is_none(), "post-block insn unguarded");
+    }
+
+    /// t318 — deep (4-slot) IT block: mask 0b0011 keeps all four slots
+    /// alive. Our existing tests covered only up to three subsequent
+    /// instructions; this one proves the state machine survives through the
+    /// architecturally maximal fourth slot and then drains on the fifth.
+    #[test]
+    fn t318_four_slot_it_block_drains_only_after_four_instructions() {
+        // 0xBF03 is a 4-slot IT block for EQ with per-slot guards [EQ, EQ, EQ, NE].
+        let l = ArmLifter::new_thumb();
+        let it = l
+            .lift_insn(&0xBF03u16.to_le_bytes(), 0x1000)
+            .expect("4-slot IT");
+        assert!(it.ir_ops.is_empty(), "IT itself must not emit IR");
+        let st = l.current_it_state().expect("IT must arm state");
+        assert_eq!(st.conds, vec![0, 0, 0, 1]);
+
+        let mut guards = Vec::new();
+        let mut pc = 0x1002u64;
+        for imm in 1u16..=4 {
+            let bytes = (0x2000u16 | imm).to_le_bytes();
+            let r = l.lift_insn(&bytes, pc).expect("MOVS lifts");
+            let copy = r
+                .ir_ops
+                .iter()
+                .find(|i| i.op == IrOp::Copy)
+                .expect("Copy emitted");
+            guards.push(copy.guard);
+            pc += 2;
+        }
+        assert_eq!(guards, vec![Some(0), Some(0), Some(0), Some(1)]);
+        assert!(l.current_it_state().is_none(), "four-slot block drained");
+
+        let post = l
+            .lift_insn(&0x2005u16.to_le_bytes(), pc)
             .expect("post-block MOVS");
         let post_copy = post
             .ir_ops

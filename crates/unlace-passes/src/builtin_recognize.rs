@@ -252,6 +252,7 @@ mod tests {
             var_role_names: BTreeMap::new(),
             finalized_signature: None,
             crypto_annotations: Vec::new(),
+            go_defer_sites: Vec::new(),
         }
     }
 

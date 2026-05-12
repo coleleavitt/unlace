@@ -7021,6 +7021,20 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         // ── x86 conditional move pseudo-intrinsic ───────────────
         0x350 => Some("__cmov__"),
 
+        // ── RISC-V Zb* bit-manipulation intrinsics (0x600..0x60B) ─
+        0x600 => Some("__builtin_ctzll"),
+        0x601 => Some("__riscv_rol"),
+        0x602 => Some("__riscv_ror"),
+        0x603 => Some("__riscv_min"),
+        0x604 => Some("__riscv_minu"),
+        0x605 => Some("__riscv_max"),
+        0x606 => Some("__riscv_maxu"),
+        0x607 => Some("__riscv_clmul"),
+        0x608 => Some("__riscv_clmulh"),
+        0x609 => Some("__riscv_clmulr"),
+        0x60A => Some("__builtin_bswap64"),
+        0x60B => Some("__riscv_orc_b"),
+
         // ── AArch64 NEON (0x400..0x40D) ─────────────────────────
         // These are *not* resolved here because the C intrinsic name
         // depends on the lane-size operand (e.g. ADD lane=4 →

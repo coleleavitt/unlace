@@ -15,6 +15,7 @@ members = [
     "crates/unlace-lift-ebpf",
     "crates/unlace-lift-avr",
     "crates/unlace-lift-z80",
+    "crates/unlace-lift-stm8",
     "crates/unlace-passes",
     "crates/unlace-struct",
     "crates/unlace-output",
@@ -92,6 +93,7 @@ unlace-lift-arc = { path = "crates/unlace-lift-arc" }
 unlace-lift-wasm = { path = "crates/unlace-lift-wasm" }
 unlace-lift-ebpf = { path = "crates/unlace-lift-ebpf" }
 unlace-lift-avr = { path = "crates/unlace-lift-avr" }
+unlace-lift-stm8 = { path = "crates/unlace-lift-stm8" }
 unlace-passes = { path = "crates/unlace-passes" }
 unlace-struct = { path = "crates/unlace-struct" }
 unlace-output = { path = "crates/unlace-output" }

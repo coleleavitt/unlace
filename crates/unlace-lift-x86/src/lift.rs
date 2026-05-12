@@ -4,6 +4,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
+use crate::apx;
 use crate::ops::{
     arithmetic, bitwise, control_flow, crypto, data_move, fpu, sse, stack, string_ops,
 };
@@ -35,6 +36,14 @@ impl Lifter for X86Lifter {
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
         if bytes.is_empty() {
             return Err(LiftError::ShortBuffer);
+        }
+
+        let mut apx_ctx = LiftCtx::new(addr);
+        if let Some(len) = apx::try_lift_apx(&mut apx_ctx, bytes) {
+            return Ok(LiftedInsn {
+                ir_ops: apx_ctx.ops,
+                len,
+            });
         }
 
         let mut decoder = Decoder::with_ip(64, bytes, addr, DecoderOptions::NONE);

@@ -157,6 +157,7 @@ mod tests {
             phi_map: BTreeMap::new(),
             var_map,
             var_types: BTreeMap::new(),
+            type_counterexamples: Vec::new(),
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
             foldable_exprs: BTreeSet::new(),

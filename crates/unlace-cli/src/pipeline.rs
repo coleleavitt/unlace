@@ -50,6 +50,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
@@ -1364,6 +1365,11 @@ pub fn decompile_function_with_symbols(
     let _libc_annotations_added =
         annotate_libc_calls(&mut ssa, &|addr| symbols.get(&addr).cloned());
 
+    // t298 — Go iface-to-concrete devirtualization. When a `Callind`
+    // target resolves to a unique method pointer recorded in a
+    // `runtime.itab`, surface the concrete method symbol at print time.
+    let go_iface_devirtualized_calls = collect_go_iface_devirtualized_calls(&ssa, image, &symbols);
+
     // Re-key (BlockId, insn_idx) → canonical name to (call_va → canonical
     // name) for the printer, which sees instructions only by their VA.
     let mut libc_call_canonical: BTreeMap<u64, String> = BTreeMap::new();
@@ -1385,6 +1391,7 @@ pub fn decompile_function_with_symbols(
     let objc_info = unlace_loader::scan_objc_classlist(image);
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
     printer_annotations.libc_call_canonical = libc_call_canonical;
+    printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
     let printer_annotations = Some(printer_annotations);
     let result = emit_output(
         emit,
@@ -1484,6 +1491,61 @@ fn build_printer_annotations(
     }
 }
 
+fn collect_go_iface_devirtualized_calls(
+    ssa: &SsaFunction,
+    image: &BinaryImage,
+    symbols: &BTreeMap<u64, String>,
+) -> BTreeMap<u64, String> {
+    let mut method_to_symbol: BTreeMap<u64, String> = BTreeMap::new();
+    for (&addr, raw) in symbols {
+        method_to_symbol.entry(addr).or_insert_with(|| raw.clone());
+    }
+
+    let itabs = Arc::new(image.go_itabs.clone());
+    if itabs.is_empty() || method_to_symbol.is_empty() {
+        return BTreeMap::new();
+    }
+
+    let mut resolved: BTreeMap<u64, String> = BTreeMap::new();
+    for (&(bid, idx), &target) in &ssa.resolved_indirect_calls {
+        let Some(block) = ssa.function.blocks.get(&bid) else {
+            continue;
+        };
+        let Some(insn) = block.insns.get(idx) else {
+            continue;
+        };
+        if insn.op != IrOp::Callind {
+            continue;
+        }
+
+        let mut matched_name: Option<String> = None;
+        for itab in itabs.values() {
+            if !itab.methods.contains(&target) {
+                continue;
+            }
+            let Some(raw_name) = method_to_symbol.get(&target) else {
+                continue;
+            };
+            // The unique target address is enough to prove the concrete
+            // implementation body. We intentionally don't require the
+            // interface/concrete type metadata itself to be rendered here —
+            // the `runtime.itab` membership test is the devirtualization proof,
+            // and the printer just needs a stable direct-callee label.
+            matched_name = Some(unlace_output::demangle::sanitize_for_c(
+                &unlace_output::demangle::demangle(raw_name)
+                    .map(|d| d.short_name)
+                    .unwrap_or_else(|| raw_name.clone()),
+            ));
+            break;
+        }
+
+        if let Some(name) = matched_name {
+            resolved.insert(insn.addr, name);
+        }
+    }
+    resolved
+}
+
 pub fn emit_output(
     format: EmitFormat,
     ssa: &SsaFunction,
@@ -1571,6 +1633,9 @@ pub fn emit_output(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use smallvec::smallvec;
+    use unlace_ir::ssa::build_ssa;
+    use unlace_ir::{Function, IrInsn, Varnode};
     use unlace_ir::ArchId;
     use unlace_loader::{BinaryImage, Endian, Section, SectionFlags};
 
@@ -1614,6 +1679,49 @@ mod tests {
             auth_pointers: Vec::new(),
             auth_ptr_slots: Vec::new(),
         }
+    }
+
+    #[test]
+    fn t298_collects_go_iface_devirtualized_calls_from_itab_method() {
+        let mut func = Function::new("go_iface", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        let target = Varnode::unique(0, 8);
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            target,
+            smallvec![Varnode::constant(0x4010, 8)],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Callind,
+            smallvec![target, Varnode::reg(0, 8)],
+            0x1004,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1008,
+        ));
+        func.insert_block(bb);
+        let mut ssa = build_ssa(func);
+        unlace_passes::IndirectCallResolvePass.run(&mut ssa).unwrap();
+
+        let mut image = make_text_image(vec![0xC3], 0x1000);
+        image.go_itabs.insert(
+            0x9000,
+            unlace_loader::go_types::GoItab {
+                va: 0x9000,
+                inter_type_va: 0xA000,
+                concrete_type_va: 0xB000,
+                hash: 0x1234,
+                methods: vec![0x4010],
+            },
+        );
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x4010, "main.(*MyType).Do".to_string());
+
+        let resolved = collect_go_iface_devirtualized_calls(&ssa, &image, &symbols);
+        assert_eq!(resolved.get(&0x1004).map(String::as_str), Some("main_MyType_Do"));
     }
 
     #[test]

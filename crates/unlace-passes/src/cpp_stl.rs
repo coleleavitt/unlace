@@ -26,6 +26,8 @@
 //! * `std::shared_ptr<T>`
 //! * `std::unique_ptr<T>`        — drops trailing `std::default_delete<…>`
 //! * `std::list<T>` / `std::deque<T>`
+//! * `std::optional<T>`          — discriminated value wrapper
+//! * `std::variant<Ts...>`       — tag-byte discriminated union
 //!
 //! Inline namespaces (`std::__1`, `std::__cxx11`) are folded back to plain
 //! `std::` so the rendered name is portable across libcxx and libstdc++.
@@ -106,7 +108,10 @@ pub fn recognize_stl_type(namespaces: &[String], class_name: &str) -> Option<Str
         }
         "unordered_set" => {
             let elem = first_template_arg(&template_args)?;
-            Some(format!("std::unordered_set<{}>", clean_inline_ns(elem.trim())))
+            Some(format!(
+                "std::unordered_set<{}>",
+                clean_inline_ns(elem.trim())
+            ))
         }
         "shared_ptr" => {
             let elem = first_template_arg(&template_args)?;
@@ -115,6 +120,22 @@ pub fn recognize_stl_type(namespaces: &[String], class_name: &str) -> Option<Str
         "unique_ptr" => {
             let elem = first_template_arg(&template_args)?;
             Some(format!("std::unique_ptr<{}>", clean_inline_ns(elem.trim())))
+        }
+        "optional" => {
+            let elem = first_template_arg(&template_args)?;
+            Some(format!("std::optional<{}>", clean_inline_ns(elem.trim())))
+        }
+        "variant" => {
+            let args = top_level_args(&template_args);
+            if args.is_empty() {
+                return None;
+            }
+            let args = args
+                .into_iter()
+                .map(|arg| clean_inline_ns(arg.trim()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!("std::variant<{args}>"))
         }
         _ => None,
     }
@@ -208,11 +229,7 @@ mod tests {
     #[test]
     fn recognises_vector_int_libcxx() {
         // _ZNSt3__16vectorIiNS_9allocatorIiEEE9push_backERKi
-        let n = ns(&[
-            "std",
-            "__1",
-            "vector<int, std::__1::allocator<int> >",
-        ]);
+        let n = ns(&["std", "__1", "vector<int, std::__1::allocator<int> >"]);
         assert_eq!(
             recognize_stl_type(&n, "vector").as_deref(),
             Some("std::vector<int>"),
@@ -324,6 +341,27 @@ mod tests {
     }
 
     #[test]
+    fn recognises_optional_and_variant() {
+        let n = ns(&["std", "optional<int>"]);
+        assert_eq!(
+            recognize_stl_type(&n, "optional").as_deref(),
+            Some("std::optional<int>"),
+        );
+
+        let n = ns(&[
+            "std",
+            "__1",
+            "variant<int, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > >",
+        ]);
+        assert_eq!(
+            recognize_stl_type(&n, "variant").as_deref(),
+            Some(
+                "std::variant<int, std::basic_string<char, std::char_traits<char>, std::allocator<char> >>"
+            ),
+        );
+    }
+
+    #[test]
     fn rejects_non_std_namespace() {
         let n = ns(&["mylib", "vector<int>"]);
         assert_eq!(recognize_stl_type(&n, "vector"), None);
@@ -354,7 +392,10 @@ mod tests {
     #[test]
     fn top_level_args_does_not_split_inside_brackets() {
         let s = "int, std::pair<int, int>, double";
-        assert_eq!(top_level_args(s), vec!["int", "std::pair<int, int>", "double"]);
+        assert_eq!(
+            top_level_args(s),
+            vec!["int", "std::pair<int, int>", "double"]
+        );
     }
 
     #[test]

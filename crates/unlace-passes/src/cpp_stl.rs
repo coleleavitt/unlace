@@ -25,6 +25,7 @@
 //! * `std::unordered_set<T>`
 //! * `std::shared_ptr<T>`
 //! * `std::unique_ptr<T>`        — drops trailing `std::default_delete<…>`
+//! * `std::function<R(Args...)>` — preserves callable signature
 //! * `std::list<T>` / `std::deque<T>`
 //!
 //! Inline namespaces (`std::__1`, `std::__cxx11`) are folded back to plain
@@ -115,6 +116,10 @@ pub fn recognize_stl_type(namespaces: &[String], class_name: &str) -> Option<Str
         "unique_ptr" => {
             let elem = first_template_arg(&template_args)?;
             Some(format!("std::unique_ptr<{}>", clean_inline_ns(elem.trim())))
+        }
+        "function" => {
+            let sig = first_template_arg(&template_args)?;
+            Some(format!("std::function<{}>", clean_inline_ns(sig.trim())))
         }
         _ => None,
     }
@@ -288,6 +293,24 @@ mod tests {
         assert_eq!(
             recognize_stl_type(&n, "unique_ptr").as_deref(),
             Some("std::unique_ptr<int>"),
+        );
+    }
+
+    #[test]
+    fn recognises_function_signature() {
+        let n = ns(&["std", "function<void (int)>"]);
+        assert_eq!(
+            recognize_stl_type(&n, "function").as_deref(),
+            Some("std::function<void (int)>"),
+        );
+    }
+
+    #[test]
+    fn recognises_function_signature_with_inline_namespace_types() {
+        let n = ns(&["std", "__1", "function<bool (std::__1::basic_string<char>)>"]);
+        assert_eq!(
+            recognize_stl_type(&n, "function").as_deref(),
+            Some("std::function<bool (std::basic_string<char>)>"),
         );
     }
 

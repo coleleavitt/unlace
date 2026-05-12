@@ -1,0 +1,7 @@
+[package]
+name = "unlace-lift-sass"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }

@@ -34,6 +34,19 @@ pub fn parse_arch(s: &str) -> Result<ArchId> {
         "ppc64" | "powerpc64" => Ok(ArchId::Ppc64),
         "v850" => Ok(ArchId::V850),
         "arc" => Ok(ArchId::Arc),
+        "sass" | "nvidia-sass" | "nv-sass" | "sm70" | "sm_70" => Ok(ArchId::NvidiaSass),
         _ => bail!("unknown architecture: '{s}'"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_nvidia_sass_aliases() {
+        for alias in ["sass", "nvidia-sass", "nv-sass", "sm70", "sm_70"] {
+            assert_eq!(parse_arch(alias).unwrap(), ArchId::NvidiaSass);
+        }
     }
 }

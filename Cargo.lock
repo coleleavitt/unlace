@@ -1339,6 +1339,7 @@ dependencies = [
  "unlace-lift-mips",
  "unlace-lift-ppc",
  "unlace-lift-riscv",
+ "unlace-lift-sass",
  "unlace-lift-v850",
  "unlace-lift-x86",
 ]
@@ -1403,6 +1404,13 @@ version = "0.1.0"
 dependencies = [
  "capstone",
  "smallvec",
+ "unlace-ir",
+]
+
+[[package]]
+name = "unlace-lift-sass"
+version = "0.1.0"
+dependencies = [
  "unlace-ir",
 ]
 

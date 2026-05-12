@@ -84,6 +84,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            go_defer_sites: Vec::new(),
         }
     }
 

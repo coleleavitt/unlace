@@ -10,16 +10,26 @@
 //!
 //! The database is ship-in-binary (`flirt_signatures::DEFAULT_SIGNATURES`)
 //! rather than loaded from `.sig` files; that's enough for the parity push
-//! and avoids a runtime IO + parsing dependency.
+//! and avoids a runtime IO + parsing dependency.  The shipped tables are split
+//! per architecture so the same bytes can be interpreted against ABI-specific
+//! libraries without x86-64 patterns producing false positives on other ISAs.
 
 mod signatures;
 
-pub use signatures::default_db;
+pub use signatures::{default_db, default_db_for_arch, signatures_for_arch};
+
+use unlace_ir::ArchId;
 
 /// One library-function fingerprint.
 #[derive(Debug, Clone)]
 pub struct FlirtSignature {
     pub name: String,
+    /// Architecture/library namespace for this signature.
+    ///
+    /// Generic databases may contain entries from multiple architectures;
+    /// architecture-aware callers should prefer [`FlirtDb::match_function_for_arch`]
+    /// so only signatures for the loaded image's ISA are considered.
+    pub arch: ArchId,
     /// Leading byte pattern. `pattern.len()` is the comparison window;
     /// positions where `mask[i] == 0` are treated as wildcards.
     pub pattern: Vec<u8>,
@@ -34,6 +44,41 @@ pub struct FlirtSignature {
     /// the candidate's actual bytes at the same offset using a fixed
     /// 32-byte window (matching IDA's default tail length).
     pub crc16_at: Option<(usize, u16)>,
+}
+
+impl FlirtSignature {
+    /// Build a signature in the historical default x86-64 namespace.
+    pub fn new(name: impl Into<String>, pattern: Vec<u8>, mask: Vec<u8>) -> Self {
+        let min_len = pattern.len();
+        Self {
+            name: name.into(),
+            arch: ArchId::X86_64,
+            pattern,
+            mask,
+            min_len,
+            max_len: None,
+            crc16_at: None,
+        }
+    }
+
+    /// Build a signature explicitly tied to `arch`.
+    pub fn for_arch(
+        arch: ArchId,
+        name: impl Into<String>,
+        pattern: Vec<u8>,
+        mask: Vec<u8>,
+    ) -> Self {
+        let min_len = pattern.len();
+        Self {
+            name: name.into(),
+            arch,
+            pattern,
+            mask,
+            min_len,
+            max_len: None,
+            crc16_at: None,
+        }
+    }
 }
 
 /// In-memory FLIRT database.
@@ -65,12 +110,35 @@ impl FlirtDb {
         self.entries.is_empty()
     }
 
+    /// Iterate over all registered signatures.
+    pub fn entries(&self) -> impl Iterator<Item = &FlirtSignature> {
+        self.entries.iter()
+    }
+
+    /// Iterate over signatures registered for `arch` only.
+    pub fn entries_for_arch(&self, arch: ArchId) -> impl Iterator<Item = &FlirtSignature> {
+        self.entries.iter().filter(move |sig| sig.arch == arch)
+    }
+
     /// Try to match `bytes` (typically the prologue + body of a candidate
     /// function) against any signature in the database. Returns the first
     /// match by registration order so callers control priority via the
     /// signature table layout.
+    ///
+    /// This legacy method scans all architecture tables. New call sites with a
+    /// loaded-image architecture should use [`Self::match_function_for_arch`].
     pub fn match_function(&self, bytes: &[u8]) -> Option<&str> {
         for sig in &self.entries {
+            if signature_matches(sig, bytes) {
+                return Some(&sig.name);
+            }
+        }
+        None
+    }
+
+    /// Try to match `bytes` against signatures registered for `arch` only.
+    pub fn match_function_for_arch(&self, arch: ArchId, bytes: &[u8]) -> Option<&str> {
+        for sig in self.entries_for_arch(arch) {
             if signature_matches(sig, bytes) {
                 return Some(&sig.name);
             }
@@ -138,12 +206,17 @@ mod tests {
     fn sig(name: &str, pattern: &[u8], mask: &[u8]) -> FlirtSignature {
         FlirtSignature {
             name: name.to_string(),
+            arch: ArchId::X86_64,
             pattern: pattern.to_vec(),
             mask: mask.to_vec(),
             min_len: pattern.len(),
             max_len: None,
             crc16_at: None,
         }
+    }
+
+    fn arch_sig(arch: ArchId, name: &str, pattern: &[u8]) -> FlirtSignature {
+        FlirtSignature::for_arch(arch, name, pattern.to_vec(), vec![0xFF; pattern.len()])
     }
 
     #[test]
@@ -164,20 +237,10 @@ mod tests {
     fn pattern_match_with_wildcards() {
         // Mask out the second byte (a relocation displacement, say).
         let mut db = FlirtDb::new();
-        db.push(sig(
-            "memcpy",
-            &[0x48, 0x00, 0xC3],
-            &[0xFF, 0x00, 0xFF],
-        ));
+        db.push(sig("memcpy", &[0x48, 0x00, 0xC3], &[0xFF, 0x00, 0xFF]));
         // Wildcarded byte may be anything.
-        assert_eq!(
-            db.match_function(&[0x48, 0x77, 0xC3, 0x00]),
-            Some("memcpy")
-        );
-        assert_eq!(
-            db.match_function(&[0x48, 0xAB, 0xC3, 0x00]),
-            Some("memcpy")
-        );
+        assert_eq!(db.match_function(&[0x48, 0x77, 0xC3, 0x00]), Some("memcpy"));
+        assert_eq!(db.match_function(&[0x48, 0xAB, 0xC3, 0x00]), Some("memcpy"));
         // First byte mismatch must reject.
         assert!(db.match_function(&[0x49, 0xAB, 0xC3, 0x00]).is_none());
     }
@@ -202,6 +265,7 @@ mod tests {
 
         db.push(FlirtSignature {
             name: "fn_a".into(),
+            arch: ArchId::X86_64,
             pattern: prefix.to_vec(),
             mask: vec![0xFF; prefix.len()],
             min_len: prefix.len(),
@@ -210,6 +274,7 @@ mod tests {
         });
         db.push(FlirtSignature {
             name: "fn_b".into(),
+            arch: ArchId::X86_64,
             pattern: prefix.to_vec(),
             mask: vec![0xFF; prefix.len()],
             min_len: prefix.len(),
@@ -235,20 +300,60 @@ mod tests {
     }
 
     #[test]
-    fn default_db_is_populated() {
+    fn arch_filtered_match_ignores_other_isa_collisions() {
+        let mut db = FlirtDb::new();
+        db.push(arch_sig(ArchId::X86_64, "x86_stub", &[0xAA, 0xBB, 0xCC]));
+        db.push(arch_sig(ArchId::AArch64, "arm64_stub", &[0xAA, 0xBB, 0xCC]));
+
+        assert_eq!(db.match_function(&[0xAA, 0xBB, 0xCC]), Some("x86_stub"));
+        assert_eq!(
+            db.match_function_for_arch(ArchId::AArch64, &[0xAA, 0xBB, 0xCC]),
+            Some("arm64_stub")
+        );
+        assert!(
+            db.match_function_for_arch(ArchId::RiscV64, &[0xAA, 0xBB, 0xCC])
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn default_db_is_populated_per_arch() {
         // Smoke-test: the shipped database has the symbols the rubric calls
-        // for. Bytes here are zeroed because we're checking *registration*,
-        // not match correctness against synthetic data.
+        // for, and the multi-architecture tables are genuinely present.
         let db = default_db();
-        assert!(db.len() >= 30, "expected ≥30 signatures, got {}", db.len());
+        assert!(db.len() >= 50, "expected ≥50 signatures, got {}", db.len());
         let names: Vec<&str> = db.entries.iter().map(|s| s.name.as_str()).collect();
         for required in &[
-            "strcpy", "strlen", "memcpy", "memset", "malloc", "free",
-            "__cxa_throw", "operator new", "pthread_create",
+            "strcpy",
+            "strlen",
+            "memcpy",
+            "memset",
+            "malloc",
+            "free",
+            "__cxa_throw",
+            "operator new",
+            "pthread_create",
         ] {
             assert!(
                 names.iter().any(|n| n == required),
                 "default_db missing {required}"
+            );
+        }
+
+        for arch in [
+            ArchId::X86_64,
+            ArchId::X86,
+            ArchId::AArch64,
+            ArchId::Arm,
+            ArchId::RiscV64,
+            ArchId::Mips64,
+            ArchId::Mips,
+            ArchId::Ppc64,
+            ArchId::Ppc,
+        ] {
+            assert!(
+                db.entries_for_arch(arch).count() >= 4,
+                "default_db missing per-arch signatures for {arch}"
             );
         }
     }

@@ -349,6 +349,14 @@ pub struct PrinterAnnotations {
     /// [`unlace_loader::BinaryImage::auth_pointers`] table. Empty for
     /// every non-cache image and for v1–v4 dyld_shared_caches.
     pub auth_calls: BTreeMap<u64, unlace_passes::AuthCallAnnotation>,
+    /// Resolved indirect calls keyed by `Callind` instruction VA.
+    ///
+    /// Populated from `SsaFunction::resolved_indirect_calls` by the CLI
+    /// pipeline after passes such as Go interface devirtualization recover a
+    /// unique concrete target. When present, `Callind` target rendering uses
+    /// the concrete symbol/`sub_<addr>` instead of the opaque function-pointer
+    /// expression.
+    pub resolved_indirect_calls: BTreeMap<u64, u64>,
     /// Pre-rendered preamble block for synthesised composite types
     /// recovered by the SSA analyses (t147 stack-frame composites in
     /// `SsaFunction::inferred_structs` and t213 array-of-structs layouts
@@ -496,6 +504,7 @@ pub fn print_c_with_annotations(
         ctx.string_hash_table = ann.string_hash_table.clone();
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
         ctx.auth_calls = ann.auth_calls.clone();
+        ctx.resolved_indirect_calls = ann.resolved_indirect_calls.clone();
         ctx.libc_call_canonical = ann.libc_call_canonical.clone();
         ctx.libc_call_original = ann.libc_call_original.clone();
         ctx.array_struct_layouts = ann.array_struct_layouts.clone();
@@ -1595,6 +1604,10 @@ struct PrintCtx {
     /// (t201). Lifted from [`PrinterAnnotations::auth_calls`]; consumed
     /// by `emit_callind_cast` to render `__builtin_arm_authcall(...)`.
     auth_calls: BTreeMap<u64, unlace_passes::AuthCallAnnotation>,
+    /// Resolved indirect call targets keyed by Callind VA. Lifted from
+    /// [`PrinterAnnotations::resolved_indirect_calls`] and consulted by
+    /// [`resolve_call_target`] before falling back to the target operand.
+    resolved_indirect_calls: BTreeMap<u64, u64>,
     /// Canonical libc family name keyed by Call VA (t229). Lifted from
     /// [`PrinterAnnotations::libc_call_canonical`]; consulted by
     /// [`resolve_call_target`] before the symbol-table fallback so a
@@ -1697,6 +1710,7 @@ impl PrintCtx {
             string_hash_table: BTreeMap::new(),
             forwarded_resolutions: BTreeMap::new(),
             auth_calls: BTreeMap::new(),
+            resolved_indirect_calls: BTreeMap::new(),
             libc_call_canonical: BTreeMap::new(),
             libc_call_original: BTreeMap::new(),
             array_struct_layouts: BTreeMap::new(),
@@ -4880,6 +4894,14 @@ fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Stri
     // can be rewritten if the annotator decided they classify.
     if let Some(canonical) = ctx.libc_call_canonical.get(&insn.addr) {
         return canonical.clone();
+    }
+    if insn.op == IrOp::Callind {
+        if let Some(&target) = ctx.resolved_indirect_calls.get(&insn.addr) {
+            if let Some(name) = ctx.symbols.get(&target) {
+                return demangle_callee_name(name);
+            }
+            return format!("sub_{:x}", target);
+        }
     }
     let target_vn = &insn.inputs[0];
     if target_vn.space == SpaceId::Const {

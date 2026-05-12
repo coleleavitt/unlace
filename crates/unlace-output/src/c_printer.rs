@@ -7053,7 +7053,7 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x327 => Some("__bitfield_get__"),
         0x328 => Some("__bitfield_set__"),
 
-        // ── AArch64 lifter callothers (0x330..0x344) ───────────
+        // ── AArch64 lifter callothers (0x330..0x34B) ───────────
         0x330 => Some("__csel__"),
         0x331 => Some("__csinc__"),
         0x332 => Some("__csinv__"),
@@ -7063,6 +7063,9 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x342 => Some("__dmb__"),
         0x343 => Some("__dsb__"),
         0x344 => Some("__isb__"),
+        // t299 AArch64 atomics are handled specially by `emit_callother`
+        // because C11 atomic builtins need memory-order arguments and, for
+        // stores, have statement form rather than a value expression.
 
         // ── x86 conditional move / perf-monitor pseudo-intrinsics ──
         0x350 => Some("__cmov__"),
@@ -7099,6 +7102,104 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x427 => Some("svst1_s32"),
         0x428 => Some("svand_pred"),
         0x429 => Some("svptrue_b32"),
+        _ => None,
+    }
+}
+
+const CALLOTHER_AARCH64_LDAXR: u64 = 0x345;
+const CALLOTHER_AARCH64_STLXR: u64 = 0x346;
+const CALLOTHER_AARCH64_ATOMIC_LOAD_ACQUIRE: u64 = 0x347;
+const CALLOTHER_AARCH64_ATOMIC_STORE_RELEASE: u64 = 0x348;
+const CALLOTHER_AARCH64_ATOMIC_FETCH_ADD: u64 = 0x349;
+const CALLOTHER_AARCH64_ATOMIC_EXCHANGE: u64 = 0x34A;
+const CALLOTHER_AARCH64_ATOMIC_CMPXCHG: u64 = 0x34B;
+
+fn aarch64_atomic_order_name(order: u64) -> &'static str {
+    match order {
+        0 => "memory_order_relaxed",
+        1 => "memory_order_acquire",
+        2 => "memory_order_release",
+        3 => "memory_order_acq_rel",
+        _ => "memory_order_seq_cst",
+    }
+}
+
+fn atomic_ptr_arg(vn: &Varnode, operand_idx: usize, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    format!(
+        "(_Atomic unsigned long long *){}",
+        emit_operand_resolved(vn, operand_idx, stmt_idx, ctx)
+    )
+}
+
+fn emit_aarch64_atomic_callother(
+    tag: u64,
+    insn: &IrInsn,
+    stmt_idx: u32,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    match tag {
+        CALLOTHER_AARCH64_LDAXR => {
+            let addr = insn.inputs.get(1)?;
+            Some(format!(
+                "atomic_load_explicit({}, memory_order_acquire)",
+                atomic_ptr_arg(addr, 1, stmt_idx, ctx)
+            ))
+        }
+        CALLOTHER_AARCH64_STLXR => {
+            let value = insn.inputs.get(1)?;
+            let addr = insn.inputs.get(2)?;
+            Some(format!(
+                "({{ atomic_store_explicit({}, {}, memory_order_release); 0; }})",
+                atomic_ptr_arg(addr, 2, stmt_idx, ctx),
+                emit_operand_resolved(value, 1, stmt_idx, ctx)
+            ))
+        }
+        CALLOTHER_AARCH64_ATOMIC_LOAD_ACQUIRE => {
+            let addr = insn.inputs.get(2)?;
+            Some(format!(
+                "atomic_load_explicit({}, memory_order_acquire)",
+                atomic_ptr_arg(addr, 2, stmt_idx, ctx)
+            ))
+        }
+        CALLOTHER_AARCH64_ATOMIC_STORE_RELEASE => {
+            let value = insn.inputs.get(2)?;
+            let addr = insn.inputs.get(3)?;
+            Some(format!(
+                "atomic_store_explicit({}, {}, memory_order_release)",
+                atomic_ptr_arg(addr, 3, stmt_idx, ctx),
+                emit_operand_resolved(value, 2, stmt_idx, ctx)
+            ))
+        }
+        CALLOTHER_AARCH64_ATOMIC_FETCH_ADD | CALLOTHER_AARCH64_ATOMIC_EXCHANGE => {
+            let order = insn.inputs.get(1)?.offset;
+            let value = insn.inputs.get(2)?;
+            let addr = insn.inputs.get(3)?;
+            let name = if tag == CALLOTHER_AARCH64_ATOMIC_FETCH_ADD {
+                "atomic_fetch_add_explicit"
+            } else {
+                "atomic_exchange_explicit"
+            };
+            Some(format!(
+                "{}({}, {}, {})",
+                name,
+                atomic_ptr_arg(addr, 3, stmt_idx, ctx),
+                emit_operand_resolved(value, 2, stmt_idx, ctx),
+                aarch64_atomic_order_name(order)
+            ))
+        }
+        CALLOTHER_AARCH64_ATOMIC_CMPXCHG => {
+            let order = insn.inputs.get(1)?.offset;
+            let expected = insn.inputs.get(2)?;
+            let desired = insn.inputs.get(3)?;
+            let addr = insn.inputs.get(4)?;
+            Some(format!(
+                "atomic_compare_exchange_strong_explicit({}, &{}, {}, {}, memory_order_relaxed)",
+                atomic_ptr_arg(addr, 4, stmt_idx, ctx),
+                emit_operand_resolved(expected, 2, stmt_idx, ctx),
+                emit_operand_resolved(desired, 3, stmt_idx, ctx),
+                aarch64_atomic_order_name(order)
+            ))
+        }
         _ => None,
     }
 }
@@ -7368,6 +7469,10 @@ fn emit_callother(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     }
 
     let tag = tag_vn.offset;
+
+    if let Some(expr) = emit_aarch64_atomic_callother(tag, insn, stmt_idx, ctx) {
+        return expr;
+    }
 
     // AArch64 NEON intrinsics carry their lane size as a constant in
     // `inputs[1]` — peel it off and route through the lane-aware
@@ -8760,6 +8865,14 @@ _DWORD __readfsdword(unsigned int offset);
 #ifndef INFINITY
 #define INFINITY __builtin_inff()
 #endif
+// Minimal C11 atomic declarations used by recovered AArch64 atomics.
+typedef enum { memory_order_relaxed, memory_order_consume, memory_order_acquire, memory_order_release, memory_order_acq_rel, memory_order_seq_cst } memory_order;
+#define _Atomic
+unsigned long long atomic_load_explicit(_Atomic unsigned long long *obj, memory_order order);
+void atomic_store_explicit(_Atomic unsigned long long *obj, unsigned long long desired, memory_order order);
+unsigned long long atomic_fetch_add_explicit(_Atomic unsigned long long *obj, unsigned long long arg, memory_order order);
+unsigned long long atomic_exchange_explicit(_Atomic unsigned long long *obj, unsigned long long desired, memory_order order);
+_Bool atomic_compare_exchange_strong_explicit(_Atomic unsigned long long *obj, unsigned long long *expected, unsigned long long desired, memory_order success, memory_order failure);
 ";
 
 #[cfg(test)]
@@ -13565,6 +13678,92 @@ mod tests {
     }
 
     // -------------------------------------------------------------------
+
+    #[test]
+    fn test_callother_aarch64_ldar_renders_c11_atomic_t299() {
+        let insn = IrInsn::with_output(
+            IrOp::Callother,
+            Varnode::unique(0, 8),
+            smallvec![
+                Varnode::constant(0x347, 8),
+                Varnode::constant(8, 8),
+                Varnode::reg(8, 8),
+            ],
+            0x1000,
+        );
+        let output = print_c(&make_func("a64_ldar", vec![HirNode::Statement(insn)]));
+        assert!(
+            output.contains("atomic_load_explicit") && output.contains("memory_order_acquire"),
+            "LDAR should render as C11 acquire load: {output}"
+        );
+        assert!(
+            !output.contains("/* CALLOTHER"),
+            "known tag must not fall back: {output}"
+        );
+    }
+
+    #[test]
+    fn test_callother_aarch64_stlr_renders_c11_atomic_t299() {
+        let insn = IrInsn::without_output(
+            IrOp::Callother,
+            smallvec![
+                Varnode::constant(0x348, 8),
+                Varnode::constant(8, 8),
+                Varnode::reg(0, 8),
+                Varnode::reg(8, 8),
+            ],
+            0x1000,
+        );
+        let output = print_c(&make_func("a64_stlr", vec![HirNode::Statement(insn)]));
+        assert!(
+            output.contains("atomic_store_explicit") && output.contains("memory_order_release"),
+            "STLR should render as C11 release store: {output}"
+        );
+    }
+
+    #[test]
+    fn test_callother_aarch64_lse_renders_c11_atomic_t299() {
+        let add = IrInsn::with_output(
+            IrOp::Callother,
+            Varnode::unique(0, 8),
+            smallvec![
+                Varnode::constant(0x349, 8),
+                Varnode::constant(3, 8),
+                Varnode::reg(16, 8),
+                Varnode::reg(8, 8),
+            ],
+            0x1000,
+        );
+        let cas = IrInsn::with_output(
+            IrOp::Callother,
+            Varnode::reg(0, 8),
+            smallvec![
+                Varnode::constant(0x34B, 8),
+                Varnode::constant(1, 8),
+                Varnode::reg(0, 8),
+                Varnode::reg(16, 8),
+                Varnode::reg(8, 8),
+            ],
+            0x1004,
+        );
+        let output = print_c(&make_func(
+            "a64_lse",
+            vec![HirNode::Statement(add), HirNode::Statement(cas)],
+        ));
+        assert!(
+            output.contains("atomic_fetch_add_explicit"),
+            "LDADD should render as fetch_add: {output}"
+        );
+        assert!(
+            output.contains("memory_order_acq_rel"),
+            "LDADDAL order should be acq_rel: {output}"
+        );
+        assert!(
+            output.contains("atomic_compare_exchange_strong_explicit"),
+            "CAS should render as cmpxchg: {output}"
+        );
+    }
+
     // t225 — AArch64 PTR_AUTH Callother rendering
     // -------------------------------------------------------------------
 

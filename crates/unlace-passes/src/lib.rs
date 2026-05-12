@@ -191,8 +191,9 @@ pub use struct_field_recovery::recover_structs;
 pub use tail_call::TailCallDetectPass;
 pub use tail_duplication::TailDuplicationPass;
 pub use type_constraint_solver::{
-    Constraint, TypeConstraintSolverPass, collect_and_apply as solve_type_constraints,
-    collect_constraints, solve_constraints,
+    Constraint, PolyTypeBounds, PolyTypeSolution, TypeCapability, TypeConstraintSolverPass,
+    collect_and_apply as solve_type_constraints, collect_constraints, solve_constraints,
+    solve_polymorphic_constraints,
 };
 pub use var_naming::{VarClassification, VarNamingPass, VarRole, classify_variables, suggest_name};
 pub use vararg_detect::{

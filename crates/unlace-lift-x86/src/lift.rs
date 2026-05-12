@@ -534,14 +534,14 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         }
         M::Vpmullq => sse::lift_avx_binop(ctx, insn, sse::tag::VPMULLQ_512),
 
-        // ── AES-NI (t309) ───────────────────────────────────────
+        // ── AES-NI (t310) ───────────────────────────────────────
         M::Aesenc => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESENC),
         M::Aesenclast => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESENCLAST),
         M::Aesdec => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESDEC),
         M::Aesdeclast => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESDECLAST),
         M::Aeskeygenassist => crypto::lift_aes_imm(ctx, insn, crypto::tag::AESKEYGENASSIST),
 
-        // ── SHA-NI (t310) ───────────────────────────────────────
+        // ── SHA-NI (t309) ───────────────────────────────────────
         M::Sha1rnds4 => crypto::lift_aes_imm(ctx, insn, crypto::tag::SHA1RNDS4),
         M::Sha1nexte => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA1NEXTE),
         M::Sha256rnds2 => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA256RNDS2),

@@ -149,6 +149,7 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
+            pdb_info: None,
             pdb_types: None,
             msvc_rtti: None,
             seh: None,

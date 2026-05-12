@@ -12486,6 +12486,34 @@ mod tests {
         );
     }
 
+    #[test]
+    fn t278_inlinee_site_marker_renders_as_leading_comment() {
+        let call_va: u64 = 0x401004;
+        let target_va: u64 = 0x500000;
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![con(target_va, 8)], call_va);
+        let func = make_func("caller", vec![HirNode::Statement(call_insn), HirNode::Return(None)]);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(target_va, "target".to_string());
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.line_comments
+            .insert(call_va, "_inlined_foo(...)".to_string());
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            Some(&symbols),
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(output.contains("target();"), "expected rendered call: {output}");
+    }
+
     // -------------------------------------------------------------------
     // t265: direct-call xref summary above the function header
     // -------------------------------------------------------------------

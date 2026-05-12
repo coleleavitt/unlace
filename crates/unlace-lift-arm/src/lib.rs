@@ -15,12 +15,19 @@ mod tests {
         ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
         CALLOTHER_ARM_NEON_VADD_F, CALLOTHER_ARM_NEON_VADD_I, CALLOTHER_ARM_NEON_VLD1,
         CALLOTHER_ARM_NEON_VQADD, CALLOTHER_ARM_NEON_VQSUB, CALLOTHER_ARM_NEON_VST1,
+        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, Aarch64TmeDecoded, ArmLiftMode,
+        CALLOTHER_AARCH64_CCMP, CALLOTHER_AARCH64_TCOMMIT, CALLOTHER_AARCH64_TSTART,
         CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
         CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
         CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
         CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
         decode_thumb1_ldm_stm, decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list,
         try_aarch64_ccmp, try_aarch64_csel,
+        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
+        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
+        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
+        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
+        try_aarch64_tme,
     };
 
     #[test]
@@ -519,6 +526,56 @@ mod tests {
             .find(|i| i.op == IrOp::Callother)
             .expect("should emit Callother");
         assert_eq!(call.inputs[0].offset, tag);
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn try_aarch64_tme_decodes_tstart_and_tcommit() {
+        assert_eq!(
+            try_aarch64_tme(0xD523_3060),
+            Some(Aarch64TmeDecoded::Tstart { rt: 0 })
+        );
+        assert_eq!(
+            try_aarch64_tme(0xD523_3061),
+            Some(Aarch64TmeDecoded::Tstart { rt: 1 })
+        );
+        assert_eq!(try_aarch64_tme(0xD503_307F), Some(Aarch64TmeDecoded::Tcommit));
+        assert_eq!(try_aarch64_tme(0xD523_3161), None, "TTEST is not part of t294");
+    }
+
+    #[test]
+    fn arm64_tstart_lifts_to_callother_with_status_output() {
+        // TSTART X0 → d5233060. LLVM models this as producing a status code in Xt.
+        let result = lifter()
+            .lift_insn(&[0x60, 0x30, 0x23, 0xd5], 0x1000)
+            .expect("TSTART should decode");
+        assert_eq!(result.len, 4);
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].space, SpaceId::Const);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_TSTART);
+        assert_eq!(ir.inputs.len(), 1);
+        let out = ir.output.as_ref().expect("TSTART returns status in Xt");
+        assert_eq!(out.space, SpaceId::Register);
+        assert_eq!(out.offset, 0);
+        assert_eq!(out.size, 8);
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn arm64_tcommit_lifts_to_callother_without_output() {
+        // TCOMMIT → d503307f.
+        let result = lifter()
+            .lift_insn(&[0x7f, 0x30, 0x03, 0xd5], 0x1000)
+            .expect("TCOMMIT should decode");
+        assert_eq!(result.len, 4);
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].space, SpaceId::Const);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_TCOMMIT);
+        assert!(ir.output.is_none());
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }
 

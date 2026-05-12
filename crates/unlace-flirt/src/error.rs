@@ -13,6 +13,18 @@ pub enum FlirtError {
     #[error("failed to parse pattern TOML: {0}")]
     Parse(#[from] toml::de::Error),
 
+    /// Static archive parsing failed.
+    #[error("failed to parse archive: {detail}")]
+    ArchiveParse { detail: String },
+
+    /// An archive member could not be parsed as an object file.
+    #[error("failed to parse object member '{member}': {detail}")]
+    ObjectParse { member: String, detail: String },
+
+    /// The archive member did not contain a code/text section.
+    #[error("archive member '{member}' contained no code section")]
+    NoCodeSection { member: String },
+
     /// A pattern has an invalid byte/mask length mismatch.
     #[error("pattern '{name}': byte length ({byte_len}) != mask length ({mask_len})")]
     LengthMismatch {

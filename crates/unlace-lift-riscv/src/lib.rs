@@ -28,6 +28,29 @@ const RV_REG_NAMES: [&str; 32] = [
 
 /// Offset of the pc register in the register file.
 const PC_OFFSET: u64 = 256;
+/// Floating-point register file.  Each architectural f-register is allocated
+/// 16 bytes so RV{F,D,Q} values can share the same logical register slot.
+const FPR_OFFSET: u64 = 264;
+const FPR_STRIDE: u64 = 16;
+/// Conservative vector register slots for RVV.  The lifter models vector
+/// operations as architecture callothers over fixed-size summaries rather than
+/// trying to encode dynamic VLEN/SEW/LMUL in the core IR.
+const VEC_OFFSET: u64 = 1024;
+const VEC_STRIDE: u64 = 16;
+const FCSR_OFFSET: u64 = 2048;
+
+const CALLOTHER_RISCV_MULH: u64 = 0x5256_0001;
+const CALLOTHER_RISCV_MULHSU: u64 = 0x5256_0002;
+const CALLOTHER_RISCV_MULHU: u64 = 0x5256_0003;
+const CALLOTHER_RISCV_AMO_MIN: u64 = 0x5256_0100;
+const CALLOTHER_RISCV_AMO_MAX: u64 = 0x5256_0101;
+const CALLOTHER_RISCV_AMO_MINU: u64 = 0x5256_0102;
+const CALLOTHER_RISCV_AMO_MAXU: u64 = 0x5256_0103;
+const CALLOTHER_RISCV_FMIN: u64 = 0x5256_0200;
+const CALLOTHER_RISCV_FMAX: u64 = 0x5256_0201;
+const CALLOTHER_RISCV_FCLASS: u64 = 0x5256_0202;
+const CALLOTHER_RISCV_VECTOR: u64 = 0x5256_0300;
+const CALLOTHER_RISCV_VSET: u64 = 0x5256_0301;
 
 /// Convert a capstone `RegId` to a register-space `Varnode`.
 /// Returns `None` for x0 (hardwired zero — callers should use `Varnode::constant(0, 8)`).
@@ -82,6 +105,85 @@ impl LiftCtx {
         self.emit(IrInsn::without_output(
             IrOp::Unimplemented,
             smallvec![],
+            self.addr,
+        ));
+    }
+
+    fn emit_callother(
+        &mut self,
+        code: u64,
+        output: Option<Varnode>,
+        mut inputs: smallvec::SmallVec<[Varnode; 4]>,
+    ) {
+        inputs.insert(0, Varnode::constant(code, 8));
+        let inputs: smallvec::SmallVec<[Varnode; 3]> = inputs.into_iter().collect();
+        if let Some(out) = output {
+            self.emit(IrInsn::with_output(IrOp::Callother, out, inputs, self.addr));
+        } else {
+            self.emit(IrInsn::without_output(IrOp::Callother, inputs, self.addr));
+        }
+    }
+
+    fn lift_load_to(&mut self, dst: Varnode, base: RegId, offset: i64) {
+        let base_vn = read_reg(base);
+        let addr_vn = if offset != 0 {
+            let off_vn = Varnode::constant(offset as u64, 8);
+            let tmp = self.alloc_unique(8);
+            self.emit(IrInsn::with_output(
+                IrOp::IntAdd,
+                tmp,
+                smallvec![base_vn, off_vn],
+                self.addr,
+            ));
+            tmp
+        } else {
+            base_vn
+        };
+        self.emit(IrInsn::with_output(
+            IrOp::Load,
+            dst,
+            smallvec![Varnode::constant(SpaceId::Ram as u64, 8), addr_vn],
+            self.addr,
+        ));
+    }
+
+    fn lift_store_value(&mut self, base: RegId, offset: i64, value: Varnode) {
+        let base_vn = read_reg(base);
+        let addr_vn = if offset != 0 {
+            let off_vn = Varnode::constant(offset as u64, 8);
+            let tmp = self.alloc_unique(8);
+            self.emit(IrInsn::with_output(
+                IrOp::IntAdd,
+                tmp,
+                smallvec![base_vn, off_vn],
+                self.addr,
+            ));
+            tmp
+        } else {
+            base_vn
+        };
+        self.emit(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![Varnode::constant(SpaceId::Ram as u64, 8), addr_vn, value],
+            self.addr,
+        ));
+    }
+
+    fn lift_fp_rr(&mut self, op: IrOp, rd: u32, rs1: u32, rs2: u32, size: u8) {
+        let out = fp_reg(rd, size);
+        self.emit(IrInsn::with_output(
+            op,
+            out,
+            smallvec![fp_reg(rs1, size), fp_reg(rs2, size)],
+            self.addr,
+        ));
+    }
+
+    fn lift_fp_unary(&mut self, op: IrOp, rd: u32, rs1: u32, size: u8) {
+        self.emit(IrInsn::with_output(
+            op,
+            fp_reg(rd, size),
+            smallvec![fp_reg(rs1, size)],
             self.addr,
         ));
     }
@@ -457,7 +559,7 @@ pub struct RiscVLifter {
 
 impl RiscVLifter {
     pub fn new() -> Self {
-        let mut regs = Vec::with_capacity(33);
+        let mut regs = Vec::with_capacity(99);
         for (i, name) in RV_REG_NAMES.iter().enumerate() {
             regs.push(RegisterDef {
                 name,
@@ -467,6 +569,24 @@ impl RiscVLifter {
         regs.push(RegisterDef {
             name: "pc",
             varnode: Varnode::reg(PC_OFFSET, 8),
+        });
+        for i in 0..32 {
+            let name: &'static str = Box::leak(format!("f{i}").into_boxed_str());
+            regs.push(RegisterDef {
+                name,
+                varnode: fp_reg(i, 16),
+            });
+        }
+        for i in 0..32 {
+            let name: &'static str = Box::leak(format!("v{i}").into_boxed_str());
+            regs.push(RegisterDef {
+                name,
+                varnode: vec_reg(i),
+            });
+        }
+        regs.push(RegisterDef {
+            name: "fcsr",
+            varnode: Varnode::reg(FCSR_OFFSET, 4),
         });
 
         let cs = Capstone::new()
@@ -566,9 +686,430 @@ fn rv_reg(index: u32) -> RegId {
     RegId(RiscVReg::RISCV_REG_X0 as u16 + index as u16)
 }
 
+fn fp_reg(index: u32, size: u8) -> Varnode {
+    Varnode::reg(FPR_OFFSET + (index as u64) * FPR_STRIDE, size)
+}
+
+fn vec_reg(index: u32) -> Varnode {
+    Varnode::reg(VEC_OFFSET + (index as u64) * VEC_STRIDE, 16)
+}
+
 fn sign_extend(value: u32, bits: u8) -> i64 {
     let shift = 64 - bits;
     ((value as i64) << shift) >> shift
+}
+
+fn fp_size_from_fmt(fmt: u32) -> Option<u8> {
+    match fmt {
+        0b00 => Some(4),  // S
+        0b01 => Some(8),  // D
+        0b11 => Some(16), // Q
+        _ => None,
+    }
+}
+
+fn lift_riscv_extended_direct(word: u32, addr: u64, ctx: &mut LiftCtx) -> Option<()> {
+    let opcode = word & 0x7f;
+    let rd = (word >> 7) & 0x1f;
+    let funct3 = (word >> 12) & 0x7;
+    let rs1 = (word >> 15) & 0x1f;
+    let rs2 = (word >> 20) & 0x1f;
+    let rs3 = (word >> 27) & 0x1f;
+    let funct7 = (word >> 25) & 0x7f;
+    match opcode {
+        // RV64M, including high-half products and unsigned W division/remainder.
+        0x33 if funct7 == 0x01 => match funct3 {
+            0x0 => ctx.lift_alu_rr(IrOp::IntMult, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            0x1 => ctx.emit_callother(
+                CALLOTHER_RISCV_MULH,
+                cs_reg_to_varnode(rv_reg(rd)),
+                smallvec![read_reg(rv_reg(rs1)), read_reg(rv_reg(rs2))],
+            ),
+            0x2 => ctx.emit_callother(
+                CALLOTHER_RISCV_MULHSU,
+                cs_reg_to_varnode(rv_reg(rd)),
+                smallvec![read_reg(rv_reg(rs1)), read_reg(rv_reg(rs2))],
+            ),
+            0x3 => ctx.emit_callother(
+                CALLOTHER_RISCV_MULHU,
+                cs_reg_to_varnode(rv_reg(rd)),
+                smallvec![read_reg(rv_reg(rs1)), read_reg(rv_reg(rs2))],
+            ),
+            0x4 => ctx.lift_alu_rr(IrOp::IntSdiv, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            0x5 => ctx.lift_alu_rr(IrOp::IntDiv, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            0x6 => ctx.lift_alu_rr(IrOp::IntSrem, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            0x7 => ctx.lift_alu_rr(IrOp::IntRem, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            _ => return None,
+        },
+        0x3b if funct7 == 0x01 => match funct3 {
+            0x0 => ctx.lift_alu_rr_w(IrOp::IntMult, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            0x4 => ctx.lift_alu_rr_w(IrOp::IntSdiv, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            0x5 => ctx.lift_alu_rr_w(IrOp::IntDiv, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            0x6 => ctx.lift_alu_rr_w(IrOp::IntSrem, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            0x7 => ctx.lift_alu_rr_w(IrOp::IntRem, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            _ => return None,
+        },
+        // RVF/RVD/RVQ loads and stores.
+        0x07 => {
+            let imm = sign_extend(word >> 20, 12);
+            let size = match funct3 {
+                0x2 => 4,
+                0x3 => 8,
+                0x4 => 16,
+                _ => return None,
+            };
+            ctx.lift_load_to(fp_reg(rd, size), rv_reg(rs1), imm);
+        }
+        0x27 => {
+            let imm = ((word >> 7) & 0x1f) | (((word >> 25) & 0x7f) << 5);
+            let imm = sign_extend(imm, 12);
+            let size = match funct3 {
+                0x2 => 4,
+                0x3 => 8,
+                0x4 => 16,
+                _ => return None,
+            };
+            ctx.lift_store_value(rv_reg(rs1), imm, fp_reg(rs2, size));
+        }
+        // Fused multiply-add/subtract family.  IR has no FMA op, so emit the canonical two-op form.
+        0x43 | 0x47 | 0x4b | 0x4f => {
+            let size = fp_size_from_fmt(funct3)?;
+            let mul = ctx.alloc_unique(size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::FloatMult,
+                mul,
+                smallvec![fp_reg(rs1, size), fp_reg(rs2, size)],
+                addr,
+            ));
+            let addend = fp_reg(rs3, size);
+            let final_op = if opcode == 0x47 || opcode == 0x4f {
+                IrOp::FloatSub
+            } else {
+                IrOp::FloatAdd
+            };
+            let out = fp_reg(rd, size);
+            if opcode == 0x4b || opcode == 0x4f {
+                let neg = ctx.alloc_unique(size);
+                ctx.emit(IrInsn::with_output(
+                    IrOp::FloatNeg,
+                    neg,
+                    smallvec![mul],
+                    addr,
+                ));
+                ctx.emit(IrInsn::with_output(
+                    final_op,
+                    out,
+                    smallvec![neg, addend],
+                    addr,
+                ));
+            } else {
+                ctx.emit(IrInsn::with_output(
+                    final_op,
+                    out,
+                    smallvec![mul, addend],
+                    addr,
+                ));
+            }
+        }
+        0x53 => {
+            let fmt = (funct7 >> 2) & 0x3;
+            let size = fp_size_from_fmt(fmt).unwrap_or(8);
+            match (funct7 >> 2, funct7 & 0x3) {
+                (0b00000, fmt) => {
+                    ctx.lift_fp_rr(IrOp::FloatAdd, rd, rs1, rs2, fp_size_from_fmt(fmt)?)
+                }
+                (0b00001, fmt) => {
+                    ctx.lift_fp_rr(IrOp::FloatSub, rd, rs1, rs2, fp_size_from_fmt(fmt)?)
+                }
+                (0b00010, fmt) => {
+                    ctx.lift_fp_rr(IrOp::FloatMult, rd, rs1, rs2, fp_size_from_fmt(fmt)?)
+                }
+                (0b00011, fmt) => {
+                    ctx.lift_fp_rr(IrOp::FloatDiv, rd, rs1, rs2, fp_size_from_fmt(fmt)?)
+                }
+                (0b01011, fmt) => {
+                    ctx.lift_fp_unary(IrOp::FloatSqrt, rd, rs1, fp_size_from_fmt(fmt)?)
+                }
+                (0b10100, fmt) => {
+                    let size = fp_size_from_fmt(fmt)?;
+                    let op = match funct3 {
+                        0x0 => IrOp::FloatLessequal,
+                        0x1 => IrOp::FloatLess,
+                        0x2 => IrOp::FloatEqual,
+                        _ => return None,
+                    };
+                    let cmp = ctx.alloc_unique(1);
+                    ctx.emit(IrInsn::with_output(
+                        op,
+                        cmp,
+                        smallvec![fp_reg(rs1, size), fp_reg(rs2, size)],
+                        addr,
+                    ));
+                    let ext = ctx.alloc_unique(8);
+                    ctx.emit(IrInsn::with_output(
+                        IrOp::IntZext,
+                        ext,
+                        smallvec![cmp],
+                        addr,
+                    ));
+                    ctx.write_reg(rv_reg(rd), ext);
+                }
+                _ => match funct7 {
+                    0b0000000 | 0b0000001 | 0b0000011 => {
+                        ctx.lift_fp_rr(IrOp::FloatAdd, rd, rs1, rs2, size)
+                    }
+                    0b0000100 | 0b0000101 | 0b0000111 => {
+                        ctx.lift_fp_rr(IrOp::FloatSub, rd, rs1, rs2, size)
+                    }
+                    0b0001000 | 0b0001001 | 0b0001011 => {
+                        ctx.lift_fp_rr(IrOp::FloatMult, rd, rs1, rs2, size)
+                    }
+                    0b0001100 | 0b0001101 | 0b0001111 => {
+                        ctx.lift_fp_rr(IrOp::FloatDiv, rd, rs1, rs2, size)
+                    }
+                    0b0101100 | 0b0101101 | 0b0101111 => {
+                        ctx.lift_fp_unary(IrOp::FloatSqrt, rd, rs1, size)
+                    }
+                    0b0010000 | 0b0010001 | 0b0010011 => match funct3 {
+                        0x0 => ctx.emit(IrInsn::with_output(
+                            IrOp::Copy,
+                            fp_reg(rd, size),
+                            smallvec![fp_reg(rs1, size)],
+                            addr,
+                        )),
+                        0x1 => ctx.lift_fp_unary(IrOp::FloatNeg, rd, rs1, size),
+                        0x2 => ctx.lift_fp_unary(IrOp::FloatAbs, rd, rs1, size),
+                        _ => return None,
+                    },
+                    0b0010100 | 0b0010101 | 0b0010111 => {
+                        let code = if funct3 == 0 {
+                            CALLOTHER_RISCV_FMIN
+                        } else {
+                            CALLOTHER_RISCV_FMAX
+                        };
+                        ctx.emit_callother(
+                            code,
+                            Some(fp_reg(rd, size)),
+                            smallvec![fp_reg(rs1, size), fp_reg(rs2, size)],
+                        );
+                    }
+                    0b1010000 | 0b1010001 | 0b1010011 => {
+                        let op = match funct3 {
+                            0x0 => IrOp::FloatLessequal,
+                            0x1 => IrOp::FloatLess,
+                            0x2 => IrOp::FloatEqual,
+                            _ => return None,
+                        };
+                        let cmp = ctx.alloc_unique(1);
+                        ctx.emit(IrInsn::with_output(
+                            op,
+                            cmp,
+                            smallvec![fp_reg(rs1, size), fp_reg(rs2, size)],
+                            addr,
+                        ));
+                        let ext = ctx.alloc_unique(8);
+                        ctx.emit(IrInsn::with_output(
+                            IrOp::IntZext,
+                            ext,
+                            smallvec![cmp],
+                            addr,
+                        ));
+                        ctx.write_reg(rv_reg(rd), ext);
+                    }
+                    0b0100000 | 0b0100001 | 0b0100011 => {
+                        let dst_size = fp_size_from_fmt(rs2 & 0x3).unwrap_or(size);
+                        ctx.emit(IrInsn::with_output(
+                            IrOp::FloatFloat2float,
+                            fp_reg(rd, dst_size),
+                            smallvec![fp_reg(rs1, size)],
+                            addr,
+                        ));
+                    }
+                    0b1100000 | 0b1100001 | 0b1100011 => {
+                        let out_size = if rs2 & 0b10 != 0 { 8 } else { 4 };
+                        let tmp = ctx.alloc_unique(out_size);
+                        ctx.emit(IrInsn::with_output(
+                            IrOp::FloatFloat2int,
+                            tmp,
+                            smallvec![fp_reg(rs1, size)],
+                            addr,
+                        ));
+                        let val = if out_size < 8 {
+                            let ext = ctx.alloc_unique(8);
+                            ctx.emit(IrInsn::with_output(
+                                IrOp::IntSext,
+                                ext,
+                                smallvec![tmp],
+                                addr,
+                            ));
+                            ext
+                        } else {
+                            tmp
+                        };
+                        ctx.write_reg(rv_reg(rd), val);
+                    }
+                    0b1101000 | 0b1101001 | 0b1101011 => {
+                        ctx.emit(IrInsn::with_output(
+                            IrOp::FloatInt2float,
+                            fp_reg(rd, size),
+                            smallvec![read_reg(rv_reg(rs1))],
+                            addr,
+                        ));
+                    }
+                    0b1110000 | 0b1110001 | 0b1110011 => match funct3 {
+                        0x0 => ctx.write_reg(rv_reg(rd), fp_reg(rs1, 8)),
+                        0x1 => ctx.emit_callother(
+                            CALLOTHER_RISCV_FCLASS,
+                            cs_reg_to_varnode(rv_reg(rd)),
+                            smallvec![fp_reg(rs1, size)],
+                        ),
+                        _ => return None,
+                    },
+                    0b1111000 | 0b1111001 | 0b1111011 => ctx.emit(IrInsn::with_output(
+                        IrOp::Copy,
+                        fp_reg(rd, size),
+                        smallvec![read_reg(rv_reg(rs1))],
+                        addr,
+                    )),
+                    _ => return None,
+                },
+            }
+        }
+        // Atomic extension: model LR/SC and AMOs as load/store pairs plus callothers where plain IR has no min/max high-level op.
+        0x2f if funct3 == 0x2 || funct3 == 0x3 => {
+            let size = if funct3 == 0x2 { 4 } else { 8 };
+            let funct5 = (word >> 27) & 0x1f;
+            let addr_v = read_reg(rv_reg(rs1));
+            let old = ctx.alloc_unique(size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Load,
+                old,
+                smallvec![Varnode::constant(SpaceId::Ram as u64, 8), addr_v],
+                addr,
+            ));
+            let old64 = if size < 8 {
+                let ext = ctx.alloc_unique(8);
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntSext,
+                    ext,
+                    smallvec![old],
+                    addr,
+                ));
+                ext
+            } else {
+                old
+            };
+            ctx.write_reg(rv_reg(rd), old64);
+            match funct5 {
+                0b00010 => {} // LR
+                0b00011 => {
+                    // SC: store rs2 and report success (0)
+                    let val = if size < 8 {
+                        let trunc = ctx.alloc_unique(size);
+                        ctx.emit(IrInsn::with_output(
+                            IrOp::Subpiece,
+                            trunc,
+                            smallvec![read_reg(rv_reg(rs2)), Varnode::constant(0, 4)],
+                            addr,
+                        ));
+                        trunc
+                    } else {
+                        read_reg(rv_reg(rs2))
+                    };
+                    ctx.emit(IrInsn::without_output(
+                        IrOp::Store,
+                        smallvec![
+                            Varnode::constant(SpaceId::Ram as u64, 8),
+                            read_reg(rv_reg(rs1)),
+                            val
+                        ],
+                        addr,
+                    ));
+                    ctx.write_reg(rv_reg(rd), Varnode::constant(0, 8));
+                }
+                0b00001 => ctx.emit(IrInsn::without_output(
+                    IrOp::Store,
+                    smallvec![
+                        Varnode::constant(SpaceId::Ram as u64, 8),
+                        read_reg(rv_reg(rs1)),
+                        read_reg(rv_reg(rs2))
+                    ],
+                    addr,
+                )),
+                0b00000 | 0b00100 | 0b01100 | 0b01000 => {
+                    let op = match funct5 {
+                        0b00000 => IrOp::IntAdd,
+                        0b00100 => IrOp::IntXor,
+                        0b01100 => IrOp::IntAnd,
+                        0b01000 => IrOp::IntOr,
+                        _ => unreachable!(),
+                    };
+                    let next = ctx.alloc_unique(size);
+                    ctx.emit(IrInsn::with_output(
+                        op,
+                        next,
+                        smallvec![old, read_reg(rv_reg(rs2))],
+                        addr,
+                    ));
+                    ctx.emit(IrInsn::without_output(
+                        IrOp::Store,
+                        smallvec![
+                            Varnode::constant(SpaceId::Ram as u64, 8),
+                            read_reg(rv_reg(rs1)),
+                            next
+                        ],
+                        addr,
+                    ));
+                }
+                0b10000 | 0b10100 | 0b11000 | 0b11100 => {
+                    let code = match funct5 {
+                        0b10000 => CALLOTHER_RISCV_AMO_MIN,
+                        0b10100 => CALLOTHER_RISCV_AMO_MAX,
+                        0b11000 => CALLOTHER_RISCV_AMO_MINU,
+                        _ => CALLOTHER_RISCV_AMO_MAXU,
+                    };
+                    let next = ctx.alloc_unique(size);
+                    ctx.emit_callother(code, Some(next), smallvec![old, read_reg(rv_reg(rs2))]);
+                    ctx.emit(IrInsn::without_output(
+                        IrOp::Store,
+                        smallvec![
+                            Varnode::constant(SpaceId::Ram as u64, 8),
+                            read_reg(rv_reg(rs1)),
+                            next
+                        ],
+                        addr,
+                    ));
+                }
+                _ => return None,
+            }
+        }
+        // RVV is highly parametric. Keep decoding complete enough for control-flow/lift progress by emitting typed vector summaries.
+        0x57 => {
+            if funct3 == 0x7 {
+                ctx.emit_callother(
+                    CALLOTHER_RISCV_VSET,
+                    cs_reg_to_varnode(rv_reg(rd)),
+                    smallvec![
+                        read_reg(rv_reg(rs1)),
+                        Varnode::constant(rs2 as u64, 8),
+                        Varnode::constant(word as u64, 8)
+                    ],
+                );
+            } else {
+                ctx.emit_callother(
+                    CALLOTHER_RISCV_VECTOR | ((funct3 as u64) << 8),
+                    Some(vec_reg(rd)),
+                    smallvec![
+                        vec_reg(rs1),
+                        vec_reg(rs2),
+                        Varnode::constant(word as u64, 8)
+                    ],
+                );
+            }
+        }
+        _ => return None,
+    }
+    Some(())
 }
 
 fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
@@ -593,6 +1134,21 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
     let rs2 = (word >> 20) & 0x1f;
     let funct7 = (word >> 25) & 0x7f;
     let mut ctx = LiftCtx::new(addr);
+
+    // Extension encodings overlap the base OP/OP-32 opcode space (notably M's
+    // funct7=1), so try the non-base decoder before the RV64I match below.
+    if matches!(
+        opcode,
+        0x07 | 0x27 | 0x2f | 0x43 | 0x47 | 0x4b | 0x4f | 0x53 | 0x57
+    ) || ((opcode == 0x33 || opcode == 0x3b) && funct7 == 0x01)
+    {
+        if lift_riscv_extended_direct(word, addr, &mut ctx).is_some() {
+            return Some(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
+    }
 
     match opcode {
         0x13 => {
@@ -709,7 +1265,9 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
         0x67 if rd == 0 && rs1 == 1 && sign_extend(word >> 20, 12) == 0 => {
             ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![], ctx.addr));
         }
-        _ => return None,
+        _ => {
+            lift_riscv_extended_direct(word, addr, &mut ctx)?;
+        }
     }
 
     Some(LiftedInsn {
@@ -1606,10 +2164,13 @@ mod tests {
     fn test_register_file() {
         let l = lifter();
         let rf = l.register_file();
-        assert_eq!(rf.registers.len(), 33);
+        assert_eq!(rf.registers.len(), 98);
         assert_eq!(rf.registers[0].name, "x0");
         assert_eq!(rf.registers[31].name, "x31");
         assert_eq!(rf.registers[32].name, "pc");
+        assert_eq!(rf.registers[33].name, "f0");
+        assert_eq!(rf.registers[65].name, "v0");
+        assert_eq!(rf.registers[97].name, "fcsr");
     }
 
     #[test]
@@ -2140,6 +2701,89 @@ mod tests {
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntLess));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
+    }
+
+    #[test]
+    fn test_m_extension_high_and_unsigned_w() {
+        // mulhu x1, x2, x3: opcode OP, funct7=1, funct3=3.
+        let mulhu = 0x023130b3u32.to_le_bytes();
+        let result = lifter().lift_insn(&mulhu, 0x1000).expect("mulhu");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+
+        // divuw x1, x2, x3: OP-32, funct7=1, funct3=5.
+        let divuw = 0x023150bbu32.to_le_bytes();
+        let result = lifter().lift_insn(&divuw, 0x1000).expect("divuw");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntDiv));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
+    }
+
+    #[test]
+    fn test_atomic_extension_lr_sc_amo() {
+        // lr.w x1, (x2)
+        let lr_w = 0x100120afu32.to_le_bytes();
+        let result = lifter().lift_insn(&lr_w, 0x1000).expect("lr.w");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+
+        // amoor.d x1, x3, (x2)
+        let amoor_d = 0x403130afu32.to_le_bytes();
+        let result = lifter().lift_insn(&amoor_d, 0x1000).expect("amoor.d");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
+    }
+
+    #[test]
+    fn test_float_double_quad_load_arithmetic_compare() {
+        // flw f1, 0(x2)
+        let flw = 0x00012087u32.to_le_bytes();
+        let result = lifter().lift_insn(&flw, 0x1000).expect("flw");
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Load && i.output == Some(fp_reg(1, 4)))
+        );
+
+        // fadd.d f1, f2, f3
+        let fadd_d = 0x023100d3u32.to_le_bytes();
+        let result = lifter().lift_insn(&fadd_d, 0x1000).expect("fadd.d");
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::FloatAdd && i.output == Some(fp_reg(1, 8)))
+        );
+
+        // fsqrt.q f1, f2
+        let fsqrt_q = 0x5e0170d3u32.to_le_bytes();
+        let result = lifter().lift_insn(&fsqrt_q, 0x1000).expect("fsqrt.q");
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::FloatSqrt && i.output == Some(fp_reg(1, 16)))
+        );
+
+        // fle.s x1, f2, f3
+        let fle_s = 0xa03100d3u32.to_le_bytes();
+        let result = lifter().lift_insn(&fle_s, 0x1000).expect("fle.s");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::FloatLessequal));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
+    }
+
+    #[test]
+    fn test_vector_extension_summary() {
+        // vadd.vv v1, v2, v3 (OP-V, funct6=0, vm=1, funct3=000)
+        let vadd_vv = 0x023100d7u32.to_le_bytes();
+        let result = lifter().lift_insn(&vadd_vv, 0x1000).expect("vadd.vv");
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.output == Some(vec_reg(1)))
+        );
     }
 
     // NOP (addi x0, x0, 0) → 0x00000013 (capstone pseudo: nop, 0 ops)

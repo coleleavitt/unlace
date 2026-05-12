@@ -69,6 +69,14 @@ pub enum StlType {
     WeakPtr { pointee: String },
     /// `std::unique_ptr<T>` — owning single-owner pointer.
     UniquePtr { pointee: String },
+    /// `std::function<R(Args...)>` — type-erased callable wrapper.
+    ///
+    /// The optional `target` records a statically recovered small-buffer
+    /// payload such as a lambda closure stored inline inside the wrapper.
+    Function {
+        signature: String,
+        target: Option<String>,
+    },
 }
 
 impl StlType {
@@ -97,6 +105,12 @@ impl StlType {
             StlType::SharedPtr { pointee } => format!("std::shared_ptr<{}>", pointee),
             StlType::WeakPtr { pointee } => format!("std::weak_ptr<{}>", pointee),
             StlType::UniquePtr { pointee } => format!("std::unique_ptr<{}>", pointee),
+            StlType::Function { signature, target } => match target {
+                Some(target) => {
+                    format!("std::function<{}> /* SBO target: {} */", signature, target)
+                }
+                None => format!("std::function<{}>", signature),
+            },
         }
     }
 
@@ -111,6 +125,9 @@ impl StlType {
             StlType::SharedPtr { .. } => Some(16),
             // Single pointer.
             StlType::UniquePtr { .. } => Some(8),
+            // libstdc++ and libc++ both keep std::function in a two-word
+            // inline buffer plus a manager/invoker pair on 64-bit targets.
+            StlType::Function { .. } => Some(32),
             // weak_ptr is the same as shared_ptr (ptr + control block).
             StlType::WeakPtr { .. } => Some(16),
             // Node-based containers — sentinel + size.
@@ -210,6 +227,13 @@ pub fn recognize_stl(dr: &DemangleResult) -> Option<StlType> {
         "unique_ptr" => {
             let pointee = args.first()?.clone();
             Some(StlType::UniquePtr { pointee })
+        }
+        "function" => {
+            let signature = args.first()?.clone();
+            Some(StlType::Function {
+                signature,
+                target: recognize_std_function_sbo_target(dr),
+            })
         }
         _ => None,
     }
@@ -317,6 +341,77 @@ pub fn looks_like_unique_ptr_layout(fields: &[(u64, u8)]) -> bool {
     fields == [(0, 8)]
 }
 
+/// Check whether the given field layout matches the common 64-bit
+/// `std::function` storage shape: a 16-byte inline callable buffer followed
+/// by manager/invoker function pointers.
+///
+/// This deliberately models the *storage* required for small-buffer
+/// optimisation unwrapping rather than a particular vendor's private names.
+/// It accepts both the coarse field view (`{16, 8, 8}`) and the split
+/// two-word buffer view (`{8, 8, 8, 8}`) observed after scalar field recovery.
+pub fn looks_like_function_sbo_layout(fields: &[(u64, u8)]) -> bool {
+    fields == [(0, 16), (16, 8), (24, 8)] || fields == [(0, 8), (8, 8), (16, 8), (24, 8)]
+}
+
+/// Recover the inline target name for a `std::function` member belonging to
+/// an implementation-specific handler/manager type.
+///
+/// libstdc++ encodes small-buffer callables in symbols such as
+/// `std::_Function_handler<void (int), Foo>::_M_invoke(...)`; libc++ uses
+/// analogous `std::__1::__function::__func<Foo, Alloc, Sig>` manager classes.
+/// Those symbols are exactly the static evidence that a concrete callable was
+/// placed in the wrapper's SBO storage. The returned string is intentionally
+/// a descriptive label/comment, not a replacement for the wrapper type.
+pub fn recognize_std_function_sbo_target(dr: &DemangleResult) -> Option<String> {
+    recognize_std_function_sbo_target_from_parts(&dr.namespaces, dr.class_name.as_deref())
+}
+
+fn recognize_std_function_sbo_target_from_parts(
+    namespaces: &[String],
+    class_name: Option<&str>,
+) -> Option<String> {
+    if namespaces.first().map(String::as_str) != Some("std") {
+        return None;
+    }
+
+    let (idx, segment) = namespaces.iter().enumerate().find(|(_, segment)| {
+        segment.starts_with("_Function_handler<")
+            || segment.starts_with("__function::__func<")
+            || segment.starts_with("__func<")
+            || segment.contains("::__function::__func<")
+    })?;
+
+    let args = extract_template_args(segment)?;
+    let target = if segment.starts_with("_Function_handler<") {
+        // libstdc++: _Function_handler<Signature, Callable>
+        args.get(1).cloned()
+    } else {
+        // libc++: __function::__func<Callable, Alloc, Signature>
+        args.first().cloned()
+    }?;
+
+    let target = clean_inline_namespaces(&target);
+    if target.is_empty() || target == "void" {
+        return None;
+    }
+
+    let role = match class_name {
+        Some("_Function_handler") | Some("__func") => "handler",
+        _ if idx + 1 < namespaces.len() => "manager",
+        _ => "target",
+    };
+
+    Some(format!("{target} ({role})"))
+}
+
+fn clean_inline_namespaces(s: &str) -> String {
+    let mut out = s.trim().to_string();
+    for marker in ["std::__1::", "std::__2::", "std::__cxx11::"] {
+        out = out.replace(marker, "std::");
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,8 +469,7 @@ mod tests {
 
     #[test]
     fn recognise_shared_ptr_int() {
-        let ty = recognize_stl(&d("_ZNSt10shared_ptrIiE5resetEv"))
-            .expect("shared_ptr<int>::reset");
+        let ty = recognize_stl(&d("_ZNSt10shared_ptrIiE5resetEv")).expect("shared_ptr<int>::reset");
         assert_eq!(ty.display(), "std::shared_ptr<int>");
         assert_eq!(ty.size_bytes(), Some(16));
     }
@@ -393,6 +487,77 @@ mod tests {
             .expect("unique_ptr<int>::reset");
         assert_eq!(ty.display(), "std::unique_ptr<int>");
         assert_eq!(ty.size_bytes(), Some(8));
+    }
+
+    #[test]
+    fn recognise_std_function_signature() {
+        let dr = DemangleResult {
+            short_name: "std::function<void (int)>::operator()".into(),
+            full_signature: "std::function<void (int)>::operator()(int) const".into(),
+            language: crate::demangle::SymbolLanguage::Cpp,
+            symbol_kind: crate::demangle::SymbolKind::Normal,
+            namespaces: vec!["std".into(), "function<void (int)>".into()],
+            class_name: Some("function".into()),
+            param_types: vec!["int".into()],
+            is_ctor: false,
+            is_dtor: false,
+            is_lambda: false,
+        };
+        let ty = recognize_stl(&dr).expect("std::function recognized");
+        assert_eq!(ty.display(), "std::function<void (int)>");
+        assert_eq!(ty.size_bytes(), Some(32));
+    }
+
+    #[test]
+    fn recognise_libstdcxx_function_handler_sbo_target() {
+        let dr = DemangleResult {
+            short_name: "std::_Function_handler<int (int), main::{lambda(int)#1}>::_M_invoke".into(),
+            full_signature: "std::_Function_handler<int (int), main::{lambda(int)#1}>::_M_invoke(std::_Any_data const&, int&&)".into(),
+            language: crate::demangle::SymbolLanguage::Cpp,
+            symbol_kind: crate::demangle::SymbolKind::Normal,
+            namespaces: vec![
+                "std".into(),
+                "_Function_handler<int (int), main::{lambda(int)#1}>".into(),
+            ],
+            class_name: Some("_Function_handler".into()),
+            param_types: vec!["std::_Any_data const&".into(), "int&&".into()],
+            is_ctor: false,
+            is_dtor: false,
+            is_lambda: false,
+        };
+        assert_eq!(
+            recognize_std_function_sbo_target(&dr).as_deref(),
+            Some("main::{lambda(int)#1} (handler)")
+        );
+    }
+
+    #[test]
+    fn recognise_libcxx_function_func_sbo_target() {
+        let dr = DemangleResult {
+            short_name:
+                "std::__1::__function::__func<Foo, std::__1::allocator<Foo>, void ()>::operator()"
+                    .into(),
+            full_signature:
+                "std::__1::__function::__func<Foo, std::__1::allocator<Foo>, void ()>::operator()()"
+                    .into(),
+            language: crate::demangle::SymbolLanguage::Cpp,
+            symbol_kind: crate::demangle::SymbolKind::Normal,
+            namespaces: vec![
+                "std".into(),
+                "__1".into(),
+                "__function".into(),
+                "__func<Foo, std::__1::allocator<Foo>, void ()>".into(),
+            ],
+            class_name: Some("__func".into()),
+            param_types: vec![],
+            is_ctor: false,
+            is_dtor: false,
+            is_lambda: false,
+        };
+        assert_eq!(
+            recognize_std_function_sbo_target(&dr).as_deref(),
+            Some("Foo (handler)")
+        );
     }
 
     // ── recognize_stl: negative cases ─────────────────────────────────
@@ -440,6 +605,15 @@ mod tests {
             pointee: "Foo".to_string(),
         };
         assert_eq!(ty.size_bytes(), Some(8));
+    }
+
+    #[test]
+    fn function_size_is_32() {
+        let ty = StlType::Function {
+            signature: "void ()".to_string(),
+            target: None,
+        };
+        assert_eq!(ty.size_bytes(), Some(32));
     }
 
     // ── extract_template_args ─────────────────────────────────────────
@@ -530,5 +704,17 @@ mod tests {
         // level, which is what we expect (the demangled name
         // disambiguates).
         assert!(looks_like_string_layout(&[(0, 8), (8, 8), (16, 8)]));
+    }
+
+    #[test]
+    fn function_sbo_layout_matches_common_views() {
+        assert!(looks_like_function_sbo_layout(&[(0, 16), (16, 8), (24, 8)]));
+        assert!(looks_like_function_sbo_layout(&[
+            (0, 8),
+            (8, 8),
+            (16, 8),
+            (24, 8)
+        ]));
+        assert!(!looks_like_function_sbo_layout(&[(0, 8), (8, 8), (16, 8)]));
     }
 }

@@ -108,3 +108,79 @@ pub fn capstone_reg_to_offset(reg: capstone::RegId) -> Option<u64> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use capstone::RegId;
+    use capstone::arch::mips::MipsReg::*;
+
+    #[test]
+    fn t360_mips64_register_file_full_layout() {
+        let rf = mips64_register_file();
+        assert_eq!(rf.registers.len(), 35);
+        for (i, name) in MIPS_REG_NAMES.iter().enumerate() {
+            assert_register(&rf, name, (i as u64) * 8, 8);
+        }
+        assert_register(&rf, "HI", HI, 4);
+        assert_register(&rf, "LO", LO, 4);
+        assert_register(&rf, "PC", PC, 4);
+        assert_unique_names(&rf);
+    }
+
+    #[test]
+    fn t360_mips_capstone_register_offsets_cover_all_gprs() {
+        let regs = [
+            MIPS_REG_0,
+            MIPS_REG_1,
+            MIPS_REG_2,
+            MIPS_REG_3,
+            MIPS_REG_4,
+            MIPS_REG_5,
+            MIPS_REG_6,
+            MIPS_REG_7,
+            MIPS_REG_8,
+            MIPS_REG_9,
+            MIPS_REG_10,
+            MIPS_REG_11,
+            MIPS_REG_12,
+            MIPS_REG_13,
+            MIPS_REG_14,
+            MIPS_REG_15,
+            MIPS_REG_16,
+            MIPS_REG_17,
+            MIPS_REG_18,
+            MIPS_REG_19,
+            MIPS_REG_20,
+            MIPS_REG_21,
+            MIPS_REG_22,
+            MIPS_REG_23,
+            MIPS_REG_24,
+            MIPS_REG_25,
+            MIPS_REG_26,
+            MIPS_REG_27,
+            MIPS_REG_28,
+            MIPS_REG_29,
+            MIPS_REG_30,
+            MIPS_REG_31,
+        ];
+        for (i, reg) in regs.iter().enumerate() {
+            assert_eq!(
+                capstone_reg_to_offset(RegId(*reg as u16)),
+                Some((i as u64) * 8)
+            );
+        }
+    }
+
+    fn assert_register(rf: &RegisterFile, name: &str, offset: u64, size: u8) {
+        let def = rf.registers.iter().find(|r| r.name == name).unwrap();
+        assert_eq!(def.varnode, Varnode::reg(offset, size), "{name}");
+    }
+
+    fn assert_unique_names(rf: &RegisterFile) {
+        let mut names = rf.registers.iter().map(|r| r.name).collect::<Vec<_>>();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), rf.registers.len());
+    }
+}

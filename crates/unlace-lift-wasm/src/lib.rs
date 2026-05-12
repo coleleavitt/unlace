@@ -242,11 +242,7 @@ impl WasmLifter {
                 )]
             }
             Operator::Return => {
-                vec![IrInsn::without_output(
-                    IrOp::Return,
-                    SmallVec::new(),
-                    addr,
-                )]
+                vec![IrInsn::without_output(IrOp::Return, SmallVec::new(), addr)]
             }
 
             // -- Structured control flow → branches --
@@ -418,10 +414,7 @@ mod tests {
         let result = l.lift_insn(&bytes, 0).unwrap();
         assert_eq!(result.ir_ops[0].op, IrOp::Copy);
         assert_eq!(result.ir_ops[0].output.unwrap().size, 8);
-        assert_eq!(
-            result.ir_ops[0].inputs[0],
-            const_vn((-1i64) as u64, 8)
-        );
+        assert_eq!(result.ir_ops[0].inputs[0], const_vn((-1i64) as u64, 8));
     }
 
     // -----------------------------------------------------------------------

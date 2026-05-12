@@ -34,6 +34,7 @@ pub fn parse_arch(s: &str) -> Result<ArchId> {
         "ppc64" | "powerpc64" => Ok(ArchId::Ppc64),
         "v850" => Ok(ArchId::V850),
         "arc" => Ok(ArchId::Arc),
+        "sharc" | "blackfin" | "bfin" | "sharc-blackfin" | "adsp" => Ok(ArchId::SharcBlackfin),
         _ => bail!("unknown architecture: '{s}'"),
     }
 }

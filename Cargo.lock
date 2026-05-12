@@ -1339,6 +1339,7 @@ dependencies = [
  "unlace-lift-mips",
  "unlace-lift-ppc",
  "unlace-lift-riscv",
+ "unlace-lift-sharc",
  "unlace-lift-v850",
  "unlace-lift-x86",
 ]
@@ -1403,6 +1404,15 @@ version = "0.1.0"
 dependencies = [
  "capstone",
  "smallvec",
+ "unlace-ir",
+]
+
+[[package]]
+name = "unlace-lift-sharc"
+version = "0.1.0"
+dependencies = [
+ "smallvec",
+ "tracing",
  "unlace-ir",
 ]
 

@@ -395,7 +395,7 @@ pub fn lift_stp(ctx: &mut LiftCtx, ops: &Ops) {
     }
 }
 
-pub fn lift_exclusive_load(ctx: &mut LiftCtx, ops: &Ops) {
+pub fn lift_exclusive_load(ctx: &mut LiftCtx, ops: &Ops, tag: u64) {
     if ops.len() < 2 {
         ctx.emit_unimplemented();
         return;
@@ -416,14 +416,14 @@ pub fn lift_exclusive_load(ctx: &mut LiftCtx, ops: &Ops) {
         (Some(dst), Some(addr)) => ctx.emit(IrInsn::with_output(
             IrOp::Callother,
             dst,
-            smallvec![Varnode::constant(0x340, 8), addr],
+            smallvec![Varnode::constant(tag, 8), addr],
             ctx.addr,
         )),
         _ => ctx.emit_unimplemented(),
     }
 }
 
-pub fn lift_exclusive_store(ctx: &mut LiftCtx, ops: &Ops) {
+pub fn lift_exclusive_store(ctx: &mut LiftCtx, ops: &Ops, tag: u64) {
     if ops.len() < 3 {
         ctx.emit_unimplemented();
         return;
@@ -445,7 +445,143 @@ pub fn lift_exclusive_store(ctx: &mut LiftCtx, ops: &Ops) {
         (Some(status), Some(value), Some(addr)) => ctx.emit(IrInsn::with_output(
             IrOp::Callother,
             status,
-            smallvec![Varnode::constant(0x341, 8), value, addr],
+            smallvec![Varnode::constant(tag, 8), value, addr],
+            ctx.addr,
+        )),
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_atomic_load(ctx: &mut LiftCtx, ops: &Ops, size: u8, tag: u64) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let dst = match ops.first() {
+        Some((Arm64OperandType::Reg(reg), _)) if !register_file::is_zero_reg(*reg) => {
+            register_file::reg_varnode(*reg)
+        }
+        Some((Arm64OperandType::Reg(_), _)) => return,
+        _ => None,
+    };
+    let addr = match &ops[1].0 {
+        Arm64OperandType::Mem(mem) => compute_mem_address(ctx, mem),
+        _ => None,
+    };
+
+    match (dst, addr) {
+        (Some(dst), Some(addr)) => ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            dst,
+            smallvec![
+                Varnode::constant(tag, 8),
+                Varnode::constant(size as u64, 8),
+                addr
+            ],
+            ctx.addr,
+        )),
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_atomic_store(ctx: &mut LiftCtx, ops: &Ops, size: u8, tag: u64) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let value = operand_to_varnode(ctx, &ops[0].0);
+    let addr = match &ops[1].0 {
+        Arm64OperandType::Mem(mem) => compute_mem_address(ctx, mem),
+        _ => None,
+    };
+
+    match (value, addr) {
+        (Some(value), Some(addr)) => ctx.emit(IrInsn::without_output(
+            IrOp::Callother,
+            smallvec![
+                Varnode::constant(tag, 8),
+                Varnode::constant(size as u64, 8),
+                value,
+                addr
+            ],
+            ctx.addr,
+        )),
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_atomic_rmw(ctx: &mut LiftCtx, ops: &Ops, tag: u64, order: u64) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let src = operand_to_varnode(ctx, &ops[0].0);
+    let dst = match &ops[1].0 {
+        Arm64OperandType::Reg(reg) if !register_file::is_zero_reg(*reg) => {
+            register_file::reg_varnode(*reg)
+        }
+        Arm64OperandType::Reg(_) => None,
+        _ => None,
+    };
+    let addr = match &ops[2].0 {
+        Arm64OperandType::Mem(mem) => compute_mem_address(ctx, mem),
+        _ => None,
+    };
+
+    match (src, dst, addr) {
+        (Some(src), Some(dst), Some(addr)) => ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            dst,
+            smallvec![
+                Varnode::constant(tag, 8),
+                Varnode::constant(order, 8),
+                src,
+                addr
+            ],
+            ctx.addr,
+        )),
+        (Some(src), None, Some(addr)) => ctx.emit(IrInsn::without_output(
+            IrOp::Callother,
+            smallvec![
+                Varnode::constant(tag, 8),
+                Varnode::constant(order, 8),
+                src,
+                addr
+            ],
+            ctx.addr,
+        )),
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_atomic_cas(ctx: &mut LiftCtx, ops: &Ops, tag: u64, order: u64) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let expected = match &ops[0].0 {
+        Arm64OperandType::Reg(reg) if !register_file::is_zero_reg(*reg) => {
+            register_file::reg_varnode(*reg)
+        }
+        _ => None,
+    };
+    let desired = operand_to_varnode(ctx, &ops[1].0);
+    let addr = match &ops[2].0 {
+        Arm64OperandType::Mem(mem) => compute_mem_address(ctx, mem),
+        _ => None,
+    };
+
+    match (expected, desired, addr) {
+        (Some(expected), Some(desired), Some(addr)) => ctx.emit(IrInsn::with_output(
+            IrOp::Callother,
+            expected,
+            smallvec![
+                Varnode::constant(tag, 8),
+                Varnode::constant(order, 8),
+                expected,
+                desired,
+                addr
+            ],
             ctx.addr,
         )),
         _ => ctx.emit_unimplemented(),

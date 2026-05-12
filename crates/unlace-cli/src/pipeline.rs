@@ -60,13 +60,13 @@ use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
 use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
 use unlace_passes::{
-    BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
-    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
-    GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
-    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
-    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
+    BmiIdiomPass, CallingConvFinalizePass, CallingConventionDetectPass, ConditionSimplifyPass,
+    ConstantFoldPass, CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
+    DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass,
+    GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass,
+    OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
+    SignatureSnapshot, StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass,
+    StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     VariableMergePass, annotate_libc_calls, bump_if_signature_changed, detect_byref,
     recover_stack_frame, recover_structs, run_outer_fixedpoint, run_to_fixedpoint,
 };
@@ -93,7 +93,7 @@ pub struct FunctionEntry {
 pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<Vec<FunctionEntry>> {
     let permissive_symbol_sizes = matches!(
         image.arch,
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
+        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::Sbpf
     );
     let text_range = image.section_by_name(".text").map(|text| {
         let start = text.vaddr;
@@ -922,9 +922,7 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
     // `vN` choices, while still losing to *meaningful* (non-`vN`) names
     // produced by the merger (it occasionally promotes a DWARF name into
     // its output map).
-    VarNamingPass
-        .run(ssa)
-        .context("var naming pass failed")?;
+    VarNamingPass.run(ssa).context("var naming pass failed")?;
 
     // t230 — calling-convention finalization. Runs last so the
     // dead-param drop, byte-mask narrowing, and caller-side
@@ -1604,7 +1602,7 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
-        pdb_types: None,
+            pdb_types: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,
@@ -1907,11 +1905,7 @@ mod tests {
             // small loop-counter update for variety
             IrInsn::with_output(IrOp::IntAdd, u1, smallvec![rcx, c8], 0x1008),
             // libc call site
-            IrInsn::without_output(
-                IrOp::Call,
-                smallvec![malloc_addr, malloc_arg],
-                0x100C,
-            ),
+            IrInsn::without_output(IrOp::Call, smallvec![malloc_addr, malloc_arg], 0x100C),
             // return
             IrInsn::without_output(IrOp::Return, smallvec![rcx], 0x1014),
         ];

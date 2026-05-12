@@ -378,6 +378,25 @@ mod tests {
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Subpiece));
     }
 
+    #[test]
+    fn lift_short_ep_relative_load_store() {
+        let sld_b = ((4u16) << 11) | (0b0110 << 7) | 0x12;
+        let lifted = lift_bytes(&sld_b.to_le_bytes(), 0x1000);
+        assert_eq!(lifted.len, 2);
+        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Load));
+        assert!(lifted.ir_ops.iter().any(|i| {
+            i.op == IrOp::IntAdd
+                && i.inputs
+                    .iter()
+                    .any(|v| v.space == unlace_ir::SpaceId::Register && v.offset == 30 * 8)
+        }));
+
+        let sst_w = ((9u16) << 11) | (0b1010 << 7) | 0x11;
+        let lifted = lift_bytes(&sst_w.to_le_bytes(), 0x1000);
+        assert_eq!(lifted.len, 2);
+        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Store));
+    }
+
     // -- Control flow --
 
     #[test]
@@ -498,9 +517,8 @@ mod tests {
 
     #[test]
     fn lift_unknown_emits_unimplemented() {
-        // Format IV (short load/store) is not implemented — should emit Unimplemented
-        let hw: u16 = (5 << 11) | (0b0110 << 7) | 0;
-        let bytes = hw.to_le_bytes();
+        // DIVH/SWITCH/FETRAP/RIE subspace is intentionally not modeled yet.
+        let bytes = encode_format_i(5, 0b000010, 3);
         let lifted = lift_bytes(&bytes, 0x1000);
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }

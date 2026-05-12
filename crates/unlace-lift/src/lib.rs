@@ -2,10 +2,11 @@
 
 use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterFile};
 
+pub use unlace_lift_6502::M6502Lifter;
 pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
-pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_avr::AvrLifter;
+pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_ppc::PpcLifter;
 pub use unlace_lift_riscv::RiscVLifter;
@@ -53,6 +54,7 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::Arc => Box::new(ArcLifter::new()),
         ArchId::Ebpf => Box::new(EbpfLifter::new()),
         ArchId::Avr => Box::new(AvrLifter::new()),
+        ArchId::M6502 => Box::new(M6502Lifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }

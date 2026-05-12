@@ -9,6 +9,22 @@
 use capstone::arch::riscv::{RiscVInsn, RiscVOperand, RiscVReg};
 use capstone::prelude::*;
 use capstone::{Capstone, Instructions};
+
+// RISC-V scalar crypto/Zk* callother tags. These let later analysis passes
+// recognise crypto-centric idioms even when the bundled capstone build lacks
+// first-class mnemonic coverage for the newer extension set.
+const TAG_RISCV_SHA256SIG0: u64 = 0x520;
+const TAG_RISCV_SHA256SIG1: u64 = 0x521;
+const TAG_RISCV_SHA256SUM0: u64 = 0x522;
+const TAG_RISCV_SHA256SUM1: u64 = 0x523;
+const TAG_RISCV_SHA512SIG0: u64 = 0x524;
+const TAG_RISCV_SHA512SIG1: u64 = 0x525;
+const TAG_RISCV_SHA512SUM0: u64 = 0x526;
+const TAG_RISCV_SHA512SUM1: u64 = 0x527;
+const TAG_RISCV_AES32ESI: u64 = 0x530;
+const TAG_RISCV_AES32ESMI: u64 = 0x531;
+const TAG_RISCV_AES32DSI: u64 = 0x532;
+const TAG_RISCV_AES32DSMI: u64 = 0x533;
 use smallvec::smallvec;
 use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterDef, RegisterFile, SpaceId,
@@ -86,6 +102,17 @@ impl LiftCtx {
             smallvec![],
             self.addr,
         ));
+    }
+
+    fn emit_crypto_callother(&mut self, tag: u64, rd: RegId, lhs: Varnode, rhs: Varnode) {
+        let tmp = self.alloc_unique(lhs.size.max(rhs.size));
+        self.emit(IrInsn::with_output(
+            IrOp::Callother,
+            tmp,
+            smallvec![Varnode::constant(tag, 8), lhs, rhs],
+            self.addr,
+        ));
+        self.write_reg(rd, tmp);
     }
 
     /// Write `value` to `dst_reg`. If `dst_reg` is x0, the write is silently dropped.
@@ -430,6 +457,22 @@ fn branch_target(addr: u64, offset: i64) -> u64 {
     addr.wrapping_add(offset as u64)
 }
 
+fn bits(value: u32, lo: u8, width: u8) -> u32 {
+    (value >> lo) & ((1u32 << width) - 1)
+}
+
+fn decode_crypto_r_type(word: u32) -> Option<(u8, RegId, RegId, RegId, u8)> {
+    if bits(word, 0, 7) != 0x33 {
+        return None;
+    }
+    let rd = RegId(bits(word, 7, 5) as u16);
+    let funct3 = bits(word, 12, 3) as u8;
+    let rs1 = RegId(bits(word, 15, 5) as u16);
+    let rs2 = RegId(bits(word, 20, 5) as u16);
+    let funct7 = bits(word, 25, 7) as u8;
+    Some((funct7, rd, rs1, rs2, funct3))
+}
+
 /// Extract (rd, mem(base, offset)) from a load instruction.
 fn ops_load(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
     match operands {
@@ -586,6 +629,9 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
     }
 
     let word = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    if let Some(lifted) = lift_riscv_crypto_direct(word, addr) {
+        return Some(lifted);
+    }
     let opcode = word & 0x7f;
     let rd = (word >> 7) & 0x1f;
     let funct3 = (word >> 12) & 0x7;
@@ -721,6 +767,31 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
 // ---------------------------------------------------------------------------
 // Instruction dispatch
 // ---------------------------------------------------------------------------
+
+fn lift_riscv_crypto_direct(word: u32, addr: u64) -> Option<LiftedInsn> {
+    let (funct7, rd, rs1, rs2, funct3) = decode_crypto_r_type(word)?;
+    let mut ctx = LiftCtx::new(addr);
+    match (funct7, funct3) {
+        (0b1100111, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_SHA256SIG0, rd, read_reg(rs1), read_reg(rs2)),
+        (0b1101001, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_SHA256SIG1, rd, read_reg(rs1), read_reg(rs2)),
+        (0b0001000, 0b010) => ctx.emit_crypto_callother(TAG_RISCV_SHA256SUM0, rd, read_reg(rs1), read_reg(rs2)),
+        (0b0001000, 0b100) => ctx.emit_crypto_callother(TAG_RISCV_SHA256SUM1, rd, read_reg(rs1), read_reg(rs2)),
+        (0b0000101, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_SHA512SIG0, rd, read_reg(rs1), read_reg(rs2)),
+        (0b0000101, 0b001) => ctx.emit_crypto_callother(TAG_RISCV_SHA512SIG1, rd, read_reg(rs1), read_reg(rs2)),
+        (0b0000100, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_SHA512SUM0, rd, read_reg(rs1), read_reg(rs2)),
+        (0b0000100, 0b001) => ctx.emit_crypto_callother(TAG_RISCV_SHA512SUM1, rd, read_reg(rs1), read_reg(rs2)),
+        (0b0010010, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_AES32ESI, rd, read_reg(rs1), read_reg(rs2)),
+        (0b0010011, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_AES32ESMI, rd, read_reg(rs1), read_reg(rs2)),
+        (0b0010101, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_AES32DSI, rd, read_reg(rs1), read_reg(rs2)),
+        (0b0010111, 0b000) => ctx.emit_crypto_callother(TAG_RISCV_AES32DSMI, rd, read_reg(rs1), read_reg(rs2)),
+        _ => return None,
+    }
+
+    Some(LiftedInsn {
+        ir_ops: ctx.ops,
+        len: 4,
+    })
+}
 
 fn dispatch_insn(
     ctx: &mut LiftCtx,
@@ -2189,5 +2260,48 @@ mod tests {
             .expect("should decode NOP");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.is_empty());
+    }
+
+    #[test]
+    fn test_sha256sig0_crypto_tag() {
+        let bytes = 0xce1100b3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode sha256sig0");
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_SHA256SIG0, 8));
+        assert_eq!(result.ir_ops.len(), 1);
+    }
+
+    #[test]
+    fn test_sha512sum1_crypto_tag() {
+        let bytes = 0x092100b3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode sha512sum1");
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_SHA512SUM0, 8));
+    }
+
+    #[test]
+    fn test_aes32esmi_crypto_tag() {
+        let bytes = 0x260100b3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode aes32esmi");
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_AES32ESMI, 8));
     }
 }

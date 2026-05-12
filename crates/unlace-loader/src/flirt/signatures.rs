@@ -9,7 +9,7 @@
 //! compiler emits relocations or PC-relative immediates that drift between
 //! builds.
 
-use super::{FlirtDb, FlirtSignature};
+use super::{FlirtDb, FlirtRef, FlirtSignature};
 
 /// `endbr64; xor %eax,%eax; ret` style stub — matches a number of trivial
 /// glibc no-op-on-x86-64 functions and is too generic on its own, so it's
@@ -26,6 +26,7 @@ fn pat(name: &str, pattern: Vec<u8>, mask: Vec<u8>) -> FlirtSignature {
         min_len,
         max_len: None,
         crc16_at: None,
+        refs: Vec::new(),
     }
 }
 
@@ -404,6 +405,34 @@ pub fn default_db() -> FlirtDb {
         &[0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x83, 0xEC, 0x08],
         &[],
     ));
+
+    // t269 — reference-name list resolution. These deliberately share the
+    // same wildcarded prologue and are distinguished only by the outbound
+    // callee already resolved elsewhere in the binary.
+    entries.push(FlirtSignature {
+        name: "__memcpy_chk".into(),
+        pattern: vec![0x55, 0x48, 0x89, 0xE5, 0xE8],
+        mask: vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        min_len: 9,
+        max_len: None,
+        crc16_at: None,
+        refs: vec![FlirtRef {
+            offset: 4,
+            name: "memcpy".into(),
+        }],
+    });
+    entries.push(FlirtSignature {
+        name: "__strcpy_chk".into(),
+        pattern: vec![0x55, 0x48, 0x89, 0xE5, 0xE8],
+        mask: vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        min_len: 9,
+        max_len: None,
+        crc16_at: None,
+        refs: vec![FlirtRef {
+            offset: 4,
+            name: "strcpy".into(),
+        }],
+    });
 
     FlirtDb::from_entries(entries)
 }

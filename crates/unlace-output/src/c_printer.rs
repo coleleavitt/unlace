@@ -600,6 +600,9 @@ pub fn print_c_with_annotations(
                     // (`[]int` / `map[K]V`).
                     (format!("type_0x{va:x}"), ty.to_string())
                 }
+                unlace_ir::types::Type::TypeParam { name, constraint } => {
+                    (format!("dictabi_0x{va:x}"), format!("[{name} {constraint}]"))
+                }
                 _ => continue,
             };
             if !emitted_any {
@@ -12192,6 +12195,22 @@ mod tests {
         // the \xHH fallback and emerge as \xc3\xa9.
         let out = super::escape_c_string("café");
         assert_eq!(out, r"caf\xc3\xa9");
+    }
+
+    #[test]
+    fn t297_go_type_param_preamble_renders_go_generic_brackets() {
+        use unlace_ir::types::Type;
+        let func = make_func("generic_user", vec![HirNode::Return(None)]);
+        let mut ann = super::PrinterAnnotations::default();
+        ann.go_interfaces.insert(
+            0x1234,
+            Type::TypeParam {
+                name: "T".into(),
+                constraint: "any".into(),
+            },
+        );
+        let output = super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+        assert!(output.contains("// dictabi_0x1234: [T any]"), "output was: {output}");
     }
 
     // -------------------------------------------------------------------

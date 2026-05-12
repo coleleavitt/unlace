@@ -395,11 +395,14 @@ pub struct BinaryImage {
     /// Populated from `GoModuleInfo.itablinks` when the moduledata parse
     /// succeeds. Empty for non-Go binaries.
     pub go_itabs: std::collections::BTreeMap<u64, crate::go_types::GoItab>,
-    /// Recovered Go interface types keyed by their `runtime._type` VA
-    /// (t181). Populated by `populate_go_types_from_module` after the
-    /// moduledata parse; the C printer consumes this map to render
-    /// `interface { Method() }` Go-style comments above usages. Empty
-    /// for non-Go binaries or when no interface types are reachable.
+    /// Recovered Go types keyed by their metadata VA (`runtime._type`
+    /// for concrete kinds; synthetic `runtime.dictabi` entry slots for
+    /// post-1.18 generic type parameters). Populated by
+    /// `populate_go_types_from_module` after the moduledata parse; the C
+    /// printer consumes this map to render Go-style comments above the
+    /// function body (`interface { Method() }`, `[]T`, `map[K]V`,
+    /// `[T any]`). Empty for non-Go binaries or when no Go metadata is
+    /// reachable.
     pub go_types:
         std::collections::BTreeMap<u64, unlace_ir::types::Type>,
     /// Swift 5+ runtime metadata recovered from Mach-O `__swift5_*`

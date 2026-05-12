@@ -345,7 +345,7 @@ fn rewrite_type_struct_names(ty: &mut Type, hash_to_name: &BTreeMap<u64, String>
             rewrite_type_struct_names(key, hash_to_name);
             rewrite_type_struct_names(value, hash_to_name);
         }
-        Type::Primitive(_) | Type::Interface { .. } => {}
+        Type::Primitive(_) | Type::Interface { .. } | Type::TypeParam { .. } => {}
     }
 }
 
@@ -466,6 +466,9 @@ fn hash_type(ty: &Type, h: &mut StableHasher, depth: u8) {
             h.u8(0x09);
             hash_type(key, h, depth - 1);
             hash_type(value, h, depth - 1);
+        }
+        Type::TypeParam { .. } => {
+            h.u8(0x0a);
         }
     }
 }

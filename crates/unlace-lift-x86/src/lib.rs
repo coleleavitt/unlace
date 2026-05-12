@@ -1087,9 +1087,10 @@ mod tests {
         assert_eq!(paddq_out.size, 16);
 
         // PSUBQ reads xmm0 (operand 0 as source) and writes xmm0 again.
-        let psubq_reads_xmm0 = psubq_co.inputs.iter().any(|v| {
-            v.space == SpaceId::Register && v.offset == XMM0 && v.size == 16
-        });
+        let psubq_reads_xmm0 = psubq_co
+            .inputs
+            .iter()
+            .any(|v| v.space == SpaceId::Register && v.offset == XMM0 && v.size == 16);
         assert!(
             psubq_reads_xmm0,
             "PSUBQ must read the same XMM0 reg varnode PADDQ wrote — \
@@ -1203,9 +1204,10 @@ mod tests {
             .lift_insn(&[0x66, 0x0F, 0xDB, 0xC1], 0x1000)
             .unwrap();
         let is_intand = result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd);
-        let is_callother_pand = result.ir_ops.iter().any(|i| {
-            i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PAND
-        });
+        let is_callother_pand = result
+            .ir_ops
+            .iter()
+            .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PAND);
         assert!(
             is_intand || is_callother_pand,
             "PAND must lift to either IntAnd or Callother(tag::PAND)"
@@ -2470,28 +2472,71 @@ mod tests {
     /// t205 — VPADDQ zmm0, zmm1, zmm2 → `_mm512_add_epi64`.
     #[test]
     fn t205_vpaddq_zmm_lift() {
-        assert_avx512_lift(
-            &[0x62, 0xF1, 0xF5, 0x48, 0xD4, 0xC2],
-            sse_tag::VPADDQ_512,
-        );
+        assert_avx512_lift(&[0x62, 0xF1, 0xF5, 0x48, 0xD4, 0xC2], sse_tag::VPADDQ_512);
     }
 
     /// t205 — VPSUBQ zmm0, zmm1, zmm2 → `_mm512_sub_epi64`.
     #[test]
     fn t205_vpsubq_zmm_lift() {
-        assert_avx512_lift(
-            &[0x62, 0xF1, 0xF5, 0x48, 0xFB, 0xC2],
-            sse_tag::VPSUBQ_512,
-        );
+        assert_avx512_lift(&[0x62, 0xF1, 0xF5, 0x48, 0xFB, 0xC2], sse_tag::VPSUBQ_512);
     }
 
     /// t205 — VPMULLQ zmm0, zmm1, zmm2 → `_mm512_mullo_epi64`.
     #[test]
     fn t205_vpmullq_zmm_lift() {
-        assert_avx512_lift(
-            &[0x62, 0xF2, 0xF5, 0x48, 0x40, 0xC2],
-            sse_tag::VPMULLQ_512,
+        assert_avx512_lift(&[0x62, 0xF2, 0xF5, 0x48, 0x40, 0xC2], sse_tag::VPMULLQ_512);
+    }
+
+    /// t306 — previously unsupported EVEX instructions fall back to a generic
+    /// AVX-512 Callother instead of `Unimplemented`, preserving exact mnemonic
+    /// id plus 64-byte ZMM def-use.
+    #[test]
+    fn t306_generic_evex_vaddps_zmm_lift() {
+        let result = lifter()
+            .lift_insn(&[0x62, 0xF1, 0x74, 0x48, 0x58, 0xC2], 0x1000)
+            .expect("vaddps zmm should decode");
+        assert_eq!(result.len, 6);
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("generic EVEX instruction should emit Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(sse_tag::AVX512_EVEX, 8),
         );
+        assert_eq!(co.inputs[1].offset, iced_x86::Mnemonic::Vaddps as u64);
+        let dst = co.output.expect("VADDPS should write ZMM0");
+        assert_eq!(dst.offset, crate::register_file::ZMM0);
+        assert_eq!(dst.size, 64);
+        assert_eq!(co.inputs[3].offset, crate::register_file::ZMM1);
+        assert_eq!(co.inputs[4].offset, crate::register_file::ZMM2);
+        assert!(result.ir_ops.iter().all(|i| i.op != IrOp::Unimplemented));
+    }
+
+    /// t306 — EVEX moves are covered by the generic fallback and use operand 0
+    /// as a write-only vector destination.
+    #[test]
+    fn t306_generic_evex_vmovdqu64_zmm_lift() {
+        let result = lifter()
+            .lift_insn(&[0x62, 0xF1, 0xFE, 0x48, 0x6F, 0xC1], 0x1000)
+            .expect("vmovdqu64 zmm should decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("generic EVEX move should emit Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(sse_tag::AVX512_EVEX, 8),
+        );
+        assert_eq!(co.inputs[1].offset, iced_x86::Mnemonic::Vmovdqu64 as u64);
+        let dst = co.output.expect("VMOVDQU64 should write ZMM0");
+        assert_eq!(dst.offset, crate::register_file::ZMM0);
+        assert_eq!(dst.size, 64);
+        assert_eq!(co.inputs[3].offset, crate::register_file::ZMM1);
+        assert_eq!(co.inputs[3].size, 64);
+        assert!(result.ir_ops.iter().all(|i| i.op != IrOp::Unimplemented));
     }
 
     /// t205 — ZMM register-write sanity. The Callother destination must

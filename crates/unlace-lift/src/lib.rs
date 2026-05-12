@@ -4,8 +4,9 @@ use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterFile};
 
 pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
-pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_avr::AvrLifter;
+pub use unlace_lift_ebpf::EbpfLifter;
+pub use unlace_lift_evm::EvmLifter;
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_ppc::PpcLifter;
 pub use unlace_lift_riscv::RiscVLifter;
@@ -53,6 +54,7 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::Arc => Box::new(ArcLifter::new()),
         ArchId::Ebpf => Box::new(EbpfLifter::new()),
         ArchId::Avr => Box::new(AvrLifter::new()),
+        ArchId::Evm => Box::new(EvmLifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -101,6 +103,13 @@ mod tests {
     fn test_get_lifter_arc() {
         let l = get_lifter(ArchId::Arc);
         assert_eq!(l.arch(), ArchId::Arc);
+        assert!(!l.register_file().registers.is_empty());
+    }
+
+    #[test]
+    fn test_get_lifter_evm() {
+        let l = get_lifter(ArchId::Evm);
+        assert_eq!(l.arch(), ArchId::Evm);
         assert!(!l.register_file().registers.is_empty());
     }
 

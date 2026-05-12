@@ -73,9 +73,9 @@ where
         runtime_functions: Vec::new(),
         resources: Vec::new(),
         bound_imports: Vec::new(),
-            delay_imports: Vec::new(),
-            forwarded_exports: Vec::new(),
-            forwarded_resolutions: std::collections::BTreeMap::new(),
+        delay_imports: Vec::new(),
+        forwarded_exports: Vec::new(),
+        forwarded_resolutions: std::collections::BTreeMap::new(),
         rich_header: None,
         dylibs: Vec::new(),
         rpaths: Vec::new(),
@@ -124,6 +124,7 @@ where
         elf::EM_PPC64 => ArchId::Ppc64,
         elf::EM_V850 => ArchId::V850,
         elf::EM_ARC_COMPACT | elf::EM_ARC_COMPACT2 => ArchId::Arc,
+        elf::EM_HEXAGON => ArchId::Hexagon,
         _ => ArchId::Unknown(machine),
     };
 

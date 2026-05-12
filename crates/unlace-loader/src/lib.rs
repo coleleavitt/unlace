@@ -64,7 +64,8 @@ pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMeth
 pub use macho::MachoLoader;
 pub use pdb::{PdbInfo, import_pdb, merge_pdb_symbols};
 pub use pdb_types::{
-    PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types, walk_tpi,
+    CanonicalPdbType, PdbError, PdbField, PdbType, PdbTypeAlias, PdbTypeKind, PdbTypeUnification,
+    PdbTypes, ProcSig, import_pdb_types, ipi_type_hash, unify_pdb_type_sets, walk_tpi,
 };
 pub use pe::PeLoader;
 pub use rtti::{

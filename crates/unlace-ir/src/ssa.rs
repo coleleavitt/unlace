@@ -238,6 +238,20 @@ pub struct VtableCallInfo {
     pub slot_index: usize,
 }
 
+/// One Go `defer` registration recovered from `runtime.deferproc`.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct GoDeferSite {
+    /// CFG block holding the defer registration call.
+    pub defer_block: BlockId,
+    /// Constant `*funcval` address passed to `runtime.deferproc`, or 0 when
+    /// the deferred target is not statically known.
+    pub deferred_func: u64,
+    /// Whether the enclosing function also contains a `runtime.gorecover`
+    /// call, indicating at least one deferred closure in the frame performs
+    /// panic recovery.
+    pub has_recover: bool,
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SsaFunction {
     pub function: Function,
@@ -275,6 +289,9 @@ pub struct SsaFunction {
     pub merged_names: BTreeMap<SsaVarnode, String>,
     pub enum_discriminants: Vec<EnumDiscriminant>,
     pub panic_sites: BTreeMap<(BlockId, usize), PanicKind>,
+    /// Go `defer` registrations keyed only by discovery order. Populated by
+    /// the CLI pipeline from symbol-aware runtime-helper matching.
+    pub go_defer_sites: Vec<GoDeferSite>,
     /// Indirect calls resolved as Rust trait object vtable dispatches.
     /// Keyed by `(BlockId, insn_index)` of the `CALLIND` instruction.
     /// Populated by [`RustVtablePass`](https://docs.rs/unlace-passes).
@@ -669,6 +686,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         merged_names: BTreeMap::new(),
         enum_discriminants: Vec::new(),
         panic_sites: BTreeMap::new(),
+        go_defer_sites: Vec::new(),
         vtable_calls: BTreeMap::new(),
         cpp_vtable_calls: BTreeMap::new(),
         objc_dispatch_calls: BTreeMap::new(),

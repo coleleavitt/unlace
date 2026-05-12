@@ -435,6 +435,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: BTreeSet::new(),
             panic_sites: BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: BTreeMap::new(),
             is_ctor: false,

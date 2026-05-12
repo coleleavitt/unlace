@@ -109,7 +109,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
-use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
+use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
 use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::DwarfInfo;
@@ -425,6 +425,8 @@ pub struct PrinterAnnotations {
     /// `BTreeMap` order — so the typed access rendered in the body refers
     /// to the same `struct __anon<N>` declared in the preamble.
     pub array_struct_indices: BTreeMap<SsaVarnode, usize>,
+    /// Recovered Go `defer` registrations in the current function.
+    pub go_defer_sites: Vec<GoDeferSite>,
     /// t258: per-byref-parameter union-tag types.
     pub byref_union_types: BTreeMap<u32, Vec<PrimitiveType>>,
     /// t260: __usercall / __userpurge spec for functions whose register-
@@ -509,6 +511,7 @@ pub fn print_c_with_annotations(
         ctx.libc_call_original = ann.libc_call_original.clone();
         ctx.array_struct_layouts = ann.array_struct_layouts.clone();
         ctx.array_struct_indices = ann.array_struct_indices.clone();
+        ctx.go_defer_sites = ann.go_defer_sites.clone();
         ctx.byref_union_types = ann.byref_union_types.clone();
     }
     if let Some(cfg) = config {
@@ -518,6 +521,7 @@ pub fn print_c_with_annotations(
     ctx.frame_size = header.map(|h| h.stack_frame);
     ctx.objc_dispatch_calls = func.objc_dispatch_calls.clone();
     ctx.byref_boxes = func.byref_boxes.clone();
+    ctx.go_defer_sites = func.go_defer_sites.clone();
 
     let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
     compute_dwarf_locals(dwarf_func, header, &mut ctx);
@@ -615,6 +619,11 @@ pub fn print_c_with_annotations(
         // ctor of each class — pinned at the top of the function so it
         // sits *above* the function-header comment.
         emit_class_layout_for_func(func, rtti, &mut out);
+    }
+
+    if let Some(summary) = render_go_defer_summary(func.go_defer_sites.as_slice(), symbols) {
+        out.push_str(&summary);
+        out.push('\n');
     }
 
     // t147 / t224: synthesised composite preamble (stack-frame structs +
@@ -1630,6 +1639,8 @@ struct PrintCtx {
     /// t231: per-base `__anon<N>` index, matching the numbering used by
     /// [`emit_inferred_struct_preamble`].
     array_struct_indices: BTreeMap<SsaVarnode, usize>,
+    /// Recovered Go `defer` registrations for this function.
+    go_defer_sites: Vec<GoDeferSite>,
     /// t258: per-byref-parameter union-tag type list. Empty when no caller
     /// has annotated the function with conflicting BYREF consumption-site
     /// types. See [`PrinterAnnotations::byref_union_types`].
@@ -1642,6 +1653,45 @@ struct PrintCtx {
     /// dereference cast at every Load/Store through these addresses
     /// to surface the side-effecting nature of the access.
     mmio_addrs: BTreeSet<u64>,
+}
+
+fn render_go_defer_summary(
+    sites: &[GoDeferSite],
+    symbols: Option<&BTreeMap<u64, String>>,
+) -> Option<String> {
+    if sites.is_empty() {
+        return None;
+    }
+    let mut unique_targets: Vec<u64> = sites
+        .iter()
+        .map(|s| s.deferred_func)
+        .filter(|addr| *addr != 0)
+        .collect();
+    unique_targets.sort_unstable();
+    unique_targets.dedup();
+
+    let mut out = String::new();
+    let has_recover = sites.iter().any(|s| s.has_recover);
+    if has_recover {
+        out.push_str("// Go panic recovery: defer/recover chain detected\n");
+    } else {
+        out.push_str("// Go defer chain detected\n");
+    }
+
+    for addr in unique_targets {
+        let name = symbols
+            .and_then(|m| m.get(&addr))
+            .cloned()
+            .unwrap_or_else(|| format!("sub_{addr:X}"));
+        let _ = writeln!(out, "//   defer {}(...);", name);
+    }
+    if sites.iter().any(|s| s.deferred_func == 0) {
+        out.push_str("//   defer <opaque funcval>(...);\n");
+    }
+    if has_recover {
+        out.push_str("//   recover();\n");
+    }
+    Some(out)
 }
 
 impl PrintCtx {
@@ -1715,6 +1765,7 @@ impl PrintCtx {
             libc_call_original: BTreeMap::new(),
             array_struct_layouts: BTreeMap::new(),
             array_struct_indices: BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             byref_union_types: BTreeMap::new(),
             mmio_addrs: BTreeSet::new(),
         }
@@ -8713,6 +8764,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -9349,6 +9401,7 @@ mod tests {
             addr: 0x2000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -9919,6 +9972,7 @@ mod tests {
             addr: 0x2000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -10029,6 +10083,7 @@ mod tests {
             addr: 0xf5300,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: true,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -10063,6 +10118,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -14615,6 +14671,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -14648,6 +14705,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -14685,6 +14743,7 @@ mod tests {
             addr: 0x401000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -14718,6 +14777,7 @@ mod tests {
             addr: 0x402000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -14751,6 +14811,7 @@ mod tests {
             addr: 0x403000,
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -14810,6 +14871,7 @@ mod tests {
             addr: 0x1000,
             foldable_exprs: foldable,
             panic_sites: std::collections::BTreeMap::new(),
+            go_defer_sites: Vec::new(),
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,

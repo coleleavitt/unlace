@@ -7086,8 +7086,9 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x343 => Some("__dsb__"),
         0x344 => Some("__isb__"),
 
-        // ── x86 conditional move pseudo-intrinsic ───────────────
+        // ── x86 conditional move / perf-monitor pseudo-intrinsics ──
         0x350 => Some("__cmov__"),
+        0x351 => Some("__rdpmc__"),
 
         // ── AArch64 NEON (0x400..0x40D) ─────────────────────────
         // These are *not* resolved here because the C intrinsic name
@@ -16024,6 +16025,22 @@ mod tests {
 
     /// Multiple asm lines emit one indented line per instruction inside
     /// a single `__asm { ... }` block.
+    #[test]
+    fn callother_rdpmc_renders_named_helper() {
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                Varnode::unique(0, 8),
+                smallvec![Varnode::constant(0x351, 8), Varnode::new(unlace_ir::SpaceId::Register, 0x08, 4)],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("read_pmc", body);
+        let output = print_c(&func);
+        assert!(output.contains("__rdpmc__(v1)"), "missing rdpmc helper: {output}");
+    }
+
     #[test]
     fn asm_node_multiple_instructions() {
         let body = vec![

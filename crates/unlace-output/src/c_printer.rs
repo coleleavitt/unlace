@@ -9804,6 +9804,7 @@ mod tests {
                 linkage_name: None,
                 low_pc: 0x1000,
                 high_pc: Some(0x1020),
+                ranges: vec![],
                 params: vec![],
                 return_type: Some("int".to_string()),
                 decl: None,
@@ -9845,6 +9846,7 @@ mod tests {
                 linkage_name: None,
                 low_pc: 0x1000,
                 high_pc: Some(0x1020),
+                ranges: vec![],
                 params: vec![
                     ParameterInfo {
                         name: Some("a".to_string()),
@@ -9916,6 +9918,7 @@ mod tests {
                 linkage_name: None,
                 low_pc: 0x2000,
                 high_pc: Some(0x2020),
+                ranges: vec![],
                 params: vec![
                     ParameterInfo {
                         name: Some("count".to_string()),
@@ -9966,6 +9969,7 @@ mod tests {
                 linkage_name: None,
                 low_pc: 0x1000,
                 high_pc: Some(0x1020),
+                ranges: vec![],
                 params: vec![],
                 return_type: Some("long".to_string()),
                 decl: None,
@@ -14093,6 +14097,7 @@ mod tests {
                 linkage_name: None,
                 low_pc: 0x1000,
                 high_pc: Some(0x1040),
+                ranges: vec![],
                 params: vec![],
                 return_type: Some("long long".to_string()),
                 decl: None,
@@ -14100,6 +14105,7 @@ mod tests {
                     name: "counter".to_string(),
                     type_name: Some("long long".to_string()),
                     frame_offset: Some(-0x50),
+                    locations: vec![],
                 }],
             },
         );

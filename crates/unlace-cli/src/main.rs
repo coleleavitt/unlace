@@ -48,8 +48,8 @@ fn main() {
             } else {
                 None
             };
-            let annotation_db =
-                resolve_annotations(&binary, annotations_load.as_deref()).unwrap_or_else(|e| {
+            let annotation_db = resolve_annotations(&binary, annotations_load.as_deref())
+                .unwrap_or_else(|e| {
                     tracing::warn!(err = %e, "failed to load annotations; continuing without");
                     None
                 });
@@ -77,6 +77,25 @@ fn main() {
             }
             result
         }
+        Cmd::Siggen {
+            archive,
+            output,
+            pattern_len,
+            crc_len,
+            min_function_len,
+            verbose,
+        } => {
+            init_tracing(verbose);
+            run_siggen(
+                &archive,
+                output.as_deref(),
+                unlace_loader::SigGenerateOptions {
+                    pattern_len,
+                    crc_len,
+                    min_function_len,
+                },
+            )
+        }
         Cmd::Batch {
             binary,
             jobs,
@@ -101,6 +120,30 @@ fn main() {
         eprintln!("Error: {e:#}");
         std::process::exit(1);
     }
+}
+
+fn run_siggen(
+    archive_path: &std::path::Path,
+    output_path: Option<&std::path::Path>,
+    options: unlace_loader::SigGenerateOptions,
+) -> Result<()> {
+    let patterns =
+        unlace_loader::generate_archive_patterns(archive_path, options).with_context(|| {
+            format!(
+                "failed to generate signatures from '{}'",
+                archive_path.display()
+            )
+        })?;
+    let toml = unlace_loader::render_patterns_toml(&patterns);
+    if let Some(path) = output_path {
+        fs::write(path, toml)
+            .with_context(|| format!("failed to write signature output to '{}'", path.display()))?;
+    } else {
+        let mut stdout = std::io::stdout().lock();
+        stdout.write_all(toml.as_bytes())?;
+    }
+    tracing::info!(count = patterns.len(), archive = %archive_path.display(), "generated FLIRT patterns");
+    Ok(())
 }
 
 fn init_tracing(verbose: u8) {

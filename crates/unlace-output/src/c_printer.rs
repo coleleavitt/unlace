@@ -6993,6 +6993,31 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x203 => Some("__builtin_clz"),      // LZCNT
         0x204 => Some("__builtin_popcount"), // POPCNT
 
+        // ── RISC-V scalar crypto Zk* intrinsics (0x260..0x27B) ──
+        0x260 => Some("__riscv_aes32esi"),
+        0x261 => Some("__riscv_aes32esmi"),
+        0x262 => Some("__riscv_aes32dsi"),
+        0x263 => Some("__riscv_aes32dsmi"),
+        0x264 => Some("__riscv_aes64es"),
+        0x265 => Some("__riscv_aes64esm"),
+        0x266 => Some("__riscv_aes64ds"),
+        0x267 => Some("__riscv_aes64dsm"),
+        0x268 => Some("__riscv_aes64im"),
+        0x269 => Some("__riscv_aes64ks1i"),
+        0x26A => Some("__riscv_aes64ks2"),
+        0x270 => Some("__riscv_sha256sum0"),
+        0x271 => Some("__riscv_sha256sum1"),
+        0x272 => Some("__riscv_sha256sig0"),
+        0x273 => Some("__riscv_sha256sig1"),
+        0x274 => Some("__riscv_sha512sum0"),
+        0x275 => Some("__riscv_sha512sum1"),
+        0x276 => Some("__riscv_sha512sig0"),
+        0x277 => Some("__riscv_sha512sig1"),
+        0x278 => Some("__riscv_sm3p0"),
+        0x279 => Some("__riscv_sm3p1"),
+        0x27A => Some("__riscv_sm4ed"),
+        0x27B => Some("__riscv_sm4ks"),
+
         // ── Trap (0x300) ───────────────────────────────────────
         0x300 => Some("__builtin_trap"), // UD2 / INT3
 

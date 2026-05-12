@@ -1,4 +1,4 @@
-use iced_x86::{Decoder, DecoderOptions, Instruction, Mnemonic, OpKind};
+use iced_x86::{Decoder, DecoderOptions, EncodingKind, Instruction, Mnemonic, OpKind};
 use smallvec::smallvec;
 use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
@@ -279,6 +279,302 @@ fn operand_size(insn: &Instruction, _idx: u32) -> u8 {
     }
 }
 
+fn is_evex_encoded(insn: &Instruction) -> bool {
+    insn.encoding() == EncodingKind::EVEX
+}
+
+fn is_avx512_mnemonic(mnemonic: Mnemonic) -> bool {
+    // iced-x86's AVX/AVX2/AVX-512 mnemonic family is consistently named with
+    // a leading `V`. Combined with EVEX encoding, this selects AVX-512 without
+    // accidentally catching VEX-only AVX/AVX2 forms.
+    format!("{:?}", mnemonic).starts_with('V')
+}
+
+fn is_pure_destination(insn: &Instruction, idx: u32) -> bool {
+    if insn.op_kind(idx) != OpKind::Register {
+        return false;
+    }
+
+    use Mnemonic as M;
+
+    matches!(
+        insn.mnemonic(),
+        // Vector arithmetic / logic / shuffle / convert families use an
+        // explicit write-only destination in EVEX encodings.
+        M::Vaddpd
+            | M::Vaddps
+            | M::Vaddsd
+            | M::Vaddss
+            | M::Vaddph
+            | M::Vaddsh
+            | M::Vaddsubpd
+            | M::Vaddsubps
+            | M::Vsubpd
+            | M::Vsubps
+            | M::Vsubsd
+            | M::Vsubss
+            | M::Vsubph
+            | M::Vsubsh
+            | M::Vmulpd
+            | M::Vmulps
+            | M::Vmulsd
+            | M::Vmulss
+            | M::Vmulph
+            | M::Vmulsh
+            | M::Vdivpd
+            | M::Vdivps
+            | M::Vdivsd
+            | M::Vdivss
+            | M::Vdivph
+            | M::Vdivsh
+            | M::Vminpd
+            | M::Vminps
+            | M::Vminsd
+            | M::Vminss
+            | M::Vminph
+            | M::Vminsh
+            | M::Vmaxpd
+            | M::Vmaxps
+            | M::Vmaxsd
+            | M::Vmaxss
+            | M::Vmaxph
+            | M::Vmaxsh
+            | M::Vsqrtpd
+            | M::Vsqrtps
+            | M::Vsqrtsd
+            | M::Vsqrtss
+            | M::Vsqrtph
+            | M::Vsqrtsh
+            | M::Vandpd
+            | M::Vandps
+            | M::Vandnpd
+            | M::Vandnps
+            | M::Vorpd
+            | M::Vorps
+            | M::Vxorpd
+            | M::Vxorps
+            | M::Vpaddb
+            | M::Vpaddw
+            | M::Vpaddd
+            | M::Vpaddq
+            | M::Vpsubb
+            | M::Vpsubw
+            | M::Vpsubd
+            | M::Vpsubq
+            | M::Vpmullw
+            | M::Vpmulld
+            | M::Vpmullq
+            | M::Vpand
+            | M::Vpandd
+            | M::Vpandq
+            | M::Vpandn
+            | M::Vpandnd
+            | M::Vpandnq
+            | M::Vpor
+            | M::Vpord
+            | M::Vporq
+            | M::Vpxor
+            | M::Vpxord
+            | M::Vpxorq
+            | M::Vpcmpb
+            | M::Vpcmpw
+            | M::Vpcmpd
+            | M::Vpcmpq
+            | M::Vpcmpub
+            | M::Vpcmpuw
+            | M::Vpcmpud
+            | M::Vpcmpuq
+            | M::Vcmppd
+            | M::Vcmpps
+            | M::Vcmpsd
+            | M::Vcmpss
+            | M::Vcmpph
+            | M::Vcmpsh
+            | M::Vmovapd
+            | M::Vmovaps
+            | M::Vmovdqa32
+            | M::Vmovdqa64
+            | M::Vmovdqu8
+            | M::Vmovdqu16
+            | M::Vmovdqu32
+            | M::Vmovdqu64
+            | M::Vbroadcastss
+            | M::Vbroadcastsd
+            | M::Vbroadcastf32x2
+            | M::Vbroadcastf32x4
+            | M::Vbroadcastf32x8
+            | M::Vbroadcastf64x2
+            | M::Vbroadcastf64x4
+            | M::Vbroadcasti32x2
+            | M::Vbroadcasti32x4
+            | M::Vbroadcasti32x8
+            | M::Vbroadcasti64x2
+            | M::Vbroadcasti64x4
+            | M::Vpermb
+            | M::Vpermw
+            | M::Vpermd
+            | M::Vpermq
+            | M::Vpermps
+            | M::Vpermpd
+            | M::Vpermi2b
+            | M::Vpermi2w
+            | M::Vpermi2d
+            | M::Vpermi2q
+            | M::Vpermi2ps
+            | M::Vpermi2pd
+            | M::Vpermt2b
+            | M::Vpermt2w
+            | M::Vpermt2d
+            | M::Vpermt2q
+            | M::Vpermt2ps
+            | M::Vpermt2pd
+            | M::Vshuff32x4
+            | M::Vshuff64x2
+            | M::Vshufi32x4
+            | M::Vshufi64x2
+            | M::Valignd
+            | M::Valignq
+            | M::Vpshufb
+            | M::Vpshufd
+            | M::Vpshufhw
+            | M::Vpshuflw
+            | M::Vpunpcklbw
+            | M::Vpunpcklwd
+            | M::Vpunpckldq
+            | M::Vpunpcklqdq
+            | M::Vpunpckhbw
+            | M::Vpunpckhwd
+            | M::Vpunpckhdq
+            | M::Vpunpckhqdq
+            | M::Vpslld
+            | M::Vpsllq
+            | M::Vpsllw
+            | M::Vpsrad
+            | M::Vpsraq
+            | M::Vpsraw
+            | M::Vpsrld
+            | M::Vpsrlq
+            | M::Vpsrlw
+            | M::Vpsllvd
+            | M::Vpsllvq
+            | M::Vpsllvw
+            | M::Vpsravd
+            | M::Vpsravq
+            | M::Vpsravw
+            | M::Vpsrlvd
+            | M::Vpsrlvq
+            | M::Vpsrlvw
+            | M::Vpternlogd
+            | M::Vpternlogq
+            | M::Vprold
+            | M::Vprolq
+            | M::Vprolvd
+            | M::Vprolvq
+            | M::Vprord
+            | M::Vprorq
+            | M::Vprorvd
+            | M::Vprorvq
+            | M::Vpmovzxbw
+            | M::Vpmovzxbd
+            | M::Vpmovzxbq
+            | M::Vpmovzxwd
+            | M::Vpmovzxwq
+            | M::Vpmovzxdq
+            | M::Vpmovsxbw
+            | M::Vpmovsxbd
+            | M::Vpmovsxbq
+            | M::Vpmovsxwd
+            | M::Vpmovsxwq
+            | M::Vpmovsxdq
+            | M::Vpmovdb
+            | M::Vpmovdw
+            | M::Vpmovqb
+            | M::Vpmovqd
+            | M::Vpmovqw
+            | M::Vpmovsdb
+            | M::Vpmovsdw
+            | M::Vpmovsqb
+            | M::Vpmovsqd
+            | M::Vpmovsqw
+            | M::Vpmovswb
+            | M::Vpmovusdb
+            | M::Vpmovusdw
+            | M::Vpmovusqb
+            | M::Vpmovusqd
+            | M::Vpmovusqw
+            | M::Vpmovuswb
+            | M::Vcvtps2pd
+            | M::Vcvtpd2ps
+            | M::Vcvtps2dq
+            | M::Vcvtpd2dq
+            | M::Vcvtps2qq
+            | M::Vcvtpd2qq
+            | M::Vcvtps2udq
+            | M::Vcvtpd2udq
+            | M::Vcvtps2uqq
+            | M::Vcvtpd2uqq
+            | M::Vcvtqq2ps
+            | M::Vcvtqq2pd
+            | M::Vcvtudq2ps
+            | M::Vcvtudq2pd
+            | M::Vcvtuqq2ps
+            | M::Vcvtuqq2pd
+            | M::Vcompresspd
+            | M::Vcompressps
+            | M::Vexpandpd
+            | M::Vexpandps
+            | M::Vpcompressd
+            | M::Vpcompressq
+            | M::Vpexpandd
+            | M::Vpexpandq
+            | M::Vreducepd
+            | M::Vreduceps
+            | M::Vreducesd
+            | M::Vreducess
+            | M::Vrangepd
+            | M::Vrangeps
+            | M::Vrangesd
+            | M::Vrangess
+            | M::Vscalefpd
+            | M::Vscalefps
+            | M::Vscalefsd
+            | M::Vscalefss
+            | M::Vfixupimmpd
+            | M::Vfixupimmps
+            | M::Vfixupimmsd
+            | M::Vfixupimmss
+            | M::Vgetexppd
+            | M::Vgetexpps
+            | M::Vgetexpsd
+            | M::Vgetexpss
+            | M::Vgetmantpd
+            | M::Vgetmantps
+            | M::Vgetmantsd
+            | M::Vgetmantss
+            | M::Vfpclasspd
+            | M::Vfpclassps
+            | M::Vfpclasssd
+            | M::Vfpclassss
+    ) && idx == 0
+}
+
+fn lift_generic_evex(ctx: &mut LiftCtx, insn: &Instruction) {
+    let roles: smallvec::SmallVec<[sse::EvexOperandRole; 5]> = (0..insn.op_count())
+        .map(|idx| {
+            if is_pure_destination(insn, idx) {
+                if idx == 0 && insn.has_op_mask() && insn.merging_masking() {
+                    sse::EvexOperandRole::ReadWrite
+                } else {
+                    sse::EvexOperandRole::Write
+                }
+            } else {
+                sse::EvexOperandRole::Read
+            }
+        })
+        .collect();
+    sse::lift_avx512_evex(ctx, insn, &roles);
+}
+
 fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
     // REP-prefixed string operations get first priority since iced-x86 decodes
     // them as plain MOVSB/STOSB/CMPSB mnemonics with the rep flag set.
@@ -526,12 +822,8 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         // dst). We only emit the EVEX tags here; the 256-bit AVX2
         // form is handled by a sibling task. `Vpmullq` is AVX-512
         // exclusive so it always takes the 512-bit tag.
-        M::Vpaddq if sse::is_zmm_dst(insn) => {
-            sse::lift_avx_binop(ctx, insn, sse::tag::VPADDQ_512)
-        }
-        M::Vpsubq if sse::is_zmm_dst(insn) => {
-            sse::lift_avx_binop(ctx, insn, sse::tag::VPSUBQ_512)
-        }
+        M::Vpaddq if sse::is_zmm_dst(insn) => sse::lift_avx_binop(ctx, insn, sse::tag::VPADDQ_512),
+        M::Vpsubq if sse::is_zmm_dst(insn) => sse::lift_avx_binop(ctx, insn, sse::tag::VPSUBQ_512),
         M::Vpmullq => sse::lift_avx_binop(ctx, insn, sse::tag::VPMULLQ_512),
 
         // ── AES-NI (t309) ───────────────────────────────────────
@@ -573,6 +865,10 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Fucomp => fpu::lift_fcom(ctx, insn),
         M::Fucompp => fpu::lift_fcom(ctx, insn),
         M::Fxch => fpu::lift_fxch(ctx, insn),
+
+        _ if is_evex_encoded(insn) && is_avx512_mnemonic(insn.mnemonic()) => {
+            lift_generic_evex(ctx, insn)
+        }
 
         _ => ctx.emit_unimplemented(),
     }

@@ -20,6 +20,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::demangle_swift::{is_swift_mangled, try_demangle_swift};
 use crate::image::{BinaryImage, Endian};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,6 +41,18 @@ pub struct ObjcIvar {
 pub struct ObjcProperty {
     pub name: String,
     pub attributes: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjcProtocol {
+    pub name: String,
+    pub protocol_addr: u64,
+    pub protocols: Vec<String>,
+    pub instance_methods: Vec<ObjcMethod>,
+    pub class_methods: Vec<ObjcMethod>,
+    pub optional_instance_methods: Vec<ObjcMethod>,
+    pub optional_class_methods: Vec<ObjcMethod>,
+    pub properties: Vec<ObjcProperty>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,6 +81,7 @@ pub struct ObjcCategory {
 pub struct ObjcInfo {
     pub classes: BTreeMap<u64, ObjcClass>,
     pub categories: Vec<ObjcCategory>,
+    pub protocols: BTreeMap<u64, ObjcProtocol>,
 }
 
 impl ObjcInfo {
@@ -75,11 +89,12 @@ impl ObjcInfo {
         Self {
             classes: BTreeMap::new(),
             categories: Vec::new(),
+            protocols: BTreeMap::new(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.classes.is_empty() && self.categories.is_empty()
+        self.classes.is_empty() && self.categories.is_empty() && self.protocols.is_empty()
     }
 }
 
@@ -129,6 +144,19 @@ fn read_cstring_at_va(image: &BinaryImage, va: u64, max_len: usize) -> Option<St
     None
 }
 
+fn decode_objc_selector_name(raw: String) -> String {
+    if is_swift_mangled(&raw) {
+        if let Some(demangled) = try_demangle_swift(&raw) {
+            return demangled;
+        }
+    }
+    raw
+}
+
+fn read_selector_at_va(image: &BinaryImage, va: u64, max_len: usize) -> Option<String> {
+    read_cstring_at_va(image, va, max_len).map(decode_objc_selector_name)
+}
+
 fn parse_class_at(image: &BinaryImage, class_ptr: u64) -> Option<ObjcClass> {
     // objc_class: isa(8), superclass(8), cache(8), vtable(8), data(8)
     let _isa = read_u64_at_va(image, class_ptr)?;
@@ -153,16 +181,40 @@ fn parse_class_at(image: &BinaryImage, class_ptr: u64) -> Option<ObjcClass> {
     }
 
     let methods = read_u64_at_va(image, class_ro_ptr + 32)
-        .map(|p| if p == 0 { Vec::new() } else { parse_method_list(image, p).unwrap_or_default() })
+        .map(|p| {
+            if p == 0 {
+                Vec::new()
+            } else {
+                parse_method_list(image, p).unwrap_or_default()
+            }
+        })
         .unwrap_or_default();
     let protocols = read_u64_at_va(image, class_ro_ptr + 40)
-        .map(|p| if p == 0 { Vec::new() } else { parse_protocol_list(image, p).unwrap_or_default() })
+        .map(|p| {
+            if p == 0 {
+                Vec::new()
+            } else {
+                parse_protocol_list(image, p).unwrap_or_default()
+            }
+        })
         .unwrap_or_default();
     let ivars = read_u64_at_va(image, class_ro_ptr + 48)
-        .map(|p| if p == 0 { Vec::new() } else { parse_ivar_list(image, p).unwrap_or_default() })
+        .map(|p| {
+            if p == 0 {
+                Vec::new()
+            } else {
+                parse_ivar_list(image, p).unwrap_or_default()
+            }
+        })
         .unwrap_or_default();
     let properties = read_u64_at_va(image, class_ro_ptr + 64)
-        .map(|p| if p == 0 { Vec::new() } else { parse_property_list(image, p).unwrap_or_default() })
+        .map(|p| {
+            if p == 0 {
+                Vec::new()
+            } else {
+                parse_property_list(image, p).unwrap_or_default()
+            }
+        })
         .unwrap_or_default();
 
     Some(ObjcClass {
@@ -193,12 +245,16 @@ fn parse_method_list(image: &BinaryImage, list_va: u64) -> Option<Vec<ObjcMethod
             let name_ptr = read_u64_at_va(image, entry_va)?;
             let types_ptr = read_u64_at_va(image, entry_va + 8)?;
             let imp_addr = read_u64_at_va(image, entry_va + 16)?;
-            let name = read_cstring_at_va(image, name_ptr, 256).unwrap_or_default();
+            let name = read_selector_at_va(image, name_ptr, 256).unwrap_or_default();
             let type_encoding = read_cstring_at_va(image, types_ptr, 256).unwrap_or_default();
             if name.is_empty() {
                 continue;
             }
-            out.push(ObjcMethod { name, type_encoding, imp_addr });
+            out.push(ObjcMethod {
+                name,
+                type_encoding,
+                imp_addr,
+            });
         }
     }
     Some(out)
@@ -228,7 +284,11 @@ fn parse_ivar_list(image: &BinaryImage, list_va: u64) -> Option<Vec<ObjcIvar>> {
         if name.is_empty() {
             continue;
         }
-        out.push(ObjcIvar { name, offset, type_encoding });
+        out.push(ObjcIvar {
+            name,
+            offset,
+            type_encoding,
+        });
     }
     Some(out)
 }
@@ -257,8 +317,7 @@ fn parse_property_list(image: &BinaryImage, list_va: u64) -> Option<Vec<ObjcProp
 }
 
 /// protocol_list_t: count(u64) followed by `count` protocol_t pointers.
-/// Each protocol_t starts: isa(ptr) name(ptr) ... — we extract just the name.
-fn parse_protocol_list(image: &BinaryImage, list_va: u64) -> Option<Vec<String>> {
+fn parse_protocol_ptrs(image: &BinaryImage, list_va: u64) -> Option<Vec<u64>> {
     let count = read_u64_at_va(image, list_va)?;
     if count == 0 || count > 1024 {
         return None;
@@ -266,17 +325,91 @@ fn parse_protocol_list(image: &BinaryImage, list_va: u64) -> Option<Vec<String>>
     let mut out = Vec::with_capacity(count as usize);
     for i in 0..count {
         let proto_ptr = read_u64_at_va(image, list_va + 8 + i * 8)?;
-        if proto_ptr == 0 {
-            continue;
-        }
-        let name_ptr = read_u64_at_va(image, proto_ptr + 8)?;
-        if let Some(name) = read_cstring_at_va(image, name_ptr, 256) {
-            if !name.is_empty() {
-                out.push(name);
-            }
+        if proto_ptr != 0 {
+            out.push(proto_ptr);
         }
     }
     Some(out)
+}
+
+/// protocol_list_t: count(u64) followed by `count` protocol_t pointers.
+/// Each protocol_t starts: isa(ptr) name(ptr) ... — callers that only need
+/// conformance names use this shallow view. The full protocol method lists are
+/// parsed separately by `parse_protocol_at` / `scan_objc_protocols`.
+fn parse_protocol_list(image: &BinaryImage, list_va: u64) -> Option<Vec<String>> {
+    let ptrs = parse_protocol_ptrs(image, list_va)?;
+    let mut out = Vec::with_capacity(ptrs.len());
+    for proto_ptr in ptrs {
+        if let Some(proto) = parse_protocol_at(image, proto_ptr) {
+            out.push(proto.name);
+        } else if let Some(name_ptr) = read_u64_at_va(image, proto_ptr + 8)
+            && let Some(name) = read_cstring_at_va(image, name_ptr, 256)
+            && !name.is_empty()
+        {
+            out.push(name);
+        }
+    }
+    Some(out)
+}
+
+/// protocol_t (ObjC 2.0, 64-bit) partial layout:
+/// isa, name, protocols, instanceMethods, classMethods, optionalInstanceMethods,
+/// optionalClassMethods, instanceProperties, ...
+fn parse_protocol_at(image: &BinaryImage, proto_ptr: u64) -> Option<ObjcProtocol> {
+    let name_ptr = read_u64_at_va(image, proto_ptr + 8)?;
+    let name = read_cstring_at_va(image, name_ptr, 256)?;
+    if name.is_empty() {
+        return None;
+    }
+
+    let protocols_ptr = read_u64_at_va(image, proto_ptr + 16).unwrap_or(0);
+    let instance_methods_ptr = read_u64_at_va(image, proto_ptr + 24).unwrap_or(0);
+    let class_methods_ptr = read_u64_at_va(image, proto_ptr + 32).unwrap_or(0);
+    let optional_instance_methods_ptr = read_u64_at_va(image, proto_ptr + 40).unwrap_or(0);
+    let optional_class_methods_ptr = read_u64_at_va(image, proto_ptr + 48).unwrap_or(0);
+    let properties_ptr = read_u64_at_va(image, proto_ptr + 56).unwrap_or(0);
+
+    let protocols = if protocols_ptr == 0 {
+        Vec::new()
+    } else {
+        parse_protocol_list(image, protocols_ptr).unwrap_or_default()
+    };
+    let instance_methods = if instance_methods_ptr == 0 {
+        Vec::new()
+    } else {
+        parse_method_list(image, instance_methods_ptr).unwrap_or_default()
+    };
+    let class_methods = if class_methods_ptr == 0 {
+        Vec::new()
+    } else {
+        parse_method_list(image, class_methods_ptr).unwrap_or_default()
+    };
+    let optional_instance_methods = if optional_instance_methods_ptr == 0 {
+        Vec::new()
+    } else {
+        parse_method_list(image, optional_instance_methods_ptr).unwrap_or_default()
+    };
+    let optional_class_methods = if optional_class_methods_ptr == 0 {
+        Vec::new()
+    } else {
+        parse_method_list(image, optional_class_methods_ptr).unwrap_or_default()
+    };
+    let properties = if properties_ptr == 0 {
+        Vec::new()
+    } else {
+        parse_property_list(image, properties_ptr).unwrap_or_default()
+    };
+
+    Some(ObjcProtocol {
+        name,
+        protocol_addr: proto_ptr,
+        protocols,
+        instance_methods,
+        class_methods,
+        optional_instance_methods,
+        optional_class_methods,
+        properties,
+    })
 }
 
 pub fn scan_objc_classlist(image: &BinaryImage) -> ObjcInfo {
@@ -304,8 +437,13 @@ pub fn scan_objc_classlist(image: &BinaryImage) -> ObjcInfo {
     }
 
     let categories = scan_objc_categories_with_classes(image, &classes);
+    let protocols = scan_objc_protocols(image, &classes);
 
-    ObjcInfo { classes, categories }
+    ObjcInfo {
+        classes,
+        categories,
+        protocols,
+    }
 }
 
 /// category_t (64-bit):
@@ -364,6 +502,57 @@ fn parse_category_at(
         properties,
         protocols,
     })
+}
+
+fn scan_objc_protocols(
+    image: &BinaryImage,
+    classes: &BTreeMap<u64, ObjcClass>,
+) -> BTreeMap<u64, ObjcProtocol> {
+    let mut out = BTreeMap::new();
+
+    if let Some(section) = image
+        .sections
+        .iter()
+        .find(|s| s.name.contains("__objc_protolist") || s.name == "__objc_protolist")
+    {
+        let num_entries = section.data.len() / 8;
+        for i in 0..num_entries {
+            let offset = i * 8;
+            let proto_ptr = match read_u64(&section.data, offset, image.endian) {
+                Some(p) if p != 0 => p,
+                _ => continue,
+            };
+            if let Some(proto) = parse_protocol_at(image, proto_ptr) {
+                out.insert(proto_ptr, proto);
+            }
+        }
+    }
+
+    for list_ptr in classes.values().filter_map(|class| {
+        read_u64_at_va(
+            image,
+            (read_u64_at_va(image, class.class_addr + 32)? & !0x7) + 40,
+        )
+    }) {
+        if let Some(ptrs) = parse_protocol_ptrs(image, list_ptr) {
+            for proto_ptr in ptrs {
+                out.entry(proto_ptr).or_insert_with(|| {
+                    parse_protocol_at(image, proto_ptr).unwrap_or_else(|| ObjcProtocol {
+                        name: format!("protocol_0x{proto_ptr:X}"),
+                        protocol_addr: proto_ptr,
+                        protocols: Vec::new(),
+                        instance_methods: Vec::new(),
+                        class_methods: Vec::new(),
+                        optional_instance_methods: Vec::new(),
+                        optional_class_methods: Vec::new(),
+                        properties: Vec::new(),
+                    })
+                });
+            }
+        }
+    }
+
+    out
 }
 
 fn scan_objc_categories_with_classes(
@@ -430,7 +619,7 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
-        pdb_types: None,
+            pdb_types: None,
             msvc_rtti: None,
             seh: None,
             go_module: None,
@@ -653,11 +842,41 @@ mod tests {
         let classlist = class_va.to_le_bytes().to_vec();
 
         let sections = vec![
-            Section { name: "__objc_classlist".into(), vaddr: classlist_va, size: classlist.len() as u64, data: classlist, flags: SectionFlags::READ },
-            Section { name: "__DATA".into(), vaddr: class_va, size: class.len() as u64, data: class, flags: SectionFlags::READ },
-            Section { name: "__DATA_CONST".into(), vaddr: ro_va, size: ro.len() as u64, data: ro, flags: SectionFlags::READ },
-            Section { name: "__objc_methlist".into(), vaddr: mlist_va, size: mlist.len() as u64, data: mlist, flags: SectionFlags::READ },
-            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+            Section {
+                name: "__objc_classlist".into(),
+                vaddr: classlist_va,
+                size: classlist.len() as u64,
+                data: classlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: class_va,
+                size: class.len() as u64,
+                data: class,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA_CONST".into(),
+                vaddr: ro_va,
+                size: ro.len() as u64,
+                data: ro,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_methlist".into(),
+                vaddr: mlist_va,
+                size: mlist.len() as u64,
+                data: mlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
         ];
 
         let info = scan_objc_classlist(&make_test_image(sections));
@@ -718,12 +937,48 @@ mod tests {
         class.extend_from_slice(&ro_va.to_le_bytes());
 
         let sections = vec![
-            Section { name: "__objc_classlist".into(), vaddr: 0x10000, size: 8, data: class_va.to_le_bytes().to_vec(), flags: SectionFlags::READ },
-            Section { name: "__DATA".into(), vaddr: class_va, size: class.len() as u64, data: class, flags: SectionFlags::READ },
-            Section { name: "__DATA_CONST".into(), vaddr: ro_va, size: ro.len() as u64, data: ro, flags: SectionFlags::READ },
-            Section { name: "__objc_ivars".into(), vaddr: ivar_list_va, size: ivars.len() as u64, data: ivars, flags: SectionFlags::READ },
-            Section { name: "__objc_props".into(), vaddr: prop_list_va, size: props.len() as u64, data: props, flags: SectionFlags::READ },
-            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+            Section {
+                name: "__objc_classlist".into(),
+                vaddr: 0x10000,
+                size: 8,
+                data: class_va.to_le_bytes().to_vec(),
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: class_va,
+                size: class.len() as u64,
+                data: class,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA_CONST".into(),
+                vaddr: ro_va,
+                size: ro.len() as u64,
+                data: ro,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_ivars".into(),
+                vaddr: ivar_list_va,
+                size: ivars.len() as u64,
+                data: ivars,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_props".into(),
+                vaddr: prop_list_va,
+                size: props.len() as u64,
+                data: props,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
         ];
 
         let info = scan_objc_classlist(&make_test_image(sections));
@@ -738,10 +993,7 @@ mod tests {
         assert_eq!(cls.properties[0].attributes, "T@");
     }
 
-    fn build_method_list_section(
-        list_va: u64,
-        entries: &[(u64, u64, u64)],
-    ) -> Vec<u8> {
+    fn build_method_list_section(list_va: u64, entries: &[(u64, u64, u64)]) -> Vec<u8> {
         let mut mlist = Vec::new();
         mlist.extend_from_slice(&24u32.to_le_bytes());
         mlist.extend_from_slice(&(entries.len() as u32).to_le_bytes());
@@ -957,6 +1209,131 @@ mod tests {
         assert_eq!(info.categories[0].name, "Ext");
         assert!(info.categories[0].class_name.is_none());
         assert_eq!(info.categories[0].class_addr, 0xCAFEBABE);
+    }
+
+    #[test]
+    fn objc_protocol_method_lists_decode_swift_mangled_selectors() {
+        let proto_name_va: u64 = 0x40000;
+        let mangled_sel_va: u64 = 0x40020;
+        let normal_sel_va: u64 = 0x40060;
+        let types_va: u64 = 0x40080;
+        let class_name_va: u64 = 0x40090;
+        let mut text = vec![0u8; 0x120];
+        text[0x00..0x0b].copy_from_slice(b"MyProtocol\0");
+        text[0x20..0x32].copy_from_slice(b"_$s4main5sayHiyyF\0");
+        text[0x60..0x6a].copy_from_slice(b"required:\0");
+        text[0x80..0x84].copy_from_slice(b"v@:\0");
+        text[0x90..0x9d].copy_from_slice(b"AdopterClass\0");
+
+        let inst_mlist_va: u64 = 0x50000;
+        let inst_mlist = build_method_list_section(
+            inst_mlist_va,
+            &[
+                (mangled_sel_va, types_va, 0x1111),
+                (normal_sel_va, types_va, 0x2222),
+            ],
+        );
+
+        let proto_va: u64 = 0x60000;
+        let mut proto = vec![0u8; 8]; // isa
+        proto.extend_from_slice(&proto_name_va.to_le_bytes()); // name
+        proto.extend_from_slice(&0u64.to_le_bytes()); // nested protocols
+        proto.extend_from_slice(&inst_mlist_va.to_le_bytes()); // instanceMethods
+        proto.extend_from_slice(&0u64.to_le_bytes()); // classMethods
+        proto.extend_from_slice(&0u64.to_le_bytes()); // optionalInstanceMethods
+        proto.extend_from_slice(&0u64.to_le_bytes()); // optionalClassMethods
+        proto.extend_from_slice(&0u64.to_le_bytes()); // properties
+
+        let protolist_va: u64 = 0x70000;
+        let protolist = proto_va.to_le_bytes().to_vec();
+
+        let class_ro_va: u64 = 0x30000;
+        let proto_ref_list_va: u64 = 0x71000;
+        let mut class_ro = vec![0u8; 24];
+        class_ro.extend_from_slice(&class_name_va.to_le_bytes()); // name
+        class_ro.extend_from_slice(&0u64.to_le_bytes()); // methods
+        class_ro.extend_from_slice(&proto_ref_list_va.to_le_bytes()); // protocols
+        class_ro.extend_from_slice(&0u64.to_le_bytes()); // ivars
+        class_ro.extend_from_slice(&0u64.to_le_bytes()); // weak ivars
+        class_ro.extend_from_slice(&0u64.to_le_bytes()); // properties
+
+        let class_va: u64 = 0x20000;
+        let mut class = vec![0u8; 32];
+        class.extend_from_slice(&class_ro_va.to_le_bytes());
+
+        let mut proto_ref_list = Vec::new();
+        proto_ref_list.extend_from_slice(&1u64.to_le_bytes());
+        proto_ref_list.extend_from_slice(&proto_va.to_le_bytes());
+
+        let sections = vec![
+            Section {
+                name: "__objc_classlist".into(),
+                vaddr: 0x10000,
+                size: 8,
+                data: class_va.to_le_bytes().to_vec(),
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: class_va,
+                size: class.len() as u64,
+                data: class,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA_CONST".into(),
+                vaddr: class_ro_va,
+                size: class_ro.len() as u64,
+                data: class_ro,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_protolist".into(),
+                vaddr: protolist_va,
+                size: protolist.len() as u64,
+                data: protolist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_proto".into(),
+                vaddr: proto_va,
+                size: proto.len() as u64,
+                data: proto,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_methlist".into(),
+                vaddr: inst_mlist_va,
+                size: inst_mlist.len() as u64,
+                data: inst_mlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_protorefs".into(),
+                vaddr: proto_ref_list_va,
+                size: proto_ref_list.len() as u64,
+                data: proto_ref_list,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
+        ];
+
+        let info = scan_objc_classlist(&make_test_image(sections));
+        let cls = info.classes.values().next().expect("one class");
+        assert_eq!(cls.protocols, vec!["MyProtocol"]);
+        assert_eq!(info.protocols.len(), 1);
+        let proto = info.protocols.values().next().expect("protocol");
+        assert_eq!(proto.name, "MyProtocol");
+        assert_eq!(proto.instance_methods.len(), 2);
+        assert_eq!(proto.instance_methods[0].name, "main.sayHi");
+        assert_eq!(proto.instance_methods[0].imp_addr, 0x1111);
+        assert_eq!(proto.instance_methods[1].name, "required:");
     }
 
     #[test]

@@ -6972,6 +6972,9 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x170 => Some("_mm_blend_ps"),    // BLENDPS
         0x171 => Some("_mm_blendv_epi8"), // PBLENDVB
 
+        // ── x86 performance-monitoring counter (0x1F0, t312) ────
+        0x1F0 => Some("_rdpmc"), // RDPMC
+
         // ── AES-NI intrinsics (0x1E0..0x1E4) ──────────────────────
         0x1E0 => Some("_mm_aesenc_si128"),         // AESENC
         0x1E1 => Some("_mm_aesenclast_si128"),     // AESENCLAST

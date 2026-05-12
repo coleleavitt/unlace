@@ -29,6 +29,7 @@
 //! | `std::string`       | `{char* __data, size_t __size, size_t __cap}`     | 24    |
 //! | `std::shared_ptr<T>`| `{T* __ptr, ControlBlock* __cntrl}`               | 16    |
 //! | `std::unique_ptr<T>`| `{T* __ptr}`                                      |  8    |
+//! | `std::function<R(Args...)>` | manager/invoker pointers + SBO storage      | 32    |
 //!
 //! The structural matcher in this module is a *post-hoc verification*
 //! step — we only fire a layout match once the demangled name has
@@ -69,6 +70,8 @@ pub enum StlType {
     WeakPtr { pointee: String },
     /// `std::unique_ptr<T>` — owning single-owner pointer.
     UniquePtr { pointee: String },
+    /// `std::function<R(Args...)>` — type-erased callable wrapper.
+    Function { signature: String },
 }
 
 impl StlType {
@@ -97,6 +100,7 @@ impl StlType {
             StlType::SharedPtr { pointee } => format!("std::shared_ptr<{}>", pointee),
             StlType::WeakPtr { pointee } => format!("std::weak_ptr<{}>", pointee),
             StlType::UniquePtr { pointee } => format!("std::unique_ptr<{}>", pointee),
+            StlType::Function { signature } => format!("std::function<{}>", signature),
         }
     }
 
@@ -113,6 +117,9 @@ impl StlType {
             StlType::UniquePtr { .. } => Some(8),
             // weak_ptr is the same as shared_ptr (ptr + control block).
             StlType::WeakPtr { .. } => Some(16),
+            // libstdc++'s std::function is typically 32 bytes on 64-bit:
+            // two function pointers plus a 16-byte local small-object buffer.
+            StlType::Function { .. } => Some(32),
             // Node-based containers — sentinel + size.
             StlType::Map { .. }
             | StlType::Set { .. }
@@ -210,6 +217,10 @@ pub fn recognize_stl(dr: &DemangleResult) -> Option<StlType> {
         "unique_ptr" => {
             let pointee = args.first()?.clone();
             Some(StlType::UniquePtr { pointee })
+        }
+        "function" => {
+            let signature = args.first()?.clone();
+            Some(StlType::Function { signature })
         }
         _ => None,
     }
@@ -317,6 +328,21 @@ pub fn looks_like_unique_ptr_layout(fields: &[(u64, u8)]) -> bool {
     fields == [(0, 8)]
 }
 
+/// Check whether the given field layout matches a common 64-bit
+/// `std::function<R(Args...)>` object with small-buffer optimization:
+///
+/// * two 8-byte function pointers (manager + invoker) and
+/// * 16 bytes of inline erased storage.
+///
+/// We accept either pointer-first (`0,8,16,24`) or buffer-first
+/// (`0,16,24`) field splits because different field detectors may either
+/// materialize the 16-byte SBO region as one field or as two 8-byte slots.
+pub fn looks_like_function_sbo_layout(fields: &[(u64, u8)]) -> bool {
+    fields == [(0, 8), (8, 8), (16, 8), (24, 8)]
+        || fields == [(0, 8), (8, 8), (16, 16)]
+        || fields == [(0, 16), (16, 8), (24, 8)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,6 +421,21 @@ mod tests {
         assert_eq!(ty.size_bytes(), Some(8));
     }
 
+    #[test]
+    fn recognise_function_void_int() {
+        let ty = recognize_stl(&d("_ZNSt8functionIFviEEclEi"))
+            .expect("std::function<void(int)>::operator()");
+        assert_eq!(ty.display(), "std::function<void (int)>");
+        assert_eq!(ty.size_bytes(), Some(32));
+    }
+
+    #[test]
+    fn recognise_libcxx_function_bool_char_ptr() {
+        let ty = recognize_stl(&d("_ZNSt3__18functionIFbPKcEEclES2_"))
+            .expect("libcxx std::function<bool(char const*)>::operator()");
+        assert_eq!(ty.display(), "std::function<bool (char const*)>");
+    }
+
     // ── recognize_stl: negative cases ─────────────────────────────────
 
     #[test]
@@ -440,6 +481,14 @@ mod tests {
             pointee: "Foo".to_string(),
         };
         assert_eq!(ty.size_bytes(), Some(8));
+    }
+
+    #[test]
+    fn function_size_is_32() {
+        let ty = StlType::Function {
+            signature: "void (int)".to_string(),
+        };
+        assert_eq!(ty.size_bytes(), Some(32));
     }
 
     // ── extract_template_args ─────────────────────────────────────────
@@ -522,6 +571,26 @@ mod tests {
     #[test]
     fn unique_ptr_layout_rejects_two_fields() {
         assert!(!looks_like_unique_ptr_layout(&[(0, 8), (8, 8)]));
+    }
+
+    #[test]
+    fn function_sbo_layout_matches_split_buffer() {
+        assert!(looks_like_function_sbo_layout(&[(0, 8), (8, 8), (16, 8), (24, 8)]));
+    }
+
+    #[test]
+    fn function_sbo_layout_matches_packed_buffer() {
+        assert!(looks_like_function_sbo_layout(&[(0, 8), (8, 8), (16, 16)]));
+    }
+
+    #[test]
+    fn function_sbo_layout_matches_buffer_first_variant() {
+        assert!(looks_like_function_sbo_layout(&[(0, 16), (16, 8), (24, 8)]));
+    }
+
+    #[test]
+    fn function_sbo_layout_rejects_shared_ptr_shape() {
+        assert!(!looks_like_function_sbo_layout(&[(0, 8), (8, 8)]));
     }
 
     #[test]

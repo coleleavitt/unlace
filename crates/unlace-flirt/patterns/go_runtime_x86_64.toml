@@ -1,0 +1,151 @@
+# Go runtime x86-64 FLIRT signatures
+
+[[pattern]]
+name = "runtime.morestack_noctxt"
+bytes = "4889442408e800000000c3"
+mask = "ffffffffffffff000000ff"
+length = 11
+
+[[pattern]]
+name = "runtime.morestack"
+bytes = "4c8b1d000000004c891c24e800000000"
+mask = "ffffffff00000000ffffffffff000000"
+length = 32
+
+[[pattern]]
+name = "runtime.newproc"
+bytes = "4883ec184889442420488d4424"
+mask = "ffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "runtime.gogo"
+bytes = "488b44240848894424104889442418"
+mask = "ffffffffffffffffffffffffffff00"
+length = 32
+
+[[pattern]]
+name = "runtime.mcall"
+bytes = "654c8b342500000000498b4630"
+mask = "ffffffff00000000ffffffffff"
+length = 32
+
+[[pattern]]
+name = "runtime.systemstack"
+bytes = "654c8b342500000000498b4630498b"
+mask = "ffffffff00000000ffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "runtime.mallocgc"
+bytes = "654c8b342500000000498b46304883"
+mask = "ffffffff00000000ffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "runtime.makeslice"
+bytes = "4883ec284889442430488944243848"
+mask = "ffffffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "runtime.growslice"
+bytes = "4883ec484889442450488944245848"
+mask = "ffffffffffffffffffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "runtime.makechan"
+bytes = "4883ec284889442430488b4424"
+mask = "ffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "runtime.chansend"
+bytes = "4883ec3848894424404885c074"
+mask = "ffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "runtime.chanrecv"
+bytes = "4883ec3848894424404885c074"
+mask = "ffffffffffffffffffffffffff"
+length = 48
+crc16 = 32142
+crc_offset = 16
+crc_length = 32
+
+[[pattern]]
+name = "runtime.newobject"
+bytes = "4883ec184889442420e800000000"
+mask = "ffffffffffffffffffffffff0000"
+length = 32
+
+[[pattern]]
+name = "runtime.gopanic"
+bytes = "4883ec184889442420488944242848"
+mask = "ffffffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "runtime.gorecover"
+bytes = "4883ec084889442410654c8b3425"
+mask = "ffffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "runtime.deferreturn"
+bytes = "4883ec08654c8b342500000000498b46"
+mask = "ffffffffffffffff00000000ffffffff"
+length = 32
+
+[[pattern]]
+name = "runtime.printstring"
+bytes = "4883ec18488b44242048890424488b44"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "runtime.printint"
+bytes = "4883ec10488b4424184889042448"
+mask = "ffffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "runtime.concatstrings"
+bytes = "4883ec38488944244048894424484889"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "runtime.mapaccess1"
+bytes = "4883ec384889442440488944244848"
+mask = "ffffffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "runtime.mapassign"
+bytes = "4883ec384889442440488944244848"
+mask = "ffffffffffffffffffffffffffffff"
+length = 48
+crc16 = 23661
+crc_offset = 16
+crc_length = 32
+
+[[pattern]]
+name = "runtime.mapdelete"
+bytes = "4883ec284889442430488944243848"
+mask = "ffffffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "fmt.Fprintf"
+bytes = "4883ec48488944245048894424584889"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "fmt.Printf"
+bytes = "4883ec38488944244048894424484889"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 48

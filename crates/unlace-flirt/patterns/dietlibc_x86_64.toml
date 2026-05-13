@@ -1,0 +1,121 @@
+# dietlibc x86-64 FLIRT signatures
+
+[[pattern]]
+name = "strlen"
+bytes = "4889f831c0803c070048"
+mask = "ffffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "strcpy"
+bytes = "4889f8ac88074800"
+mask = "ffffffffffffffff"
+length = 12
+
+[[pattern]]
+name = "memcpy"
+bytes = "4889f84889d1f3a4c3"
+mask = "ffffffffffffffffff"
+length = 9
+
+[[pattern]]
+name = "memmove"
+bytes = "4889f84839f6730a"
+mask = "ffffffffffffffff"
+length = 24
+
+[[pattern]]
+name = "memset"
+bytes = "4889f84088f64889d1f3aac3"
+mask = "ffffffffffffffffffffffff"
+length = 12
+
+[[pattern]]
+name = "memcmp"
+bytes = "4889d1f3a60f97c00fb6c0c3"
+mask = "ffffffffffffffffffffffff"
+length = 12
+
+[[pattern]]
+name = "malloc"
+bytes = "534883ec084889fbe800"
+mask = "ffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "free"
+bytes = "4885ff74014889fbc3"
+mask = "ffffffffffffffff00"
+length = 12
+
+[[pattern]]
+name = "printf"
+bytes = "4883ec384889e74889742410"
+mask = "ffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "puts"
+bytes = "534889fbe8000000004885c0"
+mask = "ffffffffff00000000ffffff"
+length = 16
+
+[[pattern]]
+name = "exit"
+bytes = "b83c0000000f05"
+mask = "ff00000000ffff"
+length = 7
+
+[[pattern]]
+name = "_exit"
+bytes = "b83c0100000f05"
+mask = "ff00000000ffff"
+length = 7
+
+[[pattern]]
+name = "open"
+bytes = "b8020000004989d04889f74889ce0f05"
+mask = "ff000000ffffffffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "close"
+bytes = "b8030000000f05c3"
+mask = "ff0000000000ffff"
+length = 8
+
+[[pattern]]
+name = "read"
+bytes = "b8000000000f05c3"
+mask = "ff0000000000ffff"
+length = 8
+
+[[pattern]]
+name = "write"
+bytes = "b8010000000f05c3"
+mask = "ff0000000000ffff"
+length = 8
+
+[[pattern]]
+name = "mmap"
+bytes = "4989ca4d89c8b809000000"
+mask = "ffffffffffffff00000000"
+length = 16
+
+[[pattern]]
+name = "brk"
+bytes = "b80c0000000f05c3"
+mask = "ff0000000000ffff"
+length = 8
+
+[[pattern]]
+name = "__libc_start_main"
+bytes = "4989f84889f74889feff35"
+mask = "ffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "atoi"
+bytes = "31c04889f74883ec08"
+mask = "ffffffffffffffffff"
+length = 16

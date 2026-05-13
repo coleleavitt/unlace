@@ -1,14 +1,24 @@
 //! FLIRT-style signature generation from compiled static libraries.
 //!
-//! This implements task t271's core workflow: read a Unix archive (`.a`),
-//! enumerate object members, extract their text/code sections, and emit a
-//! TOML FLIRT database whose patterns can later be matched by `unlace-flirt`.
+//! This module implements FLIRT signature generation from Unix archive (`.a`)
+//! files.  The workflow is:
+//!
+//! 1. Parse the archive and enumerate each object-file member.
+//! 2. For each member, use the symbol table to find defined function symbols
+//!    and their extents within the `.text` section.
+//! 3. Apply relocation-aware wildcarding: bytes covered by relocations are
+//!    masked out so that the pattern is position-independent.
+//! 4. Compute a CRC16/CCITT-FALSE checksum over the tail region of each
+//!    function to disambiguate signatures that share a common wildcarded prefix.
+//! 5. Emit the resulting [`FlirtDb`] which can be serialized to TOML for
+//!    persistent storage and later loaded by [`crate::load_patterns_from_toml`].
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::path::Path;
 
 use object::read::archive::ArchiveFile;
-use object::{Object, ObjectSection};
+use object::{Object, ObjectSection, ObjectSymbol, SectionIndex, SymbolKind};
 
 use crate::{FlirtDb, FlirtError, FlirtPattern};
 
@@ -18,14 +28,21 @@ const DEFAULT_CRC_LEN: usize = 32;
 /// Options controlling signature generation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GeneratorOptions {
-    /// Number of leading bytes to encode into the pattern.
+    /// Number of leading bytes to encode into the pattern prefix.
     pub prefix_len: usize,
     /// Number of bytes to include in the CRC tail region.
     pub crc_len: usize,
     /// Whether to wildcard relocation sites in the emitted mask.
+    ///
+    /// When `true` (default), bytes at relocation target offsets within a
+    /// function's prefix are set to `mask = 0x00`, making the pattern
+    /// independent of link-time address resolution.
     pub wildcard_relocations: bool,
     /// Skip archive members that produce no code bytes.
     pub skip_non_code_members: bool,
+    /// Minimum function size (in bytes) to emit a pattern for.
+    /// Functions shorter than this are skipped. Default: 4.
+    pub min_function_len: usize,
 }
 
 impl Default for GeneratorOptions {
@@ -35,6 +52,7 @@ impl Default for GeneratorOptions {
             crc_len: DEFAULT_CRC_LEN,
             wildcard_relocations: true,
             skip_non_code_members: true,
+            min_function_len: 4,
         }
     }
 }
@@ -49,6 +67,11 @@ pub fn generate_patterns_from_archive(
 }
 
 /// Generate FLIRT patterns from in-memory archive bytes.
+///
+/// Each archive member is parsed as an object file. Defined function symbols
+/// in the `.text` section are extracted, and a pattern is generated per
+/// function using the symbol's address range. Relocations within the pattern
+/// prefix are automatically wildcarded.
 pub fn generate_patterns_from_archive_bytes(
     archive_bytes: &[u8],
     options: &GeneratorOptions,
@@ -72,29 +95,197 @@ pub fn generate_patterns_from_archive_bytes(
             continue;
         }
 
-        let file = object::File::parse(member_bytes).map_err(|err| FlirtError::ObjectParse {
-            member: member_name.clone(),
-            detail: err.to_string(),
-        })?;
-
-        let code = first_code_blob(&file).ok_or_else(|| FlirtError::NoCodeSection {
-            member: member_name.clone(),
-        });
-
-        match code {
-            Ok(code) => {
-                let pattern = pattern_from_code(&member_name, code, options)?;
-                db.add_pattern(pattern);
+        let file = match object::File::parse(member_bytes) {
+            Ok(f) => f,
+            Err(err) => {
+                if options.skip_non_code_members {
+                    continue;
+                }
+                return Err(FlirtError::ObjectParse {
+                    member: member_name,
+                    detail: err.to_string(),
+                });
             }
-            Err(_err) if options.skip_non_code_members => continue,
-            Err(err) => return Err(err),
+        };
+
+        let patterns = extract_patterns_from_object(&file, &member_name, options)?;
+        if patterns.is_empty() && !options.skip_non_code_members {
+            return Err(FlirtError::NoCodeSection {
+                member: member_name,
+            });
+        }
+        for pat in patterns {
+            db.add_pattern(pat);
         }
     }
 
     Ok(db)
 }
 
-fn first_code_blob<'a>(file: &'a object::File<'a>) -> Option<Vec<u8>> {
+/// Information about a defined function within an object file.
+struct FuncInfo {
+    name: String,
+    offset: u64,
+    size: u64,
+    section_index: SectionIndex,
+}
+
+/// Extract patterns from a single object file, generating one pattern per
+/// defined function symbol.
+fn extract_patterns_from_object(
+    file: &object::File<'_>,
+    member_name: &str,
+    options: &GeneratorOptions,
+) -> Result<Vec<FlirtPattern>, FlirtError> {
+    let mut funcs: Vec<FuncInfo> = Vec::new();
+    for sym in file.symbols() {
+        if sym.kind() != SymbolKind::Text {
+            continue;
+        }
+        if !sym.is_definition() {
+            continue;
+        }
+        let name = match sym.name() {
+            Ok(n) if !n.is_empty() => n.to_string(),
+            _ => continue,
+        };
+        let section_index = match sym.section_index() {
+            Some(idx) => idx,
+            None => continue,
+        };
+        funcs.push(FuncInfo {
+            name,
+            offset: sym.address(),
+            size: sym.size(),
+            section_index,
+        });
+    }
+
+    // If no symbols found, fall back to whole-section extraction using member name.
+    if funcs.is_empty() {
+        return match first_code_blob(file) {
+            Some(code) if code.len() >= options.min_function_len => {
+                let pat = pattern_from_code(
+                    &sanitize_member_name(member_name),
+                    &code,
+                    &[],
+                    options,
+                )?;
+                Ok(vec![pat])
+            }
+            _ => Ok(Vec::new()),
+        };
+    }
+
+    // Sort by section then offset for extent computation.
+    funcs.sort_by_key(|f| (f.section_index.0, f.offset));
+
+    // Build relocation map: section_index -> sorted vec of (offset, size).
+    let reloc_map = build_relocation_map(file);
+    let mut patterns = Vec::new();
+
+    for (i, func) in funcs.iter().enumerate() {
+        let section = match file.section_by_index(func.section_index) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if section.kind() != object::SectionKind::Text {
+            continue;
+        }
+        let section_data = match section.data() {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+
+        let section_base = section.address();
+        let func_start = func.offset.saturating_sub(section_base) as usize;
+
+        // Determine function extent.
+        let func_end = if func.size > 0 {
+            func_start + func.size as usize
+        } else {
+            // Extend to next symbol in same section or end of section.
+            let next = funcs[i + 1..]
+                .iter()
+                .find(|f| f.section_index == func.section_index && f.offset > func.offset);
+            match next {
+                Some(nf) => nf.offset.saturating_sub(section_base) as usize,
+                None => section_data.len(),
+            }
+        };
+
+        if func_start >= section_data.len() || func_end > section_data.len() {
+            continue;
+        }
+
+        let code = &section_data[func_start..func_end];
+        if code.len() < options.min_function_len {
+            continue;
+        }
+
+        // Get relocations relevant to the prefix region of this function.
+        let relocs = reloc_map
+            .get(&func.section_index)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
+
+        // Filter to relocations within this function's prefix window.
+        let prefix_len = options.prefix_len.min(code.len());
+        let prefix_relocs: Vec<(usize, usize)> = relocs
+            .iter()
+            .filter_map(|&(roff, rsize)| {
+                if roff >= func_start && roff < func_start + prefix_len {
+                    let local = roff - func_start;
+                    Some((local, rsize))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let pat = pattern_from_code(&func.name, code, &prefix_relocs, options)?;
+        patterns.push(pat);
+    }
+
+    Ok(patterns)
+}
+
+/// Build a map from section index to sorted (section-relative-offset, relocation_size) pairs.
+fn build_relocation_map(file: &object::File<'_>) -> HashMap<SectionIndex, Vec<(usize, usize)>> {
+    let mut map: HashMap<SectionIndex, Vec<(usize, usize)>> = HashMap::new();
+
+    for section in file.sections() {
+        if section.kind() != object::SectionKind::Text {
+            continue;
+        }
+        let idx = section.index();
+        let mut relocs: Vec<(usize, usize)> = Vec::new();
+        for (offset, reloc) in section.relocations() {
+            let size = relocation_size(&reloc);
+            if size > 0 {
+                relocs.push((offset as usize, size));
+            }
+        }
+        relocs.sort_by_key(|r| r.0);
+        if !relocs.is_empty() {
+            map.insert(idx, relocs);
+        }
+    }
+
+    map
+}
+
+/// Determine the byte-width of a relocation entry.
+fn relocation_size(reloc: &object::Relocation) -> usize {
+    let bits = reloc.size();
+    if bits > 0 {
+        (bits as usize + 7) / 8
+    } else {
+        4
+    }
+}
+
+fn first_code_blob(file: &object::File<'_>) -> Option<Vec<u8>> {
     for section in file.sections() {
         if section.kind() != object::SectionKind::Text {
             continue;
@@ -109,14 +300,19 @@ fn first_code_blob<'a>(file: &'a object::File<'a>) -> Option<Vec<u8>> {
     None
 }
 
+/// Create a FLIRT pattern from raw function bytes.
+///
+/// `relocs` is a slice of `(offset_within_code, byte_width)` pairs marking
+/// known relocation sites that should be wildcarded in the prefix mask.
 fn pattern_from_code(
-    member_name: &str,
-    code: Vec<u8>,
+    name: &str,
+    code: &[u8],
+    relocs: &[(usize, usize)],
     options: &GeneratorOptions,
 ) -> Result<FlirtPattern, FlirtError> {
     if code.is_empty() {
         return Err(FlirtError::NoCodeSection {
-            member: member_name.to_string(),
+            member: name.to_string(),
         });
     }
 
@@ -126,6 +322,16 @@ fn pattern_from_code(
 
     let bytes = code[..prefix_len].to_vec();
     let mut mask = vec![0xFF; prefix_len];
+
+    // Wildcard explicit relocation sites.
+    for &(roff, rsize) in relocs {
+        let end = (roff + rsize).min(prefix_len);
+        if roff < prefix_len {
+            mask[roff..end].fill(0x00);
+        }
+    }
+
+    // Additionally apply heuristic wildcarding for common patterns.
     if options.wildcard_relocations {
         wildcard_relocation_like_runs(&code[..prefix_len], &mut mask);
     }
@@ -139,7 +345,7 @@ fn pattern_from_code(
     Ok(FlirtPattern {
         bytes,
         mask,
-        name: sanitize_member_name(member_name).into_owned(),
+        name: name.to_string(),
         length: code.len() as u32,
         crc16,
         crc_offset: crc_offset as u32,
@@ -157,12 +363,19 @@ fn sanitize_member_name(member_name: &str) -> Cow<'_, str> {
     }
 }
 
+/// Heuristic: wildcard runs of bytes that look like relocation immediates.
+///
+/// This catches cases where the object file lacks relocation metadata (e.g.
+/// fully-linked objects archived after stripping) by detecting 4-byte windows
+/// that appear to be absolute or relative address references.
 fn wildcard_relocation_like_runs(bytes: &[u8], mask: &mut [u8]) {
     if bytes.len() < 4 {
         return;
     }
-
     for i in 0..=bytes.len() - 4 {
+        if mask[i] == 0x00 {
+            continue;
+        }
         let window = &bytes[i..i + 4];
         if looks_like_relocation_immediate(window) {
             mask[i..i + 4].fill(0x00);
@@ -175,6 +388,10 @@ fn looks_like_relocation_immediate(window: &[u8]) -> bool {
     value != 0 && (value & 0xFFFF_0000 == 0 || value & 0x0000_FFFF == 0)
 }
 
+/// Compute CRC16/CCITT-FALSE over a byte slice.
+///
+/// Uses polynomial 0x1021, initial value 0xFFFF, no final XOR.
+/// This matches IDA/FLAIR's CRC16 algorithm for tail disambiguation.
 fn crc16_ccitt(data: &[u8]) -> u16 {
     let mut crc: u16 = 0xFFFF;
     for &byte in data {
@@ -191,7 +408,7 @@ fn crc16_ccitt(data: &[u8]) -> u16 {
 }
 
 /// Serialize a generated FLIRT DB to the TOML format understood by
-/// `load_patterns_from_toml`.
+/// [`crate::load_patterns_from_toml`].
 pub fn render_db_as_toml(db: &FlirtDb) -> String {
     let mut out = String::new();
     for pattern in &db.patterns {
@@ -243,6 +460,11 @@ mod tests {
         dir
     }
 
+    fn have_cc_and_ar() -> bool {
+        Command::new("cc").arg("--version").output().is_ok()
+            && Command::new("ar").arg("--version").output().is_ok()
+    }
+
     #[test]
     fn render_round_trips_through_toml_loader() {
         let db = FlirtDb {
@@ -263,16 +485,9 @@ mod tests {
 
     #[test]
     fn generates_patterns_from_archive() {
-        let cc = if Command::new("cc").arg("--version").output().is_ok() {
-            "cc"
-        } else {
+        if !have_cc_and_ar() {
             return;
-        };
-        let ar = if Command::new("ar").arg("--version").output().is_ok() {
-            "ar"
-        } else {
-            return;
-        };
+        }
 
         let dir = unique_temp_dir();
         let c_path = dir.join("adder.c");
@@ -280,7 +495,7 @@ mod tests {
         let a_path = dir.join("libadder.a");
         std::fs::write(&c_path, "int adder(int a, int b) { return a + b + 7; }\n").unwrap();
 
-        let status = Command::new(cc)
+        let status = Command::new("cc")
             .arg("-c")
             .arg(&c_path)
             .arg("-o")
@@ -289,7 +504,7 @@ mod tests {
             .unwrap();
         assert!(status.success(), "cc failed with {status:?}");
 
-        let status = Command::new(ar)
+        let status = Command::new("ar")
             .arg("crs")
             .arg(&a_path)
             .arg(&o_path)
@@ -311,5 +526,174 @@ mod tests {
         assert_eq!(round_trip.patterns[0].name, "adder");
 
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn generates_multiple_symbols_from_single_object() {
+        if !have_cc_and_ar() {
+            return;
+        }
+
+        let dir = unique_temp_dir();
+        let c_path = dir.join("multi.c");
+        let o_path = dir.join("multi.o");
+        let a_path = dir.join("libmulti.a");
+        std::fs::write(
+            &c_path,
+            "int alpha(int x) { return x * 3 + 1; }\n\
+             int beta(int x) { return x - 42; }\n\
+             int gamma(int a, int b) { return alpha(a) + beta(b); }\n",
+        )
+        .unwrap();
+
+        let status = Command::new("cc")
+            .arg("-c")
+            .arg("-O1")
+            .arg(&c_path)
+            .arg("-o")
+            .arg(&o_path)
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let status = Command::new("ar")
+            .arg("crs")
+            .arg(&a_path)
+            .arg(&o_path)
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let db = generate_patterns_from_archive(&a_path, &GeneratorOptions::default()).unwrap();
+        assert!(
+            db.patterns.len() >= 3,
+            "expected >= 3 patterns, got {} -- names: {:?}",
+            db.patterns.len(),
+            db.patterns.iter().map(|p| &p.name).collect::<Vec<_>>()
+        );
+
+        let names: Vec<&str> = db.patterns.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"alpha"), "missing 'alpha' in {names:?}");
+        assert!(names.contains(&"beta"), "missing 'beta' in {names:?}");
+        assert!(names.contains(&"gamma"), "missing 'gamma' in {names:?}");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn crc16_disambiguates_similar_prefixes() {
+        let code_a: Vec<u8> = vec![
+            0x55, 0x48, 0x89, 0xe5,
+            0x89, 0x7d, 0xfc, 0x8b, 0x45, 0xfc, 0x83, 0xc0, 0x01, 0x5d, 0xc3, 0x90,
+        ];
+        let code_b: Vec<u8> = vec![
+            0x55, 0x48, 0x89, 0xe5,
+            0x89, 0x7d, 0xfc, 0x8b, 0x45, 0xfc, 0x83, 0xe8, 0x01, 0x5d, 0xc3, 0x90,
+        ];
+
+        let opts = GeneratorOptions {
+            prefix_len: 4,
+            crc_len: 12,
+            wildcard_relocations: false,
+            ..Default::default()
+        };
+
+        let pat_a = pattern_from_code("func_a", &code_a, &[], &opts).unwrap();
+        let pat_b = pattern_from_code("func_b", &code_b, &[], &opts).unwrap();
+
+        assert_eq!(pat_a.bytes, pat_b.bytes);
+        assert_ne!(pat_a.crc16, pat_b.crc16);
+        assert!(pat_a.matches(&code_a));
+        assert!(!pat_a.matches(&code_b));
+        assert!(pat_b.matches(&code_b));
+        assert!(!pat_b.matches(&code_a));
+    }
+
+    #[test]
+    fn relocation_wildcarding_masks_correct_bytes() {
+        let code: Vec<u8> = vec![
+            0xe8, 0x12, 0x34, 0x56, 0x78,
+            0x55, 0x48, 0x89, 0xe5, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
+        ];
+        let relocs = vec![(1usize, 4usize)];
+
+        let opts = GeneratorOptions {
+            prefix_len: 8,
+            crc_len: 4,
+            wildcard_relocations: false,
+            ..Default::default()
+        };
+
+        let pat = pattern_from_code("test_func", &code, &relocs, &opts).unwrap();
+        assert_eq!(pat.mask[0], 0xFF);
+        assert_eq!(pat.mask[1], 0x00);
+        assert_eq!(pat.mask[2], 0x00);
+        assert_eq!(pat.mask[3], 0x00);
+        assert_eq!(pat.mask[4], 0x00);
+        assert_eq!(pat.mask[5], 0xFF);
+        assert_eq!(pat.mask[6], 0xFF);
+        assert_eq!(pat.mask[7], 0xFF);
+    }
+
+    #[test]
+    fn min_function_len_filters_small_functions() {
+        if !have_cc_and_ar() {
+            return;
+        }
+
+        let dir = unique_temp_dir();
+        let c_path = dir.join("tiny.c");
+        let o_path = dir.join("tiny.o");
+        let a_path = dir.join("libtiny.a");
+        std::fs::write(
+            &c_path,
+            "void nop(void) {} \nint big(int x) { return x*x*x + x*x + x + 1; }\n",
+        )
+        .unwrap();
+
+        let status = Command::new("cc")
+            .arg("-c")
+            .arg("-O0")
+            .arg(&c_path)
+            .arg("-o")
+            .arg(&o_path)
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let status = Command::new("ar")
+            .arg("crs")
+            .arg(&a_path)
+            .arg(&o_path)
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let opts = GeneratorOptions {
+            min_function_len: 16,
+            ..Default::default()
+        };
+        let db = generate_patterns_from_archive(&a_path, &opts).unwrap();
+        let names: Vec<&str> = db.patterns.iter().map(|p| p.name.as_str()).collect();
+        assert!(
+            !names.contains(&"nop"),
+            "expected 'nop' to be filtered out, got: {names:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn crc16_known_vector() {
+        let crc = crc16_ccitt(b"123456789");
+        assert_eq!(crc, 0x29B1, "CRC16 mismatch: got {crc:#06x}");
+    }
+
+    #[test]
+    fn empty_archive_produces_empty_db() {
+        let empty_ar = b"!<arch>\n";
+        let db =
+            generate_patterns_from_archive_bytes(empty_ar, &GeneratorOptions::default()).unwrap();
+        assert!(db.patterns.is_empty());
     }
 }

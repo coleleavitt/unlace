@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use fallible_iterator::FallibleIterator;
-use pdb::{PDB, Rva, SymbolData, TypeData, TypeIndex};
+use pdb::{BinaryAnnotation, IdIndex, PDB, Rva, SymbolData, TypeData, TypeIndex};
 use unlace_ir::ssa::CallingConvention;
 
 use crate::error::LoadError;
@@ -21,6 +21,17 @@ pub struct SourceLocation {
     pub column: Option<u32>,
 }
 
+/// A PGO-inlined call site resolved from an `S_INLINESITE` record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineeSite {
+    /// RVA of the first instruction belonging to the inlined body.
+    pub rva: u64,
+    /// Synthetic name for the inlined callee (`_inlined_<name>(...)`).
+    pub name: String,
+    /// RVA of the parent (enclosing) procedure.
+    pub parent_rva: Option<u64>,
+}
+
 /// Aggregated debug info extracted from a PDB file.
 #[derive(Debug, Clone)]
 pub struct PdbInfo {
@@ -28,6 +39,8 @@ pub struct PdbInfo {
     pub lines: BTreeMap<u64, SourceLocation>,
     /// Procedure/member-function type index → calling convention metadata.
     pub calling_conventions: BTreeMap<u32, CallingConvention>,
+    /// Inlined call-sites from `S_INLINESITE` records.
+    pub inlinee_sites: Vec<InlineeSite>,
 }
 
 /// Parse a `.pdb` file and extract function symbols and line information.
@@ -44,7 +57,19 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
     let mut lines = BTreeMap::new();
     let calling_conventions = collect_type_calling_conventions(&mut pdb)?;
 
+    // Build an ID finder for resolving inlinee names from the IPI stream.
+    let id_info = pdb.id_information()?;
+    let mut id_finder = id_info.finder();
+    {
+        let mut id_iter = id_info.iter();
+        while id_iter.next()?.is_some() {
+            id_finder.update(&id_iter);
+        }
+    }
+
     collect_global_symbols(&mut pdb, &address_map, &mut symbols)?;
+
+    let mut inlinee_sites = Vec::new();
 
     let mut modules = dbi.modules()?;
     while let Some(module) = modules.next()? {
@@ -55,11 +80,13 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
 
         collect_module_symbols(&module_info, &address_map, &mut symbols)?;
         collect_line_info(&module_info, &address_map, &mut lines)?;
+        collect_inlinee_sites(&module_info, &address_map, &id_finder, &mut inlinee_sites)?;
     }
 
     tracing::debug!(
         functions = symbols.len(),
         line_records = lines.len(),
+        inlinee_sites = inlinee_sites.len(),
         "PDB import complete"
     );
 
@@ -67,6 +94,7 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
         symbols,
         lines,
         calling_conventions,
+        inlinee_sites,
     })
 }
 
@@ -202,6 +230,119 @@ fn collect_line_info(
     Ok(())
 }
 
+/// Walk module symbols looking for `S_INLINESITE` records nested inside procedures.
+///
+/// For each inline site we resolve the inlinee function name from the IPI stream
+/// and compute the first code offset from the binary annotations. The resulting
+/// synthetic call-site is stored as `_inlined_<name>(...)`.
+fn collect_inlinee_sites(
+    module_info: &pdb::ModuleInfo<'_>,
+    address_map: &pdb::AddressMap,
+    id_finder: &pdb::IdFinder<'_>,
+    out: &mut Vec<InlineeSite>,
+) -> Result<(), LoadError> {
+    let mut iter = module_info.symbols()?;
+
+    // Track the RVA of the most-recently-seen enclosing procedure so we can
+    // attribute inline sites to their parent.
+    let mut current_proc_rva: Option<u64> = None;
+    let mut current_proc_offset: Option<pdb::PdbInternalSectionOffset> = None;
+
+    while let Some(sym) = iter.next()? {
+        let Ok(data) = sym.parse() else {
+            continue;
+        };
+
+        match data {
+            SymbolData::Procedure(proc) => {
+                current_proc_offset = Some(proc.offset);
+                current_proc_rva = proc.offset.to_rva(address_map).map(rva_to_u64);
+            }
+            SymbolData::InlineSite(site) => {
+                let name = resolve_inlinee_name(site.inlinee, id_finder);
+                let Some(ref name) = name else {
+                    continue;
+                };
+
+                // Compute the code offset of the first emitting annotation relative
+                // to the enclosing procedure's section offset.
+                let first_code_offset = first_emitting_offset(&site);
+                let Some(offset) = first_code_offset else {
+                    continue;
+                };
+
+                // Build the absolute RVA: parent proc section offset + annotation delta.
+                let Some(proc_sec_offset) = current_proc_offset else {
+                    continue;
+                };
+                let inline_offset = pdb::PdbInternalSectionOffset {
+                    section: proc_sec_offset.section,
+                    offset: proc_sec_offset.offset + offset,
+                };
+                let Some(rva) = inline_offset.to_rva(address_map) else {
+                    continue;
+                };
+
+                out.push(InlineeSite {
+                    rva: rva_to_u64(rva),
+                    name: format!("_inlined_{}(...)", name),
+                    parent_rva: current_proc_rva,
+                });
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
+/// Resolve the inlinee name from the IPI stream via `IdIndex`.
+///
+/// Returns `None` if the index cannot be found or the Id record doesn't
+/// correspond to a function or member-function.
+fn resolve_inlinee_name(inlinee: IdIndex, id_finder: &pdb::IdFinder<'_>) -> Option<String> {
+    let item = id_finder.find(inlinee).ok()?;
+    let id_data = item.parse().ok()?;
+    match id_data {
+        pdb::IdData::Function(f) => Some(f.name.to_string().to_string()),
+        pdb::IdData::MemberFunction(mf) => Some(mf.name.to_string().to_string()),
+        _ => None,
+    }
+}
+
+/// Extract the first code offset that emits a line record from the inline site's
+/// binary annotations. This represents the RVA delta (from the enclosing
+/// procedure's start) where the inlined code begins.
+fn first_emitting_offset(site: &pdb::InlineSiteSymbol<'_>) -> Option<u32> {
+    let mut code_offset: u32 = 0;
+    let mut annotations_iter = site.annotations.iter();
+    while let Ok(Some(ann)) = annotations_iter.next() {
+        match ann {
+            BinaryAnnotation::CodeOffset(o) => {
+                // Absolute code offset -- this is the first emitting one.
+                return Some(o);
+            }
+            BinaryAnnotation::ChangeCodeOffset(delta) => {
+                code_offset += delta;
+                return Some(code_offset);
+            }
+            BinaryAnnotation::ChangeCodeOffsetAndLineOffset(delta, _) => {
+                code_offset += delta;
+                return Some(code_offset);
+            }
+            BinaryAnnotation::ChangeCodeLengthAndCodeOffset(_, delta) => {
+                code_offset += delta;
+                return Some(code_offset);
+            }
+            BinaryAnnotation::ChangeCodeOffsetBase(base) => {
+                code_offset = base;
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 fn insert_symbol(out: &mut BTreeMap<u64, Symbol>, rva: Rva, name: String, size: u64) {
     let addr = rva_to_u64(rva);
     // Prefer Procedure symbols (with size) over Public symbols (without).
@@ -266,6 +407,18 @@ pub fn merge_pdb_symbols(target: &mut BTreeMap<u64, Symbol>, pdb_info: &PdbInfo,
             })
             .or_insert(adjusted);
     }
+
+    // Insert synthetic symbols for PGO-inlined call sites.
+    for site in &pdb_info.inlinee_sites {
+        let va = site.rva + image_base;
+        // Only insert if there isn't already a real symbol at this address.
+        target.entry(va).or_insert_with(|| Symbol {
+            name: site.name.clone(),
+            addr: va,
+            size: 0,
+            kind: SymbolKind::Function,
+        });
+    }
 }
 
 #[cfg(test)]
@@ -329,6 +482,7 @@ mod tests {
             )]),
             lines: BTreeMap::new(),
             calling_conventions: BTreeMap::new(),
+            inlinee_sites: Vec::new(),
         };
 
         let image_base = 0x0040_0000u64;
@@ -365,6 +519,7 @@ mod tests {
             )]),
             lines: BTreeMap::new(),
             calling_conventions: BTreeMap::new(),
+            inlinee_sites: Vec::new(),
         };
 
         merge_pdb_symbols(&mut target, &pdb_info, 0x0040_0000);
@@ -416,5 +571,98 @@ mod tests {
     fn import_real_pdb() {
         let info = import_pdb(Path::new("fixtures/test.pdb")).unwrap();
         assert!(!info.symbols.is_empty(), "should extract symbols from PDB");
+    }
+
+    #[test]
+    fn merge_inlinee_sites_produces_synthetic_symbols() {
+        let mut target = BTreeMap::new();
+        // Insert a real procedure symbol that the inline site lives inside.
+        target.insert(
+            0x0040_1000,
+            Symbol {
+                name: "parent_func".into(),
+                addr: 0x0040_1000,
+                size: 200,
+                kind: SymbolKind::Function,
+            },
+        );
+
+        let pdb_info = PdbInfo {
+            symbols: BTreeMap::new(),
+            lines: BTreeMap::new(),
+            calling_conventions: BTreeMap::new(),
+            inlinee_sites: vec![
+                InlineeSite {
+                    rva: 0x1010,
+                    name: "_inlined_memcpy(...)".into(),
+                    parent_rva: Some(0x1000),
+                },
+                InlineeSite {
+                    rva: 0x1040,
+                    name: "_inlined_strlen(...)".into(),
+                    parent_rva: Some(0x1000),
+                },
+            ],
+        };
+
+        merge_pdb_symbols(&mut target, &pdb_info, 0x0040_0000);
+
+        // Inlined memcpy site should appear as a synthetic symbol.
+        let memcpy_sym = target.get(&0x0040_1010).expect("inlined memcpy symbol");
+        assert_eq!(memcpy_sym.name, "_inlined_memcpy(...)");
+        assert_eq!(memcpy_sym.kind, SymbolKind::Function);
+
+        // Inlined strlen site should appear.
+        let strlen_sym = target.get(&0x0040_1040).expect("inlined strlen symbol");
+        assert_eq!(strlen_sym.name, "_inlined_strlen(...)");
+
+        // The parent procedure should not be overwritten.
+        let parent = target.get(&0x0040_1000).expect("parent symbol");
+        assert_eq!(parent.name, "parent_func");
+    }
+
+    #[test]
+    fn merge_inlinee_does_not_overwrite_existing() {
+        let mut target = BTreeMap::new();
+        // Pre-existing symbol at the same address as an inline site.
+        target.insert(
+            0x0040_1010,
+            Symbol {
+                name: "real_symbol".into(),
+                addr: 0x0040_1010,
+                size: 50,
+                kind: SymbolKind::Function,
+            },
+        );
+
+        let pdb_info = PdbInfo {
+            symbols: BTreeMap::new(),
+            lines: BTreeMap::new(),
+            calling_conventions: BTreeMap::new(),
+            inlinee_sites: vec![InlineeSite {
+                rva: 0x1010,
+                name: "_inlined_foo(...)".into(),
+                parent_rva: Some(0x1000),
+            }],
+        };
+
+        merge_pdb_symbols(&mut target, &pdb_info, 0x0040_0000);
+
+        // The existing symbol should NOT be replaced.
+        let sym = &target[&0x0040_1010];
+        assert_eq!(sym.name, "real_symbol");
+        assert_eq!(sym.size, 50);
+    }
+
+    #[test]
+    fn inlinee_site_formatting() {
+        let site = InlineeSite {
+            rva: 0x2000,
+            name: "_inlined_memset(...)".into(),
+            parent_rva: Some(0x1000),
+        };
+        assert_eq!(site.name, "_inlined_memset(...)");
+        assert_eq!(site.rva, 0x2000);
+        assert_eq!(site.parent_rva, Some(0x1000));
     }
 }

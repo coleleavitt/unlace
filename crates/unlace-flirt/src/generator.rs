@@ -144,6 +144,7 @@ fn pattern_from_code(
         crc16,
         crc_offset: crc_offset as u32,
         crc_length: crc_len as u32,
+        refs: Vec::new(),
     })
 }
 
@@ -208,6 +209,14 @@ pub fn render_db_as_toml(db: &FlirtDb) -> String {
             out.push_str(&format!("crc_offset = {}\n", pattern.crc_offset));
             out.push_str(&format!("crc_length = {}\n", pattern.crc_length));
         }
+        for r in &pattern.refs {
+            out.push_str("\n[[pattern.refs]]\n");
+            out.push_str(&format!("offset = {}\n", r.offset));
+            out.push_str(&format!(
+                "name = \"{}\"\n",
+                escape_toml_string(&r.name)
+            ));
+        }
         out.push('\n');
     }
     out
@@ -254,6 +263,7 @@ mod tests {
                 crc16: 1234,
                 crc_offset: 4,
                 crc_length: 8,
+                refs: Vec::new(),
             }],
         };
         let toml = render_db_as_toml(&db);

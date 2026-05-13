@@ -1,0 +1,133 @@
+# Rust libcore/std x86-64 FLIRT signatures
+
+[[pattern]]
+name = "core::panicking::panic"
+bytes = "4883ec384889f74889f64889d14889cf"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "core::panicking::panic_fmt"
+bytes = "4883ec484889f74889fe488d4c2420"
+mask = "ffffffffffffffffffffffffffff00"
+length = 48
+
+[[pattern]]
+name = "core::panicking::panic_bounds_check"
+bytes = "4883ec384889d74889f6488d4c2410"
+mask = "ffffffffffffffffffffffffffff00"
+length = 48
+
+[[pattern]]
+name = "alloc::alloc::__rust_alloc"
+bytes = "ff2500000000"
+mask = "ffff00000000"
+length = 6
+
+[[pattern]]
+name = "alloc::alloc::__rust_dealloc"
+bytes = "ff2500000000"
+mask = "ffff00000000"
+length = 6
+crc16 = 4660
+crc_offset = 0
+crc_length = 6
+
+[[pattern]]
+name = "alloc::alloc::__rust_realloc"
+bytes = "ff2500000000"
+mask = "ffff00000000"
+length = 6
+crc16 = 22136
+crc_offset = 0
+crc_length = 6
+
+[[pattern]]
+name = "core::fmt::write"
+bytes = "41574156415541544889d4534883ec48"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "core::ptr::drop_in_place"
+bytes = "4885ff7401c3"
+mask = "ffffffffffff"
+length = 6
+
+[[pattern]]
+name = "alloc::vec::Vec<T>::push"
+bytes = "534889f34839cb73"
+mask = "ffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "alloc::vec::Vec<T>::reserve"
+bytes = "534889f34839cb76"
+mask = "ffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "alloc::raw_vec::RawVec<T>::grow_one"
+bytes = "41574156415541544889fc534883ec28"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "core::slice::sort::recurse"
+bytes = "41574156415541544889d4534883ec"
+mask = "ffffffffffffffffffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "core::str::<impl str>::len"
+bytes = "488b4708c3"
+mask = "ffffffffff"
+length = 5
+
+[[pattern]]
+name = "core::str::<impl str>::as_ptr"
+bytes = "488b07c3"
+mask = "ffffffff"
+length = 4
+
+[[pattern]]
+name = "std::rt::lang_start_internal"
+bytes = "4157415641554154534889fb4883ec38"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "std::io::stdio::_print"
+bytes = "4883ec38488d442408488906488d4c24"
+mask = "ffffffffffffffffffffffffffffff00"
+length = 48
+
+[[pattern]]
+name = "std::process::exit"
+bytes = "554889e54889f7e800000000"
+mask = "ffffffffffffffffff000000"
+length = 12
+
+[[pattern]]
+name = "core::result::unwrap_failed"
+bytes = "4883ec384889f74889f6488d4c2418"
+mask = "ffffffffffffffffffffffffffff00"
+length = 48
+
+[[pattern]]
+name = "core::option::expect_failed"
+bytes = "4883ec284889f74889f6e800000000"
+mask = "ffffffffffffffffffffffff000000"
+length = 32
+
+[[pattern]]
+name = "alloc::alloc::handle_alloc_error"
+bytes = "4883ec084889f74889f6e800000000"
+mask = "ffffffffffffffffffffffff000000"
+length = 16
+
+[[pattern]]
+name = "core::intrinsics::copy_nonoverlapping"
+bytes = "4889f84889d1f3a4c3"
+mask = "ffffffffffffffffff"
+length = 9

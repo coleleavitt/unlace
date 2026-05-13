@@ -1,0 +1,145 @@
+# MSVCRT (Microsoft Visual C++ Runtime) x86-64 FLIRT signatures
+
+[[pattern]]
+name = "strlen"
+bytes = "4883ec28488bc1660f1f4400"
+mask = "ffffffffffffff00ffffffff"
+length = 24
+
+[[pattern]]
+name = "strcpy"
+bytes = "4883ec284889d14889c84889ce"
+mask = "ffffffffffffffffffffffffff"
+length = 24
+
+[[pattern]]
+name = "strcmp"
+bytes = "4883ec284889ce4889d7"
+mask = "ffffffffffffffffffff"
+length = 24
+
+[[pattern]]
+name = "memcpy"
+bytes = "4883ec284c89c14889d64889cf"
+mask = "ffffffffffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "memset"
+bytes = "4883ec284c89c04889d14088f2"
+mask = "ffffffffffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "memcmp"
+bytes = "4883ec284c89c14889d6f3a6"
+mask = "ffffffffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "malloc"
+bytes = "4883ec28e800000000488945"
+mask = "ffffffffff00000000ffffff"
+length = 32
+
+[[pattern]]
+name = "calloc"
+bytes = "4883ec284889d14889c7e800000000"
+mask = "ffffffffffffffffffffff00000000"
+length = 32
+
+[[pattern]]
+name = "realloc"
+bytes = "4883ec284889d14889c74885c9"
+mask = "ffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "free"
+bytes = "4883ec284885c9740e"
+mask = "ffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "printf"
+bytes = "4883ec384889e74889542410"
+mask = "ffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "puts"
+bytes = "4883ec284889cfe800000000"
+mask = "ffffffffffffff00000000ff"
+length = 16
+
+[[pattern]]
+name = "fopen"
+bytes = "4883ec384889d14889cf"
+mask = "ffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "fclose"
+bytes = "4883ec284889cf488b4108"
+mask = "ffffffffffffffffffff00"
+length = 32
+
+[[pattern]]
+name = "exit"
+bytes = "4883ec28e800000000"
+mask = "ffffffffff00000000"
+length = 12
+
+[[pattern]]
+name = "ExitProcess"
+bytes = "4883ec28ff1500000000"
+mask = "ffffffffffffff000000"
+length = 12
+
+[[pattern]]
+name = "_initterm"
+bytes = "4883ec284889d34889cf4839df"
+mask = "ffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "__security_init_cookie"
+bytes = "4883ec284833c4488944242048"
+mask = "ffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "__security_check_cookie"
+bytes = "4883ec284833c4483b050000"
+mask = "ffffffffffffffffffffff00"
+length = 16
+
+[[pattern]]
+name = "_CxxThrowException"
+bytes = "4883ec384889d14889cf4c8d05"
+mask = "ffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "operator new"
+bytes = "4883ec284885c974044889c7eb"
+mask = "ffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "operator delete"
+bytes = "4883ec284885c97401c34889cf"
+mask = "ffffffffffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "VirtualAlloc"
+bytes = "4883ec284c89c14c89c24889d1"
+mask = "ffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "VirtualFree"
+bytes = "4883ec284c89c04889d14889cf"
+mask = "ffffffffffffffffffffffffff"
+length = 16

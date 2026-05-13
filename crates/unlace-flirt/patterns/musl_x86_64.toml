@@ -1,0 +1,139 @@
+# musl libc x86-64 FLIRT signatures
+
+[[pattern]]
+name = "strlen"
+bytes = "4889f8f2ae48f7d048ffc8c3"
+mask = "ffffffffffffffffffffffff"
+length = 12
+
+[[pattern]]
+name = "strcpy"
+bytes = "4889f8ac880748ffc70ac0"
+mask = "ffffffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "strcmp"
+bytes = "ac3a0675064800000000eb"
+mask = "ffffffffffffff00000000"
+length = 16
+
+[[pattern]]
+name = "memcpy"
+bytes = "4889f84889d1f3a4c3"
+mask = "ffffffffffffffffff"
+length = 9
+
+[[pattern]]
+name = "memmove"
+bytes = "4889f84839fe730e"
+mask = "ffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "memset"
+bytes = "4889f84088ce4889d1f3aac3"
+mask = "ffffffffffffffffffffffff"
+length = 12
+
+[[pattern]]
+name = "memcmp"
+bytes = "4889f84889d1f3a60f97c0c3"
+mask = "ffffffffffffffffffffffff"
+length = 12
+
+[[pattern]]
+name = "malloc"
+bytes = "55534889fb4883ec08e800000000"
+mask = "ffffffffffffffffffffff000000"
+length = 32
+
+[[pattern]]
+name = "calloc"
+bytes = "534889fb4889f74889f6e800000000"
+mask = "ffffffffffffffffffffff00000000"
+length = 32
+
+[[pattern]]
+name = "free"
+bytes = "4885ff7401c3534889fb"
+mask = "ffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "printf"
+bytes = "4883ec384889e74889742410"
+mask = "ffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "puts"
+bytes = "534889fbe80000000048"
+mask = "ffffffffff00000000ff"
+length = 32
+
+[[pattern]]
+name = "fopen"
+bytes = "4883ec184889f74889fe31d2"
+mask = "ffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "exit"
+bytes = "4889f7e800000000"
+mask = "ffffffffff000000"
+length = 8
+
+[[pattern]]
+name = "open"
+bytes = "b802000000480f05"
+mask = "ff000000000000ff"
+length = 8
+
+[[pattern]]
+name = "close"
+bytes = "b8030000000f05c3"
+mask = "ff0000000000ffff"
+length = 8
+
+[[pattern]]
+name = "read"
+bytes = "b8000000000f05c3"
+mask = "ff0000000000ffff"
+length = 8
+
+[[pattern]]
+name = "write"
+bytes = "b8010000000f05c3"
+mask = "ff0000000000ffff"
+length = 8
+
+[[pattern]]
+name = "pthread_create"
+bytes = "41574989ff41564989f641554989d5"
+mask = "ffffffffffffffffffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "__libc_start_main"
+bytes = "4989f84989f94889fa4889fe"
+mask = "ffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "abort"
+bytes = "4883ec08bf06000000e800000000"
+mask = "ffffffffffffffffffffff000000"
+length = 16
+
+[[pattern]]
+name = "getenv"
+bytes = "534889fb488b3d000000"
+mask = "ffffffffffffffff0000"
+length = 32
+
+[[pattern]]
+name = "atoi"
+bytes = "4889feba0a00000031ff"
+mask = "ffffffffffffffffffff"
+length = 16

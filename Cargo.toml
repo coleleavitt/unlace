@@ -33,6 +33,7 @@ members = [
     "crates/unlace-lift-evm",
     "crates/unlace-lift-sbpf",
     "crates/unlace-lift-sass",
+    "crates/unlace-lift-spirv",
     "crates/unlace-lift-agx",
     "crates/unlace-lift-sh",
     "crates/unlace-passes",

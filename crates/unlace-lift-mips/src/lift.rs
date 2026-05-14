@@ -1006,6 +1006,29 @@ mod tests {
             .expect("should decode MUL");
         assert_eq!(mul.len, 4);
         assert!(mul.ir_ops.iter().any(|op| op.op == IrOp::IntMult));
+
+    #[test]
+    fn test_addq_updates_dsp_outflag() {
+        let mut ctx = LiftCtx::new(0x1000);
+        let ops = [
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_2 as u16)),
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_4 as u16)),
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_5 as u16)),
+        ];
+        crate::ops::dsp::lift_addq(&mut ctx, &ops);
+        assert!(ctx.ir_ops().iter().any(|op| op.op == IrOp::IntAdd));
+        assert!(ctx.ir_ops().iter().any(|op| op.output == Some(Varnode::reg(crate::register_file::DSPOUTFLAG, 8))));
+    }
+
+    #[test]
+    fn test_rddsp_lowers_to_callother() {
+        let mut ctx = LiftCtx::new(0x1000);
+        let ops = [
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_2 as u16)),
+            MipsOperand::Imm(0x1f),
+        ];
+        crate::ops::dsp::lift_rddsp(&mut ctx, &ops);
+        assert!(ctx.ir_ops().iter().any(|op| op.op == IrOp::Callother));
     }
 
     // Unknown instruction falls back to Unimplemented

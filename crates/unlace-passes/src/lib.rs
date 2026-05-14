@@ -24,6 +24,7 @@ pub mod boost_recognize;
 pub mod builtin_recognize;
 pub mod stack_context;
 pub mod bb_align;
+pub mod diff_coverage;
 pub mod cpp_stl;
 pub mod cpp_variant;
 pub mod cpp_lambda;

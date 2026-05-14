@@ -242,6 +242,7 @@ fn run_decompile(
             | ArchId::Agx
             | ArchId::Msp430
             | ArchId::M68k
+            | ArchId::TriCore
             | ArchId::Ppc
             | ArchId::Ppc64
             | ArchId::Sbpf

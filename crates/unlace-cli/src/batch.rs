@@ -79,6 +79,7 @@ pub fn run_batch(
             | ArchId::Msp430
             | ArchId::M68k
             | ArchId::Xtensa
+            | ArchId::TriCore
             | ArchId::Ppc
             | ArchId::Ppc64
             | ArchId::Sbpf

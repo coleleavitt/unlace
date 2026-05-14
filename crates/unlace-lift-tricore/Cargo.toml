@@ -8,3 +8,8 @@ unlace-ir = { workspace = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]
+license.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+smallvec = { workspace = true }

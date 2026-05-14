@@ -130,6 +130,8 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::M68k
         ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
         ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::Sbpf
+        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
+        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::TriCore
     );
     let text_range = image.section_by_name(".text").map(|text| {
         let start = text.vaddr;
@@ -266,6 +268,8 @@ fn add_symbol_gap_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>)
 
 fn add_post_entry_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
     if !matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::M68k) {
+    if !matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850) {
+    if !matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::TriCore) {
         return;
     }
     let Some(text) = image.section_by_name(".text") else {

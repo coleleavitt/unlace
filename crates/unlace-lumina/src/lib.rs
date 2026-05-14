@@ -430,3 +430,4 @@ pub mod privacy_client;
 pub mod collab;
 pub mod conflict_ui;
 pub mod web_ui;
+pub mod public_db;

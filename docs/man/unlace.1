@@ -1,0 +1,149 @@
+.\" t460: unlace(1) man page
+.TH UNLACE 1 "2025-05-13" "unlace 0.1.0" "User Commands"
+.SH NAME
+unlace \- decompile binary executables to C pseudocode
+.SH SYNOPSIS
+.B unlace decompile
+.RI [ OPTIONS ]
+.I BINARY
+.br
+.B unlace batch
+.RI [ OPTIONS ]
+.I BINARY
+.br
+.B unlace siggen
+.RI [ OPTIONS ]
+.I ARCHIVE
+.SH DESCRIPTION
+.B unlace
+is a multi-architecture binary decompiler that produces C pseudocode from
+ELF, PE, and Mach-O executables. It supports x86, x86-64, AArch64, ARM,
+RISC-V, MIPS, PowerPC, V850, ARC, and Apple AGX architectures.
+.PP
+The decompilation pipeline lifts machine code to an intermediate
+representation (IR), constructs SSA form, applies 50+ optimization passes,
+recovers control-flow structure, and emits readable C output.
+.SH COMMANDS
+.TP
+.B decompile
+Decompile a single function (or all functions with \fB\-\-all\fR) from a
+binary. The function can be specified by name or address.
+.TP
+.B batch
+Decompile all functions in parallel, writing output to stdout or a
+per-function output directory.
+.TP
+.B siggen
+Generate FLIRT-compatible signature files from static library archives.
+.SH OPTIONS
+.SS "decompile options"
+.TP
+.BI \-f ", \-\-function " NAME
+Decompile the function with the given name or hex address (e.g., \fB0x401000\fR).
+.TP
+.BI \-\-emit " FORMAT"
+Output format: \fBc\fR (default), \fBir\fR, \fBdot\fR, \fBssa\fR.
+.TP
+.BI \-\-arch " ARCH"
+Override auto-detected architecture. Values: x86, x86_64, aarch64, arm,
+riscv64, mips, mips64, ppc, ppc64, v850, arc, agx.
+.TP
+.BI \-o ", \-\-output " FILE
+Write output to FILE instead of stdout.
+.TP
+.B \-\-all
+Decompile all discovered functions.
+.TP
+.BI \-\-timeout " SECONDS"
+Per-function decompilation timeout (default: 30).
+.TP
+.B \-v ", \-\-verbose"
+Enable verbose/debug logging (set UNLACE_LOG=debug).
+.TP
+.BI \-\-plugin\-dir " DIR"
+Load plugins from DIR.
+.TP
+.BI \-\-max\-width " COLS"
+Maximum line width for C output (default: 120).
+.TP
+.BI \-\-tab\-width " N"
+Indentation width (default: 4).
+.TP
+.BI \-\-annotations\-load " FILE"
+Load function annotations from a JSON sidecar file.
+.TP
+.BI \-\-annotations\-save " FILE"
+Save annotations to a JSON sidecar file after decompilation.
+.SS "batch options"
+.TP
+.BI \-j ", \-\-jobs " N
+Number of parallel decompilation threads (default: all cores).
+.TP
+.BI \-\-output\-dir " DIR"
+Write one .c file per function to DIR.
+.SS "siggen options"
+.TP
+.BI \-o ", \-\-output " FILE"
+Write generated signatures to FILE.
+.SH ENVIRONMENT
+.TP
+.B UNLACE_LOG
+Set log level: trace, debug, info, warn (default), error.
+.TP
+.B UNLACE_MAX_WIDTH
+Default max line width for C output.
+.TP
+.B UNLACE_TAB_WIDTH
+Default tab/indentation width.
+.TP
+.B UNLACE_TIMEOUT
+Default per-function timeout in seconds.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Decompilation failed (partial results may have been emitted).
+.TP
+.B 2
+Invalid arguments or unrecognized binary format.
+.SH EXAMPLES
+Decompile the \fBmain\fR function:
+.PP
+.RS
+.nf
+$ unlace decompile ./binary --function main
+.fi
+.RE
+.PP
+Decompile all functions to a directory:
+.PP
+.RS
+.nf
+$ unlace batch ./binary --output-dir ./out/ --jobs 8
+.fi
+.RE
+.PP
+Generate FLIRT signatures from a static library:
+.PP
+.RS
+.nf
+$ unlace siggen ./libc.a -o libc.sig
+.fi
+.RE
+.SH FILES
+.TP
+.I ~/.config/unlace/plugins/
+Default plugin search directory.
+.TP
+.I .unlace-annotations.json
+Default annotations sidecar (adjacent to binary).
+.SH BUGS
+Report bugs at <https://github.com/coleleavitt/unlace/issues>.
+.SH AUTHORS
+Cole Leavitt and contributors.
+.SH SEE ALSO
+.BR objdump (1),
+.BR readelf (1),
+.BR ghidra (1)

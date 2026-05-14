@@ -606,6 +606,7 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
             reg2,
             reg3,
         } => lift_cmov(ctx, *cond, *reg1, *reg2, *reg3),
+        V850Op::Cmov { cond, reg1, reg2, reg3 } => lift_cmov(ctx, *cond, *reg1, *reg2, *reg3),
 
         // -- Control flow --
         V850Op::Jmp { reg } => {
@@ -994,6 +995,96 @@ fn lift_divh(ctx: &mut LiftCtx, dst: u8, src: u8, signed: bool) {
             smallvec![quot],
             ctx.addr,
         ));
+        ctx.emit(IrInsn::with_output(IrOp::Copy, d_lo, smallvec![lo], ctx.addr));
+    }
+    // High 32 -> reg3
+    if let Some(d_hi) = ctx.reg_write(reg3) {
+        let hi = ctx.alloc_unique(REG_SIZE);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            hi,
+            smallvec![prod, Varnode::constant(4, 1)],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(IrOp::Copy, d_hi, smallvec![hi], ctx.addr));
+    }
+}
+
+/// DIV/DIVU: reg2 ← reg2 / reg1, reg3 ← reg2 % reg1.
+fn lift_div32(ctx: &mut LiftCtx, reg1: u8, reg2: u8, reg3: u8, signed: bool) {
+    let dividend = ctx.reg_read(reg2);
+    let divisor = ctx.reg_read(reg1);
+
+    let (div_op, rem_op) = if signed {
+        (IrOp::IntSdiv, IrOp::IntSrem)
+    } else {
+        (IrOp::IntDiv, IrOp::IntRem)
+    };
+
+    let quot = ctx.alloc_unique(REG_SIZE);
+    ctx.emit(IrInsn::with_output(
+        div_op,
+        quot,
+        smallvec![dividend, divisor],
+        ctx.addr,
+    ));
+    if let Some(d_q) = ctx.reg_write(reg2) {
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d_q,
+            smallvec![quot],
+            ctx.addr,
+        ));
+    }
+
+    let rem = ctx.alloc_unique(REG_SIZE);
+    ctx.emit(IrInsn::with_output(
+        rem_op,
+        rem,
+        smallvec![dividend, divisor],
+        ctx.addr,
+    ));
+    if let Some(d_r) = ctx.reg_write(reg3) {
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            d_r,
+            smallvec![rem],
+            ctx.addr,
+        ));
+    }
+}
+
+/// DIVH 2-operand: reg2 = sign_ext32(reg2) / sign_ext16(reg1[15:0]).
+fn lift_divh(ctx: &mut LiftCtx, dst: u8, src: u8, signed: bool) {
+    if let Some(d) = ctx.reg_write(dst) {
+        let dividend = ctx.reg_read(dst);
+        // Take low 16 bits of src and sign/zero-extend to 32.
+        let src_full = ctx.reg_read(src);
+        let half = ctx.alloc_unique(2);
+        ctx.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            half,
+            smallvec![src_full, Varnode::constant(0, 1)],
+            ctx.addr,
+        ));
+        let divisor = ctx.alloc_unique(REG_SIZE);
+        let ext_op = if signed { IrOp::IntSext } else { IrOp::IntZext };
+        ctx.emit(IrInsn::with_output(
+            ext_op,
+            divisor,
+            smallvec![half],
+            ctx.addr,
+        ));
+
+        let div_op = if signed { IrOp::IntSdiv } else { IrOp::IntDiv };
+        let quot = ctx.alloc_unique(REG_SIZE);
+        ctx.emit(IrInsn::with_output(
+            div_op,
+            quot,
+            smallvec![dividend, divisor],
+            ctx.addr,
+        ));
+        ctx.emit(IrInsn::with_output(IrOp::Copy, d, smallvec![quot], ctx.addr));
     }
 }
 

@@ -35,4 +35,6 @@ harness = false
 [[bench]]
 name = "spec_suite"
 path = "../../benches/spec/suite.rs"
+name = "hexrays_throughput"
+path = "../../benches/hexrays_comparison/throughput.rs"
 harness = false

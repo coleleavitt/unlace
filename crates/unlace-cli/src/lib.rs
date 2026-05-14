@@ -36,6 +36,9 @@ pub fn parse_arch(s: &str) -> Result<ArchId> {
         "v850" => Ok(ArchId::V850),
         "arc" => Ok(ArchId::Arc),
         "agx" | "apple-agx" | "apple_agx" | "mseries-gpu" | "m-series-gpu" => Ok(ArchId::Agx),
+        "avr" => Ok(ArchId::Avr),
+        "z80" => Ok(ArchId::Z80),
+        "stm8" => Ok(ArchId::Stm8),
         _ => bail!("unknown architecture: '{s}'"),
     }
 }

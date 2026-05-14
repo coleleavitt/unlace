@@ -28,4 +28,5 @@ unlace-lift-ti = { workspace = true }
 unlace-lift-evm = { workspace = true }
 smallvec = { workspace = true }
 unlace-lift-6502 = { workspace = true }
+unlace-lift-stm8 = { workspace = true }
 thiserror = { workspace = true }

@@ -35,53 +35,39 @@ members = [
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-
 [workspace.dependencies]
 # Binary format parsing
 object = "0.39"
-
 # Architecture decoders
 iced-x86 = "1.21"
 capstone = "0.14"
-
 # Debug info
 gimli = "0.33"
 addr2line = "0.26"
 pdb = "0.8"
 fallible-iterator = "0.2"
-
 # Graph algorithms (CFG, dominator trees)
 petgraph = { version = "0.8", features = ["serde-1"] }
-
 # Serialization
 serde = { version = "1", features = ["derive"] }
 bincode = { version = "2", features = ["serde"] }
-
 # CLI
 clap = { version = "4.6", features = ["derive"] }
-
 # Symbol demangling
 symbolic-demangle = "12"
-
 # Snapshot testing
 insta = "1"
-
 # Observability
 tracing = "0.1"
-
 # Error handling
 thiserror = "2"
 anyhow = "1"
-
 # Parallelism
 rayon = "1"
-
 # Data structures
 smallvec = { version = "1", features = ["serde"] }
-
 # Dynamic library loading
 libloading = "0.8"
-
 # Internal crates
 unlace-ir = { path = "crates/unlace-ir" }
 unlace-loader = { path = "crates/unlace-loader" }
@@ -107,16 +93,11 @@ unlace-flirt = { path = "crates/unlace-flirt" }
 unlace-sbom = { path = "crates/unlace-sbom" }
 unlace-test-harness = { path = "crates/unlace-test-harness" }
 unlace-lumina = { path = "crates/unlace-lumina" }
-
 [profile.dev]
 incremental = true
-
 [profile.dev.package."*"]
 opt-level = 1
-
 [profile.test]
-opt-level = 1
-
 [profile.release]
 lto = "thin"
 codegen-units = 1

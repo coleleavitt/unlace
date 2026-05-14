@@ -13,6 +13,7 @@ use pdb::{PDB, Rva, SymbolData};
 use pdb::{PDB, Rva, SymbolData, TypeData, TypeIndex};
 use unlace_ir::ssa::CallingConvention;
 use pdb::{PDB, Rva, SymbolData};
+use pdb::{PDB, Rva, SymbolData};
 use pdb::{IdData, ItemIndex, PDB, Rva, SymbolData};
 
 use crate::error::LoadError;
@@ -192,6 +193,7 @@ fn map_pdb_calling_convention(raw: u8) -> Option<CallingConvention> {
 
 fn ti_to_u32(t: TypeIndex) -> u32 {
     u32::from(t)
+    Ok(PdbInfo { symbols, lines })
     Ok(PdbInfo { symbols, lines })
         inlinee_sites,
     })

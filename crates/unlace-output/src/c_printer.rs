@@ -10177,6 +10177,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            split_dwarf_files: Vec::new(),
         };
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(output.contains("->size"), "should contain ->size: {output}");
@@ -10239,6 +10240,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10305,6 +10307,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            split_dwarf_files: Vec::new(),
         };
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(!output.contains("->"), "should NOT contain ->: {output}");
@@ -10457,6 +10460,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10510,6 +10514,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10587,6 +10592,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10631,6 +10637,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -13214,6 +13221,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -14995,6 +15003,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);

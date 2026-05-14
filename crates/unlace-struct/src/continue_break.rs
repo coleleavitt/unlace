@@ -245,6 +245,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         }
     }
 

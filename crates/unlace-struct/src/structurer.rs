@@ -123,6 +123,7 @@ pub fn structure_with_arch(
             .map(|i| i.byref_locals.clone())
             .unwrap_or_default(),
         stack_frame: func.stack_frame.clone(),
+        cpp_lambda_captures: func.cpp_lambda_captures.clone(),
     })
 }
 

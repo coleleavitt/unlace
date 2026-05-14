@@ -67,7 +67,8 @@ use unlace_passes::{
     GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass,
     OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, RustVtablePass, SccpPass,
     BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
+    CopyPropagationPass, CppLambdaCapturePass, CppVtablePass, CsePass,
+    DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
     DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
     GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
     ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
@@ -933,6 +934,10 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
     // produced by the merger (it occasionally promotes a DWARF name into
     // its output map).
     VarNamingPass.run(ssa).context("var naming pass failed")?;
+
+    CppLambdaCapturePass
+        .run(ssa)
+        .context("cpp lambda capture pass failed")?;
 
     // t230 — calling-convention finalization. Runs last so the
     // dead-param drop, byte-mask narrowing, and caller-side

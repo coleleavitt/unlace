@@ -42,6 +42,7 @@ pub enum ArchId {
     I8051,
     AmdGpu,
     M68k,
+    Hexagon,
     Unknown(u16),
 }
 
@@ -84,6 +85,7 @@ impl fmt::Display for ArchId {
             Self::I8051 => f.write_str("i8051"),
             Self::AmdGpu => f.write_str("amdgpu"),
             Self::M68k => f.write_str("m68k"),
+            Self::Hexagon => f.write_str("hexagon"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

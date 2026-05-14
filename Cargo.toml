@@ -24,6 +24,7 @@ members = [
     "crates/unlace-lift-8051",
     "crates/unlace-lift-amdgpu",
     "crates/unlace-lift-m68k",
+    "crates/unlace-lift-hexagon",
     "crates/unlace-lift-agx",
     "crates/unlace-lift-sh",
     "crates/unlace-lift-sass",

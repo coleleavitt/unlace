@@ -26,6 +26,8 @@ members = [
     "crates/unlace-lift-m68k",
     "crates/unlace-lift-hexagon",
     "crates/unlace-lift-pic",
+    "crates/unlace-lift-tricore",
+    "crates/unlace-lift-stm8",
     "crates/unlace-lift-agx",
     "crates/unlace-lift-sh",
     "crates/unlace-lift-sass",

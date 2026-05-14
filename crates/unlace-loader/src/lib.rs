@@ -37,6 +37,7 @@ pub mod swift_metadata;
 pub mod til;
 pub mod uefi_module;
 pub mod wasm_component;
+pub mod evm_solidity;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,

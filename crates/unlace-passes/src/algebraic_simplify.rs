@@ -223,6 +223,9 @@ fn try_simplify(
         IrOp::IntNotequal => simplify_cmp_xor_zero(func, bid, insn_idx, insn)
             .or_else(|| simplify_same_ssa_to_const(func, bid, insn_idx, insn, 0)),
         IrOp::Multiequal => simplify_multiequal_all_same(func, bid, insn_idx, insn),
+        IrOp::IntEqual | IrOp::IntNotequal => {
+            simplify_cmp_xor_zero(func, bid, insn_idx, insn)
+        }
         IrOp::IntSext => simplify_double_sext(func, bid, insn_idx, insn)
             .or_else(|| simplify_sext_noop(func, bid, insn_idx, insn)),
         IrOp::IntZext => simplify_double_zext(func, bid, insn_idx, insn),

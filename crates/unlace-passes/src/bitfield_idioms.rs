@@ -269,6 +269,73 @@ fn flatten_or(
 }
 
 fn flatten_or_one(v: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>, leaves: &mut Vec<Varnode>) {
+    Some(make_callother(output, CALLOTHER_BSWAP32, &[source], insn.addr))
+}
+
+/// Represents one byte-lane extraction.
+#[derive(Debug, Clone, Copy)]
+struct ByteLane {
+    mask: u64,
+    shift: u64,
+    right: bool,
+    source: Varnode,
+}
+
+fn parse_byte_lane(vn: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<ByteLane> {
+    let def = def_of(vn, def_map)?;
+    let (shift_op, is_right) = match def.op {
+        IrOp::IntRight => (def, true),
+        IrOp::IntLeft => (def, false),
+        _ => return None,
+    };
+    if shift_op.inputs.len() != 2 {
+        return None;
+    }
+    let shift_amt_vn = &shift_op.inputs[1];
+    if shift_amt_vn.space != SpaceId::Const {
+        return None;
+    }
+    let shift_amt = shift_amt_vn.offset;
+
+    let and_vn = &shift_op.inputs[0];
+    let and_def = def_of(and_vn, def_map)?;
+    if and_def.op != IrOp::IntAnd || and_def.inputs.len() != 2 {
+        return None;
+    }
+
+    // One of the AND inputs should be a constant mask
+    let (source, mask) = if and_def.inputs[1].space == SpaceId::Const {
+        (and_def.inputs[0], and_def.inputs[1].offset)
+    } else if and_def.inputs[0].space == SpaceId::Const {
+        (and_def.inputs[1], and_def.inputs[0].offset)
+    } else {
+        return None;
+    };
+
+    Some(ByteLane {
+        mask,
+        shift: shift_amt,
+        right: is_right,
+        source,
+    })
+}
+
+/// Flatten a tree of IntOr nodes into leaf varnodes.
+fn flatten_or(
+    a: &Varnode,
+    b: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+    leaves: &mut Vec<Varnode>,
+) {
+    flatten_or_one(a, def_map, leaves);
+    flatten_or_one(b, def_map, leaves);
+}
+
+fn flatten_or_one(
+    v: &Varnode,
+    def_map: &BTreeMap<Varnode, IrInsn>,
+    leaves: &mut Vec<Varnode>,
+) {
     if let Some(def) = def_of(v, def_map) {
         if def.op == IrOp::IntOr && def.inputs.len() == 2 {
             flatten_or_one(&def.inputs[0], def_map, leaves);

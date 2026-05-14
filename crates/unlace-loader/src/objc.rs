@@ -665,6 +665,24 @@ pub fn build_category_namespace_map(image: &BinaryImage) -> BTreeMap<u64, String
     out
 }
 
+
+/// Deduplicate ObjC category methods by merging categories for the same class.
+///
+/// When multiple categories extend the same class, their methods should be
+/// unified into a single namespace for the decompiler output.
+pub fn merge_category_methods(categories: &[ObjcCategory]) -> std::collections::BTreeMap<String, Vec<ObjcMethod>> {
+    let mut merged: std::collections::BTreeMap<String, Vec<ObjcMethod>> = std::collections::BTreeMap::new();
+    for cat in categories {
+        let class_name = cat.class_name.as_deref().unwrap_or("(unknown)");
+        let key = format!("{}+{}", class_name, cat.name);
+        merged.entry(key).or_default().extend(cat.instance_methods.iter().cloned());
+        merged.entry(format!("{}+{}", class_name, cat.name))
+            .or_default()
+            .extend(cat.class_methods.iter().cloned());
+    }
+    merged
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

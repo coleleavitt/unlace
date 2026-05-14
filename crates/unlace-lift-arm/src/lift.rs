@@ -882,6 +882,8 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
 
         ArmInsn::ARM_INS_MRS => emit_arm32_mrs(ctx, &ops),
         ArmInsn::ARM_INS_MSR => emit_arm32_msr(ctx, &ops),
+        ArmInsn::ARM_INS_SMC => emit_arm32_trap(ctx, &ops, CALLOTHER_ARM_SMC),
+        ArmInsn::ARM_INS_SVC => emit_arm32_trap(ctx, &ops, CALLOTHER_ARM_SVC),
 
         ArmInsn::ARM_INS_BFI => emit_arm32_bfi(ctx, &ops),
         ArmInsn::ARM_INS_UBFX => emit_arm32_ubfx(ctx, &ops, false),
@@ -965,6 +967,17 @@ pub const CALLOTHER_ARM_SSAT: u64 = 0x35C;
 pub const CALLOTHER_ARM_QADD: u64 = 0x35D;
 /// `__qsub(Rn, Rm) -> Rd` — signed-saturating 32-bit subtract.
 pub const CALLOTHER_ARM_QSUB: u64 = 0x35E;
+/// `__arm_smc(#imm)` / `__arm_smc(cond, #imm)` — secure monitor call
+/// transition marker for TrustZone world switches. The immediate reaches
+/// the intrinsic as a constant varnode so downstream passes can recover
+/// the SMC function number without re-decoding.
+pub const CALLOTHER_ARM_SMC: u64 = 0x35F;
+/// `__arm_svc(#imm)` / `__arm_svc(cond, #imm)` — supervisor call marker.
+/// Not every SVC is a TrustZone transition, but surfacing it with the same
+/// structured shape lets downstream analysis distinguish secure monitor
+/// transitions (`SMC`) from OS / hypervisor service traps (`SVC`) while still
+/// flagging both as privilege-boundary events per t317.
+pub const CALLOTHER_ARM_SVC: u64 = 0x360;
 
 // t315 — ARM32 NEON / Adv-SIMD tags. Occupy the free band below the
 // AArch64 NEON block (`0x400..`) and above the existing ARM scalar/media
@@ -1354,6 +1367,38 @@ fn emit_arm32_msr(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
         smallvec![Varnode::constant(CALLOTHER_ARM_MSR, 8), sysreg, src],
         ctx.addr,
     ));
+}
+
+/// t317: surface TrustZone / privilege-boundary trap instructions as
+/// explicit Callother intrinsics instead of letting them disappear into
+/// `Unimplemented`. The shape is intentionally small and uniform:
+///
+///   Callother(tag, imm24)
+///
+/// for plain A32/T32 forms, with the instruction-level ARM condition
+/// carried separately via `IrInsn.guard` when present. This preserves the
+/// immediate trap number and lets downstream passes recognise
+/// secure-world transitions (`SMC`) versus supervisor calls (`SVC`)
+/// without re-decoding raw bytes.
+fn emit_arm32_trap(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
+    let Some(imm) = ops.first().and_then(arm32_trap_imm) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(tag, 8), imm],
+        ctx.addr,
+    ));
+}
+
+fn arm32_trap_imm(op: &ArmOperandType) -> Option<Varnode> {
+    match op {
+        ArmOperandType::Imm(v) => Some(Varnode::constant(*v as i64 as u64, 4)),
+        ArmOperandType::Cimm(v) => Some(Varnode::constant(*v as i64 as u64, 4)),
+        ArmOperandType::Pimm(v) => Some(Varnode::constant(*v as i64 as u64, 4)),
+        _ => None,
+    }
 }
 
 fn arm32_first_dst(ops: &[ArmOperandType]) -> Option<Varnode> {

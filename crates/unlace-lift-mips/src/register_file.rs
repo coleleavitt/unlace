@@ -180,16 +180,20 @@ pub fn capstone_reg_to_offset(reg: capstone::RegId) -> Option<u64> {
 }
 
 // MSA (MIPS SIMD Architecture) register support
+#[allow(dead_code)]
 pub const MSA_W0: u64 = 0x1000;
 
+#[allow(dead_code)]
 pub fn msa_reg_by_index(index: u8) -> Varnode {
     Varnode::reg(MSA_W0 + (index as u64) * 16, 16)
 }
 
+#[allow(dead_code)]
 pub fn msa_reg(reg: capstone::RegId) -> Option<Varnode> {
     msa_reg_index(reg).map(msa_reg_by_index)
 }
 
+#[allow(dead_code)]
 pub fn msa_reg_index(reg: capstone::RegId) -> Option<u8> {
     use capstone::arch::mips::MipsReg::*;
     let reg_u16: u16 = reg.0;

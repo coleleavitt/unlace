@@ -1,3 +1,11 @@
+//! MIPS DSP ASE callother + control-register declarations.
+//!
+//! Several DSP control registers (`DSPCARRY`, `DSPPOS`, `DSPSCOUNT`,
+//! `AC0..=AC3`) and `lift_*` helpers are staged for future dispatch wiring.
+//! Silence dead-code module-wide until those are connected; TODO: wire when
+//! DSP-ASE handlers exit WIP status.
+#![allow(dead_code)]
+
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 

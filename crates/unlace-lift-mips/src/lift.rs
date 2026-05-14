@@ -11,6 +11,8 @@ use unlace_ir::{
 use crate::ops::{arithmetic, bitwise, control_flow, data_move, dsp, fpu, memory};
 use crate::ops::{arithmetic, bitwise, control_flow, data_move, memory};
 use crate::ops::{arithmetic, bitwise, control_flow, data_move, memory, msa};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, memory};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, dsp, memory};
 use crate::register_file::{self, ZERO, capstone_reg_to_offset, mips64_register_file};
 
 // Capstone contains a raw `*mut c_void` handle to the C library.
@@ -395,6 +397,8 @@ mod tests {
         let l = lifter();
         let rf = l.register_file();
         assert_eq!(rf.registers.len(), 78);
+        assert_eq!(rf.registers.len(), 35);
+        assert_eq!(rf.registers.len(), 44);
         assert_eq!(rf.registers[0].name, "$zero");
         assert_eq!(rf.registers[31].name, "$ra");
         assert_eq!(rf.registers[32].name, "HI");
@@ -712,6 +716,29 @@ mod tests {
             msa::CALLOTHER_MSA_BITWISE
         );
         assert_eq!(result.ir_ops[0].output.expect("and.v output").size, 16);
+
+    #[test]
+    fn test_addq_updates_dsp_outflag() {
+        let mut ctx = LiftCtx::new(0x1000);
+        let ops = [
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_2 as u16)),
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_4 as u16)),
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_5 as u16)),
+        ];
+        crate::ops::dsp::lift_addq(&mut ctx, &ops);
+        assert!(ctx.ir_ops().iter().any(|op| op.op == IrOp::IntAdd));
+        assert!(ctx.ir_ops().iter().any(|op| op.output == Some(Varnode::reg(crate::register_file::DSPOUTFLAG, 8))));
+    }
+
+    #[test]
+    fn test_rddsp_lowers_to_callother() {
+        let mut ctx = LiftCtx::new(0x1000);
+        let ops = [
+            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_2 as u16)),
+            MipsOperand::Imm(0x1f),
+        ];
+        crate::ops::dsp::lift_rddsp(&mut ctx, &ops);
+        assert!(ctx.ir_ops().iter().any(|op| op.op == IrOp::Callother));
     }
 
     // Unknown instruction falls back to Unimplemented

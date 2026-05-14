@@ -82,6 +82,8 @@ pub fn msa_reg_index(reg: capstone::RegId) -> Option<u8> {
 
 pub fn mips64_register_file() -> RegisterFile {
     let mut regs = Vec::with_capacity(78);
+    let mut regs = Vec::with_capacity(35);
+    let mut regs = Vec::with_capacity(44);
     for (i, name) in MIPS_REG_NAMES.iter().enumerate() {
         regs.push(RegisterDef {
             name,

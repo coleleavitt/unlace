@@ -48,6 +48,7 @@ pub mod windbg_ttd;
 pub mod frida_bridge;
 pub mod gdb_mi;
 pub mod apple_kernelcache;
+pub mod lldb_bridge;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,

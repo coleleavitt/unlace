@@ -4,6 +4,7 @@ pub mod algebraic_simplify;
 pub mod auth_call_resolve;
 pub mod counterexample_refine;
 pub mod bitfield_idioms;
+pub mod bsim_db;
 pub mod bmi_idioms;
 pub mod bool_simplify;
 pub mod boost_recognize;

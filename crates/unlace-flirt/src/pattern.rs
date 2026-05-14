@@ -207,6 +207,21 @@ impl FlirtDb {
         self.patterns.push(pattern);
     }
 
+    /// Append all patterns from another database, preserving match order.
+    pub fn extend(&mut self, other: FlirtDb) {
+        self.patterns.extend(other.patterns);
+    }
+
+    /// Number of patterns in the database.
+    pub fn len(&self) -> usize {
+        self.patterns.len()
+    }
+
+    /// Whether the database contains no patterns.
+    pub fn is_empty(&self) -> bool {
+        self.patterns.is_empty()
+    }
+
     /// Match a single function's bytes against all patterns, returning the first match.
     pub fn match_bytes(&self, addr: u64, func_bytes: &[u8]) -> Option<FlirtMatch> {
         for (idx, pattern) in self.patterns.iter().enumerate() {

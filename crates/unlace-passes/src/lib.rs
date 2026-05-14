@@ -40,6 +40,7 @@ pub mod go_closure;
 pub mod go_defer;
 pub mod go_select;
 pub mod gui_lib_recognize;
+pub mod gcc_cleanup;
 pub mod gvn;
 pub mod idiom_recognition;
 pub mod indirect_call_resolve;

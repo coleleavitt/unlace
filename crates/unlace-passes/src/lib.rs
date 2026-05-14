@@ -29,6 +29,7 @@ pub mod cse;
 pub mod ct_violation;
 pub mod cwe_detect;
 pub mod db_recognize;
+pub mod daikon_invariants;
 pub mod dce;
 pub mod dead_flag_elim;
 pub mod dead_store_elim;

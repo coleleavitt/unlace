@@ -66,6 +66,14 @@ use unlace_passes::{
     DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass,
     GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass,
     OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, RustVtablePass, SccpPass,
+    BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
+    CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
+    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
+    GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
+    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
+    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
+    CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
+    OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
     SignatureSnapshot, StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass,
     StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     VariableMergePass, annotate_libc_calls, bump_if_signature_changed, detect_byref,
@@ -1232,6 +1240,15 @@ fn flirt_match_with_resolved(
     entry: &FunctionEntry,
     resolved: &BTreeMap<u64, String>,
 ) -> Option<String> {
+    flirt_best_match(image, entry)
+        .filter(|m| m.exact)
+        .map(|m| m.name.to_string())
+}
+
+fn flirt_best_match<'a>(
+    image: &'a BinaryImage,
+    entry: &FunctionEntry,
+) -> Option<unlace_loader::FlirtMatch<'a>> {
     if !is_flirt_eligible_name(&entry.name) {
         return None;
     }
@@ -1293,6 +1310,8 @@ fn flirt_resolved_names(image: &BinaryImage) -> BTreeMap<u64, String> {
     }
 
     resolved
+    flirt_db().match_function(bytes).map(str::to_string)
+    flirt_db().best_match(bytes)
 }
 
 /// Whether `name` looks like a stripped-binary placeholder that FLIRT is
@@ -1321,6 +1340,14 @@ pub fn render_flirt_stub(canonical: &str, entry: &FunctionEntry) -> String {
     )
 }
 
+fn render_flirt_likely(name: &str, confidence: f32, entry: &FunctionEntry) -> String {
+    let pct = (confidence * 100.0).round().clamp(0.0, 100.0) as u32;
+    format!(
+        "// likely {name} (FLIRT {pct}%)\n// {} @ {:#x} (partial FLIRT match; decompiled body follows)\n",
+        entry.name, entry.addr,
+    )
+}
+
 pub fn decompile_function_with_symbols(
     image: &BinaryImage,
     lifter: &dyn Lifter,
@@ -1334,12 +1361,30 @@ pub fn decompile_function_with_symbols(
     let _span = tracing::debug_span!("decompile_function", func = %entry.name).entered();
     let deadline = Instant::now() + config.timeout;
 
-    if matches!(emit, EmitFormat::C) {
-        if let Some(canonical) = flirt_match(image, entry) {
-            tracing::debug!(func = %entry.name, canonical = %canonical, "flirt match; eliding body");
-            return Ok(render_flirt_stub(&canonical, entry));
+    let flirt_hint = if matches!(emit, EmitFormat::C) {
+        if let Some(candidate) = flirt_best_match(image, entry) {
+            if candidate.exact {
+                let canonical = candidate.name.to_string();
+                tracing::debug!(func = %entry.name, canonical = %canonical, "flirt match; eliding body");
+                return Ok(render_flirt_stub(&canonical, entry));
+            }
+            tracing::debug!(
+                func = %entry.name,
+                canonical = candidate.name,
+                confidence = candidate.confidence,
+                "partial flirt match; surfacing confidence hint"
+            );
+            Some(render_flirt_likely(
+                candidate.name,
+                candidate.confidence,
+                entry,
+            ))
+        } else {
+            None
         }
-    }
+    } else {
+        None
+    };
 
     let t = Instant::now();
     let mut ir_func = lift_function(image, lifter, entry)?;
@@ -1504,7 +1549,13 @@ pub fn decompile_function_with_symbols(
         elapsed_us = t.elapsed().as_micros() as u64,
         "emit_output done"
     );
-    result
+    result.map(|rendered| {
+        if let Some(hint) = flirt_hint {
+            format!("{hint}{rendered}")
+        } else {
+            rendered
+        }
+    })
 }
 
 fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
@@ -2060,6 +2111,21 @@ mod tests {
         assert!(out.contains("void strcpy(void)"));
     }
 
+    #[test]
+    fn flirt_render_likely_emits_confidence_header() {
+        let entry = FunctionEntry {
+            name: "sub_4011a0".into(),
+            addr: 0x4011a0,
+            size: 8,
+        };
+        let out = super::render_flirt_likely("memcpy", 0.87, &entry);
+        assert!(
+            out.contains("// likely memcpy (FLIRT 87%)"),
+            "header missing: {out}"
+        );
+        assert!(out.contains("partial FLIRT match"));
+    }
+
     // -----------------------------------------------------------------
     // t234 — Wave 24 pipeline ordering smoke test
     //
@@ -2242,5 +2308,25 @@ mod tests {
         };
         let canonical = super::flirt_match(&image, &entry);
         assert_eq!(canonical.as_deref(), Some("__memcpy_chk"));
+    fn flirt_best_match_surfaces_partial_confidence_in_text() {
+        let mut db = unlace_loader::FlirtDb::new();
+        db.push(unlace_loader::FlirtSignature {
+            name: "memcpy".into(),
+            pattern: vec![0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89],
+            mask: vec![0xFF; 9],
+            min_len: 12,
+            max_len: None,
+            crc16_at: None,
+        });
+        let candidate = db
+            .best_match(&[0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89])
+            .expect("partial FLIRT match");
+        assert_eq!(candidate.name, "memcpy");
+        assert!(!candidate.exact);
+        assert!(
+            candidate.confidence > 0.80,
+            "confidence too low: {}",
+            candidate.confidence
+        );
     }
 }

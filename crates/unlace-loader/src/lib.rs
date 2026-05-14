@@ -59,6 +59,8 @@ pub use flirt::{
     default_db as default_flirt_db, generate_archive_patterns, generate_archive_patterns_from_bytes,
     render_patterns_toml,
 pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
+pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
+pub use flirt::{FlirtDb, FlirtMatch, FlirtSignature, default_db as default_flirt_db};
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
 pub use intel_hex::{
     IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
@@ -70,6 +72,10 @@ pub use intel_hex::{
     IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
 };
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
+pub use intel_hex::{
+    IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
+};
+pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMethod, parse_class};
 pub use image::{
     ArchId, BinaryImage, BoundImport, DebugRecord, DylibDep, DylibKind, Endian, LoadConfig,
     RelocKind, Relocation, ResourceEntry, RichHeader, RichRecord, Section, SectionFlags, Symbol,
@@ -100,6 +106,9 @@ pub use rtti::{
 pub use swift_metadata::{
     SwiftBuiltinAsyncFunction, SwiftConformance, SwiftInfo, SwiftProtocolDescriptor,
     SwiftTypeDescriptor, scan_swift_metadata,
+    SwiftConformance, SwiftInfo, SwiftProtocolDescriptor, SwiftTypeDescriptor,
+    scan_swift_metadata,
+    SwiftConformance, SwiftInfo, SwiftProtocolDescriptor, SwiftTypeDescriptor, scan_swift_metadata,
 };
 
 /// Trait for binary format loaders.

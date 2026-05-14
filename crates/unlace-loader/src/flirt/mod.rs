@@ -69,6 +69,18 @@ pub struct FlirtMatch<'a> {
     pub refs_matched: bool,
 }
 
+/// Rich FLIRT match metadata. Exact matches are used to elide the function
+/// body entirely; partial matches only surface a confidence hint to the user.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FlirtMatch<'a> {
+    pub name: &'a str,
+    /// 0.0-1.0 confidence score derived from prefix, length, and CRC checks.
+    pub confidence: f32,
+    /// True when every hard constraint matched and the candidate can be
+    /// treated as a fully recognised library stub.
+    pub exact: bool,
+}
+
 /// In-memory FLIRT database.
 #[derive(Debug, Default, Clone)]
 pub struct FlirtDb {
@@ -102,6 +114,10 @@ impl FlirtDb {
     /// function) against any signature in the database. Returns the first
     /// byte/CRC match by registration order so callers control priority via
     /// the signature table layout.
+    /// match by registration order so callers control priority via the
+    /// signature table layout.
+    /// exact match by registration order so callers control priority via the
+    /// signature table layout.
     pub fn match_function(&self, bytes: &[u8]) -> Option<&str> {
         self.match_function_with_refs(bytes, &BTreeMap::new())
             .map(|m| m.name)
@@ -161,41 +177,136 @@ impl FlirtDb {
             }
         }
         fallback
+        for sig in &self.entries {
+            if signature_matches(sig, bytes) {
+                return Some(&sig.name);
+            }
+        }
+        None
+        self.best_match(bytes).filter(|m| m.exact).map(|m| m.name)
+    }
+
+    /// Return the strongest FLIRT candidate, even when it only partially
+    /// matches. This powers t272 confidence hints like
+    /// `// likely memcpy (FLIRT 87%)` for near-misses.
+    pub fn best_match(&self, bytes: &[u8]) -> Option<FlirtMatch<'_>> {
+        self.entries
+            .iter()
+            .filter_map(|sig| {
+                let score = signature_score(sig, bytes)?;
+                Some(FlirtMatch {
+                    name: &sig.name,
+                    confidence: score.confidence,
+                    exact: score.exact,
+                })
+            })
+            .max_by(|a, b| {
+                a.confidence
+                    .partial_cmp(&b.confidence)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| a.exact.cmp(&b.exact))
+            })
     }
 }
 
-fn signature_matches(sig: &FlirtSignature, bytes: &[u8]) -> bool {
-    if bytes.len() < sig.min_len {
-        return false;
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SignatureScore {
+    confidence: f32,
+    exact: bool,
+}
+
+fn signature_score(sig: &FlirtSignature, bytes: &[u8]) -> Option<SignatureScore> {
+    let prefix_len = sig.pattern.len();
+    if prefix_len == 0 {
+        return None;
     }
-    if let Some(max) = sig.max_len {
-        if bytes.len() > max {
-            return false;
-        }
+
+    let available_prefix = bytes.len().min(prefix_len);
+    if available_prefix == 0 {
+        return None;
     }
-    if bytes.len() < sig.pattern.len() {
-        return false;
-    }
-    for (i, &want) in sig.pattern.iter().enumerate() {
-        let m = sig.mask.get(i).copied().unwrap_or(0xFF);
-        if m == 0 {
+
+    let required_positions = sig
+        .mask
+        .iter()
+        .copied()
+        .chain(std::iter::repeat(0xFF))
+        .take(prefix_len)
+        .filter(|&m| m != 0)
+        .count();
+    let wildcard_positions = prefix_len.saturating_sub(required_positions);
+    let prefix_weight = 0.80f32;
+    let length_weight = 0.10f32;
+    let crc_weight = if sig.crc16_at.is_some() {
+        0.10f32
+    } else {
+        0.0f32
+    };
+
+    let mut matched_required = 0usize;
+    let mut compared_required = 0usize;
+
+    for i in 0..available_prefix {
+        let want = sig.pattern[i];
+        let mask = sig.mask.get(i).copied().unwrap_or(0xFF);
+        if mask == 0 {
             continue;
         }
-        if (bytes[i] & m) != (want & m) {
-            return false;
+        compared_required += 1;
+        if (bytes[i] & mask) != (want & mask) {
+            return None;
+        }
+        matched_required += 1;
+    }
+
+    let matched_positions =
+        matched_required + wildcard_positions.min(available_prefix - compared_required);
+    let prefix_ratio = matched_positions as f32 / prefix_len as f32;
+
+    let length_ratio = if bytes.len() >= sig.min_len {
+        1.0
+    } else if sig.min_len == 0 {
+        1.0
+    } else {
+        bytes.len() as f32 / sig.min_len as f32
+    };
+
+    let mut exact = bytes.len() >= sig.min_len && bytes.len() >= prefix_len;
+    if let Some(max) = sig.max_len {
+        if bytes.len() > max {
+            return None;
         }
     }
-    if let Some((start, expected)) = sig.crc16_at {
+
+    let crc_ratio = if let Some((start, expected)) = sig.crc16_at {
         const WINDOW: usize = 32;
         let end = (start + WINDOW).min(bytes.len());
         if start >= end {
-            return false;
+            exact = false;
+            0.0
+        } else {
+            let crc_matches = crc16_ccitt(&bytes[start..end]) == expected;
+            if !crc_matches {
+                exact = false;
+            }
+            if crc_matches { 1.0 } else { 0.0 }
         }
-        if crc16_ccitt(&bytes[start..end]) != expected {
-            return false;
-        }
+    } else {
+        0.0
+    };
+
+    if bytes.len() < sig.min_len {
+        exact = false;
     }
-    true
+
+    let mut confidence =
+        prefix_ratio * prefix_weight + length_ratio * length_weight + crc_ratio * crc_weight;
+    if exact && sig.crc16_at.is_none() {
+        confidence += crc_weight;
+    }
+    confidence = confidence.clamp(0.0, 1.0);
+
+    Some(SignatureScore { confidence, exact })
 }
 
 fn references_match(
@@ -378,15 +489,14 @@ mod tests {
             &[0x48, 0x00, 0xC3],
             &[0xFF, 0x00, 0xFF],
         ));
+        db.push(sig(
+            "memcpy",
+            &[0x48, 0x00, 0xC3],
+            &[0xFF, 0x00, 0xFF],
+        ));
         // Wildcarded byte may be anything.
-        assert_eq!(
-            db.match_function(&[0x48, 0x77, 0xC3, 0x00]),
-            Some("memcpy")
-        );
-        assert_eq!(
-            db.match_function(&[0x48, 0xAB, 0xC3, 0x00]),
-            Some("memcpy")
-        );
+        assert_eq!(db.match_function(&[0x48, 0x77, 0xC3, 0x00]), Some("memcpy"));
+        assert_eq!(db.match_function(&[0x48, 0xAB, 0xC3, 0x00]), Some("memcpy"));
         // First byte mismatch must reject.
         assert!(db.match_function(&[0x49, 0xAB, 0xC3, 0x00]).is_none());
     }
@@ -567,6 +677,41 @@ mod tests {
             .unwrap();
         assert_eq!(m.name, "calls_malloc");
         assert!(m.refs_matched);
+    fn best_match_surfaces_partial_confidence_for_truncated_body() {
+        let mut db = FlirtDb::new();
+        db.push(FlirtSignature {
+            name: "memcpy".into(),
+            pattern: vec![0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0xC3],
+            mask: vec![0xFF; 8],
+            min_len: 12,
+            max_len: None,
+            crc16_at: None,
+        });
+
+        let partial = db.best_match(&[0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0xC3]);
+        let partial = partial.expect("partial candidate");
+        assert_eq!(partial.name, "memcpy");
+        assert!(!partial.exact);
+        assert!(
+            partial.confidence > 0.85,
+            "confidence too low: {}",
+            partial.confidence
+        );
+        assert!(
+            partial.confidence < 1.0,
+            "partial match should not be exact"
+        );
+    }
+
+    #[test]
+    fn best_match_rejects_prefix_mismatches() {
+        let mut db = FlirtDb::new();
+        db.push(sig(
+            "strcpy",
+            &[0x48, 0x89, 0xF8, 0xC3],
+            &[0xFF, 0xFF, 0xFF, 0xFF],
+        ));
+        assert!(db.best_match(&[0x90, 0x89, 0xF8, 0xC3]).is_none());
     }
 
     #[test]

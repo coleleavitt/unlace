@@ -306,6 +306,8 @@ pub struct SsaFunction {
     /// same name. Populated by `VariableMergePass`.
     pub merged_names: BTreeMap<SsaVarnode, String>,
     pub enum_discriminants: Vec<EnumDiscriminant>,
+    /// Recovered C++ `std::variant`/`std::optional` discriminator sites.
+    pub cpp_variant_discriminants: Vec<CppVariantDiscriminant>,
     pub panic_sites: BTreeMap<(BlockId, usize), PanicKind>,
     /// Go `defer` registrations keyed only by discovery order. Populated by
     /// the CLI pipeline from symbol-aware runtime-helper matching.
@@ -668,6 +670,32 @@ pub struct EnumDiscriminant {
     pub comparison_locs: Vec<(BlockId, usize)>,
 }
 
+/// A C++ `std::variant` / `std::optional` tag-byte discriminator.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CppVariantDiscriminant {
+    /// SSA varnode of the loaded tag byte.
+    pub tag_sv: SsaVarnode,
+    /// Location (block, insn_index) of the LOAD that reads the tag.
+    pub tag_load_loc: (BlockId, usize),
+    /// Byte offset from the object base pointer where the tag lives.
+    pub tag_offset: i64,
+    /// Whether this is a full variant or an optional.
+    pub kind: CppVariantKind,
+    /// Map from tag constant value to human-readable alternative name.
+    pub variants: std::collections::BTreeMap<u64, String>,
+    /// Locations of comparison instructions that branch on the tag.
+    pub comparison_locs: Vec<(BlockId, usize)>,
+}
+
+/// Whether the discriminator matches `std::optional` or `std::variant`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CppVariantKind {
+    /// `std::variant<Ts...>` tag byte encodes the active alternative index.
+    Variant,
+    /// `std::optional<T>` tag byte is 0 (empty) or 1 (engaged).
+    Optional,
+}
+
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -704,6 +732,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         tail_call_map: BTreeMap::new(),
         merged_names: BTreeMap::new(),
         enum_discriminants: Vec::new(),
+        cpp_variant_discriminants: Vec::new(),
         panic_sites: BTreeMap::new(),
         go_defer_sites: Vec::new(),
         vtable_calls: BTreeMap::new(),

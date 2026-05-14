@@ -29,6 +29,7 @@ pub enum LifterEndian {
 }
 pub use unlace_lift_riscv::RiscVLifter;
 pub use unlace_lift_sass::SassLifter;
+pub use unlace_lift_superh::SuperHLifter;
 pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_x86::X86Lifter;
 pub use unlace_lift_xtensa::XtensaLifter;
@@ -96,6 +97,7 @@ pub fn get_lifter_with_endian(arch: ArchId, endian: Option<LifterEndian>) -> Box
         ArchId::Msp430 => Box::new(Msp430Lifter::new()),
         ArchId::NvidiaSass => Box::new(SassLifter::new()),
         ArchId::Xtensa => Box::new(XtensaLifter::new()),
+        ArchId::SuperH => Box::new(SuperHLifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -184,6 +186,9 @@ mod tests {
     fn test_get_lifter_xtensa() {
         let l = get_lifter(ArchId::Xtensa);
         assert_eq!(l.arch(), ArchId::Xtensa);
+    fn test_get_lifter_superh() {
+        let l = get_lifter(ArchId::SuperH);
+        assert_eq!(l.arch(), ArchId::SuperH);
         assert!(!l.register_file().registers.is_empty());
     }
 

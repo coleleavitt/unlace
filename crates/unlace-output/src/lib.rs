@@ -7,6 +7,7 @@ pub mod cpp_stl;
 pub mod demangle;
 pub mod instruction_annotations;
 pub mod ir_dump;
+pub mod seh_output;
 
 pub use c_printer::{
     FunctionHeaderInfo, PrintConfig, PrinterAnnotations, compute_array_struct_indices,
@@ -24,3 +25,4 @@ pub use cpp_stl::{
 pub use demangle::{DemangleResult, SymbolKind, SymbolLanguage, demangle, sanitize_for_c};
 pub use instruction_annotations::collect_function_annotations;
 pub use ir_dump::dump_ir;
+pub use seh_output::{SehOutputRegion, render_try_except, render_try_finally};

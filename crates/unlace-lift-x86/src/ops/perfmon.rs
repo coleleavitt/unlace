@@ -6,6 +6,10 @@
 //! later stages can preserve both the architectural dataflow and a readable
 //! intrinsic-style name.
 
+//! TODO(t312): PMC dispatch staging — `lift_rdpmc` exists in both
+//! `perfctr` and `perfmon` (different output shapes); resolve before wiring.
+#![allow(dead_code)]
+
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 

@@ -6,6 +6,10 @@
 //! sensitive, so the lifter preserves the instruction as an annotated
 //! `Callother` rather than pretending it is ordinary arithmetic.
 
+//! TODO(t312): PMC dispatch staging — `lift_rdpmc` exists in both
+//! `perfctr` and `perfmon` (different output shapes); resolve before wiring.
+#![allow(dead_code)]
+
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 

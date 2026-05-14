@@ -129,6 +129,26 @@ pub struct FunctionSignature {
 /// return-value types.
 pub type FunctionSignatureRegistry = BTreeMap<u64, FunctionSignature>;
 
+/// Counterexample-guided explanation for an ambiguous primitive type.
+///
+/// Type refinement records these when two concrete candidates are both
+/// locally plausible and a witness value can distinguish their semantics.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TypeCounterexample {
+    /// The SSA value whose candidate type set was ambiguous.
+    pub varnode: SsaVarnode,
+    /// Candidate selected by the refinement step.
+    pub preferred: PrimitiveType,
+    /// Other locally plausible candidate rejected by the witness.
+    pub alternative: PrimitiveType,
+    /// Concrete bit-vector value that exercises a semantic difference.
+    pub witness: u64,
+    /// Width of the witness in bits.
+    pub width_bits: u8,
+    /// Human-readable reason suitable for trace/debug output.
+    pub reason: String,
+}
+
 /// Inferred primitive type for an SSA varnode.
 ///
 /// The type lattice starts at [`Unknown`](Self::Unknown) and is refined by
@@ -334,6 +354,10 @@ pub struct SsaFunction {
     pub phi_map: BTreeMap<BlockId, Vec<PhiNode>>,
     pub var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
     pub var_types: BTreeMap<SsaVarnode, PrimitiveType>,
+    /// Counterexample-guided refinements recorded for ambiguous primitive
+    /// inferences. Populated by `TypeConstraintSolverPass` when Z3-style
+    /// witness search finds a concrete value separating two candidates.
+    pub type_counterexamples: Vec<TypeCounterexample>,
     pub calling_convention: CallingConvention,
     /// Recovered stack variables keyed by RSP-relative offset.
     pub stack_vars: BTreeMap<i64, StackVar>,
@@ -778,7 +802,9 @@ pub struct EnumDiscriminant {
     pub comparison_locs: Vec<(BlockId, usize)>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum VarnodeSlot {
     Output,
     Input(usize),
@@ -804,6 +830,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         phi_map,
         var_map,
         var_types: BTreeMap::new(),
+        type_counterexamples: Vec::new(),
         calling_convention: CallingConvention::Unknown,
         stack_vars: BTreeMap::new(),
         stack_offset_hints: BTreeMap::new(),

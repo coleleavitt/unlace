@@ -182,6 +182,7 @@ mod tests {
             phi_map,
             var_map,
             var_types: std::collections::BTreeMap::new(),
+            type_counterexamples: Vec::new(),
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: std::collections::BTreeMap::new(),
             foldable_exprs: std::collections::BTreeSet::new(),

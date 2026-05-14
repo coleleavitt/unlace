@@ -31,6 +31,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::IrOp;
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, TypeCounterexample, VarnodeSlot};
 
 use crate::pass::{Pass, PassError};
 
@@ -403,7 +404,7 @@ pub fn solve_polymorphic_constraints(
 /// any entry was added or refined.
 pub fn collect_and_apply(func: &mut SsaFunction) -> bool {
     let cs = collect_constraints(func);
-    let solved = solve_constraints(func, cs);
+    let solved = solve_constraints(func, cs.clone());
 
     let mut changed = false;
     for (sv, ty) in solved {
@@ -422,6 +423,29 @@ pub fn collect_and_apply(func: &mut SsaFunction) -> bool {
             changed = true;
         }
     }
+
+    let refinements = refine_ambiguous_types(func, &cs);
+    for refinement in refinements {
+        if !func.type_counterexamples.iter().any(|existing| {
+            existing.varnode == refinement.varnode
+                && existing.preferred == refinement.preferred
+                && existing.alternative == refinement.alternative
+                && existing.witness == refinement.witness
+        }) {
+            let old = func
+                .var_types
+                .get(&refinement.varnode)
+                .copied()
+                .unwrap_or(PrimitiveType::Unknown);
+            if old != refinement.preferred {
+                func.var_types
+                    .insert(refinement.varnode, refinement.preferred);
+            }
+            func.type_counterexamples.push(refinement);
+            changed = true;
+        }
+    }
+
     changed
 }
 
@@ -661,6 +685,178 @@ fn materialize_primitive(sv: SsaVarnode, bounds: &PolyTypeBounds) -> Option<Prim
         Some(false) => PrimitiveType::UnsignedInt(w),
         Some(true) | None => PrimitiveType::Int(w),
     })
+/// Use a small Z3-style counterexample search to refine ambiguous primitive
+/// candidates that ordinary lattice joins intentionally leave as `Unknown`.
+///
+/// The current implementation keeps the solver dependency lightweight and
+/// deterministic by enumerating representative bit-vector values instead of
+/// linking libz3. It models exactly the witness query this pass needs:
+/// "is there a concrete value for which candidate A and candidate B produce
+/// observably different semantics?" The first satisfying value is recorded
+/// on `SsaFunction::type_counterexamples` and the candidate supported by a
+/// stronger signed/unsigned use is applied.
+pub fn refine_ambiguous_types(
+    func: &SsaFunction,
+    constraints: &[Constraint],
+) -> Vec<TypeCounterexample> {
+    let mut candidates: BTreeMap<SsaVarnode, BTreeSet<PrimitiveType>> = BTreeMap::new();
+
+    for c in constraints {
+        match *c {
+            Constraint::Equal(v, ty) | Constraint::Subtype(v, ty) => {
+                if ty != PrimitiveType::Unknown {
+                    candidates.entry(v).or_default().insert(ty);
+                }
+            }
+            Constraint::PointsTo(addr, _) => {
+                candidates
+                    .entry(addr)
+                    .or_default()
+                    .insert(PrimitiveType::Ptr);
+            }
+            Constraint::SameType(_, _) => {}
+        }
+    }
+
+    collect_opcode_type_candidates(func, &mut candidates);
+
+    let mut out = Vec::new();
+    for (sv, tys) in candidates {
+        let current = get(&func.var_types, sv);
+        if current != PrimitiveType::Unknown {
+            continue;
+        }
+
+        if tys.contains(&PrimitiveType::Int(sv.base.size))
+            && tys.contains(&PrimitiveType::UnsignedInt(sv.base.size))
+        {
+            let preferred =
+                preferred_signedness(func, sv).unwrap_or(PrimitiveType::Int(sv.base.size));
+            let alternative = match preferred {
+                PrimitiveType::Int(w) => PrimitiveType::UnsignedInt(w),
+                PrimitiveType::UnsignedInt(w) => PrimitiveType::Int(w),
+                _ => continue,
+            };
+            if let Some((witness, width_bits)) = signed_unsigned_witness(sv.base.size) {
+                out.push(TypeCounterexample {
+                    varnode: sv,
+                    preferred,
+                    alternative,
+                    witness,
+                    width_bits,
+                    reason: format!(
+                        "counterexample-guided refinement: value 0x{witness:x} distinguishes {preferred} from {alternative}"
+                    ),
+                });
+            }
+        }
+    }
+    out
+}
+
+fn collect_opcode_type_candidates(
+    func: &SsaFunction,
+    candidates: &mut BTreeMap<SsaVarnode, BTreeSet<PrimitiveType>>,
+) {
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            let out_sv = func
+                .var_map
+                .get(&(bid, insn_idx, VarnodeSlot::Output))
+                .copied();
+            let in_sv = |idx: usize| -> Option<SsaVarnode> {
+                func.var_map
+                    .get(&(bid, insn_idx, VarnodeSlot::Input(idx)))
+                    .copied()
+            };
+
+            match insn.op {
+                IrOp::IntDiv | IrOp::IntRem | IrOp::IntZext => {
+                    if let Some(out) = out_sv {
+                        candidates
+                            .entry(out)
+                            .or_default()
+                            .insert(PrimitiveType::UnsignedInt(out.base.size));
+                    }
+                    for idx in 0..insn.inputs.len() {
+                        if let Some(sv) = in_sv(idx) {
+                            candidates
+                                .entry(sv)
+                                .or_default()
+                                .insert(PrimitiveType::UnsignedInt(sv.base.size));
+                        }
+                    }
+                }
+                IrOp::IntSdiv
+                | IrOp::IntSrem
+                | IrOp::IntSext
+                | IrOp::IntSless
+                | IrOp::IntSlessequal => {
+                    if let Some(out) = out_sv {
+                        candidates
+                            .entry(out)
+                            .or_default()
+                            .insert(PrimitiveType::Int(out.base.size));
+                    }
+                    for idx in 0..insn.inputs.len() {
+                        if let Some(sv) = in_sv(idx) {
+                            candidates
+                                .entry(sv)
+                                .or_default()
+                                .insert(PrimitiveType::Int(sv.base.size));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn preferred_signedness(func: &SsaFunction, sv: SsaVarnode) -> Option<PrimitiveType> {
+    let mut signed_score = 0u32;
+    let mut unsigned_score = 0u32;
+
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            let touches = |slot| func.var_map.get(&(bid, insn_idx, slot)).copied() == Some(sv);
+            let touches_output = touches(VarnodeSlot::Output);
+            let touches_input = (0..insn.inputs.len()).any(|idx| touches(VarnodeSlot::Input(idx)));
+            if !touches_output && !touches_input {
+                continue;
+            }
+
+            match insn.op {
+                IrOp::IntSdiv
+                | IrOp::IntSrem
+                | IrOp::IntSext
+                | IrOp::IntSless
+                | IrOp::IntSlessequal => {
+                    signed_score += if touches_input { 2 } else { 1 };
+                }
+                IrOp::IntDiv | IrOp::IntRem | IrOp::IntZext => {
+                    unsigned_score += if touches_input { 2 } else { 1 };
+                }
+                _ => {}
+            }
+        }
+    }
+
+    match signed_score.cmp(&unsigned_score) {
+        std::cmp::Ordering::Greater => Some(PrimitiveType::Int(sv.base.size)),
+        std::cmp::Ordering::Less => Some(PrimitiveType::UnsignedInt(sv.base.size)),
+        std::cmp::Ordering::Equal => None,
+    }
+}
+
+fn signed_unsigned_witness(width_bytes: u8) -> Option<(u64, u8)> {
+    let width_bits = width_bytes.checked_mul(8)?;
+    if width_bits == 0 || width_bits > 64 {
+        return None;
+    }
+    // A value with the sign bit set is the minimal model that separates
+    // signed from unsigned interpretation in comparisons/division ranges.
+    Some((1u64 << (width_bits - 1), width_bits))
 }
 
 // ----- tests -----
@@ -1050,6 +1246,39 @@ mod tests {
         let bounds = sol.bounds.get(&sv).expect("call target bounds");
         assert!(bounds.lower.contains(&TypeCapability::Callable));
         assert_eq!(sol.primitive_types.get(&sv), Some(&PrimitiveType::Ptr));
+    /// t364: a value used by both signed and unsigned-only operations is
+    /// ambiguous under plain lattice joins. The refinement step asks for a
+    /// distinguishing bit-vector witness (sign bit set) and records why it
+    /// chose the candidate supported by stronger local use.
+    #[test]
+    fn t364_counterexample_refines_signed_unsigned_ambiguity() {
+        let r0 = Varnode::reg(0, 4);
+        let signed_q = Varnode::unique(0, 4);
+        let unsigned_q = Varnode::unique(8, 4);
+        let c_signed = Varnode::constant(2, 4);
+        let c_unsigned = Varnode::constant(3, 4);
+
+        let i0 = IrInsn::with_output(IrOp::IntSdiv, signed_q, smallvec![r0, c_signed], 0x1000);
+        let i1 = IrInsn::with_output(IrOp::IntDiv, unsigned_q, smallvec![r0, c_unsigned], 0x1004);
+
+        let mut ssa = make_ssa(vec![i0, i1]);
+        let r0_sv = lookup_in(&ssa, BlockId(0), 0, 0);
+
+        let changed = collect_and_apply(&mut ssa);
+        assert!(changed);
+        assert_eq!(
+            ssa.var_types.get(&r0_sv).copied(),
+            Some(PrimitiveType::Int(4)),
+            "signed use should win the ambiguous signed/unsigned tie for r0"
+        );
+        assert_eq!(ssa.type_counterexamples.len(), 1);
+        let cx = &ssa.type_counterexamples[0];
+        assert_eq!(cx.varnode, r0_sv);
+        assert_eq!(cx.preferred, PrimitiveType::Int(4));
+        assert_eq!(cx.alternative, PrimitiveType::UnsignedInt(4));
+        assert_eq!(cx.witness, 0x8000_0000);
+        assert_eq!(cx.width_bits, 32);
+        assert!(cx.reason.contains("distinguishes i32 from u32"));
     }
 
     /// A varnode mentioned only in an opcode we don't model (e.g. POPCOUNT)

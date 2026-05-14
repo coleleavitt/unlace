@@ -22,7 +22,7 @@ pub fn normalize_dowhile_to_while(func: &mut HirFunction) {
     normalize_scope(&mut func.body);
 }
 
-fn normalize_scope(nodes: &mut Vec<HirNode>) {
+fn normalize_scope(nodes: &mut [HirNode]) {
     for node in nodes.iter_mut() {
         normalize_node(node);
     }

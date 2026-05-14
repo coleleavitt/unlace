@@ -26,6 +26,10 @@ use unlace_ir::{BlockId, Function};
 use crate::hir::HirNode;
 
 /// A structured region recovered from the CFG.
+// `Atomic(HirNode)` dwarfs the other variants in size, but boxing it would
+// ripple through every consumer's pattern-matching of `Region::Atomic`. The
+// enum is short-lived during structuring, so the size cost is acceptable.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Region {
     /// A linear sequence of HirNodes (single block).
@@ -157,10 +161,8 @@ fn collect_loop_body(
             if pred == exit_block || pred == unknown_block {
                 continue;
             }
-            if body.insert(pred) {
-                if pred != header {
-                    worklist.push(pred);
-                }
+            if body.insert(pred) && pred != header {
+                worklist.push(pred);
             }
         }
     }

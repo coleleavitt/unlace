@@ -94,7 +94,7 @@ fn collect_label_returns_inner(nodes: &[HirNode], map: &mut BTreeMap<LabelId, Op
 }
 
 fn replace_rax_assign_goto_with_return(
-    nodes: &mut Vec<HirNode>,
+    nodes: &mut [HirNode],
     label_returns: &BTreeMap<LabelId, Option<SsaVarnode>>,
 ) -> bool {
     let mut changed = false;
@@ -189,7 +189,7 @@ fn rax_return_value(insn: &unlace_ir::IrInsn, label_ret: Option<SsaVarnode>) -> 
 /// Replace `Goto(label)` with `Return(val)` when `label` maps to a return.
 /// Returns true if any replacement was made.
 fn replace_goto_with_return(
-    nodes: &mut Vec<HirNode>,
+    nodes: &mut [HirNode],
     label_returns: &BTreeMap<LabelId, Option<SsaVarnode>>,
 ) -> bool {
     let mut changed = false;

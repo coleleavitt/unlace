@@ -45,7 +45,7 @@ fn recover_guarded_whiles_in_scope(nodes: &mut [HirNode], budget: &mut usize) {
                 else_body: None,
             } if guarded_loop_candidate(then_body) => {
                 *budget -= 1;
-                let cond = cond.clone();
+                let cond = *cond;
                 let mut body = std::mem::take(then_body);
                 recover_guarded_whiles_in_scope(&mut body, budget);
                 *node = HirNode::While { cond, body };

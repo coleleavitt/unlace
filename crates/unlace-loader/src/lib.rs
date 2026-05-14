@@ -126,7 +126,8 @@ pub use msvc_rtti::{
     MsvcVftableMethod, scan_vtables as scan_msvc_vtables,
 };
 pub use pdb_types::{
-    PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types, walk_tpi,
+    PdbBuildInfo, PdbError, PdbField, PdbFunctionId, PdbType, PdbTypeKind, PdbTypes, ProcSig,
+    import_pdb_types, walk_tpi,
 };
 pub use pe::PeLoader;
 pub use wasm_component::{

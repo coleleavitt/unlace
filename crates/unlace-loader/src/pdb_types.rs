@@ -12,6 +12,8 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 use pdb::{FallibleIterator, PDB, SymbolData, TypeData, TypeIndex, Variant};
+use pdb::{FallibleIterator, PDB, TypeData, TypeIndex};
+use pdb::{FallibleIterator, IdData, PDB, TypeData, TypeIndex};
 
 use unlace_ir::ssa::PrimitiveType;
 use unlace_ir::types::{InterfaceMethod, StructFieldType, Type};
@@ -48,6 +50,12 @@ pub struct PdbTypes {
     pub constants: BTreeMap<String, i64>,
     /// Reverse index for [`Self::constants`]: integer value → constant names.
     pub constants_by_value: BTreeMap<i64, Vec<String>>,
+    /// Function/member-function IDs from the PDB IPI stream keyed by IPI item id.
+    pub functions: BTreeMap<u32, PdbFunctionId>,
+    /// BuildInfo records from the PDB IPI stream keyed by IPI item id.
+    pub build_infos: BTreeMap<u32, PdbBuildInfo>,
+    /// String IDs from the PDB IPI stream keyed by IPI item id.
+    pub strings: BTreeMap<u32, String>,
 }
 
 /// A function signature lowered from `LF_PROCEDURE`.
@@ -55,6 +63,34 @@ pub struct PdbTypes {
 pub struct ProcSig {
     pub return_type: Type,
     pub params: Vec<Type>,
+}
+
+/// Per-function identifier lowered from the PDB IPI stream.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PdbFunctionId {
+    /// IPI item id (0x1000-based).
+    pub id: u32,
+    /// Function name carried by LF_FUNC_ID/LF_MFUNC_ID.
+    pub name: String,
+    /// Procedure/member-function type index in the TPI stream.
+    pub function_type: u32,
+    /// Optional enclosing scope id for LF_FUNC_ID.
+    pub scope: Option<u32>,
+    /// Optional parent class/type index for LF_MFUNC_ID.
+    pub parent: Option<u32>,
+    /// Resolved signature when `function_type` points at an LF_PROCEDURE lowered from TPI.
+    pub signature: Option<ProcSig>,
+}
+
+/// BuildInfo record lowered from the PDB IPI stream.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PdbBuildInfo {
+    /// IPI item id (0x1000-based).
+    pub id: u32,
+    /// Raw argument ids carried by LF_BUILDINFO.
+    pub arguments: Vec<u32>,
+    /// Arguments resolved through LF_STRING_ID records when possible.
+    pub resolved_arguments: Vec<String>,
 }
 
 /// Internal simplified representation suitable for unit testing without
@@ -1045,6 +1081,9 @@ fn variant_to_i64(value: Variant) -> Option<i64> {
         Variant::I32(v) => Some(i64::from(v)),
         Variant::I64(v) => Some(v),
     }
+    Ok(lower_cv_table(&table))
+    import_pdb_ipi(&mut pdb, &mut out)?;
+    Ok(out)
 }
 
 fn lower_typedata(td: &TypeData<'_>) -> Option<CvType> {
@@ -1093,6 +1132,114 @@ fn lower_typedata(td: &TypeData<'_>) -> Option<CvType> {
 
 fn ti_to_u32(t: TypeIndex) -> u32 {
     u32::from(t)
+}
+fn id_to_u32(id: pdb::IdIndex) -> u32 {
+    u32::from(id)
+}
+
+fn import_pdb_ipi<'s, R: pdb::Source<'s> + 's>(
+    pdb: &mut PDB<'s, R>,
+    out: &mut PdbTypes,
+) -> Result<(), LoadError> {
+    let id_info = match pdb.id_information() {
+        Ok(info) => info,
+        // Some stripped/old PDBs omit IPI entirely; TPI import should still work.
+        Err(pdb::Error::StreamNotFound(_)) => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+
+    let mut function_ids: BTreeMap<u32, (String, u32, Option<u32>, Option<u32>)> = BTreeMap::new();
+    let mut build_infos: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    let mut strings: BTreeMap<u32, String> = BTreeMap::new();
+
+    let mut iter = id_info.iter();
+    while let Some(item) = iter.next()? {
+        let id = id_to_u32(item.index());
+        let parsed = match item.parse() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        match parsed {
+            IdData::Function(f) => {
+                function_ids.insert(
+                    id,
+                    (
+                        f.name.to_string().to_string(),
+                        ti_to_u32(f.function_type),
+                        f.scope.map(id_to_u32),
+                        None,
+                    ),
+                );
+            }
+            IdData::MemberFunction(f) => {
+                function_ids.insert(
+                    id,
+                    (
+                        f.name.to_string().to_string(),
+                        ti_to_u32(f.function_type),
+                        None,
+                        Some(ti_to_u32(f.parent)),
+                    ),
+                );
+            }
+            IdData::BuildInfo(b) => {
+                build_infos.insert(id, b.arguments.into_iter().map(id_to_u32).collect());
+            }
+            IdData::String(s) => {
+                strings.insert(id, s.name.to_string().to_string());
+            }
+            _ => {}
+        }
+    }
+
+    out.strings = strings;
+    attach_ipi_function_ids(out, function_ids);
+    attach_ipi_build_infos(out, build_infos);
+
+    Ok(())
+}
+
+fn attach_ipi_function_ids(
+    out: &mut PdbTypes,
+    function_ids: BTreeMap<u32, (String, u32, Option<u32>, Option<u32>)>,
+) {
+    out.functions = function_ids
+        .into_iter()
+        .map(|(id, (name, function_type, scope, parent))| {
+            let signature = out.procedures.get(&function_type).cloned();
+            (
+                id,
+                PdbFunctionId {
+                    id,
+                    name,
+                    function_type,
+                    scope,
+                    parent,
+                    signature,
+                },
+            )
+        })
+        .collect();
+}
+
+fn attach_ipi_build_infos(out: &mut PdbTypes, build_infos: BTreeMap<u32, Vec<u32>>) {
+    out.build_infos = build_infos
+        .into_iter()
+        .map(|(id, arguments)| {
+            let resolved_arguments = arguments
+                .iter()
+                .filter_map(|arg| out.strings.get(arg).cloned())
+                .collect();
+            (
+                id,
+                PdbBuildInfo {
+                    id,
+                    arguments,
+                    resolved_arguments,
+                },
+            )
+        })
+        .collect();
 }
 
 // ---------------------------------------------------------------------------
@@ -2054,6 +2201,48 @@ mod tests {
         let sig = out.procedures.get(&0x4003).expect("procedure lowered");
         assert_eq!(sig.return_type, Type::int(4));
         assert_eq!(sig.params, vec![Type::int(4), Type::int(8)]);
+    }
+
+    #[test]
+    fn attaches_ipi_function_ids_to_procedure_signatures() {
+        let mut out = PdbTypes::default();
+        out.procedures.insert(
+            0x4003,
+            ProcSig {
+                return_type: Type::int(4),
+                params: vec![Type::int(4), Type::int(8)],
+            },
+        );
+
+        let function_ids = BTreeMap::from([(0x1000, ("main".to_string(), 0x4003, None, None))]);
+        attach_ipi_function_ids(&mut out, function_ids);
+
+        let func = out.functions.get(&0x1000).expect("function id present");
+        assert_eq!(func.name, "main");
+        assert_eq!(func.function_type, 0x4003);
+        assert_eq!(
+            func.signature.as_ref().unwrap().params,
+            vec![Type::int(4), Type::int(8)]
+        );
+    }
+
+    #[test]
+    fn resolves_buildinfo_arguments_through_string_ids() {
+        let mut out = PdbTypes::default();
+        out.strings.insert(0x1000, "cl.exe".into());
+        out.strings.insert(0x1001, "/O2".into());
+
+        attach_ipi_build_infos(
+            &mut out,
+            BTreeMap::from([(0x1002, vec![0x1000, 0x1001, 0xDEAD])]),
+        );
+
+        let build = out.build_infos.get(&0x1002).expect("build info present");
+        assert_eq!(build.arguments, vec![0x1000, 0x1001, 0xDEAD]);
+        assert_eq!(
+            build.resolved_arguments,
+            vec!["cl.exe".to_string(), "/O2".to_string()]
+        );
     }
 
     #[test]

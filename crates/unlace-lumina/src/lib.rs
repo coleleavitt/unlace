@@ -427,3 +427,4 @@ pub mod privacy_client;
         out
     }
 }
+pub mod collab;

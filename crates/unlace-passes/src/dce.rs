@@ -195,6 +195,7 @@ mod tests {
             vtable_calls: std::collections::BTreeMap::new(),
             cpp_vtable_calls: std::collections::BTreeMap::new(),
             objc_dispatch_calls: std::collections::BTreeMap::new(),
+            go_defer_recover_calls: std::collections::BTreeMap::new(),
             inferred_params: Vec::new(),
             inferred_return_type: unlace_ir::ssa::PrimitiveType::Unknown,
             frame_setup_insns: std::collections::BTreeSet::new(),

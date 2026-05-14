@@ -214,6 +214,7 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
+            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),

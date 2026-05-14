@@ -605,6 +605,9 @@ fn collect_bst_leaves(
         } => {
             // Case 1: This node is a bisection node (IntLess/IntSless).
             if let Some(BisectCmp::LessThan { expr_base, .. }) = extract_bisect_cmp(cond, def_map) {
+            if let Some(BisectCmp::LessThan { expr_base, .. }) =
+                extract_bisect_cmp(cond, def_map)
+            {
                 if expr_base != *target_base {
                     return false;
                 }
@@ -1541,6 +1544,50 @@ mod tests {
         let result = rewrite_range_node(if_chain, &def_map);
         match &result {
             HirNode::Switch { cases, default, .. } => {
+            HirNode::Switch {
+                cases, default, ..
+            } => {
+                assert_eq!(cases.len(), 1);
+                assert_eq!(
+                    cases[0].0,
+                    SwitchCase::Range(1, 10),
+                    "single range test should produce case 1 ... 10"
+                );
+                assert!(default.is_none());
+            }
+            other => panic!("expected Switch, got {other:?}"),
+        }
+    }
+
+    /// Two range-tests on the same variable:
+    /// `if ((unsigned)(x - 1) <= 9) { body1 } else if ((unsigned)(x - 20) <= 10) { body2 }`
+    /// → switch with two range arms: `case 1 ... 10:` and `case 20 ... 30:`.
+    #[test]
+    fn test_two_range_tests_merged_switch() {
+        let x = Varnode::reg(0, 4);
+        let cond1 = sv(256, 1, 1); // range [1, 10]
+        let cond2 = sv(256, 1, 2); // range [20, 30]
+
+        let body_a = vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2000)];
+        let body_b = vec![stmt(IrOp::Copy, Varnode::reg(8, 4), 0x2010)];
+
+        let if_chain = HirNode::If {
+            cond: cond1,
+            then_body: body_a,
+            else_body: Some(vec![HirNode::If {
+                cond: cond2,
+                then_body: body_b,
+                else_body: None,
+            }]),
+        };
+
+        let def_map = make_range_def_map(vec![(cond1, x, 1, 10), (cond2, x, 20, 30)]);
+
+        let result = rewrite_range_node(if_chain, &def_map);
+        match &result {
+            HirNode::Switch {
+                cases, default, ..
+            } => {
                 assert_eq!(cases.len(), 2);
                 assert_eq!(
                     cases[0].0,

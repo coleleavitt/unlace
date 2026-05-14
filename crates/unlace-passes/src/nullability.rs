@@ -444,6 +444,146 @@ mod tests {
             smallvec![k0()],
             0x1020,
         ));
+                if (aliases.contains(&a) && is_zero(b))
+                    || (aliases.contains(&b) && is_zero(a))
+                {
+                    return Some(FirstEvent::Check);
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Returns `true` if `insn`'s output should be added to the alias set —
+/// i.e. the instruction forwards the parameter value to a new Varnode.
+fn forwarding_output(insn: &unlace_ir::IrInsn, aliases: &BTreeSet<Varnode>) -> Option<bool> {
+    let _ = insn.output?;
+    let any_param_input = insn.inputs.iter().any(|i| aliases.contains(i));
+    if !any_param_input {
+        return Some(false);
+    }
+    let forwards = matches!(
+        insn.op,
+        IrOp::Copy | IrOp::IntAdd | IrOp::IntSub | IrOp::Ptradd | IrOp::Ptrsub | IrOp::Cast
+    );
+    Some(forwards)
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use smallvec::smallvec;
+    use unlace_ir::ssa::{build_ssa, CallingConvention};
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
+
+    // RDI = parameter 0 under System V.
+    const RDI: u64 = 56;
+    // RSI = parameter 1 under System V.
+    const RSI: u64 = 48;
+
+    fn rdi() -> Varnode {
+        Varnode::reg(RDI, 8)
+    }
+    fn rsi() -> Varnode {
+        Varnode::reg(RSI, 8)
+    }
+    fn u(off: u64) -> Varnode {
+        Varnode::unique(off, 8)
+    }
+    fn k0() -> Varnode {
+        Varnode::constant(0, 8)
+    }
+    fn k(v: u64) -> Varnode {
+        Varnode::constant(v, 8)
+    }
+    fn space_const() -> Varnode {
+        // Synthetic "space id" operand for LOAD/STORE — its value is
+        // irrelevant to this analysis.
+        Varnode::constant(0, 8)
+    }
+
+    fn build(blocks: Vec<BasicBlock>) -> SsaFunction {
+        let mut func = Function::new("t", BlockId(0), 0x1000);
+        for b in blocks {
+            func.insert_block(b);
+        }
+        let mut ssa = build_ssa(func);
+        ssa.calling_convention = CallingConvention::SystemV;
+        ssa
+    }
+
+    /// Single-block deref: `*p` with no null check ⇒ `Nonnull`.
+    #[test]
+    fn test_unconditional_deref_is_nonnull() {
+        // BB0: tmp = LOAD(space, RDI); RETURN tmp
+        let tmp = u(0);
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            tmp,
+            smallvec![space_const(), rdi()],
+            0x1000,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![tmp], 0x1004));
+
+        let ssa = build(vec![bb0]);
+        let res = infer_param_nullability(&ssa);
+        assert_eq!(res.get(&0), Some(&Nullability::Nonnull));
+        // No second parameter (RSI never read).
+        assert!(!res.contains_key(&1));
+    }
+
+    /// Null check before any deref ⇒ `Nullable`.
+    #[test]
+    fn test_explicit_null_check_is_nullable() {
+        // BB0:
+        //   cmp = INT_EQUAL RDI, 0
+        //   CBRANCH BB2, cmp     (if RDI==0 jump to BB2)
+        // BB1 (fallthrough, RDI != 0):
+        //   tmp = LOAD(space, RDI)
+        //   RETURN tmp
+        // BB2 (null path):
+        //   RETURN 0
+        let cmp = u(0);
+        let load_tmp = u(8);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntEqual,
+            cmp,
+            smallvec![rdi(), k0()],
+            0x1000,
+        ));
+        bb0.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![k(0x2000), cmp],
+            0x1004,
+        ));
+        bb0.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            load_tmp,
+            smallvec![space_const(), rdi()],
+            0x1010,
+        ));
+        bb1.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![load_tmp],
+            0x1014,
+        ));
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![k0()], 0x1020));
 
         let ssa = build(vec![bb0, bb1, bb2]);
         let res = infer_param_nullability(&ssa);

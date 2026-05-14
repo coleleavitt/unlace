@@ -70,6 +70,7 @@ pub mod licm;
 pub mod modulo_idiom;
 pub mod nday_correlate;
 pub mod noreturn;
+pub mod nullability;
 pub mod noreturn_propagation;
 pub mod nullability;
 pub mod objc_blocks;

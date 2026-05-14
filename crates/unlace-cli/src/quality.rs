@@ -73,6 +73,51 @@ pub struct FunctionQuality {
     pub unknown_types: usize,
     /// Raw `__asm { }` blocks the structurer could not lower.
     pub asm_blocks: usize,
+
+    // --- Batch 0+ extended control-flow counters ---
+    /// `if` / `else` statements (counts `If` + `IfCmp` + `GuardedIf`).
+    pub if_statements: usize,
+    /// `while` loops (pre-test).
+    pub while_loops: usize,
+    /// `do { ... } while` loops (post-test).
+    pub do_while_loops: usize,
+    /// C-style `for (init; cond; update)` loops.
+    pub for_loops: usize,
+    /// Ternary expressions (`cond ? a : b`).
+    pub ternary_exprs: usize,
+    /// `break` statements.
+    pub break_statements: usize,
+    /// `continue` statements.
+    pub continue_statements: usize,
+    /// Tail-call rewrites (`return callee();` form).
+    pub tail_calls: usize,
+    /// `try / catch` constructs (C++ EH).
+    pub try_catch_blocks: usize,
+    /// `try / finally` constructs (MSVC SEH).
+    pub try_finally_blocks: usize,
+
+    // --- Batch 0+ extended signature / recognition counters ---
+    /// Functions with at least one inferred parameter.
+    pub functions_with_params: usize,
+    /// Total inferred parameters across all functions.
+    pub inferred_params: usize,
+    /// Libc / runtime call sites annotated with a canonical name
+    /// (`ssa.libc_call_annotations`).
+    pub libc_annotated_calls: usize,
+    /// Rust panic sites detected (`ssa.panic_sites`).
+    pub rust_panic_sites: usize,
+    /// Functions detected as `__noreturn`.
+    pub noreturn_functions: usize,
+    /// C++ vtable dispatch sites resolved.
+    pub cpp_vtable_calls: usize,
+    /// ObjC `objc_msgSend` sites resolved.
+    pub objc_dispatch_calls: usize,
+    /// Crypto-algorithm annotations recovered.
+    pub crypto_annotations: usize,
+    /// `coroutine_sites` entries (C++20 await/yield).
+    pub coroutine_sites: usize,
+    /// MSVC SEH region count.
+    pub seh_regions: usize,
 }
 
 impl FunctionQuality {
@@ -112,6 +157,27 @@ impl FunctionQuality {
             q.struct_fields_recovered += layout.fields.len();
         }
 
+        // Batch 0+ signature / recognition counters from SSA state.
+        let param_count = ssa
+            .finalized_signature
+            .as_ref()
+            .map(|s| s.params.len())
+            .unwrap_or(ssa.inferred_params.len());
+        q.inferred_params = param_count;
+        if param_count > 0 {
+            q.functions_with_params = 1;
+        }
+        q.libc_annotated_calls = ssa.libc_call_annotations.len();
+        q.rust_panic_sites = ssa.panic_sites.len();
+        if ssa.noreturn {
+            q.noreturn_functions = 1;
+        }
+        q.cpp_vtable_calls = ssa.cpp_vtable_calls.len();
+        q.objc_dispatch_calls = ssa.objc_dispatch_calls.len();
+        q.crypto_annotations = ssa.crypto_annotations.len();
+        q.coroutine_sites = ssa.coroutine_sites.len();
+        q.seh_regions = ssa.seh_regions.len();
+
         // --- HIR-derived counters ---
         count_hir_nodes(&hir.body, &mut q);
 
@@ -148,6 +214,7 @@ fn count_hir_nodes(body: &[HirNode], q: &mut FunctionQuality) {
                 else_body,
                 ..
             } => {
+                q.if_statements += 1;
                 count_hir_nodes(then_body, q);
                 if let Some(e) = else_body {
                     count_hir_nodes(e, q);
@@ -158,16 +225,33 @@ fn count_hir_nodes(body: &[HirNode], q: &mut FunctionQuality) {
                 else_body,
                 ..
             } => {
+                q.if_statements += 1;
                 count_hir_nodes(then_body, q);
                 count_hir_nodes(else_body, q);
             }
-            HirNode::While { body, .. }
-            | HirNode::DoWhile { body, .. }
-            | HirNode::For { body, .. } => count_hir_nodes(body, q),
+            HirNode::While { body, .. } => {
+                q.while_loops += 1;
+                count_hir_nodes(body, q);
+            }
+            HirNode::DoWhile { body, .. } => {
+                q.do_while_loops += 1;
+                count_hir_nodes(body, q);
+            }
+            HirNode::For { body, .. } => {
+                q.for_loops += 1;
+                count_hir_nodes(body, q);
+            }
+            HirNode::Ternary { .. }
+            | HirNode::GuardedTernary { .. }
+            | HirNode::CselTernary { .. } => q.ternary_exprs += 1,
+            HirNode::Break => q.break_statements += 1,
+            HirNode::Continue => q.continue_statements += 1,
+            HirNode::TailCall { .. } => q.tail_calls += 1,
             HirNode::TryCatch {
                 try_body,
                 catch_arms,
             } => {
+                q.try_catch_blocks += 1;
                 count_hir_nodes(try_body, q);
                 for (_, arm) in catch_arms {
                     count_hir_nodes(arm, q);
@@ -177,6 +261,7 @@ fn count_hir_nodes(body: &[HirNode], q: &mut FunctionQuality) {
                 try_body,
                 finally_body,
             } => {
+                q.try_finally_blocks += 1;
                 count_hir_nodes(try_body, q);
                 count_hir_nodes(finally_body, q);
             }
@@ -232,6 +317,27 @@ pub struct QualityTotals {
     pub labels_emitted: usize,
     pub unknown_types: usize,
     pub asm_blocks: usize,
+    // Batch 0+ extended counters
+    pub if_statements: usize,
+    pub while_loops: usize,
+    pub do_while_loops: usize,
+    pub for_loops: usize,
+    pub ternary_exprs: usize,
+    pub break_statements: usize,
+    pub continue_statements: usize,
+    pub tail_calls: usize,
+    pub try_catch_blocks: usize,
+    pub try_finally_blocks: usize,
+    pub functions_with_params: usize,
+    pub inferred_params: usize,
+    pub libc_annotated_calls: usize,
+    pub rust_panic_sites: usize,
+    pub noreturn_functions: usize,
+    pub cpp_vtable_calls: usize,
+    pub objc_dispatch_calls: usize,
+    pub crypto_annotations: usize,
+    pub coroutine_sites: usize,
+    pub seh_regions: usize,
 }
 
 impl QualityTotals {
@@ -248,6 +354,26 @@ impl QualityTotals {
         self.labels_emitted += q.labels_emitted;
         self.unknown_types += q.unknown_types;
         self.asm_blocks += q.asm_blocks;
+        self.if_statements += q.if_statements;
+        self.while_loops += q.while_loops;
+        self.do_while_loops += q.do_while_loops;
+        self.for_loops += q.for_loops;
+        self.ternary_exprs += q.ternary_exprs;
+        self.break_statements += q.break_statements;
+        self.continue_statements += q.continue_statements;
+        self.tail_calls += q.tail_calls;
+        self.try_catch_blocks += q.try_catch_blocks;
+        self.try_finally_blocks += q.try_finally_blocks;
+        self.functions_with_params += q.functions_with_params;
+        self.inferred_params += q.inferred_params;
+        self.libc_annotated_calls += q.libc_annotated_calls;
+        self.rust_panic_sites += q.rust_panic_sites;
+        self.noreturn_functions += q.noreturn_functions;
+        self.cpp_vtable_calls += q.cpp_vtable_calls;
+        self.objc_dispatch_calls += q.objc_dispatch_calls;
+        self.crypto_annotations += q.crypto_annotations;
+        self.coroutine_sites += q.coroutine_sites;
+        self.seh_regions += q.seh_regions;
     }
 }
 
@@ -345,9 +471,66 @@ pub fn render_markdown(report: &BinaryQuality) -> String {
 
     render_table(report, &mut s);
     let _ = writeln!(s);
+    render_extended_totals(&report.totals, &mut s);
+    let _ = writeln!(s);
     render_classification(&report.totals, &mut s);
 
     s
+}
+
+/// Aggregate-only summary for the Batch 0+ extended counters. Per-function
+/// renderings would double the column width; the totals are what feeds
+/// regression baselines.
+fn render_extended_totals(t: &QualityTotals, s: &mut String) {
+    use std::fmt::Write;
+    let _ = writeln!(s, "## Extended totals");
+    let _ = writeln!(s);
+    let _ = writeln!(
+        s,
+        "### Control flow\n\
+         - if statements: {if_s}\n\
+         - while loops: {wh}\n\
+         - do-while loops: {dw}\n\
+         - for loops: {fl}\n\
+         - ternary exprs: {te}\n\
+         - break / continue: {br} / {co}\n\
+         - tail calls: {tc}\n\
+         - try-catch / try-finally: {tcb} / {tfb}\n",
+        if_s = t.if_statements,
+        wh = t.while_loops,
+        dw = t.do_while_loops,
+        fl = t.for_loops,
+        te = t.ternary_exprs,
+        br = t.break_statements,
+        co = t.continue_statements,
+        tc = t.tail_calls,
+        tcb = t.try_catch_blocks,
+        tfb = t.try_finally_blocks,
+    );
+    let _ = writeln!(
+        s,
+        "### Signatures / recognition\n\
+         - functions with params: {fp}\n\
+         - inferred params (total): {ip}\n\
+         - libc-annotated calls: {lc}\n\
+         - noreturn functions: {nr}\n\
+         - rust panic sites: {rp}\n\
+         - C++ vtable calls: {cv}\n\
+         - ObjC dispatch calls: {od}\n\
+         - crypto annotations: {ca}\n\
+         - coroutine sites: {cs}\n\
+         - SEH regions: {sr}",
+        fp = t.functions_with_params,
+        ip = t.inferred_params,
+        lc = t.libc_annotated_calls,
+        nr = t.noreturn_functions,
+        rp = t.rust_panic_sites,
+        cv = t.cpp_vtable_calls,
+        od = t.objc_dispatch_calls,
+        ca = t.crypto_annotations,
+        cs = t.coroutine_sites,
+        sr = t.seh_regions,
+    );
 }
 
 /// Per-function counter table plus the `TOTAL` row.

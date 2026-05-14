@@ -21,6 +21,7 @@ pub mod copy_prop;
 pub mod coverage_ingest;
 pub mod qemu_tcg;
 pub mod boost_recognize;
+pub mod builtin_recognize;
 pub mod cpp_stl;
 pub mod cpp_variant;
 pub mod cpp_lambda;
@@ -109,6 +110,8 @@ pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bitfield_idioms::BitfieldIdiomPass;
 pub use bmi_idioms::BmiIdiomPass;
 pub use bool_simplify::BoolSimplifyPass;
+pub use crypto_idioms::CryptoIdiomPass;
+pub use crypto_idioms::CryptoIdiomPass;
 pub use builtin_recognize::{
     BuiltinAnnotation, recognize_builtins, recognize_builtins_with_resolver,
 };

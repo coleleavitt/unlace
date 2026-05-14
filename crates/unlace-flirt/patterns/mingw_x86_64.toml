@@ -1,0 +1,91 @@
+# MinGW (GCC on Windows) x86-64 FLIRT signatures
+
+[[pattern]]
+name = "strlen"
+bytes = "554889e54883ec204889cff2ae48f7d0"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "strcpy"
+bytes = "554889e54883ec204889cf4889f6"
+mask = "ffffffffffffffffffffffffffff"
+length = 24
+
+[[pattern]]
+name = "memcpy"
+bytes = "554889e54883ec204889cf4889f64889d1f3a4"
+mask = "ffffffffffffffffffffffffffffffffffffff"
+length = 20
+
+[[pattern]]
+name = "memset"
+bytes = "554889e54883ec204889cf4088f64889d1f3aa"
+mask = "ffffffffffffffffffffffffffffffffffffff"
+length = 20
+
+[[pattern]]
+name = "malloc"
+bytes = "554889e54883ec204889cfe800000000"
+mask = "ffffffffffffffffffffffff00000000"
+length = 32
+
+[[pattern]]
+name = "calloc"
+bytes = "554889e54883ec204889cf4889f6e8"
+mask = "ffffffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "free"
+bytes = "554889e54883ec204885c97401c3"
+mask = "ffffffffffffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "printf"
+bytes = "554889e54883ec404889e04889442410"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "puts"
+bytes = "554889e54883ec204889cfe800000000"
+mask = "ffffffffffffffffffffffff00000000"
+length = 16
+
+[[pattern]]
+name = "exit"
+bytes = "554889e54883ec204889f7e800000000"
+mask = "ffffffffffffffffffffffff00000000"
+length = 12
+
+[[pattern]]
+name = "__main"
+bytes = "554889e54883ec20833d00000000"
+mask = "ffffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "__mingw_CRTStartup"
+bytes = "554889e54156415541544157534883ec"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "mainCRTStartup"
+bytes = "4883ec28e80000000048"
+mask = "ffffffffff00000000ff"
+length = 16
+
+[[pattern]]
+name = "_setjmp"
+bytes = "554889e5488b0424488907488967"
+mask = "ffffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "longjmp"
+bytes = "554889e5488b674848894c2408"
+mask = "ffffffffffffffffffffffffff"
+length = 32

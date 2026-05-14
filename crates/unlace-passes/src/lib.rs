@@ -66,6 +66,7 @@ pub mod op_type_binding;
 pub mod opaque_pred;
 pub mod packet_struct;
 pub mod pass;
+pub mod path_sensitive;
 pub mod printf_type_infer;
 pub mod prologue_elim;
 pub mod protobuf_recognize;

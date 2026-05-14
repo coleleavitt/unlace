@@ -290,3 +290,13 @@ fn lift_binop(ops: &mut Vec<IrInsn>, op: IrOp, rd: u8, rs1: u8, src2: &Src2, add
         ));
     }
 }
+
+// t331 — SPARC v9 callother tags for privileged/atomic/window operations.
+pub const CALLOTHER_SPARC_SAVE: u64 = 0x5350_5243_0001;
+pub const CALLOTHER_SPARC_RESTORE: u64 = 0x5350_5243_0002;
+pub const CALLOTHER_SPARC_CAS: u64 = 0x5350_5243_0003;
+pub const CALLOTHER_SPARC_MEMBAR: u64 = 0x5350_5243_0004;
+pub const CALLOTHER_SPARC_FLUSH: u64 = 0x5350_5243_0005;
+pub const CALLOTHER_SPARC_POPC: u64 = 0x5350_5243_0006;
+pub const CALLOTHER_SPARC_MOVCC: u64 = 0x5350_5243_0007;
+pub const CALLOTHER_SPARC_PREFETCH: u64 = 0x5350_5243_0008;

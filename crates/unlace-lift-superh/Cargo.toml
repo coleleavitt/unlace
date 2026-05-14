@@ -1,0 +1,10 @@
+[package]
+name = "unlace-lift-superh"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+unlace-ir = { workspace = true }
+smallvec = { workspace = true }
+
+[dev-dependencies]

@@ -52,6 +52,7 @@ pub enum ArchId {
     TriCore,
     Sharc,
     TiC6x,
+    Evm,
     Unknown(u16),
 }
 
@@ -104,6 +105,7 @@ impl fmt::Display for ArchId {
             Self::TriCore => f.write_str("tricore"),
             Self::Sharc => f.write_str("sharc"),
             Self::TiC6x => f.write_str("tic6x"),
+            Self::Evm => f.write_str("evm"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

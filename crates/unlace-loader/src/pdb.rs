@@ -11,36 +11,6 @@ use pdb::{PDB, Rva, SymbolData, TypeData, TypeIndex};
 use unlace_ir::ssa::CallingConvention;
 
 use crate::error::LoadError;
-
-/// A PDB inlinee site record mapping an inlined callee back to its call site.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InlineeSite {
-    /// Function ID (from IPI) of the inlined callee.
-    pub inlinee_id: u32,
-    /// Source file name (from file checksums sub-stream).
-    pub file_name: Option<String>,
-    /// Source line number where the inlined function was defined.
-    pub line: u32,
-    /// Code offset within the parent function where inlined code starts.
-    pub code_offset: u32,
-    /// Length of the inlined code region in bytes.
-    pub code_length: u32,
-}
-
-/// Collected inlinee site information from a PDB module.
-#[derive(Debug, Clone, Default)]
-pub struct InlineeSiteMap {
-    /// Inlinee sites keyed by the parent function's offset.
-    pub sites: Vec<InlineeSite>,
-}
-
-impl InlineeSiteMap {
-    /// Look up all inlinee sites at a given code offset within their parent.
-    pub fn sites_at_offset(&self, offset: u32) -> Vec<&InlineeSite> {
-        self.sites.iter().filter(|s| s.code_offset <= offset && offset < s.code_offset + s.code_length).collect()
-    }
-}
-
 use crate::image::{Symbol, SymbolKind};
 
 /// Source location for a given RVA.
@@ -446,30 +416,5 @@ mod tests {
     fn import_real_pdb() {
         let info = import_pdb(Path::new("fixtures/test.pdb")).unwrap();
         assert!(!info.symbols.is_empty(), "should extract symbols from PDB");
-    }
-}
-
-#[cfg(test)]
-mod inlinee_tests {
-    use super::*;
-
-    #[test]
-    fn sites_at_offset_filters_correctly() {
-        let map = InlineeSiteMap {
-            sites: vec![
-                InlineeSite { inlinee_id: 1, file_name: Some("foo.cpp".into()), line: 10, code_offset: 0, code_length: 20 },
-                InlineeSite { inlinee_id: 2, file_name: Some("bar.cpp".into()), line: 50, code_offset: 30, code_length: 10 },
-            ],
-        };
-        let at_5 = map.sites_at_offset(5);
-        assert_eq!(at_5.len(), 1);
-        assert_eq!(at_5[0].inlinee_id, 1);
-
-        let at_35 = map.sites_at_offset(35);
-        assert_eq!(at_35.len(), 1);
-        assert_eq!(at_35[0].inlinee_id, 2);
-
-        let at_50 = map.sites_at_offset(50);
-        assert!(at_50.is_empty());
     }
 }

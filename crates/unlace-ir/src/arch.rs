@@ -37,7 +37,6 @@ pub enum ArchId {
     I8051,
     Hexagon,
     Pic16,
-    Stm8,
     Sharc,
     SharcBlackfin,
     TiC6x,
@@ -47,7 +46,6 @@ pub enum ArchId {
     SpirV,
     AppleAgx,
     M6502,
-    Stm8,
     Unknown(u16),
 }
 
@@ -85,7 +83,6 @@ impl fmt::Display for ArchId {
             Self::I8051 => f.write_str("i8051"),
             Self::Hexagon => f.write_str("hexagon"),
             Self::Pic16 => f.write_str("pic16"),
-            Self::Stm8 => f.write_str("stm8"),
             Self::Sharc => f.write_str("sharc"),
             Self::SharcBlackfin => f.write_str("sharc-blackfin"),
             Self::TiC6x => f.write_str("tic6x"),
@@ -95,7 +92,6 @@ impl fmt::Display for ArchId {
             Self::SpirV => f.write_str("spirv"),
             Self::AppleAgx => f.write_str("appleagx"),
             Self::M6502 => f.write_str("m6502"),
-            Self::Stm8 => f.write_str("stm8"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

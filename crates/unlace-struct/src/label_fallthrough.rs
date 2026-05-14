@@ -253,20 +253,6 @@ mod tests {
             byref_locals: BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
-            noreturn: false,
-            composite_var_types: BTreeMap::new(),
-            is_ctor: false,
-            is_dtor: false,
-            class_name: None,
-            merged_names: BTreeMap::new(),
-            objc_dispatch_calls: BTreeMap::new(),
-            indirect_branch_kinds: BTreeMap::new(),
-            byref_boxes: BTreeMap::new(),
-            byref_params: BTreeSet::new(),
-            var_role_names: BTreeMap::new(),
-            finalized_signature: None,
-            byref_locals: BTreeSet::new(),
-            stack_frame: None,
         }
     }
 

@@ -22,9 +22,7 @@ use unlace_ir::{
 };
 
 use crate::ops::{arithmetic, bitwise, control_flow, data_move};
-use crate::register_file::{
-    SME_ZA, SME_ZA_SIZE, SVE_Z_SIZE, aarch64_register_file, reg_varnode, sve_z_offset,
-};
+use crate::register_file::{aarch64_register_file, reg_varnode};
 
 thread_local! {
     static ARM64_CS: RefCell<Option<Capstone>> = const { RefCell::new(None) };
@@ -172,28 +170,6 @@ impl ArmLifter {
         }
 
         let raw = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        // t294/t305 — TME system instructions are newer than the Capstone
-        // version used by this workspace. Decode them before Capstone so
-        // they don't fall through as HINT/SYS or Unimplemented.
-        if let Some(tme) = try_aarch64_tme(raw) {
-            let mut ctx = LiftCtx::new(addr);
-            emit_aarch64_tme(&mut ctx, &tme);
-            return Ok(LiftedInsn {
-                ir_ops: ctx.ops,
-                len: 4,
-            });
-        }
-
-        // t296/t301 -- SME outer-product instructions.
-        if let Some(sme_op) = try_aarch64_sme_outer_product(raw) {
-            let mut ctx = LiftCtx::new(addr);
-            emit_aarch64_sme_outer_product(&mut ctx, &sme_op);
-            return Ok(LiftedInsn {
-                ir_ops: ctx.ops,
-                len: 4,
-            });
-        }
-
         // t225 — register-form PAC/AUTH/XPAC: emit a dedicated Callother
         // intrinsic instead of folding to a nop. Done before the broader
         // PAC/BTI nop filter so the explicitly-lifted variants take
@@ -2305,10 +2281,6 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_ST3 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST3),
         Arm64Insn::ARM64_INS_ST4 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST4),
 
-        // t301 — AArch64 SME outer-product scaffolding. Capstone 0.14 does
-        // not expose SME-specific instruction ids yet, so decode by mnemonic.
-        _ if emit_aarch64_sme_outer_product(ctx, insn, detail) => {}
-
         _ => ctx.emit_unimplemented(),
     }
 }
@@ -2934,16 +2906,6 @@ pub const CALLOTHER_AARCH64_XPACI: u64 = 0x412;
 pub const CALLOTHER_AARCH64_XPACD: u64 = 0x413;
 
 /// Decoded register-form PAC/AUTH/XPAC instruction (t225).
-// AArch64 memory barrier / fence callother IDs for C11 memory model
-pub const CALLOTHER_AARCH64_DMB: u64 = 0x570;
-pub const CALLOTHER_AARCH64_DSB: u64 = 0x571;
-pub const CALLOTHER_AARCH64_ISB: u64 = 0x572;
-
-pub const CALLOTHER_AARCH64_XPACD: u64 = 0x417;
-pub const CALLOTHER_AARCH64_PACGA: u64 = 0x418;
-pub const CALLOTHER_AARCH64_STRIP: u64 = 0x419;
-
-/// Decoded register-form PAC/AUTH/XPAC instruction (t300).
 ///
 /// `value` is the X-register being authenticated/signed (the `Xd` operand
 /// — both destination and input value). `modifier` is the X-register
@@ -3029,78 +2991,6 @@ fn emit_pac_callother(ctx: &mut LiftCtx, pac: &PacAuthDecoded) {
     ctx.emit(IrInsn::with_output(IrOp::Callother, xd, inputs, ctx.addr));
 }
 
-// ── t294/t305 — AArch64 Transactional Memory Extension (TME) ───────────
-//
-// TSTART/TCOMMIT live in the system-instruction encoding space:
-//   BaseSystemI:      bits[31:22] = 1101010100
-//   TME subspace:     bits[20:12] = 000110011
-//   op2:              bits[7:5]   = 011
-//   TSTART:           L=1, CRm=0000, Rt = destination X register
-//   TCOMMIT:          L=0, CRm=0000, Rt = 11111
-//
-// We model both as Callother intrinsics because transaction begin/commit
-// affect hidden architectural transaction state and memory ordering rather
-// than ordinary registers/memory. TSTART additionally returns the architectural
-// status code in Rt, so its Callother has Rt as output.
-
-/// `Callother` tag for AArch64 TME `TSTART Xt`.
-/// Emitted as `Xt = Callother(CALLOTHER_AARCH64_TSTART)`.
-pub const CALLOTHER_AARCH64_TSTART: u64 = 0x42A;
-/// `Callother` tag for AArch64 TME `TCOMMIT`.
-/// Emitted as `Callother(CALLOTHER_AARCH64_TCOMMIT)`.
-pub const CALLOTHER_AARCH64_TCOMMIT: u64 = 0x42B;
-pub const CALLOTHER_AARCH64_TTEST: u64 = 0x42C;
-pub const CALLOTHER_AARCH64_TCANCEL: u64 = 0x42D;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Aarch64TmeDecoded {
-    Tstart { rt: u8 },
-    Tcommit,
-}
-
-/// Decode the FEAT_TME TSTART/TCOMMIT instructions directly from the raw
-/// A64 word. The in-tree Capstone may not know these mnemonics, so this
-/// pre-decode keeps the lifter deterministic across host Capstone versions.
-pub fn try_aarch64_tme(insn: u32) -> Option<Aarch64TmeDecoded> {
-    const BASE_MASK: u32 = 0xFFDF_F0E0;
-    const TME_SYSTEM_BASE: u32 = 0xD503_3060;
-
-    if (insn & BASE_MASK) != TME_SYSTEM_BASE {
-        return None;
-    }
-
-    let l = (insn >> 21) & 1;
-    let crm = (insn >> 8) & 0xF;
-    let rt = (insn & 0x1F) as u8;
-
-    match (l, crm, rt) {
-        (1, 0, rt) if rt <= 30 => Some(Aarch64TmeDecoded::Tstart { rt }),
-        (0, 0, 31) => Some(Aarch64TmeDecoded::Tcommit),
-        _ => None,
-    }
-}
-
-fn emit_aarch64_tme(ctx: &mut LiftCtx, tme: &Aarch64TmeDecoded) {
-    match *tme {
-        Aarch64TmeDecoded::Tstart { rt } => {
-            let dst = xreg_varnode(rt);
-            ctx.emit(IrInsn::with_output(
-                IrOp::Callother,
-                dst,
-                smallvec![Varnode::constant(CALLOTHER_AARCH64_TSTART, 8)],
-                ctx.addr,
-            ));
-        }
-        Aarch64TmeDecoded::Tcommit => {
-            ctx.emit(IrInsn::without_output(
-                IrOp::Callother,
-                smallvec![Varnode::constant(CALLOTHER_AARCH64_TCOMMIT, 8)],
-                ctx.addr,
-            ));
-        }
-    }
-}
-
 /// Canonical AArch64 CSEL intrinsic tag. Emitted by `lift_csel` as
 /// `Callother(CALLOTHER_AARCH64_CSEL, cond, Rn, Rm) → Rd`, optionally
 /// followed by a trailing `Varnode::constant(cc, 1)` input carrying the
@@ -3131,38 +3021,6 @@ pub const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
 /// SVE PTRUE — set predicate to all-true for element size.
 pub const CALLOTHER_SVE_PTRUE: u64 = 0x429;
 
-// AArch64 SME (Scalable Matrix Extension) callother IDs
-pub const CALLOTHER_SME_SMSTART: u64 = 0x500;
-pub const CALLOTHER_SME_SMSTOP: u64 = 0x501;
-pub const CALLOTHER_SME_FMOPA: u64 = 0x510;
-pub const CALLOTHER_SME_FMOPS: u64 = 0x511;
-pub const CALLOTHER_SME_SMOPA: u64 = 0x512;
-pub const CALLOTHER_SME_UMOPA: u64 = 0x513;
-pub const CALLOTHER_SME_ZERO: u64 = 0x520;
-pub const CALLOTHER_SME_MOVA_FROM_TILE: u64 = 0x530;
-pub const CALLOTHER_SME_MOVA_TO_TILE: u64 = 0x531;
-pub const CALLOTHER_SME_ADDHA: u64 = 0x540;
-pub const CALLOTHER_SME_ADDVA: u64 = 0x541;
-// AArch64 BTI (Branch Target Identification) callother IDs
-pub const CALLOTHER_AARCH64_BTI_C: u64 = 0x550;
-pub const CALLOTHER_AARCH64_BTI_J: u64 = 0x551;
-pub const CALLOTHER_AARCH64_BTI_JC: u64 = 0x552;
-// ARM TrustZone / exception-level transition callother IDs
-pub const CALLOTHER_ARM_SMC: u64 = 0x560;
-pub const CALLOTHER_ARM_SVC: u64 = 0x561;
-pub const CALLOTHER_ARM_HVC: u64 = 0x562;
-pub const CALLOTHER_ARM_ERET: u64 = 0x563;
-
-// ── SME Callother tags (0x42A..0x42D) ──────────────────────────────────
-/// SME FMOPA outer-product accumulate into ZA. Inputs: tag, pg, za, zn, zm.
-pub const CALLOTHER_SME_FMOPA: u64 = 0x42A;
-/// SME FMOPS outer-product subtract/accumulate into ZA. Inputs: tag, pg, za, zn, zm.
-pub const CALLOTHER_SME_FMOPS: u64 = 0x42B;
-/// SME SMOPA signed integer outer-product accumulate into ZA.
-pub const CALLOTHER_SME_SMOPA: u64 = 0x42C;
-/// SME UMOPA unsigned integer outer-product accumulate into ZA.
-pub const CALLOTHER_SME_UMOPA: u64 = 0x42D;
-
 /// Emit a generic SVE `Callother` intrinsic.
 ///
 /// Layout: `Callother(tag, pg_index, zd_index, operands…) → void`.
@@ -3175,91 +3033,6 @@ pub fn emit_sve_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varno
         smallvec::smallvec![Varnode::constant(tag, 8), Varnode::constant(pg as u64, 1),];
     inputs.extend_from_slice(operands);
     ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
-}
-
-pub(crate) fn emit_sme_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varnode]) {
-    let mut inputs: smallvec::SmallVec<[Varnode; 3]> =
-        smallvec::smallvec![Varnode::constant(tag, 8), Varnode::constant(pg as u64, 1),];
-    inputs.extend_from_slice(operands);
-    ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
-}
-
-fn aarch64_predicate_reg_index(reg: capstone::RegId) -> Option<u8> {
-    use capstone::arch::arm64::Arm64Reg;
-    let id = reg.0 as u32;
-    let base = Arm64Reg::ARM64_REG_P0;
-    if (base..=base + 15).contains(&id) {
-        Some((id - base) as u8)
-    } else {
-        None
-    }
-}
-
-fn sme_outer_product_tag(mnemonic: &str) -> Option<u64> {
-    match mnemonic.to_ascii_lowercase().as_str() {
-        "fmopa" => Some(CALLOTHER_SME_FMOPA),
-        "fmops" => Some(CALLOTHER_SME_FMOPS),
-        "smopa" => Some(CALLOTHER_SME_SMOPA),
-        "umopa" => Some(CALLOTHER_SME_UMOPA),
-        _ => None,
-    }
-}
-
-fn emit_aarch64_sme_outer_product(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) -> bool {
-    let Some(mnemonic) = insn.mnemonic() else {
-        return false;
-    };
-    let Some(tag) = sme_outer_product_tag(mnemonic) else {
-        return false;
-    };
-
-    let arch = detail.arch_detail();
-    let Some(arm64) = arch.arm64() else {
-        ctx.emit_unimplemented();
-        return true;
-    };
-
-    let mut pg = None;
-    let mut z_regs = Vec::new();
-    for op in arm64.operands() {
-        if let Arm64OperandType::Reg(reg) = op.op_type {
-            if let Some(pred) = aarch64_predicate_reg_index(reg) {
-                if pg.is_none() {
-                    pg = Some(pred);
-                }
-                continue;
-            }
-            if let Some(z_idx) = aarch64_sve_z_reg_index(reg) {
-                z_regs.push(z_idx);
-            }
-        }
-    }
-
-    let Some(pg) = pg else {
-        ctx.emit_unimplemented();
-        return true;
-    };
-    if z_regs.len() < 2 {
-        ctx.emit_unimplemented();
-        return true;
-    }
-
-    let za = Varnode::reg(SME_ZA, SME_ZA_SIZE);
-    let zn = Varnode::reg(sve_z_offset(z_regs[0]), SVE_Z_SIZE);
-    let zm = Varnode::reg(sve_z_offset(z_regs[1]), SVE_Z_SIZE);
-    emit_sme_callother(ctx, tag, pg, &[za, zn, zm]);
-    true
-}
-
-fn aarch64_sve_z_reg_index(reg: capstone::RegId) -> Option<u8> {
-    use capstone::arch::arm64::Arm64Reg;
-    let id = reg.0 as u32;
-    let base = Arm64Reg::ARM64_REG_Z0;
-    if (base..=base + 31).contains(&id) {
-        Some((id - base) as u8)
-    } else {
-        None
-    }
 }
 
 /// Return `true` if `insn` is an AArch64 pointer-authentication or BTI
@@ -3312,86 +3085,4 @@ fn pac_auth_branch_rewrite(insn: u32) -> Option<u32> {
             }
         }
     }
-}
-
-// -- t296/t301: AArch64 SME outer-product instructions --
-pub const CALLOTHER_SME_FMOPA: u64 = 0x430;
-pub const CALLOTHER_SME_FMOPS: u64 = 0x431;
-pub const CALLOTHER_SME_FMOPA_D: u64 = 0x432;
-pub const CALLOTHER_SME_FMOPS_D: u64 = 0x433;
-pub const CALLOTHER_SME_BFMOPA: u64 = 0x434;
-pub const CALLOTHER_SME_BFMOPS: u64 = 0x435;
-pub const CALLOTHER_SME_SMOPA: u64 = 0x436;
-pub const CALLOTHER_SME_SMOPS: u64 = 0x437;
-pub const CALLOTHER_SME_UMOPA: u64 = 0x438;
-pub const CALLOTHER_SME_UMOPS: u64 = 0x439;
-pub const CALLOTHER_SME_SUMOPA: u64 = 0x43A;
-pub const CALLOTHER_SME_SUMOPS: u64 = 0x43B;
-pub const CALLOTHER_SME_USMOPA: u64 = 0x43C;
-pub const CALLOTHER_SME_USMOPS: u64 = 0x43D;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SmeOuterProductKind {
-    Fmopa, Fmops, FmopaD, FmopsD,
-    Bfmopa, Bfmops, Smopa, Smops,
-    Umopa, Umops, Sumopa, Sumops, Usmopa, Usmops,
-}
-
-impl SmeOuterProductKind {
-    pub fn tag(self) -> u64 {
-        match self {
-            Self::Fmopa => CALLOTHER_SME_FMOPA, Self::Fmops => CALLOTHER_SME_FMOPS,
-            Self::FmopaD => CALLOTHER_SME_FMOPA_D, Self::FmopsD => CALLOTHER_SME_FMOPS_D,
-            Self::Bfmopa => CALLOTHER_SME_BFMOPA, Self::Bfmops => CALLOTHER_SME_BFMOPS,
-            Self::Smopa => CALLOTHER_SME_SMOPA, Self::Smops => CALLOTHER_SME_SMOPS,
-            Self::Umopa => CALLOTHER_SME_UMOPA, Self::Umops => CALLOTHER_SME_UMOPS,
-            Self::Sumopa => CALLOTHER_SME_SUMOPA, Self::Sumops => CALLOTHER_SME_SUMOPS,
-            Self::Usmopa => CALLOTHER_SME_USMOPA, Self::Usmops => CALLOTHER_SME_USMOPS,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SmeOuterProductDecoded {
-    pub kind: SmeOuterProductKind,
-    pub za_tile: u8, pub pm: u8, pub pn: u8, pub zn: u8, pub zm: u8,
-}
-
-pub fn try_aarch64_sme_outer_product(insn: u32) -> Option<SmeOuterProductDecoded> {
-    let zm = ((insn >> 16) & 0x1F) as u8;
-    let pm = ((insn >> 13) & 0x07) as u8;
-    let pn = ((insn >> 10) & 0x07) as u8;
-    let zn = ((insn >> 5) & 0x1F) as u8;
-    let s_bit = ((insn >> 4) & 1) != 0;
-    let top11 = insn >> 21;
-    let bit15 = (insn >> 15) & 1;
-    let (kind, tile_bits) = match (top11, bit15) {
-        (0x404, 0) => (if s_bit { SmeOuterProductKind::Fmops } else { SmeOuterProductKind::Fmopa }, (insn & 0x03) as u8),
-        (0x406, 0) => (if s_bit { SmeOuterProductKind::FmopsD } else { SmeOuterProductKind::FmopaD }, (insn & 0x07) as u8),
-        (0x40C, 0) => (if s_bit { SmeOuterProductKind::Bfmops } else { SmeOuterProductKind::Bfmopa }, (insn & 0x03) as u8),
-        (0x504, 0) => (if s_bit { SmeOuterProductKind::Smops } else { SmeOuterProductKind::Smopa }, (insn & 0x03) as u8),
-        (0x50C, 0) => (if s_bit { SmeOuterProductKind::Umops } else { SmeOuterProductKind::Umopa }, (insn & 0x03) as u8),
-        (0x504, 1) => (if s_bit { SmeOuterProductKind::Sumops } else { SmeOuterProductKind::Sumopa }, (insn & 0x03) as u8),
-        (0x50C, 1) => (if s_bit { SmeOuterProductKind::Usmops } else { SmeOuterProductKind::Usmopa }, (insn & 0x03) as u8),
-        _ => return None,
-    };
-    Some(SmeOuterProductDecoded { kind, za_tile: tile_bits, pm, pn, zn, zm })
-}
-
-fn emit_aarch64_sme_outer_product(ctx: &mut LiftCtx, op: &SmeOuterProductDecoded) {
-    use crate::register_file::{sve_z_offset, SVE_Z_SIZE};
-    let tag = op.kind.tag();
-    let zn_vn = Varnode::new(SpaceId::Register, sve_z_offset(op.zn), SVE_Z_SIZE);
-    let zm_vn = Varnode::new(SpaceId::Register, sve_z_offset(op.zm), SVE_Z_SIZE);
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![
-            Varnode::constant(tag, 8),
-            Varnode::constant(op.za_tile as u64, 1),
-            Varnode::constant(op.pm as u64, 1),
-            Varnode::constant(op.pn as u64, 1),
-            zn_vn, zm_vn,
-        ],
-        ctx.addr,
-    ));
 }

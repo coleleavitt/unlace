@@ -10,4 +10,3 @@ pub mod perfctr;
 pub mod sse;
 pub mod stack;
 pub mod string_ops;
-pub mod tsx;

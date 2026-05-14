@@ -253,6 +253,7 @@ mod tests {
             finalized_signature: None,
             crypto_annotations: Vec::new(),
             go_defer_sites: Vec::new(),
+            type_counterexamples: Vec::new(),
             cpp_variant_discriminants: Vec::new(),
             go_defer_recover_calls: BTreeMap::new(),
             cpp_lambda_captures: Vec::new(),

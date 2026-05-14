@@ -6,7 +6,7 @@ use unlace_ir::{
 
 use crate::apx;
 use crate::ops::{
-    arithmetic, bitwise, control_flow, crypto, data_move, fpu, sse, stack, string_ops, tsx,
+    arithmetic, bitwise, control_flow, crypto, data_move, fpu, sse, stack, string_ops,
 };
 use crate::register_file::{iced_reg_to_varnode, x86_64_register_file};
 
@@ -582,17 +582,6 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Fucomp => fpu::lift_fcom(ctx, insn),
         M::Fucompp => fpu::lift_fcom(ctx, insn),
         M::Fxch => fpu::lift_fxch(ctx, insn),
-
-        // ── Intel TSX (t312) ────────────────────────────────────
-        // Transactional-memory primitives: XBEGIN starts a speculative
-        // region with an abort-fallback target, XEND commits, XABORT
-        // explicitly aborts with an 8-bit code, XTEST queries
-        // in-transaction state via ZF. Each routes to a 0x1B0..0x1B3
-        // Callother tag and recovers to `_xbegin/_xend/_xabort/_xtest`.
-        M::Xbegin => tsx::lift_xbegin(ctx, insn),
-        M::Xend => tsx::lift_xend(ctx, insn),
-        M::Xabort => tsx::lift_xabort(ctx, insn),
-        M::Xtest => tsx::lift_xtest(ctx, insn),
 
         _ => ctx.emit_unimplemented(),
     }

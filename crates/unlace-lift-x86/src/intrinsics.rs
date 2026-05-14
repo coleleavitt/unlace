@@ -39,10 +39,6 @@ pub enum IntrinsicCategory {
     Avx512Arith,
     /// x87 FPU instructions: FLD, FSTP, FADD, FMUL, etc.
     X87Fpu,
-    /// Intel TSX hardware-transactional-memory ops: XBEGIN, XEND,
-    /// XABORT, XTEST. Surfaced to the C printer as `_xbegin/_xend/
-    /// _xabort/_xtest` intrinsics.
-    TsxTransaction,
     /// Anything that doesn't fit the above.
     Other,
 }
@@ -351,17 +347,6 @@ impl Default for IntrinsicRegistry {
             ("FUCOMP", info("__fucomp", 2, 0, X87Fpu)),
             ("FUCOMPP", info("__fucompp", 2, 0, X87Fpu)),
             ("FXCH", info("__fxch", 2, 0, X87Fpu)),
-            // ── Intel TSX hardware transactional memory (t312) ──────
-            //
-            // XBEGIN takes a relative fallback target and returns the
-            // 32-bit abort status in EAX; we model that with a single
-            // input (the resolved target address) and a 4-byte
-            // return-value slot. XEND/XTEST have no explicit operands;
-            // XABORT carries an imm8 status code.
-            ("XBEGIN", info("_xbegin", 1, 4, TsxTransaction)),
-            ("XEND", info("_xend", 0, 0, TsxTransaction)),
-            ("XABORT", info("_xabort", 1, 0, TsxTransaction)),
-            ("XTEST", info("_xtest", 0, 1, TsxTransaction)),
         ];
 
         let mut entries = BTreeMap::new();
@@ -742,162 +727,6 @@ mod tests {
             assert_eq!(info.c_name, expected_c);
             assert_eq!(info.output_size, 32, "AVX entry should be 32 bytes");
             assert_eq!(info.category, IntrinsicCategory::AvxArith);
-        }
-    }
-}
-
-/// Intel TSX (Transactional Synchronization Extensions) intrinsic IDs.
-///
-/// TSX transactions bracket critical sections with XBEGIN/XEND. The lifter
-/// emits these as Callother intrinsics so downstream passes can identify
-/// transactional regions and reconstruct the fallback path.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u64)]
-pub enum TsxIntrinsic {
-    /// XBEGIN: start a transaction. On abort, execution resumes at the
-    /// fallback address with EAX containing the abort status.
-    Xbegin = 0x600,
-    /// XEND: commit the current transaction.
-    Xend = 0x601,
-    /// XABORT imm8: explicitly abort with a user-specified reason code.
-    Xabort = 0x602,
-    /// XTEST: test whether a transaction is active (sets ZF).
-    Xtest = 0x603,
-}
-
-impl TsxIntrinsic {
-    pub fn from_u64(v: u64) -> Option<Self> {
-        match v {
-            0x600 => Some(Self::Xbegin),
-            0x601 => Some(Self::Xend),
-            0x602 => Some(Self::Xabort),
-            0x603 => Some(Self::Xtest),
-            _ => None,
-        }
-    }
-
-    pub fn mnemonic(self) -> &'static str {
-        match self {
-            Self::Xbegin => "xbegin",
-            Self::Xend => "xend",
-            Self::Xabort => "xabort",
-            Self::Xtest => "xtest",
-        }
-    }
-}
-
-pub const CALLOTHER_TSX_XBEGIN: u64 = TsxIntrinsic::Xbegin as u64;
-pub const CALLOTHER_TSX_XEND: u64 = TsxIntrinsic::Xend as u64;
-pub const CALLOTHER_TSX_XABORT: u64 = TsxIntrinsic::Xabort as u64;
-pub const CALLOTHER_TSX_XTEST: u64 = TsxIntrinsic::Xtest as u64;
-
-
-#[cfg(test)]
-mod tsx_tests {
-    use super::*;
-
-    #[test]
-    fn tsx_intrinsic_roundtrip() {
-        for id in [0x600u64, 0x601, 0x602, 0x603] {
-            let intr = TsxIntrinsic::from_u64(id).unwrap();
-            assert!(!intr.mnemonic().is_empty());
-        }
-    }
-
-    #[test]
-    fn tsx_xbegin_mnemonic() {
-        assert_eq!(TsxIntrinsic::Xbegin.mnemonic(), "xbegin");
-    }
-
-    #[test]
-    fn tsx_unknown_returns_none() {
-        assert!(TsxIntrinsic::from_u64(0x999).is_none());
-/// Intel CET (Control-flow Enforcement Technology) intrinsic IDs.
-///
-/// CET provides two mechanisms: Indirect Branch Tracking (IBT) via ENDBR32/64
-/// landing pads, and Shadow Stack (SS) for return address protection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u64)]
-pub enum CetIntrinsic {
-    /// ENDBR64: valid 64-bit indirect branch target marker.
-    Endbr64 = 0x610,
-    /// ENDBR32: valid 32-bit indirect branch target marker.
-    Endbr32 = 0x611,
-    /// RDSSPQ: read shadow stack pointer.
-    Rdsspq = 0x620,
-    /// INCSSPQ: increment shadow stack pointer (pop entries).
-    Incsspq = 0x621,
-    /// SAVEPREVSSP: save previous shadow stack pointer.
-    Saveprevssp = 0x622,
-    /// RSTORSSP: restore shadow stack pointer.
-    Rstorssp = 0x623,
-    /// WRSSD/WRSSQ: write to shadow stack.
-    Wrss = 0x624,
-    /// WRUSSD/WRUSSQ: write to user shadow stack.
-    Wruss = 0x625,
-    /// SETSSBSY: set shadow stack busy flag.
-    Setssbsy = 0x626,
-    /// CLRSSBSY: clear shadow stack busy flag.
-    Clrssbsy = 0x627,
-}
-
-impl CetIntrinsic {
-    pub fn from_u64(v: u64) -> Option<Self> {
-        match v {
-            0x610 => Some(Self::Endbr64),
-            0x611 => Some(Self::Endbr32),
-            0x620 => Some(Self::Rdsspq),
-            0x621 => Some(Self::Incsspq),
-            0x622 => Some(Self::Saveprevssp),
-            0x623 => Some(Self::Rstorssp),
-            0x624 => Some(Self::Wrss),
-            0x625 => Some(Self::Wruss),
-            0x626 => Some(Self::Setssbsy),
-            0x627 => Some(Self::Clrssbsy),
-            _ => None,
-        }
-    }
-
-    pub fn mnemonic(self) -> &'static str {
-        match self {
-            Self::Endbr64 => "endbr64",
-            Self::Endbr32 => "endbr32",
-            Self::Rdsspq => "rdsspq",
-            Self::Incsspq => "incsspq",
-            Self::Saveprevssp => "saveprevssp",
-            Self::Rstorssp => "rstorssp",
-            Self::Wrss => "wrss",
-            Self::Wruss => "wruss",
-            Self::Setssbsy => "setssbsy",
-            Self::Clrssbsy => "clrssbsy",
-        }
-    }
-}
-
-pub const CALLOTHER_CET_ENDBR64: u64 = CetIntrinsic::Endbr64 as u64;
-pub const CALLOTHER_CET_ENDBR32: u64 = CetIntrinsic::Endbr32 as u64;
-
-
-#[cfg(test)]
-mod cet_tests {
-    use super::*;
-
-    #[test]
-    fn cet_endbr_mnemonics() {
-        assert_eq!(CetIntrinsic::Endbr64.mnemonic(), "endbr64");
-        assert_eq!(CetIntrinsic::Endbr32.mnemonic(), "endbr32");
-    }
-
-    #[test]
-    fn cet_shadow_stack_ops() {
-        assert_eq!(CetIntrinsic::Rdsspq.mnemonic(), "rdsspq");
-        assert_eq!(CetIntrinsic::Incsspq.mnemonic(), "incsspq");
-    }
-
-    #[test]
-    fn cet_roundtrip() {
-        for id in [0x610u64, 0x611, 0x620, 0x621, 0x622, 0x623, 0x624, 0x625, 0x626, 0x627] {
-            assert!(CetIntrinsic::from_u64(id).is_some());
         }
     }
 }

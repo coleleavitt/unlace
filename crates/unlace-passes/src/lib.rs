@@ -218,6 +218,8 @@ pub use type_constraint_solver::{
 pub use var_naming::{VarClassification, VarNamingPass, VarRole, classify_variables, suggest_name};
 pub use vararg_detect::{
     detect_variadic_callees, parse_format_string, parse_printf_format_strings,
+    Constraint, TypeConstraintSolverPass, collect_and_apply as solve_type_constraints,
+    collect_constraints, solve_constraints,
 };
 pub use variable_merge::VariableMergePass;
 

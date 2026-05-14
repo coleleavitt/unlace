@@ -4646,6 +4646,20 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                                 v,
                                 s.escape_default()
                             );
+                        } else if let Some(names) = i64::try_from(*v)
+                            .ok()
+                            .and_then(|value| ctx.pdb_constants_by_value.get(&value))
+                        {
+                            let _ = writeln!(
+                                out,
+                                "case {}:  /* {} */",
+                                v,
+                                names
+                                    .iter()
+                                    .map(|name| name.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            );
                         } else {
                             let _ = writeln!(out, "case {}:", v);
                         }

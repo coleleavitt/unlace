@@ -2080,6 +2080,34 @@ mod tests {
         }
     }
 
+    #[test]
+    fn pdb_constant_insert_builds_forward_and_reverse_maps() {
+        let mut out = PdbTypes::default();
+
+        insert_constant(&mut out, "kAnswer".into(), 42);
+        insert_constant(&mut out, "kAlsoAnswer".into(), 42);
+        insert_constant(&mut out, "kMinusOne".into(), -1);
+        insert_constant(&mut out, "kAnswer".into(), 42);
+
+        assert_eq!(out.constants.get("kAnswer"), Some(&42));
+        assert_eq!(out.constants.get("kMinusOne"), Some(&-1));
+        assert_eq!(
+            out.constants_by_value.get(&42).cloned().unwrap_or_default(),
+            vec!["kAnswer".to_string(), "kAlsoAnswer".to_string()]
+        );
+        assert_eq!(
+            out.constants_by_value.get(&-1).cloned().unwrap_or_default(),
+            vec!["kMinusOne".to_string()]
+        );
+    }
+
+    #[test]
+    fn pdb_constant_variant_conversion_rejects_out_of_range_unsigned() {
+        assert_eq!(variant_to_i64(Variant::U32(7)), Some(7));
+        assert_eq!(variant_to_i64(Variant::I16(-3)), Some(-3));
+        assert_eq!(variant_to_i64(Variant::U64(i64::MAX as u64 + 1)), None);
+    }
+
     // -------------------------------------------------------------------
     // Raw TPI walker tests — synthesize byte streams matching the on-disk
     // CodeView leaf format and assert that `walk_tpi` produces the

@@ -8,3 +8,4 @@ unlace-ir = { workspace = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]
+tracing = { workspace = true }

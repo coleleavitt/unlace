@@ -396,4 +396,75 @@ mod tests {
         assert!(!changed);
         assert!(ssa.crypto_annotations.is_empty());
     }
+
+    #[test]
+    fn detect_riscv_sha256_sequence() {
+        let insns = vec![
+            make_tagged_insn(TAG_RISCV_SHA256SIG0, 0, 4),
+            make_tagged_insn(TAG_RISCV_SHA256SIG1, 1, 4),
+            make_tagged_insn(TAG_RISCV_SHA256SUM0, 2, 4),
+            make_tagged_insn(TAG_RISCV_SHA256SUM1, 3, 4),
+        ];
+
+        let mut ssa = build_func_with_insns(insns);
+        let pass = CryptoIdiomPass;
+        let changed = pass.run(&mut ssa).unwrap();
+
+        assert!(changed);
+        assert_eq!(ssa.crypto_annotations.len(), 1);
+        assert_eq!(ssa.crypto_annotations[0].algorithm, "SHA-256");
+        assert_eq!(ssa.crypto_annotations[0].start_loc, (BlockId(0), 0));
+        assert_eq!(ssa.crypto_annotations[0].end_loc, (BlockId(0), 3));
+    }
+
+    #[test]
+    fn detect_riscv_sha512_sequence() {
+        let insns = vec![
+            make_tagged_insn(TAG_RISCV_SHA512SIG0, 0, 8),
+            make_tagged_insn(TAG_RISCV_SHA512SUM0, 1, 8),
+            make_tagged_insn(TAG_RISCV_SHA512SIG1, 2, 8),
+            make_tagged_insn(TAG_RISCV_SHA512SUM1, 3, 8),
+        ];
+
+        let mut ssa = build_func_with_insns(insns);
+        let pass = CryptoIdiomPass;
+        let changed = pass.run(&mut ssa).unwrap();
+
+        assert!(changed);
+        assert_eq!(ssa.crypto_annotations.len(), 1);
+        assert_eq!(ssa.crypto_annotations[0].algorithm, "SHA-512");
+    }
+
+    #[test]
+    fn detect_riscv_aes32_sequence() {
+        let insns = vec![
+            make_tagged_insn(TAG_RISCV_AES32ESI, 0, 4),
+            make_tagged_insn(TAG_RISCV_AES32ESMI, 1, 4),
+            make_tagged_insn(TAG_RISCV_AES32DSI, 2, 4),
+            make_tagged_insn(TAG_RISCV_AES32DSMI, 3, 4),
+        ];
+
+        let mut ssa = build_func_with_insns(insns);
+        let pass = CryptoIdiomPass;
+        let changed = pass.run(&mut ssa).unwrap();
+
+        assert!(changed);
+        assert_eq!(ssa.crypto_annotations.len(), 1);
+        assert_eq!(ssa.crypto_annotations[0].algorithm, "AES-128");
+    }
+
+    #[test]
+    fn no_match_riscv_sha_without_both_families() {
+        let insns = vec![
+            make_tagged_insn(TAG_RISCV_SHA256SIG0, 0, 4),
+            make_tagged_insn(TAG_RISCV_SHA256SIG1, 1, 4),
+        ];
+
+        let mut ssa = build_func_with_insns(insns);
+        let pass = CryptoIdiomPass;
+        let changed = pass.run(&mut ssa).unwrap();
+
+        assert!(!changed);
+        assert!(ssa.crypto_annotations.is_empty());
+    }
 }

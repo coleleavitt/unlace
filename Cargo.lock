@@ -1725,6 +1725,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-lift-amdgpu"
+version = "0.1.0"
+dependencies = [
+ "smallvec",
+ "unlace-ir",
+]
+
+[[package]]
 name = "unlace-lift-arc"
 version = "0.1.0"
 dependencies = [

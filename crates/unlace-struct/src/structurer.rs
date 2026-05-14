@@ -93,6 +93,7 @@ pub fn structure_with_arch(
             })
             .collect(),
         go_defer_sites: func.go_defer_sites.clone(),
+        rust_async: func.rust_async.clone(),
         noreturn: func.noreturn,
         composite_var_types: func.composite_var_types.clone(),
         is_ctor: false,

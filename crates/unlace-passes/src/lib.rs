@@ -89,6 +89,7 @@ pub mod reanalysis;
 pub mod redundant_flag_elim;
 pub mod register_coalesce;
 pub mod rep_string_idiom;
+pub mod rust_async;
 pub mod rust_enum;
 pub mod rust_panic;
 pub mod rust_result;
@@ -205,6 +206,7 @@ pub use reanalysis::{
 };
 pub use redundant_flag_elim::RedundantFlagElimPass;
 pub use register_coalesce::RegisterCoalescePass;
+pub use rust_async::RustAsyncPass;
 pub use rust_enum::RustEnumPass;
 pub use rust_panic::RustPanicPass;
 pub use rust_result::{RustTaggedUnion, detect_rust_tagged_unions};
@@ -275,6 +277,7 @@ pub fn default_pass_names() -> Vec<&'static str> {
         "strength-reduce",
         "idiom-recognition",
         "condition-simplify",
+        "rust-async",
     ]
 }
 

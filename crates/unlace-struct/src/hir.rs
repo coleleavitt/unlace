@@ -466,6 +466,8 @@ pub struct HirFunction {
     pub panic_sites: BTreeMap<u64, PanicKind>,
     /// Recovered Go `defer` registrations in this function.
     pub go_defer_sites: Vec<GoDeferSite>,
+    /// Rust async state-machine metadata propagated from SSA.
+    pub rust_async: Option<unlace_ir::ssa::RustAsyncInfo>,
     /// `true` when the function never returns to its caller (e.g. tail-calls
     /// `exit`/`abort`/`panic`). Mirrors [`unlace_ir::ssa::SsaFunction::noreturn`]
     /// and triggers an `__noreturn` annotation in the C output.

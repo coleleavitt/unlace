@@ -723,6 +723,36 @@ pub fn print_c_with_annotations(
         emit_function_header(hdr, &mut out);
     }
 
+    if let Some(async_info) = &func.rust_async {
+        let states = async_info
+            .states
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let returns = async_info
+            .poll_returns
+            .iter()
+            .map(|r| match r {
+                unlace_ir::ssa::RustPollReturnKind::Ready => "Ready",
+                unlace_ir::ssa::RustPollReturnKind::Pending => "Pending",
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+        let _ = writeln!(
+            out,
+            "// recovered Rust async state machine: Pin<&mut T> state @ +0x{:x}, states [{}]{}",
+            async_info.state_offset,
+            states,
+            if returns.is_empty() {
+                String::new()
+            } else {
+                format!(", Poll::{returns}")
+            }
+        );
+        out.push_str("// async fn recovered from lowered Future::poll; original state-machine body follows\n");
+    }
+
     let demangled = crate::demangle::demangle(&func.name);
     let custom_self_name = header
         .and_then(|h| ctx.custom_names.get(&h.address))
@@ -786,6 +816,12 @@ pub fn print_c_with_annotations(
         } else {
             "__usercall"
         };
+    if let Some(uc) = usercall_spec {
+        let kind = if uc.purge { "__userpurge" } else { "__usercall" };
+    if func.rust_async.is_some() {
+        let _ = write!(out, "async fn {}(", emit_name);
+    } else if let Some(uc) = usercall_spec {
+        let kind = if uc.purge { "__userpurge" } else { "__usercall" };
         // `<ret>` suffix is omitted for void returns or when the spec
         // didn't pin a return register.
         let ret_suffix = if uc.return_reg.is_empty() {
@@ -9289,6 +9325,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -9959,6 +9996,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -10542,6 +10580,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -10659,6 +10698,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: true,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -10696,6 +10736,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15481,6 +15522,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15517,6 +15559,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15557,6 +15600,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15593,6 +15637,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15629,6 +15674,7 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15691,6 +15737,7 @@ mod tests {
             foldable_exprs: foldable,
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,

@@ -249,6 +249,174 @@ mod tests {
 
     use super::*;
     use unlace_ir::ssa::{SsaFunction, build_ssa};
+                    if let Some(&out_sv) =
+                        func.var_map.get(&(bid, idx, VarnodeSlot::Output))
+                    {
+                        malloc_sites.push(MallocSite {
+                            location: (bid, idx),
+                            result: out_sv,
+                        });
+                    }
+                }
+                "free" => {
+                    // First argument lives at Input(1); Input(0) is the
+                    // call target. SSA renaming maps the relevant ABI
+                    // register slot to a fresh SsaVarnode at this site.
+                    if let Some(&arg_sv) =
+                        func.var_map.get(&(bid, idx, VarnodeSlot::Input(1)))
+                    {
+                        free_sites.push(FreeSite {
+                            location: (bid, idx),
+                            arg: arg_sv,
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // -- CWE-415: double free. -------------------------------------------
+    //
+    // Group free sites by their SSA argument. Any group with >=2 entries
+    // is a double free; we report every free *after the first* keyed by
+    // (block, insn) so a triple-free shows up as two distinct findings.
+    let mut by_arg: BTreeMap<SsaVarnode, Vec<(BlockId, usize)>> = BTreeMap::new();
+    for fs in &free_sites {
+        by_arg.entry(fs.arg).or_default().push(fs.location);
+    }
+    for (_arg, mut locs) in by_arg {
+        if locs.len() < 2 {
+            continue;
+        }
+        locs.sort();
+        for &loc in &locs[1..] {
+            findings.insert(CweFinding {
+                kind: CweKind::Cwe415DoubleFree,
+                location: loc,
+                description: "double free: pointer previously released \
+                              on this path"
+                    .to_string(),
+            });
+        }
+    }
+
+    // -- CWE-401: memory leak. -------------------------------------------
+    //
+    // A malloc result is "leaked" (per this conservative detector) when
+    // no `free` call within the function consumes that exact SSA
+    // varnode. This deliberately ignores aliasing through stores /
+    // copies — the goal is a reviewable signal, not a soundness proof.
+    let freed_args: BTreeSet<SsaVarnode> =
+        free_sites.iter().map(|fs| fs.arg).collect();
+    for ms in &malloc_sites {
+        if !freed_args.contains(&ms.result) {
+            findings.insert(CweFinding {
+                kind: CweKind::Cwe401MemoryLeak,
+                location: ms.location,
+                description: "malloc result is never released on any \
+                              reachable path"
+                    .to_string(),
+            });
+        }
+    }
+
+    // -- CWE-416: use after free. ----------------------------------------
+    //
+    // For every Load whose address SSA varnode equals a previously-freed
+    // pointer, and the free site dominates the load site, raise a UAF.
+    // Dominance avoids the textbook false positive where free and load
+    // are siblings (different branches of an if).
+    for (&bid, block) in &func.function.blocks {
+        for (idx, insn) in block.insns.iter().enumerate() {
+            if insn.op != IrOp::Load {
+                continue;
+            }
+            // LOAD inputs are either [addr] or [space_id, addr]; the
+            // SSA var_map only maps real address operands (the space_id
+            // is a Const that bypasses renaming), so we probe both.
+            let addr_sv = func
+                .var_map
+                .get(&(bid, idx, VarnodeSlot::Input(0)))
+                .or_else(|| func.var_map.get(&(bid, idx, VarnodeSlot::Input(1))))
+                .copied();
+            let Some(addr_sv) = addr_sv else { continue };
+
+            for fs in &free_sites {
+                if fs.arg != addr_sv {
+                    continue;
+                }
+                if !dominates_strict(func, fs.location, (bid, idx)) {
+                    continue;
+                }
+                findings.insert(CweFinding {
+                    kind: CweKind::Cwe416UseAfterFree,
+                    location: (bid, idx),
+                    description: "load reads memory previously released \
+                                  by free()"
+                        .to_string(),
+                });
+                break;
+            }
+        }
+    }
+
+    findings.into_iter().collect()
+}
+
+/// Internal record for a recognised `malloc` site.
+#[derive(Copy, Clone, Debug)]
+struct MallocSite {
+    location: (BlockId, usize),
+    result: SsaVarnode,
+}
+
+/// Internal record for a recognised `free` site.
+#[derive(Copy, Clone, Debug)]
+struct FreeSite {
+    location: (BlockId, usize),
+    arg: SsaVarnode,
+}
+
+/// True iff IR location `a` strictly dominates location `b` on every
+/// path through `func`'s CFG. Same-block: lower insn index dominates.
+/// Cross-block: walk the idom chain of `b.0` upward looking for `a.0`.
+fn dominates_strict(
+    func: &SsaFunction,
+    a: (BlockId, usize),
+    b: (BlockId, usize),
+) -> bool {
+    if a == b {
+        return false;
+    }
+    if a.0 == b.0 {
+        return a.1 < b.1;
+    }
+    // Walk b's dominators upward to the root.
+    let mut cur = b.0;
+    while let Some(parent) = func.dom_tree.idom(cur) {
+        if parent == cur {
+            // idom of root is itself (or unset); stop.
+            return false;
+        }
+        if parent == a.0 {
+            return true;
+        }
+        cur = parent;
+    }
+    false
+}
+
+// =========================================================================
+// Tests
+// =========================================================================
+
+#[cfg(test)]
+mod tests {
+    use smallvec::smallvec;
+
+    use super::*;
+    use unlace_ir::ssa::{build_ssa, SsaFunction};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, Varnode};
 
     fn reg(off: u64) -> Varnode {

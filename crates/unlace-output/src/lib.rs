@@ -7,6 +7,7 @@ pub mod cpp_stl;
 pub mod demangle;
 pub mod instruction_annotations;
 pub mod ir_dump;
+pub mod semantic_diff;
 
 pub use c_printer::{
     FunctionHeaderInfo, PrintConfig, PrinterAnnotations, compute_array_struct_indices,

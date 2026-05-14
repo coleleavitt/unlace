@@ -18,4 +18,5 @@ unlace-lift-agx = { workspace = true }
 unlace-lift-msp430 = { workspace = true }
 unlace-lift-m68k = { workspace = true }
 unlace-lift-sass = { workspace = true }
+unlace-lift-xtensa = { workspace = true }
 thiserror = { workspace = true }

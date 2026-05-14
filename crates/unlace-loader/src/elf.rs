@@ -142,6 +142,7 @@ where
                 ArchId::Ebpf
             }
         }
+        elf::EM_XTENSA => ArchId::Xtensa,
         _ => ArchId::Unknown(machine),
     };
 

@@ -3119,6 +3119,11 @@ pub const CALLOTHER_SME_ADDVA: u64 = 0x541;
 pub const CALLOTHER_AARCH64_BTI_C: u64 = 0x550;
 pub const CALLOTHER_AARCH64_BTI_J: u64 = 0x551;
 pub const CALLOTHER_AARCH64_BTI_JC: u64 = 0x552;
+// ARM TrustZone / exception-level transition callother IDs
+pub const CALLOTHER_ARM_SMC: u64 = 0x560;
+pub const CALLOTHER_ARM_SVC: u64 = 0x561;
+pub const CALLOTHER_ARM_HVC: u64 = 0x562;
+pub const CALLOTHER_ARM_ERET: u64 = 0x563;
 
 
 /// Emit a generic SVE `Callother` intrinsic.

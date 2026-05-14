@@ -1678,6 +1678,8 @@ dependencies = [
 name = "unlace-fuzz"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "unlace-cli",
  "unlace-ir",
  "unlace-lift",

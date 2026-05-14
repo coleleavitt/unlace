@@ -34,6 +34,23 @@ pub fn lift_move(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     }
 }
 
+pub fn lift_li(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let dst = match &ops[0] {
+        MipsOperand::Reg(r) => ctx.write_reg(*r),
+        _ => None,
+    };
+    let imm = ctx.read_operand(&ops[1]);
+    match (dst, imm) {
+        (Some(dst), Some(imm)) => ctx.write_to_reg(dst, imm),
+        (None, _) => {}
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
 pub fn lift_lui(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     if ops.len() < 2 {
         ctx.emit_unimplemented();

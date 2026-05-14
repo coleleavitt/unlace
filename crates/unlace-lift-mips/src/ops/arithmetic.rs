@@ -124,6 +124,93 @@ pub fn lift_mult(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     }
 }
 
+pub fn lift_mul(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let dst = match &ops[0] {
+        MipsOperand::Reg(r) => ctx.write_reg(*r),
+        _ => None,
+    };
+    let a = ctx.read_operand(&ops[1]);
+    let b = ctx.read_operand(&ops[2]);
+    match (dst, a, b) {
+        (Some(dst), Some(a), Some(b)) => {
+            let result = ctx.alloc_unique(8);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntMult,
+                result,
+                smallvec![a, b],
+                ctx.addr,
+            ));
+            ctx.write_to_reg(dst, result);
+        }
+        (None, _, _) => {}
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_madd(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let a = ctx.read_operand(&ops[0]);
+    let b = ctx.read_operand(&ops[1]);
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let product = ctx.alloc_unique(8);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntMult,
+                product,
+                smallvec![a, b],
+                ctx.addr,
+            ));
+            let lo = crate::register_file::reg64(crate::register_file::LO);
+            let sum = ctx.alloc_unique(8);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAdd,
+                sum,
+                smallvec![lo, product],
+                ctx.addr,
+            ));
+            ctx.write_to_reg(lo, sum);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_msub(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let a = ctx.read_operand(&ops[0]);
+    let b = ctx.read_operand(&ops[1]);
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let product = ctx.alloc_unique(8);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntMult,
+                product,
+                smallvec![a, b],
+                ctx.addr,
+            ));
+            let lo = crate::register_file::reg64(crate::register_file::LO);
+            let diff = ctx.alloc_unique(8);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntSub,
+                diff,
+                smallvec![lo, product],
+                ctx.addr,
+            ));
+            ctx.write_to_reg(lo, diff);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
 pub fn lift_div(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
     if ops.len() < 2 {
         ctx.emit_unimplemented();

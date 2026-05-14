@@ -37,6 +37,7 @@ pub mod embed_interp_recognize;
 pub mod expression_tree;
 pub mod format_magic;
 pub mod func_fingerprint;
+pub mod func_ptr_table;
 pub mod global_copy_prop;
 pub mod go_closure;
 pub mod go_defer;

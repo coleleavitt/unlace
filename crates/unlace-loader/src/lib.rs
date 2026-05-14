@@ -23,6 +23,7 @@ pub mod intel_hex;
 pub mod ios_img4;
 pub mod java_class;
 pub mod macho;
+pub mod minidump;
 pub mod msvc_rtti;
 pub mod objc;
 pub mod packer_detect;

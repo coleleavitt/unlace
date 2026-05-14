@@ -65,6 +65,7 @@ pub fn parse_arch(s: &str) -> Result<ArchId> {
         "ebpf" | "bpf" => Ok(ArchId::Ebpf),
         "sbpf" | "sbf" | "solana-bpf" | "solana_bpf" => Ok(ArchId::Sbpf),
         "sass" | "nvidia-sass" | "nv-sass" | "sm70" | "sm_70" => Ok(ArchId::NvidiaSass),
+        "xtensa" | "esp32" | "esp8266" | "lx6" | "lx106" => Ok(ArchId::Xtensa),
         _ => bail!("unknown architecture: '{s}'"),
     }
 }

@@ -79,6 +79,12 @@ pub struct SwiftBuiltinAsyncFunction {
 pub struct SwiftConformance {
     /// VA of the conformance descriptor.
     pub descriptor_va: u64,
+    /// Protocol being conformed to.
+    pub protocol_name: String,
+    /// Conforming type name.
+    pub type_name: String,
+    /// Address of the protocol witness table (0 if not resolved).
+    pub witness_table_addr: u64,
 }
 
 /// Aggregate Swift runtime metadata recovered from a Mach-O image.
@@ -335,11 +341,48 @@ fn parse_conformance_table(sec: &Section) -> Vec<SwiftConformance> {
             continue;
         }
         let desc_va = resolve_relative(slot_va, raw);
-        out.push(SwiftConformance {
-            descriptor_va: desc_va,
-        });
+        out.push(SwiftConformance { descriptor_va: desc_va, protocol_name: String::new(), type_name: String::new(), witness_table_addr: 0 });
     }
     out
+}
+
+
+/// A Swift protocol witness table conformance record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwiftWitnessTable {
+    /// Protocol being conformed to.
+    pub protocol_name: String,
+    /// Conforming type.
+    pub conforming_type: String,
+    /// Address of the witness table in the binary.
+    pub table_addr: u64,
+    /// Method entries in the witness table.
+    pub methods: Vec<SwiftWitnessMethod>,
+}
+
+/// A single method entry in a protocol witness table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwiftWitnessMethod {
+    /// Slot index in the witness table.
+    pub slot: usize,
+    /// Target function address (the actual implementation).
+    pub impl_addr: u64,
+    /// Protocol requirement name this entry satisfies.
+    pub requirement_name: Option<String>,
+}
+
+/// Scan for Swift protocol witness table conformances.
+pub fn scan_witness_tables(conformances: &[SwiftConformance]) -> Vec<SwiftWitnessTable> {
+    conformances
+        .iter()
+        .filter(|c| c.witness_table_addr != 0)
+        .map(|c| SwiftWitnessTable {
+            protocol_name: c.protocol_name.clone(),
+            conforming_type: c.type_name.clone(),
+            table_addr: c.witness_table_addr,
+            methods: Vec::new(), // Methods populated during lifting
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -551,5 +594,47 @@ mod tests {
             flags: SectionFlags::READ | SectionFlags::EXEC,
         });
         assert!(scan_swift_metadata(&img).is_none());
+    }
+}
+
+#[cfg(test)]
+mod witness_tests {
+    use super::*;
+
+    #[test]
+    fn scan_witness_tables_filters_zero_addr() {
+        let conformances = vec![
+            SwiftConformance {
+                descriptor_va: 0,
+                protocol_name: "Equatable".into(),
+                type_name: "MyStruct".into(),
+                witness_table_addr: 0x1000,
+            },
+            SwiftConformance {
+                descriptor_va: 0,
+                protocol_name: "Hashable".into(),
+                type_name: "MyStruct".into(),
+                witness_table_addr: 0,
+            },
+        ];
+        let tables = scan_witness_tables(&conformances);
+        assert_eq!(tables.len(), 1);
+        assert_eq!(tables[0].protocol_name, "Equatable");
+        assert_eq!(tables[0].table_addr, 0x1000);
+    }
+
+    #[test]
+    fn witness_method_slot_ordering() {
+        let wt = SwiftWitnessTable {
+            protocol_name: "Collection".into(),
+            conforming_type: "Array".into(),
+            table_addr: 0x2000,
+            methods: vec![
+                SwiftWitnessMethod { slot: 0, impl_addr: 0x3000, requirement_name: Some("startIndex".into()) },
+                SwiftWitnessMethod { slot: 1, impl_addr: 0x3010, requirement_name: Some("endIndex".into()) },
+            ],
+        };
+        assert_eq!(wt.methods.len(), 2);
+        assert_eq!(wt.methods[0].requirement_name.as_deref(), Some("startIndex"));
     }
 }

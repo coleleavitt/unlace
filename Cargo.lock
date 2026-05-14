@@ -1710,6 +1710,7 @@ dependencies = [
  "unlace-lift-arm",
  "unlace-lift-avr",
  "unlace-lift-ebpf",
+ "unlace-lift-m68k",
  "unlace-lift-mips",
  "unlace-lift-msp430",
  "unlace-lift-ppc",
@@ -1759,6 +1760,14 @@ version = "0.1.0"
 dependencies = [
  "smallvec",
  "tracing",
+ "unlace-ir",
+]
+
+[[package]]
+name = "unlace-lift-m68k"
+version = "0.1.0"
+dependencies = [
+ "smallvec",
  "unlace-ir",
 ]
 

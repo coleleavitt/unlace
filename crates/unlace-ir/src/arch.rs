@@ -32,6 +32,7 @@ pub enum ArchId {
     M68k,
     Sparc,
     SuperH,
+    M68k,
     Unknown(u16),
 }
 
@@ -64,6 +65,7 @@ impl fmt::Display for ArchId {
             Self::M68k => f.write_str("m68k"),
             Self::Sparc => f.write_str("sparc"),
             Self::SuperH => f.write_str("superh"),
+            Self::M68k => f.write_str("m68k"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

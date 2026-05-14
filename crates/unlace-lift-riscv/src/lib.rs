@@ -2034,6 +2034,62 @@ fn dispatch_insn(
 // Tests
 // ===========================================================================
 
+
+/// RISC-V ISA extension flags detected from ELF attributes or instruction patterns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RiscvExtensions {
+    /// M: Integer multiply/divide.
+    pub m: bool,
+    /// A: Atomic instructions.
+    pub a: bool,
+    /// F: Single-precision floating point.
+    pub f: bool,
+    /// D: Double-precision floating point.
+    pub d: bool,
+    /// C: Compressed (16-bit) instructions.
+    pub c: bool,
+    /// V: Vector extension.
+    pub v: bool,
+    /// Zba: Address generation bit-manipulation.
+    pub zba: bool,
+    /// Zbb: Basic bit-manipulation.
+    pub zbb: bool,
+    /// Zbc: Carry-less multiplication.
+    pub zbc: bool,
+    /// Zbs: Single-bit operations.
+    pub zbs: bool,
+    /// Zbkb/Zbkc/Zbkx: Crypto bit-manipulation.
+    pub zbk: bool,
+    /// Zk*: Scalar crypto.
+    pub zk: bool,
+    /// H: Hypervisor extension.
+    pub h: bool,
+}
+
+impl RiscvExtensions {
+    /// Parse a RISC-V ISA string (e.g. "rv64imafdc_zba_zbb").
+    pub fn from_isa_string(s: &str) -> Self {
+        let lower = s.to_ascii_lowercase();
+        let mut ext = Self::default();
+        // Base extensions in the ISA string
+        if lower.contains('m') { ext.m = true; }
+        if lower.contains('a') { ext.a = true; }
+        if lower.contains('f') { ext.f = true; }
+        if lower.contains('d') { ext.d = true; }
+        if lower.contains('c') { ext.c = true; }
+        if lower.chars().enumerate().any(|(i, c)| c == 'v' && i > 3) { ext.v = true; }
+        // Named extensions after underscore
+        if lower.contains("zba") { ext.zba = true; }
+        if lower.contains("zbb") { ext.zbb = true; }
+        if lower.contains("zbc") { ext.zbc = true; }
+        if lower.contains("zbs") { ext.zbs = true; }
+        if lower.contains("zbk") { ext.zbk = true; }
+        if lower.contains("zk") { ext.zk = true; }
+        if lower.contains("_h") || lower.ends_with('h') { ext.h = true; }
+        ext
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2829,5 +2885,36 @@ mod tests {
             .find(|i| i.op == IrOp::Callother)
             .expect("callother present");
         assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_AES32ESMI, 8));
+    }
+}
+
+#[cfg(test)]
+mod ext_tests {
+    use super::RiscvExtensions;
+
+    #[test]
+    fn parse_rv64gc() {
+        let ext = RiscvExtensions::from_isa_string("rv64imafdc");
+        assert!(ext.m);
+        assert!(ext.a);
+        assert!(ext.f);
+        assert!(ext.d);
+        assert!(ext.c);
+        assert!(!ext.v);
+    }
+
+    #[test]
+    fn parse_with_bitmanip() {
+        let ext = RiscvExtensions::from_isa_string("rv64imafdc_zba_zbb_zbs");
+        assert!(ext.zba);
+        assert!(ext.zbb);
+        assert!(ext.zbs);
+        assert!(!ext.zbc);
+    }
+
+    #[test]
+    fn parse_vector() {
+        let ext = RiscvExtensions::from_isa_string("rv64imafdcv");
+        assert!(ext.v);
     }
 }

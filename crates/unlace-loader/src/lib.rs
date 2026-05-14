@@ -50,6 +50,10 @@ pub use dwarf::{
     DwarfInfo, EnumType, ExprLocation, ExprPiece, FunctionDebugInfo, LocalVariable,
     MacroDefinition, ParameterInfo, PieceLocation, SourceLocation, StructField, StructType,
     UnionType, evaluate_dwarf_expr, evaluate_location_attr, import_dwarf,
+    DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo, SourceLocation,
+    StructField, StructType, UnionType, import_dwarf,
+    DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, MacroEntry, ParameterInfo, SourceLocation,
+    StructField, StructType, UnionType, import_dwarf, parse_debug_macro,
 };
 pub use pdb::{InlineeSite, PdbInfo, import_pdb, merge_pdb_symbols};
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};

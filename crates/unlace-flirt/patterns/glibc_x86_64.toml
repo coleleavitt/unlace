@@ -1,0 +1,207 @@
+# glibc x86-64 FLIRT signatures
+#
+# Patterns for glibc 2.31+ on x86-64 Linux with -fcf-protection=full.
+
+[[pattern]]
+name = "strlen"
+bytes = "f30f1efa4889f8f2ae48f7d048ffc8c3"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "strcpy"
+bytes = "f30f1efa4889f84889f1ac88074800"
+mask = "ffffffffffffffffffff00ffff0000"
+length = 24
+
+[[pattern]]
+name = "strcmp"
+bytes = "f30f1efa4889f84889f6ac3a0675"
+mask = "ffffffffffffffffffffff00ffff"
+length = 32
+
+[[pattern]]
+name = "strncpy"
+bytes = "f30f1efa4889f84889d14889f2"
+mask = "ffffffffffffffffffffffffff"
+length = 28
+
+[[pattern]]
+name = "strcat"
+bytes = "f30f1efa534889fb4889f7e800000000"
+mask = "ffffffffffffffffffffffff00000000"
+length = 32
+
+[[pattern]]
+name = "memcpy"
+bytes = "f30f1efa4889f84889d1f3a4c3"
+mask = "ffffffffffffffffffffffffff"
+length = 13
+
+[[pattern]]
+name = "memmove"
+bytes = "f30f1efa4889f84839fe7300"
+mask = "ffffffffffffffffffff00ff"
+length = 32
+
+[[pattern]]
+name = "memset"
+bytes = "f30f1efa4889f840880e4889d1f3aac3"
+mask = "ffffffffffff00ffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "memcmp"
+bytes = "f30f1efa4889f84889d1f3a6"
+mask = "ffffffffffffffffffffffff"
+length = 20
+
+[[pattern]]
+name = "malloc"
+bytes = "f30f1efa4883ec08e80000000048"
+mask = "ffffffffffffffffff00000000ff"
+length = 32
+
+[[pattern]]
+name = "calloc"
+bytes = "f30f1efa534889fb4889f7e800000000"
+mask = "ffffffffffffffffffffffff00000000"
+length = 32
+
+[[pattern]]
+name = "realloc"
+bytes = "f30f1efa4885ff740c4885f674"
+mask = "ffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "free"
+bytes = "f30f1efa4885ff7401c3534889fb"
+mask = "ffffffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "printf"
+bytes = "f30f1efa4883ec184889e74889742410"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "fprintf"
+bytes = "f30f1efa4883ec184889f74889542410"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "snprintf"
+bytes = "f30f1efa4883ec284889e74889442418"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "puts"
+bytes = "f30f1efa534889fbe8000000004885c0"
+mask = "ffffffffffffffffffffffff00000000"
+length = 32
+
+[[pattern]]
+name = "fopen"
+bytes = "f30f1efa4883ec184889f74889fe"
+mask = "ffffffffffffffffffffffffffff"
+length = 48
+
+[[pattern]]
+name = "fclose"
+bytes = "f30f1efa534889fb488b4748"
+mask = "ffffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "exit"
+bytes = "f30f1efa4889f7e800000000"
+mask = "ffffffffffffffffff000000"
+length = 12
+
+[[pattern]]
+name = "open"
+bytes = "f30f1efa4883ec184889e7b802000000"
+mask = "ffffffffffffffffffffffffff000000"
+length = 32
+
+[[pattern]]
+name = "close"
+bytes = "f30f1efab803000000"
+mask = "ffffffffff00000000"
+length = 12
+
+[[pattern]]
+name = "read"
+bytes = "f30f1efab800000000"
+mask = "ffffffffff00000000"
+length = 12
+
+[[pattern]]
+name = "write"
+bytes = "f30f1efab801000000"
+mask = "ffffffffff00000000"
+length = 12
+
+[[pattern]]
+name = "mmap"
+bytes = "f30f1efa4989ca4d89c8b809000000"
+mask = "ffffffffffffffffffffffff000000"
+length = 32
+
+[[pattern]]
+name = "pthread_create"
+bytes = "f30f1efa41574989ff41564989f64155"
+mask = "ffffffffffffffffffffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "pthread_mutex_lock"
+bytes = "f30f1efa31c0f00fb107"
+mask = "ffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "__libc_start_main"
+bytes = "f30f1efa41574989ff41564989f6"
+mask = "ffffffffffffffffffffffffffff"
+length = 64
+
+[[pattern]]
+name = "__cxa_atexit"
+bytes = "f30f1efa534889f34889fe"
+mask = "ffffffffffffffffffffff"
+length = 32
+
+[[pattern]]
+name = "atexit"
+bytes = "f30f1efa31d231f6e900000000"
+mask = "ffffffffffffffffffffff0000"
+length = 13
+
+[[pattern]]
+name = "abort"
+bytes = "f30f1efa4883ec08e800000000"
+mask = "ffffffffffffffffff00000000"
+length = 16
+
+[[pattern]]
+name = "getenv"
+bytes = "f30f1efa534889fb488b3d00000000"
+mask = "ffffffffffffffffffffffff000000"
+length = 32
+
+[[pattern]]
+name = "atoi"
+bytes = "f30f1efa4889fe31ff"
+mask = "ffffffffffffffffff"
+length = 16
+
+[[pattern]]
+name = "qsort"
+bytes = "f30f1efa41554989cd41544989d4534889fb"
+mask = "ffffffffffffffffffffffffffffffffffff"
+length = 64

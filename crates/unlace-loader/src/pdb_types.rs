@@ -295,6 +295,39 @@ pub fn unify_pdb_type_sets(modules: &mut [PdbTypes]) -> PdbTypeUnification {
     summary
 }
 
+/// Resolve cross-DLL forward declarations by pulling full struct definitions
+/// from whichever module has them.
+pub fn resolve_cross_dll_forward_decls(modules: &mut [PdbTypes]) -> usize {
+    let mut full_defs: BTreeMap<String, Type> = BTreeMap::new();
+    for module in modules.iter() {
+        for (name, ty) in &module.structs {
+            if let Type::Struct { fields, .. } = ty {
+                if !fields.is_empty() && !full_defs.contains_key(name) {
+                    full_defs.insert(name.clone(), ty.clone());
+                }
+            }
+        }
+    }
+    let mut resolved_count = 0usize;
+    for module in modules.iter_mut() {
+        let names: Vec<String> = module.structs.keys().cloned().collect();
+        for name in names {
+            let is_fwd = module
+                .structs
+                .get(&name)
+                .map(|ty| matches!(ty, Type::Struct { fields, .. } if fields.is_empty()))
+                .unwrap_or(false);
+            if is_fwd {
+                if let Some(full) = full_defs.get(&name) {
+                    module.structs.insert(name, full.clone());
+                    resolved_count += 1;
+                }
+            }
+        }
+    }
+    resolved_count
+}
+
 fn rewrite_module_struct_names(module: &mut PdbTypes, hash_to_name: &BTreeMap<u64, String>) {
     let old_structs = std::mem::take(&mut module.structs);
     for (_old_name, mut ty) in old_structs {
@@ -1856,5 +1889,24 @@ mod tests {
         assert_eq!(items[1].id, 0x1002, "id slot consumed by unknown leaf");
         assert_eq!(items[1].kind, PdbIpiKind::StringId);
         assert_eq!(items[1].name.as_deref(), Some("beta"));
+    }
+
+    #[test]
+    fn cross_dll_forward_decl_resolution() {
+        use unlace_ir::types::{StructFieldType, Type};
+        let mut mod_a = PdbTypes::default();
+        mod_a.structs.insert("Foo".into(), Type::Struct { name: "Foo".into(), fields: vec![] });
+        let mut mod_b = PdbTypes::default();
+        mod_b.structs.insert("Foo".into(), Type::Struct {
+            name: "Foo".into(),
+            fields: vec![StructFieldType { name: "x".into(), offset: 0, ty: Type::Primitive(PrimitiveType::Int(4)) }],
+        });
+        let mut modules = vec![mod_a, mod_b];
+        let count = resolve_cross_dll_forward_decls(&mut modules);
+        assert_eq!(count, 1);
+        match &modules[0].structs["Foo"] {
+            Type::Struct { fields, .. } => assert_eq!(fields.len(), 1),
+            _ => panic!("expected struct"),
+        }
     }
 }

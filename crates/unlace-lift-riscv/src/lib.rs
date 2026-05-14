@@ -2831,3 +2831,64 @@ mod tests {
         assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_AES32ESMI, 8));
     }
 }
+
+// t328 — RISC-V Zb* bit-manipulation extension callother and direct lift tags.
+// Zbb (basic bit-manipulation)
+const TAG_RISCV_CLZ: u64 = 0x540;
+const TAG_RISCV_CTZ: u64 = 0x541;
+const TAG_RISCV_CPOP: u64 = 0x542;
+const TAG_RISCV_ANDN: u64 = 0x543;
+const TAG_RISCV_ORN: u64 = 0x544;
+const TAG_RISCV_XNOR: u64 = 0x545;
+const TAG_RISCV_MAX: u64 = 0x546;
+const TAG_RISCV_MAXU: u64 = 0x547;
+const TAG_RISCV_MIN: u64 = 0x548;
+const TAG_RISCV_MINU: u64 = 0x549;
+const TAG_RISCV_SEXTB: u64 = 0x54A;
+const TAG_RISCV_SEXTH: u64 = 0x54B;
+const TAG_RISCV_ZEXTH: u64 = 0x54C;
+const TAG_RISCV_REV8: u64 = 0x54D;
+const TAG_RISCV_ORC_B: u64 = 0x54E;
+const TAG_RISCV_ROL: u64 = 0x54F;
+const TAG_RISCV_ROR: u64 = 0x550;
+const TAG_RISCV_RORI: u64 = 0x551;
+// Zba (address generation)
+const TAG_RISCV_SH1ADD: u64 = 0x560;
+const TAG_RISCV_SH2ADD: u64 = 0x561;
+const TAG_RISCV_SH3ADD: u64 = 0x562;
+// Zbs (single-bit)
+const TAG_RISCV_BCLR: u64 = 0x570;
+const TAG_RISCV_BCLRI: u64 = 0x571;
+const TAG_RISCV_BEXT: u64 = 0x572;
+const TAG_RISCV_BEXTI: u64 = 0x573;
+const TAG_RISCV_BINV: u64 = 0x574;
+const TAG_RISCV_BINVI: u64 = 0x575;
+const TAG_RISCV_BSET: u64 = 0x576;
+const TAG_RISCV_BSETI: u64 = 0x577;
+
+#[cfg(test)]
+mod zb_tests {
+    use super::*;
+
+    #[test]
+    fn test_zb_tags_no_collision() {
+        let tags = [
+            TAG_RISCV_CLZ, TAG_RISCV_CTZ, TAG_RISCV_CPOP,
+            TAG_RISCV_ANDN, TAG_RISCV_ORN, TAG_RISCV_XNOR,
+            TAG_RISCV_ROL, TAG_RISCV_ROR, TAG_RISCV_SH1ADD,
+            TAG_RISCV_SH2ADD, TAG_RISCV_SH3ADD,
+            TAG_RISCV_BCLR, TAG_RISCV_BEXT, TAG_RISCV_BINV, TAG_RISCV_BSET,
+        ];
+        for (i, a) in tags.iter().enumerate() {
+            for b in tags.iter().skip(i + 1) {
+                assert_ne!(a, b, "tag collision detected");
+            }
+        }
+    }
+
+    #[test]
+    fn test_zb_tags_dont_collide_with_crypto() {
+        // Ensure no overlap with Zk* tags (0x520..0x533)
+        assert!(TAG_RISCV_CLZ > TAG_RISCV_AES32DSMI);
+    }
+}

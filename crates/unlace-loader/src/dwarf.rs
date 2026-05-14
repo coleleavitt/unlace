@@ -32,6 +32,9 @@
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use gimli::{
     AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_data_member_location, DW_AT_high_pc,
@@ -64,10 +67,14 @@ use gimli::{
     DW_TAG_structure_type, DW_TAG_subprogram, DW_TAG_template_type_parameter,
     DW_TAG_template_value_parameter, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable,
     DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
+    EndianSlice, RunTimeEndian,
+    DwarfFileType, EndianSlice, RunTimeEndian,
 };
 
+use object::{Object, ObjectSection};
+
 use crate::error::LoadError;
-use crate::image::BinaryImage;
+use crate::image::{BinaryImage, Section};
 
 type R<'a> = EndianSlice<'a, RunTimeEndian>;
 
@@ -79,6 +86,9 @@ pub struct DwarfInfo {
     pub enums: BTreeMap<String, EnumType>,
     pub unions: BTreeMap<String, UnionType>,
     pub macros: Vec<MacroDefinition>,
+    /// Split-DWARF object files (`.dwo`/`.dwp`) followed while expanding
+    /// skeleton compilation units. Paths are best-effort and informational.
+    pub split_dwarf_files: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -474,14 +484,7 @@ pub fn import_dwarf(image: &BinaryImage) -> Result<DwarfInfo, LoadError> {
         crate::image::Endian::Big => RunTimeEndian::Big,
     };
 
-    let dwarf_sections = gimli::DwarfSections::load(|id| {
-        let data: Cow<'_, [u8]> = match image.section_by_name(id.name()) {
-            Some(section) => Cow::Borrowed(&section.data),
-            None => Cow::Borrowed(&[] as &[u8]),
-        };
-        Ok::<_, gimli::Error>(data)
-    })?;
-
+    let dwarf_sections = load_dwarf_sections_from_image(image, false)?;
     let dwarf: gimli::Dwarf<R<'_>> =
         dwarf_sections.borrow(|section| EndianSlice::new(section.as_ref(), endian));
 
@@ -489,6 +492,23 @@ pub fn import_dwarf(image: &BinaryImage) -> Result<DwarfInfo, LoadError> {
     let source_map = build_source_map(&dwarf)?;
     let (structs, enums, unions) = extract_composite_types(&dwarf)?;
     let macros = extract_macros(&dwarf)?;
+    let functions = extract_functions(&dwarf)?;
+    let source_map = build_source_map(&dwarf)?;
+    let (structs, enums, unions) = extract_composite_types(&dwarf)?;
+    let split_units = load_split_dwarf_units(image, endian)?;
+
+    let mut functions = extract_functions(&dwarf)?;
+    let mut source_map = build_source_map(&dwarf)?;
+    let (mut structs, mut enums, mut unions) = extract_composite_types(&dwarf)?;
+
+    for split in &split_units {
+        merge_functions(&mut functions, extract_functions(&split.dwarf)?);
+        source_map.extend(build_source_map(&split.dwarf)?);
+        let (split_structs, split_enums, split_unions) = extract_composite_types(&split.dwarf)?;
+        structs.extend(split_structs);
+        enums.extend(split_enums);
+        unions.extend(split_unions);
+    }
 
     Ok(DwarfInfo {
         functions,
@@ -497,6 +517,10 @@ pub fn import_dwarf(image: &BinaryImage) -> Result<DwarfInfo, LoadError> {
         enums,
         unions,
         macros,
+        split_dwarf_files: split_units
+            .into_iter()
+            .map(|unit| unit.display_name)
+            .collect(),
     })
 }
 
@@ -672,6 +696,247 @@ fn resolve_macro_file_name(
     match file_idx {
         Some(idx) if idx != 0 => resolve_file_name(dwarf, unit, idx),
         _ => Ok(None),
+struct SplitDwarfUnit {
+    dwarf: gimli::Dwarf<R<'static>>,
+    display_name: String,
+}
+
+fn load_dwarf_sections_from_image(
+    image: &BinaryImage,
+    dwo_names: bool,
+) -> Result<gimli::DwarfSections<Cow<'_, [u8]>>, gimli::Error> {
+    gimli::DwarfSections::load(|id| {
+        let data: Cow<'_, [u8]> = section_data_by_dwarf_id(&image.sections, id, dwo_names)
+            .map(Cow::Borrowed)
+            .unwrap_or_else(|| Cow::Borrowed(&[]));
+        Ok::<_, gimli::Error>(data)
+    })
+}
+
+fn load_dwarf_sections_from_image_static(
+    image: &BinaryImage,
+    dwo_names: bool,
+    endian: RunTimeEndian,
+) -> Result<gimli::DwarfSections<R<'static>>, gimli::Error> {
+    gimli::DwarfSections::load(|id| {
+        Ok::<_, gimli::Error>(EndianSlice::new(
+            section_data_by_dwarf_id(&image.sections, id, dwo_names)
+                .map(leak_bytes)
+                .unwrap_or(&[]),
+            endian,
+        ))
+    })
+}
+
+fn section_data_by_dwarf_id<'a>(
+    sections: &'a [Section],
+    id: gimli::SectionId,
+    dwo_names: bool,
+) -> Option<&'a [u8]> {
+    let wanted = if dwo_names {
+        id.dwo_name().unwrap_or(id.name())
+    } else {
+        id.name()
+    };
+    sections
+        .iter()
+        .find(|section| section.name == wanted)
+        .map(|section| section.data.as_slice())
+}
+
+fn load_split_dwarf_units(
+    image: &BinaryImage,
+    endian: RunTimeEndian,
+) -> Result<Vec<SplitDwarfUnit>, gimli::Error> {
+    let parent_sections = load_dwarf_sections_from_image_static(image, false, endian)?;
+    let parent = parent_sections.borrow(|section| *section);
+    let mut out = Vec::new();
+    let mut units = parent.units();
+
+    while let Some(header) = units.next()? {
+        let skeleton = parent.unit(header)?;
+        let Some(dwo_id) = skeleton.dwo_id else {
+            continue;
+        };
+
+        let dwo_name = unit_dwo_name(&parent, &skeleton)?;
+        if let Some(package) = load_embedded_dwp_unit(image, &parent, dwo_id, endian)? {
+            out.push(package);
+            continue;
+        }
+
+        let Some(name) = dwo_name else {
+            continue;
+        };
+
+        if let Some(unit) = load_external_dwo_unit(image, &parent, &skeleton, &name, endian)? {
+            out.push(unit);
+        }
+    }
+
+    Ok(out)
+}
+
+fn load_embedded_dwp_unit(
+    image: &BinaryImage,
+    parent: &gimli::Dwarf<R<'static>>,
+    dwo_id: gimli::DwoId,
+    endian: RunTimeEndian,
+) -> Result<Option<SplitDwarfUnit>, gimli::Error> {
+    if section_data_by_dwarf_id(&image.sections, gimli::SectionId::DebugCuIndex, true).is_none() {
+        return Ok(None);
+    }
+
+    let package = gimli::DwarfPackage::load(
+        |id| {
+            Ok::<_, gimli::Error>(EndianSlice::new(
+                section_data_by_dwarf_id(&image.sections, id, true)
+                    .map(leak_bytes)
+                    .unwrap_or(&[]),
+                endian,
+            ))
+        },
+        EndianSlice::new(&[], endian),
+    )?;
+
+    Ok(package
+        .find_cu(dwo_id, parent)?
+        .map(|dwarf| SplitDwarfUnit {
+            dwarf,
+            display_name: format!("<embedded .dwp:{:#x}>", dwo_id.0),
+        }))
+}
+
+fn load_external_dwo_unit(
+    image: &BinaryImage,
+    parent: &gimli::Dwarf<R<'static>>,
+    skeleton: &gimli::Unit<R<'static>>,
+    dwo_name: &str,
+    endian: RunTimeEndian,
+) -> Result<Option<SplitDwarfUnit>, gimli::Error> {
+    let Some(bytes) = resolve_split_dwarf_bytes(image, skeleton, dwo_name) else {
+        return Ok(None);
+    };
+
+    let file = match object::File::parse(bytes) {
+        Ok(file) => file,
+        Err(_) => return Ok(None),
+    };
+
+    if file.section_by_name(".debug_cu_index").is_some() {
+        let package = gimli::DwarfPackage::load(
+            |id| Ok::<_, gimli::Error>(object_dwarf_section_static(&file, id, true, endian)),
+            EndianSlice::new(&[], endian),
+        )?;
+        return Ok(package
+            .find_cu(skeleton.dwo_id.expect("checked by caller"), parent)?
+            .map(|dwarf| SplitDwarfUnit {
+                dwarf,
+                display_name: dwo_name.to_owned(),
+            }));
+    }
+
+    let sections = gimli::DwarfSections::load(|id| {
+        Ok::<_, gimli::Error>(object_dwarf_section_static(&file, id, true, endian))
+    })?;
+    let mut dwo = sections.borrow(|section| *section);
+    dwo.make_dwo(parent);
+    dwo.file_type = DwarfFileType::Dwo;
+
+    if dwo.units().next()?.is_none() {
+        return Ok(None);
+    }
+
+    Ok(Some(SplitDwarfUnit {
+        dwarf: dwo,
+        display_name: dwo_name.to_owned(),
+    }))
+}
+
+fn object_dwarf_section_static(
+    file: &object::File<'_>,
+    id: gimli::SectionId,
+    dwo_names: bool,
+    endian: RunTimeEndian,
+) -> R<'static> {
+    let name = if dwo_names {
+        id.dwo_name().unwrap_or(id.name())
+    } else {
+        id.name()
+    };
+    let bytes = file
+        .section_by_name(name)
+        .and_then(|section| section.uncompressed_data().ok())
+        .map(|data| leak_bytes(data.as_ref()))
+        .unwrap_or(&[]);
+    EndianSlice::new(bytes, endian)
+}
+
+fn resolve_split_dwarf_bytes(
+    image: &BinaryImage,
+    skeleton: &gimli::Unit<R<'_>>,
+    dwo_name: &str,
+) -> Option<&'static [u8]> {
+    let mut candidates = Vec::new();
+    let dwo_path = PathBuf::from(dwo_name);
+    if dwo_path.is_absolute() {
+        candidates.push(dwo_path);
+    } else {
+        if let Some(comp_dir) = unit_comp_dir(skeleton) {
+            candidates.push(Path::new(&comp_dir).join(dwo_name));
+        }
+        candidates.push(PathBuf::from(dwo_name));
+    }
+
+    for candidate in candidates {
+        if let Ok(bytes) = std::fs::read(&candidate) {
+            return Some(leak_bytes(&bytes));
+        }
+    }
+
+    for section in &image.sections {
+        if section.name == format!(".debug_dwo/{dwo_name}") || section.name == dwo_name {
+            return Some(leak_bytes(&section.data));
+        }
+    }
+
+    None
+}
+
+fn leak_bytes(bytes: &[u8]) -> &'static [u8] {
+    if bytes.is_empty() {
+        &[]
+    } else {
+        Box::leak(bytes.to_vec().into_boxed_slice())
+    }
+}
+
+fn unit_dwo_name(
+    dwarf: &gimli::Dwarf<R<'_>>,
+    unit: &gimli::Unit<R<'_>>,
+) -> Result<Option<String>, gimli::Error> {
+    match unit.dwo_name()? {
+        Some(attr) => dwarf
+            .attr_string(unit, attr)
+            .map(|s| Some(s.to_string_lossy().into_owned())),
+        None => Ok(None),
+    }
+}
+
+fn unit_comp_dir(unit: &gimli::Unit<R<'_>>) -> Option<String> {
+    unit.comp_dir
+        .as_ref()
+        .map(|dir| dir.to_string_lossy().into_owned())
+}
+
+fn merge_functions(
+    base: &mut BTreeMap<u64, FunctionDebugInfo>,
+    split: BTreeMap<u64, FunctionDebugInfo>,
+) {
+    for (addr, info) in split {
+        if addr != 0 {
+            base.insert(addr, info);
+        }
     }
 }
 
@@ -1912,6 +2177,54 @@ mod tests {
             .values()
             .any(|loc| loc.file.contains("calls.c"));
         assert!(has_calls_c, "source map should reference calls.c");
+    }
+
+    #[test]
+    fn follows_split_dwarf_dwo_file() {
+        let gcc = match std::process::Command::new("gcc").arg("--version").output() {
+            Ok(output) if output.status.success() => "gcc",
+            _ => return,
+        };
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let src = tmp.path().join("split.c");
+        std::fs::write(
+            &src,
+            "int add_split(int a, int b) { return a + b; }\nint main(void) { return add_split(1, 2); }\n",
+        )
+        .expect("write source");
+        let exe = tmp.path().join("split");
+        let status = std::process::Command::new(gcc)
+            .args(["-g", "-gsplit-dwarf"])
+            .arg(&src)
+            .arg("-o")
+            .arg(&exe)
+            .status()
+            .expect("run gcc");
+        if !status.success() {
+            return;
+        }
+
+        let data = std::fs::read(&exe).expect("read split dwarf exe");
+        let img = ElfLoader::load(&data).expect("load split dwarf exe");
+        let info = import_dwarf(&img).expect("parse split dwarf");
+        let names: Vec<&str> = info
+            .functions
+            .values()
+            .map(|func| func.name.as_str())
+            .collect();
+
+        assert!(
+            !info.split_dwarf_files.is_empty(),
+            "expected split-DWARF side file to be followed"
+        );
+        assert!(
+            names.contains(&"add_split"),
+            "split .dwo should contribute add_split, got {names:?}"
+        );
+        assert!(
+            names.contains(&"main"),
+            "split .dwo should contribute main: {names:?}"
+        );
     }
 
     #[test]

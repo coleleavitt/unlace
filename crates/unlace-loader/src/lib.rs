@@ -62,6 +62,8 @@ pub use dwarf::{
     SourceLocation, StructField, StructType, UnionType, import_dwarf,
     StructField, StructType, UnionType, import_dwarf,
     StructField, StructType, TemplateArgument, UnionType, import_dwarf,
+    AddressRange, DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo,
+    SourceLocation, StructField, StructType, UnionType, VariableLocationRange, import_dwarf,
 };
 pub use pdb::{InlineeSite, PdbInfo, import_pdb, merge_pdb_symbols};
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};

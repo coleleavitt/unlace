@@ -10,6 +10,7 @@ pub mod annotations;
 pub mod args;
 pub mod batch;
 pub mod pipeline;
+pub mod project;
 
 use anyhow::{Result, bail};
 use unlace_ir::ArchId;

@@ -223,7 +223,7 @@ fn match_magic(value: u64, size: usize) -> Option<&'static str> {
         if magic.len() != size {
             continue;
         }
-        if magic.as_ref() == le || magic.as_ref() == be {
+        if *magic == le || *magic == be {
             return Some(name);
         }
     }

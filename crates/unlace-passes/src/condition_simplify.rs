@@ -274,7 +274,7 @@ fn is_safe_offset_fold_target(a: &Varnode, x: &Varnode, inner: &IrInsn) -> bool 
         return false;
     }
     if let Some(out) = inner.output {
-        if inner.inputs.iter().any(|v| *v == out) {
+        if inner.inputs.contains(&out) {
             return false;
         }
     }
@@ -592,10 +592,10 @@ fn demorgan(
 fn both_negated(a: &Varnode, b: &Varnode, def_map: &BTreeMap<Varnode, IrInsn>) -> bool {
     let a_neg = def_map
         .get(a)
-        .map_or(false, |insn| insn.op == IrOp::BoolNegate);
+        .is_some_and(|insn| insn.op == IrOp::BoolNegate);
     let b_neg = def_map
         .get(b)
-        .map_or(false, |insn| insn.op == IrOp::BoolNegate);
+        .is_some_and(|insn| insn.op == IrOp::BoolNegate);
     a_neg && b_neg
 }
 

@@ -353,6 +353,7 @@ mod tests {
 
     // ── Slot index calculation: offset 24 → slot 3, offset 32 → slot 4 ──
     #[test]
+    #[allow(clippy::erasing_op)] // `0/8 == 0` is the documented slot-0 case.
     fn test_vtable_slot_index_calculation() {
         // Slot 3 (offset 24)
         assert_eq!(24_u64 / 8, 3);

@@ -65,7 +65,7 @@ impl Pass for RustEnumPass {
             return Ok(false);
         }
 
-        new_discriminants.sort_by(|a, b| a.load_loc.cmp(&b.load_loc));
+        new_discriminants.sort_by_key(|a| a.load_loc);
 
         let had_none = func.enum_discriminants.is_empty();
         func.enum_discriminants = new_discriminants;

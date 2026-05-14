@@ -202,8 +202,8 @@ mod tests {
     use unlace_ir::ssa::build_ssa;
     use unlace_ir::{BasicBlock, Function};
 
-    const STACK_BLOCK_ISA: u64 = 0xCAFEBABE_0000_0001;
-    const GLOBAL_BLOCK_ISA: u64 = 0xCAFEBABE_0000_0002;
+    const STACK_BLOCK_ISA: u64 = 0xCAFE_BABE_0000_0001;
+    const GLOBAL_BLOCK_ISA: u64 = 0xCAFE_BABE_0000_0002;
 
     fn isa_set(addrs: &[u64]) -> BTreeSet<u64> {
         addrs.iter().copied().collect()

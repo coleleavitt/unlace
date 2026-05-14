@@ -458,7 +458,7 @@ fn move_insn(func: &mut SsaFunction, src: BlockId, src_idx: usize, dest: BlockId
     }
 
     if let Some(out_sv) = hoisted_output {
-        for (_phi_block, phis) in func.phi_map.iter_mut() {
+        for phis in func.phi_map.values_mut() {
             for phi in phis.iter_mut() {
                 for (pred_bid, in_sv) in phi.inputs.iter_mut() {
                     if *in_sv == out_sv && *pred_bid == src {

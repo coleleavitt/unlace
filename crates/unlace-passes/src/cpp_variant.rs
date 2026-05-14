@@ -75,7 +75,7 @@ impl Pass for CppVariantPass {
         if additions.is_empty() {
             return Ok(false);
         }
-        additions.sort_by(|a, b| a.load_loc.cmp(&b.load_loc));
+        additions.sort_by_key(|a| a.load_loc);
         let mut changed = false;
         for disc in additions {
             if !func.enum_discriminants.iter().any(|existing| {
@@ -86,7 +86,7 @@ impl Pass for CppVariantPass {
             }
         }
         func.enum_discriminants
-            .sort_by(|a, b| a.load_loc.cmp(&b.load_loc));
+            .sort_by_key(|a| a.load_loc);
         Ok(changed)
     }
 }

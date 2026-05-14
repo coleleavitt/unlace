@@ -475,8 +475,8 @@ fn assign_names(
     let mut next_index: u32 = 1;
     for sv in all_vars {
         if let Some(&cidx) = cluster_of.get(sv) {
-            if !order.contains_key(&cidx) {
-                order.insert(cidx, next_index);
+            if let std::collections::btree_map::Entry::Vacant(e) = order.entry(cidx) {
+                e.insert(next_index);
                 next_index += 1;
             }
         }

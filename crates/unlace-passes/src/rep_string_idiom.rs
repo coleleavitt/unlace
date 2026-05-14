@@ -226,19 +226,19 @@ mod tests {
         let insns = vec![
             IrInsn::with_output(
                 IrOp::Load,
-                val.clone(),
-                smallvec![space.clone(), rsi.clone()],
+                val,
+                smallvec![space, rsi],
                 0x1000,
             ),
             IrInsn::without_output(
                 IrOp::Store,
-                smallvec![space.clone(), rdi.clone(), val],
+                smallvec![space, rdi, val],
                 0x1004,
             ),
             IrInsn::with_output(
                 IrOp::IntSub,
-                rcx.clone(),
-                smallvec![rcx.clone(), Varnode::constant(1, 8)],
+                rcx,
+                smallvec![rcx, Varnode::constant(1, 8)],
                 0x1008,
             ),
         ];
@@ -259,7 +259,7 @@ mod tests {
             IrInsn::without_output(IrOp::Store, smallvec![space, rdi, rax], 0x1004),
             IrInsn::with_output(
                 IrOp::IntSub,
-                rcx.clone(),
+                rcx,
                 smallvec![rcx, Varnode::constant(1, 8)],
                 0x1008,
             ),
@@ -282,12 +282,12 @@ mod tests {
         let b = Varnode::reg(0x108, 1);
         let zf = Varnode::reg(0x200, 1);
         let insns = vec![
-            IrInsn::with_output(IrOp::Load, a.clone(), smallvec![space.clone(), rsi], 0x1000),
-            IrInsn::with_output(IrOp::Load, b.clone(), smallvec![space, rdi], 0x1002),
+            IrInsn::with_output(IrOp::Load, a, smallvec![space, rsi], 0x1000),
+            IrInsn::with_output(IrOp::Load, b, smallvec![space, rdi], 0x1002),
             IrInsn::with_output(IrOp::IntEqual, zf, smallvec![a, b], 0x1004),
             IrInsn::with_output(
                 IrOp::IntSub,
-                rcx.clone(),
+                rcx,
                 smallvec![rcx, Varnode::constant(1, 8)],
                 0x1008,
             ),
@@ -313,7 +313,7 @@ mod tests {
         let loaded = Varnode::reg(0x100, 1);
         let zf = Varnode::reg(0x200, 1);
         let insns = vec![
-            IrInsn::with_output(IrOp::Load, loaded.clone(), smallvec![space, rdi], 0x1000),
+            IrInsn::with_output(IrOp::Load, loaded, smallvec![space, rdi], 0x1000),
             IrInsn::with_output(
                 IrOp::IntEqual,
                 zf,
@@ -322,7 +322,7 @@ mod tests {
             ),
             IrInsn::with_output(
                 IrOp::IntSub,
-                rcx.clone(),
+                rcx,
                 smallvec![rcx, Varnode::constant(1, 8)],
                 0x1008,
             ),
@@ -347,14 +347,14 @@ mod tests {
         vec![
             IrInsn::with_output(
                 IrOp::Load,
-                val.clone(),
-                smallvec![space.clone(), rsi],
+                val,
+                smallvec![space, rsi],
                 0x1000,
             ),
             IrInsn::without_output(IrOp::Store, smallvec![space, rdi, val], 0x1004),
             IrInsn::with_output(
                 IrOp::IntSub,
-                rcx.clone(),
+                rcx,
                 smallvec![rcx, Varnode::constant(1, 8)],
                 0x1008,
             ),
@@ -371,7 +371,7 @@ mod tests {
             IrInsn::without_output(IrOp::Store, smallvec![space, rdi, rax], 0x1004),
             IrInsn::with_output(
                 IrOp::IntSub,
-                rcx.clone(),
+                rcx,
                 smallvec![rcx, Varnode::constant(1, 8)],
                 0x1008,
             ),
@@ -444,7 +444,7 @@ mod tests {
         let rax = Varnode::reg(0x00, 8);
         let insns = vec![IrInsn::with_output(
             IrOp::Copy,
-            rax.clone(),
+            rax,
             smallvec![Varnode::constant(42, 8)],
             0x1000,
         )];
@@ -463,13 +463,13 @@ mod tests {
             IrInsn::without_output(IrOp::Store, smallvec![space, rdi, rax], 0x1004),
             IrInsn::with_output(
                 IrOp::IntSub,
-                rcx.clone(),
+                rcx,
                 smallvec![rcx, Varnode::constant(1, 8)],
                 0x1008,
             ),
         ];
         let mut ssa = make_self_loop(insns);
-        let pass = RepStringIdiomPass::default();
+        let pass = RepStringIdiomPass;
         let changed = pass.run(&mut ssa).expect("pass runs");
         assert!(!changed, "MVP detection-only pass returns Ok(false)");
     }

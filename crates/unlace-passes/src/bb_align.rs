@@ -102,7 +102,7 @@ mod tests {
     #[test]
     fn partial_match() {
         let score = block_similarity(&[1, 2, 3, 4], &[1, 2, 5, 4]);
-        assert!(score >= 50 && score <= 80);
+        assert!((50..=80).contains(&score));
     }
 
     #[test]

@@ -395,7 +395,7 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
 }
 
 fn find_output_ssa_for_base(func: &SsaFunction, base: &Varnode) -> Option<SsaVarnode> {
-    for (&(_, _, ref slot), &sv) in &func.var_map {
+    for ((_, _, slot), &sv) in &func.var_map {
         if matches!(slot, VarnodeSlot::Output) && sv.base == *base {
             return Some(sv);
         }

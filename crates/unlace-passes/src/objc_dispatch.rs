@@ -45,6 +45,12 @@ pub struct ObjcDispatchPass {
     pub category_lookup: BTreeMap<(String, String), String>,
 }
 
+impl Default for ObjcDispatchPass {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ObjcDispatchPass {
     pub fn new() -> Self {
         Self {

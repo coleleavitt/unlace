@@ -603,6 +603,10 @@ fn propagate_lower_to_upper(
         .get(&lower)
         .map(|b| b.lower.iter().copied().collect())
         .unwrap_or_default();
+    // `fold` (not `any`) is intentional: `insert_lower` mutates `bounds` for
+    // every `cap`, and we need to visit them all. `any` would short-circuit on
+    // the first `true` and skip the remaining capability insertions.
+    #[allow(clippy::unnecessary_fold)]
     caps.into_iter().fold(false, |changed, cap| {
         insert_lower(bounds, upper, cap) || changed
     })
@@ -623,6 +627,9 @@ fn propagate_upper_to_lower(
                 .collect()
         })
         .unwrap_or_default();
+    // See note above: `fold` is intentional to avoid short-circuiting the
+    // side-effectful `insert_upper` call.
+    #[allow(clippy::unnecessary_fold)]
     caps.into_iter().fold(false, |changed, cap| {
         insert_upper(bounds, lower, cap) || changed
     })

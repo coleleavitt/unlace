@@ -3388,6 +3388,8 @@ pub const CALLOTHER_AARCH64_TSTART: u64 = 0x42A;
 /// `Callother` tag for AArch64 TME `TCOMMIT`.
 /// Emitted as `Callother(CALLOTHER_AARCH64_TCOMMIT)`.
 pub const CALLOTHER_AARCH64_TCOMMIT: u64 = 0x42B;
+pub const CALLOTHER_AARCH64_TTEST: u64 = 0x42C;
+pub const CALLOTHER_AARCH64_TCANCEL: u64 = 0x42D;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Aarch64TmeDecoded {

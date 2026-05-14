@@ -70,6 +70,7 @@ pub mod reanalysis;
 pub mod redundant_flag_elim;
 pub mod register_coalesce;
 pub mod rep_string_idiom;
+pub mod rust_async;
 pub mod rust_enum;
 pub mod rust_panic;
 pub mod rust_result;

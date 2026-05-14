@@ -45,6 +45,7 @@ pub mod dotnet_clr;
 pub mod stm32_blob;
 pub mod lua_bytecode;
 pub mod windbg_ttd;
+pub mod frida_bridge;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,

@@ -25,18 +25,18 @@ struct __anon0 {
 void sub_1130(void) {
     long long v1; // rsp
     int v4; // rip
-    unsigned long long v10; // temp
+    unsigned long long c1; // temp
     if (v4) {
         return result;
     } else {
-        *(_QWORD *)(0LL) = 0LL; v10 = *(_QWORD *)(v10);
+        *(_QWORD *)(0LL) = 0LL; c1 = *(_QWORD *)(c1);
         if (cond) {
         } else {
-            v10 = *(_QWORD *)(v10); *(_QWORD *)(0LL) = 0x1157LL; sub_1040();
+            c1 = *(_QWORD *)(c1); *(_QWORD *)(0LL) = 0x1157LL; sub_1040();
         }
-        v1 = v10; *(_QWORD *)(v10) = 0x115cLL; sub_10c0();
-        *(_BYTE *)(v10) = 1; v10 = v10; v1 = v10;
-        result = *(_QWORD *)(v10); return result;
+        v1 = c1; *(_QWORD *)(c1) = 0x115cLL; sub_10c0();
+        *(_BYTE *)(c1) = 1; c1 = c1; v1 = c1;
+        result = *(_QWORD *)(c1); return result;
     }
 }
 /* Function:   sub_1170 | Address: 0x1170 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */

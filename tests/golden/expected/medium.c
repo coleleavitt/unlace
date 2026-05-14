@@ -5,7 +5,7 @@ struct __anon0 {
 };
 
 /* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: unknown | Stack frame: 0xc (12 bytes) | Xrefs to:   __stack_chk_fail, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
-void main(void) {
+void __noreturn main(void) {
     int v5; // edx
     long long v13; // rdi
     int v21; // rip
@@ -228,7 +228,7 @@ __int32 f_rec_power.constprop.0(__int64 a1) {
     }
     if (cond) {
     } else {
-        v22--; cond = v22 == 0;
+        v22--; cond = v22 == 1;
         if (cond) {
             v22 *= v22; v39 = v22; v22 = v22;
             return result;
@@ -256,18 +256,18 @@ struct __anon0 {
 void sub_1520(void) {
     long long v1; // rsp
     int v4; // rip
-    unsigned long long v10; // temp
+    unsigned long long c1; // temp
     if (v4) {
         return result;
     } else {
-        *(_QWORD *)(0LL) = 0LL; v10 = *(_QWORD *)(v10);
+        *(_QWORD *)(0LL) = 0LL; c1 = *(_QWORD *)(c1);
         if (cond) {
         } else {
-            v10 = *(_QWORD *)(v10); *(_QWORD *)(0LL) = 0x1547LL; sub_1040();
+            c1 = *(_QWORD *)(c1); *(_QWORD *)(0LL) = 0x1547LL; sub_1040();
         }
-        v1 = v10; *(_QWORD *)(v10) = 0x154cLL; sub_14b0();
-        *(_BYTE *)(v10) = 1; v10 = v10; v1 = v10;
-        result = *(_QWORD *)(v10); return result;
+        v1 = c1; *(_QWORD *)(c1) = 0x154cLL; sub_14b0();
+        *(_BYTE *)(c1) = 1; c1 = c1; v1 = c1;
+        result = *(_QWORD *)(c1); return result;
     }
 }
 /* Function:   sub_1560 | Address: 0x1560 | Size: 0x735 (1845 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
@@ -275,23 +275,23 @@ void sub_1560(void) {
     int v15; // rdi
     signed char v56; // temp
     sub_14e0();
-    signed char v44 = LOBYTE(0); // temp
-    v41 = 1;
-    if (v41) {
+    signed char v45 = LOBYTE(0); // temp
+    v42 = 1;
+    if (v42) {
         return result;
     } else {
         long long v9 = cond; // rsp
         *(_QWORD *)(cond) = cond; v9 = cond; *(_QWORD *)(cond) = cond;
         v9 = cond; *(_QWORD *)(cond) = cond; v9 = cond;
         *(_QWORD *)(cond) = cond; v9 = cond; *(_QWORD *)(cond) = cond;
-        v9 = cond; *(_QWORD *)(cond) = cond; cond = cond == -8LL;
-        cond = cond < 0LL; v55 = LOBYTE(cond); v56 = LOBYTE(cond);
-        if (v41) {
-            v46 = v56;
-            if (v38) {
-                cond = cond; v42 = 0; v44 = v55;
+        v9 = cond; *(_QWORD *)(cond) = cond; cond = cond < 0LL;
+        v55 = LOBYTE(cond); v56 = LOBYTE(cond);
+        if (v42) {
+            v47 = v56;
+            if (v39) {
+                v43 = 0; v45 = v55;
             } else {
-                cond = cond < 0LL; v46 = LOBYTE(cond); v60 = cond;
+                cond = cond < 0LL; v47 = LOBYTE(cond); v60 = cond;
                 cond = cond; v9 = cond; cond = cond;
                 v9 = cond; cond = cond; v9 = cond;
                 cond = cond; v9 = cond; cond = cond;

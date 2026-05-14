@@ -54,6 +54,7 @@ pub enum ArchId {
     TiC6x,
     Evm,
     Sbpf,
+    NvSass,
     Unknown(u16),
 }
 
@@ -108,6 +109,7 @@ impl fmt::Display for ArchId {
             Self::TiC6x => f.write_str("tic6x"),
             Self::Evm => f.write_str("evm"),
             Self::Sbpf => f.write_str("sbpf"),
+            Self::NvSass => f.write_str("nvsass"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

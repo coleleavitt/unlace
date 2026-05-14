@@ -167,6 +167,21 @@ fn rvv_mask(vm: bool) -> Varnode {
     }
 }
 
+// RISC-V scalar bit-manipulation (Zb*) callother tags.  These occupy a
+// RISC-V-local range that does not overlap the existing x86/AArch64 tables.
+pub const CALLOTHER_RISCV_CTZ: u64 = 0x600;
+pub const CALLOTHER_RISCV_ROL: u64 = 0x601;
+pub const CALLOTHER_RISCV_ROR: u64 = 0x602;
+pub const CALLOTHER_RISCV_MIN: u64 = 0x603;
+pub const CALLOTHER_RISCV_MINU: u64 = 0x604;
+pub const CALLOTHER_RISCV_MAX: u64 = 0x605;
+pub const CALLOTHER_RISCV_MAXU: u64 = 0x606;
+pub const CALLOTHER_RISCV_CLMUL: u64 = 0x607;
+pub const CALLOTHER_RISCV_CLMULH: u64 = 0x608;
+pub const CALLOTHER_RISCV_CLMULR: u64 = 0x609;
+pub const CALLOTHER_RISCV_REV8: u64 = 0x60A;
+pub const CALLOTHER_RISCV_ORC_B: u64 = 0x60B;
+
 /// Convert a capstone `RegId` to a register-space `Varnode`.
 /// Returns `None` for x0 (hardwired zero — callers should use `Varnode::constant(0, 8)`).
 fn cs_reg_to_varnode(reg: RegId) -> Option<Varnode> {
@@ -335,6 +350,334 @@ impl LiftCtx {
             smallvec![fp_reg(rs1, size)],
             self.addr,
         ));
+    fn emit_callother(&mut self, output: Varnode, tag: u64, args: &[Varnode]) {
+        let mut inputs = smallvec![Varnode::constant(tag, 8)];
+        inputs.extend_from_slice(args);
+        self.emit(IrInsn::with_output(
+            IrOp::Callother,
+            output,
+            inputs,
+            self.addr,
+        ));
+    }
+
+    fn lift_unary_to_reg(&mut self, op: IrOp, rd: RegId, rs1: RegId) {
+        let src = read_reg(rs1);
+        let tmp = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(op, tmp, smallvec![src], self.addr));
+        self.write_reg(rd, tmp);
+    }
+
+    fn lift_unary_callother(&mut self, tag: u64, rd: RegId, rs1: RegId) {
+        let src = read_reg(rs1);
+        let tmp = self.alloc_unique(8);
+        self.emit_callother(tmp, tag, &[src]);
+        self.write_reg(rd, tmp);
+    }
+
+    fn lift_binary_callother(&mut self, tag: u64, rd: RegId, rs1: RegId, rs2: RegId) {
+        let a = read_reg(rs1);
+        let b = read_reg(rs2);
+        let tmp = self.alloc_unique(8);
+        self.emit_callother(tmp, tag, &[a, b]);
+        self.write_reg(rd, tmp);
+    }
+
+    fn lift_callother_ri(&mut self, tag: u64, rd: RegId, rs1: RegId, imm: u64) {
+        let a = read_reg(rs1);
+        let tmp = self.alloc_unique(8);
+        self.emit_callother(tmp, tag, &[a, Varnode::constant(imm, 8)]);
+        self.write_reg(rd, tmp);
+    }
+
+    fn lift_not(&mut self, value: Varnode) -> Varnode {
+        let tmp = self.alloc_unique(value.size);
+        self.emit(IrInsn::with_output(
+            IrOp::IntXor,
+            tmp,
+            smallvec![value, Varnode::constant(u64::MAX, value.size)],
+            self.addr,
+        ));
+        tmp
+    }
+
+    fn lift_andn(&mut self, rd: RegId, rs1: RegId, rs2: RegId) {
+        let not_rs2 = self.lift_not(read_reg(rs2));
+        let tmp = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntAnd,
+            tmp,
+            smallvec![read_reg(rs1), not_rs2],
+            self.addr,
+        ));
+        self.write_reg(rd, tmp);
+    }
+
+    fn lift_orn(&mut self, rd: RegId, rs1: RegId, rs2: RegId) {
+        let not_rs2 = self.lift_not(read_reg(rs2));
+        let tmp = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntOr,
+            tmp,
+            smallvec![read_reg(rs1), not_rs2],
+            self.addr,
+        ));
+        self.write_reg(rd, tmp);
+    }
+
+    fn lift_xnor(&mut self, rd: RegId, rs1: RegId, rs2: RegId) {
+        let xor = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntXor,
+            xor,
+            smallvec![read_reg(rs1), read_reg(rs2)],
+            self.addr,
+        ));
+        let not_xor = self.lift_not(xor);
+        self.write_reg(rd, not_xor);
+    }
+
+    fn lift_shift_add(&mut self, rd: RegId, rs1: RegId, rs2: RegId, amount: u64, word: bool) {
+        let base = if word {
+            let lo = self.alloc_unique(4);
+            self.emit(IrInsn::with_output(
+                IrOp::Subpiece,
+                lo,
+                smallvec![read_reg(rs1), Varnode::constant(0, 4)],
+                self.addr,
+            ));
+            let zext = self.alloc_unique(8);
+            self.emit(IrInsn::with_output(
+                IrOp::IntZext,
+                zext,
+                smallvec![lo],
+                self.addr,
+            ));
+            zext
+        } else {
+            read_reg(rs1)
+        };
+        let shifted = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntLeft,
+            shifted,
+            smallvec![base, Varnode::constant(amount, 8)],
+            self.addr,
+        ));
+        let result = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntAdd,
+            result,
+            smallvec![shifted, read_reg(rs2)],
+            self.addr,
+        ));
+        self.write_reg(rd, result);
+    }
+
+    fn lift_add_uw(&mut self, rd: RegId, rs1: RegId, rs2: RegId) {
+        let lo = self.alloc_unique(4);
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            lo,
+            smallvec![read_reg(rs1), Varnode::constant(0, 4)],
+            self.addr,
+        ));
+        let zext = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntZext,
+            zext,
+            smallvec![lo],
+            self.addr,
+        ));
+        let result = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntAdd,
+            result,
+            smallvec![zext, read_reg(rs2)],
+            self.addr,
+        ));
+        self.write_reg(rd, result);
+    }
+
+    fn lift_slli_uw(&mut self, rd: RegId, rs1: RegId, shamt: u64) {
+        let lo = self.alloc_unique(4);
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            lo,
+            smallvec![read_reg(rs1), Varnode::constant(0, 4)],
+            self.addr,
+        ));
+        let zext = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntZext,
+            zext,
+            smallvec![lo],
+            self.addr,
+        ));
+        let result = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntLeft,
+            result,
+            smallvec![zext, Varnode::constant(shamt, 8)],
+            self.addr,
+        ));
+        self.write_reg(rd, result);
+    }
+
+    fn lift_sext_from_bytes(&mut self, rd: RegId, rs1: RegId, bytes: u8) {
+        let part = self.alloc_unique(bytes);
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            part,
+            smallvec![read_reg(rs1), Varnode::constant(0, 4)],
+            self.addr,
+        ));
+        let ext = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntSext,
+            ext,
+            smallvec![part],
+            self.addr,
+        ));
+        self.write_reg(rd, ext);
+    }
+
+    fn lift_zext_from_bytes(&mut self, rd: RegId, rs1: RegId, bytes: u8) {
+        let part = self.alloc_unique(bytes);
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            part,
+            smallvec![read_reg(rs1), Varnode::constant(0, 4)],
+            self.addr,
+        ));
+        let ext = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntZext,
+            ext,
+            smallvec![part],
+            self.addr,
+        ));
+        self.write_reg(rd, ext);
+    }
+
+    fn lift_bitmanip_mask(&mut self, shamt: Varnode) -> Varnode {
+        let masked = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntAnd,
+            masked,
+            smallvec![shamt, Varnode::constant(63, 8)],
+            self.addr,
+        ));
+        let mask = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntLeft,
+            mask,
+            smallvec![Varnode::constant(1, 8), masked],
+            self.addr,
+        ));
+        mask
+    }
+
+    fn lift_bset(&mut self, rd: RegId, rs1: RegId, shamt: Varnode) {
+        let mask = self.lift_bitmanip_mask(shamt);
+        let result = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntOr,
+            result,
+            smallvec![read_reg(rs1), mask],
+            self.addr,
+        ));
+        self.write_reg(rd, result);
+    }
+
+    fn lift_bclr(&mut self, rd: RegId, rs1: RegId, shamt: Varnode) {
+        let mask = self.lift_bitmanip_mask(shamt);
+        let not_mask = self.lift_not(mask);
+        let result = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntAnd,
+            result,
+            smallvec![read_reg(rs1), not_mask],
+            self.addr,
+        ));
+        self.write_reg(rd, result);
+    }
+
+    fn lift_binv(&mut self, rd: RegId, rs1: RegId, shamt: Varnode) {
+        let mask = self.lift_bitmanip_mask(shamt);
+        let result = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntXor,
+            result,
+            smallvec![read_reg(rs1), mask],
+            self.addr,
+        ));
+        self.write_reg(rd, result);
+    }
+
+    fn lift_bext(&mut self, rd: RegId, rs1: RegId, shamt: Varnode) {
+        let masked = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntAnd,
+            masked,
+            smallvec![shamt, Varnode::constant(63, 8)],
+            self.addr,
+        ));
+        let shifted = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntRight,
+            shifted,
+            smallvec![read_reg(rs1), masked],
+            self.addr,
+        ));
+        let result = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntAnd,
+            result,
+            smallvec![shifted, Varnode::constant(1, 8)],
+            self.addr,
+        ));
+        self.write_reg(rd, result);
+    }
+
+    fn lift_word_unary_to_reg(&mut self, op: IrOp, rd: RegId, rs1: RegId) {
+        let lo = self.alloc_unique(4);
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            lo,
+            smallvec![read_reg(rs1), Varnode::constant(0, 4)],
+            self.addr,
+        ));
+        let result32 = self.alloc_unique(4);
+        self.emit(IrInsn::with_output(op, result32, smallvec![lo], self.addr));
+        let ext = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntSext,
+            ext,
+            smallvec![result32],
+            self.addr,
+        ));
+        self.write_reg(rd, ext);
+    }
+
+    fn lift_word_callother(&mut self, tag: u64, rd: RegId, rs1: RegId) {
+        let lo = self.alloc_unique(4);
+        self.emit(IrInsn::with_output(
+            IrOp::Subpiece,
+            lo,
+            smallvec![read_reg(rs1), Varnode::constant(0, 4)],
+            self.addr,
+        ));
+        let result32 = self.alloc_unique(4);
+        self.emit_callother(result32, tag, &[lo]);
+        let ext = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::IntSext,
+            ext,
+            smallvec![result32],
+            self.addr,
+        ));
+        self.write_reg(rd, ext);
     }
 
     /// Write `value` to `dst_reg`. If `dst_reg` is x0, the write is silently dropped.
@@ -1747,6 +2090,168 @@ fn lift_rvv_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
         ir_ops: ctx.ops,
         len: 4,
     })
+fn decode_riscv_zb_direct(
+    ctx: &mut LiftCtx,
+    opcode: u32,
+    rd: u32,
+    funct3: u32,
+    rs1: u32,
+    rs2: u32,
+    funct7: u32,
+    word: u32,
+) -> bool {
+    match opcode {
+        0x33 => match (funct7, funct3) {
+            // Zba: shifted-add and unsigned-word add forms.
+            (0x10, 0x2) => ctx.lift_shift_add(rv_reg(rd), rv_reg(rs1), rv_reg(rs2), 1, false), // sh1add
+            (0x10, 0x4) => ctx.lift_shift_add(rv_reg(rd), rv_reg(rs1), rv_reg(rs2), 2, false), // sh2add
+            (0x10, 0x6) => ctx.lift_shift_add(rv_reg(rd), rv_reg(rs1), rv_reg(rs2), 3, false), // sh3add
+            (0x04, 0x0) => ctx.lift_add_uw(rv_reg(rd), rv_reg(rs1), rv_reg(rs2)), // add.uw
+            (0x10, 0x3) => ctx.lift_shift_add(rv_reg(rd), rv_reg(rs1), rv_reg(rs2), 1, true), // sh1add.uw
+            (0x10, 0x5) => ctx.lift_shift_add(rv_reg(rd), rv_reg(rs1), rv_reg(rs2), 2, true), // sh2add.uw
+            (0x10, 0x7) => ctx.lift_shift_add(rv_reg(rd), rv_reg(rs1), rv_reg(rs2), 3, true), // sh3add.uw
+
+            // Zbb logic and rotate/min-max operations.
+            (0x20, 0x7) => ctx.lift_andn(rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            (0x20, 0x6) => ctx.lift_orn(rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            (0x20, 0x4) => ctx.lift_xnor(rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+            (0x04, 0x4) if rs2 == 0 => ctx.lift_zext_from_bytes(rv_reg(rd), rv_reg(rs1), 2), // zext.h
+            (0x30, 0x1) => {
+                ctx.lift_binary_callother(CALLOTHER_RISCV_ROL, rv_reg(rd), rv_reg(rs1), rv_reg(rs2))
+            }
+            (0x30, 0x5) => {
+                ctx.lift_binary_callother(CALLOTHER_RISCV_ROR, rv_reg(rd), rv_reg(rs1), rv_reg(rs2))
+            }
+            (0x05, 0x4) => {
+                ctx.lift_binary_callother(CALLOTHER_RISCV_MIN, rv_reg(rd), rv_reg(rs1), rv_reg(rs2))
+            }
+            (0x05, 0x5) => ctx.lift_binary_callother(
+                CALLOTHER_RISCV_MINU,
+                rv_reg(rd),
+                rv_reg(rs1),
+                rv_reg(rs2),
+            ),
+            (0x05, 0x6) => {
+                ctx.lift_binary_callother(CALLOTHER_RISCV_MAX, rv_reg(rd), rv_reg(rs1), rv_reg(rs2))
+            }
+            (0x05, 0x7) => ctx.lift_binary_callother(
+                CALLOTHER_RISCV_MAXU,
+                rv_reg(rd),
+                rv_reg(rs1),
+                rv_reg(rs2),
+            ),
+
+            // Zbc carry-less multiply operations.
+            (0x05, 0x1) => ctx.lift_binary_callother(
+                CALLOTHER_RISCV_CLMUL,
+                rv_reg(rd),
+                rv_reg(rs1),
+                rv_reg(rs2),
+            ),
+            (0x05, 0x3) => ctx.lift_binary_callother(
+                CALLOTHER_RISCV_CLMULH,
+                rv_reg(rd),
+                rv_reg(rs1),
+                rv_reg(rs2),
+            ),
+            (0x05, 0x2) => ctx.lift_binary_callother(
+                CALLOTHER_RISCV_CLMULR,
+                rv_reg(rd),
+                rv_reg(rs1),
+                rv_reg(rs2),
+            ),
+
+            // Zbs single-bit register forms.
+            (0x14, 0x1) => ctx.lift_bset(rv_reg(rd), rv_reg(rs1), read_reg(rv_reg(rs2))),
+            (0x24, 0x1) => ctx.lift_bclr(rv_reg(rd), rv_reg(rs1), read_reg(rv_reg(rs2))),
+            (0x34, 0x1) => ctx.lift_binv(rv_reg(rd), rv_reg(rs1), read_reg(rv_reg(rs2))),
+            (0x24, 0x5) => ctx.lift_bext(rv_reg(rd), rv_reg(rs1), read_reg(rv_reg(rs2))),
+            _ => return false,
+        },
+        0x13 => {
+            let shamt = (word >> 20) & 0x3f;
+            let funct6 = (word >> 26) & 0x3f;
+            match funct3 {
+                0x1 => match funct6 {
+                    0x09 => {
+                        ctx.lift_bset(rv_reg(rd), rv_reg(rs1), Varnode::constant(shamt as u64, 8))
+                    } // bseti
+                    0x11 => {
+                        ctx.lift_bclr(rv_reg(rd), rv_reg(rs1), Varnode::constant(shamt as u64, 8))
+                    } // bclri
+                    0x19 => {
+                        ctx.lift_binv(rv_reg(rd), rv_reg(rs1), Varnode::constant(shamt as u64, 8))
+                    } // binvi
+                    _ => return false,
+                },
+                0x5 => match (funct7, rs2) {
+                    (0x30, 0x00) => ctx.lift_unary_to_reg(IrOp::Lzcount, rv_reg(rd), rv_reg(rs1)),
+                    (0x30, 0x01) => {
+                        ctx.lift_unary_callother(CALLOTHER_RISCV_CTZ, rv_reg(rd), rv_reg(rs1))
+                    }
+                    (0x30, 0x02) => ctx.lift_unary_to_reg(IrOp::Popcount, rv_reg(rd), rv_reg(rs1)),
+                    (0x30, 0x04) => ctx.lift_sext_from_bytes(rv_reg(rd), rv_reg(rs1), 1),
+                    (0x30, 0x05) => ctx.lift_sext_from_bytes(rv_reg(rd), rv_reg(rs1), 2),
+                    (0x34, 0x07) => {
+                        ctx.lift_callother_ri(CALLOTHER_RISCV_ORC_B, rv_reg(rd), rv_reg(rs1), 0)
+                    }
+                    (0x34, 0x18) => {
+                        ctx.lift_callother_ri(CALLOTHER_RISCV_REV8, rv_reg(rd), rv_reg(rs1), 0)
+                    }
+                    _ => match funct6 {
+                        0x18 => ctx.lift_callother_ri(
+                            CALLOTHER_RISCV_ROR,
+                            rv_reg(rd),
+                            rv_reg(rs1),
+                            shamt as u64,
+                        ), // rori
+                        0x12 => ctx.lift_bext(
+                            rv_reg(rd),
+                            rv_reg(rs1),
+                            Varnode::constant(shamt as u64, 8),
+                        ), // bexti
+                        _ => return false,
+                    },
+                },
+                _ => return false,
+            }
+        }
+        0x1b => {
+            let shamt = (word >> 20) & 0x1f;
+            let funct7 = (word >> 25) & 0x7f;
+            match (funct7, funct3, rs2) {
+                (0x04, 0x1, _) => ctx.lift_slli_uw(rv_reg(rd), rv_reg(rs1), shamt as u64),
+                (0x30, 0x1, _) => ctx.lift_callother_ri(
+                    CALLOTHER_RISCV_ROR,
+                    rv_reg(rd),
+                    rv_reg(rs1),
+                    shamt as u64,
+                ), // roriw
+                (0x30, 0x5, 0x00) => {
+                    ctx.lift_word_unary_to_reg(IrOp::Lzcount, rv_reg(rd), rv_reg(rs1))
+                }
+                (0x30, 0x5, 0x01) => {
+                    ctx.lift_word_callother(CALLOTHER_RISCV_CTZ, rv_reg(rd), rv_reg(rs1))
+                }
+                (0x30, 0x5, 0x02) => {
+                    ctx.lift_word_unary_to_reg(IrOp::Popcount, rv_reg(rd), rv_reg(rs1))
+                }
+                _ => return false,
+            }
+        }
+        0x3b => match (funct7, funct3) {
+            (0x04, 0x0) => ctx.lift_add_uw(rv_reg(rd), rv_reg(rs1), rv_reg(rs2)), // add.uw (some assemblers accept OP-32 aliases)
+            (0x30, 0x1) => {
+                ctx.lift_binary_callother(CALLOTHER_RISCV_ROL, rv_reg(rd), rv_reg(rs1), rv_reg(rs2))
+            } // rolw
+            (0x30, 0x5) => {
+                ctx.lift_binary_callother(CALLOTHER_RISCV_ROR, rv_reg(rd), rv_reg(rs1), rv_reg(rs2))
+            } // rorw
+            _ => return false,
+        },
+        _ => return false,
+    }
+    true
 }
 
 fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
@@ -1788,6 +2293,11 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
                 len: 4,
             });
         }
+    if decode_riscv_zb_direct(&mut ctx, opcode, rd, funct3, rs1, rs2, funct7, word) {
+        return Some(LiftedInsn {
+            ir_ops: ctx.ops,
+            len: 4,
+        });
     }
 
     match opcode {
@@ -3716,6 +4226,148 @@ mod tests {
     }
 
     // NOP (addi x0, x0, 0) → 0x00000013 (capstone pseudo: nop, 0 ops)
+
+    // -- RISC-V Zb* bitmanip extensions -----------------------------------
+    #[test]
+    fn test_zbb_andn_orn_xnor() {
+        let cases = [
+            (0x403170B3u32, IrOp::IntAnd), // andn x1, x2, x3
+            (0x403160B3u32, IrOp::IntOr),  // orn  x1, x2, x3
+            (0x403140B3u32, IrOp::IntXor), // xnor emits xor then not
+        ];
+        for (word, op) in cases {
+            let result = lifter()
+                .lift_insn(&word.to_le_bytes(), 0x1000)
+                .expect("decode Zbb logic");
+            assert_eq!(result.len, 4);
+            assert!(result.ir_ops.iter().any(|i| i.op == op));
+            assert!(
+                result
+                    .ir_ops
+                    .iter()
+                    .any(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 8)))
+            );
+        }
+    }
+
+    #[test]
+    fn test_zbb_count_and_sign_extend() {
+        let clz = lifter()
+            .lift_insn(&0x60015093u32.to_le_bytes(), 0x1000)
+            .expect("clz");
+        assert!(clz.ir_ops.iter().any(|i| i.op == IrOp::Lzcount));
+
+        let ctz = lifter()
+            .lift_insn(&0x60115093u32.to_le_bytes(), 0x1000)
+            .expect("ctz");
+        assert!(
+            ctz.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0] == Varnode::constant(CALLOTHER_RISCV_CTZ, 8))
+        );
+
+        let cpop = lifter()
+            .lift_insn(&0x60215093u32.to_le_bytes(), 0x1000)
+            .expect("cpop");
+        assert!(cpop.ir_ops.iter().any(|i| i.op == IrOp::Popcount));
+
+        let sext_b = lifter()
+            .lift_insn(&0x60415093u32.to_le_bytes(), 0x1000)
+            .expect("sext.b");
+        assert!(
+            sext_b
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Subpiece && i.output.map(|v| v.size) == Some(1))
+        );
+        assert!(sext_b.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
+    }
+
+    #[test]
+    fn test_zbb_rotate_and_rev8_tags() {
+        let rol = lifter()
+            .lift_insn(&0x603110B3u32.to_le_bytes(), 0x1000)
+            .expect("rol");
+        assert!(
+            rol.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0] == Varnode::constant(CALLOTHER_RISCV_ROL, 8))
+        );
+
+        let ror = lifter()
+            .lift_insn(&0x603150B3u32.to_le_bytes(), 0x1000)
+            .expect("ror");
+        assert!(
+            ror.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0] == Varnode::constant(CALLOTHER_RISCV_ROR, 8))
+        );
+
+        let rev8 = lifter()
+            .lift_insn(&0x69815093u32.to_le_bytes(), 0x1000)
+            .expect("rev8");
+        assert!(rev8.ir_ops.iter().any(|i| i.op == IrOp::Callother
+            && i.inputs[0] == Varnode::constant(CALLOTHER_RISCV_REV8, 8)));
+    }
+
+    #[test]
+    fn test_zba_shift_add_and_word_extend() {
+        let sh1add = lifter()
+            .lift_insn(&0x203120B3u32.to_le_bytes(), 0x1000)
+            .expect("sh1add");
+        assert!(sh1add.ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
+        assert!(sh1add.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
+
+        let zext_h = lifter()
+            .lift_insn(&0x080140B3u32.to_le_bytes(), 0x1000)
+            .expect("zext.h");
+        assert!(
+            zext_h
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Subpiece && i.output.map(|v| v.size) == Some(2))
+        );
+        assert!(zext_h.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
+    }
+
+    #[test]
+    fn test_zbs_single_bit_ops() {
+        let bset = lifter()
+            .lift_insn(&0x283110B3u32.to_le_bytes(), 0x1000)
+            .expect("bset");
+        assert!(bset.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
+
+        let bclr = lifter()
+            .lift_insn(&0x483110B3u32.to_le_bytes(), 0x1000)
+            .expect("bclr");
+        assert!(bclr.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
+
+        let binv = lifter()
+            .lift_insn(&0x683110B3u32.to_le_bytes(), 0x1000)
+            .expect("binv");
+        assert!(binv.ir_ops.iter().any(|i| i.op == IrOp::IntXor));
+
+        let bext = lifter()
+            .lift_insn(&0x483150B3u32.to_le_bytes(), 0x1000)
+            .expect("bext");
+        assert!(bext.ir_ops.iter().any(|i| i.op == IrOp::IntRight));
+        assert!(bext.ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
+    }
+
+    #[test]
+    fn test_zbc_and_minmax_callothers() {
+        let clmul = lifter()
+            .lift_insn(&0x0A3110B3u32.to_le_bytes(), 0x1000)
+            .expect("clmul");
+        assert!(clmul.ir_ops.iter().any(|i| i.op == IrOp::Callother
+            && i.inputs[0] == Varnode::constant(CALLOTHER_RISCV_CLMUL, 8)));
+
+        let min = lifter()
+            .lift_insn(&0x0A3140B3u32.to_le_bytes(), 0x1000)
+            .expect("min");
+        assert!(
+            min.ir_ops.iter().any(|i| i.op == IrOp::Callother
+                && i.inputs[0] == Varnode::constant(CALLOTHER_RISCV_MIN, 8))
+        );
+    }
+
     #[test]
     fn test_nop() {
         let bytes = 0x00000013u32.to_le_bytes();

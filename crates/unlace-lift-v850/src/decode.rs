@@ -340,6 +340,7 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
                     src: reg1,
                 }
                 V850Op::Unknown { hw0 } // SATSUBR
+                V850Op::Unknown { hw0 } // SATSUBR
                 V850Op::Satsubr { dst: reg2, src: reg1 }
             }
         }
@@ -352,6 +353,7 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
                     src: reg1,
                 }
                 V850Op::Unknown { hw0 } // SATSUB
+                V850Op::Unknown { hw0 } // SATSUB
                 V850Op::Satsub { dst: reg2, src: reg1 }
             }
         }
@@ -363,6 +365,7 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
                     dst: reg2,
                     src: reg1,
                 }
+                V850Op::Unknown { hw0 } // SATADD
                 V850Op::Unknown { hw0 } // SATADD
                 V850Op::Satadd { dst: reg2, src: reg1 }
             }
@@ -526,6 +529,10 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
                     disp: disp & !3,
                 }
             }
+        }
+        // Format IV: short load/store (ep-relative) — skip for MVP
+        (0b0110, _) | (0b0111, _) | (0b1000, _) | (0b1001, _) | (0b1010, _) => {
+            V850Op::Unknown { hw0 }
         }
 
         _ => V850Op::Unknown { hw0 },

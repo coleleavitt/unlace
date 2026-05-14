@@ -529,6 +529,9 @@ mod tests {
         let bytes = hw.to_le_bytes();
         // DIVH/SWITCH/FETRAP/RIE subspace is intentionally not modeled yet.
         let bytes = encode_format_i(5, 0b000010, 3);
+        // Format IV (short load/store) is not implemented — should emit Unimplemented
+        let hw: u16 = (5 << 11) | (0b0110 << 7) | 0;
+        let bytes = hw.to_le_bytes();
         let lifted = lift_bytes(&bytes, 0x1000);
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
     }

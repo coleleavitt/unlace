@@ -612,6 +612,7 @@ mod tests {
             dylibs: Vec::new(),
             rpaths: Vec::new(),
         pdb_types: None,
+        pdb_types: None,
         pdb_info: None,
             pdb_types: None,
             msvc_rtti: None,

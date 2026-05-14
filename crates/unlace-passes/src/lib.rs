@@ -45,6 +45,7 @@ pub mod idiom_recognition;
 pub mod indirect_call_resolve;
 pub mod inline_foldback;
 pub mod interproc_fixpoint;
+pub mod junk_code_removal;
 pub mod iv_elim;
 pub mod lazy_lift;
 pub mod libc_idioms;

@@ -1418,6 +1418,9 @@ fn flirt_resolved_names(image: &BinaryImage) -> BTreeMap<u64, String> {
     }
 
     resolved
+    flirt_db().match_function(bytes).map(str::to_string)
+        .match_function_for_arch(image.arch, bytes)
+        .map(str::to_string)
 }
 
 /// Whether `name` looks like a stripped-binary placeholder that FLIRT is

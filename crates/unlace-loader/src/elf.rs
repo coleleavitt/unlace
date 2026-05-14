@@ -115,6 +115,7 @@ where
         elf::EM_ARM => ArchId::Arm,
         elf::EM_AARCH64 => ArchId::AArch64,
         elf::EM_RISCV => ArchId::RiscV64,
+        elf::EM_68K => ArchId::M68k,
         elf::EM_MIPS => {
             if class == elf::ELFCLASS64 {
                 ArchId::Mips64

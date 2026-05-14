@@ -16,4 +16,5 @@ unlace-lift-ebpf = { workspace = true }
 unlace-lift-avr = { workspace = true }
 unlace-lift-agx = { workspace = true }
 unlace-lift-msp430 = { workspace = true }
+unlace-lift-m68k = { workspace = true }
 thiserror = { workspace = true }

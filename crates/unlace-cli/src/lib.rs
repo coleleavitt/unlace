@@ -61,6 +61,7 @@ pub fn parse_arch(s: &str) -> Result<ArchId> {
         "v850" => Ok(ArchId::V850),
         "arc" => Ok(ArchId::Arc),
         "msp430" | "msp" => Ok(ArchId::Msp430),
+        "m68k" | "m68000" | "68000" | "68020" | "coldfire" => Ok(ArchId::M68k),
         _ => bail!("unknown architecture: '{s}'"),
     }
 }

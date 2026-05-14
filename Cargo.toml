@@ -91,6 +91,7 @@ unlace-lift-rx = { path = "crates/unlace-lift-rx" }
 unlace-lift-agx = { path = "crates/unlace-lift-agx" }
 unlace-lift-sparc = { path = "crates/unlace-lift-sparc" }
 unlace-lift-msp430 = { path = "crates/unlace-lift-msp430" }
+unlace-lift-m68k = { path = "crates/unlace-lift-m68k" }
 unlace-passes = { path = "crates/unlace-passes" }
 unlace-struct = { path = "crates/unlace-struct" }
 unlace-output = { path = "crates/unlace-output" }

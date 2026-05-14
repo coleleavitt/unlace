@@ -44,7 +44,7 @@ use crate::hir::HirNode;
 /// recurses so CSE applies inside nested constructs as well. CSE does
 /// **not** cross the boundary into a nested construct (the contents of
 /// an `If` arm are CSE'd independently of the surrounding region).
-pub fn eliminate_common_subexpressions(body: &mut Vec<HirNode>) {
+pub fn eliminate_common_subexpressions(body: &mut [HirNode]) {
     // Recurse into children first (so the nested transforms are visible
     // when we walk this level's statement window).
     for node in body.iter_mut() {
@@ -208,9 +208,10 @@ fn cse_flat(nodes: &mut [HirNode]) {
                     // Record operand reads (no write effect, just kept
                     // for future invalidation logic). Then record the
                     // write to `insn.output` (if any).
-                    if can_cse && insn.output.is_some() {
+                    if let Some(output) = insn.output
+                        && can_cse
+                    {
                         let key = ExprKey::of(insn);
-                        let output = insn.output.expect("can_cse");
                         // Only record if this is the FIRST occurrence
                         // (don't blow away a still-valid prior entry —
                         // but we already checked it was invalid above

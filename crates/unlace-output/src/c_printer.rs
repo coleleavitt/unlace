@@ -719,7 +719,7 @@ pub fn print_c_with_annotations(
     // the inference can only approximate).
     let return_type_str = dwarf_func
         .and_then(|df| df.return_type.as_deref())
-        .map(|s| dwarf_type_to_c(s))
+        .map(dwarf_type_to_c)
         .or_else(|| {
             func.finalized_signature
                 .as_ref()
@@ -770,7 +770,7 @@ pub fn print_c_with_annotations(
             let ty = param
                 .type_name
                 .as_deref()
-                .map(|s| dwarf_type_to_c(s))
+                .map(dwarf_type_to_c)
                 .unwrap_or_else(|| "int".to_string());
             let name = param.name.as_deref().unwrap_or("arg");
             let _ = write!(out, "{} {}", ty, name);
@@ -1187,7 +1187,7 @@ fn emit_rtti_hierarchy(rtti: &unlace_loader::RttiInfo, out: &mut String) {
         }
     }
 
-    out.push_str(" ");
+    out.push(' ');
     out.push_str(RTTI_BLOCK_END);
     out.push('\n');
     out.push('\n');
@@ -2332,11 +2332,9 @@ fn try_array_struct_field_access(
             }
         }
     }
-    for outputs in ctx.stmt_outputs.values() {
-        if let Some(sv) = outputs {
-            if ctx.name_overrides.contains_key(&sv.base) {
-                iv_candidates.insert(*sv);
-            }
+    for sv in ctx.stmt_outputs.values().flatten() {
+        if ctx.name_overrides.contains_key(&sv.base) {
+            iv_candidates.insert(*sv);
         }
     }
     if iv_candidates.is_empty() {
@@ -3244,6 +3242,10 @@ fn compute_byref_bases(ctx: &mut PrintCtx) {
 /// `stmt_insns` in `next_stmt`-order (canonical emission order set up
 /// by [`collect_varnodes`]). Non-constant addresses are ignored — those
 /// could be aliasing pointers and we have no taint analysis here.
+// `collapsible_match` would force the readable `if cond { body }` inside each
+// match arm to migrate into match-guards, which hurts readability for these
+// heuristic blocks. Keep the original shape.
+#[allow(clippy::collapsible_match, clippy::collapsible_if)]
 fn detect_mmio_addrs(ctx: &mut PrintCtx) {
     use std::collections::BTreeMap;
     // Per-address state: (consecutive_loads, consecutive_stores).
@@ -3261,7 +3263,7 @@ fn detect_mmio_addrs(ctx: &mut PrintCtx) {
 
     // Iterate in statement order. `stmt_insns` is keyed by stmt_idx so
     // BTreeMap order is the canonical emit order.
-    for (_idx, insn) in ctx.stmt_insns.iter() {
+    for insn in ctx.stmt_insns.values() {
         match insn.op {
             IrOp::Load => {
                 // Load inputs = [space, address]. Only constant addresses
@@ -3871,6 +3873,9 @@ fn record_role(roles: &mut BTreeMap<Varnode, VarRole>, base: Varnode, role: VarR
 
 /// HIR walker — collects roles that need the structured tree (Return, If/While
 /// conditions, switch, etc.).
+// Keep the readable `match { Variant => if cond { ... } }` shape rather than
+// collapsing into match guards.
+#[allow(clippy::collapsible_match, clippy::collapsible_if)]
 fn walk_collect_roles(nodes: &[HirNode], ctx: &PrintCtx, roles: &mut BTreeMap<Varnode, VarRole>) {
     for node in nodes {
         match node {
@@ -4267,7 +4272,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
             if group_has_terminal {
                 let next_is_label = nodes
                     .get(i)
-                    .map_or(false, |n| matches!(n, HirNode::Label(_)));
+                    .is_some_and(|n| matches!(n, HirNode::Label(_)));
                 if !next_is_label {
                     break;
                 }
@@ -4280,7 +4285,7 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
             // Don't break if the next node is a Label — labels must still be emitted
             let next_is_label = nodes
                 .get(i + 1)
-                .map_or(false, |n| matches!(n, HirNode::Label(_)));
+                .is_some_and(|n| matches!(n, HirNode::Label(_)));
             if !next_is_label {
                 break;
             }
@@ -5056,9 +5061,9 @@ fn tail_call_target_name(target: u64, ctx: &PrintCtx) -> String {
 ///
 /// * Non-void parent: `return callee();`
 /// * Void parent:    `callee();` — the structurer already emits a trailing
-///                   `Return(None)` after the tail call, so we don't add a
-///                   second `return;` here (which would render as the ugly
-///                   `callee(); return; return;` triple).
+///   `Return(None)` after the tail call, so we don't add a
+///   second `return;` here (which would render as the ugly
+///   `callee(); return; return;` triple).
 ///
 /// The callee is resolved against the symbol table (with demangling) so the
 /// emitted form matches the rest of the pretty-printer's call sites instead
@@ -5255,7 +5260,7 @@ fn objc_bracket_call(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
 pub fn objc_type_encoding_to_c(encoding: &str) -> String {
     let trimmed = encoding.trim();
     let trimmed =
-        trimmed.trim_start_matches(|c: char| matches!(c, 'r' | 'n' | 'N' | 'o' | 'O' | 'R' | 'V'));
+        trimmed.trim_start_matches(['r', 'n', 'N', 'o', 'O', 'R', 'V']);
     match trimmed {
         "c" => return "char".into(),
         "C" => return "unsigned char".into(),
@@ -7824,7 +7829,7 @@ fn format_int_literal(value: u64, width: u8, _ctx: &PrintCtx) -> String {
     // 1. Printable ASCII character — emit a C char literal. We exclude
     //    backslash and single-quote because rendering those requires an
     //    escape sequence, and the spec says "no escape needed".
-    if value <= 0x7E && value >= 0x20 && value != b'\\' as u64 && value != b'\'' as u64 {
+    if (0x20..=0x7E).contains(&value) && value != b'\\' as u64 && value != b'\'' as u64 {
         return format!("'{}'", value as u8 as char);
     }
 
@@ -8748,28 +8753,10 @@ fn is_redundant_same_size_cast(input: &Varnode, output_size: u8) -> bool {
     input.size == output_size
 }
 
-/// Decide whether a `(to)(value)` cast carries information worth emitting.
-///
-/// The C printer otherwise emits a cast at every `IrOp::Cast` / `IntZext` /
-/// `IntSext` site, which produces a torrent of redundant `(unsigned __int64)`
-/// / `(__int32)` noise on values whose flow-sensitive type already matches
-/// the destination. This predicate is the gatekeeper: returning `false`
-/// suppresses the cast entirely.
-///
-/// Rules (kept conservative — when in doubt, **emit** the cast so semantics
-/// are never silently dropped):
-///
-/// * Same width + same signedness → `false` (purely cosmetic noise).
-/// * Different width on integers (sign-extend, zero-extend, truncation) →
-///   `true` — the cast changes the value's representation.
-/// * Pointer ↔ integer in either direction → `true` (always meaningful in C).
-/// * Either side is [`PrimitiveType::Unknown`] → `false` — Unknown is the
-///   lattice bottom, so we have no basis to claim the cast is informative
-///   and the surrounding context will paint the type anyway. This avoids
-///   "noise" casts on un-inferred temporaries.
-/// * `Bool` ↔ `Bool` → `false`; `Bool` ↔ anything else → `true`.
-/// * Float family: same-kind → `false`; otherwise (Float↔Double, Float↔Int,
-///   Double↔Int) → `true`.
+// (Doc block for a former `is_cast_informative` predicate removed when the
+// function it documented was deleted; the rule list lives in the printer's
+// design notes now.)
+
 /// Look up the inferred flow-sensitive type of a *use* of `input` at the
 /// statement `stmt_idx`. Returns [`PrimitiveType::Unknown`] when the input
 /// is a constant (no SSA name) or the type inference pass did not assign

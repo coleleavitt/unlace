@@ -99,7 +99,7 @@ pub fn demangle(name: &str) -> Option<DemangleResult> {
     let is_ctor = symbol_kind == SymbolKind::Constructor
         || class_name
             .as_deref()
-            .map_or(false, |c| !c.is_empty() && c == final_component);
+            .is_some_and(|c| !c.is_empty() && c == final_component);
     let is_dtor = symbol_kind == SymbolKind::Destructor || final_component.starts_with('~');
 
     let symbol_kind = match symbol_kind {
@@ -277,7 +277,7 @@ fn parse_signature(full: &str) -> (Vec<String>, Option<String>, Vec<String>) {
             .map(|s| s.trim().to_string())
             .collect();
         let class = ns.last().map(|s| strip_template_args(s).to_string());
-        ns = ns.into_iter().filter(|s| !s.is_empty()).collect();
+        ns.retain(|s| !s.is_empty());
         (ns, class)
     };
 
@@ -397,13 +397,16 @@ fn split_top_level_scope(s: &str) -> Vec<String> {
             b')' if depth_paren > 0 => depth_paren -= 1,
             b'[' => depth_square += 1,
             b']' if depth_square > 0 => depth_square -= 1,
-            b':' if depth_angle == 0 && depth_paren == 0 && depth_square == 0 => {
-                if i + 1 < bytes.len() && bytes[i + 1] == b':' {
-                    out.push(s[start..i].to_string());
-                    i += 2;
-                    start = i;
-                    continue;
-                }
+            b':' if depth_angle == 0
+                && depth_paren == 0
+                && depth_square == 0
+                && i + 1 < bytes.len()
+                && bytes[i + 1] == b':' =>
+            {
+                out.push(s[start..i].to_string());
+                i += 2;
+                start = i;
+                continue;
             }
             _ => {}
         }

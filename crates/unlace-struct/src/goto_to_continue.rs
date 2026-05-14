@@ -8,6 +8,7 @@ pub fn goto_to_continue(func: &mut HirFunction) {
     rewrite_scope(&mut func.body);
 }
 
+#[allow(clippy::needless_range_loop)] // index used to look up sibling `loop_header_targets`
 fn rewrite_scope(nodes: &mut [HirNode]) {
     let loop_header_targets: Vec<Option<LabelId>> = nodes
         .windows(2)

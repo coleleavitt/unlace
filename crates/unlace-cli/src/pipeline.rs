@@ -65,7 +65,7 @@ use unlace_passes::{
     ConstantFoldPass, CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
     DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass,
     GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass,
-    OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
+    OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, RustVtablePass, SccpPass,
     SignatureSnapshot, StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass,
     StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     VariableMergePass, annotate_libc_calls, bump_if_signature_changed, detect_byref,
@@ -865,6 +865,7 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             // BTreeMap<i64, StackLocal> instead of re-walking the IR.
             ssa.stack_frame = Some(recover_stack_frame(ssa));
             CppVtablePass.run(ssa)?;
+            RustVtablePass.run(ssa)?;
 
             // ---- Type recovery ----
             CallingConventionDetectPass.run(ssa)?;
@@ -1463,6 +1464,29 @@ pub fn decompile_function_with_symbols(
     printer_annotations.go_interfaces = image.go_types.clone();
     printer_annotations.libc_call_canonical = libc_call_canonical;
     printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
+
+    // t298: Extract Rust trait-object vtable dispatch annotations (keyed by CALLIND VA).
+    let mut rust_vtable_calls: BTreeMap<u64, unlace_ir::ssa::VtableCallInfo> = BTreeMap::new();
+    for (&(bid, idx), info) in &ssa.vtable_calls {
+        if let Some(block) = ssa.function.blocks.get(&bid) {
+            if let Some(insn) = block.insns.get(idx) {
+                rust_vtable_calls.insert(insn.addr, info.clone());
+            }
+        }
+    }
+    printer_annotations.rust_vtable_calls = rust_vtable_calls;
+
+    // t298: Extract C++ virtual dispatch annotations (keyed by CALLIND VA).
+    let mut cpp_vtable_calls: BTreeMap<u64, unlace_ir::ssa::VtableCallInfo> = BTreeMap::new();
+    for (&(bid, idx), info) in &ssa.cpp_vtable_calls {
+        if let Some(block) = ssa.function.blocks.get(&bid) {
+            if let Some(insn) = block.insns.get(idx) {
+                cpp_vtable_calls.insert(insn.addr, info.clone());
+            }
+        }
+    }
+    printer_annotations.cpp_vtable_calls = cpp_vtable_calls;
+
     let printer_annotations = Some(printer_annotations);
     let result = emit_output(
         emit,

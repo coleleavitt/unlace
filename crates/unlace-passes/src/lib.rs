@@ -27,6 +27,7 @@ pub mod bb_align;
 pub mod diff_coverage;
 pub mod cve_classify;
 pub mod live_concrete;
+pub mod symex_coverage;
 pub mod cpp_stl;
 pub mod cpp_variant;
 pub mod cpp_lambda;

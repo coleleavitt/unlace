@@ -607,6 +607,18 @@ pub struct SsaFunction {
     /// C printer as a source-like `[&x, this]` annotation on lambda
     /// `operator()` functions.
     pub cpp_lambda_captures: Vec<CppLambdaCapture>,
+    /// MSVC structured exception handling (SEH) regions recovered from
+    /// `__C_specific_handler` scope tables. Each entry describes a
+    /// `__try { ... } __except(filter) { ... }` or
+    /// `__try { ... } __finally { ... }` region. Populated by
+    /// `unlace_passes::msvc_seh::MsvcSehPass`.
+    pub seh_regions: Vec<SehRegion>,
+    /// C++20 coroutine frame metadata recovered by
+    /// `unlace_passes::cpp_coroutine::CppCoroutinePass`. Each entry
+    /// describes a coroutine ramp/resume/destroy function and its
+    /// suspension points (`co_await` / `co_yield`). Empty until the pass
+    /// runs.
+    pub coroutine_sites: Vec<CoroutineSite>,
 }
 
 /// One recovered C++ lambda capture.
@@ -620,6 +632,92 @@ pub struct CppLambdaCapture {
     pub ty: Option<crate::types::Type>,
     /// Byte offset in the closure object when known.
     pub offset: Option<u64>,
+}
+
+/// A recovered MSVC structured exception handling (SEH) region.
+///
+/// Annotated onto [`SsaFunction::seh_regions`] so the C printer can
+/// reconstitute the original `__try`/`__except`/`__finally` source shape.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SehRegion {
+    /// Blocks covered by the `__try { ... }` body.
+    pub try_blocks: Vec<BlockId>,
+    /// Address of the filter expression function (`__except(expr)` part).
+    /// `None` for `__finally` regions.
+    pub filter: Option<u64>,
+    /// Blocks constituting the `__except { ... }` handler body.
+    pub handler_blocks: Vec<BlockId>,
+    /// Blocks constituting the `__finally { ... }` body.
+    pub finally_blocks: Vec<BlockId>,
+}
+
+/// Kind of a C++20 coroutine suspension point.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum SuspensionKind {
+    /// `co_await expr` — suspends and resumes when the awaited value is ready.
+    CoAwait,
+    /// `co_yield expr` — stores a value into the promise and suspends.
+    CoYield,
+    /// Initial or final suspension point inserted by the compiler.
+    Implicit,
+}
+
+/// A single suspension point in a C++20 coroutine.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SuspensionPoint {
+    /// Kind of suspension (`co_await`, `co_yield`, or implicit).
+    pub kind: SuspensionKind,
+    /// Suspension index stored into the frame's index field before returning.
+    pub index: u64,
+    /// Location of the store to the suspension index field.
+    pub store_loc: (BlockId, usize),
+    /// If `co_yield`: byte offset in the promise where the yielded value is
+    /// stored. `None` for pure `co_await` / implicit suspensions.
+    pub yield_value_offset: Option<u64>,
+}
+
+/// Role of a function within a C++20 coroutine triple.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CoroutineRole {
+    /// The ramp function: allocates the coroutine frame, stores resume/destroy
+    /// pointers, and performs the initial call to the resume path.
+    Ramp,
+    /// The resume (body) function: takes the frame pointer and advances
+    /// the coroutine state machine through suspension points.
+    Resume,
+    /// The destroy function: deallocates the coroutine frame.
+    Destroy,
+}
+
+/// Recovered C++20 coroutine frame metadata.
+///
+/// C++20 coroutines compile into a "split" ABI:
+/// - A **ramp** function allocates the coroutine frame (`operator new`),
+///   stores resume/destroy function pointers at known offsets (0/8),
+///   and returns the handle.
+/// - A **resume** function receives the frame pointer and executes the body,
+///   using a suspension-index field to dispatch to the correct resume point.
+/// - A **destroy** function receives the frame pointer and deallocates.
+///
+/// This struct captures the detected pattern so the decompiler can
+/// reconstruct `co_await` / `co_yield` pseudo-syntax.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CoroutineSite {
+    /// Role of the current function in the coroutine triple.
+    pub role: CoroutineRole,
+    /// Address of the frame allocation (`operator new` call) in the ramp,
+    /// or 0 if this is a resume/destroy function.
+    pub frame_alloc_addr: u64,
+    /// Byte offset within the frame where the resume function pointer is stored.
+    pub resume_fn_offset: u64,
+    /// Byte offset within the frame where the destroy function pointer is stored.
+    pub destroy_fn_offset: u64,
+    /// Byte offset of the suspension index field within the coroutine frame.
+    pub suspend_index_offset: u64,
+    /// Byte offset of the promise object within the coroutine frame (if detected).
+    pub promise_offset: Option<u64>,
+    /// Detected suspension points in the resume body.
+    pub suspension_points: Vec<SuspensionPoint>,
 }
 
 impl CppLambdaCapture {
@@ -876,6 +974,8 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         finalized_signature: None,
         crypto_annotations: Vec::new(),
         cpp_lambda_captures: Vec::new(),
+        seh_regions: Vec::new(),
+        coroutine_sites: Vec::new(),
     }
 }
 

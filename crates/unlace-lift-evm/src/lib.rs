@@ -8,6 +8,8 @@
 //! 256-bit immediates are represented by their low 128 bits, matching the
 //! largest practical scalar varnode size currently used by the IR).
 
+pub mod solidity;
+
 use smallvec::SmallVec;
 use tracing::trace;
 

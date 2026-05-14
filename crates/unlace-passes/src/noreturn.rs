@@ -170,6 +170,8 @@ mod tests {
             cpp_variant_discriminants: Vec::new(),
             go_defer_recover_calls: BTreeMap::new(),
             cpp_lambda_captures: Vec::new(),
+            seh_regions: Vec::new(),
+            coroutine_sites: Vec::new(),
             rust_async: None,
             vtable_calls: BTreeMap::new(),
             cpp_vtable_calls: BTreeMap::new(),

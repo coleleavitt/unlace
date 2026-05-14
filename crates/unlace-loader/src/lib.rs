@@ -36,6 +36,7 @@ pub mod strings;
 pub mod swift_metadata;
 pub mod til;
 pub mod uefi_module;
+pub mod ttd_trace;
 pub mod wasm_component;
 
 pub use objc::{

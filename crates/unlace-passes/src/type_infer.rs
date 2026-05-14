@@ -649,6 +649,8 @@ fn field_to_primitive(ty: &Type) -> PrimitiveType {
         Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } | Type::TypeParam { .. } => {
             PrimitiveType::Ptr
         }
+        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } => PrimitiveType::Ptr,
+        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } | Type::TypeParam { .. } => PrimitiveType::Ptr,
     }
 }
 

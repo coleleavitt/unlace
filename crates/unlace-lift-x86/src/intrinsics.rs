@@ -39,6 +39,10 @@ pub enum IntrinsicCategory {
     Avx512Arith,
     /// x87 FPU instructions: FLD, FSTP, FADD, FMUL, etc.
     X87Fpu,
+    /// Intel TSX hardware-transactional-memory ops: XBEGIN, XEND,
+    /// XABORT, XTEST. Surfaced to the C printer as `_xbegin/_xend/
+    /// _xabort/_xtest` intrinsics.
+    TsxTransaction,
     /// Anything that doesn't fit the above.
     Other,
 }
@@ -347,6 +351,17 @@ impl Default for IntrinsicRegistry {
             ("FUCOMP", info("__fucomp", 2, 0, X87Fpu)),
             ("FUCOMPP", info("__fucompp", 2, 0, X87Fpu)),
             ("FXCH", info("__fxch", 2, 0, X87Fpu)),
+            // ── Intel TSX hardware transactional memory (t312) ──────
+            //
+            // XBEGIN takes a relative fallback target and returns the
+            // 32-bit abort status in EAX; we model that with a single
+            // input (the resolved target address) and a 4-byte
+            // return-value slot. XEND/XTEST have no explicit operands;
+            // XABORT carries an imm8 status code.
+            ("XBEGIN", info("_xbegin", 1, 4, TsxTransaction)),
+            ("XEND", info("_xend", 0, 0, TsxTransaction)),
+            ("XABORT", info("_xabort", 1, 0, TsxTransaction)),
+            ("XTEST", info("_xtest", 0, 1, TsxTransaction)),
         ];
 
         let mut entries = BTreeMap::new();

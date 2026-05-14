@@ -19,6 +19,7 @@ pub mod const_fold;
 pub mod copy_prop;
 pub mod coverage_ingest;
 pub mod qemu_tcg;
+pub mod boost_recognize;
 pub mod cpp_stl;
 pub mod cpp_variant;
 pub mod cpp_lambda;

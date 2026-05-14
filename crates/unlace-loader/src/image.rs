@@ -414,6 +414,15 @@ pub struct BinaryImage {
     /// `interface { Method() }` Go-style comments above usages. Empty
     /// for non-Go binaries or when no interface types are reachable.
     pub go_types: std::collections::BTreeMap<u64, unlace_ir::types::Type>,
+    /// Recovered Go interface types keyed by their `runtime._type` VA
+    /// (t181). Populated by `populate_go_types_from_module` after the
+    /// moduledata parse; the C printer consumes this map to render
+    /// `interface { Method() }` Go-style comments above usages. Empty
+    /// for non-Go binaries or when no interface types are reachable.
+    pub go_types:
+        std::collections::BTreeMap<u64, unlace_ir::types::Type>,
+    pub go_types:
+        std::collections::BTreeMap<u64, unlace_ir::types::Type>,
     /// Swift 5+ runtime metadata recovered from Mach-O `__swift5_*`
     /// sections (t193). `None` for non-Swift binaries (the common
     /// case) or any image where none of the three sections is

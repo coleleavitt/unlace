@@ -111,6 +111,22 @@ pub enum Type {
     /// when known (e.g. `T`); `constraint` is the rendered Go syntax for
     /// the bound (usually `any` for dictionary-only recovery).
     TypeParam { name: String, constraint: String },
+    Map {
+        key: Box<Type>,
+        value: Box<Type>,
+    },
+    Map {
+        key: Box<Type>,
+        value: Box<Type>,
+    },
+    /// Go generic type parameter surfaced from post-1.18 metadata
+    /// (`runtime.dictabi`, t297). `name` is the source-style identifier
+    /// when known (e.g. `T`); `constraint` is the rendered Go syntax for
+    /// the bound (usually `any` for dictionary-only recovery).
+    TypeParam {
+        name: String,
+        constraint: String,
+    },
 }
 
 /// A single field within a [`Type::Struct`] or [`Type::Union`].
@@ -709,6 +725,16 @@ mod tests {
             value: Box::new(inner),
         };
         assert_eq!(outer.to_string(), "map[__int32]map[__int8][]__int32",);
+    }
+
+    #[test]
+    fn t297_type_param_display_and_size() {
+        let t = Type::TypeParam {
+            name: "T".into(),
+            constraint: "any".into(),
+        };
+        assert_eq!(t.to_string(), "T any");
+        assert_eq!(t.size(), Some(8));
     }
 
     #[test]

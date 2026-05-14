@@ -661,6 +661,9 @@ pub fn print_c_with_annotations(
                     format!("dictabi_0x{va:x}"),
                     format!("[{name} {constraint}]"),
                 ),
+                unlace_ir::types::Type::TypeParam { name, constraint } => {
+                    (format!("dictabi_0x{va:x}"), format!("[{name} {constraint}]"))
+                }
                 _ => continue,
             };
             if !emitted_any {
@@ -13009,6 +13012,8 @@ mod tests {
             output.contains("// dictabi_0x1234: [T any]"),
             "output was: {output}"
         );
+        let output = super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+        assert!(output.contains("// dictabi_0x1234: [T any]"), "output was: {output}");
     }
 
     // -------------------------------------------------------------------

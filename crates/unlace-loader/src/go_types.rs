@@ -729,6 +729,10 @@ fn resolve_go_type_at(
                     constraint: param.constraint.clone(),
                 })
         }
+        GoKind::DictAbi { params } => params.first().map(|param| unlace_ir::types::Type::TypeParam {
+            name: param.name.clone(),
+            constraint: param.constraint.clone(),
+        }),
         // Pointer / array / struct / func / chan resolution is out of
         // scope for t191 — surface them as opaque `void *` so a
         // map/slice that references them still registers cleanly.
@@ -1769,6 +1773,88 @@ mod tests {
                 name: "T".into(),
                 constraint: "any".into()
             })
+        buf[0x40] = 0; buf[0x41] = 1; buf[0x42] = b'T';
+        buf[0x50] = 0; buf[0x51] = 3; buf[0x52] = b'a'; buf[0x53] = b'n'; buf[0x54] = b'y';
+        buf[0x60] = 0; buf[0x61] = 1; buf[0x62] = b'U';
+
+        let t = parse_type_at(&buf, 0, ident).expect("decode dictabi");
+        match t.kind {
+            GoKind::DictAbi { params } => {
+                assert_eq!(params.len(), 2);
+                assert_eq!(params[0], GoTypeParam { name: "T".into(), constraint: "any".into() });
+                assert_eq!(params[1], GoTypeParam { name: "U".into(), constraint: "any".into() });
+            }
+            other => panic!("expected DictAbi, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn t297_populate_dictabi_registers_type_params() {
+        use std::collections::BTreeMap;
+        use unlace_ir::types::Type;
+        use unlace_ir::ArchId;
+        use crate::Endian;
+        use crate::go_moduledata::GoModuleInfo;
+        use crate::image::{BinaryImage, Section, SectionFlags};
+
+        const RODATA_BASE: u64 = 0x20000;
+        let dict_off = 0x80usize;
+        let dict_va = RODATA_BASE + dict_off as u64;
+        let mut rodata = vec![0u8; 0x200];
+        rodata[dict_off..dict_off + 4].copy_from_slice(&1u32.to_le_bytes());
+        rodata[dict_off + 8..dict_off + 16].copy_from_slice(&(RODATA_BASE + 0x140).to_le_bytes());
+        rodata[dict_off + 16..dict_off + 24].copy_from_slice(&(RODATA_BASE + 0x150).to_le_bytes());
+        rodata[0x140] = 0; rodata[0x141] = 1; rodata[0x142] = b'T';
+        rodata[0x150] = 0; rodata[0x151] = 3; rodata[0x152] = b'a'; rodata[0x153] = b'n'; rodata[0x154] = b'y';
+
+        let mut img = BinaryImage {
+            arch: ArchId::X86_64,
+            endian: Endian::Little,
+            entry: 0,
+            sections: vec![Section {
+                name: ".rodata".into(),
+                vaddr: RODATA_BASE,
+                size: rodata.len() as u64,
+                data: rodata,
+                flags: SectionFlags::READ,
+            }],
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: Vec::new(),
+            string_table: BTreeMap::new(),
+            tls_callbacks: Vec::new(),
+            function_starts: Vec::new(),
+            debug_records: Vec::new(),
+            load_config: None,
+            runtime_functions: Vec::new(),
+            resources: Vec::new(),
+            bound_imports: Vec::new(),
+            delay_imports: Vec::new(),
+            forwarded_exports: Vec::new(),
+            forwarded_resolutions: BTreeMap::new(),
+            rich_header: None,
+            dylibs: Vec::new(),
+            rpaths: Vec::new(),
+            pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: Some(GoModuleInfo {
+                types_va: RODATA_BASE,
+                etypes_va: RODATA_BASE + 0x200,
+                typelinks: vec![dict_off as i32],
+                ..GoModuleInfo::default()
+            }),
+            go_itabs: BTreeMap::new(),
+            go_types: BTreeMap::new(),
+            swift_info: None,
+            auth_pointers: Vec::new(),
+            auth_ptr_slots: Vec::new(),
+        };
+
+        populate_go_types_from_module(&mut img);
+        assert_eq!(
+            img.go_types.get(&dict_va),
+            Some(&Type::TypeParam { name: "T".into(), constraint: "any".into() })
         );
     }
 

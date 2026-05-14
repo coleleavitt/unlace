@@ -48,7 +48,6 @@ pub const AC3: u64 = 368;
 pub const FPR_BASE: u64 = 384;
 pub const FCC0: u64 = FPR_BASE + 32 * 8;
 pub const FCSR: u64 = FCC0 + 8;
-pub const MSA_W0: u64 = 0x1000;
 
 const MIPS_REG_NAMES: [&str; 32] = [
     "$zero", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3", "$t0", "$t1", "$t2", "$t3", "$t4",
@@ -60,30 +59,8 @@ pub fn reg64(offset: u64) -> Varnode {
     Varnode::new(SpaceId::Register, offset, 4)
 }
 
-pub fn msa_reg_by_index(index: u8) -> Varnode {
-    Varnode::reg(MSA_W0 + (index as u64) * 16, 16)
-}
-
-pub fn msa_reg(reg: capstone::RegId) -> Option<Varnode> {
-    msa_reg_index(reg).map(msa_reg_by_index)
-}
-
-pub fn msa_reg_index(reg: capstone::RegId) -> Option<u8> {
-    use capstone::arch::mips::MipsReg::*;
-    let reg_u16: u16 = reg.0;
-    let first = MIPS_REG_W0 as u16;
-    let last = MIPS_REG_W31 as u16;
-    if (first..=last).contains(&reg_u16) {
-        Some((reg_u16 - first) as u8)
-    } else {
-        None
-    }
-}
-
 pub fn mips64_register_file() -> RegisterFile {
     let mut regs = Vec::with_capacity(78);
-    let mut regs = Vec::with_capacity(35);
-    let mut regs = Vec::with_capacity(44);
     for (i, name) in MIPS_REG_NAMES.iter().enumerate() {
         regs.push(RegisterDef {
             name,
@@ -198,41 +175,29 @@ pub fn capstone_reg_to_offset(reg: capstone::RegId) -> Option<u64> {
         x if x == MIPS_REG_29 as u16 => Some(SP),
         x if x == MIPS_REG_30 as u16 => Some(FP),
         x if x == MIPS_REG_31 as u16 => Some(RA),
-        x if x == MIPS_REG_ZERO as u16 => Some(ZERO),
-        x if x == MIPS_REG_AT as u16 => Some(AT),
-        x if x == MIPS_REG_V0 as u16 => Some(V0),
-        x if x == MIPS_REG_V1 as u16 => Some(V1),
-        x if x == MIPS_REG_A0 as u16 => Some(A0),
-        x if x == MIPS_REG_A1 as u16 => Some(A1),
-        x if x == MIPS_REG_A2 as u16 => Some(A2),
-        x if x == MIPS_REG_A3 as u16 => Some(A3),
-        x if x == MIPS_REG_T0 as u16 => Some(T0),
-        x if x == MIPS_REG_T1 as u16 => Some(T1),
-        x if x == MIPS_REG_T2 as u16 => Some(T2),
-        x if x == MIPS_REG_T3 as u16 => Some(T3),
-        x if x == MIPS_REG_T4 as u16 => Some(T4),
-        x if x == MIPS_REG_T5 as u16 => Some(T5),
-        x if x == MIPS_REG_T6 as u16 => Some(T6),
-        x if x == MIPS_REG_T7 as u16 => Some(T7),
-        x if x == MIPS_REG_S0 as u16 => Some(S0),
-        x if x == MIPS_REG_S1 as u16 => Some(S1),
-        x if x == MIPS_REG_S2 as u16 => Some(S2),
-        x if x == MIPS_REG_S3 as u16 => Some(S3),
-        x if x == MIPS_REG_S4 as u16 => Some(S4),
-        x if x == MIPS_REG_S5 as u16 => Some(S5),
-        x if x == MIPS_REG_S6 as u16 => Some(S6),
-        x if x == MIPS_REG_S7 as u16 => Some(S7),
-        x if x == MIPS_REG_T8 as u16 => Some(T8),
-        x if x == MIPS_REG_T9 as u16 => Some(T9),
-        x if x == MIPS_REG_K0 as u16 => Some(K0),
-        x if x == MIPS_REG_K1 as u16 => Some(K1),
-        x if x == MIPS_REG_GP as u16 => Some(GP),
-        x if x == MIPS_REG_SP as u16 => Some(SP),
-        x if x == MIPS_REG_FP as u16 => Some(FP),
-        x if x == MIPS_REG_S8 as u16 => Some(FP),
-        x if x == MIPS_REG_RA as u16 => Some(RA),
-        x if x == MIPS_REG_HI as u16 => Some(HI),
-        x if x == MIPS_REG_LO as u16 => Some(LO),
         _ => None,
+    }
+}
+
+// MSA (MIPS SIMD Architecture) register support
+pub const MSA_W0: u64 = 0x1000;
+
+pub fn msa_reg_by_index(index: u8) -> Varnode {
+    Varnode::reg(MSA_W0 + (index as u64) * 16, 16)
+}
+
+pub fn msa_reg(reg: capstone::RegId) -> Option<Varnode> {
+    msa_reg_index(reg).map(msa_reg_by_index)
+}
+
+pub fn msa_reg_index(reg: capstone::RegId) -> Option<u8> {
+    use capstone::arch::mips::MipsReg::*;
+    let reg_u16: u16 = reg.0;
+    let first = MIPS_REG_W0 as u16;
+    let last = MIPS_REG_W31 as u16;
+    if (first..=last).contains(&reg_u16) {
+        Some((reg_u16 - first) as u8)
+    } else {
+        None
     }
 }

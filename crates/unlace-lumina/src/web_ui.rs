@@ -70,7 +70,7 @@ pub struct BinaryMetadata {
 }
 
 /// Apply a filter to function summaries.
-pub fn filter_functions(functions: &[FunctionSummary], filter: &str) -> Vec<&FunctionSummary> {
+pub fn filter_functions<'a>(functions: &'a [FunctionSummary], filter: &str) -> Vec<&'a FunctionSummary> {
     let filter_lower = filter.to_lowercase();
     functions.iter()
         .filter(|f| f.name.to_lowercase().contains(&filter_lower) || format!("0x{:x}", f.addr).contains(&filter_lower))

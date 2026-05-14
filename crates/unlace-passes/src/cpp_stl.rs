@@ -25,8 +25,6 @@
 //! * `std::unordered_set<T>`
 //! * `std::shared_ptr<T>`
 //! * `std::unique_ptr<T>`        — drops trailing `std::default_delete<…>`
-//! * `std::function<R(Args...)>` — preserves callable signature
-//! * `std::function<R(Args...)>` — keeps the callable signature
 //! * `std::list<T>` / `std::deque<T>`
 //! * `std::optional<T>`          — discriminated value wrapper
 //! * `std::variant<Ts...>`       — tag-byte discriminated union
@@ -123,9 +121,6 @@ pub fn recognize_stl_type(namespaces: &[String], class_name: &str) -> Option<Str
             let elem = first_template_arg(&template_args)?;
             Some(format!("std::unique_ptr<{}>", clean_inline_ns(elem.trim())))
         }
-        "function" => {
-            let sig = first_template_arg(&template_args)?;
-            Some(format!("std::function<{}>", clean_inline_ns(sig.trim())))
         "optional" => {
             let elem = first_template_arg(&template_args)?;
             Some(format!("std::optional<{}>", clean_inline_ns(elem.trim())))
@@ -310,34 +305,6 @@ mod tests {
         assert_eq!(
             recognize_stl_type(&n, "unique_ptr").as_deref(),
             Some("std::unique_ptr<int>"),
-        );
-    }
-
-    #[test]
-    fn recognises_function_signature() {
-        let n = ns(&["std", "function<void (int)>"]);
-        assert_eq!(
-            recognize_stl_type(&n, "function").as_deref(),
-            Some("std::function<void (int)>"),
-        );
-    }
-
-    #[test]
-    fn recognises_function_signature_with_inline_namespace_types() {
-        let n = ns(&[
-            "std",
-            "__1",
-            "function<bool (std::__1::basic_string<char>)>",
-        ]);
-        let n = ns(&["std", "__1", "function<bool (std::__1::basic_string<char>)>"]);
-        assert_eq!(
-            recognize_stl_type(&n, "function").as_deref(),
-            Some("std::function<bool (std::basic_string<char>)>"),
-    fn recognises_std_function_signature() {
-        let n = ns(&["std", "function<void (int)>"]);
-        assert_eq!(
-            recognize_stl_type(&n, "function").as_deref(),
-            Some("std::function<void (int)>"),
         );
     }
 

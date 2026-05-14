@@ -65,37 +65,6 @@ use unlace_passes::{
     ConstantFoldPass, CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
     DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass,
     GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass,
-    OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, RustVtablePass, SccpPass,
-    BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppLambdaCapturePass, CppVtablePass, CsePass,
-    DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
-    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
-    GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
-    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, RustVtablePass, SccpPass, SignatureSnapshot,
-    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
-    BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppVariantPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
-    DeadCodeElimPass,
-    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
-    GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
-    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
-    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
-    BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
-    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GoIfaceDevirtPass,
-    GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
-    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
-    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
-    BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
-    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
-    GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
-    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, RustAsyncPass, SccpPass,
-    SignatureSnapshot, StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
-    CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
     SignatureSnapshot, StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass,
     StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
@@ -126,14 +95,6 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     let permissive_symbol_sizes = matches!(
         image.arch,
         ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::Agx
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::M68k
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::Sbpf
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::TriCore
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::AmdGpu
-        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::SharcBlackfin
     );
     let text_range = image.section_by_name(".text").map(|text| {
         let start = text.vaddr;
@@ -269,9 +230,7 @@ fn add_symbol_gap_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>)
 }
 
 fn add_post_entry_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
-    if !matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::M68k) {
     if !matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850) {
-    if !matches!(image.arch, ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::TriCore) {
         return;
     }
     let Some(text) = image.section_by_name(".text") else {
@@ -795,11 +754,6 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     Ok(report.ir_changes)
 }
 
-pub fn run_passes_with_image(ssa: &mut SsaFunction, image: &BinaryImage) -> Result<usize> {
-    let report = run_passes_with_report_and_image(ssa, Some(image))?;
-    Ok(report.ir_changes)
-}
-
 /// Detailed report from one [`run_passes`] invocation.
 ///
 /// Captures the outer-fixed-point behaviour: how many outer iterations ran,
@@ -840,13 +794,6 @@ pub struct PassesReport {
 ///    presentation-layer concerns and re-running them inside the loop
 ///    would either be redundant or risk oscillation.
 pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
-    run_passes_with_report_and_image(ssa, None)
-}
-
-pub fn run_passes_with_report_and_image(
-    ssa: &mut SsaFunction,
-    image: Option<&BinaryImage>,
-) -> Result<PassesReport> {
     // (1) One-time pre-pass: snapshot pre-optimization stack offsets so
     // later iterations of stack-var recovery still see the original
     // RSP/RBP-relative addressing.
@@ -912,25 +859,18 @@ pub fn run_passes_with_report_and_image(
             PrologueElimPass.run(ssa)?;
             TailCallDetectPass.run(ssa)?;
             StackVarRecoveryPass.run(ssa)?;
-            RustVtablePass.run(ssa)?;
             // Wave 24 / t209: synthesise the high-level stack frame layout
             // (one slot per offset, fused partial-access groups, array
             // collapsing) so the type-recovery layer can consume a stable
             // BTreeMap<i64, StackLocal> instead of re-walking the IR.
             ssa.stack_frame = Some(recover_stack_frame(ssa));
             CppVtablePass.run(ssa)?;
-            RustVtablePass.run(ssa)?;
-            CppVariantPass.run(ssa)?;
-            if let Some(image) = image {
-                GoIfaceDevirtPass::new(&image.go_itabs).run(ssa)?;
-            }
 
             // ---- Type recovery ----
             CallingConventionDetectPass.run(ssa)?;
             ParamInferPass.run(ssa)?;
             ReturnTypeInferPass.run(ssa)?;
             StructFieldDetectPass.run(ssa)?;
-            RustAsyncPass.run(ssa)?;
             // Wave 24 / t210: address-taken / byref bookkeeping. Runs
             // after ParamInferPass so the detector knows how many
             // parameter registers are "live" for this calling convention.
@@ -967,12 +907,6 @@ pub fn run_passes_with_report_and_image(
         );
     }
 
-    if let Some(image) = image {
-        GoIfaceDevirtPass::new(&image.go_itabs)
-            .run(ssa)
-            .context("Go interface devirtualization failed")?;
-    }
-
     // (3) Presentation-layer post-passes. These run once, after the type
     // and IR shape have stabilised, because they encode print-time
     // decisions that should be made against the final IR.
@@ -990,22 +924,6 @@ pub fn run_passes_with_report_and_image(
     // produced by the merger (it occasionally promotes a DWARF name into
     // its output map).
     VarNamingPass.run(ssa).context("var naming pass failed")?;
-
-    CppLambdaCapturePass
-        .run(ssa)
-        .context("cpp lambda capture pass failed")?;
-    VarNamingPass
-        .run(ssa)
-        .context("var naming pass failed")?;
-    VarNamingPass
-        .run(ssa)
-        .context("var naming pass failed")?;
-    VarNamingPass
-        .run(ssa)
-        .context("var naming pass failed")?;
-    VarNamingPass
-        .run(ssa)
-        .context("var naming pass failed")?;
 
     // t230 — calling-convention finalization. Runs last so the
     // dead-param drop, byte-mask narrowing, and caller-side
@@ -1313,15 +1231,6 @@ fn flirt_match_with_resolved(
     entry: &FunctionEntry,
     resolved: &BTreeMap<u64, String>,
 ) -> Option<String> {
-    flirt_best_match(image, entry)
-        .filter(|m| m.exact)
-        .map(|m| m.name.to_string())
-}
-
-fn flirt_best_match<'a>(
-    image: &'a BinaryImage,
-    entry: &FunctionEntry,
-) -> Option<unlace_loader::FlirtMatch<'a>> {
     if !is_flirt_eligible_name(&entry.name) {
         return None;
     }
@@ -1338,8 +1247,6 @@ fn flirt_best_match<'a>(
     let bytes = &text.data[off_start..off_end];
     flirt_db()
         .match_function_with_refs(bytes, resolved)
-    flirt_db().match_function(bytes).map(str::to_string)
-        .match_function_at_with_refs(bytes, start, resolved)
         .map(|m| m.name.to_string())
 }
 
@@ -1383,55 +1290,6 @@ fn flirt_resolved_names(image: &BinaryImage) -> BTreeMap<u64, String> {
     }
 
     resolved
-    flirt_db().match_function(bytes).map(str::to_string)
-    flirt_db().best_match(bytes)
-    flirt_db().match_function(bytes).map(str::to_string)
-        .map(|m| m.name.to_string())
-}
-
-fn flirt_resolved_names(image: &BinaryImage) -> BTreeMap<u64, String> {
-    let mut resolved = BTreeMap::new();
-    for (&addr, sym) in &image.symbols {
-        if sym.kind == SymbolKind::Function && !is_flirt_eligible_name(&sym.name) {
-            resolved.insert(addr, sym.name.clone());
-        }
-    }
-    for (&addr, name) in &image.plt_symbols {
-        resolved.insert(addr, name.clone());
-    }
-
-    let mut changed = true;
-    while changed {
-        changed = false;
-        let mut candidates: Vec<(u64, String)> = image
-            .symbols
-            .iter()
-            .filter(|(addr, sym)| {
-                sym.kind == SymbolKind::Function
-                    && is_flirt_eligible_name(&sym.name)
-                    && !resolved.contains_key(addr)
-            })
-            .filter_map(|(_addr, sym)| {
-                let entry = FunctionEntry {
-                    name: sym.name.clone(),
-                    addr: sym.addr,
-                    size: sym.size,
-                };
-                flirt_match_with_resolved(image, &entry, &resolved).map(|name| (sym.addr, name))
-            })
-            .collect();
-        candidates.sort_by_key(|(addr, _)| *addr);
-        for (addr, name) in candidates {
-            if resolved.insert(addr, name).is_none() {
-                changed = true;
-            }
-        }
-    }
-
-    resolved
-    flirt_db().match_function(bytes).map(str::to_string)
-        .match_function_for_arch(image.arch, bytes)
-        .map(str::to_string)
 }
 
 /// Whether `name` looks like a stripped-binary placeholder that FLIRT is
@@ -1460,14 +1318,6 @@ pub fn render_flirt_stub(canonical: &str, entry: &FunctionEntry) -> String {
     )
 }
 
-fn render_flirt_likely(name: &str, confidence: f32, entry: &FunctionEntry) -> String {
-    let pct = (confidence * 100.0).round().clamp(0.0, 100.0) as u32;
-    format!(
-        "// likely {name} (FLIRT {pct}%)\n// {} @ {:#x} (partial FLIRT match; decompiled body follows)\n",
-        entry.name, entry.addr,
-    )
-}
-
 pub fn decompile_function_with_symbols(
     image: &BinaryImage,
     lifter: &dyn Lifter,
@@ -1481,30 +1331,12 @@ pub fn decompile_function_with_symbols(
     let _span = tracing::debug_span!("decompile_function", func = %entry.name).entered();
     let deadline = Instant::now() + config.timeout;
 
-    let flirt_hint = if matches!(emit, EmitFormat::C) {
-        if let Some(candidate) = flirt_best_match(image, entry) {
-            if candidate.exact {
-                let canonical = candidate.name.to_string();
-                tracing::debug!(func = %entry.name, canonical = %canonical, "flirt match; eliding body");
-                return Ok(render_flirt_stub(&canonical, entry));
-            }
-            tracing::debug!(
-                func = %entry.name,
-                canonical = candidate.name,
-                confidence = candidate.confidence,
-                "partial flirt match; surfacing confidence hint"
-            );
-            Some(render_flirt_likely(
-                candidate.name,
-                candidate.confidence,
-                entry,
-            ))
-        } else {
-            None
+    if matches!(emit, EmitFormat::C) {
+        if let Some(canonical) = flirt_match(image, entry) {
+            tracing::debug!(func = %entry.name, canonical = %canonical, "flirt match; eliding body");
+            return Ok(render_flirt_stub(&canonical, entry));
         }
-    } else {
-        None
-    };
+    }
 
     let t = Instant::now();
     let mut ir_func = lift_function(image, lifter, entry)?;
@@ -1562,7 +1394,7 @@ pub fn decompile_function_with_symbols(
     check_timeout(deadline, &entry.name)?;
 
     let t = Instant::now();
-    if let Err(e) = run_passes_with_image(&mut ssa, image) {
+    if let Err(e) = run_passes(&mut ssa) {
         tracing::warn!(err = %e, "pass pipeline failed; emitting unoptimized");
     }
     tracing::trace!(
@@ -1603,9 +1435,6 @@ pub fn decompile_function_with_symbols(
     // target resolves to a unique method pointer recorded in a
     // `runtime.itab`, surface the concrete method symbol at print time.
     let go_iface_devirtualized_calls = collect_go_iface_devirtualized_calls(&ssa, image, &symbols);
-    // t302: Go `defer` / `recover` helpers are symbol-driven too. Record
-    // source-style annotations before structuring/printing.
-    populate_go_defer_recover_annotations(&mut ssa, &symbols);
 
     // Re-key (BlockId, insn_idx) → canonical name to (call_va → canonical
     // name) for the printer, which sees instructions only by their VA.
@@ -1614,23 +1443,6 @@ pub fn decompile_function_with_symbols(
         if let Some(block) = ssa.function.blocks.get(&bid) {
             if let Some(insn) = block.insns.get(idx) {
                 libc_call_canonical.insert(insn.addr, canonical.clone());
-            }
-        }
-    }
-
-    let mut rust_vtable_calls: BTreeMap<u64, unlace_ir::ssa::VtableCallInfo> = BTreeMap::new();
-    for (&(bid, idx), info) in &ssa.vtable_calls {
-        if let Some(block) = ssa.function.blocks.get(&bid) {
-            if let Some(insn) = block.insns.get(idx) {
-                rust_vtable_calls.insert(insn.addr, info.clone());
-            }
-        }
-    }
-    let mut cpp_vtable_calls: BTreeMap<u64, unlace_ir::ssa::VtableCallInfo> = BTreeMap::new();
-    for (&(bid, idx), info) in &ssa.cpp_vtable_calls {
-        if let Some(block) = ssa.function.blocks.get(&bid) {
-            if let Some(insn) = block.insns.get(idx) {
-                cpp_vtable_calls.insert(insn.addr, info.clone());
             }
         }
     }
@@ -1649,46 +1461,8 @@ pub fn decompile_function_with_symbols(
     let objc_info = unlace_loader::scan_objc_classlist(image);
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
     printer_annotations.go_interfaces = image.go_types.clone();
-    if let Some(swift_info) = &image.swift_info {
-    if let Some(swift_info) = image.swift_info.as_ref() {
-        printer_annotations.swift_conformances = swift_info.conformances.clone();
-    }
     printer_annotations.libc_call_canonical = libc_call_canonical;
     printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
-
-    // t298: Extract Rust trait-object vtable dispatch annotations (keyed by CALLIND VA).
-    let mut rust_vtable_calls: BTreeMap<u64, unlace_ir::ssa::VtableCallInfo> = BTreeMap::new();
-    for (&(bid, idx), info) in &ssa.vtable_calls {
-        if let Some(block) = ssa.function.blocks.get(&bid) {
-            if let Some(insn) = block.insns.get(idx) {
-                rust_vtable_calls.insert(insn.addr, info.clone());
-            }
-        }
-    }
-    printer_annotations.rust_vtable_calls = rust_vtable_calls;
-
-    // t298: Extract C++ virtual dispatch annotations (keyed by CALLIND VA).
-    let mut cpp_vtable_calls: BTreeMap<u64, unlace_ir::ssa::VtableCallInfo> = BTreeMap::new();
-    for (&(bid, idx), info) in &ssa.cpp_vtable_calls {
-        if let Some(block) = ssa.function.blocks.get(&bid) {
-            if let Some(insn) = block.insns.get(idx) {
-                cpp_vtable_calls.insert(insn.addr, info.clone());
-            }
-        }
-    }
-    printer_annotations.cpp_vtable_calls = cpp_vtable_calls;
-
-    printer_annotations.resolved_indirect_calls = ssa
-        .resolved_indirect_calls
-        .iter()
-        .filter_map(|(&(bid, idx), &target)| {
-            let block = ssa.function.blocks.get(&bid)?;
-            let insn = block.insns.get(idx)?;
-            Some((insn.addr, target))
-        })
-        .collect();
-    printer_annotations.rust_vtable_calls = rust_vtable_calls;
-    printer_annotations.cpp_vtable_calls = cpp_vtable_calls;
     let printer_annotations = Some(printer_annotations);
     let result = emit_output(
         emit,
@@ -1704,13 +1478,7 @@ pub fn decompile_function_with_symbols(
         elapsed_us = t.elapsed().as_micros() as u64,
         "emit_output done"
     );
-    result.map(|rendered| {
-        if let Some(hint) = flirt_hint {
-            format!("{hint}{rendered}")
-        } else {
-            rendered
-        }
-    })
+    result
 }
 
 fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
@@ -1718,37 +1486,6 @@ fn check_timeout(deadline: Instant, func_name: &str) -> Result<()> {
         bail!("timeout exceeded for function '{func_name}'");
     }
     Ok(())
-}
-
-/// Populate source-style annotations for Go `defer` / `recover` runtime helpers.
-fn populate_go_defer_recover_annotations(ssa: &mut SsaFunction, symbols: &BTreeMap<u64, String>) {
-    let ops = unlace_passes::detect_go_defer_recover_ops(ssa, |addr| {
-        symbols.get(&addr).map(String::as_str)
-    });
-
-    for op in ops {
-        let text = match op.kind {
-            unlace_passes::GoDeferRecoverKind::Defer => op
-                .funcval
-                .map(|funcval| format!("defer {}", format_go_funcval_for_annotation(&funcval)))
-                .unwrap_or_else(|| "defer /* funcval */".to_string()),
-            unlace_passes::GoDeferRecoverKind::DeferReturn => "deferreturn".to_string(),
-            unlace_passes::GoDeferRecoverKind::Recover => "recover()".to_string(),
-        };
-        ssa.go_defer_recover_calls
-            .insert((op.block_id, op.insn_idx), text);
-    }
-}
-
-fn format_go_funcval_for_annotation(funcval: &unlace_ir::ssa::SsaVarnode) -> String {
-    let base = funcval.base;
-    match base.space {
-        unlace_ir::SpaceId::Const => format!("sub_{:x}", base.offset),
-        unlace_ir::SpaceId::Register => format!("reg_{:x}", base.offset),
-        unlace_ir::SpaceId::Stack => format!("stack_{:x}", base.offset),
-        unlace_ir::SpaceId::Unique => format!("tmp_{:x}", base.offset),
-        other => format!("{:?}_{:x}", other, base.offset),
-    }
 }
 
 /// Recover precise try/catch boundaries for `entry` from the binary's
@@ -1968,8 +1705,6 @@ pub fn emit_output(
 mod tests {
     use super::*;
     use smallvec::smallvec;
-    use unlace_ir::ssa::build_ssa;
-    use unlace_ir::{Function, IrInsn, Varnode};
     use unlace_ir::ArchId;
     use unlace_ir::ssa::build_ssa;
     use unlace_ir::{Function, IrInsn, Varnode};
@@ -2005,13 +1740,6 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
-        pdb_types: None,
-        pdb_types: None,
-            pdb_info: None,
-        pdb_types: None,
-        pdb_types: None,
-        pdb_types: None,
-        pdb_types: None,
             pdb_types: None,
             msvc_rtti: None,
             seh: None,
@@ -2071,24 +1799,6 @@ mod tests {
             resolved.get(&0x1004).map(String::as_str),
             Some("main_MyType_Do")
         );
-        unlace_passes::IndirectCallResolvePass.run(&mut ssa).unwrap();
-
-        let mut image = make_text_image(vec![0xC3], 0x1000);
-        image.go_itabs.insert(
-            0x9000,
-            unlace_loader::go_types::GoItab {
-                va: 0x9000,
-                inter_type_va: 0xA000,
-                concrete_type_va: 0xB000,
-                hash: 0x1234,
-                methods: vec![0x4010],
-            },
-        );
-        let mut symbols = BTreeMap::new();
-        symbols.insert(0x4010, "main.(*MyType).Do".to_string());
-
-        let resolved = collect_go_iface_devirtualized_calls(&ssa, &image, &symbols);
-        assert_eq!(resolved.get(&0x1004).map(String::as_str), Some("main_MyType_Do"));
     }
 
     #[test]
@@ -2324,21 +2034,6 @@ mod tests {
         assert!(out.contains("void strcpy(void)"));
     }
 
-    #[test]
-    fn flirt_render_likely_emits_confidence_header() {
-        let entry = FunctionEntry {
-            name: "sub_4011a0".into(),
-            addr: 0x4011a0,
-            size: 8,
-        };
-        let out = super::render_flirt_likely("memcpy", 0.87, &entry);
-        assert!(
-            out.contains("// likely memcpy (FLIRT 87%)"),
-            "header missing: {out}"
-        );
-        assert!(out.contains("partial FLIRT match"));
-    }
-
     // -----------------------------------------------------------------
     // t234 — Wave 24 pipeline ordering smoke test
     //
@@ -2487,63 +2182,6 @@ mod tests {
     #[test]
     fn flirt_match_resolves_reference_name_lists() {
         let mut code = vec![0x55, 0x48, 0x89, 0xE5, 0xE8, 0x37, 0x00, 0x00, 0x00];
-        let mut code = vec![
-            0x55, 0x48, 0x89, 0xE5, 0xE8, 0x37, 0x00, 0x00, 0x00,
-        ];
-        code.resize(0x40, 0x90);
-        code.extend_from_slice(&[
-            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
-        ]);
-        let base: u64 = 0x1000;
-        let mut image = make_text_image(code, base);
-        image.symbols.insert(
-            base,
-            unlace_loader::Symbol {
-                name: "sub_1000".into(),
-                addr: base,
-                size: 9,
-                kind: SymbolKind::Function,
-            },
-        );
-        image.symbols.insert(
-            base + 0x40,
-            unlace_loader::Symbol {
-                name: "sub_1040".into(),
-                addr: base + 0x40,
-                size: 13,
-                kind: SymbolKind::Function,
-            },
-        );
-        let entry = FunctionEntry {
-            name: "sub_1000".into(),
-            addr: base,
-            size: 9,
-        };
-        let canonical = super::flirt_match(&image, &entry);
-        assert_eq!(canonical.as_deref(), Some("__memcpy_chk"));
-    fn flirt_best_match_surfaces_partial_confidence_in_text() {
-        let mut db = unlace_loader::FlirtDb::new();
-        db.push(unlace_loader::FlirtSignature {
-            name: "memcpy".into(),
-            pattern: vec![0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89],
-            mask: vec![0xFF; 9],
-            min_len: 12,
-            max_len: None,
-            crc16_at: None,
-        });
-        let candidate = db
-            .best_match(&[0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89])
-            .expect("partial FLIRT match");
-        assert_eq!(candidate.name, "memcpy");
-        assert!(!candidate.exact);
-        assert!(
-            candidate.confidence > 0.80,
-            "confidence too low: {}",
-            candidate.confidence
-        );
-        let mut code = vec![
-            0x55, 0x48, 0x89, 0xE5, 0xE8, 0x37, 0x00, 0x00, 0x00,
-        ];
         code.resize(0x40, 0x90);
         code.extend_from_slice(&[
             0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,

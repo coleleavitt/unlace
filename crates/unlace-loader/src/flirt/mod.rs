@@ -12,9 +12,7 @@
 //!
 //! The database is ship-in-binary (`flirt_signatures::DEFAULT_SIGNATURES`)
 //! rather than loaded from `.sig` files; that's enough for the parity push
-//! and avoids a runtime IO + parsing dependency.  The shipped tables are split
-//! per architecture so the same bytes can be interpreted against ABI-specific
-//! libraries without x86-64 patterns producing false positives on other ISAs.
+//! and avoids a runtime IO + parsing dependency.
 
 mod generator;
 mod signatures;
@@ -26,21 +24,11 @@ pub use generator::{
     generate_archive_patterns_from_bytes, render_patterns_toml,
 };
 pub use signatures::default_db;
-pub use signatures::default_db;
-pub use signatures::{default_db, default_db_for_arch, signatures_for_arch};
-
-use unlace_ir::ArchId;
 
 /// One library-function fingerprint.
 #[derive(Debug, Clone)]
 pub struct FlirtSignature {
     pub name: String,
-    /// Architecture/library namespace for this signature.
-    ///
-    /// Generic databases may contain entries from multiple architectures;
-    /// architecture-aware callers should prefer [`FlirtDb::match_function_for_arch`]
-    /// so only signatures for the loaded image's ISA are considered.
-    pub arch: ArchId,
     /// Leading byte pattern. `pattern.len()` is the comparison window;
     /// positions where `mask[i] == 0` are treated as wildcards.
     pub pattern: Vec<u8>,
@@ -81,53 +69,6 @@ pub struct FlirtMatch<'a> {
     pub refs_matched: bool,
 }
 
-/// Rich FLIRT match metadata. Exact matches are used to elide the function
-/// body entirely; partial matches only surface a confidence hint to the user.
-#[derive(Debug, Clone, PartialEq)]
-pub struct FlirtMatch<'a> {
-    pub name: &'a str,
-    /// 0.0-1.0 confidence score derived from prefix, length, and CRC checks.
-    pub confidence: f32,
-    /// True when every hard constraint matched and the candidate can be
-    /// treated as a fully recognised library stub.
-    pub exact: bool,
-}
-
-impl FlirtSignature {
-    /// Build a signature in the historical default x86-64 namespace.
-    pub fn new(name: impl Into<String>, pattern: Vec<u8>, mask: Vec<u8>) -> Self {
-        let min_len = pattern.len();
-        Self {
-            name: name.into(),
-            arch: ArchId::X86_64,
-            pattern,
-            mask,
-            min_len,
-            max_len: None,
-            crc16_at: None,
-        }
-    }
-
-    /// Build a signature explicitly tied to `arch`.
-    pub fn for_arch(
-        arch: ArchId,
-        name: impl Into<String>,
-        pattern: Vec<u8>,
-        mask: Vec<u8>,
-    ) -> Self {
-        let min_len = pattern.len();
-        Self {
-            name: name.into(),
-            arch,
-            pattern,
-            mask,
-            min_len,
-            max_len: None,
-            crc16_at: None,
-        }
-    }
-}
-
 /// In-memory FLIRT database.
 #[derive(Debug, Default, Clone)]
 pub struct FlirtDb {
@@ -157,89 +98,13 @@ impl FlirtDb {
         self.entries.is_empty()
     }
 
-    /// Iterate over all registered signatures.
-    pub fn entries(&self) -> impl Iterator<Item = &FlirtSignature> {
-        self.entries.iter()
-    }
-
-    /// Iterate over signatures registered for `arch` only.
-    pub fn entries_for_arch(&self, arch: ArchId) -> impl Iterator<Item = &FlirtSignature> {
-        self.entries.iter().filter(move |sig| sig.arch == arch)
-    }
-
     /// Try to match `bytes` (typically the prologue + body of a candidate
     /// function) against any signature in the database. Returns the first
     /// byte/CRC match by registration order so callers control priority via
     /// the signature table layout.
-    /// match by registration order so callers control priority via the
-    /// signature table layout.
-    /// exact match by registration order so callers control priority via the
-    /// signature table layout.
-    /// match by registration order so callers control priority via the
-    /// signature table layout.
-    ///
-    /// This legacy method scans all architecture tables. New call sites with a
-    /// loaded-image architecture should use [`Self::match_function_for_arch`].
     pub fn match_function(&self, bytes: &[u8]) -> Option<&str> {
         self.match_function_with_refs(bytes, &BTreeMap::new())
             .map(|m| m.name)
-        self.match_function_with_refs(bytes, &BTreeMap::new()).map(|m| m.name)
-    }
-
-    /// Match `bytes` against the DB, preferring candidates whose recorded
-    /// outbound references resolve against the already-known `resolved_names`
-    /// map (absolute address → canonical callee name).
-    pub fn match_function_with_refs<'a>(
-        &'a self,
-        bytes: &[u8],
-    }
-
-    /// Match `bytes` against the DB, preferring candidates whose recorded
-    /// outbound references resolve against the already-known `resolved_names`
-    /// map (absolute address → canonical callee name).
-    pub fn match_function_with_refs<'a>(
-        &'a self,
-        bytes: &[u8],
-        resolved_names: &BTreeMap<u64, String>,
-    ) -> Option<FlirtMatch<'a>> {
-        self.match_function_at_with_refs(bytes, 0, resolved_names)
-    }
-
-    /// Like [`Self::match_function_with_refs`], but interprets PC-relative
-    /// reference offsets with `base_addr` as the candidate function's load
-    /// address. This is the form production callers should use; the zero-base
-    /// variant is retained for tests and callers that already work in
-    /// function-relative coordinates.
-    pub fn match_function_at_with_refs<'a>(
-        &'a self,
-        bytes: &[u8],
-        base_addr: u64,
-        resolved_names: &BTreeMap<u64, String>,
-    ) -> Option<FlirtMatch<'a>> {
-        let mut fallback: Option<FlirtMatch<'a>> = None;
-        for sig in &self.entries {
-            if !signature_matches(sig, bytes) {
-                continue;
-            }
-            let refs_matched = references_match(sig, bytes, resolved_names);
-            if signature_matches(sig, bytes) {
-                return Some(&sig.name);
-            let refs_matched = references_match(sig, bytes, base_addr, resolved_names);
-            if refs_matched {
-                return Some(FlirtMatch {
-                    name: &sig.name,
-                    refs_matched: true,
-                });
-            }
-            if fallback.is_none() {
-                fallback = Some(FlirtMatch {
-                    name: &sig.name,
-                    refs_matched: false,
-                });
-            }
-        }
-        fallback
-        self.match_function_with_refs(bytes, &BTreeMap::new()).map(|m| m.name)
     }
 
     /// Match `bytes` against the DB, preferring candidates whose recorded
@@ -269,143 +134,42 @@ impl FlirtDb {
                 });
             }
         }
-        None
-        self.best_match(bytes).filter(|m| m.exact).map(|m| m.name)
-    }
-
-    /// Return the strongest FLIRT candidate, even when it only partially
-    /// matches. This powers t272 confidence hints like
-    /// `// likely memcpy (FLIRT 87%)` for near-misses.
-    pub fn best_match(&self, bytes: &[u8]) -> Option<FlirtMatch<'_>> {
-        self.entries
-            .iter()
-            .filter_map(|sig| {
-                let score = signature_score(sig, bytes)?;
-                Some(FlirtMatch {
-                    name: &sig.name,
-                    confidence: score.confidence,
-                    exact: score.exact,
-                })
-            })
-            .max_by(|a, b| {
-                a.confidence
-                    .partial_cmp(&b.confidence)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| a.exact.cmp(&b.exact))
-            })
-        None
         fallback
     }
-
-    /// Try to match `bytes` against signatures registered for `arch` only.
-    pub fn match_function_for_arch(&self, arch: ArchId, bytes: &[u8]) -> Option<&str> {
-        for sig in self.entries_for_arch(arch) {
-            if signature_matches(sig, bytes) {
-                return Some(&sig.name);
-            }
-        }
-        None
-    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct SignatureScore {
-    confidence: f32,
-    exact: bool,
-}
-
-fn signature_score(sig: &FlirtSignature, bytes: &[u8]) -> Option<SignatureScore> {
-    let prefix_len = sig.pattern.len();
-    if prefix_len == 0 {
-        return None;
+fn signature_matches(sig: &FlirtSignature, bytes: &[u8]) -> bool {
+    if bytes.len() < sig.min_len {
+        return false;
     }
-
-    let available_prefix = bytes.len().min(prefix_len);
-    if available_prefix == 0 {
-        return None;
-    }
-
-    let required_positions = sig
-        .mask
-        .iter()
-        .copied()
-        .chain(std::iter::repeat(0xFF))
-        .take(prefix_len)
-        .filter(|&m| m != 0)
-        .count();
-    let wildcard_positions = prefix_len.saturating_sub(required_positions);
-    let prefix_weight = 0.80f32;
-    let length_weight = 0.10f32;
-    let crc_weight = if sig.crc16_at.is_some() {
-        0.10f32
-    } else {
-        0.0f32
-    };
-
-    let mut matched_required = 0usize;
-    let mut compared_required = 0usize;
-
-    for i in 0..available_prefix {
-        let want = sig.pattern[i];
-        let mask = sig.mask.get(i).copied().unwrap_or(0xFF);
-        if mask == 0 {
-            continue;
-        }
-        compared_required += 1;
-        if (bytes[i] & mask) != (want & mask) {
-            return None;
-        }
-        matched_required += 1;
-    }
-
-    let matched_positions =
-        matched_required + wildcard_positions.min(available_prefix - compared_required);
-    let prefix_ratio = matched_positions as f32 / prefix_len as f32;
-
-    let length_ratio = if bytes.len() >= sig.min_len {
-        1.0
-    } else if sig.min_len == 0 {
-        1.0
-    } else {
-        bytes.len() as f32 / sig.min_len as f32
-    };
-
-    let mut exact = bytes.len() >= sig.min_len && bytes.len() >= prefix_len;
     if let Some(max) = sig.max_len {
         if bytes.len() > max {
-            return None;
+            return false;
         }
     }
-
-    let crc_ratio = if let Some((start, expected)) = sig.crc16_at {
+    if bytes.len() < sig.pattern.len() {
+        return false;
+    }
+    for (i, &want) in sig.pattern.iter().enumerate() {
+        let m = sig.mask.get(i).copied().unwrap_or(0xFF);
+        if m == 0 {
+            continue;
+        }
+        if (bytes[i] & m) != (want & m) {
+            return false;
+        }
+    }
+    if let Some((start, expected)) = sig.crc16_at {
         const WINDOW: usize = 32;
         let end = (start + WINDOW).min(bytes.len());
         if start >= end {
-            exact = false;
-            0.0
-        } else {
-            let crc_matches = crc16_ccitt(&bytes[start..end]) == expected;
-            if !crc_matches {
-                exact = false;
-            }
-            if crc_matches { 1.0 } else { 0.0 }
+            return false;
         }
-    } else {
-        0.0
-    };
-
-    if bytes.len() < sig.min_len {
-        exact = false;
+        if crc16_ccitt(&bytes[start..end]) != expected {
+            return false;
+        }
     }
-
-    let mut confidence =
-        prefix_ratio * prefix_weight + length_ratio * length_weight + crc_ratio * crc_weight;
-    if exact && sig.crc16_at.is_none() {
-        confidence += crc_weight;
-    }
-    confidence = confidence.clamp(0.0, 1.0);
-
-    Some(SignatureScore { confidence, exact })
+    true
 }
 
 fn references_match(
@@ -413,83 +177,6 @@ fn references_match(
     bytes: &[u8],
     resolved_names: &BTreeMap<u64, String>,
 ) -> bool {
-fn references_match(sig: &FlirtSignature, bytes: &[u8], resolved_names: &BTreeMap<u64, String>) -> bool {
-    if sig.refs.is_empty() {
-        return true;
-    }
-    for reference in &sig.refs {
-        let Some(target) = resolve_rel32_call(bytes, reference.offset) else {
-            return false;
-        };
-        let Some(name) = resolved_names.get(&target) else {
-            return false;
-        };
-        if name != &reference.name {
-            return false;
-        }
-    }
-    true
-}
-
-/// Resolve a near x86/x86-64 rel32 `call`/`jmp` target at `offset`.
-///
-/// `offset` must point at the opcode byte (`E8`/`E9`) inside `bytes`.
-fn resolve_rel32_call(bytes: &[u8], offset: usize) -> Option<u64> {
-    let end = offset.checked_add(5)?;
-    if end > bytes.len() {
-        return None;
-    }
-    match bytes[offset] {
-        0xE8 | 0xE9 => {}
-        _ => return None,
-    }
-    let disp = i32::from_le_bytes(bytes[offset + 1..end].try_into().ok()?);
-    let target = end as i64 + disp as i64;
-    if target < 0 {
-        return None;
-    }
-    Some(target as u64)
-    base_addr: u64,
-    resolved_names: &BTreeMap<u64, String>,
-) -> bool {
-    if sig.refs.is_empty() {
-        return true;
-    }
-    for reference in &sig.refs {
-        let Some(target) = resolve_rel32_call(bytes, base_addr, reference.offset) else {
-            return false;
-        };
-        let Some(name) = resolved_names.get(&target) else {
-            return false;
-        };
-        if name != &reference.name {
-            return false;
-        }
-    }
-    true
-}
-
-/// Resolve a near x86/x86-64 rel32 `call`/`jmp` target at `offset`.
-///
-/// `offset` must point at the opcode byte (`E8`/`E9`) inside `bytes`; `base_addr`
-/// is the load address corresponding to `bytes[0]`.
-fn resolve_rel32_call(bytes: &[u8], base_addr: u64, offset: usize) -> Option<u64> {
-    let end = offset.checked_add(5)?;
-    if end > bytes.len() {
-        return None;
-    }
-    match bytes[offset] {
-        0xE8 | 0xE9 => {}
-        _ => return None,
-    }
-    let disp = i32::from_le_bytes(bytes[offset + 1..end].try_into().ok()?);
-    let insn_end = base_addr.checked_add(end as u64)?;
-    if disp >= 0 {
-        insn_end.checked_add(disp as u32 as u64)
-    } else {
-        insn_end.checked_sub(disp.unsigned_abs() as u64)
-    }
-fn references_match(sig: &FlirtSignature, bytes: &[u8], resolved_names: &BTreeMap<u64, String>) -> bool {
     if sig.refs.is_empty() {
         return true;
     }
@@ -552,7 +239,6 @@ mod tests {
     fn sig(name: &str, pattern: &[u8], mask: &[u8]) -> FlirtSignature {
         FlirtSignature {
             name: name.to_string(),
-            arch: ArchId::X86_64,
             pattern: pattern.to_vec(),
             mask: mask.to_vec(),
             min_len: pattern.len(),
@@ -570,8 +256,6 @@ mod tests {
         out[0] = opcode;
         out[1..].copy_from_slice(&disp.to_le_bytes());
         out
-    fn arch_sig(arch: ArchId, name: &str, pattern: &[u8]) -> FlirtSignature {
-        FlirtSignature::for_arch(arch, name, pattern.to_vec(), vec![0xFF; pattern.len()])
     }
 
     #[test]
@@ -594,65 +278,6 @@ mod tests {
         db.push(sig("memcpy", &[0x48, 0x00, 0xC3], &[0xFF, 0x00, 0xFF]));
         assert_eq!(db.match_function(&[0x48, 0x77, 0xC3, 0x00]), Some("memcpy"));
         assert_eq!(db.match_function(&[0x48, 0xAB, 0xC3, 0x00]), Some("memcpy"));
-        db.push(sig(
-            "memcpy",
-            &[0x48, 0x00, 0xC3],
-            &[0xFF, 0x00, 0xFF],
-        ));
-        assert_eq!(
-            db.match_function(&[0x48, 0x77, 0xC3, 0x00]),
-            Some("memcpy")
-        );
-        assert_eq!(
-            db.match_function(&[0x48, 0xAB, 0xC3, 0x00]),
-            Some("memcpy")
-        );
-        db.push(sig(
-            "memcpy",
-            &[0x48, 0x00, 0xC3],
-            &[0xFF, 0x00, 0xFF],
-        ));
-        // Wildcarded byte may be anything.
-        assert_eq!(
-            db.match_function(&[0x48, 0x77, 0xC3, 0x00]),
-            Some("memcpy")
-        );
-        assert_eq!(
-            db.match_function(&[0x48, 0xAB, 0xC3, 0x00]),
-            Some("memcpy")
-        );
-        // Wildcarded byte may be anything.
-        assert_eq!(db.match_function(&[0x48, 0x77, 0xC3, 0x00]), Some("memcpy"));
-        assert_eq!(db.match_function(&[0x48, 0xAB, 0xC3, 0x00]), Some("memcpy"));
-        // First byte mismatch must reject.
-        db.push(sig(
-            "memcpy",
-            &[0x48, 0x00, 0xC3],
-            &[0xFF, 0x00, 0xFF],
-        ));
-        assert_eq!(
-            db.match_function(&[0x48, 0x77, 0xC3, 0x00]),
-            Some("memcpy")
-        );
-        assert_eq!(
-            db.match_function(&[0x48, 0xAB, 0xC3, 0x00]),
-            Some("memcpy")
-        );
-        db.push(sig(
-            "memcpy",
-            &[0x48, 0x00, 0xC3],
-            &[0xFF, 0x00, 0xFF],
-        ));
-        db.push(sig(
-            "memcpy",
-            &[0x48, 0x00, 0xC3],
-            &[0xFF, 0x00, 0xFF],
-        ));
-        // Wildcarded byte may be anything.
-        assert_eq!(db.match_function(&[0x48, 0x77, 0xC3, 0x00]), Some("memcpy"));
-        assert_eq!(db.match_function(&[0x48, 0xAB, 0xC3, 0x00]), Some("memcpy"));
-        // First byte mismatch must reject.
-        // First byte mismatch must reject.
         assert!(db.match_function(&[0x49, 0xAB, 0xC3, 0x00]).is_none());
     }
 
@@ -673,7 +298,6 @@ mod tests {
 
         db.push(FlirtSignature {
             name: "fn_a".into(),
-            arch: ArchId::X86_64,
             pattern: prefix.to_vec(),
             mask: vec![0xFF; prefix.len()],
             min_len: prefix.len(),
@@ -683,7 +307,6 @@ mod tests {
         });
         db.push(FlirtSignature {
             name: "fn_b".into(),
-            arch: ArchId::X86_64,
             pattern: prefix.to_vec(),
             mask: vec![0xFF; prefix.len()],
             min_len: prefix.len(),
@@ -781,116 +404,6 @@ mod tests {
         let m = db
             .match_function_with_refs(&bytes, &BTreeMap::new())
             .unwrap();
-        let m = db.match_function_with_refs(&bytes, &BTreeMap::new()).unwrap();
-        assert_eq!(m.name, "calls_malloc");
-        assert!(!m.refs_matched);
-    }
-
-    #[test]
-    fn bad_reference_opcode_rejects_reference_match() {
-        let mut db = FlirtDb::new();
-        let bytes = vec![0x55, 0x48, 0x89, 0xE5, 0x90, 0x90, 0x90, 0x90, 0x90];
-        db.push(FlirtSignature {
-            name: "calls_malloc".into(),
-            pattern: bytes[..4].to_vec(),
-            mask: vec![0xFF; 4],
-            min_len: 4,
-            max_len: None,
-            crc16_at: None,
-            refs: vec![FlirtRef {
-                offset: 4,
-                name: "malloc".into(),
-            }],
-        });
-        let m = db.match_function_with_refs(&bytes, &BTreeMap::new()).unwrap();
-        assert!(!m.refs_matched);
-        assert!(!m.refs_matched);
-    }
-
-    #[test]
-    fn reference_resolution_uses_function_load_address() {
-        let mut db = FlirtDb::new();
-        let base = 0x1000;
-        let mut bytes = vec![0x55, 0x48, 0x89, 0xE5];
-        bytes.extend_from_slice(&rel32(0xE8, 0x40, 4));
-
-        db.push(FlirtSignature {
-            name: "calls_malloc".into(),
-            pattern: bytes[..4].to_vec(),
-            mask: vec![0xFF; 4],
-            min_len: 4,
-            max_len: None,
-            crc16_at: None,
-            refs: vec![FlirtRef {
-                offset: 4,
-                name: "malloc".into(),
-            }],
-        });
-
-        let mut resolved = BTreeMap::new();
-        resolved.insert(base + 0x40, "malloc".to_string());
-        let m = db
-            .match_function_at_with_refs(&bytes, base, &resolved)
-            .unwrap();
-        assert_eq!(m.name, "calls_malloc");
-        assert!(m.refs_matched);
-    fn best_match_surfaces_partial_confidence_for_truncated_body() {
-        let mut db = FlirtDb::new();
-        db.push(FlirtSignature {
-            name: "memcpy".into(),
-            pattern: vec![0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0xC3],
-            mask: vec![0xFF; 8],
-            min_len: 12,
-            max_len: None,
-            crc16_at: None,
-        });
-
-        let partial = db.best_match(&[0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0xC3]);
-        let partial = partial.expect("partial candidate");
-        assert_eq!(partial.name, "memcpy");
-        assert!(!partial.exact);
-        assert!(
-            partial.confidence > 0.85,
-            "confidence too low: {}",
-            partial.confidence
-        );
-        assert!(
-            partial.confidence < 1.0,
-            "partial match should not be exact"
-        );
-    }
-
-    #[test]
-    fn best_match_rejects_prefix_mismatches() {
-        let mut db = FlirtDb::new();
-        db.push(sig(
-            "strcpy",
-            &[0x48, 0x89, 0xF8, 0xC3],
-            &[0xFF, 0xFF, 0xFF, 0xFF],
-        ));
-        assert!(db.best_match(&[0x90, 0x89, 0xF8, 0xC3]).is_none());
-        let m = db.match_function_with_refs(&bytes, &BTreeMap::new()).unwrap();
-        assert_eq!(m.name, "calls_malloc");
-        assert!(!m.refs_matched);
-    }
-
-    #[test]
-    fn bad_reference_opcode_rejects_reference_match() {
-        let mut db = FlirtDb::new();
-        let bytes = vec![0x55, 0x48, 0x89, 0xE5, 0x90, 0x90, 0x90, 0x90, 0x90];
-        db.push(FlirtSignature {
-            name: "calls_malloc".into(),
-            pattern: bytes[..4].to_vec(),
-            mask: vec![0xFF; 4],
-            min_len: 4,
-            max_len: None,
-            crc16_at: None,
-            refs: vec![FlirtRef {
-                offset: 4,
-                name: "malloc".into(),
-            }],
-        });
-        let m = db.match_function_with_refs(&bytes, &BTreeMap::new()).unwrap();
         assert!(!m.refs_matched);
     }
 
@@ -909,32 +422,8 @@ mod tests {
 
     #[test]
     fn default_db_is_populated() {
-    fn default_db_is_populated() {
-        // Smoke-test: the shipped database has the symbols the rubric calls
-        // for. Bytes here are zeroed because we're checking *registration*,
-        // not match correctness against synthetic data.
-    fn arch_filtered_match_ignores_other_isa_collisions() {
-        let mut db = FlirtDb::new();
-        db.push(arch_sig(ArchId::X86_64, "x86_stub", &[0xAA, 0xBB, 0xCC]));
-        db.push(arch_sig(ArchId::AArch64, "arm64_stub", &[0xAA, 0xBB, 0xCC]));
-
-        assert_eq!(db.match_function(&[0xAA, 0xBB, 0xCC]), Some("x86_stub"));
-        assert_eq!(
-            db.match_function_for_arch(ArchId::AArch64, &[0xAA, 0xBB, 0xCC]),
-            Some("arm64_stub")
-        );
-        assert!(
-            db.match_function_for_arch(ArchId::RiscV64, &[0xAA, 0xBB, 0xCC])
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn default_db_is_populated_per_arch() {
-        // Smoke-test: the shipped database has the symbols the rubric calls
-        // for, and the multi-architecture tables are genuinely present.
         let db = default_db();
-        assert!(db.len() >= 50, "expected ≥50 signatures, got {}", db.len());
+        assert!(db.len() >= 30, "expected ≥30 signatures, got {}", db.len());
         let names: Vec<&str> = db.entries.iter().map(|s| s.name.as_str()).collect();
         for required in &[
             "strcpy",
@@ -950,23 +439,6 @@ mod tests {
             assert!(
                 names.iter().any(|n| n == required),
                 "default_db missing {required}"
-            );
-        }
-
-        for arch in [
-            ArchId::X86_64,
-            ArchId::X86,
-            ArchId::AArch64,
-            ArchId::Arm,
-            ArchId::RiscV64,
-            ArchId::Mips64,
-            ArchId::Mips,
-            ArchId::Ppc64,
-            ArchId::Ppc,
-        ] {
-            assert!(
-                db.entries_for_arch(arch).count() >= 4,
-                "default_db missing per-arch signatures for {arch}"
             );
         }
     }

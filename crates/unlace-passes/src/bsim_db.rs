@@ -76,47 +76,6 @@ impl BSimDb {
 
         // Sort descending by score; stable so equal scores keep insertion order.
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        Self { entries: Vec::new() }
-    }
-
-    /// Number of stored entries.
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    /// Whether the database has any entries.
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    /// Insert a (name, feature_vec) pair. Duplicate names are *not* deduplicated:
-    /// the same symbol may legitimately appear with different feature vectors
-    /// (e.g. multiple build variants of the same function).
-    pub fn insert(&mut self, name: &str, vec: [u32; FEATURE_VEC_LEN]) {
-        self.entries.push((name.to_string(), vec));
-    }
-
-    /// Return the `top_k` entries most similar to `vec` under cosine similarity,
-    /// sorted in descending order by score. Ties are broken by insertion order
-    /// (stable sort), which makes results deterministic across runs.
-    ///
-    /// If the database has fewer than `top_k` entries, all entries are returned.
-    /// If `top_k == 0` the result is empty.
-    pub fn query(&self, vec: [u32; FEATURE_VEC_LEN], top_k: usize) -> Vec<(String, f32)> {
-        if top_k == 0 || self.entries.is_empty() {
-            return Vec::new();
-        }
-
-        let mut scored: Vec<(String, f32)> = self
-            .entries
-            .iter()
-            .map(|(name, entry)| (name.clone(), cosine_similarity(&vec, entry)))
-            .collect();
-
-        // Sort descending by score; stable so equal scores keep insertion order.
-        scored.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
         scored.truncate(top_k);
         scored
     }

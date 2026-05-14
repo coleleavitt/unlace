@@ -9,7 +9,6 @@ pub mod demangle_rust;
 pub mod demangle_swift;
 pub mod dwarf;
 pub mod dyld_cache;
-pub mod dyld_mmap;
 pub mod eh_frame;
 pub mod elf;
 pub mod error;
@@ -23,10 +22,7 @@ pub mod image;
 pub mod intel_hex;
 pub mod ios_img4;
 pub mod java_class;
-pub mod ios_img4;
-pub mod java_class;
 pub mod macho;
-pub mod minidump;
 pub mod msvc_rtti;
 pub mod objc;
 pub mod packer_detect;
@@ -41,7 +37,6 @@ pub mod swift_metadata;
 pub mod til;
 pub mod uefi_module;
 pub mod wasm_component;
-pub mod rr_trace;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,
@@ -49,53 +44,18 @@ pub use objc::{
 };
 
 pub use dwarf::{
-    DwarfInfo, EnumType, ExprLocation, ExprPiece, FunctionDebugInfo, LocalVariable,
-    MacroDefinition, ParameterInfo, PieceLocation, SourceLocation, StructField, StructType,
-    UnionType, evaluate_dwarf_expr, evaluate_location_attr, import_dwarf,
-    DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo, SourceLocation,
-    StructField, StructType, UnionType, import_dwarf,
-    DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, MacroEntry, ParameterInfo, SourceLocation,
-    StructField, StructType, UnionType, import_dwarf, parse_debug_macro,
-    DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo, SourceLocation,
-    StructField, StructType, UnionType, import_dwarf,
     DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, MacroDefinition, ParameterInfo,
     SourceLocation, StructField, StructType, UnionType, import_dwarf,
-    StructField, StructType, UnionType, import_dwarf,
-    StructField, StructType, TemplateArgument, UnionType, import_dwarf,
-    AddressRange, DwarfInfo, EnumType, FunctionDebugInfo, LocalVariable, ParameterInfo,
-    SourceLocation, StructField, StructType, UnionType, VariableLocationRange, import_dwarf,
 };
-pub use pdb::{InlineeSite, PdbInfo, import_pdb, merge_pdb_symbols};
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;
-pub use ios_img4::{Img4Container, Img4Error, parse_img4};
 pub use error::LoadError;
 pub use flirt::{
     FlirtDb, FlirtSignature, GeneratedSigPattern, SigGenerateError, SigGenerateOptions,
     default_db as default_flirt_db, generate_archive_patterns, generate_archive_patterns_from_bytes,
     render_patterns_toml,
-pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
-pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
-pub use flirt::{FlirtDb, FlirtMatch, FlirtSignature, default_db as default_flirt_db};
-pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
 };
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
-pub use intel_hex::{
-    IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
-    FlirtDb, FlirtMatch, FlirtRef, FlirtSignature, default_db as default_flirt_db,
-};
-pub use ios_img4::{Img4Container, Img4Error, parse_img4};
-pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
-pub use intel_hex::{
-    IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
-};
-pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
-pub use intel_hex::{
-    IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
-};
-pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMethod, parse_class};
-};
-pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMethod, parse_class};
 pub use image::{
     ArchId, BinaryImage, BoundImport, DebugRecord, DylibDep, DylibKind, Endian, LoadConfig,
     RelocKind, Relocation, ResourceEntry, RichHeader, RichRecord, Section, SectionFlags, Symbol,
@@ -107,29 +67,10 @@ pub use intel_hex::{
 pub use ios_img4::{Img4Container, Img4Error, parse_img4};
 pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMethod, parse_class};
 pub use macho::MachoLoader;
-pub use pdb::{InlineeSite, PdbInfo, import_pdb, merge_pdb_symbols};
 pub use pdb::{PdbInfo, import_pdb, merge_pdb_symbols};
 pub use pdb_types::{
     CanonicalPdbType, PdbError, PdbField, PdbType, PdbTypeAlias, PdbTypeKind, PdbTypeUnification,
-    PdbTypes, ProcSig, import_pdb_types, ipi_type_hash, resolve_cross_dll_forward_decls,
-    unify_pdb_type_sets, walk_tpi,
-    PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types, walk_tpi,
     PdbTypes, ProcSig, import_pdb_types, ipi_type_hash, unify_pdb_type_sets, walk_tpi,
-    PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types, walk_tpi,
-    PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types,
-    merge_pdb_types, walk_tpi,
-};
-pub use pdb_types::{PdbTypes, ProcSig, import_pdb_types};
-pub use packer_detect::{PackerKind, detect_packer};
-pub use pdb_types::{PdbTypes, ProcSig, import_pdb_types};
-pub use pdb_types::{PdbTypes, ProcSig, import_pdb_types};
-pub use msvc_rtti::{
-    MsvcBaseClass, MsvcClass, MsvcHierarchy, MsvcRtti, MsvcVbtable, MsvcVftable,
-    MsvcVftableMethod, scan_vtables as scan_msvc_vtables,
-};
-pub use pdb_types::{
-    PdbBuildInfo, PdbError, PdbField, PdbFunctionId, PdbType, PdbTypeKind, PdbTypes, ProcSig,
-    import_pdb_types, walk_tpi,
 };
 pub use pe::PeLoader;
 pub use wasm_component::{
@@ -143,15 +84,6 @@ pub use rtti::{
 };
 pub use swift_metadata::{
     SwiftBuiltinAsyncFunction, SwiftConformance, SwiftInfo, SwiftProtocolDescriptor,
-    SwiftTypeDescriptor, scan_swift_metadata,
-    SwiftConformance, SwiftInfo, SwiftProtocolDescriptor, SwiftTypeDescriptor,
-    scan_swift_metadata,
-    SwiftConformance, SwiftInfo, SwiftProtocolDescriptor, SwiftTypeDescriptor, scan_swift_metadata,
-    SwiftConformance, SwiftInfo, SwiftProtocolDescriptor, SwiftTypeDescriptor,
-    scan_swift_metadata,
-    SwiftConformance, SwiftInfo, SwiftProtocolDescriptor, SwiftTypeDescriptor,
-    scan_swift_metadata,
-    SwiftConformance, SwiftGenericContext, SwiftInfo, SwiftProtocolDescriptor,
     SwiftTypeDescriptor, scan_swift_metadata,
 };
 

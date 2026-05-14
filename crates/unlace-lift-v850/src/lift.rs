@@ -29,7 +29,6 @@ const SF: u64 = 280;
 const OVF: u64 = 288;
 const CYF: u64 = 296;
 const SATF: u64 = 304;
-const EP_REG: u8 = 30;
 
 pub struct LiftCtx {
     pub ops: Vec<IrInsn>,
@@ -564,56 +563,6 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
         V850Op::StB { src, base, disp } => lift_store(ctx, *src, *base, *disp, 1),
         V850Op::StH { src, base, disp } => lift_store(ctx, *src, *base, *disp, 2),
         V850Op::StW { src, base, disp } => lift_store(ctx, *src, *base, *disp, 4),
-        V850Op::SldB { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp, 1, true),
-        V850Op::SldH { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp, 2, true),
-        V850Op::SldW { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp, 4, false),
-        V850Op::SstB { src, disp } => lift_store(ctx, *src, EP_REG, *disp, 1),
-        V850Op::SstH { src, disp } => lift_store(ctx, *src, EP_REG, *disp, 2),
-        V850Op::SstW { src, disp } => lift_store(ctx, *src, EP_REG, *disp, 4),
-
-        // -- Short load (EP-relative) ----------------------------------------
-        // SLD.B/H sign-extend; SLD.W is a full word.
-        V850Op::SldB { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp as i32, 1, true),
-        V850Op::SldH { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp as i32, 2, true),
-        V850Op::SldW { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp as i32, 4, false),
-
-        // -- Saturating arithmetic -------------------------------------------
-        // Saturation requires conditional clamping that doesn't map cleanly to
-        // Pcode primitives; emit a tagged Callother that downstream passes can
-        // recognize. Result flags are not modeled.
-        V850Op::Satadd { dst, src } => lift_sat_binop(ctx, *dst, *src, CALLOTHER_V850_SATADD),
-        V850Op::SataddImm5 { dst, imm } => {
-            lift_sat_binop_imm(ctx, *dst, *imm, CALLOTHER_V850_SATADD)
-        }
-        V850Op::Satsub { dst, src } => lift_sat_binop(ctx, *dst, *src, CALLOTHER_V850_SATSUB),
-        V850Op::Satsubr { dst, src } => lift_sat_binop(ctx, *dst, *src, CALLOTHER_V850_SATSUBR),
-
-        // -- 32x32 multiply (low word into reg2, high word into reg3) --------
-        V850Op::Mul { reg1, reg2, reg3 } => lift_mul32(ctx, *reg1, *reg2, *reg3, true),
-        V850Op::Mulu { reg1, reg2, reg3 } => lift_mul32(ctx, *reg1, *reg2, *reg3, false),
-
-        // -- Divide -----------------------------------------------------------
-        V850Op::Div { reg1, reg2, reg3 } => lift_div32(ctx, *reg1, *reg2, *reg3, true),
-        V850Op::Divu { reg1, reg2, reg3 } => lift_div32(ctx, *reg1, *reg2, *reg3, false),
-        V850Op::Divh { dst, src } => lift_divh(ctx, *dst, *src, true),
-        V850Op::Divhu { reg1, reg2, reg3 } => {
-            // reg2 = sign-narrowed div, reg3 = remainder. Use the 16-bit path
-            // for reg2 and emit a remainder write.
-            lift_divh_reg3(ctx, *reg1, *reg2, *reg3, false);
-        }
-
-        // -- Byte/half swap --------------------------------------------------
-        V850Op::Bsw { src, dst } => lift_swap(ctx, *src, *dst, CALLOTHER_V850_BSW),
-        V850Op::Bsh { src, dst } => lift_swap(ctx, *src, *dst, CALLOTHER_V850_BSH),
-
-        // -- Conditional move ------------------------------------------------
-        V850Op::Cmov {
-            cond,
-            reg1,
-            reg2,
-            reg3,
-        } => lift_cmov(ctx, *cond, *reg1, *reg2, *reg3),
-        V850Op::Cmov { cond, reg1, reg2, reg3 } => lift_cmov(ctx, *cond, *reg1, *reg2, *reg3),
 
         // -- Short load (EP-relative) ----------------------------------------
         // SLD.B/H sign-extend; SLD.W is a full word.
@@ -933,111 +882,6 @@ fn lift_mul32(ctx: &mut LiftCtx, reg1: u8, reg2: u8, reg3: u8, signed: bool) {
             IrOp::Subpiece,
             lo,
             smallvec![prod, Varnode::constant(0, 1)],
-            ctx.addr,
-        ));
-        ctx.emit(IrInsn::with_output(
-            IrOp::Copy,
-            d_lo,
-            smallvec![lo],
-            ctx.addr,
-        ));
-    }
-    // High 32 -> reg3
-    if let Some(d_hi) = ctx.reg_write(reg3) {
-        let hi = ctx.alloc_unique(REG_SIZE);
-        ctx.emit(IrInsn::with_output(
-            IrOp::Subpiece,
-            hi,
-            smallvec![prod, Varnode::constant(4, 1)],
-            ctx.addr,
-        ));
-        ctx.emit(IrInsn::with_output(
-            IrOp::Copy,
-            d_hi,
-            smallvec![hi],
-            ctx.addr,
-        ));
-    }
-}
-
-/// DIV/DIVU: reg2 ← reg2 / reg1, reg3 ← reg2 % reg1.
-fn lift_div32(ctx: &mut LiftCtx, reg1: u8, reg2: u8, reg3: u8, signed: bool) {
-    let dividend = ctx.reg_read(reg2);
-    let divisor = ctx.reg_read(reg1);
-
-    let (div_op, rem_op) = if signed {
-        (IrOp::IntSdiv, IrOp::IntSrem)
-    } else {
-        (IrOp::IntDiv, IrOp::IntRem)
-    };
-
-    let quot = ctx.alloc_unique(REG_SIZE);
-    ctx.emit(IrInsn::with_output(
-        div_op,
-        quot,
-        smallvec![dividend, divisor],
-        ctx.addr,
-    ));
-    if let Some(d_q) = ctx.reg_write(reg2) {
-        ctx.emit(IrInsn::with_output(
-            IrOp::Copy,
-            d_q,
-            smallvec![quot],
-            ctx.addr,
-        ));
-    }
-
-    let rem = ctx.alloc_unique(REG_SIZE);
-    ctx.emit(IrInsn::with_output(
-        rem_op,
-        rem,
-        smallvec![dividend, divisor],
-        ctx.addr,
-    ));
-    if let Some(d_r) = ctx.reg_write(reg3) {
-        ctx.emit(IrInsn::with_output(
-            IrOp::Copy,
-            d_r,
-            smallvec![rem],
-            ctx.addr,
-        ));
-    }
-}
-
-/// DIVH 2-operand: reg2 = sign_ext32(reg2) / sign_ext16(reg1[15:0]).
-fn lift_divh(ctx: &mut LiftCtx, dst: u8, src: u8, signed: bool) {
-    if let Some(d) = ctx.reg_write(dst) {
-        let dividend = ctx.reg_read(dst);
-        // Take low 16 bits of src and sign/zero-extend to 32.
-        let src_full = ctx.reg_read(src);
-        let half = ctx.alloc_unique(2);
-        ctx.emit(IrInsn::with_output(
-            IrOp::Subpiece,
-            half,
-            smallvec![src_full, Varnode::constant(0, 1)],
-            ctx.addr,
-        ));
-        let divisor = ctx.alloc_unique(REG_SIZE);
-        let ext_op = if signed { IrOp::IntSext } else { IrOp::IntZext };
-        ctx.emit(IrInsn::with_output(
-            ext_op,
-            divisor,
-            smallvec![half],
-            ctx.addr,
-        ));
-
-        let div_op = if signed { IrOp::IntSdiv } else { IrOp::IntDiv };
-        let quot = ctx.alloc_unique(REG_SIZE);
-        ctx.emit(IrInsn::with_output(
-            div_op,
-            quot,
-            smallvec![dividend, divisor],
-            ctx.addr,
-        ));
-        ctx.emit(IrInsn::with_output(
-            IrOp::Copy,
-            d,
-            smallvec![quot],
             ctx.addr,
         ));
         ctx.emit(IrInsn::with_output(IrOp::Copy, d_lo, smallvec![lo], ctx.addr));

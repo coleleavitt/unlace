@@ -639,23 +639,3 @@ mod tests {
         ));
     }
 }
-
-// t350 — Additional WASI/Component Model interface validation tests.
-#[cfg(test)]
-mod t350_tests {
-    use super::*;
-
-    #[test]
-    fn test_wasm_encoding_display() {
-        assert_eq!(format!("{}", WasmEncoding::Module), "module");
-        assert_eq!(format!("{}", WasmEncoding::Component), "component");
-    }
-
-    #[test]
-    fn test_component_info_default() {
-        let info = WasmComponentInfo::default();
-        assert_eq!(info.encoding, WasmEncoding::Module);
-        assert!(info.core_imports.is_empty());
-        assert!(info.component_exports.is_empty());
-    }
-}

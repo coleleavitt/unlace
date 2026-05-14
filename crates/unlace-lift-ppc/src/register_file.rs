@@ -1,16 +1,11 @@
 //! PowerPC register file layouts.
 //!
-//! PPC32: r0–r31 as 32-bit GPRs, plus CR, LR, CTR, XER, and PC.
-//! PPC64: r0–r31 as 64-bit GPRs, plus CR, LR, CTR, XER, and PC.
-//! r0–r31 as 64-bit GPRs, plus CR, LR, CTR, XER, and PC.
 //! r0–r31 as 32-bit or 64-bit GPRs, plus CR, LR, CTR, XER, and PC.
 
 use capstone::RegId;
 use unlace_ir::{RegisterDef, RegisterFile, SpaceId, Varnode};
 
 pub const GPR_BASE: u64 = 0;
-pub const GPR_COUNT: usize = 32;
-pub const GPR_SIZE: u8 = 8;
 pub const PPC32_GPR_SIZE: u8 = 4;
 pub const PPC64_GPR_SIZE: u8 = 8;
 
@@ -19,12 +14,6 @@ pub const fn gpr_offset_with_size(n: u64, gpr_size: u8) -> u64 {
     GPR_BASE + n * (gpr_size as u64)
 }
 
-pub const PPC32_GPR_SIZE: u8 = 4;
-pub const PPC64_GPR_SIZE: u8 = 8;
-#[inline]
-pub const fn gpr_offset(n: u64) -> u64 {
-    GPR_BASE + n * (GPR_SIZE as u64)
-}
 #[inline]
 pub const fn gpr_offset(n: u64) -> u64 {
     gpr_offset_with_size(n, PPC64_GPR_SIZE)
@@ -43,26 +32,17 @@ pub const XER_SIZE: u8 = 4;
 pub const PC_OFFSET: u64 = 288;
 pub const PC_SIZE: u8 = PPC64_PTR_SIZE;
 
-const PPC_GPR_NAMES: [&str; GPR_COUNT] = [
+const PPC_GPR_NAMES: [&str; 32] = [
     "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14",
     "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25", "r26", "r27",
     "r28", "r29", "r30", "r31",
 ];
 
-#[inline]
-pub const fn gpr_offset(n: u64, gpr_size: u8) -> u64 {
-    GPR_BASE + n * (gpr_size as u64)
-}
-
-fn build_register_file(gpr_size: u8) -> RegisterFile {
-pub fn ppc64_register_file() -> RegisterFile {
 fn ppc_register_file(gpr_size: u8) -> RegisterFile {
     let mut regs = Vec::with_capacity(37);
     for (i, name) in PPC_GPR_NAMES.iter().enumerate() {
         regs.push(RegisterDef {
             name,
-            varnode: Varnode::reg(gpr_offset(i as u64, gpr_size), gpr_size),
-            varnode: Varnode::reg(gpr_offset(i as u64), GPR_SIZE),
             varnode: Varnode::reg(gpr_offset_with_size(i as u64, gpr_size), gpr_size),
         });
     }
@@ -90,11 +70,6 @@ fn ppc_register_file(gpr_size: u8) -> RegisterFile {
 }
 
 pub fn ppc32_register_file() -> RegisterFile {
-    build_register_file(PPC32_GPR_SIZE)
-}
-
-pub fn ppc64_register_file() -> RegisterFile {
-    build_register_file(PPC64_GPR_SIZE)
     ppc_register_file(PPC32_GPR_SIZE)
 }
 
@@ -105,12 +80,6 @@ pub fn ppc64_register_file() -> RegisterFile {
 /// Helper: 64-bit GPR varnode.
 #[inline]
 pub fn gpr(n: u64) -> Varnode {
-    Varnode::new(
-        SpaceId::Register,
-        gpr_offset(n, PPC64_GPR_SIZE),
-        PPC64_GPR_SIZE,
-    )
-    Varnode::new(SpaceId::Register, gpr_offset(n), GPR_SIZE)
     Varnode::new(SpaceId::Register, gpr_offset(n), PPC64_GPR_SIZE)
 }
 
@@ -175,39 +144,4 @@ pub fn cs_reg_to_varnode_with_size(reg: RegId, ptr_size: u8) -> Option<Varnode> 
         12..=19 => Some(cr()),
         _ => None,
     }
-}
-
-// t326 — AltiVec/VMX/VSX vector register file extension.
-pub const VR_BASE: u64 = 296;
-pub const VR_COUNT: usize = 32;
-pub const VR_SIZE: u8 = 16; // 128-bit AltiVec registers
-pub const VSR_BASE: u64 = VR_BASE + (VR_COUNT as u64) * (VR_SIZE as u64); // VSX overlaps
-pub const VSR_COUNT: usize = 64;
-pub const VSR_SIZE: u8 = 16;
-pub const VSCR_OFFSET: u64 = VSR_BASE + (VSR_COUNT as u64) * (VSR_SIZE as u64);
-pub const VRSAVE_OFFSET: u64 = VSCR_OFFSET + 4;
-
-pub fn altivec_register_file_extension() -> Vec<RegisterDef> {
-    let mut regs = Vec::with_capacity(34);
-    static VR_NAMES: [&str; 32] = [
-        "vr0","vr1","vr2","vr3","vr4","vr5","vr6","vr7",
-        "vr8","vr9","vr10","vr11","vr12","vr13","vr14","vr15",
-        "vr16","vr17","vr18","vr19","vr20","vr21","vr22","vr23",
-        "vr24","vr25","vr26","vr27","vr28","vr29","vr30","vr31",
-    ];
-    for (i, name) in VR_NAMES.iter().enumerate() {
-        regs.push(RegisterDef {
-            name,
-            varnode: Varnode::reg(VR_BASE + (i as u64) * (VR_SIZE as u64), VR_SIZE),
-        });
-    }
-    regs.push(RegisterDef {
-        name: "VSCR",
-        varnode: Varnode::reg(VSCR_OFFSET, 4),
-    });
-    regs.push(RegisterDef {
-        name: "VRSAVE",
-        varnode: Varnode::reg(VRSAVE_OFFSET, 4),
-    });
-    regs
 }

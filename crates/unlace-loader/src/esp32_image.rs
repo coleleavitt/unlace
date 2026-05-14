@@ -72,9 +72,6 @@ pub enum Esp32Error {
 
     /// A segment claims a payload that extends past the end of the input.
     #[error("ESP32 image truncated in segment {index} data: need {needed} bytes, have {available}")]
-    #[error(
-        "ESP32 image truncated in segment {index} data: need {needed} bytes, have {available}"
-    )]
     TruncatedSegmentData {
         /// Zero-based index of the segment whose payload was truncated.
         index: usize,

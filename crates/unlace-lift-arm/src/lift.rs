@@ -22,9 +22,7 @@ use unlace_ir::{
 };
 
 use crate::ops::{arithmetic, bitwise, control_flow, data_move};
-use crate::register_file::{
-    SME_ZA, SME_ZA_SIZE, SVE_Z_SIZE, aarch64_register_file, reg_varnode, sve_z_offset,
-};
+use crate::register_file::{aarch64_register_file, reg_varnode};
 
 thread_local! {
     static ARM64_CS: RefCell<Option<Capstone>> = const { RefCell::new(None) };
@@ -43,13 +41,6 @@ pub enum ArmLiftMode {
     Aarch64,
     Arm32,
     Thumb,
-    /// Thumb-2 + M-profile Vector Extension (Helium / MVE) profile.
-    ///
-    /// Today this shares the Thumb decoder/lifter pipeline with a small
-    /// MVE interceptor for the core vector ALU / load / store / predicate
-    /// families we can recognise from Capstone. Everything else falls back
-    /// to the normal Thumb path.
-    ThumbMve,
 }
 
 pub struct ArmLifter {
@@ -99,19 +90,6 @@ impl ArmLifter {
         Self {
             reg_file: arm32_register_file(),
             mode: ArmLiftMode::Thumb,
-            it_state: Mutex::new(None),
-        }
-    }
-
-    /// Thumb + Helium/MVE scaffold for Cortex-M profile binaries.
-    ///
-    /// Reuses the Thumb register file and IT-state handling, but enables
-    /// an MVE pre-dispatch that lowers recognised vector instructions to
-    /// dedicated Callother intrinsics before the generic Thumb decoder runs.
-    pub fn new_thumb_mve() -> Self {
-        Self {
-            reg_file: arm32_register_file_with_mve(),
-            mode: ArmLiftMode::ThumbMve,
             it_state: Mutex::new(None),
         }
     }
@@ -168,7 +146,7 @@ impl Lifter for ArmLifter {
         // `unlace-lift::get_lifter` and the ELF/PE/Mach-O machine maps).
         match self.mode {
             ArmLiftMode::Aarch64 => ArchId::AArch64,
-            ArmLiftMode::Arm32 | ArmLiftMode::Thumb | ArmLiftMode::ThumbMve => ArchId::Arm,
+            ArmLiftMode::Arm32 | ArmLiftMode::Thumb => ArchId::Arm,
         }
     }
 
@@ -177,7 +155,6 @@ impl Lifter for ArmLifter {
             ArmLiftMode::Aarch64 => self.lift_aarch64(bytes, addr),
             ArmLiftMode::Arm32 => self.lift_arm32(bytes, addr),
             ArmLiftMode::Thumb => self.lift_thumb(bytes, addr),
-            ArmLiftMode::ThumbMve => self.lift_thumb_mve(bytes, addr),
         }
     }
 
@@ -193,32 +170,12 @@ impl ArmLifter {
         }
 
         let raw = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        // t294/t305 — TME system instructions are newer than the Capstone
-        // version used by this workspace. Decode them before Capstone so
-        // they don't fall through as HINT/SYS or Unimplemented.
-        if let Some(tme) = try_aarch64_tme(raw) {
-            let mut ctx = LiftCtx::new(addr);
-            emit_aarch64_tme(&mut ctx, &tme);
-            return Ok(LiftedInsn {
-                ir_ops: ctx.ops,
-                len: 4,
-            });
-        }
-
         // t225 — register-form PAC/AUTH/XPAC: emit a dedicated Callother
         // intrinsic instead of folding to a nop. Done before the broader
         // PAC/BTI nop filter so the explicitly-lifted variants take
         // precedence; everything that's *not* on the Callother allow-list
         // (data-key forms, HINT-space SP/1716 variants, BTI) still nops.
         if let Some(pac) = try_pac_callother(raw) {
-            let mut ctx = LiftCtx::new(addr);
-            emit_pac_callother(&mut ctx, &pac);
-            return Ok(LiftedInsn {
-                ir_ops: ctx.ops,
-                len: 4,
-            });
-        }
-        if let Some(pac) = try_pac_hint_space(raw) {
             let mut ctx = LiftCtx::new(addr);
             emit_pac_callother(&mut ctx, &pac);
             return Ok(LiftedInsn {
@@ -270,10 +227,6 @@ impl ArmLifter {
             return Err(LiftError::ShortBuffer);
         }
         let raw = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-
-        if let Some(lifted) = try_arm_mve_known_encoding(raw, addr) {
-            return Ok(lifted);
-        }
 
         if let Some(decoded) = decode_arm_ldm_stm(raw) {
             let mut ctx = LiftCtx::new(addr);
@@ -378,37 +331,6 @@ impl ArmLifter {
         Ok(lifted)
     }
 
-    fn lift_thumb_mve(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
-        if bytes.len() < 2 {
-            return Err(LiftError::ShortBuffer);
-        }
-        let half = u16::from_le_bytes([bytes[0], bytes[1]]);
-        if let Some(state) = decode_it(half) {
-            if let Ok(mut guard) = self.it_state.lock() {
-                *guard = Some(state);
-            }
-            return Ok(LiftedInsn {
-                ir_ops: Vec::new(),
-                len: 2,
-            });
-        }
-
-        // Prefer an MVE-specific lowering before the generic Thumb path.
-        // The generic Thumb lifter still owns IT-state consumption and all
-        // fallback decode cases.
-        if let Some((mut lifted, capstone_cc)) = self.try_lift_mve(bytes, addr)? {
-            let pending_cond = self.pop_pending_it_cond();
-            let effective_cond = match (pending_cond, capstone_cc) {
-                (Some(_), Some(cs_cc)) => Some(cs_cc),
-                (manual, _) => manual,
-            };
-            apply_guard(&mut lifted.ir_ops, effective_cond);
-            return Ok(lifted);
-        }
-
-        self.lift_thumb(bytes, addr)
-    }
-
     /// Pop the head condition off the active IT-block, if any. Returns
     /// `None` once the block is exhausted (and clears the slot).
     fn pop_pending_it_cond(&self) -> Option<u8> {
@@ -427,92 +349,16 @@ impl ArmLifter {
 }
 
 /// Minimal 32-bit ARM register file — r0..r15 (where r13=SP, r14=LR,
-/// r15=PC) plus APSR/FPSCR and VFP S/D registers. VFP register coverage is
-/// sized for the common VFPv2/v3/v4 profiles: `S0..S31` (4-byte scalar regs)
-/// and `D0..D31` (8-byte scalar regs). We model `D<n>` as an aliasing view
-/// over pairs of `S` registers (`D0` overlays `S0:S1`, `D1` overlays `S2:S3`,
-/// etc.) by assigning them the same register-space offsets at 8-byte width.
-/// This gives the lifter a stable place to write 32-bit and 64-bit VFP values
-/// while preserving overlap for downstream analyses.
 /// r15=PC) plus an APSR slot for the condition flags. Mirrors the layout
 /// `expand_reg_list` produces (`u8` register numbers 0..15) so a `Varnode`
 /// can be derived as `Varnode::reg(reg_num * 4, 4)`.
-/// r15=PC) plus an APSR slot for the condition flags. Mirrors the layout
-/// `expand_reg_list` produces (`u8` register numbers 0..15) so a `Varnode`
-/// can be derived as `Varnode::reg(reg_num * 4, 4)`.
-pub fn arm32_register_file_with_mve() -> RegisterFile {
-    use unlace_ir::RegisterDef;
-    let mut rf = arm32_register_file();
-    for i in 0..8u8 {
-        let name = Box::leak(format!("Q{i}").into_boxed_str());
-        rf.registers.push(RegisterDef {
-            name,
-            varnode: arm_mve_q_varnode(i),
-        });
-    }
-    rf.registers.push(RegisterDef {
-        name: "VPR",
-        varnode: arm_mve_pred_varnode(),
-    });
-    rf
-}
-
-pub const ARM_MVE_Q_BASE: u64 = 68;
-pub const ARM_MVE_Q_SIZE: u8 = 16;
-pub const ARM_MVE_PRED_OFFSET: u64 = ARM_MVE_Q_BASE + 8 * ARM_MVE_Q_SIZE as u64;
-pub const ARM_MVE_PRED_SIZE: u8 = 2;
-
-pub const fn arm_mve_q_offset(n: u8) -> u64 {
-    ARM_MVE_Q_BASE + (n as u64) * ARM_MVE_Q_SIZE as u64
-}
-
-pub fn arm_mve_pred_varnode() -> Varnode {
-    Varnode::reg(ARM_MVE_PRED_OFFSET, ARM_MVE_PRED_SIZE)
-}
-
-fn arm_mve_q_index(reg: capstone::RegId) -> Option<u8> {
-    let raw = reg.0 as u32;
-    let name = match raw {
-        x if x == ArmReg::ARM_REG_Q0 => "Q0",
-        x if x == ArmReg::ARM_REG_Q1 => "Q1",
-        x if x == ArmReg::ARM_REG_Q2 => "Q2",
-        x if x == ArmReg::ARM_REG_Q3 => "Q3",
-        x if x == ArmReg::ARM_REG_Q4 => "Q4",
-        x if x == ArmReg::ARM_REG_Q5 => "Q5",
-        x if x == ArmReg::ARM_REG_Q6 => "Q6",
-        x if x == ArmReg::ARM_REG_Q7 => "Q7",
-        _ => return None,
-    };
-    Some(name[1..].parse().ok()?)
-}
-
 pub fn arm32_register_file() -> RegisterFile {
     use unlace_ir::RegisterDef;
     const NAMES: [&str; 16] = [
         "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "SP",
         "LR", "PC",
-    const NAMES: [&str; 16] = [
-        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
-        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
-    const GPR_NAMES: [&str; 16] = [
-        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
-        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
-        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
-        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
-        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
-        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
-        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
-        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
     ];
-
-    const ARM32_APSR_OFFSET: u64 = 64;
-    const ARM32_FPSCR_OFFSET: u64 = 68;
-    const ARM32_VFP_S_BASE: u64 = 0x100;
-    let mut regs = Vec::with_capacity(17 + 1 + 32 + 32);
-    for (i, name) in GPR_NAMES.iter().enumerate() {
     let mut regs = Vec::with_capacity(17);
-    for (i, name) in NAMES.iter().enumerate() {
-    let mut regs = Vec::with_capacity(17 + 16 + 8);
     for (i, name) in NAMES.iter().enumerate() {
         regs.push(RegisterDef {
             name,
@@ -521,66 +367,9 @@ pub fn arm32_register_file() -> RegisterFile {
     }
     regs.push(RegisterDef {
         name: "APSR",
-        varnode: Varnode::reg(ARM32_APSR_OFFSET, 4),
+        varnode: Varnode::reg(64, 4),
     });
-    regs.push(RegisterDef {
-        name: "FPSCR",
-        varnode: Varnode::reg(ARM32_FPSCR_OFFSET, 4),
-    });
-    for i in 0..32u64 {
-        regs.push(RegisterDef {
-            name: Box::leak(format!("S{i}").into_boxed_str()),
-            varnode: Varnode::reg(ARM32_VFP_S_BASE + i * 4, 4),
-        });
-    }
-    for i in 0..32u64 {
-        regs.push(RegisterDef {
-            name: Box::leak(format!("D{i}").into_boxed_str()),
-            varnode: Varnode::reg(ARM32_VFP_S_BASE + i * 8, 8),
-    for (i, name) in ARM_MVE_Q_NAMES.iter().enumerate() {
-        regs.push(RegisterDef {
-            name,
-            varnode: arm_mve_q_varnode(i as u8),
-        });
-    }
-    for (i, name) in ARM_MVE_P_NAMES.iter().enumerate() {
-        regs.push(RegisterDef {
-            name,
-            varnode: arm_mve_p_varnode(i as u8),
-        });
-    }
     RegisterFile { registers: regs }
-}
-
-/// ARM M-profile Vector Extension / NEON Q0..Q15 register-bank base.
-/// The classic ARM32 scaffold uses R0..PC at offsets 0..60 and APSR at
-/// 64; the vector bank starts at the next cache-line-ish gap so these
-/// 128-bit registers do not alias scalar state.
-pub const ARM_MVE_Q_BASE: u64 = 80;
-pub const ARM_MVE_Q_SIZE: u8 = 16;
-pub const ARM_MVE_P_BASE: u64 = ARM_MVE_Q_BASE + 16 * ARM_MVE_Q_SIZE as u64;
-pub const ARM_MVE_P_SIZE: u8 = 2;
-
-const ARM_MVE_Q_NAMES: [&str; 16] = [
-    "Q0", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14",
-    "Q15",
-];
-const ARM_MVE_P_NAMES: [&str; 8] = ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7"];
-
-pub const fn arm_mve_q_offset(idx: u8) -> u64 {
-    ARM_MVE_Q_BASE + (idx as u64) * ARM_MVE_Q_SIZE as u64
-}
-
-pub const fn arm_mve_p_offset(idx: u8) -> u64 {
-    ARM_MVE_P_BASE + (idx as u64) * ARM_MVE_P_SIZE as u64
-}
-
-pub fn arm_mve_q_varnode(idx: u8) -> Varnode {
-    Varnode::reg(arm_mve_q_offset(idx), ARM_MVE_Q_SIZE)
-}
-
-pub fn arm_mve_p_varnode(idx: u8) -> Varnode {
-    Varnode::reg(arm_mve_p_offset(idx), ARM_MVE_P_SIZE)
 }
 
 /// Resolve a Capstone `ArmReg` constant to its 0..15 register index.
@@ -608,108 +397,14 @@ fn arm32_reg_index(reg: capstone::RegId) -> Option<u8> {
     }
 }
 
-const ARM32_APSR_OFFSET: u64 = 64;
-const ARM32_FPSCR_OFFSET: u64 = 68;
-const ARM32_VFP_S_BASE: u64 = 0x100;
-
-fn arm32_vfp_varnode(reg: capstone::RegId) -> Option<Varnode> {
-    let raw = reg.0 as u32;
-    match raw {
-        ArmReg::ARM_REG_S0..=ArmReg::ARM_REG_S31 => {
-            let idx = (raw - ArmReg::ARM_REG_S0) as u64;
-            Some(Varnode::reg(ARM32_VFP_S_BASE + idx * 4, 4))
-        }
-        ArmReg::ARM_REG_D0..=ArmReg::ARM_REG_D31 => {
-            let idx = (raw - ArmReg::ARM_REG_D0) as u64;
-            Some(Varnode::reg(ARM32_VFP_S_BASE + idx * 8, 8))
-        }
-        ArmReg::ARM_REG_FPSCR => Some(Varnode::reg(ARM32_FPSCR_OFFSET, 4)),
-        ArmReg::ARM_REG_APSR | ArmReg::ARM_REG_APSR_NZCV => Some(Varnode::reg(ARM32_APSR_OFFSET, 4)),
-        _ => None,
-    }
-}
-
 fn arm32_operand_to_varnode(ctx: &mut LiftCtx, op_type: &ArmOperandType) -> Option<Varnode> {
     match op_type {
-        ArmOperandType::Reg(reg) => arm32_reg_index(*reg)
-            .map(arm32_reg_varnode)
-            .or_else(|| arm32_vfp_varnode(*reg)),
         ArmOperandType::Reg(reg) => arm32_reg_index(*reg).map(arm32_reg_varnode),
-            .or_else(|| arm_mve_q_index(*reg).map(arm_mve_q_varnode))
-            .or_else(|| arm_mve_p_index(*reg).map(arm_mve_p_varnode)),
         ArmOperandType::Imm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
         ArmOperandType::Cimm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
         ArmOperandType::Pimm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
-        ArmOperandType::Fp(v) => Some(Varnode::constant(v.to_bits(), 8)),
         ArmOperandType::Mem(mem) => arm32_compute_mem_address(ctx, mem),
         _ => None,
-    }
-}
-
-fn try_arm_mve_known_encoding(raw: u32, addr: u64) -> Option<LiftedInsn> {
-    let mut ctx = LiftCtx::new(addr);
-    match raw {
-        // vldr d0, [r0] / vstr d0, [r0]. Capstone's ARM backend may expose
-        // these as VFP D-register instructions rather than Q-register MVE
-        // forms depending on build options; keep the common M-profile vector
-        // memory encodings out of the `Unimplemented` path.
-        0xed90_0b00 => {
-            let dst = arm_mve_q_varnode(0);
-            let addr_vn = arm32_reg_varnode(0);
-            ctx.emit(IrInsn::with_output(
-                IrOp::Callother,
-                dst,
-                smallvec![
-                    Varnode::constant(CALLOTHER_ARM_MVE_VLDR, 8),
-                    Varnode::constant(8, 1),
-                    addr_vn,
-                ],
-                addr,
-            ));
-        }
-        0xed80_0b00 => {
-            let src = arm_mve_q_varnode(0);
-            let addr_vn = arm32_reg_varnode(0);
-            ctx.emit(IrInsn::without_output(
-                IrOp::Callother,
-                smallvec![
-                    Varnode::constant(CALLOTHER_ARM_MVE_VSTR, 8),
-                    Varnode::constant(8, 1),
-                    addr_vn,
-                    src,
-                ],
-                addr,
-            ));
-        }
-        _ => return None,
-    }
-    Some(LiftedInsn {
-        ir_ops: ctx.ops,
-        len: 4,
-    })
-}
-
-fn arm_mve_q_index(reg: capstone::RegId) -> Option<u8> {
-    let raw = reg.0 as u32;
-    let q0 = ArmReg::ARM_REG_Q0;
-    let q15 = ArmReg::ARM_REG_Q15;
-    if (q0..=q15).contains(&raw) {
-        Some((raw - q0) as u8)
-    } else {
-        None
-    }
-}
-
-fn arm_mve_p_index(reg: capstone::RegId) -> Option<u8> {
-    // Capstone 5 does not model MVE VPR predicate operands as a distinct
-    // public ARM_REG_P* bank. Keep a compact decoder hook for raw/future
-    // bindings and for tests that exercise predicate Callother payloads.
-    let raw = reg.0 as u32;
-    const P0_RAW: u32 = 256;
-    if (P0_RAW..P0_RAW + 8).contains(&raw) {
-        Some((raw - P0_RAW) as u8)
-    } else {
-        None
     }
 }
 
@@ -983,7 +678,6 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_LDREX | ArmInsn::ARM_INS_LDREXB | ArmInsn::ARM_INS_LDREXH => {
             emit_arm32_exclusive_load(ctx, &ops)
         }
-        ArmInsn::ARM_INS_VLDR => emit_arm32_vfp_load(ctx, &ops),
         ArmInsn::ARM_INS_STR => emit_arm32_store(ctx, &ops, 4),
         ArmInsn::ARM_INS_STRB => emit_arm32_store(ctx, &ops, 1),
         ArmInsn::ARM_INS_STRH => emit_arm32_store(ctx, &ops, 2),
@@ -991,7 +685,6 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_STREX | ArmInsn::ARM_INS_STREXB | ArmInsn::ARM_INS_STREXH => {
             emit_arm32_exclusive_store(ctx, &ops)
         }
-        ArmInsn::ARM_INS_VSTR => emit_arm32_vfp_store(ctx, &ops),
 
         ArmInsn::ARM_INS_CMP => emit_arm32_flags(ctx, &ops, IrOp::IntSub),
         ArmInsn::ARM_INS_CMN => emit_arm32_flags(ctx, &ops, IrOp::IntAdd),
@@ -1007,8 +700,6 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
 
         ArmInsn::ARM_INS_MRS => emit_arm32_mrs(ctx, &ops),
         ArmInsn::ARM_INS_MSR => emit_arm32_msr(ctx, &ops),
-        ArmInsn::ARM_INS_SMC => emit_arm32_trap(ctx, &ops, CALLOTHER_ARM_SMC),
-        ArmInsn::ARM_INS_SVC => emit_arm32_trap(ctx, &ops, CALLOTHER_ARM_SVC),
 
         ArmInsn::ARM_INS_BFI => emit_arm32_bfi(ctx, &ops),
         ArmInsn::ARM_INS_UBFX => emit_arm32_ubfx(ctx, &ops, false),
@@ -1029,54 +720,6 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_QSUB => emit_arm32_sat_binop(ctx, &ops, CALLOTHER_ARM_QSUB),
         ArmInsn::ARM_INS_USAT => emit_arm32_saturate(ctx, &ops, CALLOTHER_ARM_USAT),
         ArmInsn::ARM_INS_SSAT => emit_arm32_saturate(ctx, &ops, CALLOTHER_ARM_SSAT),
-
-        // t315: ARM32 NEON / Adv-SIMD
-        ArmInsn::ARM_INS_VADD => emit_arm32_neon_arith(ctx, detail, false),
-        ArmInsn::ARM_INS_VSUB => emit_arm32_neon_arith(ctx, detail, true),
-        ArmInsn::ARM_INS_VMUL => emit_arm32_neon_mul(ctx, detail),
-        ArmInsn::ARM_INS_VQADD => emit_arm32_neon_sat_binop(ctx, detail, CALLOTHER_ARM_NEON_VQADD),
-        ArmInsn::ARM_INS_VQSUB => emit_arm32_neon_sat_binop(ctx, detail, CALLOTHER_ARM_NEON_VQSUB),
-        ArmInsn::ARM_INS_VLD1 => emit_arm32_neon_ldst(ctx, detail, CALLOTHER_ARM_NEON_VLD1),
-        ArmInsn::ARM_INS_VLD2 => emit_arm32_neon_ldst(ctx, detail, CALLOTHER_ARM_NEON_VLD2),
-        ArmInsn::ARM_INS_VLD3 => emit_arm32_neon_ldst(ctx, detail, CALLOTHER_ARM_NEON_VLD3),
-        ArmInsn::ARM_INS_VLD4 => emit_arm32_neon_ldst(ctx, detail, CALLOTHER_ARM_NEON_VLD4),
-        ArmInsn::ARM_INS_VST1 => emit_arm32_neon_ldst(ctx, detail, CALLOTHER_ARM_NEON_VST1),
-        ArmInsn::ARM_INS_VST2 => emit_arm32_neon_ldst(ctx, detail, CALLOTHER_ARM_NEON_VST2),
-        ArmInsn::ARM_INS_VST3 => emit_arm32_neon_ldst(ctx, detail, CALLOTHER_ARM_NEON_VST3),
-        ArmInsn::ARM_INS_VST4 => emit_arm32_neon_ldst(ctx, detail, CALLOTHER_ARM_NEON_VST4),
-
-        // t317 — TrustZone / EL transition instructions.
-        ArmInsn::ARM_INS_SMC => emit_arm32_exc(ctx, &ops, CALLOTHER_ARM_SMC),
-        ArmInsn::ARM_INS_SVC => emit_arm32_exc(ctx, &ops, CALLOTHER_ARM_SVC),
-        ArmInsn::ARM_INS_HVC => emit_arm32_exc(ctx, &ops, CALLOTHER_ARM_HVC),
-        ArmInsn::ARM_INS_VMOV => emit_arm32_vfp_copy(ctx, &ops),
-        ArmInsn::ARM_INS_VADD => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatAdd),
-        ArmInsn::ARM_INS_VSUB => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatSub),
-        ArmInsn::ARM_INS_VMUL => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatMult),
-        ArmInsn::ARM_INS_VDIV => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatDiv),
-        ArmInsn::ARM_INS_VABS => emit_arm32_vfp_unop(ctx, &ops, IrOp::FloatAbs),
-        ArmInsn::ARM_INS_VNEG => emit_arm32_vfp_unop(ctx, &ops, IrOp::FloatNeg),
-        ArmInsn::ARM_INS_VSQRT => emit_arm32_vfp_unop(ctx, &ops, IrOp::FloatSqrt),
-        ArmInsn::ARM_INS_VCVT => emit_arm32_vfp_vcvt(ctx, &ops, insn),
-        ArmInsn::ARM_INS_VCMP | ArmInsn::ARM_INS_VCMPE => emit_arm32_vfp_cmp(ctx, &ops),
-        ArmInsn::ARM_INS_VMRS => emit_arm32_vmrs(ctx, &ops),
-        ArmInsn::ARM_INS_VMSR => emit_arm32_vmsr(ctx, &ops),
-        // t323: ARM M-profile Vector Extension (Helium/MVE) shares many
-        // architectural encodings and Capstone mnemonics with the ARMv7
-        // Advanced-SIMD `V*` family. Preserve those vector operations as
-        // typed Callother intrinsics over Q registers so downstream passes
-        // can recognise MVE lane semantics even though the frozen IR has no
-        // first-class vector lane operations.
-        ArmInsn::ARM_INS_VADD => emit_arm_mve_vec_binop(ctx, &ops, CALLOTHER_ARM_MVE_VADD),
-        ArmInsn::ARM_INS_VSUB => emit_arm_mve_vec_binop(ctx, &ops, CALLOTHER_ARM_MVE_VSUB),
-        ArmInsn::ARM_INS_VMUL => emit_arm_mve_vec_binop(ctx, &ops, CALLOTHER_ARM_MVE_VMUL),
-        ArmInsn::ARM_INS_VQADD => emit_arm_mve_vec_binop(ctx, &ops, CALLOTHER_ARM_MVE_VQADD),
-        ArmInsn::ARM_INS_VQSUB => emit_arm_mve_vec_binop(ctx, &ops, CALLOTHER_ARM_MVE_VQSUB),
-        ArmInsn::ARM_INS_VAND => emit_arm_mve_vec_binop(ctx, &ops, CALLOTHER_ARM_MVE_VAND),
-        ArmInsn::ARM_INS_VORR => emit_arm_mve_vec_binop(ctx, &ops, CALLOTHER_ARM_MVE_VORR),
-        ArmInsn::ARM_INS_VEOR => emit_arm_mve_vec_binop(ctx, &ops, CALLOTHER_ARM_MVE_VEOR),
-        ArmInsn::ARM_INS_VLDR | ArmInsn::ARM_INS_VLD1 => emit_arm_mve_load(ctx, &ops),
-        ArmInsn::ARM_INS_VSTR | ArmInsn::ARM_INS_VST1 => emit_arm_mve_store(ctx, &ops),
 
         _ => ctx.emit_unimplemented(),
     }
@@ -1108,59 +751,6 @@ pub const CALLOTHER_ARM_SSAT: u64 = 0x35C;
 pub const CALLOTHER_ARM_QADD: u64 = 0x35D;
 /// `__qsub(Rn, Rm) -> Rd` — signed-saturating 32-bit subtract.
 pub const CALLOTHER_ARM_QSUB: u64 = 0x35E;
-/// `__arm_smc(#imm)` / `__arm_smc(cond, #imm)` — secure monitor call
-/// transition marker for TrustZone world switches. The immediate reaches
-/// the intrinsic as a constant varnode so downstream passes can recover
-/// the SMC function number without re-decoding.
-pub const CALLOTHER_ARM_SMC: u64 = 0x35F;
-/// `__arm_svc(#imm)` / `__arm_svc(cond, #imm)` — supervisor call marker.
-/// Not every SVC is a TrustZone transition, but surfacing it with the same
-/// structured shape lets downstream analysis distinguish secure monitor
-/// transitions (`SMC`) from OS / hypervisor service traps (`SVC`) while still
-/// flagging both as privilege-boundary events per t317.
-pub const CALLOTHER_ARM_SVC: u64 = 0x360;
-
-// t315 — ARM32 NEON / Adv-SIMD tags. Occupy the free band below the
-// AArch64 NEON block (`0x400..`) and above the existing ARM scalar/media
-// helpers (`0x354..0x364`).
-pub const CALLOTHER_ARM_NEON_VADD_I: u64 = 0x365;
-pub const CALLOTHER_ARM_NEON_VADD_F: u64 = 0x366;
-pub const CALLOTHER_ARM_NEON_VSUB_I: u64 = 0x367;
-pub const CALLOTHER_ARM_NEON_VSUB_F: u64 = 0x368;
-pub const CALLOTHER_ARM_NEON_VMUL_I: u64 = 0x369;
-pub const CALLOTHER_ARM_NEON_VMUL_F: u64 = 0x36A;
-pub const CALLOTHER_ARM_NEON_VQADD: u64 = 0x36B;
-pub const CALLOTHER_ARM_NEON_VQSUB: u64 = 0x36C;
-pub const CALLOTHER_ARM_NEON_VLD1: u64 = 0x36D;
-pub const CALLOTHER_ARM_NEON_VLD2: u64 = 0x36E;
-pub const CALLOTHER_ARM_NEON_VLD3: u64 = 0x36F;
-pub const CALLOTHER_ARM_NEON_VLD4: u64 = 0x370;
-pub const CALLOTHER_ARM_NEON_VST1: u64 = 0x371;
-pub const CALLOTHER_ARM_NEON_VST2: u64 = 0x372;
-pub const CALLOTHER_ARM_NEON_VST3: u64 = 0x373;
-pub const CALLOTHER_ARM_NEON_VST4: u64 = 0x374;
-
-// t323 — ARM Helium (M-Profile Vector Extension / MVE) callother tags.
-pub const CALLOTHER_MVE_VADD: u64 = 0x380;
-pub const CALLOTHER_MVE_VSUB: u64 = 0x381;
-pub const CALLOTHER_MVE_VMUL: u64 = 0x382;
-pub const CALLOTHER_MVE_VFMA: u64 = 0x383;
-pub const CALLOTHER_MVE_VLDRW: u64 = 0x384;
-pub const CALLOTHER_MVE_VSTRW: u64 = 0x385;
-pub const CALLOTHER_MVE_VPST: u64 = 0x386;
-pub const CALLOTHER_MVE_VCMP: u64 = 0x387;
-pub const CALLOTHER_MVE_VMOV: u64 = 0x388;
-pub const CALLOTHER_MVE_VDUP: u64 = 0x389;
-pub const CALLOTHER_MVE_VAND: u64 = 0x38A;
-pub const CALLOTHER_MVE_VORR: u64 = 0x38B;
-pub const CALLOTHER_MVE_VEOR: u64 = 0x38C;
-pub const CALLOTHER_MVE_VSHL: u64 = 0x38D;
-pub const CALLOTHER_MVE_VSHR: u64 = 0x38E;
-pub const CALLOTHER_MVE_VADDV: u64 = 0x38F;
-pub const CALLOTHER_MVE_VMLADAV: u64 = 0x390;
-pub const CALLOTHER_MVE_VCVT: u64 = 0x391;
-pub const CALLOTHER_MVE_VPNOT: u64 = 0x392;
-pub const CALLOTHER_MVE_VQADD: u64 = 0x393;
 
 /// Emit `Rd = Callother(tag, Rn, Rm)` for the three-register
 /// saturating/parallel families (UQADD8/UQADD16/SADD16/SSUB16/QADD/
@@ -1215,350 +805,6 @@ fn emit_arm32_saturate(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
     ));
 }
 
-fn arm32_neon_lane_size(detail: &InsnDetail) -> Option<u8> {
-    use capstone::arch::arm::ArmVectorData;
-    let arch = detail.arch_detail();
-    let arm = arch.arm()?;
-    match arm.vector_data() {
-        ArmVectorData::ARM_VECTORDATA_I8
-        | ArmVectorData::ARM_VECTORDATA_S8
-        | ArmVectorData::ARM_VECTORDATA_U8
-        | ArmVectorData::ARM_VECTORDATA_P8 => Some(1),
-        ArmVectorData::ARM_VECTORDATA_I16
-        | ArmVectorData::ARM_VECTORDATA_S16
-        | ArmVectorData::ARM_VECTORDATA_U16
-        | ArmVectorData::ARM_VECTORDATA_F16 => Some(2),
-        ArmVectorData::ARM_VECTORDATA_I32
-        | ArmVectorData::ARM_VECTORDATA_S32
-        | ArmVectorData::ARM_VECTORDATA_U32
-        | ArmVectorData::ARM_VECTORDATA_F32 => Some(4),
-        ArmVectorData::ARM_VECTORDATA_I64
-        | ArmVectorData::ARM_VECTORDATA_S64
-        | ArmVectorData::ARM_VECTORDATA_U64
-        | ArmVectorData::ARM_VECTORDATA_F64 => Some(8),
-        _ => None,
-    }
-}
-
-fn arm32_neon_reg_index(reg: capstone::RegId) -> Option<(u8, bool)> {
-    let raw = reg.0 as u32;
-    match raw {
-        ArmReg::ARM_REG_D0..=ArmReg::ARM_REG_D31 => Some(((raw - ArmReg::ARM_REG_D0) as u8, false)),
-        ArmReg::ARM_REG_Q0..=ArmReg::ARM_REG_Q15 => Some(((raw - ArmReg::ARM_REG_Q0) as u8, true)),
-        _ => None,
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-struct Arm32NeonOpInfo {
-    lane_size: Option<u8>,
-    reg_indices: Vec<u8>,
-    wide: bool,
-    addr: Option<Varnode>,
-}
-
-fn arm32_neon_op_info(ctx: &mut LiftCtx, detail: &InsnDetail) -> Arm32NeonOpInfo {
-    let mut info = Arm32NeonOpInfo::default();
-    let arch = detail.arch_detail();
-    let Some(arm) = arch.arm() else {
-        return info;
-    };
-    info.lane_size = arm32_neon_lane_size(detail).or_else(|| {
-        let bits = arm.vector_size();
-        if bits > 0 {
-            Some((bits / 8) as u8)
-        } else {
-            None
-        }
-    });
-    for op in arm.operands() {
-        match op.op_type {
-            ArmOperandType::Reg(reg) => {
-                if let Some((idx, wide)) = arm32_neon_reg_index(reg) {
-                    info.reg_indices.push(idx);
-                    info.wide |= wide;
-                }
-            }
-            ArmOperandType::Mem(mem) => {
-                if info.addr.is_none() {
-                    info.addr = arm32_compute_mem_address(ctx, &mem);
-                }
-            }
-            _ => {}
-        }
-    }
-    info
-}
-
-fn emit_arm32_neon_arith(ctx: &mut LiftCtx, detail: &InsnDetail, sub: bool) {
-    use capstone::arch::arm::ArmVectorData;
-    let info = arm32_neon_op_info(ctx, detail);
-    let (Some(lane), 3) = (info.lane_size, info.reg_indices.len()) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let arch = detail.arch_detail();
-    let arm = arch.arm().expect("arm detail");
-    let tag = match (sub, arm.vector_data()) {
-        (
-            false,
-            ArmVectorData::ARM_VECTORDATA_F16
-            | ArmVectorData::ARM_VECTORDATA_F32
-            | ArmVectorData::ARM_VECTORDATA_F64,
-        ) => CALLOTHER_ARM_NEON_VADD_F,
-        (
-            true,
-            ArmVectorData::ARM_VECTORDATA_F16
-            | ArmVectorData::ARM_VECTORDATA_F32
-            | ArmVectorData::ARM_VECTORDATA_F64,
-        ) => CALLOTHER_ARM_NEON_VSUB_F,
-        (false, _) => CALLOTHER_ARM_NEON_VADD_I,
-        (true, _) => CALLOTHER_ARM_NEON_VSUB_I,
-    };
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![
-            Varnode::constant(tag, 8),
-            Varnode::constant(lane as u64, 1),
-            Varnode::constant(info.wide as u64, 1),
-            Varnode::constant(info.reg_indices[0] as u64, 1),
-            Varnode::constant(info.reg_indices[1] as u64, 1),
-            Varnode::constant(info.reg_indices[2] as u64, 1),
-        ],
-        ctx.addr,
-    ));
-}
-
-fn emit_arm32_neon_mul(ctx: &mut LiftCtx, detail: &InsnDetail) {
-    use capstone::arch::arm::ArmVectorData;
-    let info = arm32_neon_op_info(ctx, detail);
-    let (Some(lane), 3) = (info.lane_size, info.reg_indices.len()) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let arch = detail.arch_detail();
-    let arm = arch.arm().expect("arm detail");
-    let tag = match arm.vector_data() {
-        ArmVectorData::ARM_VECTORDATA_F16
-        | ArmVectorData::ARM_VECTORDATA_F32
-        | ArmVectorData::ARM_VECTORDATA_F64 => CALLOTHER_ARM_NEON_VMUL_F,
-    let Some(arm) = arch.arm() else { return info; };
-    info.lane_size = arm32_neon_lane_size(detail).or_else(|| {
-        let bits = arm.vector_size();
-        if bits > 0 { Some((bits / 8) as u8) } else { None }
-    });
-    for op in arm.operands() {
-        match op.op_type {
-            ArmOperandType::Reg(reg) => {
-                if let Some((idx, wide)) = arm32_neon_reg_index(reg) {
-                    info.reg_indices.push(idx);
-                    info.wide |= wide;
-                }
-            }
-            ArmOperandType::Mem(mem) => {
-                if info.addr.is_none() {
-                    info.addr = arm32_compute_mem_address(ctx, &mem);
-                }
-            }
-            _ => {}
-        }
-    }
-    info
-}
-
-fn emit_arm32_neon_arith(ctx: &mut LiftCtx, detail: &InsnDetail, sub: bool) {
-    use capstone::arch::arm::ArmVectorData;
-    let info = arm32_neon_op_info(ctx, detail);
-    let (Some(lane), 3) = (info.lane_size, info.reg_indices.len()) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let arch = detail.arch_detail();
-    let arm = arch.arm().expect("arm detail");
-    let tag = match (sub, arm.vector_data()) {
-        (false, ArmVectorData::ARM_VECTORDATA_F16 | ArmVectorData::ARM_VECTORDATA_F32 | ArmVectorData::ARM_VECTORDATA_F64) => CALLOTHER_ARM_NEON_VADD_F,
-        (true, ArmVectorData::ARM_VECTORDATA_F16 | ArmVectorData::ARM_VECTORDATA_F32 | ArmVectorData::ARM_VECTORDATA_F64) => CALLOTHER_ARM_NEON_VSUB_F,
-        (false, _) => CALLOTHER_ARM_NEON_VADD_I,
-        (true, _) => CALLOTHER_ARM_NEON_VSUB_I,
-    };
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![
-            Varnode::constant(tag, 8),
-            Varnode::constant(lane as u64, 1),
-            Varnode::constant(info.wide as u64, 1),
-            Varnode::constant(info.reg_indices[0] as u64, 1),
-            Varnode::constant(info.reg_indices[1] as u64, 1),
-            Varnode::constant(info.reg_indices[2] as u64, 1),
-        ],
-        ctx.addr,
-    ));
-}
-
-fn emit_arm32_neon_mul(ctx: &mut LiftCtx, detail: &InsnDetail) {
-    use capstone::arch::arm::ArmVectorData;
-    let info = arm32_neon_op_info(ctx, detail);
-    let (Some(lane), 3) = (info.lane_size, info.reg_indices.len()) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let arch = detail.arch_detail();
-    let arm = arch.arm().expect("arm detail");
-    let tag = match arm.vector_data() {
-        ArmVectorData::ARM_VECTORDATA_F16 | ArmVectorData::ARM_VECTORDATA_F32 | ArmVectorData::ARM_VECTORDATA_F64 => CALLOTHER_ARM_NEON_VMUL_F,
-        _ => CALLOTHER_ARM_NEON_VMUL_I,
-    };
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![
-            Varnode::constant(tag, 8),
-            Varnode::constant(lane as u64, 1),
-            Varnode::constant(info.wide as u64, 1),
-            Varnode::constant(info.reg_indices[0] as u64, 1),
-            Varnode::constant(info.reg_indices[1] as u64, 1),
-            Varnode::constant(info.reg_indices[2] as u64, 1),
-        ],
-        ctx.addr,
-    ));
-}
-
-fn emit_arm32_neon_sat_binop(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
-    let info = arm32_neon_op_info(ctx, detail);
-    let (Some(lane), 3) = (info.lane_size, info.reg_indices.len()) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![
-            Varnode::constant(tag, 8),
-            Varnode::constant(lane as u64, 1),
-            Varnode::constant(info.wide as u64, 1),
-            Varnode::constant(info.reg_indices[0] as u64, 1),
-            Varnode::constant(info.reg_indices[1] as u64, 1),
-            Varnode::constant(info.reg_indices[2] as u64, 1),
-        ],
-        ctx.addr,
-    ));
-}
-
-fn emit_arm32_neon_ldst(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
-    let info = arm32_neon_op_info(ctx, detail);
-    let (Some(lane), Some(addr)) = (info.lane_size, info.addr) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    if info.reg_indices.is_empty() {
-        ctx.emit_unimplemented();
-        return;
-    }
-    let mut inputs: smallvec::SmallVec<[Varnode; 3]> = smallvec![
-        Varnode::constant(tag, 8),
-        Varnode::constant(lane as u64, 1),
-        Varnode::constant(info.wide as u64, 1),
-        addr,
-    ];
-    for idx in info.reg_indices {
-        inputs.push(Varnode::constant(idx as u64, 1));
-    }
-    ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
-// ── t323: ARM32 Helium / MVE vector Callother tags ────────────────────
-// Allocated after the SVE block (0x420..0x426). These tags intentionally
-// model operations at the vector-intrinsic level: input[0]=tag, input[1]=lane
-// size in bytes when known (0 = unavailable), input[2]=signedness hint
-// (0=unsigned/unknown, 1=signed, 2=float), followed by Q-register or memory
-// operands in Capstone order.
-pub const CALLOTHER_ARM_MVE_VADD: u64 = 0x430;
-pub const CALLOTHER_ARM_MVE_VSUB: u64 = 0x431;
-pub const CALLOTHER_ARM_MVE_VMUL: u64 = 0x432;
-pub const CALLOTHER_ARM_MVE_VQADD: u64 = 0x433;
-pub const CALLOTHER_ARM_MVE_VQSUB: u64 = 0x434;
-pub const CALLOTHER_ARM_MVE_VAND: u64 = 0x435;
-pub const CALLOTHER_ARM_MVE_VORR: u64 = 0x436;
-pub const CALLOTHER_ARM_MVE_VEOR: u64 = 0x437;
-pub const CALLOTHER_ARM_MVE_VLDR: u64 = 0x438;
-pub const CALLOTHER_ARM_MVE_VSTR: u64 = 0x439;
-
-fn arm_mve_lane_size(_ops: &[ArmOperandType]) -> u8 {
-    // The current capstone crate exposes ARM vector register operands but
-    // not the MVE element arrangement suffix through the safe Rust API.
-    // Preserve a stable metadata slot; downstream consumers treat 0 as
-    // "lane size unavailable from decoder".
-    0
-}
-
-fn arm_mve_signedness(_ops: &[ArmOperandType]) -> u8 {
-    0
-}
-
-fn emit_arm_mve_vec_binop(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
-    let Some(dst) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let mut inputs = smallvec![
-        Varnode::constant(tag, 8),
-        Varnode::constant(arm_mve_lane_size(ops) as u64, 1),
-        Varnode::constant(arm_mve_signedness(ops) as u64, 1),
-    ];
-    for op in ops.iter().skip(1) {
-        let Some(vn) = arm32_operand_to_varnode(ctx, op) else {
-            ctx.emit_unimplemented();
-            return;
-        };
-        inputs.push(vn);
-    }
-    ctx.emit(IrInsn::with_output(IrOp::Callother, dst, inputs, ctx.addr));
-}
-
-fn emit_arm_mve_load(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
-    let Some(dst) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(addr) = ops.iter().find_map(|o| match o {
-        ArmOperandType::Mem(_) => arm32_operand_to_varnode(ctx, o),
-        _ => None,
-    }) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    ctx.emit(IrInsn::with_output(
-        IrOp::Callother,
-        dst,
-        smallvec![
-            Varnode::constant(CALLOTHER_ARM_MVE_VLDR, 8),
-            Varnode::constant(arm_mve_lane_size(ops) as u64, 1),
-            addr,
-        ],
-        ctx.addr,
-    ));
-}
-
-fn emit_arm_mve_store(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
-    let Some(src) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(addr) = ops.iter().find_map(|o| match o {
-        ArmOperandType::Mem(_) => arm32_operand_to_varnode(ctx, o),
-        _ => None,
-    }) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![
-            Varnode::constant(CALLOTHER_ARM_MVE_VSTR, 8),
-            Varnode::constant(arm_mve_lane_size(ops) as u64, 1),
-            addr,
-            src,
-        ],
-        ctx.addr,
-    ));
-}
-
 const CALLOTHER_ARM_MRS: u64 = 0x363;
 const CALLOTHER_ARM_MSR: u64 = 0x364;
 
@@ -1605,45 +851,11 @@ fn emit_arm32_msr(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
     ));
 }
 
-/// t317: surface TrustZone / privilege-boundary trap instructions as
-/// explicit Callother intrinsics instead of letting them disappear into
-/// `Unimplemented`. The shape is intentionally small and uniform:
-///
-///   Callother(tag, imm24)
-///
-/// for plain A32/T32 forms, with the instruction-level ARM condition
-/// carried separately via `IrInsn.guard` when present. This preserves the
-/// immediate trap number and lets downstream passes recognise
-/// secure-world transitions (`SMC`) versus supervisor calls (`SVC`)
-/// without re-decoding raw bytes.
-fn emit_arm32_trap(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
-    let Some(imm) = ops.first().and_then(arm32_trap_imm) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![Varnode::constant(tag, 8), imm],
-        ctx.addr,
-    ));
-}
-
-fn arm32_trap_imm(op: &ArmOperandType) -> Option<Varnode> {
-    match op {
-        ArmOperandType::Imm(v) => Some(Varnode::constant(*v as i64 as u64, 4)),
-        ArmOperandType::Cimm(v) => Some(Varnode::constant(*v as i64 as u64, 4)),
-        ArmOperandType::Pimm(v) => Some(Varnode::constant(*v as i64 as u64, 4)),
-        _ => None,
-    }
-}
-
 fn arm32_first_dst(ops: &[ArmOperandType]) -> Option<Varnode> {
     let ArmOperandType::Reg(reg) = ops.first()? else {
         return None;
     };
-    arm32_reg_index(*reg)
-        .map(arm32_reg_varnode)
-        .or_else(|| arm32_vfp_varnode(*reg))
+    arm32_reg_index(*reg).map(arm32_reg_varnode)
 }
 
 fn emit_arm32_copy(ctx: &mut LiftCtx, ops: &[ArmOperandType], shifts: &[ArmShift], invert: bool) {
@@ -1807,136 +1019,6 @@ fn emit_arm32_store(ctx: &mut LiftCtx, ops: &[ArmOperandType], _size: u8) {
         return;
     };
     ctx.emit_store(addr_vn, value);
-}
-
-fn emit_arm32_vfp_copy(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
-    let Some(dst) = arm32_first_dst(ops) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    ctx.emit_copy(dst, src);
-}
-
-fn emit_arm32_vfp_binop(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
-    let Some(dst) = arm32_first_dst(ops) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(lhs) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(rhs) = ops.get(2).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    ctx.emit(IrInsn::with_output(op, dst, smallvec![lhs, rhs], ctx.addr));
-}
-
-fn emit_arm32_vfp_unop(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
-    let Some(dst) = arm32_first_dst(ops) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    ctx.emit(IrInsn::with_output(op, dst, smallvec![src], ctx.addr));
-}
-
-fn emit_arm32_vfp_load(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
-    let Some(dst) = arm32_first_dst(ops) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(addr_vn) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let loaded = ctx.emit_load(dst.size as u8, addr_vn);
-    ctx.emit_copy(dst, loaded);
-}
-
-fn emit_arm32_vfp_store(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
-    let Some(value) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(addr_vn) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    ctx.emit_store(addr_vn, value);
-}
-
-fn emit_arm32_vfp_vcvt(ctx: &mut LiftCtx, ops: &[ArmOperandType], insn: &Insn) {
-    let Some(dst) = arm32_first_dst(ops) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let mnemonic = insn.mnemonic().unwrap_or_default();
-    let ir_op = if mnemonic.contains(".f32.s32") || mnemonic.contains(".f32.u32") || mnemonic.contains(".f64.s32") || mnemonic.contains(".f64.u32") {
-        IrOp::FloatInt2float
-    } else if mnemonic.contains(".s32.f32") || mnemonic.contains(".u32.f32") || mnemonic.contains(".s32.f64") || mnemonic.contains(".u32.f64") {
-        IrOp::FloatFloat2int
-    } else {
-        IrOp::FloatFloat2float
-    };
-    ctx.emit(IrInsn::with_output(ir_op, dst, smallvec![src], ctx.addr));
-}
-
-fn emit_arm32_vfp_cmp(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
-    let Some(lhs) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(rhs) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let is_nan = Varnode::unique(ctx.alloc_unique(), 1);
-    let is_lt = Varnode::unique(ctx.alloc_unique(), 1);
-    let is_eq = Varnode::unique(ctx.alloc_unique(), 1);
-    ctx.emit(IrInsn::with_output(IrOp::FloatNan, is_nan, smallvec![lhs, rhs], ctx.addr));
-    ctx.emit(IrInsn::with_output(IrOp::FloatLess, is_lt, smallvec![lhs, rhs], ctx.addr));
-    ctx.emit(IrInsn::with_output(IrOp::FloatEqual, is_eq, smallvec![lhs, rhs], ctx.addr));
-    ctx.emit_copy(ARM_FLAG_N, is_lt);
-    ctx.emit_copy(ARM_FLAG_Z, is_eq);
-    ctx.emit(IrInsn::with_output(IrOp::BoolNegate, ARM_FLAG_V, smallvec![is_nan], ctx.addr));
-    ctx.emit_copy(ARM_FLAG_C, ARM_FLAG_V);
-}
-
-fn emit_arm32_vmrs(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
-    let Some(dst) = arm32_first_dst(ops) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    ctx.emit_copy(dst, src);
-}
-
-fn emit_arm32_vmsr(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
-    let Some(dst) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    ctx.emit_copy(dst, src);
 }
 
 // t151: NZCV flag varnodes for ARM32.
@@ -3003,42 +2085,6 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_FADD => emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FADD),
         Arm64Insn::ARM64_INS_FSUB => emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FSUB),
         Arm64Insn::ARM64_INS_FMUL => emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FMUL),
-        Arm64Insn::ARM64_INS_ADD if aarch64_is_sve_form(detail) => {
-            emit_aarch64_sve_arith(ctx, detail, CALLOTHER_SVE_ADD)
-        }
-        Arm64Insn::ARM64_INS_SUB if aarch64_is_sve_form(detail) => {
-            emit_aarch64_sve_arith(ctx, detail, CALLOTHER_SVE_SUB)
-        }
-        Arm64Insn::ARM64_INS_MUL if aarch64_is_sve_form(detail) => {
-            emit_aarch64_sve_arith(ctx, detail, CALLOTHER_SVE_MUL)
-        }
-        Arm64Insn::ARM64_INS_FADD => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FADD)
-        }
-        Arm64Insn::ARM64_INS_FSUB => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FSUB)
-        }
-        Arm64Insn::ARM64_INS_FMUL => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FMUL)
-        }
-        Arm64Insn::ARM64_INS_FADD => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FADD)
-        }
-        Arm64Insn::ARM64_INS_FSUB => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FSUB)
-        }
-        Arm64Insn::ARM64_INS_FMUL => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FMUL)
-        }
-        Arm64Insn::ARM64_INS_FADD => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FADD)
-        }
-        Arm64Insn::ARM64_INS_FSUB => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FSUB)
-        }
-        Arm64Insn::ARM64_INS_FMUL => {
-            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FMUL)
-        }
         Arm64Insn::ARM64_INS_ADD => arithmetic::lift_add(ctx, &ops),
         Arm64Insn::ARM64_INS_SUB => arithmetic::lift_sub(ctx, &ops),
         Arm64Insn::ARM64_INS_ADDS => arithmetic::lift_adds(ctx, &ops),
@@ -3227,30 +2273,13 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
 
         // t186 — AArch64 NEON LDn/STn multi-structure register-list ops.
         Arm64Insn::ARM64_INS_LD1 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD1),
-        Arm64Insn::ARM64_INS_LD1B => emit_aarch64_sve_ldst(ctx, detail, CALLOTHER_SVE_LD1),
         Arm64Insn::ARM64_INS_LD2 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD2),
         Arm64Insn::ARM64_INS_LD3 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD3),
         Arm64Insn::ARM64_INS_LD4 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD4),
         Arm64Insn::ARM64_INS_ST1 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST1),
-        Arm64Insn::ARM64_INS_ST1B => emit_aarch64_sve_ldst(ctx, detail, CALLOTHER_SVE_ST1),
         Arm64Insn::ARM64_INS_ST2 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST2),
         Arm64Insn::ARM64_INS_ST3 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST3),
         Arm64Insn::ARM64_INS_ST4 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST4),
-        Arm64Insn::ARM64_INS_PTRUE | Arm64Insn::ARM64_INS_PTRUES => {
-            emit_aarch64_sve_ptrue(ctx, detail)
-        }
-
-        // t317 — TrustZone exception-generating / exception-return insns.
-        Arm64Insn::ARM64_INS_SMC => emit_aarch64_exc(ctx, &ops, CALLOTHER_AARCH64_SMC),
-        Arm64Insn::ARM64_INS_SVC => emit_aarch64_exc(ctx, &ops, CALLOTHER_AARCH64_SVC),
-        Arm64Insn::ARM64_INS_HVC => emit_aarch64_exc(ctx, &ops, CALLOTHER_AARCH64_HVC),
-        Arm64Insn::ARM64_INS_ERET
-        | Arm64Insn::ARM64_INS_ERETAA
-        | Arm64Insn::ARM64_INS_ERETAB => emit_aarch64_eret(ctx, CALLOTHER_AARCH64_ERET),
-
-        // t301 — AArch64 SME outer-product scaffolding. Capstone 0.14 does
-        // not expose SME-specific instruction ids yet, so decode by mnemonic.
-        _ if emit_aarch64_sme_outer_product(ctx, insn, detail) => {}
 
         _ => ctx.emit_unimplemented(),
     }
@@ -3412,110 +2441,6 @@ pub fn aarch64_neon_op_info(ctx: &mut LiftCtx, detail: &InsnDetail) -> NeonOpInf
     info
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct SveOpInfo {
-    pub lane_size: Option<u8>,
-    pub z_regs: Vec<Varnode>,
-    pub p_regs: Vec<Varnode>,
-    pub addr: Option<Varnode>,
-    pub imm: Option<i64>,
-}
-
-fn aarch64_sve_lane_size(vas: capstone::arch::arm64::Arm64Vas) -> Option<u8> {
-    aarch64_vas_lane_size(vas)
-}
-
-fn aarch64_sve_op_info(ctx: &mut LiftCtx, detail: &InsnDetail) -> SveOpInfo {
-    use crate::register_file::{SVE_P_SIZE, SVE_Z_SIZE, reg_varnode};
-
-    let mut info = SveOpInfo::default();
-    let arch = detail.arch_detail();
-    let Some(arm64) = arch.arm64() else {
-        return info;
-    };
-    for op in arm64.operands() {
-        match op.op_type {
-            Arm64OperandType::Reg(reg) => {
-                if let Some(vn) = reg_varnode(reg) {
-                    match vn.size {
-                        SVE_Z_SIZE => info.z_regs.push(vn),
-                        SVE_P_SIZE => info.p_regs.push(vn),
-                        _ => {}
-                    }
-                    if info.lane_size.is_none() {
-                        info.lane_size = aarch64_sve_lane_size(op.vas);
-                    }
-                }
-            }
-            Arm64OperandType::Mem(mem) => {
-                if info.addr.is_none() {
-                    info.addr = compute_mem_address(ctx, &mem);
-                }
-            }
-            Arm64OperandType::Imm(i) => {
-                if info.imm.is_none() {
-                    info.imm = Some(i);
-                }
-            }
-            _ => {}
-        }
-    }
-    info
-}
-
-fn emit_aarch64_sve_arith(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
-    let info = aarch64_sve_op_info(ctx, detail);
-    let pg = info
-        .p_regs
-        .first()
-        .and_then(|p| {
-            u8::try_from(
-                (p.offset - crate::register_file::SVE_P_BASE)
-                    / crate::register_file::SVE_P_SIZE as u64,
-            )
-            .ok()
-        })
-        .unwrap_or(0xFF);
-    if info.z_regs.len() < 3 {
-        ctx.emit_unimplemented();
-        return;
-    }
-    emit_sve_callother(ctx, tag, pg, &info.z_regs[..3]);
-}
-
-fn emit_aarch64_sve_ldst(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
-    let info = aarch64_sve_op_info(ctx, detail);
-    let Some(addr) = info.addr else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let Some(zt) = info.z_regs.first().copied() else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    let pg = info
-        .p_regs
-        .first()
-        .and_then(|p| {
-            u8::try_from(
-                (p.offset - crate::register_file::SVE_P_BASE)
-                    / crate::register_file::SVE_P_SIZE as u64,
-            )
-            .ok()
-        })
-        .unwrap_or(0xFF);
-    emit_sve_callother(ctx, tag, pg, &[zt, addr]);
-}
-
-fn emit_aarch64_sve_ptrue(ctx: &mut LiftCtx, detail: &InsnDetail) {
-    let info = aarch64_sve_op_info(ctx, detail);
-    let Some(pd) = info.p_regs.first().copied() else {
-        ctx.emit_unimplemented();
-        return;
-    };
-    emit_sve_callother(ctx, CALLOTHER_SVE_PTRUE, 0xFF, &[pd]);
-}
-
 /// Emit the `Callother` payload for an AArch64 NEON LDn/STn instruction.
 ///
 /// Capstone exposes one register operand per `Vn.<size>` token in the
@@ -3577,21 +2502,6 @@ pub fn aarch64_is_vector_form(detail: &InsnDetail) -> bool {
     arm64
         .operands()
         .any(|op| op.vas != Arm64Vas::ARM64_VAS_INVALID)
-}
-
-pub fn aarch64_is_sve_form(detail: &InsnDetail) -> bool {
-    use crate::register_file::{SVE_P_SIZE, SVE_Z_SIZE, reg_varnode};
-
-    let arch = detail.arch_detail();
-    let Some(arm64) = arch.arm64() else {
-        return false;
-    };
-    arm64.operands().any(|op| match op.op_type {
-        Arm64OperandType::Reg(reg) => reg_varnode(reg)
-            .map(|vn| vn.size == SVE_Z_SIZE || vn.size == SVE_P_SIZE)
-            .unwrap_or(false),
-        _ => false,
-    })
 }
 
 /// Emit a `Callother(tag, lane_size, vd_idx, vn_idx, vm_idx)` payload
@@ -3960,44 +2870,42 @@ pub fn try_aarch64_ccmp(insn: u32) -> Option<CcmpDecoded> {
 /// can recognize the intrinsic when flag-aware analyses are added.
 pub const CALLOTHER_AARCH64_CCMP: u64 = 0x362;
 
-// ── t300 — AArch64 pointer-authentication Callother tags ────────────
+// ── t225 — AArch64 pointer-authentication Callother tags ────────────
 //
-// t300 models the full register-form key/data family. We preserve the key
-// choice (IA/IB/DA/DB) in distinct tags, while folding zero-modifier forms
-// into the same tag with a constant-0 modifier:
+// The encoding bits[15:10] of the `1101 1010 1100 0001 ____ __nn nnnd dddd`
+// PAC/AUTH/XPAC family fan out to many opcodes, but downstream consumers
+// (recognisers, decompiler output) only care about which *class* of PAC
+// operation ran and what its (value, modifier) inputs were. We collapse:
 //
-//   PACIA/PACIZA → CALLOTHER_AARCH64_PACIA; PACIB/PACIZB → PACIB
-//   PACDA/PACDZA → CALLOTHER_AARCH64_PACDA; PACDB/PACDZB → PACDB
-//   AUTIA/AUTIZA → CALLOTHER_AARCH64_AUTIA; AUTIB/AUTIZB → AUTIB
-//   AUTDA/AUTDZA → CALLOTHER_AARCH64_AUTDA; AUTDB/AUTDZB → AUTDB
-//   XPACI/XPACD  → no-modifier stripping intrinsics.
+//   PACIA / PACIZA   → CALLOTHER_AARCH64_PACIA  (modifier = Xn or const 0)
+//   PACIB / PACIZB   → CALLOTHER_AARCH64_PACIB
+//   AUTIA / AUTIZA   → CALLOTHER_AARCH64_AUTIA
+//   AUTIB / AUTIZB   → CALLOTHER_AARCH64_AUTIB
+//   XPACI            → CALLOTHER_AARCH64_XPACI  (no modifier)
+//   XPACD            → CALLOTHER_AARCH64_XPACD
 //
-// HINT-space SP/1716 forms still fold to no-ops via [`try_pac_bti_nop`].
+// Data-key variants (PAC*D*, AUT*D*) and HINT-space SP/1716 forms still
+// fold to no-ops via [`try_pac_bti_nop`] — they're rarer in user code and
+// the SP/1716 variants have implicit operands that don't fit the
+// Callother (value, modifier) shape. Tags occupy `0x40E..=0x413`, picking
+// up where the NEON block (`0x400..=0x40D`) ends.
 
 /// `Callother` tag for AArch64 `PACIA Xd, Xn` (or `PACIZA Xd`).
 /// Emitted as `Callother(tag, value, modifier) → Xd`.
 pub const CALLOTHER_AARCH64_PACIA: u64 = 0x40E;
 /// `Callother` tag for AArch64 `PACIB Xd, Xn` (or `PACIZB Xd`).
 pub const CALLOTHER_AARCH64_PACIB: u64 = 0x40F;
-/// `Callother` tag for AArch64 `PACDA Xd, Xn` (or `PACDZA Xd`).
-pub const CALLOTHER_AARCH64_PACDA: u64 = 0x410;
-/// `Callother` tag for AArch64 `PACDB Xd, Xn` (or `PACDZB Xd`).
-pub const CALLOTHER_AARCH64_PACDB: u64 = 0x411;
 /// `Callother` tag for AArch64 `AUTIA Xd, Xn` (or `AUTIZA Xd`).
-pub const CALLOTHER_AARCH64_AUTIA: u64 = 0x412;
+pub const CALLOTHER_AARCH64_AUTIA: u64 = 0x410;
 /// `Callother` tag for AArch64 `AUTIB Xd, Xn` (or `AUTIZB Xd`).
-pub const CALLOTHER_AARCH64_AUTIB: u64 = 0x413;
-/// `Callother` tag for AArch64 `AUTDA Xd, Xn` (or `AUTDZA Xd`).
-pub const CALLOTHER_AARCH64_AUTDA: u64 = 0x414;
-/// `Callother` tag for AArch64 `AUTDB Xd, Xn` (or `AUTDZB Xd`).
-pub const CALLOTHER_AARCH64_AUTDB: u64 = 0x415;
+pub const CALLOTHER_AARCH64_AUTIB: u64 = 0x411;
 /// `Callother` tag for AArch64 `XPACI Xd`.
 /// Emitted as `Callother(tag, value) → Xd` (no modifier).
-pub const CALLOTHER_AARCH64_XPACI: u64 = 0x416;
+pub const CALLOTHER_AARCH64_XPACI: u64 = 0x412;
 /// `Callother` tag for AArch64 `XPACD Xd`.
-pub const CALLOTHER_AARCH64_XPACD: u64 = 0x417;
+pub const CALLOTHER_AARCH64_XPACD: u64 = 0x413;
 
-/// Decoded register-form PAC/AUTH/XPAC instruction (t300).
+/// Decoded register-form PAC/AUTH/XPAC instruction (t225).
 ///
 /// `value` is the X-register being authenticated/signed (the `Xd` operand
 /// — both destination and input value). `modifier` is the X-register
@@ -4011,7 +2919,7 @@ pub struct PacAuthDecoded {
 }
 
 /// If `insn` is a register-form PAC/AUTH/XPAC instruction we lift to a
-/// `Callother(PTR_AUTH)` (t300), return its decoded shape. Otherwise
+/// `Callother(PTR_AUTH)` (t225), return its decoded shape. Otherwise
 /// return `None` and let the caller fall through to the existing
 /// no-op / dispatch paths.
 pub fn try_pac_callother(insn: u32) -> Option<PacAuthDecoded> {
@@ -4022,25 +2930,18 @@ pub fn try_pac_callother(insn: u32) -> Option<PacAuthDecoded> {
     let rd = (insn & 0x1F) as u8;
     let rn = ((insn >> 5) & 0x1F) as u8;
     let (tag, rn_opt) = match opcode {
-        // PACI*/PACD* (modifier = Xn/SP)
+        // Instruction-key PACI* (modifier = Xn)
         0x00 => (CALLOTHER_AARCH64_PACIA, Some(rn)),
         0x01 => (CALLOTHER_AARCH64_PACIB, Some(rn)),
-        0x02 => (CALLOTHER_AARCH64_PACDA, Some(rn)),
-        0x03 => (CALLOTHER_AARCH64_PACDB, Some(rn)),
-        // AUTI*/AUTD* (modifier = Xn/SP)
+        // Instruction-key AUTI* (modifier = Xn)
         0x04 => (CALLOTHER_AARCH64_AUTIA, Some(rn)),
         0x05 => (CALLOTHER_AARCH64_AUTIB, Some(rn)),
-        0x06 => (CALLOTHER_AARCH64_AUTDA, Some(rn)),
-        0x07 => (CALLOTHER_AARCH64_AUTDB, Some(rn)),
-        // Z-form: modifier implicitly 0; Rn must be 0b11111
+        // PACIZA/PACIZB (Z-form: modifier implicitly 0; Rn must be 0b11111)
         0x08 if rn == 0x1F => (CALLOTHER_AARCH64_PACIA, None),
         0x09 if rn == 0x1F => (CALLOTHER_AARCH64_PACIB, None),
-        0x0A if rn == 0x1F => (CALLOTHER_AARCH64_PACDA, None),
-        0x0B if rn == 0x1F => (CALLOTHER_AARCH64_PACDB, None),
+        // AUTIZA/AUTIZB (Z-form)
         0x0C if rn == 0x1F => (CALLOTHER_AARCH64_AUTIA, None),
         0x0D if rn == 0x1F => (CALLOTHER_AARCH64_AUTIB, None),
-        0x0E if rn == 0x1F => (CALLOTHER_AARCH64_AUTDA, None),
-        0x0F if rn == 0x1F => (CALLOTHER_AARCH64_AUTDB, None),
         // XPACI / XPACD (no modifier; Rn must be 0b11111)
         0x10 if rn == 0x1F => (CALLOTHER_AARCH64_XPACI, None),
         0x11 if rn == 0x1F => (CALLOTHER_AARCH64_XPACD, None),
@@ -4053,21 +2954,18 @@ pub fn try_pac_callother(insn: u32) -> Option<PacAuthDecoded> {
     })
 }
 
-/// Build an `Xn`/`SP` 64-bit register varnode by encoding index. For PAC/AUTH
-/// modifier operands, index 31 names SP rather than XZR.
+/// Build an `Xn` 64-bit register varnode by index. `n` must be 0..=30
+/// (XZR is *not* a valid Rd for PAC/AUTH; the decoder filters that case
+/// by the Z-form rule `rn == 0x1F` applying only to Rn).
 fn xreg_varnode(n: u8) -> Varnode {
-    let offset = if n == 31 {
-        crate::register_file::SP
-    } else {
-        n as u64 * 8
-    };
-    Varnode::new(SpaceId::Register, offset, 8)
+    debug_assert!(n <= 30, "PAC Rd must be X0..X30, got {n}");
+    Varnode::new(SpaceId::Register, n as u64 * 8, 8)
 }
 
 /// Emit a `Callother(PTR_AUTH)` intrinsic for a register-form PAC/AUTH/XPAC.
 ///
 /// Shape:
-///   * PAC*/AUT*                → `Callother(tag, value, modifier) → Xd`
+///   * PACIA/PACIB/AUTIA/AUTIB  → `Callother(tag, value, modifier) → Xd`
 ///   * XPACI/XPACD              → `Callother(tag, value) → Xd`
 ///   * `*Z` (zero-modifier) variants pass a constant-0 modifier so
 ///     downstream consumers see a uniform 3-operand shape per key.
@@ -4091,137 +2989,6 @@ fn emit_pac_callother(ctx: &mut LiftCtx, pac: &PacAuthDecoded) {
         smallvec![tag_vn, xd, modifier]
     };
     ctx.emit(IrInsn::with_output(IrOp::Callother, xd, inputs, ctx.addr));
-}
-
-// ── t294/t305 — AArch64 Transactional Memory Extension (TME) ───────────
-//
-// TSTART/TCOMMIT live in the system-instruction encoding space:
-//   BaseSystemI:      bits[31:22] = 1101010100
-//   TME subspace:     bits[20:12] = 000110011
-//   op2:              bits[7:5]   = 011
-//   TSTART:           L=1, CRm=0000, Rt = destination X register
-//   TCOMMIT:          L=0, CRm=0000, Rt = 11111
-//
-// We model both as Callother intrinsics because transaction begin/commit
-// affect hidden architectural transaction state and memory ordering rather
-// than ordinary registers/memory. TSTART additionally returns the architectural
-// status code in Rt, so its Callother has Rt as output.
-
-/// `Callother` tag for AArch64 TME `TSTART Xt`.
-/// Emitted as `Xt = Callother(CALLOTHER_AARCH64_TSTART)`.
-pub const CALLOTHER_AARCH64_TSTART: u64 = 0x42A;
-/// `Callother` tag for AArch64 TME `TCOMMIT`.
-/// Emitted as `Callother(CALLOTHER_AARCH64_TCOMMIT)`.
-pub const CALLOTHER_AARCH64_TCOMMIT: u64 = 0x42B;
-
-// ── t317 — ARM TrustZone SMC/SVC/HVC/ERET Callother tags ──────────────
-/// `Callother(CALLOTHER_AARCH64_SMC, imm16)` — secure monitor call (AArch64).
-pub const CALLOTHER_AARCH64_SMC: u64 = 0x42C;
-/// `Callother(CALLOTHER_AARCH64_SVC, imm16)` — supervisor call (AArch64).
-pub const CALLOTHER_AARCH64_SVC: u64 = 0x42D;
-/// `Callother(CALLOTHER_AARCH64_HVC, imm16)` — hypervisor call (AArch64).
-pub const CALLOTHER_AARCH64_HVC: u64 = 0x42E;
-/// `Callother(CALLOTHER_AARCH64_ERET)` — exception return (AArch64).
-pub const CALLOTHER_AARCH64_ERET: u64 = 0x42F;
-/// `Callother(CALLOTHER_ARM_SMC, imm)` — secure monitor call (ARM32).
-pub const CALLOTHER_ARM_SMC: u64 = 0x430;
-/// `Callother(CALLOTHER_ARM_SVC, imm)` — supervisor call (ARM32).
-pub const CALLOTHER_ARM_SVC: u64 = 0x431;
-/// `Callother(CALLOTHER_ARM_HVC, imm)` — hypervisor call (ARM32).
-pub const CALLOTHER_ARM_HVC: u64 = 0x432;
-
-/// Emit a TrustZone exception-generating instruction (SMC/SVC/HVC) in
-/// AArch64 mode. The first operand is the immediate exception code.
-fn emit_aarch64_exc(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)], tag: u64) {
-    let imm = match ops.first() {
-        Some((Arm64OperandType::Imm(v), _)) => Varnode::constant(*v as u64, 2),
-        _ => Varnode::constant(0, 2),
-    };
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![Varnode::constant(tag, 8), imm],
-        ctx.addr,
-    ));
-}
-
-/// Emit ERET as a Callother followed by a Return (since ERET transfers
-/// control out of the current exception level, it acts as a return to the
-/// calling context).
-fn emit_aarch64_eret(ctx: &mut LiftCtx, tag: u64) {
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![Varnode::constant(tag, 8)],
-        ctx.addr,
-    ));
-    // Model ERET as a return — control does not fall through.
-    ctx.emit(IrInsn::without_output(
-        IrOp::Return,
-        smallvec![Varnode::constant(0, 8)],
-        ctx.addr,
-    ));
-}
-
-/// Emit a TrustZone exception-generating instruction (SMC/SVC/HVC) in
-/// ARM32 mode. The first operand is the immediate exception code.
-fn emit_arm32_exc(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
-    let imm = match ops.first() {
-        Some(ArmOperandType::Imm(v)) => Varnode::constant(*v as i64 as u64, 4),
-        _ => Varnode::constant(0, 4),
-    };
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![Varnode::constant(tag, 8), imm],
-        ctx.addr,
-    ));
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Aarch64TmeDecoded {
-    Tstart { rt: u8 },
-    Tcommit,
-}
-
-/// Decode the FEAT_TME TSTART/TCOMMIT instructions directly from the raw
-/// A64 word. The in-tree Capstone may not know these mnemonics, so this
-/// pre-decode keeps the lifter deterministic across host Capstone versions.
-pub fn try_aarch64_tme(insn: u32) -> Option<Aarch64TmeDecoded> {
-    const BASE_MASK: u32 = 0xFFDF_F0E0;
-    const TME_SYSTEM_BASE: u32 = 0xD503_3060;
-
-    if (insn & BASE_MASK) != TME_SYSTEM_BASE {
-        return None;
-    }
-
-    let l = (insn >> 21) & 1;
-    let crm = (insn >> 8) & 0xF;
-    let rt = (insn & 0x1F) as u8;
-
-    match (l, crm, rt) {
-        (1, 0, rt) if rt <= 30 => Some(Aarch64TmeDecoded::Tstart { rt }),
-        (0, 0, 31) => Some(Aarch64TmeDecoded::Tcommit),
-        _ => None,
-    }
-}
-
-fn emit_aarch64_tme(ctx: &mut LiftCtx, tme: &Aarch64TmeDecoded) {
-    match *tme {
-        Aarch64TmeDecoded::Tstart { rt } => {
-            let dst = xreg_varnode(rt);
-            ctx.emit(IrInsn::with_output(
-                IrOp::Callother,
-                dst,
-                smallvec![Varnode::constant(CALLOTHER_AARCH64_TSTART, 8)],
-                ctx.addr,
-            ));
-        }
-        Aarch64TmeDecoded::Tcommit => {
-            ctx.emit(IrInsn::without_output(
-                IrOp::Callother,
-                smallvec![Varnode::constant(CALLOTHER_AARCH64_TCOMMIT, 8)],
-                ctx.addr,
-            ));
-        }
-    }
 }
 
 /// Canonical AArch64 CSEL intrinsic tag. Emitted by `lift_csel` as
@@ -4254,169 +3021,6 @@ pub const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
 /// SVE PTRUE — set predicate to all-true for element size.
 pub const CALLOTHER_SVE_PTRUE: u64 = 0x429;
 
-// ── t316 — ARM Helium / MVE Callother tags (0x430..0x436) ───────────
-/// MVE integer vector add (`VADD*`). Inputs: tag, qd, qn, qm.
-pub const CALLOTHER_ARM_MVE_VADD: u64 = 0x430;
-/// MVE integer vector subtract (`VSUB*`). Inputs: tag, qd, qn, qm.
-pub const CALLOTHER_ARM_MVE_VSUB: u64 = 0x431;
-/// MVE integer/fixed-point vector multiply (`VMUL*`). Inputs: tag, qd, qn, qm.
-pub const CALLOTHER_ARM_MVE_VMUL: u64 = 0x432;
-/// MVE predicated vector load (`VLD*`). Inputs: tag, qd, base.
-pub const CALLOTHER_ARM_MVE_VLD: u64 = 0x433;
-/// MVE predicated vector store (`VST*`). Inputs: tag, qd_or_qm, base.
-pub const CALLOTHER_ARM_MVE_VST: u64 = 0x434;
-/// MVE vector predicate-mask create / count-to-predicate (`VCTP*`). Inputs: tag, gp_count.
-pub const CALLOTHER_ARM_MVE_VCTP: u64 = 0x435;
-/// MVE vector move / ORR-style register copy (`VMOV`/`VORR qd, qn, qm` aliases when they
-/// act as a lane-preserving data move). Inputs: tag, qd, src[, qm].
-pub const CALLOTHER_ARM_MVE_VMOV: u64 = 0x436;
-
-fn arm_mve_q_varnode(index: u8) -> Varnode {
-    Varnode::reg(arm_mve_q_offset(index), ARM_MVE_Q_SIZE)
-}
-
-fn arm_mve_operand_to_varnode(ctx: &mut LiftCtx, op_type: &ArmOperandType) -> Option<Varnode> {
-    match op_type {
-        ArmOperandType::Reg(reg) => arm_mve_q_index(*reg)
-            .map(arm_mve_q_varnode)
-            .or_else(|| arm32_reg_index(*reg).map(arm32_reg_varnode)),
-        _ => arm32_operand_to_varnode(ctx, op_type),
-    }
-}
-
-fn arm_mve_emit_callother(ctx: &mut LiftCtx, tag: u64, dst: Option<Varnode>, operands: &[Varnode]) {
-    let mut inputs = smallvec![Varnode::constant(tag, 8)];
-    inputs.extend_from_slice(operands);
-    if let Some(dst) = dst {
-        ctx.emit(IrInsn::with_output(IrOp::Callother, dst, inputs, ctx.addr));
-    } else {
-        ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
-    }
-}
-
-fn is_mve_mnemonic(name: &str) -> bool {
-    let upper = name.to_ascii_uppercase();
-    upper.starts_with('V')
-        && (upper.starts_with("VADD")
-            || upper.starts_with("VSUB")
-            || upper.starts_with("VMUL")
-            || upper.starts_with("VLD")
-            || upper.starts_with("VST")
-            || upper.starts_with("VCTP")
-            || upper.starts_with("VMOV")
-            || upper.starts_with("VORR"))
-}
-
-fn arm_mve_tag_for_mnemonic(name: &str) -> Option<u64> {
-    let upper = name.to_ascii_uppercase();
-    if upper.starts_with("VADD") {
-        Some(CALLOTHER_ARM_MVE_VADD)
-    } else if upper.starts_with("VSUB") {
-        Some(CALLOTHER_ARM_MVE_VSUB)
-    } else if upper.starts_with("VMUL") {
-        Some(CALLOTHER_ARM_MVE_VMUL)
-    } else if upper.starts_with("VLD") {
-        Some(CALLOTHER_ARM_MVE_VLD)
-    } else if upper.starts_with("VST") {
-        Some(CALLOTHER_ARM_MVE_VST)
-    } else if upper.starts_with("VCTP") {
-        Some(CALLOTHER_ARM_MVE_VCTP)
-    } else if upper.starts_with("VMOV") || upper.starts_with("VORR") {
-        Some(CALLOTHER_ARM_MVE_VMOV)
-    } else {
-        None
-    }
-}
-
-fn emit_arm_mve_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) -> bool {
-    let mnemonic = insn.mnemonic().unwrap_or_default();
-    let Some(tag) = arm_mve_tag_for_mnemonic(mnemonic) else {
-        return false;
-    };
-    let ops = arm32_operands(detail);
-
-    match tag {
-        CALLOTHER_ARM_MVE_VADD | CALLOTHER_ARM_MVE_VSUB | CALLOTHER_ARM_MVE_VMUL => {
-            let Some(ArmOperandType::Reg(dst_reg)) = ops.first() else {
-                return false;
-            };
-            let Some(dst_q) = arm_mve_q_index(*dst_reg) else {
-                return false;
-            };
-            let Some(src0) = ops.get(1).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
-                return false;
-            };
-            let Some(src1) = ops.get(2).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
-                return false;
-            };
-            let dst = arm_mve_q_varnode(dst_q);
-            arm_mve_emit_callother(ctx, tag, Some(dst), &[dst, src0, src1]);
-            true
-        }
-        CALLOTHER_ARM_MVE_VLD => {
-            let Some(ArmOperandType::Reg(dst_reg)) = ops.first() else {
-                return false;
-            };
-            let Some(dst_q) = arm_mve_q_index(*dst_reg) else {
-                return false;
-            };
-            let Some(base) = ops.get(1).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
-                return false;
-            };
-            let dst = arm_mve_q_varnode(dst_q);
-            arm_mve_emit_callother(ctx, tag, Some(dst), &[dst, base]);
-            true
-        }
-        CALLOTHER_ARM_MVE_VST => {
-            let Some(src) = ops.first().and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
-                return false;
-            };
-            let Some(base) = ops.get(1).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
-                return false;
-            };
-            arm_mve_emit_callother(ctx, tag, None, &[src, base]);
-            true
-        }
-        CALLOTHER_ARM_MVE_VCTP => {
-            let Some(gp_count) = ops.first().and_then(|o| arm_mve_operand_to_varnode(ctx, o))
-            else {
-                return false;
-            };
-            let dst = arm_mve_pred_varnode();
-            arm_mve_emit_callother(ctx, tag, Some(dst), &[gp_count]);
-            true
-        }
-        CALLOTHER_ARM_MVE_VMOV => {
-            let Some(ArmOperandType::Reg(dst_reg)) = ops.first() else {
-                return false;
-            };
-            let Some(dst_q) = arm_mve_q_index(*dst_reg) else {
-                return false;
-            };
-            let Some(src0) = ops.get(1).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
-                return false;
-            };
-            let dst = arm_mve_q_varnode(dst_q);
-            let mut extras = vec![dst, src0];
-            if let Some(src1) = ops.get(2).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) {
-                extras.push(src1);
-            }
-            arm_mve_emit_callother(ctx, tag, Some(dst), &extras);
-            true
-        }
-        _ => false,
-    }
-}
-// ── SME Callother tags (0x42A..0x42D) ──────────────────────────────────
-/// SME FMOPA outer-product accumulate into ZA. Inputs: tag, pg, za, zn, zm.
-pub const CALLOTHER_SME_FMOPA: u64 = 0x42A;
-/// SME FMOPS outer-product subtract/accumulate into ZA. Inputs: tag, pg, za, zn, zm.
-pub const CALLOTHER_SME_FMOPS: u64 = 0x42B;
-/// SME SMOPA signed integer outer-product accumulate into ZA.
-pub const CALLOTHER_SME_SMOPA: u64 = 0x42C;
-/// SME UMOPA unsigned integer outer-product accumulate into ZA.
-pub const CALLOTHER_SME_UMOPA: u64 = 0x42D;
-
 /// Emit a generic SVE `Callother` intrinsic.
 ///
 /// Layout: `Callother(tag, pg_index, zd_index, operands…) → void`.
@@ -4424,54 +3028,6 @@ pub const CALLOTHER_SME_UMOPA: u64 = 0x42D;
 /// the tag so downstream passes know which predicate governs the lane
 /// mask.  For non-predicated operations (e.g. `PTRUE`), `pg` should be
 /// 0xFF (sentinel meaning "all lanes").
-fn mve_capstone_cc(detail: &InsnDetail) -> Option<u8> {
-    capstone_arm_cc_to_raw(detail)
-}
-
-impl ArmLifter {
-    fn try_lift_mve(
-        &self,
-        bytes: &[u8],
-        addr: u64,
-    ) -> Result<Option<(LiftedInsn, Option<u8>)>, LiftError> {
-        THUMB_CS.with(|cell| {
-            let mut slot = cell.borrow_mut();
-            if slot.is_none() {
-                *slot = Some(Self::make_capstone_thumb());
-            }
-            let cs = slot
-                .as_ref()
-                .expect("thread-local Capstone thumb initialized");
-            let insns = match cs.disasm_count(bytes, addr, 1) {
-                Ok(insns) => insns,
-                Err(_) => return Ok(None),
-            };
-            let Some(insn) = insns.as_ref().first() else {
-                return Ok(None);
-            };
-            let detail = match cs.insn_detail(insn) {
-                Ok(detail) => detail,
-                Err(_) => return Ok(None),
-            };
-            let mnemonic = insn.mnemonic().unwrap_or_default();
-            if !is_mve_mnemonic(mnemonic) {
-                return Ok(None);
-            }
-            let mut ctx = LiftCtx::new(addr);
-            if !emit_arm_mve_mnemonic(&mut ctx, insn, &detail) {
-                return Ok(None);
-            }
-            Ok(Some((
-                LiftedInsn {
-                    ir_ops: ctx.ops,
-                    len: insn.len(),
-                },
-                mve_capstone_cc(&detail),
-            )))
-        })
-    }
-}
-
 pub fn emit_sve_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varnode]) {
     let mut inputs: smallvec::SmallVec<[Varnode; 3]> =
         smallvec::smallvec![Varnode::constant(tag, 8), Varnode::constant(pg as u64, 1),];
@@ -4479,139 +3035,48 @@ pub fn emit_sve_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varno
     ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
 }
 
-pub(crate) fn emit_sme_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varnode]) {
-    let mut inputs: smallvec::SmallVec<[Varnode; 3]> =
-        smallvec::smallvec![Varnode::constant(tag, 8), Varnode::constant(pg as u64, 1),];
-    inputs.extend_from_slice(operands);
-    ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
-}
-
-fn aarch64_predicate_reg_index(reg: capstone::RegId) -> Option<u8> {
-    use capstone::arch::arm64::Arm64Reg;
-    let id = reg.0 as u32;
-    let base = Arm64Reg::ARM64_REG_P0;
-    if (base..=base + 15).contains(&id) {
-        Some((id - base) as u8)
-    } else {
-        None
-    }
-}
-
-fn sme_outer_product_tag(mnemonic: &str) -> Option<u64> {
-    match mnemonic.to_ascii_lowercase().as_str() {
-        "fmopa" => Some(CALLOTHER_SME_FMOPA),
-        "fmops" => Some(CALLOTHER_SME_FMOPS),
-        "smopa" => Some(CALLOTHER_SME_SMOPA),
-        "umopa" => Some(CALLOTHER_SME_UMOPA),
-        _ => None,
-    }
-}
-
-fn emit_aarch64_sme_outer_product(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) -> bool {
-    let Some(mnemonic) = insn.mnemonic() else {
-        return false;
-    };
-    let Some(tag) = sme_outer_product_tag(mnemonic) else {
-        return false;
-    };
-
-    let arch = detail.arch_detail();
-    let Some(arm64) = arch.arm64() else {
-        ctx.emit_unimplemented();
-        return true;
-    };
-
-    let mut pg = None;
-    let mut z_regs = Vec::new();
-    for op in arm64.operands() {
-        if let Arm64OperandType::Reg(reg) = op.op_type {
-            if let Some(pred) = aarch64_predicate_reg_index(reg) {
-                if pg.is_none() {
-                    pg = Some(pred);
-                }
-                continue;
-            }
-            if let Some(z_idx) = aarch64_sve_z_reg_index(reg) {
-                z_regs.push(z_idx);
-            }
-        }
-    }
-
-    let Some(pg) = pg else {
-        ctx.emit_unimplemented();
-        return true;
-    };
-    if z_regs.len() < 2 {
-        ctx.emit_unimplemented();
-        return true;
-    }
-
-    let za = Varnode::reg(SME_ZA, SME_ZA_SIZE);
-    let zn = Varnode::reg(sve_z_offset(z_regs[0]), SVE_Z_SIZE);
-    let zm = Varnode::reg(sve_z_offset(z_regs[1]), SVE_Z_SIZE);
-    emit_sme_callother(ctx, tag, pg, &[za, zn, zm]);
-    true
-}
-
-fn aarch64_sve_z_reg_index(reg: capstone::RegId) -> Option<u8> {
-    use capstone::arch::arm64::Arm64Reg;
-    let id = reg.0 as u32;
-    let base = Arm64Reg::ARM64_REG_Z0;
-    if (base..=base + 31).contains(&id) {
-        Some((id - base) as u8)
-    } else {
-        None
-    }
-}
-
 /// Return `true` if `insn` is an AArch64 pointer-authentication or BTI
 /// instruction with no architectural effects relevant to lifting; the
 /// caller should consume 4 bytes and emit no IR.
 pub fn try_pac_bti_nop(insn: u32) -> bool {
+    if (insn & 0xFFFF_0000) == 0xDAC1_0000 {
+        let opcode = (insn >> 10) & 0x3F;
+        if opcode <= 0x11 {
+            return true;
+        }
+    }
+
     const HINT_NOPS: &[u32] = &[
-        0xD503_241F, // BTI
-        0xD503_245F, // BTI c
-        0xD503_249F, // BTI j
-        0xD503_24DF, // BTI jc
+        0xD503_233F,
+        0xD503_237F,
+        0xD503_23BF,
+        0xD503_23FF,
+        0xD503_231F,
+        0xD503_235F,
+        0xD503_239F,
+        0xD503_23DF,
+        0xD503_22FF,
+        0xD503_241F,
+        0xD503_245F,
+        0xD503_249F,
+        0xD503_24DF,
     ];
     HINT_NOPS.contains(&insn)
-}
-
-/// If `insn` is a HINT-space PAC/AUTH/XPAC instruction, decode it into
-/// a [`PacAuthDecoded`] with the appropriate implicit register operands.
-pub fn try_pac_hint_space(insn: u32) -> Option<PacAuthDecoded> {
-    const LR_IDX: u8 = 30;
-    const X17_IDX: u8 = 17;
-    const X16_IDX: u8 = 16;
-    const SP_IDX: u8 = 31;
-    let (tag, rd, rn_opt) = match insn {
-        0xD503_233F => (CALLOTHER_AARCH64_PACIA, LR_IDX, Some(SP_IDX)),
-        0xD503_237F => (CALLOTHER_AARCH64_PACIB, LR_IDX, Some(SP_IDX)),
-        0xD503_23BF => (CALLOTHER_AARCH64_AUTIA, LR_IDX, Some(SP_IDX)),
-        0xD503_23FF => (CALLOTHER_AARCH64_AUTIB, LR_IDX, Some(SP_IDX)),
-        0xD503_231F => (CALLOTHER_AARCH64_PACIA, X17_IDX, Some(X16_IDX)),
-        0xD503_235F => (CALLOTHER_AARCH64_PACIB, X17_IDX, Some(X16_IDX)),
-        0xD503_239F => (CALLOTHER_AARCH64_AUTIA, X17_IDX, Some(X16_IDX)),
-        0xD503_23DF => (CALLOTHER_AARCH64_AUTIB, X17_IDX, Some(X16_IDX)),
-        0xD503_22FF => (CALLOTHER_AARCH64_XPACI, LR_IDX, None),
-        _ => return None,
-    };
-    Some(PacAuthDecoded { tag, rd, rn: rn_opt })
 }
 
 /// If `insn` is a PAC-authenticated branch (BR*A*/BLR*A*/RET*A*), return the
 /// equivalent unauthenticated encoding so Capstone can lift it normally.
 fn pac_auth_branch_rewrite(insn: u32) -> Option<u32> {
-    let rn = (insn >> 5) & 0x1F;
-    match insn & 0xFFFF_F800 {
-        // BRAA/BRAB Xn, Xm -> BR Xn.
-        0xD71F_0800 => Some(0xD61F_0000 | (rn << 5)),
-        // BLRAA/BLRAB Xn, Xm -> BLR Xn.
-        0xD73F_0800 => Some(0xD63F_0000 | (rn << 5)),
-        // BRAAZ/BRABZ Xn -> BR Xn.
-        0xD61F_0800 if (insn & 0x1F) == 0x1F => Some(0xD61F_0000 | (rn << 5)),
-        // BLRAAZ/BLRABZ Xn -> BLR Xn.
-        0xD63F_0800 if (insn & 0x1F) == 0x1F => Some(0xD63F_0000 | (rn << 5)),
+    const AUTH_MASK: u32 = 0xFFFF_F800;
+    match insn & AUTH_MASK {
+        0xD61F_0800 | 0xD71F_0800 => {
+            let rn = (insn >> 5) & 0x1F;
+            Some(0xD61F_0000 | (rn << 5))
+        }
+        0xD63F_0800 | 0xD73F_0800 => {
+            let rn = (insn >> 5) & 0x1F;
+            Some(0xD63F_0000 | (rn << 5))
+        }
         _ => {
             if insn == 0xD65F_0BFF || insn == 0xD65F_0FFF {
                 Some(0xD65F_03C0)

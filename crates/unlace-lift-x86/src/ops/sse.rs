@@ -5,10 +5,9 @@
 //! [`IntrinsicRegistry`](crate::intrinsics::IntrinsicRegistry).
 
 use smallvec::smallvec;
-use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
+use unlace_ir::{IrInsn, IrOp, Varnode};
 
 use crate::lift::LiftCtx;
-use crate::register_file::iced_reg_to_varnode;
 
 /// Constant tags for SSE Callother `inputs[0]`.
 ///
@@ -164,153 +163,7 @@ pub mod tag {
     pub const VPSUBQ_512: u64 = 0x1D1;
     /// VPMULLQ (EVEX/ZMM form) — packed signed 64×64→low-64 multiply (512-bit).
     pub const VPMULLQ_512: u64 = 0x1D2;
-
-    // ── t306: generic AVX-512 EVEX fallback ─────────────────────
-    // Covers the broad AVX-512 EVEX surface that does not yet have a
-    // mnemonic-specific semantic tag. The instruction mnemonic is carried
-    // as an immediate operand so downstream passes can still recover the
-    // exact operation while preserving def-use for ZMM/YMM/XMM/K/GP args.
-    pub const AVX512_EVEX: u64 = 0x1F0;
-}
-
-/// Operand-index flavor for generic EVEX Callother lowering.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EvexOperandRole {
-    /// Operand is read.
-    Read,
-    /// Operand is written.
-    Write,
-    /// Operand is both read and written (merge-masked destinations).
-    ReadWrite,
-}
-
-fn reg_operand_varnode(insn: &iced_x86::Instruction, idx: u32) -> Option<Varnode> {
-    use iced_x86::OpKind;
-
-    if insn.op_kind(idx) != OpKind::Register {
-        return None;
-    }
-    let (offset, size) = iced_reg_to_varnode(insn.op_register(idx))?;
-    Some(Varnode::new(SpaceId::Register, offset, size))
-}
-
-fn mask_varnode(insn: &iced_x86::Instruction) -> Option<Varnode> {
-    use iced_x86::Register;
-
-    let mask = insn.op_mask();
-    if mask == Register::None {
-        return None;
-    }
-    let (offset, size) = iced_reg_to_varnode(mask)?;
-    Some(Varnode::new(SpaceId::Register, offset, size))
-}
-
-/// Generic AVX-512 EVEX lifter.
-///
-/// AVX-512 has a very large EVEX-encoded instruction surface. Instead of
-/// letting unsupported EVEX instructions collapse to `Unimplemented`, this
-/// fallback emits a well-formed Callother with:
-///
-/// ```text
-/// dst = Callother(AVX512_EVEX, mnemonic_id, flags, src...)
-/// ```
-///
-/// where `mnemonic_id` is iced-x86's stable enum discriminant for the exact
-/// mnemonic and `flags` records broadcast / opmask / zeroing / SAE metadata.
-/// The explicit operands are then copied through as source varnodes according
-/// to `roles`, and an opmask register is appended when present. This preserves
-/// instruction length, exact mnemonic identity, vector/mask def-use, and the
-/// 64-byte ZMM destination sizing needed by SSA and the printer.
-pub fn lift_avx512_evex(
-    ctx: &mut LiftCtx,
-    insn: &iced_x86::Instruction,
-    roles: &[EvexOperandRole],
-) {
-    const FLAG_BROADCAST: u64 = 1 << 0;
-    const FLAG_ZEROING: u64 = 1 << 1;
-    const FLAG_HAS_MASK: u64 = 1 << 2;
-    const FLAG_SAE: u64 = 1 << 3;
-    const FLAG_ROUND_SHIFT: u64 = 8;
-
-    let mut flags = 0u64;
-    if insn.is_broadcast() {
-        flags |= FLAG_BROADCAST;
-    }
-    if insn.zeroing_masking() {
-        flags |= FLAG_ZEROING;
-    }
-    if insn.has_op_mask() {
-        flags |= FLAG_HAS_MASK;
-    }
-    if insn.suppress_all_exceptions() {
-        flags |= FLAG_SAE;
-    }
-    flags |= (insn.rounding_control() as u64) << FLAG_ROUND_SHIFT;
-
-    let tag_vn = Varnode::constant(tag::AVX512_EVEX, 8);
-    let mnemonic_vn = Varnode::constant(insn.mnemonic() as u64, 4);
-    let flags_vn = Varnode::constant(flags, 8);
-
-    let mut inputs = smallvec![tag_vn, mnemonic_vn, flags_vn];
-    let mut output = None;
-
-    let count = insn.op_count() as usize;
-    for idx in 0..count {
-        let role = roles.get(idx).copied().unwrap_or(EvexOperandRole::Read);
-        match role {
-            EvexOperandRole::Read => {
-                let Some(src) = ctx.operand_read(insn, idx as u32) else {
-                    ctx.emit_unimplemented();
-                    return;
-                };
-                inputs.push(src);
-            }
-            EvexOperandRole::Write => {
-                if output.is_some() {
-                    // Secondary explicit write (eg. two-register intersections)
-                    // is represented as an address-like operand so the exact
-                    // side-effect is still visible to downstream consumers.
-                    let Some(dst) = reg_operand_varnode(insn, idx as u32)
-                        .or_else(|| ctx.operand_write(insn, idx as u32))
-                    else {
-                        ctx.emit_unimplemented();
-                        return;
-                    };
-                    inputs.push(dst);
-                } else {
-                    let Some(dst) = ctx.operand_write(insn, idx as u32) else {
-                        ctx.emit_unimplemented();
-                        return;
-                    };
-                    output = Some(dst);
-                }
-            }
-            EvexOperandRole::ReadWrite => {
-                let Some(src) = ctx.operand_read(insn, idx as u32) else {
-                    ctx.emit_unimplemented();
-                    return;
-                };
-                inputs.push(src);
-                if output.is_none() {
-                    let Some(dst) = ctx.operand_write(insn, idx as u32) else {
-                        ctx.emit_unimplemented();
-                        return;
-                    };
-                    output = Some(dst);
-                }
-            }
-        }
-    }
-
-    if let Some(mask) = mask_varnode(insn) {
-        inputs.push(mask);
-    }
-
-    if let Some(dst) = output {
-        ctx.emit(IrInsn::with_output(IrOp::Callother, dst, inputs, ctx.addr));
-    } else {
-        ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
-    }
+    pub const AVX512_EVEX: u64 = 0x300;
 }
 
 /// Returns `true` iff operand 0 of `insn` is a ZMM register \u2014 the

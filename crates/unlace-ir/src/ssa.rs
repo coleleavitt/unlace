@@ -15,8 +15,6 @@ use crate::{BlockId, Function, Varnode};
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct SsaVarnode {
     pub base: Varnode,
     pub version: u32,
@@ -71,8 +69,6 @@ impl DominatorTree {
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize,
 )]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
 pub enum CallingConvention {
     /// System V AMD64 ABI: args in RDI, RSI, RDX, RCX, R8, R9; return in RAX.
     SystemV,
@@ -151,8 +147,6 @@ pub type FunctionSignatureRegistry = BTreeMap<u64, FunctionSignature>;
     serde::Serialize,
     serde::Deserialize,
 )]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default, serde::Serialize, serde::Deserialize)]
 pub enum PrimitiveType {
     /// No type information yet — joins with anything to become that type.
     #[default]
@@ -221,8 +215,6 @@ pub struct StackVar {
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub enum PanicKind {
     Panic,
     BoundsCheck,
@@ -786,36 +778,6 @@ pub struct EnumDiscriminant {
     pub comparison_locs: Vec<(BlockId, usize)>,
 }
 
-/// A C++ `std::variant` / `std::optional` tag-byte discriminator.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct CppVariantDiscriminant {
-    /// SSA varnode of the loaded tag byte.
-    pub tag_sv: SsaVarnode,
-    /// Location (block, insn_index) of the LOAD that reads the tag.
-    pub tag_load_loc: (BlockId, usize),
-    /// Byte offset from the object base pointer where the tag lives.
-    pub tag_offset: i64,
-    /// Whether this is a full variant or an optional.
-    pub kind: CppVariantKind,
-    /// Map from tag constant value to human-readable alternative name.
-    pub variants: std::collections::BTreeMap<u64, String>,
-    /// Locations of comparison instructions that branch on the tag.
-    pub comparison_locs: Vec<(BlockId, usize)>,
-}
-
-/// Whether the discriminator matches `std::optional` or `std::variant`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum CppVariantKind {
-    /// `std::variant<Ts...>` tag byte encodes the active alternative index.
-    Variant,
-    /// `std::optional<T>` tag byte is 0 (empty) or 1 (engaged).
-    Optional,
-}
-
-#[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
-)]
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub enum VarnodeSlot {
     Output,

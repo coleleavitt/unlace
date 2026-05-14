@@ -44,9 +44,6 @@ pub fn recognize_serial_api(symbol_name: &str) -> Option<SerialKind> {
 
     // FlatBuffers — demangled `flatbuffers::` or mangled `_ZN11flatbuffers`.
     if symbol_name.starts_with("flatbuffers::") || symbol_name.starts_with("_ZN11flatbuffers") {
-    if symbol_name.starts_with("flatbuffers::")
-        || symbol_name.starts_with("_ZN11flatbuffers")
-    {
         return Some(SerialKind::FlatBuffers);
     }
 

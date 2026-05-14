@@ -95,21 +95,6 @@ fn parse_lock(text: &str) -> Vec<SbomComponent> {
     let mut cur_source: Option<String> = None;
     let mut in_package = false;
 
-    let flush = |components: &mut Vec<SbomComponent>,
-                 name: &mut Option<String>,
-                 version: &mut Option<String>,
-                 source: &mut Option<String>| {
-        if let (Some(n), Some(v)) = (name.take(), version.take()) {
-            let purl = build_purl(&n, &v, source.as_deref());
-            components.push(SbomComponent {
-                name: n,
-                version: v,
-                purl,
-                license: None,
-            });
-        }
-        *source = None;
-    };
     let flush =
         |components: &mut Vec<SbomComponent>,
          name: &mut Option<String>,

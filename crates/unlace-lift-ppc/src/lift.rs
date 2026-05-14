@@ -1,7 +1,4 @@
-use std::sync::Mutex;
-
-use capstone::arch::ppc::{ArchMode, PpcInsn, PpcOperand};
-use capstone::arch::{BuildsCapstone, BuildsCapstoneEndian};
+use capstone::arch::ppc::{PpcInsn, PpcOperand};
 use capstone::prelude::*;
 use capstone::{Capstone, Endian, Insn, InsnDetail};
 use smallvec::smallvec;
@@ -10,16 +7,6 @@ use unlace_ir::{
 };
 
 use crate::ops;
-use crate::register_file::{cs_reg_to_varnode, ppc32_register_file, ppc64_register_file};
-
-struct SendCapstone(Capstone);
-unsafe impl Send for SendCapstone {}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PpcLiftMode {
-    Ppc32,
-    Ppc64,
-use crate::register_file::{cs_reg_to_varnode, ppc64_register_file};
 use crate::register_file::{
     PPC32_GPR_SIZE, PPC64_GPR_SIZE, cs_reg_to_varnode_with_size, ppc32_register_file,
     ppc64_register_file,
@@ -71,21 +58,13 @@ impl PpcEndian {
 
 pub struct PpcLifter {
     reg_file: RegisterFile,
-    arch: ArchId,
-    cs: Mutex<SendCapstone>,
     mode: PpcMode,
     endian: PpcEndian,
 }
 
-fn make_capstone(mode: ArchMode, endian: Endian) -> Capstone {
-fn make_capstone() -> Capstone {
 fn make_capstone(mode: PpcMode, endian: PpcEndian) -> Capstone {
     Capstone::new()
         .ppc()
-        .mode(mode)
-        .endian(endian)
-        .mode(capstone::arch::ppc::ArchMode::Mode64)
-        .endian(Endian::Big)
         .mode(mode.capstone_mode())
         .endian(endian.capstone_endian())
         .detail(true)
@@ -94,31 +73,7 @@ fn make_capstone(mode: PpcMode, endian: PpcEndian) -> Capstone {
 }
 
 impl PpcLifter {
-    /// Legacy constructor kept for existing callers; defaults to 32-bit big-endian PowerPC.
     pub fn new() -> Self {
-        Self::new_ppc32_be()
-    }
-
-    pub fn new_ppc32_be() -> Self {
-        Self {
-            reg_file: ppc32_register_file(),
-            arch: ArchId::Ppc,
-            cs: Mutex::new(SendCapstone(make_capstone(ArchMode::Mode32, Endian::Big))),
-        }
-    }
-
-    pub fn new_ppc32_le() -> Self {
-        Self {
-            reg_file: ppc32_register_file(),
-            arch: ArchId::Ppc,
-            cs: Mutex::new(SendCapstone(make_capstone(
-                ArchMode::Mode32,
-                Endian::Little,
-            ))),
-        }
-    }
-
-    pub fn new_ppc64_be() -> Self {
         Self::ppc32_be()
     }
 
@@ -144,29 +99,6 @@ impl PpcLifter {
             PpcMode::Ppc64 => ppc64_register_file(),
         };
         Self {
-            reg_file: ppc64_register_file(),
-            arch: ArchId::Ppc64,
-            cs: Mutex::new(SendCapstone(make_capstone(ArchMode::Mode64, Endian::Big))),
-        }
-    }
-
-    pub fn new_ppc64_le() -> Self {
-        Self {
-            reg_file: ppc64_register_file(),
-            arch: ArchId::Ppc64,
-            cs: Mutex::new(SendCapstone(make_capstone(
-                ArchMode::Mode64,
-                Endian::Little,
-            ))),
-        }
-    }
-
-    pub fn mode(&self) -> PpcLiftMode {
-        match self.arch {
-            ArchId::Ppc => PpcLiftMode::Ppc32,
-            ArchId::Ppc64 => PpcLiftMode::Ppc64,
-            _ => unreachable!("PpcLifter only exposes PPC/PPC64 architectures"),
-            reg_file: ppc64_register_file(),
             reg_file,
             mode,
             endian,
@@ -190,8 +122,6 @@ impl Default for PpcLifter {
 
 impl Lifter for PpcLifter {
     fn arch(&self) -> ArchId {
-        self.arch
-        ArchId::Ppc
         self.mode.arch()
     }
 
@@ -200,12 +130,6 @@ impl Lifter for PpcLifter {
             return Err(LiftError::ShortBuffer);
         }
 
-        let guard = self
-            .cs
-            .lock()
-            .map_err(|e| LiftError::Decode(format!("lock poisoned: {e}")))?;
-        let cs = &guard.0;
-        let cs = make_capstone();
         let cs = make_capstone(self.mode, self.endian);
 
         let insns = cs
@@ -221,10 +145,6 @@ impl Lifter for PpcLifter {
             .insn_detail(insn)
             .map_err(|e| LiftError::Decode(format!("{e}")))?;
 
-        let mut ctx = LiftCtx::new(addr);
-        dispatch(cs, &mut ctx, insn, &detail);
-        let mut ctx = LiftCtx::new(addr);
-        dispatch(&cs, &mut ctx, insn, &detail);
         let mut ctx = LiftCtx::new(addr, self.mode.ptr_size());
         dispatch(&cs, &mut ctx, insn, &detail);
 
@@ -339,13 +259,6 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
     let ops = ppc_operands(detail);
     let id = insn_id(insn);
 
-    if let Some(mnemonic) = insn.mnemonic() {
-        if ops::spe::classify_spe_mnemonic(mnemonic).is_some() {
-            ops::spe::lift_spe(ctx, mnemonic, &ops);
-            return;
-        }
-    }
-
     match id {
         // Arithmetic
         PpcInsn::PPC_INS_ADD => ops::arithmetic::lift_add(ctx, &ops),
@@ -430,27 +343,3 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
         _ => ctx.emit_unimplemented(),
     }
 }
-
-// t326 — AltiVec/VMX/VSX callother tags.
-pub const CALLOTHER_PPC_VADDSWS: u64 = 0x5050_4356_4d58_0001;
-pub const CALLOTHER_PPC_VADDUBS: u64 = 0x5050_4356_4d58_0002;
-pub const CALLOTHER_PPC_VSUBUBM: u64 = 0x5050_4356_4d58_0003;
-pub const CALLOTHER_PPC_VMULUWM: u64 = 0x5050_4356_4d58_0004;
-pub const CALLOTHER_PPC_VMAXSW: u64 = 0x5050_4356_4d58_0005;
-pub const CALLOTHER_PPC_VMINSW: u64 = 0x5050_4356_4d58_0006;
-pub const CALLOTHER_PPC_VCMPEQUW: u64 = 0x5050_4356_4d58_0007;
-pub const CALLOTHER_PPC_VCMPGTSW: u64 = 0x5050_4356_4d58_0008;
-pub const CALLOTHER_PPC_VPERM: u64 = 0x5050_4356_4d58_0009;
-pub const CALLOTHER_PPC_VSEL: u64 = 0x5050_4356_4d58_000A;
-pub const CALLOTHER_PPC_VSLDOI: u64 = 0x5050_4356_4d58_000B;
-pub const CALLOTHER_PPC_VAND: u64 = 0x5050_4356_4d58_000C;
-pub const CALLOTHER_PPC_VOR: u64 = 0x5050_4356_4d58_000D;
-pub const CALLOTHER_PPC_VXOR: u64 = 0x5050_4356_4d58_000E;
-pub const CALLOTHER_PPC_LVXL: u64 = 0x5050_4356_4d58_000F;
-pub const CALLOTHER_PPC_STVXL: u64 = 0x5050_4356_4d58_0010;
-pub const CALLOTHER_PPC_XSADDDP: u64 = 0x5050_4356_5358_0001; // VSX
-pub const CALLOTHER_PPC_XSMULDP: u64 = 0x5050_4356_5358_0002;
-pub const CALLOTHER_PPC_XVADDDP: u64 = 0x5050_4356_5358_0003;
-pub const CALLOTHER_PPC_XVMULDP: u64 = 0x5050_4356_5358_0004;
-pub const CALLOTHER_PPC_LXVD2X: u64 = 0x5050_4356_5358_0005;
-pub const CALLOTHER_PPC_STXVD2X: u64 = 0x5050_4356_5358_0006;

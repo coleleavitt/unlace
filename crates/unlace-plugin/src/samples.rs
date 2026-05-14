@@ -64,14 +64,14 @@ impl UnlacePlugin for StringXrefPlugin {
 
     fn on_binary(&self, image: &BinaryImage) -> Vec<PluginFinding> {
         let mut findings = Vec::new();
-        for sym in &image.symbols {
+        for (addr, sym) in &image.symbols {
             let name_lower = sym.name.to_lowercase();
             for pattern in &self.patterns {
                 if name_lower.contains(pattern) {
                     findings.push(PluginFinding {
                         kind: "interesting-string".into(),
                         message: format!("symbol '{}' matches pattern '{}'", sym.name, pattern),
-                        addr: Some(sym.addr),
+                        addr: Some(*addr),
                     });
                 }
             }

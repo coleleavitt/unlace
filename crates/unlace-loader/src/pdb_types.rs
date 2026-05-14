@@ -508,6 +508,181 @@ fn hash_type(ty: &Type, h: &mut StableHasher, depth: u8) {
         }
         Type::TypeParam { .. } => {
             h.u8(0x0a);
+fn rewrite_module_struct_names(module: &mut PdbTypes, hash_to_name: &BTreeMap<u64, String>) {
+    let old_structs = std::mem::take(&mut module.structs);
+    for (_old_name, mut ty) in old_structs {
+        rewrite_type_struct_names(&mut ty, hash_to_name);
+        if let Type::Struct { name, .. } = &ty {
+            module.structs.entry(name.clone()).or_insert(ty);
+        }
+    }
+
+    for ty in module.by_index.values_mut() {
+        rewrite_type_struct_names(ty, hash_to_name);
+    }
+    for sig in module.procedures.values_mut() {
+        rewrite_type_struct_names(&mut sig.return_type, hash_to_name);
+        for param in &mut sig.params {
+            rewrite_type_struct_names(param, hash_to_name);
+        }
+    }
+}
+
+fn rewrite_type_struct_names(ty: &mut Type, hash_to_name: &BTreeMap<u64, String>) {
+    match ty {
+        Type::Struct { name, fields } => {
+            let hash = ipi_type_hash(&Type::Struct {
+                name: String::new(),
+                fields: fields.clone(),
+            });
+            if let Some(canonical) = hash_to_name.get(&hash) {
+                *name = canonical.clone();
+            }
+            for field in fields {
+                rewrite_type_struct_names(&mut field.ty, hash_to_name);
+            }
+        }
+        Type::Ptr(inner)
+        | Type::Bitfield {
+            underlying: inner, ..
+        }
+        | Type::Slice { elem: inner } => rewrite_type_struct_names(inner, hash_to_name),
+        Type::Array { element, .. } => rewrite_type_struct_names(element, hash_to_name),
+        Type::FuncPtr {
+            params,
+            return_type,
+            ..
+        } => {
+            rewrite_type_struct_names(return_type, hash_to_name);
+            for param in params {
+                rewrite_type_struct_names(param, hash_to_name);
+            }
+        }
+        Type::Map { key, value } => {
+            rewrite_type_struct_names(key, hash_to_name);
+            rewrite_type_struct_names(value, hash_to_name);
+        }
+        Type::Primitive(_) | Type::Interface { .. } => {}
+    }
+}
+
+struct StableHasher(u64);
+
+impl StableHasher {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+
+    fn new() -> Self {
+        Self(Self::OFFSET)
+    }
+    fn byte(&mut self, b: u8) {
+        self.0 ^= u64::from(b);
+        self.0 = self.0.wrapping_mul(Self::PRIME);
+    }
+    fn bytes(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.byte(b);
+        }
+        self.byte(0xff);
+    }
+    fn u8(&mut self, v: u8) {
+        self.byte(v);
+    }
+    fn u32(&mut self, v: u32) {
+        self.bytes(&v.to_le_bytes());
+    }
+    fn u64(&mut self, v: u64) {
+        self.bytes(&v.to_le_bytes());
+    }
+    fn str(&mut self, s: &str) {
+        self.u64(s.len() as u64);
+        self.bytes(s.as_bytes());
+    }
+    fn finish(self) -> u64 {
+        self.0
+    }
+}
+
+fn hash_type(ty: &Type, h: &mut StableHasher, depth: u8) {
+    if depth == 0 {
+        h.u8(0xfe);
+        return;
+    }
+    match ty {
+        Type::Primitive(p) => {
+            h.u8(0x01);
+            h.str(&format!("{p:?}"));
+        }
+        Type::Ptr(inner) => {
+            h.u8(0x02);
+            hash_type(inner, h, depth - 1);
+        }
+        Type::Array { element, size } => {
+            h.u8(0x03);
+            match size {
+                Some(n) => {
+                    h.u8(1);
+                    h.u64(*n);
+                }
+                None => h.u8(0),
+            }
+            hash_type(element, h, depth - 1);
+        }
+        Type::Struct { fields, .. } => {
+            h.u8(0x04);
+            h.u64(fields.len() as u64);
+            for field in fields {
+                h.str(&field.name);
+                h.u64(field.offset);
+                hash_type(&field.ty, h, depth - 1);
+            }
+        }
+        Type::FuncPtr {
+            params,
+            return_type,
+            variadic,
+        } => {
+            h.u8(0x05);
+            h.u8(u8::from(*variadic));
+            h.u64(params.len() as u64);
+            for param in params {
+                hash_type(param, h, depth - 1);
+            }
+            hash_type(return_type, h, depth - 1);
+        }
+        Type::Bitfield {
+            underlying,
+            offset,
+            width,
+        } => {
+            h.u8(0x06);
+            h.u32(*offset);
+            h.u32(*width);
+            hash_type(underlying, h, depth - 1);
+        }
+        Type::Interface { name, methods } => {
+            h.u8(0x07);
+            h.str(name);
+            h.u64(methods.len() as u64);
+            for InterfaceMethod { name, signature } in methods {
+                h.str(name);
+                match signature {
+                    Some(sig) => {
+                        h.u8(1);
+                        h.str(sig);
+                    }
+                    None => h.u8(0),
+                }
+            }
+        }
+        Type::Slice { elem } => {
+            h.u8(0x08);
+            hash_type(elem, h, depth - 1);
+        }
+        Type::Map { key, value } => {
+            h.u8(0x09);
+            hash_type(key, h, depth - 1);
+            hash_type(value, h, depth - 1);
         }
     }
 }

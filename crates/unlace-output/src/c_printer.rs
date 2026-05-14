@@ -113,6 +113,8 @@ use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaFunction, SsaVarn
 use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
 use unlace_ir::ssa::{CppLambdaCapture, PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
 use unlace_ir::types::Type;
+use unlace_ir::types::Type;
+use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::DwarfInfo;
 use unlace_struct::{HirFunction, HirNode, SwitchCase};
@@ -2157,9 +2159,9 @@ fn try_struct_field_access(
     let base_type = ctx.composite_var_types.get(&base_sv)?;
 
     let struct_fields = match base_type {
-        Type::Struct { fields, .. } => fields,
+        Type::Struct { fields, .. } | Type::Union { fields, .. } => fields,
         Type::Ptr(inner) => match inner.as_ref() {
-            Type::Struct { fields, .. } => fields,
+            Type::Struct { fields, .. } | Type::Union { fields, .. } => fields,
             _ => return None,
         },
         _ => return None,
@@ -5463,13 +5465,19 @@ pub fn render_objc_class_struct(class: &unlace_loader::ObjcClass) -> Option<Stri
 /// * [`SsaFunction::inferred_structs`] — stack-frame composites synthesised
 ///   from adjacent same-typed stack slots by `StackVarRecoveryPass` (t147),
 ///   keyed by RSP-relative starting offset.
+/// * [`SsaFunction::composite_var_types`] — pointer/base structs recovered
+///   from repeated base-plus-constant accesses. Only layouts containing a
+///   recovered union field are printed here, avoiding churn for plain access
+///   recovery while surfacing t365 union alternatives.
 /// * [`SsaFunction::array_struct_layouts`] — heap / global / parameter-pointer
 ///   structs recovered from array-of-structs access patterns inside natural
 ///   loops by `struct_field_recovery::recover_structs` (t213), keyed by the
 ///   base-pointer SSA varnode.
 ///
-/// One `struct __anon0 { … };` block is emitted per layout, numbered in the
-/// fixed order above (stack-frame composites first, then array layouts).
+/// One `struct __anon0 { … };` block is emitted per stack/array layout,
+/// numbered in the fixed order above (stack-frame composites first, then
+/// array layouts). Named `composite_var_types` union layouts are emitted
+/// between those phases without consuming an `__anon<N>` index.
 /// Field names use the byte-offset convention `field_<offset>` so the layout
 /// is self-describing without leaking the synthesised internal name.
 ///
@@ -5477,7 +5485,10 @@ pub fn render_objc_class_struct(class: &unlace_loader::ObjcClass) -> Option<Stri
 /// the result unconditionally and only emit a trailing blank line when the
 /// preamble is non-empty.
 pub fn emit_inferred_struct_preamble(func: &SsaFunction) -> String {
-    if func.inferred_structs.is_empty() && func.array_struct_layouts.is_empty() {
+    if func.inferred_structs.is_empty()
+        && func.composite_var_types.is_empty()
+        && func.array_struct_layouts.is_empty()
+    {
         return String::new();
     }
 
@@ -5489,13 +5500,35 @@ pub fn emit_inferred_struct_preamble(func: &SsaFunction) -> String {
     // whose `offset` is a true byte offset.  We re-emit with offset-based
     // names so the rendered struct is self-describing.
     for ty in func.inferred_structs.values() {
-        if let Type::Struct { fields, .. } = ty {
-            let _ = writeln!(out, "struct __anon{idx} {{");
-            for f in fields {
-                let _ = writeln!(out, "    {} field_{};", f.ty, f.offset);
+        match ty {
+            Type::Struct { fields, .. } => {
+                let _ = writeln!(out, "struct __anon{idx} {{");
+                for f in fields {
+                    let _ = writeln!(out, "    {} field_{};", f.ty, f.offset);
+                }
+                let _ = writeln!(out, "}};");
+                idx += 1;
             }
-            let _ = writeln!(out, "}};");
-            idx += 1;
+            Type::Union { fields, .. } => {
+                let _ = writeln!(out, "union __anon{idx} {{");
+                for f in fields {
+                    let _ = writeln!(out, "    {} {};", f.ty, f.name);
+                }
+                let _ = writeln!(out, "}};");
+                idx += 1;
+            }
+            _ => {}
+        }
+    }
+
+    // Pointer/base composites recovered from repeated base-plus-constant
+    // accesses (t365). These may include anonymous union fields when the same
+    // byte offset is read/written through incompatible access types.
+    for ty in func.composite_var_types.values() {
+        if let Type::Struct { name, fields } = ty
+            && fields.iter().any(|field| type_contains_union(&field.ty))
+        {
+            emit_named_struct_decl(&mut out, name, fields);
         }
     }
 
@@ -5531,7 +5564,7 @@ pub fn compute_array_struct_indices(func: &SsaFunction) -> BTreeMap<SsaVarnode, 
     // Stack-frame composites (t147) — count one slot each. Their iteration
     // order must mirror `emit_inferred_struct_preamble`.
     for ty in func.inferred_structs.values() {
-        if matches!(ty, Type::Struct { .. }) {
+        if matches!(ty, Type::Struct { .. } | Type::Union { .. }) {
             idx += 1;
         }
     }
@@ -5547,6 +5580,51 @@ pub fn compute_array_struct_indices(func: &SsaFunction) -> BTreeMap<SsaVarnode, 
 /// inferred-struct preamble.  Widths outside the recognised set fall back to
 /// `__int64`, matching the conservative-widening convention used elsewhere
 /// in the printer for unrecovered scalar types.
+fn type_contains_union(ty: &Type) -> bool {
+    match ty {
+        Type::Union { .. } => true,
+        Type::Struct { fields, .. } => fields.iter().any(|field| type_contains_union(&field.ty)),
+        Type::Array { element, .. } | Type::Ptr(element) | Type::Slice { elem: element } => {
+            type_contains_union(element)
+        }
+        Type::Map { key, value } => type_contains_union(key) || type_contains_union(value),
+        Type::FuncPtr {
+            params,
+            return_type,
+            ..
+        } => params.iter().any(type_contains_union) || type_contains_union(return_type),
+        Type::Bitfield { underlying, .. } => type_contains_union(underlying),
+        Type::Primitive(_) | Type::Interface { .. } => false,
+    }
+}
+
+fn emit_named_struct_decl(out: &mut String, name: &str, fields: &[StructFieldType]) {
+    let _ = writeln!(out, "struct {name} {{");
+    for f in fields {
+        emit_struct_field_decl(out, f, 1);
+    }
+    let _ = writeln!(out, "}};");
+}
+
+fn emit_struct_field_decl(out: &mut String, field: &StructFieldType, indent: usize) {
+    let pad = "    ".repeat(indent);
+    match &field.ty {
+        Type::Union { fields, .. } => {
+            let _ = writeln!(out, "{pad}union {{");
+            for member in fields {
+                emit_struct_field_decl(out, member, indent + 1);
+            }
+            let _ = writeln!(out, "{pad}}} {};", field.name);
+        }
+        Type::Struct { name, .. } => {
+            let _ = writeln!(out, "{pad}struct {name} {};", field.name);
+        }
+        ty => {
+            let _ = writeln!(out, "{pad}{ty} {};", field.name);
+        }
+    }
+}
+
 fn primitive_for_width(width: u8) -> &'static str {
     match width {
         1 => "__int8",
@@ -18267,6 +18345,57 @@ mod tests {
         assert!(out.contains("field_0"), "field_0 missing: {out}");
         assert!(out.contains("field_4"), "field_4 missing: {out}");
         assert!(out.trim_end().ends_with("};"), "close brace: {out}");
+    }
+
+    #[test]
+    fn test_emit_inferred_struct_preamble_composite_var_union_field() {
+        use unlace_ir::types::{StructFieldType, Type};
+        use unlace_ir::{SpaceId, Varnode};
+
+        let mut ssa = empty_ssa_for_preamble();
+        let base = unlace_ir::ssa::SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Register,
+                offset: 0x20,
+                size: 8,
+            },
+            version: 0,
+        };
+        ssa.composite_var_types.insert(
+            base,
+            Type::Struct {
+                name: "struct_20".into(),
+                fields: vec![StructFieldType {
+                    name: "field_0".into(),
+                    offset: 0,
+                    ty: Type::Union {
+                        name: "union_field_0".into(),
+                        fields: vec![
+                            StructFieldType {
+                                name: "field_0_a".into(),
+                                offset: 0,
+                                ty: Type::uint(4),
+                            },
+                            StructFieldType {
+                                name: "field_0_b".into(),
+                                offset: 0,
+                                ty: Type::Primitive(PrimitiveType::Float),
+                            },
+                        ],
+                    },
+                }],
+            },
+        );
+
+        let out = super::emit_inferred_struct_preamble(&ssa);
+        assert!(out.contains("struct struct_20 {"), "struct header missing: {out}");
+        assert!(out.contains("    union {"), "union field missing: {out}");
+        assert!(
+            out.contains("        unsigned __int32 field_0_a;"),
+            "integer union member missing: {out}"
+        );
+        assert!(out.contains("        float field_0_b;"), "float union member missing: {out}");
+        assert!(out.contains("    } field_0;"), "union declarator missing: {out}");
     }
 
     #[test]

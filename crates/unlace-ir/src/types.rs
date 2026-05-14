@@ -57,6 +57,12 @@ pub enum Type {
         name: String,
         fields: Vec<StructFieldType>,
     },
+    /// Anonymous/named union recovered when the same byte offset is observed
+    /// through multiple incompatible access types.
+    Union {
+        name: String,
+        fields: Vec<StructFieldType>,
+    },
     /// Function pointer with parameter list, return type and varargs flag.
     FuncPtr {
         params: Vec<Type>,
@@ -107,7 +113,7 @@ pub enum Type {
     TypeParam { name: String, constraint: String },
 }
 
-/// A single field within a [`Type::Struct`].
+/// A single field within a [`Type::Struct`] or [`Type::Union`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct StructFieldType {
     pub name: String,
@@ -196,6 +202,15 @@ impl Type {
         matches!(
             self,
             Type::Struct { .. } | Type::Array { .. } | Type::Slice { .. } | Type::Map { .. }
+            Type::Struct { .. }
+                | Type::Array { .. }
+                | Type::Slice { .. }
+                | Type::Map { .. }
+            Type::Struct { .. }
+                | Type::Array { .. }
+                | Type::Slice { .. }
+                | Type::Map { .. }
+                | Type::Union { .. }
         )
     }
 
@@ -228,6 +243,14 @@ impl Type {
                     end = end.max(f.offset.checked_add(fsize)?);
                 }
                 u8::try_from(end).ok()
+            }
+            Type::Union { fields, .. } => {
+                // Union storage is the maximum member size.
+                let mut max_size: u8 = 0;
+                for f in fields {
+                    max_size = max_size.max(f.ty.size()?);
+                }
+                Some(max_size)
             }
             Type::Bitfield { underlying, .. } => underlying.size(),
             // A Go interface value is `{ *itab, *data }` — two pointers,
@@ -281,6 +304,19 @@ impl Type {
                     fields: f2,
                 },
             ) if n1 == n2 && f1 == f2 => Type::Struct {
+                name: n1,
+                fields: f1,
+            },
+            (
+                Type::Union {
+                    name: n1,
+                    fields: f1,
+                },
+                Type::Union {
+                    name: n2,
+                    fields: f2,
+                },
+            ) if n1 == n2 && f1 == f2 => Type::Union {
                 name: n1,
                 fields: f1,
             },
@@ -383,6 +419,7 @@ impl fmt::Display for Type {
                 None => write!(f, "{element}[]"),
             },
             Type::Struct { name, .. } => write!(f, "struct {name}"),
+            Type::Union { name, .. } => write!(f, "union {name}"),
             Type::Bitfield {
                 underlying, width, ..
             } => write!(f, "{underlying} : {width}"),

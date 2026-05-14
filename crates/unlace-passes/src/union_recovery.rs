@@ -19,10 +19,10 @@ pub struct UnionCandidate {
 
 /// Scan a sequence of IR instructions for incompatible accesses.
 pub fn detect_union_candidates(insns: &[IrInsn]) -> Vec<UnionCandidate> {
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     // Map: (space, offset) -> (set of sizes, has_float_access)
-    let mut access_map: HashMap<(SpaceId, u64), (Vec<u8>, bool)> = HashMap::new();
+    let mut access_map: BTreeMap<(SpaceId, u64), (Vec<u8>, bool)> = BTreeMap::new();
 
     for insn in insns {
         let is_float_op = matches!(

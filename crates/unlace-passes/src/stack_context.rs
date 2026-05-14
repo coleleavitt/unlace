@@ -27,7 +27,7 @@ pub struct StackTrace {
 /// Extract unique function addresses from stack traces, prioritized by
 /// frame depth (innermost frames first — most likely crash-relevant).
 pub fn prioritize_functions(traces: &[StackTrace]) -> Vec<u64> {
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     let mut result = Vec::new();
 
     // Process all traces, innermost frames first

@@ -31,7 +31,7 @@
 //! marked killed). The pass is still useful inside straight-line regions
 //! (the common shape after structuring).
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
@@ -119,7 +119,7 @@ fn recurse_into_children(node: &mut HirNode) {
 }
 
 /// Key used for expression-equality lookup: opcode + operand list.
-#[derive(Hash, Eq, PartialEq, Clone)]
+#[derive(Hash, Eq, PartialEq, PartialOrd, Ord, Clone)]
 struct ExprKey {
     op: IrOp,
     inputs: Vec<Varnode>,
@@ -144,7 +144,7 @@ impl ExprKey {
 fn cse_flat(nodes: &mut [HirNode]) {
     // expr -> (output_varnode_of_first_occurrence, "generation" stamp at that
     //         occurrence — used to detect intervening writes).
-    let mut available: HashMap<ExprKey, (Varnode, u64)> = HashMap::new();
+    let mut available: BTreeMap<ExprKey, (Varnode, u64)> = BTreeMap::new();
 
     // For each varnode we've seen as either an input or an output, track
     // the generation number at which it was last written. A statement is
@@ -152,7 +152,7 @@ fn cse_flat(nodes: &mut [HirNode]) {
     // recorded output) has not been written since the map entry was
     // recorded — i.e. each operand's last-write generation < entry's
     // stored generation.
-    let mut last_write: HashMap<Varnode, u64> = HashMap::new();
+    let mut last_write: BTreeMap<Varnode, u64> = BTreeMap::new();
     let mut generation: u64 = 0;
 
     for node in nodes.iter_mut() {

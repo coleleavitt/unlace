@@ -19,7 +19,7 @@
 //! settled, and the C printer consults it when emitting parameter
 //! declarations to append a trailing `// BYREF` comment.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::{ByrefInfo, CallingConvention, SsaFunction, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
@@ -41,7 +41,7 @@ const AARCH64_ARG_REGS: &[u64] = &[0, 8, 16, 24, 32, 40, 48, 56];
 
 const MAX_RESOLVE_DEPTH: u32 = 16;
 
-type DefMap = HashMap<Varnode, Vec<(BlockId, usize)>>;
+type DefMap = BTreeMap<Varnode, Vec<(BlockId, usize)>>;
 
 /// Root of an address-trace: either RSP/RBP + K, or one of this
 /// function's parameter registers (identified by index).
@@ -147,7 +147,7 @@ pub fn detect_byref(func: &SsaFunction) -> ByrefInfo {
 
 /// Build a map from each output [`Varnode`] to its definition sites.
 fn build_def_map(func: &SsaFunction) -> DefMap {
-    let mut def_map: DefMap = HashMap::new();
+    let mut def_map: DefMap = BTreeMap::new();
     for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
         if *slot == VarnodeSlot::Output {
             def_map.entry(sv.base).or_default().push((bid, insn_idx));

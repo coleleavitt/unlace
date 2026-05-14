@@ -1722,6 +1722,14 @@ fn render_go_defer_summary(
     /// has annotated the function with conflicting BYREF consumption-site
     /// types. See [`PrinterAnnotations::byref_union_types`].
     byref_union_types: BTreeMap<u32, Vec<PrimitiveType>>,
+    /// t259: constant absolute addresses heuristically classified as
+    /// memory-mapped I/O registers. An address lands here when it is
+    /// loaded at least twice in tight succession with no intervening
+    /// Store to the *same* address (or stored at least twice with no
+    /// intervening Load). The C printer adds `volatile` to the
+    /// dereference cast at every Load/Store through these addresses
+    /// to surface the side-effecting nature of the access.
+    mmio_addrs: BTreeSet<u64>,
 }
 
 impl PrintCtx {
@@ -1800,6 +1808,7 @@ impl PrintCtx {
             byref_union_types: BTreeMap::new(),
             mmio_addrs: BTreeSet::new(),
             byref_union_types: BTreeMap::new(),
+            mmio_addrs: BTreeSet::new(),
         }
     }
 
@@ -6644,6 +6653,16 @@ fn emit_expr_with_prec(
                         memory
                     } else {
                         format!("*({} *){}", cast.trim_end_matches(" *"), memory)
+                    // t259: MMIO-classified MEMORY[…] sigil → prepend
+                    // `volatile` to the cast so the side-effecting access
+                    // contract survives the C lowering. The cast wears
+                    // a trailing ` *` (e.g. `_QWORD *`); we splice
+                    // `volatile` in front of the primitive.
+                    let cast = ida_ptr_type(load_size);
+                    return if is_mmio {
+                        format!("*(volatile {}){}", cast, memory)
+                    } else {
+                        memory
                     };
                 }
                 let addr = emit_operand_resolved(&insn.inputs[addr_idx], addr_idx, stmt_idx, ctx);
@@ -19262,6 +19281,72 @@ mod tests {
         assert!(
             header.contains("/* BYREF */"),
             "single-type BYREF keeps the BYREF comment: {header:?}"
+    // t259: volatile annotation for MMIO patterns
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn test_t259_repeated_loads_get_volatile() {
+        // Two back-to-back Loads of the same constant address (in the
+        // MEMORY[…] range, 0x1000..0x10000) → MMIO classification →
+        // the dereference cast wears `volatile`.
+        let space = con(0, 8);
+        let addr = con(0x4000, 8);
+        let r0 = reg(0, 8);
+        let r8 = reg(8, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r0,
+                smallvec![space, addr],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r8,
+                smallvec![space, addr],
+                0x1008,
+            )),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("t259_mmio", body);
+        let output = print_c(&func);
+        let body_only = super::strip_ida_typedefs(&output);
+
+        assert!(
+            body_only.contains("volatile _QWORD"),
+            "QWORD MMIO load should render as `*(volatile _QWORD *)…`: {body_only}"
+        );
+    }
+
+    #[test]
+    fn test_t259_single_load_no_volatile() {
+        // A single Load of a constant address is a normal global access —
+        // no MMIO signal, no volatile qualifier.
+        let space = con(0, 8);
+        let addr = con(0x5000, 8);
+        let r8 = reg(8, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Load,
+                r8,
+                smallvec![space, addr],
+                0x1000,
+            )),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("t259_normal_global", body);
+        let output = print_c(&func);
+        // The IDA_TYPEDEFS preamble itself mentions `volatile` (for the
+        // MEMORY sigil declaration). Strip the typedefs before asserting.
+        let body_only = super::strip_ida_typedefs(&output);
+
+        assert!(
+            !body_only.contains("volatile"),
+            "single load of a constant address must NOT be volatile: {body_only}"
         );
     }
 }

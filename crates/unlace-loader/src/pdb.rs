@@ -8,6 +8,8 @@ use std::path::Path;
 
 use fallible_iterator::FallibleIterator;
 use pdb::{BinaryAnnotation, IdIndex, PDB, Rva, SymbolData, TypeData, TypeIndex};
+use pdb::{PDB, Rva, SymbolData};
+use pdb::{PDB, Rva, SymbolData, TypeData, TypeIndex};
 use unlace_ir::ssa::CallingConvention;
 
 use crate::error::LoadError;
@@ -115,6 +117,25 @@ fn collect_type_calling_conventions(
             TypeData::Procedure(proc) => {
                 map_pdb_calling_convention(proc.attributes.calling_convention())
             }
+    Ok(PdbInfo { symbols, lines })
+    })
+}
+
+fn collect_type_calling_conventions(
+    pdb: &mut PDB<std::fs::File>,
+) -> Result<BTreeMap<u32, CallingConvention>, LoadError> {
+    let type_info = pdb.type_information()?;
+    let mut out = BTreeMap::new();
+    let mut iter = type_info.iter();
+
+    while let Some(typ) = iter.next()? {
+        let idx = ti_to_u32(typ.index());
+        let Ok(parsed) = typ.parse() else {
+            continue;
+        };
+
+        let convention = match parsed {
+            TypeData::Procedure(proc) => map_pdb_calling_convention(proc.attributes.calling_convention()),
             TypeData::MemberFunction(proc) => {
                 map_pdb_calling_convention(proc.attributes.calling_convention())
             }
@@ -563,6 +584,10 @@ mod tests {
             map_pdb_calling_convention(0x0b),
             Some(CallingConvention::Thiscall)
         );
+        assert_eq!(map_pdb_calling_convention(0x00), Some(CallingConvention::Cdecl));
+        assert_eq!(map_pdb_calling_convention(0x07), Some(CallingConvention::Stdcall));
+        assert_eq!(map_pdb_calling_convention(0x04), Some(CallingConvention::MicrosoftX64));
+        assert_eq!(map_pdb_calling_convention(0x0b), Some(CallingConvention::Thiscall));
         assert_eq!(map_pdb_calling_convention(0xff), None);
     }
 

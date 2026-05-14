@@ -56,6 +56,7 @@ pub enum ArchId {
     Sbpf,
     NvSass,
     SpirV,
+    AppleAgx,
     Unknown(u16),
 }
 
@@ -112,6 +113,7 @@ impl fmt::Display for ArchId {
             Self::Sbpf => f.write_str("sbpf"),
             Self::NvSass => f.write_str("nvsass"),
             Self::SpirV => f.write_str("spirv"),
+            Self::AppleAgx => f.write_str("appleagx"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

@@ -477,5 +477,87 @@ mod tests {
             matches!(err, SRecordError::BadChecksum { .. }),
             "got {err:?}"
         );
+        assert_eq!(img.segments, vec![(0x0000_0100, vec![0xDE, 0xAD, 0xBE, 0xEF])]);
+        assert_eq!(img.start_addr, None);
+    }
+
+    #[test]
+    fn ihex_extended_linear_address_and_start() {
+        // ELA 0x0001 -> upper = 0x00010000; data at 0x0200 => 0x00010200.
+        let ela = ihex_line(0x04, 0x0000, &[0x00, 0x01]);
+        let data = ihex_line(0x00, 0x0200, &[0x11, 0x22]);
+        // Start linear address 0x08000123.
+        let start = ihex_line(0x05, 0x0000, &[0x08, 0x00, 0x01, 0x23]);
+        let eof = ihex_line(0x01, 0x0000, &[]);
+        let text = format!("{}\n{}\n{}\n{}\n", ela, data, start, eof);
+        let img = load_intel_hex(&text).unwrap();
+        assert_eq!(img.segments, vec![(0x0001_0200, vec![0x11, 0x22])]);
+        assert_eq!(img.start_addr, Some(0x0800_0123));
+    }
+
+    #[test]
+    fn ihex_bad_checksum_rejected() {
+        // Hand-crafted invalid checksum.
+        let bad = ":0401000001020304AA\n:00000001FF\n";
+        let err = load_intel_hex(bad).unwrap_err();
+        assert!(matches!(err, IntelHexError::BadChecksum { .. }), "got {err:?}");
+    }
+
+    // ----- S-record helpers -----
+
+    fn srec_cksum(bytes: &[u8]) -> u8 {
+        let s: u8 = bytes.iter().copied().fold(0u8, u8::wrapping_add);
+        !s
+    }
+
+    fn srec_line(rtype: char, addr: u32, addr_bytes: usize, payload: &[u8]) -> String {
+        let mut body = Vec::new();
+        // count = addr_bytes + payload + 1 (checksum)
+        let count = (addr_bytes + payload.len() + 1) as u8;
+        body.push(count);
+        for i in (0..addr_bytes).rev() {
+            body.push((addr >> (i * 8)) as u8);
+        }
+        body.extend_from_slice(payload);
+        let cs = srec_cksum(&body);
+        let mut s = format!("S{}", rtype);
+        for b in &body {
+            s.push_str(&format!("{:02X}", b));
+        }
+        s.push_str(&format!("{:02X}", cs));
+        s
+    }
+
+    #[test]
+    fn srec_s1_data_and_s9_start() {
+        let s1 = srec_line('1', 0x1234, 2, &[0xAA, 0xBB, 0xCC]);
+        let s9 = srec_line('9', 0x1234, 2, &[]);
+        let text = format!("{}\n{}\n", s1, s9);
+        let img = load_s_record(&text).unwrap();
+        assert_eq!(img.segments, vec![(0x0000_1234, vec![0xAA, 0xBB, 0xCC])]);
+        assert_eq!(img.start_addr, Some(0x0000_1234));
+    }
+
+    #[test]
+    fn srec_s3_32bit_address_and_coalesce() {
+        let a = srec_line('3', 0x0800_0000, 4, &[0x01, 0x02]);
+        let b = srec_line('3', 0x0800_0002, 4, &[0x03, 0x04]);
+        let s7 = srec_line('7', 0x0800_0000, 4, &[]);
+        let text = format!("{}\n{}\n{}\n", a, b, s7);
+        let img = load_s_record(&text).unwrap();
+        assert_eq!(
+            img.segments,
+            vec![(0x0800_0000, vec![0x01, 0x02, 0x03, 0x04])]
+        );
+        assert_eq!(img.start_addr, Some(0x0800_0000));
+    }
+
+    #[test]
+    fn srec_bad_checksum_rejected() {
+        // S1 record with corrupted checksum byte.
+        // count=04, addr=0000, data=FF, cksum should be !(04+00+00+FF)=00 — we give 11.
+        let bad = "S1040000FF11\nS9030000FC\n";
+        let err = load_s_record(bad).unwrap_err();
+        assert!(matches!(err, SRecordError::BadChecksum { .. }), "got {err:?}");
     }
 }

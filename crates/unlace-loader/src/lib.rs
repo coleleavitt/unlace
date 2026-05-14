@@ -85,6 +85,7 @@ pub use intel_hex::{
     IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
 };
 pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMethod, parse_class};
+};
 pub use image::{
     ArchId, BinaryImage, BoundImport, DebugRecord, DylibDep, DylibKind, Endian, LoadConfig,
     RelocKind, Relocation, ResourceEntry, RichHeader, RichRecord, Section, SectionFlags, Symbol,

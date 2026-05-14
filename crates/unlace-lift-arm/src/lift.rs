@@ -1082,6 +1082,70 @@ fn emit_arm32_neon_mul(ctx: &mut LiftCtx, detail: &InsnDetail) {
         ArmVectorData::ARM_VECTORDATA_F16
         | ArmVectorData::ARM_VECTORDATA_F32
         | ArmVectorData::ARM_VECTORDATA_F64 => CALLOTHER_ARM_NEON_VMUL_F,
+    let Some(arm) = arch.arm() else { return info; };
+    info.lane_size = arm32_neon_lane_size(detail).or_else(|| {
+        let bits = arm.vector_size();
+        if bits > 0 { Some((bits / 8) as u8) } else { None }
+    });
+    for op in arm.operands() {
+        match op.op_type {
+            ArmOperandType::Reg(reg) => {
+                if let Some((idx, wide)) = arm32_neon_reg_index(reg) {
+                    info.reg_indices.push(idx);
+                    info.wide |= wide;
+                }
+            }
+            ArmOperandType::Mem(mem) => {
+                if info.addr.is_none() {
+                    info.addr = arm32_compute_mem_address(ctx, &mem);
+                }
+            }
+            _ => {}
+        }
+    }
+    info
+}
+
+fn emit_arm32_neon_arith(ctx: &mut LiftCtx, detail: &InsnDetail, sub: bool) {
+    use capstone::arch::arm::ArmVectorData;
+    let info = arm32_neon_op_info(ctx, detail);
+    let (Some(lane), 3) = (info.lane_size, info.reg_indices.len()) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let arch = detail.arch_detail();
+    let arm = arch.arm().expect("arm detail");
+    let tag = match (sub, arm.vector_data()) {
+        (false, ArmVectorData::ARM_VECTORDATA_F16 | ArmVectorData::ARM_VECTORDATA_F32 | ArmVectorData::ARM_VECTORDATA_F64) => CALLOTHER_ARM_NEON_VADD_F,
+        (true, ArmVectorData::ARM_VECTORDATA_F16 | ArmVectorData::ARM_VECTORDATA_F32 | ArmVectorData::ARM_VECTORDATA_F64) => CALLOTHER_ARM_NEON_VSUB_F,
+        (false, _) => CALLOTHER_ARM_NEON_VADD_I,
+        (true, _) => CALLOTHER_ARM_NEON_VSUB_I,
+    };
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![
+            Varnode::constant(tag, 8),
+            Varnode::constant(lane as u64, 1),
+            Varnode::constant(info.wide as u64, 1),
+            Varnode::constant(info.reg_indices[0] as u64, 1),
+            Varnode::constant(info.reg_indices[1] as u64, 1),
+            Varnode::constant(info.reg_indices[2] as u64, 1),
+        ],
+        ctx.addr,
+    ));
+}
+
+fn emit_arm32_neon_mul(ctx: &mut LiftCtx, detail: &InsnDetail) {
+    use capstone::arch::arm::ArmVectorData;
+    let info = arm32_neon_op_info(ctx, detail);
+    let (Some(lane), 3) = (info.lane_size, info.reg_indices.len()) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let arch = detail.arch_detail();
+    let arm = arch.arm().expect("arm detail");
+    let tag = match arm.vector_data() {
+        ArmVectorData::ARM_VECTORDATA_F16 | ArmVectorData::ARM_VECTORDATA_F32 | ArmVectorData::ARM_VECTORDATA_F64 => CALLOTHER_ARM_NEON_VMUL_F,
         _ => CALLOTHER_ARM_NEON_VMUL_I,
     };
     ctx.emit(IrInsn::without_output(

@@ -1191,15 +1191,22 @@ fn place_phis(
     phi_sites
 }
 
+/// Result of [`rename_variables`]: the per-block phi list and the
+/// `(block, insn, slot) → SSA varnode` lookup map.
+///
+/// Factored into a named tuple alias to keep clippy's `type_complexity`
+/// lint happy.
+type RenameResult = (
+    BTreeMap<BlockId, Vec<PhiNode>>,
+    BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+);
+
 fn rename_variables(
     func: &Function,
     cfg: &ControlFlowGraph,
     dom_tree: &DominatorTree,
     phi_locations: &BTreeMap<BlockId, BTreeSet<Varnode>>,
-) -> (
-    BTreeMap<BlockId, Vec<PhiNode>>,
-    BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
-) {
+) -> RenameResult {
     let mut version_counter: BTreeMap<Varnode, u32> = BTreeMap::new();
     let mut var_stack: BTreeMap<Varnode, Vec<u32>> = BTreeMap::new();
     let mut phi_map: BTreeMap<BlockId, Vec<PhiNode>> = BTreeMap::new();

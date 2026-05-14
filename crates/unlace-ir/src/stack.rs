@@ -80,8 +80,8 @@ impl StackSpec {
             // most ABIs. PPC32 uses 4-byte GPRs (`GPR_BASE + n*4`), PPC64
             // uses 8-byte (`GPR_BASE + n*8`). See
             // crates/unlace-lift-ppc/src/register_file.rs.
-            ArchId::Ppc => (1 * 4, Some(31 * 4), 4),
-            ArchId::Ppc64 => (1 * 8, Some(31 * 8), 8),
+            ArchId::Ppc => (4, Some(31 * 4), 4),
+            ArchId::Ppc64 => (8, Some(31 * 8), 8),
             // V850: r3 is SP, r2 is conventional FP. GPRs are 4-byte stored
             // at `(i as u64) * 8`. See crates/unlace-lift-v850/src/lib.rs.
             ArchId::V850 => (3 * 8, Some(2 * 8), 4),

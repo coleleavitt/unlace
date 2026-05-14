@@ -1,6 +1,8 @@
 //! Binary image types produced by loaders.
 
 use std::collections::BTreeMap;
+
+use crate::pdb::PdbInfo;
 use std::fmt;
 
 pub use unlace_ir::ArchId;
@@ -377,6 +379,9 @@ pub struct BinaryImage {
     pub dylibs: Vec<DylibDep>,
     /// Mach-O `@rpath` search paths from `LC_RPATH`. Empty for ELF/PE.
     pub rpaths: Vec<String>,
+    /// Raw PDB symbol / line / inlinee-site information, when an associated
+    /// `.pdb` was loaded.
+    pub pdb_info: Option<PdbInfo>,
     /// PDB-derived CodeView types, when an associated `.pdb` was loaded.
     /// Consumed by the type-infer pipeline to seed function signatures and
     /// composite layouts. `None` for ELF/Mach-O or PEs without PDB.
@@ -561,6 +566,7 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
+            pdb_info: None,
             pdb_types: None,
             msvc_rtti: None,
             seh: None,

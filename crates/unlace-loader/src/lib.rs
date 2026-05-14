@@ -51,6 +51,7 @@ pub use dwarf::{
     MacroDefinition, ParameterInfo, PieceLocation, SourceLocation, StructField, StructType,
     UnionType, evaluate_dwarf_expr, evaluate_location_attr, import_dwarf,
 };
+pub use pdb::{InlineeSite, PdbInfo, import_pdb, merge_pdb_symbols};
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;
 pub use error::LoadError;

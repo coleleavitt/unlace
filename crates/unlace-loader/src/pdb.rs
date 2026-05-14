@@ -1,7 +1,8 @@
 //! PDB (Program Database) debug info import.
 //!
 //! Parses Microsoft PDB files to extract function symbols with addresses,
-//! line number mappings, and source file information. Uses the `pdb` crate.
+//! line number mappings, source file information, and inlinee call-site maps.
+//! Uses the `pdb` crate.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -11,6 +12,8 @@ use pdb::{BinaryAnnotation, IdIndex, PDB, Rva, SymbolData, TypeData, TypeIndex};
 use pdb::{PDB, Rva, SymbolData};
 use pdb::{PDB, Rva, SymbolData, TypeData, TypeIndex};
 use unlace_ir::ssa::CallingConvention;
+use pdb::{PDB, Rva, SymbolData};
+use pdb::{IdData, ItemIndex, PDB, Rva, SymbolData};
 
 use crate::error::LoadError;
 use crate::image::{Symbol, SymbolKind};
@@ -32,6 +35,19 @@ pub struct InlineeSite {
     pub name: String,
     /// RVA of the parent (enclosing) procedure.
     pub parent_rva: Option<u64>,
+/// PGO / CodeView inlinee call-site recovered from a PDB.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineeSite {
+    /// Start RVA of the machine-code range attributed to the inlined callee.
+    pub rva: u64,
+    /// Length of the covered code range when known.
+    pub length: Option<u32>,
+    /// Display name of the inlined callee.
+    pub name: String,
+    /// Source location associated with the inlinee record when present.
+    pub file: Option<String>,
+    pub line: Option<u32>,
+    pub column: Option<u32>,
 }
 
 /// Aggregated debug info extracted from a PDB file.
@@ -43,6 +59,8 @@ pub struct PdbInfo {
     pub calling_conventions: BTreeMap<u32, CallingConvention>,
     /// Inlined call-sites from `S_INLINESITE` records.
     pub inlinee_sites: Vec<InlineeSite>,
+    /// Instruction RVA → inlined callee metadata for PGO/CodeView inline sites.
+    pub inlinee_sites: BTreeMap<u64, InlineeSite>,
 }
 
 /// Parse a `.pdb` file and extract function symbols and line information.
@@ -55,6 +73,13 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
 
     let address_map = pdb.address_map()?;
     let dbi = pdb.debug_information()?;
+    let id_info = pdb.id_information()?;
+    let mut id_finder = id_info.finder();
+    let mut id_iter = id_info.iter();
+    while let Some(_id) = id_iter.next()? {
+        id_finder.update(&id_iter);
+    }
+
     let mut symbols = BTreeMap::new();
     let mut lines = BTreeMap::new();
     let calling_conventions = collect_type_calling_conventions(&mut pdb)?;
@@ -68,6 +93,7 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
             id_finder.update(&id_iter);
         }
     }
+    let mut inlinee_sites = BTreeMap::new();
 
     collect_global_symbols(&mut pdb, &address_map, &mut symbols)?;
 
@@ -166,6 +192,9 @@ fn map_pdb_calling_convention(raw: u8) -> Option<CallingConvention> {
 
 fn ti_to_u32(t: TypeIndex) -> u32 {
     u32::from(t)
+    Ok(PdbInfo { symbols, lines })
+        inlinee_sites,
+    })
 }
 
 fn collect_global_symbols(
@@ -180,7 +209,7 @@ fn collect_global_symbols(
         if let Ok(data) = sym.parse() {
             match data {
                 SymbolData::Public(pub_sym) if pub_sym.function => {
-                    if let Some(rva) = pub_sym.offset.to_rva(&address_map) {
+                    if let Some(rva) = pub_sym.offset.to_rva(address_map) {
                         insert_symbol(out, rva, pub_sym.name.to_string().to_string(), 0);
                     }
                 }
@@ -203,12 +232,12 @@ fn collect_module_symbols(
         if let Ok(data) = sym.parse() {
             match data {
                 SymbolData::Procedure(proc) => {
-                    if let Some(rva) = proc.offset.to_rva(&address_map) {
+                    if let Some(rva) = proc.offset.to_rva(address_map) {
                         insert_symbol(out, rva, proc.name.to_string().to_string(), proc.len as u64);
                     }
                 }
                 SymbolData::Data(data_sym) if data_sym.global => {
-                    if let Some(rva) = data_sym.offset.to_rva(&address_map) {
+                    if let Some(rva) = data_sym.offset.to_rva(address_map) {
                         insert_data_symbol(out, rva, data_sym.name.to_string().to_string());
                     }
                 }
@@ -229,7 +258,7 @@ fn collect_line_info(
     let mut line_iter = line_program.lines();
 
     while let Some(line) = line_iter.next()? {
-        let rva = match line.offset.to_rva(&address_map) {
+        let rva = match line.offset.to_rva(address_map) {
             Some(r) => r,
             None => continue,
         };
@@ -362,6 +391,86 @@ fn first_emitting_offset(site: &pdb::InlineSiteSymbol<'_>) -> Option<u32> {
         }
     }
     None
+fn collect_inlinee_sites(
+    module_info: &pdb::ModuleInfo<'_>,
+    address_map: &pdb::AddressMap,
+    id_finder: &pdb::IdFinder<'_>,
+    out: &mut BTreeMap<u64, InlineeSite>,
+) -> Result<(), LoadError> {
+    let mut inlinees = module_info.inlinees()?;
+    let mut inlinee_map = BTreeMap::new();
+    while let Some(inlinee) = inlinees.next()? {
+        inlinee_map.insert(inlinee.index(), inlinee);
+    }
+
+    if inlinee_map.is_empty() {
+        return Ok(());
+    }
+
+    let line_program = module_info.line_program()?;
+    let mut symbols = module_info.symbols()?;
+    let mut proc_offset = None;
+
+    while let Some(sym) = symbols.next()? {
+        if let Ok(data) = sym.parse() {
+            match data {
+                SymbolData::Procedure(proc) => {
+                    proc_offset = Some(proc.offset);
+                }
+                SymbolData::InlineSite(site) => {
+                    let Some(parent_offset) = proc_offset else {
+                        continue;
+                    };
+                    let Some(inlinee) = inlinee_map.get(&site.inlinee) else {
+                        continue;
+                    };
+                    let name = resolve_inlinee_name(site.inlinee, id_finder)
+                        .unwrap_or_else(|| format!("inlinee_{:#x}", u32::from(site.inlinee)));
+                    let mut lines = inlinee.lines(parent_offset, &site);
+                    while let Some(line) = lines.next()? {
+                        let Some(rva) = line.offset.to_rva(address_map) else {
+                            continue;
+                        };
+                        let file = line_program
+                            .get_file_info(line.file_index)
+                            .ok()
+                            .map(|fi| fi.name.to_string().to_string());
+                        let key = rva_to_u64(rva);
+                        out.entry(key).or_insert_with(|| InlineeSite {
+                            rva: key,
+                            length: line.length,
+                            name: name.clone(),
+                            file,
+                            line: Some(line.line_start),
+                            column: line.column_start,
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn resolve_inlinee_name(index: pdb::IdIndex, id_finder: &pdb::IdFinder<'_>) -> Option<String> {
+    let index = resolve_local_id_index(index);
+    let item = id_finder.find(index).ok()?;
+    match item.parse().ok()? {
+        IdData::Function(func) => Some(func.name.to_string().to_string()),
+        IdData::MemberFunction(func) => Some(func.name.to_string().to_string()),
+        IdData::String(s) => Some(s.name.to_string().to_string()),
+        _ => None,
+    }
+}
+
+fn resolve_local_id_index(index: pdb::IdIndex) -> pdb::IdIndex {
+    if index.is_cross_module() {
+        pdb::IdIndex(u32::from(index) & 0x7fff_ffff)
+    } else {
+        index
+    }
 }
 
 fn insert_symbol(out: &mut BTreeMap<u64, Symbol>, rva: Rva, name: String, size: u64) {
@@ -504,6 +613,7 @@ mod tests {
             lines: BTreeMap::new(),
             calling_conventions: BTreeMap::new(),
             inlinee_sites: Vec::new(),
+            inlinee_sites: BTreeMap::new(),
         };
 
         let image_base = 0x0040_0000u64;
@@ -541,6 +651,7 @@ mod tests {
             lines: BTreeMap::new(),
             calling_conventions: BTreeMap::new(),
             inlinee_sites: Vec::new(),
+            inlinee_sites: BTreeMap::new(),
         };
 
         merge_pdb_symbols(&mut target, &pdb_info, 0x0040_0000);
@@ -589,6 +700,11 @@ mod tests {
         assert_eq!(map_pdb_calling_convention(0x04), Some(CallingConvention::MicrosoftX64));
         assert_eq!(map_pdb_calling_convention(0x0b), Some(CallingConvention::Thiscall));
         assert_eq!(map_pdb_calling_convention(0xff), None);
+    fn resolve_local_id_index_masks_cross_module_bit() {
+        let cross = pdb::IdIndex(0x8000_1234);
+        assert_eq!(resolve_local_id_index(cross), pdb::IdIndex(0x1234));
+        let local = pdb::IdIndex(0x1234);
+        assert_eq!(resolve_local_id_index(local), local);
     }
 
     #[test]

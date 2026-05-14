@@ -576,6 +576,7 @@ mod tests {
             rich_header: None,
             dylibs: vec![],
             rpaths: vec![],
+            pdb_info: None,
             pdb_types: None,
             msvc_rtti: None,
             seh: None,

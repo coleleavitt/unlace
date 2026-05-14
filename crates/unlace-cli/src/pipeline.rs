@@ -1248,6 +1248,8 @@ fn flirt_match_with_resolved(
     let bytes = &text.data[off_start..off_end];
     flirt_db()
         .match_function_with_refs(bytes, resolved)
+    flirt_db().match_function(bytes).map(str::to_string)
+        .match_function_at_with_refs(bytes, start, resolved)
         .map(|m| m.name.to_string())
 }
 

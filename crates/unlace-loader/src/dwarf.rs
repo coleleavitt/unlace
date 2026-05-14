@@ -374,6 +374,7 @@ pub struct MacroDefinition {
     pub value: Option<String>,
     pub file: Option<String>,
     pub line: Option<u32>,
+    pub locations: Vec<gimli::Range>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -908,6 +909,9 @@ fn extract_params_and_locals(
             let frame_offset = location_attr.and_then(decode_fbreg_offset);
             let expr_location =
                 location_attr.and_then(|v| evaluate_location_attr(v, unit.encoding()));
+            let frame_offset = entry
+                .attr_value(DW_AT_location)
+                .and_then(decode_fbreg_offset);
             let locations = match location_attr {
                 Some(value) => extract_location_ranges(dwarf, unit, value)?,
                 None => Vec::new(),
@@ -2203,6 +2207,140 @@ mod expr_eval_tests {
                     body: "TAIL 1".to_string(),
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn dwarf_v5_loclists_and_rnglists_are_supported() {
+        let source = r#"
+#include <stdio.h>
+
+int helper(int x) {
+    return x + 1;
+}
+
+int main(void) {
+    int n = 0;
+    if (helper(1) > 0) {
+        n += 1;
+    }
+    if (helper(2) > 0) {
+        n += 2;
+    }
+    return n;
+}
+"#;
+        let temp = tempfile::tempdir().expect("tempdir");
+        let src = temp.path().join("rng.c");
+        let elf = temp.path().join("rng.elf");
+        std::fs::write(&src, source).expect("write source");
+
+        let status = std::process::Command::new("clang")
+            .args([
+                "-gdwarf-5",
+                "-ffunction-sections",
+                "-Wl,--gc-sections",
+                "-O2",
+                "-o",
+            ])
+            .arg(&elf)
+            .arg(&src)
+            .status()
+            .expect("invoke clang");
+        assert!(status.success(), "clang should compile DWARF v5 fixture");
+
+        let data = std::fs::read(&elf).expect("read fixture");
+        let img = ElfLoader::load(&data).expect("parse DWARF v5 ELF");
+        assert!(img.section_by_name(".debug_rnglists").is_some());
+
+        let info = import_dwarf(&img).expect("import DWARF v5");
+        let main_fn = info
+            .functions
+            .values()
+            .find(|f| f.name == "main")
+            .expect("find main");
+        assert!(
+            !main_fn.ranges.is_empty(),
+            "main should populate ranges from DW_AT_ranges/.debug_rnglists"
+        );
+        assert!(
+            main_fn.ranges.iter().any(|r| r.begin < r.end),
+            "main ranges should contain valid address intervals: {:?}",
+            main_fn.ranges
+        );
+    }
+
+    #[test]
+    fn dwarf_v5_loclists_ranges_are_recorded_for_variables() {
+        let source = r#"
+#include <stdint.h>
+
+struct Pair { int x; int y; };
+
+__attribute__((noinline))
+int choose(int *p, int *q, int flag) {
+    int *selected = flag ? p : q;
+    int total = 0;
+    if (flag > 0) {
+        total += *selected;
+    } else {
+        total += *q;
+    }
+    return total + flag;
+}
+
+__attribute__((noinline))
+int pair_sum(struct Pair *pair, int which) {
+    int value = which ? pair->x : pair->y;
+    if (which > 3) {
+        value += pair->x;
+    }
+    return value;
+}
+
+int main(void) {
+    struct Pair pair = {3, 4};
+    int a = 10;
+    int b = 20;
+    return choose(&a, &b, 1) + pair_sum(&pair, 0);
+}
+"#;
+        let temp = tempfile::tempdir().expect("tempdir");
+        let src = temp.path().join("loc.c");
+        let elf = temp.path().join("loc.elf");
+        std::fs::write(&src, source).expect("write source");
+
+        let status = std::process::Command::new("clang")
+            .args(["-gdwarf-5", "-O2", "-o"])
+            .arg(&elf)
+            .arg(&src)
+            .status()
+            .expect("invoke clang");
+        assert!(status.success(), "clang should compile DWARF v5 fixture");
+
+        let data = std::fs::read(&elf).expect("read fixture");
+        let img = ElfLoader::load(&data).expect("parse DWARF v5 ELF");
+        assert!(img.section_by_name(".debug_loclists").is_some());
+
+        let info = import_dwarf(&img).expect("import DWARF v5");
+        let choose = info
+            .functions
+            .values()
+            .find(|f| f.name == "choose")
+            .expect("find choose");
+        let total = choose
+            .locals
+            .iter()
+            .find(|local| local.name == "total")
+            .expect("find total local");
+        assert!(
+            !total.locations.is_empty(),
+            "location-list backed locals should record live ranges"
+        );
+        assert!(
+            total.locations.iter().all(|r| r.begin < r.end),
+            "all location ranges should be valid: {:?}",
+            total.locations
         );
     }
 }

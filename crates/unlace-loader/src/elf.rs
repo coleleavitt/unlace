@@ -148,6 +148,8 @@ where
         elf::EM_TRICORE => ArchId::TriCore,
         224 => ArchId::AmdGpu, // EM_AMDGPU
         elf::EM_BLACKFIN | elf::EM_SHARC => ArchId::SharcBlackfin,
+        elf::EM_TI_C6000 => ArchId::TiC6x,
+        elf::EM_TI_C2000 => ArchId::TiC28x,
         _ => ArchId::Unknown(machine),
     };
 

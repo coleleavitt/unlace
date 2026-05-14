@@ -91,6 +91,7 @@ pub mod ssa_cache;
 pub mod stack_frame_recovery;
 pub mod stack_pointer_tracking;
 pub mod stack_vars;
+pub mod symbolic_heap;
 pub mod strength_reduce;
 pub mod string_hash_switch;
 pub mod struct_boundary;

@@ -369,17 +369,31 @@ impl ArmLifter {
 }
 
 /// Minimal 32-bit ARM register file — r0..r15 (where r13=SP, r14=LR,
-/// r15=PC) plus an APSR slot for the condition flags. Mirrors the layout
-/// `expand_reg_list` produces (`u8` register numbers 0..15) so a `Varnode`
-/// can be derived as `Varnode::reg(reg_num * 4, 4)`.
+/// r15=PC) plus APSR/FPSCR and VFP S/D registers. VFP register coverage is
+/// sized for the common VFPv2/v3/v4 profiles: `S0..S31` (4-byte scalar regs)
+/// and `D0..D31` (8-byte scalar regs). We model `D<n>` as an aliasing view
+/// over pairs of `S` registers (`D0` overlays `S0:S1`, `D1` overlays `S2:S3`,
+/// etc.) by assigning them the same register-space offsets at 8-byte width.
+/// This gives the lifter a stable place to write 32-bit and 64-bit VFP values
+/// while preserving overlap for downstream analyses.
 pub fn arm32_register_file() -> RegisterFile {
     use unlace_ir::RegisterDef;
     const NAMES: [&str; 16] = [
         "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "SP",
         "LR", "PC",
+    const NAMES: [&str; 16] = [
+        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
+        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
+    const GPR_NAMES: [&str; 16] = [
+        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
+        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
     ];
-    let mut regs = Vec::with_capacity(17);
-    for (i, name) in NAMES.iter().enumerate() {
+
+    const ARM32_APSR_OFFSET: u64 = 64;
+    const ARM32_FPSCR_OFFSET: u64 = 68;
+    const ARM32_VFP_S_BASE: u64 = 0x100;
+    let mut regs = Vec::with_capacity(17 + 1 + 32 + 32);
+    for (i, name) in GPR_NAMES.iter().enumerate() {
         regs.push(RegisterDef {
             name,
             varnode: Varnode::reg((i as u64) * 4, 4),
@@ -387,8 +401,24 @@ pub fn arm32_register_file() -> RegisterFile {
     }
     regs.push(RegisterDef {
         name: "APSR",
-        varnode: Varnode::reg(64, 4),
+        varnode: Varnode::reg(ARM32_APSR_OFFSET, 4),
     });
+    regs.push(RegisterDef {
+        name: "FPSCR",
+        varnode: Varnode::reg(ARM32_FPSCR_OFFSET, 4),
+    });
+    for i in 0..32u64 {
+        regs.push(RegisterDef {
+            name: Box::leak(format!("S{i}").into_boxed_str()),
+            varnode: Varnode::reg(ARM32_VFP_S_BASE + i * 4, 4),
+        });
+    }
+    for i in 0..32u64 {
+        regs.push(RegisterDef {
+            name: Box::leak(format!("D{i}").into_boxed_str()),
+            varnode: Varnode::reg(ARM32_VFP_S_BASE + i * 8, 8),
+        });
+    }
     RegisterFile { registers: regs }
 }
 
@@ -417,12 +447,36 @@ fn arm32_reg_index(reg: capstone::RegId) -> Option<u8> {
     }
 }
 
+const ARM32_APSR_OFFSET: u64 = 64;
+const ARM32_FPSCR_OFFSET: u64 = 68;
+const ARM32_VFP_S_BASE: u64 = 0x100;
+
+fn arm32_vfp_varnode(reg: capstone::RegId) -> Option<Varnode> {
+    let raw = reg.0 as u32;
+    match raw {
+        ArmReg::ARM_REG_S0..=ArmReg::ARM_REG_S31 => {
+            let idx = (raw - ArmReg::ARM_REG_S0) as u64;
+            Some(Varnode::reg(ARM32_VFP_S_BASE + idx * 4, 4))
+        }
+        ArmReg::ARM_REG_D0..=ArmReg::ARM_REG_D31 => {
+            let idx = (raw - ArmReg::ARM_REG_D0) as u64;
+            Some(Varnode::reg(ARM32_VFP_S_BASE + idx * 8, 8))
+        }
+        ArmReg::ARM_REG_FPSCR => Some(Varnode::reg(ARM32_FPSCR_OFFSET, 4)),
+        ArmReg::ARM_REG_APSR | ArmReg::ARM_REG_APSR_NZCV => Some(Varnode::reg(ARM32_APSR_OFFSET, 4)),
+        _ => None,
+    }
+}
+
 fn arm32_operand_to_varnode(ctx: &mut LiftCtx, op_type: &ArmOperandType) -> Option<Varnode> {
     match op_type {
-        ArmOperandType::Reg(reg) => arm32_reg_index(*reg).map(arm32_reg_varnode),
+        ArmOperandType::Reg(reg) => arm32_reg_index(*reg)
+            .map(arm32_reg_varnode)
+            .or_else(|| arm32_vfp_varnode(*reg)),
         ArmOperandType::Imm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
         ArmOperandType::Cimm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
         ArmOperandType::Pimm(imm) => Some(Varnode::constant(*imm as i64 as u64, 4)),
+        ArmOperandType::Fp(v) => Some(Varnode::constant(v.to_bits(), 8)),
         ArmOperandType::Mem(mem) => arm32_compute_mem_address(ctx, mem),
         _ => None,
     }
@@ -698,6 +752,7 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_LDREX | ArmInsn::ARM_INS_LDREXB | ArmInsn::ARM_INS_LDREXH => {
             emit_arm32_exclusive_load(ctx, &ops)
         }
+        ArmInsn::ARM_INS_VLDR => emit_arm32_vfp_load(ctx, &ops),
         ArmInsn::ARM_INS_STR => emit_arm32_store(ctx, &ops, 4),
         ArmInsn::ARM_INS_STRB => emit_arm32_store(ctx, &ops, 1),
         ArmInsn::ARM_INS_STRH => emit_arm32_store(ctx, &ops, 2),
@@ -705,6 +760,7 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_STREX | ArmInsn::ARM_INS_STREXB | ArmInsn::ARM_INS_STREXH => {
             emit_arm32_exclusive_store(ctx, &ops)
         }
+        ArmInsn::ARM_INS_VSTR => emit_arm32_vfp_store(ctx, &ops),
 
         ArmInsn::ARM_INS_CMP => emit_arm32_flags(ctx, &ops, IrOp::IntSub),
         ArmInsn::ARM_INS_CMN => emit_arm32_flags(ctx, &ops, IrOp::IntAdd),
@@ -760,6 +816,18 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_SMC => emit_arm32_exc(ctx, &ops, CALLOTHER_ARM_SMC),
         ArmInsn::ARM_INS_SVC => emit_arm32_exc(ctx, &ops, CALLOTHER_ARM_SVC),
         ArmInsn::ARM_INS_HVC => emit_arm32_exc(ctx, &ops, CALLOTHER_ARM_HVC),
+        ArmInsn::ARM_INS_VMOV => emit_arm32_vfp_copy(ctx, &ops),
+        ArmInsn::ARM_INS_VADD => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatAdd),
+        ArmInsn::ARM_INS_VSUB => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatSub),
+        ArmInsn::ARM_INS_VMUL => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatMult),
+        ArmInsn::ARM_INS_VDIV => emit_arm32_vfp_binop(ctx, &ops, IrOp::FloatDiv),
+        ArmInsn::ARM_INS_VABS => emit_arm32_vfp_unop(ctx, &ops, IrOp::FloatAbs),
+        ArmInsn::ARM_INS_VNEG => emit_arm32_vfp_unop(ctx, &ops, IrOp::FloatNeg),
+        ArmInsn::ARM_INS_VSQRT => emit_arm32_vfp_unop(ctx, &ops, IrOp::FloatSqrt),
+        ArmInsn::ARM_INS_VCVT => emit_arm32_vfp_vcvt(ctx, &ops, insn),
+        ArmInsn::ARM_INS_VCMP | ArmInsn::ARM_INS_VCMPE => emit_arm32_vfp_cmp(ctx, &ops),
+        ArmInsn::ARM_INS_VMRS => emit_arm32_vmrs(ctx, &ops),
+        ArmInsn::ARM_INS_VMSR => emit_arm32_vmsr(ctx, &ops),
 
         _ => ctx.emit_unimplemented(),
     }
@@ -1122,7 +1190,9 @@ fn arm32_first_dst(ops: &[ArmOperandType]) -> Option<Varnode> {
     let ArmOperandType::Reg(reg) = ops.first()? else {
         return None;
     };
-    arm32_reg_index(*reg).map(arm32_reg_varnode)
+    arm32_reg_index(*reg)
+        .map(arm32_reg_varnode)
+        .or_else(|| arm32_vfp_varnode(*reg))
 }
 
 fn emit_arm32_copy(ctx: &mut LiftCtx, ops: &[ArmOperandType], shifts: &[ArmShift], invert: bool) {
@@ -1286,6 +1356,136 @@ fn emit_arm32_store(ctx: &mut LiftCtx, ops: &[ArmOperandType], _size: u8) {
         return;
     };
     ctx.emit_store(addr_vn, value);
+}
+
+fn emit_arm32_vfp_copy(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit_copy(dst, src);
+}
+
+fn emit_arm32_vfp_binop(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(lhs) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = ops.get(2).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(op, dst, smallvec![lhs, rhs], ctx.addr));
+}
+
+fn emit_arm32_vfp_unop(ctx: &mut LiftCtx, ops: &[ArmOperandType], op: IrOp) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(op, dst, smallvec![src], ctx.addr));
+}
+
+fn emit_arm32_vfp_load(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(addr_vn) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let loaded = ctx.emit_load(dst.size as u8, addr_vn);
+    ctx.emit_copy(dst, loaded);
+}
+
+fn emit_arm32_vfp_store(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(value) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(addr_vn) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit_store(addr_vn, value);
+}
+
+fn emit_arm32_vfp_vcvt(ctx: &mut LiftCtx, ops: &[ArmOperandType], insn: &Insn) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let mnemonic = insn.mnemonic().unwrap_or_default();
+    let ir_op = if mnemonic.contains(".f32.s32") || mnemonic.contains(".f32.u32") || mnemonic.contains(".f64.s32") || mnemonic.contains(".f64.u32") {
+        IrOp::FloatInt2float
+    } else if mnemonic.contains(".s32.f32") || mnemonic.contains(".u32.f32") || mnemonic.contains(".s32.f64") || mnemonic.contains(".u32.f64") {
+        IrOp::FloatFloat2int
+    } else {
+        IrOp::FloatFloat2float
+    };
+    ctx.emit(IrInsn::with_output(ir_op, dst, smallvec![src], ctx.addr));
+}
+
+fn emit_arm32_vfp_cmp(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(lhs) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let is_nan = Varnode::unique(ctx.alloc_unique(), 1);
+    let is_lt = Varnode::unique(ctx.alloc_unique(), 1);
+    let is_eq = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(IrOp::FloatNan, is_nan, smallvec![lhs, rhs], ctx.addr));
+    ctx.emit(IrInsn::with_output(IrOp::FloatLess, is_lt, smallvec![lhs, rhs], ctx.addr));
+    ctx.emit(IrInsn::with_output(IrOp::FloatEqual, is_eq, smallvec![lhs, rhs], ctx.addr));
+    ctx.emit_copy(ARM_FLAG_N, is_lt);
+    ctx.emit_copy(ARM_FLAG_Z, is_eq);
+    ctx.emit(IrInsn::with_output(IrOp::BoolNegate, ARM_FLAG_V, smallvec![is_nan], ctx.addr));
+    ctx.emit_copy(ARM_FLAG_C, ARM_FLAG_V);
+}
+
+fn emit_arm32_vmrs(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(dst) = arm32_first_dst(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit_copy(dst, src);
+}
+
+fn emit_arm32_vmsr(ctx: &mut LiftCtx, ops: &[ArmOperandType]) {
+    let Some(dst) = ops.first().and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ops.get(1).and_then(|o| arm32_operand_to_varnode(ctx, o)) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit_copy(dst, src);
 }
 
 // t151: NZCV flag varnodes for ARM32.

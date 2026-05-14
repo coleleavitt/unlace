@@ -240,6 +240,7 @@ fn run_decompile(
             | ArchId::V850
             | ArchId::Arc
             | ArchId::Agx
+            | ArchId::Msp430
             | ArchId::Ppc
             | ArchId::Ppc64
     ) {

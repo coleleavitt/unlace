@@ -7,8 +7,11 @@ pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
 pub use unlace_lift_avr::AvrLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
+pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_avr::AvrLifter;
+pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_mips::MipsLifter;
+pub use unlace_lift_msp430::Msp430Lifter;
 pub use unlace_lift_ppc::PpcLifter;
 pub use unlace_lift_riscv::RiscVLifter;
 pub use unlace_lift_v850::V850Lifter;
@@ -57,6 +60,7 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::Ebpf => Box::new(EbpfLifter::new()),
         ArchId::Avr => Box::new(AvrLifter::new()),
         ArchId::Agx => Box::new(AgxLifter::new()),
+        ArchId::Msp430 => Box::new(Msp430Lifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -121,6 +125,9 @@ mod tests {
     fn test_get_lifter_agx() {
         let l = get_lifter(ArchId::Agx);
         assert_eq!(l.arch(), ArchId::Agx);
+    fn test_get_lifter_msp430() {
+        let l = get_lifter(ArchId::Msp430);
+        assert_eq!(l.arch(), ArchId::Msp430);
         assert!(!l.register_file().registers.is_empty());
     }
 

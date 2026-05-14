@@ -1711,6 +1711,7 @@ dependencies = [
  "unlace-lift-avr",
  "unlace-lift-ebpf",
  "unlace-lift-mips",
+ "unlace-lift-msp430",
  "unlace-lift-ppc",
  "unlace-lift-riscv",
  "unlace-lift-v850",
@@ -1766,6 +1767,15 @@ name = "unlace-lift-mips"
 version = "0.1.0"
 dependencies = [
  "capstone",
+ "smallvec",
+ "tracing",
+ "unlace-ir",
+]
+
+[[package]]
+name = "unlace-lift-msp430"
+version = "0.1.0"
+dependencies = [
  "smallvec",
  "tracing",
  "unlace-ir",

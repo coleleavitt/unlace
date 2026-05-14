@@ -210,7 +210,9 @@ impl<'a> LiftCtx<'a> {
         ));
     }
 
-    #[cfg(test)]
+    
+
+#[cfg(test)]
     pub fn ir_ops(&self) -> &[IrInsn] {
         &self.ops
     }
@@ -325,6 +327,43 @@ pub fn detect_isa_mode(addr: u64, has_micromips: bool) -> (u64, MipsIsaMode) {
         (addr, MipsIsaMode::Mips32)
     }
 }
+
+/// Loongson-specific MIPS extension detection.
+///
+/// Loongson CPUs (used in Chinese domestic processors) add proprietary
+/// multimedia and fixed-point extensions to the MIPS ISA. These include
+/// MMI (Multi-Media Instructions) and Loongson-EXT (extended operations).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LoongsonExtensions {
+    /// Loongson MMI (Multi-Media Instructions): SIMD ops on GPRs.
+    pub mmi: bool,
+    /// Loongson EXT: additional bit-manipulation and atomic ops.
+    pub ext: bool,
+    /// Loongson EXT2: further extensions (cam, gsexc, etc.).
+    pub ext2: bool,
+}
+
+impl LoongsonExtensions {
+    /// Detect Loongson extensions from ELF e_flags or .MIPS.abiflags.
+    pub fn from_elf_flags(flags: u32) -> Self {
+        Self {
+            // EF_MIPS_MACH_LS2E = 0x00A00000
+            // EF_MIPS_MACH_LS2F = 0x00A10000
+            // EF_MIPS_MACH_LS3A = 0x00A20000
+            mmi: (flags & 0x00FF0000) >= 0x00A00000,
+            ext: (flags & 0x00FF0000) >= 0x00A10000,
+            ext2: (flags & 0x00FF0000) >= 0x00A20000,
+        }
+    }
+}
+
+/// Loongson MMI callother IDs for multimedia SIMD-on-GPR instructions.
+pub const CALLOTHER_LOONGSON_PADDW: u64 = 0x700;
+pub const CALLOTHER_LOONGSON_PSUBW: u64 = 0x701;
+pub const CALLOTHER_LOONGSON_PMULUW: u64 = 0x702;
+pub const CALLOTHER_LOONGSON_PSHUFH: u64 = 0x703;
+pub const CALLOTHER_LOONGSON_PUNPCKL: u64 = 0x704;
+pub const CALLOTHER_LOONGSON_PUNPCKH: u64 = 0x705;
 
 fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand]) {
     use MipsInsn::*;
@@ -889,5 +928,18 @@ mod tests {
         let (addr, mode) = detect_isa_mode(0x80001001, true);
         assert_eq!(addr, 0x80001000);
         assert_eq!(mode, MipsIsaMode::MicroMips);
+    fn loongson_ext_from_ls3a_flags() {
+        let ext = LoongsonExtensions::from_elf_flags(0x00A20000);
+        assert!(ext.mmi);
+        assert!(ext.ext);
+        assert!(ext.ext2);
+    }
+
+    #[test]
+    fn loongson_ext_from_generic_mips() {
+        let ext = LoongsonExtensions::from_elf_flags(0x00000000);
+        assert!(!ext.mmi);
+        assert!(!ext.ext);
+        assert!(!ext.ext2);
     }
 }

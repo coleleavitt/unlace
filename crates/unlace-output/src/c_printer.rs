@@ -7721,6 +7721,104 @@ fn emit_aarch64_atomic_callother(
     }
 }
 
+const CALLOTHER_AARCH64_LDAXR: u64 = 0x345;
+const CALLOTHER_AARCH64_STLXR: u64 = 0x346;
+const CALLOTHER_AARCH64_ATOMIC_LOAD_ACQUIRE: u64 = 0x347;
+const CALLOTHER_AARCH64_ATOMIC_STORE_RELEASE: u64 = 0x348;
+const CALLOTHER_AARCH64_ATOMIC_FETCH_ADD: u64 = 0x349;
+const CALLOTHER_AARCH64_ATOMIC_EXCHANGE: u64 = 0x34A;
+const CALLOTHER_AARCH64_ATOMIC_CMPXCHG: u64 = 0x34B;
+
+fn aarch64_atomic_order_name(order: u64) -> &'static str {
+    match order {
+        0 => "memory_order_relaxed",
+        1 => "memory_order_acquire",
+        2 => "memory_order_release",
+        3 => "memory_order_acq_rel",
+        _ => "memory_order_seq_cst",
+    }
+}
+
+fn atomic_ptr_arg(vn: &Varnode, operand_idx: usize, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    format!(
+        "(_Atomic unsigned long long *){}",
+        emit_operand_resolved(vn, operand_idx, stmt_idx, ctx)
+    )
+}
+
+fn emit_aarch64_atomic_callother(
+    tag: u64,
+    insn: &IrInsn,
+    stmt_idx: u32,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    match tag {
+        CALLOTHER_AARCH64_LDAXR => {
+            let addr = insn.inputs.get(1)?;
+            Some(format!(
+                "atomic_load_explicit({}, memory_order_acquire)",
+                atomic_ptr_arg(addr, 1, stmt_idx, ctx)
+            ))
+        }
+        CALLOTHER_AARCH64_STLXR => {
+            let value = insn.inputs.get(1)?;
+            let addr = insn.inputs.get(2)?;
+            Some(format!(
+                "({{ atomic_store_explicit({}, {}, memory_order_release); 0; }})",
+                atomic_ptr_arg(addr, 2, stmt_idx, ctx),
+                emit_operand_resolved(value, 1, stmt_idx, ctx)
+            ))
+        }
+        CALLOTHER_AARCH64_ATOMIC_LOAD_ACQUIRE => {
+            let addr = insn.inputs.get(2)?;
+            Some(format!(
+                "atomic_load_explicit({}, memory_order_acquire)",
+                atomic_ptr_arg(addr, 2, stmt_idx, ctx)
+            ))
+        }
+        CALLOTHER_AARCH64_ATOMIC_STORE_RELEASE => {
+            let value = insn.inputs.get(2)?;
+            let addr = insn.inputs.get(3)?;
+            Some(format!(
+                "atomic_store_explicit({}, {}, memory_order_release)",
+                atomic_ptr_arg(addr, 3, stmt_idx, ctx),
+                emit_operand_resolved(value, 2, stmt_idx, ctx)
+            ))
+        }
+        CALLOTHER_AARCH64_ATOMIC_FETCH_ADD | CALLOTHER_AARCH64_ATOMIC_EXCHANGE => {
+            let order = insn.inputs.get(1)?.offset;
+            let value = insn.inputs.get(2)?;
+            let addr = insn.inputs.get(3)?;
+            let name = if tag == CALLOTHER_AARCH64_ATOMIC_FETCH_ADD {
+                "atomic_fetch_add_explicit"
+            } else {
+                "atomic_exchange_explicit"
+            };
+            Some(format!(
+                "{}({}, {}, {})",
+                name,
+                atomic_ptr_arg(addr, 3, stmt_idx, ctx),
+                emit_operand_resolved(value, 2, stmt_idx, ctx),
+                aarch64_atomic_order_name(order)
+            ))
+        }
+        CALLOTHER_AARCH64_ATOMIC_CMPXCHG => {
+            let order = insn.inputs.get(1)?.offset;
+            let expected = insn.inputs.get(2)?;
+            let desired = insn.inputs.get(3)?;
+            let addr = insn.inputs.get(4)?;
+            Some(format!(
+                "atomic_compare_exchange_strong_explicit({}, &{}, {}, {}, memory_order_relaxed)",
+                atomic_ptr_arg(addr, 4, stmt_idx, ctx),
+                emit_operand_resolved(expected, 2, stmt_idx, ctx),
+                emit_operand_resolved(desired, 3, stmt_idx, ctx),
+                aarch64_atomic_order_name(order)
+            ))
+        }
+        _ => None,
+    }
+}
+
 // ── AArch64 NEON Callother tags (mirror of `unlace-lift-arm`) ──────────
 // Duplicated here as private consts to keep the output crate from taking
 // a cross-arch lifter dependency just for these eight u64s.

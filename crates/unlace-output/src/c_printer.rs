@@ -7363,6 +7363,8 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
 
         // ── AVX-512 generic EVEX fallback (t306) ─────────────────
         0x1F0 => Some("__builtin_ia32_avx512_evex"),
+        // ── x86 performance-monitoring counter (0x1F0, t312) ────
+        0x1F0 => Some("_rdpmc"), // RDPMC
 
         // ── AES-NI intrinsics (0x1E0..0x1E4) ──────────────────────
         0x1E0 => Some("_mm_aesenc_si128"),          // AESENC

@@ -2569,4 +2569,42 @@ mod tests {
         assert_eq!(src1.offset, crate::register_file::ZMM1);
         assert_eq!(src2.offset, crate::register_file::ZMM2);
     }
+
+    /// t312 — RDPMC reads the ECX-selected performance-monitoring counter.
+    #[test]
+    fn t312_lift_rdpmc_carries_ecx_selector() {
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x33], 0x1000)
+            .expect("rdpmc decode should succeed");
+        assert_eq!(result.len, 2);
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "RDPMC should be annotated rather than unimplemented",
+        );
+
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("RDPMC should emit Callother");
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(crate::ops::perfctr::tag::RDPMC, 8)
+        );
+        assert_eq!(co.inputs.len(), 2, "RDPMC shape: (tag, ECX)");
+        assert_eq!(
+            co.inputs[1],
+            unlace_ir::Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RCX, 4),
+        );
+        assert_eq!(
+            co.output,
+            Some(unlace_ir::Varnode::new(
+                unlace_ir::SpaceId::Register,
+                crate::register_file::RAX,
+                8,
+            )),
+            "RDPMC returns the EDX:EAX pair as a 64-bit RAX-family value",
+        );
+    }
+
 }

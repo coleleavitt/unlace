@@ -756,6 +756,11 @@ fn dispatch_arm32_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) 
         ArmInsn::ARM_INS_VST3 => emit_arm32_neon_ldst(ctx, detail, CALLOTHER_ARM_NEON_VST3),
         ArmInsn::ARM_INS_VST4 => emit_arm32_neon_ldst(ctx, detail, CALLOTHER_ARM_NEON_VST4),
 
+        // t317 — TrustZone / EL transition instructions.
+        ArmInsn::ARM_INS_SMC => emit_arm32_exc(ctx, &ops, CALLOTHER_ARM_SMC),
+        ArmInsn::ARM_INS_SVC => emit_arm32_exc(ctx, &ops, CALLOTHER_ARM_SVC),
+        ArmInsn::ARM_INS_HVC => emit_arm32_exc(ctx, &ops, CALLOTHER_ARM_HVC),
+
         _ => ctx.emit_unimplemented(),
     }
 }
@@ -2557,6 +2562,14 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
             emit_aarch64_sve_ptrue(ctx, detail)
         }
 
+        // t317 — TrustZone exception-generating / exception-return insns.
+        Arm64Insn::ARM64_INS_SMC => emit_aarch64_exc(ctx, &ops, CALLOTHER_AARCH64_SMC),
+        Arm64Insn::ARM64_INS_SVC => emit_aarch64_exc(ctx, &ops, CALLOTHER_AARCH64_SVC),
+        Arm64Insn::ARM64_INS_HVC => emit_aarch64_exc(ctx, &ops, CALLOTHER_AARCH64_HVC),
+        Arm64Insn::ARM64_INS_ERET
+        | Arm64Insn::ARM64_INS_ERETAA
+        | Arm64Insn::ARM64_INS_ERETAB => emit_aarch64_eret(ctx, CALLOTHER_AARCH64_ERET),
+
         _ => ctx.emit_unimplemented(),
     }
 }
@@ -3418,6 +3431,67 @@ pub const CALLOTHER_AARCH64_TSTART: u64 = 0x42A;
 /// `Callother` tag for AArch64 TME `TCOMMIT`.
 /// Emitted as `Callother(CALLOTHER_AARCH64_TCOMMIT)`.
 pub const CALLOTHER_AARCH64_TCOMMIT: u64 = 0x42B;
+
+// ── t317 — ARM TrustZone SMC/SVC/HVC/ERET Callother tags ──────────────
+/// `Callother(CALLOTHER_AARCH64_SMC, imm16)` — secure monitor call (AArch64).
+pub const CALLOTHER_AARCH64_SMC: u64 = 0x42C;
+/// `Callother(CALLOTHER_AARCH64_SVC, imm16)` — supervisor call (AArch64).
+pub const CALLOTHER_AARCH64_SVC: u64 = 0x42D;
+/// `Callother(CALLOTHER_AARCH64_HVC, imm16)` — hypervisor call (AArch64).
+pub const CALLOTHER_AARCH64_HVC: u64 = 0x42E;
+/// `Callother(CALLOTHER_AARCH64_ERET)` — exception return (AArch64).
+pub const CALLOTHER_AARCH64_ERET: u64 = 0x42F;
+/// `Callother(CALLOTHER_ARM_SMC, imm)` — secure monitor call (ARM32).
+pub const CALLOTHER_ARM_SMC: u64 = 0x430;
+/// `Callother(CALLOTHER_ARM_SVC, imm)` — supervisor call (ARM32).
+pub const CALLOTHER_ARM_SVC: u64 = 0x431;
+/// `Callother(CALLOTHER_ARM_HVC, imm)` — hypervisor call (ARM32).
+pub const CALLOTHER_ARM_HVC: u64 = 0x432;
+
+/// Emit a TrustZone exception-generating instruction (SMC/SVC/HVC) in
+/// AArch64 mode. The first operand is the immediate exception code.
+fn emit_aarch64_exc(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)], tag: u64) {
+    let imm = match ops.first() {
+        Some((Arm64OperandType::Imm(v), _)) => Varnode::constant(*v as u64, 2),
+        _ => Varnode::constant(0, 2),
+    };
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(tag, 8), imm],
+        ctx.addr,
+    ));
+}
+
+/// Emit ERET as a Callother followed by a Return (since ERET transfers
+/// control out of the current exception level, it acts as a return to the
+/// calling context).
+fn emit_aarch64_eret(ctx: &mut LiftCtx, tag: u64) {
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(tag, 8)],
+        ctx.addr,
+    ));
+    // Model ERET as a return — control does not fall through.
+    ctx.emit(IrInsn::without_output(
+        IrOp::Return,
+        smallvec![Varnode::constant(0, 8)],
+        ctx.addr,
+    ));
+}
+
+/// Emit a TrustZone exception-generating instruction (SMC/SVC/HVC) in
+/// ARM32 mode. The first operand is the immediate exception code.
+fn emit_arm32_exc(ctx: &mut LiftCtx, ops: &[ArmOperandType], tag: u64) {
+    let imm = match ops.first() {
+        Some(ArmOperandType::Imm(v)) => Varnode::constant(*v as i64 as u64, 4),
+        _ => Varnode::constant(0, 4),
+    };
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(tag, 8), imm],
+        ctx.addr,
+    ));
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Aarch64TmeDecoded {

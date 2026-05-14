@@ -192,6 +192,7 @@ mod tests {
             cpp_variant_discriminants: Vec::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            rust_async: None,
             vtable_calls: std::collections::BTreeMap::new(),
             cpp_vtable_calls: std::collections::BTreeMap::new(),
             objc_dispatch_calls: std::collections::BTreeMap::new(),

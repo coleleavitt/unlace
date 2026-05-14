@@ -274,6 +274,7 @@ mod tests {
             enum_discriminants: Vec::new(),
             cpp_variant_discriminants: Vec::new(),
             panic_sites: BTreeMap::new(),
+            rust_async: None,
             vtable_calls: BTreeMap::new(),
             cpp_vtable_calls: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),

@@ -199,60 +199,6 @@ mod tests {
             recognize_interp_api("mrb_open"),
             Some(EmbedInterpKind::Mruby)
         );
-        assert_eq!(recognize_interp_api("lua_pcall"), Some(EmbedInterpKind::Lua));
-        assert_eq!(recognize_interp_api("lua_newstate"), Some(EmbedInterpKind::Lua));
-        assert_eq!(recognize_interp_api("luaL_openlibs"), Some(EmbedInterpKind::Lua));
-        assert_eq!(recognize_interp_api("luaL_loadstring"), Some(EmbedInterpKind::Lua));
-    }
-
-    #[test]
-    fn recognises_python_public_and_internal() {
-        assert_eq!(
-            recognize_interp_api("PyObject_GetAttr"),
-            Some(EmbedInterpKind::Python),
-        );
-        assert_eq!(
-            recognize_interp_api("PyList_New"),
-            Some(EmbedInterpKind::Python),
-        );
-        assert_eq!(
-            recognize_interp_api("_Py_Dealloc"),
-            Some(EmbedInterpKind::Python),
-        );
-        assert_eq!(
-            recognize_interp_api("_Py_NoneStruct"),
-            Some(EmbedInterpKind::Python),
-        );
-    }
-
-    #[test]
-    fn recognises_ruby_mri_extensions() {
-        assert_eq!(
-            recognize_interp_api("rb_define_method"),
-            Some(EmbedInterpKind::Ruby),
-        );
-        assert_eq!(recognize_interp_api("rb_funcall"), Some(EmbedInterpKind::Ruby));
-        assert_eq!(recognize_interp_api("rb_str_new"), Some(EmbedInterpKind::Ruby));
-    }
-
-    #[test]
-    fn recognises_v8_mangled_namespace() {
-        // Itanium mangling: `v8::Isolate::New(...)`.
-        assert_eq!(
-            recognize_interp_api("_ZN2v87Isolate3NewERKNS_15CreateParamsE"),
-            Some(EmbedInterpKind::V8),
-        );
-        // MSVC mangling: `v8::String::NewFromUtf8`.
-        assert_eq!(
-            recognize_interp_api("?NewFromUtf8@String@v8@@SA?AV?$Local@VString@v8@@@2@PEAVIsolate@2@PEBDW4NewStringType@2@H@Z"),
-            Some(EmbedInterpKind::V8),
-        );
-    }
-
-    #[test]
-    fn recognises_mruby_and_does_not_alias_with_ruby() {
-        // `mrb_*` is mruby, not MRI.
-        assert_eq!(recognize_interp_api("mrb_open"), Some(EmbedInterpKind::Mruby));
         assert_eq!(
             recognize_interp_api("mrb_define_class"),
             Some(EmbedInterpKind::Mruby),

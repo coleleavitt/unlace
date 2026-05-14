@@ -70,8 +70,6 @@ mod tests {
             addr: 0,
             foldable_exprs: BTreeSet::new(),
             panic_sites: BTreeMap::new(),
-            go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: BTreeMap::new(),
             is_ctor: false,
@@ -79,7 +77,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -87,8 +84,10 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            go_defer_sites: Vec::new(),
             cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
+            go_defer_sites: Vec::new(),
         }
     }
 

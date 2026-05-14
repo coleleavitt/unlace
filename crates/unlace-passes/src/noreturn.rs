@@ -164,14 +164,15 @@ mod tests {
             tail_call_map: BTreeMap::new(),
             merged_names: BTreeMap::new(),
             enum_discriminants: Vec::new(),
-            cpp_variant_discriminants: Vec::new(),
             panic_sites: BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            cpp_variant_discriminants: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            cpp_lambda_captures: Vec::new(),
             rust_async: None,
             vtable_calls: BTreeMap::new(),
             cpp_vtable_calls: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             inferred_params: Vec::new(),
             inferred_return_type: PrimitiveType::Unknown,
             frame_setup_insns: BTreeSet::new(),
@@ -201,7 +202,6 @@ mod tests {
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
             crypto_annotations: Vec::new(),
-            cpp_lambda_captures: Vec::new(),
         }
     }
 

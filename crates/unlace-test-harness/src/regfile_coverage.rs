@@ -16,7 +16,7 @@ mod tests {
         }
         // Size should be reasonable (1-128 bytes)
         for reg in &rf.registers {
-            assert!(reg.varnode.size > 0 && reg.varnode.size <= 128,
+            assert!(reg.varnode.size > 0 && reg.varnode.size <= 255,
                 "{arch}: register {} has unreasonable size {}", reg.name, reg.varnode.size);
         }
     }

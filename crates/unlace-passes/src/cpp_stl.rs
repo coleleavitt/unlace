@@ -25,9 +25,8 @@
 //! * `std::unordered_set<T>`
 //! * `std::shared_ptr<T>`
 //! * `std::unique_ptr<T>`        — drops trailing `std::default_delete<…>`
+//! * `std::function<R(Args...)>` — preserves callable signature
 //! * `std::list<T>` / `std::deque<T>`
-//! * `std::optional<T>`          — discriminated value wrapper
-//! * `std::variant<Ts...>`       — tag-byte discriminated union
 //!
 //! Inline namespaces (`std::__1`, `std::__cxx11`) are folded back to plain
 //! `std::` so the rendered name is portable across libcxx and libstdc++.
@@ -121,21 +120,9 @@ pub fn recognize_stl_type(namespaces: &[String], class_name: &str) -> Option<Str
             let elem = first_template_arg(&template_args)?;
             Some(format!("std::unique_ptr<{}>", clean_inline_ns(elem.trim())))
         }
-        "optional" => {
-            let elem = first_template_arg(&template_args)?;
-            Some(format!("std::optional<{}>", clean_inline_ns(elem.trim())))
-        }
-        "variant" => {
-            let args = top_level_args(&template_args);
-            if args.is_empty() {
-                return None;
-            }
-            let args = args
-                .into_iter()
-                .map(|arg| clean_inline_ns(arg.trim()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            Some(format!("std::variant<{args}>"))
+        "function" => {
+            let sig = first_template_arg(&template_args)?;
+            Some(format!("std::function<{}>", clean_inline_ns(sig.trim())))
         }
         _ => None,
     }
@@ -309,6 +296,28 @@ mod tests {
     }
 
     #[test]
+    fn recognises_function_signature() {
+        let n = ns(&["std", "function<void (int)>"]);
+        assert_eq!(
+            recognize_stl_type(&n, "function").as_deref(),
+            Some("std::function<void (int)>"),
+        );
+    }
+
+    #[test]
+    fn recognises_function_signature_with_inline_namespace_types() {
+        let n = ns(&[
+            "std",
+            "__1",
+            "function<bool (std::__1::basic_string<char>)>",
+        ]);
+        assert_eq!(
+            recognize_stl_type(&n, "function").as_deref(),
+            Some("std::function<bool (std::basic_string<char>)>"),
+        );
+    }
+
+    #[test]
     fn recognises_set_and_unordered() {
         let n = ns(&["std", "set<int, std::less<int>, std::allocator<int> >"]);
         assert_eq!(
@@ -337,27 +346,6 @@ mod tests {
         assert_eq!(
             recognize_stl_type(&n, "deque").as_deref(),
             Some("std::deque<int>"),
-        );
-    }
-
-    #[test]
-    fn recognises_optional_and_variant() {
-        let n = ns(&["std", "optional<int>"]);
-        assert_eq!(
-            recognize_stl_type(&n, "optional").as_deref(),
-            Some("std::optional<int>"),
-        );
-
-        let n = ns(&[
-            "std",
-            "__1",
-            "variant<int, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > >",
-        ]);
-        assert_eq!(
-            recognize_stl_type(&n, "variant").as_deref(),
-            Some(
-                "std::variant<int, std::basic_string<char, std::char_traits<char>, std::allocator<char> >>"
-            ),
         );
     }
 

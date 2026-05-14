@@ -216,10 +216,7 @@ mod tests {
     /// Resolve the lowest-version SSA mapping for a base varnode in the
     /// constructed `SsaFunction`. The SSA builder assigns versions during
     /// renaming; we don't want test code to hard-code them.
-    fn find_first_def(
-        ssa: &unlace_ir::ssa::SsaFunction,
-        base: Varnode,
-    ) -> SsaVarnode {
+    fn find_first_def(ssa: &unlace_ir::ssa::SsaFunction, base: Varnode) -> SsaVarnode {
         // Prefer the earliest *output* binding (the def); fall back to
         // earliest input mapping (live-on-entry).
         let mut best: Option<SsaVarnode> = None;

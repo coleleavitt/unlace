@@ -1,8 +1,8 @@
 /* Function:   _start | Address: 0x10100 | Size: 0x10 (16 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
-    int v2;
+    int v3;
     arithmetic_test(); logic_test(); memory_test();
-    while (v2) {
+    while (v3) {
     }
     return;
 }

@@ -89,6 +89,13 @@ use unlace_passes::{
     ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
     StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
     CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
+    BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
+    CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
+    DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
+    GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
+    ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
+    StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
+    CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
     SignatureSnapshot, StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass,
     StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
@@ -121,6 +128,8 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::Agx
         ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
         ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::M68k
+        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
+        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::Sbpf
     );
     let text_range = image.section_by_name(".text").map(|text| {
         let start = text.vaddr;
@@ -977,6 +986,9 @@ pub fn run_passes_with_report_and_image(
     CppLambdaCapturePass
         .run(ssa)
         .context("cpp lambda capture pass failed")?;
+    VarNamingPass
+        .run(ssa)
+        .context("var naming pass failed")?;
     VarNamingPass
         .run(ssa)
         .context("var naming pass failed")?;
@@ -1962,6 +1974,7 @@ mod tests {
         pdb_types: None,
         pdb_types: None,
             pdb_info: None,
+        pdb_types: None,
         pdb_types: None,
         pdb_types: None,
             pdb_types: None,

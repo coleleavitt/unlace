@@ -9,9 +9,11 @@ pub use unlace_lift_avr::AvrLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
+pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_avr::AvrLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_m68k::M68kLifter;
+pub use unlace_lift_ebpf::{EbpfLifter, SbpfLifter};
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_msp430::Msp430Lifter;
 pub use unlace_lift_ppc::PpcLifter;
@@ -63,6 +65,7 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::V850 => Box::new(V850Lifter::new()),
         ArchId::Arc => Box::new(ArcLifter::new()),
         ArchId::Ebpf => Box::new(EbpfLifter::new()),
+        ArchId::Sbpf => Box::new(SbpfLifter::new()),
         ArchId::Avr => Box::new(AvrLifter::new()),
         ArchId::Agx => Box::new(AgxLifter::new()),
         ArchId::Msp430 => Box::new(Msp430Lifter::new()),
@@ -140,6 +143,9 @@ mod tests {
     fn test_get_lifter_msp430() {
         let l = get_lifter(ArchId::Msp430);
         assert_eq!(l.arch(), ArchId::Msp430);
+    fn test_get_lifter_sbpf() {
+        let l = get_lifter(ArchId::Sbpf);
+        assert_eq!(l.arch(), ArchId::Sbpf);
         assert!(!l.register_file().registers.is_empty());
     }
 

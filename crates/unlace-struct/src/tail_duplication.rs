@@ -484,5 +484,9 @@ mod tests {
 
         let dups = tail_duplicate_aggressive(&mut func);
         assert_eq!(dups, 5, "should hit the per-function cap at 5; got {dups}");
+        assert_eq!(
+            dups, 5,
+            "should hit the per-function cap at 5; got {dups}"
+        );
     }
 }

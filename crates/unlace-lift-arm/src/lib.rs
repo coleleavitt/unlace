@@ -93,6 +93,16 @@ use crate::lift::{
         CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
         CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
         CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
+        CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
+        CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
+        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
+        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
+        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
+        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
+        CALLOTHER_ARM_MVE_VADD, CALLOTHER_ARM_MVE_VLDR, CALLOTHER_ARM_MVE_VSTR, CALLOTHER_ARM_QADD,
+        CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV, CALLOTHER_ARM_REV16,
+        CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16, CALLOTHER_ARM_UQADD8,
+        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
         CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
         decode_thumb1_ldm_stm, decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list,
         try_aarch64_ccmp, try_aarch64_csel,
@@ -3636,6 +3646,87 @@ use crate::lift::{
         assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SVC);
         assert_eq!(co.inputs[1].offset, 7);
         assert_eq!(co.guard, Some(0), "IT EQ should guard the trapped instruction");
+    // ── t323: ARM32 Helium / MVE scaffolding ───────────────────────────
+
+    #[test]
+    fn arm32_register_file_includes_mve_q_and_predicate_banks_t323() {
+        use crate::lift::{ARM_MVE_P_SIZE, ARM_MVE_Q_SIZE, arm_mve_p_offset, arm_mve_q_offset};
+
+        let rf = ArmLifter::new_arm32().register_file().clone();
+        let q0 = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "Q0")
+            .expect("Q0 present");
+        assert_eq!(q0.varnode.offset, arm_mve_q_offset(0));
+        assert_eq!(q0.varnode.size, ARM_MVE_Q_SIZE);
+        let q15 = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "Q15")
+            .expect("Q15 present");
+        assert_eq!(q15.varnode.offset, arm_mve_q_offset(15));
+        assert_eq!(q15.varnode.size, ARM_MVE_Q_SIZE);
+        let p0 = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "P0")
+            .expect("P0 present");
+        assert_eq!(p0.varnode.offset, arm_mve_p_offset(0));
+        assert_eq!(p0.varnode.size, ARM_MVE_P_SIZE);
+    }
+
+    #[test]
+    fn arm32_vadd_vector_lifts_to_mve_callother_t323() {
+        use crate::lift::ARM_MVE_Q_SIZE;
+
+        // vadd.i32 q0, q0, q1 (ARM/NEON encoding, also representative of
+        // MVE's Q-register vector arithmetic shape in the current Capstone
+        // decoder). The lifter preserves it as a Helium/MVE Callother.
+        let l = ArmLifter::new_arm32();
+        let r = l
+            .lift_insn(&0xf220_0842u32.to_le_bytes(), 0x1000)
+            .expect("VADD vector should decode");
+        assert!(
+            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "VADD vector must not fall through: {:?}",
+            r.ir_ops
+        );
+        let co = r.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
+        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_MVE_VADD);
+        let out = co.output.expect("VADD writes a Q register");
+        assert_eq!(out.size, ARM_MVE_Q_SIZE);
+        assert_eq!(co.inputs.len(), 5, "tag + lane + signedness + two sources");
+    }
+
+    #[test]
+    fn arm32_vldr_vstr_vector_lift_to_mve_callothers_t323() {
+        // vldr d0, [r0] / vstr d0, [r0]. D-register forms are still vector
+        // memory traffic in the ARM decoder; t323 routes them through stable
+        // MVE load/store tags rather than `Unimplemented`.
+        let l = ArmLifter::new_arm32();
+        let load = l.lift_insn(&0xed90_0b00u32.to_le_bytes(), 0x2000).unwrap();
+        assert!(
+            !load.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
+            "VLDR vector must not fall through: {:?}",
+            load.ir_ops
+        );
+        let load_co = load
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap_or_else(|| panic!("VLDR should emit Callother, got {:?}", load.ir_ops));
+        assert_eq!(load_co.inputs[0].offset, CALLOTHER_ARM_MVE_VLDR);
+        assert!(load_co.output.is_some());
+
+        let store = l.lift_insn(&0xed80_0b00u32.to_le_bytes(), 0x2004).unwrap();
+        let store_co = store
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(store_co.inputs[0].offset, CALLOTHER_ARM_MVE_VSTR);
+        assert!(store_co.output.is_none());
     }
 
     // ── t300: SVE scaffolding tests ───────────────────────────────────

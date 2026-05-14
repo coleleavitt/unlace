@@ -243,6 +243,7 @@ fn run_decompile(
             | ArchId::Msp430
             | ArchId::M68k
             | ArchId::TriCore
+            | ArchId::AmdGpu
             | ArchId::Ppc
             | ArchId::Ppc64
             | ArchId::Sbpf

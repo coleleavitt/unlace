@@ -76,10 +76,8 @@ pub fn run_batch(
             | ArchId::V850
             | ArchId::Arc
             | ArchId::Agx
-            | ArchId::Stm8
             | ArchId::Ppc
             | ArchId::Ppc64
-            | ArchId::Stm8
     ) {
         bail!(
             "architecture {} is not yet supported for decompilation",

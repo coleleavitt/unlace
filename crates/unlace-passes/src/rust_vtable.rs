@@ -184,73 +184,6 @@ fn find_def(insns: &[IrInsn], before: usize, target: &Varnode) -> Option<usize> 
     None
 }
 
-
-/// Recovered vtable layout for a Rust trait object.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RustVtableLayout {
-    /// Address of the vtable in .rodata.
-    pub vtable_addr: u64,
-    /// drop_in_place function pointer (slot 0).
-    pub drop_fn: u64,
-    /// Size of the concrete type (slot 1).
-    pub size: u64,
-    /// Alignment of the concrete type (slot 2).
-    pub align: u64,
-    /// Trait method function pointers (slots 3+).
-    pub methods: Vec<u64>,
-}
-
-/// Attempt to recover the Rust vtable layout from a known vtable address.
-///
-/// Rust trait-object vtables have a fixed layout:
-///   [0] drop_in_place
-///   [1] size
-///   [2] align
-///   [3..] trait methods
-pub fn recover_vtable_layout(vtable_addr: u64, data: &[u8], data_base: u64) -> Option<RustVtableLayout> {
-    let offset = vtable_addr.checked_sub(data_base)? as usize;
-    if offset + 3 * PTR_SIZE as usize > data.len() {
-        return None;
-    }
-
-    let read_u64 = |off: usize| -> u64 {
-        if off + 8 > data.len() { return 0; }
-        u64::from_le_bytes(data[off..off+8].try_into().unwrap_or([0u8; 8]))
-    };
-
-    let drop_fn = read_u64(offset);
-    let size = read_u64(offset + 8);
-    let align = read_u64(offset + 16);
-
-    // Sanity check: align should be a power of 2 and <= 4096
-    if align == 0 || (align & (align - 1)) != 0 || align > 4096 {
-        return None;
-    }
-
-    // Read method slots until we hit a zero or non-code-like address
-    let mut methods = Vec::new();
-    let mut slot_off = offset + 24;
-    while slot_off + 8 <= data.len() {
-        let addr = read_u64(slot_off);
-        if addr == 0 {
-            break;
-        }
-        methods.push(addr);
-        slot_off += 8;
-        if methods.len() > 256 {
-            break; // safety limit
-        }
-    }
-
-    Some(RustVtableLayout {
-        vtable_addr,
-        drop_fn,
-        size,
-        align,
-        methods,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
@@ -565,33 +498,5 @@ mod tests {
         let info = ssa.vtable_calls.get(&(BlockId(0), 4)).expect("found");
         assert_eq!(info.slot_index, 3);
         assert_eq!(info.vtable_offset, 24);
-    }
-
-    #[test]
-    fn recover_rust_vtable_layout_basic() {
-        // Construct a fake vtable: drop=0x1000, size=16, align=8, methods=[0x2000, 0x3000]
-        let mut data = vec![0u8; 64];
-        data[0..8].copy_from_slice(&0x1000u64.to_le_bytes());  // drop
-        data[8..16].copy_from_slice(&16u64.to_le_bytes());     // size
-        data[16..24].copy_from_slice(&8u64.to_le_bytes());     // align
-        data[24..32].copy_from_slice(&0x2000u64.to_le_bytes()); // method 0
-        data[32..40].copy_from_slice(&0x3000u64.to_le_bytes()); // method 1
-        // zero-terminated
-        data[40..48].copy_from_slice(&0u64.to_le_bytes());
-
-        let layout = recover_vtable_layout(0x4000, &data, 0x4000).unwrap();
-        assert_eq!(layout.drop_fn, 0x1000);
-        assert_eq!(layout.size, 16);
-        assert_eq!(layout.align, 8);
-        assert_eq!(layout.methods, vec![0x2000, 0x3000]);
-    }
-
-    #[test]
-    fn recover_vtable_rejects_bad_alignment() {
-        let mut data = vec![0u8; 32];
-        data[0..8].copy_from_slice(&0x1000u64.to_le_bytes());
-        data[8..16].copy_from_slice(&16u64.to_le_bytes());
-        data[16..24].copy_from_slice(&3u64.to_le_bytes()); // bad align (not power of 2)
-        assert!(recover_vtable_layout(0x4000, &data, 0x4000).is_none());
     }
 }

@@ -4,7 +4,6 @@ use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterFile};
 
 pub use unlace_lift_agx::AgxLifter;
 pub use unlace_lift_amdgpu::AmdGpuLifter;
-pub use unlace_lift_6502::M6502Lifter;
 pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
 pub use unlace_lift_avr::AvrLifter;
@@ -21,7 +20,6 @@ pub use unlace_lift_sharc::SharcBlackfinLifter;
 pub use unlace_lift_superh::SuperHLifter;
 pub use unlace_lift_ti::TiLifter;
 pub use unlace_lift_tricore::TriCoreLifter;
-pub use unlace_lift_stm8::Stm8Lifter;
 pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_x86::X86Lifter;
 pub use unlace_lift_xtensa::XtensaLifter;
@@ -88,9 +86,6 @@ impl Lifter for StubLifter {
                 addr,
             )],
         })
-        ArchId::M6502 => Box::new(M6502Lifter::new()),
-        ArchId::Stm8 => Box::new(Stm8Lifter::new()),
-        other => Box::new(UnimplementedLifter::new(other)),
     }
 }
 
@@ -98,64 +93,6 @@ impl Lifter for StubLifter {
 mod tests {
     use super::*;
     use unlace_ir::IrOp;
-
-    #[test]
-    fn test_get_lifter_arm() {
-        let l = get_lifter(ArchId::AArch64);
-        assert_eq!(l.arch(), ArchId::AArch64);
-        assert!(!l.register_file().registers.is_empty());
-    }
-
-    #[test]
-    fn test_get_lifter_riscv() {
-        let l = get_lifter(ArchId::RiscV64);
-        assert_eq!(l.arch(), ArchId::RiscV64);
-        assert!(!l.register_file().registers.is_empty());
-    }
-
-    #[test]
-    fn test_get_lifter_mips() {
-        let l = get_lifter(ArchId::Mips64);
-        assert_eq!(l.arch(), ArchId::Mips64);
-        assert!(!l.register_file().registers.is_empty());
-    }
-
-    #[test]
-    fn test_get_lifter_ppc() {
-        let l = get_lifter(ArchId::Ppc);
-        assert_eq!(l.arch(), ArchId::Ppc);
-        assert!(!l.register_file().registers.is_empty());
-    }
-
-    #[test]
-    fn test_get_lifter_v850() {
-        let l = get_lifter(ArchId::V850);
-        assert_eq!(l.arch(), ArchId::V850);
-        assert!(!l.register_file().registers.is_empty());
-    }
-
-    #[test]
-    fn test_get_lifter_arc() {
-        let l = get_lifter(ArchId::Arc);
-        assert_eq!(l.arch(), ArchId::Arc);
-        assert!(!l.register_file().registers.is_empty());
-    }
-
-    #[test]
-    fn test_get_lifter_stm8() {
-        let l = get_lifter(ArchId::Stm8);
-        assert_eq!(l.arch(), ArchId::Stm8);
-        assert!(!l.register_file().registers.is_empty());
-    }
-
-    #[test]
-    fn test_get_lifter_unknown_returns_fallback() {
-        let l = get_lifter(ArchId::Unknown(0xFFFF));
-        assert_eq!(l.arch(), ArchId::Unknown(0xFFFF));
-        assert!(l.register_file().registers.is_empty());
-        let result = l.lift_insn(&[0x00], 0);
-        assert!(result.is_err());
-    }
 
     #[test]
     fn test_stub_lifters_produce_unimplemented() {

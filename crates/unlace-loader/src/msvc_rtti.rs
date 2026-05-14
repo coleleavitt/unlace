@@ -37,56 +37,6 @@ pub struct MsvcBaseClass {
     pub attributes: u32,
 }
 
-/// Complete vftable/vbtable hierarchy for multi-inheritance recovery.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct MsvcHierarchy {
-    /// All vftables recovered for the class, primary first.
-    pub vftables: Vec<MsvcVftable>,
-    /// Vbtables referenced by virtual base descriptors.
-    pub vbtables: Vec<MsvcVbtable>,
-}
-
-/// A single vftable for a class or base-class subobject.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MsvcVftable {
-    /// Address of the COL pointer slot.
-    pub col_slot_addr: u64,
-    /// Address point stored in the object vptr.
-    pub address_point: u64,
-    /// Subobject offset in the complete object. Zero = primary.
-    pub offset_in_object: u32,
-    /// Constructor displacement offset.
-    pub constructor_displacement: u32,
-    /// Function pointers in this vftable.
-    pub methods: Vec<MsvcVftableMethod>,
-}
-
-/// A single method slot in a vftable.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MsvcVftableMethod {
-    pub slot: usize,
-    pub va: u64,
-    pub name: Option<String>,
-    pub is_thunk: bool,
-}
-
-/// A virtual base table used by MSVC virtual inheritance.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MsvcVbtable {
-    /// Base class whose descriptor references this vbtable.
-    pub base_mangled_name: String,
-    /// Absolute virtual address of the vbtable.
-    pub address: u64,
-    /// PMD::pdisp from the base descriptor.
-    pub pdisp: i32,
-    /// PMD::vdisp from the base descriptor.
-    pub vdisp: i32,
-    /// Signed 32-bit vbtable entries.
-    pub entries: Vec<i32>,
-}
-
-
-
 #[derive(Debug, Clone)]
 pub struct CompleteObjectLocator {
     pub signature: u32,
@@ -603,47 +553,5 @@ mod tests {
         let class = rtti.classes.get(".?AVLone@@").expect("class still found");
         assert!(class.bases.is_empty());
         assert_eq!(class.inheritance, 0);
-    }
-}
-
-#[cfg(test)]
-mod hierarchy_tests {
-    use super::*;
-
-    #[test]
-    fn hierarchy_default_is_empty() {
-        let h = MsvcHierarchy::default();
-        assert!(h.vftables.is_empty());
-        assert!(h.vbtables.is_empty());
-    }
-
-    #[test]
-    fn vftable_method_slot_ordering() {
-        let vft = MsvcVftable {
-            col_slot_addr: 0x1000,
-            address_point: 0x1008,
-            offset_in_object: 0,
-            constructor_displacement: 0,
-            methods: vec![
-                MsvcVftableMethod { slot: 0, va: 0x2000, name: Some("dtor".into()), is_thunk: false },
-                MsvcVftableMethod { slot: 1, va: 0x2010, name: None, is_thunk: true },
-            ],
-        };
-        assert_eq!(vft.methods.len(), 2);
-        assert_eq!(vft.methods[0].slot, 0);
-        assert!(vft.methods[1].is_thunk);
-    }
-
-    #[test]
-    fn vbtable_entries_encode_virtual_base_offsets() {
-        let vbt = MsvcVbtable {
-            base_mangled_name: ".?AVBase@@".into(),
-            address: 0x3000,
-            pdisp: 0,
-            vdisp: 4,
-            entries: vec![-4, 8, 16],
-        };
-        assert_eq!(vbt.entries[0], -4);
-        assert_eq!(vbt.entries.len(), 3);
     }
 }

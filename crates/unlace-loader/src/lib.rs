@@ -37,18 +37,6 @@ pub mod swift_metadata;
 pub mod til;
 pub mod uefi_module;
 pub mod wasm_component;
-pub mod sbpf_evm;
-pub mod wasm_wit;
-pub mod evm_solidity;
-pub mod android_dex;
-pub mod dotnet_clr;
-pub mod stm32_blob;
-pub mod lua_bytecode;
-pub mod windbg_ttd;
-pub mod frida_bridge;
-pub mod gdb_mi;
-pub mod apple_kernelcache;
-pub mod lldb_bridge;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,
@@ -82,8 +70,7 @@ pub use macho::MachoLoader;
 pub use pdb::{PdbInfo, import_pdb, merge_pdb_symbols};
 pub use pdb_types::{
     CanonicalPdbType, PdbError, PdbField, PdbType, PdbTypeAlias, PdbTypeKind, PdbTypeUnification,
-    PdbTypes, ProcSig, import_pdb_types, ipi_type_hash, resolve_cross_dll_forward_decls,
-    unify_pdb_type_sets, walk_tpi,
+    PdbTypes, ProcSig, import_pdb_types, ipi_type_hash, unify_pdb_type_sets, walk_tpi,
 };
 pub use pe::PeLoader;
 pub use wasm_component::{

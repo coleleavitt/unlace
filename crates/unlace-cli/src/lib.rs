@@ -9,7 +9,6 @@
 pub mod annotations;
 pub mod args;
 pub mod batch;
-pub mod parallel;
 pub mod pipeline;
 
 use anyhow::{Result, bail};
@@ -34,24 +33,8 @@ pub fn parse_arch(s: &str) -> Result<ArchId> {
         "ppc" | "powerpc" => Ok(ArchId::Ppc),
         "ppc64" | "powerpc64" => Ok(ArchId::Ppc64),
         "v850" => Ok(ArchId::V850),
-        "stm8" | "stm8s" | "stm8l" => Ok(ArchId::Stm8),
         "arc" => Ok(ArchId::Arc),
         "agx" | "apple-agx" | "apple_agx" | "mseries-gpu" | "m-series-gpu" => Ok(ArchId::Agx),
-        "avr" => Ok(ArchId::Avr),
-        "z80" => Ok(ArchId::Z80),
-        "stm8" => Ok(ArchId::Stm8),
         _ => bail!("unknown architecture: '{s}'"),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_arch_stm8_aliases() {
-        assert!(matches!(parse_arch("stm8").unwrap(), ArchId::Stm8));
-        assert!(matches!(parse_arch("stm8s").unwrap(), ArchId::Stm8));
-        assert!(matches!(parse_arch("stm8l").unwrap(), ArchId::Stm8));
     }
 }

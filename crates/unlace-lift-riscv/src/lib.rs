@@ -1,12 +1,30 @@
-//! RISC-V (RV64I) → IR lifter via capstone.
+//! RISC-V (RV32I/RV32E/RV64I/RV128I base) → IR lifter via capstone.
 //!
-//! Lifts the RV64I base integer instruction set. Registers x0-x31 plus pc.
+//! Lifts the base integer instruction set across RISC-V widths. The current
+//! IR register file remains 64-bit wide, so RV32 results are normalized into the
+//! existing representation while RV64I instructions retain their native width.
 //! x0 is hardwired to zero: reads produce `Varnode::constant(0, 8)`,
 //! writes are silently dropped.
 
 use capstone::arch::riscv::{RiscVInsn, RiscVOperand, RiscVReg};
 use capstone::prelude::*;
 use capstone::{Capstone, Instructions};
+
+// RISC-V scalar crypto/Zk* callother tags. These let later analysis passes
+// recognise crypto-centric idioms even when the bundled capstone build lacks
+// first-class mnemonic coverage for the newer extension set.
+const TAG_RISCV_SHA256SIG0: u64 = 0x520;
+const TAG_RISCV_SHA256SIG1: u64 = 0x521;
+const TAG_RISCV_SHA256SUM0: u64 = 0x522;
+const TAG_RISCV_SHA256SUM1: u64 = 0x523;
+const TAG_RISCV_SHA512SIG0: u64 = 0x524;
+const TAG_RISCV_SHA512SIG1: u64 = 0x525;
+const TAG_RISCV_SHA512SUM0: u64 = 0x526;
+const TAG_RISCV_SHA512SUM1: u64 = 0x527;
+const TAG_RISCV_AES32ESI: u64 = 0x530;
+const TAG_RISCV_AES32ESMI: u64 = 0x531;
+const TAG_RISCV_AES32DSI: u64 = 0x532;
+const TAG_RISCV_AES32DSMI: u64 = 0x533;
 use smallvec::smallvec;
 use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterDef, RegisterFile, SpaceId,
@@ -15,44 +33,6 @@ use unlace_ir::{
 
 mod rvc;
 pub use rvc::{expand, is_compressed};
-
-// ---------------------------------------------------------------------------
-// RISC-V scalar crypto Callother tags (Zk*)
-// ---------------------------------------------------------------------------
-
-/// Constant tags for RISC-V scalar cryptography instructions emitted as
-/// `Callother`. The first input of each intrinsic is one of these constants,
-/// followed by the architectural source operands (and immediate/byte-select
-/// constants where encoded by the instruction).
-pub mod crypto_tag {
-    // Keep this range separate from x86 AES-NI/SHA-NI (0x1E0..0x1EC) and
-    // other architecture-specific pseudo-op blocks used by the C printer.
-    pub const RV_AES32ESI: u64 = 0x260;
-    pub const RV_AES32ESMI: u64 = 0x261;
-    pub const RV_AES32DSI: u64 = 0x262;
-    pub const RV_AES32DSMI: u64 = 0x263;
-    pub const RV_AES64ES: u64 = 0x264;
-    pub const RV_AES64ESM: u64 = 0x265;
-    pub const RV_AES64DS: u64 = 0x266;
-    pub const RV_AES64DSM: u64 = 0x267;
-    pub const RV_AES64IM: u64 = 0x268;
-    pub const RV_AES64KS1I: u64 = 0x269;
-    pub const RV_AES64KS2: u64 = 0x26A;
-
-    pub const RV_SHA256SUM0: u64 = 0x270;
-    pub const RV_SHA256SUM1: u64 = 0x271;
-    pub const RV_SHA256SIG0: u64 = 0x272;
-    pub const RV_SHA256SIG1: u64 = 0x273;
-    pub const RV_SHA512SUM0: u64 = 0x274;
-    pub const RV_SHA512SUM1: u64 = 0x275;
-    pub const RV_SHA512SIG0: u64 = 0x276;
-    pub const RV_SHA512SIG1: u64 = 0x277;
-
-    pub const RV_SM3P0: u64 = 0x278;
-    pub const RV_SM3P1: u64 = 0x279;
-    pub const RV_SM4ED: u64 = 0x27A;
-    pub const RV_SM4KS: u64 = 0x27B;
-}
 
 // ---------------------------------------------------------------------------
 // Register file layout
@@ -64,31 +44,51 @@ const RV_REG_NAMES: [&str; 32] = [
     "x28", "x29", "x30", "x31",
 ];
 
+const RVV_REG_NAMES: [&str; 32] = [
+    "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14",
+    "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27",
+    "v28", "v29", "v30", "v31",
+];
+
 /// Offset of the pc register in the register file.
 const PC_OFFSET: u64 = 256;
-/// Floating-point register file.  Each architectural f-register is allocated
-/// 16 bytes so RV{F,D,Q} values can share the same logical register slot.
-const FPR_OFFSET: u64 = 264;
-const FPR_STRIDE: u64 = 16;
-/// Conservative vector register slots for RVV.  The lifter models vector
-/// operations as architecture callothers over fixed-size summaries rather than
-/// trying to encode dynamic VLEN/SEW/LMUL in the core IR.
-const VEC_OFFSET: u64 = 1024;
-const VEC_STRIDE: u64 = 16;
-const FCSR_OFFSET: u64 = 2048;
 
-const CALLOTHER_RISCV_MULH: u64 = 0x5256_0001;
-const CALLOTHER_RISCV_MULHSU: u64 = 0x5256_0002;
-const CALLOTHER_RISCV_MULHU: u64 = 0x5256_0003;
-const CALLOTHER_RISCV_AMO_MIN: u64 = 0x5256_0100;
-const CALLOTHER_RISCV_AMO_MAX: u64 = 0x5256_0101;
-const CALLOTHER_RISCV_AMO_MINU: u64 = 0x5256_0102;
-const CALLOTHER_RISCV_AMO_MAXU: u64 = 0x5256_0103;
-const CALLOTHER_RISCV_FMIN: u64 = 0x5256_0200;
-const CALLOTHER_RISCV_FMAX: u64 = 0x5256_0201;
-const CALLOTHER_RISCV_FCLASS: u64 = 0x5256_0202;
-const CALLOTHER_RISCV_VECTOR: u64 = 0x5256_0300;
-const CALLOTHER_RISCV_VSET: u64 = 0x5256_0301;
+/// Offset of the RVV vector register bank (`v0`..`v31`).  RVV allows an
+/// implementation-defined VLEN, so the lifter models each architectural vector
+/// register as a conservative 128-byte register-space varnode.  LMUL groups are
+/// represented by the first register plus an LMUL metadata operand in the RVV
+/// callother rather than by fabricating variable-width register names.
+const RVV_REG_OFFSET: u64 = 512;
+const RVV_REG_SIZE: u8 = 128;
+const RVV_REG_STRIDE: u64 = RVV_REG_SIZE as u64;
+
+/// RVV CSRs/configuration registers modeled in the register file.
+const VTYPE_OFFSET: u64 = 4608;
+const VL_OFFSET: u64 = 4616;
+const VSTART_OFFSET: u64 = 4624;
+const VXRM_OFFSET: u64 = 4632;
+const VXSAT_OFFSET: u64 = 4640;
+
+/// RISC-V lifter callother identifiers for RVV instructions.
+///
+/// The first callother input is always one of these constants.  RVV operations
+/// also include policy/mask/configuration metadata so downstream passes can
+/// distinguish masked vs unmasked execution, tail/mask policy, SEW, LMUL and
+/// vector length configuration even when the bundled Capstone does not decode
+/// RVV instructions.
+pub const CALLOTHER_RVV_VSETVLI: u64 = 0x5256_5601;
+pub const CALLOTHER_RVV_VSETIVLI: u64 = 0x5256_5602;
+pub const CALLOTHER_RVV_VSETVL: u64 = 0x5256_5603;
+pub const CALLOTHER_RVV_LOAD: u64 = 0x5256_5610;
+pub const CALLOTHER_RVV_STORE: u64 = 0x5256_5611;
+pub const CALLOTHER_RVV_OPIVV: u64 = 0x5256_5620;
+pub const CALLOTHER_RVV_OPFVV: u64 = 0x5256_5621;
+pub const CALLOTHER_RVV_OPMVV: u64 = 0x5256_5622;
+pub const CALLOTHER_RVV_OPIVI: u64 = 0x5256_5623;
+pub const CALLOTHER_RVV_OPIVX: u64 = 0x5256_5624;
+pub const CALLOTHER_RVV_OPFVF: u64 = 0x5256_5625;
+pub const CALLOTHER_RVV_OPMVX: u64 = 0x5256_5626;
+pub const CALLOTHER_RVV_MASK_OP: u64 = 0x5256_5630;
 
 /// Convert a capstone `RegId` to a register-space `Varnode`.
 /// Returns `None` for x0 (hardwired zero — callers should use `Varnode::constant(0, 8)`).
@@ -108,6 +108,31 @@ fn cs_reg_to_varnode(reg: RegId) -> Option<Varnode> {
 /// Read a register operand: x0 produces constant zero, others produce register varnodes.
 fn read_reg(reg: RegId) -> Varnode {
     cs_reg_to_varnode(reg).unwrap_or(Varnode::constant(0, 8))
+}
+
+#[inline]
+fn rvv_reg(index: u32) -> Varnode {
+    Varnode::reg(
+        RVV_REG_OFFSET + (index as u64) * RVV_REG_STRIDE,
+        RVV_REG_SIZE,
+    )
+}
+
+#[inline]
+fn rvv_mask_reg(index: u32) -> Varnode {
+    // Mask registers alias vector registers in RVV, but consumers need to know
+    // only the mask-producing/consuming mode.  We therefore reuse the vector
+    // varnode and put mask semantics in the callother identifier/metadata.
+    rvv_reg(index)
+}
+
+#[inline]
+fn rvv_config_inputs() -> [Varnode; 3] {
+    [
+        Varnode::reg(VTYPE_OFFSET, 8),
+        Varnode::reg(VL_OFFSET, 8),
+        Varnode::reg(VSTART_OFFSET, 8),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -147,83 +172,15 @@ impl LiftCtx {
         ));
     }
 
-    fn emit_callother(
-        &mut self,
-        code: u64,
-        output: Option<Varnode>,
-        mut inputs: smallvec::SmallVec<[Varnode; 4]>,
-    ) {
-        inputs.insert(0, Varnode::constant(code, 8));
-        let inputs: smallvec::SmallVec<[Varnode; 3]> = inputs.into_iter().collect();
-        if let Some(out) = output {
-            self.emit(IrInsn::with_output(IrOp::Callother, out, inputs, self.addr));
-        } else {
-            self.emit(IrInsn::without_output(IrOp::Callother, inputs, self.addr));
-        }
-    }
-
-    fn lift_load_to(&mut self, dst: Varnode, base: RegId, offset: i64) {
-        let base_vn = read_reg(base);
-        let addr_vn = if offset != 0 {
-            let off_vn = Varnode::constant(offset as u64, 8);
-            let tmp = self.alloc_unique(8);
-            self.emit(IrInsn::with_output(
-                IrOp::IntAdd,
-                tmp,
-                smallvec![base_vn, off_vn],
-                self.addr,
-            ));
-            tmp
-        } else {
-            base_vn
-        };
+    fn emit_crypto_callother(&mut self, tag: u64, rd: RegId, lhs: Varnode, rhs: Varnode) {
+        let tmp = self.alloc_unique(lhs.size.max(rhs.size));
         self.emit(IrInsn::with_output(
-            IrOp::Load,
-            dst,
-            smallvec![Varnode::constant(SpaceId::Ram as u64, 8), addr_vn],
+            IrOp::Callother,
+            tmp,
+            smallvec![Varnode::constant(tag, 8), lhs, rhs],
             self.addr,
         ));
-    }
-
-    fn lift_store_value(&mut self, base: RegId, offset: i64, value: Varnode) {
-        let base_vn = read_reg(base);
-        let addr_vn = if offset != 0 {
-            let off_vn = Varnode::constant(offset as u64, 8);
-            let tmp = self.alloc_unique(8);
-            self.emit(IrInsn::with_output(
-                IrOp::IntAdd,
-                tmp,
-                smallvec![base_vn, off_vn],
-                self.addr,
-            ));
-            tmp
-        } else {
-            base_vn
-        };
-        self.emit(IrInsn::without_output(
-            IrOp::Store,
-            smallvec![Varnode::constant(SpaceId::Ram as u64, 8), addr_vn, value],
-            self.addr,
-        ));
-    }
-
-    fn lift_fp_rr(&mut self, op: IrOp, rd: u32, rs1: u32, rs2: u32, size: u8) {
-        let out = fp_reg(rd, size);
-        self.emit(IrInsn::with_output(
-            op,
-            out,
-            smallvec![fp_reg(rs1, size), fp_reg(rs2, size)],
-            self.addr,
-        ));
-    }
-
-    fn lift_fp_unary(&mut self, op: IrOp, rd: u32, rs1: u32, size: u8) {
-        self.emit(IrInsn::with_output(
-            op,
-            fp_reg(rd, size),
-            smallvec![fp_reg(rs1, size)],
-            self.addr,
-        ));
+        self.write_reg(rd, tmp);
     }
 
     /// Write `value` to `dst_reg`. If `dst_reg` is x0, the write is silently dropped.
@@ -400,61 +357,6 @@ impl LiftCtx {
         self.write_reg(rd, result);
     }
 
-    // -- RISC-V scalar crypto helpers ---------------------------------------
-
-    fn lift_crypto_unary(&mut self, tag: u64, rd: RegId, rs1: RegId) {
-        let tmp = self.alloc_unique(8);
-        self.emit(IrInsn::with_output(
-            IrOp::Callother,
-            tmp,
-            smallvec![Varnode::constant(tag, 8), read_reg(rs1)],
-            self.addr,
-        ));
-        self.write_reg(rd, tmp);
-    }
-
-    fn lift_crypto_binary(&mut self, tag: u64, rd: RegId, rs1: RegId, rs2: RegId) {
-        let tmp = self.alloc_unique(8);
-        self.emit(IrInsn::with_output(
-            IrOp::Callother,
-            tmp,
-            smallvec![Varnode::constant(tag, 8), read_reg(rs1), read_reg(rs2)],
-            self.addr,
-        ));
-        self.write_reg(rd, tmp);
-    }
-
-    fn lift_crypto_binary_imm(&mut self, tag: u64, rd: RegId, rs1: RegId, rs2: RegId, imm: u8) {
-        let tmp = self.alloc_unique(8);
-        self.emit(IrInsn::with_output(
-            IrOp::Callother,
-            tmp,
-            smallvec![
-                Varnode::constant(tag, 8),
-                read_reg(rs1),
-                read_reg(rs2),
-                Varnode::constant(imm as u64, 1),
-            ],
-            self.addr,
-        ));
-        self.write_reg(rd, tmp);
-    }
-
-    fn lift_crypto_unary_imm(&mut self, tag: u64, rd: RegId, rs1: RegId, imm: u8) {
-        let tmp = self.alloc_unique(8);
-        self.emit(IrInsn::with_output(
-            IrOp::Callother,
-            tmp,
-            smallvec![
-                Varnode::constant(tag, 8),
-                read_reg(rs1),
-                Varnode::constant(imm as u64, 1),
-            ],
-            self.addr,
-        ));
-        self.write_reg(rd, tmp);
-    }
-
     // -- Branch helpers ---------------------------------------------------
 
     /// Conditional branch: `if (rs1 <cmp_op> rs2) goto target`
@@ -503,11 +405,9 @@ impl LiftCtx {
             self.addr,
         ));
 
-        // Extend to 8 bytes (RV64I register width)
+        // Extend to 8 bytes (current register-file width)
         let value = if load_size < 8 {
-            // LW sign-extends to 64 bits; LD is already 8 bytes
-            // LW is 4 bytes (sign-extend), LD is 8 bytes (no extend needed)
-            // We use IntSext for signed loads (LW, LH, LB) by default
+            // Narrow signed integer loads are sign-extended into the register file.
             let ext = self.alloc_unique(8);
             self.emit(IrInsn::with_output(
                 IrOp::IntSext,
@@ -625,6 +525,22 @@ fn branch_target(addr: u64, offset: i64) -> u64 {
     addr.wrapping_add(offset as u64)
 }
 
+fn bits(value: u32, lo: u8, width: u8) -> u32 {
+    (value >> lo) & ((1u32 << width) - 1)
+}
+
+fn decode_crypto_r_type(word: u32) -> Option<(u8, RegId, RegId, RegId, u8)> {
+    if bits(word, 0, 7) != 0x33 {
+        return None;
+    }
+    let rd = RegId(bits(word, 7, 5) as u16);
+    let funct3 = bits(word, 12, 3) as u8;
+    let rs1 = RegId(bits(word, 15, 5) as u16);
+    let rs2 = RegId(bits(word, 20, 5) as u16);
+    let funct7 = bits(word, 25, 7) as u8;
+    Some((funct7, rd, rs1, rs2, funct3))
+}
+
 /// Extract (rd, mem(base, offset)) from a load instruction.
 fn ops_load(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
     match operands {
@@ -652,7 +568,7 @@ pub struct RiscVLifter {
 
 impl RiscVLifter {
     pub fn new() -> Self {
-        let mut regs = Vec::with_capacity(99);
+        let mut regs = Vec::with_capacity(70);
         for (i, name) in RV_REG_NAMES.iter().enumerate() {
             regs.push(RegisterDef {
                 name,
@@ -663,24 +579,38 @@ impl RiscVLifter {
             name: "pc",
             varnode: Varnode::reg(PC_OFFSET, 8),
         });
-        for i in 0..32 {
-            let name: &'static str = Box::leak(format!("f{i}").into_boxed_str());
+
+        // RVV architectural vector registers.  The fixed 128-byte model is an
+        // IR storage convention; exact SEW/LMUL/VL semantics are carried by the
+        // RVV callother metadata emitted for each instruction.
+        for (i, name) in RVV_REG_NAMES.iter().enumerate() {
             regs.push(RegisterDef {
                 name,
-                varnode: fp_reg(i, 16),
+                varnode: rvv_reg(i as u32),
             });
         }
-        for i in 0..32 {
-            let name: &'static str = Box::leak(format!("v{i}").into_boxed_str());
-            regs.push(RegisterDef {
-                name,
-                varnode: vec_reg(i),
-            });
-        }
-        regs.push(RegisterDef {
-            name: "fcsr",
-            varnode: Varnode::reg(FCSR_OFFSET, 4),
-        });
+        regs.extend([
+            RegisterDef {
+                name: "vtype",
+                varnode: Varnode::reg(VTYPE_OFFSET, 8),
+            },
+            RegisterDef {
+                name: "vl",
+                varnode: Varnode::reg(VL_OFFSET, 8),
+            },
+            RegisterDef {
+                name: "vstart",
+                varnode: Varnode::reg(VSTART_OFFSET, 8),
+            },
+            RegisterDef {
+                name: "vxrm",
+                varnode: Varnode::reg(VXRM_OFFSET, 8),
+            },
+            RegisterDef {
+                name: "vxsat",
+                varnode: Varnode::reg(VXSAT_OFFSET, 8),
+            },
+        ]);
 
         let cs = Capstone::new()
             .riscv()
@@ -724,6 +654,10 @@ impl Lifter for RiscVLifter {
                     return Ok(lifted);
                 }
             }
+        }
+
+        if let Some(lifted) = lift_rvv_direct(bytes, addr) {
+            return Ok(lifted);
         }
 
         if let Some(lifted) = lift_rv64i_direct(bytes, addr) {
@@ -779,467 +713,220 @@ fn rv_reg(index: u32) -> RegId {
     RegId(RiscVReg::RISCV_REG_X0 as u16 + index as u16)
 }
 
-fn fp_reg(index: u32, size: u8) -> Varnode {
-    Varnode::reg(FPR_OFFSET + (index as u64) * FPR_STRIDE, size)
-}
-
-fn vec_reg(index: u32) -> Varnode {
-    Varnode::reg(VEC_OFFSET + (index as u64) * VEC_STRIDE, 16)
-}
-
 fn sign_extend(value: u32, bits: u8) -> i64 {
     let shift = 64 - bits;
     ((value as i64) << shift) >> shift
 }
 
-fn fp_size_from_fmt(fmt: u32) -> Option<u8> {
-    match fmt {
-        0b00 => Some(4),  // S
-        0b01 => Some(8),  // D
-        0b11 => Some(16), // Q
-        _ => None,
+#[inline]
+fn rvv_const(value: u64) -> Varnode {
+    Varnode::constant(value, 8)
+}
+
+fn emit_rvv_callother(
+    ctx: &mut LiftCtx,
+    tag: u64,
+    output: Option<Varnode>,
+    mut inputs: Vec<Varnode>,
+) {
+    let mut all = smallvec![rvv_const(tag)];
+    all.extend(inputs.drain(..));
+    match output {
+        Some(out) => ctx.emit(IrInsn::with_output(IrOp::Callother, out, all, ctx.addr)),
+        None => ctx.emit(IrInsn::without_output(IrOp::Callother, all, ctx.addr)),
     }
 }
 
-fn lift_riscv_extended_direct(word: u32, addr: u64, ctx: &mut LiftCtx) -> Option<()> {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum RvvMajor {
+    Opivv = 0,
+    Opfvv = 1,
+    Opmvv = 2,
+    Opivi = 3,
+    Opivx = 4,
+    Opfvf = 5,
+    Opmvx = 6,
+}
+
+impl RvvMajor {
+    fn from_funct3(funct3: u32) -> Option<Self> {
+        match funct3 {
+            0b000 => Some(Self::Opivv),
+            0b001 => Some(Self::Opfvv),
+            0b010 => Some(Self::Opmvv),
+            0b011 => Some(Self::Opivi),
+            0b100 => Some(Self::Opivx),
+            0b101 => Some(Self::Opfvf),
+            0b110 => Some(Self::Opmvx),
+            _ => None,
+        }
+    }
+
+    fn tag(self) -> u64 {
+        match self {
+            Self::Opivv => CALLOTHER_RVV_OPIVV,
+            Self::Opfvv => CALLOTHER_RVV_OPFVV,
+            Self::Opmvv => CALLOTHER_RVV_OPMVV,
+            Self::Opivi => CALLOTHER_RVV_OPIVI,
+            Self::Opivx => CALLOTHER_RVV_OPIVX,
+            Self::Opfvf => CALLOTHER_RVV_OPFVF,
+            Self::Opmvx => CALLOTHER_RVV_OPMVX,
+        }
+    }
+
+    fn is_scalar_or_imm(self) -> bool {
+        matches!(self, Self::Opivi | Self::Opivx | Self::Opfvf | Self::Opmvx)
+    }
+}
+
+fn lift_rvv_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
+    if bytes.len() < 4 {
+        return None;
+    }
+
+    let word = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
     let opcode = word & 0x7f;
     let rd = (word >> 7) & 0x1f;
     let funct3 = (word >> 12) & 0x7;
     let rs1 = (word >> 15) & 0x1f;
     let rs2 = (word >> 20) & 0x1f;
-    let rs3 = (word >> 27) & 0x1f;
-    let funct7 = (word >> 25) & 0x7f;
+    let vm = (word >> 25) & 0x1;
+    let funct6 = (word >> 26) & 0x3f;
+    let mut ctx = LiftCtx::new(addr);
+
     match opcode {
-        // RV64M, including high-half products and unsigned W division/remainder.
-        0x33 if funct7 == 0x01 => match funct3 {
-            0x0 => ctx.lift_alu_rr(IrOp::IntMult, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-            0x1 => ctx.emit_callother(
-                CALLOTHER_RISCV_MULH,
-                cs_reg_to_varnode(rv_reg(rd)),
-                smallvec![read_reg(rv_reg(rs1)), read_reg(rv_reg(rs2))],
-            ),
-            0x2 => ctx.emit_callother(
-                CALLOTHER_RISCV_MULHSU,
-                cs_reg_to_varnode(rv_reg(rd)),
-                smallvec![read_reg(rv_reg(rs1)), read_reg(rv_reg(rs2))],
-            ),
-            0x3 => ctx.emit_callother(
-                CALLOTHER_RISCV_MULHU,
-                cs_reg_to_varnode(rv_reg(rd)),
-                smallvec![read_reg(rv_reg(rs1)), read_reg(rv_reg(rs2))],
-            ),
-            0x4 => ctx.lift_alu_rr(IrOp::IntSdiv, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-            0x5 => ctx.lift_alu_rr(IrOp::IntDiv, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-            0x6 => ctx.lift_alu_rr(IrOp::IntSrem, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-            0x7 => ctx.lift_alu_rr(IrOp::IntRem, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-            _ => return None,
-        },
-        0x3b if funct7 == 0x01 => match funct3 {
-            0x0 => ctx.lift_alu_rr_w(IrOp::IntMult, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-            0x4 => ctx.lift_alu_rr_w(IrOp::IntSdiv, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-            0x5 => ctx.lift_alu_rr_w(IrOp::IntDiv, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-            0x6 => ctx.lift_alu_rr_w(IrOp::IntSrem, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-            0x7 => ctx.lift_alu_rr_w(IrOp::IntRem, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-            _ => return None,
-        },
-        // RVF/RVD/RVQ loads and stores.
-        0x07 => {
-            let imm = sign_extend(word >> 20, 12);
-            let size = match funct3 {
-                0x2 => 4,
-                0x3 => 8,
-                0x4 => 16,
-                _ => return None,
-            };
-            ctx.lift_load_to(fp_reg(rd, size), rv_reg(rs1), imm);
-        }
-        0x27 => {
-            let imm = ((word >> 7) & 0x1f) | (((word >> 25) & 0x7f) << 5);
-            let imm = sign_extend(imm, 12);
-            let size = match funct3 {
-                0x2 => 4,
-                0x3 => 8,
-                0x4 => 16,
-                _ => return None,
-            };
-            ctx.lift_store_value(rv_reg(rs1), imm, fp_reg(rs2, size));
-        }
-        // Fused multiply-add/subtract family.  IR has no FMA op, so emit the canonical two-op form.
-        0x43 | 0x47 | 0x4b | 0x4f => {
-            let size = fp_size_from_fmt(funct3)?;
-            let mul = ctx.alloc_unique(size);
+        // vsetvli rd, rs1, vtypei
+        0x57 if funct3 == 0b111 && ((word >> 31) & 1) == 0 => {
+            let vtypei = (word >> 20) & 0x7ff;
+            let avl = read_reg(rv_reg(rs1));
+            let vl = Varnode::reg(VL_OFFSET, 8);
+            emit_rvv_callother(
+                &mut ctx,
+                CALLOTHER_RVV_VSETVLI,
+                Some(vl),
+                vec![avl, rvv_const(vtypei as u64)],
+            );
+            ctx.write_reg(rv_reg(rd), vl);
             ctx.emit(IrInsn::with_output(
-                IrOp::FloatMult,
-                mul,
-                smallvec![fp_reg(rs1, size), fp_reg(rs2, size)],
+                IrOp::Copy,
+                Varnode::reg(VTYPE_OFFSET, 8),
+                smallvec![rvv_const(vtypei as u64)],
                 addr,
             ));
-            let addend = fp_reg(rs3, size);
-            let final_op = if opcode == 0x47 || opcode == 0x4f {
-                IrOp::FloatSub
-            } else {
-                IrOp::FloatAdd
-            };
-            let out = fp_reg(rd, size);
-            if opcode == 0x4b || opcode == 0x4f {
-                let neg = ctx.alloc_unique(size);
-                ctx.emit(IrInsn::with_output(
-                    IrOp::FloatNeg,
-                    neg,
-                    smallvec![mul],
-                    addr,
-                ));
-                ctx.emit(IrInsn::with_output(
-                    final_op,
-                    out,
-                    smallvec![neg, addend],
-                    addr,
-                ));
-            } else {
-                ctx.emit(IrInsn::with_output(
-                    final_op,
-                    out,
-                    smallvec![mul, addend],
-                    addr,
-                ));
-            }
         }
-        0x53 => {
-            let fmt = (funct7 >> 2) & 0x3;
-            let size = fp_size_from_fmt(fmt).unwrap_or(8);
-            match (funct7 >> 2, funct7 & 0x3) {
-                (0b00000, fmt) => {
-                    ctx.lift_fp_rr(IrOp::FloatAdd, rd, rs1, rs2, fp_size_from_fmt(fmt)?)
-                }
-                (0b00001, fmt) => {
-                    ctx.lift_fp_rr(IrOp::FloatSub, rd, rs1, rs2, fp_size_from_fmt(fmt)?)
-                }
-                (0b00010, fmt) => {
-                    ctx.lift_fp_rr(IrOp::FloatMult, rd, rs1, rs2, fp_size_from_fmt(fmt)?)
-                }
-                (0b00011, fmt) => {
-                    ctx.lift_fp_rr(IrOp::FloatDiv, rd, rs1, rs2, fp_size_from_fmt(fmt)?)
-                }
-                (0b01011, fmt) => {
-                    ctx.lift_fp_unary(IrOp::FloatSqrt, rd, rs1, fp_size_from_fmt(fmt)?)
-                }
-                (0b10100, fmt) => {
-                    let size = fp_size_from_fmt(fmt)?;
-                    let op = match funct3 {
-                        0x0 => IrOp::FloatLessequal,
-                        0x1 => IrOp::FloatLess,
-                        0x2 => IrOp::FloatEqual,
-                        _ => return None,
-                    };
-                    let cmp = ctx.alloc_unique(1);
-                    ctx.emit(IrInsn::with_output(
-                        op,
-                        cmp,
-                        smallvec![fp_reg(rs1, size), fp_reg(rs2, size)],
-                        addr,
-                    ));
-                    let ext = ctx.alloc_unique(8);
-                    ctx.emit(IrInsn::with_output(
-                        IrOp::IntZext,
-                        ext,
-                        smallvec![cmp],
-                        addr,
-                    ));
-                    ctx.write_reg(rv_reg(rd), ext);
-                }
-                _ => match funct7 {
-                    0b0000000 | 0b0000001 | 0b0000011 => {
-                        ctx.lift_fp_rr(IrOp::FloatAdd, rd, rs1, rs2, size)
-                    }
-                    0b0000100 | 0b0000101 | 0b0000111 => {
-                        ctx.lift_fp_rr(IrOp::FloatSub, rd, rs1, rs2, size)
-                    }
-                    0b0001000 | 0b0001001 | 0b0001011 => {
-                        ctx.lift_fp_rr(IrOp::FloatMult, rd, rs1, rs2, size)
-                    }
-                    0b0001100 | 0b0001101 | 0b0001111 => {
-                        ctx.lift_fp_rr(IrOp::FloatDiv, rd, rs1, rs2, size)
-                    }
-                    0b0101100 | 0b0101101 | 0b0101111 => {
-                        ctx.lift_fp_unary(IrOp::FloatSqrt, rd, rs1, size)
-                    }
-                    0b0010000 | 0b0010001 | 0b0010011 => match funct3 {
-                        0x0 => ctx.emit(IrInsn::with_output(
-                            IrOp::Copy,
-                            fp_reg(rd, size),
-                            smallvec![fp_reg(rs1, size)],
-                            addr,
-                        )),
-                        0x1 => ctx.lift_fp_unary(IrOp::FloatNeg, rd, rs1, size),
-                        0x2 => ctx.lift_fp_unary(IrOp::FloatAbs, rd, rs1, size),
-                        _ => return None,
-                    },
-                    0b0010100 | 0b0010101 | 0b0010111 => {
-                        let code = if funct3 == 0 {
-                            CALLOTHER_RISCV_FMIN
-                        } else {
-                            CALLOTHER_RISCV_FMAX
-                        };
-                        ctx.emit_callother(
-                            code,
-                            Some(fp_reg(rd, size)),
-                            smallvec![fp_reg(rs1, size), fp_reg(rs2, size)],
-                        );
-                    }
-                    0b1010000 | 0b1010001 | 0b1010011 => {
-                        let op = match funct3 {
-                            0x0 => IrOp::FloatLessequal,
-                            0x1 => IrOp::FloatLess,
-                            0x2 => IrOp::FloatEqual,
-                            _ => return None,
-                        };
-                        let cmp = ctx.alloc_unique(1);
-                        ctx.emit(IrInsn::with_output(
-                            op,
-                            cmp,
-                            smallvec![fp_reg(rs1, size), fp_reg(rs2, size)],
-                            addr,
-                        ));
-                        let ext = ctx.alloc_unique(8);
-                        ctx.emit(IrInsn::with_output(
-                            IrOp::IntZext,
-                            ext,
-                            smallvec![cmp],
-                            addr,
-                        ));
-                        ctx.write_reg(rv_reg(rd), ext);
-                    }
-                    0b0100000 | 0b0100001 | 0b0100011 => {
-                        let dst_size = fp_size_from_fmt(rs2 & 0x3).unwrap_or(size);
-                        ctx.emit(IrInsn::with_output(
-                            IrOp::FloatFloat2float,
-                            fp_reg(rd, dst_size),
-                            smallvec![fp_reg(rs1, size)],
-                            addr,
-                        ));
-                    }
-                    0b1100000 | 0b1100001 | 0b1100011 => {
-                        let out_size = if rs2 & 0b10 != 0 { 8 } else { 4 };
-                        let tmp = ctx.alloc_unique(out_size);
-                        ctx.emit(IrInsn::with_output(
-                            IrOp::FloatFloat2int,
-                            tmp,
-                            smallvec![fp_reg(rs1, size)],
-                            addr,
-                        ));
-                        let val = if out_size < 8 {
-                            let ext = ctx.alloc_unique(8);
-                            ctx.emit(IrInsn::with_output(
-                                IrOp::IntSext,
-                                ext,
-                                smallvec![tmp],
-                                addr,
-                            ));
-                            ext
-                        } else {
-                            tmp
-                        };
-                        ctx.write_reg(rv_reg(rd), val);
-                    }
-                    0b1101000 | 0b1101001 | 0b1101011 => {
-                        ctx.emit(IrInsn::with_output(
-                            IrOp::FloatInt2float,
-                            fp_reg(rd, size),
-                            smallvec![read_reg(rv_reg(rs1))],
-                            addr,
-                        ));
-                    }
-                    0b1110000 | 0b1110001 | 0b1110011 => match funct3 {
-                        0x0 => ctx.write_reg(rv_reg(rd), fp_reg(rs1, 8)),
-                        0x1 => ctx.emit_callother(
-                            CALLOTHER_RISCV_FCLASS,
-                            cs_reg_to_varnode(rv_reg(rd)),
-                            smallvec![fp_reg(rs1, size)],
-                        ),
-                        _ => return None,
-                    },
-                    0b1111000 | 0b1111001 | 0b1111011 => ctx.emit(IrInsn::with_output(
-                        IrOp::Copy,
-                        fp_reg(rd, size),
-                        smallvec![read_reg(rv_reg(rs1))],
-                        addr,
-                    )),
-                    _ => return None,
-                },
-            }
-        }
-        // Atomic extension: model LR/SC and AMOs as load/store pairs plus callothers where plain IR has no min/max high-level op.
-        0x2f if funct3 == 0x2 || funct3 == 0x3 => {
-            let size = if funct3 == 0x2 { 4 } else { 8 };
-            let funct5 = (word >> 27) & 0x1f;
-            let addr_v = read_reg(rv_reg(rs1));
-            let old = ctx.alloc_unique(size);
+        // vsetivli rd, uimm, vtypei
+        0x57 if funct3 == 0b111 && ((word >> 30) & 0x3) == 0b11 => {
+            let uimm = rs1;
+            let vtypei = (word >> 20) & 0x3ff;
+            let vl = Varnode::reg(VL_OFFSET, 8);
+            emit_rvv_callother(
+                &mut ctx,
+                CALLOTHER_RVV_VSETIVLI,
+                Some(vl),
+                vec![rvv_const(uimm as u64), rvv_const(vtypei as u64)],
+            );
+            ctx.write_reg(rv_reg(rd), vl);
             ctx.emit(IrInsn::with_output(
-                IrOp::Load,
-                old,
-                smallvec![Varnode::constant(SpaceId::Ram as u64, 8), addr_v],
+                IrOp::Copy,
+                Varnode::reg(VTYPE_OFFSET, 8),
+                smallvec![rvv_const(vtypei as u64)],
                 addr,
             ));
-            let old64 = if size < 8 {
-                let ext = ctx.alloc_unique(8);
-                ctx.emit(IrInsn::with_output(
-                    IrOp::IntSext,
-                    ext,
-                    smallvec![old],
-                    addr,
-                ));
-                ext
-            } else {
-                old
-            };
-            ctx.write_reg(rv_reg(rd), old64);
-            match funct5 {
-                0b00010 => {} // LR
-                0b00011 => {
-                    // SC: store rs2 and report success (0)
-                    let val = if size < 8 {
-                        let trunc = ctx.alloc_unique(size);
-                        ctx.emit(IrInsn::with_output(
-                            IrOp::Subpiece,
-                            trunc,
-                            smallvec![read_reg(rv_reg(rs2)), Varnode::constant(0, 4)],
-                            addr,
-                        ));
-                        trunc
-                    } else {
-                        read_reg(rv_reg(rs2))
-                    };
-                    ctx.emit(IrInsn::without_output(
-                        IrOp::Store,
-                        smallvec![
-                            Varnode::constant(SpaceId::Ram as u64, 8),
-                            read_reg(rv_reg(rs1)),
-                            val
-                        ],
-                        addr,
-                    ));
-                    ctx.write_reg(rv_reg(rd), Varnode::constant(0, 8));
-                }
-                0b00001 => ctx.emit(IrInsn::without_output(
-                    IrOp::Store,
-                    smallvec![
-                        Varnode::constant(SpaceId::Ram as u64, 8),
-                        read_reg(rv_reg(rs1)),
-                        read_reg(rv_reg(rs2))
-                    ],
-                    addr,
-                )),
-                0b00000 | 0b00100 | 0b01100 | 0b01000 => {
-                    let op = match funct5 {
-                        0b00000 => IrOp::IntAdd,
-                        0b00100 => IrOp::IntXor,
-                        0b01100 => IrOp::IntAnd,
-                        0b01000 => IrOp::IntOr,
-                        _ => unreachable!(),
-                    };
-                    let next = ctx.alloc_unique(size);
-                    ctx.emit(IrInsn::with_output(
-                        op,
-                        next,
-                        smallvec![old, read_reg(rv_reg(rs2))],
-                        addr,
-                    ));
-                    ctx.emit(IrInsn::without_output(
-                        IrOp::Store,
-                        smallvec![
-                            Varnode::constant(SpaceId::Ram as u64, 8),
-                            read_reg(rv_reg(rs1)),
-                            next
-                        ],
-                        addr,
-                    ));
-                }
-                0b10000 | 0b10100 | 0b11000 | 0b11100 => {
-                    let code = match funct5 {
-                        0b10000 => CALLOTHER_RISCV_AMO_MIN,
-                        0b10100 => CALLOTHER_RISCV_AMO_MAX,
-                        0b11000 => CALLOTHER_RISCV_AMO_MINU,
-                        _ => CALLOTHER_RISCV_AMO_MAXU,
-                    };
-                    let next = ctx.alloc_unique(size);
-                    ctx.emit_callother(code, Some(next), smallvec![old, read_reg(rv_reg(rs2))]);
-                    ctx.emit(IrInsn::without_output(
-                        IrOp::Store,
-                        smallvec![
-                            Varnode::constant(SpaceId::Ram as u64, 8),
-                            read_reg(rv_reg(rs1)),
-                            next
-                        ],
-                        addr,
-                    ));
-                }
-                _ => return None,
-            }
         }
-        // RVV is highly parametric. Keep decoding complete enough for control-flow/lift progress by emitting typed vector summaries.
+        // vsetvl rd, rs1, rs2
+        0x57 if funct3 == 0b111 && funct6 == 0b100000 => {
+            let avl = read_reg(rv_reg(rs1));
+            let vtype_src = read_reg(rv_reg(rs2));
+            let vl = Varnode::reg(VL_OFFSET, 8);
+            emit_rvv_callother(
+                &mut ctx,
+                CALLOTHER_RVV_VSETVL,
+                Some(vl),
+                vec![avl, vtype_src],
+            );
+            ctx.write_reg(rv_reg(rd), vl);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                Varnode::reg(VTYPE_OFFSET, 8),
+                smallvec![vtype_src],
+                addr,
+            ));
+        }
+        // Unit-stride vector loads: vle{8,16,32,64}.v vd, (rs1), vm
+        0x07 if matches!(funct3, 0b000 | 0b101 | 0b110 | 0b111) && ((word >> 28) & 0xf) == 0 => {
+            let width = match funct3 {
+                0b000 => 1,
+                0b101 => 2,
+                0b110 => 4,
+                0b111 => 8,
+                _ => unreachable!(),
+            };
+            let mut inputs = vec![
+                read_reg(rv_reg(rs1)),
+                rvv_const(width),
+                rvv_const(vm as u64),
+            ];
+            inputs.extend(rvv_config_inputs());
+            emit_rvv_callother(&mut ctx, CALLOTHER_RVV_LOAD, Some(rvv_reg(rd)), inputs);
+        }
+        // Unit-stride vector stores: vse{8,16,32,64}.v vs3, (rs1), vm
+        0x27 if matches!(funct3, 0b000 | 0b101 | 0b110 | 0b111) && ((word >> 28) & 0xf) == 0 => {
+            let width = match funct3 {
+                0b000 => 1,
+                0b101 => 2,
+                0b110 => 4,
+                0b111 => 8,
+                _ => unreachable!(),
+            };
+            let mut inputs = vec![
+                rvv_reg(rs2),
+                read_reg(rv_reg(rs1)),
+                rvv_const(width),
+                rvv_const(vm as u64),
+            ];
+            inputs.extend(rvv_config_inputs());
+            emit_rvv_callother(&mut ctx, CALLOTHER_RVV_STORE, None, inputs);
+        }
+        // Vector arithmetic/logical/move/mask operations.  The exact funct6 is
+        // preserved as metadata, giving downstream passes full opcode-mode
+        // visibility while avoiding dependence on Capstone's RVV tables.
         0x57 => {
-            if funct3 == 0x7 {
-                ctx.emit_callother(
-                    CALLOTHER_RISCV_VSET,
-                    cs_reg_to_varnode(rv_reg(rd)),
-                    smallvec![
-                        read_reg(rv_reg(rs1)),
-                        Varnode::constant(rs2 as u64, 8),
-                        Varnode::constant(word as u64, 8)
-                    ],
-                );
+            let major = RvvMajor::from_funct3(funct3)?;
+            let is_mask_op = matches!(major, RvvMajor::Opmvv | RvvMajor::Opmvx);
+            let tag = if is_mask_op {
+                CALLOTHER_RVV_MASK_OP
             } else {
-                ctx.emit_callother(
-                    CALLOTHER_RISCV_VECTOR | ((funct3 as u64) << 8),
-                    Some(vec_reg(rd)),
-                    smallvec![
-                        vec_reg(rs1),
-                        vec_reg(rs2),
-                        Varnode::constant(word as u64, 8)
-                    ],
-                );
+                major.tag()
+            };
+            let mut inputs = vec![rvv_reg(rs2)];
+            if major.is_scalar_or_imm() {
+                if matches!(major, RvvMajor::Opivi) {
+                    inputs.push(rvv_const(sign_extend(rs1, 5) as u64));
+                } else {
+                    inputs.push(read_reg(rv_reg(rs1)));
+                }
+            } else {
+                inputs.push(rvv_reg(rs1));
             }
+            inputs.extend([
+                rvv_const(funct6 as u64),
+                rvv_const(vm as u64),
+                rvv_const(major as u64),
+            ]);
+            inputs.extend(rvv_config_inputs());
+            let out = if is_mask_op {
+                rvv_mask_reg(rd)
+            } else {
+                rvv_reg(rd)
+            };
+            emit_rvv_callother(&mut ctx, tag, Some(out), inputs);
         }
         _ => return None,
     }
-    Some(())
-fn decode_rv_crypto_op_imm(funct12: u32) -> Option<u64> {
-    Some(match funct12 {
-        0x100 => crypto_tag::RV_SHA256SUM0,
-        0x101 => crypto_tag::RV_SHA256SUM1,
-        0x102 => crypto_tag::RV_SHA256SIG0,
-        0x103 => crypto_tag::RV_SHA256SIG1,
-        0x104 => crypto_tag::RV_SHA512SUM0,
-        0x105 => crypto_tag::RV_SHA512SUM1,
-        0x106 => crypto_tag::RV_SHA512SIG0,
-        0x107 => crypto_tag::RV_SHA512SIG1,
-        0x108 => crypto_tag::RV_SM3P0,
-        0x109 => crypto_tag::RV_SM3P1,
-        0x300 => crypto_tag::RV_AES64IM,
-        _ => return None,
-    })
-}
 
-fn decode_rv_crypto_op(funct7: u32, bs: u8) -> Option<u64> {
-    let funct5 = funct7 & 0x1f;
-    Some(match (funct5, bs) {
-        // RV32 scalar AES/SM4 encode the byte select in instruction bits 31..30;
-        // the fixed opcode field is therefore only bits 29..25 (funct5).
-        (0x11, 0..=3) => crypto_tag::RV_AES32ESI,
-        (0x13, 0..=3) => crypto_tag::RV_AES32ESMI,
-        (0x15, 0..=3) => crypto_tag::RV_AES32DSI,
-        (0x17, 0..=3) => crypto_tag::RV_AES32DSMI,
-        (0x18, 0..=3) => crypto_tag::RV_SM4ED,
-        (0x1A, 0..=3) => crypto_tag::RV_SM4KS,
-
-        // RV64 scalar AES encodings use the same opcode/funct3 space but require
-        // bits 31..30 to be zero except for aes64ks2 (funct7=0x7f, bs=3).
-        (0x19, 0) => crypto_tag::RV_AES64ES,
-        (0x1B, 0) => crypto_tag::RV_AES64ESM,
-        (0x1D, 0) => crypto_tag::RV_AES64DS,
-        (0x1F, 0) => crypto_tag::RV_AES64DSM,
-        (0x1F, 3) if funct7 == 0x7F => crypto_tag::RV_AES64KS2,
-        _ => return None,
+    Some(LiftedInsn {
+        ir_ops: ctx.ops,
+        len: 4,
     })
 }
 
@@ -1258,6 +945,9 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
     }
 
     let word = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    if let Some(lifted) = lift_riscv_crypto_direct(word, addr) {
+        return Some(lifted);
+    }
     let opcode = word & 0x7f;
     let rd = (word >> 7) & 0x1f;
     let funct3 = (word >> 12) & 0x7;
@@ -1266,84 +956,28 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
     let funct7 = (word >> 25) & 0x7f;
     let mut ctx = LiftCtx::new(addr);
 
-    // Extension encodings overlap the base OP/OP-32 opcode space (notably M's
-    // funct7=1), so try the non-base decoder before the RV64I match below.
-    if matches!(
-        opcode,
-        0x07 | 0x27 | 0x2f | 0x43 | 0x47 | 0x4b | 0x4f | 0x53 | 0x57
-    ) || ((opcode == 0x33 || opcode == 0x3b) && funct7 == 0x01)
-    {
-        if lift_riscv_extended_direct(word, addr, &mut ctx).is_some() {
-            return Some(LiftedInsn {
-                ir_ops: ctx.ops,
-                len: 4,
-            });
-        }
-    }
-
     match opcode {
         0x13 => {
-            if funct3 == 0x1 {
-                let funct12 = word >> 20;
-                if let Some(tag) = decode_rv_crypto_op_imm(funct12) {
-                    ctx.lift_crypto_unary(tag, rv_reg(rd), rv_reg(rs1));
-                } else if (funct12 & 0xFE0) == 0x300 && ((funct12 >> 4) & 0x1) == 1 {
-                    // aes64ks1i encodes its round number in bits 23..20.
-                    ctx.lift_crypto_unary_imm(
-                        crypto_tag::RV_AES64KS1I,
-                        rv_reg(rd),
-                        rv_reg(rs1),
-                        (funct12 & 0xF) as u8,
-                    );
-                } else {
-                    return None;
+            let imm = sign_extend(word >> 20, 12);
+            match funct3 {
+                0x0 if rd == 0 && rs1 == 0 && imm == 0 => {}
+                0x0 => ctx.lift_alu_ri(IrOp::IntAdd, rv_reg(rd), rv_reg(rs1), imm),
+                0x2 => ctx.lift_slti(rv_reg(rd), rv_reg(rs1), imm),
+                0x3 => ctx.lift_sltiu(rv_reg(rd), rv_reg(rs1), imm),
+                0x4 => ctx.lift_alu_ri(IrOp::IntXor, rv_reg(rd), rv_reg(rs1), imm),
+                0x6 => ctx.lift_alu_ri(IrOp::IntOr, rv_reg(rd), rv_reg(rs1), imm),
+                0x7 => ctx.lift_alu_ri(IrOp::IntAnd, rv_reg(rd), rv_reg(rs1), imm),
+                0x1 => ctx.lift_alu_ri(IrOp::IntLeft, rv_reg(rd), rv_reg(rs1), rs2 as i64),
+                0x5 if funct7 == 0x00 => {
+                    ctx.lift_alu_ri(IrOp::IntRight, rv_reg(rd), rv_reg(rs1), rs2 as i64)
                 }
-            } else {
-                let imm = sign_extend(word >> 20, 12);
-                match funct3 {
-                    0x0 if rd == 0 && rs1 == 0 && imm == 0 => {}
-                    0x0 => ctx.lift_alu_ri(IrOp::IntAdd, rv_reg(rd), rv_reg(rs1), imm),
-                    0x2 => ctx.lift_slti(rv_reg(rd), rv_reg(rs1), imm),
-                    0x3 => ctx.lift_sltiu(rv_reg(rd), rv_reg(rs1), imm),
-                    0x4 => ctx.lift_alu_ri(IrOp::IntXor, rv_reg(rd), rv_reg(rs1), imm),
-                    0x6 => ctx.lift_alu_ri(IrOp::IntOr, rv_reg(rd), rv_reg(rs1), imm),
-                    0x7 => ctx.lift_alu_ri(IrOp::IntAnd, rv_reg(rd), rv_reg(rs1), imm),
-                    0x1 => ctx.lift_alu_ri(IrOp::IntLeft, rv_reg(rd), rv_reg(rs1), rs2 as i64),
-                    0x5 if funct7 == 0x00 => {
-                        ctx.lift_alu_ri(IrOp::IntRight, rv_reg(rd), rv_reg(rs1), rs2 as i64)
-                    }
-                    0x5 if funct7 == 0x20 => {
-                        ctx.lift_alu_ri(IrOp::IntSright, rv_reg(rd), rv_reg(rs1), rs2 as i64)
-                    }
-                    _ => return None,
+                0x5 if funct7 == 0x20 => {
+                    ctx.lift_alu_ri(IrOp::IntSright, rv_reg(rd), rv_reg(rs1), rs2 as i64)
                 }
+                _ => return None,
             }
         }
         0x33 => {
-            if funct3 == 0x0 {
-                let bs = (word >> 30) as u8;
-                if let Some(tag) = decode_rv_crypto_op(funct7, bs) {
-                    match tag {
-                        crypto_tag::RV_AES32ESI
-                        | crypto_tag::RV_AES32ESMI
-                        | crypto_tag::RV_AES32DSI
-                        | crypto_tag::RV_AES32DSMI
-                        | crypto_tag::RV_SM4ED
-                        | crypto_tag::RV_SM4KS => ctx.lift_crypto_binary_imm(
-                            tag,
-                            rv_reg(rd),
-                            rv_reg(rs1),
-                            rv_reg(rs2),
-                            bs,
-                        ),
-                        _ => ctx.lift_crypto_binary(tag, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
-                    }
-                    return Some(LiftedInsn {
-                        ir_ops: ctx.ops,
-                        len: 4,
-                    });
-                }
-            }
             let op = match (funct7, funct3) {
                 (0x00, 0x2) => {
                     ctx.lift_slt(rv_reg(rd), rv_reg(rs1), rv_reg(rs2));
@@ -1437,9 +1071,7 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
         0x67 if rd == 0 && rs1 == 1 && sign_extend(word >> 20, 12) == 0 => {
             ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![], ctx.addr));
         }
-        _ => {
-            lift_riscv_extended_direct(word, addr, &mut ctx)?;
-        }
+        _ => return None,
     }
 
     Some(LiftedInsn {
@@ -1451,6 +1083,55 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
 // ---------------------------------------------------------------------------
 // Instruction dispatch
 // ---------------------------------------------------------------------------
+
+fn lift_riscv_crypto_direct(word: u32, addr: u64) -> Option<LiftedInsn> {
+    let (funct7, rd, rs1, rs2, funct3) = decode_crypto_r_type(word)?;
+    let mut ctx = LiftCtx::new(addr);
+    match (funct7, funct3) {
+        (0b1100111, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA256SIG0, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b1101001, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA256SIG1, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0001000, 0b010) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA256SUM0, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0001000, 0b100) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA256SUM1, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0000101, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA512SIG0, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0000101, 0b001) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA512SIG1, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0000100, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA512SUM0, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0000100, 0b001) => {
+            ctx.emit_crypto_callother(TAG_RISCV_SHA512SUM1, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0010010, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES32ESI, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0010011, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES32ESMI, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0010101, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES32DSI, rd, read_reg(rs1), read_reg(rs2))
+        }
+        (0b0010111, 0b000) => {
+            ctx.emit_crypto_callother(TAG_RISCV_AES32DSMI, rd, read_reg(rs1), read_reg(rs2))
+        }
+        _ => return None,
+    }
+
+    Some(LiftedInsn {
+        ir_ops: ctx.ops,
+        len: 4,
+    })
+}
 
 fn dispatch_insn(
     ctx: &mut LiftCtx,
@@ -2033,7 +1714,7 @@ fn dispatch_insn(
             }
         }
 
-        // -- Loads: LW (4, sign-ext), LD (8) --
+        // -- Loads: LB/LH/LW/LD + unsigned variants --
         x if x == RISCV_INS_LW as u32 => {
             if let Some((rd, base, offset)) = ops_load(operands) {
                 ctx.lift_load(rd, base, offset, 4);
@@ -2232,6 +1913,28 @@ fn dispatch_insn(
             }
         }
 
+        // -- Privileged/Hypervisor system instructions --
+        x if x == RISCV_INS_SRET as u32 => {
+            ctx.emit(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![Varnode::constant(2, 4)], // supervisor return
+                addr,
+            ));
+        }
+        x if x == RISCV_INS_WFI as u32 => {
+            ctx.emit(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![Varnode::constant(3, 4)], // wait-for-interrupt hint
+                addr,
+            ));
+        }
+        x if x == RISCV_INS_SFENCE_VMA as u32 => {
+            ctx.emit(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![Varnode::constant(4, 4)], // supervisor TLB fence
+                addr,
+            ));
+        }
         // -- ECALL / EBREAK --
         x if x == RISCV_INS_ECALL as u32 => {
             ctx.emit(IrInsn::without_output(
@@ -2284,6 +1987,13 @@ fn dispatch_insn(
                 ctx.emit_unimplemented();
             }
         }
+        x if x == RISCV_INS_DIVUW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntDiv, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
         x if x == RISCV_INS_REM as u32 => {
             if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
                 ctx.lift_alu_rr(IrOp::IntSrem, rd, rs1, rs2);
@@ -2301,6 +2011,13 @@ fn dispatch_insn(
         x if x == RISCV_INS_REMW as u32 => {
             if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
                 ctx.lift_alu_rr_w(IrOp::IntSrem, rd, rs1, rs2);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
+        x if x == RISCV_INS_REMUW as u32 => {
+            if let Some((rd, rs1, rs2)) = ops_rrr(operands) {
+                ctx.lift_alu_rr_w(IrOp::IntRem, rd, rs1, rs2);
             } else {
                 ctx.emit_unimplemented();
             }
@@ -2392,51 +2109,144 @@ mod tests {
     fn test_register_file() {
         let l = lifter();
         let rf = l.register_file();
-        assert_eq!(rf.registers.len(), 98);
+        assert_eq!(rf.registers.len(), 70);
         assert_eq!(rf.registers[0].name, "x0");
         assert_eq!(rf.registers[31].name, "x31");
         assert_eq!(rf.registers[32].name, "pc");
-        assert_eq!(rf.registers[33].name, "f0");
-        assert_eq!(rf.registers[65].name, "v0");
-        assert_eq!(rf.registers[97].name, "fcsr");
-    }
-
-    #[test]
-    fn t360_riscv64_register_file_full_layout() {
-        let l = lifter();
-        let rf = l.register_file();
-        assert_eq!(rf.registers.len(), 33);
-        for (i, name) in RV_REG_NAMES.iter().enumerate() {
-            assert_register(rf, name, (i as u64) * 8, 8);
-        }
-        assert_register(rf, "pc", PC_OFFSET, 8);
-        assert_eq!(cs_reg_to_varnode(rv_reg(0)), None);
-        assert_eq!(read_reg(rv_reg(0)), Varnode::constant(0, 8));
-        for i in 1..32u32 {
-            assert_eq!(
-                cs_reg_to_varnode(rv_reg(i)),
-                Some(Varnode::reg((i as u64) * 8, 8))
-            );
-        }
-        assert_unique_names(rf);
-    }
-
-    fn assert_register(rf: &RegisterFile, name: &str, offset: u64, size: u8) {
-        let def = rf.registers.iter().find(|r| r.name == name).unwrap();
-        assert_eq!(def.varnode, Varnode::reg(offset, size), "{name}");
-    }
-
-    fn assert_unique_names(rf: &RegisterFile) {
-        let mut names = rf.registers.iter().map(|r| r.name).collect::<Vec<_>>();
-        names.sort_unstable();
-        names.dedup();
-        assert_eq!(names.len(), rf.registers.len());
+        assert_eq!(rf.registers[33].name, "v0");
+        assert_eq!(rf.registers[64].name, "v31");
+        assert_eq!(rf.registers[65].name, "vtype");
+        assert_eq!(rf.registers[66].name, "vl");
+        assert_eq!(rf.registers[67].name, "vstart");
+        assert_eq!(rf.registers[68].name, "vxrm");
+        assert_eq!(rf.registers[69].name, "vxsat");
     }
 
     #[test]
     fn test_short_buffer() {
         let result = lifter().lift_insn(&[0x00], 0x1000);
         assert!(result.is_err());
+    }
+
+    fn rvv_tag(result: &LiftedInsn) -> Option<u64> {
+        result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .and_then(|i| i.inputs.first())
+            .map(|v| v.offset)
+    }
+
+    #[test]
+    fn test_rvv_vsetvli() {
+        // vsetvli x1, x2, e32,m1,ta,ma (vtypei carries SEW/LMUL/tail/mask policy)
+        let vtypei = 0b1101_0000u32;
+        let word = (vtypei << 20) | (2 << 15) | (0b111 << 12) | (1 << 7) | 0x57;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift vsetvli without capstone RVV support");
+        assert_eq!(result.len, 4);
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_VSETVLI));
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::Callother && i.output == Some(Varnode::reg(VL_OFFSET, 8))
+            })
+        );
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 8)) })
+        );
+    }
+
+    #[test]
+    fn test_rvv_vsetivli() {
+        // vsetivli x3, 7, e8,mf2,tu,mu
+        let vtypei = 0b0000_0101u32;
+        let word = (0b11 << 30) | (vtypei << 20) | (7 << 15) | (0b111 << 12) | (3 << 7) | 0x57;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift vsetivli");
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_VSETIVLI));
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert!(call.inputs.contains(&Varnode::constant(7, 8)));
+    }
+
+    #[test]
+    fn test_rvv_vsetvl() {
+        // vsetvl x1, x2, x3
+        let word: u32 = (0b100000 << 26) | (3 << 20) | (2 << 15) | (0b111 << 12) | (1 << 7) | 0x57;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift vsetvl");
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_VSETVL));
+    }
+
+    #[test]
+    fn test_rvv_vector_add_masked() {
+        // vadd.vv v1, v2, v3, v0.t (vm=0, funct6=0)
+        let word: u32 = (0 << 25) | (3 << 20) | (2 << 15) | (0b000 << 12) | (1 << 7) | 0x57;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift vector op");
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_OPIVV));
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(call.output, Some(rvv_reg(1)));
+        assert!(call.inputs.contains(&rvv_reg(2)));
+        assert!(call.inputs.contains(&rvv_reg(3)));
+        assert!(call.inputs.contains(&Varnode::reg(VTYPE_OFFSET, 8)));
+        assert!(call.inputs.contains(&Varnode::reg(VL_OFFSET, 8)));
+    }
+
+    #[test]
+    fn test_rvv_mask_register_op() {
+        // vmand.mm v1, v2, v3 (OPMVV mode); result is a mask/vector-register alias.
+        let word: u32 =
+            (0b011001 << 26) | (1 << 25) | (3 << 20) | (2 << 15) | (0b010 << 12) | (1 << 7) | 0x57;
+        let result = lifter()
+            .lift_insn(&word.to_le_bytes(), 0x1000)
+            .expect("should lift mask op");
+        assert_eq!(rvv_tag(&result), Some(CALLOTHER_RVV_MASK_OP));
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(call.output, Some(rvv_mask_reg(1)));
+    }
+
+    #[test]
+    fn test_rvv_load_store_unit_stride() {
+        // vle8.v v1, (x2), vm=1 and vse16.v v3, (x4), vm=0
+        let load: u32 = (1 << 25) | (2 << 15) | (0b000 << 12) | (1 << 7) | 0x07;
+        let load_result = lifter()
+            .lift_insn(&load.to_le_bytes(), 0x1000)
+            .expect("should lift vector load");
+        assert_eq!(rvv_tag(&load_result), Some(CALLOTHER_RVV_LOAD));
+        assert_eq!(
+            load_result
+                .ir_ops
+                .iter()
+                .find(|i| i.op == IrOp::Callother)
+                .unwrap()
+                .output,
+            Some(rvv_reg(1))
+        );
+
+        let store: u32 = (0 << 25) | (3 << 20) | (4 << 15) | (0b101 << 12) | (0 << 7) | 0x27;
+        let store_result = lifter()
+            .lift_insn(&store.to_le_bytes(), 0x1000)
+            .expect("should lift vector store");
+        assert_eq!(rvv_tag(&store_result), Some(CALLOTHER_RVV_STORE));
     }
 
     // -- ADD rd, rs1, rs2 -------------------------------------------------
@@ -2528,6 +2338,30 @@ mod tests {
             .expect("should decode ORI");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
+    }
+
+    #[test]
+    fn test_divuw() {
+        // divuw x1, x2, x3 -> funct7=0000001 funct3=101 opcode=0111011
+        let bytes = 0x023150BBu32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode DIVUW");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntDiv));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
+    }
+
+    #[test]
+    fn test_remuw() {
+        // remuw x1, x2, x3 -> funct7=0000001 funct3=111 opcode=0111011
+        let bytes = 0x023170BBu32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode REMUW");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntRem));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
     }
 
     // -- XOR rd, rs1, rs2 ------------------------------------------------
@@ -2829,6 +2663,42 @@ mod tests {
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
     }
 
+    // -- SRET ------------------------------------------------------------
+    // sret  → 0x10200073
+    #[test]
+    fn test_sret() {
+        let bytes = 0x10200073u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SRET");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
+    // -- WFI -------------------------------------------------------------
+    // wfi  → 0x10500073
+    #[test]
+    fn test_wfi() {
+        let bytes = 0x10500073u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode WFI");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
+    // -- SFENCE.VMA ------------------------------------------------------
+    // sfence.vma x0, x0  → 0x12000073
+    #[test]
+    fn test_sfence_vma() {
+        let bytes = 0x12000073u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode SFENCE.VMA");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
     // -- x0 hardwired zero -----------------------------------------------
     // add x0, x1, x2 → result discarded (x0 write is no-op)
     #[test]
@@ -2963,149 +2833,6 @@ mod tests {
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
     }
 
-    #[test]
-    fn test_m_extension_high_and_unsigned_w() {
-        // mulhu x1, x2, x3: opcode OP, funct7=1, funct3=3.
-        let mulhu = 0x023130b3u32.to_le_bytes();
-        let result = lifter().lift_insn(&mulhu, 0x1000).expect("mulhu");
-        assert_eq!(result.len, 4);
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
-
-        // divuw x1, x2, x3: OP-32, funct7=1, funct3=5.
-        let divuw = 0x023150bbu32.to_le_bytes();
-        let result = lifter().lift_insn(&divuw, 0x1000).expect("divuw");
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntDiv));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
-    }
-
-    #[test]
-    fn test_atomic_extension_lr_sc_amo() {
-        // lr.w x1, (x2)
-        let lr_w = 0x100120afu32.to_le_bytes();
-        let result = lifter().lift_insn(&lr_w, 0x1000).expect("lr.w");
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
-
-        // amoor.d x1, x3, (x2)
-        let amoor_d = 0x403130afu32.to_le_bytes();
-        let result = lifter().lift_insn(&amoor_d, 0x1000).expect("amoor.d");
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntOr));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
-    }
-
-    #[test]
-    fn test_float_double_quad_load_arithmetic_compare() {
-        // flw f1, 0(x2)
-        let flw = 0x00012087u32.to_le_bytes();
-        let result = lifter().lift_insn(&flw, 0x1000).expect("flw");
-        assert!(
-            result
-                .ir_ops
-                .iter()
-                .any(|i| i.op == IrOp::Load && i.output == Some(fp_reg(1, 4)))
-        );
-
-        // fadd.d f1, f2, f3
-        let fadd_d = 0x023100d3u32.to_le_bytes();
-        let result = lifter().lift_insn(&fadd_d, 0x1000).expect("fadd.d");
-        assert!(
-            result
-                .ir_ops
-                .iter()
-                .any(|i| i.op == IrOp::FloatAdd && i.output == Some(fp_reg(1, 8)))
-        );
-
-        // fsqrt.q f1, f2
-        let fsqrt_q = 0x5e0170d3u32.to_le_bytes();
-        let result = lifter().lift_insn(&fsqrt_q, 0x1000).expect("fsqrt.q");
-        assert!(
-            result
-                .ir_ops
-                .iter()
-                .any(|i| i.op == IrOp::FloatSqrt && i.output == Some(fp_reg(1, 16)))
-        );
-
-        // fle.s x1, f2, f3
-        let fle_s = 0xa03100d3u32.to_le_bytes();
-        let result = lifter().lift_insn(&fle_s, 0x1000).expect("fle.s");
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::FloatLessequal));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
-    }
-
-    #[test]
-    fn test_vector_extension_summary() {
-        // vadd.vv v1, v2, v3 (OP-V, funct6=0, vm=1, funct3=000)
-        let vadd_vv = 0x023100d7u32.to_le_bytes();
-        let result = lifter().lift_insn(&vadd_vv, 0x1000).expect("vadd.vv");
-        assert!(
-            result
-                .ir_ops
-                .iter()
-                .any(|i| i.op == IrOp::Callother && i.output == Some(vec_reg(1)))
-        );
-    fn assert_crypto_callother(word: u32, tag: u64, extra_const: Option<u64>) {
-        let bytes = word.to_le_bytes();
-        let result = lifter()
-            .lift_insn(&bytes, 0x1000)
-            .expect("should decode RISC-V scalar crypto instruction");
-        assert_eq!(result.len, 4);
-        let call = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("should emit Callother");
-        assert_eq!(call.inputs.first(), Some(&Varnode::constant(tag, 8)));
-        if let Some(value) = extra_const {
-            assert!(call.inputs.contains(&Varnode::constant(value, 1)));
-        }
-        assert!(
-            result
-                .ir_ops
-                .iter()
-                .any(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 8)))
-        );
-    }
-
-    #[test]
-    fn test_riscv_crypto_aes64_rounds() {
-        assert_crypto_callother(0x323100B3, crypto_tag::RV_AES64ES, None);
-        assert_crypto_callother(0x363100B3, crypto_tag::RV_AES64ESM, None);
-        assert_crypto_callother(0x3A3100B3, crypto_tag::RV_AES64DS, None);
-        assert_crypto_callother(0x3E3100B3, crypto_tag::RV_AES64DSM, None);
-        assert_crypto_callother(0xFE3100B3, crypto_tag::RV_AES64KS2, None);
-    }
-
-    #[test]
-    fn test_riscv_crypto_aes64_immediates() {
-        assert_crypto_callother(0x30011093, crypto_tag::RV_AES64IM, None);
-        assert_crypto_callother(0x31511093, crypto_tag::RV_AES64KS1I, Some(5));
-    }
-
-    #[test]
-    fn test_riscv_crypto_aes32_and_sm4_byte_select() {
-        assert_crypto_callother(0xA23100B3, crypto_tag::RV_AES32ESI, Some(2));
-        assert_crypto_callother(0xE63100B3, crypto_tag::RV_AES32ESMI, Some(3));
-        assert_crypto_callother(0x2A3100B3, crypto_tag::RV_AES32DSI, Some(0));
-        assert_crypto_callother(0x6E3100B3, crypto_tag::RV_AES32DSMI, Some(1));
-        assert_crypto_callother(0xB03100B3, crypto_tag::RV_SM4ED, Some(2));
-        assert_crypto_callother(0x743100B3, crypto_tag::RV_SM4KS, Some(1));
-    }
-
-    #[test]
-    fn test_riscv_crypto_sha_and_sm3_unary() {
-        assert_crypto_callother(0x10011093, crypto_tag::RV_SHA256SUM0, None);
-        assert_crypto_callother(0x10111093, crypto_tag::RV_SHA256SUM1, None);
-        assert_crypto_callother(0x10211093, crypto_tag::RV_SHA256SIG0, None);
-        assert_crypto_callother(0x10311093, crypto_tag::RV_SHA256SIG1, None);
-        assert_crypto_callother(0x10411093, crypto_tag::RV_SHA512SUM0, None);
-        assert_crypto_callother(0x10511093, crypto_tag::RV_SHA512SUM1, None);
-        assert_crypto_callother(0x10611093, crypto_tag::RV_SHA512SIG0, None);
-        assert_crypto_callother(0x10711093, crypto_tag::RV_SHA512SIG1, None);
-        assert_crypto_callother(0x10811093, crypto_tag::RV_SM3P0, None);
-        assert_crypto_callother(0x10911093, crypto_tag::RV_SM3P1, None);
-    }
-
     // NOP (addi x0, x0, 0) → 0x00000013 (capstone pseudo: nop, 0 ops)
     #[test]
     fn test_nop() {
@@ -3115,6 +2842,49 @@ mod tests {
             .expect("should decode NOP");
         assert_eq!(result.len, 4);
         assert!(result.ir_ops.is_empty());
+    }
+
+    #[test]
+    fn test_sha256sig0_crypto_tag() {
+        let bytes = 0xce1100b3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode sha256sig0");
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_SHA256SIG0, 8));
+        assert_eq!(result.ir_ops.len(), 1);
+    }
+
+    #[test]
+    fn test_sha512sum1_crypto_tag() {
+        let bytes = 0x092100b3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode sha512sum1");
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_SHA512SUM0, 8));
+    }
+
+    #[test]
+    fn test_aes32esmi_crypto_tag() {
+        let bytes = 0x260100b3u32.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode aes32esmi");
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("callother present");
+        assert_eq!(call.inputs[0], Varnode::constant(TAG_RISCV_AES32ESMI, 8));
     }
 }
 

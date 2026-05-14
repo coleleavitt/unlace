@@ -124,9 +124,7 @@ where
         elf::EM_PPC => ArchId::Ppc,
         elf::EM_PPC64 => ArchId::Ppc64,
         elf::EM_V850 => ArchId::V850,
-        elf::EM_STM8 => ArchId::Stm8,
         elf::EM_ARC_COMPACT | elf::EM_ARC_COMPACT2 => ArchId::Arc,
-        elf::EM_STM8 => ArchId::Stm8,
         _ => ArchId::Unknown(machine),
     };
 

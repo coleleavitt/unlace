@@ -47,6 +47,14 @@ pub struct SwiftTypeDescriptor {
     /// Decoded name, if the embedded relative offset points at a
     /// readable NUL-terminated UTF-8 string in any mapped section.
     pub name: Option<String>,
+    /// Whether this type has generic parameters.
+    pub is_generic: bool,
+    /// Names of generic type parameters (if any).
+    pub generic_params: Vec<String>,
+    /// Stored field descriptors for struct/class types.
+    pub fields: Vec<String>,
+    /// Numeric type kind (0=class, 1=struct, 2=enum).
+    pub kind: u32,
 }
 
 /// One entry parsed from `__swift5_protos`.
@@ -242,6 +250,10 @@ fn parse_type_table(image: &BinaryImage, sec: &Section) -> Vec<SwiftTypeDescript
             descriptor_va: desc_va,
             flags,
             name,
+            is_generic: false,
+            generic_params: Vec::new(),
+            fields: Vec::new(),
+            kind: flags & 0x1F,
         });
     }
     out
@@ -340,6 +352,51 @@ fn parse_conformance_table(sec: &Section) -> Vec<SwiftConformance> {
         });
     }
     out
+}
+
+
+/// A Swift generic type parameter metadata record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwiftGenericParam {
+    /// Name of the generic parameter (e.g. "T", "Element").
+    pub name: String,
+    /// Protocol constraints on this parameter.
+    pub constraints: Vec<String>,
+    /// Depth in the generic signature (0 = outermost).
+    pub depth: u32,
+    /// Index within the depth level.
+    pub index: u32,
+}
+
+/// Generic context describing a Swift generic function or type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwiftGenericContext {
+    /// The mangled name of the generic function/type.
+    pub mangled_name: String,
+    /// Generic parameters.
+    pub params: Vec<SwiftGenericParam>,
+    /// Whether this is a generic function vs a generic type.
+    pub is_function: bool,
+}
+
+/// Extract generic context from Swift type descriptors.
+pub fn extract_generic_contexts(descriptors: &[SwiftTypeDescriptor]) -> Vec<SwiftGenericContext> {
+    descriptors
+        .iter()
+        .filter(|d| d.is_generic)
+        .map(|d| SwiftGenericContext {
+            mangled_name: d.name.clone().unwrap_or_default(),
+            params: d.generic_params.iter().enumerate().map(|(i, name)| {
+                SwiftGenericParam {
+                    name: name.clone(),
+                    constraints: Vec::new(),
+                    depth: 0,
+                    index: i as u32,
+                }
+            }).collect(),
+            is_function: false,
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -551,5 +608,38 @@ mod tests {
             flags: SectionFlags::READ | SectionFlags::EXEC,
         });
         assert!(scan_swift_metadata(&img).is_none());
+    }
+}
+
+#[cfg(test)]
+mod generic_tests {
+    use super::*;
+
+    #[test]
+    fn extract_generic_contexts_from_descriptors() {
+        let descriptors = vec![
+            SwiftTypeDescriptor {
+                descriptor_va: 0,
+                flags: 0,
+                name: Some("Array".into()),
+                is_generic: true,
+                generic_params: vec!["Element".into()],
+                fields: vec![],
+                kind: 0,
+            },
+            SwiftTypeDescriptor {
+                descriptor_va: 0,
+                flags: 0,
+                name: Some("Foo".into()),
+                is_generic: false,
+                generic_params: vec![],
+                fields: vec![],
+                kind: 0,
+            },
+        ];
+        let contexts = extract_generic_contexts(&descriptors);
+        assert_eq!(contexts.len(), 1);
+        assert_eq!(contexts[0].params[0].name, "Element");
+        assert_eq!(contexts[0].params[0].index, 0);
     }
 }

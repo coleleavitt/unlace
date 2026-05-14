@@ -88,6 +88,11 @@ pub const SME_ZA: u64 = SVE_P_BASE + 16 * SVE_P_SIZE as u64; // 1368
 pub const SME_ZA_SIZE: u8 = 32;
 pub const SME_ZT0: u64 = SME_ZA + SME_ZA_SIZE as u64; // 1624
 pub const SME_ZT0_SIZE: u8 = SVE_Z_SIZE;
+pub const SME_ZA_BASE: u64 = SVE_P_BASE + 16 * SVE_P_SIZE as u64;
+pub const SME_ZA_SIZE: u8 = 64;
+pub const SME_ZA_COUNT: u8 = 8;
+pub const fn sme_za_offset(n: u8) -> u64 { SME_ZA_BASE + (n as u64) * SME_ZA_SIZE as u64 }
+const SME_ZA_NAMES: [&str; 8] = ["ZA0","ZA1","ZA2","ZA3","ZA4","ZA5","ZA6","ZA7"];
 
 /// SVE Z-register names.
 const SVE_Z_NAMES: [&str; 32] = [
@@ -156,6 +161,9 @@ pub fn aarch64_register_file() -> RegisterFile {
         name: "ZT0",
         varnode: Varnode::reg(SME_ZT0, SME_ZT0_SIZE),
     });
+    for i in 0..SME_ZA_COUNT {
+        regs.push(RegisterDef { name: SME_ZA_NAMES[i as usize], varnode: Varnode::reg(sme_za_offset(i), SME_ZA_SIZE) });
+    }
     RegisterFile { registers: regs }
 }
 

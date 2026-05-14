@@ -202,6 +202,7 @@ mod tests {
         // 31 Xn + SP + PC + NZCV + PSTATE_NZCV + 32 Zn + 16 Pn = 83
         // 31 Xn + SP + PC + NZCV + PSTATE_NZCV + 32 Zn + 16 Pn + ZA + ZT0 = 85
         assert_eq!(rf.registers.len(), 85);
+        assert_eq!(rf.registers.len(), 91);
         assert_eq!(rf.registers[0].name, "X0");
         assert_eq!(rf.registers[30].name, "X30");
         assert_eq!(rf.registers[31].name, "SP");
@@ -701,13 +702,21 @@ mod tests {
     }
 
     #[test]
-    fn paciasp_recognized_as_nop() {
-        // PACIASP  →  d503233f
+    fn paciasp_lifts_to_callother_t303() {
+        use crate::lift::CALLOTHER_AARCH64_PACIA;
+        use crate::register_file::{SP, X30};
         let result = lifter()
             .lift_insn(&[0x3f, 0x23, 0x03, 0xd5], 0x1000)
             .expect("should decode");
         assert_eq!(result.len, 4);
-        assert!(result.ir_ops.is_empty());
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACIA);
+        assert_eq!(ir.inputs[1].offset, X30);
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, SP);
+        assert_eq!(ir.output.as_ref().unwrap().offset, X30);
     }
 
     #[test]
@@ -721,13 +730,19 @@ mod tests {
     }
 
     #[test]
-    fn xpaclri_recognized_as_nop() {
-        // XPACLRI  →  d50322ff
+    fn xpaclri_lifts_to_callother_t303() {
+        use crate::lift::CALLOTHER_AARCH64_XPACI;
+        use crate::register_file::X30;
         let result = lifter()
             .lift_insn(&[0xff, 0x22, 0x03, 0xd5], 0x1000)
             .expect("should decode");
         assert_eq!(result.len, 4);
-        assert!(result.ir_ops.is_empty());
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_XPACI);
+        assert_eq!(ir.inputs[1].offset, X30);
+        assert_eq!(ir.output.as_ref().unwrap().offset, X30);
     }
 
     #[test]
@@ -886,13 +901,93 @@ mod tests {
     }
 
     #[test]
-    fn autiasp_remains_nop() {
-        // t135 — AUTIASP (HINT-space)  →  d50323bf
+    fn autiasp_lifts_to_callother_t303() {
+        use crate::lift::CALLOTHER_AARCH64_AUTIA;
+        use crate::register_file::{SP, X30};
         let result = lifter()
             .lift_insn(&[0xbf, 0x23, 0x03, 0xd5], 0x1000)
             .expect("should decode");
         assert_eq!(result.len, 4);
-        assert!(result.ir_ops.is_empty(), "AUTIASP must remain a no-op");
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTIA);
+        assert_eq!(ir.inputs[1].offset, X30);
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, SP);
+        assert_eq!(ir.output.as_ref().unwrap().offset, X30);
+    }
+
+    #[test]
+    fn pacibsp_lifts_to_callother_t303() {
+        use crate::lift::CALLOTHER_AARCH64_PACIB;
+        use crate::register_file::{SP, X30};
+        let result = lifter()
+            .lift_insn(&[0x7f, 0x23, 0x03, 0xd5], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.len, 4);
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACIB);
+        assert_eq!(ir.inputs[1].offset, X30);
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, SP);
+        assert_eq!(ir.output.as_ref().unwrap().offset, X30);
+    }
+
+    #[test]
+    fn autibsp_lifts_to_callother_t303() {
+        use crate::lift::CALLOTHER_AARCH64_AUTIB;
+        use crate::register_file::{SP, X30};
+        let result = lifter()
+            .lift_insn(&[0xff, 0x23, 0x03, 0xd5], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.len, 4);
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTIB);
+        assert_eq!(ir.inputs[1].offset, X30);
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, SP);
+        assert_eq!(ir.output.as_ref().unwrap().offset, X30);
+    }
+
+    #[test]
+    fn pacia1716_lifts_to_callother_t303() {
+        use crate::lift::CALLOTHER_AARCH64_PACIA;
+        use crate::register_file::{X16, X17};
+        let result = lifter()
+            .lift_insn(&[0x1f, 0x23, 0x03, 0xd5], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.len, 4);
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACIA);
+        assert_eq!(ir.inputs[1].offset, X17);
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, X16);
+        assert_eq!(ir.output.as_ref().unwrap().offset, X17);
+    }
+
+    #[test]
+    fn autia1716_lifts_to_callother_t303() {
+        use crate::lift::CALLOTHER_AARCH64_AUTIA;
+        use crate::register_file::{X16, X17};
+        let result = lifter()
+            .lift_insn(&[0x9f, 0x23, 0x03, 0xd5], 0x1000)
+            .expect("should decode");
+        assert_eq!(result.len, 4);
+        assert_eq!(result.ir_ops.len(), 1);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTIA);
+        assert_eq!(ir.inputs[1].offset, X17);
+        assert_eq!(ir.inputs[2].space, SpaceId::Register);
+        assert_eq!(ir.inputs[2].offset, X16);
+        assert_eq!(ir.output.as_ref().unwrap().offset, X17);
     }
 
     #[test]
@@ -3117,5 +3212,49 @@ mod tests {
     fn test_sme_tag_constants_t301() {
         assert!(CALLOTHER_SME_FMOPA < CALLOTHER_SME_SMOPA);
         assert!(CALLOTHER_SME_SMOPA < CALLOTHER_SME_UMOPA);
+    }
+
+    #[test]
+    fn try_sme_fmopa_decodes_t296() {
+        use crate::lift::{SmeOuterProductKind, try_aarch64_sme_outer_product};
+        let d = try_aarch64_sme_outer_product(0x8081_0000).unwrap();
+        assert_eq!(d.kind, SmeOuterProductKind::Fmopa);
+        assert_eq!((d.za_tile, d.pm, d.pn, d.zn, d.zm), (0, 0, 0, 0, 1));
+    }
+
+    #[test]
+    fn try_sme_fmops_decodes_t296() {
+        use crate::lift::{SmeOuterProductKind, try_aarch64_sme_outer_product};
+        let d = try_aarch64_sme_outer_product(0x8081_0010).unwrap();
+        assert_eq!(d.kind, SmeOuterProductKind::Fmops);
+    }
+
+    #[test]
+    fn try_sme_smopa_decodes_t296() {
+        use crate::lift::{SmeOuterProductKind, try_aarch64_sme_outer_product};
+        let d = try_aarch64_sme_outer_product(0xA083_0041).unwrap();
+        assert_eq!(d.kind, SmeOuterProductKind::Smopa);
+        assert_eq!((d.za_tile, d.zn, d.zm), (1, 2, 3));
+    }
+
+    #[test]
+    fn sme_fmopa_lifts_to_callother_t296() {
+        use crate::lift::CALLOTHER_SME_FMOPA;
+        use crate::register_file::{SVE_Z_SIZE, sve_z_offset};
+        let result = lifter().lift_insn(&[0x00, 0x00, 0x81, 0x80], 0x1000).unwrap();
+        assert_eq!(result.len, 4);
+        let ir = &result.ir_ops[0];
+        assert_eq!(ir.op, IrOp::Callother);
+        assert_eq!(ir.inputs[0].offset, CALLOTHER_SME_FMOPA);
+        assert_eq!(ir.inputs[4], Varnode::reg(sve_z_offset(0), SVE_Z_SIZE));
+        assert_eq!(ir.inputs[5], Varnode::reg(sve_z_offset(1), SVE_Z_SIZE));
+    }
+
+    #[test]
+    fn sme_smopa_lifts_to_callother_t296() {
+        use crate::lift::CALLOTHER_SME_SMOPA;
+        let result = lifter().lift_insn(&[0x41, 0x00, 0x83, 0xA0], 0x1000).unwrap();
+        assert_eq!(result.ir_ops[0].inputs[0].offset, CALLOTHER_SME_SMOPA);
+        assert_eq!(result.ir_ops[0].inputs[1].offset, 1);
     }
 }

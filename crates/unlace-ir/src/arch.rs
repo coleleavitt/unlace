@@ -34,6 +34,7 @@ pub enum ArchId {
     Sparc,
     SuperH,
     M68k,
+    NvidiaSass,
     Unknown(u16),
 }
 
@@ -68,6 +69,7 @@ impl fmt::Display for ArchId {
             Self::Sparc => f.write_str("sparc"),
             Self::SuperH => f.write_str("superh"),
             Self::M68k => f.write_str("m68k"),
+            Self::NvidiaSass => f.write_str("nvidia-sass"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

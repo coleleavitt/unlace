@@ -10,6 +10,7 @@ pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
+pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_avr::AvrLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_m68k::M68kLifter;
@@ -18,6 +19,7 @@ pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_msp430::Msp430Lifter;
 pub use unlace_lift_ppc::PpcLifter;
 pub use unlace_lift_riscv::RiscVLifter;
+pub use unlace_lift_sass::SassLifter;
 pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_x86::X86Lifter;
 
@@ -69,6 +71,7 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::Avr => Box::new(AvrLifter::new()),
         ArchId::Agx => Box::new(AgxLifter::new()),
         ArchId::Msp430 => Box::new(Msp430Lifter::new()),
+        ArchId::NvidiaSass => Box::new(SassLifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -146,6 +149,9 @@ mod tests {
     fn test_get_lifter_sbpf() {
         let l = get_lifter(ArchId::Sbpf);
         assert_eq!(l.arch(), ArchId::Sbpf);
+    fn test_get_lifter_sass() {
+        let l = get_lifter(ArchId::NvidiaSass);
+        assert_eq!(l.arch(), ArchId::NvidiaSass);
         assert!(!l.register_file().registers.is_empty());
     }
 

@@ -7182,6 +7182,14 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x427 => Some("svst1_s32"),
         0x428 => Some("svand_pred"),
         0x429 => Some("svptrue_b32"),
+        // t317 — TrustZone / exception-level transition intrinsics.
+        0x42C => Some("__smc"),
+        0x42D => Some("__svc"),
+        0x42E => Some("__hvc"),
+        0x42F => Some("__eret"),
+        0x430 => Some("__smc"),
+        0x431 => Some("__svc"),
+        0x432 => Some("__hvc"),
         _ => None,
     }
 }

@@ -37,6 +37,7 @@ pub mod crypto_lib_recognize;
 pub mod ct_violation;
 pub mod ct_violation;
 pub mod cwe_detect;
+pub mod ct_violation;
 pub mod cse;
 pub mod ct_violation;
 pub mod cwe_detect;

@@ -6,6 +6,7 @@ pub mod bitfield_idioms;
 pub mod bitfield_recovery;
 pub mod bmi_idioms;
 pub mod bool_simplify;
+pub mod bool_coverage;
 pub mod boost_recognize;
 pub mod bsim_db;
 pub mod builtin_recognize;

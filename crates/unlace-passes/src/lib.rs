@@ -94,6 +94,7 @@ pub mod rust_result;
 pub mod rust_vtable;
 pub mod sccp;
 pub mod serial_recognize;
+pub mod smc_unwrap;
 pub mod printf_type_infer;
 pub mod rep_string_idiom;
 pub mod printf_type_infer;

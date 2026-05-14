@@ -100,6 +100,7 @@ pub mod printf_type_infer;
 pub mod protobuf_recognize;
 pub mod qt_recognize;
 pub mod rep_string_idiom;
+pub mod serial_recognize;
 pub mod sizeof_recognition;
 pub mod smc_unwrap;
 pub mod source_sink;

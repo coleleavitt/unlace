@@ -109,14 +109,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
-use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaFunction, SsaVarnode, VtableCallInfo};
-use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
-use unlace_ir::ssa::{CppLambdaCapture, PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
-use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
-use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaFunction, SsaVarnode, VtableCallInfo};
+use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
 use unlace_ir::types::Type;
-use unlace_ir::types::Type;
-use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::DwarfInfo;
 use unlace_struct::{HirFunction, HirNode, SwitchCase};
@@ -327,12 +321,6 @@ pub struct PrinterAnnotations {
     /// later via per-line comments).  Wired from
     /// [`unlace_loader::ObjcInfo::categories`] by the CLI pipeline.
     pub objc_categories: Vec<unlace_loader::ObjcCategory>,
-    /// Swift protocol conformances recovered from Mach-O `__swift5_proto`
-    /// descriptors (t290). Emitted as comment-only summaries in the preamble,
-    /// e.g. `// struct Cat: P`, so analysts can see source-level protocol
-    /// adoption even when witness-table users never devirtualize to a direct
-    /// call in the current function.
-    pub swift_conformances: Vec<unlace_loader::SwiftConformance>,
     /// Resolved PE forwarder chains: IAT slot VA → `target_dll!target_symbol`.
     ///
     /// Populated from [`unlace_loader::BinaryImage::forwarded_resolutions`].
@@ -372,14 +360,6 @@ pub struct PrinterAnnotations {
     /// direct source-like calls when the concrete receiver type is statically
     /// determinable.
     pub go_iface_devirtualized_calls: BTreeMap<u64, String>,
-    /// Resolved indirect calls keyed by `Callind` instruction VA.
-    ///
-    /// Populated from `SsaFunction::resolved_indirect_calls` by the CLI
-    /// pipeline after passes such as Go interface devirtualization recover a
-    /// unique concrete target. When present, `Callind` target rendering uses
-    /// the concrete symbol/`sub_<addr>` instead of the opaque function-pointer
-    /// expression.
-    pub resolved_indirect_calls: BTreeMap<u64, u64>,
     /// Pre-rendered preamble block for synthesised composite types
     /// recovered by the SSA analyses (t147 stack-frame composites in
     /// `SsaFunction::inferred_structs` and t213 array-of-structs layouts
@@ -452,18 +432,6 @@ pub struct PrinterAnnotations {
     pub go_defer_sites: Vec<GoDeferSite>,
     /// t258: per-byref-parameter union-tag types.
     pub byref_union_types: BTreeMap<u32, Vec<PrimitiveType>>,
-    /// t298: Rust trait-object vtable dispatches keyed by CALLIND instruction VA.
-    pub rust_vtable_calls: BTreeMap<u64, VtableCallInfo>,
-    /// t298: C++ virtual dispatches keyed by CALLIND instruction VA.
-    pub cpp_vtable_calls: BTreeMap<u64, VtableCallInfo>,
-    /// Swift protocol conformances recovered from Mach-O `__swift5_proto`.
-    /// Rendered as a source-style preamble (`// protocol P conformance: T`)
-    /// so witness-table metadata is visible in the C view.
-    pub swift_conformances: Vec<unlace_loader::SwiftConformance>,
-    /// Rust trait-object vtable dispatches keyed by CALLIND instruction VA.
-    pub rust_vtable_calls: BTreeMap<u64, VtableCallInfo>,
-    /// C++ virtual dispatches keyed by CALLIND instruction VA.
-    pub cpp_vtable_calls: BTreeMap<u64, VtableCallInfo>,
     /// t260: __usercall / __userpurge spec for functions whose register-
     /// passing scheme diverges from the active ABI's canonical sequence.
     pub usercall: Option<UsercallSpec>,
@@ -543,15 +511,12 @@ pub fn print_c_with_annotations(
         ctx.forwarded_resolutions = ann.forwarded_resolutions.clone();
         ctx.auth_calls = ann.auth_calls.clone();
         ctx.go_iface_devirtualized_calls = ann.go_iface_devirtualized_calls.clone();
-        ctx.resolved_indirect_calls = ann.resolved_indirect_calls.clone();
         ctx.libc_call_canonical = ann.libc_call_canonical.clone();
         ctx.libc_call_original = ann.libc_call_original.clone();
         ctx.array_struct_layouts = ann.array_struct_layouts.clone();
         ctx.array_struct_indices = ann.array_struct_indices.clone();
         ctx.go_defer_sites = ann.go_defer_sites.clone();
         ctx.byref_union_types = ann.byref_union_types.clone();
-        ctx.rust_vtable_calls = ann.rust_vtable_calls.clone();
-        ctx.cpp_vtable_calls = ann.cpp_vtable_calls.clone();
     }
     if let Some(cfg) = config {
         ctx.config = cfg;
@@ -559,7 +524,6 @@ pub fn print_c_with_annotations(
     ctx.parent_returns_void = matches!(func.return_type, PrimitiveType::Unknown);
     ctx.frame_size = header.map(|h| h.stack_frame);
     ctx.objc_dispatch_calls = func.objc_dispatch_calls.clone();
-    ctx.go_defer_recover_calls = func.go_defer_recover_calls.clone();
     ctx.byref_boxes = func.byref_boxes.clone();
     ctx.go_defer_sites = func.go_defer_sites.clone();
 
@@ -616,23 +580,6 @@ pub fn print_c_with_annotations(
         }
     }
 
-    if let Some(ann) = annotations {
-        let mut emitted_any = false;
-        for conf in &ann.swift_conformances {
-            let Some(line) = render_swift_conformance(conf) else {
-                continue;
-            };
-            if !emitted_any {
-                out.push_str("// Swift protocol conformances (recovered from __swift5_proto)\n");
-                emitted_any = true;
-            }
-            let _ = writeln!(out, "// {line}");
-        }
-        if emitted_any {
-            out.push('\n');
-        }
-    }
-
     // t181/t191: Go-style preamble for every recovered Go type.
     // Mirrors the ObjC class block above — surfaces interface method
     // sets (t181) plus slice / map shapes (t191) so analysts can
@@ -661,9 +608,6 @@ pub fn print_c_with_annotations(
                     format!("dictabi_0x{va:x}"),
                     format!("[{name} {constraint}]"),
                 ),
-                unlace_ir::types::Type::TypeParam { name, constraint } => {
-                    (format!("dictabi_0x{va:x}"), format!("[{name} {constraint}]"))
-                }
                 _ => continue,
             };
             if !emitted_any {
@@ -688,8 +632,6 @@ pub fn print_c_with_annotations(
     if let Some(summary) = render_go_defer_summary(func.go_defer_sites.as_slice(), symbols) {
         out.push_str(&summary);
         out.push('\n');
-    if let Some(ann) = annotations {
-        emit_swift_protocol_conformances(&ann.swift_conformances, &mut out);
     }
 
     // t147 / t224: synthesised composite preamble (stack-frame structs +
@@ -738,36 +680,6 @@ pub fn print_c_with_annotations(
         emit_function_header(hdr, &mut out);
     }
 
-    if let Some(async_info) = &func.rust_async {
-        let states = async_info
-            .states
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let returns = async_info
-            .poll_returns
-            .iter()
-            .map(|r| match r {
-                unlace_ir::ssa::RustPollReturnKind::Ready => "Ready",
-                unlace_ir::ssa::RustPollReturnKind::Pending => "Pending",
-            })
-            .collect::<Vec<_>>()
-            .join("/");
-        let _ = writeln!(
-            out,
-            "// recovered Rust async state machine: Pin<&mut T> state @ +0x{:x}, states [{}]{}",
-            async_info.state_offset,
-            states,
-            if returns.is_empty() {
-                String::new()
-            } else {
-                format!(", Poll::{returns}")
-            }
-        );
-        out.push_str("// async fn recovered from lowered Future::poll; original state-machine body follows\n");
-    }
-
     let demangled = crate::demangle::demangle(&func.name);
     let custom_self_name = header
         .and_then(|h| ctx.custom_names.get(&h.address))
@@ -794,10 +706,7 @@ pub fn print_c_with_annotations(
             // detection only — full `[capture](args) { ... }` rendering
             // would need to walk the closure's data members.
             if dr.is_lambda {
-                emit_lambda_annotation(&func.cpp_lambda_captures, &mut out);
-            }
-            if let Some(target) = crate::cpp_stl::recognize_std_function_sbo_target(dr) {
-                let _ = writeln!(out, "// std::function SBO target: {target}");
+                out.push_str("// lambda closure operator()\n");
             }
             crate::demangle::sanitize_for_c(&dr.short_name)
         }
@@ -831,12 +740,6 @@ pub fn print_c_with_annotations(
         } else {
             "__usercall"
         };
-    if let Some(uc) = usercall_spec {
-        let kind = if uc.purge { "__userpurge" } else { "__usercall" };
-    if func.rust_async.is_some() {
-        let _ = write!(out, "async fn {}(", emit_name);
-    } else if let Some(uc) = usercall_spec {
-        let kind = if uc.purge { "__userpurge" } else { "__usercall" };
         // `<ret>` suffix is omitted for void returns or when the spec
         // didn't pin a return register.
         let ret_suffix = if uc.return_reg.is_empty() {
@@ -1696,8 +1599,6 @@ struct PrintCtx {
     /// ObjC dispatch annotations keyed by instruction VA. Lifted from
     /// [`HirFunction::objc_dispatch_calls`].
     objc_dispatch_calls: BTreeMap<u64, String>,
-    /// Go `defer` / `recover` source-style annotations keyed by runtime-call VA.
-    go_defer_recover_calls: BTreeMap<u64, String>,
     /// Recovered ObjC `__block` (byref) boxes keyed by the alloca's base
     /// [`Varnode`]. Lifted from [`HirFunction::byref_boxes`] and consulted
     /// by local-decl emission to render `__block T name;` in place of the
@@ -1721,10 +1622,6 @@ struct PrintCtx {
     /// VA. When present, [`resolve_call_target`] renders the concrete callee
     /// name instead of the opaque function-pointer expression.
     go_iface_devirtualized_calls: BTreeMap<u64, String>,
-    /// Resolved indirect call targets keyed by Callind VA. Lifted from
-    /// [`PrinterAnnotations::resolved_indirect_calls`] and consulted by
-    /// [`resolve_call_target`] before falling back to the target operand.
-    resolved_indirect_calls: BTreeMap<u64, u64>,
     /// Canonical libc family name keyed by Call VA (t229). Lifted from
     /// [`PrinterAnnotations::libc_call_canonical`]; consulted by
     /// [`resolve_call_target`] before the symbol-table fallback so a
@@ -1753,10 +1650,6 @@ struct PrintCtx {
     /// has annotated the function with conflicting BYREF consumption-site
     /// types. See [`PrinterAnnotations::byref_union_types`].
     byref_union_types: BTreeMap<u32, Vec<PrimitiveType>>,
-    /// Rust trait-object vtable dispatch annotations keyed by CALLIND VA.
-    rust_vtable_calls: BTreeMap<u64, VtableCallInfo>,
-    /// C++ virtual dispatch annotations keyed by CALLIND VA.
-    cpp_vtable_calls: BTreeMap<u64, VtableCallInfo>,
     /// t259: constant absolute addresses heuristically classified as
     /// memory-mapped I/O registers. An address lands here when it is
     /// loaded at least twice in tight succession with no intervening
@@ -1765,10 +1658,6 @@ struct PrintCtx {
     /// dereference cast at every Load/Store through these addresses
     /// to surface the side-effecting nature of the access.
     mmio_addrs: BTreeSet<u64>,
-    /// t298: Rust trait-object vtable dispatch annotations keyed by CALLIND VA.
-    rust_vtable_calls: BTreeMap<u64, VtableCallInfo>,
-    /// t298: C++ virtual dispatch annotations keyed by CALLIND VA.
-    cpp_vtable_calls: BTreeMap<u64, VtableCallInfo>,
 }
 
 fn render_go_defer_summary(
@@ -1872,25 +1761,19 @@ impl PrintCtx {
             line_comments: BTreeMap::new(),
             custom_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             string_hash_table: BTreeMap::new(),
             pdb_constants_by_value: BTreeMap::new(),
             forwarded_resolutions: BTreeMap::new(),
             auth_calls: BTreeMap::new(),
             go_iface_devirtualized_calls: BTreeMap::new(),
-            resolved_indirect_calls: BTreeMap::new(),
             libc_call_canonical: BTreeMap::new(),
             libc_call_original: BTreeMap::new(),
             array_struct_layouts: BTreeMap::new(),
             array_struct_indices: BTreeMap::new(),
             go_defer_sites: Vec::new(),
             byref_union_types: BTreeMap::new(),
-            rust_vtable_calls: BTreeMap::new(),
-            cpp_vtable_calls: BTreeMap::new(),
             mmio_addrs: BTreeSet::new(),
-            rust_vtable_calls: BTreeMap::new(),
-            cpp_vtable_calls: BTreeMap::new(),
         }
     }
 
@@ -2234,9 +2117,9 @@ fn try_struct_field_access(
     let base_type = ctx.composite_var_types.get(&base_sv)?;
 
     let struct_fields = match base_type {
-        Type::Struct { fields, .. } | Type::Union { fields, .. } => fields,
+        Type::Struct { fields, .. } => fields,
         Type::Ptr(inner) => match inner.as_ref() {
-            Type::Struct { fields, .. } | Type::Union { fields, .. } => fields,
+            Type::Struct { fields, .. } => fields,
             _ => return None,
         },
         _ => return None,
@@ -4254,30 +4137,6 @@ fn is_default_v_name(name: &str) -> bool {
 /// general [`render_type_as_c`] so a `T *` param survives intact when
 /// the finalized signature widens a pointer-typed param into a typed
 /// pointer.
-fn emit_lambda_annotation(captures: &[CppLambdaCapture], out: &mut String) {
-    if captures.is_empty() {
-        out.push_str("// lambda closure operator()\n");
-        return;
-    }
-    let rendered = captures
-        .iter()
-        .map(render_lambda_capture)
-        .collect::<Vec<_>>()
-        .join(", ");
-    let _ = writeln!(out, "// lambda closure operator() [{}]", rendered);
-}
-
-fn render_lambda_capture(cap: &CppLambdaCapture) -> String {
-    if cap.name == "this" {
-        return "this".to_string();
-    }
-    if cap.by_ref {
-        format!("&{}", cap.name)
-    } else {
-        cap.name.clone()
-    }
-}
-
 fn c_sig_type_for_type(ty: &Type) -> String {
     match ty {
         Type::Primitive(p) => c_sig_type(p).to_string(),
@@ -4331,28 +4190,6 @@ fn c_sig_return_type(ty: &PrimitiveType) -> &'static str {
     }
 }
 
-fn sanitize_template_type_for_c(ty: &str) -> String {
-    let mut out = String::with_capacity(ty.len());
-    let mut last_was_sep = false;
-    for ch in ty.chars() {
-        let c = match ch {
-            '<' | '>' | ',' | ':' => '_',
-            c if c.is_ascii_alphanumeric() || c == '_' || c == '*' || c.is_whitespace() => c,
-            _ => '_',
-        };
-        if c == '_' {
-            if !last_was_sep {
-                out.push('_');
-                last_was_sep = true;
-            }
-        } else {
-            out.push(c);
-            last_was_sep = false;
-        }
-    }
-    out.trim_matches('_').to_string()
-}
-
 fn dwarf_type_to_c(dwarf_type: &str) -> String {
     let mut normalized = dwarf_type
         .trim()
@@ -4361,7 +4198,6 @@ fn dwarf_type_to_c(dwarf_type: &str) -> String {
         .replace("restrict ", "")
         .replace("struct ", "")
         .replace("typedef ", "");
-    normalized = sanitize_template_type_for_c(&normalized);
     let ptr_depth = normalized.matches('*').count();
     normalized = normalized.replace('*', " ");
     let normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -4732,38 +4568,6 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                                     .collect::<Vec<_>>()
                                     .join(", ")
                             );
-                            let _ = writeln!(
-                                out,
-                                "case 0x{:X}u:  /* \"{}\" */",
-                                v,
-                                s.escape_default()
-                            );
-                            let _ = writeln!(
-                                out,
-                                "case 0x{:X}u:  /* \"{}\" */",
-                                v,
-                                s.escape_default()
-                            );
-                        } else if let Some(names) = i64::try_from(*v)
-                            .ok()
-                            .and_then(|value| ctx.pdb_constants_by_value.get(&value))
-                        {
-                            let _ = writeln!(
-                                out,
-                                "case {}:  /* {} */",
-                                v,
-                                names
-                                    .iter()
-                                    .map(|name| name.as_str())
-                                    .collect::<Vec<_>>()
-                                    .join(", ")
-                            );
-                            let _ = writeln!(
-                                out,
-                                "case 0x{:X}u:  /* \"{}\" */",
-                                v,
-                                s.escape_default()
-                            );
                         } else {
                             let _ = writeln!(out, "case {}:", v);
                         }
@@ -5121,37 +4925,6 @@ fn emit_comment_line(text: &str, depth: usize, tab_width: usize, out: &mut Strin
 /// the trailing `/* -> dll!sym */` comment text the printer should append
 /// to the call statement. Returns `None` for non-CALL insns or when the
 /// target VA is not a key in the resolution map.
-/// t298: Render a human-readable annotation for a single Rust vtable slot.
-fn rust_vtable_call_comment(info: &VtableCallInfo) -> String {
-    let label = match info.slot_index {
-        0 => "drop_in_place",
-        1 => "size",
-        2 => "align",
-        _ => "method",
-    };
-    format!(
-        "Rust dyn Trait vtable call: slot {} ({}, offset {:#x})",
-        info.slot_index, label, info.vtable_offset
-    )
-}
-
-/// t298: If `insn` is a CALLIND identified as Rust or C++ vtable dispatch,
-/// return the annotation comment string.
-fn vtable_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
-    if insn.op != IrOp::Callind {
-        return None;
-    }
-    if let Some(info) = ctx.rust_vtable_calls.get(&insn.addr) {
-        return Some(rust_vtable_call_comment(info));
-    }
-    ctx.cpp_vtable_calls.get(&insn.addr).map(|info| {
-        format!(
-            "C++ virtual call: vtable slot {} (offset {:#x})",
-            info.slot_index, info.vtable_offset
-        )
-    })
-}
-
 fn forwarded_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
     if !matches!(insn.op, IrOp::Call | IrOp::Callind) {
         return None;
@@ -5165,34 +4938,6 @@ fn forwarded_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
     }
     let resolved = ctx.forwarded_resolutions.get(&target.offset)?;
     Some(format!("/* -> {} */", resolved))
-}
-
-fn rust_vtable_call_comment(info: &VtableCallInfo) -> String {
-    let label = match info.slot_index {
-        0 => "drop_in_place",
-        1 => "size",
-        2 => "align",
-        _ => "method",
-    };
-    format!(
-        "Rust dyn Trait vtable call: slot {} ({}, offset {:#x})",
-        info.slot_index, label, info.vtable_offset
-    )
-}
-
-fn vtable_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
-    if insn.op != IrOp::Callind {
-        return None;
-    }
-    if let Some(info) = ctx.rust_vtable_calls.get(&insn.addr) {
-        return Some(rust_vtable_call_comment(info));
-    }
-    ctx.cpp_vtable_calls.get(&insn.addr).map(|info| {
-        format!(
-            "C++ virtual call: vtable slot {} (offset {:#x})",
-            info.slot_index, info.vtable_offset
-        )
-    })
 }
 
 fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
@@ -5211,13 +4956,6 @@ fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Stri
     }
     if let Some(go_name) = ctx.go_iface_devirtualized_calls.get(&insn.addr) {
         return go_name.clone();
-    if insn.op == IrOp::Callind {
-        if let Some(&target) = ctx.resolved_indirect_calls.get(&insn.addr) {
-            if let Some(name) = ctx.symbols.get(&target) {
-                return demangle_callee_name(name);
-            }
-            return format!("sub_{:x}", target);
-        }
     }
     let target_vn = &insn.inputs[0];
     if target_vn.space == SpaceId::Const {
@@ -5510,15 +5248,6 @@ fn objc_bracket_call(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
     }
 }
 
-/// Return a printer-ready Go `defer` / `recover` annotation for this runtime
-/// helper call, when the SSA-level Go recovery pass identified one.
-fn go_defer_recover_annotation(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
-    if !matches!(insn.op, IrOp::Call) {
-        return None;
-    }
-    ctx.go_defer_recover_calls.get(&insn.addr).cloned()
-}
-
 /// Translate a single ObjC `@encoding` type code into the closest C type
 /// spelling.  Unknown encodings fall back to `void*` with an inline comment
 /// preserving the original code so the reader can still recover the
@@ -5633,19 +5362,13 @@ pub fn render_objc_class_struct(class: &unlace_loader::ObjcClass) -> Option<Stri
 /// * [`SsaFunction::inferred_structs`] — stack-frame composites synthesised
 ///   from adjacent same-typed stack slots by `StackVarRecoveryPass` (t147),
 ///   keyed by RSP-relative starting offset.
-/// * [`SsaFunction::composite_var_types`] — pointer/base structs recovered
-///   from repeated base-plus-constant accesses. Only layouts containing a
-///   recovered union field are printed here, avoiding churn for plain access
-///   recovery while surfacing t365 union alternatives.
 /// * [`SsaFunction::array_struct_layouts`] — heap / global / parameter-pointer
 ///   structs recovered from array-of-structs access patterns inside natural
 ///   loops by `struct_field_recovery::recover_structs` (t213), keyed by the
 ///   base-pointer SSA varnode.
 ///
-/// One `struct __anon0 { … };` block is emitted per stack/array layout,
-/// numbered in the fixed order above (stack-frame composites first, then
-/// array layouts). Named `composite_var_types` union layouts are emitted
-/// between those phases without consuming an `__anon<N>` index.
+/// One `struct __anon0 { … };` block is emitted per layout, numbered in the
+/// fixed order above (stack-frame composites first, then array layouts).
 /// Field names use the byte-offset convention `field_<offset>` so the layout
 /// is self-describing without leaking the synthesised internal name.
 ///
@@ -5653,10 +5376,7 @@ pub fn render_objc_class_struct(class: &unlace_loader::ObjcClass) -> Option<Stri
 /// the result unconditionally and only emit a trailing blank line when the
 /// preamble is non-empty.
 pub fn emit_inferred_struct_preamble(func: &SsaFunction) -> String {
-    if func.inferred_structs.is_empty()
-        && func.composite_var_types.is_empty()
-        && func.array_struct_layouts.is_empty()
-    {
+    if func.inferred_structs.is_empty() && func.array_struct_layouts.is_empty() {
         return String::new();
     }
 
@@ -5668,35 +5388,13 @@ pub fn emit_inferred_struct_preamble(func: &SsaFunction) -> String {
     // whose `offset` is a true byte offset.  We re-emit with offset-based
     // names so the rendered struct is self-describing.
     for ty in func.inferred_structs.values() {
-        match ty {
-            Type::Struct { fields, .. } => {
-                let _ = writeln!(out, "struct __anon{idx} {{");
-                for f in fields {
-                    let _ = writeln!(out, "    {} field_{};", f.ty, f.offset);
-                }
-                let _ = writeln!(out, "}};");
-                idx += 1;
+        if let Type::Struct { fields, .. } = ty {
+            let _ = writeln!(out, "struct __anon{idx} {{");
+            for f in fields {
+                let _ = writeln!(out, "    {} field_{};", f.ty, f.offset);
             }
-            Type::Union { fields, .. } => {
-                let _ = writeln!(out, "union __anon{idx} {{");
-                for f in fields {
-                    let _ = writeln!(out, "    {} {};", f.ty, f.name);
-                }
-                let _ = writeln!(out, "}};");
-                idx += 1;
-            }
-            _ => {}
-        }
-    }
-
-    // Pointer/base composites recovered from repeated base-plus-constant
-    // accesses (t365). These may include anonymous union fields when the same
-    // byte offset is read/written through incompatible access types.
-    for ty in func.composite_var_types.values() {
-        if let Type::Struct { name, fields } = ty
-            && fields.iter().any(|field| type_contains_union(&field.ty))
-        {
-            emit_named_struct_decl(&mut out, name, fields);
+            let _ = writeln!(out, "}};");
+            idx += 1;
         }
     }
 
@@ -5732,7 +5430,7 @@ pub fn compute_array_struct_indices(func: &SsaFunction) -> BTreeMap<SsaVarnode, 
     // Stack-frame composites (t147) — count one slot each. Their iteration
     // order must mirror `emit_inferred_struct_preamble`.
     for ty in func.inferred_structs.values() {
-        if matches!(ty, Type::Struct { .. } | Type::Union { .. }) {
+        if matches!(ty, Type::Struct { .. }) {
             idx += 1;
         }
     }
@@ -5748,51 +5446,6 @@ pub fn compute_array_struct_indices(func: &SsaFunction) -> BTreeMap<SsaVarnode, 
 /// inferred-struct preamble.  Widths outside the recognised set fall back to
 /// `__int64`, matching the conservative-widening convention used elsewhere
 /// in the printer for unrecovered scalar types.
-fn type_contains_union(ty: &Type) -> bool {
-    match ty {
-        Type::Union { .. } => true,
-        Type::Struct { fields, .. } => fields.iter().any(|field| type_contains_union(&field.ty)),
-        Type::Array { element, .. } | Type::Ptr(element) | Type::Slice { elem: element } => {
-            type_contains_union(element)
-        }
-        Type::Map { key, value } => type_contains_union(key) || type_contains_union(value),
-        Type::FuncPtr {
-            params,
-            return_type,
-            ..
-        } => params.iter().any(type_contains_union) || type_contains_union(return_type),
-        Type::Bitfield { underlying, .. } => type_contains_union(underlying),
-        Type::Primitive(_) | Type::Interface { .. } => false,
-    }
-}
-
-fn emit_named_struct_decl(out: &mut String, name: &str, fields: &[StructFieldType]) {
-    let _ = writeln!(out, "struct {name} {{");
-    for f in fields {
-        emit_struct_field_decl(out, f, 1);
-    }
-    let _ = writeln!(out, "}};");
-}
-
-fn emit_struct_field_decl(out: &mut String, field: &StructFieldType, indent: usize) {
-    let pad = "    ".repeat(indent);
-    match &field.ty {
-        Type::Union { fields, .. } => {
-            let _ = writeln!(out, "{pad}union {{");
-            for member in fields {
-                emit_struct_field_decl(out, member, indent + 1);
-            }
-            let _ = writeln!(out, "{pad}}} {};", field.name);
-        }
-        Type::Struct { name, .. } => {
-            let _ = writeln!(out, "{pad}struct {name} {};", field.name);
-        }
-        ty => {
-            let _ = writeln!(out, "{pad}{ty} {};", field.name);
-        }
-    }
-}
-
 fn primitive_for_width(width: u8) -> &'static str {
     match width {
         1 => "__int8",
@@ -5802,54 +5455,6 @@ fn primitive_for_width(width: u8) -> &'static str {
         16 => "__int128",
         _ => "__int64",
     }
-}
-
-/// Render Swift protocol witness-table metadata as compact comments.
-///
-/// The recovered data is runtime metadata rather than C syntax, so comments are
-/// deliberate: they preserve valid C output while giving analysts the source
-/// fact they care about — `Type` conforms to `protocol P` and the witness
-/// table/accessor address that implements the conformance.
-pub fn render_swift_conformance(conf: &unlace_loader::SwiftConformance) -> String {
-    let ty = conf
-        .type_name
-        .as_deref()
-        .map(str::to_owned)
-        .or_else(|| conf.type_va.map(|va| format!("type_0x{va:x}")))
-        .unwrap_or_else(|| "<unknown type>".to_string());
-    let proto = conf
-        .protocol_name
-        .as_deref()
-        .map(str::to_owned)
-        .or_else(|| conf.protocol_va.map(|va| format!("protocol_0x{va:x}")))
-        .unwrap_or_else(|| "<unknown protocol>".to_string());
-
-    let mut line = format!(
-        "// protocol {proto} conformance: {ty} @ 0x{:x}",
-        conf.descriptor_va
-    );
-    if let Some(witness) = conf.witness_table_va {
-        let _ = write!(line, " witness=0x{witness:x}");
-    }
-    if conf.flags != 0 {
-        let _ = write!(line, " flags=0x{:x}", conf.flags);
-    }
-    line.push('\n');
-    line
-}
-
-fn emit_swift_protocol_conformances(
-    conformances: &[unlace_loader::SwiftConformance],
-    out: &mut String,
-) {
-    if conformances.is_empty() {
-        return;
-    }
-    out.push_str("// Swift protocol conformances (recovered from __swift5_proto)\n");
-    for conf in conformances {
-        out.push_str(&render_swift_conformance(conf));
-    }
-    out.push('\n');
 }
 
 /// Render an ObjC category as a commented `@interface` block:
@@ -5871,34 +5476,7 @@ fn emit_swift_protocol_conformances(
 /// class methods `+`. The body is intentionally allowed to be empty: a
 /// category may exist in the runtime even with zero recovered selectors
 /// (the analyst gets a "this category exists" breadcrumb to chase).
-pub fn render_swift_conformance(conf: &unlace_loader::SwiftConformance) -> Option<String> {
-    let protocol_name = conf.protocol_name.as_deref()?;
-    let type_name = conf.type_name.as_deref()?;
-    let type_kind = conf
-        .type_descriptor_va
-        .and_then(|_| classify_swift_type_decl(type_name));
-    Some(match type_kind {
-        Some(kind) => format!("{kind} {type_name}: {protocol_name}"),
-        None => format!("{type_name}: {protocol_name}"),
-    })
-}
-
-fn classify_swift_type_decl(type_name: &str) -> Option<&'static str> {
-    let last = type_name.rsplit('.').next().unwrap_or(type_name);
-    let first = last.chars().next()?;
-    if !first.is_ascii_uppercase() {
-        return None;
-    }
-    if last.contains("enum") {
-        Some("enum")
-    } else if last.contains("Protocol") {
-        Some("protocol")
-    } else {
-        Some("struct")
-    }
-}
-
-fn render_objc_category(cat: &unlace_loader::ObjcCategory) -> String {
+pub fn render_objc_category(cat: &unlace_loader::ObjcCategory) -> String {
     let mut out = String::new();
     let class_label: String = cat
         .class_name
@@ -5939,9 +5517,7 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
         return None;
     }
     if matches!(insn.op, IrOp::Call | IrOp::Callind)
-        && (ctx.panic_sites.contains_key(&insn.addr)
-            || cxa_call_annotation(insn, ctx).is_some()
-            || go_defer_recover_annotation(insn, ctx).is_some())
+        && (ctx.panic_sites.contains_key(&insn.addr) || cxa_call_annotation(insn, ctx).is_some())
     {
         return None;
     }
@@ -6034,13 +5610,7 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             }
             IrOp::Store => Some("/* STORE (bad arity) */;".to_string()),
             IrOp::Callind => {
-                let mut s = String::new();
-                if let Some(comment) = vtable_call_comment(insn, ctx) {
-                    s.push_str("// ");
-                    s.push_str(&comment);
-                    s.push('\n');
-                }
-                s.push_str(&format!("{};", emit_callind_cast(insn, idx, ctx)));
+                let mut s = format!("{};", emit_callind_cast(insn, idx, ctx));
                 if let Some(c) = forwarded_call_comment(insn, ctx) {
                     s.push(' ');
                     s.push_str(&c);
@@ -6162,15 +5732,6 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
         let lhs = ctx.name_of(&sv);
 
-        if let Some(ann) = go_defer_recover_annotation(insn, ctx) {
-            if ann == "recover()" {
-                let _ = writeln!(out, "{} = recover();", lhs);
-                return;
-            }
-            let _ = writeln!(out, "/* Go: {} */", ann);
-            indent(depth, ctx.config.tab_width, out);
-        }
-
         if matches!(insn.op, IrOp::Call | IrOp::Callind) {
             if let Some(ann) = cxa_call_annotation(insn, ctx) {
                 let _ = writeln!(out, "/* {} */", ann);
@@ -6247,10 +5808,6 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 }
             }
             IrOp::Call | IrOp::Callind => {
-                if let Some(ann) = go_defer_recover_annotation(insn, ctx) {
-                    let _ = writeln!(out, "{};", ann);
-                    return;
-                }
                 if let Some(kind) = ctx.panic_sites.get(&insn.addr) {
                     let _ = writeln!(out, "/* PANIC: {} */", kind);
                     indent(depth, ctx.config.tab_width, out);
@@ -6258,10 +5815,6 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 let cxa_annotation = cxa_call_annotation(insn, ctx);
                 if let Some(ref ann) = cxa_annotation {
                     let _ = writeln!(out, "/* {} */", ann);
-                    indent(depth, ctx.config.tab_width, out);
-                }
-                if let Some(comment) = vtable_call_comment(insn, ctx) {
-                    let _ = writeln!(out, "// {}", comment);
                     indent(depth, ctx.config.tab_width, out);
                 }
                 let fwd = forwarded_call_comment(insn, ctx);
@@ -7236,11 +6789,6 @@ fn emit_expr_with_prec(
 
         // -- Call with output --
         IrOp::Call | IrOp::Callind => {
-            if let Some(ann) = go_defer_recover_annotation(insn, ctx)
-                && ann == "recover()"
-            {
-                return ann;
-            }
             let base = if insn.op == IrOp::Callind {
                 emit_callind_cast(insn, stmt_idx, ctx)
             } else if let Some(printf_call) = try_emit_printf_call(insn, stmt_idx, ctx) {
@@ -7496,8 +7044,6 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
 
         // ── AVX-512 generic EVEX fallback (t306) ─────────────────
         0x1F0 => Some("__builtin_ia32_avx512_evex"),
-        // ── x86 performance-monitoring counter (0x1F0, t312) ────
-        0x1F0 => Some("_rdpmc"), // RDPMC
 
         // ── AES-NI intrinsics (0x1E0..0x1E4) ──────────────────────
         0x1E0 => Some("_mm_aesenc_si128"),          // AESENC
@@ -7512,16 +7058,6 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x1EA => Some("_mm_sha256rnds2_epu32"), // SHA256RNDS2
         0x1EB => Some("_mm_sha256msg1_epu32"),  // SHA256MSG1
         0x1EC => Some("_mm_sha256msg2_epu32"),  // SHA256MSG2
-
-        // ── Intel AMX tile intrinsics (0x1F0..0x1F7) ────────────
-        0x1F0 => Some("_tile_loadd"),    // TILELOADD / TILELOADDT1
-        0x1F1 => Some("_tile_stored"),   // TILESTORED
-        0x1F2 => Some("_tile_release"),  // TILERELEASE
-        0x1F3 => Some("_tile_dpbssd"),   // TDPBSSD
-        0x1F4 => Some("_tile_dpbsud"),   // TDPBSUD
-        0x1F5 => Some("_tile_dpbusd"),   // TDPBUSD
-        0x1F6 => Some("_tile_dpbuud"),   // TDPBUUD
-        0x1F7 => Some("_tile_dpbf16ps"), // TDPBF16PS
 
         // ── Bit-manipulation builtins (0x200..0x204) ───────────
         0x200 => Some("__builtin_ctz"),      // BSF
@@ -7562,20 +7098,6 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x350 => Some("__cmov__"),
         0x351 => Some("__rdpmc__"),
 
-        // ── RISC-V Zb* bit-manipulation intrinsics (0x600..0x60B) ─
-        0x600 => Some("__builtin_ctzll"),
-        0x601 => Some("__riscv_rol"),
-        0x602 => Some("__riscv_ror"),
-        0x603 => Some("__riscv_min"),
-        0x604 => Some("__riscv_minu"),
-        0x605 => Some("__riscv_max"),
-        0x606 => Some("__riscv_maxu"),
-        0x607 => Some("__riscv_clmul"),
-        0x608 => Some("__riscv_clmulh"),
-        0x609 => Some("__riscv_clmulr"),
-        0x60A => Some("__builtin_bswap64"),
-        0x60B => Some("__riscv_orc_b"),
-
         // ── AArch64 NEON (0x400..0x40D) ─────────────────────────
         // These are *not* resolved here because the C intrinsic name
         // depends on the lane-size operand (e.g. ADD lane=4 →
@@ -7596,7 +7118,7 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x416 => Some("__xpaci"),
         0x417 => Some("__xpacd"),
 
-        // ── AArch64 SVE/SME (0x420..0x42D) ──────────────────────────
+        // ── AArch64 SVE (0x420..0x429) ──────────────────────────────
         0x420 => Some("svadd_s32"),
         0x421 => Some("svsub_s32"),
         0x422 => Some("svmul_s32"),
@@ -7607,116 +7129,6 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x427 => Some("svst1_s32"),
         0x428 => Some("svand_pred"),
         0x429 => Some("svptrue_b32"),
-        // t317 — TrustZone / exception-level transition intrinsics.
-        0x42C => Some("__smc"),
-        0x42D => Some("__svc"),
-        0x42E => Some("__hvc"),
-        0x42F => Some("__eret"),
-        0x430 => Some("__smc"),
-        0x431 => Some("__svc"),
-        0x432 => Some("__hvc"),
-        _ => None,
-    }
-}
-
-const CALLOTHER_AARCH64_LDAXR: u64 = 0x345;
-const CALLOTHER_AARCH64_STLXR: u64 = 0x346;
-const CALLOTHER_AARCH64_ATOMIC_LOAD_ACQUIRE: u64 = 0x347;
-const CALLOTHER_AARCH64_ATOMIC_STORE_RELEASE: u64 = 0x348;
-const CALLOTHER_AARCH64_ATOMIC_FETCH_ADD: u64 = 0x349;
-const CALLOTHER_AARCH64_ATOMIC_EXCHANGE: u64 = 0x34A;
-const CALLOTHER_AARCH64_ATOMIC_CMPXCHG: u64 = 0x34B;
-
-fn aarch64_atomic_order_name(order: u64) -> &'static str {
-    match order {
-        0 => "memory_order_relaxed",
-        1 => "memory_order_acquire",
-        2 => "memory_order_release",
-        3 => "memory_order_acq_rel",
-        _ => "memory_order_seq_cst",
-    }
-}
-
-fn atomic_ptr_arg(vn: &Varnode, operand_idx: usize, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
-    format!(
-        "(_Atomic unsigned long long *){}",
-        emit_operand_resolved(vn, operand_idx, stmt_idx, ctx)
-    )
-}
-
-fn emit_aarch64_atomic_callother(
-    tag: u64,
-    insn: &IrInsn,
-    stmt_idx: u32,
-    ctx: &mut PrintCtx,
-) -> Option<String> {
-    match tag {
-        CALLOTHER_AARCH64_LDAXR => {
-            let addr = insn.inputs.get(1)?;
-            Some(format!(
-                "atomic_load_explicit({}, memory_order_acquire)",
-                atomic_ptr_arg(addr, 1, stmt_idx, ctx)
-            ))
-        }
-        CALLOTHER_AARCH64_STLXR => {
-            let value = insn.inputs.get(1)?;
-            let addr = insn.inputs.get(2)?;
-            Some(format!(
-                "({{ atomic_store_explicit({}, {}, memory_order_release); 0; }})",
-                atomic_ptr_arg(addr, 2, stmt_idx, ctx),
-                emit_operand_resolved(value, 1, stmt_idx, ctx)
-            ))
-        }
-        CALLOTHER_AARCH64_ATOMIC_LOAD_ACQUIRE => {
-            let addr = insn.inputs.get(2)?;
-            Some(format!(
-                "atomic_load_explicit({}, memory_order_acquire)",
-                atomic_ptr_arg(addr, 2, stmt_idx, ctx)
-            ))
-        }
-        CALLOTHER_AARCH64_ATOMIC_STORE_RELEASE => {
-            let value = insn.inputs.get(2)?;
-            let addr = insn.inputs.get(3)?;
-            Some(format!(
-                "atomic_store_explicit({}, {}, memory_order_release)",
-                atomic_ptr_arg(addr, 3, stmt_idx, ctx),
-                emit_operand_resolved(value, 2, stmt_idx, ctx)
-            ))
-        }
-        CALLOTHER_AARCH64_ATOMIC_FETCH_ADD | CALLOTHER_AARCH64_ATOMIC_EXCHANGE => {
-            let order = insn.inputs.get(1)?.offset;
-            let value = insn.inputs.get(2)?;
-            let addr = insn.inputs.get(3)?;
-            let name = if tag == CALLOTHER_AARCH64_ATOMIC_FETCH_ADD {
-                "atomic_fetch_add_explicit"
-            } else {
-                "atomic_exchange_explicit"
-            };
-            Some(format!(
-                "{}({}, {}, {})",
-                name,
-                atomic_ptr_arg(addr, 3, stmt_idx, ctx),
-                emit_operand_resolved(value, 2, stmt_idx, ctx),
-                aarch64_atomic_order_name(order)
-            ))
-        }
-        CALLOTHER_AARCH64_ATOMIC_CMPXCHG => {
-            let order = insn.inputs.get(1)?.offset;
-            let expected = insn.inputs.get(2)?;
-            let desired = insn.inputs.get(3)?;
-            let addr = insn.inputs.get(4)?;
-            Some(format!(
-                "atomic_compare_exchange_strong_explicit({}, &{}, {}, {}, memory_order_relaxed)",
-                atomic_ptr_arg(addr, 4, stmt_idx, ctx),
-                emit_operand_resolved(expected, 2, stmt_idx, ctx),
-                emit_operand_resolved(desired, 3, stmt_idx, ctx),
-                aarch64_atomic_order_name(order)
-            ))
-        }
-        0x42A => Some("svfmopa_f32"),
-        0x42B => Some("svfmops_f32"),
-        0x42C => Some("svsmopa_s32"),
-        0x42D => Some("svumopa_u32"),
         _ => None,
     }
 }
@@ -7858,14 +7270,6 @@ const CALLOTHER_SVE_ST1: u64 = 0x427;
 const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
 #[allow(dead_code)]
 const CALLOTHER_SVE_PTRUE: u64 = 0x429;
-#[allow(dead_code)]
-const CALLOTHER_SME_FMOPA: u64 = 0x42A;
-#[allow(dead_code)]
-const CALLOTHER_SME_FMOPS: u64 = 0x42B;
-#[allow(dead_code)]
-const CALLOTHER_SME_SMOPA: u64 = 0x42C;
-#[allow(dead_code)]
-const CALLOTHER_SME_UMOPA: u64 = 0x42D;
 
 /// Map an AArch64 NEON `Callother` `(tag, lane_size, signed)` triple to
 /// its Apple/ARM C intrinsic name (e.g. `vaddq_s32`).
@@ -9520,7 +8924,6 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -9528,7 +8931,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -9536,7 +8938,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         }
     }
 
@@ -9553,37 +8954,6 @@ mod tests {
             base: Varnode::reg(offset, size),
             version: 0,
         }
-    }
-
-    #[test]
-    fn t302_prints_go_defer_and_recover_source_style() {
-        let defer_call =
-            IrInsn::without_output(IrOp::Call, smallvec![con(0x1000, 8), reg(0, 8)], 0x1010);
-        let recover_ret = reg(8, 8);
-        let recover_call = IrInsn::with_output(
-            IrOp::Call,
-            recover_ret,
-            smallvec![con(0x2000, 8), con(0, 8)],
-            0x2020,
-        );
-        let mut func = make_func(
-            "go_defer_recover",
-            vec![
-                HirNode::Statement(defer_call),
-                HirNode::Statement(recover_call),
-                HirNode::Return(Some(sv(8, 8))),
-            ],
-        );
-        func.go_defer_recover_calls
-            .insert(0x1010, "defer reg_0".to_string());
-        func.go_defer_recover_calls
-            .insert(0x2020, "recover()".to_string());
-
-        let output = print_c(&func);
-        assert!(output.contains("defer reg_0;"), "{output}");
-        assert!(output.contains(" = recover();"), "{output}");
-        assert!(!output.contains("sub_1000"), "{output}");
-        assert!(!output.contains("sub_2000"), "{output}");
     }
 
     #[test]
@@ -10191,7 +9561,6 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -10199,7 +9568,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -10207,7 +9575,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -10400,7 +9767,6 @@ mod tests {
                         type_name: "int".to_string(),
                     },
                 ],
-                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10410,7 +9776,6 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
-            split_dwarf_files: Vec::new(),
         };
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(output.contains("->size"), "should contain ->size: {output}");
@@ -10463,7 +9828,6 @@ mod tests {
                         type_name: "int".to_string(),
                     },
                 ],
-                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10473,7 +9837,6 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
-            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10530,7 +9893,6 @@ mod tests {
                         type_name: "int".to_string(),
                     },
                 ],
-                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10540,7 +9902,6 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
-            split_dwarf_files: Vec::new(),
         };
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(!output.contains("->"), "should NOT contain ->: {output}");
@@ -10683,7 +10044,6 @@ mod tests {
                 return_type: Some("int".to_string()),
                 decl: None,
                 locals: vec![],
-                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10693,7 +10053,6 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
-            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10728,20 +10087,15 @@ mod tests {
                     ParameterInfo {
                         name: Some("a".to_string()),
                         type_name: Some("int".to_string()),
-                        frame_offset: None,
-                        locations: vec![],
                     },
                     ParameterInfo {
                         name: Some("b".to_string()),
                         type_name: Some("int".to_string()),
-                        frame_offset: None,
-                        locations: vec![],
                     },
                 ],
                 return_type: Some("int".to_string()),
                 decl: None,
                 locals: vec![],
-                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10751,7 +10105,6 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
-            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10779,7 +10132,6 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -10787,7 +10139,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -10795,7 +10146,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         };
 
         let mut functions = BTreeMap::new();
@@ -10811,20 +10161,15 @@ mod tests {
                     ParameterInfo {
                         name: Some("count".to_string()),
                         type_name: Some("int".to_string()),
-                        frame_offset: None,
-                        locations: vec![],
                     },
                     ParameterInfo {
                         name: Some("buf".to_string()),
                         type_name: Some("char *".to_string()),
-                        frame_offset: None,
-                        locations: vec![],
                     },
                 ],
                 return_type: Some("int".to_string()),
                 decl: None,
                 locals: vec![],
-                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10834,7 +10179,6 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
-            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10869,7 +10213,6 @@ mod tests {
                 return_type: Some("long".to_string()),
                 decl: None,
                 locals: vec![],
-                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10879,7 +10222,6 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
-            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10901,7 +10243,6 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: true,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -10909,7 +10250,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -10917,7 +10257,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         };
 
         let output = super::print_c(&func);
@@ -10939,7 +10278,6 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -10947,7 +10285,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -10955,7 +10292,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         };
 
         let output = super::print_c(&func);
@@ -13118,8 +12454,6 @@ mod tests {
             output.contains("// dictabi_0x1234: [T any]"),
             "output was: {output}"
         );
-        let output = super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
-        assert!(output.contains("// dictabi_0x1234: [T any]"), "output was: {output}");
     }
 
     // -------------------------------------------------------------------
@@ -13467,7 +12801,6 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
-            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -13508,34 +12841,6 @@ mod tests {
             !output.contains("// source:"),
             "legacy `// source:` prefix should not be emitted: {output}",
         );
-    }
-
-    #[test]
-    fn t278_inlinee_site_marker_renders_as_leading_comment() {
-        let call_va: u64 = 0x401004;
-        let target_va: u64 = 0x500000;
-        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![con(target_va, 8)], call_va);
-        let func = make_func("caller", vec![HirNode::Statement(call_insn), HirNode::Return(None)]);
-
-        let mut symbols = BTreeMap::new();
-        symbols.insert(target_va, "target".to_string());
-
-        let mut ann = super::PrinterAnnotations::default();
-        ann.line_comments
-            .insert(call_va, "_inlined_foo(...)".to_string());
-
-        let output = super::print_c_with_annotations(
-            &func,
-            None,
-            None,
-            Some(&symbols),
-            None,
-            None,
-            None,
-            Some(&ann),
-        );
-
-        assert!(output.contains("target();"), "expected rendered call: {output}");
     }
 
     // -------------------------------------------------------------------
@@ -15236,10 +14541,8 @@ mod tests {
                     name: "counter".to_string(),
                     type_name: Some("long long".to_string()),
                     frame_offset: Some(-0x50),
-                    expr_location: None,
                     locations: vec![],
                 }],
-                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -15249,7 +14552,6 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
-            split_dwarf_files: Vec::new(),
         };
 
         let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
@@ -15727,7 +15029,6 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15735,7 +15036,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -15743,7 +15043,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -15764,7 +15063,6 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15772,7 +15070,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -15780,7 +15077,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -15805,7 +15101,6 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15813,7 +15108,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -15821,7 +15115,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -15842,7 +15135,6 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15850,7 +15142,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -15858,7 +15149,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -15879,7 +15169,6 @@ mod tests {
             foldable_exprs: std::collections::BTreeSet::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15887,7 +15176,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -15895,7 +15183,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -15942,7 +15229,6 @@ mod tests {
             foldable_exprs: foldable,
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
-            rust_async: None,
             noreturn: false,
             composite_var_types: std::collections::BTreeMap::new(),
             is_ctor: false,
@@ -15950,7 +15236,6 @@ mod tests {
             class_name: None,
             merged_names: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),
-            go_defer_recover_calls: BTreeMap::new(),
             indirect_branch_kinds: BTreeMap::new(),
             byref_boxes: BTreeMap::new(),
             byref_params: std::collections::BTreeSet::new(),
@@ -15958,7 +15243,6 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
-            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -16195,19 +15479,6 @@ mod tests {
             !output.contains("((void (*)(__int64))pfn)("),
             "got: {output}"
         );
-        let output = super::print_c_with_annotations(
-            &func,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(&ann),
-        );
-
-        assert!(output.contains("main__MyType_Do)("), "got: {output}");
-        assert!(!output.contains("((void (*)(__int64))pfn)("), "got: {output}");
     }
 
     // P8-12: Demangled C++ names in C output
@@ -17008,22 +16279,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn lambda_capture_list_emits_byref_and_this() {
-        let body = vec![HirNode::Return(None)];
-        let mut func = make_func("_ZZ11call_lambdaiENKUliE_clEi", body);
-        func.cpp_lambda_captures = vec![
-            unlace_ir::ssa::CppLambdaCapture::by_reference("x"),
-            unlace_ir::ssa::CppLambdaCapture::by_value("this"),
-        ];
-        let output = print_c(&func);
-
-        assert!(
-            output.contains("// lambda closure operator() [&x, this]"),
-            "expected lambda capture list, got:\n{output}",
-        );
-    }
-
     /// Negative: a regular non-lambda member function must NOT receive
     /// the lambda annotation comment.
     #[test]
@@ -17111,14 +16366,6 @@ mod tests {
             output.contains("__rdpmc__(v1)"),
             "missing rdpmc helper: {output}"
         );
-                smallvec![Varnode::constant(0x351, 8), Varnode::new(unlace_ir::SpaceId::Register, 0x08, 4)],
-                0x1000,
-            )),
-            HirNode::Return(None),
-        ];
-        let func = make_func("read_pmc", body);
-        let output = print_c(&func);
-        assert!(output.contains("__rdpmc__(v1)"), "missing rdpmc helper: {output}");
     }
 
     #[test]
@@ -17942,137 +17189,6 @@ mod tests {
         );
     }
 
-    // ── t298: Rust trait-object vtable recovery ──
-
-    #[test]
-    fn t298_rust_trait_object_vtable_call_is_annotated() {
-        let fptr = reg(0, 8);
-        let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr], 0x1100);
-        let func = make_func(
-            "dyn_trait_dispatch",
-            vec![HirNode::Statement(callind), HirNode::Return(None)],
-        );
-
-        let mut ann = super::PrinterAnnotations::default();
-        ann.rust_vtable_calls.insert(
-            0x1100,
-            unlace_ir::ssa::VtableCallInfo {
-                base_varnode: SsaVarnode {
-                    base: reg(16, 8),
-                    version: 0,
-                },
-                vtable_offset: 24,
-                slot_index: 3,
-            },
-        );
-
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
-        assert!(
-            output.contains("// Rust dyn Trait vtable call: slot 3 (method, offset 0x18)"),
-            "missing Rust vtable annotation: {output}"
-        );
-    }
-
-    #[test]
-    fn t298_cpp_vtable_call_is_annotated() {
-        let fptr = reg(0, 8);
-        let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr], 0x2200);
-        let func = make_func(
-            "cpp_virtual_dispatch",
-            vec![HirNode::Statement(callind), HirNode::Return(None)],
-        );
-
-        let mut ann = super::PrinterAnnotations::default();
-        ann.cpp_vtable_calls.insert(
-            0x2200,
-            unlace_ir::ssa::VtableCallInfo {
-                base_varnode: SsaVarnode {
-                    base: reg(16, 8),
-                    version: 0,
-                },
-                vtable_offset: 16,
-                slot_index: 2,
-            },
-        );
-
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
-        assert!(
-            output.contains("// C++ virtual call: vtable slot 2 (offset 0x10)"),
-            "missing C++ vtable annotation: {output}"
-        );
-    }
-
-    #[test]
-    fn t298_rust_vtable_drop_slot_annotated() {
-        let fptr = reg(0, 8);
-        let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr], 0x3300);
-        let func = make_func(
-            "dyn_drop",
-            vec![HirNode::Statement(callind), HirNode::Return(None)],
-        );
-
-        let mut ann = super::PrinterAnnotations::default();
-        ann.rust_vtable_calls.insert(
-            0x3300,
-            unlace_ir::ssa::VtableCallInfo {
-                base_varnode: SsaVarnode {
-                    base: reg(16, 8),
-                    version: 0,
-                },
-                vtable_offset: 0,
-                slot_index: 0,
-            },
-        );
-
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
-        assert!(
-            output.contains("// Rust dyn Trait vtable call: slot 0 (drop_in_place, offset 0x0)"),
-            "missing drop_in_place vtable annotation: {output}"
-
-    #[test]
-    fn t296_rust_trait_object_vtable_call_is_annotated() {
-        let fptr = reg(0, 8);
-        let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr], 0x1100);
-        let func = make_func(
-            "dyn_trait_dispatch",
-            vec![HirNode::Statement(callind), HirNode::Return(None)],
-        );
-
-        let mut ann = super::PrinterAnnotations::default();
-        ann.rust_vtable_calls.insert(
-            0x1100,
-            unlace_ir::ssa::VtableCallInfo {
-                base_varnode: SsaVarnode {
-                    base: reg(16, 8),
-                    version: 0,
-                },
-                vtable_offset: 24,
-                slot_index: 3,
-            },
-        );
-
-        let output = super::print_c_with_annotations(
-            &func,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(&ann),
-        );
-        assert!(
-            output.contains("// Rust dyn Trait vtable call: slot 3 (method, offset 0x18)"),
-            "missing Rust vtable annotation: {output}"
-        );
-    }
-
     // ── t122: stack canary + char-case polish ──
 
     #[test]
@@ -18482,53 +17598,6 @@ mod tests {
     }
 
     #[test]
-    fn preamble_emits_swift_protocol_conformances() {
-        let func = minimal_func();
-        let mut ann = super::PrinterAnnotations::default();
-        ann.swift_conformances
-            .push(unlace_loader::SwiftConformance {
-                descriptor_va: 0x7000,
-                protocol_descriptor_va: Some(0x6000),
-                protocol_name: Some("Pettable".into()),
-                type_descriptor_va: Some(0x5000),
-                type_name: Some("Cat".into()),
-            });
-        let output =
-            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
-        assert!(
-            output.contains("// Swift protocol conformances (recovered from __swift5_proto)"),
-            "expected Swift conformance heading, got:
-{output}"
-        );
-        assert!(
-            output.contains("// struct Cat: Pettable"),
-            "expected rendered conformance summary, got:
-{output}"
-        );
-    }
-
-    #[test]
-    fn preamble_skips_incomplete_swift_protocol_conformances() {
-        let func = minimal_func();
-        let mut ann = super::PrinterAnnotations::default();
-        ann.swift_conformances
-            .push(unlace_loader::SwiftConformance {
-                descriptor_va: 0x7000,
-                protocol_descriptor_va: Some(0x6000),
-                protocol_name: None,
-                type_descriptor_va: Some(0x5000),
-                type_name: Some("Cat".into()),
-            });
-        let output =
-            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
-        assert!(
-            !output.contains("Swift protocol conformances"),
-            "incomplete entries should not emit a heading, got:
-{output}"
-        );
-    }
-
-    #[test]
     fn preamble_emits_category_with_two_instance_methods() {
         let func = minimal_func();
         let mut ann = super::PrinterAnnotations::default();
@@ -18592,34 +17661,6 @@ mod tests {
         assert!(
             !body.contains("//   -") && !body.contains("//   +"),
             "empty-method category body must not contain selector lines, got body:\n{body}"
-        );
-    }
-
-    #[test]
-    fn preamble_emits_swift_protocol_conformance() {
-        let func = minimal_func();
-        let mut ann = super::PrinterAnnotations::default();
-        ann.swift_conformances
-            .push(unlace_loader::SwiftConformance {
-                descriptor_va: 0x6000,
-                protocol_va: Some(0x5000),
-                protocol_name: Some("Drawable".into()),
-                type_va: Some(0x4000),
-                type_name: Some("Widget".into()),
-                witness_table_va: Some(0x7000),
-                flags: 0x1234,
-            });
-        let output =
-            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
-        assert!(
-            output.contains("// Swift protocol conformances (recovered from __swift5_proto)"),
-            "expected Swift heading, got:\n{output}"
-        );
-        assert!(
-            output.contains(
-                "// protocol Drawable conformance: Widget @ 0x6000 witness=0x7000 flags=0x1234"
-            ),
-            "expected rendered conformance, got:\n{output}"
         );
     }
 
@@ -18847,57 +17888,6 @@ mod tests {
         assert!(out.contains("field_0"), "field_0 missing: {out}");
         assert!(out.contains("field_4"), "field_4 missing: {out}");
         assert!(out.trim_end().ends_with("};"), "close brace: {out}");
-    }
-
-    #[test]
-    fn test_emit_inferred_struct_preamble_composite_var_union_field() {
-        use unlace_ir::types::{StructFieldType, Type};
-        use unlace_ir::{SpaceId, Varnode};
-
-        let mut ssa = empty_ssa_for_preamble();
-        let base = unlace_ir::ssa::SsaVarnode {
-            base: Varnode {
-                space: SpaceId::Register,
-                offset: 0x20,
-                size: 8,
-            },
-            version: 0,
-        };
-        ssa.composite_var_types.insert(
-            base,
-            Type::Struct {
-                name: "struct_20".into(),
-                fields: vec![StructFieldType {
-                    name: "field_0".into(),
-                    offset: 0,
-                    ty: Type::Union {
-                        name: "union_field_0".into(),
-                        fields: vec![
-                            StructFieldType {
-                                name: "field_0_a".into(),
-                                offset: 0,
-                                ty: Type::uint(4),
-                            },
-                            StructFieldType {
-                                name: "field_0_b".into(),
-                                offset: 0,
-                                ty: Type::Primitive(PrimitiveType::Float),
-                            },
-                        ],
-                    },
-                }],
-            },
-        );
-
-        let out = super::emit_inferred_struct_preamble(&ssa);
-        assert!(out.contains("struct struct_20 {"), "struct header missing: {out}");
-        assert!(out.contains("    union {"), "union field missing: {out}");
-        assert!(
-            out.contains("        unsigned __int32 field_0_a;"),
-            "integer union member missing: {out}"
-        );
-        assert!(out.contains("        float field_0_b;"), "float union member missing: {out}");
-        assert!(out.contains("    } field_0;"), "union declarator missing: {out}");
     }
 
     #[test]
@@ -19663,29 +18653,6 @@ mod tests {
         assert!(
             !header.contains("@<"),
             "standard header must not carry @<reg> suffixes: {header:?}"
-        );
-    }
-
-    #[test]
-    fn test_callother_sme_fmopa_emits_svfmopa_f32_t301() {
-        let tag = con(0x42A, 8);
-        let pg = con(3, 1);
-        let za = reg(0x558, 0x20);
-        let zn = reg(0x118, 0x20);
-        let zm = reg(0x138, 0x20);
-        let body = vec![
-            HirNode::Statement(IrInsn::without_output(
-                IrOp::Callother,
-                smallvec![tag, pg, za, zn, zm],
-                0x1000,
-            )),
-            HirNode::Return(None),
-        ];
-        let func = make_func("sme_fmopa", body);
-        let output = print_c(&func);
-        assert!(
-            output.contains("svfmopa_f32("),
-            "SME FMOPA should render as svfmopa_f32: {output}"
         );
     }
 }

@@ -36,103 +36,12 @@
 //! distinct from an expected `Err` returned by the loader on malformed
 //! input.
 
-pub mod corpus;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::Duration;
 
 use unlace_cli::args::EmitFormat;
 use unlace_cli::pipeline::{self, PipelineConfig};
 use unlace_lift::get_lifter;
-use unlace_loader::{ElfLoader, Loader};
-
-/// Maximum number of functions the harness will decompile per iteration.
-///
-/// Fuzzers prize *throughput* — covering one new edge per million inputs
-/// matters more than fully decompiling any single binary. Capping the
-/// per-iteration work keeps tail latency bounded so a maliciously crafted
-/// ELF with millions of synthetic symbols can't stall the corpus.
-const MAX_FUNCTIONS_PER_ITER: usize = 16;
-
-/// Per-function decompilation timeout. Same rationale as
-/// [`MAX_FUNCTIONS_PER_ITER`]: bound worst-case time so the fuzzer keeps
-/// moving.
-const PER_FUNCTION_TIMEOUT: Duration = Duration::from_secs(2);
-
-/// Structured outcome of a single fuzz iteration.
-///
-/// Each variant corresponds to a distinct *interesting* observable: the
-/// fuzzer's coverage minimizer can key on these to keep one
-/// representative input per outcome class without needing to diff
-/// arbitrary string output.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FuzzResult {
-    /// Input was not a valid ELF (loader rejected magic / parse). This is
-    /// the common case for random inputs and is **not** a bug — the
-    /// fuzzer should still record coverage but not flag it.
-    NotElf,
-    /// Loader accepted the input but parsing returned a structured error
-    /// before any lifting happened. Carries the stringified error for
-    /// triage.
-    LoadFailed(String),
-    /// The whole pipeline ran to completion across all discovered
-    /// functions. `functions_decompiled` counts how many produced C
-    /// output without panicking; pipeline-level `Err` returns from
-    /// individual functions are tolerated (the real CLI also tolerates
-    /// them, emitting a `/* decompilation failed */` comment).
-    Ok { functions_decompiled: usize },
-    /// **A panic was caught.** This is the only "found a bug" outcome.
-    /// `stage` names the pipeline stage that was running when the panic
-    /// fired so triage knows where to start. The payload string is the
-    /// best-effort downcast of the panic value.
-    Panicked {
-        stage: &'static str,
-        payload: String,
-    },
-}
-
-/// Drive one fuzz iteration over `bytes`.
-///
-/// This is the function a `fuzz_target!` macro would wrap. It MUST NOT
-/// panic; every internal call site is wrapped in `catch_unwind`. If a
-/// panic *does* escape (e.g. from `catch_unwind` itself on a foreign
-/// exception), that is a separate class of bug and will manifest as a
-/// process abort — exactly what we want the fuzzer to surface.
-pub fn fuzz_iteration(bytes: &[u8]) -> FuzzResult {
-    // -- Stage 1: ELF magic gate ------------------------------------
-    //
-    // We could call `ElfLoader::load` directly and let it reject
-    // non-ELF input, but the magic check is essentially free and lets
-    // us distinguish "fuzzer fed us random bytes" (overwhelming
-    // majority) from "fuzzer fed us a corrupted ELF" (the interesting
-    // class). This split shows up in coverage reports as a much
-    // clearer signal.
-    if !ElfLoader::can_load(bytes) {
-        return FuzzResult::NotElf;
-    }
-
-    // -- Stage 2: load ----------------------------------------------
-    let load_outcome = catch_unwind(AssertUnwindSafe(|| ElfLoader::load(bytes)));
-    let image = match load_outcome {
-        Ok(Ok(img)) => img,
-        Ok(Err(e)) => return FuzzResult::LoadFailed(format!("{e}")),
-        Err(payload) => {
-            return FuzzResult::Panicked {
-                stage: "load",
-                payload: panic_payload_to_string(&payload),
-            };
-        }
-    };
-
-    // -- Stage 3: function discovery --------------------------------
-    let discover_outcome = catch_unwind(AssertUnwindSafe(|| {
-        pipeline::discover_functions(&image, None)
-    }));
-use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::time::Duration;
-
-use unlace_cli::args::EmitFormat;
-use unlace_cli::pipeline::{self, PipelineConfig};
-use unlace_lift::{LifterEndian, get_lifter_with_endian};
 use unlace_loader::{ElfLoader, Loader};
 
 /// Maximum number of functions the harness will decompile per iteration.
@@ -245,15 +154,7 @@ pub fn fuzz_iteration(bytes: &[u8]) -> FuzzResult {
         };
     }
 
-    let lifter = match catch_unwind(AssertUnwindSafe(|| {
-        get_lifter_with_endian(
-            image.arch,
-            Some(match image.endian {
-                unlace_loader::Endian::Little => LifterEndian::Little,
-                unlace_loader::Endian::Big => LifterEndian::Big,
-            }),
-        )
-    })) {
+    let lifter = match catch_unwind(AssertUnwindSafe(|| get_lifter(image.arch))) {
         Ok(l) => l,
         Err(payload) => {
             return FuzzResult::Panicked {

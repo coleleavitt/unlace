@@ -1,8 +1,6 @@
 //! Binary image types produced by loaders.
 
 use std::collections::BTreeMap;
-
-use crate::pdb::PdbInfo;
 use std::fmt;
 
 pub use unlace_ir::ArchId;
@@ -379,9 +377,6 @@ pub struct BinaryImage {
     pub dylibs: Vec<DylibDep>,
     /// Mach-O `@rpath` search paths from `LC_RPATH`. Empty for ELF/PE.
     pub rpaths: Vec<String>,
-    /// Raw PDB symbol / line / inlinee-site information, when an associated
-    /// `.pdb` was loaded.
-    pub pdb_info: Option<PdbInfo>,
     /// PDB-derived CodeView types, when an associated `.pdb` was loaded.
     /// Consumed by the type-infer pipeline to seed function signatures and
     /// composite layouts. `None` for ELF/Mach-O or PEs without PDB.
@@ -414,15 +409,6 @@ pub struct BinaryImage {
     /// `interface { Method() }` Go-style comments above usages. Empty
     /// for non-Go binaries or when no interface types are reachable.
     pub go_types: std::collections::BTreeMap<u64, unlace_ir::types::Type>,
-    /// Recovered Go interface types keyed by their `runtime._type` VA
-    /// (t181). Populated by `populate_go_types_from_module` after the
-    /// moduledata parse; the C printer consumes this map to render
-    /// `interface { Method() }` Go-style comments above usages. Empty
-    /// for non-Go binaries or when no interface types are reachable.
-    pub go_types:
-        std::collections::BTreeMap<u64, unlace_ir::types::Type>,
-    pub go_types:
-        std::collections::BTreeMap<u64, unlace_ir::types::Type>,
     /// Swift 5+ runtime metadata recovered from Mach-O `__swift5_*`
     /// sections (t193). `None` for non-Swift binaries (the common
     /// case) or any image where none of the three sections is
@@ -575,7 +561,6 @@ mod tests {
             rich_header: None,
             dylibs: Vec::new(),
             rpaths: Vec::new(),
-            pdb_info: None,
             pdb_types: None,
             msvc_rtti: None,
             seh: None,

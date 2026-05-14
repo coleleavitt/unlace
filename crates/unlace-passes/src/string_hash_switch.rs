@@ -534,30 +534,6 @@ pub fn is_java_string_pattern(loop_body: &[IrInsn]) -> bool {
                 .inputs
                 .iter()
                 .any(|v| v.space == SpaceId::Const && v.offset == 5)
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 10)
-    });
-    let has_shr6 = loop_body.iter().any(|insn| {
-        insn.op == IrOp::IntRight
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 6)
-    });
-    let has_add = loop_body.iter().any(|insn| insn.op == IrOp::IntAdd);
-    let has_xor = loop_body.iter().any(|insn| insn.op == IrOp::IntXor);
-    has_shl10 && has_shr6 && has_add && has_xor
-}
-
-/// Check whether `loop_body` matches Java/Swift string hashing.
-pub fn is_java_string_pattern(loop_body: &[IrInsn]) -> bool {
-    let has_mult_31 = loop_body.iter().any(|insn| {
-        insn.op == IrOp::IntMult
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 31)
-    });
-    if has_mult_31 && loop_body.iter().any(|insn| insn.op == IrOp::IntAdd) {
-        return true;
-    }
-
-    let has_shl5 = loop_body.iter().any(|insn| {
-        insn.op == IrOp::IntLeft
-            && insn.inputs.iter().any(|v| v.space == SpaceId::Const && v.offset == 5)
     });
     let has_sub = loop_body.iter().any(|insn| insn.op == IrOp::IntSub);
     let has_add = loop_body.iter().any(|insn| insn.op == IrOp::IntAdd);
@@ -760,17 +736,6 @@ mod tests {
             identify_hash_pattern(&loop_body),
             Some(HashFamily::JavaString)
         );
-        assert_eq!(identify_hash_pattern(&loop_body), Some(HashFamily::JenkinsOaat));
-    }
-
-    #[test]
-    fn test_java_string_pattern_recognised() {
-        let loop_body = vec![
-            make_insn(IrOp::IntMult, 31),
-            make_insn_no_const(IrOp::IntAdd),
-        ];
-        assert!(is_java_string_pattern(&loop_body));
-        assert_eq!(identify_hash_pattern(&loop_body), Some(HashFamily::JavaString));
     }
 
     /// sdbm pattern: IntLeft by 6, IntLeft by 16, IntSub, IntAdd recognised.

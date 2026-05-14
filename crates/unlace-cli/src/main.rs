@@ -7,7 +7,7 @@ use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 use unlace_ir::ArchId;
-use unlace_lift::{LifterEndian, get_lifter_with_endian};
+use unlace_lift::get_lifter;
 use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf};
 use unlace_plugin::PluginManager;
 
@@ -240,16 +240,8 @@ fn run_decompile(
             | ArchId::V850
             | ArchId::Arc
             | ArchId::Agx
-            | ArchId::Msp430
-            | ArchId::M68k
-            | ArchId::TriCore
-            | ArchId::AmdGpu
-            | ArchId::SharcBlackfin
             | ArchId::Ppc
             | ArchId::Ppc64
-            | ArchId::Sbpf
-            | ArchId::TiC6x
-            | ArchId::TiC28x
     ) {
         bail!(
             "architecture {} is not yet supported for decompilation",
@@ -257,13 +249,7 @@ fn run_decompile(
         );
     }
 
-    let lifter = get_lifter_with_endian(
-        image.arch,
-        Some(match image.endian {
-            unlace_loader::Endian::Little => LifterEndian::Little,
-            unlace_loader::Endian::Big => LifterEndian::Big,
-        }),
-    );
+    let lifter = get_lifter(image.arch);
     let mut functions = pipeline::discover_functions(&image, function_filter)?;
 
     let dwarf = match import_dwarf(&image) {

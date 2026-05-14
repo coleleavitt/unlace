@@ -10,13 +10,10 @@ publish = false
 # fuzz drivers; the binary is a tiny stdin reader so this harness can be
 # plugged into AFL/honggfuzz/libFuzzer without taking on libfuzzer-sys's
 # nightly + sanitizer build chain (per t467 scope).
+
 [lib]
 name = "unlace_fuzz"
 path = "src/lib.rs"
-
-[[bin]]
-name = "unlace-fuzz"
-path = "src/main.rs"
 
 [dependencies]
 unlace-ir = { workspace = true }
@@ -27,3 +24,7 @@ unlace-output = { workspace = true }
 unlace-cli = { workspace = true }
 serde = { workspace = true }
 serde_json = "1"
+
+[[bin]]
+name = "unlace-fuzz"
+path = "src/main.rs"

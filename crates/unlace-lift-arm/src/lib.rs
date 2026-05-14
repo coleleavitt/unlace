@@ -11,114 +11,10 @@ mod tests {
     use unlace_ir::{ArchId, IrOp, Lifter, SpaceId, Varnode};
 
     use crate::ArmLifter;
-use crate::lift::{
-    ARM_FLAG_C,
-    ARM_FLAG_N,
-    ARM_FLAG_V,
-    ARM_FLAG_Z,
-    Aarch64TmeDecoded,
-    ArmLiftMode,
-    CALLOTHER_AARCH64_CCMP,
-    CALLOTHER_AARCH64_TCOMMIT,
-    CALLOTHER_AARCH64_TSTART,
-    CALLOTHER_ARM_NEON_VADD_F,
-    CALLOTHER_ARM_NEON_VADD_I,
-    CALLOTHER_ARM_NEON_VLD1,
-    CALLOTHER_ARM_NEON_VQADD,
-    CALLOTHER_ARM_NEON_VQSUB,
-    CALLOTHER_ARM_NEON_VST1,
-    CALLOTHER_ARM_QADD,
-    CALLOTHER_ARM_QSUB,
-    CALLOTHER_ARM_RBIT,
-    CALLOTHER_ARM_REV,
-    CALLOTHER_ARM_REV16,
-    CALLOTHER_ARM_SADD16,
-    CALLOTHER_ARM_SSAT,
-    CALLOTHER_ARM_SSUB16,
-    CALLOTHER_ARM_UQADD16,
-    CALLOTHER_ARM_UQADD8,
-    CALLOTHER_ARM_USAT,
-    CALLOTHER_INT_MULT_HIGH,
-    CALLOTHER_INT_SMULT_HIGH,
-    CALLOTHER_AARCH64_SMC,
-    CALLOTHER_AARCH64_SVC,
-    CALLOTHER_AARCH64_HVC,
-    CALLOTHER_AARCH64_ERET,
-    CALLOTHER_ARM_SMC,
-    CALLOTHER_ARM_SVC,
-    CALLOTHER_ARM_HVC,
-    ItState,
-    LdmStmAddressing,
-    decode_arm_ldm_stm,
-    decode_it,
-    decode_thumb1_ldm_stm,
-    decode_thumb1_push_pop,
-    decode_thumb2_ldm_stm,
-    expand_reg_list,
-    try_aarch64_ccmp,
-    try_aarch64_csel,
-    try_aarch64_tme,
-};
-    use crate::lift::{
-        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
-        CALLOTHER_ARM_NEON_VADD_F, CALLOTHER_ARM_NEON_VADD_I, CALLOTHER_ARM_NEON_VLD1,
-        CALLOTHER_ARM_NEON_VQADD, CALLOTHER_ARM_NEON_VQSUB, CALLOTHER_ARM_NEON_VST1,
-        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
-        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, Aarch64TmeDecoded, ArmLiftMode,
-        CALLOTHER_AARCH64_CCMP, CALLOTHER_AARCH64_TCOMMIT, CALLOTHER_AARCH64_TSTART,
-        CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
-        CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
-        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
-        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
-        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
-        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
-        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
-        CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
-        CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SMC, CALLOTHER_ARM_SSAT,
-        CALLOTHER_ARM_SSUB16, CALLOTHER_ARM_SVC, CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8,
-        CALLOTHER_ARM_USAT,
-        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
-        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
-        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
-        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ARM_MVE_PRED_OFFSET, ARM_MVE_PRED_SIZE,
-        ARM_MVE_Q_SIZE, ArmLiftMode, CALLOTHER_AARCH64_CCMP, CALLOTHER_ARM_MVE_VADD,
-        CALLOTHER_ARM_MVE_VCTP, CALLOTHER_ARM_MVE_VLD, CALLOTHER_ARM_MVE_VMOV,
-        CALLOTHER_ARM_MVE_VMUL, CALLOTHER_ARM_MVE_VST, CALLOTHER_ARM_MVE_VSUB, CALLOTHER_ARM_QADD,
-        CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV, CALLOTHER_ARM_REV16,
-        CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16, CALLOTHER_ARM_UQADD8,
-        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
-        CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, arm_mve_q_offset, decode_arm_ldm_stm,
-        decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop, decode_thumb2_ldm_stm,
-        expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
-    };
     use crate::lift::{
         ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
         CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
         CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
-        CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
-        CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
-        CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
-        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
-        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
-        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
-        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
-        CALLOTHER_ARM_MVE_VADD, CALLOTHER_ARM_MVE_VLDR, CALLOTHER_ARM_MVE_VSTR, CALLOTHER_ARM_QADD,
-        CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV, CALLOTHER_ARM_REV16,
-        CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16, CALLOTHER_ARM_UQADD8,
-        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
-        CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
-        decode_thumb1_ldm_stm, decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list,
-        try_aarch64_ccmp, try_aarch64_csel,
-        try_aarch64_tme,
-        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
-        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
-        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
-        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
-        CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
-        CALLOTHER_INT_SMULT_HIGH, CALLOTHER_SME_FMOPA, CALLOTHER_SME_SMOPA, CALLOTHER_SME_UMOPA,
-        ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm,
-        decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp,
-        try_aarch64_csel,
         CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
         CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
         decode_thumb1_ldm_stm, decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list,
@@ -251,18 +147,6 @@ use crate::lift::{
     }
 
     #[test]
-    fn decode_itett_eq() {
-        // firstcond=EQ=0, mask=0b0011 → ITETT → insn = 0xBF03
-        let s = decode_it(0xBF03).expect("ITETT EQ");
-        assert_eq!(s.firstcond, 0);
-        assert_eq!(s.conds, vec![0, 0, 0, 1]);
-    fn decode_itete_eq_four_slots() {
-        let s = decode_it(0xBF0B).expect("ITETE EQ");
-        assert_eq!(s.firstcond, 0);
-        assert_eq!(s.conds, vec![0, 1, 0, 1]);
-    }
-
-    #[test]
     fn decode_it_rejects_non_it() {
         assert!(decode_it(0x4770).is_none()); // BX LR
         assert!(decode_it(0xBF00).is_none()); // mask=0 → NOP hint
@@ -311,8 +195,8 @@ use crate::lift::{
         let l = lifter();
         let rf = l.register_file();
         assert!(!rf.registers.is_empty());
-        // 31 Xn + SP + PC + NZCV + PSTATE_NZCV + 32 Zn + 16 Pn + ZA + ZT0 = 85
-        assert_eq!(rf.registers.len(), 85);
+        // 31 Xn + SP + PC + NZCV + PSTATE_NZCV + 32 Zn + 16 Pn = 83
+        assert_eq!(rf.registers.len(), 83);
         assert_eq!(rf.registers[0].name, "X0");
         assert_eq!(rf.registers[30].name, "X30");
         assert_eq!(rf.registers[31].name, "SP");
@@ -325,20 +209,6 @@ use crate::lift::{
         assert_eq!(rf.registers[66].name, "Z31");
         assert_eq!(rf.registers[67].name, "P0");
         assert_eq!(rf.registers[82].name, "P15");
-    }
-
-    #[test]
-    fn arm32_register_file_includes_vfp_registers() {
-        let l = ArmLifter::new_arm32();
-        let rf = l.register_file();
-        assert_eq!(rf.registers[16].name, "APSR");
-        assert_eq!(rf.registers[17].name, "FPSCR");
-        assert_eq!(rf.registers[18].name, "S0");
-        assert_eq!(rf.registers[49].name, "S31");
-        assert_eq!(rf.registers[50].name, "D0");
-        assert_eq!(rf.registers[81].name, "D31");
-        assert_eq!(rf.registers[18].varnode.offset, rf.registers[50].varnode.offset);
-        assert_eq!(rf.registers[50].varnode.size, 8);
     }
 
     #[test]
@@ -643,56 +513,6 @@ use crate::lift::{
     }
 
     #[test]
-    fn try_aarch64_tme_decodes_tstart_and_tcommit() {
-        assert_eq!(
-            try_aarch64_tme(0xD523_3060),
-            Some(Aarch64TmeDecoded::Tstart { rt: 0 })
-        );
-        assert_eq!(
-            try_aarch64_tme(0xD523_3061),
-            Some(Aarch64TmeDecoded::Tstart { rt: 1 })
-        );
-        assert_eq!(try_aarch64_tme(0xD503_307F), Some(Aarch64TmeDecoded::Tcommit));
-        assert_eq!(try_aarch64_tme(0xD523_3161), None, "TTEST is not part of t294");
-    }
-
-    #[test]
-    fn arm64_tstart_lifts_to_callother_with_status_output() {
-        // TSTART X0 → d5233060. LLVM models this as producing a status code in Xt.
-        let result = lifter()
-            .lift_insn(&[0x60, 0x30, 0x23, 0xd5], 0x1000)
-            .expect("TSTART should decode");
-        assert_eq!(result.len, 4);
-        assert_eq!(result.ir_ops.len(), 1);
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].space, SpaceId::Const);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_TSTART);
-        assert_eq!(ir.inputs.len(), 1);
-        let out = ir.output.as_ref().expect("TSTART returns status in Xt");
-        assert_eq!(out.space, SpaceId::Register);
-        assert_eq!(out.offset, 0);
-        assert_eq!(out.size, 8);
-        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-    }
-
-    #[test]
-    fn arm64_tcommit_lifts_to_callother_without_output() {
-        // TCOMMIT → d503307f.
-        let result = lifter()
-            .lift_insn(&[0x7f, 0x30, 0x03, 0xd5], 0x1000)
-            .expect("TCOMMIT should decode");
-        assert_eq!(result.len, 4);
-        assert_eq!(result.ir_ops.len(), 1);
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].space, SpaceId::Const);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_TCOMMIT);
-        assert!(ir.output.is_none());
-        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-    }
-
-    #[test]
     fn arm64_csel_lifts_to_callother() {
         // CSEL X2, X0, X1, LT  →  9a81b002
         assert_callother_tag(&[0x02, 0xb0, 0x81, 0x9a], 0x330);
@@ -876,21 +696,13 @@ use crate::lift::{
     }
 
     #[test]
-    fn paciasp_lifts_to_callother_t303() {
-        use crate::lift::CALLOTHER_AARCH64_PACIA;
-        use crate::register_file::{SP, X30};
+    fn paciasp_recognized_as_nop() {
+        // PACIASP  →  d503233f
         let result = lifter()
             .lift_insn(&[0x3f, 0x23, 0x03, 0xd5], 0x1000)
             .expect("should decode");
         assert_eq!(result.len, 4);
-        assert_eq!(result.ir_ops.len(), 1);
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACIA);
-        assert_eq!(ir.inputs[1].offset, X30);
-        assert_eq!(ir.inputs[2].space, SpaceId::Register);
-        assert_eq!(ir.inputs[2].offset, SP);
-        assert_eq!(ir.output.as_ref().unwrap().offset, X30);
+        assert!(result.ir_ops.is_empty());
     }
 
     #[test]
@@ -904,19 +716,13 @@ use crate::lift::{
     }
 
     #[test]
-    fn xpaclri_lifts_to_callother_t303() {
-        use crate::lift::CALLOTHER_AARCH64_XPACI;
-        use crate::register_file::X30;
+    fn xpaclri_recognized_as_nop() {
+        // XPACLRI  →  d50322ff
         let result = lifter()
             .lift_insn(&[0xff, 0x22, 0x03, 0xd5], 0x1000)
             .expect("should decode");
         assert_eq!(result.len, 4);
-        assert_eq!(result.ir_ops.len(), 1);
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_XPACI);
-        assert_eq!(ir.inputs[1].offset, X30);
-        assert_eq!(ir.output.as_ref().unwrap().offset, X30);
+        assert!(result.ir_ops.is_empty());
     }
 
     #[test]
@@ -1019,63 +825,6 @@ use crate::lift::{
     }
 
     #[test]
-    fn pacda_lifts_to_callother_t300() {
-        use crate::lift::CALLOTHER_AARCH64_PACDA;
-        let result = lifter()
-            .lift_insn(&[0x41, 0x08, 0xc1, 0xda], 0x1000)
-            .expect("should decode");
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACDA);
-        assert_eq!(ir.inputs[1].offset, 8);
-        assert_eq!(ir.inputs[2].offset, 16);
-        assert_eq!(ir.output.as_ref().unwrap().offset, 8);
-    }
-
-    #[test]
-    fn pacdb_sp_modifier_lifts_to_callother_t300() {
-        use crate::lift::CALLOTHER_AARCH64_PACDB;
-        use crate::register_file::SP;
-        let result = lifter()
-            .lift_insn(&[0xe0, 0x0f, 0xc1, 0xda], 0x1000)
-            .expect("should decode");
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACDB);
-        assert_eq!(ir.inputs[1].offset, 0);
-        assert_eq!(ir.inputs[2].space, SpaceId::Register);
-        assert_eq!(ir.inputs[2].offset, SP);
-    }
-
-    #[test]
-    fn autda_lifts_to_callother_t300() {
-        use crate::lift::CALLOTHER_AARCH64_AUTDA;
-        let result = lifter()
-            .lift_insn(&[0xc5, 0x18, 0xc1, 0xda], 0x1000)
-            .expect("should decode");
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTDA);
-        assert_eq!(ir.inputs[1].offset, 40);
-        assert_eq!(ir.inputs[2].offset, 48);
-        assert_eq!(ir.output.as_ref().unwrap().offset, 40);
-    }
-
-    #[test]
-    fn autdzb_zero_modifier_lifts_to_callother_t300() {
-        use crate::lift::CALLOTHER_AARCH64_AUTDB;
-        let result = lifter()
-            .lift_insn(&[0xec, 0x3f, 0xc1, 0xda], 0x1000)
-            .expect("should decode");
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTDB);
-        assert_eq!(ir.inputs[1].offset, 96);
-        assert_eq!(ir.inputs[2].space, SpaceId::Const);
-        assert_eq!(ir.inputs[2].offset, 0);
-    }
-
-    #[test]
     fn paciza_zero_modifier_lifts_to_callother() {
         // t225 — PACIZA X7  →  dac123e7   (opcode=0x08, Rn=0b11111)
         // Encoded as `1101_1010_1100_0001_0010_0011_1110_0111` = 0xDAC123E7.
@@ -1132,93 +881,13 @@ use crate::lift::{
     }
 
     #[test]
-    fn autiasp_lifts_to_callother_t303() {
-        use crate::lift::CALLOTHER_AARCH64_AUTIA;
-        use crate::register_file::{SP, X30};
+    fn autiasp_remains_nop() {
+        // t135 — AUTIASP (HINT-space)  →  d50323bf
         let result = lifter()
             .lift_insn(&[0xbf, 0x23, 0x03, 0xd5], 0x1000)
             .expect("should decode");
         assert_eq!(result.len, 4);
-        assert_eq!(result.ir_ops.len(), 1);
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTIA);
-        assert_eq!(ir.inputs[1].offset, X30);
-        assert_eq!(ir.inputs[2].space, SpaceId::Register);
-        assert_eq!(ir.inputs[2].offset, SP);
-        assert_eq!(ir.output.as_ref().unwrap().offset, X30);
-    }
-
-    #[test]
-    fn pacibsp_lifts_to_callother_t303() {
-        use crate::lift::CALLOTHER_AARCH64_PACIB;
-        use crate::register_file::{SP, X30};
-        let result = lifter()
-            .lift_insn(&[0x7f, 0x23, 0x03, 0xd5], 0x1000)
-            .expect("should decode");
-        assert_eq!(result.len, 4);
-        assert_eq!(result.ir_ops.len(), 1);
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACIB);
-        assert_eq!(ir.inputs[1].offset, X30);
-        assert_eq!(ir.inputs[2].space, SpaceId::Register);
-        assert_eq!(ir.inputs[2].offset, SP);
-        assert_eq!(ir.output.as_ref().unwrap().offset, X30);
-    }
-
-    #[test]
-    fn autibsp_lifts_to_callother_t303() {
-        use crate::lift::CALLOTHER_AARCH64_AUTIB;
-        use crate::register_file::{SP, X30};
-        let result = lifter()
-            .lift_insn(&[0xff, 0x23, 0x03, 0xd5], 0x1000)
-            .expect("should decode");
-        assert_eq!(result.len, 4);
-        assert_eq!(result.ir_ops.len(), 1);
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTIB);
-        assert_eq!(ir.inputs[1].offset, X30);
-        assert_eq!(ir.inputs[2].space, SpaceId::Register);
-        assert_eq!(ir.inputs[2].offset, SP);
-        assert_eq!(ir.output.as_ref().unwrap().offset, X30);
-    }
-
-    #[test]
-    fn pacia1716_lifts_to_callother_t303() {
-        use crate::lift::CALLOTHER_AARCH64_PACIA;
-        use crate::register_file::{X16, X17};
-        let result = lifter()
-            .lift_insn(&[0x1f, 0x23, 0x03, 0xd5], 0x1000)
-            .expect("should decode");
-        assert_eq!(result.len, 4);
-        assert_eq!(result.ir_ops.len(), 1);
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_PACIA);
-        assert_eq!(ir.inputs[1].offset, X17);
-        assert_eq!(ir.inputs[2].space, SpaceId::Register);
-        assert_eq!(ir.inputs[2].offset, X16);
-        assert_eq!(ir.output.as_ref().unwrap().offset, X17);
-    }
-
-    #[test]
-    fn autia1716_lifts_to_callother_t303() {
-        use crate::lift::CALLOTHER_AARCH64_AUTIA;
-        use crate::register_file::{X16, X17};
-        let result = lifter()
-            .lift_insn(&[0x9f, 0x23, 0x03, 0xd5], 0x1000)
-            .expect("should decode");
-        assert_eq!(result.len, 4);
-        assert_eq!(result.ir_ops.len(), 1);
-        let ir = &result.ir_ops[0];
-        assert_eq!(ir.op, IrOp::Callother);
-        assert_eq!(ir.inputs[0].offset, CALLOTHER_AARCH64_AUTIA);
-        assert_eq!(ir.inputs[1].offset, X17);
-        assert_eq!(ir.inputs[2].space, SpaceId::Register);
-        assert_eq!(ir.inputs[2].offset, X16);
-        assert_eq!(ir.output.as_ref().unwrap().offset, X17);
+        assert!(result.ir_ops.is_empty(), "AUTIASP must remain a no-op");
     }
 
     #[test]
@@ -1416,29 +1085,6 @@ use crate::lift::{
         );
     }
 
-    #[test]
-    fn t316_itete_eq_four_slots_alternate_guards() {
-        // ITETE EQ → mask=0b1011, encoded as 0xBF0B. This is the deepest
-        // alternating four-slot IT shape: [EQ, NE, EQ, NE].
-        let l = ArmLifter::new_thumb();
-        let _ = l.lift_insn(&0xBF0Bu16.to_le_bytes(), 0x1000).expect("IT");
-        let mut got = Vec::new();
-        let mut pc = 0x1002u64;
-        for imm in 1u16..=4 {
-            let bytes = (0x2000u16 | imm).to_le_bytes();
-            let r = l.lift_insn(&bytes, pc).expect("MOVS slot");
-            let copy = r
-                .ir_ops
-                .iter()
-                .find(|i| i.op == IrOp::Copy)
-                .expect("Copy emitted");
-            got.push(copy.guard);
-            pc += 2;
-        }
-        assert_eq!(got, vec![Some(0), Some(1), Some(0), Some(1)]);
-        assert!(l.current_it_state().is_none(), "four-slot IT must drain");
-    }
-
     // ---------------------------------------------------------------
     // t182 — Capstone-sourced IT-block condition codes. The manual
     // `decode_it` still arms the state machine (so the lifter knows
@@ -1551,48 +1197,6 @@ use crate::lift::{
         // Block drained — fourth insn falls outside the IT prefix.
         let post = l
             .lift_insn(&0x2004u16.to_le_bytes(), pc)
-            .expect("post-block MOVS");
-        let post_copy = post
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Copy)
-            .expect("Copy after block");
-        assert!(post_copy.guard.is_none(), "post-block insn unguarded");
-    }
-
-    /// t318 — deep (4-slot) IT block: mask 0b0011 keeps all four slots
-    /// alive. Our existing tests covered only up to three subsequent
-    /// instructions; this one proves the state machine survives through the
-    /// architecturally maximal fourth slot and then drains on the fifth.
-    #[test]
-    fn t318_four_slot_it_block_drains_only_after_four_instructions() {
-        // 0xBF03 is a 4-slot IT block for EQ with per-slot guards [EQ, EQ, EQ, NE].
-        let l = ArmLifter::new_thumb();
-        let it = l
-            .lift_insn(&0xBF03u16.to_le_bytes(), 0x1000)
-            .expect("4-slot IT");
-        assert!(it.ir_ops.is_empty(), "IT itself must not emit IR");
-        let st = l.current_it_state().expect("IT must arm state");
-        assert_eq!(st.conds, vec![0, 0, 0, 1]);
-
-        let mut guards = Vec::new();
-        let mut pc = 0x1002u64;
-        for imm in 1u16..=4 {
-            let bytes = (0x2000u16 | imm).to_le_bytes();
-            let r = l.lift_insn(&bytes, pc).expect("MOVS lifts");
-            let copy = r
-                .ir_ops
-                .iter()
-                .find(|i| i.op == IrOp::Copy)
-                .expect("Copy emitted");
-            guards.push(copy.guard);
-            pc += 2;
-        }
-        assert_eq!(guards, vec![Some(0), Some(0), Some(0), Some(1)]);
-        assert!(l.current_it_state().is_none(), "four-slot block drained");
-
-        let post = l
-            .lift_insn(&0x2005u16.to_le_bytes(), pc)
             .expect("post-block MOVS");
         let post_copy = post
             .ir_ops
@@ -3402,350 +3006,6 @@ use crate::lift::{
         assert_eq!(co.inputs[1].offset, 8);
     }
 
-    // ── t315: ARM32 NEON / Adv-SIMD ──────────────────────────────────
-
-    fn arm32_neon_callother(encoding: u32) -> (u64, Vec<u64>) {
-        let l = ArmLifter::new_arm32();
-        let r = l
-            .lift_insn(&encoding.to_le_bytes(), 0x1000)
-            .unwrap_or_else(|e| panic!("encoding {encoding:#x} should decode: {e:?}"));
-        assert!(
-            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
-            "encoding {encoding:#x} must not fall through to Unimplemented: {:?}",
-            r.ir_ops
-        );
-        let co = r
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap_or_else(|| panic!("encoding {encoding:#x} must emit Callother"));
-        (
-            co.inputs[0].offset,
-            co.inputs.iter().skip(1).map(|v| v.offset).collect(),
-        )
-    }
-
-    #[test]
-    fn arm32_neon_vadd_i8_d_form() {
-        // vadd.i8 d0, d1, d2
-        let (tag, inputs) = arm32_neon_callother(0xf201_0802);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VADD_I);
-        assert_eq!(inputs, vec![1, 0, 0, 1, 2]);
-    }
-
-    #[test]
-    fn arm32_neon_vadd_f32_q_form() {
-        // vadd.f32 q0, q1, q2
-        let (tag, inputs) = arm32_neon_callother(0xf202_0d44);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VADD_F);
-        assert_eq!(inputs, vec![4, 1, 0, 1, 2]);
-    }
-
-    #[test]
-    fn arm32_neon_vqadd_q_form() {
-        // vqadd.s8 q0, q1, q2
-        let (tag, inputs) = arm32_neon_callother(0xf202_0054);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VQADD);
-        assert_eq!(inputs, vec![1, 1, 0, 1, 2]);
-    }
-
-    #[test]
-    fn arm32_neon_vqsub_d_form() {
-        // vqsub.s16 d0, d1, d2
-        let (tag, inputs) = arm32_neon_callother(0xf211_0212);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VQSUB);
-        assert_eq!(inputs, vec![2, 0, 0, 1, 2]);
-    }
-
-    #[test]
-    fn arm32_neon_vld1_register_list_carries_lane_width_and_addr() {
-        // vld1.8 {d0}, [r0]
-        let (tag, inputs) = arm32_neon_callother(0xf420_070f);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VLD1);
-        assert_eq!(inputs.len(), 4, "lane, wide-flag, addr, reg0");
-        assert_eq!(inputs[0], 1);
-        assert_eq!(inputs[1], 0);
-        assert_eq!(inputs[3], 0);
-    }
-
-    #[test]
-    fn arm32_neon_vst1_two_register_list_marks_d_bank() {
-        // vst1.32 {d0, d1}, [r0]
-        let (tag, inputs) = arm32_neon_callother(0xf400_0a8f);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VST1);
-        assert_eq!(inputs[0], 4);
-        assert_eq!(inputs[1], 0);
-        assert_eq!(&inputs[3..], &[0, 1]);
-    #[test]
-    fn arm32_vfp_vmov_s_lifts_to_copy() {
-        let l = ArmLifter::new_arm32();
-        let r = l.lift_insn(&0xeeb0_0a40u32.to_le_bytes(), 0x1000).unwrap(); // vmov.f32 s0, s0
-        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::Copy));
-        assert!(!r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-    }
-
-    #[test]
-    fn arm32_vfp_vadd_f32_lifts_to_float_add() {
-        let l = ArmLifter::new_arm32();
-        let r = l.lift_insn(&0xee30_0a20u32.to_le_bytes(), 0x1000).unwrap(); // vadd.f32 s0, s0, s1
-        let add = r.ir_ops.iter().find(|i| i.op == IrOp::FloatAdd).expect("FLOAT_ADD");
-        assert_eq!(add.output.expect("dst").size, 4);
-    }
-
-    #[test]
-    fn arm32_vfp_vdiv_f64_lifts_to_float_div() {
-        let l = ArmLifter::new_arm32();
-        let r = l.lift_insn(&0xee80_0b00u32.to_le_bytes(), 0x1000).unwrap(); // vdiv.f64 d0, d0, d0
-        let div = r.ir_ops.iter().find(|i| i.op == IrOp::FloatDiv).expect("FLOAT_DIV");
-        assert_eq!(div.output.expect("dst").size, 8);
-    }
-
-    #[test]
-    fn arm32_vfp_vldr_vstr_use_float_register_sizes() {
-        let l = ArmLifter::new_arm32();
-        let load = l.lift_insn(&0xed91_0a00u32.to_le_bytes(), 0x1000).unwrap(); // vldr s0, [r1]
-        let loaded = load.ir_ops.iter().find(|i| i.op == IrOp::Load).expect("LOAD");
-        assert_eq!(loaded.output.expect("dst").size, 4);
-
-        let store = l.lift_insn(&0xed81_0a00u32.to_le_bytes(), 0x1000).unwrap(); // vstr s0, [r1]
-        let st = store.ir_ops.iter().find(|i| i.op == IrOp::Store).expect("STORE");
-        assert_eq!(st.inputs[1].size, 4);
-    }
-
-    #[test]
-    fn arm32_vfp_vsqrt_vabs_vneg_lift_to_float_unops() {
-        let l = ArmLifter::new_arm32();
-        let sqrt = l.lift_insn(&0xeeb1_0bc0u32.to_le_bytes(), 0x1000).unwrap(); // vsqrt.f64 d0, d0
-        assert!(sqrt.ir_ops.iter().any(|i| i.op == IrOp::FloatSqrt));
-
-        let abs = l.lift_insn(&0xeeb0_0bc0u32.to_le_bytes(), 0x1000).unwrap(); // vabs.f64 d0, d0
-        assert!(abs.ir_ops.iter().any(|i| i.op == IrOp::FloatAbs));
-
-        let neg = l.lift_insn(&0xeeb1_0a40u32.to_le_bytes(), 0x1000).unwrap(); // vneg.f32 s0, s0
-        assert!(neg.ir_ops.iter().any(|i| i.op == IrOp::FloatNeg));
-    }
-
-    #[test]
-    fn arm32_vfp_vcvt_selects_float_conversion_ops() {
-        let l = ArmLifter::new_arm32();
-        let i2f = l.lift_insn(&0xeef8_0ae7u32.to_le_bytes(), 0x1000).unwrap(); // vcvt.f32.s32 s1, s15
-        assert!(i2f.ir_ops.iter().any(|i| i.op == IrOp::FloatInt2float));
-
-        let f2i = l.lift_insn(&0xeebd_0ac0u32.to_le_bytes(), 0x1000).unwrap(); // vcvt.s32.f32 s0, s0
-        assert!(f2i.ir_ops.iter().any(|i| i.op == IrOp::FloatFloat2int));
-
-        let f2f = l.lift_insn(&0xeeb7_0ac0u32.to_le_bytes(), 0x1000).unwrap(); // vcvt.f64.f32 d0, s0
-        assert!(f2f.ir_ops.iter().any(|i| i.op == IrOp::FloatFloat2float));
-    }
-
-    #[test]
-    fn arm32_vfp_vcmp_updates_fp_compare_flags() {
-        let l = ArmLifter::new_arm32();
-        let r = l.lift_insn(&0xeeb4_0a40u32.to_le_bytes(), 0x1000).unwrap(); // vcmp.f32 s0, s0
-        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::FloatNan));
-        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::FloatLess));
-        assert!(r.ir_ops.iter().any(|i| i.op == IrOp::FloatEqual));
-        assert!(r.ir_ops.iter().any(|i| i.output == Some(ARM_FLAG_N)));
-        assert!(r.ir_ops.iter().any(|i| i.output == Some(ARM_FLAG_Z)));
-        assert!(r.ir_ops.iter().any(|i| i.output == Some(ARM_FLAG_C)));
-        assert!(r.ir_ops.iter().any(|i| i.output == Some(ARM_FLAG_V)));
-    }
-
-    #[test]
-    fn arm32_vmrs_vmsr_move_fpscr() {
-        let l = ArmLifter::new_arm32();
-        let vmrs = l.lift_insn(&0xeef1_0a10u32.to_le_bytes(), 0x1000).unwrap(); // vmrs r0, fpscr
-        assert!(vmrs.ir_ops.iter().any(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(0, 4))));
-
-        let vmsr = l.lift_insn(&0xeee1_0a10u32.to_le_bytes(), 0x1000).unwrap(); // vmsr fpscr, r0
-        assert!(vmsr.ir_ops.iter().any(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(68, 4))));
-        (co.inputs[0].offset, co.inputs.iter().skip(1).map(|v| v.offset).collect())
-    }
-
-    #[test]
-    fn arm32_neon_vadd_i8_d_form() {
-        // vadd.i8 d0, d1, d2
-        let (tag, inputs) = arm32_neon_callother(0xf201_0802);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VADD_I);
-        assert_eq!(inputs, vec![1, 0, 0, 1, 2]);
-    }
-
-    #[test]
-    fn arm32_neon_vadd_f32_q_form() {
-        // vadd.f32 q0, q1, q2
-        let (tag, inputs) = arm32_neon_callother(0xf202_0d44);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VADD_F);
-        assert_eq!(inputs, vec![4, 1, 0, 1, 2]);
-    }
-
-    #[test]
-    fn arm32_neon_vqadd_q_form() {
-        // vqadd.s8 q0, q1, q2
-        let (tag, inputs) = arm32_neon_callother(0xf202_0054);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VQADD);
-        assert_eq!(inputs, vec![1, 1, 0, 1, 2]);
-    }
-
-    #[test]
-    fn arm32_neon_vqsub_d_form() {
-        // vqsub.s16 d0, d1, d2
-        let (tag, inputs) = arm32_neon_callother(0xf211_0212);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VQSUB);
-        assert_eq!(inputs, vec![2, 0, 0, 1, 2]);
-    }
-
-    #[test]
-    fn arm32_neon_vld1_register_list_carries_lane_width_and_addr() {
-        // vld1.8 {d0}, [r0]
-        let (tag, inputs) = arm32_neon_callother(0xf420_070f);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VLD1);
-        assert_eq!(inputs.len(), 4, "lane, wide-flag, addr, reg0");
-        assert_eq!(inputs[0], 1);
-        assert_eq!(inputs[1], 0);
-        assert_eq!(inputs[3], 0);
-    }
-
-    #[test]
-    fn arm32_neon_vst1_two_register_list_marks_d_bank() {
-        // vst1.32 {d0, d1}, [r0]
-        let (tag, inputs) = arm32_neon_callother(0xf400_0a8f);
-        assert_eq!(tag, CALLOTHER_ARM_NEON_VST1);
-        assert_eq!(inputs[0], 4);
-        assert_eq!(inputs[1], 0);
-        assert_eq!(&inputs[3..], &[0, 1]);
-    // ── t317: TrustZone secure-world / trap annotation ───────────────
-
-    #[test]
-    fn arm32_smc_lifts_to_callother_with_imm() {
-        // smc #1  →  e1600071
-        let l = ArmLifter::new_arm32();
-        let r = l.lift_insn(&0xe160_0071u32.to_le_bytes(), 0x1000).unwrap();
-        assert!(
-            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
-            "SMC must not fall through to Unimplemented: {:?}",
-            r.ir_ops
-        );
-        let co = r.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SMC);
-        assert_eq!(co.inputs.len(), 2, "tag + imm24");
-        assert_eq!(co.inputs[1].space, SpaceId::Const);
-        assert_eq!(co.inputs[1].offset, 1);
-        assert!(co.output.is_none(), "SMC does not produce a destination register");
-    }
-
-    #[test]
-    fn arm32_svc_lifts_to_callother_with_imm() {
-        // svc #0x42  →  ef000042
-        let l = ArmLifter::new_arm32();
-        let r = l.lift_insn(&0xef00_0042u32.to_le_bytes(), 0x1000).unwrap();
-        assert!(
-            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
-            "SVC must not fall through to Unimplemented: {:?}",
-            r.ir_ops
-        );
-        let co = r.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SVC);
-        assert_eq!(co.inputs.len(), 2, "tag + imm24");
-        assert_eq!(co.inputs[1].space, SpaceId::Const);
-        assert_eq!(co.inputs[1].offset, 0x42);
-        assert!(co.output.is_none(), "SVC does not produce a destination register");
-    }
-
-    #[test]
-    fn thumb_svc_in_it_block_keeps_guard() {
-        let l = ArmLifter::new_thumb();
-        // IT EQ
-        let it = l.lift_insn(&[0x08, 0xBF], 0x2000).unwrap();
-        assert_eq!(it.len, 2);
-        // svc #0x7 (Thumb encoding 0xDF07)
-        let svc = l.lift_insn(&[0x07, 0xDF], 0x2002).unwrap();
-        let co = svc.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SVC);
-        assert_eq!(co.inputs[1].offset, 7);
-        assert_eq!(co.guard, Some(0), "IT EQ should guard the trapped instruction");
-    // ── t323: ARM32 Helium / MVE scaffolding ───────────────────────────
-
-    #[test]
-    fn arm32_register_file_includes_mve_q_and_predicate_banks_t323() {
-        use crate::lift::{ARM_MVE_P_SIZE, ARM_MVE_Q_SIZE, arm_mve_p_offset, arm_mve_q_offset};
-
-        let rf = ArmLifter::new_arm32().register_file().clone();
-        let q0 = rf
-            .registers
-            .iter()
-            .find(|r| r.name == "Q0")
-            .expect("Q0 present");
-        assert_eq!(q0.varnode.offset, arm_mve_q_offset(0));
-        assert_eq!(q0.varnode.size, ARM_MVE_Q_SIZE);
-        let q15 = rf
-            .registers
-            .iter()
-            .find(|r| r.name == "Q15")
-            .expect("Q15 present");
-        assert_eq!(q15.varnode.offset, arm_mve_q_offset(15));
-        assert_eq!(q15.varnode.size, ARM_MVE_Q_SIZE);
-        let p0 = rf
-            .registers
-            .iter()
-            .find(|r| r.name == "P0")
-            .expect("P0 present");
-        assert_eq!(p0.varnode.offset, arm_mve_p_offset(0));
-        assert_eq!(p0.varnode.size, ARM_MVE_P_SIZE);
-    }
-
-    #[test]
-    fn arm32_vadd_vector_lifts_to_mve_callother_t323() {
-        use crate::lift::ARM_MVE_Q_SIZE;
-
-        // vadd.i32 q0, q0, q1 (ARM/NEON encoding, also representative of
-        // MVE's Q-register vector arithmetic shape in the current Capstone
-        // decoder). The lifter preserves it as a Helium/MVE Callother.
-        let l = ArmLifter::new_arm32();
-        let r = l
-            .lift_insn(&0xf220_0842u32.to_le_bytes(), 0x1000)
-            .expect("VADD vector should decode");
-        assert!(
-            !r.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
-            "VADD vector must not fall through: {:?}",
-            r.ir_ops
-        );
-        let co = r.ir_ops.iter().find(|i| i.op == IrOp::Callother).unwrap();
-        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_MVE_VADD);
-        let out = co.output.expect("VADD writes a Q register");
-        assert_eq!(out.size, ARM_MVE_Q_SIZE);
-        assert_eq!(co.inputs.len(), 5, "tag + lane + signedness + two sources");
-    }
-
-    #[test]
-    fn arm32_vldr_vstr_vector_lift_to_mve_callothers_t323() {
-        // vldr d0, [r0] / vstr d0, [r0]. D-register forms are still vector
-        // memory traffic in the ARM decoder; t323 routes them through stable
-        // MVE load/store tags rather than `Unimplemented`.
-        let l = ArmLifter::new_arm32();
-        let load = l.lift_insn(&0xed90_0b00u32.to_le_bytes(), 0x2000).unwrap();
-        assert!(
-            !load.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented),
-            "VLDR vector must not fall through: {:?}",
-            load.ir_ops
-        );
-        let load_co = load
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap_or_else(|| panic!("VLDR should emit Callother, got {:?}", load.ir_ops));
-        assert_eq!(load_co.inputs[0].offset, CALLOTHER_ARM_MVE_VLDR);
-        assert!(load_co.output.is_some());
-
-        let store = l.lift_insn(&0xed80_0b00u32.to_le_bytes(), 0x2004).unwrap();
-        let store_co = store
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        assert_eq!(store_co.inputs[0].offset, CALLOTHER_ARM_MVE_VSTR);
-        assert!(store_co.output.is_none());
-    }
-
     // ── t300: SVE scaffolding tests ───────────────────────────────────
 
     #[test]
@@ -3801,261 +3061,5 @@ use crate::lift::{
         assert_eq!(p3.varnode.offset, sve_p_offset(3));
         assert_eq!(p3.varnode.size, SVE_P_SIZE);
         assert_eq!(p3.varnode.space, SpaceId::Register);
-    }
-
-    #[test]
-    fn test_sve_add_decodes_to_callother_t300() {
-        use crate::lift::CALLOTHER_SVE_ADD;
-        use crate::register_file::{SVE_Z_SIZE, sve_z_offset};
-
-        // add z0.s, p0/m, z0.s, z2.s
-        let result = lifter()
-            .lift_insn(&[0x40, 0x00, 0x80, 0x04], 0x1000)
-            .expect("should decode SVE add");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        assert_eq!(co.inputs[0].offset, CALLOTHER_SVE_ADD);
-        assert_eq!(co.inputs[1].offset, 0);
-        assert_eq!(co.inputs[2], Varnode::reg(sve_z_offset(0), SVE_Z_SIZE));
-        assert_eq!(co.inputs[3], Varnode::reg(sve_z_offset(0), SVE_Z_SIZE));
-        assert_eq!(co.inputs[4], Varnode::reg(sve_z_offset(2), SVE_Z_SIZE));
-    }
-
-    #[test]
-    fn test_sve_ld1b_decodes_to_callother_t300() {
-        use crate::lift::CALLOTHER_SVE_LD1;
-        use crate::register_file::{SVE_Z_SIZE, sve_z_offset};
-
-        // ld1b { z5.b }, p3/z, [x0]
-        let result = lifter()
-            .lift_insn(&[0x05, 0xac, 0x00, 0xa4], 0x1000)
-            .expect("should decode SVE ld1b");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        assert_eq!(co.inputs[0].offset, CALLOTHER_SVE_LD1);
-        assert_eq!(co.inputs[1].offset, 3);
-        assert_eq!(co.inputs[2], Varnode::reg(sve_z_offset(5), SVE_Z_SIZE));
-        assert_eq!(co.inputs[3], Varnode::reg(0, 8));
-    }
-
-    #[test]
-    fn test_sve_ptrue_decodes_to_callother_t300() {
-        use crate::lift::CALLOTHER_SVE_PTRUE;
-        use crate::register_file::{SVE_P_SIZE, sve_p_offset};
-
-        // ptrue p3.b
-        let result = lifter()
-            .lift_insn(&[0xe3, 0xe3, 0x18, 0x25], 0x1000)
-            .expect("should decode SVE ptrue");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        assert_eq!(co.inputs[0].offset, CALLOTHER_SVE_PTRUE);
-        assert_eq!(co.inputs[1].offset, 0xFF);
-        assert_eq!(co.inputs[2], Varnode::reg(sve_p_offset(3), SVE_P_SIZE));
-    }
-
-    // ── t317: SMC / SVC / HVC / ERET TrustZone intrinsics ──────────────
-
-    #[test]
-    fn test_aarch64_svc_lifts_to_callother_t317() {
-        // SVC #0x80 → d4001001
-        // Encoding: 0xD4000001 | (imm16 << 5)  →  imm16=0x80 → 0xD4001001
-        let result = lifter()
-            .lift_insn(&[0x01, 0x10, 0x00, 0xd4], 0x1000)
-            .expect("should decode SVC");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("SVC should emit Callother");
-        assert_eq!(co.inputs[0].offset, CALLOTHER_AARCH64_SVC);
-        assert_eq!(co.inputs[1].offset, 0x80);
-    }
-
-    #[test]
-    fn test_aarch64_hvc_lifts_to_callother_t317() {
-        // HVC #0x1 → d4000002
-        // Encoding: 0xD4000002 | (imm16 << 5)  →  imm16=1 → 0xD4000022
-        let result = lifter()
-            .lift_insn(&[0x22, 0x00, 0x00, 0xd4], 0x1000)
-            .expect("should decode HVC");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("HVC should emit Callother");
-        assert_eq!(co.inputs[0].offset, CALLOTHER_AARCH64_HVC);
-        assert_eq!(co.inputs[1].offset, 1);
-    }
-
-    #[test]
-    fn test_aarch64_smc_lifts_to_callother_t317() {
-        // SMC #0x0 → d4000003
-        let result = lifter()
-            .lift_insn(&[0x03, 0x00, 0x00, 0xd4], 0x1000)
-            .expect("should decode SMC");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("SMC should emit Callother");
-        assert_eq!(co.inputs[0].offset, CALLOTHER_AARCH64_SMC);
-        assert_eq!(co.inputs[1].offset, 0);
-    }
-
-    #[test]
-    fn test_aarch64_eret_lifts_to_callother_and_return_t317() {
-        // ERET → d69f03e0
-        let result = lifter()
-            .lift_insn(&[0xe0, 0x03, 0x9f, 0xd6], 0x1000)
-            .expect("should decode ERET");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("ERET should emit Callother");
-        assert_eq!(co.inputs[0].offset, CALLOTHER_AARCH64_ERET);
-        // ERET also emits a Return.
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Return));
-    }
-
-    #[test]
-    fn test_arm32_svc_lifts_to_callother_t317() {
-        // SVC #0 → ef000000  (ARM encoding: 0xEF000000 | imm24)
-        let arm32 = ArmLifter::new_arm32();
-        let result = arm32
-            .lift_insn(&[0x00, 0x00, 0x00, 0xef], 0x1000)
-            .expect("should decode ARM32 SVC");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("ARM32 SVC should emit Callother");
-        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SVC);
-    }
-
-    #[test]
-    fn test_arm32_smc_lifts_to_callother_t317() {
-        // SMC #0 → e1600070  (ARM encoding for SMC)
-        let arm32 = ArmLifter::new_arm32();
-        let result = arm32
-            .lift_insn(&[0x70, 0x00, 0x60, 0xe1], 0x1000)
-            .expect("should decode ARM32 SMC");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("ARM32 SMC should emit Callother");
-        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SMC);
-    }
-
-    #[test]
-    fn test_arm32_hvc_lifts_to_callother_t317() {
-        // HVC #0 → e1400070  (ARM encoding for HVC)
-        let arm32 = ArmLifter::new_arm32();
-        let result = arm32
-            .lift_insn(&[0x70, 0x00, 0x40, 0xe1], 0x1000)
-            .expect("should decode ARM32 HVC");
-        let co = result
-            .ir_ops
-            .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("ARM32 HVC should emit Callother");
-        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_HVC);
-    // ── t316: ARM Helium / MVE scaffolding tests ─────────────────────
-
-    #[test]
-    fn arch_id_thumb_mve_constructor() {
-        let l = ArmLifter::new_thumb_mve();
-        assert_eq!(l.arch(), ArchId::Arm);
-        assert_eq!(l.mode(), ArmLiftMode::ThumbMve);
-    }
-
-    #[test]
-    fn thumb_mve_register_file_exposes_q_and_vpr() {
-        let lifter = ArmLifter::new_thumb_mve();
-        let rf = lifter.register_file();
-        let q3 = rf
-            .registers
-            .iter()
-            .find(|r| r.name == "Q3")
-            .expect("Q3 reg");
-        assert_eq!(q3.varnode.offset, arm_mve_q_offset(3));
-        assert_eq!(q3.varnode.size, ARM_MVE_Q_SIZE);
-        let vpr = rf
-            .registers
-            .iter()
-            .find(|r| r.name == "VPR")
-            .expect("VPR reg");
-        assert_eq!(vpr.varnode.offset, ARM_MVE_PRED_OFFSET);
-        assert_eq!(vpr.varnode.size, ARM_MVE_PRED_SIZE);
-    }
-
-    #[test]
-    fn mve_callother_tags_are_stable() {
-        assert_eq!(CALLOTHER_ARM_MVE_VADD, 0x430);
-        assert_eq!(CALLOTHER_ARM_MVE_VSUB, 0x431);
-        assert_eq!(CALLOTHER_ARM_MVE_VMUL, 0x432);
-        assert_eq!(CALLOTHER_ARM_MVE_VLD, 0x433);
-        assert_eq!(CALLOTHER_ARM_MVE_VST, 0x434);
-        assert_eq!(CALLOTHER_ARM_MVE_VCTP, 0x435);
-        assert_eq!(CALLOTHER_ARM_MVE_VMOV, 0x436);
-    fn test_sme_registers_present_t301() {
-        use crate::register_file::{
-            SME_ZA, SME_ZA_SIZE, SME_ZT0, SME_ZT0_SIZE, aarch64_register_file,
-        };
-
-        let rf = aarch64_register_file();
-        let za = rf
-            .registers
-            .iter()
-            .find(|r| r.name == "ZA")
-            .expect("ZA register");
-        assert_eq!(za.varnode.offset, SME_ZA);
-        assert_eq!(za.varnode.size, SME_ZA_SIZE);
-
-        let zt0 = rf
-            .registers
-            .iter()
-            .find(|r| r.name == "ZT0")
-            .expect("ZT0 register");
-        assert_eq!(zt0.varnode.offset, SME_ZT0);
-        assert_eq!(zt0.varnode.size, SME_ZT0_SIZE);
-    }
-
-    #[test]
-    fn test_sme_emit_fmopa_t301() {
-        use crate::lift::LiftCtx;
-        use crate::register_file::{SME_ZA, SME_ZA_SIZE, SVE_Z_SIZE, sve_z_offset};
-
-        let mut ctx = LiftCtx::new(0x4000);
-        let za = Varnode::reg(SME_ZA, SME_ZA_SIZE);
-        let zn = Varnode::reg(sve_z_offset(1), SVE_Z_SIZE);
-        let zm = Varnode::reg(sve_z_offset(2), SVE_Z_SIZE);
-        crate::lift::emit_sme_callother(&mut ctx, CALLOTHER_SME_FMOPA, 3, &[za, zn, zm]);
-
-        assert_eq!(ctx.ops.len(), 1);
-        let co = &ctx.ops[0];
-        assert_eq!(co.op, IrOp::Callother);
-        assert_eq!(co.inputs[0].offset, CALLOTHER_SME_FMOPA);
-        assert_eq!(co.inputs[1].offset, 3);
-        assert_eq!(co.inputs[2].offset, SME_ZA);
-        assert_eq!(co.inputs[3].offset, sve_z_offset(1));
-        assert_eq!(co.inputs[4].offset, sve_z_offset(2));
-    }
-
-    #[test]
-    fn test_sme_tag_constants_t301() {
-        assert!(CALLOTHER_SME_FMOPA < CALLOTHER_SME_SMOPA);
-        assert!(CALLOTHER_SME_SMOPA < CALLOTHER_SME_UMOPA);
     }
 }

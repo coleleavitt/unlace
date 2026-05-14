@@ -476,9 +476,9 @@ fn read_optional_pname(bytes: &[u8], pos: &mut usize) -> Option<Option<String>> 
 
 /// Lower a parsed [`BtComplexBody`] into the cross-crate [`Type`] enum so
 /// the existing `TilSym::decoded` channel still surfaces a usable shape.
-/// Struct bodies become `Type::Struct`, union bodies become `Type::Union`
-/// (fields typed as the recursive decode of their stored byte slice, falling
-/// back to `Unknown`). Enum and typedef bodies degrade to an empty struct — callers needing those
+/// Struct/union bodies become `Type::Struct` (fields typed as the recursive
+/// decode of their stored byte slice, falling back to `Unknown`). Enum and
+/// typedef bodies degrade to an empty struct — callers needing those
 /// shapes should consult `TilSym::complex_body` directly.
 fn complex_body_to_type(body: Option<&BtComplexBody>) -> Type {
     use unlace_ir::types::StructFieldType;
@@ -488,7 +488,7 @@ fn complex_body_to_type(body: Option<&BtComplexBody>) -> Type {
     };
     let Some(body) = body else { return empty() };
     match body {
-        BtComplexBody::Struct { fields } => {
+        BtComplexBody::Struct { fields } | BtComplexBody::Union { fields } => {
             let mut out_fields = Vec::with_capacity(fields.len());
             let mut offset: u64 = 0;
             for (idx, (name, raw)) in fields.iter().enumerate() {
@@ -505,21 +505,6 @@ fn complex_body_to_type(body: Option<&BtComplexBody>) -> Type {
                 offset = offset.saturating_add(1);
             }
             Type::Struct {
-                name: String::new(),
-                fields: out_fields,
-            }
-        }
-        BtComplexBody::Union { fields } => {
-            let out_fields = fields
-                .iter()
-                .enumerate()
-                .map(|(idx, (name, raw))| StructFieldType {
-                    name: name.clone().unwrap_or_else(|| format!("field_{idx}")),
-                    ty: decode_typestring(raw).unwrap_or(Type::Primitive(PrimitiveType::Unknown)),
-                    offset: 0,
-                })
-                .collect();
-            Type::Union {
                 name: String::new(),
                 fields: out_fields,
             }

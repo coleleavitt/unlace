@@ -111,28 +111,9 @@ pub enum Type {
     /// when known (e.g. `T`); `constraint` is the rendered Go syntax for
     /// the bound (usually `any` for dictionary-only recovery).
     TypeParam { name: String, constraint: String },
-    Map {
-        key: Box<Type>,
-        value: Box<Type>,
-    },
-    Map {
-        key: Box<Type>,
-        value: Box<Type>,
-    },
-    /// Go generic type parameter surfaced from post-1.18 metadata
-    /// (`runtime.dictabi`, t297). `name` is the source-style identifier
-    /// when known (e.g. `T`); `constraint` is the rendered Go syntax for
-    /// the bound (usually `any` for dictionary-only recovery).
-    TypeParam {
-        name: String,
-        constraint: String,
-    },
 }
 
 /// A single field within a [`Type::Struct`] or [`Type::Union`].
-/// A single field within a [`Type::Struct`].
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-/// A single field within a [`Type::Struct`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct StructFieldType {
     pub name: String,
@@ -173,8 +154,6 @@ pub struct InferredStruct {
     serde::Serialize,
     serde::Deserialize,
 )]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct StructField {
     pub offset: u64,
     pub size: u8,
@@ -222,11 +201,6 @@ impl Type {
     pub fn is_composite(&self) -> bool {
         matches!(
             self,
-            Type::Struct { .. } | Type::Array { .. } | Type::Slice { .. } | Type::Map { .. }
-            Type::Struct { .. }
-                | Type::Array { .. }
-                | Type::Slice { .. }
-                | Type::Map { .. }
             Type::Struct { .. }
                 | Type::Array { .. }
                 | Type::Slice { .. }
@@ -737,13 +711,4 @@ mod tests {
         assert_eq!(t.size(), Some(8));
     }
 
-    #[test]
-    fn t297_type_param_display_and_size() {
-        let t = Type::TypeParam {
-            name: "T".into(),
-            constraint: "any".into(),
-        };
-        assert_eq!(t.to_string(), "T any");
-        assert_eq!(t.size(), Some(8));
     }
-}

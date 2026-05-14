@@ -182,13 +182,12 @@ fn seed_from_composites(func: &mut SsaFunction) {
             },
             Type::Ptr(_)
             | Type::Struct { .. }
-            | Type::Union { .. }
             | Type::Array { .. }
             | Type::FuncPtr { .. }
             | Type::Interface { .. }
             | Type::Slice { .. }
             | Type::Map { .. }
-            | Type::TypeParam { .. } => PrimitiveType::Ptr,
+            | Type::TypeParam { .. } | Type::Union { .. } => PrimitiveType::Ptr,
         };
         let entry = func.var_types.entry(*sv).or_insert(primitive);
         *entry = entry.join(primitive);
@@ -604,7 +603,7 @@ fn lookup_struct_field_type(
 
     let struct_ty = composite_var_types.get(&base_sv)?;
     match struct_ty {
-        Type::Struct { fields, .. } | Type::Union { fields, .. } => {
+        Type::Struct { fields, .. } => {
             let field = fields.iter().find(|f| f.offset == offset)?;
             Some(field_to_primitive(&field.ty))
         }
@@ -639,18 +638,16 @@ fn field_to_primitive(ty: &Type) -> PrimitiveType {
             _ => PrimitiveType::Unknown,
         },
         Type::Ptr(_) | Type::FuncPtr { .. } => PrimitiveType::Ptr,
-        Type::Struct { .. } | Type::Union { .. } | Type::Array { .. } => PrimitiveType::Ptr,
+        Type::Struct { .. } | Type::Array { .. } => PrimitiveType::Ptr,
         // A Go interface value is `{ *itab, *data }` — at the SSA
         // primitive level it lowers to a pointer-sized payload, matching
         // how the printer renders `Type::Interface` as `void *`.
         // Slices reduce to their `*T` data pointer; maps to `*hmap`.
         // Generic type parameters flow via runtime dictionaries / iface words,
         // so model them as pointer-sized too.
-        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } | Type::TypeParam { .. } => {
+        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } | Type::TypeParam { .. } | Type::Union { .. } => {
             PrimitiveType::Ptr
         }
-        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } => PrimitiveType::Ptr,
-        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } | Type::TypeParam { .. } => PrimitiveType::Ptr,
     }
 }
 

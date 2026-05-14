@@ -3,10 +3,6 @@ name = "unlace-cli"
 version.workspace = true
 edition.workspace = true
 
-[[bin]]
-name = "unlace"
-path = "src/main.rs"
-
 [dependencies]
 unlace-ir = { workspace = true }
 unlace-loader = { workspace = true }
@@ -28,6 +24,10 @@ serde_json = "1"
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3"
 
+[[bin]]
+name = "unlace"
+path = "src/main.rs"
+
 [[bench]]
 name = "decompile_medium"
 harness = false
@@ -35,6 +35,9 @@ harness = false
 [[bench]]
 name = "spec_suite"
 path = "../../benches/spec/suite.rs"
+harness = false
+
+[[bench]]
 name = "hexrays_throughput"
 path = "../../benches/hexrays_comparison/throughput.rs"
 harness = false

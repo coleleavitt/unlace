@@ -196,27 +196,6 @@ mod tests {
                 num_lifted: 2,
                 num_total: 4
             }
-        let lifter = LazyLifter::new(
-            (0x1000, 0x2000),
-            vec![0x1000, 0x1100, 0x1200, 0x1300],
-        );
-        assert_eq!(
-            lifter.stats(),
-            LazyStats { num_lifted: 0, num_total: 4 }
-        );
-
-        lifter.record_lifted(0x1000, sample_func(0x1000));
-        lifter.record_lifted(0x1200, sample_func(0x1200));
-        assert_eq!(
-            lifter.stats(),
-            LazyStats { num_lifted: 2, num_total: 4 }
-        );
-
-        // Re-inserting the same address must not double-count.
-        lifter.record_lifted(0x1000, sample_func(0x1000));
-        assert_eq!(
-            lifter.stats(),
-            LazyStats { num_lifted: 2, num_total: 4 }
         );
     }
 }

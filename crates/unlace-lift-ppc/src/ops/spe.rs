@@ -151,16 +151,16 @@ pub(crate) fn lift_spe(ctx: &mut LiftCtx, mnemonic: &str, ops: &[PpcOperand]) {
             Some(8),
         ),
         SpeClass::Packed | SpeClass::Unknown => {
-            emit_callother(ctx, ops, generic_tag(mnemonic), destination_size(ops))
+            emit_callother(ctx, ops, generic_tag(mnemonic), destination_size(ctx, ops))
         }
     }
 }
 
 fn lift_binop(ctx: &mut LiftCtx, ops: &[PpcOperand], op: IrOp) {
     let (rd, ra, rb) = match (
-        ops.first().and_then(operand_reg),
-        ops.get(1).and_then(operand_reg),
-        ops.get(2).and_then(operand_reg),
+        ops.first().and_then(|o| operand_reg(ctx, o)),
+        ops.get(1).and_then(|o| operand_reg(ctx, o)),
+        ops.get(2).and_then(|o| operand_reg(ctx, o)),
     ) {
         (Some(d), Some(a), Some(b)) => (d, a, b),
         _ => return ctx.emit_unimplemented(),
@@ -177,9 +177,9 @@ fn lift_binop(ctx: &mut LiftCtx, ops: &[PpcOperand], op: IrOp) {
 
 fn lift_subf(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     let (rd, ra, rb) = match (
-        ops.first().and_then(operand_reg),
-        ops.get(1).and_then(operand_reg),
-        ops.get(2).and_then(operand_reg),
+        ops.first().and_then(|o| operand_reg(ctx, o)),
+        ops.get(1).and_then(|o| operand_reg(ctx, o)),
+        ops.get(2).and_then(|o| operand_reg(ctx, o)),
     ) {
         (Some(d), Some(a), Some(b)) => (d, a, b),
         _ => return ctx.emit_unimplemented(),
@@ -201,9 +201,9 @@ fn lift_subf(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
 
 fn lift_reversed_compare(ctx: &mut LiftCtx, ops: &[PpcOperand], op: IrOp) {
     let (rd, ra, rb) = match (
-        ops.first().and_then(operand_reg),
-        ops.get(1).and_then(operand_reg),
-        ops.get(2).and_then(operand_reg),
+        ops.first().and_then(|o| operand_reg(ctx, o)),
+        ops.get(1).and_then(|o| operand_reg(ctx, o)),
+        ops.get(2).and_then(|o| operand_reg(ctx, o)),
     ) {
         (Some(d), Some(a), Some(b)) => (d, a, b),
         _ => return ctx.emit_unimplemented(),
@@ -227,8 +227,8 @@ fn lift_reversed_compare(ctx: &mut LiftCtx, ops: &[PpcOperand], op: IrOp) {
 
 fn lift_unop(ctx: &mut LiftCtx, ops: &[PpcOperand], op: IrOp) {
     let (rd, ra) = match (
-        ops.first().and_then(operand_reg),
-        ops.get(1).and_then(operand_reg),
+        ops.first().and_then(|o| operand_reg(ctx, o)),
+        ops.get(1).and_then(|o| operand_reg(ctx, o)),
     ) {
         (Some(d), Some(a)) => (d, a),
         _ => return ctx.emit_unimplemented(),
@@ -244,7 +244,7 @@ fn lift_unop(ctx: &mut LiftCtx, ops: &[PpcOperand], op: IrOp) {
 }
 
 fn lift_load(ctx: &mut LiftCtx, ops: &[PpcOperand], mnemonic: &str) {
-    let rd = match ops.first().and_then(operand_reg) {
+    let rd = match ops.first().and_then(|o| operand_reg(ctx, o)) {
         Some(v) => v,
         None => return ctx.emit_unimplemented(),
     };
@@ -279,7 +279,7 @@ fn lift_load(ctx: &mut LiftCtx, ops: &[PpcOperand], mnemonic: &str) {
 }
 
 fn lift_store(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
-    let rs = match ops.first().and_then(operand_reg) {
+    let rs = match ops.first().and_then(|o| operand_reg(ctx, o)) {
         Some(v) => v,
         None => return ctx.emit_unimplemented(),
     };
@@ -296,8 +296,8 @@ fn lift_store(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
 fn lift_move_or_callother(ctx: &mut LiftCtx, ops: &[PpcOperand], mnemonic: &str) {
     if mnemonic.eq_ignore_ascii_case("evmra") {
         if let (Some(rd), Some(rs)) = (
-            ops.first().and_then(operand_reg),
-            ops.get(1).and_then(operand_reg),
+            ops.first().and_then(|o| operand_reg(ctx, o)),
+            ops.get(1).and_then(|o| operand_reg(ctx, o)),
         ) {
             ctx.emit(IrInsn::with_output(IrOp::Copy, rd, smallvec![rs], ctx.addr));
             return;
@@ -307,24 +307,32 @@ fn lift_move_or_callother(ctx: &mut LiftCtx, ops: &[PpcOperand], mnemonic: &str)
         ctx,
         ops,
         CALLOTHER_PPC_SPE_PACKED + mnemonic_hash(mnemonic),
-        destination_size(ops),
+        destination_size(ctx, ops),
     );
 }
 
 fn emit_callother(ctx: &mut LiftCtx, ops: &[PpcOperand], tag: u64, output_size: Option<u8>) {
+    let ptr_size = ctx.ptr_size;
     let inputs = std::iter::once(Varnode::constant(tag, 8))
-        .chain(ops.iter().skip(1).filter_map(operand_reg))
+        .chain(ops.iter().skip(1).filter_map(|o| operand_reg_sized(o, ptr_size)))
         .collect::<smallvec::SmallVec<[Varnode; 3]>>();
 
-    if let (Some(rd), Some(_)) = (ops.first().and_then(operand_reg), output_size) {
+    if let (Some(rd), Some(_)) = (ops.first().and_then(|o| operand_reg(ctx, o)), output_size) {
         ctx.emit(IrInsn::with_output(IrOp::Callother, rd, inputs, ctx.addr));
     } else {
         ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
     }
 }
 
-fn destination_size(ops: &[PpcOperand]) -> Option<u8> {
-    ops.first().and_then(operand_reg).map(|v| v.size)
+fn operand_reg_sized(op: &PpcOperand, ptr_size: u8) -> Option<Varnode> {
+    match op {
+        PpcOperand::Reg(id) => crate::register_file::cs_reg_to_varnode_with_size(*id, ptr_size),
+        _ => None,
+    }
+}
+
+fn destination_size(ctx: &LiftCtx, ops: &[PpcOperand]) -> Option<u8> {
+    ops.first().and_then(|o| operand_reg(ctx, o)).map(|v| v.size)
 }
 
 fn generic_tag(mnemonic: &str) -> u64 {
@@ -355,16 +363,3 @@ mod tests {
         assert_eq!(classify_spe_mnemonic("add"), None);
     }
 }
-
-// t329 — Additional SPE instructions: evmerge, evsel.
-pub const CALLOTHER_SPE_EVMERGEHI: u64 = 0x5350_4500_0020;
-pub const CALLOTHER_SPE_EVMERGELO: u64 = 0x5350_4500_0021;
-pub const CALLOTHER_SPE_EVMERGEHILO: u64 = 0x5350_4500_0022;
-pub const CALLOTHER_SPE_EVMERGELOHI: u64 = 0x5350_4500_0023;
-pub const CALLOTHER_SPE_EVSEL: u64 = 0x5350_4500_0024;
-pub const CALLOTHER_SPE_EVSPLATFI: u64 = 0x5350_4500_0025;
-pub const CALLOTHER_SPE_EVSPLATI: u64 = 0x5350_4500_0026;
-pub const CALLOTHER_SPE_EVSTDD: u64 = 0x5350_4500_0027;
-pub const CALLOTHER_SPE_EVLDD: u64 = 0x5350_4500_0028;
-pub const CALLOTHER_SPE_EVCNTLZW: u64 = 0x5350_4500_0029;
-pub const CALLOTHER_SPE_EVCNTLSW: u64 = 0x5350_4500_002A;

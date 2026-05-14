@@ -24,7 +24,6 @@ members = [
     "crates/unlace-lift-xtensa",
     "crates/unlace-lift-6502",
     "crates/unlace-lift-8051",
-    "crates/unlace-lift-amdgpu",
     "crates/unlace-lift-m68k",
     "crates/unlace-lift-hexagon",
     "crates/unlace-lift-pic",
@@ -36,12 +35,9 @@ members = [
     "crates/unlace-lift-sass",
     "crates/unlace-lift-spirv",
     "crates/unlace-lift-appleagx",
-    "crates/unlace-lift-msp430",
     "crates/unlace-lift-agx",
     "crates/unlace-lift-sh",
-    "crates/unlace-lift-sharc",
     "crates/unlace-lift-ti",
-    "crates/unlace-lift-evm",
     "crates/unlace-passes",
     "crates/unlace-struct",
     "crates/unlace-output",
@@ -59,6 +55,7 @@ members = [
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+
 [workspace.dependencies]
 # Binary format parsing
 object = "0.39"
@@ -75,7 +72,6 @@ petgraph = { version = "0.8", features = ["serde-1"] }
 # Serialization
 serde = { version = "1", features = ["derive"] }
 bincode = { version = "2", features = ["serde"] }
-petgraph = "0.8"
 # CLI
 clap = { version = "4.6", features = ["derive"] }
 # Symbol demangling
@@ -91,7 +87,6 @@ anyhow = "1"
 rayon = "1"
 # Data structures
 smallvec = { version = "1", features = ["serde"] }
-smallvec = "1"
 # Dynamic library loading
 libloading = "0.8"
 # Internal crates
@@ -131,11 +126,15 @@ unlace-flirt = { path = "crates/unlace-flirt" }
 unlace-sbom = { path = "crates/unlace-sbom" }
 unlace-test-harness = { path = "crates/unlace-test-harness" }
 unlace-lumina = { path = "crates/unlace-lumina" }
+
 [profile.dev]
 incremental = true
+
 [profile.dev.package."*"]
 opt-level = 1
+
 [profile.test]
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

@@ -195,3 +195,29 @@ mod decode_tests {
         );
     }
 }
+
+// t331 — SPARC v9 extended instruction set.
+/// SPARC v9 extended opcodes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SparcV9Insn {
+    /// MULX: 64-bit multiply.
+    Mulx { rd: u8, rs1: u8, src2: Src2 },
+    /// SDIVX: 64-bit signed divide.
+    Sdivx { rd: u8, rs1: u8, src2: Src2 },
+    /// UDIVX: 64-bit unsigned divide.
+    Udivx { rd: u8, rs1: u8, src2: Src2 },
+    /// MOVCC: conditional move (based on icc/xcc).
+    Movcc { rd: u8, cond: u8, src2: Src2 },
+    /// SAVE: allocate register window.
+    Save { rd: u8, rs1: u8, src2: Src2 },
+    /// RESTORE: deallocate register window.
+    Restore { rd: u8, rs1: u8, src2: Src2 },
+    /// LDXW: 64-bit load.
+    Ldx { rd: u8, rs1: u8, src2: Src2 },
+    /// STX: 64-bit store.
+    Stx { rd: u8, rs1: u8, src2: Src2 },
+    /// POPC: population count.
+    Popc { rd: u8, src2: Src2 },
+    /// CAS: compare-and-swap.
+    Cas { rd: u8, rs1: u8, rs2: u8 },
+}

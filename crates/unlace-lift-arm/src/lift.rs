@@ -3468,6 +3468,12 @@ pub const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
 /// SVE PTRUE — set predicate to all-true for element size.
 pub const CALLOTHER_SVE_PTRUE: u64 = 0x429;
 
+// AArch64 BTI (Branch Target Identification) callother IDs
+pub const CALLOTHER_AARCH64_BTI_C: u64 = 0x550;
+pub const CALLOTHER_AARCH64_BTI_J: u64 = 0x551;
+pub const CALLOTHER_AARCH64_BTI_JC: u64 = 0x552;
+
+
 /// Emit a generic SVE `Callother` intrinsic.
 ///
 /// Layout: `Callother(tag, pg_index, zd_index, operands…) → void`.

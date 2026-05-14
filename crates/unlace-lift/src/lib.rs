@@ -20,6 +20,7 @@ pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_m68k::M68kLifter;
 pub use unlace_lift_ebpf::{EbpfLifter, SbpfLifter};
 pub use unlace_lift_hexagon::HexagonLifter;
+pub use unlace_lift_evm::EvmLifter;
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_msp430::Msp430Lifter;
 pub use unlace_lift_ppc::PpcLifter;
@@ -112,6 +113,7 @@ pub fn get_lifter_with_endian(arch: ArchId, endian: Option<LifterEndian>) -> Box
         ArchId::SharcBlackfin => Box::new(SharcBlackfinLifter::new()),
         ArchId::TiC6x => Box::new(TiLifter::new_c6x()),
         ArchId::TiC28x => Box::new(TiLifter::new_c28x()),
+        ArchId::Evm => Box::new(EvmLifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -226,6 +228,10 @@ mod tests {
         let c28x = get_lifter(ArchId::TiC28x);
         assert_eq!(c28x.arch(), ArchId::TiC28x);
         assert!(!c28x.register_file().registers.is_empty());
+    fn test_get_lifter_evm() {
+        let l = get_lifter(ArchId::Evm);
+        assert_eq!(l.arch(), ArchId::Evm);
+        assert!(!l.register_file().registers.is_empty());
     }
 
     #[test]

@@ -323,6 +323,12 @@ pub struct PrinterAnnotations {
     /// later via per-line comments).  Wired from
     /// [`unlace_loader::ObjcInfo::categories`] by the CLI pipeline.
     pub objc_categories: Vec<unlace_loader::ObjcCategory>,
+    /// Swift protocol conformances recovered from Mach-O `__swift5_proto`
+    /// descriptors (t290). Emitted as comment-only summaries in the preamble,
+    /// e.g. `// struct Cat: P`, so analysts can see source-level protocol
+    /// adoption even when witness-table users never devirtualize to a direct
+    /// call in the current function.
+    pub swift_conformances: Vec<unlace_loader::SwiftConformance>,
     /// Resolved PE forwarder chains: IAT slot VA → `target_dll!target_symbol`.
     ///
     /// Populated from [`unlace_loader::BinaryImage::forwarded_resolutions`].
@@ -582,6 +588,23 @@ pub fn print_c_with_annotations(
                 emitted_any = true;
             }
             out.push_str(&render_objc_category(cat));
+        }
+        if emitted_any {
+            out.push('\n');
+        }
+    }
+
+    if let Some(ann) = annotations {
+        let mut emitted_any = false;
+        for conf in &ann.swift_conformances {
+            let Some(line) = render_swift_conformance(conf) else {
+                continue;
+            };
+            if !emitted_any {
+                out.push_str("// Swift protocol conformances (recovered from __swift5_proto)\n");
+                emitted_any = true;
+            }
+            let _ = writeln!(out, "// {line}");
         }
         if emitted_any {
             out.push('\n');
@@ -4606,6 +4629,12 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                                     .collect::<Vec<_>>()
                                     .join(", ")
                             );
+                            let _ = writeln!(
+                                out,
+                                "case 0x{:X}u:  /* \"{}\" */",
+                                v,
+                                s.escape_default()
+                            );
                         } else {
                             let _ = writeln!(out, "case {}:", v);
                         }
@@ -5545,7 +5574,34 @@ fn primitive_for_width(width: u8) -> &'static str {
 /// class methods `+`. The body is intentionally allowed to be empty: a
 /// category may exist in the runtime even with zero recovered selectors
 /// (the analyst gets a "this category exists" breadcrumb to chase).
-pub fn render_objc_category(cat: &unlace_loader::ObjcCategory) -> String {
+pub fn render_swift_conformance(conf: &unlace_loader::SwiftConformance) -> Option<String> {
+    let protocol_name = conf.protocol_name.as_deref()?;
+    let type_name = conf.type_name.as_deref()?;
+    let type_kind = conf
+        .type_descriptor_va
+        .and_then(|_| classify_swift_type_decl(type_name));
+    Some(match type_kind {
+        Some(kind) => format!("{kind} {type_name}: {protocol_name}"),
+        None => format!("{type_name}: {protocol_name}"),
+    })
+}
+
+fn classify_swift_type_decl(type_name: &str) -> Option<&'static str> {
+    let last = type_name.rsplit('.').next().unwrap_or(type_name);
+    let first = last.chars().next()?;
+    if !first.is_ascii_uppercase() {
+        return None;
+    }
+    if last.contains("enum") {
+        Some("enum")
+    } else if last.contains("Protocol") {
+        Some("protocol")
+    } else {
+        Some("struct")
+    }
+}
+
+fn render_objc_category(cat: &unlace_loader::ObjcCategory) -> String {
     let mut out = String::new();
     let class_label: String = cat
         .class_name
@@ -17833,6 +17889,53 @@ mod tests {
             properties: vec![],
             protocols: vec![],
         }
+    }
+
+    #[test]
+    fn preamble_emits_swift_protocol_conformances() {
+        let func = minimal_func();
+        let mut ann = super::PrinterAnnotations::default();
+        ann.swift_conformances
+            .push(unlace_loader::SwiftConformance {
+                descriptor_va: 0x7000,
+                protocol_descriptor_va: Some(0x6000),
+                protocol_name: Some("Pettable".into()),
+                type_descriptor_va: Some(0x5000),
+                type_name: Some("Cat".into()),
+            });
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+        assert!(
+            output.contains("// Swift protocol conformances (recovered from __swift5_proto)"),
+            "expected Swift conformance heading, got:
+{output}"
+        );
+        assert!(
+            output.contains("// struct Cat: Pettable"),
+            "expected rendered conformance summary, got:
+{output}"
+        );
+    }
+
+    #[test]
+    fn preamble_skips_incomplete_swift_protocol_conformances() {
+        let func = minimal_func();
+        let mut ann = super::PrinterAnnotations::default();
+        ann.swift_conformances
+            .push(unlace_loader::SwiftConformance {
+                descriptor_va: 0x7000,
+                protocol_descriptor_va: Some(0x6000),
+                protocol_name: None,
+                type_descriptor_va: Some(0x5000),
+                type_name: Some("Cat".into()),
+            });
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+        assert!(
+            !output.contains("Swift protocol conformances"),
+            "incomplete entries should not emit a heading, got:
+{output}"
+        );
     }
 
     #[test]

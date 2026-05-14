@@ -114,6 +114,7 @@ fn find_globally_dead_stores(func: &SsaFunction) -> Vec<(BlockId, usize)> {
 /// either:
 ///   * encounter a STORE to the same stack offset (kill), OR
 ///   * reach the function's exit/return (lifetime ends).
+///
 /// A LOAD from the offset, a CALL/CALLIND, or any unresolvable
 /// memory access kills the analysis (returns `false`).
 fn is_globally_dead(

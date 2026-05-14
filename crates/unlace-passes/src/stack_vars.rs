@@ -549,7 +549,7 @@ fn find_rsp_relative_offset_uncached(
                 }
             }
             IrOp::Copy => {
-                if def_insn.inputs.len() < 1 {
+                if def_insn.inputs.is_empty() {
                     continue;
                 }
                 let src = &def_insn.inputs[0];

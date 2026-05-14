@@ -1275,7 +1275,7 @@ mod tests {
 
     #[test]
     fn test_pointer_chain_load_through_ptr_gets_ptr() {
-        use unlace_ir::types::{StructFieldType, Type};
+        
 
         // struct_ptr (r0) → Load → v1 (r8, 8B) → IntAdd(v1, 8) → addr → Load → v2
         // struct_ptr is Ptr (address of first Load), v1 should get Ptr (chain).

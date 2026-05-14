@@ -164,11 +164,10 @@ fn callee_pop_bytes(func: &SsaFunction) -> u64 {
                 continue;
             }
             for inp in &insn.inputs {
-                if inp.space == SpaceId::Const && inp.offset > 0 {
-                    if inp.offset > max_pop {
+                if inp.space == SpaceId::Const && inp.offset > 0
+                    && inp.offset > max_pop {
                         max_pop = inp.offset;
                     }
-                }
             }
         }
     }
@@ -544,11 +543,12 @@ fn classify_return_op(
 mod tests {
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{CallingConvention, build_ssa};
+    use unlace_ir::ssa::build_ssa;
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
 
+    #[allow(dead_code)]
     fn make_entry_block_ssa(insns: Vec<IrInsn>) -> SsaFunction {
         let mut func = Function::new("test", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));

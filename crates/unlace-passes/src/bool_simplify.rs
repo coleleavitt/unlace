@@ -360,7 +360,7 @@ fn build_sop_ir(
         )];
     }
 
-    let num_vars = vars.len();
+    let _num_vars = vars.len();
     let mut insns = Vec::new();
     let mut product_outputs: Vec<Varnode> = Vec::new();
 
@@ -478,8 +478,8 @@ fn try_simplify(
     let mut assignments = vec![false; num_vars];
 
     for combo in 0..num_combinations {
-        for i in 0..num_vars {
-            assignments[i] = (combo >> (num_vars - 1 - i)) & 1 == 1;
+        for (i, slot) in assignments.iter_mut().enumerate() {
+            *slot = (combo >> (num_vars - 1 - i)) & 1 == 1;
         }
         if expr.eval(&assignments) {
             minterms.push(combo);
@@ -527,7 +527,7 @@ fn try_simplify(
 mod tests {
     use smallvec::smallvec;
     use unlace_ir::ssa::build_ssa;
-    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
 

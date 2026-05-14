@@ -91,7 +91,7 @@ impl Pass for ExpressionTreePass {
 mod tests {
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{SsaVarnode, VarnodeSlot, build_ssa};
+    use unlace_ir::ssa::{VarnodeSlot, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;

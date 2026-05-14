@@ -216,8 +216,8 @@ mod tests {
         let insns = vec![
             IrInsn::with_output(
                 IrOp::Load,
-                loaded.clone(),
-                smallvec![space, ptr.clone()],
+                loaded,
+                smallvec![space, ptr],
                 0x1000,
             ),
             IrInsn::with_output(
@@ -228,7 +228,7 @@ mod tests {
             ),
             IrInsn::with_output(
                 IrOp::IntAdd,
-                ptr.clone(),
+                ptr,
                 smallvec![ptr, Varnode::constant(1, 8)],
                 0x1008,
             ),
@@ -259,27 +259,27 @@ mod tests {
         let insns = vec![
             IrInsn::with_output(
                 IrOp::Load,
-                val.clone(),
-                smallvec![space.clone(), src.clone()],
+                val,
+                smallvec![space, src],
                 0x1000,
             ),
-            IrInsn::without_output(IrOp::Store, smallvec![space, dst.clone(), val], 0x1004),
+            IrInsn::without_output(IrOp::Store, smallvec![space, dst, val], 0x1004),
             IrInsn::with_output(
                 IrOp::IntAdd,
-                src.clone(),
+                src,
                 smallvec![src, Varnode::constant(1, 8)],
                 0x1008,
             ),
             IrInsn::with_output(
                 IrOp::IntAdd,
-                dst.clone(),
+                dst,
                 smallvec![dst, Varnode::constant(1, 8)],
                 0x100C,
             ),
             IrInsn::with_output(
                 IrOp::IntSub,
-                cnt.clone(),
-                smallvec![cnt.clone(), Varnode::constant(1, 8)],
+                cnt,
+                smallvec![cnt, Varnode::constant(1, 8)],
                 0x1010,
             ),
             IrInsn::without_output(
@@ -311,14 +311,14 @@ mod tests {
         let insns = vec![
             IrInsn::with_output(
                 IrOp::Load,
-                byte.clone(),
-                smallvec![space, ptr.clone()],
+                byte,
+                smallvec![space, ptr],
                 0x1000,
             ),
-            IrInsn::with_output(IrOp::IntXor, mixed.clone(), smallvec![crc, byte], 0x1004),
+            IrInsn::with_output(IrOp::IntXor, mixed, smallvec![crc, byte], 0x1004),
             IrInsn::with_output(
                 IrOp::IntAdd,
-                ptr.clone(),
+                ptr,
                 smallvec![ptr, Varnode::constant(1, 8)],
                 0x1008,
             ),
@@ -350,8 +350,8 @@ mod tests {
         let insns = vec![
             IrInsn::with_output(
                 IrOp::IntAdd,
-                out.clone(),
-                smallvec![r0.clone(), r1.clone()],
+                out,
+                smallvec![r0, r1],
                 0x1000,
             ),
             IrInsn::with_output(IrOp::IntMult, out, smallvec![r0, r1], 0x1004),

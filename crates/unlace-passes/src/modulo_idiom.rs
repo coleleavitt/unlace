@@ -12,11 +12,11 @@
 //!
 //! Recognized patterns:
 //! - **Subtract form, unsigned**:
-//!     `INT_SUB(v, INT_MULT(INT_DIV(v, N), N))` -> `INT_REM(v, N)`
+//!   `INT_SUB(v, INT_MULT(INT_DIV(v, N), N))` -> `INT_REM(v, N)`
 //! - **Subtract form, signed**:
-//!     `INT_SUB(v, INT_MULT(INT_SDIV(v, N), N))` -> `INT_SREM(v, N)`
+//!   `INT_SUB(v, INT_MULT(INT_SDIV(v, N), N))` -> `INT_SREM(v, N)`
 //! - **Power-of-two AND mask** (only in index-like context):
-//!     `INT_AND(v, N - 1)` where N = 2^k -> `INT_REM(v, N)`
+//!   `INT_AND(v, N - 1)` where N = 2^k -> `INT_REM(v, N)`
 //!
 //! The MULT / DIV intermediates produced by the subtract form are
 //! neutralized to `COPY`s so subsequent DCE can drop them.

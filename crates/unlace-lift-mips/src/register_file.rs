@@ -48,6 +48,7 @@ pub const AC3: u64 = 368;
 pub const FPR_BASE: u64 = 384;
 pub const FCC0: u64 = FPR_BASE + 32 * 8;
 pub const FCSR: u64 = FCC0 + 8;
+pub const MSA_W0: u64 = 0x1000;
 
 const MIPS_REG_NAMES: [&str; 32] = [
     "$zero", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3", "$t0", "$t1", "$t2", "$t3", "$t4",
@@ -57,6 +58,26 @@ const MIPS_REG_NAMES: [&str; 32] = [
 
 pub fn reg64(offset: u64) -> Varnode {
     Varnode::new(SpaceId::Register, offset, 4)
+}
+
+pub fn msa_reg_by_index(index: u8) -> Varnode {
+    Varnode::reg(MSA_W0 + (index as u64) * 16, 16)
+}
+
+pub fn msa_reg(reg: capstone::RegId) -> Option<Varnode> {
+    msa_reg_index(reg).map(msa_reg_by_index)
+}
+
+pub fn msa_reg_index(reg: capstone::RegId) -> Option<u8> {
+    use capstone::arch::mips::MipsReg::*;
+    let reg_u16: u16 = reg.0;
+    let first = MIPS_REG_W0 as u16;
+    let last = MIPS_REG_W31 as u16;
+    if (first..=last).contains(&reg_u16) {
+        Some((reg_u16 - first) as u8)
+    } else {
+        None
+    }
 }
 
 pub fn mips64_register_file() -> RegisterFile {

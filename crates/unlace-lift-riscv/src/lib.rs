@@ -1,6 +1,8 @@
 //! RISC-V (RV32I/RV32E/RV64I/RV128I base) → IR lifter via capstone.
 //! RISC-V (RV64I) → IR lifter via capstone.
 //! RISC-V (RV64I + RVV metadata) → IR lifter via capstone.
+//! RISC-V (RV64I) → IR lifter via capstone.
+//! RISC-V base-integer → IR lifter.
 //!
 //! Lifts the base integer instruction set across RISC-V widths. The current
 //! IR register file remains 64-bit wide, so RV32 results are normalized into the
@@ -10,6 +12,14 @@
 //! with vector register varnodes and Callother intrinsics so downstream passes
 //! can preserve vector configuration, mask mode, and data-flow even though the
 //! frozen IR has no scalable-vector primitive opcodes.
+//! Lifts the RV64I base integer instruction set. Registers x0-x31 plus pc.
+//! x0 is hardwired to zero: reads produce `Varnode::constant(0, 8)`,
+//! writes are silently dropped.
+//! Lifts the unprivileged base integer ISA for RV32I, RV32E, RV64I and RV128I.
+//! The public [`RiscVLifter`] keeps the historical RV64 defaults; width-specific
+//! constructors select XLEN/register-count semantics while sharing the same direct
+//! decoder. x0 is hardwired to zero: reads produce a zero constant and writes are
+//! silently dropped.
 
 use capstone::arch::riscv::{RiscVInsn, RiscVOperand, RiscVReg};
 use capstone::prelude::*;
@@ -181,25 +191,68 @@ pub const CALLOTHER_RISCV_CLMULH: u64 = 0x608;
 pub const CALLOTHER_RISCV_CLMULR: u64 = 0x609;
 pub const CALLOTHER_RISCV_REV8: u64 = 0x60A;
 pub const CALLOTHER_RISCV_ORC_B: u64 = 0x60B;
+/// Offset of the pc register in the register file.
+const PC_OFFSET: u64 = 256;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RiscVBaseVariant {
+    Rv32I,
+    Rv32E,
+    Rv64I,
+    Rv128I,
+}
+
+impl RiscVBaseVariant {
+    const fn xlen(self) -> u8 {
+        match self {
+            Self::Rv32I | Self::Rv32E => 4,
+            Self::Rv64I => 8,
+            Self::Rv128I => 16,
+        }
+    }
+
+    const fn register_count(self) -> u32 {
+        match self {
+            Self::Rv32E => 16,
+            Self::Rv32I | Self::Rv64I | Self::Rv128I => 32,
+        }
+    }
+
+    const fn capstone_mode(self) -> arch::riscv::ArchMode {
+        match self {
+            Self::Rv32I | Self::Rv32E => arch::riscv::ArchMode::RiscV32,
+            Self::Rv64I | Self::Rv128I => arch::riscv::ArchMode::RiscV64,
+        }
+    }
+}
 
 /// Convert a capstone `RegId` to a register-space `Varnode`.
-/// Returns `None` for x0 (hardwired zero — callers should use `Varnode::constant(0, 8)`).
-fn cs_reg_to_varnode(reg: RegId) -> Option<Varnode> {
+/// Returns `None` for x0 (hardwired zero — callers should use `Varnode::constant(0, xlen)`).
+fn cs_reg_to_varnode_width(reg: RegId, xlen: u8, reg_count: u32) -> Option<Varnode> {
     let id = reg.0 as u32;
     // capstone riscv_reg: RISCV_REG_X0 = 1, RISCV_REG_X1 = 2, …, RISCV_REG_X31 = 32
     if id == RiscVReg::RISCV_REG_X0 as u32 {
         return None; // x0 is hardwired zero
     }
-    if id >= RiscVReg::RISCV_REG_X0 as u32 && id <= RiscVReg::RISCV_REG_X31 as u32 {
+    if id >= RiscVReg::RISCV_REG_X0 as u32 && id < RiscVReg::RISCV_REG_X0 as u32 + reg_count {
         let idx = id - RiscVReg::RISCV_REG_X0 as u32;
-        return Some(Varnode::reg((idx as u64) * 8, 8));
+        return Some(Varnode::reg((idx as u64) * xlen as u64, xlen));
     }
     None
 }
 
 /// Read a register operand: x0 produces constant zero, others produce register varnodes.
+fn read_reg_width(reg: RegId, xlen: u8, reg_count: u32) -> Varnode {
+    cs_reg_to_varnode_width(reg, xlen, reg_count).unwrap_or(Varnode::constant(0, xlen))
+}
+
+#[allow(dead_code)]
+fn cs_reg_to_varnode(reg: RegId) -> Option<Varnode> {
+    cs_reg_to_varnode_width(reg, 8, 32)
+}
+
+#[allow(dead_code)]
 fn read_reg(reg: RegId) -> Varnode {
-    cs_reg_to_varnode(reg).unwrap_or(Varnode::constant(0, 8))
+    read_reg_width(reg, 8, 32)
 }
 
 #[inline]
@@ -235,14 +288,18 @@ struct LiftCtx {
     ops: Vec<IrInsn>,
     addr: u64,
     unique_counter: u64,
+    xlen: u8,
+    reg_count: u32,
 }
 
 impl LiftCtx {
-    fn new(addr: u64) -> Self {
+    fn with_variant(addr: u64, variant: RiscVBaseVariant) -> Self {
         Self {
             ops: Vec::new(),
             addr,
             unique_counter: 0,
+            xlen: variant.xlen(),
+            reg_count: variant.register_count(),
         }
     }
 
@@ -681,8 +738,12 @@ impl LiftCtx {
     }
 
     /// Write `value` to `dst_reg`. If `dst_reg` is x0, the write is silently dropped.
+    fn read_reg(&self, reg: RegId) -> Varnode {
+        read_reg_width(reg, self.xlen, self.reg_count)
+    }
+
     fn write_reg(&mut self, dst_reg: RegId, value: Varnode) {
-        if let Some(dst) = cs_reg_to_varnode(dst_reg) {
+        if let Some(dst) = cs_reg_to_varnode_width(dst_reg, self.xlen, self.reg_count) {
             self.emit(IrInsn::with_output(
                 IrOp::Copy,
                 dst,
@@ -696,24 +757,24 @@ impl LiftCtx {
     // -- Arithmetic helpers ------------------------------------------------
 
     fn lift_alu_rr(&mut self, op: IrOp, rd: RegId, rs1: RegId, rs2: RegId) {
-        let a = read_reg(rs1);
-        let b = read_reg(rs2);
-        let tmp = self.alloc_unique(8);
+        let a = self.read_reg(rs1);
+        let b = self.read_reg(rs2);
+        let tmp = self.alloc_unique(self.xlen);
         self.emit(IrInsn::with_output(op, tmp, smallvec![a, b], self.addr));
         self.write_reg(rd, tmp);
     }
 
     fn lift_alu_ri(&mut self, op: IrOp, rd: RegId, rs1: RegId, imm: i64) {
-        let a = read_reg(rs1);
-        let b = Varnode::constant(imm as u64, 8);
-        let tmp = self.alloc_unique(8);
+        let a = self.read_reg(rs1);
+        let b = Varnode::constant(imm as u64, self.xlen);
+        let tmp = self.alloc_unique(self.xlen);
         self.emit(IrInsn::with_output(op, tmp, smallvec![a, b], self.addr));
         self.write_reg(rd, tmp);
     }
 
     fn lift_alu_rr_w(&mut self, op: IrOp, rd: RegId, rs1: RegId, rs2: RegId) {
-        let a = read_reg(rs1);
-        let b = read_reg(rs2);
+        let a = self.read_reg(rs1);
+        let b = self.read_reg(rs2);
         let a32 = self.alloc_unique(4);
         self.emit(IrInsn::with_output(
             IrOp::Subpiece,
@@ -735,7 +796,7 @@ impl LiftCtx {
             smallvec![a32, b32],
             self.addr,
         ));
-        let ext = self.alloc_unique(8);
+        let ext = self.alloc_unique(self.xlen);
         self.emit(IrInsn::with_output(
             IrOp::IntSext,
             ext,
@@ -746,7 +807,7 @@ impl LiftCtx {
     }
 
     fn lift_alu_ri_w(&mut self, op: IrOp, rd: RegId, rs1: RegId, imm: i64) {
-        let a = read_reg(rs1);
+        let a = self.read_reg(rs1);
         let a32 = self.alloc_unique(4);
         self.emit(IrInsn::with_output(
             IrOp::Subpiece,
@@ -762,7 +823,7 @@ impl LiftCtx {
             smallvec![a32, b32],
             self.addr,
         ));
-        let ext = self.alloc_unique(8);
+        let ext = self.alloc_unique(self.xlen);
         self.emit(IrInsn::with_output(
             IrOp::IntSext,
             ext,
@@ -775,8 +836,8 @@ impl LiftCtx {
     // -- Comparison helpers (SLT/SLTU) ------------------------------------
 
     fn lift_slt(&mut self, rd: RegId, rs1: RegId, rs2: RegId) {
-        let a = read_reg(rs1);
-        let b = read_reg(rs2);
+        let a = self.read_reg(rs1);
+        let b = self.read_reg(rs2);
         let cmp = self.alloc_unique(1);
         self.emit(IrInsn::with_output(
             IrOp::IntSless,
@@ -784,7 +845,7 @@ impl LiftCtx {
             smallvec![a, b],
             self.addr,
         ));
-        let result = self.alloc_unique(8);
+        let result = self.alloc_unique(self.xlen);
         self.emit(IrInsn::with_output(
             IrOp::IntZext,
             result,
@@ -795,8 +856,8 @@ impl LiftCtx {
     }
 
     fn lift_sltu(&mut self, rd: RegId, rs1: RegId, rs2: RegId) {
-        let a = read_reg(rs1);
-        let b = read_reg(rs2);
+        let a = self.read_reg(rs1);
+        let b = self.read_reg(rs2);
         let cmp = self.alloc_unique(1);
         self.emit(IrInsn::with_output(
             IrOp::IntLess,
@@ -804,7 +865,7 @@ impl LiftCtx {
             smallvec![a, b],
             self.addr,
         ));
-        let result = self.alloc_unique(8);
+        let result = self.alloc_unique(self.xlen);
         self.emit(IrInsn::with_output(
             IrOp::IntZext,
             result,
@@ -815,8 +876,8 @@ impl LiftCtx {
     }
 
     fn lift_slti(&mut self, rd: RegId, rs1: RegId, imm: i64) {
-        let a = read_reg(rs1);
-        let b = Varnode::constant(imm as u64, 8);
+        let a = self.read_reg(rs1);
+        let b = Varnode::constant(imm as u64, self.xlen);
         let cmp = self.alloc_unique(1);
         self.emit(IrInsn::with_output(
             IrOp::IntSless,
@@ -824,7 +885,7 @@ impl LiftCtx {
             smallvec![a, b],
             self.addr,
         ));
-        let result = self.alloc_unique(8);
+        let result = self.alloc_unique(self.xlen);
         self.emit(IrInsn::with_output(
             IrOp::IntZext,
             result,
@@ -835,8 +896,8 @@ impl LiftCtx {
     }
 
     fn lift_sltiu(&mut self, rd: RegId, rs1: RegId, imm: i64) {
-        let a = read_reg(rs1);
-        let b = Varnode::constant(imm as u64, 8);
+        let a = self.read_reg(rs1);
+        let b = Varnode::constant(imm as u64, self.xlen);
         let cmp = self.alloc_unique(1);
         self.emit(IrInsn::with_output(
             IrOp::IntLess,
@@ -844,7 +905,7 @@ impl LiftCtx {
             smallvec![a, b],
             self.addr,
         ));
-        let result = self.alloc_unique(8);
+        let result = self.alloc_unique(self.xlen);
         self.emit(IrInsn::with_output(
             IrOp::IntZext,
             result,
@@ -858,8 +919,8 @@ impl LiftCtx {
 
     /// Conditional branch: `if (rs1 <cmp_op> rs2) goto target`
     fn lift_cbranch(&mut self, cmp_op: IrOp, rs1: RegId, rs2: RegId, target: u64) {
-        let a = read_reg(rs1);
-        let b = read_reg(rs2);
+        let a = self.read_reg(rs1);
+        let b = self.read_reg(rs2);
         let cond = self.alloc_unique(1);
         self.emit(IrInsn::with_output(
             cmp_op,
@@ -867,7 +928,7 @@ impl LiftCtx {
             smallvec![a, b],
             self.addr,
         ));
-        let target_vn = Varnode::constant(target, 8);
+        let target_vn = Varnode::constant(target, self.xlen);
         self.emit(IrInsn::without_output(
             IrOp::Cbranch,
             smallvec![target_vn, cond],
@@ -878,10 +939,10 @@ impl LiftCtx {
     // -- Load helpers -----------------------------------------------------
 
     fn lift_load(&mut self, rd: RegId, base: RegId, offset: i64, load_size: u8) {
-        let base_vn = read_reg(base);
+        let base_vn = self.read_reg(base);
         let addr_vn = if offset != 0 {
-            let off_vn = Varnode::constant(offset as u64, 8);
-            let tmp = self.alloc_unique(8);
+            let off_vn = Varnode::constant(offset as u64, self.xlen);
+            let tmp = self.alloc_unique(self.xlen);
             self.emit(IrInsn::with_output(
                 IrOp::IntAdd,
                 tmp,
@@ -893,7 +954,7 @@ impl LiftCtx {
             base_vn
         };
 
-        let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+        let ram_space = Varnode::constant(SpaceId::Ram as u64, self.xlen);
         let loaded = self.alloc_unique(load_size);
         self.emit(IrInsn::with_output(
             IrOp::Load,
@@ -906,6 +967,14 @@ impl LiftCtx {
         let value = if load_size < 8 {
             // Narrow signed integer loads are sign-extended into the register file.
             let ext = self.alloc_unique(8);
+            // LW sign-extends to 64 bits; LD is already 8 bytes
+            // LW is 4 bytes (sign-extend), LD is 8 bytes (no extend needed)
+            // We use IntSext for signed loads (LW, LH, LB) by default
+            let ext = self.alloc_unique(8);
+            // LW sign-extends to 64 bits; LD is already 8 bytes
+            // LW is 4 bytes (sign-extend), LD is 8 bytes (no extend needed)
+            // We use IntSext for signed loads (LW, LH, LB) by default
+            let ext = self.alloc_unique(self.xlen);
             self.emit(IrInsn::with_output(
                 IrOp::IntSext,
                 ext,
@@ -923,10 +992,10 @@ impl LiftCtx {
     // -- Store helpers ----------------------------------------------------
 
     fn lift_store(&mut self, base: RegId, offset: i64, src: RegId, store_size: u8) {
-        let base_vn = read_reg(base);
+        let base_vn = self.read_reg(base);
         let addr_vn = if offset != 0 {
-            let off_vn = Varnode::constant(offset as u64, 8);
-            let tmp = self.alloc_unique(8);
+            let off_vn = Varnode::constant(offset as u64, self.xlen);
+            let tmp = self.alloc_unique(self.xlen);
             self.emit(IrInsn::with_output(
                 IrOp::IntAdd,
                 tmp,
@@ -938,7 +1007,7 @@ impl LiftCtx {
             base_vn
         };
 
-        let src_vn = read_reg(src);
+        let src_vn = self.read_reg(src);
         // Truncate to store size if needed
         let value = if store_size < 8 {
             let trunc = self.alloc_unique(store_size);
@@ -953,7 +1022,7 @@ impl LiftCtx {
             src_vn
         };
 
-        let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+        let ram_space = Varnode::constant(SpaceId::Ram as u64, self.xlen);
         self.emit(IrInsn::without_output(
             IrOp::Store,
             smallvec![ram_space, addr_vn, value],
@@ -1061,6 +1130,7 @@ fn ops_store(operands: &[RiscVOperand]) -> Option<(RegId, RegId, i64)> {
 pub struct RiscVLifter {
     register_file: RegisterFile,
     cs: Capstone,
+    variant: RiscVBaseVariant,
 }
 
 impl RiscVLifter {
@@ -1069,14 +1139,48 @@ impl RiscVLifter {
         let mut regs = Vec::with_capacity(33);
         let mut regs = Vec::with_capacity(99);
         for (i, name) in RV_REG_NAMES.iter().enumerate() {
+        let mut regs = Vec::with_capacity(33);
+        for (i, name) in RV_REG_NAMES.iter().enumerate() {
+        Self::with_variant(RiscVBaseVariant::Rv64I)
+    }
+
+    pub fn rv32i() -> Self {
+        Self::with_variant(RiscVBaseVariant::Rv32I)
+    }
+
+    pub fn rv32e() -> Self {
+        Self::with_variant(RiscVBaseVariant::Rv32E)
+    }
+
+    pub fn rv64i() -> Self {
+        Self::with_variant(RiscVBaseVariant::Rv64I)
+    }
+
+    pub fn rv128i() -> Self {
+        Self::with_variant(RiscVBaseVariant::Rv128I)
+    }
+
+    pub fn variant(&self) -> RiscVBaseVariant {
+        self.variant
+    }
+
+    pub fn xlen(&self) -> u8 {
+        self.variant.xlen()
+    }
+
+    pub fn with_variant(variant: RiscVBaseVariant) -> Self {
+        let xlen = variant.xlen();
+        let reg_count = variant.register_count();
+        let mut regs = Vec::with_capacity(reg_count as usize + 1);
+        for (i, name) in RV_REG_NAMES.iter().take(reg_count as usize).enumerate() {
             regs.push(RegisterDef {
                 name,
-                varnode: Varnode::reg((i as u64) * 8, 8),
+                varnode: Varnode::reg((i as u64) * xlen as u64, xlen),
             });
         }
         regs.push(RegisterDef {
             name: "pc",
-            varnode: Varnode::reg(PC_OFFSET, 8),
+            varnode: Varnode::reg(reg_count as u64 * xlen as u64, xlen),
         });
         for i in 0..32 {
             let name: &'static str = Box::leak(format!("f{i}").into_boxed_str());
@@ -1157,7 +1261,7 @@ impl RiscVLifter {
 
         let cs = Capstone::new()
             .riscv()
-            .mode(arch::riscv::ArchMode::RiscV64)
+            .mode(variant.capstone_mode())
             .detail(true)
             .build()
             .expect("failed to create capstone RISC-V engine");
@@ -1165,6 +1269,7 @@ impl RiscVLifter {
         Self {
             register_file: RegisterFile { registers: regs },
             cs,
+            variant,
         }
     }
 }
@@ -1192,7 +1297,7 @@ impl Lifter for RiscVLifter {
             let half = u16::from_le_bytes([bytes[0], bytes[1]]);
             if let Some(word) = expand(half) {
                 let buf = word.to_le_bytes();
-                if let Some(mut lifted) = lift_rv64i_direct(&buf, addr) {
+                if let Some(mut lifted) = lift_rv_base_direct(&buf, addr, self.variant) {
                     lifted.len = 2;
                     return Ok(lifted);
                 }
@@ -1204,6 +1309,8 @@ impl Lifter for RiscVLifter {
         }
 
         if let Some(lifted) = lift_rv64i_direct(bytes, addr) {
+        if let Some(lifted) = lift_rv64i_direct(bytes, addr) {
+        if let Some(lifted) = lift_rv_base_direct(bytes, addr, self.variant) {
             return Ok(lifted);
         }
 
@@ -1234,7 +1341,7 @@ impl Lifter for RiscVLifter {
         let insn_len = insn.len();
         let mnemonic = insn.mnemonic().unwrap_or("");
 
-        let mut ctx = LiftCtx::new(addr);
+        let mut ctx = LiftCtx::with_variant(addr, self.variant);
         dispatch_insn(&mut ctx, insn_id, &operands, addr, mnemonic);
 
         Ok(LiftedInsn {
@@ -2255,9 +2362,11 @@ fn decode_riscv_zb_direct(
 }
 
 fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
+fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
+fn lift_rv_base_direct(bytes: &[u8], addr: u64, variant: RiscVBaseVariant) -> Option<LiftedInsn> {
     let half = u16::from_le_bytes([bytes[0], bytes[1]]);
     if half == 0x8082 {
-        let mut ctx = LiftCtx::new(addr);
+        let mut ctx = LiftCtx::with_variant(addr, variant);
         ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![], ctx.addr));
         return Some(LiftedInsn {
             ir_ops: ctx.ops,
@@ -2278,7 +2387,20 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
     let rs1 = (word >> 15) & 0x1f;
     let rs2 = (word >> 20) & 0x1f;
     let funct7 = (word >> 25) & 0x7f;
-    let mut ctx = LiftCtx::new(addr);
+    let mut ctx = LiftCtx::with_variant(addr, variant);
+    let xlen = variant.xlen();
+    let reg_count = variant.register_count();
+
+    if rd >= reg_count
+        || rs1 >= reg_count
+        || (rs2 >= reg_count && opcode != 0x37 && opcode != 0x17 && opcode != 0x6f)
+    {
+        ctx.emit_unimplemented();
+        return Some(LiftedInsn {
+            ir_ops: ctx.ops,
+            len: 4,
+        });
+    }
 
     // Extension encodings overlap the base OP/OP-32 opcode space (notably M's
     // funct7=1), so try the non-base decoder before the RV64I match below.
@@ -2321,6 +2443,20 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
                 _ => return None,
             }
         }
+        0x1b if xlen >= 8 => {
+            let imm = sign_extend(word >> 20, 12);
+            match funct3 {
+                0x0 => ctx.lift_alu_ri_w(IrOp::IntAdd, rv_reg(rd), rv_reg(rs1), imm),
+                0x1 => ctx.lift_alu_ri_w(IrOp::IntLeft, rv_reg(rd), rv_reg(rs1), rs2 as i64),
+                0x5 if funct7 == 0x00 => {
+                    ctx.lift_alu_ri_w(IrOp::IntRight, rv_reg(rd), rv_reg(rs1), rs2 as i64)
+                }
+                0x5 if funct7 == 0x20 => {
+                    ctx.lift_alu_ri_w(IrOp::IntSright, rv_reg(rd), rv_reg(rs1), rs2 as i64)
+                }
+                _ => return None,
+            }
+        }
         0x33 => {
             let op = match (funct7, funct3) {
                 (0x00, 0x2) => {
@@ -2349,13 +2485,24 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
             };
             ctx.lift_alu_rr(op, rv_reg(rd), rv_reg(rs1), rv_reg(rs2));
         }
+        0x3b if xlen >= 8 => {
+            let op = match (funct7, funct3) {
+                (0x00, 0x0) => IrOp::IntAdd,
+                (0x20, 0x0) => IrOp::IntSub,
+                (0x00, 0x1) => IrOp::IntLeft,
+                (0x00, 0x5) => IrOp::IntRight,
+                (0x20, 0x5) => IrOp::IntSright,
+                _ => return None,
+            };
+            ctx.lift_alu_rr_w(op, rv_reg(rd), rv_reg(rs1), rv_reg(rs2));
+        }
         0x03 => {
             let imm = sign_extend(word >> 20, 12);
             let size = match funct3 {
                 0x0 | 0x4 => 1,
                 0x1 | 0x5 => 2,
                 0x2 | 0x6 => 4,
-                0x3 => 8,
+                0x3 if xlen >= 8 => 8,
                 _ => return None,
             };
             ctx.lift_load(rv_reg(rd), rv_reg(rs1), imm, size);
@@ -2367,7 +2514,7 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
                 0x0 => 1,
                 0x1 => 2,
                 0x2 => 4,
-                0x3 => 8,
+                0x3 if xlen >= 8 => 8,
                 _ => return None,
             };
             ctx.lift_store(rv_reg(rs1), imm, rv_reg(rs2), size);
@@ -2393,7 +2540,7 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
                     ctx.emit(IrInsn::with_output(
                         cmp_op,
                         cmp,
-                        smallvec![read_reg(rv_reg(rs1)), read_reg(rv_reg(rs2))],
+                        smallvec![ctx.read_reg(rv_reg(rs1)), ctx.read_reg(rv_reg(rs2))],
                         addr,
                     ));
                     let neg = ctx.alloc_unique(1);
@@ -2405,19 +2552,112 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
                     ));
                     ctx.emit(IrInsn::without_output(
                         IrOp::Cbranch,
-                        smallvec![Varnode::constant(target, 8), neg],
+                        smallvec![Varnode::constant(target, ctx.xlen), neg],
                         addr,
                     ));
                 }
                 _ => return None,
             }
         }
-        0x67 if rd == 0 && rs1 == 1 && sign_extend(word >> 20, 12) == 0 => {
-            ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![], ctx.addr));
+        0x37 => {
+            let imm = sign_extend(word & 0xfffff000, 32) as u64;
+            ctx.write_reg(rv_reg(rd), Varnode::constant(imm, ctx.xlen));
         }
         _ => {
             lift_riscv_extended_direct(word, addr, &mut ctx)?;
         }
+        _ => return None,
+        0x17 => {
+            let imm = sign_extend(word & 0xfffff000, 32) as u64;
+            let tmp = ctx.alloc_unique(ctx.xlen);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAdd,
+                tmp,
+                smallvec![
+                    Varnode::constant(addr, ctx.xlen),
+                    Varnode::constant(imm, ctx.xlen)
+                ],
+                addr,
+            ));
+            ctx.write_reg(rv_reg(rd), tmp);
+        }
+        0x6f => {
+            let imm = (((word >> 31) & 0x1) << 20)
+                | (((word >> 12) & 0xff) << 12)
+                | (((word >> 20) & 0x1) << 11)
+                | (((word >> 21) & 0x3ff) << 1);
+            let target = addr.wrapping_add(sign_extend(imm, 21) as u64);
+            ctx.write_reg(
+                rv_reg(rd),
+                Varnode::constant(addr.wrapping_add(4), ctx.xlen),
+            );
+            ctx.emit(IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![Varnode::constant(target, ctx.xlen)],
+                addr,
+            ));
+        }
+        0x67 => {
+            let imm = sign_extend(word >> 20, 12);
+            if rd == 0 && rs1 == 1 && imm == 0 {
+                ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![], ctx.addr));
+            } else {
+                let base = ctx.read_reg(rv_reg(rs1));
+                let target = if imm != 0 {
+                    let tmp = ctx.alloc_unique(ctx.xlen);
+                    ctx.emit(IrInsn::with_output(
+                        IrOp::IntAdd,
+                        tmp,
+                        smallvec![base, Varnode::constant(imm as u64, ctx.xlen)],
+                        addr,
+                    ));
+                    tmp
+                } else {
+                    base
+                };
+                let aligned = ctx.alloc_unique(ctx.xlen);
+                ctx.emit(IrInsn::with_output(
+                    IrOp::IntAnd,
+                    aligned,
+                    smallvec![target, Varnode::constant(!1u64, ctx.xlen)],
+                    addr,
+                ));
+                ctx.write_reg(
+                    rv_reg(rd),
+                    Varnode::constant(addr.wrapping_add(4), ctx.xlen),
+                );
+                if rd == 0 {
+                    ctx.emit(IrInsn::without_output(
+                        IrOp::Branchind,
+                        smallvec![aligned],
+                        addr,
+                    ));
+                } else {
+                    ctx.emit(IrInsn::without_output(
+                        IrOp::Callind,
+                        smallvec![aligned],
+                        addr,
+                    ));
+                }
+            }
+        }
+        0x0f => {
+            // FENCE/FENCE.I are ordering constraints for execution; they do not change architectural state in this IR.
+        }
+        0x73 => match word {
+            0x0000_0073 => ctx.emit(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![Varnode::constant(0, 4)],
+                addr,
+            )),
+            0x0010_0073 => ctx.emit(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![Varnode::constant(1, 4)],
+                addr,
+            )),
+            _ => return None,
+        },
+        _ => return None,
     }
 
     Some(LiftedInsn {
@@ -2510,7 +2750,7 @@ fn dispatch_insn(
         }
         "li" => {
             if let [RiscVOperand::Reg(rd), RiscVOperand::Imm(imm)] = operands {
-                ctx.write_reg(*rd, Varnode::constant(*imm as u64, 8));
+                ctx.write_reg(*rd, Varnode::constant(*imm as u64, ctx.xlen));
             } else {
                 ctx.emit_unimplemented();
             }
@@ -2518,7 +2758,7 @@ fn dispatch_insn(
         }
         "mv" => {
             if let [RiscVOperand::Reg(rd), RiscVOperand::Reg(rs)] = operands {
-                ctx.write_reg(*rd, read_reg(*rs));
+                ctx.write_reg(*rd, ctx.read_reg(*rs));
             } else {
                 ctx.emit_unimplemented();
             }
@@ -2643,7 +2883,7 @@ fn dispatch_insn(
                 [] => { /* NOP — no IR ops needed */ }
                 // mv rd, rs: 2 register operands (addi rd, rs, 0)
                 [RiscVOperand::Reg(rd), RiscVOperand::Reg(rs)] => {
-                    let src = read_reg(*rs);
+                    let src = ctx.read_reg(*rs);
                     ctx.write_reg(*rd, src);
                 }
                 // addi/li rd, rs, imm: 3 operands
@@ -2820,8 +3060,8 @@ fn dispatch_insn(
         x if x == RISCV_INS_BGE as u32 => {
             if let Some((rs1, rs2, target)) = ops_branch(operands) {
                 // BGE rs1, rs2 ⟹ NOT (rs1 < rs2)
-                let a = read_reg(rs1);
-                let b = read_reg(rs2);
+                let a = ctx.read_reg(rs1);
+                let b = ctx.read_reg(rs2);
                 let cmp = ctx.alloc_unique(1);
                 ctx.emit(IrInsn::with_output(
                     IrOp::IntSless,
@@ -2836,7 +3076,7 @@ fn dispatch_insn(
                     smallvec![cmp],
                     addr,
                 ));
-                let target_vn = Varnode::constant(branch_target(addr, target), 8);
+                let target_vn = Varnode::constant(branch_target(addr, target), ctx.xlen);
                 ctx.emit(IrInsn::without_output(
                     IrOp::Cbranch,
                     smallvec![target_vn, neg],
@@ -2856,8 +3096,8 @@ fn dispatch_insn(
         x if x == RISCV_INS_BGEU as u32 => {
             if let Some((rs1, rs2, target)) = ops_branch(operands) {
                 // BGEU rs1, rs2 ⟹ NOT (rs1 <u rs2)
-                let a = read_reg(rs1);
-                let b = read_reg(rs2);
+                let a = ctx.read_reg(rs1);
+                let b = ctx.read_reg(rs2);
                 let cmp = ctx.alloc_unique(1);
                 ctx.emit(IrInsn::with_output(
                     IrOp::IntLess,
@@ -2872,7 +3112,7 @@ fn dispatch_insn(
                     smallvec![cmp],
                     addr,
                 ));
-                let target_vn = Varnode::constant(branch_target(addr, target), 8);
+                let target_vn = Varnode::constant(branch_target(addr, target), ctx.xlen);
                 ctx.emit(IrInsn::without_output(
                     IrOp::Cbranch,
                     smallvec![target_vn, neg],
@@ -2888,9 +3128,9 @@ fn dispatch_insn(
             match operands {
                 // jal rd, target (explicit rd)
                 [RiscVOperand::Reg(rd), RiscVOperand::Imm(target)] => {
-                    let ret_addr = Varnode::constant(addr.wrapping_add(4), 8);
+                    let ret_addr = Varnode::constant(addr.wrapping_add(4), ctx.xlen);
                     ctx.write_reg(*rd, ret_addr);
-                    let target_vn = Varnode::constant(branch_target(addr, *target), 8);
+                    let target_vn = Varnode::constant(branch_target(addr, *target), ctx.xlen);
                     ctx.emit(IrInsn::without_output(
                         IrOp::Branch,
                         smallvec![target_vn],
@@ -2901,9 +3141,9 @@ fn dispatch_insn(
                 [RiscVOperand::Imm(target)] => {
                     // rd=ra(x1) is implicit
                     let ra = RegId(RiscVReg::RISCV_REG_X1 as u16);
-                    let ret_addr = Varnode::constant(addr.wrapping_add(4), 8);
+                    let ret_addr = Varnode::constant(addr.wrapping_add(4), ctx.xlen);
                     ctx.write_reg(ra, ret_addr);
-                    let target_vn = Varnode::constant(branch_target(addr, *target), 8);
+                    let target_vn = Varnode::constant(branch_target(addr, *target), ctx.xlen);
                     ctx.emit(IrInsn::without_output(
                         IrOp::Branch,
                         smallvec![target_vn],
@@ -2919,15 +3159,15 @@ fn dispatch_insn(
             match operands {
                 // ret: 0 operands (jalr x0, 0(x1))
                 [] => {
-                    let ra_vn = read_reg(RegId(RiscVReg::RISCV_REG_X1 as u16));
+                    let ra_vn = ctx.read_reg(RegId(RiscVReg::RISCV_REG_X1 as u16));
                     ctx.emit(IrInsn::without_output(IrOp::Return, smallvec![ra_vn], addr));
                 }
                 // jr rs or jalr rs: 1 register operand
                 // "jr" → rd=x0 (branch), "jalr" → rd=ra (call)
                 [RiscVOperand::Reg(rs)] => {
-                    let target = read_reg(*rs);
-                    let mask = Varnode::constant(!1u64, 8);
-                    let aligned = ctx.alloc_unique(8);
+                    let target = ctx.read_reg(*rs);
+                    let mask = Varnode::constant(!1u64, ctx.xlen);
+                    let aligned = ctx.alloc_unique(ctx.xlen);
                     ctx.emit(IrInsn::with_output(
                         IrOp::IntAnd,
                         aligned,
@@ -2943,7 +3183,7 @@ fn dispatch_insn(
                     } else {
                         // jalr rs → implicit rd=ra
                         let ra = RegId(RiscVReg::RISCV_REG_X1 as u16);
-                        let ret_addr = Varnode::constant(addr.wrapping_add(4), 8);
+                        let ret_addr = Varnode::constant(addr.wrapping_add(4), ctx.xlen);
                         ctx.write_reg(ra, ret_addr);
                         ctx.emit(IrInsn::without_output(
                             IrOp::Callind,
@@ -2958,13 +3198,13 @@ fn dispatch_insn(
                     RiscVOperand::Reg(rs1),
                     RiscVOperand::Imm(imm),
                 ] => {
-                    let ret_addr = Varnode::constant(addr.wrapping_add(4), 8);
+                    let ret_addr = Varnode::constant(addr.wrapping_add(4), ctx.xlen);
                     ctx.write_reg(*rd, ret_addr);
 
-                    let base = read_reg(*rs1);
+                    let base = ctx.read_reg(*rs1);
                     let target_vn = if *imm != 0 {
-                        let off = Varnode::constant(*imm as u64, 8);
-                        let tmp = ctx.alloc_unique(8);
+                        let off = Varnode::constant(*imm as u64, ctx.xlen);
+                        let tmp = ctx.alloc_unique(ctx.xlen);
                         ctx.emit(IrInsn::with_output(
                             IrOp::IntAdd,
                             tmp,
@@ -2976,8 +3216,8 @@ fn dispatch_insn(
                         base
                     };
 
-                    let mask = Varnode::constant(!1u64, 8);
-                    let aligned = ctx.alloc_unique(8);
+                    let mask = Varnode::constant(!1u64, ctx.xlen);
+                    let aligned = ctx.alloc_unique(ctx.xlen);
                     ctx.emit(IrInsn::with_output(
                         IrOp::IntAnd,
                         aligned,
@@ -3014,13 +3254,13 @@ fn dispatch_insn(
                 }
                 // jalr rd, mem(base, offset)
                 [RiscVOperand::Reg(rd), RiscVOperand::Mem(mem)] => {
-                    let ret_addr = Varnode::constant(addr.wrapping_add(4), 8);
+                    let ret_addr = Varnode::constant(addr.wrapping_add(4), ctx.xlen);
                     ctx.write_reg(*rd, ret_addr);
 
-                    let base = read_reg(mem.base());
+                    let base = ctx.read_reg(mem.base());
                     let target_vn = if mem.disp() != 0 {
-                        let off = Varnode::constant(mem.disp() as u64, 8);
-                        let tmp = ctx.alloc_unique(8);
+                        let off = Varnode::constant(mem.disp() as u64, ctx.xlen);
+                        let tmp = ctx.alloc_unique(ctx.xlen);
                         ctx.emit(IrInsn::with_output(
                             IrOp::IntAdd,
                             tmp,
@@ -3032,8 +3272,8 @@ fn dispatch_insn(
                         base
                     };
 
-                    let mask = Varnode::constant(!1u64, 8);
-                    let aligned = ctx.alloc_unique(8);
+                    let mask = Varnode::constant(!1u64, ctx.xlen);
+                    let aligned = ctx.alloc_unique(ctx.xlen);
                     ctx.emit(IrInsn::with_output(
                         IrOp::IntAnd,
                         aligned,
@@ -3104,10 +3344,10 @@ fn dispatch_insn(
         x if x == RISCV_INS_LBU as u32 => {
             if let Some((rd, base, offset)) = ops_load(operands) {
                 // LBU: zero-extend
-                let base_vn = read_reg(base);
+                let base_vn = ctx.read_reg(base);
                 let addr_vn = if offset != 0 {
-                    let off_vn = Varnode::constant(offset as u64, 8);
-                    let tmp = ctx.alloc_unique(8);
+                    let off_vn = Varnode::constant(offset as u64, ctx.xlen);
+                    let tmp = ctx.alloc_unique(ctx.xlen);
                     ctx.emit(IrInsn::with_output(
                         IrOp::IntAdd,
                         tmp,
@@ -3118,7 +3358,7 @@ fn dispatch_insn(
                 } else {
                     base_vn
                 };
-                let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+                let ram_space = Varnode::constant(SpaceId::Ram as u64, ctx.xlen);
                 let loaded = ctx.alloc_unique(1);
                 ctx.emit(IrInsn::with_output(
                     IrOp::Load,
@@ -3126,7 +3366,7 @@ fn dispatch_insn(
                     smallvec![ram_space, addr_vn],
                     ctx.addr,
                 ));
-                let ext = ctx.alloc_unique(8);
+                let ext = ctx.alloc_unique(ctx.xlen);
                 ctx.emit(IrInsn::with_output(
                     IrOp::IntZext,
                     ext,
@@ -3140,10 +3380,10 @@ fn dispatch_insn(
         }
         x if x == RISCV_INS_LHU as u32 => {
             if let Some((rd, base, offset)) = ops_load(operands) {
-                let base_vn = read_reg(base);
+                let base_vn = ctx.read_reg(base);
                 let addr_vn = if offset != 0 {
-                    let off_vn = Varnode::constant(offset as u64, 8);
-                    let tmp = ctx.alloc_unique(8);
+                    let off_vn = Varnode::constant(offset as u64, ctx.xlen);
+                    let tmp = ctx.alloc_unique(ctx.xlen);
                     ctx.emit(IrInsn::with_output(
                         IrOp::IntAdd,
                         tmp,
@@ -3154,7 +3394,7 @@ fn dispatch_insn(
                 } else {
                     base_vn
                 };
-                let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+                let ram_space = Varnode::constant(SpaceId::Ram as u64, ctx.xlen);
                 let loaded = ctx.alloc_unique(2);
                 ctx.emit(IrInsn::with_output(
                     IrOp::Load,
@@ -3162,7 +3402,7 @@ fn dispatch_insn(
                     smallvec![ram_space, addr_vn],
                     ctx.addr,
                 ));
-                let ext = ctx.alloc_unique(8);
+                let ext = ctx.alloc_unique(ctx.xlen);
                 ctx.emit(IrInsn::with_output(
                     IrOp::IntZext,
                     ext,
@@ -3176,10 +3416,10 @@ fn dispatch_insn(
         }
         x if x == RISCV_INS_LWU as u32 => {
             if let Some((rd, base, offset)) = ops_load(operands) {
-                let base_vn = read_reg(base);
+                let base_vn = ctx.read_reg(base);
                 let addr_vn = if offset != 0 {
-                    let off_vn = Varnode::constant(offset as u64, 8);
-                    let tmp = ctx.alloc_unique(8);
+                    let off_vn = Varnode::constant(offset as u64, ctx.xlen);
+                    let tmp = ctx.alloc_unique(ctx.xlen);
                     ctx.emit(IrInsn::with_output(
                         IrOp::IntAdd,
                         tmp,
@@ -3190,7 +3430,7 @@ fn dispatch_insn(
                 } else {
                     base_vn
                 };
-                let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
+                let ram_space = Varnode::constant(SpaceId::Ram as u64, ctx.xlen);
                 let loaded = ctx.alloc_unique(4);
                 ctx.emit(IrInsn::with_output(
                     IrOp::Load,
@@ -3198,7 +3438,7 @@ fn dispatch_insn(
                     smallvec![ram_space, addr_vn],
                     ctx.addr,
                 ));
-                let ext = ctx.alloc_unique(8);
+                let ext = ctx.alloc_unique(ctx.xlen);
                 ctx.emit(IrInsn::with_output(
                     IrOp::IntZext,
                     ext,
@@ -3245,7 +3485,7 @@ fn dispatch_insn(
         x if x == RISCV_INS_LUI as u32 => {
             if let Some((rd, imm)) = ops_ri(operands) {
                 // capstone already shifts the immediate for LUI
-                let val = Varnode::constant(imm as u64, 8);
+                let val = Varnode::constant(imm as u64, ctx.xlen);
                 ctx.write_reg(rd, val);
             } else {
                 ctx.emit_unimplemented();
@@ -3256,9 +3496,9 @@ fn dispatch_insn(
         x if x == RISCV_INS_AUIPC as u32 => {
             if let Some((rd, imm)) = ops_ri(operands) {
                 // capstone already shifts the immediate
-                let pc_val = Varnode::constant(addr, 8);
-                let imm_vn = Varnode::constant(imm as u64, 8);
-                let result = ctx.alloc_unique(8);
+                let pc_val = Varnode::constant(addr, ctx.xlen);
+                let imm_vn = Varnode::constant(imm as u64, ctx.xlen);
+                let result = ctx.alloc_unique(ctx.xlen);
                 ctx.emit(IrInsn::with_output(
                     IrOp::IntAdd,
                     result,
@@ -4048,9 +4288,9 @@ mod tests {
     // -- Unknown instruction produces Unimplemented ----------------------
     #[test]
     fn test_unknown_insn() {
-        // FENCE instruction (not in our dispatch table)
-        // fence  → 0x0ff0000f
-        let bytes = 0x0ff0000fu32.to_le_bytes();
+        // Privileged/system return instruction (not in the unprivileged base lifter).
+        // mret  → 0x30200073
+        let bytes = 0x30200073u32.to_le_bytes();
         let result = lifter()
             .lift_insn(&bytes, 0x1000)
             .expect("should not panic");
@@ -4536,5 +4776,109 @@ mod zb_tests {
         assert_eq!(co.output, Some(rvv_reg(4)));
         assert_eq!(co.inputs[4], Varnode::constant(0xff, 1));
         assert_eq!(co.inputs[5], Varnode::reg(5 * 8, 8));
+    // -- t321: RV32I/RV32E/RV64I/RV128I base-variant coverage ---------------
+    #[test]
+    fn test_rv32i_register_file_and_width() {
+        let l = RiscVLifter::rv32i();
+        assert_eq!(l.variant(), RiscVBaseVariant::Rv32I);
+        assert_eq!(l.xlen(), 4);
+        let rf = l.register_file();
+        assert_eq!(rf.registers.len(), 33);
+        assert_eq!(rf.registers[1].varnode, Varnode::reg(4, 4));
+        assert_eq!(rf.registers[32].name, "pc");
+        assert_eq!(rf.registers[32].varnode, Varnode::reg(128, 4));
+    }
+
+    #[test]
+    fn test_rv32e_register_file_and_invalid_high_register() {
+        let l = RiscVLifter::rv32e();
+        assert_eq!(l.variant(), RiscVBaseVariant::Rv32E);
+        assert_eq!(l.xlen(), 4);
+        let rf = l.register_file();
+        assert_eq!(rf.registers.len(), 17);
+        assert_eq!(rf.registers[15].name, "x15");
+        assert_eq!(rf.registers[16].name, "pc");
+        assert_eq!(rf.registers[16].varnode, Varnode::reg(64, 4));
+
+        // add x16, x1, x2 is outside RV32E's x0-x15 register file. The direct
+        // decoder rejects it and the RV32 capstone fallback emits UNIMPLEMENTED
+        // rather than fabricating an x16 write.
+        let bytes = 0x00208833u32.to_le_bytes();
+        let result = l
+            .lift_insn(&bytes, 0x1000)
+            .expect("decode high-register ADD");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| i.output == Some(Varnode::reg(64, 4)))
+        );
+    }
+
+    #[test]
+    fn test_rv32i_add_uses_32_bit_registers() {
+        let bytes = 0x003100B3u32.to_le_bytes();
+        let result = RiscVLifter::rv32i()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode RV32I ADD");
+        assert_eq!(result.len, 4);
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(4, 4)))
+        );
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.output.map(|v| v.size) == Some(4))
+        );
+    }
+
+    #[test]
+    fn test_rv32i_rejects_rv64_load_double() {
+        let bytes = 0x00013083u32.to_le_bytes();
+        let result = RiscVLifter::rv32i().lift_insn(&bytes, 0x1000);
+        assert!(result.is_err(), "RV32I must not lift RV64-only LD");
+    }
+
+    #[test]
+    fn test_rv64i_word_variants_sign_extend_to_xlen() {
+        // addw x1, x2, x3 → 0x003100BB
+        let bytes = 0x003100BBu32.to_le_bytes();
+        let result = RiscVLifter::rv64i()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode ADDW");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntSext && i.output.map(|v| v.size) == Some(8))
+        );
+    }
+
+    #[test]
+    fn test_rv128i_registers_and_base_add_width() {
+        let l = RiscVLifter::rv128i();
+        assert_eq!(l.variant(), RiscVBaseVariant::Rv128I);
+        assert_eq!(l.xlen(), 16);
+        assert_eq!(
+            l.register_file().registers[32].varnode,
+            Varnode::reg(512, 16)
+        );
+
+        let bytes = 0x003100B3u32.to_le_bytes();
+        let result = l
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode RV128I ADD");
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(16, 16)))
+        );
     }
 }

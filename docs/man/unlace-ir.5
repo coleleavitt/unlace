@@ -1,0 +1,50 @@
+.\" t460: unlace-ir(5) man page — IR format reference
+.TH UNLACE-IR 5 "2025-05-13" "unlace 0.1.0" "File Formats"
+.SH NAME
+unlace-ir \- unlace intermediate representation format
+.SH DESCRIPTION
+The unlace IR is a register-transfer-level representation with ~70 opcodes.
+Each function is represented as a control-flow graph of basic blocks, where
+each block contains a sequence of IR instructions.
+.SH IR INSTRUCTION FORMAT
+Each instruction has the form:
+.PP
+.RS
+.nf
+output:type = OPCODE input1, input2, ...
+.fi
+.RE
+.PP
+Where:
+.TP
+.I output
+An SSA variable (e.g., \fBv0\fR, \fBv1\fR) with a size annotation.
+.TP
+.I type
+The size in bits: \fBi8\fR, \fBi16\fR, \fBi32\fR, \fBi64\fR, \fBf32\fR, \fBf64\fR.
+.TP
+.I OPCODE
+One of the ~70 IR opcodes (see OPCODES section).
+.TP
+.I inputs
+Zero or more operands: SSA variables or constants.
+.SH OPCODES
+.SS "Arithmetic"
+INT_ADD, INT_SUB, INT_MULT, INT_DIV, INT_SDIV, INT_REM, INT_SREM
+.SS "Bitwise"
+INT_AND, INT_OR, INT_XOR, INT_NEGATE, INT_LEFT, INT_RIGHT, INT_SRIGHT
+.SS "Comparison"
+INT_EQUAL, INT_NOTEQUAL, INT_LESS, INT_SLESS, INT_LESSEQUAL, INT_SLESSEQUAL
+.SS "Conversion"
+INT_ZEXT, INT_SEXT, TRUNC, INT2FLOAT, FLOAT2INT, FLOAT2FLOAT
+.SS "Memory"
+LOAD, STORE, COPY
+.SS "Control Flow"
+BRANCH, CBRANCH, BRANCHIND, CALL, CALLIND, RETURN
+.SS "Floating Point"
+FLOAT_ADD, FLOAT_SUB, FLOAT_MULT, FLOAT_DIV, FLOAT_NEG, FLOAT_ABS,
+FLOAT_SQRT, FLOAT_EQUAL, FLOAT_NOTEQUAL, FLOAT_LESS, FLOAT_LESSEQUAL
+.SS "Special"
+PIECE, SUBPIECE, POPCOUNT, LZCOUNT, BOOL_AND, BOOL_OR, BOOL_NEGATE
+.SH SEE ALSO
+.BR unlace (1)

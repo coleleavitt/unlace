@@ -163,6 +163,8 @@ pub mod tag {
     pub const VPSUBQ_512: u64 = 0x1D1;
     /// VPMULLQ (EVEX/ZMM form) — packed signed 64×64→low-64 multiply (512-bit).
     pub const VPMULLQ_512: u64 = 0x1D2;
+    // Reserved EVEX dispatch tag — referenced once AVX-512 lowering lands.
+    #[allow(dead_code)]
     pub const AVX512_EVEX: u64 = 0x300;
 }
 

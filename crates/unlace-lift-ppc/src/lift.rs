@@ -340,6 +340,15 @@ fn dispatch(cs: &Capstone, ctx: &mut LiftCtx, insn: &Insn<'_>, detail: &InsnDeta
         // NOP
         PpcInsn::PPC_INS_NOP => ops::data_move::lift_nop(ctx),
 
-        _ => ctx.emit_unimplemented(),
+        _ => {
+            // SPE / e500 mnemonics (`ev*`) aren't surfaced as distinct
+            // PpcInsn variants by Capstone; dispatch by mnemonic string.
+            let mnemonic = insn.mnemonic().unwrap_or("");
+            if ops::spe::classify_spe_mnemonic(mnemonic).is_some() {
+                ops::spe::lift_spe(ctx, mnemonic, &ops);
+            } else {
+                ctx.emit_unimplemented();
+            }
+        }
     }
 }

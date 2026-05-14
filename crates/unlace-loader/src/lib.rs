@@ -43,6 +43,7 @@ pub mod evm_solidity;
 pub mod android_dex;
 pub mod dotnet_clr;
 pub mod stm32_blob;
+pub mod lua_bytecode;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,

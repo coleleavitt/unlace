@@ -22,6 +22,7 @@ pub use unlace_lift_riscv::RiscVLifter;
 pub use unlace_lift_sass::SassLifter;
 pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_x86::X86Lifter;
+pub use unlace_lift_xtensa::XtensaLifter;
 
 struct UnimplementedLifter {
     arch_id: ArchId,
@@ -72,6 +73,7 @@ pub fn get_lifter(arch: ArchId) -> Box<dyn Lifter> {
         ArchId::Agx => Box::new(AgxLifter::new()),
         ArchId::Msp430 => Box::new(Msp430Lifter::new()),
         ArchId::NvidiaSass => Box::new(SassLifter::new()),
+        ArchId::Xtensa => Box::new(XtensaLifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -152,6 +154,9 @@ mod tests {
     fn test_get_lifter_sass() {
         let l = get_lifter(ArchId::NvidiaSass);
         assert_eq!(l.arch(), ArchId::NvidiaSass);
+    fn test_get_lifter_xtensa() {
+        let l = get_lifter(ArchId::Xtensa);
+        assert_eq!(l.arch(), ArchId::Xtensa);
         assert!(!l.register_file().registers.is_empty());
     }
 

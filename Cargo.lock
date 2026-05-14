@@ -1717,6 +1717,7 @@ dependencies = [
  "unlace-lift-riscv",
  "unlace-lift-v850",
  "unlace-lift-x86",
+ "unlace-lift-xtensa",
 ]
 
 [[package]]
@@ -1851,6 +1852,14 @@ dependencies = [
  "smallvec",
  "thiserror",
  "tracing",
+ "unlace-ir",
+]
+
+[[package]]
+name = "unlace-lift-xtensa"
+version = "0.1.0"
+dependencies = [
+ "smallvec",
  "unlace-ir",
 ]
 

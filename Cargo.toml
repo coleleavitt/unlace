@@ -22,6 +22,7 @@ members = [
     "crates/unlace-lift-m68k",
     "crates/unlace-lift-sh",
     "crates/unlace-lift-sass",
+    "crates/unlace-lift-xtensa",
     "crates/unlace-passes",
     "crates/unlace-struct",
     "crates/unlace-output",
@@ -94,6 +95,7 @@ unlace-lift-sparc = { path = "crates/unlace-lift-sparc" }
 unlace-lift-msp430 = { path = "crates/unlace-lift-msp430" }
 unlace-lift-m68k = { path = "crates/unlace-lift-m68k" }
 unlace-lift-sass = { path = "crates/unlace-lift-sass" }
+unlace-lift-xtensa = { path = "crates/unlace-lift-xtensa" }
 unlace-passes = { path = "crates/unlace-passes" }
 unlace-struct = { path = "crates/unlace-struct" }
 unlace-output = { path = "crates/unlace-output" }

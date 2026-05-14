@@ -1844,6 +1844,8 @@ pub fn emit_output(
 mod tests {
     use super::*;
     use smallvec::smallvec;
+    use unlace_ir::ssa::build_ssa;
+    use unlace_ir::{Function, IrInsn, Varnode};
     use unlace_ir::ArchId;
     use unlace_ir::ssa::build_ssa;
     use unlace_ir::{Function, IrInsn, Varnode};
@@ -1942,6 +1944,24 @@ mod tests {
             resolved.get(&0x1004).map(String::as_str),
             Some("main_MyType_Do")
         );
+        unlace_passes::IndirectCallResolvePass.run(&mut ssa).unwrap();
+
+        let mut image = make_text_image(vec![0xC3], 0x1000);
+        image.go_itabs.insert(
+            0x9000,
+            unlace_loader::go_types::GoItab {
+                va: 0x9000,
+                inter_type_va: 0xA000,
+                concrete_type_va: 0xB000,
+                hash: 0x1234,
+                methods: vec![0x4010],
+            },
+        );
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x4010, "main.(*MyType).Do".to_string());
+
+        let resolved = collect_go_iface_devirtualized_calls(&ssa, &image, &symbols);
+        assert_eq!(resolved.get(&0x1004).map(String::as_str), Some("main_MyType_Do"));
     }
 
     #[test]

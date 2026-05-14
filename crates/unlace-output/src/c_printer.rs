@@ -15665,6 +15665,19 @@ mod tests {
             !output.contains("((void (*)(__int64))pfn)("),
             "got: {output}"
         );
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(output.contains("main__MyType_Do)("), "got: {output}");
+        assert!(!output.contains("((void (*)(__int64))pfn)("), "got: {output}");
     }
 
     // P8-12: Demangled C++ names in C output

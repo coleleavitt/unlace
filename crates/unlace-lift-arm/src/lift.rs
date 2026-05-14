@@ -3468,6 +3468,13 @@ pub const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
 /// SVE PTRUE — set predicate to all-true for element size.
 pub const CALLOTHER_SVE_PTRUE: u64 = 0x429;
 
+// ARM TrustZone / exception-level transition callother IDs
+pub const CALLOTHER_ARM_SMC: u64 = 0x560;
+pub const CALLOTHER_ARM_SVC: u64 = 0x561;
+pub const CALLOTHER_ARM_HVC: u64 = 0x562;
+pub const CALLOTHER_ARM_ERET: u64 = 0x563;
+
+
 /// Emit a generic SVE `Callother` intrinsic.
 ///
 /// Layout: `Callother(tag, pg_index, zd_index, operands…) → void`.

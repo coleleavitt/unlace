@@ -73,6 +73,8 @@ pub use flirt::{
 pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
 pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
 pub use flirt::{FlirtDb, FlirtMatch, FlirtSignature, default_db as default_flirt_db};
+pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
+};
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
 pub use intel_hex::{
     IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,

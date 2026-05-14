@@ -52,6 +52,7 @@ petgraph = { version = "0.8", features = ["serde-1"] }
 # Serialization
 serde = { version = "1", features = ["derive"] }
 bincode = { version = "2", features = ["serde"] }
+petgraph = "0.8"
 # CLI
 clap = { version = "4.6", features = ["derive"] }
 # Symbol demangling
@@ -67,6 +68,7 @@ anyhow = "1"
 rayon = "1"
 # Data structures
 smallvec = { version = "1", features = ["serde"] }
+smallvec = "1"
 # Dynamic library loading
 libloading = "0.8"
 # Internal crates

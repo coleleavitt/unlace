@@ -114,6 +114,9 @@ pub enum Type {
 }
 
 /// A single field within a [`Type::Struct`] or [`Type::Union`].
+/// A single field within a [`Type::Struct`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// A single field within a [`Type::Struct`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct StructFieldType {
     pub name: String,
@@ -154,6 +157,8 @@ pub struct InferredStruct {
     serde::Serialize,
     serde::Deserialize,
 )]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct StructField {
     pub offset: u64,
     pub size: u8,

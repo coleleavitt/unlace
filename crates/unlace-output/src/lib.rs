@@ -10,6 +10,7 @@ pub mod ir_dump;
 pub mod pernosco_html;
 pub mod windbg_dml;
 pub mod semantic_diff;
+pub mod cfg_svg;
 
 pub use c_printer::{
     FunctionHeaderInfo, PrintConfig, PrinterAnnotations, compute_array_struct_indices,

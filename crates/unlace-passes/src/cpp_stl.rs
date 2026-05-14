@@ -28,6 +28,8 @@
 //! * `std::function<R(Args...)>` — preserves callable signature
 //! * `std::function<R(Args...)>` — keeps the callable signature
 //! * `std::list<T>` / `std::deque<T>`
+//! * `std::optional<T>`          — discriminated value wrapper
+//! * `std::variant<Ts...>`       — tag-byte discriminated union
 //!
 //! Inline namespaces (`std::__1`, `std::__cxx11`) are folded back to plain
 //! `std::` so the rendered name is portable across libcxx and libstdc++.
@@ -124,6 +126,21 @@ pub fn recognize_stl_type(namespaces: &[String], class_name: &str) -> Option<Str
         "function" => {
             let sig = first_template_arg(&template_args)?;
             Some(format!("std::function<{}>", clean_inline_ns(sig.trim())))
+        "optional" => {
+            let elem = first_template_arg(&template_args)?;
+            Some(format!("std::optional<{}>", clean_inline_ns(elem.trim())))
+        }
+        "variant" => {
+            let args = top_level_args(&template_args);
+            if args.is_empty() {
+                return None;
+            }
+            let args = args
+                .into_iter()
+                .map(|arg| clean_inline_ns(arg.trim()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!("std::variant<{args}>"))
         }
         _ => None,
     }
@@ -353,6 +370,27 @@ mod tests {
         assert_eq!(
             recognize_stl_type(&n, "deque").as_deref(),
             Some("std::deque<int>"),
+        );
+    }
+
+    #[test]
+    fn recognises_optional_and_variant() {
+        let n = ns(&["std", "optional<int>"]);
+        assert_eq!(
+            recognize_stl_type(&n, "optional").as_deref(),
+            Some("std::optional<int>"),
+        );
+
+        let n = ns(&[
+            "std",
+            "__1",
+            "variant<int, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > >",
+        ]);
+        assert_eq!(
+            recognize_stl_type(&n, "variant").as_deref(),
+            Some(
+                "std::variant<int, std::basic_string<char, std::char_traits<char>, std::allocator<char> >>"
+            ),
         );
     }
 

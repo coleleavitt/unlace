@@ -75,7 +75,8 @@ use unlace_passes::{
     StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass,
     CallingConvFinalizePass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     BmiIdiomPass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass,
+    CopyPropagationPass, CppVariantPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
+    DeadCodeElimPass,
     DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass,
     GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass, OuterFixedpointReport,
     ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass, SignatureSnapshot,
@@ -882,6 +883,7 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             ssa.stack_frame = Some(recover_stack_frame(ssa));
             CppVtablePass.run(ssa)?;
             RustVtablePass.run(ssa)?;
+            CppVariantPass.run(ssa)?;
 
             // ---- Type recovery ----
             CallingConventionDetectPass.run(ssa)?;

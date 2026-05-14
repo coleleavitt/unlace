@@ -269,5 +269,34 @@ pub fn msa_reg_index(reg: capstone::RegId) -> Option<u8> {
         Some((reg_u16 - first) as u8)
     } else {
         None
+// MIPS MSA (MIPS SIMD Architecture) registers.
+// W0-W31 are 128-bit vector registers overlaying the FPU registers.
+const MSA_BASE: u64 = 0x400;
+
+pub const fn msa_w_offset(n: u64) -> u64 {
+    MSA_BASE + n * 16
+}
+
+pub const MSA_W0: u64 = msa_w_offset(0);
+pub const MSA_W31: u64 = msa_w_offset(31);
+pub const MSACSR: u64 = MSA_BASE + 32 * 16;
+
+pub const MSA_W_SIZE: u8 = 16;
+
+
+#[cfg(test)]
+mod msa_tests {
+    use super::*;
+
+    #[test]
+    fn msa_w_offsets_sequential() {
+        for i in 0..31 {
+            assert_eq!(msa_w_offset(i + 1) - msa_w_offset(i), 16);
+        }
+    }
+
+    #[test]
+    fn msacsr_after_w_registers() {
+        assert!(MSACSR > MSA_W31);
     }
 }

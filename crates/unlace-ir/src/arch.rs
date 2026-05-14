@@ -37,6 +37,7 @@ pub enum ArchId {
     NvidiaSass,
     Xtensa,
     SuperH,
+    Xtensa,
     Unknown(u16),
 }
 
@@ -74,6 +75,7 @@ impl fmt::Display for ArchId {
             Self::NvidiaSass => f.write_str("nvidia-sass"),
             Self::Xtensa => f.write_str("xtensa"),
             Self::SuperH => f.write_str("superh"),
+            Self::Xtensa => f.write_str("xtensa"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

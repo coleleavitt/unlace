@@ -355,3 +355,16 @@ mod tests {
         assert_eq!(classify_spe_mnemonic("add"), None);
     }
 }
+
+// t329 — Additional SPE instructions: evmerge, evsel.
+pub const CALLOTHER_SPE_EVMERGEHI: u64 = 0x5350_4500_0020;
+pub const CALLOTHER_SPE_EVMERGELO: u64 = 0x5350_4500_0021;
+pub const CALLOTHER_SPE_EVMERGEHILO: u64 = 0x5350_4500_0022;
+pub const CALLOTHER_SPE_EVMERGELOHI: u64 = 0x5350_4500_0023;
+pub const CALLOTHER_SPE_EVSEL: u64 = 0x5350_4500_0024;
+pub const CALLOTHER_SPE_EVSPLATFI: u64 = 0x5350_4500_0025;
+pub const CALLOTHER_SPE_EVSPLATI: u64 = 0x5350_4500_0026;
+pub const CALLOTHER_SPE_EVSTDD: u64 = 0x5350_4500_0027;
+pub const CALLOTHER_SPE_EVLDD: u64 = 0x5350_4500_0028;
+pub const CALLOTHER_SPE_EVCNTLZW: u64 = 0x5350_4500_0029;
+pub const CALLOTHER_SPE_EVCNTLSW: u64 = 0x5350_4500_002A;

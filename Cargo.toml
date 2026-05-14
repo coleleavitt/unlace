@@ -35,6 +35,7 @@ members = [
     "crates/unlace-lift-sass",
     "crates/unlace-lift-spirv",
     "crates/unlace-lift-appleagx",
+    "crates/unlace-lift-msp430",
     "crates/unlace-lift-agx",
     "crates/unlace-lift-sh",
     "crates/unlace-passes",

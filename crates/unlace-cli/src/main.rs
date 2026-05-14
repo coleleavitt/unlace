@@ -114,6 +114,14 @@ fn main() {
             };
             batch::run_batch(&binary, &config, arch.as_deref(), output_dir.as_deref())
         }
+        Cmd::Quality {
+            binary,
+            format,
+            verbose,
+        } => {
+            init_tracing(verbose);
+            run_quality(&binary, format)
+        }
     };
 
     if let Err(e) = result {
@@ -143,6 +151,19 @@ fn run_siggen(
         stdout.write_all(toml.as_bytes())?;
     }
     tracing::info!(count = patterns.len(), archive = %archive_path.display(), "generated FLIRT patterns");
+    Ok(())
+}
+
+fn run_quality(binary_path: &std::path::Path, format: args::QualityFormat) -> Result<()> {
+    let report = unlace_cli::quality::analyze_binary(binary_path)?;
+    let rendered = match format {
+        args::QualityFormat::Md => unlace_cli::quality::render_markdown(&report),
+        args::QualityFormat::Json => unlace_cli::quality::render_json(&report)?,
+    };
+    print!("{rendered}");
+    if !rendered.ends_with('\n') {
+        println!();
+    }
     Ok(())
 }
 

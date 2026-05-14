@@ -132,6 +132,29 @@ pub enum Cmd {
         #[arg(long, short, action = clap::ArgAction::Count)]
         verbose: u8,
     },
+
+    /// Measure decompiler output quality (feature counters, no C emission).
+    Quality {
+        /// Path to the binary file.
+        binary: PathBuf,
+
+        /// Report format.
+        #[arg(long, default_value = "md")]
+        format: QualityFormat,
+
+        /// Increase verbosity (-v, -vv, -vvv).
+        #[arg(long, short, action = clap::ArgAction::Count)]
+        verbose: u8,
+    },
+}
+
+/// Quality report output format.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum QualityFormat {
+    /// Markdown table for human review.
+    Md,
+    /// JSON for automation.
+    Json,
 }
 
 /// Output format selector.

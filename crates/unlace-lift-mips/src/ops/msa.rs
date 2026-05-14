@@ -1,3 +1,9 @@
+//! MIPS SIMD Architecture (MSA / MIPS-3D) lift helpers.
+//!
+//! Handlers and Callother tags are staged for future MSA dispatch wiring.
+//! Silence dead-code until the MSA opcode block lands in `lift::dispatch_insn`.
+#![allow(dead_code)]
+
 use capstone::RegId;
 use capstone::arch::mips::{MipsInsn, MipsOperand};
 use smallvec::smallvec;

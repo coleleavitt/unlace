@@ -1,4 +1,8 @@
 //! MIPS FPU (Coprocessor 1) instruction lifting.
+//!
+//! All handlers here are WIP and not yet wired into `lift::dispatch_insn`.
+//! TODO: connect MFC1/MTC1/CFC1/CTC1/LWC1/SWC1/BC1*/`add.s|sub.s|...` etc.
+#![allow(dead_code)]
 
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};

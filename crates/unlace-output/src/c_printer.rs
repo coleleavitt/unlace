@@ -16581,6 +16581,14 @@ mod tests {
             output.contains("__rdpmc__(v1)"),
             "missing rdpmc helper: {output}"
         );
+                smallvec![Varnode::constant(0x351, 8), Varnode::new(unlace_ir::SpaceId::Register, 0x08, 4)],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("read_pmc", body);
+        let output = print_c(&func);
+        assert!(output.contains("__rdpmc__(v1)"), "missing rdpmc helper: {output}");
     }
 
     #[test]

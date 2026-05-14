@@ -228,6 +228,10 @@ use crate::lift::{
         let s = decode_it(0xBF03).expect("ITETT EQ");
         assert_eq!(s.firstcond, 0);
         assert_eq!(s.conds, vec![0, 0, 0, 1]);
+    fn decode_itete_eq_four_slots() {
+        let s = decode_it(0xBF0B).expect("ITETE EQ");
+        assert_eq!(s.firstcond, 0);
+        assert_eq!(s.conds, vec![0, 1, 0, 1]);
     }
 
     #[test]
@@ -1382,6 +1386,29 @@ use crate::lift::{
             "post-IT insn must not carry a guard: {:?}",
             adds.ir_ops
         );
+    }
+
+    #[test]
+    fn t316_itete_eq_four_slots_alternate_guards() {
+        // ITETE EQ → mask=0b1011, encoded as 0xBF0B. This is the deepest
+        // alternating four-slot IT shape: [EQ, NE, EQ, NE].
+        let l = ArmLifter::new_thumb();
+        let _ = l.lift_insn(&0xBF0Bu16.to_le_bytes(), 0x1000).expect("IT");
+        let mut got = Vec::new();
+        let mut pc = 0x1002u64;
+        for imm in 1u16..=4 {
+            let bytes = (0x2000u16 | imm).to_le_bytes();
+            let r = l.lift_insn(&bytes, pc).expect("MOVS slot");
+            let copy = r
+                .ir_ops
+                .iter()
+                .find(|i| i.op == IrOp::Copy)
+                .expect("Copy emitted");
+            got.push(copy.guard);
+            pc += 2;
+        }
+        assert_eq!(got, vec![Some(0), Some(1), Some(0), Some(1)]);
+        assert!(l.current_it_state().is_none(), "four-slot IT must drain");
     }
 
     // ---------------------------------------------------------------

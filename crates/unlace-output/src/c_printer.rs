@@ -10728,10 +10728,14 @@ mod tests {
                     ParameterInfo {
                         name: Some("a".to_string()),
                         type_name: Some("int".to_string()),
+                        frame_offset: None,
+                        locations: vec![],
                     },
                     ParameterInfo {
                         name: Some("b".to_string()),
                         type_name: Some("int".to_string()),
+                        frame_offset: None,
+                        locations: vec![],
                     },
                 ],
                 return_type: Some("int".to_string()),
@@ -10807,10 +10811,14 @@ mod tests {
                     ParameterInfo {
                         name: Some("count".to_string()),
                         type_name: Some("int".to_string()),
+                        frame_offset: None,
+                        locations: vec![],
                     },
                     ParameterInfo {
                         name: Some("buf".to_string()),
                         type_name: Some("char *".to_string()),
+                        frame_offset: None,
+                        locations: vec![],
                     },
                 ],
                 return_type: Some("int".to_string()),

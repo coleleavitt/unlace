@@ -170,6 +170,7 @@ pub use func_fingerprint::{build_feature_vector, fingerprint_function, similarit
 pub use global_copy_prop::GlobalCopyPropPass;
 pub use go_closure::{ClosureAllocation, ClosureCall, detect_go_closures};
 pub use go_defer::{GoDeferSite, detect_go_defer};
+pub use go_defer::{GoDeferRecoverKind, GoDeferRecoverOp, detect_go_defer_recover_ops};
 pub use go_select::{GoChannelOp, GoChannelOpKind, detect_go_channel_ops};
 pub use gvn::GvnPass;
 pub use idiom_recognition::IdiomRecognitionPass;

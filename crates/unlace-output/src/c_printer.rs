@@ -6608,6 +6608,16 @@ fn emit_expr_with_prec(
                         format!("*(volatile {} *){}", cast_prim, memory)
                     } else {
                         format!("*({} *){}", cast_prim, memory)
+                    // t257: wrap the MEMORY[…] sigil with the load-sized cast
+                    // so the read-through-pointer is explicit, matching IDA's
+                    //   *(_QWORD *)MEMORY[0x4000]
+                    // rendering. We skip the cast for byte loads since
+                    // MEMORY is already `volatile unsigned char *`.
+                    let cast = ida_ptr_type(load_size);
+                    return if load_size == 1 {
+                        memory
+                    } else {
+                        format!("*({} *){}", cast.trim_end_matches(" *"), memory)
                     };
                 }
                 let addr = emit_operand_resolved(&insn.inputs[addr_idx], addr_idx, stmt_idx, ctx);
@@ -19092,6 +19102,62 @@ mod tests {
         assert!(
             output.contains("__OFSUB__("),
             "polynomial `(a^b) & (a^(a-b)) < 0` should fold to __OFSUB__: {output}"
+    // t257: MEMORY[…] sigil for unanalyzable globals
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn test_t257_load_unknown_global_emits_memory_sigil() {
+        // Load from a constant absolute address in the "low globals" range
+        // (≥ 0x1000, < 0x10000) that no symbol claims. The renderer must
+        // emit `*(_QWORD *)MEMORY[0x4000]` rather than a synthesized
+        // `qword_4000` name (the named path is reserved for addresses
+        // ≥ 0x10000 where there's reasonable confidence they're in a
+        // recognized data section).
+        let space = con(0, 8);
+        let addr = con(0x4000, 8);
+        let r8 = reg(8, 8);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 8)))];
+
+        let func = make_func("t257_unknown_global", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("MEMORY[0x4000]"),
+            "unanalyzable global should render with MEMORY[…] sigil: {output}"
+        );
+        assert!(
+            output.contains("*(_QWORD *)MEMORY[0x4000]"),
+            "8-byte load through MEMORY should wear the _QWORD * cast: {output}"
+        );
+    }
+
+    #[test]
+    fn test_t257_load_known_section_emits_symbol() {
+        // Load from an address that's in the symbol table (e.g. a named
+        // .data global). The symbol name wins; MEMORY[…] must not appear.
+        let space = con(0, 8);
+        let addr = con(0x404000, 8);
+        let r8 = reg(8, 8);
+
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr], 0x1000);
+        let body = vec![HirNode::Statement(load), HirNode::Return(Some(sv(8, 8)))];
+
+        let func = make_func("t257_known_global", body);
+
+        let mut symbols = std::collections::BTreeMap::new();
+        symbols.insert(0x404000u64, "g_named_var".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("g_named_var"),
+            "known-section global should keep its symbol name: {output}"
+        );
+        assert!(
+            !output.contains("MEMORY["),
+            "known-section global must NOT render via MEMORY[…]: {output}"
         );
     }
 }

@@ -21,6 +21,9 @@ pub use cpp_stl::{
     StlType, looks_like_function_sbo_layout, looks_like_shared_ptr_layout,
     looks_like_string_layout, looks_like_unique_ptr_layout, looks_like_vector_layout,
     recognize_stl,
+    StlType, looks_like_shared_ptr_layout, looks_like_string_layout, looks_like_unique_ptr_layout,
+    looks_like_vector_layout, recognize_stl,
+    looks_like_string_layout, looks_like_unique_ptr_layout, looks_like_vector_layout, recognize_stl,
 };
 pub use demangle::{DemangleResult, SymbolKind, SymbolLanguage, demangle, sanitize_for_c};
 pub use instruction_annotations::collect_function_annotations;

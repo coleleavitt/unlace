@@ -61,15 +61,19 @@ use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
 use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
 use unlace_passes::{
-    BmiIdiomPass, CallingConvFinalizePass, CallingConventionDetectPass, ConditionSimplifyPass,
-    ConstantFoldPass, CopyPropagationPass, CppVtablePass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
-    DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass,
-    GlobalCopyPropPass, GvnPass, IdiomRecognitionPass, IvElimPass, LicmPass, ModuloIdiomPass,
-    OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass, ReturnTypeInferPass, SccpPass,
-    SignatureSnapshot, StackOffsetSnapshotPass, StackVarRecoveryPass, StrengthReducePass,
-    StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
-    VariableMergePass, annotate_libc_calls, bump_if_signature_changed, detect_byref,
-    detect_go_defer, recover_stack_frame, recover_structs, run_outer_fixedpoint, run_to_fixedpoint,
+    AlgebraicSimplifyPass, BitfieldIdiomPass, BmiIdiomPass, CallBoundaryCopyPropPass,
+    CallingConvFinalizePass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
+    CopyPropagationPass, CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
+    DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass,
+    DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
+    IndirectCallResolvePass, IvElimPass, LicmPass, ModuloIdiomPass, NoreturnDetectPass,
+    OpTypeBindingPass, OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass,
+    RedundantFlagElimPass, RegisterCoalescePass, ReturnTypeInferPass, RustEnumPass, RustPanicPass,
+    RustVtablePass, SccpPass, SignatureSnapshot, StackOffsetSnapshotPass, StackPointerTrackingPass,
+    StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass, TailCallDetectPass,
+    TypeConstraintSolverPass, VarNamingPass, VariableMergePass, annotate_libc_calls,
+    bump_if_signature_changed, detect_byref, detect_go_defer, recover_stack_frame, recover_structs,
+    run_outer_fixedpoint, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -754,6 +758,19 @@ pub fn run_passes(ssa: &mut SsaFunction) -> Result<usize> {
     Ok(report.ir_changes)
 }
 
+/// Variant of [`run_passes`] that accepts a `call-target VA → name` resolver.
+///
+/// Wired into [`decompile_function_with_symbols`] so the noreturn detector
+/// and Rust panic annotator (Batch 1) can match against PLT/import names
+/// without needing the symbol table baked into the pass module.
+pub fn run_passes_with_resolver(
+    ssa: &mut SsaFunction,
+    resolver: &dyn Fn(u64) -> Option<&'static str>,
+) -> Result<usize> {
+    let report = run_passes_with_report_inner(ssa, Some(resolver))?;
+    Ok(report.ir_changes)
+}
+
 /// Detailed report from one [`run_passes`] invocation.
 ///
 /// Captures the outer-fixed-point behaviour: how many outer iterations ran,
@@ -794,6 +811,20 @@ pub struct PassesReport {
 ///    presentation-layer concerns and re-running them inside the loop
 ///    would either be redundant or risk oscillation.
 pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
+    run_passes_with_report_inner(ssa, None)
+}
+
+/// Inner driver shared by [`run_passes_with_report`] (no resolver) and
+/// [`run_passes_with_resolver`] (PLT/import-name aware).
+///
+/// The resolver, when present, is consumed by symbol-pattern-gated passes
+/// (Batch 1): [`NoreturnDetectPass::run_with_resolver`] and
+/// [`RustPanicPass::run_with_resolver`]. Without a resolver these passes
+/// are skipped — they would otherwise no-op via the trait's default `run()`.
+fn run_passes_with_report_inner(
+    ssa: &mut SsaFunction,
+    resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
+) -> Result<PassesReport> {
     // (1) One-time pre-pass: snapshot pre-optimization stack offsets so
     // later iterations of stack-var recovery still see the original
     // RSP/RBP-relative addressing.
@@ -806,6 +837,18 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
     // revision counter usable as a dirty-flag for any whole-program
     // [`unlace_passes::reanalysis_fixpoint`] driver layered on top.
     let pre_pipeline_sig = SignatureSnapshot::of(ssa);
+
+    // Batch 1: noreturn detection runs *once* before the outer loop, with
+    // the caller-provided PLT/import-name resolver. Strips unreachable
+    // instructions after recognised noreturn calls (`exit`, `abort`,
+    // `__cxa_throw`, …) so the IR-fixedpoint and structural detection
+    // never re-process them. Symbols are stable across outer iterations,
+    // so re-running this inside the loop would be wasted work.
+    if let Some(resolve) = resolver {
+        NoreturnDetectPass::new()
+            .run_with_resolver(ssa, |a| resolve(a))
+            .context("noreturn detect pass failed")?;
+    }
 
     let mut total_ir_changes: usize = 0usize;
 
@@ -831,6 +874,17 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             let idiom = IdiomRecognitionPass;
             let bmi = BmiIdiomPass;
             let cond = ConditionSimplifyPass;
+            // Batch 1 additions to the inner fixed-point cluster:
+            // - call-boundary copy-prop removes the spurious post-call
+            //   register restore version (`reg_post = LOAD(stkN)` → fold
+            //   into the pre-call name) so CSE/GVN see one canonical name.
+            // - redundant-flag elim rewrites lifter-emitted `(a-b)==0`
+            //   shape into direct comparisons.
+            // - algebraic-simplify is currently a skeleton landing zone;
+            //   wiring now means future rules light up automatically.
+            let call_bound = CallBoundaryCopyPropPass;
+            let red_flag = RedundantFlagElimPass;
+            let algebraic = AlgebraicSimplifyPass;
             let passes: &[&dyn Pass] = &[
                 &fold,
                 &prop,
@@ -845,6 +899,9 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
                 &strength_reduce,
                 &idiom,
                 &cond,
+                &call_bound,
+                &red_flag,
+                &algebraic,
             ];
             let inner = run_to_fixedpoint(passes, ssa)?;
             total_ir_changes = total_ir_changes.saturating_add(inner);
@@ -852,18 +909,32 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
             // ---- Cleanup passes (single-run per outer iter) ----
             DeadStoreElimPass.run(ssa)?;
             DeadFlagElimPass.run(ssa)?;
+            // Batch 1: cross-block DSE picks up stores killed by writes in
+            // a successor block — the intra-block DSE above misses them.
+            DeadStoreElimGlobalPass.run(ssa)?;
             DivisionIdiomPass.run(ssa)?;
             ModuloIdiomPass.run(ssa)?;
 
             // ---- Structural detection ----
             PrologueElimPass.run(ssa)?;
             TailCallDetectPass.run(ssa)?;
+            // Batch 1: SP-delta tracking populates `sp_delta_at`,
+            // `stack_holes`, `dynamic_sp` *before* stack var recovery so
+            // the latter can resolve frame addresses through the right
+            // SP-state at each instruction.
+            StackPointerTrackingPass.run(ssa)?;
             StackVarRecoveryPass.run(ssa)?;
             // Wave 24 / t209: synthesise the high-level stack frame layout
             // (one slot per offset, fused partial-access groups, array
             // collapsing) so the type-recovery layer can consume a stable
             // BTreeMap<i64, StackLocal> instead of re-walking the IR.
             ssa.stack_frame = Some(recover_stack_frame(ssa));
+            // Batch 1: indirect-call resolution recovers a unique
+            // constant target for `Callind` chains where the source
+            // narrows to a single `Const` after copy-prop. Runs before
+            // CppVtablePass / language-specific devirt so they all see
+            // the same `resolved_indirect_calls` map.
+            IndirectCallResolvePass.run(ssa)?;
             CppVtablePass.run(ssa)?;
 
             // ---- Type recovery ----
@@ -907,6 +978,33 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
         );
     }
 
+    // Batch 1: pattern-recognition / annotation-only passes that don't
+    // influence the outer-loop type/IR fixedpoint. Running them once
+    // after convergence (instead of every outer iter) keeps large
+    // functions inside the per-function timeout — wiring all four inside
+    // the loop pushed `medium.elf::sub_1560` (1845 bytes) past 30 s.
+    //
+    // - BitfieldIdiomPass: byte-swap (`bswap`) idiom recognition.
+    // - CryptoIdiomPass: AES / RISC-V Zk sequence annotation.
+    // - IndirectCallResolvePass: traces `Callind` chains back to a
+    //   unique `Const` target after copy-prop has settled.
+    // - OpTypeBindingPass: attaches struct-offset / enum-constant
+    //   bindings to LOAD/STORE/compare operands. Reads
+    //   `composite_var_types` and `enum_discriminants`, both of which
+    //   are stable by the time the outer loop exits.
+    BitfieldIdiomPass
+        .run(ssa)
+        .context("bitfield idiom pass failed")?;
+    CryptoIdiomPass
+        .run(ssa)
+        .context("crypto idiom pass failed")?;
+    IndirectCallResolvePass
+        .run(ssa)
+        .context("indirect call resolve pass failed")?;
+    OpTypeBindingPass
+        .run(ssa)
+        .context("op type binding pass failed")?;
+
     // (3) Presentation-layer post-passes. These run once, after the type
     // and IR shape have stabilised, because they encode print-time
     // decisions that should be made against the final IR.
@@ -917,6 +1015,29 @@ pub fn run_passes_with_report(ssa: &mut SsaFunction) -> Result<PassesReport> {
     VariableMergePass
         .run(ssa)
         .context("variable merge pass failed")?;
+
+    // Batch 1: Chaitin-Briggs PHI-operand coalescing. Sits after the
+    // variable-merge coalescer and before role-based naming so its
+    // interference-graph-driven merge groups land in `merged_names`
+    // alongside the merger's output — VarNamingPass then names one C
+    // variable per coalesced cluster.
+    RegisterCoalescePass
+        .run(ssa)
+        .context("register coalesce pass failed")?;
+
+    // Batch 1: language-specific recovery passes. Each is gated by its
+    // own data shape — Rust enum/vtable passes early-return when no
+    // discriminant-load / fat-pointer pattern is present, so they are
+    // no-ops on non-Rust binaries. RustPanicPass needs the symbol
+    // resolver (panic-function name matching) and so only runs on the
+    // resolver-aware path.
+    RustEnumPass.run(ssa).context("rust enum pass failed")?;
+    RustVtablePass.run(ssa).context("rust vtable pass failed")?;
+    if let Some(resolve) = resolver {
+        RustPanicPass
+            .run_with_resolver(ssa, |a| resolve(a))
+            .context("rust panic pass failed")?;
+    }
 
     // t227 — role-based naming. Sits after the variable-merge coalescer so
     // role names like `i`/`saved_rbx` can override the merger's generic
@@ -1393,8 +1514,22 @@ pub fn decompile_function_with_symbols(
     warn_if_large_ir(&entry.name, &ssa);
     check_timeout(deadline, &entry.name)?;
 
+    // Batch 1: build the call-target VA → name resolver *before* the pass
+    // pipeline so symbol-pattern-gated passes (NoreturnDetectPass,
+    // RustPanicPass) can match against PLT/import names. The leaked
+    // `&'static str`s previously built only for `detect_go_defer` are now
+    // also reused as the resolver backing store.
+    let symbols = build_symbol_table_with_functions(image, discovered);
+    let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
+    for (&addr, name) in &symbols {
+        stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
+    }
+
     let t = Instant::now();
-    if let Err(e) = run_passes(&mut ssa) {
+    let resolve_name = |addr: u64| -> Option<&'static str> {
+        stable_symbol_names.get(&addr).copied()
+    };
+    if let Err(e) = run_passes_with_resolver(&mut ssa, &resolve_name) {
         tracing::warn!(err = %e, "pass pipeline failed; emitting unoptimized");
     }
     tracing::trace!(
@@ -1405,13 +1540,8 @@ pub fn decompile_function_with_symbols(
     check_timeout(deadline, &entry.name)?;
 
     let t = Instant::now();
-    let symbols = build_symbol_table_with_functions(image, discovered);
 
     if !symbols.is_empty() {
-        let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
-        for (&addr, name) in &symbols {
-            stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
-        }
         ssa.go_defer_sites = detect_go_defer(&ssa, |addr| stable_symbol_names.get(&addr).copied())
             .into_iter()
             .map(|site| unlace_ir::ssa::GoDeferSite {

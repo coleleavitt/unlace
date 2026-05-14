@@ -49,6 +49,7 @@ pub enum ArchId {
     AmdGpu,
     Stm8,
     AmdGpu,
+    TriCore,
     Unknown(u16),
 }
 
@@ -98,6 +99,7 @@ impl fmt::Display for ArchId {
             Self::AmdGpu => f.write_str("amdgpu"),
             Self::Stm8 => f.write_str("stm8"),
             Self::AmdGpu => f.write_str("amdgpu"),
+            Self::TriCore => f.write_str("tricore"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

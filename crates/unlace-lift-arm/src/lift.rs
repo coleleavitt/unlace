@@ -2911,6 +2911,9 @@ pub const CALLOTHER_AARCH64_DMB: u64 = 0x570;
 pub const CALLOTHER_AARCH64_DSB: u64 = 0x571;
 pub const CALLOTHER_AARCH64_ISB: u64 = 0x572;
 
+pub const CALLOTHER_AARCH64_XPACD: u64 = 0x417;
+pub const CALLOTHER_AARCH64_PACGA: u64 = 0x418;
+pub const CALLOTHER_AARCH64_STRIP: u64 = 0x419;
 
 /// Decoded register-form PAC/AUTH/XPAC instruction (t300).
 ///

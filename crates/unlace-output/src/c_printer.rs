@@ -7380,6 +7380,16 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x1EB => Some("_mm_sha256msg1_epu32"),  // SHA256MSG1
         0x1EC => Some("_mm_sha256msg2_epu32"),  // SHA256MSG2
 
+        // ── Intel AMX tile intrinsics (0x1F0..0x1F7) ────────────
+        0x1F0 => Some("_tile_loadd"),    // TILELOADD / TILELOADDT1
+        0x1F1 => Some("_tile_stored"),   // TILESTORED
+        0x1F2 => Some("_tile_release"),  // TILERELEASE
+        0x1F3 => Some("_tile_dpbssd"),   // TDPBSSD
+        0x1F4 => Some("_tile_dpbsud"),   // TDPBSUD
+        0x1F5 => Some("_tile_dpbusd"),   // TDPBUSD
+        0x1F6 => Some("_tile_dpbuud"),   // TDPBUUD
+        0x1F7 => Some("_tile_dpbf16ps"), // TDPBF16PS
+
         // ── Bit-manipulation builtins (0x200..0x204) ───────────
         0x200 => Some("__builtin_ctz"),      // BSF
         0x201 => Some("__bsr"),              // BSR

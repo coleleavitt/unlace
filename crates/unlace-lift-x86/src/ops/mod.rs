@@ -1,3 +1,4 @@
+pub mod amx;
 pub mod arithmetic;
 pub mod bitwise;
 pub mod control_flow;

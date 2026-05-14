@@ -202,9 +202,35 @@ pub const K5: u64 = k_offset(5);
 pub const K6: u64 = k_offset(6);
 pub const K7: u64 = k_offset(7);
 
+// ── Intel AMX tile registers (TMM0..TMM7) ───────────────────────────────
+//
+// AMX architectural tile registers can each hold up to 1 KiB. The current IR
+// stores varnode sizes in u8, so TMM_SIZE uses u8::MAX as a conservative
+// opaque tile-register width while preserving distinct 1 KiB register slots.
+pub const TMM_SIZE: u8 = u8::MAX;
+const TMM_BASE: u64 = K_BASE + 8 * K_STRIDE; // 0xC40
+const TMM_STRIDE: u64 = 1024;
+
+const fn tmm_offset(index: u64) -> u64 {
+    TMM_BASE + index * TMM_STRIDE
+}
+
+pub const TMM0: u64 = tmm_offset(0);
+pub const TMM1: u64 = tmm_offset(1);
+pub const TMM2: u64 = tmm_offset(2);
+pub const TMM3: u64 = tmm_offset(3);
+pub const TMM4: u64 = tmm_offset(4);
+pub const TMM5: u64 = tmm_offset(5);
+pub const TMM6: u64 = tmm_offset(6);
+pub const TMM7: u64 = tmm_offset(7);
+
 /// 64-byte ZMM varnode constructor (AVX-512).
 pub fn reg512(offset: u64) -> Varnode {
     Varnode::new(SpaceId::Register, offset, 64)
+}
+
+pub fn reg1024(offset: u64) -> Varnode {
+    Varnode::new(SpaceId::Register, offset, TMM_SIZE)
 }
 
 pub fn reg256(offset: u64) -> Varnode {
@@ -553,6 +579,15 @@ pub fn x86_64_register_file() -> RegisterFile {
             RegisterDef { name: "K5", varnode: reg64(K5) },
             RegisterDef { name: "K6", varnode: reg64(K6) },
             RegisterDef { name: "K7", varnode: reg64(K7) },
+            // TMM0..TMM7 — Intel AMX tile registers (1024 architectural bytes).
+            RegisterDef { name: "TMM0", varnode: reg1024(TMM0) },
+            RegisterDef { name: "TMM1", varnode: reg1024(TMM1) },
+            RegisterDef { name: "TMM2", varnode: reg1024(TMM2) },
+            RegisterDef { name: "TMM3", varnode: reg1024(TMM3) },
+            RegisterDef { name: "TMM4", varnode: reg1024(TMM4) },
+            RegisterDef { name: "TMM5", varnode: reg1024(TMM5) },
+            RegisterDef { name: "TMM6", varnode: reg1024(TMM6) },
+            RegisterDef { name: "TMM7", varnode: reg1024(TMM7) },
             RegisterDef {
                 name: "ST0",
                 varnode: st_reg(0),
@@ -744,6 +779,16 @@ pub fn iced_reg_to_varnode(reg: iced_x86::Register) -> Option<(u64, u8)> {
         R::K5 => Some((K5, 8)),
         R::K6 => Some((K6, 8)),
         R::K7 => Some((K7, 8)),
+
+        // Intel AMX tile registers.
+        R::TMM0 => Some((TMM0, TMM_SIZE)),
+        R::TMM1 => Some((TMM1, TMM_SIZE)),
+        R::TMM2 => Some((TMM2, TMM_SIZE)),
+        R::TMM3 => Some((TMM3, TMM_SIZE)),
+        R::TMM4 => Some((TMM4, TMM_SIZE)),
+        R::TMM5 => Some((TMM5, TMM_SIZE)),
+        R::TMM6 => Some((TMM6, TMM_SIZE)),
+        R::TMM7 => Some((TMM7, TMM_SIZE)),
 
         R::ST0 => Some((ST0, 10)),
         R::ST1 => Some((ST1, 10)),
@@ -1011,4 +1056,24 @@ mod tests {
         let zmm1 = Varnode::new(SpaceId::Register, ZMM1, 64);
         assert!(!aliases(zmm0, zmm1));
     }
+    #[test]
+    fn test_tmm0_size_255_ir_limit() {
+        let vn = reg1024(TMM0);
+        assert_eq!(vn.size, TMM_SIZE);
+        assert_eq!(vn.space, SpaceId::Register);
+    }
+
+    #[test]
+    fn test_tmm_iced_mapping() {
+        use iced_x86::Register as R;
+        let (off, sz) = iced_reg_to_varnode(R::TMM0).expect("TMM0 should map");
+        assert_eq!(off, TMM0);
+        assert_eq!(sz, TMM_SIZE);
+
+        let (off7, sz7) = iced_reg_to_varnode(R::TMM7).expect("TMM7 should map");
+        assert_eq!(off7, TMM7);
+        assert_eq!(sz7, TMM_SIZE);
+        assert_eq!(TMM7 - TMM0, 7 * TMM_STRIDE);
+    }
+
 }

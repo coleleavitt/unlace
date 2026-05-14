@@ -454,6 +454,10 @@ pub struct PrinterAnnotations {
     pub rust_vtable_calls: BTreeMap<u64, VtableCallInfo>,
     /// t298: C++ virtual dispatches keyed by CALLIND instruction VA.
     pub cpp_vtable_calls: BTreeMap<u64, VtableCallInfo>,
+    /// Swift protocol conformances recovered from Mach-O `__swift5_proto`.
+    /// Rendered as a source-style preamble (`// protocol P conformance: T`)
+    /// so witness-table metadata is visible in the C view.
+    pub swift_conformances: Vec<unlace_loader::SwiftConformance>,
     /// t260: __usercall / __userpurge spec for functions whose register-
     /// passing scheme diverges from the active ABI's canonical sequence.
     pub usercall: Option<UsercallSpec>,
@@ -675,6 +679,8 @@ pub fn print_c_with_annotations(
     if let Some(summary) = render_go_defer_summary(func.go_defer_sites.as_slice(), symbols) {
         out.push_str(&summary);
         out.push('\n');
+    if let Some(ann) = annotations {
+        emit_swift_protocol_conformances(&ann.swift_conformances, &mut out);
     }
 
     // t147 / t224: synthesised composite preamble (stack-frame structs +
@@ -5753,6 +5759,54 @@ fn primitive_for_width(width: u8) -> &'static str {
         16 => "__int128",
         _ => "__int64",
     }
+}
+
+/// Render Swift protocol witness-table metadata as compact comments.
+///
+/// The recovered data is runtime metadata rather than C syntax, so comments are
+/// deliberate: they preserve valid C output while giving analysts the source
+/// fact they care about — `Type` conforms to `protocol P` and the witness
+/// table/accessor address that implements the conformance.
+pub fn render_swift_conformance(conf: &unlace_loader::SwiftConformance) -> String {
+    let ty = conf
+        .type_name
+        .as_deref()
+        .map(str::to_owned)
+        .or_else(|| conf.type_va.map(|va| format!("type_0x{va:x}")))
+        .unwrap_or_else(|| "<unknown type>".to_string());
+    let proto = conf
+        .protocol_name
+        .as_deref()
+        .map(str::to_owned)
+        .or_else(|| conf.protocol_va.map(|va| format!("protocol_0x{va:x}")))
+        .unwrap_or_else(|| "<unknown protocol>".to_string());
+
+    let mut line = format!(
+        "// protocol {proto} conformance: {ty} @ 0x{:x}",
+        conf.descriptor_va
+    );
+    if let Some(witness) = conf.witness_table_va {
+        let _ = write!(line, " witness=0x{witness:x}");
+    }
+    if conf.flags != 0 {
+        let _ = write!(line, " flags=0x{:x}", conf.flags);
+    }
+    line.push('\n');
+    line
+}
+
+fn emit_swift_protocol_conformances(
+    conformances: &[unlace_loader::SwiftConformance],
+    out: &mut String,
+) {
+    if conformances.is_empty() {
+        return;
+    }
+    out.push_str("// Swift protocol conformances (recovered from __swift5_proto)\n");
+    for conf in conformances {
+        out.push_str(&render_swift_conformance(conf));
+    }
+    out.push('\n');
 }
 
 /// Render an ObjC category as a commented `@interface` block:
@@ -18351,6 +18405,34 @@ mod tests {
         assert!(
             !body.contains("//   -") && !body.contains("//   +"),
             "empty-method category body must not contain selector lines, got body:\n{body}"
+        );
+    }
+
+    #[test]
+    fn preamble_emits_swift_protocol_conformance() {
+        let func = minimal_func();
+        let mut ann = super::PrinterAnnotations::default();
+        ann.swift_conformances
+            .push(unlace_loader::SwiftConformance {
+                descriptor_va: 0x6000,
+                protocol_va: Some(0x5000),
+                protocol_name: Some("Drawable".into()),
+                type_va: Some(0x4000),
+                type_name: Some("Widget".into()),
+                witness_table_va: Some(0x7000),
+                flags: 0x1234,
+            });
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
+        assert!(
+            output.contains("// Swift protocol conformances (recovered from __swift5_proto)"),
+            "expected Swift heading, got:\n{output}"
+        );
+        assert!(
+            output.contains(
+                "// protocol Drawable conformance: Widget @ 0x6000 witness=0x7000 flags=0x1234"
+            ),
+            "expected rendered conformance, got:\n{output}"
         );
     }
 

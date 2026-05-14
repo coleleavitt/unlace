@@ -1774,6 +1774,15 @@ pub fn emit_output(
                 unlace_struct::structure_with_landing_pads(ssa, &ssa.eh_landing_pads)
                     .context("control-flow structuring failed")?
             };
+            // Batch 9 slice: post-structuring switch recovery. Walks the HIR
+            // and preserves/normalises any `HirNode::Switch` produced by the
+            // structurer, plus logs any remaining unresolved `BRANCHIND`
+            // statements for diagnostics. The full `refine_switches_with_tables`
+            // path needs a `BTreeMap<u64, (JumpTable, Vec<u64>)>` keyed by
+            // switch-instruction address — SsaFunction currently exposes
+            // `resolved_indirect_calls` but no equivalent jump-table map, so
+            // refinement is deferred until that wiring lands.
+            unlace_struct::recover_switches(&mut hir);
             unlace_struct::ternary_recovery(&mut hir);
             unlace_struct::short_circuit_recovery(&mut hir);
             unlace_struct::flatten_if_else_chains(&mut hir);

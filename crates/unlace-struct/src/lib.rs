@@ -17,6 +17,7 @@ pub mod hir_cse;
 pub mod hir_licm;
 pub mod if_to_switch;
 pub mod irreducible;
+pub mod loop_normalize;
 pub mod label_cleanup;
 pub mod label_fallthrough;
 pub mod label_hoist;

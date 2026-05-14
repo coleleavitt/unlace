@@ -16,6 +16,7 @@ members = [
     "crates/unlace-lift-avr",
     "crates/unlace-lift-z80",
     "crates/unlace-lift-rx",
+    "crates/unlace-lift-amdgpu",
     "crates/unlace-lift-m68k",
     "crates/unlace-lift-agx",
     "crates/unlace-passes",

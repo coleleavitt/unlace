@@ -36,6 +36,7 @@
 //! distinct from an expected `Err` returned by the loader on malformed
 //! input.
 
+pub mod corpus;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::Duration;
 

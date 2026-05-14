@@ -195,6 +195,14 @@ impl ArmLifter {
                 len: 4,
             });
         }
+        if let Some(pac) = try_pac_hint_space(raw) {
+            let mut ctx = LiftCtx::new(addr);
+            emit_pac_callother(&mut ctx, &pac);
+            return Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
         if try_pac_bti_nop(raw) {
             return Ok(LiftedInsn {
                 ir_ops: Vec::new(),
@@ -3509,21 +3517,34 @@ pub fn emit_sve_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varno
 /// caller should consume 4 bytes and emit no IR.
 pub fn try_pac_bti_nop(insn: u32) -> bool {
     const HINT_NOPS: &[u32] = &[
-        0xD503_233F,
-        0xD503_237F,
-        0xD503_23BF,
-        0xD503_23FF,
-        0xD503_231F,
-        0xD503_235F,
-        0xD503_239F,
-        0xD503_23DF,
-        0xD503_22FF,
-        0xD503_241F,
-        0xD503_245F,
-        0xD503_249F,
-        0xD503_24DF,
+        0xD503_241F, // BTI
+        0xD503_245F, // BTI c
+        0xD503_249F, // BTI j
+        0xD503_24DF, // BTI jc
     ];
     HINT_NOPS.contains(&insn)
+}
+
+/// If `insn` is a HINT-space PAC/AUTH/XPAC instruction, decode it into
+/// a [`PacAuthDecoded`] with the appropriate implicit register operands.
+pub fn try_pac_hint_space(insn: u32) -> Option<PacAuthDecoded> {
+    const LR_IDX: u8 = 30;
+    const X17_IDX: u8 = 17;
+    const X16_IDX: u8 = 16;
+    const SP_IDX: u8 = 31;
+    let (tag, rd, rn_opt) = match insn {
+        0xD503_233F => (CALLOTHER_AARCH64_PACIA, LR_IDX, Some(SP_IDX)),
+        0xD503_237F => (CALLOTHER_AARCH64_PACIB, LR_IDX, Some(SP_IDX)),
+        0xD503_23BF => (CALLOTHER_AARCH64_AUTIA, LR_IDX, Some(SP_IDX)),
+        0xD503_23FF => (CALLOTHER_AARCH64_AUTIB, LR_IDX, Some(SP_IDX)),
+        0xD503_231F => (CALLOTHER_AARCH64_PACIA, X17_IDX, Some(X16_IDX)),
+        0xD503_235F => (CALLOTHER_AARCH64_PACIB, X17_IDX, Some(X16_IDX)),
+        0xD503_239F => (CALLOTHER_AARCH64_AUTIA, X17_IDX, Some(X16_IDX)),
+        0xD503_23DF => (CALLOTHER_AARCH64_AUTIB, X17_IDX, Some(X16_IDX)),
+        0xD503_22FF => (CALLOTHER_AARCH64_XPACI, LR_IDX, None),
+        _ => return None,
+    };
+    Some(PacAuthDecoded { tag, rd, rn: rn_opt })
 }
 
 /// If `insn` is a PAC-authenticated branch (BR*A*/BLR*A*/RET*A*), return the

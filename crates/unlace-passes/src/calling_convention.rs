@@ -540,6 +540,378 @@ fn classify_return_op(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Architecture calling-convention specifications
+// ---------------------------------------------------------------------------
+
+/// Declarative ABI data for a supported architecture calling convention.
+///
+/// Register values are canonical architecture/ABI register numbers, not the
+/// byte offsets used by a particular lifter register file. Keeping this table
+/// independent from lifter crates lets the pass crate audit ABI completeness
+/// without introducing architecture-specific dependency cycles. Consumers that
+/// need concrete `SpaceId::Register` offsets should translate these register
+/// numbers through the active architecture's register file.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct CallConvSpec {
+    /// Stable user-facing ABI name.
+    pub name: &'static str,
+    /// Integer/pointer parameter registers in ABI assignment order.
+    pub param_int_regs: &'static [u16],
+    /// Floating-point/vector parameter registers in ABI assignment order.
+    pub param_float_regs: &'static [u16],
+    /// Integer/pointer return registers in ABI assignment order.
+    pub return_int_regs: &'static [u16],
+    /// Floating-point/vector return registers in ABI assignment order.
+    pub return_float_regs: &'static [u16],
+    /// Callee-saved registers (non-volatile registers preserved by callees).
+    pub callee_saved: &'static [u16],
+    /// Required stack alignment at call boundaries, in bytes.
+    pub stack_align: u16,
+    /// Bytes of caller-allocated call-home/shadow area, if mandated.
+    pub shadow_space: u16,
+    /// Whether fixed arguments are stack-only for this ABI variant.
+    pub stack_params: bool,
+    /// Whether the callee pops stack arguments on return.
+    pub callee_pops_stack: bool,
+}
+
+impl CallConvSpec {
+    pub const fn has_register_params(&self) -> bool {
+        !self.param_int_regs.is_empty() || !self.param_float_regs.is_empty()
+    }
+}
+
+// x86-64 architectural register numbers: rax=0, rcx=1, rdx=2, rbx=3,
+// rsp=4, rbp=5, rsi=6, rdi=7, r8..r15=8..15. XMM registers use 100+N.
+const X86_64_SYSV_INT_PARAMS: &[u16] = &[7, 6, 2, 1, 8, 9];
+const X86_64_MS_INT_PARAMS: &[u16] = &[1, 2, 8, 9];
+const X86_64_INT_RET: &[u16] = &[0, 2];
+const X86_64_XMM_PARAMS_8: &[u16] = &[100, 101, 102, 103, 104, 105, 106, 107];
+const X86_64_XMM_PARAMS_4: &[u16] = &[100, 101, 102, 103];
+const X86_64_XMM_RET: &[u16] = &[100, 101];
+const X86_64_SYSV_CALLEE_SAVED: &[u16] = &[3, 4, 5, 12, 13, 14, 15];
+const X86_64_MS_CALLEE_SAVED: &[u16] = &[
+    3, 4, 5, 6, 7, 12, 13, 14, 15, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
+];
+
+// i386 architectural register numbers: eax=0, ecx=1, edx=2, ebx=3,
+// esp=4, ebp=5, esi=6, edi=7. x87 ST0/ST1 are 80/81.
+const X86_32_FASTCALL_PARAMS: &[u16] = &[1, 2];
+const X86_32_THISCALL_PARAMS: &[u16] = &[1];
+const X86_32_INT_RET: &[u16] = &[0, 2];
+const X86_32_X87_RET: &[u16] = &[80, 81];
+const X86_32_CALLEE_SAVED: &[u16] = &[3, 4, 5, 6, 7];
+
+// AArch64: X0..X30 => 0..30, SP => 31; V0..V31 => 100..131.
+const AARCH64_INT_PARAMS: &[u16] = &[0, 1, 2, 3, 4, 5, 6, 7];
+const AARCH64_FP_PARAMS: &[u16] = &[100, 101, 102, 103, 104, 105, 106, 107];
+const AARCH64_INT_RET: &[u16] = &[0, 1];
+const AARCH64_FP_RET: &[u16] = &[100, 101];
+const AARCH64_CALLEE_SAVED: &[u16] = &[
+    19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 31, 108, 109, 110, 111, 112, 113, 114, 115,
+];
+
+// ARM AAPCS: R0..R15 => 0..15; D0..D31 => 100..131.
+const ARM_INT_PARAMS: &[u16] = &[0, 1, 2, 3];
+const ARM_HARD_FLOAT_PARAMS: &[u16] = &[100, 101, 102, 103, 104, 105, 106, 107];
+const ARM_INT_RET: &[u16] = &[0, 1];
+const ARM_FP_RET: &[u16] = &[100, 101];
+const ARM_CALLEE_SAVED: &[u16] = &[4, 5, 6, 7, 8, 9, 10, 11, 13, 14];
+const ARM_HARD_FLOAT_CALLEE_SAVED: &[u16] = &[
+    4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 108, 109, 110, 111, 112, 113, 114, 115,
+];
+
+// MIPS: $0..$31 => 0..31; F0..F31 => 100..131.
+const MIPS_O32_INT_PARAMS: &[u16] = &[4, 5, 6, 7];
+const MIPS_N_INT_PARAMS: &[u16] = &[4, 5, 6, 7, 8, 9, 10, 11];
+const MIPS_O32_FP_PARAMS: &[u16] = &[112, 114];
+const MIPS_N_FP_PARAMS: &[u16] = &[112, 113, 114, 115, 116, 117, 118, 119];
+const MIPS_INT_RET: &[u16] = &[2, 3];
+const MIPS_FP_RET: &[u16] = &[100, 102];
+const MIPS_CALLEE_SAVED: &[u16] = &[
+    16, 17, 18, 19, 20, 21, 22, 23, 28, 29, 30, 31, 120, 121, 122, 123, 124, 125, 126, 127, 128,
+    129, 130, 131,
+];
+
+// RISC-V: x0..x31 => 0..31; f0..f31 => 100..131.
+const RISCV_INT_PARAMS: &[u16] = &[10, 11, 12, 13, 14, 15, 16, 17];
+const RISCV_FP_PARAMS: &[u16] = &[110, 111, 112, 113, 114, 115, 116, 117];
+const RISCV_INT_RET: &[u16] = &[10, 11];
+const RISCV_FP_RET: &[u16] = &[110, 111];
+const RISCV_CALLEE_SAVED: &[u16] = &[
+    2, 8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 108, 109, 118, 119, 120, 121, 122, 123, 124,
+    125, 126, 127,
+];
+
+// PowerPC: r0..r31 => 0..31; f0..f31 => 100..131.
+const PPC_INT_PARAMS: &[u16] = &[3, 4, 5, 6, 7, 8, 9, 10];
+const PPC_FP_PARAMS: &[u16] = &[
+    101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113,
+];
+const PPC_INT_RET: &[u16] = &[3, 4];
+const PPC_FP_RET: &[u16] = &[101];
+const PPC_CALLEE_SAVED: &[u16] = &[
+    1, 2, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 114, 115,
+    116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131,
+];
+
+// SPARC: globals g0..g7 => 0..7, outs o0..o7 => 8..15, locals l0..l7
+// => 16..23, ins i0..i7 => 24..31; floats use 100+N.
+const SPARC_INT_PARAMS: &[u16] = &[8, 9, 10, 11, 12, 13];
+const SPARC_FP_PARAMS: &[u16] = &[
+    100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
+];
+const SPARC_INT_RET: &[u16] = &[8, 9];
+const SPARC_FP_RET: &[u16] = &[100, 101];
+const SPARC_CALLEE_SAVED: &[u16] = &[
+    14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+];
+
+pub const SYSTEMV_X86_64: CallConvSpec = CallConvSpec {
+    name: "SystemV-x86_64",
+    param_int_regs: X86_64_SYSV_INT_PARAMS,
+    param_float_regs: X86_64_XMM_PARAMS_8,
+    return_int_regs: X86_64_INT_RET,
+    return_float_regs: X86_64_XMM_RET,
+    callee_saved: X86_64_SYSV_CALLEE_SAVED,
+    stack_align: 16,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const MS_X64: CallConvSpec = CallConvSpec {
+    name: "MS-x64",
+    param_int_regs: X86_64_MS_INT_PARAMS,
+    param_float_regs: X86_64_XMM_PARAMS_4,
+    return_int_regs: X86_64_INT_RET,
+    return_float_regs: X86_64_XMM_RET,
+    callee_saved: X86_64_MS_CALLEE_SAVED,
+    stack_align: 16,
+    shadow_space: 32,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const SYSV_X86_CDECL: CallConvSpec = CallConvSpec {
+    name: "SysV-x86-cdecl",
+    param_int_regs: &[],
+    param_float_regs: &[],
+    return_int_regs: X86_32_INT_RET,
+    return_float_regs: X86_32_X87_RET,
+    callee_saved: X86_32_CALLEE_SAVED,
+    stack_align: 4,
+    shadow_space: 0,
+    stack_params: true,
+    callee_pops_stack: false,
+};
+pub const SYSV_X86_STDCALL: CallConvSpec = CallConvSpec {
+    name: "SysV-x86-stdcall",
+    param_int_regs: &[],
+    param_float_regs: &[],
+    return_int_regs: X86_32_INT_RET,
+    return_float_regs: X86_32_X87_RET,
+    callee_saved: X86_32_CALLEE_SAVED,
+    stack_align: 4,
+    shadow_space: 0,
+    stack_params: true,
+    callee_pops_stack: true,
+};
+pub const SYSV_X86_FASTCALL: CallConvSpec = CallConvSpec {
+    name: "SysV-x86-fastcall",
+    param_int_regs: X86_32_FASTCALL_PARAMS,
+    param_float_regs: &[],
+    return_int_regs: X86_32_INT_RET,
+    return_float_regs: X86_32_X87_RET,
+    callee_saved: X86_32_CALLEE_SAVED,
+    stack_align: 4,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: true,
+};
+pub const SYSV_X86_THISCALL: CallConvSpec = CallConvSpec {
+    name: "SysV-x86-thiscall",
+    param_int_regs: X86_32_THISCALL_PARAMS,
+    param_float_regs: &[],
+    return_int_regs: X86_32_INT_RET,
+    return_float_regs: X86_32_X87_RET,
+    callee_saved: X86_32_CALLEE_SAVED,
+    stack_align: 4,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: true,
+};
+pub const AARCH64_AAPCS64: CallConvSpec = CallConvSpec {
+    name: "AArch64-AAPCS64",
+    param_int_regs: AARCH64_INT_PARAMS,
+    param_float_regs: AARCH64_FP_PARAMS,
+    return_int_regs: AARCH64_INT_RET,
+    return_float_regs: AARCH64_FP_RET,
+    callee_saved: AARCH64_CALLEE_SAVED,
+    stack_align: 16,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const AARCH64_DARWIN: CallConvSpec = CallConvSpec {
+    name: "AArch64-Darwin",
+    param_int_regs: AARCH64_INT_PARAMS,
+    param_float_regs: AARCH64_FP_PARAMS,
+    return_int_regs: AARCH64_INT_RET,
+    return_float_regs: AARCH64_FP_RET,
+    callee_saved: AARCH64_CALLEE_SAVED,
+    stack_align: 16,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const ARM_AAPCS_SOFT: CallConvSpec = CallConvSpec {
+    name: "ARM-AAPCS-soft",
+    param_int_regs: ARM_INT_PARAMS,
+    param_float_regs: &[],
+    return_int_regs: ARM_INT_RET,
+    return_float_regs: &[],
+    callee_saved: ARM_CALLEE_SAVED,
+    stack_align: 8,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const ARM_AAPCS_HARD: CallConvSpec = CallConvSpec {
+    name: "ARM-AAPCS-hard",
+    param_int_regs: ARM_INT_PARAMS,
+    param_float_regs: ARM_HARD_FLOAT_PARAMS,
+    return_int_regs: ARM_INT_RET,
+    return_float_regs: ARM_FP_RET,
+    callee_saved: ARM_HARD_FLOAT_CALLEE_SAVED,
+    stack_align: 8,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const MIPS_O32: CallConvSpec = CallConvSpec {
+    name: "MIPS-O32",
+    param_int_regs: MIPS_O32_INT_PARAMS,
+    param_float_regs: MIPS_O32_FP_PARAMS,
+    return_int_regs: MIPS_INT_RET,
+    return_float_regs: MIPS_FP_RET,
+    callee_saved: MIPS_CALLEE_SAVED,
+    stack_align: 8,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const MIPS_N32: CallConvSpec = CallConvSpec {
+    name: "MIPS-N32",
+    param_int_regs: MIPS_N_INT_PARAMS,
+    param_float_regs: MIPS_N_FP_PARAMS,
+    return_int_regs: MIPS_INT_RET,
+    return_float_regs: MIPS_FP_RET,
+    callee_saved: MIPS_CALLEE_SAVED,
+    stack_align: 16,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const MIPS_N64: CallConvSpec = CallConvSpec {
+    name: "MIPS-N64",
+    param_int_regs: MIPS_N_INT_PARAMS,
+    param_float_regs: MIPS_N_FP_PARAMS,
+    return_int_regs: MIPS_INT_RET,
+    return_float_regs: MIPS_FP_RET,
+    callee_saved: MIPS_CALLEE_SAVED,
+    stack_align: 16,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const RISCV_LP64: CallConvSpec = CallConvSpec {
+    name: "RISC-V-LP64",
+    param_int_regs: RISCV_INT_PARAMS,
+    param_float_regs: RISCV_FP_PARAMS,
+    return_int_regs: RISCV_INT_RET,
+    return_float_regs: RISCV_FP_RET,
+    callee_saved: RISCV_CALLEE_SAVED,
+    stack_align: 16,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const POWERPC_ELFV1: CallConvSpec = CallConvSpec {
+    name: "PowerPC-ELFv1",
+    param_int_regs: PPC_INT_PARAMS,
+    param_float_regs: PPC_FP_PARAMS,
+    return_int_regs: PPC_INT_RET,
+    return_float_regs: PPC_FP_RET,
+    callee_saved: PPC_CALLEE_SAVED,
+    stack_align: 16,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const POWERPC_ELFV2: CallConvSpec = CallConvSpec {
+    name: "PowerPC-ELFv2",
+    param_int_regs: PPC_INT_PARAMS,
+    param_float_regs: PPC_FP_PARAMS,
+    return_int_regs: PPC_INT_RET,
+    return_float_regs: PPC_FP_RET,
+    callee_saved: PPC_CALLEE_SAVED,
+    stack_align: 16,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const SPARC_V8: CallConvSpec = CallConvSpec {
+    name: "SPARC-v8",
+    param_int_regs: SPARC_INT_PARAMS,
+    param_float_regs: &[],
+    return_int_regs: SPARC_INT_RET,
+    return_float_regs: SPARC_FP_RET,
+    callee_saved: SPARC_CALLEE_SAVED,
+    stack_align: 8,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+pub const SPARC_V9: CallConvSpec = CallConvSpec {
+    name: "SPARC-v9",
+    param_int_regs: SPARC_INT_PARAMS,
+    param_float_regs: SPARC_FP_PARAMS,
+    return_int_regs: SPARC_INT_RET,
+    return_float_regs: SPARC_FP_RET,
+    callee_saved: SPARC_CALLEE_SAVED,
+    stack_align: 16,
+    shadow_space: 0,
+    stack_params: false,
+    callee_pops_stack: false,
+};
+
+/// Complete registry of supported architecture calling-convention specs.
+pub const CALL_CONV_SPECS: &[CallConvSpec] = &[
+    SYSTEMV_X86_64,
+    MS_X64,
+    SYSV_X86_CDECL,
+    SYSV_X86_STDCALL,
+    SYSV_X86_FASTCALL,
+    SYSV_X86_THISCALL,
+    AARCH64_AAPCS64,
+    AARCH64_DARWIN,
+    ARM_AAPCS_SOFT,
+    ARM_AAPCS_HARD,
+    MIPS_O32,
+    MIPS_N32,
+    MIPS_N64,
+    RISCV_LP64,
+    POWERPC_ELFV1,
+    POWERPC_ELFV2,
+    SPARC_V8,
+    SPARC_V9,
+];
+
+/// Lookup a calling-convention spec by stable name.
+pub fn call_conv_spec(name: &str) -> Option<&'static CallConvSpec> {
+    CALL_CONV_SPECS.iter().find(|spec| spec.name == name)
+}
+
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
@@ -560,5 +932,655 @@ mod tests {
         ));
         func.insert_block(bb);
         build_ssa(func)
+    }
+
+    // -------------------------------------------------------------------
+    // Architecture calling-convention spec tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_call_conv_registry_is_complete_for_wave50() {
+        const EXPECTED: &[&str] = &[
+            "SystemV-x86_64",
+            "MS-x64",
+            "SysV-x86-cdecl",
+            "SysV-x86-stdcall",
+            "SysV-x86-fastcall",
+            "SysV-x86-thiscall",
+            "AArch64-AAPCS64",
+            "AArch64-Darwin",
+            "ARM-AAPCS-soft",
+            "ARM-AAPCS-hard",
+            "MIPS-O32",
+            "MIPS-N32",
+            "MIPS-N64",
+            "RISC-V-LP64",
+            "PowerPC-ELFv1",
+            "PowerPC-ELFv2",
+            "SPARC-v8",
+            "SPARC-v9",
+        ];
+
+        assert_eq!(CALL_CONV_SPECS.len(), EXPECTED.len());
+        for name in EXPECTED {
+            assert!(call_conv_spec(name).is_some(), "missing {name}");
+        }
+    }
+
+    #[test]
+    fn test_x86_64_specs_capture_sysv_vs_ms_x64() {
+        let sysv = call_conv_spec("SystemV-x86_64").unwrap();
+        let ms = call_conv_spec("MS-x64").unwrap();
+
+        assert_eq!(sysv.param_int_regs, &[7, 6, 2, 1, 8, 9]);
+        assert_eq!(sysv.param_float_regs.len(), 8);
+        assert_eq!(sysv.return_int_regs, &[0, 2]);
+        assert_eq!(sysv.stack_align, 16);
+        assert_eq!(sysv.shadow_space, 0);
+
+        assert_eq!(ms.param_int_regs, &[1, 2, 8, 9]);
+        assert_eq!(ms.param_float_regs.len(), 4);
+        assert_eq!(ms.shadow_space, 32);
+        assert!(ms.callee_saved.contains(&6));
+        assert!(ms.callee_saved.contains(&115));
+    }
+
+    #[test]
+    fn test_x86_32_stack_and_register_variants() {
+        let cdecl = call_conv_spec("SysV-x86-cdecl").unwrap();
+        let stdcall = call_conv_spec("SysV-x86-stdcall").unwrap();
+        let fastcall = call_conv_spec("SysV-x86-fastcall").unwrap();
+        let thiscall = call_conv_spec("SysV-x86-thiscall").unwrap();
+
+        assert!(cdecl.stack_params);
+        assert!(!cdecl.callee_pops_stack);
+        assert!(stdcall.stack_params);
+        assert!(stdcall.callee_pops_stack);
+        assert_eq!(fastcall.param_int_regs, &[1, 2]);
+        assert_eq!(thiscall.param_int_regs, &[1]);
+        assert_eq!(cdecl.stack_align, 4);
+    }
+
+    #[test]
+    fn test_arm_and_aarch64_specs_model_hard_float() {
+        let aapcs64 = call_conv_spec("AArch64-AAPCS64").unwrap();
+        let darwin = call_conv_spec("AArch64-Darwin").unwrap();
+        let arm_soft = call_conv_spec("ARM-AAPCS-soft").unwrap();
+        let arm_hard = call_conv_spec("ARM-AAPCS-hard").unwrap();
+
+        assert_eq!(aapcs64.param_int_regs, &[0, 1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(aapcs64.param_float_regs.len(), 8);
+        assert_eq!(darwin.stack_align, 16);
+        assert!(arm_soft.param_float_regs.is_empty());
+        assert_eq!(
+            arm_hard.param_float_regs,
+            &[100, 101, 102, 103, 104, 105, 106, 107]
+        );
+        assert_eq!(arm_hard.stack_align, 8);
+    }
+
+    #[test]
+    fn test_mips_riscv_powerpc_specs_have_expected_register_windows() {
+        let o32 = call_conv_spec("MIPS-O32").unwrap();
+        let n64 = call_conv_spec("MIPS-N64").unwrap();
+        let riscv = call_conv_spec("RISC-V-LP64").unwrap();
+        let ppc64 = call_conv_spec("PowerPC-ELFv2").unwrap();
+
+        assert_eq!(o32.param_int_regs, &[4, 5, 6, 7]);
+        assert_eq!(n64.param_int_regs, &[4, 5, 6, 7, 8, 9, 10, 11]);
+        assert_eq!(n64.stack_align, 16);
+        assert_eq!(riscv.param_int_regs, &[10, 11, 12, 13, 14, 15, 16, 17]);
+        assert!(riscv.callee_saved.contains(&2));
+        assert_eq!(ppc64.param_int_regs, &[3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(ppc64.param_float_regs.len(), 13);
+    }
+
+    #[test]
+    fn test_sparc_v8_v9_specs_capture_alignment_and_fp_params() {
+        let v8 = call_conv_spec("SPARC-v8").unwrap();
+        let v9 = call_conv_spec("SPARC-v9").unwrap();
+
+        assert_eq!(v8.param_int_regs, &[8, 9, 10, 11, 12, 13]);
+        assert!(v8.param_float_regs.is_empty());
+        assert_eq!(v8.stack_align, 8);
+        assert_eq!(v9.param_float_regs.len(), 16);
+        assert_eq!(v9.stack_align, 16);
+        assert!(v9.callee_saved.contains(&31));
+    }
+
+    // --- Register helpers (x86-64 offsets) ---
+    fn rdi() -> Varnode {
+        Varnode::reg(RDI, 8)
+    }
+    fn rsi() -> Varnode {
+        Varnode::reg(RSI, 8)
+    }
+    fn rdx() -> Varnode {
+        Varnode::reg(RDX, 8)
+    }
+    fn rcx() -> Varnode {
+        Varnode::reg(RCX, 8)
+    }
+    fn r8() -> Varnode {
+        Varnode::reg(R8, 8)
+    }
+    fn r9() -> Varnode {
+        Varnode::reg(R9, 8)
+    }
+    fn rax() -> Varnode {
+        Varnode::reg(RAX, 8)
+    }
+
+    #[test]
+    fn test_sysv_rdi_rsi_reads() {
+        // Function reads RDI and RSI -> System V
+        let out = Varnode::unique(0, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rdi(), rsi()],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        let pass = CallingConventionDetectPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+
+        assert!(changed);
+        assert_eq!(ssa.calling_convention, CallingConvention::SystemV);
+    }
+
+    #[test]
+    fn test_sysv_rdi_rdx_rcx() {
+        // Reads RDI, RDX, RCX -> System V (RDI is the distinguisher)
+        let out1 = Varnode::unique(0, 8);
+        let out2 = Varnode::unique(8, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, out1, smallvec![rdi(), rdx()], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, out2, smallvec![out1, rcx()], 0x1004),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::SystemV);
+    }
+
+    #[test]
+    fn test_msx64_rcx_rdx_reads() {
+        // Function reads RCX and RDX (but NOT RDI/RSI) -> Microsoft x64
+        let out = Varnode::unique(0, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rcx(), rdx()],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        let pass = CallingConventionDetectPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+
+        assert!(changed);
+        assert_eq!(ssa.calling_convention, CallingConvention::MicrosoftX64);
+    }
+
+    #[test]
+    fn test_msx64_rcx_rdx_r8_r9() {
+        // All four MS x64 arg registers
+        let out1 = Varnode::unique(0, 8);
+        let out2 = Varnode::unique(8, 8);
+        let out3 = Varnode::unique(16, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, out1, smallvec![rcx(), rdx()], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, out2, smallvec![r8(), r9()], 0x1004),
+            IrInsn::with_output(IrOp::IntAdd, out3, smallvec![out1, out2], 0x1008),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::MicrosoftX64);
+    }
+
+    #[test]
+    fn test_sysv_all_six_arg_regs() {
+        // All six SysV arg registers
+        let out1 = Varnode::unique(0, 8);
+        let out2 = Varnode::unique(8, 8);
+        let out3 = Varnode::unique(16, 8);
+        let out4 = Varnode::unique(24, 8);
+        let out5 = Varnode::unique(32, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, out1, smallvec![rdi(), rsi()], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, out2, smallvec![rdx(), rcx()], 0x1004),
+            IrInsn::with_output(IrOp::IntAdd, out3, smallvec![r8(), r9()], 0x1008),
+            IrInsn::with_output(IrOp::IntAdd, out4, smallvec![out1, out2], 0x100c),
+            IrInsn::with_output(IrOp::IntAdd, out5, smallvec![out4, out3], 0x1010),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::SystemV);
+    }
+
+    #[test]
+    fn test_empty_function_unknown() {
+        // No register reads -> Unknown
+        let insns = vec![];
+        let mut ssa = make_entry_block_ssa(insns);
+        let pass = CallingConventionDetectPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+        assert!(!changed);
+        assert_eq!(ssa.calling_convention, CallingConvention::Unknown);
+    }
+
+    #[test]
+    fn test_no_change_on_rerun() {
+        // Running the pass twice should report no change the second time.
+        let out = Varnode::unique(0, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rdi(), rsi()],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        let pass = CallingConventionDetectPass;
+        assert!(pass.run(&mut ssa).unwrap());
+        assert!(!pass.run(&mut ssa).unwrap());
+    }
+
+    #[test]
+    fn test_register_written_then_read_not_counted() {
+        // RDI is written first, then read -- should NOT count as an argument register.
+        // Only RCX is read before write, so -> MicrosoftX64.
+        let out = Varnode::unique(0, 8);
+        let c42 = Varnode::constant(42, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::Copy, rdi(), smallvec![c42], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, out, smallvec![rdi(), rcx()], 0x1004),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::MicrosoftX64);
+    }
+
+    #[test]
+    fn test_return_value_in_rax_not_argument() {
+        // RAX written (return value setup) then used -- not an argument.
+        // RDI read as argument -> System V
+        let c0 = Varnode::constant(0, 8);
+        let out = Varnode::unique(0, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::Copy, rax(), smallvec![rdi()], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, out, smallvec![rax(), c0], 0x1004),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::SystemV);
+    }
+
+    #[test]
+    fn test_aarch64_x0_x1() {
+        // AArch64: reads from X0(offset=0) and X1(offset=8), no x86-specific regs.
+        // But offset 0 = RAX and offset 8 = RCX in x86. The key is that X0(0)
+        // is used as an argument (RAX is never an arg in either x86 CC).
+        let x0 = Varnode::reg(0, 8);
+        let x1 = Varnode::reg(8, 8);
+        let out = Varnode::unique(0, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![x0, x1],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        // offset 0 (RAX/X0) is read + offset 8 (RCX/X1) is read.
+        // Since offset 8 = RCX and RCX is an MSX64 arg, this triggers MSX64.
+        // In real usage, the arch would be known; this tests the heuristic limits.
+        // Without ArchId context, the pass can only use register patterns.
+        assert!(
+            ssa.calling_convention == CallingConvention::MicrosoftX64
+                || ssa.calling_convention == CallingConvention::AArch64
+        );
+    }
+
+    #[test]
+    fn test_aarch64_x0_only() {
+        // Only X0 (offset 0) read, no x86 arg regs -> AArch64
+        let x0 = Varnode::reg(0, 8);
+        let c1 = Varnode::constant(1, 8);
+        let out = Varnode::unique(0, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![x0, c1],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::AArch64);
+    }
+
+    #[test]
+    fn test_const_inputs_ignored() {
+        // Only constant inputs -> no register reads -> Unknown
+        let c1 = Varnode::constant(1, 8);
+        let c2 = Varnode::constant(2, 8);
+        let out = Varnode::unique(0, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![c1, c2],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::Unknown);
+    }
+
+    #[test]
+    fn test_stack_reads_not_arg_regs() {
+        // Stack reads (SpaceId::Stack) should not affect detection.
+        let s0 = Varnode::stack(0, 8);
+        let s8 = Varnode::stack(8, 8);
+        let out = Varnode::unique(0, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![s0, s8],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::Unknown);
+    }
+
+    #[test]
+    fn test_rsp_read_not_argument() {
+        // RSP (offset 32) is not an argument register for either CC.
+        // Combined with RDI -> still System V, RSP is just incidental.
+        let rsp = Varnode::reg(RSP, 8);
+        let out = Varnode::unique(0, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rdi(), rsp],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::SystemV);
+    }
+
+    // -------------------------------------------------------------------
+    // Parameter inference tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_param_count_sysv() {
+        let out = Varnode::unique(0, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rdi(), rsi()],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ParamInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_params.len(), 2);
+        assert_eq!(ssa.inferred_params[0].0, "a1");
+        assert_eq!(ssa.inferred_params[1].0, "a2");
+        assert_eq!(ssa.inferred_params[0].1, PrimitiveType::Int(8));
+        assert_eq!(ssa.inferred_params[1].1, PrimitiveType::Int(8));
+    }
+
+    #[test]
+    fn test_param_count_zero() {
+        let insns = vec![];
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ParamInferPass.run(&mut ssa).unwrap();
+
+        assert!(ssa.inferred_params.is_empty());
+    }
+
+    #[test]
+    fn test_param_ptr_type() {
+        let out = Varnode::unique(0, 8);
+        let space = Varnode::constant(0, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::Load,
+            out,
+            smallvec![space, rdi()],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ParamInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_params.len(), 1);
+        assert_eq!(ssa.inferred_params[0].1, PrimitiveType::Ptr);
+    }
+
+    #[test]
+    fn test_param_six_sysv() {
+        let out1 = Varnode::unique(0, 8);
+        let out2 = Varnode::unique(8, 8);
+        let out3 = Varnode::unique(16, 8);
+        let out4 = Varnode::unique(24, 8);
+        let out5 = Varnode::unique(32, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, out1, smallvec![rdi(), rsi()], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, out2, smallvec![rdx(), rcx()], 0x1004),
+            IrInsn::with_output(IrOp::IntAdd, out3, smallvec![r8(), r9()], 0x1008),
+            IrInsn::with_output(IrOp::IntAdd, out4, smallvec![out1, out2], 0x100c),
+            IrInsn::with_output(IrOp::IntAdd, out5, smallvec![out4, out3], 0x1010),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ParamInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_params.len(), 6);
+        assert_eq!(ssa.inferred_params[5].0, "a6");
+    }
+
+    #[test]
+    fn test_param_msx64_four() {
+        let out1 = Varnode::unique(0, 8);
+        let out2 = Varnode::unique(8, 8);
+        let out3 = Varnode::unique(16, 8);
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, out1, smallvec![rcx(), rdx()], 0x1000),
+            IrInsn::with_output(IrOp::IntAdd, out2, smallvec![r8(), r9()], 0x1004),
+            IrInsn::with_output(IrOp::IntAdd, out3, smallvec![out1, out2], 0x1008),
+        ];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ParamInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.calling_convention, CallingConvention::MicrosoftX64);
+        assert_eq!(ssa.inferred_params.len(), 4);
+    }
+
+    // -------------------------------------------------------------------
+    // Return type inference tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_return_void() {
+        let insns = vec![];
+        let mut ssa = make_entry_block_ssa(insns);
+        ReturnTypeInferPass.run(&mut ssa).unwrap();
+
+        // No RAX write before RETURN → Unknown (void in C output)
+        assert_eq!(ssa.inferred_return_type, PrimitiveType::Unknown);
+    }
+
+    #[test]
+    fn test_return_int64() {
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            rax(),
+            smallvec![rdi(), rsi()],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ReturnTypeInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_return_type, PrimitiveType::Int(8));
+    }
+
+    #[test]
+    fn test_return_int32() {
+        let eax = Varnode::reg(RAX, 4);
+        let edi = Varnode::reg(RDI, 4);
+        let esi = Varnode::reg(RSI, 4);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntAdd,
+            eax,
+            smallvec![edi, esi],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ReturnTypeInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_return_type, PrimitiveType::Int(4));
+    }
+
+    #[test]
+    fn test_return_bool_from_comparison() {
+        let out = Varnode::reg(RAX, 8);
+        let insns = vec![IrInsn::with_output(
+            IrOp::IntEqual,
+            out,
+            smallvec![rdi(), rsi()],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        ReturnTypeInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_return_type, PrimitiveType::Bool);
+    }
+
+    #[test]
+    fn test_return_double_from_float_op() {
+        let xmm0_vn = Varnode::reg(XMM0, 16);
+        let xmm1_vn = Varnode::reg(xmm_offset(1), 16);
+        let insns = vec![IrInsn::with_output(
+            IrOp::FloatAdd,
+            xmm0_vn,
+            smallvec![xmm0_vn, xmm1_vn],
+            0x1000,
+        )];
+
+        let mut ssa = make_entry_block_ssa(insns);
+        ReturnTypeInferPass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.inferred_return_type, PrimitiveType::Double);
+    }
+
+    // -------------------------------------------------------------------
+    // t81 — custom calling-convention refinement
+    // -------------------------------------------------------------------
+
+    /// `ret 8` epilogue ⇒ stdcall (callee pops 8 bytes for one stack arg).
+    #[test]
+    fn t81_stdcall_from_ret_n() {
+        let mut func = unlace_ir::Function::new("stdcall_fn", BlockId(0), 0x1000);
+        let mut bb = unlace_ir::BasicBlock::new(BlockId(0));
+        let out = Varnode::unique(0, 8);
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rcx(), rdx()],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(8, 4)],
+            0x1004,
+        ));
+        func.insert_block(bb);
+        let mut ssa = unlace_ir::ssa::build_ssa(func);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::Stdcall);
+    }
+
+    /// `mov [rbp-8], ecx` at entry ⇒ thiscall.
+    #[test]
+    fn t81_thiscall_from_this_spill() {
+        let mut func = unlace_ir::Function::new("thiscall_fn", BlockId(0), 0x1000);
+        let mut bb = unlace_ir::BasicBlock::new(BlockId(0));
+
+        let space_ram = Varnode::constant(1, 8);
+        let addr = Varnode::unique(0, 8);
+        let neg8 = Varnode::constant((-8i64) as u64, 8);
+
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            addr,
+            smallvec![Varnode::reg(40, 8), neg8],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr, rcx()],
+            0x1004,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1008,
+        ));
+        func.insert_block(bb);
+        let mut ssa = unlace_ir::ssa::build_ssa(func);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::Thiscall);
+    }
+
+    /// Fastcall (i386): first two args in ECX + EDX, callee-pops `ret N`.
+    /// We approximate fastcall as stdcall in the current enum; the key
+    /// invariant is that detection does **not** misclassify as MS x64.
+    #[test]
+    fn t81_fastcall_classified_as_stdcall_when_ret_n() {
+        let mut func = unlace_ir::Function::new("fastcall_fn", BlockId(0), 0x1000);
+        let mut bb = unlace_ir::BasicBlock::new(BlockId(0));
+        let out = Varnode::unique(0, 8);
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            out,
+            smallvec![rcx(), rdx()],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(12, 4)],
+            0x1004,
+        ));
+        func.insert_block(bb);
+        let mut ssa = unlace_ir::ssa::build_ssa(func);
+        CallingConventionDetectPass.run(&mut ssa).unwrap();
+        assert_eq!(ssa.calling_convention, CallingConvention::Stdcall);
     }
 }

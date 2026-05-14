@@ -372,6 +372,7 @@ pub fn default_db() -> FlirtDb {
     ));
 
     // t269 — reference-name list resolution. These deliberately share the
+    // t272 — reference-name list resolution. These deliberately share the
     // same wildcarded prologue and are distinguished only by the outbound
     // callee already resolved elsewhere in the binary.
     entries.push(FlirtSignature {

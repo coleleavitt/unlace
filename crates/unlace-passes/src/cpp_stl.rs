@@ -26,6 +26,7 @@
 //! * `std::shared_ptr<T>`
 //! * `std::unique_ptr<T>`        — drops trailing `std::default_delete<…>`
 //! * `std::function<R(Args...)>` — preserves callable signature
+//! * `std::function<R(Args...)>` — keeps the callable signature
 //! * `std::list<T>` / `std::deque<T>`
 //!
 //! Inline namespaces (`std::__1`, `std::__cxx11`) are folded back to plain
@@ -315,6 +316,11 @@ mod tests {
         assert_eq!(
             recognize_stl_type(&n, "function").as_deref(),
             Some("std::function<bool (std::basic_string<char>)>"),
+    fn recognises_std_function_signature() {
+        let n = ns(&["std", "function<void (int)>"]);
+        assert_eq!(
+            recognize_stl_type(&n, "function").as_deref(),
+            Some("std::function<void (int)>"),
         );
     }
 

@@ -4640,6 +4640,12 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                                 v,
                                 s.escape_default()
                             );
+                            let _ = writeln!(
+                                out,
+                                "case 0x{:X}u:  /* \"{}\" */",
+                                v,
+                                s.escape_default()
+                            );
                         } else {
                             let _ = writeln!(out, "case {}:", v);
                         }
@@ -7348,7 +7354,7 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x416 => Some("__xpaci"),
         0x417 => Some("__xpacd"),
 
-        // ── AArch64 SVE (0x420..0x429) ──────────────────────────────
+        // ── AArch64 SVE/SME (0x420..0x42D) ──────────────────────────
         0x420 => Some("svadd_s32"),
         0x421 => Some("svsub_s32"),
         0x422 => Some("svmul_s32"),
@@ -7465,6 +7471,10 @@ fn emit_aarch64_atomic_callother(
                 aarch64_atomic_order_name(order)
             ))
         }
+        0x42A => Some("svfmopa_f32"),
+        0x42B => Some("svfmops_f32"),
+        0x42C => Some("svsmopa_s32"),
+        0x42D => Some("svumopa_u32"),
         _ => None,
     }
 }
@@ -7508,6 +7518,14 @@ const CALLOTHER_SVE_ST1: u64 = 0x427;
 const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
 #[allow(dead_code)]
 const CALLOTHER_SVE_PTRUE: u64 = 0x429;
+#[allow(dead_code)]
+const CALLOTHER_SME_FMOPA: u64 = 0x42A;
+#[allow(dead_code)]
+const CALLOTHER_SME_FMOPS: u64 = 0x42B;
+#[allow(dead_code)]
+const CALLOTHER_SME_SMOPA: u64 = 0x42C;
+#[allow(dead_code)]
+const CALLOTHER_SME_UMOPA: u64 = 0x42D;
 
 /// Map an AArch64 NEON `Callother` `(tag, lane_size, signed)` triple to
 /// its Apple/ARM C intrinsic name (e.g. `vaddq_s32`).
@@ -19161,6 +19179,29 @@ mod tests {
         assert!(
             !header.contains("@<"),
             "standard header must not carry @<reg> suffixes: {header:?}"
+        );
+    }
+
+    #[test]
+    fn test_callother_sme_fmopa_emits_svfmopa_f32_t301() {
+        let tag = con(0x42A, 8);
+        let pg = con(3, 1);
+        let za = reg(0x558, 0x20);
+        let zn = reg(0x118, 0x20);
+        let zm = reg(0x138, 0x20);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![tag, pg, za, zn, zm],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("sme_fmopa", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("svfmopa_f32("),
+            "SME FMOPA should render as svfmopa_f32: {output}"
         );
     }
 }

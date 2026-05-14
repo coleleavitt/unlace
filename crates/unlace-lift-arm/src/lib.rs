@@ -110,6 +110,15 @@ use crate::lift::{
         decode_thumb1_ldm_stm, decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list,
         try_aarch64_ccmp, try_aarch64_csel,
         try_aarch64_tme,
+        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
+        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
+        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
+        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
+        CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
+        CALLOTHER_INT_SMULT_HIGH, CALLOTHER_SME_FMOPA, CALLOTHER_SME_SMOPA, CALLOTHER_SME_UMOPA,
+        ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm,
+        decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp,
+        try_aarch64_csel,
     };
 
     #[test]
@@ -298,8 +307,8 @@ use crate::lift::{
         let l = lifter();
         let rf = l.register_file();
         assert!(!rf.registers.is_empty());
-        // 31 Xn + SP + PC + NZCV + PSTATE_NZCV + 32 Zn + 16 Pn = 83
-        assert_eq!(rf.registers.len(), 83);
+        // 31 Xn + SP + PC + NZCV + PSTATE_NZCV + 32 Zn + 16 Pn + ZA + ZT0 = 85
+        assert_eq!(rf.registers.len(), 85);
         assert_eq!(rf.registers[0].name, "X0");
         assert_eq!(rf.registers[30].name, "X30");
         assert_eq!(rf.registers[31].name, "SP");
@@ -3996,5 +4005,53 @@ use crate::lift::{
         assert_eq!(CALLOTHER_ARM_MVE_VST, 0x434);
         assert_eq!(CALLOTHER_ARM_MVE_VCTP, 0x435);
         assert_eq!(CALLOTHER_ARM_MVE_VMOV, 0x436);
+    fn test_sme_registers_present_t301() {
+        use crate::register_file::{
+            SME_ZA, SME_ZA_SIZE, SME_ZT0, SME_ZT0_SIZE, aarch64_register_file,
+        };
+
+        let rf = aarch64_register_file();
+        let za = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "ZA")
+            .expect("ZA register");
+        assert_eq!(za.varnode.offset, SME_ZA);
+        assert_eq!(za.varnode.size, SME_ZA_SIZE);
+
+        let zt0 = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "ZT0")
+            .expect("ZT0 register");
+        assert_eq!(zt0.varnode.offset, SME_ZT0);
+        assert_eq!(zt0.varnode.size, SME_ZT0_SIZE);
+    }
+
+    #[test]
+    fn test_sme_emit_fmopa_t301() {
+        use crate::lift::LiftCtx;
+        use crate::register_file::{SME_ZA, SME_ZA_SIZE, SVE_Z_SIZE, sve_z_offset};
+
+        let mut ctx = LiftCtx::new(0x4000);
+        let za = Varnode::reg(SME_ZA, SME_ZA_SIZE);
+        let zn = Varnode::reg(sve_z_offset(1), SVE_Z_SIZE);
+        let zm = Varnode::reg(sve_z_offset(2), SVE_Z_SIZE);
+        crate::lift::emit_sme_callother(&mut ctx, CALLOTHER_SME_FMOPA, 3, &[za, zn, zm]);
+
+        assert_eq!(ctx.ops.len(), 1);
+        let co = &ctx.ops[0];
+        assert_eq!(co.op, IrOp::Callother);
+        assert_eq!(co.inputs[0].offset, CALLOTHER_SME_FMOPA);
+        assert_eq!(co.inputs[1].offset, 3);
+        assert_eq!(co.inputs[2].offset, SME_ZA);
+        assert_eq!(co.inputs[3].offset, sve_z_offset(1));
+        assert_eq!(co.inputs[4].offset, sve_z_offset(2));
+    }
+
+    #[test]
+    fn test_sme_tag_constants_t301() {
+        assert!(CALLOTHER_SME_FMOPA < CALLOTHER_SME_SMOPA);
+        assert!(CALLOTHER_SME_SMOPA < CALLOTHER_SME_UMOPA);
     }
 }

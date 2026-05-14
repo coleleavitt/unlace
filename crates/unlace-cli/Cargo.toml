@@ -31,3 +31,8 @@ tempfile = "3"
 [[bench]]
 name = "decompile_medium"
 harness = false
+
+[[bench]]
+name = "hexrays_throughput"
+path = "../../benches/hexrays_comparison/throughput.rs"
+harness = false

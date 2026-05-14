@@ -4,6 +4,7 @@ use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterFile};
 
 pub use unlace_lift_agx::AgxLifter;
 pub use unlace_lift_amdgpu::AmdGpuLifter;
+pub use unlace_lift_6502::M6502Lifter;
 pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
 pub use unlace_lift_avr::AvrLifter;
@@ -86,6 +87,8 @@ impl Lifter for StubLifter {
                 addr,
             )],
         })
+        ArchId::M6502 => Box::new(M6502Lifter::new()),
+        other => Box::new(UnimplementedLifter::new(other)),
     }
 }
 

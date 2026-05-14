@@ -504,3 +504,4 @@ mod tests {
         );
     }
 }
+pub mod calling_conv_coverage;

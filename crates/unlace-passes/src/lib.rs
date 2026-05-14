@@ -98,6 +98,7 @@ pub mod struct_field_detect;
 pub mod struct_field_recovery;
 pub mod tail_call;
 pub mod tail_duplication;
+pub mod taint_engine;
 pub mod type_constraint_solver;
 pub mod type_infer;
 pub mod var_naming;

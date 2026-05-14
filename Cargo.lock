@@ -1943,6 +1943,7 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-c",
  "unlace-ir",
+ "unlace-lift",
  "unlace-lift-arm",
 ]
 

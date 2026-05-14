@@ -23,6 +23,7 @@ pub mod image;
 pub mod intel_hex;
 pub mod ios_img4;
 pub mod java_class;
+pub mod ios_img4;
 pub mod macho;
 pub mod minidump;
 pub mod msvc_rtti;
@@ -62,6 +63,7 @@ pub use dwarf::{
 pub use pdb::{InlineeSite, PdbInfo, import_pdb, merge_pdb_symbols};
 pub use eh_frame::{EhFrameInfo, FunctionExtent, LsdaEntry, parse_eh_frame};
 pub use elf::ElfLoader;
+pub use ios_img4::{Img4Container, Img4Error, parse_img4};
 pub use error::LoadError;
 pub use flirt::{
     FlirtDb, FlirtSignature, GeneratedSigPattern, SigGenerateError, SigGenerateOptions,

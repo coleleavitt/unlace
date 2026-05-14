@@ -12,6 +12,7 @@ pub mod batch;
 pub mod pipeline;
 pub mod project;
 pub mod lsp;
+pub mod tui;
 
 use anyhow::{Result, bail};
 use unlace_ir::ArchId;

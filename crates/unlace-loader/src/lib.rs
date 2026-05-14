@@ -24,6 +24,7 @@ pub mod intel_hex;
 pub mod ios_img4;
 pub mod java_class;
 pub mod ios_img4;
+pub mod java_class;
 pub mod macho;
 pub mod minidump;
 pub mod msvc_rtti;
@@ -88,6 +89,7 @@ pub use intel_hex::{
 };
 pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMethod, parse_class};
 };
+pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMethod, parse_class};
 pub use image::{
     ArchId, BinaryImage, BoundImport, DebugRecord, DylibDep, DylibKind, Endian, LoadConfig,
     RelocKind, Relocation, ResourceEntry, RichHeader, RichRecord, Section, SectionFlags, Symbol,

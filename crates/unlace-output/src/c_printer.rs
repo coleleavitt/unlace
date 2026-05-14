@@ -443,6 +443,23 @@ pub struct UsercallSpec {
     pub return_reg: String,
     pub param_regs: Vec<String>,
     pub purge: bool,
+    /// t258: per-byref-parameter union-tag types.
+    ///
+    /// Keyed by zero-based parameter index (must be a member of
+    /// [`HirFunction::byref_params`]). The value is the ordered list of
+    /// distinct primitive types observed at the parameter's BYREF
+    /// consumption sites — i.e. the dereferenced types written to /
+    /// read from the address held by this parameter. When the list has
+    /// **two or more entries**, the printer renders the parameter as
+    /// `union { T1 *a; T2 *b; …; } *name` instead of the regular
+    /// `T *name` form, surfacing the type-punning at the signature site.
+    ///
+    /// One-entry lists are tolerated (printer falls back to the regular
+    /// rendering); zero-entry lists are equivalent to "no annotation".
+    /// Empty by default. Populated by the byref-detection pass after
+    /// it has cross-referenced callee signatures for each consumption
+    /// site.
+    pub byref_union_types: BTreeMap<u32, Vec<PrimitiveType>>,
 }
 
 /// Same as [`print_c_with_rtti`] but accepts an explicit [`PrintConfig`].
@@ -848,6 +865,10 @@ pub fn print_c_with_annotations(
                     {
                         let _ = write!(out, "@<{}>", reg);
                     }
+                    // t210: mark byref-detected parameters with a trailing
+                    // comment. We use the `/* … */` form rather than `//`
+                    // so it survives inline in a comma-separated parameter
+                    // list.
                     if func.byref_params.contains(&(i as u32)) {
                         out.push_str(" /* BYREF */");
                     }
@@ -1697,6 +1718,10 @@ fn render_go_defer_summary(
         out.push_str("//   recover();\n");
     }
     Some(out)
+    /// t258: per-byref-parameter union-tag type list. Empty when no caller
+    /// has annotated the function with conflicting BYREF consumption-site
+    /// types. See [`PrinterAnnotations::byref_union_types`].
+    byref_union_types: BTreeMap<u32, Vec<PrimitiveType>>,
 }
 
 impl PrintCtx {
@@ -1774,6 +1799,7 @@ impl PrintCtx {
             go_defer_sites: Vec::new(),
             byref_union_types: BTreeMap::new(),
             mmio_addrs: BTreeSet::new(),
+            byref_union_types: BTreeMap::new(),
         }
     }
 
@@ -19158,6 +19184,84 @@ mod tests {
         assert!(
             !output.contains("MEMORY["),
             "known-section global must NOT render via MEMORY[…]: {output}"
+    // t258: union-tagged BYREF parameters
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn test_t258_byref_param_two_types_emits_union() {
+        // BYREF param index 0 with two incompatible consumption types
+        // (Int(4) + Float) → header renders as
+        //   `union { int *a; float *b; } *p0`
+        // instead of the regular `int *p0 /* BYREF */`.
+        let mut func = make_func(
+            "t258_two_types",
+            vec![HirNode::Return(None)],
+        );
+        // params[0] is the BYREF candidate. The base type is whatever
+        // signature recovery inferred; the union annotation overrides it.
+        func.params = vec![("p0".to_string(), PrimitiveType::Int(4))];
+        func.byref_params.insert(0);
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.byref_union_types
+            .insert(0, vec![PrimitiveType::Int(4), PrimitiveType::Float]);
+
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+
+        let header = output
+            .lines()
+            .find(|l| l.contains("t258_two_types("))
+            .unwrap_or_else(|| panic!("function header missing: {output}"));
+        assert!(
+            header.contains("union {"),
+            "two-type BYREF should render with union: {header:?}"
+        );
+        assert!(
+            header.contains("*a;") && header.contains("*b;"),
+            "union members should be `*a; *b;`: {header:?}"
+        );
+        assert!(
+            header.contains("} *p0"),
+            "union should wrap the pointer name p0: {header:?}"
+        );
+        assert!(
+            !header.contains("/* BYREF */"),
+            "union form supersedes the BYREF comment: {header:?}"
+        );
+    }
+
+    #[test]
+    fn test_t258_byref_param_single_type_keeps_regular_form() {
+        // BYREF param with only one observed consumption type → no union,
+        // standard `T name /* BYREF */` rendering.
+        let mut func = make_func(
+            "t258_one_type",
+            vec![HirNode::Return(None)],
+        );
+        func.params = vec![("p0".to_string(), PrimitiveType::Int(4))];
+        func.byref_params.insert(0);
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.byref_union_types
+            .insert(0, vec![PrimitiveType::Int(4)]);
+
+        let output = super::print_c_with_annotations(
+            &func, None, None, None, None, None, None, Some(&ann),
+        );
+
+        let header = output
+            .lines()
+            .find(|l| l.contains("t258_one_type("))
+            .unwrap_or_else(|| panic!("function header missing: {output}"));
+        assert!(
+            !header.contains("union {"),
+            "single-type BYREF must NOT use union: {header:?}"
+        );
+        assert!(
+            header.contains("/* BYREF */"),
+            "single-type BYREF keeps the BYREF comment: {header:?}"
         );
     }
 }

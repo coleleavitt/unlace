@@ -489,6 +489,278 @@ mod tests {
             unions.is_empty(),
             "4-byte load should not match byte-tag pattern"
         );
+                    result.entry(sv).or_default().push((b.offset, bid, insn_idx));
+                }
+            } else if a.space == SpaceId::Const && b.space != SpaceId::Const {
+                if let Some(&sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(1))) {
+                    result.entry(sv).or_default().push((a.offset, bid, insn_idx));
+                }
+            }
+        }
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use smallvec::smallvec;
+
+    use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
+    use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, SpaceId, Varnode};
+
+    use super::*;
+
+    // ── Helpers ─────────────────────────────────────────────────────
+
+    fn build_trivial_dom(
+        cfg: &unlace_ir::cfg::ControlFlowGraph,
+    ) -> unlace_ir::ssa::DominatorTree {
+        use petgraph::algo::dominators::simple_fast;
+
+        let entry_ni = cfg
+            .node_index(cfg.entry_block())
+            .expect("entry block in cfg");
+        let dominators = simple_fast(cfg.inner(), entry_ni);
+
+        let mut idom = BTreeMap::new();
+        let mut children: BTreeMap<BlockId, Vec<BlockId>> = BTreeMap::new();
+        let entry = cfg.entry_block();
+
+        for (&bid, &ni) in cfg.node_map() {
+            if bid == entry {
+                continue;
+            }
+            if let Some(dom_ni) = dominators.immediate_dominator(ni) {
+                let dom_bid = cfg.inner()[dom_ni];
+                idom.insert(bid, dom_bid);
+                children.entry(dom_bid).or_default().push(bid);
+            }
+        }
+
+        for cl in children.values_mut() {
+            cl.sort();
+        }
+
+        unlace_ir::ssa::DominatorTree::new(idom, children, entry)
+    }
+
+    fn make_ssa(
+        blocks: Vec<BasicBlock>,
+        var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    ) -> SsaFunction {
+        let entry = blocks.first().expect("blocks non-empty").id;
+        let mut func = Function::new("test", entry, 0x1000);
+        for bb in blocks {
+            func.insert_block(bb);
+        }
+
+        let cfg = unlace_ir::cfg::build_cfg(&func);
+        let dom_tree = build_trivial_dom(&cfg);
+
+        SsaFunction {
+            function: func,
+            cfg,
+            dom_tree,
+            post_dom_tree: None,
+            phi_map: BTreeMap::new(),
+            var_map,
+            var_types: BTreeMap::new(),
+            calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
+            stack_vars: BTreeMap::new(),
+            foldable_exprs: BTreeSet::new(),
+            noreturn: false,
+            tail_call_map: BTreeMap::new(),
+            merged_names: BTreeMap::new(),
+            enum_discriminants: Vec::new(),
+            panic_sites: BTreeMap::new(),
+            vtable_calls: BTreeMap::new(),
+            cpp_vtable_calls: BTreeMap::new(),
+            objc_dispatch_calls: BTreeMap::new(),
+            inferred_params: Vec::new(),
+            inferred_return_type: PrimitiveType::Unknown,
+            frame_setup_insns: BTreeSet::new(),
+            stack_offset_hints: BTreeMap::new(),
+            dwarf_local_names: BTreeMap::new(),
+            inferred_structs: BTreeMap::new(),
+            composite_var_types: BTreeMap::new(),
+            array_strides: BTreeMap::new(),
+            external_signatures: BTreeMap::new(),
+            eh_landing_pads: BTreeSet::new(),
+            stack_gaps: BTreeMap::new(),
+            frame_size: 0,
+            sp_delta_at: BTreeMap::new(),
+            stack_holes: BTreeMap::new(),
+            dynamic_sp: false,
+            sizeof_type_map: BTreeMap::new(),
+            alignof_type_map: BTreeMap::new(),
+            resolved_indirect_calls: BTreeMap::new(),
+            variadic_call_types: BTreeMap::new(),
+            signature_revision: 0,
+            op_bindings: unlace_ir::ssa::OpTypeBindings::default(),
+            byref_boxes: BTreeMap::new(),
+            stack_frame: None,
+            byref_info: None,
+            libc_call_annotations: BTreeMap::new(),
+            array_struct_layouts: BTreeMap::new(),
+            var_role_names: BTreeMap::new(),
+            finalized_signature: None,
+            crypto_annotations: Vec::new(),
+        }
+    }
+
+    /// Build a pattern: LOAD 1-byte from base pointer, then INT_EQUAL comparisons.
+    fn build_result_pattern(
+        constants: &[u64],
+    ) -> (
+        Vec<BasicBlock>,
+        BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+        SsaVarnode, // base_sv
+    ) {
+        let bid = BlockId(0);
+        let mut bb = BasicBlock::new(bid);
+        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> = BTreeMap::new();
+
+        // Base pointer in register r0
+        let ptr_reg = Varnode::reg(0, 8);
+        let ptr_sv = SsaVarnode {
+            base: ptr_reg,
+            version: 0,
+        };
+
+        // 1-byte load from base+0 (tag byte)
+        let load_out = Varnode::unique(0, 1);
+        let load_sv = SsaVarnode {
+            base: load_out,
+            version: 0,
+        };
+        let space_vn = Varnode::constant(SpaceId::Ram as u64, 8);
+
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            load_out,
+            smallvec![space_vn, ptr_reg],
+            0x1000,
+        ));
+        var_map.insert((bid, 0, VarnodeSlot::Output), load_sv);
+        var_map.insert((bid, 0, VarnodeSlot::Input(1)), ptr_sv);
+
+        // INT_EQUAL comparisons
+        for (i, &c) in constants.iter().enumerate() {
+            let insn_idx = i + 1;
+            let cmp_out = Varnode::unique((insn_idx as u64 + 1) * 8, 1);
+            let cmp_sv = SsaVarnode {
+                base: cmp_out,
+                version: 0,
+            };
+
+            bb.insns.push(IrInsn::with_output(
+                IrOp::IntEqual,
+                cmp_out,
+                smallvec![load_out, Varnode::constant(c, 1)],
+                0x1000 + (insn_idx as u64) * 4,
+            ));
+            var_map.insert((bid, insn_idx, VarnodeSlot::Output), cmp_sv);
+            var_map.insert((bid, insn_idx, VarnodeSlot::Input(0)), load_sv);
+        }
+
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x2000,
+        ));
+
+        (vec![bb], var_map, ptr_sv)
+    }
+
+    // ── Tests ───────────────────────────────────────────────────────
+
+    /// Detect a standard Result<T,E> pattern with tag==0 (Ok) and tag==1 (Err).
+    #[test]
+    fn test_detect_result_ok_err() {
+        let (blocks, var_map, _base_sv) = build_result_pattern(&[0, 1]);
+        let ssa = make_ssa(blocks, var_map);
+
+        let unions = detect_rust_tagged_unions(&ssa);
+
+        assert_eq!(unions.len(), 1);
+        let u = &unions[0];
+        assert_eq!(u.tag_offset, 0);
+        assert_eq!(u.variants.len(), 2);
+        assert!(u.variants.contains(&(0, "Ok".to_string())));
+        assert!(u.variants.contains(&(1, "Err".to_string())));
+    }
+
+    /// No detection when only one discriminant value is compared (not a tagged union).
+    #[test]
+    fn test_no_detect_single_comparison() {
+        let (blocks, var_map, _) = build_result_pattern(&[0]);
+        let ssa = make_ssa(blocks, var_map);
+
+        let unions = detect_rust_tagged_unions(&ssa);
+        assert!(unions.is_empty(), "single comparison should not detect a tagged union");
+    }
+
+    /// No detection when the load is not 1-byte (e.g. 4-byte load is a general
+    /// enum, not the specific Result/Option byte-tag pattern).
+    #[test]
+    fn test_no_detect_non_byte_tag() {
+        let bid = BlockId(0);
+        let mut bb = BasicBlock::new(bid);
+        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> = BTreeMap::new();
+
+        let ptr_reg = Varnode::reg(0, 8);
+        let ptr_sv = SsaVarnode {
+            base: ptr_reg,
+            version: 0,
+        };
+
+        // 4-byte load (not a byte tag)
+        let load_out = Varnode::unique(0, 4);
+        let load_sv = SsaVarnode {
+            base: load_out,
+            version: 0,
+        };
+        let space_vn = Varnode::constant(SpaceId::Ram as u64, 8);
+
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Load,
+            load_out,
+            smallvec![space_vn, ptr_reg],
+            0x1000,
+        ));
+        var_map.insert((bid, 0, VarnodeSlot::Output), load_sv);
+        var_map.insert((bid, 0, VarnodeSlot::Input(1)), ptr_sv);
+
+        // Compare against 0 and 1
+        for (i, c) in [0u64, 1].iter().enumerate() {
+            let insn_idx = i + 1;
+            let cmp_out = Varnode::unique((insn_idx as u64 + 1) * 8, 1);
+            let cmp_sv = SsaVarnode {
+                base: cmp_out,
+                version: 0,
+            };
+            bb.insns.push(IrInsn::with_output(
+                IrOp::IntEqual,
+                cmp_out,
+                smallvec![load_out, Varnode::constant(*c, 4)],
+                0x1000 + (insn_idx as u64) * 4,
+            ));
+            var_map.insert((bid, insn_idx, VarnodeSlot::Output), cmp_sv);
+            var_map.insert((bid, insn_idx, VarnodeSlot::Input(0)), load_sv);
+        }
+
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x2000,
+        ));
+
+        let ssa = make_ssa(vec![bb], var_map);
+        let unions = detect_rust_tagged_unions(&ssa);
+        assert!(unions.is_empty(), "4-byte load should not match byte-tag pattern");
     }
 
     /// Detect pattern when load address is computed via INT_ADD(base, 0).

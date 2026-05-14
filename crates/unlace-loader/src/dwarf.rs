@@ -37,7 +37,7 @@ use gimli::{
     DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter,
     DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type,
     DW_TAG_subprogram, DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type,
-    DW_TAG_variable, DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
+    DW_TAG_variable, DW_TAG_volatile_type, EndianSlice, Operation, RunTimeEndian,
 };
 
 use crate::error::LoadError;
@@ -86,7 +86,284 @@ pub struct LocalVariable {
     pub name: String,
     pub type_name: Option<String>,
     pub frame_offset: Option<i64>,
+    /// Rich expression-based location computed by the full DW_OP evaluator (t280).
+    pub expr_location: Option<ExprLocation>,
     pub locations: Vec<gimli::Range>,
+}
+
+
+// ---- Full DW_OP_* expression evaluator (t280) ----
+
+/// The result of statically evaluating a DWARF location expression.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExprLocation {
+    Register(u16),
+    Address { register: Option<u16>, offset: i64 },
+    AbsoluteAddress(u64),
+    ImplicitValue(u64),
+    ImplicitBytes(Vec<u8>),
+    Pieces(Vec<ExprPiece>),
+    CfaOffset(i64),
+    ThreadLocal,
+    Complex,
+}
+
+/// A single piece in a composite location.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExprPiece {
+    pub size_in_bits: u64,
+    pub bit_offset: u64,
+    pub location: PieceLocation,
+}
+
+/// Location of a single piece.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PieceLocation {
+    Register(u16),
+    Address { register: Option<u16>, offset: i64 },
+    AbsoluteAddress(u64),
+    Value(u64),
+    Empty,
+}
+
+/// Evaluate a DWARF location expression into an [`ExprLocation`].
+pub fn evaluate_dwarf_expr(bytes: &[u8], encoding: gimli::Encoding) -> Option<ExprLocation> {
+    if bytes.is_empty() { return None; }
+    let ops = parse_all_operations(bytes, encoding)?;
+    if ops.is_empty() { return None; }
+    Some(eval_operations(&ops))
+}
+
+fn parse_all_operations(
+    bytes: &[u8], encoding: gimli::Encoding,
+) -> Option<Vec<Operation<EndianSlice<'_, RunTimeEndian>>>> {
+    let endian = RunTimeEndian::Little;
+    let mut input = EndianSlice::new(bytes, endian);
+    let mut ops = Vec::new();
+    while !input.is_empty() {
+        match Operation::parse(&mut input, encoding) {
+            Ok(op) => ops.push(op),
+            Err(_) => return None,
+        }
+    }
+    Some(ops)
+}
+
+fn eval_operations(operations: &[Operation<EndianSlice<'_, RunTimeEndian>>]) -> ExprLocation {
+    let mut stack: Vec<StackEntry> = Vec::new();
+    let mut pieces: Vec<ExprPiece> = Vec::new();
+    let mut last_was_register: Option<u16> = None;
+    let mut has_stack_value = false;
+    let mut has_implicit_value: Option<Vec<u8>> = None;
+
+    for op in operations {
+        match op {
+            Operation::Piece { .. } | Operation::StackValue => {}
+            _ => last_was_register = None,
+        }
+        match op {
+            Operation::UnsignedConstant { value } => stack.push(StackEntry::Literal(*value)),
+            Operation::SignedConstant { value } => stack.push(StackEntry::Literal(*value as u64)),
+            Operation::Address { address } => stack.push(StackEntry::AbsoluteAddr(*address)),
+            Operation::Register { register } => {
+                last_was_register = Some(register.0);
+                stack.push(StackEntry::Reg(register.0));
+            }
+            Operation::RegisterOffset { register, offset, .. } => {
+                stack.push(StackEntry::RegOffset(register.0, *offset));
+            }
+            Operation::FrameOffset { offset } => stack.push(StackEntry::FrameOffset(*offset)),
+            Operation::CallFrameCFA => stack.push(StackEntry::Cfa(0)),
+            Operation::Drop => { stack.pop(); }
+            Operation::Pick { index } => {
+                let idx = *index as usize;
+                if idx >= stack.len() { return ExprLocation::Complex; }
+                let val = stack[stack.len() - 1 - idx].clone();
+                stack.push(val);
+            }
+            Operation::Swap => {
+                let len = stack.len();
+                if len < 2 { return ExprLocation::Complex; }
+                stack.swap(len - 1, len - 2);
+            }
+            Operation::Rot => {
+                let len = stack.len();
+                if len < 3 { return ExprLocation::Complex; }
+                let c = stack.pop().unwrap();
+                let b = stack.pop().unwrap();
+                let a = stack.pop().unwrap();
+                stack.push(c); stack.push(a); stack.push(b);
+            }
+            Operation::Plus => {
+                if stack.len() < 2 { return ExprLocation::Complex; }
+                let b = stack.pop().unwrap(); let a = stack.pop().unwrap();
+                stack.push(add_entries(a, b));
+            }
+            Operation::PlusConstant { value } => {
+                if stack.is_empty() { return ExprLocation::Complex; }
+                let a = stack.pop().unwrap();
+                stack.push(add_entries(a, StackEntry::Literal(*value)));
+            }
+            Operation::Minus => {
+                if stack.len() < 2 { return ExprLocation::Complex; }
+                let b = stack.pop().unwrap(); let a = stack.pop().unwrap();
+                stack.push(sub_entries(a, b));
+            }
+            Operation::Mul => {
+                if stack.len() < 2 { return ExprLocation::Complex; }
+                let b = stack.pop().unwrap(); let a = stack.pop().unwrap();
+                match (a, b) {
+                    (StackEntry::Literal(x), StackEntry::Literal(y)) => stack.push(StackEntry::Literal(x.wrapping_mul(y))),
+                    _ => return ExprLocation::Complex,
+                }
+            }
+            Operation::Div => {
+                if stack.len() < 2 { return ExprLocation::Complex; }
+                let b = stack.pop().unwrap(); let a = stack.pop().unwrap();
+                match (a, b) {
+                    (StackEntry::Literal(x), StackEntry::Literal(y)) if y != 0 => stack.push(StackEntry::Literal(((x as i64).wrapping_div(y as i64)) as u64)),
+                    _ => return ExprLocation::Complex,
+                }
+            }
+            Operation::Mod => {
+                if stack.len() < 2 { return ExprLocation::Complex; }
+                let b = stack.pop().unwrap(); let a = stack.pop().unwrap();
+                match (a, b) {
+                    (StackEntry::Literal(x), StackEntry::Literal(y)) if y != 0 => stack.push(StackEntry::Literal(x % y)),
+                    _ => return ExprLocation::Complex,
+                }
+            }
+            Operation::Neg => {
+                if stack.is_empty() { return ExprLocation::Complex; }
+                match stack.pop().unwrap() {
+                    StackEntry::Literal(x) => stack.push(StackEntry::Literal((-(x as i64)) as u64)),
+                    _ => return ExprLocation::Complex,
+                }
+            }
+            Operation::Abs => {
+                if stack.is_empty() { return ExprLocation::Complex; }
+                match stack.pop().unwrap() {
+                    StackEntry::Literal(x) => stack.push(StackEntry::Literal((x as i64).unsigned_abs())),
+                    _ => return ExprLocation::Complex,
+                }
+            }
+            Operation::Not => {
+                if stack.is_empty() { return ExprLocation::Complex; }
+                match stack.pop().unwrap() {
+                    StackEntry::Literal(x) => stack.push(StackEntry::Literal(!x)),
+                    _ => return ExprLocation::Complex,
+                }
+            }
+            Operation::And => { if !binary_literal_op(&mut stack, |a, b| a & b) { return ExprLocation::Complex; } }
+            Operation::Or  => { if !binary_literal_op(&mut stack, |a, b| a | b) { return ExprLocation::Complex; } }
+            Operation::Xor => { if !binary_literal_op(&mut stack, |a, b| a ^ b) { return ExprLocation::Complex; } }
+            Operation::Shl => { if !binary_literal_op(&mut stack, |a, b| a.wrapping_shl(b as u32)) { return ExprLocation::Complex; } }
+            Operation::Shr => { if !binary_literal_op(&mut stack, |a, b| a.wrapping_shr(b as u32)) { return ExprLocation::Complex; } }
+            Operation::Shra => { if !binary_literal_op(&mut stack, |a, b| ((a as i64).wrapping_shr(b as u32)) as u64) { return ExprLocation::Complex; } }
+            Operation::Eq => { if !comparison_op(&mut stack, |a, b| a == b) { return ExprLocation::Complex; } }
+            Operation::Ne => { if !comparison_op(&mut stack, |a, b| a != b) { return ExprLocation::Complex; } }
+            Operation::Lt => { if !comparison_op(&mut stack, |a, b| (a as i64) < (b as i64)) { return ExprLocation::Complex; } }
+            Operation::Le => { if !comparison_op(&mut stack, |a, b| (a as i64) <= (b as i64)) { return ExprLocation::Complex; } }
+            Operation::Gt => { if !comparison_op(&mut stack, |a, b| (a as i64) > (b as i64)) { return ExprLocation::Complex; } }
+            Operation::Ge => { if !comparison_op(&mut stack, |a, b| (a as i64) >= (b as i64)) { return ExprLocation::Complex; } }
+            Operation::Piece { size_in_bits, bit_offset } => {
+                let bit_off = bit_offset.unwrap_or(0);
+                let loc = if let Some(entry) = stack.pop() {
+                    entry_to_piece_location(entry)
+                } else if let Some(reg) = last_was_register.take() {
+                    PieceLocation::Register(reg)
+                } else { PieceLocation::Empty };
+                pieces.push(ExprPiece { size_in_bits: *size_in_bits, bit_offset: bit_off, location: loc });
+            }
+            Operation::StackValue => { has_stack_value = true; }
+            Operation::ImplicitValue { data } => { has_implicit_value = Some(data.slice().to_vec()); }
+            Operation::TLS => return ExprLocation::ThreadLocal,
+            Operation::Bra { .. } | Operation::Skip { .. } | Operation::Deref { .. }
+            | Operation::Call { .. } | Operation::EntryValue { .. }
+            | Operation::PushObjectAddress => return ExprLocation::Complex,
+            Operation::Nop => {}
+            _ => return ExprLocation::Complex,
+        }
+    }
+
+    if !pieces.is_empty() { return ExprLocation::Pieces(pieces); }
+    if let Some(bytes) = has_implicit_value { return ExprLocation::ImplicitBytes(bytes); }
+    let Some(top) = stack.pop() else { return ExprLocation::Complex; };
+    if has_stack_value {
+        return match top {
+            StackEntry::Literal(v) => ExprLocation::ImplicitValue(v),
+            _ => ExprLocation::Complex,
+        };
+    }
+    match top {
+        StackEntry::Literal(addr) | StackEntry::AbsoluteAddr(addr) => ExprLocation::AbsoluteAddress(addr),
+        StackEntry::FrameOffset(off) => ExprLocation::Address { register: None, offset: off },
+        StackEntry::RegOffset(reg, off) => ExprLocation::Address { register: Some(reg), offset: off },
+        StackEntry::Reg(reg) => ExprLocation::Register(reg),
+        StackEntry::Cfa(off) => ExprLocation::CfaOffset(off),
+    }
+}
+
+#[derive(Debug, Clone)]
+enum StackEntry { Literal(u64), AbsoluteAddr(u64), FrameOffset(i64), RegOffset(u16, i64), Reg(u16), Cfa(i64) }
+
+fn add_entries(a: StackEntry, b: StackEntry) -> StackEntry {
+    match (a, b) {
+        (StackEntry::Literal(x), StackEntry::Literal(y)) => StackEntry::Literal(x.wrapping_add(y)),
+        (StackEntry::FrameOffset(off), StackEntry::Literal(v)) | (StackEntry::Literal(v), StackEntry::FrameOffset(off)) => StackEntry::FrameOffset(off.wrapping_add(v as i64)),
+        (StackEntry::RegOffset(r, off), StackEntry::Literal(v)) | (StackEntry::Literal(v), StackEntry::RegOffset(r, off)) => StackEntry::RegOffset(r, off.wrapping_add(v as i64)),
+        (StackEntry::Cfa(off), StackEntry::Literal(v)) | (StackEntry::Literal(v), StackEntry::Cfa(off)) => StackEntry::Cfa(off.wrapping_add(v as i64)),
+        (StackEntry::AbsoluteAddr(a), StackEntry::Literal(v)) | (StackEntry::Literal(v), StackEntry::AbsoluteAddr(a)) => StackEntry::AbsoluteAddr(a.wrapping_add(v)),
+        _ => StackEntry::Literal(0),
+    }
+}
+
+fn sub_entries(a: StackEntry, b: StackEntry) -> StackEntry {
+    match (a, b) {
+        (StackEntry::Literal(x), StackEntry::Literal(y)) => StackEntry::Literal(x.wrapping_sub(y)),
+        (StackEntry::FrameOffset(off), StackEntry::Literal(v)) => StackEntry::FrameOffset(off.wrapping_sub(v as i64)),
+        (StackEntry::RegOffset(r, off), StackEntry::Literal(v)) => StackEntry::RegOffset(r, off.wrapping_sub(v as i64)),
+        (StackEntry::Cfa(off), StackEntry::Literal(v)) => StackEntry::Cfa(off.wrapping_sub(v as i64)),
+        (StackEntry::AbsoluteAddr(a), StackEntry::Literal(v)) => StackEntry::AbsoluteAddr(a.wrapping_sub(v)),
+        _ => StackEntry::Literal(0),
+    }
+}
+
+fn binary_literal_op(stack: &mut Vec<StackEntry>, f: impl FnOnce(u64, u64) -> u64) -> bool {
+    if stack.len() < 2 { return false; }
+    let b = stack.pop().unwrap(); let a = stack.pop().unwrap();
+    match (a, b) {
+        (StackEntry::Literal(x), StackEntry::Literal(y)) => { stack.push(StackEntry::Literal(f(x, y))); true }
+        _ => false,
+    }
+}
+
+fn comparison_op(stack: &mut Vec<StackEntry>, cmp: impl FnOnce(u64, u64) -> bool) -> bool {
+    if stack.len() < 2 { return false; }
+    let b = stack.pop().unwrap(); let a = stack.pop().unwrap();
+    match (a, b) {
+        (StackEntry::Literal(x), StackEntry::Literal(y)) => { stack.push(StackEntry::Literal(if cmp(x, y) { 1 } else { 0 })); true }
+        _ => false,
+    }
+}
+
+fn entry_to_piece_location(entry: StackEntry) -> PieceLocation {
+    match entry {
+        StackEntry::Reg(r) => PieceLocation::Register(r),
+        StackEntry::RegOffset(r, off) => PieceLocation::Address { register: Some(r), offset: off },
+        StackEntry::FrameOffset(off) | StackEntry::Cfa(off) => PieceLocation::Address { register: None, offset: off },
+        StackEntry::Literal(v) => PieceLocation::Value(v),
+        StackEntry::AbsoluteAddr(a) => PieceLocation::AbsoluteAddress(a),
+    }
+}
+
+/// Evaluate a DW_AT_location attribute value.
+pub fn evaluate_location_attr(value: AttributeValue<R<'_>>, encoding: gimli::Encoding) -> Option<ExprLocation> {
+    let bytes: &[u8] = match value {
+        AttributeValue::Block(b) | AttributeValue::Exprloc(gimli::Expression(b)) => b.slice(),
+        _ => return None,
+    };
+    evaluate_dwarf_expr(bytes, encoding)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -627,6 +904,8 @@ fn extract_params_and_locals(
             };
             let location_attr = entry.attr_value(DW_AT_location);
             let frame_offset = location_attr.and_then(decode_fbreg_offset);
+            let expr_location =
+                location_attr.and_then(|v| evaluate_location_attr(v, unit.encoding()));
             let locations = match location_attr {
                 Some(value) => extract_location_ranges(dwarf, unit, value)?,
                 None => Vec::new(),
@@ -635,6 +914,7 @@ fn extract_params_and_locals(
                 name,
                 type_name,
                 frame_offset,
+                expr_location,
                 locations,
             });
         }
@@ -1464,5 +1744,116 @@ int main(void) {
             "all location ranges should be valid: {:?}",
             total.locations
         );
+    }
+}
+
+
+#[cfg(test)]
+mod expr_eval_tests {
+    use super::*;
+
+    fn test_encoding() -> gimli::Encoding {
+        gimli::Encoding { format: gimli::Format::Dwarf64, version: 5, address_size: 8 }
+    }
+
+    #[test]
+    fn expr_eval_fbreg() {
+        let bytes = &[0x91, 0x70];
+        assert_eq!(evaluate_dwarf_expr(bytes, test_encoding()), Some(ExprLocation::Address { register: None, offset: -16 }));
+    }
+
+    #[test]
+    fn expr_eval_register() {
+        assert_eq!(evaluate_dwarf_expr(&[0x50], test_encoding()), Some(ExprLocation::Register(0)));
+    }
+
+    #[test]
+    fn expr_eval_breg_plus_const() {
+        assert_eq!(evaluate_dwarf_expr(&[0x76, 0x00, 0x23, 0x08], test_encoding()), Some(ExprLocation::Address { register: Some(6), offset: 8 }));
+    }
+
+    #[test]
+    fn expr_eval_addr() {
+        assert_eq!(evaluate_dwarf_expr(&[0x03, 0x00, 0x10, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00], test_encoding()), Some(ExprLocation::AbsoluteAddress(0x00401000)));
+    }
+
+    #[test]
+    fn expr_eval_stack_value() {
+        assert_eq!(evaluate_dwarf_expr(&[0x35, 0x9f], test_encoding()), Some(ExprLocation::ImplicitValue(5)));
+    }
+
+    #[test]
+    fn expr_eval_plus() {
+        assert_eq!(evaluate_dwarf_expr(&[0x33, 0x34, 0x22, 0x9f], test_encoding()), Some(ExprLocation::ImplicitValue(7)));
+    }
+
+    #[test]
+    fn expr_eval_minus() {
+        assert_eq!(evaluate_dwarf_expr(&[0x3a, 0x33, 0x1c, 0x9f], test_encoding()), Some(ExprLocation::ImplicitValue(7)));
+    }
+
+    #[test]
+    fn expr_eval_mul() {
+        assert_eq!(evaluate_dwarf_expr(&[0x33, 0x34, 0x1e, 0x9f], test_encoding()), Some(ExprLocation::ImplicitValue(12)));
+    }
+
+    #[test]
+    fn expr_eval_neg() {
+        assert_eq!(evaluate_dwarf_expr(&[0x35, 0x1f, 0x9f], test_encoding()), Some(ExprLocation::ImplicitValue((-5i64) as u64)));
+    }
+
+    #[test]
+    fn expr_eval_pieces() {
+        assert_eq!(evaluate_dwarf_expr(&[0x50, 0x93, 0x04, 0x51, 0x93, 0x04], test_encoding()), Some(ExprLocation::Pieces(vec![
+            ExprPiece { size_in_bits: 32, bit_offset: 0, location: PieceLocation::Register(0) },
+            ExprPiece { size_in_bits: 32, bit_offset: 0, location: PieceLocation::Register(1) },
+        ])));
+    }
+
+    #[test]
+    fn expr_eval_cfa() {
+        assert_eq!(evaluate_dwarf_expr(&[0x9c, 0x23, 0x10], test_encoding()), Some(ExprLocation::CfaOffset(16)));
+    }
+
+    #[test]
+    fn expr_eval_deref_is_complex() {
+        assert_eq!(evaluate_dwarf_expr(&[0x76, 0x00, 0x06], test_encoding()), Some(ExprLocation::Complex));
+    }
+
+    #[test]
+    fn expr_eval_empty() {
+        assert_eq!(evaluate_dwarf_expr(&[], test_encoding()), None);
+    }
+
+    #[test]
+    fn expr_eval_tls() {
+        assert_eq!(evaluate_dwarf_expr(&[0x33, 0x9b], test_encoding()), Some(ExprLocation::ThreadLocal));
+    }
+
+    #[test]
+    fn expr_eval_implicit_bytes() {
+        assert_eq!(evaluate_dwarf_expr(&[0x9e, 0x04, 0xDE, 0xAD, 0xBE, 0xEF], test_encoding()), Some(ExprLocation::ImplicitBytes(vec![0xDE, 0xAD, 0xBE, 0xEF])));
+    }
+
+    #[test]
+    fn expr_eval_nop() {
+        assert_eq!(evaluate_dwarf_expr(&[0x31, 0x96, 0x9f], test_encoding()), Some(ExprLocation::ImplicitValue(1)));
+    }
+
+    #[test]
+    fn expr_eval_fbreg_agrees_with_legacy() {
+        for offset in [-128i64, -16, 0, 8, 127] {
+            let mut bytes = vec![0x91u8];
+            let mut val = offset;
+            loop {
+                let mut byte = (val & 0x7f) as u8;
+                val >>= 7;
+                let more = !((val == 0 && byte & 0x40 == 0) || (val == -1 && byte & 0x40 != 0));
+                if more { byte |= 0x80; }
+                bytes.push(byte);
+                if !more { break; }
+            }
+            assert_eq!(evaluate_dwarf_expr(&bytes, test_encoding()), Some(ExprLocation::Address { register: None, offset }), "fbreg({offset})");
+        }
     }
 }

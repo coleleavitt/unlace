@@ -14541,6 +14541,7 @@ mod tests {
                     name: "counter".to_string(),
                     type_name: Some("long long".to_string()),
                     frame_offset: Some(-0x50),
+                    expr_location: None,
                     locations: vec![],
                 }],
             },

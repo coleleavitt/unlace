@@ -3093,6 +3093,20 @@ pub const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
 /// SVE PTRUE — set predicate to all-true for element size.
 pub const CALLOTHER_SVE_PTRUE: u64 = 0x429;
 
+// AArch64 SME (Scalable Matrix Extension) callother IDs
+pub const CALLOTHER_SME_SMSTART: u64 = 0x500;
+pub const CALLOTHER_SME_SMSTOP: u64 = 0x501;
+pub const CALLOTHER_SME_FMOPA: u64 = 0x510;
+pub const CALLOTHER_SME_FMOPS: u64 = 0x511;
+pub const CALLOTHER_SME_SMOPA: u64 = 0x512;
+pub const CALLOTHER_SME_UMOPA: u64 = 0x513;
+pub const CALLOTHER_SME_ZERO: u64 = 0x520;
+pub const CALLOTHER_SME_MOVA_FROM_TILE: u64 = 0x530;
+pub const CALLOTHER_SME_MOVA_TO_TILE: u64 = 0x531;
+pub const CALLOTHER_SME_ADDHA: u64 = 0x540;
+pub const CALLOTHER_SME_ADDVA: u64 = 0x541;
+
+
 /// Emit a generic SVE `Callother` intrinsic.
 ///
 /// Layout: `Callother(tag, pg_index, zd_index, operands…) → void`.

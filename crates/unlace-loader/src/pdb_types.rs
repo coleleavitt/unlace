@@ -2299,5 +2299,86 @@ mod tests {
             Type::Struct { name, .. } => assert_eq!(name, "kernel32!BUFFER"),
             other => panic!("expected canonical struct, got {other:?}"),
         }
+        stream.extend(record(LF_STRING_ID, &string_id_payload(0, "C:\\src\\foo.cpp")));
+
+        let items = walk_ipi(&stream).expect("walk succeeds");
+        assert_eq!(items.len(), 2);
+
+        assert_eq!(items[0].id, 0x1000);
+        assert_eq!(items[0].kind, PdbIpiKind::MFuncId);
+        assert_eq!(items[0].name.as_deref(), Some("MyClass::do_thing"));
+
+        assert_eq!(items[1].id, 0x1001);
+        assert_eq!(items[1].kind, PdbIpiKind::StringId);
+        assert_eq!(items[1].name.as_deref(), Some("C:\\src\\foo.cpp"));
+    }
+
+    #[test]
+    fn walk_ipi_handles_nameless_leaves() {
+        // BUILDINFO + SUBSTR_LIST + UDT_SRC_LINE: walker should report
+        // each with `name = None` and the correct kind discriminant.
+        // Concrete payload bytes don't matter for nameless leaves — the
+        // walker only inspects the length-prefixed framing.
+        let buildinfo = {
+            let mut p = Vec::new();
+            p.extend_from_slice(&5u16.to_le_bytes()); // count
+            for arg in [0x1100u32, 0x1101, 0x1102, 0x1103, 0x1104] {
+                p.extend_from_slice(&arg.to_le_bytes());
+            }
+            p
+        };
+        let substr_list = {
+            let mut p = Vec::new();
+            p.extend_from_slice(&2u32.to_le_bytes()); // count
+            p.extend_from_slice(&0x1200u32.to_le_bytes());
+            p.extend_from_slice(&0x1201u32.to_le_bytes());
+            p
+        };
+        let udt_src_line = {
+            let mut p = Vec::new();
+            p.extend_from_slice(&0x1500u32.to_le_bytes()); // type TI
+            p.extend_from_slice(&0x1000u32.to_le_bytes()); // src (LF_STRING_ID id)
+            p.extend_from_slice(&42u32.to_le_bytes()); // line
+            p
+        };
+
+        let mut stream = record(LF_BUILDINFO, &buildinfo);
+        stream.extend(record(LF_SUBSTR_LIST, &substr_list));
+        stream.extend(record(LF_UDT_SRC_LINE, &udt_src_line));
+
+        let items = walk_ipi(&stream).expect("walk succeeds");
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].id, 0x1000);
+        assert_eq!(items[0].kind, PdbIpiKind::BuildInfo);
+        assert!(items[0].name.is_none());
+        assert_eq!(items[1].id, 0x1001);
+        assert_eq!(items[1].kind, PdbIpiKind::SubStrList);
+        assert!(items[1].name.is_none());
+        assert_eq!(items[2].id, 0x1002);
+        assert_eq!(items[2].kind, PdbIpiKind::UdtSrcLine);
+        assert!(items[2].name.is_none());
+    }
+
+    #[test]
+    fn walk_ipi_skips_unknown_leaves_and_advances_ids() {
+        // Mix three records: FUNC_ID (known) → bogus 0x9999 leaf (skipped
+        // by walker, but still consumes an item-id slot) → STRING_ID
+        // (known). The STRING_ID should land at id 0x1002 even though
+        // only two items appear in the output, proving the walker
+        // increments the id counter for every record it sees — not just
+        // recognized ones — which matches how compilers actually
+        // allocate IPI ids.
+        let mut stream = record(LF_FUNC_ID, &func_id_payload(0, 0x1234, "alpha"));
+        stream.extend(record(0x9999, &[0u8; 4])); // unknown leaf, 4 payload bytes
+        stream.extend(record(LF_STRING_ID, &string_id_payload(0, "beta")));
+
+        let items = walk_ipi(&stream).expect("walk succeeds");
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].id, 0x1000);
+        assert_eq!(items[0].kind, PdbIpiKind::FuncId);
+        assert_eq!(items[0].name.as_deref(), Some("alpha"));
+        assert_eq!(items[1].id, 0x1002, "id slot consumed by unknown leaf");
+        assert_eq!(items[1].kind, PdbIpiKind::StringId);
+        assert_eq!(items[1].name.as_deref(), Some("beta"));
     }
 }

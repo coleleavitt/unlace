@@ -1873,6 +1873,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-lumina"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "unlace-output"
 version = "0.1.0"
 dependencies = [

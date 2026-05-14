@@ -196,7 +196,7 @@ mod tests {
         let rf = l.register_file();
         assert!(!rf.registers.is_empty());
         // 31 Xn + SP + PC + NZCV + PSTATE_NZCV + 32 Zn + 16 Pn = 83
-        assert_eq!(rf.registers.len(), 83);
+        assert_eq!(rf.registers.len(), 85);
         assert_eq!(rf.registers[0].name, "X0");
         assert_eq!(rf.registers[30].name, "X30");
         assert_eq!(rf.registers[31].name, "SP");

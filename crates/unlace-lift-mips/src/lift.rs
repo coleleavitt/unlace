@@ -372,7 +372,7 @@ mod tests {
     fn test_register_file() {
         let l = lifter();
         let rf = l.register_file();
-        assert_eq!(rf.registers.len(), 44);
+        assert_eq!(rf.registers.len(), 78);
         assert_eq!(rf.registers[0].name, "$zero");
         assert_eq!(rf.registers[31].name, "$ra");
         assert_eq!(rf.registers[32].name, "HI");

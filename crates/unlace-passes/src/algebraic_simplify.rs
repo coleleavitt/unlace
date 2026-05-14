@@ -224,11 +224,8 @@ fn try_simplify(
             .or_else(|| simplify_same_ssa_to_const(func, bid, insn_idx, insn, 0)),
         IrOp::Multiequal => simplify_multiequal_all_same(func, bid, insn_idx, insn),
         IrOp::IntSext => simplify_double_sext(func, bid, insn_idx, insn)
-            .or_else(|| simplify_sext_of_zext(func, bid, insn_idx, insn))
-            .or_else(|| simplify_sext_of_and_mask(func, bid, insn_idx, insn))
             .or_else(|| simplify_sext_noop(func, bid, insn_idx, insn)),
-        IrOp::IntZext => simplify_double_zext(func, bid, insn_idx, insn)
-            .or_else(|| simplify_zext_of_sext(func, bid, insn_idx, insn)),
+        IrOp::IntZext => simplify_double_zext(func, bid, insn_idx, insn),
         _ => None,
     }
 }
@@ -1159,115 +1156,6 @@ fn simplify_double_zext(
         inputs: smallvec::smallvec![inner_x],
         input_ssas: smallvec::smallvec![inner_x_ssa],
     })
-}
-
-/// `IntSext(IntZext(x))` → `IntZext(x)` — sign-extending a zero-extended value
-/// is equivalent to zero-extension from the original width, because zero-extension
-/// guarantees the intermediate sign bit is 0 (all upper bits are zero).
-///
-/// Example: `sext32→64(zext16→32(x))` → `zext16→64(x)`
-fn simplify_sext_of_zext(
-    func: &SsaFunction,
-    bid: BlockId,
-    insn_idx: usize,
-    insn: &IrInsn,
-) -> Option<Replacement> {
-    let _input = one_input(insn)?;
-    let _output = insn.output?;
-
-    let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
-    if def_insn.op != IrOp::IntZext || def_insn.inputs.len() != 1 {
-        return None;
-    }
-
-    // The inner zext's input — extend directly from there with zero-extension.
-    let inner_x = def_insn.inputs[0];
-    let inner_x_ssa = input_ssa(func, def_bid, def_idx, 0);
-
-    Some(Replacement::Reop {
-        op: IrOp::IntZext,
-        inputs: smallvec::smallvec![inner_x],
-        input_ssas: smallvec::smallvec![inner_x_ssa],
-    })
-}
-
-/// `IntSext(IntAnd(x, mask))` → `IntZext(IntAnd(x, mask))` when the AND mask
-/// clears the sign bit of the intermediate value. If the highest bit of the
-/// mask within the input size is 0, then after the AND the sign bit is
-/// guaranteed to be 0, making sign-extension identical to zero-extension.
-/// Zero-extension produces cleaner decompiler output (no signed cast).
-fn simplify_sext_of_and_mask(
-    func: &SsaFunction,
-    bid: BlockId,
-    insn_idx: usize,
-    insn: &IrInsn,
-) -> Option<Replacement> {
-    let input = one_input(insn)?;
-    let _output = insn.output?;
-
-    let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (_def_bid, _def_idx, def_insn) = defining_insn(func, inner_ssa)?;
-    if def_insn.op != IrOp::IntAnd || def_insn.inputs.len() != 2 {
-        return None;
-    }
-
-    // Find the constant mask operand.
-    let mask_val = if def_insn.inputs[1].space == SpaceId::Const {
-        def_insn.inputs[1].offset
-    } else if def_insn.inputs[0].space == SpaceId::Const {
-        def_insn.inputs[0].offset
-    } else {
-        return None;
-    };
-
-    // Check if the sign bit of the input size is clear in the mask.
-    let sign_bit = 1u64 << (input.size as u32 * 8 - 1);
-    if mask_val & sign_bit != 0 {
-        return None; // Sign bit could be set; sext != zext.
-    }
-
-    // Safe: the AND guarantees sign bit is 0, so sext == zext.
-    // Rewrite IntSext → IntZext, keeping the same input operand.
-    Some(Replacement::Reop {
-        op: IrOp::IntZext,
-        inputs: smallvec::smallvec![input],
-        input_ssas: smallvec::smallvec![Some(inner_ssa)],
-    })
-}
-
-/// `IntZext(IntSext(x))` where the sext was a no-op (x.size == sext output)
-/// collapses to `IntZext(x)`. The sext didn't change the value, so we can
-/// bypass it and zero-extend directly from x.
-fn simplify_zext_of_sext(
-    func: &SsaFunction,
-    bid: BlockId,
-    insn_idx: usize,
-    insn: &IrInsn,
-) -> Option<Replacement> {
-    let input = one_input(insn)?;
-    let _output = insn.output?;
-
-    let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
-    if def_insn.op != IrOp::IntSext || def_insn.inputs.len() != 1 {
-        return None;
-    }
-
-    let inner_x = def_insn.inputs[0];
-
-    // The sext was a no-op (inner_x.size == sext output size = input.size).
-    // In that case, just zext from the original value directly.
-    if inner_x.size == input.size {
-        let inner_x_ssa = input_ssa(func, def_bid, def_idx, 0);
-        return Some(Replacement::Reop {
-            op: IrOp::IntZext,
-            inputs: smallvec::smallvec![inner_x],
-            input_ssas: smallvec::smallvec![inner_x_ssa],
-        });
-    }
-
-    None
 }
 
 // ─── Self-referential expression collapse (t252) ─────────────────────────────
@@ -2292,97 +2180,6 @@ mod tests {
         let ssa = run_pass(vec![phi_insn]);
         let folded = rewritten_insn(&ssa, 0);
         assert_eq!(folded.op, IrOp::Copy);
-        assert_eq!(folded.inputs.len(), 1);
-        assert_eq!(folded.inputs[0], x);
-    }
-
-    // ─── Additional sign-extension elimination tests (t244/t249) ─────────
-
-    /// `IntSext(IntZext(x))` → `IntZext(x)` — sign-extending a zero-extended
-    /// value is just zero-extension from the original, since zext guarantees
-    /// the intermediate sign bit is 0.
-    #[test]
-    fn sext_of_zext_collapses_to_zext() {
-        let x = Varnode::reg(0, 2); // 2-byte input
-        let mid = Varnode::unique(0, 4); // zext to 4 bytes
-        let out = Varnode::unique(8, 8); // sext to 8 bytes
-
-        let zext_insn = IrInsn::with_output(IrOp::IntZext, mid, smallvec![x], 0x1000);
-        let sext_insn = IrInsn::with_output(IrOp::IntSext, out, smallvec![mid], 0x1004);
-
-        let ssa = run_pass(vec![zext_insn, sext_insn]);
-        let folded = rewritten_insn(&ssa, 1);
-        assert_eq!(folded.op, IrOp::IntZext);
-        assert_eq!(folded.inputs.len(), 1);
-        assert_eq!(folded.inputs[0], x); // zext directly from the original 2-byte value
-    }
-
-    /// `IntSext(IntAnd(x, mask))` → `IntZext(IntAnd(x, mask))` when the mask
-    /// guarantees the sign bit is clear.
-    #[test]
-    fn sext_of_and_with_clear_sign_bit_becomes_zext() {
-        let x = Varnode::reg(0, 2); // 2-byte value
-        let mask = Varnode::constant(0x7FFF, 2); // clears bit 15 (sign bit for 2 bytes)
-        let and_out = Varnode::unique(0, 2);
-        let sext_out = Varnode::unique(4, 4);
-
-        let and_insn =
-            IrInsn::with_output(IrOp::IntAnd, and_out, smallvec![x, mask], 0x1000);
-        let sext_insn =
-            IrInsn::with_output(IrOp::IntSext, sext_out, smallvec![and_out], 0x1004);
-
-        let ssa = run_pass(vec![and_insn, sext_insn]);
-        let folded = rewritten_insn(&ssa, 1);
-        // Should be rewritten to IntZext since sign bit is guaranteed 0
-        assert_eq!(folded.op, IrOp::IntZext);
-        assert_eq!(folded.inputs.len(), 1);
-        assert_eq!(folded.inputs[0], and_out);
-    }
-
-    /// `IntSext(IntAnd(x, mask))` where mask has sign bit set should NOT be
-    /// rewritten (sign bit might be 1 after the AND).
-    #[test]
-    fn sext_of_and_with_set_sign_bit_not_rewritten() {
-        let x = Varnode::reg(0, 2);
-        let mask = Varnode::constant(0xFFFF, 2); // all bits set including sign
-        let and_out = Varnode::unique(0, 2);
-        let sext_out = Varnode::unique(4, 4);
-
-        let and_insn =
-            IrInsn::with_output(IrOp::IntAnd, and_out, smallvec![x, mask], 0x1000);
-        let sext_insn =
-            IrInsn::with_output(IrOp::IntSext, sext_out, smallvec![and_out], 0x1004);
-
-        let mut ssa = make_single_block_ssa(vec![and_insn, sext_insn]);
-        let changed = AlgebraicSimplifyPass
-            .run(&mut ssa)
-            .expect("pass should succeed");
-        // The AND with all-ones is itself a simplification target (identity),
-        // but the sext should NOT be converted to zext.
-        let insn = rewritten_insn(&ssa, 1);
-        if changed {
-            // The and was simplified (IntAnd(x, 0xFFFF) → Copy(x));
-            // the sext now operates directly on x — still should be IntSext.
-            assert_ne!(insn.op, IrOp::IntZext);
-        } else {
-            assert_eq!(insn.op, IrOp::IntSext);
-        }
-    }
-
-    /// `IntZext(IntSext(x))` where sext is a no-op (x.size == sext output size)
-    /// collapses to `IntZext(x)`.
-    #[test]
-    fn zext_of_noop_sext_collapses() {
-        let x = Varnode::reg(0, 4); // 4-byte input
-        let mid = Varnode::unique(0, 4); // sext to 4 bytes (no-op)
-        let out = Varnode::unique(8, 8); // zext to 8 bytes
-
-        let sext_insn = IrInsn::with_output(IrOp::IntSext, mid, smallvec![x], 0x1000);
-        let zext_insn = IrInsn::with_output(IrOp::IntZext, out, smallvec![mid], 0x1004);
-
-        let ssa = run_pass(vec![sext_insn, zext_insn]);
-        let folded = rewritten_insn(&ssa, 1);
-        assert_eq!(folded.op, IrOp::IntZext);
         assert_eq!(folded.inputs.len(), 1);
         assert_eq!(folded.inputs[0], x);
     }

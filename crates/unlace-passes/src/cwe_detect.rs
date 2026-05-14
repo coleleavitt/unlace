@@ -90,9 +90,7 @@ pub fn detect_cwe(func: &SsaFunction) -> Vec<CweFinding> {
             };
             match annotation.as_str() {
                 "malloc" => {
-                    if let Some(&out_sv) =
-                        func.var_map.get(&(bid, idx, VarnodeSlot::Output))
-                    {
+                    if let Some(&out_sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Output)) {
                         malloc_sites.push(MallocSite {
                             location: (bid, idx),
                             result: out_sv,
@@ -103,9 +101,7 @@ pub fn detect_cwe(func: &SsaFunction) -> Vec<CweFinding> {
                     // First argument lives at Input(1); Input(0) is the
                     // call target. SSA renaming maps the relevant ABI
                     // register slot to a fresh SsaVarnode at this site.
-                    if let Some(&arg_sv) =
-                        func.var_map.get(&(bid, idx, VarnodeSlot::Input(1)))
-                    {
+                    if let Some(&arg_sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Input(1))) {
                         free_sites.push(FreeSite {
                             location: (bid, idx),
                             arg: arg_sv,
@@ -148,8 +144,7 @@ pub fn detect_cwe(func: &SsaFunction) -> Vec<CweFinding> {
     // no `free` call within the function consumes that exact SSA
     // varnode. This deliberately ignores aliasing through stores /
     // copies — the goal is a reviewable signal, not a soundness proof.
-    let freed_args: BTreeSet<SsaVarnode> =
-        free_sites.iter().map(|fs| fs.arg).collect();
+    let freed_args: BTreeSet<SsaVarnode> = free_sites.iter().map(|fs| fs.arg).collect();
     for ms in &malloc_sites {
         if !freed_args.contains(&ms.result) {
             findings.insert(CweFinding {
@@ -222,11 +217,7 @@ struct FreeSite {
 /// True iff IR location `a` strictly dominates location `b` on every
 /// path through `func`'s CFG. Same-block: lower insn index dominates.
 /// Cross-block: walk the idom chain of `b.0` upward looking for `a.0`.
-fn dominates_strict(
-    func: &SsaFunction,
-    a: (BlockId, usize),
-    b: (BlockId, usize),
-) -> bool {
+fn dominates_strict(func: &SsaFunction, a: (BlockId, usize), b: (BlockId, usize)) -> bool {
     if a == b {
         return false;
     }
@@ -257,7 +248,7 @@ mod tests {
     use smallvec::smallvec;
 
     use super::*;
-    use unlace_ir::ssa::{build_ssa, SsaFunction};
+    use unlace_ir::ssa::{SsaFunction, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, Varnode};
 
     fn reg(off: u64) -> Varnode {

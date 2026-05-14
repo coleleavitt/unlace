@@ -291,8 +291,8 @@ fn lift_binop(ops: &mut Vec<IrInsn>, op: IrOp, rd: u8, rs1: u8, src2: &Src2, add
     }
 }
 
-// Condition code flag offsets in the PSR register
-pub const SPARC_FLAG_C: u64 = 0x200;
-pub const SPARC_FLAG_V: u64 = 0x201;
-pub const SPARC_FLAG_Z: u64 = 0x202;
-pub const SPARC_FLAG_N: u64 = 0x203;
+// Condition code flag varnodes in the PSR register (1-byte flags)
+pub const SPARC_FLAG_C: Varnode = Varnode::reg(0x200, 1);
+pub const SPARC_FLAG_V: Varnode = Varnode::reg(0x201, 1);
+pub const SPARC_FLAG_Z: Varnode = Varnode::reg(0x202, 1);
+pub const SPARC_FLAG_N: Varnode = Varnode::reg(0x203, 1);

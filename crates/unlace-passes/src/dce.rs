@@ -5,7 +5,7 @@
 //! to [`DeadCodeElimPass::run`] performs one sweep; the caller iterates to
 //! a fixed point for cascading removal.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::IrOp;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
@@ -189,14 +189,15 @@ mod tests {
             tail_call_map: std::collections::BTreeMap::new(),
             merged_names: std::collections::BTreeMap::new(),
             enum_discriminants: Vec::new(),
-            cpp_variant_discriminants: Vec::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
+            cpp_variant_discriminants: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            cpp_lambda_captures: Vec::new(),
             rust_async: None,
             vtable_calls: std::collections::BTreeMap::new(),
             cpp_vtable_calls: std::collections::BTreeMap::new(),
             objc_dispatch_calls: std::collections::BTreeMap::new(),
-            go_defer_recover_calls: std::collections::BTreeMap::new(),
             inferred_params: Vec::new(),
             inferred_return_type: unlace_ir::ssa::PrimitiveType::Unknown,
             frame_setup_insns: std::collections::BTreeSet::new(),
@@ -226,7 +227,6 @@ mod tests {
             var_role_names: std::collections::BTreeMap::new(),
             finalized_signature: None,
             crypto_annotations: Vec::new(),
-            cpp_lambda_captures: Vec::new(),
         }
     }
 

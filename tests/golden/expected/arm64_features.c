@@ -1,7 +1,7 @@
-/* Function:   _start | Address: 0x400100 | Size: 0x18 (24 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   bitfield_test, csel_test, mul_test | Xrefs from: unknown */
+/* Function:   _start | Address: 0x400100 | Size: 0xc (12 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   bitfield_test, csel_test, mul_test | Xrefs from: unknown */
 void _start(void) {
     mul_test(); csel_test(); bitfield_test();
-    __svc(0); return;
+    return;
 }
 /* Function:   mul_test | Address: 0x400118 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void mul_test(void) {

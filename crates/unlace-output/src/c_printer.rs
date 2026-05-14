@@ -8938,6 +8938,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         }
     }
 
@@ -9575,6 +9578,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         };
 
         let output = print_c(&func);
@@ -10146,6 +10152,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         };
 
         let mut functions = BTreeMap::new();
@@ -10257,6 +10266,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         };
 
         let output = super::print_c(&func);
@@ -10292,6 +10304,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         };
 
         let output = super::print_c(&func);
@@ -15043,6 +15058,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         };
 
         let output = print_c(&func);
@@ -15077,6 +15095,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         };
 
         let output = print_c(&func);
@@ -15115,6 +15136,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         };
 
         let output = print_c(&func);
@@ -15149,6 +15173,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         };
 
         let output = print_c(&func);
@@ -15183,6 +15210,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         };
 
         let output = print_c(&func);
@@ -15243,6 +15273,9 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
+            go_defer_recover_calls: BTreeMap::new(),
+            rust_async: None,
         };
 
         let output = print_c(&func);

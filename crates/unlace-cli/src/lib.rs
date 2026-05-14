@@ -9,6 +9,7 @@
 pub mod annotations;
 pub mod args;
 pub mod batch;
+pub mod parallel;
 pub mod pipeline;
 
 use anyhow::{Result, bail};

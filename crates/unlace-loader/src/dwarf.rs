@@ -381,6 +381,14 @@ pub struct MacroDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MacroDefinition {
+    pub name: String,
+    pub value: Option<String>,
+    pub file: Option<String>,
+    pub line: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceLocation {
     pub file: String,
     pub line: u32,
@@ -536,6 +544,70 @@ fn parse_macro_definition(
     file: Option<String>,
     line: Option<u64>,
 ) -> Option<MacroDefinition> {
+
+fn extract_macros(dwarf: &gimli::Dwarf<R<'_>>) -> Result<Vec<MacroDefinition>, gimli::Error> {
+    let mut out = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut units = dwarf.units();
+
+    while let Some(header) = units.next()? {
+        let unit = dwarf.unit(header)?;
+        let mut tree = unit.entries_tree(None)?;
+        let root = tree.root()?;
+        let entry = root.entry();
+
+        let mut visit = |body: String, file: Option<String>, line: Option<u64>| {
+            if let Some(def) = parse_macro_definition(&body, file, line) {
+                let key = (def.name.clone(), def.value.clone(), def.file.clone(), def.line);
+                if seen.insert(key) {
+                    out.push(def);
+                }
+            }
+        };
+
+        if let Some(gimli::AttributeValue::DebugMacroRef(offset)) = entry.attr_value(gimli::DW_AT_macros) {
+            let mut macros = dwarf.macros(offset)?;
+            let mut current_file = None;
+            while let Some(op) = macros.next()? {
+                use gimli::read::MacroEntry::*;
+                match op {
+                    Define { line, text } => {
+                        let body = text.string(unit.unit_ref(dwarf))?.to_string_lossy().into_owned();
+                        visit(body, current_file.clone(), Some(line));
+                    }
+                    StartFile { file, .. } => {
+                        current_file = resolve_macro_file_name(dwarf, &unit, Some(file))?;
+                    }
+                    EndFile => current_file = None,
+                    _ => {}
+                }
+            }
+        }
+
+        if let Some(gimli::AttributeValue::DebugMacinfoRef(offset)) = entry.attr_value(gimli::DW_AT_macro_info) {
+            let mut macros = dwarf.macinfo(offset)?;
+            let mut current_file = None;
+            while let Some(op) = macros.next()? {
+                use gimli::read::MacroEntry::*;
+                match op {
+                    Define { line, text } => {
+                        let body = text.string(unit.unit_ref(dwarf))?.to_string_lossy().into_owned();
+                        visit(body, current_file.clone(), Some(line));
+                    }
+                    StartFile { file, .. } => {
+                        current_file = resolve_macro_file_name(dwarf, &unit, Some(file))?;
+                    }
+                    EndFile => current_file = None,
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    Ok(out)
+}
+
+fn parse_macro_definition(body: &str, file: Option<String>, line: Option<u64>) -> Option<MacroDefinition> {
     let trimmed = body.trim();
     if trimmed.is_empty() {
         return None;

@@ -12,6 +12,7 @@ pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
+pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_avr::AvrLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_m68k::M68kLifter;
@@ -98,6 +99,7 @@ pub fn get_lifter_with_endian(arch: ArchId, endian: Option<LifterEndian>) -> Box
         ArchId::NvidiaSass => Box::new(SassLifter::new()),
         ArchId::Xtensa => Box::new(XtensaLifter::new()),
         ArchId::SuperH => Box::new(SuperHLifter::new()),
+        ArchId::Xtensa => Box::new(XtensaLifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -189,6 +191,9 @@ mod tests {
     fn test_get_lifter_superh() {
         let l = get_lifter(ArchId::SuperH);
         assert_eq!(l.arch(), ArchId::SuperH);
+    fn test_get_lifter_xtensa() {
+        let l = get_lifter(ArchId::Xtensa);
+        assert_eq!(l.arch(), ArchId::Xtensa);
         assert!(!l.register_file().registers.is_empty());
     }
 

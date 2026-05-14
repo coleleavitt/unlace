@@ -78,6 +78,7 @@ pub fn run_batch(
             | ArchId::Agx
             | ArchId::Msp430
             | ArchId::M68k
+            | ArchId::Xtensa
             | ArchId::Ppc
             | ArchId::Ppc64
             | ArchId::Sbpf

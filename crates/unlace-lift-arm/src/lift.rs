@@ -2906,6 +2906,13 @@ pub const CALLOTHER_AARCH64_XPACI: u64 = 0x412;
 pub const CALLOTHER_AARCH64_XPACD: u64 = 0x413;
 
 /// Decoded register-form PAC/AUTH/XPAC instruction (t225).
+// AArch64 memory barrier / fence callother IDs for C11 memory model
+pub const CALLOTHER_AARCH64_DMB: u64 = 0x570;
+pub const CALLOTHER_AARCH64_DSB: u64 = 0x571;
+pub const CALLOTHER_AARCH64_ISB: u64 = 0x572;
+
+
+/// Decoded register-form PAC/AUTH/XPAC instruction (t300).
 ///
 /// `value` is the X-register being authenticated/signed (the `Xd` operand
 /// — both destination and input value). `modifier` is the X-register

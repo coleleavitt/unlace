@@ -21,6 +21,7 @@ members = [
     "crates/unlace-lift-superh",
     "crates/unlace-lift-xtensa",
     "crates/unlace-lift-6502",
+    "crates/unlace-lift-8051",
     "crates/unlace-lift-agx",
     "crates/unlace-lift-m68k",
     "crates/unlace-lift-sh",

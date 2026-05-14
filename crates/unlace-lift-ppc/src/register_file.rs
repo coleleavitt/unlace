@@ -120,3 +120,38 @@ pub fn cs_reg_to_varnode(reg: RegId) -> Option<Varnode> {
         _ => None,
     }
 }
+
+// t326 — AltiVec/VMX/VSX vector register file extension.
+pub const VR_BASE: u64 = 296;
+pub const VR_COUNT: usize = 32;
+pub const VR_SIZE: u8 = 16; // 128-bit AltiVec registers
+pub const VSR_BASE: u64 = VR_BASE + (VR_COUNT as u64) * (VR_SIZE as u64); // VSX overlaps
+pub const VSR_COUNT: usize = 64;
+pub const VSR_SIZE: u8 = 16;
+pub const VSCR_OFFSET: u64 = VSR_BASE + (VSR_COUNT as u64) * (VSR_SIZE as u64);
+pub const VRSAVE_OFFSET: u64 = VSCR_OFFSET + 4;
+
+pub fn altivec_register_file_extension() -> Vec<RegisterDef> {
+    let mut regs = Vec::with_capacity(34);
+    static VR_NAMES: [&str; 32] = [
+        "vr0","vr1","vr2","vr3","vr4","vr5","vr6","vr7",
+        "vr8","vr9","vr10","vr11","vr12","vr13","vr14","vr15",
+        "vr16","vr17","vr18","vr19","vr20","vr21","vr22","vr23",
+        "vr24","vr25","vr26","vr27","vr28","vr29","vr30","vr31",
+    ];
+    for (i, name) in VR_NAMES.iter().enumerate() {
+        regs.push(RegisterDef {
+            name,
+            varnode: Varnode::reg(VR_BASE + (i as u64) * (VR_SIZE as u64), VR_SIZE),
+        });
+    }
+    regs.push(RegisterDef {
+        name: "VSCR",
+        varnode: Varnode::reg(VSCR_OFFSET, 4),
+    });
+    regs.push(RegisterDef {
+        name: "VRSAVE",
+        varnode: Varnode::reg(VRSAVE_OFFSET, 4),
+    });
+    regs
+}

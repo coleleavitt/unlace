@@ -245,7 +245,7 @@ impl Pass for VarNamingPass {
         // `SavedRegister("r12")` instances don't collide in the same
         // counter — IDA-style "first counter is i, first save is
         // saved_rbx" naming.
-        #[derive(PartialEq, Eq, Hash)]
+        #[derive(PartialEq, Eq, Hash, PartialOrd, Ord)]
         enum Family {
             LoopCounter,
             LoopBound,
@@ -253,8 +253,8 @@ impl Pass for VarNamingPass {
             SavedRegister(&'static str),
             Argument(u32),
         }
-        let mut counters: std::collections::HashMap<Family, usize> =
-            std::collections::HashMap::new();
+        let mut counters: std::collections::BTreeMap<Family, usize> =
+            std::collections::BTreeMap::new();
 
         let mut names: BTreeMap<SsaVarnode, String> = BTreeMap::new();
 

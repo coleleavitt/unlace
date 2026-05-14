@@ -20,7 +20,7 @@
 //! by the pipeline wiring in `unlace-cli` after the fixed-point loop
 //! reaches steady state.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use unlace_ir::ssa::{SsaFunction, StackFrame, StackLocal, VarnodeSlot};
 use unlace_ir::stack::StackSpec;
@@ -38,8 +38,8 @@ fn resolve_spec(func: &SsaFunction) -> StackSpec {
         .expect("x86_64 always has a StackSpec")
 }
 
-type DefMap = HashMap<Varnode, Vec<(BlockId, usize)>>;
-type ResolveCache = HashMap<(Varnode, u32), Option<i64>>;
+type DefMap = BTreeMap<Varnode, Vec<(BlockId, usize)>>;
+type ResolveCache = BTreeMap<(Varnode, u32), Option<i64>>;
 
 /// Recover the logical stack-frame layout of `func`.
 ///
@@ -57,7 +57,7 @@ type ResolveCache = HashMap<(Varnode, u32), Option<i64>>;
 pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
     let spec = resolve_spec(func);
     let def_map = build_def_map(func);
-    let mut resolve_cache: ResolveCache = HashMap::new();
+    let mut resolve_cache: ResolveCache = BTreeMap::new();
 
     // First pass: collect every (offset, width) observation.
     // BTreeMap keeps offsets sorted for the later fusion sweep.
@@ -269,7 +269,7 @@ fn detect_arrays(locals: &BTreeMap<i64, StackLocal>) -> Vec<(i64, u64, Vec<u8>)>
 /// Mirrors [`crate::stack_vars::build_def_map`] but kept local so this
 /// module can stand alone if the older pass is ever removed.
 fn build_def_map(func: &SsaFunction) -> DefMap {
-    let mut def_map: DefMap = HashMap::new();
+    let mut def_map: DefMap = BTreeMap::new();
     for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
         if *slot == VarnodeSlot::Output {
             def_map.entry(sv.base).or_default().push((bid, insn_idx));

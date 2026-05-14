@@ -2,7 +2,7 @@
 //!
 //! Propagates calling convention information across call edges.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use unlace_ir::ssa::{CallingConvention, FunctionSignatureRegistry, PrimitiveType, SsaFunction};
 use unlace_ir::IrOp;
@@ -53,7 +53,7 @@ impl Pass for WholeProgCallingConvPass {
 
 /// Infer a consensus calling convention from a set of functions.
 pub fn infer_program_convention(functions: &[&SsaFunction]) -> CallingConvention {
-    let mut counts: HashMap<u8, (CallingConvention, usize)> = HashMap::new();
+    let mut counts: BTreeMap<u8, (CallingConvention, usize)> = BTreeMap::new();
     for f in functions {
         let cc = f.calling_convention;
         if cc != CallingConvention::Unknown {

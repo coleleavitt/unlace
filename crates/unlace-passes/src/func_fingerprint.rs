@@ -18,7 +18,7 @@
 //! The pair mirrors Ghidra's BSim primitives: an exact-match digest plus a
 //! fuzzy feature vector for ranking candidates.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 use std::hash::Hasher;
 
 use unlace_ir::ssa::SsaFunction;
@@ -88,7 +88,7 @@ fn visit_blocks_in_cfg_order(func: &SsaFunction, mut visit: impl FnMut(BlockId))
     let exit = func.cfg.exit_block();
     let unknown = func.cfg.unknown_block();
 
-    let mut seen: HashSet<BlockId> = HashSet::new();
+    let mut seen: BTreeSet<BlockId> = BTreeSet::new();
     let mut queue: VecDeque<BlockId> = VecDeque::new();
     queue.push_back(entry);
     seen.insert(entry);

@@ -4,7 +4,7 @@
 //! addresses, groups accesses at the same offset into logical local
 //! variables, and populates `SsaFunction::stack_vars`.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, StackVar, VarnodeSlot};
 use unlace_ir::stack::StackSpec;
@@ -23,8 +23,8 @@ fn resolve_spec(func: &SsaFunction) -> StackSpec {
         .expect("x86_64 always has a StackSpec")
 }
 
-type DefMap = HashMap<Varnode, Vec<(unlace_ir::BlockId, usize)>>;
-type ResolveCache = HashMap<(Varnode, u32), Option<i64>>;
+type DefMap = BTreeMap<Varnode, Vec<(unlace_ir::BlockId, usize)>>;
+type ResolveCache = BTreeMap<(Varnode, u32), Option<i64>>;
 
 pub struct StackVarRecoveryPass;
 
@@ -38,7 +38,7 @@ impl Pass for StackOffsetSnapshotPass {
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let spec = resolve_spec(func);
         let def_map = build_def_map(func);
-        let mut resolve_cache = HashMap::new();
+        let mut resolve_cache = BTreeMap::new();
         let mut hints = BTreeMap::new();
 
         for (&bid, block) in &func.function.blocks {
@@ -72,7 +72,7 @@ impl Pass for StackVarRecoveryPass {
         let def_map = build_def_map(func);
 
         let mut accesses: BTreeMap<i64, Vec<(SsaVarnode, u8)>> = BTreeMap::new();
-        let mut resolve_cache: ResolveCache = HashMap::new();
+        let mut resolve_cache: ResolveCache = BTreeMap::new();
 
         for (&bid, block) in &func.function.blocks {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
@@ -395,7 +395,7 @@ fn field_size(ty: PrimitiveType) -> Option<u8> {
 }
 
 fn build_def_map(func: &SsaFunction) -> DefMap {
-    let mut def_map: DefMap = HashMap::new();
+    let mut def_map: DefMap = BTreeMap::new();
     for (&(bid, insn_idx, ref slot), sv) in &func.var_map {
         if *slot == VarnodeSlot::Output {
             def_map.entry(sv.base).or_default().push((bid, insn_idx));

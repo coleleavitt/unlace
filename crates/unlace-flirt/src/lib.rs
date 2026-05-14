@@ -5,6 +5,7 @@
 
 mod error;
 mod pattern;
+pub mod prologue;
 
 pub use error::FlirtError;
 pub use pattern::{FlirtDb, FlirtMatch, FlirtPattern, load_patterns_from_toml, match_functions};

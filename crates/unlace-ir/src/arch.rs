@@ -38,6 +38,7 @@ pub enum ArchId {
     Xtensa,
     SuperH,
     Xtensa,
+    Mos6502,
     Unknown(u16),
 }
 
@@ -76,6 +77,7 @@ impl fmt::Display for ArchId {
             Self::Xtensa => f.write_str("xtensa"),
             Self::SuperH => f.write_str("superh"),
             Self::Xtensa => f.write_str("xtensa"),
+            Self::Mos6502 => f.write_str("6502"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

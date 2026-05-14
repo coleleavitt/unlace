@@ -244,6 +244,7 @@ fn run_decompile(
             | ArchId::M68k
             | ArchId::Ppc
             | ArchId::Ppc64
+            | ArchId::Sbpf
     ) {
         bail!(
             "architecture {} is not yet supported for decompilation",

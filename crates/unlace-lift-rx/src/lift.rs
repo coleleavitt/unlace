@@ -369,6 +369,189 @@ pub fn lift(insn: &RxInsn, addr: u64) -> LiftCtx {
                 smallvec![],
                 ctx.addr,
             ));
+            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![imm_v], ctx.addr));
+        }
+        RxOp::MovRegL { dst, src } => {
+            let dst_v = ctx.reg(*dst);
+            let src_v = ctx.reg(*src);
+            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![src_v], ctx.addr));
+        }
+        RxOp::MovLoadL { dst, src } => {
+            let dst_v = ctx.reg(*dst);
+            let addr_v = ctx.reg(*src);
+            let space_v = Varnode::constant(SpaceId::Ram as u64, 4);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Load,
+                dst_v,
+                smallvec![space_v, addr_v],
+                ctx.addr,
+            ));
+        }
+        RxOp::MovStoreL { dst, src } => {
+            let addr_v = ctx.reg(*dst);
+            let val_v = ctx.reg(*src);
+            let space_v = Varnode::constant(SpaceId::Ram as u64, 4);
+            ctx.emit(IrInsn::without_output(
+                IrOp::Store,
+                smallvec![space_v, addr_v, val_v],
+                ctx.addr,
+            ));
+        }
+        RxOp::Add { dst, src } => {
+            let dst_v = ctx.reg(*dst);
+            let src_v = ctx.reg(*src);
+            let result = ctx.alloc_unique(REG_SIZE);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAdd,
+                result,
+                smallvec![dst_v, src_v],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+            ctx.emit_arith_flags(dst_v, src_v, result, false);
+        }
+        RxOp::Sub { dst, src } => {
+            let dst_v = ctx.reg(*dst);
+            let src_v = ctx.reg(*src);
+            let result = ctx.alloc_unique(REG_SIZE);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntSub,
+                result,
+                smallvec![dst_v, src_v],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+            ctx.emit_arith_flags(dst_v, src_v, result, true);
+        }
+        RxOp::And { dst, src } => {
+            let dst_v = ctx.reg(*dst);
+            let src_v = ctx.reg(*src);
+            let result = ctx.alloc_unique(REG_SIZE);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAnd,
+                result,
+                smallvec![dst_v, src_v],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+        }
+        RxOp::Or { dst, src } => {
+            let dst_v = ctx.reg(*dst);
+            let src_v = ctx.reg(*src);
+            let result = ctx.alloc_unique(REG_SIZE);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntOr,
+                result,
+                smallvec![dst_v, src_v],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+        }
+        RxOp::Xor { dst, src } => {
+            let dst_v = ctx.reg(*dst);
+            let src_v = ctx.reg(*src);
+            let result = ctx.alloc_unique(REG_SIZE);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntXor,
+                result,
+                smallvec![dst_v, src_v],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+        }
+        RxOp::Mul { dst, src } => {
+            let dst_v = ctx.reg(*dst);
+            let src_v = ctx.reg(*src);
+            let result = ctx.alloc_unique(REG_SIZE);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntMult,
+                result,
+                smallvec![dst_v, src_v],
+                ctx.addr,
+            ));
+            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+        }
+        RxOp::Cmp { src1, src2 } => {
+            // CMP src, dst sets flags from (dst - src). Result is discarded.
+            let src_v = ctx.reg(*src1);
+            let dst_v = ctx.reg(*src2);
+            let result = ctx.alloc_unique(REG_SIZE);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntSub,
+                result,
+                smallvec![dst_v, src_v],
+                ctx.addr,
+            ));
+            ctx.emit_arith_flags(dst_v, src_v, result, true);
+        }
+        RxOp::BraB { disp } => {
+            let target = addr.wrapping_add(*disp as i64 as u64);
+            ctx.emit(IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![Varnode::ram(target, REG_SIZE)],
+                ctx.addr,
+            ));
+        }
+        RxOp::BsrW { disp } => {
+            let target = addr.wrapping_add(*disp as i64 as u64);
+            ctx.emit(IrInsn::without_output(
+                IrOp::Call,
+                smallvec![Varnode::ram(target, REG_SIZE)],
+                ctx.addr,
+            ));
+        }
+        RxOp::BcondB { cond, disp } => {
+            let target = addr.wrapping_add(*disp as i64 as u64);
+            let cond_v = match cond {
+                BranchCond::Eq => ctx.zf(),
+                BranchCond::Ne => {
+                    let neg = ctx.alloc_unique(1);
+                    ctx.emit(IrInsn::with_output(
+                        IrOp::BoolNegate,
+                        neg,
+                        smallvec![ctx.zf()],
+                        ctx.addr,
+                    ));
+                    neg
+                }
+                BranchCond::Ge => {
+                    // GE = (S == O)
+                    let eq = ctx.alloc_unique(1);
+                    ctx.emit(IrInsn::with_output(
+                        IrOp::IntEqual,
+                        eq,
+                        smallvec![ctx.sf(), ctx.of()],
+                        ctx.addr,
+                    ));
+                    eq
+                }
+                BranchCond::Le => {
+                    // LE = Z OR (S != O)
+                    let ne = ctx.alloc_unique(1);
+                    ctx.emit(IrInsn::with_output(
+                        IrOp::IntNotequal,
+                        ne,
+                        smallvec![ctx.sf(), ctx.of()],
+                        ctx.addr,
+                    ));
+                    let or = ctx.alloc_unique(1);
+                    ctx.emit(IrInsn::with_output(
+                        IrOp::BoolOr,
+                        or,
+                        smallvec![ctx.zf(), ne],
+                        ctx.addr,
+                    ));
+                    or
+                }
+            };
+            ctx.emit(IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![Varnode::ram(target, REG_SIZE), cond_v],
+                ctx.addr,
+            ));
+        }
+        RxOp::Unknown => {
+            ctx.emit(IrInsn::without_output(IrOp::Unimplemented, smallvec![], ctx.addr));
         }
     }
 

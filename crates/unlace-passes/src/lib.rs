@@ -13,6 +13,7 @@ pub mod byref_detect;
 pub mod call_boundary_copyprop;
 pub mod caller_param_propagate;
 pub mod calling_conv_finalize;
+pub mod calling_conv_whole_prog;
 pub mod calling_convention;
 pub mod condition_simplify;
 pub mod const_fold;

@@ -8,7 +8,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
 };
 
-use crate::ops::{arithmetic, bitwise, control_flow, data_move, dsp, memory};
+use crate::ops::{arithmetic, bitwise, control_flow, data_move, dsp, fpu, memory};
 use crate::register_file::{self, ZERO, capstone_reg_to_offset, mips64_register_file};
 
 // Capstone contains a raw `*mut c_void` handle to the C library.
@@ -350,6 +350,21 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand]) {
         x if x == MIPS_INS_SH as u32 => memory::lift_store(ctx, ops, 2),
         x if x == MIPS_INS_SB as u32 => memory::lift_store(ctx, ops, 1),
 
+        // FPU loads/stores
+        x if x == MIPS_INS_LWC1 as u32 => fpu::lift_fpu_load(ctx, ops, 4),
+        x if x == MIPS_INS_LDC1 as u32 => fpu::lift_fpu_load(ctx, ops, 8),
+        x if x == MIPS_INS_SWC1 as u32 => fpu::lift_fpu_store(ctx, ops, 4),
+        x if x == MIPS_INS_SDC1 as u32 => fpu::lift_fpu_store(ctx, ops, 8),
+        // FPU register moves
+        x if x == MIPS_INS_MFC1 as u32 => fpu::lift_mfc1(ctx, ops, 4),
+        x if x == MIPS_INS_DMFC1 as u32 => fpu::lift_dmfc1(ctx, ops),
+        x if x == MIPS_INS_MTC1 as u32 => fpu::lift_mtc1(ctx, ops, 4),
+        x if x == MIPS_INS_DMTC1 as u32 => fpu::lift_dmtc1(ctx, ops),
+        x if x == MIPS_INS_CFC1 as u32 => fpu::lift_cfc1(ctx, ops),
+        x if x == MIPS_INS_CTC1 as u32 => fpu::lift_ctc1(ctx, ops),
+        // FPU branches
+        x if x == MIPS_INS_BC1F as u32 => fpu::lift_bc1(ctx, ops, false),
+        x if x == MIPS_INS_BC1T as u32 => fpu::lift_bc1(ctx, ops, true),
         _ => ctx.emit_unimplemented(),
     }
 }
@@ -372,7 +387,7 @@ mod tests {
     fn test_register_file() {
         let l = lifter();
         let rf = l.register_file();
-        assert_eq!(rf.registers.len(), 44);
+        assert_eq!(rf.registers.len(), 78);
         assert_eq!(rf.registers[0].name, "$zero");
         assert_eq!(rf.registers[31].name, "$ra");
         assert_eq!(rf.registers[32].name, "HI");

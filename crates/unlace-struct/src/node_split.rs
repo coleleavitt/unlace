@@ -246,7 +246,7 @@ fn simulate_post_split_score(
 fn predecessors(func: &Function, target: BlockId) -> Vec<BlockId> {
     let mut preds = Vec::new();
     for (&bid, block) in &func.blocks {
-        if block.successors.iter().any(|s| *s == target) {
+        if block.successors.contains(&target) {
             preds.push(bid);
         }
     }

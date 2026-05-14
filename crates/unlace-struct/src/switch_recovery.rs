@@ -909,10 +909,7 @@ pub fn detect_computed_goto_with_provider(
 
     let mut targets = Vec::new();
     let mut addr = table_base;
-    loop {
-        let Some(target) = provider.read_target(section, addr, table_base) else {
-            break;
-        };
+    while let Some(target) = provider.read_target(section, addr, table_base) {
         if target < func_range.0 || target >= func_range.1 {
             break;
         }

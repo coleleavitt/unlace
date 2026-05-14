@@ -39,7 +39,7 @@ pub fn cross_jump_revert(func: &mut SsaFunction) {
 
     let mut splits: Vec<(BlockId, BlockId, usize)> = Vec::new();
 
-    for (_succ, preds) in &successor_groups {
+    for preds in successor_groups.values() {
         if preds.len() < 2 {
             continue;
         }

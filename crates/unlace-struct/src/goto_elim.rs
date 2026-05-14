@@ -80,6 +80,7 @@ fn remove_goto_to_next_label(nodes: &mut Vec<HirNode>) {
     }
 }
 
+#[allow(clippy::needless_range_loop)] // index used for sibling `next_labels` lookup
 fn remove_if_tail_goto_to_next_label(nodes: &mut [HirNode]) {
     let next_labels: Vec<Option<LabelId>> = nodes
         .windows(2)
@@ -142,17 +143,17 @@ fn remove_unreachable_after_terminal(nodes: &mut Vec<HirNode>) {
 fn is_terminal(node: &HirNode) -> bool {
     match node {
         HirNode::Return(_) | HirNode::Break | HirNode::Continue | HirNode::Goto(_) => true,
-        HirNode::Block(children) => children.last().map_or(false, is_terminal),
+        HirNode::Block(children) => children.last().is_some_and(is_terminal),
         HirNode::If {
             then_body,
             else_body,
             ..
         } => {
-            let then_terminal = then_body.last().map_or(false, is_terminal);
+            let then_terminal = then_body.last().is_some_and(is_terminal);
             let else_terminal = else_body
                 .as_ref()
                 .and_then(|e| e.last())
-                .map_or(false, is_terminal);
+                .is_some_and(is_terminal);
             then_terminal && else_terminal
         }
         _ => false,

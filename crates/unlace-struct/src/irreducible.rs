@@ -226,16 +226,14 @@ fn tarjan_visit(
                 }
 
                 // Post-order: propagate lowlink to parent and check root.
-                if let Some(parent_frame) = work.last() {
-                    if let Frame::Resume {
-                        node: parent_node, ..
-                    } = parent_frame
-                    {
-                        let child_low = state.lowlink[&node];
-                        let parent_low = state.lowlink[parent_node];
-                        if child_low < parent_low {
-                            state.lowlink.insert(*parent_node, child_low);
-                        }
+                if let Some(Frame::Resume {
+                    node: parent_node, ..
+                }) = work.last()
+                {
+                    let child_low = state.lowlink[&node];
+                    let parent_low = state.lowlink[parent_node];
+                    if child_low < parent_low {
+                        state.lowlink.insert(*parent_node, child_low);
                     }
                 }
 

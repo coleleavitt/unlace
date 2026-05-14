@@ -169,10 +169,10 @@ fn simplify_else_against_outer(
     };
 
     if conditions_equivalent(outer, *inner, def_map) {
-        let collapsed = match inner_else {
-            Some(ie) => ie.clone(),
-            None => return None,
+        let Some(ie) = inner_else else {
+            return None;
         };
+        let collapsed = ie.clone();
         let mut rest: Vec<HirNode> = collapsed;
         rest.extend(else_body.into_iter().skip(1));
         return if rest.is_empty() { None } else { Some(rest) };

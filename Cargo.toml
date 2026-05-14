@@ -39,6 +39,7 @@ members = [
     "crates/unlace-lift-sh",
     "crates/unlace-lift-ti",
     "crates/unlace-lift-6502",
+    "crates/unlace-lift-stm8",
     "crates/unlace-passes",
     "crates/unlace-struct",
     "crates/unlace-output",
@@ -119,6 +120,7 @@ unlace-lift-sharc = { path = "crates/unlace-lift-sharc" }
 unlace-lift-ti = { path = "crates/unlace-lift-ti" }
 unlace-lift-evm = { path = "crates/unlace-lift-evm" }
 unlace-lift-6502 = { path = "crates/unlace-lift-6502" }
+unlace-lift-stm8 = { path = "crates/unlace-lift-stm8" }
 unlace-passes = { path = "crates/unlace-passes" }
 unlace-struct = { path = "crates/unlace-struct" }
 unlace-output = { path = "crates/unlace-output" }

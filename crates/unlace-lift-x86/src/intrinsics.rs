@@ -730,3 +730,72 @@ mod tests {
         }
     }
 }
+
+/// Intel TSX (Transactional Synchronization Extensions) intrinsic IDs.
+///
+/// TSX transactions bracket critical sections with XBEGIN/XEND. The lifter
+/// emits these as Callother intrinsics so downstream passes can identify
+/// transactional regions and reconstruct the fallback path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u64)]
+pub enum TsxIntrinsic {
+    /// XBEGIN: start a transaction. On abort, execution resumes at the
+    /// fallback address with EAX containing the abort status.
+    Xbegin = 0x600,
+    /// XEND: commit the current transaction.
+    Xend = 0x601,
+    /// XABORT imm8: explicitly abort with a user-specified reason code.
+    Xabort = 0x602,
+    /// XTEST: test whether a transaction is active (sets ZF).
+    Xtest = 0x603,
+}
+
+impl TsxIntrinsic {
+    pub fn from_u64(v: u64) -> Option<Self> {
+        match v {
+            0x600 => Some(Self::Xbegin),
+            0x601 => Some(Self::Xend),
+            0x602 => Some(Self::Xabort),
+            0x603 => Some(Self::Xtest),
+            _ => None,
+        }
+    }
+
+    pub fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Xbegin => "xbegin",
+            Self::Xend => "xend",
+            Self::Xabort => "xabort",
+            Self::Xtest => "xtest",
+        }
+    }
+}
+
+pub const CALLOTHER_TSX_XBEGIN: u64 = TsxIntrinsic::Xbegin as u64;
+pub const CALLOTHER_TSX_XEND: u64 = TsxIntrinsic::Xend as u64;
+pub const CALLOTHER_TSX_XABORT: u64 = TsxIntrinsic::Xabort as u64;
+pub const CALLOTHER_TSX_XTEST: u64 = TsxIntrinsic::Xtest as u64;
+
+
+#[cfg(test)]
+mod tsx_tests {
+    use super::*;
+
+    #[test]
+    fn tsx_intrinsic_roundtrip() {
+        for id in [0x600u64, 0x601, 0x602, 0x603] {
+            let intr = TsxIntrinsic::from_u64(id).unwrap();
+            assert!(!intr.mnemonic().is_empty());
+        }
+    }
+
+    #[test]
+    fn tsx_xbegin_mnemonic() {
+        assert_eq!(TsxIntrinsic::Xbegin.mnemonic(), "xbegin");
+    }
+
+    #[test]
+    fn tsx_unknown_returns_none() {
+        assert!(TsxIntrinsic::from_u64(0x999).is_none());
+    }
+}

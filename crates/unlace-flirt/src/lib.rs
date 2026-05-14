@@ -15,6 +15,10 @@
 //! - Rust libcore/std (x86-64)
 //!
 //! Use [`SignatureLibrary`] or [`load_all_bundled`] to access them.
+//! with optional masks and CRC16 checksums against raw function bytes.
+//! with optional masks, CRC16 checksums, and outbound call-reference metadata
+//! against raw function bytes. Includes an iterative resolver that feeds back
+//! matches from earlier passes to disambiguate colliding byte patterns.
 
 mod error;
 mod generator;
@@ -45,6 +49,6 @@ pub use pattern::{
 pub use pattern::{FlirtDb, FlirtMatch, FlirtPattern, load_patterns_from_toml, match_functions};
 pub use pattern::{FlirtDb, FlirtMatch, FlirtPattern, load_patterns_from_toml, match_functions};
 pub use pattern::{
-    FlirtDb, FlirtMatch, FlirtPattern, FunctionBytes, load_patterns_from_toml,
-    load_patterns_from_toml_str, match_functions,
+    FlirtDb, FlirtMatch, FlirtPattern, FlirtRef, FunctionBytes, load_patterns_from_toml,
+    load_patterns_from_toml_str, match_functions, resolve_iterative,
 };

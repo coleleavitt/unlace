@@ -236,3 +236,43 @@ pub fn is_w_reg(reg: RegId) -> bool {
 pub fn is_zero_reg(reg: RegId) -> bool {
     reg.0 == ARM64_REG_XZR || reg.0 == ARM64_REG_WZR
 }
+
+// ARM VFP (Vector Floating Point) double-precision registers.
+// D0-D31 are 64-bit FP registers. On AArch32, D0-D15 are also accessible
+// as pairs of single-precision S0-S31 registers.
+const VFP_BASE: u64 = 0x1000; // Separate space from GP regs
+
+pub const fn vfp_d_offset(n: u64) -> u64 {
+    VFP_BASE + n * 8
+}
+
+pub const VFP_D0: u64 = vfp_d_offset(0);
+pub const VFP_D1: u64 = vfp_d_offset(1);
+pub const VFP_D15: u64 = vfp_d_offset(15);
+pub const VFP_D31: u64 = vfp_d_offset(31);
+
+/// FPSCR (Floating-Point Status and Control Register).
+pub const FPSCR: u64 = VFP_BASE + 32 * 8;
+
+/// Size of a VFP D-register varnode.
+pub const VFP_D_SIZE: u8 = 8;
+/// Size of a VFP S-register varnode (lower half of D).
+pub const VFP_S_SIZE: u8 = 4;
+
+
+#[cfg(test)]
+mod vfp_tests {
+    use super::*;
+
+    #[test]
+    fn vfp_d_offsets_are_sequential() {
+        for i in 0..31 {
+            assert_eq!(vfp_d_offset(i + 1) - vfp_d_offset(i), 8);
+        }
+    }
+
+    #[test]
+    fn fpscr_after_d_registers() {
+        assert!(FPSCR > VFP_D31);
+    }
+}

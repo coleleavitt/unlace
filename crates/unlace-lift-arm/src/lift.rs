@@ -3115,6 +3115,10 @@ pub const CALLOTHER_SME_MOVA_FROM_TILE: u64 = 0x530;
 pub const CALLOTHER_SME_MOVA_TO_TILE: u64 = 0x531;
 pub const CALLOTHER_SME_ADDHA: u64 = 0x540;
 pub const CALLOTHER_SME_ADDVA: u64 = 0x541;
+// AArch64 BTI (Branch Target Identification) callother IDs
+pub const CALLOTHER_AARCH64_BTI_C: u64 = 0x550;
+pub const CALLOTHER_AARCH64_BTI_J: u64 = 0x551;
+pub const CALLOTHER_AARCH64_BTI_JC: u64 = 0x552;
 
 
 /// Emit a generic SVE `Callother` intrinsic.

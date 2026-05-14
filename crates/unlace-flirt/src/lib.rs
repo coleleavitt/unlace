@@ -43,6 +43,7 @@ pub use pattern::{
     FlirtDb, FlirtMatch, FlirtPattern, load_patterns_from_toml, load_patterns_from_toml_str,
     match_functions,
 pub use pattern::{FlirtDb, FlirtMatch, FlirtPattern, load_patterns_from_toml, match_functions};
+pub use pattern::{FlirtDb, FlirtMatch, FlirtPattern, load_patterns_from_toml, match_functions};
 pub use pattern::{
     FlirtDb, FlirtMatch, FlirtPattern, FunctionBytes, load_patterns_from_toml,
     load_patterns_from_toml_str, match_functions,

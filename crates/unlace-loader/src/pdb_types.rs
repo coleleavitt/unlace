@@ -353,6 +353,30 @@ fn rewrite_type_struct_names(ty: &mut Type, hash_to_name: &BTreeMap<u64, String>
     }
 }
 
+
+/// Map PDB constants to their originating enum type where possible.
+///
+/// For each `S_CONSTANT` whose value matches a known enum variant, this
+/// records the (constant_name → enum_name::variant) mapping so the printer
+/// can emit symbolic names instead of raw integers.
+pub fn resolve_constants_to_enums(types: &PdbTypes) -> BTreeMap<String, String> {
+    let mut resolved = BTreeMap::new();
+    for (const_name, &value) in &types.constants {
+        for (enum_name, variants) in &types.enums {
+            for (variant_name, variant_val) in variants {
+                if *variant_val == value {
+                    resolved.insert(
+                        const_name.clone(),
+                        format!("{enum_name}::{variant_name}"),
+                    );
+                    break;
+                }
+            }
+        }
+    }
+    resolved
+}
+
 struct StableHasher(u64);
 
 impl StableHasher {
@@ -1842,5 +1866,22 @@ mod tests {
         assert_eq!(items[1].id, 0x1002, "id slot consumed by unknown leaf");
         assert_eq!(items[1].kind, PdbIpiKind::StringId);
         assert_eq!(items[1].name.as_deref(), Some("beta"));
+    }
+
+    #[test]
+    fn resolves_constants_to_enum_variants() {
+        let mut types = PdbTypes::default();
+        types.constants.insert("STATUS_OK".into(), 0);
+        types.constants.insert("STATUS_ERR".into(), 1);
+        types.constants.insert("UNKNOWN_CONST".into(), 999);
+        types.enums.insert("StatusCode".into(), vec![
+            ("Ok".into(), 0),
+            ("Err".into(), 1),
+            ("Pending".into(), 2),
+        ]);
+        let resolved = resolve_constants_to_enums(&types);
+        assert_eq!(resolved.get("STATUS_OK").map(|s| s.as_str()), Some("StatusCode::Ok"));
+        assert_eq!(resolved.get("STATUS_ERR").map(|s| s.as_str()), Some("StatusCode::Err"));
+        assert!(!resolved.contains_key("UNKNOWN_CONST"));
     }
 }

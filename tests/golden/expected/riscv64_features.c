@@ -20,7 +20,7 @@ void logic_test(void) {
     }
     return;
 }
-/* Function:   memory_test | Address: 0x10164 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   memory_test | Address: 0x10164 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x24 (36 bytes) | Xrefs from: unknown */
 void memory_test(void) {
     unsigned int v8; // temp
     unsigned long long v10; // temp

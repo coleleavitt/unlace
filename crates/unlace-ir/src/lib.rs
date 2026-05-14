@@ -17,6 +17,7 @@ mod op;
 pub mod reg_alias;
 mod space;
 pub mod ssa;
+pub mod stack;
 pub mod types;
 mod varnode;
 pub mod xref;

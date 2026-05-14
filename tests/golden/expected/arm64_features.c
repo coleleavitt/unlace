@@ -32,8 +32,16 @@ void __fastcall csel_test(__int64 a1) {
     }
     return result;
 }
-/* Function:   bitfield_test | Address: 0x400148 | Size: 0x1c (28 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
+struct __anon0 {
+    __int64 field_0;
+    __int64 field_8;
+    __int64 field_16;
+};
+
+/* Function:   bitfield_test | Address: 0x400148 | Size: 0x1c (28 bytes) | Convention: unknown | Stack frame: 0x18 (24 bytes) | Xrefs from: unknown */
 void bitfield_test(void) {
+    char buf_16[24];
     int v2; // rbp
     int v5; // reg?
     unsigned long long v8; // temp

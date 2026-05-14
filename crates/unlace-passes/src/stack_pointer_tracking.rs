@@ -19,13 +19,10 @@ use std::collections::{BTreeMap, VecDeque};
 
 use unlace_ir::ssa::PrimitiveType;
 use unlace_ir::ssa::SsaFunction;
+use unlace_ir::stack::StackSpec;
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
-
-/// SLEIGH register-bank offset for `RSP` on x86-64. Matches the constant
-/// used by [`stack_vars`](crate::stack_vars).
-const RSP_OFFSET: u64 = 32;
 
 pub struct StackPointerTrackingPass;
 
@@ -35,7 +32,14 @@ impl Pass for StackPointerTrackingPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        let (sp_delta_at, dynamic_sp, min_depth) = walk_sp_deltas(func);
+        // Batch 2: stack recovery is per-arch. When the spec is missing
+        // (Unknown / unsupported arch) the pass is a no-op rather than
+        // panicking on hard-coded x86 offsets — preserves the old behaviour
+        // for arches that didn't have working stack recovery before.
+        let Some(spec) = StackSpec::for_arch(func.arch) else {
+            return Ok(false);
+        };
+        let (sp_delta_at, dynamic_sp, min_depth) = walk_sp_deltas(func, &spec);
         let stack_holes = compute_stack_holes(func, min_depth);
 
         let changed = sp_delta_at != func.sp_delta_at
@@ -48,10 +52,6 @@ impl Pass for StackPointerTrackingPass {
 
         Ok(changed)
     }
-}
-
-fn is_rsp(v: &Varnode) -> bool {
-    v.space == SpaceId::Register && v.offset == RSP_OFFSET
 }
 
 /// Dominator-order traversal of all blocks reachable from the dom-tree
@@ -79,7 +79,10 @@ fn dom_order(func: &SsaFunction) -> Vec<BlockId> {
 
 /// Walk every block in dom-order, threading the SP delta through every
 /// instruction. Returns `(sp_delta_at, dynamic_sp, min_depth_seen)`.
-fn walk_sp_deltas(func: &SsaFunction) -> (BTreeMap<(BlockId, usize), i64>, bool, i64) {
+fn walk_sp_deltas(
+    func: &SsaFunction,
+    spec: &StackSpec,
+) -> (BTreeMap<(BlockId, usize), i64>, bool, i64) {
     let mut entry_delta: BTreeMap<BlockId, i64> = BTreeMap::new();
     entry_delta.insert(func.dom_tree.root(), 0);
 
@@ -103,11 +106,11 @@ fn walk_sp_deltas(func: &SsaFunction) -> (BTreeMap<(BlockId, usize), i64>, bool,
             //   1. Direct: `IntAdd/IntSub` whose output is RSP (rare).
             //   2. Indirect: `Copy(rsp <- u)` where `u` was just produced
             //      by `IntAdd/IntSub(rsp, K)` in this block.
-            let writes_rsp = insn.output.as_ref().is_some_and(is_rsp);
+            let writes_rsp = insn.output.as_ref().is_some_and(|v| spec.is_sp(v));
 
             match insn.op {
                 IrOp::IntSub if writes_rsp => {
-                    if let Some((_, k, is_dynamic)) = match_rsp_arith(insn) {
+                    if let Some((_, k, is_dynamic)) = match_sp_arith(insn, spec) {
                         if is_dynamic {
                             dynamic_sp = true;
                         } else {
@@ -116,7 +119,7 @@ fn walk_sp_deltas(func: &SsaFunction) -> (BTreeMap<(BlockId, usize), i64>, bool,
                     }
                 }
                 IrOp::IntAdd if writes_rsp => {
-                    if let Some((_, k, is_dynamic)) = match_rsp_arith(insn) {
+                    if let Some((_, k, is_dynamic)) = match_sp_arith(insn, spec) {
                         if is_dynamic {
                             dynamic_sp = true;
                         } else {
@@ -126,7 +129,8 @@ fn walk_sp_deltas(func: &SsaFunction) -> (BTreeMap<(BlockId, usize), i64>, bool,
                 }
                 IrOp::Copy if writes_rsp => {
                     if let Some(src) = insn.inputs.first() {
-                        if let Some((sign, k, is_dynamic)) = trace_copy_source(func, bid, idx, src)
+                        if let Some((sign, k, is_dynamic)) =
+                            trace_copy_source(func, bid, idx, src, spec)
                         {
                             if is_dynamic {
                                 dynamic_sp = true;
@@ -157,32 +161,33 @@ fn walk_sp_deltas(func: &SsaFunction) -> (BTreeMap<(BlockId, usize), i64>, bool,
     (sp_delta_at, dynamic_sp, min_depth)
 }
 
-/// If `insn` is `IntAdd/IntSub(rsp, X)`, return `(rsp_input_pos, |X|, is_dynamic)`.
-fn match_rsp_arith(insn: &unlace_ir::IrInsn) -> Option<(usize, i64, bool)> {
+/// If `insn` is `IntAdd/IntSub(sp, X)`, return `(sp_input_pos, |X|, is_dynamic)`.
+fn match_sp_arith(insn: &unlace_ir::IrInsn, spec: &StackSpec) -> Option<(usize, i64, bool)> {
     if insn.inputs.len() < 2 {
         return None;
     }
-    let (rsp_pos, other) = if is_rsp(&insn.inputs[0]) {
+    let (sp_pos, other) = if spec.is_sp(&insn.inputs[0]) {
         (0usize, &insn.inputs[1])
-    } else if is_rsp(&insn.inputs[1]) {
+    } else if spec.is_sp(&insn.inputs[1]) {
         (1usize, &insn.inputs[0])
     } else {
         return None;
     };
     if other.space == SpaceId::Const {
-        Some((rsp_pos, other.offset as i64, false))
+        Some((sp_pos, other.offset as i64, false))
     } else {
-        Some((rsp_pos, 0, true))
+        Some((sp_pos, 0, true))
     }
 }
 
-/// Trace a `Copy(rsp <- src)` back to its defining instruction within the
+/// Trace a `Copy(sp <- src)` back to its defining instruction within the
 /// same block. Returns `(sign, magnitude, is_dynamic)`.
 fn trace_copy_source(
     func: &SsaFunction,
     bid: BlockId,
     copy_idx: usize,
     src: &Varnode,
+    spec: &StackSpec,
 ) -> Option<(i64, i64, bool)> {
     if src.space != SpaceId::Unique {
         return None;
@@ -198,7 +203,7 @@ fn trace_copy_source(
         }
         match prev.op {
             IrOp::IntAdd | IrOp::IntSub => {
-                let (_, mag, dynamic) = match_rsp_arith(prev)?;
+                let (_, mag, dynamic) = match_sp_arith(prev, spec)?;
                 let sign = if prev.op == IrOp::IntAdd { 1 } else { -1 };
                 return Some((sign, mag, dynamic));
             }
@@ -269,8 +274,10 @@ mod tests {
 
     use super::*;
 
+    /// x86-64 RSP varnode — tests synthesise functions tagged as x86_64 so
+    /// the `StackSpec` lookup resolves to the legacy offset.
     fn rsp() -> Varnode {
-        Varnode::reg(RSP_OFFSET, 8)
+        Varnode::reg(32, 8)
     }
 
     fn build(insns: Vec<IrInsn>) -> SsaFunction {
@@ -283,7 +290,9 @@ mod tests {
             0x2000,
         ));
         func.insert_block(bb);
-        build_ssa(func)
+        let mut ssa = build_ssa(func);
+        ssa.arch = unlace_ir::ArchId::X86_64;
+        ssa
     }
 
     #[test]

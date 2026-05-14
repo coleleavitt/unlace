@@ -10,7 +10,7 @@ use petgraph::algo::dominators::simple_fast;
 use petgraph::stable_graph::StableDiGraph;
 
 use crate::cfg::{ControlFlowGraph, build_cfg};
-use crate::{BlockId, Function, Varnode};
+use crate::{ArchId, BlockId, Function, Varnode};
 
 #[derive(
     Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
@@ -346,6 +346,15 @@ pub struct GoDeferSite {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SsaFunction {
     pub function: Function,
+    /// Target architecture this function was lifted from.
+    ///
+    /// Batch 2: consulted by stack-recovery passes via
+    /// [`crate::stack::StackSpec::for_arch`] so SP/FP register offsets are
+    /// resolved per-arch instead of hard-coded to x86_64. Defaults to
+    /// [`ArchId::Unknown(0)`] when constructed by [`build_ssa`]; the CLI
+    /// pipeline overwrites it from the loaded `BinaryImage` before passes
+    /// run.
+    pub arch: ArchId,
     pub cfg: ControlFlowGraph,
     pub dom_tree: DominatorTree,
     /// Post-dominator tree computed from the reversed CFG.
@@ -922,6 +931,11 @@ pub fn build_ssa(func: Function) -> SsaFunction {
 
     SsaFunction {
         function: func,
+        // Default to `Unknown` here; the CLI pipeline overwrites this with
+        // the loaded `BinaryImage::arch` before passes run. Stack passes
+        // treat `Unknown` as "no stack spec → skip recovery" rather than
+        // panicking, so this default is safe.
+        arch: ArchId::Unknown(0),
         cfg,
         dom_tree,
         post_dom_tree: Some(post_dom_tree),

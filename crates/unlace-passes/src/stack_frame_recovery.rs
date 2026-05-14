@@ -23,14 +23,20 @@
 use std::collections::{BTreeMap, HashMap};
 
 use unlace_ir::ssa::{SsaFunction, StackFrame, StackLocal, VarnodeSlot};
-use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
-
-/// AMD64 register-space offsets for RSP / RBP. These mirror the constants
-/// used by [`crate::stack_vars`] and the Sleigh AMD64 register file.
-const RSP_OFFSET: u64 = 32;
-const RBP_OFFSET: u64 = 40;
+use unlace_ir::stack::StackSpec;
+use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 const MAX_RESOLVE_DEPTH: u32 = 16;
+
+/// Resolve the [`StackSpec`] this pass should consult for the function's
+/// architecture. Unknown / unsupported arches fall back to the x86_64 spec
+/// — the historical default — so unit-test fixtures that construct an
+/// `SsaFunction` without setting `arch` keep working.
+fn resolve_spec(func: &SsaFunction) -> StackSpec {
+    StackSpec::for_arch(func.arch)
+        .or_else(|| StackSpec::for_arch(ArchId::X86_64))
+        .expect("x86_64 always has a StackSpec")
+}
 
 type DefMap = HashMap<Varnode, Vec<(BlockId, usize)>>;
 type ResolveCache = HashMap<(Varnode, u32), Option<i64>>;
@@ -49,6 +55,7 @@ type ResolveCache = HashMap<(Varnode, u32), Option<i64>>;
 /// Returns an empty [`StackFrame`] when no stack-relative access is
 /// detected.
 pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
+    let spec = resolve_spec(func);
     let def_map = build_def_map(func);
     let mut resolve_cache: ResolveCache = HashMap::new();
 
@@ -70,7 +77,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                         continue;
                     }
                     if let Some(offset) =
-                        extract_stack_offset(insn, func, &def_map, &mut resolve_cache)
+                        extract_stack_offset(insn, func, &def_map, &mut resolve_cache, &spec)
                     {
                         let width = insn.inputs[2].size;
                         if width > 0 {
@@ -83,7 +90,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                         continue;
                     }
                     if let Some(offset) =
-                        extract_stack_offset(insn, func, &def_map, &mut resolve_cache)
+                        extract_stack_offset(insn, func, &def_map, &mut resolve_cache, &spec)
                     {
                         let width = insn.output.map(|o| o.size).unwrap_or(0);
                         if width > 0 {
@@ -278,17 +285,18 @@ fn extract_stack_offset(
     func: &SsaFunction,
     def_map: &DefMap,
     resolve_cache: &mut ResolveCache,
+    spec: &StackSpec,
 ) -> Option<i64> {
     let addr = &insn.inputs[1];
 
     if addr.space == SpaceId::Stack {
         return Some(addr.offset as i64);
     }
-    if is_rsp_or_rbp(addr) {
+    if spec.is_frame_base(addr) {
         return Some(0);
     }
     if addr.space == SpaceId::Unique || addr.space == SpaceId::Register {
-        return find_relative_offset(addr, func, def_map, resolve_cache, 0);
+        return find_relative_offset(addr, func, def_map, resolve_cache, 0, spec);
     }
     None
 }
@@ -299,6 +307,7 @@ fn find_relative_offset(
     def_map: &DefMap,
     resolve_cache: &mut ResolveCache,
     depth: u32,
+    spec: &StackSpec,
 ) -> Option<i64> {
     if depth > MAX_RESOLVE_DEPTH {
         return None;
@@ -306,7 +315,7 @@ fn find_relative_offset(
     if let Some(&cached) = resolve_cache.get(&(*addr, depth)) {
         return cached;
     }
-    let resolved = find_relative_offset_uncached(addr, func, def_map, resolve_cache, depth);
+    let resolved = find_relative_offset_uncached(addr, func, def_map, resolve_cache, depth, spec);
     resolve_cache.insert((*addr, depth), resolved);
     resolved
 }
@@ -317,6 +326,7 @@ fn find_relative_offset_uncached(
     def_map: &DefMap,
     resolve_cache: &mut ResolveCache,
     depth: u32,
+    spec: &StackSpec,
 ) -> Option<i64> {
     let defs = def_map.get(addr)?;
     for &(bid, insn_idx) in defs {
@@ -328,22 +338,22 @@ fn find_relative_offset_uncached(
                     continue;
                 }
                 let (a, b) = (&def.inputs[0], &def.inputs[1]);
-                if is_rsp_or_rbp(a) && b.space == SpaceId::Const {
+                if spec.is_frame_base(a) && b.space == SpaceId::Const {
                     return Some(b.offset as i64);
                 }
-                if is_rsp_or_rbp(b) && a.space == SpaceId::Const {
+                if spec.is_frame_base(b) && a.space == SpaceId::Const {
                     return Some(a.offset as i64);
                 }
                 if b.space == SpaceId::Const {
                     if let Some(base) =
-                        find_relative_offset(a, func, def_map, resolve_cache, depth + 1)
+                        find_relative_offset(a, func, def_map, resolve_cache, depth + 1, spec)
                     {
                         return Some(base.wrapping_add(b.offset as i64));
                     }
                 }
                 if a.space == SpaceId::Const {
                     if let Some(base) =
-                        find_relative_offset(b, func, def_map, resolve_cache, depth + 1)
+                        find_relative_offset(b, func, def_map, resolve_cache, depth + 1, spec)
                     {
                         return Some(base.wrapping_add(a.offset as i64));
                     }
@@ -354,12 +364,12 @@ fn find_relative_offset_uncached(
                     continue;
                 }
                 let (a, b) = (&def.inputs[0], &def.inputs[1]);
-                if is_rsp_or_rbp(a) && b.space == SpaceId::Const {
+                if spec.is_frame_base(a) && b.space == SpaceId::Const {
                     return Some(-(b.offset as i64));
                 }
                 if b.space == SpaceId::Const {
                     if let Some(base) =
-                        find_relative_offset(a, func, def_map, resolve_cache, depth + 1)
+                        find_relative_offset(a, func, def_map, resolve_cache, depth + 1, spec)
                     {
                         return Some(base.wrapping_sub(b.offset as i64));
                     }
@@ -370,22 +380,18 @@ fn find_relative_offset_uncached(
                     continue;
                 }
                 let src = &def.inputs[0];
-                if is_rsp_or_rbp(src) {
+                if spec.is_frame_base(src) {
                     return Some(0);
                 }
                 if src.space == SpaceId::Stack {
                     return Some(src.offset as i64);
                 }
-                return find_relative_offset(src, func, def_map, resolve_cache, depth + 1);
+                return find_relative_offset(src, func, def_map, resolve_cache, depth + 1, spec);
             }
             _ => {}
         }
     }
     None
-}
-
-fn is_rsp_or_rbp(v: &Varnode) -> bool {
-    v.space == SpaceId::Register && (v.offset == RSP_OFFSET || v.offset == RBP_OFFSET)
 }
 
 #[cfg(test)]
@@ -397,7 +403,7 @@ mod tests {
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn};
 
     fn rsp() -> Varnode {
-        Varnode::reg(RSP_OFFSET, 8)
+        Varnode::reg(32, 8)
     }
 
     fn make_single_block_ssa(insns: Vec<IrInsn>) -> SsaFunction {
@@ -410,7 +416,11 @@ mod tests {
             0x1FFF,
         ));
         func.insert_block(bb);
-        build_ssa(func)
+        let mut ssa = build_ssa(func);
+        // Tag the synthesised function as x86_64 so the new arch-aware spec
+        // lookup resolves to the legacy RSP=32 / RBP=40 offsets.
+        ssa.arch = ArchId::X86_64;
+        ssa
     }
 
     /// Test 1: simple int local at -8.

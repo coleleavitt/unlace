@@ -19,7 +19,7 @@ void logic_test(void) {
     }
     return result;
 }
-/* Function:   memory_test | Address: 0x120000170 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   memory_test | Address: 0x120000170 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x24 (36 bytes) | Xrefs from: unknown */
 void memory_test(void) {
     unsigned int v9; // temp
     *(_QWORD *)(0x42LL) = 0LL; *(_QWORD *)(0x42LL) = 0LL; *(_DWORD *)(0x42LL) = LODWORD(0x42LL);

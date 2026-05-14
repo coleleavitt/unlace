@@ -315,6 +315,9 @@ fn analyze_function(
     unlace_struct::split_irreducible_entries(&mut ir_func);
 
     let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
+    // Batch 2: tag the SSA function with its arch so stack-recovery passes
+    // consult the right StackSpec — same plumbing as the main pipeline.
+    ssa.arch = image.arch;
     if let Err(e) = pipeline::run_passes(&mut ssa) {
         // Match the pipeline's behaviour: a failed pass run still yields a
         // measurable (unoptimised) function rather than aborting.

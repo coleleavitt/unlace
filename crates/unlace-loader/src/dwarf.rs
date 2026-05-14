@@ -40,6 +40,9 @@ use gimli::{
     DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type,
     DW_TAG_subprogram, DW_TAG_template_type_parameter, DW_TAG_typedef, DW_TAG_union_type,
     DW_TAG_variable, DW_TAG_volatile_type, EndianSlice, Operation, RunTimeEndian,
+    DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable, DW_TAG_volatile_type,
+    EndianSlice, RunTimeEndian,
+    DW_TAG_variable, DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
 };
 
 use crate::error::LoadError;
@@ -797,6 +800,7 @@ fn extract_union_type(
     }))
 }
 
+
 fn render_type_with_template_params(name: &str, template_params: &[String]) -> String {
     if template_params.is_empty() || name.contains('<') {
         name.to_owned()
@@ -1074,6 +1078,7 @@ fn extract_template_params_for_type_die(
             (Some(name), Some(type_name)) if !name.is_empty() => {
                 format!("{} = {}", name, type_name)
             }
+            (Some(name), Some(type_name)) if !name.is_empty() => format!("{} = {}", name, type_name),
             (Some(name), None) if !name.is_empty() => name,
             (_, Some(type_name)) if !type_name.is_empty() => type_name,
             _ => continue,
@@ -1776,6 +1781,62 @@ mod tests {
             .structs
             .get("Holder")
             .expect("Holder struct should exist");
+        dwarf.write(&mut sections).expect("should write synthetic DWARF");
+
+        let section = |id: gimli::SectionId| -> crate::image::Section {
+            let data = sections
+                .get(id)
+                .expect("section should exist")
+                .slice()
+                .to_vec();
+            crate::image::Section {
+                name: id.name().to_string(),
+                vaddr: 0,
+                size: data.len() as u64,
+                data,
+                flags: crate::image::SectionFlags::READ,
+            }
+        };
+
+        let img = BinaryImage {
+            arch: ArchId::X86_64,
+            endian: crate::image::Endian::Little,
+            entry: 0,
+            sections: vec![
+                section(gimli::SectionId::DebugAbbrev),
+                section(gimli::SectionId::DebugInfo),
+                section(gimli::SectionId::DebugStr),
+            ],
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: vec![],
+            string_table: BTreeMap::new(),
+            tls_callbacks: vec![],
+            function_starts: vec![],
+            debug_records: vec![],
+            load_config: None,
+            runtime_functions: vec![],
+            resources: vec![],
+            bound_imports: vec![],
+            delay_imports: vec![],
+            forwarded_exports: vec![],
+            forwarded_resolutions: BTreeMap::new(),
+            rich_header: None,
+            dylibs: vec![],
+            rpaths: vec![],
+            pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: None,
+            go_itabs: BTreeMap::new(),
+            go_types: BTreeMap::new(),
+            swift_info: None,
+            auth_pointers: vec![],
+            auth_ptr_slots: vec![],
+        };
+
+        let info = import_dwarf(&img).expect("should parse synthetic DWARF");
+        let holder = info.structs.get("Holder").expect("Holder struct should exist");
         assert_eq!(holder.fields[0].type_name, "Vec<T = int>");
 
         let vec = info.structs.get("Vec").expect("Vec struct should exist");

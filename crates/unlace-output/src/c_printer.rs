@@ -110,6 +110,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaFunction, SsaVarnode, VtableCallInfo};
+use unlace_ir::ssa::{PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
+use unlace_ir::ssa::{CppLambdaCapture, PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
 use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::DwarfInfo;
@@ -712,7 +714,7 @@ pub fn print_c_with_annotations(
             // detection only — full `[capture](args) { ... }` rendering
             // would need to walk the closure's data members.
             if dr.is_lambda {
-                out.push_str("// lambda closure operator()\n");
+                emit_lambda_annotation(&func.cpp_lambda_captures, &mut out);
             }
             crate::demangle::sanitize_for_c(&dr.short_name)
         }
@@ -4149,6 +4151,30 @@ fn is_default_v_name(name: &str) -> bool {
 /// general [`render_type_as_c`] so a `T *` param survives intact when
 /// the finalized signature widens a pointer-typed param into a typed
 /// pointer.
+fn emit_lambda_annotation(captures: &[CppLambdaCapture], out: &mut String) {
+    if captures.is_empty() {
+        out.push_str("// lambda closure operator()\n");
+        return;
+    }
+    let rendered = captures
+        .iter()
+        .map(render_lambda_capture)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let _ = writeln!(out, "// lambda closure operator() [{}]", rendered);
+}
+
+fn render_lambda_capture(cap: &CppLambdaCapture) -> String {
+    if cap.name == "this" {
+        return "this".to_string();
+    }
+    if cap.by_ref {
+        format!("&{}", cap.name)
+    } else {
+        cap.name.clone()
+    }
+}
+
 fn c_sig_type_for_type(ty: &Type) -> String {
     match ty {
         Type::Primitive(p) => c_sig_type(p).to_string(),
@@ -8999,6 +9025,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         }
     }
 
@@ -9636,6 +9663,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -10207,6 +10235,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let mut functions = BTreeMap::new();
@@ -10318,6 +10347,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let output = super::print_c(&func);
@@ -10353,6 +10383,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let output = super::print_c(&func);
@@ -15133,6 +15164,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -15167,6 +15199,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -15205,6 +15238,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -15239,6 +15273,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -15273,6 +15308,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -15333,6 +15369,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         };
 
         let output = print_c(&func);
@@ -16366,6 +16403,22 @@ mod tests {
         assert!(
             output.contains("// lambda closure operator()"),
             "expected lambda annotation for clang $_0, got:\n{output}",
+        );
+    }
+
+    #[test]
+    fn lambda_capture_list_emits_byref_and_this() {
+        let body = vec![HirNode::Return(None)];
+        let mut func = make_func("_ZZ11call_lambdaiENKUliE_clEi", body);
+        func.cpp_lambda_captures = vec![
+            unlace_ir::ssa::CppLambdaCapture::by_reference("x"),
+            unlace_ir::ssa::CppLambdaCapture::by_value("this"),
+        ];
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("// lambda closure operator() [&x, this]"),
+            "expected lambda capture list, got:\n{output}",
         );
     }
 

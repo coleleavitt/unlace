@@ -21,6 +21,7 @@ pub mod coverage_ingest;
 pub mod qemu_tcg;
 pub mod cpp_stl;
 pub mod cpp_variant;
+pub mod cpp_lambda;
 pub mod cpp_vtable;
 pub mod crypto_idioms;
 pub mod crypto_lib_recognize;
@@ -124,6 +125,9 @@ pub use coverage_ingest::{
 };
 pub use cpp_stl::recognize_stl_type;
 pub use cpp_variant::CppVariantPass;
+pub use serial_recognize::{SerialKind, recognize_serial_api};
+pub use cpp_lambda::{CppLambdaCapturePass, recover_lambda_captures};
+pub use serial_recognize::{SerialKind, recognize_serial_api};
 pub use cpp_vtable::CppVtablePass;
 pub use crypto_idioms::CryptoIdiomPass;
 pub use cse::CsePass;
@@ -232,6 +236,7 @@ pub fn default_pass_names() -> Vec<&'static str> {
         "cse",
         "gvn",
         "bmi-idioms",
+        "cpp-lambda-captures",
         "licm",
         "iv-elim",
         "strength-reduce",

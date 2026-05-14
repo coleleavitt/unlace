@@ -85,6 +85,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             go_defer_sites: Vec::new(),
+            cpp_lambda_captures: Vec::new(),
         }
     }
 

@@ -543,6 +543,53 @@ pub struct SsaFunction {
     /// `(BlockId, insn_index)` of the first instruction in the matched
     /// sequence. Empty until the pass runs.
     pub crypto_annotations: Vec<CryptoAnnotation>,
+    /// C++ lambda closure captures recovered from constructor/call-operator
+    /// context. Populated by `unlace_passes::cpp_lambda` and surfaced by the
+    /// C printer as a source-like `[&x, this]` annotation on lambda
+    /// `operator()` functions.
+    pub cpp_lambda_captures: Vec<CppLambdaCapture>,
+}
+
+/// One recovered C++ lambda capture.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CppLambdaCapture {
+    /// Stable display name (`this`, `x`, `capture_0`, ...).
+    pub name: String,
+    /// `true` when the capture is by reference (`&x`); false means by value.
+    pub by_ref: bool,
+    /// Optional recovered capture type.
+    pub ty: Option<crate::types::Type>,
+    /// Byte offset in the closure object when known.
+    pub offset: Option<u64>,
+}
+
+impl CppLambdaCapture {
+    pub fn new(name: impl Into<String>, by_ref: bool) -> Self {
+        Self {
+            name: name.into(),
+            by_ref,
+            ty: None,
+            offset: None,
+        }
+    }
+
+    pub fn by_value(name: impl Into<String>) -> Self {
+        Self::new(name, false)
+    }
+
+    pub fn by_reference(name: impl Into<String>) -> Self {
+        Self::new(name, true)
+    }
+
+    pub fn with_type(mut self, ty: crate::types::Type) -> Self {
+        self.ty = Some(ty);
+        self
+    }
+
+    pub fn with_offset(mut self, offset: u64) -> Self {
+        self.offset = Some(offset);
+        self
+    }
 }
 
 /// A recognized cryptographic algorithm sequence within a function.
@@ -792,6 +839,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         var_role_names: BTreeMap::new(),
         finalized_signature: None,
         crypto_annotations: Vec::new(),
+        cpp_lambda_captures: Vec::new(),
     }
 }
 

@@ -557,4 +557,8 @@ pub struct HirFunction {
     /// (`__int32 v_8;`, `char buf_10[16];`) and to name stack accesses
     /// in expressions (t232).
     pub stack_frame: Option<unlace_ir::ssa::StackFrame>,
+    /// C++ lambda captures propagated from the SSA lambda recognizer.
+    /// The C printer renders them as a source-like capture list (for example
+    /// `[&x, this]`) on lambda closure `operator()` annotations.
+    pub cpp_lambda_captures: Vec<unlace_ir::ssa::CppLambdaCapture>,
 }

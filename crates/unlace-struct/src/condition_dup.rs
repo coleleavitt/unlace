@@ -398,6 +398,7 @@ mod tests {
             finalized_signature: None,
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
+            cpp_lambda_captures: Vec::new(),
         }
     }
 

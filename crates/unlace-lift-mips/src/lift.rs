@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use capstone::arch::mips::{MipsInsn, MipsOperand};
 use capstone::prelude::*;
-use capstone::{Capstone, InsnId};
+use capstone::{Capstone, Insn, InsnId};
 use smallvec::smallvec;
 use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
@@ -28,9 +28,17 @@ pub const CALLOTHER_MIPS_DBITSWAP: u64 = 0x4D49_5053_0002;
 struct SendCapstone(Capstone);
 unsafe impl Send for SendCapstone {}
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MipsDecodeMode {
+    Regular,
+    Micro,
+}
+
 pub struct MipsLifter {
     reg_file: RegisterFile,
     cs: Mutex<SendCapstone>,
+    cs_micro: Mutex<SendCapstone>,
+    mode: MipsDecodeMode,
 }
 
 fn make_capstone() -> Capstone {
@@ -43,13 +51,89 @@ fn make_capstone() -> Capstone {
         .expect("capstone MIPS64 init should not fail")
 }
 
+fn make_micro_capstone() -> Capstone {
+    Capstone::new()
+        .mips()
+        .mode(capstone::arch::mips::ArchMode::Mips32)
+        .endian(capstone::Endian::Big)
+        .extra_mode([capstone::arch::mips::ArchExtraMode::Micro].iter().copied())
+        .detail(true)
+        .build()
+        .expect("capstone microMIPS init should not fail")
+}
+
 impl MipsLifter {
     pub fn new() -> Self {
+        Self::with_mode(MipsDecodeMode::Regular)
+    }
+
+    /// Construct a lifter for microMIPS/MIPS16e compressed encodings.
+    ///
+    /// Capstone exposes these encodings through the MIPS32 decoder plus the
+    /// `Micro` extra mode.  The regular constructor remains MIPS64-compatible so
+    /// existing callers do not accidentally interpret arbitrary 32-bit MIPS code
+    /// as a 16-bit compressed instruction stream.
+    pub fn new_micro_mips() -> Self {
+        Self::with_mode(MipsDecodeMode::Micro)
+    }
+
+    /// Alias for compressed MIPS16e-style streams; Capstone reports the common
+    /// microMIPS instruction ids for the 16-bit encodings we lift here.
+    pub fn new_mips16e() -> Self {
+        Self::new_micro_mips()
+    }
+
+    fn with_mode(mode: MipsDecodeMode) -> Self {
         Self {
             reg_file: mips64_register_file(),
             cs: Mutex::new(SendCapstone(make_capstone())),
+            cs_micro: Mutex::new(SendCapstone(make_micro_capstone())),
+            mode,
         }
     }
+
+    fn try_lift_with(
+        &self,
+        cs_mutex: &Mutex<SendCapstone>,
+        bytes: &[u8],
+        addr: u64,
+    ) -> Result<Option<LiftedInsn>, LiftError> {
+        let guard = cs_mutex
+            .lock()
+            .map_err(|e| LiftError::Decode(format!("lock poisoned: {e}")))?;
+        let cs = &guard.0;
+
+        let insns = cs
+            .disasm_count(bytes, addr, 1)
+            .map_err(|e| LiftError::Decode(format!("capstone: {e}")))?;
+
+        let Some(insn) = insns.iter().next() else {
+            return Ok(None);
+        };
+
+        lift_decoded_insn(cs, &insn, addr).map(Some)
+    }
+}
+
+fn lift_decoded_insn(cs: &Capstone, insn: &Insn<'_>, addr: u64) -> Result<LiftedInsn, LiftError> {
+    let detail = cs
+        .insn_detail(insn)
+        .map_err(|e| LiftError::Decode(format!("no detail: {e}")))?;
+
+    let arch_detail = detail.arch_detail();
+    let mips_detail = arch_detail
+        .mips()
+        .ok_or_else(|| LiftError::Decode("not MIPS detail".into()))?;
+
+    let operands: Vec<MipsOperand> = mips_detail.operands().collect();
+
+    let mut ctx = LiftCtx::new(addr);
+    dispatch_insn(&mut ctx, insn.id(), &operands);
+
+    Ok(LiftedInsn {
+        ir_ops: ctx.ops,
+        len: insn.len(),
+    })
 }
 
 impl Default for MipsLifter {
@@ -64,6 +148,16 @@ impl Lifter for MipsLifter {
     }
 
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
+        if bytes.len() < 2 {
+            return Err(LiftError::ShortBuffer);
+        }
+
+        if self.mode == MipsDecodeMode::Micro {
+            return self
+                .try_lift_with(&self.cs_micro, bytes, addr)?
+                .ok_or_else(|| LiftError::Decode(format!("no instruction at {addr:#x}")));
+        }
+
         if bytes.len() < 4 {
             return Err(LiftError::ShortBuffer);
         }
@@ -102,6 +196,41 @@ impl Lifter for MipsLifter {
             ir_ops: ctx.ops,
             len: insn.len(),
         })
+        let guard = self
+            .cs
+            .lock()
+            .map_err(|e| LiftError::Decode(format!("lock poisoned: {e}")))?;
+        let cs = &guard.0;
+
+        let insns = cs
+            .disasm_count(bytes, addr, 1)
+            .map_err(|e| LiftError::Decode(format!("capstone: {e}")))?;
+
+        let insn = insns
+            .iter()
+            .next()
+            .ok_or_else(|| LiftError::Decode(format!("no instruction at {addr:#x}")))?;
+
+        let detail = cs
+            .insn_detail(&insn)
+            .map_err(|e| LiftError::Decode(format!("no detail: {e}")))?;
+
+        let arch_detail = detail.arch_detail();
+        let mips_detail = arch_detail
+            .mips()
+            .ok_or_else(|| LiftError::Decode("not MIPS detail".into()))?;
+
+        let operands: Vec<MipsOperand> = mips_detail.operands().collect();
+
+        let mut ctx = LiftCtx::new(addr);
+        dispatch_insn(&mut ctx, insn.id(), &operands);
+
+        Ok(LiftedInsn {
+            ir_ops: ctx.ops,
+            len: insn.len(),
+        })
+        self.try_lift_with(&self.cs, bytes, addr)?
+            .ok_or_else(|| LiftError::Decode(format!("no instruction at {addr:#x}")))
     }
 
     fn register_file(&self) -> &RegisterFile {
@@ -245,6 +374,7 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand], mnemonic: &
 
         x if x == MIPS_INS_ADD as u32 => arithmetic::lift_add(ctx, ops),
         x if x == MIPS_INS_ADDU as u32 => arithmetic::lift_add(ctx, ops),
+        x if x == MIPS_INS_ADDU16 as u32 => arithmetic::lift_add(ctx, ops),
         x if x == MIPS_INS_ADDI as u32 => arithmetic::lift_addi(ctx, ops),
         x if x == MIPS_INS_ADDIU as u32 => arithmetic::lift_addi(ctx, ops),
         x if x == MIPS_INS_DADD as u32 => arithmetic::lift_add(ctx, ops),
@@ -253,9 +383,17 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand], mnemonic: &
         x if x == MIPS_INS_DADDIU as u32 => arithmetic::lift_addi(ctx, ops),
         x if x == MIPS_INS_SUB as u32 => arithmetic::lift_sub(ctx, ops),
         x if x == MIPS_INS_SUBU as u32 => arithmetic::lift_sub(ctx, ops),
+        x if x == MIPS_INS_SUBU16 as u32 => arithmetic::lift_sub(ctx, ops),
         x if x == MIPS_INS_DSUBU as u32 => arithmetic::lift_sub(ctx, ops),
         x if x == MIPS_INS_MULT as u32 => arithmetic::lift_mult(ctx, ops),
         x if x == MIPS_INS_MULTU as u32 => arithmetic::lift_mult(ctx, ops),
+        x if x == MIPS_INS_MUL as u32 => arithmetic::lift_mul(ctx, ops),
+        x if x == MIPS_INS_DMULT as u32 => arithmetic::lift_mult(ctx, ops),
+        x if x == MIPS_INS_DMULTU as u32 => arithmetic::lift_mult(ctx, ops),
+        x if x == MIPS_INS_MADD as u32 => arithmetic::lift_madd(ctx, ops),
+        x if x == MIPS_INS_MADDU as u32 => arithmetic::lift_madd(ctx, ops),
+        x if x == MIPS_INS_MSUB as u32 => arithmetic::lift_msub(ctx, ops),
+        x if x == MIPS_INS_MSUBU as u32 => arithmetic::lift_msub(ctx, ops),
         x if x == MIPS_INS_DIV as u32 => arithmetic::lift_div(ctx, ops),
         x if x == MIPS_INS_DIVU as u32 => arithmetic::lift_div(ctx, ops),
         x if x == MIPS_INS_SLT as u32 => arithmetic::lift_slt(ctx, ops),
@@ -263,6 +401,7 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand], mnemonic: &
         x if x == MIPS_INS_SLTI as u32 => arithmetic::lift_slt(ctx, ops),
         x if x == MIPS_INS_SLTIU as u32 => arithmetic::lift_sltu(ctx, ops),
         x if x == MIPS_INS_NEGU as u32 => arithmetic::lift_negu(ctx, ops),
+        x if x == MIPS_INS_LI16 as u32 => data_move::lift_li(ctx, ops),
 
         x if x == MIPS_INS_AND as u32 => bitwise::lift_and(ctx, ops),
         x if x == MIPS_INS_ANDI as u32 => bitwise::lift_andi(ctx, ops),
@@ -273,12 +412,19 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand], mnemonic: &
         x if x == MIPS_INS_NOR as u32 => bitwise::lift_nor(ctx, ops),
         x if x == MIPS_INS_BITSWAP as u32 => bitwise::lift_bitswap(ctx, ops),
         x if x == MIPS_INS_DBITSWAP as u32 => bitwise::lift_dbitswap(ctx, ops),
+        x if x == MIPS_INS_CLO as u32 => bitwise::lift_count(ctx, ops, true),
+        x if x == MIPS_INS_CLZ as u32 => bitwise::lift_count(ctx, ops, false),
+        x if x == MIPS_INS_SEB as u32 => bitwise::lift_sign_extend_byte(ctx, ops),
+        x if x == MIPS_INS_SEH as u32 => bitwise::lift_sign_extend_half(ctx, ops),
+        x if x == MIPS_INS_WSBH as u32 => bitwise::lift_wsbh(ctx, ops),
         x if x == MIPS_INS_SLL as u32 => bitwise::lift_sll(ctx, ops),
         x if x == MIPS_INS_SRL as u32 => bitwise::lift_srl(ctx, ops),
         x if x == MIPS_INS_SRA as u32 => bitwise::lift_sra(ctx, ops),
+        x if x == MIPS_INS_ROTR as u32 => bitwise::lift_rotr(ctx, ops),
         x if x == MIPS_INS_SLLV as u32 => bitwise::lift_sllv(ctx, ops),
         x if x == MIPS_INS_SRLV as u32 => bitwise::lift_srlv(ctx, ops),
         x if x == MIPS_INS_SRAV as u32 => bitwise::lift_srav(ctx, ops),
+        x if x == MIPS_INS_ROTRV as u32 => bitwise::lift_rotrv(ctx, ops),
         x if x == MIPS_INS_DSLL as u32 => bitwise::lift_sll(ctx, ops),
         x if x == MIPS_INS_DSRL as u32 => bitwise::lift_srl(ctx, ops),
         x if x == MIPS_INS_DSRA as u32 => bitwise::lift_sra(ctx, ops),
@@ -346,7 +492,9 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand], mnemonic: &
         x if x == MIPS_INS_BEQ as u32 => control_flow::lift_beq(ctx, ops),
         x if x == MIPS_INS_BNE as u32 => control_flow::lift_bne(ctx, ops),
         x if x == MIPS_INS_BEQZ as u32 => control_flow::lift_beqz(ctx, ops),
+        x if x == MIPS_INS_BEQZ16 as u32 => control_flow::lift_beqz(ctx, ops),
         x if x == MIPS_INS_BNEZ as u32 => control_flow::lift_bnez(ctx, ops),
+        x if x == MIPS_INS_BNEZ16 as u32 => control_flow::lift_bnez(ctx, ops),
         x if x == MIPS_INS_BGEZ as u32 => control_flow::lift_bgez(ctx, ops),
         x if x == MIPS_INS_BLTZ as u32 => control_flow::lift_bltz(ctx, ops),
         x if x == MIPS_INS_BGTZ as u32 => control_flow::lift_bgtz(ctx, ops),
@@ -354,22 +502,36 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand], mnemonic: &
         x if x == MIPS_INS_BGEZAL as u32 => control_flow::lift_bgezal(ctx, ops),
         x if x == MIPS_INS_BLTZAL as u32 => control_flow::lift_bltzal(ctx, ops),
         x if x == MIPS_INS_B as u32 => control_flow::lift_b(ctx, ops),
+        x if x == MIPS_INS_B16 as u32 => control_flow::lift_b(ctx, ops),
         x if x == MIPS_INS_BAL as u32 => control_flow::lift_bal(ctx, ops),
         x if x == MIPS_INS_J as u32 => control_flow::lift_j(ctx, ops),
         x if x == MIPS_INS_JAL as u32 => control_flow::lift_jal(ctx, ops),
         x if x == MIPS_INS_JR as u32 => control_flow::lift_jr(ctx, ops),
+        x if x == MIPS_INS_JR16 as u32 => control_flow::lift_jr(ctx, ops),
+        x if x == MIPS_INS_JRC as u32 => control_flow::lift_jr(ctx, ops),
+        x if x == MIPS_INS_JALRC as u32 => control_flow::lift_jalr(ctx, ops),
         x if x == MIPS_INS_JALR as u32 => control_flow::lift_jalr(ctx, ops),
+        x if x == MIPS_INS_JALRS16 as u32 => control_flow::lift_jalr(ctx, ops),
 
         x if x == MIPS_INS_LW as u32 => memory::lift_load(ctx, ops, 4),
+        x if x == MIPS_INS_LW16 as u32 => memory::lift_load(ctx, ops, 4),
         x if x == MIPS_INS_LD as u32 => memory::lift_load(ctx, ops, 8),
         x if x == MIPS_INS_LH as u32 => memory::lift_load(ctx, ops, 2),
         x if x == MIPS_INS_LHU as u32 => memory::lift_load(ctx, ops, 2),
         x if x == MIPS_INS_LB as u32 => memory::lift_load(ctx, ops, 1),
         x if x == MIPS_INS_LBU as u32 => memory::lift_load(ctx, ops, 1),
         x if x == MIPS_INS_SW as u32 => memory::lift_store(ctx, ops, 4),
+        x if x == MIPS_INS_SW16 as u32 => memory::lift_store(ctx, ops, 4),
         x if x == MIPS_INS_SD as u32 => memory::lift_store(ctx, ops, 8),
         x if x == MIPS_INS_SH as u32 => memory::lift_store(ctx, ops, 2),
         x if x == MIPS_INS_SB as u32 => memory::lift_store(ctx, ops, 1),
+        x if x == MIPS_INS_LL as u32 => memory::lift_load(ctx, ops, 4),
+        x if x == MIPS_INS_SC as u32 => memory::lift_store_conditional(ctx, ops, 4),
+        x if x == MIPS_INS_PREF as u32 => memory::lift_prefetch(ctx),
+        x if x == MIPS_INS_SYNC as u32 => memory::lift_barrier(ctx),
+        x if x == MIPS_INS_SYNCI as u32 => memory::lift_barrier(ctx),
+        x if x == MIPS_INS_LWM16 as u32 => memory::lift_multi_load(ctx, ops),
+        x if x == MIPS_INS_SWM16 as u32 => memory::lift_multi_store(ctx, ops),
 
         // FPU loads/stores
         x if x == MIPS_INS_LWC1 as u32 => fpu::lift_fpu_load(ctx, ops, 4),
@@ -783,6 +945,67 @@ mod tests {
             op.op == IrOp::Callother
                 && op.inputs.first().map(|v| v.offset) == Some(CALLOTHER_MIPS_DBITSWAP)
         }));
+    fn test_micro_mips_li16() {
+        let l = MipsLifter::new_micro_mips();
+        let result = l
+            .lift_insn(&[0xed, 0x01], 0x1000)
+            .expect("should decode LI16");
+        assert_eq!(result.len, 2);
+        assert!(result.ir_ops.iter().any(|op| op.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_micro_mips_lw16() {
+        let l = MipsLifter::new_micro_mips();
+        let result = l
+            .lift_insn(&[0x6a, 0x41], 0x1000)
+            .expect("should decode LW16");
+        assert_eq!(result.len, 2);
+        assert!(result.ir_ops.iter().any(|op| op.op == IrOp::Load));
+    }
+
+    #[test]
+    fn test_micro_mips_sw16() {
+        let l = MipsLifter::new_micro_mips();
+        let result = l
+            .lift_insn(&[0xe8, 0x00], 0x1000)
+            .expect("should decode SW16");
+        assert_eq!(result.len, 2);
+        assert!(result.ir_ops.iter().any(|op| op.op == IrOp::Store));
+    }
+
+    #[test]
+    fn test_micro_mips_compressed_branch_and_jr() {
+        let l = MipsLifter::new_mips16e();
+        let beqz = l
+            .lift_insn(&[0x8c, 0x02], 0x1000)
+            .expect("should decode BEQZ16");
+        assert_eq!(beqz.len, 2);
+        assert!(beqz.ir_ops.iter().any(|op| op.op == IrOp::Cbranch));
+
+        let jr = l
+            .lift_insn(&[0x45, 0x99], 0x1002)
+            .expect("should decode JR16/JRC");
+        assert_eq!(jr.len, 2);
+        assert!(jr.ir_ops.iter().any(|op| op.op == IrOp::Branchind));
+    }
+
+    #[test]
+    fn test_loongson_mips32r2_bit_ops() {
+        let l = lifter();
+        // CLZ $v0, $a0 = 0x70841020 (big-endian)
+        let clz = l
+            .lift_insn(&[0x70, 0x84, 0x10, 0x20], 0x1000)
+            .expect("should decode CLZ");
+        assert_eq!(clz.len, 4);
+        assert!(clz.ir_ops.iter().any(|op| op.op == IrOp::Lzcount));
+
+        // MUL $v0, $a0, $a1 = 0x70851002 (SPECIAL2)
+        let mul = l
+            .lift_insn(&[0x70, 0x85, 0x10, 0x02], 0x1004)
+            .expect("should decode MUL");
+        assert_eq!(mul.len, 4);
+        assert!(mul.ir_ops.iter().any(|op| op.op == IrOp::IntMult));
     }
 
     // Unknown instruction falls back to Unimplemented

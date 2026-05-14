@@ -615,6 +615,44 @@ fn dispatch(ctx: &mut LiftCtx, op: &V850Op) {
         } => lift_cmov(ctx, *cond, *reg1, *reg2, *reg3),
         V850Op::Cmov { cond, reg1, reg2, reg3 } => lift_cmov(ctx, *cond, *reg1, *reg2, *reg3),
 
+        // -- Short load (EP-relative) ----------------------------------------
+        // SLD.B/H sign-extend; SLD.W is a full word.
+        V850Op::SldB { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp as i32, 1, true),
+        V850Op::SldH { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp as i32, 2, true),
+        V850Op::SldW { dst, disp } => lift_load(ctx, *dst, EP_REG, *disp as i32, 4, false),
+
+        // -- Saturating arithmetic -------------------------------------------
+        // Saturation requires conditional clamping that doesn't map cleanly to
+        // Pcode primitives; emit a tagged Callother that downstream passes can
+        // recognize. Result flags are not modeled.
+        V850Op::Satadd { dst, src } => lift_sat_binop(ctx, *dst, *src, CALLOTHER_V850_SATADD),
+        V850Op::SataddImm5 { dst, imm } => {
+            lift_sat_binop_imm(ctx, *dst, *imm, CALLOTHER_V850_SATADD)
+        }
+        V850Op::Satsub { dst, src } => lift_sat_binop(ctx, *dst, *src, CALLOTHER_V850_SATSUB),
+        V850Op::Satsubr { dst, src } => lift_sat_binop(ctx, *dst, *src, CALLOTHER_V850_SATSUBR),
+
+        // -- 32x32 multiply (low word into reg2, high word into reg3) --------
+        V850Op::Mul { reg1, reg2, reg3 } => lift_mul32(ctx, *reg1, *reg2, *reg3, true),
+        V850Op::Mulu { reg1, reg2, reg3 } => lift_mul32(ctx, *reg1, *reg2, *reg3, false),
+
+        // -- Divide -----------------------------------------------------------
+        V850Op::Div { reg1, reg2, reg3 } => lift_div32(ctx, *reg1, *reg2, *reg3, true),
+        V850Op::Divu { reg1, reg2, reg3 } => lift_div32(ctx, *reg1, *reg2, *reg3, false),
+        V850Op::Divh { dst, src } => lift_divh(ctx, *dst, *src, true),
+        V850Op::Divhu { reg1, reg2, reg3 } => {
+            // reg2 = sign-narrowed div, reg3 = remainder. Use the 16-bit path
+            // for reg2 and emit a remainder write.
+            lift_divh_reg3(ctx, *reg1, *reg2, *reg3, false);
+        }
+
+        // -- Byte/half swap --------------------------------------------------
+        V850Op::Bsw { src, dst } => lift_swap(ctx, *src, *dst, CALLOTHER_V850_BSW),
+        V850Op::Bsh { src, dst } => lift_swap(ctx, *src, *dst, CALLOTHER_V850_BSH),
+
+        // -- Conditional move ------------------------------------------------
+        V850Op::Cmov { cond, reg1, reg2, reg3 } => lift_cmov(ctx, *cond, *reg1, *reg2, *reg3),
+
         // -- Control flow --
         V850Op::Jmp { reg } => {
             if *reg == 31 {

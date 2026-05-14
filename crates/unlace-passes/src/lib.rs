@@ -504,3 +504,4 @@ mod tests {
         );
     }
 }
+pub mod switch_table_recovery;

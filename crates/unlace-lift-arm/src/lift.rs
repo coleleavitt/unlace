@@ -799,6 +799,28 @@ pub const CALLOTHER_ARM_NEON_VST2: u64 = 0x372;
 pub const CALLOTHER_ARM_NEON_VST3: u64 = 0x373;
 pub const CALLOTHER_ARM_NEON_VST4: u64 = 0x374;
 
+// t323 — ARM Helium (M-Profile Vector Extension / MVE) callother tags.
+pub const CALLOTHER_MVE_VADD: u64 = 0x380;
+pub const CALLOTHER_MVE_VSUB: u64 = 0x381;
+pub const CALLOTHER_MVE_VMUL: u64 = 0x382;
+pub const CALLOTHER_MVE_VFMA: u64 = 0x383;
+pub const CALLOTHER_MVE_VLDRW: u64 = 0x384;
+pub const CALLOTHER_MVE_VSTRW: u64 = 0x385;
+pub const CALLOTHER_MVE_VPST: u64 = 0x386;
+pub const CALLOTHER_MVE_VCMP: u64 = 0x387;
+pub const CALLOTHER_MVE_VMOV: u64 = 0x388;
+pub const CALLOTHER_MVE_VDUP: u64 = 0x389;
+pub const CALLOTHER_MVE_VAND: u64 = 0x38A;
+pub const CALLOTHER_MVE_VORR: u64 = 0x38B;
+pub const CALLOTHER_MVE_VEOR: u64 = 0x38C;
+pub const CALLOTHER_MVE_VSHL: u64 = 0x38D;
+pub const CALLOTHER_MVE_VSHR: u64 = 0x38E;
+pub const CALLOTHER_MVE_VADDV: u64 = 0x38F;
+pub const CALLOTHER_MVE_VMLADAV: u64 = 0x390;
+pub const CALLOTHER_MVE_VCVT: u64 = 0x391;
+pub const CALLOTHER_MVE_VPNOT: u64 = 0x392;
+pub const CALLOTHER_MVE_VQADD: u64 = 0x393;
+
 /// Emit `Rd = Callother(tag, Rn, Rm)` for the three-register
 /// saturating/parallel families (UQADD8/UQADD16/SADD16/SSUB16/QADD/
 /// QSUB). All six instructions share the same `Rd, Rn, Rm` operand

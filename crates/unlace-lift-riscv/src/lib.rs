@@ -2402,6 +2402,38 @@ mod tests {
     }
 
     #[test]
+    fn t360_riscv64_register_file_full_layout() {
+        let l = lifter();
+        let rf = l.register_file();
+        assert_eq!(rf.registers.len(), 33);
+        for (i, name) in RV_REG_NAMES.iter().enumerate() {
+            assert_register(rf, name, (i as u64) * 8, 8);
+        }
+        assert_register(rf, "pc", PC_OFFSET, 8);
+        assert_eq!(cs_reg_to_varnode(rv_reg(0)), None);
+        assert_eq!(read_reg(rv_reg(0)), Varnode::constant(0, 8));
+        for i in 1..32u32 {
+            assert_eq!(
+                cs_reg_to_varnode(rv_reg(i)),
+                Some(Varnode::reg((i as u64) * 8, 8))
+            );
+        }
+        assert_unique_names(rf);
+    }
+
+    fn assert_register(rf: &RegisterFile, name: &str, offset: u64, size: u8) {
+        let def = rf.registers.iter().find(|r| r.name == name).unwrap();
+        assert_eq!(def.varnode, Varnode::reg(offset, size), "{name}");
+    }
+
+    fn assert_unique_names(rf: &RegisterFile) {
+        let mut names = rf.registers.iter().map(|r| r.name).collect::<Vec<_>>();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), rf.registers.len());
+    }
+
+    #[test]
     fn test_short_buffer() {
         let result = lifter().lift_insn(&[0x00], 0x1000);
         assert!(result.is_err());

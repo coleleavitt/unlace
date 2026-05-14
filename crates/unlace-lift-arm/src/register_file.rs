@@ -300,5 +300,71 @@ mod vfp_tests {
     #[test]
     fn fpscr_after_d_registers() {
         assert!(FPSCR > VFP_D31);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use capstone::RegId;
+
+    #[test]
+    fn t360_aarch64_register_file_full_layout() {
+        let rf = aarch64_register_file();
+        assert_eq!(rf.registers.len(), 83);
+        for i in 0..31u64 {
+            assert_register(&rf, &format!("X{i}"), i * 8, 8);
+        }
+        assert_register(&rf, "SP", SP, 8);
+        assert_register(&rf, "PC", PC, 8);
+        assert_register(&rf, "NZCV", NZCV, 4);
+        assert_register(&rf, "PSTATE_NZCV", ARM_NZCV, 4);
+        for i in 0..32u8 {
+            assert_register(&rf, &format!("Z{i}"), sve_z_offset(i), SVE_Z_SIZE);
+        }
+        for i in 0..16u8 {
+            assert_register(&rf, &format!("P{i}"), sve_p_offset(i), SVE_P_SIZE);
+        }
+        assert_unique_names(&rf);
+    }
+
+    #[test]
+    fn t360_aarch64_capstone_mapping_and_zero_registers() {
+        assert_eq!(cs_reg_to_varnode(RegId(ARM64_REG_X0)), Some((X0, 8)));
+        assert_eq!(cs_reg_to_varnode(RegId(ARM64_REG_X28)), Some((X28, 8)));
+        assert_eq!(cs_reg_to_varnode(RegId(ARM64_REG_FP)), Some((X29, 8)));
+        assert_eq!(cs_reg_to_varnode(RegId(ARM64_REG_LR)), Some((X30, 8)));
+        assert_eq!(cs_reg_to_varnode(RegId(ARM64_REG_SP)), Some((SP, 8)));
+        assert_eq!(cs_reg_to_varnode(RegId(ARM64_REG_W0)), Some((X0, 4)));
+        assert_eq!(cs_reg_to_varnode(RegId(ARM64_REG_W28)), Some((X28, 4)));
+        assert_eq!(cs_reg_to_varnode(RegId(ARM64_REG_W29)), Some((X29, 4)));
+        assert_eq!(cs_reg_to_varnode(RegId(ARM64_REG_W30)), Some((X30, 4)));
+        assert_eq!(
+            reg_varnode(RegId(ARM64_REG_XZR)),
+            Some(Varnode::constant(0, 8))
+        );
+        assert_eq!(
+            reg_varnode(RegId(ARM64_REG_WZR)),
+            Some(Varnode::constant(0, 4))
+        );
+        assert!(is_zero_reg(RegId(ARM64_REG_XZR)));
+        assert!(is_w_reg(RegId(ARM64_REG_W30)));
+    }
+
+    fn assert_register(rf: &RegisterFile, name: &str, offset: u64, size: u8) {
+        let def = rf
+            .registers
+            .iter()
+            .find(|r| r.name == name)
+            .unwrap_or_else(|| panic!("missing register {name}"));
+        assert_eq!(def.varnode, Varnode::reg(offset, size), "{name}");
+    }
+
+    fn assert_unique_names(rf: &RegisterFile) {
+        let mut names = rf.registers.iter().map(|r| r.name).collect::<Vec<_>>();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(
+            names.len(),
+            rf.registers.len(),
+            "register names must be unique"
+        );
     }
 }

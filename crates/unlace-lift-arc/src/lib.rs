@@ -776,6 +776,35 @@ mod tests {
         assert_eq!(lifter().arch(), ArchId::Arc);
     }
 
+    #[test]
+    fn t360_arc_register_file_full_layout() {
+        let l = lifter();
+        let rf = l.register_file();
+        assert_eq!(rf.registers.len(), 68);
+        for i in 0..64u8 {
+            assert_register(rf, &format!("r{i}"), (i as u64) * 8, 4);
+        }
+        assert_register(rf, "STATUS32", 512, 4);
+        assert_register(rf, "BTA", 520, 4);
+        assert_register(rf, "LP_START", 528, 4);
+        assert_register(rf, "LP_END", 536, 4);
+        assert_eq!(reg(REG_SP), Varnode::reg(224, 4));
+        assert_eq!(reg(REG_BLINK), Varnode::reg(248, 4));
+        assert_unique_names(rf);
+    }
+
+    fn assert_register(rf: &RegisterFile, name: &str, offset: u64, size: u8) {
+        let def = rf.registers.iter().find(|r| r.name == name).unwrap();
+        assert_eq!(def.varnode, Varnode::reg(offset, size), "{name}");
+    }
+
+    fn assert_unique_names(rf: &RegisterFile) {
+        let mut names = rf.registers.iter().map(|r| r.name).collect::<Vec<_>>();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), rf.registers.len());
+    }
+
     // -- Helper tests --
 
     #[test]

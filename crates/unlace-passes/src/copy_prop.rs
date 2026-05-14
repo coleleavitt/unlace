@@ -83,7 +83,7 @@ fn resolve_chains(copy_map: &BTreeMap<Varnode, Varnode>) -> BTreeMap<Varnode, Va
     let mut resolved = BTreeMap::new();
     let limit = copy_map.len();
 
-    for (&target, _) in copy_map {
+    for &target in copy_map.keys() {
         let mut current = target;
         let mut depth = 0;
         while let Some(&source) = copy_map.get(&current) {

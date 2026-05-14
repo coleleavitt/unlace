@@ -7,6 +7,14 @@
 //! [`SsaFunction::frame_setup_insns`](unlace_ir::ssa::SsaFunction::frame_setup_insns)
 //! so the structurer and printer can skip them.
 
+// The scanners in this module use `for idx in i..end` index-loops because they
+// reach into `insns[idx-1]`, `insns[idx+1]`, etc. to inspect neighbouring
+// instructions — iterator-based forms would be substantially less readable.
+// They also assign to `i` before an early `return` to communicate the new
+// position to the outer driver; this is harmless because the loop exits
+// immediately after the assignment.
+#![allow(clippy::needless_range_loop, clippy::mut_range_bound)]
+
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
@@ -130,12 +138,10 @@ fn scan_push_rbp(
         } else {
             // Sometimes the decrement comes before the store.
             // Check if RSP decrement is at position si-1.
-            if si > 0 {
-                if let Some(_) = find_rsp_decrement(&insns[si - 1..si], 0, 8) {
-                    marked.insert((bid, si - 1));
-                    marked.insert((bid, si));
-                    i = si + 1;
-                }
+            if si > 0 && find_rsp_decrement(&insns[si - 1..si], 0, 8).is_some() {
+                marked.insert((bid, si - 1));
+                marked.insert((bid, si));
+                i = si + 1;
             }
         }
     }
@@ -158,7 +164,7 @@ fn scan_mov_rbp_rsp(
     let window_end = (i + 4).min(insns.len());
     for idx in i..window_end {
         let insn = &insns[idx];
-        let output_is_rbp = insn.output.map_or(false, |o| is_reg(&o, RBP));
+        let output_is_rbp = insn.output.is_some_and(|o| is_reg(&o, RBP));
 
         if output_is_rbp {
             let is_copy_rsp =
@@ -205,7 +211,7 @@ fn scan_stack_alloc(
     let window_end = (i + 4).min(insns.len());
     for idx in i..window_end {
         let insn = &insns[idx];
-        let output_is_rsp = insn.output.map_or(false, |o| is_reg(&o, RSP));
+        let output_is_rsp = insn.output.is_some_and(|o| is_reg(&o, RSP));
 
         if output_is_rsp
             && insn.op == IrOp::IntSub
@@ -250,13 +256,11 @@ fn scan_callee_saved_pushes(
                 continue;
             }
             // Also try: RSP -= 8 then STORE
-            if si > i {
-                if let Some(_) = find_rsp_decrement(&insns[si - 1..si], 0, 8) {
-                    marked.insert((bid, si - 1));
-                    marked.insert((bid, si));
-                    i = si + 1;
-                    continue;
-                }
+            if si > i && find_rsp_decrement(&insns[si - 1..si], 0, 8).is_some() {
+                marked.insert((bid, si - 1));
+                marked.insert((bid, si));
+                i = si + 1;
+                continue;
             }
         }
 
@@ -382,7 +386,7 @@ fn scan_epilogue_frame_restore(
 
     for idx in (scan_start..i).rev() {
         let insn = &insns[idx];
-        let output_is_rsp = insn.output.map_or(false, |o| is_reg(&o, RSP));
+        let output_is_rsp = insn.output.is_some_and(|o| is_reg(&o, RSP));
 
         // RSP = COPY(RBP) — first part of `leave`.
         if output_is_rsp
@@ -416,7 +420,7 @@ fn scan_epilogue_frame_restore(
     // RBP = LOAD(addr); RSP = RSP + 8
     for idx in (scan_start..i).rev() {
         let insn = &insns[idx];
-        let output_is_rbp = insn.output.map_or(false, |o| is_reg(&o, RBP));
+        let output_is_rbp = insn.output.is_some_and(|o| is_reg(&o, RBP));
 
         if output_is_rbp && insn.op == IrOp::Load {
             // Check next instruction for RSP += 8.
@@ -448,7 +452,7 @@ fn mark_pop_rbp_after(
         let insn = &insns[idx];
 
         // RBP = LOAD(addr) — loading saved RBP.
-        if insn.output.map_or(false, |o| is_reg(&o, RBP)) && insn.op == IrOp::Load {
+        if insn.output.is_some_and(|o| is_reg(&o, RBP)) && insn.op == IrOp::Load {
             marked.insert((bid, idx));
             continue;
         }
@@ -460,7 +464,7 @@ fn mark_pop_rbp_after(
         }
 
         // Any RSP adjustment via INT_ADD.
-        if insn.output.map_or(false, |o| is_reg(&o, RSP)) && insn.op == IrOp::IntAdd {
+        if insn.output.is_some_and(|o| is_reg(&o, RSP)) && insn.op == IrOp::IntAdd {
             marked.insert((bid, idx));
             continue;
         }
@@ -494,7 +498,7 @@ fn scan_epilogue_callee_restores(
 
             if is_rsp_increment(maybe_rsp, 8)
                 && maybe_load.op == IrOp::Load
-                && maybe_load.output.map_or(false, |o| is_callee_saved(&o))
+                && maybe_load.output.is_some_and(|o| is_callee_saved(&o))
             {
                 marked.insert((bid, idx - 2));
                 marked.insert((bid, idx - 1));
@@ -507,7 +511,7 @@ fn scan_epilogue_callee_restores(
         if idx >= 1 {
             let maybe_load = &insns[idx - 1];
             if maybe_load.op == IrOp::Load
-                && maybe_load.output.map_or(false, |o| is_callee_saved(&o))
+                && maybe_load.output.is_some_and(|o| is_callee_saved(&o))
             {
                 marked.insert((bid, idx - 1));
                 idx -= 1;
@@ -530,7 +534,7 @@ fn scan_epilogue_callee_restores(
 /// Check if instruction is `RSP = RSP + N` (or RSP = INT_ADD(RSP, N)).
 /// If `expected` is 0, any positive increment matches.
 fn is_rsp_increment(insn: &unlace_ir::IrInsn, expected: u64) -> bool {
-    let output_is_rsp = insn.output.map_or(false, |o| is_reg(&o, RSP));
+    let output_is_rsp = insn.output.is_some_and(|o| is_reg(&o, RSP));
     if !output_is_rsp || insn.op != IrOp::IntAdd || insn.inputs.len() != 2 {
         return false;
     }
@@ -586,17 +590,15 @@ fn find_rsp_decrement(insns: &[unlace_ir::IrInsn], start: usize, expected: u64) 
     let window = (start + 3).min(insns.len());
     for idx in start..window {
         let insn = &insns[idx];
-        let output_is_rsp = insn.output.map_or(false, |o| is_reg(&o, RSP));
+        let output_is_rsp = insn.output.is_some_and(|o| is_reg(&o, RSP));
         if output_is_rsp
             && insn.op == IrOp::IntSub
             && insn.inputs.len() == 2
             && is_reg(&insn.inputs[0], RSP)
             && is_const(&insn.inputs[1])
-        {
-            if expected == 0 || insn.inputs[1].offset == expected {
+            && (expected == 0 || insn.inputs[1].offset == expected) {
                 return Some(idx);
             }
-        }
     }
     None
 }
@@ -604,10 +606,10 @@ fn find_rsp_decrement(insns: &[unlace_ir::IrInsn], start: usize, expected: u64) 
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
-    use std::collections::BTreeMap;
+    
 
     use unlace_ir::ssa::{
-        CallingConvention, PhiNode, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot, build_ssa,
+        SsaFunction, build_ssa,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
@@ -640,6 +642,7 @@ mod tests {
     fn r14() -> Varnode {
         Varnode::reg(R14, 8)
     }
+    #[allow(dead_code)]
     fn rbx() -> Varnode {
         Varnode::reg(RBX, 8)
     }

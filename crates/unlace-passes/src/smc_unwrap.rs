@@ -121,8 +121,7 @@ pub fn detect_smc(func: &SsaFunction, code_section: (u64, u64)) -> Vec<SmcRewrit
 /// Patterns:
 ///   - operand is itself `Const`             → return its offset
 ///   - operand is SSA-defined by `INT_XOR`   → fold if both XOR operands
-///                                              are constants (directly or
-///                                              through their own SSA defs)
+///     are constants (directly or through their own SSA defs)
 fn resolve_constant_value(
     func: &SsaFunction,
     bid: BlockId,
@@ -192,10 +191,10 @@ fn resolve_operand_const(func: &SsaFunction, insn: &IrInsn, idx: usize) -> Optio
 /// `var_map` for the `(BlockId, insn_idx, Output)` entry whose value is
 /// `target`. Mirrors the helper in `algebraic_simplify` so this module
 /// stays self-contained.
-fn defining_insn<'a>(
-    func: &'a SsaFunction,
+fn defining_insn(
+    func: &SsaFunction,
     target: SsaVarnode,
-) -> Option<(BlockId, usize, &'a IrInsn)> {
+) -> Option<(BlockId, usize, &IrInsn)> {
     for (&(def_bid, def_idx, ref slot), &def_ssa) in &func.var_map {
         if !matches!(slot, VarnodeSlot::Output) || def_ssa != target {
             continue;

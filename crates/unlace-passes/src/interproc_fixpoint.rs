@@ -42,10 +42,11 @@ pub struct InterprocReport {
 fn snapshot_signatures(funcs: &BTreeMap<u64, SsaFunction>) -> FunctionSignatureRegistry {
     let mut out = BTreeMap::new();
     for (&addr, ssa) in funcs {
-        let mut sig = FunctionSignature::default();
-        sig.calling_convention = ssa.calling_convention;
-        sig.return_type = ssa.inferred_return_type;
-        sig.param_types = ssa.inferred_params.iter().map(|(_, ty)| *ty).collect();
+        let sig = FunctionSignature {
+            calling_convention: ssa.calling_convention,
+            return_type: ssa.inferred_return_type,
+            param_types: ssa.inferred_params.iter().map(|(_, ty)| *ty).collect(),
+        };
         out.insert(addr, sig);
     }
     out

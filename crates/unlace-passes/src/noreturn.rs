@@ -374,14 +374,12 @@ mod tests {
 
         // var_map entries for removed instructions should be gone
         assert!(
-            ssa.var_map
-                .get(&(BlockId(0), 2, VarnodeSlot::Input(0)))
-                .is_none()
+            !ssa.var_map
+                .contains_key(&(BlockId(0), 2, VarnodeSlot::Input(0)))
         );
         assert!(
-            ssa.var_map
-                .get(&(BlockId(0), 2, VarnodeSlot::Output))
-                .is_none()
+            !ssa.var_map
+                .contains_key(&(BlockId(0), 2, VarnodeSlot::Output))
         );
     }
 

@@ -1166,6 +1166,10 @@ fn try_bitfield_write_ordered(
     ))
 }
 
+// Commutative algebraic identities (e.g. `0 & x` vs `x & 0`, or `all_ones | x` vs
+// `x | all_ones`) are intentionally written as separate, readable arms — collapsing
+// them would lose the operand-symmetry documentation that mirrors the code comments.
+#[allow(clippy::if_same_then_else)]
 fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<IrInsn> {
     let output = insn.output?;
 
@@ -1206,11 +1210,7 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
                 Some(make_copy(insn, Varnode::constant(0, output.size)))
             } else if a == b && a.space != SpaceId::Const {
                 Some(make_copy(insn, a))
-            } else if let Some(r) = try_and_simplify(insn, &a, &b, def_map) {
-                Some(r)
-            } else {
-                None
-            }
+            } else { try_and_simplify(insn, &a, &b, def_map) }
         }
 
         // ── v | 0 → v, v | all_ones → all_ones, v | v → v ────────

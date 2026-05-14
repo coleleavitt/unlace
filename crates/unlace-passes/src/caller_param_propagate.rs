@@ -13,7 +13,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::{
-    CallingConvention, FunctionSignature, FunctionSignatureRegistry, PrimitiveType, SsaFunction,
+    CallingConvention, FunctionSignatureRegistry, PrimitiveType, SsaFunction,
     SsaVarnode, VarnodeSlot,
 };
 use unlace_ir::xref::CallGraph;
@@ -153,7 +153,7 @@ fn merge_into_registry(
 ) -> bool {
     let entry = registry
         .entry(callee_addr)
-        .or_insert_with(FunctionSignature::default);
+        .or_default();
 
     let mut changed = false;
     if entry.calling_convention == CallingConvention::Unknown && cc != CallingConvention::Unknown {
@@ -231,7 +231,7 @@ pub fn seed_registry_from_funcs(
     for (&addr, ssa) in funcs {
         let entry = registry
             .entry(addr)
-            .or_insert_with(FunctionSignature::default);
+            .or_default();
         if entry.calling_convention == CallingConvention::Unknown {
             entry.calling_convention = ssa.calling_convention;
         }
@@ -418,7 +418,7 @@ mod tests {
         let mut registry = FunctionSignatureRegistry::new();
         registry.insert(
             callee_addr,
-            FunctionSignature {
+            unlace_ir::ssa::FunctionSignature {
                 return_type: PrimitiveType::Unknown,
                 param_types: vec![PrimitiveType::Ptr],
                 calling_convention: CallingConvention::SystemV,

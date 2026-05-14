@@ -5,7 +5,7 @@
 //! to [`DeadCodeElimPass::run`] performs one sweep; the caller iterates to
 //! a fixed point for cascading removal.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use unlace_ir::IrOp;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
@@ -194,7 +194,7 @@ mod tests {
             go_defer_sites: Vec::new(),
             type_counterexamples: Vec::new(),
             cpp_variant_discriminants: Vec::new(),
-            go_defer_recover_calls: BTreeMap::new(),
+            go_defer_recover_calls: std::collections::BTreeMap::new(),
             cpp_lambda_captures: Vec::new(),
             seh_regions: Vec::new(),
             coroutine_sites: Vec::new(),

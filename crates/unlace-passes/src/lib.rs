@@ -349,7 +349,7 @@ mod tests {
     /// stop once the closure stops mutating type state.
     #[test]
     fn test_outer_fixedpoint_re_runs_on_type_changes() {
-        use unlace_ir::ssa::{PrimitiveType, SsaVarnode, VarnodeSlot};
+        use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 
         let r0 = Varnode::reg(0, 4);
         let r8 = Varnode::reg(8, 4);
@@ -359,13 +359,7 @@ mod tests {
 
         // Collect SSA varnodes (excluding the trailing Return's constant input)
         // so the cycle has fresh keys to add types for on each round.
-        let mut keys: Vec<SsaVarnode> = ssa
-            .var_map
-            .iter()
-            .filter_map(|((_, _, slot), sv)| match slot {
-                VarnodeSlot::Output | VarnodeSlot::Input(_) => Some(*sv),
-            })
-            .collect();
+        let mut keys: Vec<SsaVarnode> = ssa.var_map.values().copied().collect();
         keys.sort();
         keys.dedup();
         assert!(
@@ -417,7 +411,7 @@ mod tests {
     /// a runaway by perturbing a different `var_types` entry every round.
     #[test]
     fn test_outer_fixedpoint_iteration_cap_prevents_runaway() {
-        use unlace_ir::ssa::{PrimitiveType, SsaVarnode, VarnodeSlot};
+        use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 
         let r0 = Varnode::reg(0, 4);
         let r8 = Varnode::reg(8, 4);
@@ -428,10 +422,9 @@ mod tests {
         // Pick any SSA varnode we can keep flipping the type of.
         let any_sv: SsaVarnode = ssa
             .var_map
-            .iter()
-            .find_map(|((_, _, slot), sv)| match slot {
-                VarnodeSlot::Output | VarnodeSlot::Input(_) => Some(*sv),
-            })
+            .values()
+            .copied()
+            .next()
             .expect("at least one SSA varnode");
 
         let cap = 3;
@@ -496,7 +489,7 @@ mod tests {
     /// so the outer loop sees type-recovery progress as a "re-run me" signal.
     #[test]
     fn test_ssa_type_signature_reflects_var_types_changes() {
-        use unlace_ir::ssa::{PrimitiveType, SsaVarnode, VarnodeSlot};
+        use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 
         let r0 = Varnode::reg(0, 4);
         let r8 = Varnode::reg(8, 4);
@@ -508,10 +501,9 @@ mod tests {
 
         let any_sv: SsaVarnode = ssa
             .var_map
-            .iter()
-            .find_map(|((_, _, slot), sv)| match slot {
-                VarnodeSlot::Output | VarnodeSlot::Input(_) => Some(*sv),
-            })
+            .values()
+            .copied()
+            .next()
             .expect("at least one SSA varnode");
         ssa.var_types.insert(any_sv, PrimitiveType::Int(4));
 

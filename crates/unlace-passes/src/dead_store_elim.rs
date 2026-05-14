@@ -126,7 +126,7 @@ fn find_dead_ssa_defs(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
     // an input anywhere in the function, or as a phi input).
     let mut globally_used: BTreeSet<SsaVarnode> = BTreeSet::new();
 
-    for (&(_, _, ref slot), &sv) in &func.var_map {
+    for ((_, _, slot), &sv) in &func.var_map {
         if matches!(slot, VarnodeSlot::Input(_)) {
             globally_used.insert(sv);
         }

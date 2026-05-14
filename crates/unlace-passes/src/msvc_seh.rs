@@ -225,7 +225,7 @@ pub fn render_seh_region(region: &SehRegion) -> String {
     for bid in &region.try_blocks {
         out.push_str(&format!("    // {bid}\n"));
     }
-    out.push_str("}");
+    out.push('}');
 
     if let Some(filter_addr) = region.filter {
         out.push_str(&format!(" __except(filter_{filter_addr:#x}()) {{\n"));

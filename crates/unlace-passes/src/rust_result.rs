@@ -79,7 +79,7 @@ pub fn detect_rust_tagged_unions(func: &SsaFunction) -> Vec<RustTaggedUnion> {
         });
     }
 
-    results.sort_by(|a, b| a.base.cmp(&b.base));
+    results.sort_by_key(|a| a.base);
     results
 }
 

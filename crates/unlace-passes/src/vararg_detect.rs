@@ -20,7 +20,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::{
-    CallingConvention, FunctionSignature, FunctionSignatureRegistry, PrimitiveType, SsaFunction,
+    CallingConvention, FunctionSignatureRegistry, PrimitiveType, SsaFunction,
 };
 use unlace_ir::xref::CallGraph;
 use unlace_ir::{BlockId, IrOp, SpaceId};
@@ -94,7 +94,7 @@ pub fn detect_variadic_callees(
         if counts.len() > 1 {
             let entry = registry
                 .entry(callee)
-                .or_insert_with(FunctionSignature::default);
+                .or_default();
             // Set the *fixed* prefix to the smallest observed count.
             // Variadic-ness is signalled to downstream passes by the
             // mismatch between this prefix size and the observed
@@ -464,8 +464,8 @@ mod tests {
             let mut func = Function::new("c", BlockId(0), addr);
             let mut bb = BasicBlock::new(BlockId(0));
             let regs = [RDI, RSI, RDX];
-            for i in 0..n {
-                let r = Varnode::reg(regs[i], 8);
+            for (i, &reg) in regs.iter().take(n).enumerate() {
+                let r = Varnode::reg(reg, 8);
                 bb.insns.push(IrInsn::with_output(
                     IrOp::Copy,
                     r,

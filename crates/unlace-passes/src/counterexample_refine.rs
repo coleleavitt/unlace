@@ -65,7 +65,7 @@ fn propose_candidates(sv: &SsaVarnode, func: &SsaFunction) -> Vec<PrimitiveType>
 
     for block in func.function.blocks.values() {
         for insn in &block.insns {
-            let is_input = insn.inputs.iter().any(|inp| *inp == sv.base);
+            let is_input = insn.inputs.contains(&sv.base);
             if !is_input {
                 continue;
             }
@@ -123,11 +123,10 @@ fn verify_candidate(
                     return false;
                 }
             }
-            Constraint::Subtype(v, ty) if v == sv => {
-                if !types_compatible(candidate, ty) {
+            Constraint::Subtype(v, ty) if v == sv
+                && !types_compatible(candidate, ty) => {
                     return false;
                 }
-            }
             _ => {}
         }
     }

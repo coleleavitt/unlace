@@ -276,6 +276,7 @@ mod tests {
 
     use super::*;
 
+    #[allow(dead_code)]
     fn run_pass(func: Function) -> SsaFunction {
         let mut ssa = build_ssa(func);
         OpTypeBindingPass.run(&mut ssa).expect("pass run");

@@ -181,7 +181,7 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
     }
 
     // 3. Everything else: Temporary.
-    for (_, sv) in &func.var_map {
+    for sv in func.var_map.values() {
         roles.entry(*sv).or_insert(VarRole::Temporary);
     }
 

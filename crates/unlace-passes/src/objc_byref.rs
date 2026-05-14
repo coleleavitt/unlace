@@ -229,13 +229,8 @@ fn match_store_to_base(insn: &IrInsn, base: &Varnode) -> Option<ChildStore> {
 
     let offset = if addr == *base {
         0
-    } else if base.space == SpaceId::Const
-        && addr.space == SpaceId::Const
-        && addr.offset >= base.offset
-    {
-        addr.offset - base.offset
-    } else if base.space == SpaceId::Stack
-        && addr.space == SpaceId::Stack
+    } else if base.space == addr.space
+        && matches!(base.space, SpaceId::Const | SpaceId::Stack)
         && addr.offset >= base.offset
     {
         addr.offset - base.offset

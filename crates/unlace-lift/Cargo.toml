@@ -25,4 +25,5 @@ unlace-lift-xtensa = { workspace = true }
 unlace-lift-hexagon = { workspace = true }
 unlace-lift-amdgpu = { workspace = true }
 unlace-lift-sharc = { workspace = true }
+unlace-lift-ti = { workspace = true }
 thiserror = { workspace = true }

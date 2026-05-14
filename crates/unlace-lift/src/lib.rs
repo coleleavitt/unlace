@@ -36,6 +36,7 @@ pub use unlace_lift_sass::SassLifter;
 pub use unlace_lift_superh::SuperHLifter;
 pub use unlace_lift_tricore::TriCoreLifter;
 pub use unlace_lift_sharc::SharcBlackfinLifter;
+pub use unlace_lift_ti::TiLifter;
 pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_x86::X86Lifter;
 pub use unlace_lift_xtensa::XtensaLifter;
@@ -109,6 +110,8 @@ pub fn get_lifter_with_endian(arch: ArchId, endian: Option<LifterEndian>) -> Box
         ArchId::Hexagon => Box::new(HexagonLifter::new()),
         ArchId::AmdGpu => Box::new(AmdGpuLifter::new()),
         ArchId::SharcBlackfin => Box::new(SharcBlackfinLifter::new()),
+        ArchId::TiC6x => Box::new(TiLifter::new_c6x()),
+        ArchId::TiC28x => Box::new(TiLifter::new_c28x()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -216,6 +219,13 @@ mod tests {
         let l = get_lifter(ArchId::SharcBlackfin);
         assert_eq!(l.arch(), ArchId::SharcBlackfin);
         assert!(!l.register_file().registers.is_empty());
+    fn test_get_lifter_ti() {
+        let c6x = get_lifter(ArchId::TiC6x);
+        assert_eq!(c6x.arch(), ArchId::TiC6x);
+        assert!(!c6x.register_file().registers.is_empty());
+        let c28x = get_lifter(ArchId::TiC28x);
+        assert_eq!(c28x.arch(), ArchId::TiC28x);
+        assert!(!c28x.register_file().registers.is_empty());
     }
 
     #[test]

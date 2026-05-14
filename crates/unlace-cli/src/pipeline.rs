@@ -996,6 +996,9 @@ pub fn run_passes_with_report_and_image(
     VarNamingPass
         .run(ssa)
         .context("var naming pass failed")?;
+    VarNamingPass
+        .run(ssa)
+        .context("var naming pass failed")?;
 
     // t230 — calling-convention finalization. Runs last so the
     // dead-param drop, byte-mask narrowing, and caller-side
@@ -1623,6 +1626,7 @@ pub fn decompile_function_with_symbols(
     printer_annotations.objc_classes = objc_info.classes.into_values().collect();
     printer_annotations.go_interfaces = image.go_types.clone();
     if let Some(swift_info) = &image.swift_info {
+    if let Some(swift_info) = image.swift_info.as_ref() {
         printer_annotations.swift_conformances = swift_info.conformances.clone();
     }
     printer_annotations.libc_call_canonical = libc_call_canonical;
@@ -1978,6 +1982,7 @@ mod tests {
         pdb_types: None,
         pdb_types: None,
             pdb_info: None,
+        pdb_types: None,
         pdb_types: None,
         pdb_types: None,
         pdb_types: None,

@@ -38,6 +38,7 @@ pub mod til;
 pub mod uefi_module;
 pub mod wasm_component;
 pub mod sbpf_evm;
+pub mod wasm_wit;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,

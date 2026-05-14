@@ -8,7 +8,7 @@ use crate::register_file::cr;
 /// CMPW: signed 32-bit compare → set CR field.
 /// Emits IntSless(a, b) → CR (simplified: full CR field encoding deferred).
 pub fn lift_cmpw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
-    let (ra, rb) = match extract_cmp_operands(ops) {
+    let (ra, rb) = match extract_cmp_operands(ctx, ops) {
         Some(pair) => pair,
         None => return ctx.emit_unimplemented(),
     };
@@ -37,7 +37,7 @@ pub fn lift_cmpw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
 
 /// CMPLW: unsigned 32-bit compare.
 pub fn lift_cmplw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
-    let (ra, rb) = match extract_cmp_operands(ops) {
+    let (ra, rb) = match extract_cmp_operands(ctx, ops) {
         Some(pair) => pair,
         None => return ctx.emit_unimplemented(),
     };
@@ -64,16 +64,16 @@ pub fn lift_cmplw(ctx: &mut LiftCtx, ops: &[PpcOperand]) {
     ));
 }
 
-fn extract_cmp_operands(ops: &[PpcOperand]) -> Option<(Varnode, Varnode)> {
+fn extract_cmp_operands(ctx: &LiftCtx, ops: &[PpcOperand]) -> Option<(Varnode, Varnode)> {
     // Capstone may emit: cmpw crX, rA, rB  (3 ops with CRX first)
     //                 or: cmpw rA, rB       (2 ops, CR0 implied)
     if ops.len() >= 3 {
-        let ra = operand_reg(&ops[1])?;
-        let rb = operand_reg(&ops[2])?;
+        let ra = operand_reg(ctx, &ops[1])?;
+        let rb = operand_reg(ctx, &ops[2])?;
         Some((ra, rb))
     } else if ops.len() == 2 {
-        let ra = operand_reg(&ops[0])?;
-        let rb = operand_reg(&ops[1])?;
+        let ra = operand_reg(ctx, &ops[0])?;
+        let rb = operand_reg(ctx, &ops[1])?;
         Some((ra, rb))
     } else {
         None

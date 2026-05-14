@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
 
 use unlace_ir::ArchId;
-use unlace_lift::get_lifter;
+use unlace_lift::{LifterEndian, get_lifter_with_endian};
 use unlace_loader::{
     BinaryImage, DwarfInfo, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf,
 };
@@ -155,7 +155,13 @@ fn decompile_all_parallel(
     dwarf: Option<&DwarfInfo>,
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Vec<BatchResult> {
-    let lifter = get_lifter(image.arch);
+    let lifter = get_lifter_with_endian(
+        image.arch,
+        Some(match image.endian {
+            unlace_loader::Endian::Little => LifterEndian::Little,
+            unlace_loader::Endian::Big => LifterEndian::Big,
+        }),
+    );
     let pipeline_config = PipelineConfig {
         timeout: std::time::Duration::from_secs(config.timeout_secs),
         print_config: None,

@@ -4,7 +4,7 @@ pub mod lift;
 mod ops;
 pub mod register_file;
 
-pub use lift::PpcLifter;
+pub use lift::{PpcEndian, PpcLifter, PpcMode};
 
 #[cfg(test)]
 mod tests {
@@ -27,6 +27,12 @@ mod tests {
 
     fn lifter64_le() -> PpcLifter {
         PpcLifter::new_ppc64_le()
+        PpcLifter::new()
+        PpcLifter::ppc32_be()
+    }
+
+    fn lifter64() -> PpcLifter {
+        PpcLifter::ppc64_be()
     }
 
     #[test]
@@ -174,10 +180,19 @@ mod tests {
 
     #[test]
     fn test_lwz() {
-        // 80 61 00 08 = lwz r3, 8(r1)
+        // 80 61 00 08 = lwz r3, 8(r1); in PPC32, word loads already match GPR width.
         let result = lifter()
             .lift_insn(&[0x80, 0x61, 0x00, 0x08], 0x1000_0000)
             .expect("should decode LWZ");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_ppc64_lwz_zero_extends_word() {
+        let result = lifter64()
+            .lift_insn(&[0x80, 0x61, 0x00, 0x08], 0x1000_0000)
+            .expect("should decode PPC64 LWZ");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntZext));
     }
@@ -185,7 +200,7 @@ mod tests {
     #[test]
     fn test_ld() {
         // e8 61 00 08 = ld r3, 8(r1)
-        let result = lifter()
+        let result = lifter64()
             .lift_insn(&[0xe8, 0x61, 0x00, 0x08], 0x1000_0000)
             .expect("should decode LD");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
@@ -203,7 +218,7 @@ mod tests {
     #[test]
     fn test_std() {
         // f8 61 00 08 = std r3, 8(r1)
-        let result = lifter()
+        let result = lifter64()
             .lift_insn(&[0xf8, 0x61, 0x00, 0x08], 0x1000_0000)
             .expect("should decode STD");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
@@ -288,6 +303,33 @@ mod tests {
             .lift_insn(&[0x7c, 0x68, 0x03, 0xa6], 0x1000_0000)
             .expect("should decode MTLR");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_ppc32_little_endian_decode() {
+        // Little-endian encoding of 38 60 00 2a = li r3, 42.
+        let result = PpcLifter::ppc32_le()
+            .lift_insn(&[0x2a, 0x00, 0x60, 0x38], 0x1000_0000)
+            .expect("should decode little-endian PPC32 LI");
+        assert_eq!(result.len, 4);
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_ppc64_arch_and_register_width() {
+        let l = PpcLifter::ppc64_be();
+        assert_eq!(l.arch(), ArchId::Ppc64);
+        assert_eq!(l.register_file().registers[0].varnode.size, 8);
+    }
+
+    #[test]
+    fn test_ppc64_lwa_sign_extends_word() {
+        // e8 61 00 0a = lwa r3, 8(r1) (DS-form low two bits ignored by ISA).
+        let result = lifter64()
+            .lift_insn(&[0xe8, 0x61, 0x00, 0x0a], 0x1000_0000)
+            .expect("should decode LWA");
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
     }
 
     #[test]

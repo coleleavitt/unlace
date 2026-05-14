@@ -18,6 +18,7 @@ members = [
     "crates/unlace-lift-z80",
     "crates/unlace-lift-rx",
     "crates/unlace-lift-sparc",
+    "crates/unlace-lift-superh",
     "crates/unlace-lift-agx",
     "crates/unlace-lift-m68k",
     "crates/unlace-lift-sh",

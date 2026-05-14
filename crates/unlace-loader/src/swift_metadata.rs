@@ -214,6 +214,9 @@ fn read_u16_le(data: &[u8], offset: usize) -> Option<u16> {
     }
     let bytes: [u8; 2] = data[offset..end].try_into().ok()?;
     Some(u16::from_le_bytes(bytes))
+    image.sections.iter().find(|s| {
+        s.name == name || s.name.ends_with(name) || s.name.ends_with(&format!(",{name}"))
+    })
 }
 
 /// Read a 32-bit little-endian word at `offset` within `data`, or

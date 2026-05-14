@@ -4683,6 +4683,12 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                                     .collect::<Vec<_>>()
                                     .join(", ")
                             );
+                            let _ = writeln!(
+                                out,
+                                "case 0x{:X}u:  /* \"{}\" */",
+                                v,
+                                s.escape_default()
+                            );
                         } else {
                             let _ = writeln!(out, "case {}:", v);
                         }

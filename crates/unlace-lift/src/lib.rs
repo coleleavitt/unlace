@@ -35,6 +35,7 @@ pub use unlace_lift_riscv::RiscVLifter;
 pub use unlace_lift_sass::SassLifter;
 pub use unlace_lift_superh::SuperHLifter;
 pub use unlace_lift_tricore::TriCoreLifter;
+pub use unlace_lift_sharc::SharcBlackfinLifter;
 pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_x86::X86Lifter;
 pub use unlace_lift_xtensa::XtensaLifter;
@@ -107,6 +108,7 @@ pub fn get_lifter_with_endian(arch: ArchId, endian: Option<LifterEndian>) -> Box
         ArchId::Xtensa => Box::new(XtensaLifter::new()),
         ArchId::Hexagon => Box::new(HexagonLifter::new()),
         ArchId::AmdGpu => Box::new(AmdGpuLifter::new()),
+        ArchId::SharcBlackfin => Box::new(SharcBlackfinLifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -210,6 +212,9 @@ mod tests {
     fn test_get_lifter_amdgpu() {
         let l = get_lifter(ArchId::AmdGpu);
         assert_eq!(l.arch(), ArchId::AmdGpu);
+    fn test_get_lifter_sharc_blackfin() {
+        let l = get_lifter(ArchId::SharcBlackfin);
+        assert_eq!(l.arch(), ArchId::SharcBlackfin);
         assert!(!l.register_file().registers.is_empty());
     }
 

@@ -70,6 +70,7 @@ pub fn parse_arch(s: &str) -> Result<ArchId> {
         "xtensa" | "esp32" | "esp8266" | "lx6" | "lx106" => Ok(ArchId::Xtensa),
         "tricore" | "tc" | "tc1" | "tc1.6" | "tc1.6.2" => Ok(ArchId::TriCore),
         "amdgpu" | "amd-gpu" | "gcn" | "rdna" => Ok(ArchId::AmdGpu),
+        "sharc" | "blackfin" | "bfin" | "sharc-blackfin" | "adsp" => Ok(ArchId::SharcBlackfin),
         _ => bail!("unknown architecture: '{s}'"),
     }
 }

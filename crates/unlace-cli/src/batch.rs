@@ -81,6 +81,7 @@ pub fn run_batch(
             | ArchId::Xtensa
             | ArchId::TriCore
             | ArchId::AmdGpu
+            | ArchId::SharcBlackfin
             | ArchId::Ppc
             | ArchId::Ppc64
             | ArchId::Sbpf

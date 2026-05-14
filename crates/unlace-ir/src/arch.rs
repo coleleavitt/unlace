@@ -59,6 +59,7 @@ pub enum ArchId {
     SpirV,
     AppleAgx,
     Msp430,
+    SharcBlackfin,
     Unknown(u16),
 }
 
@@ -118,6 +119,7 @@ impl fmt::Display for ArchId {
             Self::SpirV => f.write_str("spirv"),
             Self::AppleAgx => f.write_str("appleagx"),
             Self::Msp430 => f.write_str("msp430"),
+            Self::SharcBlackfin => f.write_str("sharc-blackfin"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }
     }

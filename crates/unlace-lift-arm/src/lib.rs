@@ -69,6 +69,23 @@ use crate::lift::{
         CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
         decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
         decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
+        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
+        CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
+        CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
+        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
+        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
+        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
+        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
+        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ARM_MVE_PRED_OFFSET, ARM_MVE_PRED_SIZE,
+        ARM_MVE_Q_SIZE, ArmLiftMode, CALLOTHER_AARCH64_CCMP, CALLOTHER_ARM_MVE_VADD,
+        CALLOTHER_ARM_MVE_VCTP, CALLOTHER_ARM_MVE_VLD, CALLOTHER_ARM_MVE_VMOV,
+        CALLOTHER_ARM_MVE_VMUL, CALLOTHER_ARM_MVE_VST, CALLOTHER_ARM_MVE_VSUB, CALLOTHER_ARM_QADD,
+        CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV, CALLOTHER_ARM_REV16,
+        CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16, CALLOTHER_ARM_UQADD8,
+        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
+        CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, arm_mve_q_offset, decode_arm_ldm_stm,
+        decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop, decode_thumb2_ldm_stm,
+        expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
     };
     use crate::lift::{
         ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
@@ -3768,5 +3785,43 @@ use crate::lift::{
             .find(|i| i.op == IrOp::Callother)
             .expect("ARM32 HVC should emit Callother");
         assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_HVC);
+    // ── t316: ARM Helium / MVE scaffolding tests ─────────────────────
+
+    #[test]
+    fn arch_id_thumb_mve_constructor() {
+        let l = ArmLifter::new_thumb_mve();
+        assert_eq!(l.arch(), ArchId::Arm);
+        assert_eq!(l.mode(), ArmLiftMode::ThumbMve);
+    }
+
+    #[test]
+    fn thumb_mve_register_file_exposes_q_and_vpr() {
+        let lifter = ArmLifter::new_thumb_mve();
+        let rf = lifter.register_file();
+        let q3 = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "Q3")
+            .expect("Q3 reg");
+        assert_eq!(q3.varnode.offset, arm_mve_q_offset(3));
+        assert_eq!(q3.varnode.size, ARM_MVE_Q_SIZE);
+        let vpr = rf
+            .registers
+            .iter()
+            .find(|r| r.name == "VPR")
+            .expect("VPR reg");
+        assert_eq!(vpr.varnode.offset, ARM_MVE_PRED_OFFSET);
+        assert_eq!(vpr.varnode.size, ARM_MVE_PRED_SIZE);
+    }
+
+    #[test]
+    fn mve_callother_tags_are_stable() {
+        assert_eq!(CALLOTHER_ARM_MVE_VADD, 0x430);
+        assert_eq!(CALLOTHER_ARM_MVE_VSUB, 0x431);
+        assert_eq!(CALLOTHER_ARM_MVE_VMUL, 0x432);
+        assert_eq!(CALLOTHER_ARM_MVE_VLD, 0x433);
+        assert_eq!(CALLOTHER_ARM_MVE_VST, 0x434);
+        assert_eq!(CALLOTHER_ARM_MVE_VCTP, 0x435);
+        assert_eq!(CALLOTHER_ARM_MVE_VMOV, 0x436);
     }
 }

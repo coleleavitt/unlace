@@ -41,6 +41,13 @@ pub enum ArmLiftMode {
     Aarch64,
     Arm32,
     Thumb,
+    /// Thumb-2 + M-profile Vector Extension (Helium / MVE) profile.
+    ///
+    /// Today this shares the Thumb decoder/lifter pipeline with a small
+    /// MVE interceptor for the core vector ALU / load / store / predicate
+    /// families we can recognise from Capstone. Everything else falls back
+    /// to the normal Thumb path.
+    ThumbMve,
 }
 
 pub struct ArmLifter {
@@ -90,6 +97,19 @@ impl ArmLifter {
         Self {
             reg_file: arm32_register_file(),
             mode: ArmLiftMode::Thumb,
+            it_state: Mutex::new(None),
+        }
+    }
+
+    /// Thumb + Helium/MVE scaffold for Cortex-M profile binaries.
+    ///
+    /// Reuses the Thumb register file and IT-state handling, but enables
+    /// an MVE pre-dispatch that lowers recognised vector instructions to
+    /// dedicated Callother intrinsics before the generic Thumb decoder runs.
+    pub fn new_thumb_mve() -> Self {
+        Self {
+            reg_file: arm32_register_file_with_mve(),
+            mode: ArmLiftMode::ThumbMve,
             it_state: Mutex::new(None),
         }
     }
@@ -146,7 +166,7 @@ impl Lifter for ArmLifter {
         // `unlace-lift::get_lifter` and the ELF/PE/Mach-O machine maps).
         match self.mode {
             ArmLiftMode::Aarch64 => ArchId::AArch64,
-            ArmLiftMode::Arm32 | ArmLiftMode::Thumb => ArchId::Arm,
+            ArmLiftMode::Arm32 | ArmLiftMode::Thumb | ArmLiftMode::ThumbMve => ArchId::Arm,
         }
     }
 
@@ -155,6 +175,7 @@ impl Lifter for ArmLifter {
             ArmLiftMode::Aarch64 => self.lift_aarch64(bytes, addr),
             ArmLiftMode::Arm32 => self.lift_arm32(bytes, addr),
             ArmLiftMode::Thumb => self.lift_thumb(bytes, addr),
+            ArmLiftMode::ThumbMve => self.lift_thumb_mve(bytes, addr),
         }
     }
 
@@ -351,6 +372,37 @@ impl ArmLifter {
         Ok(lifted)
     }
 
+    fn lift_thumb_mve(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
+        if bytes.len() < 2 {
+            return Err(LiftError::ShortBuffer);
+        }
+        let half = u16::from_le_bytes([bytes[0], bytes[1]]);
+        if let Some(state) = decode_it(half) {
+            if let Ok(mut guard) = self.it_state.lock() {
+                *guard = Some(state);
+            }
+            return Ok(LiftedInsn {
+                ir_ops: Vec::new(),
+                len: 2,
+            });
+        }
+
+        // Prefer an MVE-specific lowering before the generic Thumb path.
+        // The generic Thumb lifter still owns IT-state consumption and all
+        // fallback decode cases.
+        if let Some((mut lifted, capstone_cc)) = self.try_lift_mve(bytes, addr)? {
+            let pending_cond = self.pop_pending_it_cond();
+            let effective_cond = match (pending_cond, capstone_cc) {
+                (Some(_), Some(cs_cc)) => Some(cs_cc),
+                (manual, _) => manual,
+            };
+            apply_guard(&mut lifted.ir_ops, effective_cond);
+            return Ok(lifted);
+        }
+
+        self.lift_thumb(bytes, addr)
+    }
+
     /// Pop the head condition off the active IT-block, if any. Returns
     /// `None` once the block is exhausted (and clears the slot).
     fn pop_pending_it_cond(&self) -> Option<u8> {
@@ -376,6 +428,58 @@ impl ArmLifter {
 /// etc.) by assigning them the same register-space offsets at 8-byte width.
 /// This gives the lifter a stable place to write 32-bit and 64-bit VFP values
 /// while preserving overlap for downstream analyses.
+/// r15=PC) plus an APSR slot for the condition flags. Mirrors the layout
+/// `expand_reg_list` produces (`u8` register numbers 0..15) so a `Varnode`
+/// can be derived as `Varnode::reg(reg_num * 4, 4)`.
+/// r15=PC) plus an APSR slot for the condition flags. Mirrors the layout
+/// `expand_reg_list` produces (`u8` register numbers 0..15) so a `Varnode`
+/// can be derived as `Varnode::reg(reg_num * 4, 4)`.
+pub fn arm32_register_file_with_mve() -> RegisterFile {
+    use unlace_ir::RegisterDef;
+    let mut rf = arm32_register_file();
+    for i in 0..8u8 {
+        let name = Box::leak(format!("Q{i}").into_boxed_str());
+        rf.registers.push(RegisterDef {
+            name,
+            varnode: arm_mve_q_varnode(i),
+        });
+    }
+    rf.registers.push(RegisterDef {
+        name: "VPR",
+        varnode: arm_mve_pred_varnode(),
+    });
+    rf
+}
+
+pub const ARM_MVE_Q_BASE: u64 = 68;
+pub const ARM_MVE_Q_SIZE: u8 = 16;
+pub const ARM_MVE_PRED_OFFSET: u64 = ARM_MVE_Q_BASE + 8 * ARM_MVE_Q_SIZE as u64;
+pub const ARM_MVE_PRED_SIZE: u8 = 2;
+
+pub const fn arm_mve_q_offset(n: u8) -> u64 {
+    ARM_MVE_Q_BASE + (n as u64) * ARM_MVE_Q_SIZE as u64
+}
+
+pub fn arm_mve_pred_varnode() -> Varnode {
+    Varnode::reg(ARM_MVE_PRED_OFFSET, ARM_MVE_PRED_SIZE)
+}
+
+fn arm_mve_q_index(reg: capstone::RegId) -> Option<u8> {
+    let raw = reg.0 as u32;
+    let name = match raw {
+        x if x == ArmReg::ARM_REG_Q0 => "Q0",
+        x if x == ArmReg::ARM_REG_Q1 => "Q1",
+        x if x == ArmReg::ARM_REG_Q2 => "Q2",
+        x if x == ArmReg::ARM_REG_Q3 => "Q3",
+        x if x == ArmReg::ARM_REG_Q4 => "Q4",
+        x if x == ArmReg::ARM_REG_Q5 => "Q5",
+        x if x == ArmReg::ARM_REG_Q6 => "Q6",
+        x if x == ArmReg::ARM_REG_Q7 => "Q7",
+        _ => return None,
+    };
+    Some(name[1..].parse().ok()?)
+}
+
 pub fn arm32_register_file() -> RegisterFile {
     use unlace_ir::RegisterDef;
     const NAMES: [&str; 16] = [
@@ -385,6 +489,8 @@ pub fn arm32_register_file() -> RegisterFile {
         "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
         "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
     const GPR_NAMES: [&str; 16] = [
+        "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
+        "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
         "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7",
         "R8", "R9", "R10", "R11", "R12", "SP", "LR", "PC",
     ];
@@ -2625,6 +2731,15 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_MUL if aarch64_is_sve_form(detail) => {
             emit_aarch64_sve_arith(ctx, detail, CALLOTHER_SVE_MUL)
         }
+        Arm64Insn::ARM64_INS_FADD => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FADD)
+        }
+        Arm64Insn::ARM64_INS_FSUB => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FSUB)
+        }
+        Arm64Insn::ARM64_INS_FMUL => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FMUL)
+        }
         Arm64Insn::ARM64_INS_ADD => arithmetic::lift_add(ctx, &ops),
         Arm64Insn::ARM64_INS_SUB => arithmetic::lift_sub(ctx, &ops),
         Arm64Insn::ARM64_INS_ADDS => arithmetic::lift_adds(ctx, &ops),
@@ -3836,6 +3951,160 @@ pub const CALLOTHER_SVE_AND_PRED: u64 = 0x428;
 /// SVE PTRUE — set predicate to all-true for element size.
 pub const CALLOTHER_SVE_PTRUE: u64 = 0x429;
 
+// ── t316 — ARM Helium / MVE Callother tags (0x430..0x436) ───────────
+/// MVE integer vector add (`VADD*`). Inputs: tag, qd, qn, qm.
+pub const CALLOTHER_ARM_MVE_VADD: u64 = 0x430;
+/// MVE integer vector subtract (`VSUB*`). Inputs: tag, qd, qn, qm.
+pub const CALLOTHER_ARM_MVE_VSUB: u64 = 0x431;
+/// MVE integer/fixed-point vector multiply (`VMUL*`). Inputs: tag, qd, qn, qm.
+pub const CALLOTHER_ARM_MVE_VMUL: u64 = 0x432;
+/// MVE predicated vector load (`VLD*`). Inputs: tag, qd, base.
+pub const CALLOTHER_ARM_MVE_VLD: u64 = 0x433;
+/// MVE predicated vector store (`VST*`). Inputs: tag, qd_or_qm, base.
+pub const CALLOTHER_ARM_MVE_VST: u64 = 0x434;
+/// MVE vector predicate-mask create / count-to-predicate (`VCTP*`). Inputs: tag, gp_count.
+pub const CALLOTHER_ARM_MVE_VCTP: u64 = 0x435;
+/// MVE vector move / ORR-style register copy (`VMOV`/`VORR qd, qn, qm` aliases when they
+/// act as a lane-preserving data move). Inputs: tag, qd, src[, qm].
+pub const CALLOTHER_ARM_MVE_VMOV: u64 = 0x436;
+
+fn arm_mve_q_varnode(index: u8) -> Varnode {
+    Varnode::reg(arm_mve_q_offset(index), ARM_MVE_Q_SIZE)
+}
+
+fn arm_mve_operand_to_varnode(ctx: &mut LiftCtx, op_type: &ArmOperandType) -> Option<Varnode> {
+    match op_type {
+        ArmOperandType::Reg(reg) => arm_mve_q_index(*reg)
+            .map(arm_mve_q_varnode)
+            .or_else(|| arm32_reg_index(*reg).map(arm32_reg_varnode)),
+        _ => arm32_operand_to_varnode(ctx, op_type),
+    }
+}
+
+fn arm_mve_emit_callother(ctx: &mut LiftCtx, tag: u64, dst: Option<Varnode>, operands: &[Varnode]) {
+    let mut inputs = smallvec![Varnode::constant(tag, 8)];
+    inputs.extend_from_slice(operands);
+    if let Some(dst) = dst {
+        ctx.emit(IrInsn::with_output(IrOp::Callother, dst, inputs, ctx.addr));
+    } else {
+        ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
+    }
+}
+
+fn is_mve_mnemonic(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    upper.starts_with('V')
+        && (upper.starts_with("VADD")
+            || upper.starts_with("VSUB")
+            || upper.starts_with("VMUL")
+            || upper.starts_with("VLD")
+            || upper.starts_with("VST")
+            || upper.starts_with("VCTP")
+            || upper.starts_with("VMOV")
+            || upper.starts_with("VORR"))
+}
+
+fn arm_mve_tag_for_mnemonic(name: &str) -> Option<u64> {
+    let upper = name.to_ascii_uppercase();
+    if upper.starts_with("VADD") {
+        Some(CALLOTHER_ARM_MVE_VADD)
+    } else if upper.starts_with("VSUB") {
+        Some(CALLOTHER_ARM_MVE_VSUB)
+    } else if upper.starts_with("VMUL") {
+        Some(CALLOTHER_ARM_MVE_VMUL)
+    } else if upper.starts_with("VLD") {
+        Some(CALLOTHER_ARM_MVE_VLD)
+    } else if upper.starts_with("VST") {
+        Some(CALLOTHER_ARM_MVE_VST)
+    } else if upper.starts_with("VCTP") {
+        Some(CALLOTHER_ARM_MVE_VCTP)
+    } else if upper.starts_with("VMOV") || upper.starts_with("VORR") {
+        Some(CALLOTHER_ARM_MVE_VMOV)
+    } else {
+        None
+    }
+}
+
+fn emit_arm_mve_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) -> bool {
+    let mnemonic = insn.mnemonic().unwrap_or_default();
+    let Some(tag) = arm_mve_tag_for_mnemonic(mnemonic) else {
+        return false;
+    };
+    let ops = arm32_operands(detail);
+
+    match tag {
+        CALLOTHER_ARM_MVE_VADD | CALLOTHER_ARM_MVE_VSUB | CALLOTHER_ARM_MVE_VMUL => {
+            let Some(ArmOperandType::Reg(dst_reg)) = ops.first() else {
+                return false;
+            };
+            let Some(dst_q) = arm_mve_q_index(*dst_reg) else {
+                return false;
+            };
+            let Some(src0) = ops.get(1).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
+                return false;
+            };
+            let Some(src1) = ops.get(2).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
+                return false;
+            };
+            let dst = arm_mve_q_varnode(dst_q);
+            arm_mve_emit_callother(ctx, tag, Some(dst), &[dst, src0, src1]);
+            true
+        }
+        CALLOTHER_ARM_MVE_VLD => {
+            let Some(ArmOperandType::Reg(dst_reg)) = ops.first() else {
+                return false;
+            };
+            let Some(dst_q) = arm_mve_q_index(*dst_reg) else {
+                return false;
+            };
+            let Some(base) = ops.get(1).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
+                return false;
+            };
+            let dst = arm_mve_q_varnode(dst_q);
+            arm_mve_emit_callother(ctx, tag, Some(dst), &[dst, base]);
+            true
+        }
+        CALLOTHER_ARM_MVE_VST => {
+            let Some(src) = ops.first().and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
+                return false;
+            };
+            let Some(base) = ops.get(1).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
+                return false;
+            };
+            arm_mve_emit_callother(ctx, tag, None, &[src, base]);
+            true
+        }
+        CALLOTHER_ARM_MVE_VCTP => {
+            let Some(gp_count) = ops.first().and_then(|o| arm_mve_operand_to_varnode(ctx, o))
+            else {
+                return false;
+            };
+            let dst = arm_mve_pred_varnode();
+            arm_mve_emit_callother(ctx, tag, Some(dst), &[gp_count]);
+            true
+        }
+        CALLOTHER_ARM_MVE_VMOV => {
+            let Some(ArmOperandType::Reg(dst_reg)) = ops.first() else {
+                return false;
+            };
+            let Some(dst_q) = arm_mve_q_index(*dst_reg) else {
+                return false;
+            };
+            let Some(src0) = ops.get(1).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) else {
+                return false;
+            };
+            let dst = arm_mve_q_varnode(dst_q);
+            let mut extras = vec![dst, src0];
+            if let Some(src1) = ops.get(2).and_then(|o| arm_mve_operand_to_varnode(ctx, o)) {
+                extras.push(src1);
+            }
+            arm_mve_emit_callother(ctx, tag, Some(dst), &extras);
+            true
+        }
+        _ => false,
+    }
+}
+
 /// Emit a generic SVE `Callother` intrinsic.
 ///
 /// Layout: `Callother(tag, pg_index, zd_index, operands…) → void`.
@@ -3843,6 +4112,54 @@ pub const CALLOTHER_SVE_PTRUE: u64 = 0x429;
 /// the tag so downstream passes know which predicate governs the lane
 /// mask.  For non-predicated operations (e.g. `PTRUE`), `pg` should be
 /// 0xFF (sentinel meaning "all lanes").
+fn mve_capstone_cc(detail: &InsnDetail) -> Option<u8> {
+    capstone_arm_cc_to_raw(detail)
+}
+
+impl ArmLifter {
+    fn try_lift_mve(
+        &self,
+        bytes: &[u8],
+        addr: u64,
+    ) -> Result<Option<(LiftedInsn, Option<u8>)>, LiftError> {
+        THUMB_CS.with(|cell| {
+            let mut slot = cell.borrow_mut();
+            if slot.is_none() {
+                *slot = Some(Self::make_capstone_thumb());
+            }
+            let cs = slot
+                .as_ref()
+                .expect("thread-local Capstone thumb initialized");
+            let insns = match cs.disasm_count(bytes, addr, 1) {
+                Ok(insns) => insns,
+                Err(_) => return Ok(None),
+            };
+            let Some(insn) = insns.as_ref().first() else {
+                return Ok(None);
+            };
+            let detail = match cs.insn_detail(insn) {
+                Ok(detail) => detail,
+                Err(_) => return Ok(None),
+            };
+            let mnemonic = insn.mnemonic().unwrap_or_default();
+            if !is_mve_mnemonic(mnemonic) {
+                return Ok(None);
+            }
+            let mut ctx = LiftCtx::new(addr);
+            if !emit_arm_mve_mnemonic(&mut ctx, insn, &detail) {
+                return Ok(None);
+            }
+            Ok(Some((
+                LiftedInsn {
+                    ir_ops: ctx.ops,
+                    len: insn.len(),
+                },
+                mve_capstone_cc(&detail),
+            )))
+        })
+    }
+}
+
 pub fn emit_sve_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varnode]) {
     let mut inputs: smallvec::SmallVec<[Varnode; 3]> =
         smallvec::smallvec![Varnode::constant(tag, 8), Varnode::constant(pg as u64, 1),];

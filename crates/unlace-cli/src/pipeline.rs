@@ -1500,6 +1500,11 @@ pub fn decompile_function_with_symbols(
 
     let t = Instant::now();
     let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
+    // Batch 2: tag the SSA function with its target arch so stack-recovery
+    // passes consult the right [`unlace_ir::stack::StackSpec`]. Previously
+    // every non-x86 binary fell through to a hard-coded RSP=32 lookup and
+    // produced `stack_vars.len() == 0`.
+    ssa.arch = image.arch;
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
         "build_ssa done"

@@ -254,6 +254,7 @@ mod tests {
         let dom_tree = trivial_dom(&cfg);
         SsaFunction {
             function: func,
+            arch: unlace_ir::ArchId::Unknown(0),
             cfg,
             dom_tree,
             post_dom_tree: None,

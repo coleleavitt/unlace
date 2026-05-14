@@ -1081,6 +1081,55 @@ fn decode_sleb128(bytes: &[u8]) -> (i64, usize) {
         result |= !0i64 << shift;
     }
     (result, i)
+/// Split-DWARF (DWO/DWP) skeleton → full-DWARF resolution support.
+///
+/// When a binary is compiled with `-gsplit-dwarf`, the `.debug_info` in the
+/// executable contains only skeleton compilation units (DW_TAG_skeleton_unit)
+/// with a DW_AT_dwo_id. The full type/line/macro info lives in companion
+/// `.dwo` files or a merged `.dwp` package.
+#[derive(Debug, Clone)]
+pub struct SplitDwarfResolver {
+    /// Map from DWO-ID (hash) to the path of the `.dwo` / `.dwp` file.
+    pub dwo_map: std::collections::BTreeMap<u64, String>,
+    /// If a `.dwp` package is present, its path.
+    pub dwp_path: Option<String>,
+}
+
+/// A split-DWARF skeleton reference found in the main binary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkeletonUnit {
+    /// DW_AT_dwo_id hash identifying the companion unit.
+    pub dwo_id: u64,
+    /// DW_AT_comp_dir (compilation directory).
+    pub comp_dir: Option<String>,
+    /// DW_AT_dwo_name or DW_AT_GNU_dwo_name file path.
+    pub dwo_name: Option<String>,
+    /// Offset of this skeleton CU in `.debug_info`.
+    pub offset: u64,
+}
+
+impl SplitDwarfResolver {
+    pub fn new() -> Self {
+        Self {
+            dwo_map: std::collections::BTreeMap::new(),
+            dwp_path: None,
+        }
+    }
+
+    /// Register a DWO file for a given DWO-ID.
+    pub fn register_dwo(&mut self, dwo_id: u64, path: String) {
+        self.dwo_map.insert(dwo_id, path);
+    }
+
+    /// Resolve a skeleton unit to its companion DWO path.
+    pub fn resolve(&self, skeleton: &SkeletonUnit) -> Option<&str> {
+        self.dwo_map.get(&skeleton.dwo_id).map(|s| s.as_str())
+    }
+
+    /// Check if we have a DWP package that might contain all split units.
+    pub fn has_dwp(&self) -> bool {
+        self.dwp_path.is_some()
+    }
 }
 
 #[cfg(test)]
@@ -1668,5 +1717,34 @@ mod dwarf_expr_tests {
         // Unknown DW_OP
         let expr = [0xFF];
         assert_eq!(eval.evaluate(&expr, 0), DwarfLocation::Complex);
+mod split_dwarf_tests {
+    use super::*;
+
+    #[test]
+    fn resolver_finds_registered_dwo() {
+        let mut resolver = SplitDwarfResolver::new();
+        resolver.register_dwo(0xDEAD_BEEF, "/tmp/foo.dwo".into());
+        let skel = SkeletonUnit {
+            dwo_id: 0xDEAD_BEEF,
+            comp_dir: Some("/src".into()),
+            dwo_name: Some("foo.dwo".into()),
+            offset: 0,
+        };
+        assert_eq!(resolver.resolve(&skel), Some("/tmp/foo.dwo"));
+    }
+
+    #[test]
+    fn resolver_returns_none_for_unknown_id() {
+        let resolver = SplitDwarfResolver::new();
+        let skel = SkeletonUnit { dwo_id: 0x1234, comp_dir: None, dwo_name: None, offset: 0 };
+        assert_eq!(resolver.resolve(&skel), None);
+    }
+
+    #[test]
+    fn dwp_path_detection() {
+        let mut resolver = SplitDwarfResolver::new();
+        assert!(!resolver.has_dwp());
+        resolver.dwp_path = Some("/tmp/all.dwp".into());
+        assert!(resolver.has_dwp());
     }
 }

@@ -147,6 +147,7 @@ where
         elf::EM_HEXAGON => ArchId::Hexagon,
         elf::EM_TRICORE => ArchId::TriCore,
         224 => ArchId::AmdGpu, // EM_AMDGPU
+        elf::EM_BLACKFIN | elf::EM_SHARC => ArchId::SharcBlackfin,
         _ => ArchId::Unknown(machine),
     };
 

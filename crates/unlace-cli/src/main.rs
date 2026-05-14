@@ -244,6 +244,7 @@ fn run_decompile(
             | ArchId::M68k
             | ArchId::TriCore
             | ArchId::AmdGpu
+            | ArchId::SharcBlackfin
             | ArchId::Ppc
             | ArchId::Ppc64
             | ArchId::Sbpf

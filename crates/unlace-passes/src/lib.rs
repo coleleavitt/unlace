@@ -3,6 +3,7 @@
 pub mod algebraic_simplify;
 pub mod auth_call_resolve;
 pub mod bitfield_idioms;
+pub mod bitfield_recovery;
 pub mod bmi_idioms;
 pub mod bool_simplify;
 pub mod boost_recognize;

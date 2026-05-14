@@ -19,6 +19,7 @@ pub mod const_fold;
 pub mod copy_prop;
 pub mod coverage_ingest;
 pub mod cpp_stl;
+pub mod cpp_variant;
 pub mod cpp_vtable;
 pub mod crypto_idioms;
 pub mod crypto_lib_recognize;
@@ -121,6 +122,7 @@ pub use coverage_ingest::{
     ProfRaw, parse_afl_coverage, parse_profraw,
 };
 pub use cpp_stl::recognize_stl_type;
+pub use cpp_variant::CppVariantPass;
 pub use cpp_vtable::CppVtablePass;
 pub use crypto_idioms::CryptoIdiomPass;
 pub use cse::CsePass;

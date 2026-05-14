@@ -193,6 +193,7 @@ mod tests {
             tail_call_map: BTreeMap::new(),
             merged_names: BTreeMap::new(),
             enum_discriminants: Vec::new(),
+            cpp_variant_discriminants: Vec::new(),
             panic_sites: BTreeMap::new(),
             go_defer_sites: Vec::new(),
             vtable_calls: BTreeMap::new(),

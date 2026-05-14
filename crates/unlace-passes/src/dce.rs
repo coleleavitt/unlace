@@ -189,6 +189,7 @@ mod tests {
             tail_call_map: std::collections::BTreeMap::new(),
             merged_names: std::collections::BTreeMap::new(),
             enum_discriminants: Vec::new(),
+            cpp_variant_discriminants: Vec::new(),
             panic_sites: std::collections::BTreeMap::new(),
             go_defer_sites: Vec::new(),
             vtable_calls: std::collections::BTreeMap::new(),

@@ -15,6 +15,12 @@ use crate::ops::{arithmetic, bitwise, control_flow, data_move, memory};
 use crate::ops::{arithmetic, bitwise, control_flow, data_move, dsp, memory};
 use crate::register_file::{self, ZERO, capstone_reg_to_offset, mips64_register_file};
 
+/// Callother tag for Loongson/MIPSr6-style bit-reverse operations that are not
+/// expressible in the frozen base IR.
+pub const CALLOTHER_MIPS_BITSWAP: u64 = 0x4D49_5053_0001;
+/// 64-bit counterpart of [`CALLOTHER_MIPS_BITSWAP`].
+pub const CALLOTHER_MIPS_DBITSWAP: u64 = 0x4D49_5053_0002;
+
 // Capstone contains a raw `*mut c_void` handle to the C library.
 // The capstone C library documents that each cs_handle is independent and
 // may be used from any one thread at a time. Wrapping in Mutex<> ensures
@@ -126,6 +132,10 @@ impl LiftCtx {
 
     pub fn emit(&mut self, insn: IrInsn) {
         self.ops.push(insn);
+    }
+
+    pub fn ir_ops(&self) -> &[IrInsn] {
+        &self.ops
     }
 
     pub fn emit_unimplemented(&mut self) {
@@ -261,6 +271,8 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand], mnemonic: &
         x if x == MIPS_INS_XOR as u32 => bitwise::lift_xor(ctx, ops),
         x if x == MIPS_INS_XORI as u32 => bitwise::lift_xori(ctx, ops),
         x if x == MIPS_INS_NOR as u32 => bitwise::lift_nor(ctx, ops),
+        x if x == MIPS_INS_BITSWAP as u32 => bitwise::lift_bitswap(ctx, ops),
+        x if x == MIPS_INS_DBITSWAP as u32 => bitwise::lift_dbitswap(ctx, ops),
         x if x == MIPS_INS_SLL as u32 => bitwise::lift_sll(ctx, ops),
         x if x == MIPS_INS_SRL as u32 => bitwise::lift_srl(ctx, ops),
         x if x == MIPS_INS_SRA as u32 => bitwise::lift_sra(ctx, ops),
@@ -381,6 +393,7 @@ fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand], mnemonic: &
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{CALLOTHER_MIPS_BITSWAP, CALLOTHER_MIPS_DBITSWAP};
     use unlace_ir::IrOp;
 
     fn lifter() -> MipsLifter {
@@ -739,6 +752,37 @@ mod tests {
         ];
         crate::ops::dsp::lift_rddsp(&mut ctx, &ops);
         assert!(ctx.ir_ops().iter().any(|op| op.op == IrOp::Callother));
+    fn test_bitswap_dispatches_to_callother() {
+        let mut ctx = LiftCtx::new(0x1000);
+        dispatch_insn(
+            &mut ctx,
+            InsnId(MipsInsn::MIPS_INS_BITSWAP as u32),
+            &[
+                MipsOperand::Reg(RegId(4)),
+                MipsOperand::Reg(RegId(5)),
+            ],
+        );
+        assert!(ctx.ir_ops().iter().any(|op| {
+            op.op == IrOp::Callother
+                && op.inputs.first().map(|v| v.offset) == Some(CALLOTHER_MIPS_BITSWAP)
+        }));
+    }
+
+    #[test]
+    fn test_dbitswap_dispatches_to_callother() {
+        let mut ctx = LiftCtx::new(0x1000);
+        dispatch_insn(
+            &mut ctx,
+            InsnId(MipsInsn::MIPS_INS_DBITSWAP as u32),
+            &[
+                MipsOperand::Reg(RegId(4)),
+                MipsOperand::Reg(RegId(5)),
+            ],
+        );
+        assert!(ctx.ir_ops().iter().any(|op| {
+            op.op == IrOp::Callother
+                && op.inputs.first().map(|v| v.offset) == Some(CALLOTHER_MIPS_DBITSWAP)
+        }));
     }
 
     // Unknown instruction falls back to Unimplemented

@@ -41,6 +41,7 @@ pub mod sbpf_evm;
 pub mod wasm_wit;
 pub mod evm_solidity;
 pub mod android_dex;
+pub mod dotnet_clr;
 
 pub use objc::{
     ObjcCategory, ObjcClass, ObjcInfo, ObjcIvar, ObjcMethod, ObjcProperty, scan_objc_categories,

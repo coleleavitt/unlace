@@ -17,6 +17,7 @@ pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
 pub mod coverage_ingest;
+pub mod live_concrete;
 pub mod cpp_stl;
 pub mod cpp_vtable;
 pub mod crypto_idioms;

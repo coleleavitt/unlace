@@ -104,6 +104,9 @@ pub use pdb_types::{
     unify_pdb_type_sets, walk_tpi,
     PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types, walk_tpi,
     PdbTypes, ProcSig, import_pdb_types, ipi_type_hash, unify_pdb_type_sets, walk_tpi,
+    PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types, walk_tpi,
+    PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types,
+    merge_pdb_types, walk_tpi,
 };
 pub use pe::PeLoader;
 pub use wasm_component::{

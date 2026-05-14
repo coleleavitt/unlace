@@ -6,6 +6,7 @@
 mod error;
 mod generator;
 mod pattern;
+pub mod prologue;
 
 pub use error::FlirtError;
 pub use generator::{

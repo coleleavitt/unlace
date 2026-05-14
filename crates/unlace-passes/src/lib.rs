@@ -562,3 +562,4 @@ mod tests {
     }
 }
 pub mod union_recovery;
+pub mod switch_table_recovery;

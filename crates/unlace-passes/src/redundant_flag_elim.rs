@@ -198,6 +198,7 @@ mod tests {
             phi_map: BTreeMap::new(),
             var_map,
             var_types: BTreeMap::new(),
+            type_counterexamples: Vec::new(),
             calling_convention: CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
             stack_offset_hints: BTreeMap::new(),

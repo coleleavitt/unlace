@@ -22,7 +22,9 @@ use unlace_ir::{
 };
 
 use crate::ops::{arithmetic, bitwise, control_flow, data_move};
-use crate::register_file::{aarch64_register_file, reg_varnode};
+use crate::register_file::{
+    SME_ZA, SME_ZA_SIZE, SVE_Z_SIZE, aarch64_register_file, reg_varnode, sve_z_offset,
+};
 
 thread_local! {
     static ARM64_CS: RefCell<Option<Capstone>> = const { RefCell::new(None) };
@@ -2281,6 +2283,10 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_ST3 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST3),
         Arm64Insn::ARM64_INS_ST4 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_ST4),
 
+        // t301 — AArch64 SME outer-product scaffolding. Capstone 0.14 does
+        // not expose SME-specific instruction ids yet, so decode by mnemonic.
+        _ if emit_aarch64_sme_outer_product(ctx, insn, detail) => {}
+
         _ => ctx.emit_unimplemented(),
     }
 }
@@ -3125,6 +3131,15 @@ pub const CALLOTHER_ARM_SVC: u64 = 0x561;
 pub const CALLOTHER_ARM_HVC: u64 = 0x562;
 pub const CALLOTHER_ARM_ERET: u64 = 0x563;
 
+// ── SME Callother tags (0x42A..0x42D) ──────────────────────────────────
+/// SME FMOPA outer-product accumulate into ZA. Inputs: tag, pg, za, zn, zm.
+pub const CALLOTHER_SME_FMOPA: u64 = 0x42A;
+/// SME FMOPS outer-product subtract/accumulate into ZA. Inputs: tag, pg, za, zn, zm.
+pub const CALLOTHER_SME_FMOPS: u64 = 0x42B;
+/// SME SMOPA signed integer outer-product accumulate into ZA.
+pub const CALLOTHER_SME_SMOPA: u64 = 0x42C;
+/// SME UMOPA unsigned integer outer-product accumulate into ZA.
+pub const CALLOTHER_SME_UMOPA: u64 = 0x42D;
 
 /// Emit a generic SVE `Callother` intrinsic.
 ///
@@ -3138,6 +3153,91 @@ pub fn emit_sve_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varno
         smallvec::smallvec![Varnode::constant(tag, 8), Varnode::constant(pg as u64, 1),];
     inputs.extend_from_slice(operands);
     ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
+}
+
+pub(crate) fn emit_sme_callother(ctx: &mut LiftCtx, tag: u64, pg: u8, operands: &[Varnode]) {
+    let mut inputs: smallvec::SmallVec<[Varnode; 3]> =
+        smallvec::smallvec![Varnode::constant(tag, 8), Varnode::constant(pg as u64, 1),];
+    inputs.extend_from_slice(operands);
+    ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
+}
+
+fn aarch64_predicate_reg_index(reg: capstone::RegId) -> Option<u8> {
+    use capstone::arch::arm64::Arm64Reg;
+    let id = reg.0 as u32;
+    let base = Arm64Reg::ARM64_REG_P0;
+    if (base..=base + 15).contains(&id) {
+        Some((id - base) as u8)
+    } else {
+        None
+    }
+}
+
+fn sme_outer_product_tag(mnemonic: &str) -> Option<u64> {
+    match mnemonic.to_ascii_lowercase().as_str() {
+        "fmopa" => Some(CALLOTHER_SME_FMOPA),
+        "fmops" => Some(CALLOTHER_SME_FMOPS),
+        "smopa" => Some(CALLOTHER_SME_SMOPA),
+        "umopa" => Some(CALLOTHER_SME_UMOPA),
+        _ => None,
+    }
+}
+
+fn emit_aarch64_sme_outer_product(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) -> bool {
+    let Some(mnemonic) = insn.mnemonic() else {
+        return false;
+    };
+    let Some(tag) = sme_outer_product_tag(mnemonic) else {
+        return false;
+    };
+
+    let arch = detail.arch_detail();
+    let Some(arm64) = arch.arm64() else {
+        ctx.emit_unimplemented();
+        return true;
+    };
+
+    let mut pg = None;
+    let mut z_regs = Vec::new();
+    for op in arm64.operands() {
+        if let Arm64OperandType::Reg(reg) = op.op_type {
+            if let Some(pred) = aarch64_predicate_reg_index(reg) {
+                if pg.is_none() {
+                    pg = Some(pred);
+                }
+                continue;
+            }
+            if let Some(z_idx) = aarch64_sve_z_reg_index(reg) {
+                z_regs.push(z_idx);
+            }
+        }
+    }
+
+    let Some(pg) = pg else {
+        ctx.emit_unimplemented();
+        return true;
+    };
+    if z_regs.len() < 2 {
+        ctx.emit_unimplemented();
+        return true;
+    }
+
+    let za = Varnode::reg(SME_ZA, SME_ZA_SIZE);
+    let zn = Varnode::reg(sve_z_offset(z_regs[0]), SVE_Z_SIZE);
+    let zm = Varnode::reg(sve_z_offset(z_regs[1]), SVE_Z_SIZE);
+    emit_sme_callother(ctx, tag, pg, &[za, zn, zm]);
+    true
+}
+
+fn aarch64_sve_z_reg_index(reg: capstone::RegId) -> Option<u8> {
+    use capstone::arch::arm64::Arm64Reg;
+    let id = reg.0 as u32;
+    let base = Arm64Reg::ARM64_REG_Z0;
+    if (base..=base + 31).contains(&id) {
+        Some((id - base) as u8)
+    } else {
+        None
+    }
 }
 
 /// Return `true` if `insn` is an AArch64 pointer-authentication or BTI

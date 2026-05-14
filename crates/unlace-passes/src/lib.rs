@@ -98,6 +98,7 @@ pub mod printf_type_infer;
 pub mod rep_string_idiom;
 pub mod printf_type_infer;
 pub mod protobuf_recognize;
+pub mod qt_recognize;
 pub mod rep_string_idiom;
 pub mod sizeof_recognition;
 pub mod smc_unwrap;

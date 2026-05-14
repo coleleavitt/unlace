@@ -59,6 +59,24 @@ use crate::lift::{
     try_aarch64_csel,
     try_aarch64_tme,
 };
+    use crate::lift::{
+        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
+        CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
+        CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
+        CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_USAT,
+        CALLOTHER_INT_MULT_HIGH, CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing,
+        decode_arm_ldm_stm, decode_it, decode_thumb1_ldm_stm, decode_thumb1_push_pop,
+        decode_thumb2_ldm_stm, expand_reg_list, try_aarch64_ccmp, try_aarch64_csel,
+    };
+    use crate::lift::{
+        ARM_FLAG_C, ARM_FLAG_N, ARM_FLAG_V, ARM_FLAG_Z, ArmLiftMode, CALLOTHER_AARCH64_CCMP,
+        CALLOTHER_ARM_QADD, CALLOTHER_ARM_QSUB, CALLOTHER_ARM_RBIT, CALLOTHER_ARM_REV,
+        CALLOTHER_ARM_REV16, CALLOTHER_ARM_SADD16, CALLOTHER_ARM_SSAT, CALLOTHER_ARM_SSUB16,
+        CALLOTHER_ARM_UQADD8, CALLOTHER_ARM_UQADD16, CALLOTHER_ARM_USAT, CALLOTHER_INT_MULT_HIGH,
+        CALLOTHER_INT_SMULT_HIGH, ItState, LdmStmAddressing, decode_arm_ldm_stm, decode_it,
+        decode_thumb1_ldm_stm, decode_thumb1_push_pop, decode_thumb2_ldm_stm, expand_reg_list,
+        try_aarch64_ccmp, try_aarch64_csel,
+    };
 
     #[test]
     fn expand_reg_list_ldmia_three_regs() {

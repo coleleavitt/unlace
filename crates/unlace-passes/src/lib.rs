@@ -64,6 +64,7 @@ pub mod packet_struct;
 pub mod pass;
 pub mod printf_type_infer;
 pub mod prologue_elim;
+pub mod pgo_outlining;
 pub mod protobuf_recognize;
 pub mod qt_recognize;
 pub mod reanalysis;

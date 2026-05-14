@@ -30,6 +30,7 @@ members = [
     "crates/unlace-lift-stm8",
     "crates/unlace-lift-sharc",
     "crates/unlace-lift-tic6x",
+    "crates/unlace-lift-evm",
     "crates/unlace-lift-agx",
     "crates/unlace-lift-sh",
     "crates/unlace-lift-sass",

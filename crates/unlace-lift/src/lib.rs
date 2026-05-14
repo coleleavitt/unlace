@@ -7,6 +7,7 @@ pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
 pub use unlace_lift_avr::AvrLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
+pub use unlace_lift_avr::AvrLifter;
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_ppc::PpcLifter;
 pub use unlace_lift_riscv::RiscVLifter;

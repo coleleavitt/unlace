@@ -33,6 +33,7 @@ pub enum LifterEndian {
 pub use unlace_lift_riscv::RiscVLifter;
 pub use unlace_lift_sass::SassLifter;
 pub use unlace_lift_superh::SuperHLifter;
+pub use unlace_lift_tricore::TriCoreLifter;
 pub use unlace_lift_v850::V850Lifter;
 pub use unlace_lift_x86::X86Lifter;
 pub use unlace_lift_xtensa::XtensaLifter;
@@ -93,6 +94,7 @@ pub fn get_lifter_with_endian(arch: ArchId, endian: Option<LifterEndian>) -> Box
         },
         ArchId::V850 => Box::new(V850Lifter::new()),
         ArchId::Arc => Box::new(ArcLifter::new()),
+        ArchId::TriCore => Box::new(TriCoreLifter::new()),
         ArchId::Ebpf => Box::new(EbpfLifter::new()),
         ArchId::Sbpf => Box::new(SbpfLifter::new()),
         ArchId::Avr => Box::new(AvrLifter::new()),
@@ -200,6 +202,9 @@ mod tests {
     fn test_get_lifter_hexagon() {
         let l = get_lifter(ArchId::Hexagon);
         assert_eq!(l.arch(), ArchId::Hexagon);
+    fn test_get_lifter_tricore() {
+        let l = get_lifter(ArchId::TriCore);
+        assert_eq!(l.arch(), ArchId::TriCore);
         assert!(!l.register_file().registers.is_empty());
     }
 

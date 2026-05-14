@@ -145,6 +145,7 @@ where
         }
         elf::EM_XTENSA => ArchId::Xtensa,
         elf::EM_HEXAGON => ArchId::Hexagon,
+        elf::EM_TRICORE => ArchId::TriCore,
         _ => ArchId::Unknown(machine),
     };
 

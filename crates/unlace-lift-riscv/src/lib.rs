@@ -17,6 +17,44 @@ mod rvc;
 pub use rvc::{expand, is_compressed};
 
 // ---------------------------------------------------------------------------
+// RISC-V scalar crypto Callother tags (Zk*)
+// ---------------------------------------------------------------------------
+
+/// Constant tags for RISC-V scalar cryptography instructions emitted as
+/// `Callother`. The first input of each intrinsic is one of these constants,
+/// followed by the architectural source operands (and immediate/byte-select
+/// constants where encoded by the instruction).
+pub mod crypto_tag {
+    // Keep this range separate from x86 AES-NI/SHA-NI (0x1E0..0x1EC) and
+    // other architecture-specific pseudo-op blocks used by the C printer.
+    pub const RV_AES32ESI: u64 = 0x260;
+    pub const RV_AES32ESMI: u64 = 0x261;
+    pub const RV_AES32DSI: u64 = 0x262;
+    pub const RV_AES32DSMI: u64 = 0x263;
+    pub const RV_AES64ES: u64 = 0x264;
+    pub const RV_AES64ESM: u64 = 0x265;
+    pub const RV_AES64DS: u64 = 0x266;
+    pub const RV_AES64DSM: u64 = 0x267;
+    pub const RV_AES64IM: u64 = 0x268;
+    pub const RV_AES64KS1I: u64 = 0x269;
+    pub const RV_AES64KS2: u64 = 0x26A;
+
+    pub const RV_SHA256SUM0: u64 = 0x270;
+    pub const RV_SHA256SUM1: u64 = 0x271;
+    pub const RV_SHA256SIG0: u64 = 0x272;
+    pub const RV_SHA256SIG1: u64 = 0x273;
+    pub const RV_SHA512SUM0: u64 = 0x274;
+    pub const RV_SHA512SUM1: u64 = 0x275;
+    pub const RV_SHA512SIG0: u64 = 0x276;
+    pub const RV_SHA512SIG1: u64 = 0x277;
+
+    pub const RV_SM3P0: u64 = 0x278;
+    pub const RV_SM3P1: u64 = 0x279;
+    pub const RV_SM4ED: u64 = 0x27A;
+    pub const RV_SM4KS: u64 = 0x27B;
+}
+
+// ---------------------------------------------------------------------------
 // Register file layout
 // ---------------------------------------------------------------------------
 
@@ -360,6 +398,61 @@ impl LiftCtx {
             self.addr,
         ));
         self.write_reg(rd, result);
+    }
+
+    // -- RISC-V scalar crypto helpers ---------------------------------------
+
+    fn lift_crypto_unary(&mut self, tag: u64, rd: RegId, rs1: RegId) {
+        let tmp = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::Callother,
+            tmp,
+            smallvec![Varnode::constant(tag, 8), read_reg(rs1)],
+            self.addr,
+        ));
+        self.write_reg(rd, tmp);
+    }
+
+    fn lift_crypto_binary(&mut self, tag: u64, rd: RegId, rs1: RegId, rs2: RegId) {
+        let tmp = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::Callother,
+            tmp,
+            smallvec![Varnode::constant(tag, 8), read_reg(rs1), read_reg(rs2)],
+            self.addr,
+        ));
+        self.write_reg(rd, tmp);
+    }
+
+    fn lift_crypto_binary_imm(&mut self, tag: u64, rd: RegId, rs1: RegId, rs2: RegId, imm: u8) {
+        let tmp = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::Callother,
+            tmp,
+            smallvec![
+                Varnode::constant(tag, 8),
+                read_reg(rs1),
+                read_reg(rs2),
+                Varnode::constant(imm as u64, 1),
+            ],
+            self.addr,
+        ));
+        self.write_reg(rd, tmp);
+    }
+
+    fn lift_crypto_unary_imm(&mut self, tag: u64, rd: RegId, rs1: RegId, imm: u8) {
+        let tmp = self.alloc_unique(8);
+        self.emit(IrInsn::with_output(
+            IrOp::Callother,
+            tmp,
+            smallvec![
+                Varnode::constant(tag, 8),
+                read_reg(rs1),
+                Varnode::constant(imm as u64, 1),
+            ],
+            self.addr,
+        ));
+        self.write_reg(rd, tmp);
     }
 
     // -- Branch helpers ---------------------------------------------------
@@ -1110,6 +1203,44 @@ fn lift_riscv_extended_direct(word: u32, addr: u64, ctx: &mut LiftCtx) -> Option
         _ => return None,
     }
     Some(())
+fn decode_rv_crypto_op_imm(funct12: u32) -> Option<u64> {
+    Some(match funct12 {
+        0x100 => crypto_tag::RV_SHA256SUM0,
+        0x101 => crypto_tag::RV_SHA256SUM1,
+        0x102 => crypto_tag::RV_SHA256SIG0,
+        0x103 => crypto_tag::RV_SHA256SIG1,
+        0x104 => crypto_tag::RV_SHA512SUM0,
+        0x105 => crypto_tag::RV_SHA512SUM1,
+        0x106 => crypto_tag::RV_SHA512SIG0,
+        0x107 => crypto_tag::RV_SHA512SIG1,
+        0x108 => crypto_tag::RV_SM3P0,
+        0x109 => crypto_tag::RV_SM3P1,
+        0x300 => crypto_tag::RV_AES64IM,
+        _ => return None,
+    })
+}
+
+fn decode_rv_crypto_op(funct7: u32, bs: u8) -> Option<u64> {
+    let funct5 = funct7 & 0x1f;
+    Some(match (funct5, bs) {
+        // RV32 scalar AES/SM4 encode the byte select in instruction bits 31..30;
+        // the fixed opcode field is therefore only bits 29..25 (funct5).
+        (0x11, 0..=3) => crypto_tag::RV_AES32ESI,
+        (0x13, 0..=3) => crypto_tag::RV_AES32ESMI,
+        (0x15, 0..=3) => crypto_tag::RV_AES32DSI,
+        (0x17, 0..=3) => crypto_tag::RV_AES32DSMI,
+        (0x18, 0..=3) => crypto_tag::RV_SM4ED,
+        (0x1A, 0..=3) => crypto_tag::RV_SM4KS,
+
+        // RV64 scalar AES encodings use the same opcode/funct3 space but require
+        // bits 31..30 to be zero except for aes64ks2 (funct7=0x7f, bs=3).
+        (0x19, 0) => crypto_tag::RV_AES64ES,
+        (0x1B, 0) => crypto_tag::RV_AES64ESM,
+        (0x1D, 0) => crypto_tag::RV_AES64DS,
+        (0x1F, 0) => crypto_tag::RV_AES64DSM,
+        (0x1F, 3) if funct7 == 0x7F => crypto_tag::RV_AES64KS2,
+        _ => return None,
+    })
 }
 
 fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
@@ -1152,26 +1283,67 @@ fn lift_rv64i_direct(bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
 
     match opcode {
         0x13 => {
-            let imm = sign_extend(word >> 20, 12);
-            match funct3 {
-                0x0 if rd == 0 && rs1 == 0 && imm == 0 => {}
-                0x0 => ctx.lift_alu_ri(IrOp::IntAdd, rv_reg(rd), rv_reg(rs1), imm),
-                0x2 => ctx.lift_slti(rv_reg(rd), rv_reg(rs1), imm),
-                0x3 => ctx.lift_sltiu(rv_reg(rd), rv_reg(rs1), imm),
-                0x4 => ctx.lift_alu_ri(IrOp::IntXor, rv_reg(rd), rv_reg(rs1), imm),
-                0x6 => ctx.lift_alu_ri(IrOp::IntOr, rv_reg(rd), rv_reg(rs1), imm),
-                0x7 => ctx.lift_alu_ri(IrOp::IntAnd, rv_reg(rd), rv_reg(rs1), imm),
-                0x1 => ctx.lift_alu_ri(IrOp::IntLeft, rv_reg(rd), rv_reg(rs1), rs2 as i64),
-                0x5 if funct7 == 0x00 => {
-                    ctx.lift_alu_ri(IrOp::IntRight, rv_reg(rd), rv_reg(rs1), rs2 as i64)
+            if funct3 == 0x1 {
+                let funct12 = word >> 20;
+                if let Some(tag) = decode_rv_crypto_op_imm(funct12) {
+                    ctx.lift_crypto_unary(tag, rv_reg(rd), rv_reg(rs1));
+                } else if (funct12 & 0xFE0) == 0x300 && ((funct12 >> 4) & 0x1) == 1 {
+                    // aes64ks1i encodes its round number in bits 23..20.
+                    ctx.lift_crypto_unary_imm(
+                        crypto_tag::RV_AES64KS1I,
+                        rv_reg(rd),
+                        rv_reg(rs1),
+                        (funct12 & 0xF) as u8,
+                    );
+                } else {
+                    return None;
                 }
-                0x5 if funct7 == 0x20 => {
-                    ctx.lift_alu_ri(IrOp::IntSright, rv_reg(rd), rv_reg(rs1), rs2 as i64)
+            } else {
+                let imm = sign_extend(word >> 20, 12);
+                match funct3 {
+                    0x0 if rd == 0 && rs1 == 0 && imm == 0 => {}
+                    0x0 => ctx.lift_alu_ri(IrOp::IntAdd, rv_reg(rd), rv_reg(rs1), imm),
+                    0x2 => ctx.lift_slti(rv_reg(rd), rv_reg(rs1), imm),
+                    0x3 => ctx.lift_sltiu(rv_reg(rd), rv_reg(rs1), imm),
+                    0x4 => ctx.lift_alu_ri(IrOp::IntXor, rv_reg(rd), rv_reg(rs1), imm),
+                    0x6 => ctx.lift_alu_ri(IrOp::IntOr, rv_reg(rd), rv_reg(rs1), imm),
+                    0x7 => ctx.lift_alu_ri(IrOp::IntAnd, rv_reg(rd), rv_reg(rs1), imm),
+                    0x1 => ctx.lift_alu_ri(IrOp::IntLeft, rv_reg(rd), rv_reg(rs1), rs2 as i64),
+                    0x5 if funct7 == 0x00 => {
+                        ctx.lift_alu_ri(IrOp::IntRight, rv_reg(rd), rv_reg(rs1), rs2 as i64)
+                    }
+                    0x5 if funct7 == 0x20 => {
+                        ctx.lift_alu_ri(IrOp::IntSright, rv_reg(rd), rv_reg(rs1), rs2 as i64)
+                    }
+                    _ => return None,
                 }
-                _ => return None,
             }
         }
         0x33 => {
+            if funct3 == 0x0 {
+                let bs = (word >> 30) as u8;
+                if let Some(tag) = decode_rv_crypto_op(funct7, bs) {
+                    match tag {
+                        crypto_tag::RV_AES32ESI
+                        | crypto_tag::RV_AES32ESMI
+                        | crypto_tag::RV_AES32DSI
+                        | crypto_tag::RV_AES32DSMI
+                        | crypto_tag::RV_SM4ED
+                        | crypto_tag::RV_SM4KS => ctx.lift_crypto_binary_imm(
+                            tag,
+                            rv_reg(rd),
+                            rv_reg(rs1),
+                            rv_reg(rs2),
+                            bs,
+                        ),
+                        _ => ctx.lift_crypto_binary(tag, rv_reg(rd), rv_reg(rs1), rv_reg(rs2)),
+                    }
+                    return Some(LiftedInsn {
+                        ir_ops: ctx.ops,
+                        len: 4,
+                    });
+                }
+            }
             let op = match (funct7, funct3) {
                 (0x00, 0x2) => {
                     ctx.lift_slt(rv_reg(rd), rv_reg(rs1), rv_reg(rs2));
@@ -2840,6 +3012,66 @@ mod tests {
                 .iter()
                 .any(|i| i.op == IrOp::Callother && i.output == Some(vec_reg(1)))
         );
+    fn assert_crypto_callother(word: u32, tag: u64, extra_const: Option<u64>) {
+        let bytes = word.to_le_bytes();
+        let result = lifter()
+            .lift_insn(&bytes, 0x1000)
+            .expect("should decode RISC-V scalar crypto instruction");
+        assert_eq!(result.len, 4);
+        let call = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("should emit Callother");
+        assert_eq!(call.inputs.first(), Some(&Varnode::constant(tag, 8)));
+        if let Some(value) = extra_const {
+            assert!(call.inputs.contains(&Varnode::constant(value, 1)));
+        }
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 8)))
+        );
+    }
+
+    #[test]
+    fn test_riscv_crypto_aes64_rounds() {
+        assert_crypto_callother(0x323100B3, crypto_tag::RV_AES64ES, None);
+        assert_crypto_callother(0x363100B3, crypto_tag::RV_AES64ESM, None);
+        assert_crypto_callother(0x3A3100B3, crypto_tag::RV_AES64DS, None);
+        assert_crypto_callother(0x3E3100B3, crypto_tag::RV_AES64DSM, None);
+        assert_crypto_callother(0xFE3100B3, crypto_tag::RV_AES64KS2, None);
+    }
+
+    #[test]
+    fn test_riscv_crypto_aes64_immediates() {
+        assert_crypto_callother(0x30011093, crypto_tag::RV_AES64IM, None);
+        assert_crypto_callother(0x31511093, crypto_tag::RV_AES64KS1I, Some(5));
+    }
+
+    #[test]
+    fn test_riscv_crypto_aes32_and_sm4_byte_select() {
+        assert_crypto_callother(0xA23100B3, crypto_tag::RV_AES32ESI, Some(2));
+        assert_crypto_callother(0xE63100B3, crypto_tag::RV_AES32ESMI, Some(3));
+        assert_crypto_callother(0x2A3100B3, crypto_tag::RV_AES32DSI, Some(0));
+        assert_crypto_callother(0x6E3100B3, crypto_tag::RV_AES32DSMI, Some(1));
+        assert_crypto_callother(0xB03100B3, crypto_tag::RV_SM4ED, Some(2));
+        assert_crypto_callother(0x743100B3, crypto_tag::RV_SM4KS, Some(1));
+    }
+
+    #[test]
+    fn test_riscv_crypto_sha_and_sm3_unary() {
+        assert_crypto_callother(0x10011093, crypto_tag::RV_SHA256SUM0, None);
+        assert_crypto_callother(0x10111093, crypto_tag::RV_SHA256SUM1, None);
+        assert_crypto_callother(0x10211093, crypto_tag::RV_SHA256SIG0, None);
+        assert_crypto_callother(0x10311093, crypto_tag::RV_SHA256SIG1, None);
+        assert_crypto_callother(0x10411093, crypto_tag::RV_SHA512SUM0, None);
+        assert_crypto_callother(0x10511093, crypto_tag::RV_SHA512SUM1, None);
+        assert_crypto_callother(0x10611093, crypto_tag::RV_SHA512SIG0, None);
+        assert_crypto_callother(0x10711093, crypto_tag::RV_SHA512SIG1, None);
+        assert_crypto_callother(0x10811093, crypto_tag::RV_SM3P0, None);
+        assert_crypto_callother(0x10911093, crypto_tag::RV_SM3P1, None);
     }
 
     // NOP (addi x0, x0, 0) → 0x00000013 (capstone pseudo: nop, 0 ops)

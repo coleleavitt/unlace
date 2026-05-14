@@ -160,6 +160,15 @@ mod tests {
             auth_pointers: Vec::new(),
             auth_ptr_slots: Vec::new(),
             wasm_component: None,
+            pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: None,
+            go_itabs: BTreeMap::new(),
+            go_types: BTreeMap::new(),
+            swift_info: None,
+            auth_pointers: Vec::new(),
+            auth_ptr_slots: Vec::new(),
         }
     }
 

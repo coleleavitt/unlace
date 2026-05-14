@@ -113,6 +113,9 @@ pub use pdb_types::{
     PdbError, PdbField, PdbType, PdbTypeKind, PdbTypes, ProcSig, import_pdb_types,
     merge_pdb_types, walk_tpi,
 };
+pub use pdb_types::{PdbTypes, ProcSig, import_pdb_types};
+pub use packer_detect::{PackerKind, detect_packer};
+pub use pdb_types::{PdbTypes, ProcSig, import_pdb_types};
 pub use pe::PeLoader;
 pub use wasm_component::{
     WasmCanonicalFunction, WasmComponentExport, WasmComponentImport, WasmComponentInfo,

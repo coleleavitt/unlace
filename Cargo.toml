@@ -84,6 +84,7 @@ unlace-lift-ebpf = { path = "crates/unlace-lift-ebpf" }
 unlace-lift-avr = { path = "crates/unlace-lift-avr" }
 unlace-lift-rx = { path = "crates/unlace-lift-rx" }
 unlace-lift-agx = { path = "crates/unlace-lift-agx" }
+unlace-lift-sparc = { path = "crates/unlace-lift-sparc" }
 unlace-passes = { path = "crates/unlace-passes" }
 unlace-struct = { path = "crates/unlace-struct" }
 unlace-output = { path = "crates/unlace-output" }

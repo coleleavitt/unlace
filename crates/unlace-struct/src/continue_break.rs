@@ -16,12 +16,12 @@ use crate::hir::{HirNode, LabelId};
 /// - `Goto(label)` where label matches the loop header → `Continue`
 /// - `Goto(label)` where label matches the first stmt after the loop → `Break`
 /// - `Goto(label)` to unrelated labels → left unchanged
-pub fn detect_continue_break(body: &mut Vec<HirNode>) {
+pub fn detect_continue_break(body: &mut [HirNode]) {
     rewrite_scope(body);
 }
 
 /// Walk a scope, discovering loop header/exit labels from adjacent Label/Loop pairs.
-fn rewrite_scope(nodes: &mut Vec<HirNode>) {
+fn rewrite_scope(nodes: &mut [HirNode]) {
     // Pre-compute header and exit labels for each position.
     // A loop at index `i` has:
     //   - header label: if nodes[i-1] == Label(L), then L is the header

@@ -399,7 +399,7 @@ impl<'a> StructureCtx<'a> {
         let synthetic = BTreeSet::from([func.cfg.exit_block(), func.cfg.unknown_block()]);
 
         // Detect back-edges: edge (src → tgt) where tgt dominates src.
-        for (&bid, _block) in &func.function.blocks {
+        for &bid in func.function.blocks.keys() {
             for (succ, _kind) in func.cfg.edges_from(bid) {
                 if synthetic.contains(&succ) {
                     continue;
@@ -416,7 +416,7 @@ impl<'a> StructureCtx<'a> {
         // irreducible CFG regions where the structurer's `if`/`while`
         // patterns cannot encode all incoming control edges.
         let mut goto_targets = BTreeSet::new();
-        for (&bid, _block) in &func.function.blocks {
+        for &bid in func.function.blocks.keys() {
             if loop_headers.contains(&bid) {
                 continue;
             }
@@ -626,7 +626,7 @@ impl<'a> StructureCtx<'a> {
 
         let bounds_default = bounds.and_then(|b| b.default_target);
         let has_explicit_default = bounds_default
-            .map(|t| targets.iter().any(|x| *x == t))
+            .map(|t| targets.contains(&t))
             .unwrap_or(false);
 
         let num_cases = if targets.len() > 2 && !has_explicit_default {
@@ -694,6 +694,7 @@ impl<'a> StructureCtx<'a> {
         None
     }
 
+    #[allow(clippy::collapsible_match)] // explicit if/else inside arms reads more clearly
     fn scan_pred_for_bounds(
         &self,
         pred: BlockId,
@@ -712,7 +713,7 @@ impl<'a> StructureCtx<'a> {
                 continue;
             }
 
-            let lhs_raw = insn.inputs.get(0).copied()?;
+            let lhs_raw = insn.inputs.first().copied()?;
             let rhs_raw = insn.inputs.get(1).copied()?;
             let lhs_is_const = lhs_raw.space == SpaceId::Const;
             let rhs_is_const = rhs_raw.space == SpaceId::Const;
@@ -1349,16 +1350,16 @@ impl<'a> StructureCtx<'a> {
             if bid == header {
                 continue;
             }
-            for (&src, _) in &self.func.function.blocks {
+            for &src in self.func.function.blocks.keys() {
                 if loop_blocks.contains(&src) {
                     continue;
                 }
                 let edges = self.func.cfg.edges_from(src);
-                if edges.iter().any(|(tgt, _)| *tgt == bid) {
-                    if dominates(&self.func.dom_tree, header, src) {
-                        loop_blocks.insert(src);
-                        worklist.push(src);
-                    }
+                if edges.iter().any(|(tgt, _)| *tgt == bid)
+                    && dominates(&self.func.dom_tree, header, src)
+                {
+                    loop_blocks.insert(src);
+                    worklist.push(src);
                 }
             }
         }
@@ -2065,7 +2066,7 @@ fn is_aarch64_csel_callother(insn: &IrInsn) -> bool {
 /// preceded (within the same body) by an `IntSub` `Statement` whose write
 /// is not consumed by an intervening non-flag Statement, fold them into
 /// a [`HirNode::CselTernary`]. Recurses into child bodies. Idempotent.
-fn fold_csel_ternary(nodes: &mut Vec<HirNode>) {
+fn fold_csel_ternary(nodes: &mut [HirNode]) {
     for node in nodes.iter_mut() {
         fold_csel_ternary_in_children(node);
     }
@@ -2355,7 +2356,7 @@ fn is_register_flag(vn: &Varnode, offset: u64) -> bool {
 
 /// Scan `body` and rewrite trailing `If { cond = NZCV-derived }` patterns
 /// into `HirNode::IfCmp`. Recurses into child bodies. Idempotent.
-fn fold_aarch64_bcc_if(nodes: &mut Vec<HirNode>) {
+fn fold_aarch64_bcc_if(nodes: &mut [HirNode]) {
     for node in nodes.iter_mut() {
         fold_aarch64_bcc_if_in_children(node);
     }

@@ -84,7 +84,7 @@ fn merge_one_pass(func: &mut Function) -> usize {
                 return None;
             }
             let b_block = func.blocks.get(&succ)?;
-            if b_block.successors.iter().any(|s| *s == a_id) {
+            if b_block.successors.contains(&a_id) {
                 return None;
             }
             if !is_mergeable_terminator(a_block) {

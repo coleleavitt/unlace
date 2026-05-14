@@ -172,6 +172,28 @@ impl ArmLifter {
         }
 
         let raw = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        // t294/t305 — TME system instructions are newer than the Capstone
+        // version used by this workspace. Decode them before Capstone so
+        // they don't fall through as HINT/SYS or Unimplemented.
+        if let Some(tme) = try_aarch64_tme(raw) {
+            let mut ctx = LiftCtx::new(addr);
+            emit_aarch64_tme(&mut ctx, &tme);
+            return Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
+
+        // t296/t301 -- SME outer-product instructions.
+        if let Some(sme_op) = try_aarch64_sme_outer_product(raw) {
+            let mut ctx = LiftCtx::new(addr);
+            emit_aarch64_sme_outer_product(&mut ctx, &sme_op);
+            return Ok(LiftedInsn {
+                ir_ops: ctx.ops,
+                len: 4,
+            });
+        }
+
         // t225 — register-form PAC/AUTH/XPAC: emit a dedicated Callother
         // intrinsic instead of folding to a nop. Done before the broader
         // PAC/BTI nop filter so the explicitly-lifted variants take
@@ -3290,4 +3312,86 @@ fn pac_auth_branch_rewrite(insn: u32) -> Option<u32> {
             }
         }
     }
+}
+
+// -- t296/t301: AArch64 SME outer-product instructions --
+pub const CALLOTHER_SME_FMOPA: u64 = 0x430;
+pub const CALLOTHER_SME_FMOPS: u64 = 0x431;
+pub const CALLOTHER_SME_FMOPA_D: u64 = 0x432;
+pub const CALLOTHER_SME_FMOPS_D: u64 = 0x433;
+pub const CALLOTHER_SME_BFMOPA: u64 = 0x434;
+pub const CALLOTHER_SME_BFMOPS: u64 = 0x435;
+pub const CALLOTHER_SME_SMOPA: u64 = 0x436;
+pub const CALLOTHER_SME_SMOPS: u64 = 0x437;
+pub const CALLOTHER_SME_UMOPA: u64 = 0x438;
+pub const CALLOTHER_SME_UMOPS: u64 = 0x439;
+pub const CALLOTHER_SME_SUMOPA: u64 = 0x43A;
+pub const CALLOTHER_SME_SUMOPS: u64 = 0x43B;
+pub const CALLOTHER_SME_USMOPA: u64 = 0x43C;
+pub const CALLOTHER_SME_USMOPS: u64 = 0x43D;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmeOuterProductKind {
+    Fmopa, Fmops, FmopaD, FmopsD,
+    Bfmopa, Bfmops, Smopa, Smops,
+    Umopa, Umops, Sumopa, Sumops, Usmopa, Usmops,
+}
+
+impl SmeOuterProductKind {
+    pub fn tag(self) -> u64 {
+        match self {
+            Self::Fmopa => CALLOTHER_SME_FMOPA, Self::Fmops => CALLOTHER_SME_FMOPS,
+            Self::FmopaD => CALLOTHER_SME_FMOPA_D, Self::FmopsD => CALLOTHER_SME_FMOPS_D,
+            Self::Bfmopa => CALLOTHER_SME_BFMOPA, Self::Bfmops => CALLOTHER_SME_BFMOPS,
+            Self::Smopa => CALLOTHER_SME_SMOPA, Self::Smops => CALLOTHER_SME_SMOPS,
+            Self::Umopa => CALLOTHER_SME_UMOPA, Self::Umops => CALLOTHER_SME_UMOPS,
+            Self::Sumopa => CALLOTHER_SME_SUMOPA, Self::Sumops => CALLOTHER_SME_SUMOPS,
+            Self::Usmopa => CALLOTHER_SME_USMOPA, Self::Usmops => CALLOTHER_SME_USMOPS,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmeOuterProductDecoded {
+    pub kind: SmeOuterProductKind,
+    pub za_tile: u8, pub pm: u8, pub pn: u8, pub zn: u8, pub zm: u8,
+}
+
+pub fn try_aarch64_sme_outer_product(insn: u32) -> Option<SmeOuterProductDecoded> {
+    let zm = ((insn >> 16) & 0x1F) as u8;
+    let pm = ((insn >> 13) & 0x07) as u8;
+    let pn = ((insn >> 10) & 0x07) as u8;
+    let zn = ((insn >> 5) & 0x1F) as u8;
+    let s_bit = ((insn >> 4) & 1) != 0;
+    let top11 = insn >> 21;
+    let bit15 = (insn >> 15) & 1;
+    let (kind, tile_bits) = match (top11, bit15) {
+        (0x404, 0) => (if s_bit { SmeOuterProductKind::Fmops } else { SmeOuterProductKind::Fmopa }, (insn & 0x03) as u8),
+        (0x406, 0) => (if s_bit { SmeOuterProductKind::FmopsD } else { SmeOuterProductKind::FmopaD }, (insn & 0x07) as u8),
+        (0x40C, 0) => (if s_bit { SmeOuterProductKind::Bfmops } else { SmeOuterProductKind::Bfmopa }, (insn & 0x03) as u8),
+        (0x504, 0) => (if s_bit { SmeOuterProductKind::Smops } else { SmeOuterProductKind::Smopa }, (insn & 0x03) as u8),
+        (0x50C, 0) => (if s_bit { SmeOuterProductKind::Umops } else { SmeOuterProductKind::Umopa }, (insn & 0x03) as u8),
+        (0x504, 1) => (if s_bit { SmeOuterProductKind::Sumops } else { SmeOuterProductKind::Sumopa }, (insn & 0x03) as u8),
+        (0x50C, 1) => (if s_bit { SmeOuterProductKind::Usmops } else { SmeOuterProductKind::Usmopa }, (insn & 0x03) as u8),
+        _ => return None,
+    };
+    Some(SmeOuterProductDecoded { kind, za_tile: tile_bits, pm, pn, zn, zm })
+}
+
+fn emit_aarch64_sme_outer_product(ctx: &mut LiftCtx, op: &SmeOuterProductDecoded) {
+    use crate::register_file::{sve_z_offset, SVE_Z_SIZE};
+    let tag = op.kind.tag();
+    let zn_vn = Varnode::new(SpaceId::Register, sve_z_offset(op.zn), SVE_Z_SIZE);
+    let zm_vn = Varnode::new(SpaceId::Register, sve_z_offset(op.zm), SVE_Z_SIZE);
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![
+            Varnode::constant(tag, 8),
+            Varnode::constant(op.za_tile as u64, 1),
+            Varnode::constant(op.pm as u64, 1),
+            Varnode::constant(op.pn as u64, 1),
+            zn_vn, zm_vn,
+        ],
+        ctx.addr,
+    ));
 }

@@ -1828,6 +1828,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-lift-lua"
+version = "0.1.0"
+dependencies = [
+ "smallvec",
+ "thiserror",
+ "tracing",
+ "unlace-ir",
+]
+
+[[package]]
 name = "unlace-lift-m68k"
 version = "0.1.0"
 dependencies = [

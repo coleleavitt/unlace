@@ -32,6 +32,7 @@ members = [
     "crates/unlace-lift-sharc",
     "crates/unlace-lift-tic6x",
     "crates/unlace-lift-evm",
+    "crates/unlace-lift-lua",
     "crates/unlace-lift-sbpf",
     "crates/unlace-lift-sass",
     "crates/unlace-lift-spirv",
@@ -120,6 +121,7 @@ unlace-lift-amdgpu = { path = "crates/unlace-lift-amdgpu" }
 unlace-lift-sharc = { path = "crates/unlace-lift-sharc" }
 unlace-lift-ti = { path = "crates/unlace-lift-ti" }
 unlace-lift-evm = { path = "crates/unlace-lift-evm" }
+unlace-lift-lua = { path = "crates/unlace-lift-lua" }
 unlace-lift-6502 = { path = "crates/unlace-lift-6502" }
 unlace-lift-stm8 = { path = "crates/unlace-lift-stm8" }
 unlace-passes = { path = "crates/unlace-passes" }

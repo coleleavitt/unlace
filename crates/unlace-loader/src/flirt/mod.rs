@@ -114,6 +114,28 @@ impl FlirtDb {
     pub fn match_function_with_refs<'a>(
         &'a self,
         bytes: &[u8],
+    }
+
+    /// Match `bytes` against the DB, preferring candidates whose recorded
+    /// outbound references resolve against the already-known `resolved_names`
+    /// map (absolute address → canonical callee name).
+    pub fn match_function_with_refs<'a>(
+        &'a self,
+        bytes: &[u8],
+        resolved_names: &BTreeMap<u64, String>,
+    ) -> Option<FlirtMatch<'a>> {
+        self.match_function_at_with_refs(bytes, 0, resolved_names)
+    }
+
+    /// Like [`Self::match_function_with_refs`], but interprets PC-relative
+    /// reference offsets with `base_addr` as the candidate function's load
+    /// address. This is the form production callers should use; the zero-base
+    /// variant is retained for tests and callers that already work in
+    /// function-relative coordinates.
+    pub fn match_function_at_with_refs<'a>(
+        &'a self,
+        bytes: &[u8],
+        base_addr: u64,
         resolved_names: &BTreeMap<u64, String>,
     ) -> Option<FlirtMatch<'a>> {
         let mut fallback: Option<FlirtMatch<'a>> = None;
@@ -122,6 +144,9 @@ impl FlirtDb {
                 continue;
             }
             let refs_matched = references_match(sig, bytes, resolved_names);
+            if signature_matches(sig, bytes) {
+                return Some(&sig.name);
+            let refs_matched = references_match(sig, bytes, base_addr, resolved_names);
             if refs_matched {
                 return Some(FlirtMatch {
                     name: &sig.name,
@@ -214,6 +239,46 @@ fn resolve_rel32_call(bytes: &[u8], offset: usize) -> Option<u64> {
         return None;
     }
     Some(target as u64)
+    base_addr: u64,
+    resolved_names: &BTreeMap<u64, String>,
+) -> bool {
+    if sig.refs.is_empty() {
+        return true;
+    }
+    for reference in &sig.refs {
+        let Some(target) = resolve_rel32_call(bytes, base_addr, reference.offset) else {
+            return false;
+        };
+        let Some(name) = resolved_names.get(&target) else {
+            return false;
+        };
+        if name != &reference.name {
+            return false;
+        }
+    }
+    true
+}
+
+/// Resolve a near x86/x86-64 rel32 `call`/`jmp` target at `offset`.
+///
+/// `offset` must point at the opcode byte (`E8`/`E9`) inside `bytes`; `base_addr`
+/// is the load address corresponding to `bytes[0]`.
+fn resolve_rel32_call(bytes: &[u8], base_addr: u64, offset: usize) -> Option<u64> {
+    let end = offset.checked_add(5)?;
+    if end > bytes.len() {
+        return None;
+    }
+    match bytes[offset] {
+        0xE8 | 0xE9 => {}
+        _ => return None,
+    }
+    let disp = i32::from_le_bytes(bytes[offset + 1..end].try_into().ok()?);
+    let insn_end = base_addr.checked_add(end as u64)?;
+    if disp >= 0 {
+        insn_end.checked_add(disp as u32 as u64)
+    } else {
+        insn_end.checked_sub(disp.unsigned_abs() as u64)
+    }
 }
 
 /// CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection, no xorout).
@@ -308,6 +373,21 @@ mod tests {
             db.match_function(&[0x48, 0xAB, 0xC3, 0x00]),
             Some("memcpy")
         );
+        db.push(sig(
+            "memcpy",
+            &[0x48, 0x00, 0xC3],
+            &[0xFF, 0x00, 0xFF],
+        ));
+        // Wildcarded byte may be anything.
+        assert_eq!(
+            db.match_function(&[0x48, 0x77, 0xC3, 0x00]),
+            Some("memcpy")
+        );
+        assert_eq!(
+            db.match_function(&[0x48, 0xAB, 0xC3, 0x00]),
+            Some("memcpy")
+        );
+        // First byte mismatch must reject.
         assert!(db.match_function(&[0x49, 0xAB, 0xC3, 0x00]).is_none());
     }
 
@@ -457,6 +537,36 @@ mod tests {
         });
         let m = db.match_function_with_refs(&bytes, &BTreeMap::new()).unwrap();
         assert!(!m.refs_matched);
+        assert!(!m.refs_matched);
+    }
+
+    #[test]
+    fn reference_resolution_uses_function_load_address() {
+        let mut db = FlirtDb::new();
+        let base = 0x1000;
+        let mut bytes = vec![0x55, 0x48, 0x89, 0xE5];
+        bytes.extend_from_slice(&rel32(0xE8, 0x40, 4));
+
+        db.push(FlirtSignature {
+            name: "calls_malloc".into(),
+            pattern: bytes[..4].to_vec(),
+            mask: vec![0xFF; 4],
+            min_len: 4,
+            max_len: None,
+            crc16_at: None,
+            refs: vec![FlirtRef {
+                offset: 4,
+                name: "malloc".into(),
+            }],
+        });
+
+        let mut resolved = BTreeMap::new();
+        resolved.insert(base + 0x40, "malloc".to_string());
+        let m = db
+            .match_function_at_with_refs(&bytes, base, &resolved)
+            .unwrap();
+        assert_eq!(m.name, "calls_malloc");
+        assert!(m.refs_matched);
     }
 
     #[test]

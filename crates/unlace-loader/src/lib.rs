@@ -58,6 +58,16 @@ pub use flirt::{
     FlirtDb, FlirtSignature, GeneratedSigPattern, SigGenerateError, SigGenerateOptions,
     default_db as default_flirt_db, generate_archive_patterns, generate_archive_patterns_from_bytes,
     render_patterns_toml,
+pub use flirt::{FlirtDb, FlirtSignature, default_db as default_flirt_db};
+pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
+pub use intel_hex::{
+    IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
+    FlirtDb, FlirtMatch, FlirtRef, FlirtSignature, default_db as default_flirt_db,
+};
+pub use ios_img4::{Img4Container, Img4Error, parse_img4};
+pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
+pub use intel_hex::{
+    IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
 };
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
 pub use image::{

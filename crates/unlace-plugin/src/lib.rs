@@ -45,6 +45,7 @@ pub use error::PluginError;
 pub use manager::PluginManager;
 npub mod registry;
 npub mod wasm_sandbox;
+npub mod python_bridge;
 
 /// Entry point symbol name that every plugin shared library must export.
 pub const PLUGIN_ENTRY: &str = "unlace_plugin_create";

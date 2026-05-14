@@ -21,4 +21,5 @@ unlace-lift-sass = { workspace = true }
 unlace-lift-xtensa = { workspace = true }
 unlace-lift-superh = { workspace = true }
 unlace-lift-xtensa = { workspace = true }
+unlace-lift-hexagon = { workspace = true }
 thiserror = { workspace = true }

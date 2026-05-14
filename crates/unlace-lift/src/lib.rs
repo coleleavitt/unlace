@@ -13,10 +13,12 @@ pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
+pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_avr::AvrLifter;
 pub use unlace_lift_ebpf::EbpfLifter;
 pub use unlace_lift_m68k::M68kLifter;
 pub use unlace_lift_ebpf::{EbpfLifter, SbpfLifter};
+pub use unlace_lift_hexagon::HexagonLifter;
 pub use unlace_lift_mips::MipsLifter;
 pub use unlace_lift_msp430::Msp430Lifter;
 pub use unlace_lift_ppc::PpcLifter;
@@ -100,6 +102,7 @@ pub fn get_lifter_with_endian(arch: ArchId, endian: Option<LifterEndian>) -> Box
         ArchId::Xtensa => Box::new(XtensaLifter::new()),
         ArchId::SuperH => Box::new(SuperHLifter::new()),
         ArchId::Xtensa => Box::new(XtensaLifter::new()),
+        ArchId::Hexagon => Box::new(HexagonLifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -194,6 +197,9 @@ mod tests {
     fn test_get_lifter_xtensa() {
         let l = get_lifter(ArchId::Xtensa);
         assert_eq!(l.arch(), ArchId::Xtensa);
+    fn test_get_lifter_hexagon() {
+        let l = get_lifter(ArchId::Hexagon);
+        assert_eq!(l.arch(), ArchId::Hexagon);
         assert!(!l.register_file().registers.is_empty());
     }
 

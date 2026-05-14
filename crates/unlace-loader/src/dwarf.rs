@@ -925,6 +925,164 @@ fn build_source_map(
     Ok(map)
 }
 
+
+/// A minimal DWARF expression (DW_OP) stack machine evaluator.
+///
+/// Supports the core location opcodes needed to resolve variable locations
+/// from `.debug_loc` / `.debug_loclists` entries.
+#[derive(Debug, Clone)]
+pub struct DwarfExprEvaluator {
+    stack: Vec<u64>,
+}
+
+/// Result of evaluating a DWARF location expression.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DwarfLocation {
+    /// Register-relative (frame base + offset).
+    FrameOffset(i64),
+    /// Absolute address.
+    Address(u64),
+    /// Register name (DW_OP_reg* / DW_OP_regx).
+    Register(u16),
+    /// Stack value (DW_OP_stack_value).
+    StackValue(u64),
+    /// Implicit constant (DW_OP_implicit_value).
+    ImplicitValue(Vec<u8>),
+    /// Expression too complex to evaluate statically.
+    Complex,
+}
+
+impl DwarfExprEvaluator {
+    pub fn new() -> Self {
+        Self { stack: Vec::new() }
+    }
+
+    /// Evaluate a DWARF expression byte sequence.
+    pub fn evaluate(&mut self, expr: &[u8], frame_base: u64) -> DwarfLocation {
+        self.stack.clear();
+        let mut pc = 0usize;
+        while pc < expr.len() {
+            let op = expr[pc];
+            pc += 1;
+            match op {
+                // DW_OP_addr
+                0x03 => {
+                    if pc + 8 > expr.len() { return DwarfLocation::Complex; }
+                    let addr = u64::from_le_bytes(expr[pc..pc+8].try_into().unwrap());
+                    self.stack.push(addr);
+                    pc += 8;
+                }
+                // DW_OP_fbreg
+                0x91 => {
+                    let (offset, len) = decode_sleb128(&expr[pc..]);
+                    pc += len;
+                    return DwarfLocation::FrameOffset(offset);
+                }
+                // DW_OP_reg0..DW_OP_reg31
+                0x50..=0x6F => {
+                    return DwarfLocation::Register((op - 0x50) as u16);
+                }
+                // DW_OP_breg0..DW_OP_breg31
+                0x70..=0x8F => {
+                    let reg = (op - 0x70) as u16;
+                    let (offset, len) = decode_sleb128(&expr[pc..]);
+                    pc += len;
+                    let _ = reg;
+                    self.stack.push(frame_base.wrapping_add(offset as u64));
+                }
+                // DW_OP_stack_value
+                0x9F => {
+                    if let Some(&top) = self.stack.last() {
+                        return DwarfLocation::StackValue(top);
+                    }
+                    return DwarfLocation::Complex;
+                }
+                // DW_OP_plus_uconst
+                0x23 => {
+                    let (val, len) = decode_uleb128(&expr[pc..]);
+                    pc += len;
+                    if let Some(top) = self.stack.last_mut() {
+                        *top = top.wrapping_add(val);
+                    }
+                }
+                // DW_OP_lit0..DW_OP_lit31
+                0x30..=0x4F => {
+                    self.stack.push((op - 0x30) as u64);
+                }
+                // DW_OP_constu
+                0x10 => {
+                    let (val, len) = decode_uleb128(&expr[pc..]);
+                    pc += len;
+                    self.stack.push(val);
+                }
+                // DW_OP_consts
+                0x11 => {
+                    let (val, len) = decode_sleb128(&expr[pc..]);
+                    pc += len;
+                    self.stack.push(val as u64);
+                }
+                // DW_OP_plus
+                0x22 => {
+                    if self.stack.len() >= 2 {
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
+                        self.stack.push(a.wrapping_add(b));
+                    }
+                }
+                // DW_OP_minus
+                0x1C => {
+                    if self.stack.len() >= 2 {
+                        let b = self.stack.pop().unwrap();
+                        let a = self.stack.pop().unwrap();
+                        self.stack.push(a.wrapping_sub(b));
+                    }
+                }
+                _ => return DwarfLocation::Complex,
+            }
+        }
+        if let Some(&top) = self.stack.last() {
+            DwarfLocation::Address(top)
+        } else {
+            DwarfLocation::Complex
+        }
+    }
+}
+
+fn decode_uleb128(bytes: &[u8]) -> (u64, usize) {
+    let mut result: u64 = 0;
+    let mut shift = 0u32;
+    let mut i = 0;
+    loop {
+        if i >= bytes.len() { break; }
+        let b = bytes[i];
+        i += 1;
+        result |= ((b & 0x7F) as u64) << shift;
+        if b & 0x80 == 0 { break; }
+        shift += 7;
+    }
+    (result, i)
+}
+
+fn decode_sleb128(bytes: &[u8]) -> (i64, usize) {
+    let mut result: i64 = 0;
+    let mut shift = 0u32;
+    let mut i = 0;
+    let mut last_byte = 0u8;
+    loop {
+        if i >= bytes.len() { break; }
+        let b = bytes[i];
+        last_byte = b;
+        i += 1;
+        result |= ((b & 0x7F) as i64) << shift;
+        shift += 7;
+        if b & 0x80 == 0 { break; }
+    }
+    if shift < 64 && (last_byte & 0x40) != 0 {
+        result |= !0i64 << shift;
+    }
+    (result, i)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1464,5 +1622,51 @@ int main(void) {
             "all location ranges should be valid: {:?}",
             total.locations
         );
+    }
+}
+
+#[cfg(test)]
+mod dwarf_expr_tests {
+    use super::*;
+
+    #[test]
+    fn eval_fbreg_offset() {
+        let mut eval = DwarfExprEvaluator::new();
+        // DW_OP_fbreg(-16): 0x91 followed by SLEB128(-16) = 0x70
+        let expr = [0x91, 0x70];
+        assert_eq!(eval.evaluate(&expr, 0), DwarfLocation::FrameOffset(-16));
+    }
+
+    #[test]
+    fn eval_reg() {
+        let mut eval = DwarfExprEvaluator::new();
+        // DW_OP_reg3
+        let expr = [0x53];
+        assert_eq!(eval.evaluate(&expr, 0), DwarfLocation::Register(3));
+    }
+
+    #[test]
+    fn eval_addr() {
+        let mut eval = DwarfExprEvaluator::new();
+        // DW_OP_addr 0x1234567890
+        let mut expr = vec![0x03];
+        expr.extend_from_slice(&0x1234567890u64.to_le_bytes());
+        assert_eq!(eval.evaluate(&expr, 0), DwarfLocation::Address(0x1234567890));
+    }
+
+    #[test]
+    fn eval_lit_plus_stack_value() {
+        let mut eval = DwarfExprEvaluator::new();
+        // DW_OP_lit5; DW_OP_stack_value
+        let expr = [0x35, 0x9F];
+        assert_eq!(eval.evaluate(&expr, 0), DwarfLocation::StackValue(5));
+    }
+
+    #[test]
+    fn eval_complex_unknown_op() {
+        let mut eval = DwarfExprEvaluator::new();
+        // Unknown DW_OP
+        let expr = [0xFF];
+        assert_eq!(eval.evaluate(&expr, 0), DwarfLocation::Complex);
     }
 }

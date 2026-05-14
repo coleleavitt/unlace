@@ -299,6 +299,31 @@ fn dispatch_cop1_fpu(ctx: &mut LiftCtx, word: u32, ops: &[MipsOperand]) -> bool 
         _ => return false,
     }
     true
+
+/// MIPS ISA mode for mixed-mode binaries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MipsIsaMode {
+    /// Standard MIPS32/MIPS64 (32-bit instructions).
+    Mips32,
+    /// MIPS16e compact encoding (16/32-bit mixed).
+    Mips16e,
+    /// microMIPS compact encoding (16/32-bit mixed).
+    MicroMips,
+}
+
+/// Detect the ISA mode at a given address from the function's entry point.
+pub fn detect_isa_mode(addr: u64, has_micromips: bool) -> (u64, MipsIsaMode) {
+    if addr & 1 != 0 {
+        let real_addr = addr & !1u64;
+        let mode = if has_micromips {
+            MipsIsaMode::MicroMips
+        } else {
+            MipsIsaMode::Mips16e
+        };
+        (real_addr, mode)
+    } else {
+        (addr, MipsIsaMode::Mips32)
+    }
 }
 
 fn dispatch_insn(ctx: &mut LiftCtx, id: InsnId, ops: &[MipsOperand]) {
@@ -843,5 +868,26 @@ mod tests {
             }
             Err(_) => {} // decode failure is also acceptable
         }
+    }
+
+    #[test]
+    fn detect_isa_mode_standard() {
+        let (addr, mode) = detect_isa_mode(0x80001000, false);
+        assert_eq!(addr, 0x80001000);
+        assert_eq!(mode, MipsIsaMode::Mips32);
+    }
+
+    #[test]
+    fn detect_isa_mode_mips16e() {
+        let (addr, mode) = detect_isa_mode(0x80001001, false);
+        assert_eq!(addr, 0x80001000);
+        assert_eq!(mode, MipsIsaMode::Mips16e);
+    }
+
+    #[test]
+    fn detect_isa_mode_micromips() {
+        let (addr, mode) = detect_isa_mode(0x80001001, true);
+        assert_eq!(addr, 0x80001000);
+        assert_eq!(mode, MipsIsaMode::MicroMips);
     }
 }

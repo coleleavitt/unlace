@@ -318,6 +318,10 @@ fn parse_builtin_async_table(image: &BinaryImage, sec: &Section) -> Vec<SwiftBui
         let function_name = image.symbols.get(&function_va).map(|sym| {
             crate::demangle_swift::try_demangle_swift(&sym.name).unwrap_or_else(|| sym.name.clone())
         });
+        let function_name = image
+            .symbols
+            .get(&function_va)
+            .map(|sym| crate::demangle_swift::try_demangle_swift(&sym.name).unwrap_or_else(|| sym.name.clone()));
         out.push(SwiftBuiltinAsyncFunction {
             record_va,
             function_va,

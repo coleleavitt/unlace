@@ -398,3 +398,72 @@ mod tests {
         );
     }
 }
+
+/// Small Buffer Optimization (SBO) threshold for std::function.
+///
+/// std::function stores callable objects inline (without heap allocation)
+/// when they fit within the SBO buffer. The typical sizes are:
+/// - libstdc++: 16 bytes (2 pointers)
+/// - libc++: 24 bytes (3 pointers)
+/// - MSVC: 40 bytes (5 pointers, includes alignment padding)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SboThreshold {
+    /// libstdc++ (GCC): 16-byte inline buffer.
+    Libstdcxx,
+    /// libc++ (Clang/LLVM): 24-byte inline buffer.
+    Libcxx,
+    /// MSVC STL: typically 40 bytes.
+    Msvc,
+    /// Custom/unknown threshold.
+    Custom(usize),
+}
+
+impl SboThreshold {
+    pub fn size_bytes(self) -> usize {
+        match self {
+            Self::Libstdcxx => 16,
+            Self::Libcxx => 24,
+            Self::Msvc => 40,
+            Self::Custom(n) => n,
+        }
+    }
+
+    /// Detect likely SBO implementation from observed struct size.
+    pub fn from_struct_size(total_size: usize, ptr_size: usize) -> Self {
+        let buffer_size = total_size.saturating_sub(2 * ptr_size); // invoker + manager
+        match buffer_size {
+            16 => Self::Libstdcxx,
+            24 => Self::Libcxx,
+            40 => Self::Msvc,
+            n => Self::Custom(n),
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod sbo_tests {
+    use super::SboThreshold;
+
+    #[test]
+    fn detect_libstdcxx_sbo() {
+        // 16 (buffer) + 8 (invoker) + 8 (manager) = 32
+        let t = SboThreshold::from_struct_size(32, 8);
+        assert_eq!(t, SboThreshold::Libstdcxx);
+        assert_eq!(t.size_bytes(), 16);
+    }
+
+    #[test]
+    fn detect_libcxx_sbo() {
+        // 24 (buffer) + 8 + 8 = 40
+        let t = SboThreshold::from_struct_size(40, 8);
+        assert_eq!(t, SboThreshold::Libcxx);
+    }
+
+    #[test]
+    fn detect_msvc_sbo() {
+        // 40 (buffer) + 8 + 8 = 56
+        let t = SboThreshold::from_struct_size(56, 8);
+        assert_eq!(t, SboThreshold::Msvc);
+    }
+}

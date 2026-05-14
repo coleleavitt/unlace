@@ -2,7 +2,7 @@ use capstone::arch::mips::MipsOperand;
 use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
-use crate::lift::LiftCtx;
+use crate::lift::{CALLOTHER_MIPS_BITSWAP, CALLOTHER_MIPS_DBITSWAP, LiftCtx};
 
 fn lift_reg3(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
     if ops.len() < 3 {
@@ -149,6 +149,40 @@ fn lift_shift_imm(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
 
 fn lift_shift_var(ctx: &mut LiftCtx, ops: &[MipsOperand], ir_op: IrOp) {
     lift_shift_imm(ctx, ops, ir_op);
+}
+
+fn lift_callother_unary(ctx: &mut LiftCtx, ops: &[MipsOperand], tag: u64) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let dst = match &ops[0] {
+        MipsOperand::Reg(r) => ctx.write_reg(*r),
+        _ => None,
+    };
+    let src = ctx.read_operand(&ops[1]);
+    match (dst, src) {
+        (Some(dst), Some(src)) => {
+            let result = ctx.alloc_unique(8);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Callother,
+                result,
+                smallvec![Varnode::constant(tag, 8), src],
+                ctx.addr,
+            ));
+            ctx.write_to_reg(dst, result);
+        }
+        (None, _) => {}
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_bitswap(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
+    lift_callother_unary(ctx, ops, CALLOTHER_MIPS_BITSWAP);
+}
+
+pub fn lift_dbitswap(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
+    lift_callother_unary(ctx, ops, CALLOTHER_MIPS_DBITSWAP);
 }
 
 pub fn lift_sll(ctx: &mut LiftCtx, ops: &[MipsOperand]) {

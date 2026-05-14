@@ -563,3 +563,4 @@ mod tests {
 }
 pub mod union_recovery;
 pub mod switch_table_recovery;
+pub mod calling_conv_coverage;

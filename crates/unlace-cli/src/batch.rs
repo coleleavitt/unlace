@@ -80,6 +80,7 @@ pub fn run_batch(
             | ArchId::M68k
             | ArchId::Xtensa
             | ArchId::TriCore
+            | ArchId::AmdGpu
             | ArchId::Ppc
             | ArchId::Ppc64
             | ArchId::Sbpf

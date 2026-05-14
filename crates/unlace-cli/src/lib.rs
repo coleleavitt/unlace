@@ -69,6 +69,7 @@ pub fn parse_arch(s: &str) -> Result<ArchId> {
         "sass" | "nvidia-sass" | "nv-sass" | "sm70" | "sm_70" => Ok(ArchId::NvidiaSass),
         "xtensa" | "esp32" | "esp8266" | "lx6" | "lx106" => Ok(ArchId::Xtensa),
         "tricore" | "tc" | "tc1" | "tc1.6" | "tc1.6.2" => Ok(ArchId::TriCore),
+        "amdgpu" | "amd-gpu" | "gcn" | "rdna" => Ok(ArchId::AmdGpu),
         _ => bail!("unknown architecture: '{s}'"),
     }
 }

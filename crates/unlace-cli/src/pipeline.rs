@@ -132,6 +132,7 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::Sbpf
         ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc
         ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::TriCore
+        ArchId::Ppc | ArchId::Ppc64 | ArchId::V850 | ArchId::Arc | ArchId::AmdGpu
     );
     let text_range = image.section_by_name(".text").map(|text| {
         let start = text.vaddr;

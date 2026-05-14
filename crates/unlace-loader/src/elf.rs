@@ -146,6 +146,7 @@ where
         elf::EM_XTENSA => ArchId::Xtensa,
         elf::EM_HEXAGON => ArchId::Hexagon,
         elf::EM_TRICORE => ArchId::TriCore,
+        224 => ArchId::AmdGpu, // EM_AMDGPU
         _ => ArchId::Unknown(machine),
     };
 

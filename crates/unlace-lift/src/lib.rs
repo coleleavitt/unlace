@@ -3,6 +3,7 @@
 use unlace_ir::{ArchId, LiftError, LiftedInsn, Lifter, RegisterFile};
 
 pub use unlace_lift_agx::AgxLifter;
+pub use unlace_lift_amdgpu::AmdGpuLifter;
 pub use unlace_lift_arc::ArcLifter;
 pub use unlace_lift_arm::ArmLifter;
 pub use unlace_lift_avr::AvrLifter;
@@ -105,6 +106,7 @@ pub fn get_lifter_with_endian(arch: ArchId, endian: Option<LifterEndian>) -> Box
         ArchId::SuperH => Box::new(SuperHLifter::new()),
         ArchId::Xtensa => Box::new(XtensaLifter::new()),
         ArchId::Hexagon => Box::new(HexagonLifter::new()),
+        ArchId::AmdGpu => Box::new(AmdGpuLifter::new()),
         other => Box::new(UnimplementedLifter::new(other)),
     }
 }
@@ -205,6 +207,9 @@ mod tests {
     fn test_get_lifter_tricore() {
         let l = get_lifter(ArchId::TriCore);
         assert_eq!(l.arch(), ArchId::TriCore);
+    fn test_get_lifter_amdgpu() {
+        let l = get_lifter(ArchId::AmdGpu);
+        assert_eq!(l.arch(), ArchId::AmdGpu);
         assert!(!l.register_file().registers.is_empty());
     }
 

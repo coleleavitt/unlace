@@ -16,6 +16,7 @@ members = [
     "crates/unlace-lift-ebpf",
     "crates/unlace-lift-avr",
     "crates/unlace-lift-msp430",
+    "crates/unlace-lift-amdgpu",
     "crates/unlace-lift-z80",
     "crates/unlace-lift-rx",
     "crates/unlace-lift-sparc",
@@ -114,6 +115,7 @@ unlace-lift-sass = { path = "crates/unlace-lift-sass" }
 unlace-lift-xtensa = { path = "crates/unlace-lift-xtensa" }
 unlace-lift-superh = { path = "crates/unlace-lift-superh" }
 unlace-lift-hexagon = { path = "crates/unlace-lift-hexagon" }
+unlace-lift-amdgpu = { path = "crates/unlace-lift-amdgpu" }
 unlace-passes = { path = "crates/unlace-passes" }
 unlace-struct = { path = "crates/unlace-struct" }
 unlace-output = { path = "crates/unlace-output" }

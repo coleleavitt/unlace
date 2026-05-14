@@ -311,6 +311,7 @@ mod tests {
             "__1",
             "function<bool (std::__1::basic_string<char>)>",
         ]);
+        let n = ns(&["std", "__1", "function<bool (std::__1::basic_string<char>)>"]);
         assert_eq!(
             recognize_stl_type(&n, "function").as_deref(),
             Some("std::function<bool (std::basic_string<char>)>"),

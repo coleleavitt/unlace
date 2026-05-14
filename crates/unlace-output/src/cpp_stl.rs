@@ -580,6 +580,7 @@ mod tests {
             (16, 8),
             (24, 8)
         ]));
+        assert!(looks_like_function_sbo_layout(&[(0, 8), (8, 8), (16, 8), (24, 8)]));
     }
 
     #[test]

@@ -1730,6 +1730,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "unlace-lift-8051"
+version = "0.1.0"
+dependencies = [
+ "smallvec",
+ "unlace-ir",
+]
+
+[[package]]
 name = "unlace-lift-agx"
 version = "0.1.0"
 dependencies = [

@@ -4256,6 +4256,28 @@ fn c_sig_return_type(ty: &PrimitiveType) -> &'static str {
     }
 }
 
+fn sanitize_template_type_for_c(ty: &str) -> String {
+    let mut out = String::with_capacity(ty.len());
+    let mut last_was_sep = false;
+    for ch in ty.chars() {
+        let c = match ch {
+            '<' | '>' | ',' | ':' => '_',
+            c if c.is_ascii_alphanumeric() || c == '_' || c == '*' || c.is_whitespace() => c,
+            _ => '_',
+        };
+        if c == '_' {
+            if !last_was_sep {
+                out.push('_');
+                last_was_sep = true;
+            }
+        } else {
+            out.push(c);
+            last_was_sep = false;
+        }
+    }
+    out.trim_matches('_').to_string()
+}
+
 fn dwarf_type_to_c(dwarf_type: &str) -> String {
     let mut normalized = dwarf_type
         .trim()
@@ -4264,6 +4286,7 @@ fn dwarf_type_to_c(dwarf_type: &str) -> String {
         .replace("restrict ", "")
         .replace("struct ", "")
         .replace("typedef ", "");
+    normalized = sanitize_template_type_for_c(&normalized);
     let ptr_depth = normalized.matches('*').count();
     normalized = normalized.replace('*', " ");
     let normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -10039,6 +10062,7 @@ mod tests {
                         type_name: "int".to_string(),
                     },
                 ],
+                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10100,6 +10124,7 @@ mod tests {
                         type_name: "int".to_string(),
                     },
                 ],
+                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10165,6 +10190,7 @@ mod tests {
                         type_name: "int".to_string(),
                     },
                 ],
+                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10316,6 +10342,7 @@ mod tests {
                 return_type: Some("int".to_string()),
                 decl: None,
                 locals: vec![],
+                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10368,6 +10395,7 @@ mod tests {
                 return_type: Some("int".to_string()),
                 decl: None,
                 locals: vec![],
+                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10443,6 +10471,7 @@ mod tests {
                 return_type: Some("int".to_string()),
                 decl: None,
                 locals: vec![],
+                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -10486,6 +10515,7 @@ mod tests {
                 return_type: Some("long".to_string()),
                 decl: None,
                 locals: vec![],
+                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {
@@ -14847,6 +14877,7 @@ mod tests {
                     expr_location: None,
                     locations: vec![],
                 }],
+                template_args: vec![],
             },
         );
         let dwarf = DwarfInfo {

@@ -3271,6 +3271,8 @@ pub const CALLOTHER_AARCH64_AUTDB: u64 = 0x415;
 pub const CALLOTHER_AARCH64_XPACI: u64 = 0x416;
 /// `Callother` tag for AArch64 `XPACD Xd`.
 pub const CALLOTHER_AARCH64_XPACD: u64 = 0x417;
+pub const CALLOTHER_AARCH64_PACGA: u64 = 0x418;
+pub const CALLOTHER_AARCH64_STRIP: u64 = 0x419;
 
 /// Decoded register-form PAC/AUTH/XPAC instruction (t300).
 ///

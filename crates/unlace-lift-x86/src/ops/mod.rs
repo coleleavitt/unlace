@@ -5,6 +5,7 @@ pub mod crypto;
 pub mod data_move;
 pub mod fpu;
 pub mod perfmon;
+pub mod perfctr;
 pub mod sse;
 pub mod stack;
 pub mod string_ops;

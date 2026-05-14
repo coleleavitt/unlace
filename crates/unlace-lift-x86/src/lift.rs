@@ -8,6 +8,8 @@ use crate::apx;
 use crate::ops::{
     arithmetic, bitwise, control_flow, crypto, data_move, fpu, perfmon, sse, stack,
     string_ops,
+    arithmetic, bitwise, control_flow, crypto, data_move, fpu, sse, stack, string_ops,
+    arithmetic, bitwise, control_flow, crypto, data_move, fpu, perfctr, sse, stack, string_ops,
 };
 use crate::register_file::{iced_reg_to_varnode, x86_64_register_file};
 
@@ -837,6 +839,11 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Vpmullq => sse::lift_avx_binop(ctx, insn, sse::tag::VPMULLQ_512),
 
         // ── AES-NI (t310) ───────────────────────────────────────
+        // ── AES-NI (t309) ───────────────────────────────────────
+        // ── Performance-monitoring counters (t312) ──────────────
+        M::Rdpmc => perfctr::lift_rdpmc(ctx, insn),
+
+        // ── AES-NI (t309) ───────────────────────────────────────
         M::Aesenc => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESENC),
         M::Aesenclast => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESENCLAST),
         M::Aesdec => crypto::lift_aes_binop(ctx, insn, crypto::tag::AESDEC),

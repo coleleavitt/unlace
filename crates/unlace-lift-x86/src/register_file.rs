@@ -1077,3 +1077,51 @@ mod tests {
     }
 
 }
+
+// Intel AMX tile registers.
+// Each TMM register is 1024 bytes (max 16 rows × 64 bytes per row).
+// The TILECFG register (64 bytes) stores the current tile configuration.
+const AMX_BASE: u64 = K7 + 8; // After last mask register
+
+pub const fn tmm_offset(n: u64) -> u64 {
+    AMX_BASE + 64 + n * 1024 // skip TILECFG
+}
+
+pub const TILECFG: u64 = AMX_BASE;
+pub const TMM0: u64 = tmm_offset(0);
+pub const TMM1: u64 = tmm_offset(1);
+pub const TMM2: u64 = tmm_offset(2);
+pub const TMM3: u64 = tmm_offset(3);
+pub const TMM4: u64 = tmm_offset(4);
+pub const TMM5: u64 = tmm_offset(5);
+pub const TMM6: u64 = tmm_offset(6);
+pub const TMM7: u64 = tmm_offset(7);
+
+pub const TMM_SIZE: u8 = 64; // Represent as 64-byte varnodes (logical max row)
+
+
+#[cfg(test)]
+mod amx_tests {
+    use super::*;
+
+    #[test]
+    fn tmm_offsets_are_distinct() {
+        let offsets: Vec<u64> = (0..8).map(tmm_offset).collect();
+        for i in 0..8 {
+            for j in (i+1)..8 {
+                assert_ne!(offsets[i], offsets[j]);
+            }
+        }
+    }
+
+    #[test]
+    fn tilecfg_before_tmm0() {
+        assert!(TILECFG < TMM0);
+    }
+
+    #[test]
+    fn tmm_spacing_is_1024() {
+        assert_eq!(TMM1 - TMM0, 1024);
+        assert_eq!(TMM7 - TMM6, 1024);
+    }
+}

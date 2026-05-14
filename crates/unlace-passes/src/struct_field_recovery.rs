@@ -175,8 +175,8 @@ fn walk_addr(
         IrOp::IntAdd => {
             let lhs_in = def.insn.inputs.first()?;
             let rhs_in = def.insn.inputs.get(1)?;
-            let lhs_const = (lhs_in.space == SpaceId::Const).then(|| lhs_in.offset);
-            let rhs_const = (rhs_in.space == SpaceId::Const).then(|| rhs_in.offset);
+            let lhs_const = (lhs_in.space == SpaceId::Const).then_some(lhs_in.offset);
+            let rhs_const = (rhs_in.space == SpaceId::Const).then_some(rhs_in.offset);
 
             let lhs_sv = func.var_map.get(&(def.bid, def.idx, VarnodeSlot::Input(0)));
             let rhs_sv = func.var_map.get(&(def.bid, def.idx, VarnodeSlot::Input(1)));
@@ -213,12 +213,12 @@ fn walk_addr(
             // iv * const  or  const * iv
             let (iv_candidate, k) = if let (Some(svi), Some(c)) = (
                 lhs_sv,
-                (rhs_in.space == SpaceId::Const).then(|| rhs_in.offset),
+                (rhs_in.space == SpaceId::Const).then_some(rhs_in.offset),
             ) {
                 (*svi, c)
             } else if let (Some(svi), Some(c)) = (
                 rhs_sv,
-                (lhs_in.space == SpaceId::Const).then(|| lhs_in.offset),
+                (lhs_in.space == SpaceId::Const).then_some(lhs_in.offset),
             ) {
                 (*svi, c)
             } else {

@@ -3,7 +3,7 @@
 //! Detects jump-table patterns (indexed indirect branches) across all
 //! supported architectures and recovers the table entries as branch targets.
 
-use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
+use unlace_ir::{IrInsn, IrOp, SpaceId};
 
 /// A recovered switch table.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +58,7 @@ pub fn detect_switch_tables(insns: &[IrInsn]) -> Vec<SwitchTable> {
 mod tests {
     use super::*;
     use smallvec::smallvec;
+    use unlace_ir::Varnode;
 
     #[test]
     fn test_detects_branchind_after_load() {

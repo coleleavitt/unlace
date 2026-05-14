@@ -124,10 +124,7 @@ fn pred_uses_unconditional_branch(func: &SsaFunction, pred: BlockId, tail: Block
     if block.successors.len() != 1 || block.successors[0] != tail {
         return false;
     }
-    match block.insns.last().map(|i| i.op) {
-        Some(IrOp::Branch) | None => true,
-        _ => false,
-    }
+    matches!(block.insns.last().map(|i| i.op), Some(IrOp::Branch) | None)
 }
 
 fn collect_candidates(func: &SsaFunction) -> Vec<BlockId> {
@@ -163,7 +160,7 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::ssa::{
-        CallingConvention, DominatorTree, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot,
+        CallingConvention, DominatorTree, PrimitiveType, SsaFunction,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
@@ -321,7 +318,7 @@ mod tests {
         let still_to_b5 = (1..=4)
             .filter(|i| {
                 let succs = &ssa.function.blocks[&BlockId(*i)].successors;
-                succs.iter().any(|&s| s == BlockId(5))
+                succs.contains(&BlockId(5))
             })
             .count();
         assert_eq!(

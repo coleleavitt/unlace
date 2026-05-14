@@ -111,7 +111,7 @@ fn same_base_class(a: SsaVarnode, b: SsaVarnode) -> bool {
 
 fn collect_all_ssa_vars(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
     let mut out = BTreeSet::new();
-    for (_, sv) in &func.var_map {
+    for sv in func.var_map.values() {
         out.insert(*sv);
     }
     for phis in func.phi_map.values() {

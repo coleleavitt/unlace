@@ -152,7 +152,7 @@ mod tests {
         // addrs[0] calls addrs[1] calls addrs[2] ...; last is a leaf.
         let mut funcs = BTreeMap::new();
         for (i, &addr) in addrs.iter().enumerate() {
-            let mut func = Function::new(&format!("f{i}"), BlockId(0), addr);
+            let mut func = Function::new(format!("f{i}"), BlockId(0), addr);
             let mut bb = BasicBlock::new(BlockId(0));
             if let Some(&next) = addrs.get(i + 1) {
                 bb.insns.push(IrInsn::without_output(

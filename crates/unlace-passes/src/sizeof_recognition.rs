@@ -224,6 +224,7 @@ fn mask_to_alignment(mask: u64, width: u8) -> Option<u64> {
 /// own `composite_var_types` plus `inferred_structs` (no extra context
 /// required). For wider recognition (every struct in the binary), call
 /// [`recognize_with_resolver`] directly.
+#[derive(Default)]
 pub struct SizeofRecognitionPass {
     /// Optional name resolver (call-target address → callee name).
     /// When `None`, no allocator-shaped patterns are recognised; only the
@@ -231,13 +232,6 @@ pub struct SizeofRecognitionPass {
     pub name_resolver: Option<Box<dyn Fn(u64) -> Option<&'static str> + Send + Sync>>,
 }
 
-impl Default for SizeofRecognitionPass {
-    fn default() -> Self {
-        Self {
-            name_resolver: None,
-        }
-    }
-}
 
 impl Pass for SizeofRecognitionPass {
     fn name(&self) -> &str {
@@ -249,7 +243,7 @@ impl Pass for SizeofRecognitionPass {
         structs.extend(func.inferred_structs.values().cloned());
 
         let resolver: Box<dyn Fn(u64) -> Option<&'static str>> = match &self.name_resolver {
-            Some(r) => Box::new(|addr| r(addr)),
+            Some(r) => Box::new(r),
             None => Box::new(|_| None),
         };
 
@@ -261,7 +255,7 @@ impl Pass for SizeofRecognitionPass {
 mod tests {
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{PrimitiveType, build_ssa};
+    use unlace_ir::ssa::build_ssa;
     use unlace_ir::types::{StructFieldType, Type};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
@@ -335,7 +329,7 @@ mod tests {
 
         let mut ssa = build_call_with_const_size_arg(8, RDI, 0xCAFE);
         let r = move |a: u64| if a == 0xCAFE { Some("malloc") } else { None };
-        let changed = recognize_with_resolver(&mut ssa, &r, &[pt.clone()]);
+        let changed = recognize_with_resolver(&mut ssa, r, std::slice::from_ref(&pt));
 
         assert!(changed);
         assert_eq!(
@@ -351,7 +345,7 @@ mod tests {
         let pt = point_struct();
         let mut ssa = build_call_with_const_size_arg(8, RDX, 0xBEEF);
         let r = move |a: u64| if a == 0xBEEF { Some("memcpy") } else { None };
-        let changed = recognize_with_resolver(&mut ssa, &r, &[pt.clone()]);
+        let changed = recognize_with_resolver(&mut ssa, r, std::slice::from_ref(&pt));
 
         assert!(changed);
         assert_eq!(ssa.sizeof_type_map.get(&(BlockId(0), 1)), Some(&pt));
@@ -379,7 +373,7 @@ mod tests {
         let mut ssa = build_ssa(func);
 
         let r = |_: u64| -> Option<&'static str> { None };
-        let changed = recognize_with_resolver(&mut ssa, &r, &[pt.clone()]);
+        let changed = recognize_with_resolver(&mut ssa, r, std::slice::from_ref(&pt));
 
         assert!(changed);
         assert_eq!(
@@ -397,7 +391,7 @@ mod tests {
         let pt = point_struct();
         let mut ssa = build_call_with_const_size_arg(8, RDI, 0xDEAD);
         let r = |_: u64| -> Option<&'static str> { None };
-        let changed = recognize_with_resolver(&mut ssa, &r, &[pt.clone()]);
+        let changed = recognize_with_resolver(&mut ssa, r, std::slice::from_ref(&pt));
 
         assert!(!changed);
         assert!(ssa.sizeof_type_map.is_empty());
@@ -406,7 +400,7 @@ mod tests {
         // Likewise a malloc() with a size that doesn't match any struct.
         let mut ssa2 = build_call_with_const_size_arg(99, RDI, 0xCAFE);
         let r2 = |a: u64| if a == 0xCAFE { Some("malloc") } else { None };
-        assert!(!recognize_with_resolver(&mut ssa2, &r2, &[pt.clone()]));
+        assert!(!recognize_with_resolver(&mut ssa2, r2, std::slice::from_ref(&pt)));
         assert!(ssa2.sizeof_type_map.is_empty());
 
         // Use resolver helper too to keep it referenced.

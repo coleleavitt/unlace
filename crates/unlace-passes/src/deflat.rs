@@ -62,7 +62,7 @@ pub fn detect_flattened_dispatch(func: &SsaFunction) -> Option<FlattenedCfg> {
     let unknown_block = func.cfg.unknown_block();
 
     let mut in_degree: BTreeMap<BlockId, usize> = BTreeMap::new();
-    for (&bid, _) in blocks.iter() {
+    for &bid in blocks.keys() {
         let edges = func.cfg.edges_to(bid);
         in_degree.insert(bid, edges.len());
     }
@@ -245,7 +245,7 @@ fn extract_state_to_block_map(
     // by conditional branches.
     let mut last_compared_const: Option<u64> = None;
 
-    for (_i, insn) in disp_block.insns.iter().enumerate() {
+    for insn in disp_block.insns.iter() {
         match insn.op {
             IrOp::IntEqual | IrOp::IntNotequal => {
                 // Find the constant operand in this comparison.
@@ -257,7 +257,7 @@ fn extract_state_to_block_map(
                     }
                 });
                 // Verify the state variable is also an operand.
-                let has_state = insn.inputs.iter().any(|input| *input == *state_var);
+                let has_state = insn.inputs.contains(state_var);
                 if has_state {
                     last_compared_const = const_val;
                 }

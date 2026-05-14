@@ -29,7 +29,9 @@ use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
-/// Byte size of a pointer on the target (assumed x86-64).
+/// Byte size of a pointer on the target (assumed x86-64). Documented for the
+/// reader; equal to `DESTROY_FN_OFFSET` and `SUSPEND_INDEX_OFFSET - 8`.
+#[allow(dead_code)]
 const PTR_SIZE: u64 = 8;
 
 /// Canonical offset of the resume function pointer in the coroutine frame.
@@ -158,14 +160,14 @@ fn detect_ramp(func: &SsaFunction) -> Option<CoroutineSite> {
                 match offset {
                     RESUME_FN_OFFSET => resume_store = Some((bid, i)),
                     DESTROY_FN_OFFSET => _destroy_store = Some((bid, i)),
-                    off if off > DESTROY_FN_OFFSET + PTR_SIZE => {
-                        // First field after the two function pointers + index
-                        // is likely the promise.
-                        if off >= SUSPEND_INDEX_OFFSET + 2 {
-                            if promise_offset.is_none() || off < promise_offset.unwrap() {
-                                promise_offset = Some(off);
-                            }
-                        }
+                    // First field after the two function pointers + index
+                    // is likely the promise. `off >= SUSPEND_INDEX_OFFSET + 2`
+                    // (= 18) implies `off > DESTROY_FN_OFFSET + PTR_SIZE` (= 16),
+                    // so the latter check is redundant.
+                    off if off >= SUSPEND_INDEX_OFFSET + 2
+                        && (promise_offset.is_none() || off < promise_offset.unwrap()) =>
+                    {
+                        promise_offset = Some(off);
                     }
                     _ => {}
                 }
@@ -395,12 +397,11 @@ fn resolve_base_offset_full(
                 return Some(idx_vn.offset * elem_size);
             }
         }
-        IrOp::Copy if def_insn.inputs.len() == 1 => {
+        IrOp::Copy if def_insn.inputs.len() == 1
             // Walk through copies.
-            if def_insn.inputs[0] == base {
+            && def_insn.inputs[0] == base => {
                 return Some(0);
             }
-        }
         _ => {}
     }
     None

@@ -84,14 +84,12 @@ pub fn infer_param_nullability(func: &SsaFunction) -> BTreeMap<u32, Nullability>
         }
     }
 
-    let mut param_idx: u32 = 0;
-    for &reg_off in int_regs {
+    for (param_idx, &reg_off) in (0_u32..).zip(int_regs.iter()) {
         if !read_before_write.contains(&reg_off) {
             break;
         }
         let nullability = classify_param(func, reg_off);
         out.insert(param_idx, nullability);
-        param_idx += 1;
     }
 
     out

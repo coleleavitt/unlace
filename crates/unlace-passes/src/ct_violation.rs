@@ -109,18 +109,17 @@ pub fn detect_ct_violations(func: &SsaFunction, secrets: &[SsaVarnode]) -> Vec<C
                         }
                     }
                 }
-                IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright => {
+                IrOp::IntLeft | IrOp::IntRight | IrOp::IntSright
                     // Variable shift: operand 1 is the shift amount. A
                     // constant shift amount lives in `SpaceId::Const` and
                     // is never present in `var_map`, so a tainted lookup
                     // hit implies a register-sourced (variable) shift.
-                    if input_is_tainted(func, &tainted, bid, i, 1) {
+                    if input_is_tainted(func, &tainted, bid, i, 1) => {
                         violations.insert(CtViolation {
                             kind: CtViolationKind::VariableShift,
                             location: (bid, i),
                         });
                     }
-                }
                 _ => {}
             }
         }
@@ -224,14 +223,13 @@ mod tests {
             if sv.base != base {
                 continue;
             }
-            if matches!(slot, VarnodeSlot::Output) {
-                if best.map_or(true, |b| sv.version < b.version) {
+            if matches!(slot, VarnodeSlot::Output)
+                && best.map_or(true, |b| sv.version < b.version) {
                     best = Some(*sv);
                 }
-            }
         }
         if best.is_none() {
-            for (_, sv) in &ssa.var_map {
+            for sv in ssa.var_map.values() {
                 if sv.base == base && best.map_or(true, |b| sv.version < b.version) {
                     best = Some(*sv);
                 }

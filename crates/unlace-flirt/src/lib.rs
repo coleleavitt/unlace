@@ -35,6 +35,7 @@ pub use library::{
     SignatureLibrary, list_bundled_libraries, load_all_bundled, load_bundled_libraries,
     load_bundled_library,
 };
+pub mod fuzzy_lookup;
 pub use pattern::{
     FlirtDb, FlirtMatch, FlirtPattern, FunctionBytes, load_patterns_from_toml,
     load_patterns_from_toml_str, match_functions,

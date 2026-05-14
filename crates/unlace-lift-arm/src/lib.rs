@@ -40,6 +40,13 @@ use crate::lift::{
     CALLOTHER_ARM_USAT,
     CALLOTHER_INT_MULT_HIGH,
     CALLOTHER_INT_SMULT_HIGH,
+    CALLOTHER_AARCH64_SMC,
+    CALLOTHER_AARCH64_SVC,
+    CALLOTHER_AARCH64_HVC,
+    CALLOTHER_AARCH64_ERET,
+    CALLOTHER_ARM_SMC,
+    CALLOTHER_ARM_SVC,
+    CALLOTHER_ARM_HVC,
     ItState,
     LdmStmAddressing,
     decode_arm_ldm_stm,
@@ -3386,5 +3393,115 @@ use crate::lift::{
         assert_eq!(co.inputs[0].offset, CALLOTHER_SVE_PTRUE);
         assert_eq!(co.inputs[1].offset, 0xFF);
         assert_eq!(co.inputs[2], Varnode::reg(sve_p_offset(3), SVE_P_SIZE));
+    }
+
+    // ── t317: SMC / SVC / HVC / ERET TrustZone intrinsics ──────────────
+
+    #[test]
+    fn test_aarch64_svc_lifts_to_callother_t317() {
+        // SVC #0x80 → d4001001
+        // Encoding: 0xD4000001 | (imm16 << 5)  →  imm16=0x80 → 0xD4001001
+        let result = lifter()
+            .lift_insn(&[0x01, 0x10, 0x00, 0xd4], 0x1000)
+            .expect("should decode SVC");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("SVC should emit Callother");
+        assert_eq!(co.inputs[0].offset, CALLOTHER_AARCH64_SVC);
+        assert_eq!(co.inputs[1].offset, 0x80);
+    }
+
+    #[test]
+    fn test_aarch64_hvc_lifts_to_callother_t317() {
+        // HVC #0x1 → d4000002
+        // Encoding: 0xD4000002 | (imm16 << 5)  →  imm16=1 → 0xD4000022
+        let result = lifter()
+            .lift_insn(&[0x22, 0x00, 0x00, 0xd4], 0x1000)
+            .expect("should decode HVC");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("HVC should emit Callother");
+        assert_eq!(co.inputs[0].offset, CALLOTHER_AARCH64_HVC);
+        assert_eq!(co.inputs[1].offset, 1);
+    }
+
+    #[test]
+    fn test_aarch64_smc_lifts_to_callother_t317() {
+        // SMC #0x0 → d4000003
+        let result = lifter()
+            .lift_insn(&[0x03, 0x00, 0x00, 0xd4], 0x1000)
+            .expect("should decode SMC");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("SMC should emit Callother");
+        assert_eq!(co.inputs[0].offset, CALLOTHER_AARCH64_SMC);
+        assert_eq!(co.inputs[1].offset, 0);
+    }
+
+    #[test]
+    fn test_aarch64_eret_lifts_to_callother_and_return_t317() {
+        // ERET → d69f03e0
+        let result = lifter()
+            .lift_insn(&[0xe0, 0x03, 0x9f, 0xd6], 0x1000)
+            .expect("should decode ERET");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("ERET should emit Callother");
+        assert_eq!(co.inputs[0].offset, CALLOTHER_AARCH64_ERET);
+        // ERET also emits a Return.
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Return));
+    }
+
+    #[test]
+    fn test_arm32_svc_lifts_to_callother_t317() {
+        // SVC #0 → ef000000  (ARM encoding: 0xEF000000 | imm24)
+        let arm32 = ArmLifter::new_arm32();
+        let result = arm32
+            .lift_insn(&[0x00, 0x00, 0x00, 0xef], 0x1000)
+            .expect("should decode ARM32 SVC");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("ARM32 SVC should emit Callother");
+        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SVC);
+    }
+
+    #[test]
+    fn test_arm32_smc_lifts_to_callother_t317() {
+        // SMC #0 → e1600070  (ARM encoding for SMC)
+        let arm32 = ArmLifter::new_arm32();
+        let result = arm32
+            .lift_insn(&[0x70, 0x00, 0x60, 0xe1], 0x1000)
+            .expect("should decode ARM32 SMC");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("ARM32 SMC should emit Callother");
+        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_SMC);
+    }
+
+    #[test]
+    fn test_arm32_hvc_lifts_to_callother_t317() {
+        // HVC #0 → e1400070  (ARM encoding for HVC)
+        let arm32 = ArmLifter::new_arm32();
+        let result = arm32
+            .lift_insn(&[0x70, 0x00, 0x40, 0xe1], 0x1000)
+            .expect("should decode ARM32 HVC");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("ARM32 HVC should emit Callother");
+        assert_eq!(co.inputs[0].offset, CALLOTHER_ARM_HVC);
     }
 }

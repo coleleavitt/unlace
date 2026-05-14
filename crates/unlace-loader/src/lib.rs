@@ -67,7 +67,7 @@ pub use intel_hex::{
 pub use ios_img4::{Img4Container, Img4Error, parse_img4};
 pub use java_class::{JAVA_CLASS_MAGIC, JavaClass, JavaError, JavaField, JavaMethod, parse_class};
 pub use macho::MachoLoader;
-pub use pdb::{PdbInfo, import_pdb, merge_pdb_symbols};
+pub use pdb::{InlineeSite, PdbInfo, import_pdb, merge_pdb_symbols};
 pub use pdb_types::{
     CanonicalPdbType, PdbError, PdbField, PdbType, PdbTypeAlias, PdbTypeKind, PdbTypeUnification,
     PdbTypes, ProcSig, import_pdb_types, ipi_type_hash, resolve_cross_dll_forward_decls,

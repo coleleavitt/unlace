@@ -2991,6 +2991,78 @@ fn emit_pac_callother(ctx: &mut LiftCtx, pac: &PacAuthDecoded) {
     ctx.emit(IrInsn::with_output(IrOp::Callother, xd, inputs, ctx.addr));
 }
 
+// ── t294/t305 — AArch64 Transactional Memory Extension (TME) ───────────
+//
+// TSTART/TCOMMIT live in the system-instruction encoding space:
+//   BaseSystemI:      bits[31:22] = 1101010100
+//   TME subspace:     bits[20:12] = 000110011
+//   op2:              bits[7:5]   = 011
+//   TSTART:           L=1, CRm=0000, Rt = destination X register
+//   TCOMMIT:          L=0, CRm=0000, Rt = 11111
+//
+// We model both as Callother intrinsics because transaction begin/commit
+// affect hidden architectural transaction state and memory ordering rather
+// than ordinary registers/memory. TSTART additionally returns the architectural
+// status code in Rt, so its Callother has Rt as output.
+
+/// `Callother` tag for AArch64 TME `TSTART Xt`.
+/// Emitted as `Xt = Callother(CALLOTHER_AARCH64_TSTART)`.
+pub const CALLOTHER_AARCH64_TSTART: u64 = 0x42A;
+/// `Callother` tag for AArch64 TME `TCOMMIT`.
+/// Emitted as `Callother(CALLOTHER_AARCH64_TCOMMIT)`.
+pub const CALLOTHER_AARCH64_TCOMMIT: u64 = 0x42B;
+pub const CALLOTHER_AARCH64_TTEST: u64 = 0x42C;
+pub const CALLOTHER_AARCH64_TCANCEL: u64 = 0x42D;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Aarch64TmeDecoded {
+    Tstart { rt: u8 },
+    Tcommit,
+}
+
+/// Decode the FEAT_TME TSTART/TCOMMIT instructions directly from the raw
+/// A64 word. The in-tree Capstone may not know these mnemonics, so this
+/// pre-decode keeps the lifter deterministic across host Capstone versions.
+pub fn try_aarch64_tme(insn: u32) -> Option<Aarch64TmeDecoded> {
+    const BASE_MASK: u32 = 0xFFDF_F0E0;
+    const TME_SYSTEM_BASE: u32 = 0xD503_3060;
+
+    if (insn & BASE_MASK) != TME_SYSTEM_BASE {
+        return None;
+    }
+
+    let l = (insn >> 21) & 1;
+    let crm = (insn >> 8) & 0xF;
+    let rt = (insn & 0x1F) as u8;
+
+    match (l, crm, rt) {
+        (1, 0, rt) if rt <= 30 => Some(Aarch64TmeDecoded::Tstart { rt }),
+        (0, 0, 31) => Some(Aarch64TmeDecoded::Tcommit),
+        _ => None,
+    }
+}
+
+fn emit_aarch64_tme(ctx: &mut LiftCtx, tme: &Aarch64TmeDecoded) {
+    match *tme {
+        Aarch64TmeDecoded::Tstart { rt } => {
+            let dst = xreg_varnode(rt);
+            ctx.emit(IrInsn::with_output(
+                IrOp::Callother,
+                dst,
+                smallvec![Varnode::constant(CALLOTHER_AARCH64_TSTART, 8)],
+                ctx.addr,
+            ));
+        }
+        Aarch64TmeDecoded::Tcommit => {
+            ctx.emit(IrInsn::without_output(
+                IrOp::Callother,
+                smallvec![Varnode::constant(CALLOTHER_AARCH64_TCOMMIT, 8)],
+                ctx.addr,
+            ));
+        }
+    }
+}
+
 /// Canonical AArch64 CSEL intrinsic tag. Emitted by `lift_csel` as
 /// `Callother(CALLOTHER_AARCH64_CSEL, cond, Rn, Rm) → Rd`, optionally
 /// followed by a trailing `Varnode::constant(cc, 1)` input carrying the

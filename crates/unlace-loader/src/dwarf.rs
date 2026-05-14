@@ -43,6 +43,18 @@ use gimli::{
     DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable, DW_TAG_volatile_type,
     EndianSlice, RunTimeEndian,
     DW_TAG_variable, DW_TAG_volatile_type, EndianSlice, RunTimeEndian,
+    AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_data_member_location, DW_AT_high_pc,
+    DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_type, DW_TAG_base_type,
+    DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator, DW_TAG_formal_parameter,
+    DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type, DW_TAG_structure_type,
+    DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable, DW_TAG_volatile_type,
+    EndianSlice, RunTimeEndian,
+    AttributeValue, DW_AT_byte_size, DW_AT_const_value, DW_AT_data_member_location, DW_AT_frame_base,
+    DW_AT_high_pc, DW_AT_linkage_name, DW_AT_location, DW_AT_low_pc, DW_AT_name, DW_AT_type,
+    DW_TAG_base_type, DW_TAG_const_type, DW_TAG_enumeration_type, DW_TAG_enumerator,
+    DW_TAG_formal_parameter, DW_TAG_member, DW_TAG_pointer_type, DW_TAG_restrict_type,
+    DW_TAG_structure_type, DW_TAG_subprogram, DW_TAG_typedef, DW_TAG_union_type, DW_TAG_variable,
+    DW_TAG_volatile_type, EndianSlice, EvaluationResult, Location, Piece, RunTimeEndian, Value,
 };
 
 use crate::error::LoadError;
@@ -83,9 +95,11 @@ pub struct ParameterInfo {
 ///
 /// `frame_offset` is the signed offset relative to the canonical frame
 /// pointer (negative = below saved RBP, the common case for stack locals)
-/// when the variable's `DW_AT_location` is a single `DW_OP_fbreg` opcode.
-/// Other location forms (registers, complex DWARF expressions) are
-/// preserved without `frame_offset` so callers can still surface the name.
+/// when the variable's `DW_AT_location` ultimately resolves to a stack
+/// address based on the function frame base / CFA. Complex DWARF expressions
+/// are evaluated as far as possible; locations that do not resolve to a stack
+/// offset are preserved without `frame_offset` so callers can still surface
+/// the name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalVariable {
     pub name: String,
@@ -959,6 +973,7 @@ fn extract_params_and_locals(
 ) -> Result<(Vec<ParameterInfo>, Vec<LocalVariable>), gimli::Error> {
     let mut params = Vec::new();
     let mut locals = Vec::new();
+    let func_entry = func_node.entry().clone();
     let mut children = func_node.children();
 
     while let Some(child) = children.next()? {
@@ -991,6 +1006,12 @@ fn extract_params_and_locals(
             let locations = match location_attr {
                 Some(value) => extract_location_ranges(dwarf, unit, value)?,
                 None => Vec::new(),
+            let frame_offset = entry
+                .attr_value(DW_AT_location)
+                .and_then(decode_fbreg_offset);
+            let frame_offset = match entry.attr_value(DW_AT_location) {
+                Some(value) => decode_frame_offset_from_location(dwarf, unit, &func_entry, value),
+                None => None,
             };
             locals.push(LocalVariable {
                 name,
@@ -1005,44 +1026,152 @@ fn extract_params_and_locals(
     Ok((params, locals))
 }
 
-/// Decode a `DW_AT_location` value as a single `DW_OP_fbreg <sleb>` opcode.
-///
-/// Returns `Some(offset)` when the location is exactly a `DW_OP_fbreg`
-/// expression and `None` otherwise. The opcode constant is `0x91` and the
-/// operand is an SLEB128. Compilers commonly emit this single-opcode form
-/// for stack-allocated locals.
-fn decode_fbreg_offset(value: AttributeValue<R<'_>>) -> Option<i64> {
-    let bytes: &[u8] = match value {
-        AttributeValue::Block(b) | AttributeValue::Exprloc(gimli::Expression(b)) => b.slice(),
-        _ => return None,
-    };
-    if bytes.first().copied() != Some(0x91) {
-        return None;
-    }
-    let mut cursor = &bytes[1..];
-    let mut result: i64 = 0;
-    let mut shift: u32 = 0;
-    let mut last: u8;
+fn decode_frame_offset_from_location(
+    dwarf: &gimli::Dwarf<R<'_>>,
+    unit: &gimli::Unit<R<'_>>,
+    func_entry: &gimli::DebuggingInformationEntry<R<'_>>,
+    value: AttributeValue<R<'_>>,
+) -> Option<i64> {
+    let expression = attribute_expression(value)?;
+    let encoding = unit.encoding();
+    let mut eval = expression.evaluation(encoding);
+    eval.set_max_iterations(1024);
+
+    let mut frame_base = None;
+    let mut result = eval.evaluate().ok()?;
     loop {
-        let byte = *cursor.first()?;
-        cursor = &cursor[1..];
-        last = byte;
-        result |= ((byte & 0x7f) as i64) << shift;
-        shift += 7;
-        if byte & 0x80 == 0 {
-            break;
-        }
-        if shift >= 64 {
-            return None;
+        match result {
+            EvaluationResult::Complete => break,
+            EvaluationResult::RequiresFrameBase => {
+                let base = *frame_base.get_or_insert_with(|| {
+                    resolve_frame_base(dwarf, unit, func_entry).unwrap_or(0)
+                });
+                result = eval.resume_with_frame_base(base).ok()?;
+            }
+            EvaluationResult::RequiresCallFrameCfa => {
+                let base = *frame_base.get_or_insert_with(|| {
+                    resolve_frame_base(dwarf, unit, func_entry).unwrap_or(0)
+                });
+                result = eval.resume_with_call_frame_cfa(base).ok()?;
+            }
+            EvaluationResult::RequiresRelocatedAddress(address) => {
+                result = eval.resume_with_relocated_address(address).ok()?;
+            }
+            EvaluationResult::RequiresIndexedAddress { index, .. } => {
+                let address = dwarf.address(unit, index).ok()?;
+                result = eval.resume_with_indexed_address(address).ok()?;
+            }
+            EvaluationResult::RequiresMemory { .. }
+            | EvaluationResult::RequiresRegister { .. }
+            | EvaluationResult::RequiresTls(_)
+            | EvaluationResult::RequiresAtLocation(_)
+            | EvaluationResult::RequiresEntryValue(_)
+            | EvaluationResult::RequiresParameterRef(_)
+            | EvaluationResult::RequiresBaseType(_) => return None,
         }
     }
-    if shift < 64 && (last & 0x40) != 0 {
-        result |= -(1i64 << shift);
+
+    frame_offset_from_pieces(eval.as_result())
+}
+
+fn attribute_expression(value: AttributeValue<R<'_>>) -> Option<gimli::Expression<R<'_>>> {
+    match value {
+        AttributeValue::Exprloc(expr) => Some(expr),
+        AttributeValue::Block(block) => Some(gimli::Expression(block)),
+        _ => None,
     }
-    if !cursor.is_empty() {
+}
+
+fn resolve_frame_base(
+    dwarf: &gimli::Dwarf<R<'_>>,
+    unit: &gimli::Unit<R<'_>>,
+    func_entry: &gimli::DebuggingInformationEntry<R<'_>>,
+) -> Option<u64> {
+    let frame_base_attr = func_entry.attr_value(DW_AT_frame_base)?;
+    let expression = attribute_expression(frame_base_attr)?;
+    let mut eval = expression.evaluation(unit.encoding());
+    eval.set_max_iterations(1024);
+
+    let mut result = eval.evaluate().ok()?;
+    loop {
+        match result {
+            EvaluationResult::Complete => break,
+            EvaluationResult::RequiresRelocatedAddress(address) => {
+                result = eval.resume_with_relocated_address(address).ok()?;
+            }
+            EvaluationResult::RequiresIndexedAddress { index, .. } => {
+                let address = dwarf.address(unit, index).ok()?;
+                result = eval.resume_with_indexed_address(address).ok()?;
+            }
+            EvaluationResult::RequiresCallFrameCfa => {
+                result = eval.resume_with_call_frame_cfa(0).ok()?;
+            }
+            EvaluationResult::RequiresFrameBase
+            | EvaluationResult::RequiresMemory { .. }
+            | EvaluationResult::RequiresRegister { .. }
+            | EvaluationResult::RequiresTls(_)
+            | EvaluationResult::RequiresAtLocation(_)
+            | EvaluationResult::RequiresEntryValue(_)
+            | EvaluationResult::RequiresParameterRef(_)
+            | EvaluationResult::RequiresBaseType(_) => return None,
+        }
+    }
+
+    absolute_location_from_pieces(eval.as_result())
+}
+
+fn frame_offset_from_pieces(pieces: &[Piece<R<'_>>]) -> Option<i64> {
+    let piece = pieces.first()?;
+    if pieces.len() != 1 || piece.bit_offset.is_some() || piece.size_in_bits.is_some() {
         return None;
     }
-    Some(result)
+    match piece.location {
+        Location::Address { address } => Some(address as i64),
+        Location::Value { value } => value_to_i64(value),
+        _ => None,
+    }
+}
+
+fn absolute_location_from_pieces(pieces: &[Piece<R<'_>>]) -> Option<u64> {
+    let piece = pieces.first()?;
+    if pieces.len() != 1 || piece.bit_offset.is_some() || piece.size_in_bits.is_some() {
+        return None;
+    }
+    match piece.location {
+        Location::Address { address } => Some(address),
+        Location::Value { value } => value_to_u64(value),
+        _ => None,
+    }
+}
+
+fn value_to_i64(value: Value) -> Option<i64> {
+    match value {
+        Value::Generic(v) => Some(v as i64),
+        Value::I8(v) => Some(v as i64),
+        Value::I16(v) => Some(v as i64),
+        Value::I32(v) => Some(v as i64),
+        Value::I64(v) => Some(v),
+        Value::U8(v) => Some(v as i64),
+        Value::U16(v) => Some(v as i64),
+        Value::U32(v) => Some(v as i64),
+        Value::U64(v) => i64::try_from(v).ok(),
+        _ => None,
+    }
+}
+
+fn value_to_u64(value: Value) -> Option<u64> {
+    match value {
+        Value::Generic(v) => Some(v),
+        Value::U8(v) => Some(v as u64),
+        Value::U16(v) => Some(v as u64),
+        Value::U32(v) => Some(v as u64),
+        Value::U64(v) => Some(v),
+        Value::I8(v) if v >= 0 => Some(v as u64),
+        Value::I16(v) if v >= 0 => Some(v as u64),
+        Value::I32(v) if v >= 0 => Some(v as u64),
+        Value::I64(v) if v >= 0 => Some(v as u64),
+        _ => None,
+    }
 }
 
 fn extract_die_ranges<'a>(
@@ -2475,5 +2604,64 @@ int main(void) {
             "all location ranges should be valid: {:?}",
             total.locations
         );
+    }
+
+    #[test]
+    fn local_locations_do_not_regress_under_full_expression_eval() {
+        let image = load_debug_fixture();
+        let info = import_dwarf(&image).expect("should parse DWARF");
+        let compute = info
+            .functions
+            .values()
+            .find(|f| f.name == "compute")
+            .expect("compute exists");
+        assert!(
+            compute.locals.iter().any(|local| local.frame_offset.is_some()),
+            "expected at least one stack local with a resolved frame offset: {:?}",
+            compute.locals
+        );
+    }
+
+    #[test]
+    fn dwarf_expression_evaluator_supports_stack_arithmetic_and_branches() {
+        let expr = gimli::Expression(EndianSlice::new(
+            &[
+                0x30, // lit0
+                0x28, // bra +4
+                0x04,
+                0x00,
+                0x31, // lit1 (skipped)
+                0x13, // drop   (skipped)
+                0x9c, // call_frame_cfa
+                0x10, // constu 8
+                0x08,
+                0x22, // plus
+                0x10, // constu 1
+                0x01,
+                0x1c, // minus => cfa + 7
+            ],
+            RunTimeEndian::Little,
+        ));
+        let mut eval = expr.evaluation(gimli::Encoding {
+            format: gimli::Format::Dwarf32,
+            version: 5,
+            address_size: 8,
+        });
+        let mut result = eval.evaluate().expect("initial evaluate succeeds");
+        loop {
+            match result {
+                EvaluationResult::Complete => break,
+                EvaluationResult::RequiresCallFrameCfa => {
+                    result = eval
+                        .resume_with_call_frame_cfa(0x1000)
+                        .expect("resume with CFA succeeds");
+                }
+                other => panic!("unexpected evaluation request: {other:?}"),
+            }
+        }
+
+        let pieces = eval.result();
+        assert_eq!(pieces.len(), 1);
+        assert_eq!(pieces[0].location, Location::Address { address: 0x1007 });
     }
 }

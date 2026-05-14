@@ -18,6 +18,7 @@ members = [
     "crates/unlace-lift-rx",
     "crates/unlace-lift-sparc",
     "crates/unlace-lift-agx",
+    "crates/unlace-lift-m68k",
     "crates/unlace-passes",
     "crates/unlace-struct",
     "crates/unlace-output",

@@ -213,7 +213,7 @@ fn add_symbol_gap_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>)
         .map(|func| {
             (
                 func.addr,
-                func.addr.saturating_add(func.size as u64).min(text_end),
+                func.addr.saturating_add(func.size).min(text_end),
             )
         })
         .collect();
@@ -726,7 +726,7 @@ fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRec
                             if let Some(next) = insns.get(
                                 start_pos
                                     + 1
-                                    + (&insns[start_pos..])
+                                    + insns[start_pos..]
                                         .iter()
                                         .position(|r| std::ptr::eq(r, rec))
                                         .unwrap_or(0),
@@ -801,6 +801,7 @@ pub struct PassesReport {
 ///      - structural detection (prologue / tail call / stack vars / C++ vt);
 ///      - type recovery (calling convention / param infer / return infer /
 ///        struct field detect / primitive type infer).
+///
 ///    After each iteration we hash the type-recovery state via
 ///    [`unlace_passes::ssa_type_signature`]; if it changed we run again.
 ///    This is the key cascade: better types ⇒ better simplification ⇒
@@ -846,7 +847,7 @@ fn run_passes_with_report_inner(
     // so re-running this inside the loop would be wasted work.
     if let Some(resolve) = resolver {
         NoreturnDetectPass::new()
-            .run_with_resolver(ssa, |a| resolve(a))
+            .run_with_resolver(ssa, resolve)
             .context("noreturn detect pass failed")?;
     }
 
@@ -1035,7 +1036,7 @@ fn run_passes_with_report_inner(
     RustVtablePass.run(ssa).context("rust vtable pass failed")?;
     if let Some(resolve) = resolver {
         RustPanicPass
-            .run_with_resolver(ssa, |a| resolve(a))
+            .run_with_resolver(ssa, resolve)
             .context("rust panic pass failed")?;
     }
 
@@ -1800,7 +1801,7 @@ pub fn emit_output(
             unlace_struct::eliminate_forward_gotos(&mut hir);
             unlace_struct::recover_guarded_whiles(&mut hir);
             unlace_struct::cleanup_empty_ifs(&mut hir);
-            let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, &symbols);
+            let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, symbols);
 
             // t224: precompute the recovered-composite preamble from the
             // SsaFunction here — the printer sees only HirFunction and so
@@ -2016,7 +2017,7 @@ mod tests {
         let result = scan_for_prologues(&image);
         let addrs: BTreeSet<u64> = result.iter().map(|f| f.addr).collect();
 
-        assert!(addrs.contains(&(base + 0x00)), "push r15: {addrs:?}");
+        assert!(addrs.contains(&base), "push r15: {addrs:?}");
         assert!(addrs.contains(&(base + 0x20)), "push r14: {addrs:?}");
         assert!(addrs.contains(&(base + 0x40)), "push r13: {addrs:?}");
         assert!(addrs.contains(&(base + 0x60)), "push r12: {addrs:?}");

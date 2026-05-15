@@ -43,19 +43,19 @@ __int32 __noreturn __stdcall safe_call(void) {
     return;
 }
 
-/* Function:   main | Address: 0x1250 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   main | Address: 0x1250 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void main(void) {
     int result;
     safe_call(); return result;
 }
 
-/* Function:   _start | Address: 0x1260 | Size: 0x1f (31 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   _start | Address: 0x1260 | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
     int v6; // rip
     *(_QWORD *)(0LL) = 0x1285LL; return;
 }
 
-/* Function:   may_throw(int) | Address: 0x1350 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   may_throw(int) | Address: 0x1350 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // may_throw(int)
 void may_throw(void) {
     int v4;
@@ -65,7 +65,7 @@ void may_throw(void) {
     return result;
 }
 
-/* Function:   safe_call(int) | Address: 0x1360 | Size: 0x6 (6 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   safe_call(int) | Address: 0x1360 | Size: 0x6 (6 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // safe_call(int)
 void safe_call(void) {
     int v5;
@@ -87,7 +87,7 @@ struct __anon0 {
     __int64 field_8;
 };
 
-/* Function:   sub_11c4 | Address: 0x11c4 | Size: 0x54 (84 bytes) | Convention: unknown | Stack frame: 0x20 (32 bytes) | Xrefs to:   __cxa_begin_catch, __cxa_free_exception | Xrefs from: unknown */
+/* Function:   sub_11c4 | Address: 0x11c4 | Size: 0x54 (84 bytes) | Convention: System V AMD64 | Stack frame: 0x20 (32 bytes) | Xrefs to:   __cxa_begin_catch, __cxa_free_exception | Xrefs from: unknown */
 void sub_11c4(void) {
     long long v4; // rsp
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; v4 = 0LL;
@@ -126,7 +126,7 @@ struct __anon0 {
     __int64 field_8;
 };
 
-/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
+/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
 void sub_1300(void) {
     long long v1; // rsp
     int v4; // rip
@@ -145,12 +145,12 @@ void sub_1300(void) {
     }
 }
 
-/* Function:   sub_1340 | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   sub_1340 | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1340(void) {
     sub_12c0(); return;
 }
 
-/* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1290(void) {
     int v5; // rip
     v8 = 1;

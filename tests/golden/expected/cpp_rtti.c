@@ -20,7 +20,7 @@
  *       vfunc[1] = Cat::~Cat() [override]
  *       vfunc[2] = Cat::~Cat() [override]
  */
-/* Function:   main | Address: 0x10c0 | Size: 0x77 (119 bytes) | Convention: unknown | Stack frame: 0x8 (8 bytes) | Xrefs to:   identify(Animal*), __printf_chk, __stack_chk_fail | Xrefs from: unknown */
+/* Function:   main | Address: 0x10c0 | Size: 0x77 (119 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   identify(Animal*), __printf_chk, __stack_chk_fail | Xrefs from: unknown */
 void __noreturn main(void) {
     int v6; // rip
     int result;
@@ -34,7 +34,7 @@ void __noreturn main(void) {
     return result;
 }
 
-/* Function:   _start | Address: 0x1140 | Size: 0x1f (31 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   _start | Address: 0x1140 | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
     int v6; // rip
     *(_QWORD *)(0LL) = 0x1165LL; return;
@@ -61,39 +61,39 @@ void __stdcall identify(void) {
     }
 }
 
-/* Function:   Dog::speak() | Address: 0x1300 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   Dog::speak() | Address: 0x1300 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Dog::speak()
 void Dog_speak(Dog *this) {
     return result;
 }
 
-/* Function:   Cat::speak() | Address: 0x1310 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   Cat::speak() | Address: 0x1310 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Cat::speak()
 void Cat_speak(Cat *this) {
     return result;
 }
 
-/* Function:   Dog::~Dog() | Address: 0x1320 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   Dog::~Dog() | Address: 0x1320 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Dog::~Dog()
 void Dog_Dog(Dog *this) {
     long long result = 0LL; // temp
     return result;
 }
 
-/* Function:   Cat::~Cat() | Address: 0x1330 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   Cat::~Cat() | Address: 0x1330 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Cat::~Cat()
 void Cat_Cat(Cat *this) {
     long long result = 0LL; // temp
     return result;
 }
 
-/* Function:   Cat::~Cat() | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   Cat::~Cat() | Address: 0x1340 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Cat::~Cat()
 void Cat_Cat(Cat *this) {
     delete(); return;
 }
 
-/* Function:   Dog::~Dog() | Address: 0x1350 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   Dog::~Dog() | Address: 0x1350 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Dog::~Dog()
 void Dog_Dog(Dog *this) {
     delete(); return;
@@ -105,7 +105,7 @@ struct __anon0 {
     __int64 field_8;
 };
 
-/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
+/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
 void sub_11e0(void) {
     long long v1; // rsp
     int v4; // rip
@@ -124,12 +124,12 @@ void sub_11e0(void) {
     }
 }
 
-/* Function:   sub_1220 | Address: 0x1220 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   sub_1220 | Address: 0x1220 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1220(void) {
     sub_11a0(); return;
 }
 
-/* Function:   sub_1170 | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   sub_1170 | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1170(void) {
     int v5; // rip
     v8 = 1;

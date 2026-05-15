@@ -5,37 +5,34 @@ struct __anon0 {
 };
 
 /* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: System V AMD64 | Stack frame: 0xc (12 bytes) | Xrefs to:   __stack_chk_fail, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
-void __noreturn main(void) // dropped 1 param(s) (dead in body) {
+void __noreturn main(void) {
     int v5; // edx
     long long v13; // rdi
-    int v21; // rip
-    __m128i v28; // xmm1
-    __m128i v29; // xmm2
-    int v30;
+    int v20; // rip
+    int c2;
     int result;
-    int v56;
+    int v51;
     __m128i v37; // temp
-    *(_QWORD *)(0LL) = 0LL; v37 = *(_OWORD *)(0LL);
-    __m128i v54 = _mm_load_si128(v37); // xmm0
-    _mm_load_ps(0LL, v54); v37 = *(_OWORD *)(0LL); v27 = _mm_load_si128(v37);
-    _mm_load_ps(0LL, v27); v37 = *(_OWORD *)(0LL); v27 = _mm_load_si128(v37);
-    _mm_load_ps(0LL, v27);
-    for (; v34; v55 = 0) {
+    *(_QWORD *)(0LL) = 0LL; v37 = *(_OWORD *)(0LL); v26 = v37;
+    _mm_load_ps(0LL, 0); v37 = *(_OWORD *)(0LL); v26 = v37;
+    _mm_load_ps(0LL, 0); v37 = *(_OWORD *)(0LL); v26 = v37;
+    _mm_load_ps(0LL, 0); v37 = *(_OWORD *)(0LL); v26 = v37;
+    _mm_load_ps(0LL, 0);
+    for (; v34; v50 = 0) {
     }
-    if (v56) {
+    if (v51) {
     }
-    for (; v34; v55 = 0) {
+    for (; v34; v50 = 0) {
     }
-    if (v56) {
+    if (v51) {
     }
-    v27 = _mm_xor_si128(v27, v27);
-    if (v56) {
+    v16 = 0LL;
+    if (v51) {
     }
-    v28 = _mm_load_si128(v27); v13 = 0LL; v27 = _mm_add_epi32(v27, v28);
-    v28 = _mm_load_si128(v27); v27 = _mm_add_epi32(v27, v28);
-    if (v27) {
+    v13 = 0LL;
+    if (v16) {
         v34 = 0;
-        if (v56) {
+        if (v51) {
         }
     } else {
         if (0) { 0 = 0LL; }
@@ -43,7 +40,7 @@ void __noreturn main(void) // dropped 1 param(s) (dead in body) {
         }
     }
     if (v5) {
-        for (; v34; v55 = 0) {
+        for (; v34; v50 = 0) {
             if (0) { 0 = 0LL; } if (0) { 0 = 0LL; }
         }
     } else {
@@ -51,26 +48,22 @@ void __noreturn main(void) // dropped 1 param(s) (dead in body) {
         if (v13) {
         }
     }
-    v29 = _mm_xor_si128(v29, v29);
-    while (v34) {
-        v37 = *(_OWORD *)(0LL); v27 = _mm_load_si128(v37); v28 = _mm_load_si128(v27);
-        v28 = _mm_mul_epu32(v28, v27); v27 = _mm_mul_epu32(v27, v27); v28 = _mm_shuffle_epi32(v28, v28);
-        v27 = _mm_shuffle_epi32(v27, v27); v29 = _mm_add_epi32(v29, v28);
+    if (v51) {
     }
-    if (v24) {
+    if (v23) {
     }
     if (v44) {
     }
-    for (; v34; v55 = 0) {
+    for (; v34; v50 = 0) {
     }
-    if (v30) {
+    if (c2) {
     }
-    if (v30) {
+    if (c2) {
     }
-    if (v56) {
+    if (v51) {
     }
-    if (v24) {
-        if (v24) {
+    if (v23) {
+        if (v23) {
         }
     }
     return result;

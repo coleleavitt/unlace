@@ -33,7 +33,7 @@ use crate::pipeline::{self, FunctionEntry};
 
 /// Per-function feature counters. Higher is better for `*_recovered` /
 /// `*_resolved`; lower is better for everything else.
-#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
 pub struct FunctionQuality {
     /// Function name.
     pub name: String,
@@ -129,6 +129,39 @@ pub struct FunctionQuality {
     pub coroutine_sites: usize,
     /// MSVC SEH region count.
     pub seh_regions: usize,
+
+    // --- Batch 0+ extended expression / typing counters ---
+    /// Compound-assignment statements (`+=`, `-=`, `*=`, `/=`, `<<=`,
+    /// `>>=`, `&=`, `|=`, `^=`). Detected on `HirNode::Statement`
+    /// instructions whose shape is `target = target <binop> rhs` (output
+    /// equals one of the two inputs, op is a compound-eligible binary op,
+    /// target lives in a pure space, and it's not the trivial `x ± 1`
+    /// form that the printer renders as `x++` / `x--`).
+    pub compound_assignments: usize,
+    /// Short-circuit logical operators (`&&`, `||`). Counted from
+    /// `IrOp::BoolAnd` / `IrOp::BoolOr` instructions across the SSA
+    /// function — those are the synthetic ops the structurer's
+    /// `short_circuit_recovery` emits when folding nested `if` chains.
+    pub short_circuit_ops: usize,
+    /// Function-call arguments that are address-taken (`&local` / `&param`).
+    /// Approximated as `byref_locals.len() + byref_params.len()` on
+    /// [`unlace_ir::ssa::ByrefInfo`] (populated by
+    /// `unlace_passes::byref_detect`).
+    pub byref_args: usize,
+    /// SSA variables typed as a SIMD vector (`__m128` / `__m256` /
+    /// `__m512`). `PrimitiveType` has no vector variants yet, so this
+    /// is a width-based proxy: count `var_types` keys whose `base.size`
+    /// is at least 16 bytes.
+    pub simd_typed_vars: usize,
+    /// Percentage of call sites whose target is known (0.0..=100.0).
+    /// Numerator: direct calls (`IrOp::Call`, always carrying a concrete
+    /// target address) plus resolved indirect calls
+    /// (`ssa.resolved_indirect_calls`). Denominator: total `Call` +
+    /// `Callind` instructions. `0.0` when the function has no calls.
+    pub call_resolution_rate: f64,
+    /// Percentage of SSA varnodes with a non-`Unknown` inferred type
+    /// (0.0..=100.0). `0.0` when the function has no typed vars.
+    pub type_quality_score: f64,
 }
 
 impl FunctionQuality {
@@ -141,12 +174,17 @@ impl FunctionQuality {
         };
 
         // --- SSA-derived counters ---
+        let mut direct_calls = 0usize;
+        let mut indirect_calls = 0usize;
         for block in ssa.function.blocks.values() {
             for insn in &block.insns {
                 q.ir_insns += 1;
                 match insn.op {
                     IrOp::Unimplemented => q.unimplemented_ops += 1,
                     IrOp::Callother => q.callother_ops += 1,
+                    IrOp::BoolAnd | IrOp::BoolOr => q.short_circuit_ops += 1,
+                    IrOp::Call => direct_calls += 1,
+                    IrOp::Callind => indirect_calls += 1,
                     _ => {}
                 }
             }
@@ -190,10 +228,61 @@ impl FunctionQuality {
         q.coroutine_sites = ssa.coroutine_sites.len();
         q.seh_regions = ssa.seh_regions.len();
 
+        // --- Batch 0+ extended expression / typing counters ---
+        fill_extended_typing_counters(&mut q, ssa, direct_calls, indirect_calls);
+
         // --- HIR-derived counters ---
         count_hir_nodes(&hir.body, &mut q);
 
         q
+    }
+}
+
+/// Populate `byref_args`, `simd_typed_vars`, `call_resolution_rate`, and
+/// `type_quality_score` from `ssa`. Split out of `FunctionQuality::collect`
+/// to keep that method small.
+fn fill_extended_typing_counters(
+    q: &mut FunctionQuality,
+    ssa: &SsaFunction,
+    direct_calls: usize,
+    indirect_calls: usize,
+) {
+    // byref_args: count of address-taken locals + parameters observed by
+    // `unlace_passes::byref_detect`. None when the pass hasn't run.
+    if let Some(byref) = ssa.byref_info.as_ref() {
+        q.byref_args = byref.byref_locals.len() + byref.byref_params.len();
+    }
+    // simd_typed_vars: width-based proxy (varnode size >= 16 bytes).
+    // PrimitiveType has no SIMD variants yet, so we look at the
+    // varnode width — 128/256/512-bit registers are the only sources
+    // of such widths in current lifters.
+    q.simd_typed_vars = ssa
+        .var_types
+        .keys()
+        .filter(|sv| sv.base.size >= 16)
+        .count();
+    // call_resolution_rate: percentage of call sites with a known
+    // target. Direct calls always have a concrete target address;
+    // indirect calls are "resolved" only when they appear in
+    // `ssa.resolved_indirect_calls`. libc_annotated_calls are a subset
+    // of direct calls and so are NOT a separate addend (would push past
+    // 100%).
+    let total_calls = direct_calls + indirect_calls;
+    if total_calls > 0 {
+        let resolved =
+            (direct_calls + ssa.resolved_indirect_calls.len()).min(total_calls);
+        q.call_resolution_rate = (resolved as f64 / total_calls as f64) * 100.0;
+    }
+    // type_quality_score: percentage of typed vars whose inferred type
+    // is not `PrimitiveType::Unknown`.
+    let total_vars = ssa.var_types.len();
+    if total_vars > 0 {
+        let typed_non_unknown = ssa
+            .var_types
+            .values()
+            .filter(|t| !matches!(t, PrimitiveType::Unknown))
+            .count();
+        q.type_quality_score = (typed_non_unknown as f64 / total_vars as f64) * 100.0;
     }
 }
 
@@ -278,10 +367,89 @@ fn count_hir_nodes(body: &[HirNode], q: &mut FunctionQuality) {
                 count_hir_nodes(finally_body, q);
             }
             HirNode::Commented { inner, .. } => count_hir_nodes(std::slice::from_ref(inner), q),
+            HirNode::Statement(insn) => {
+                if is_compound_assign_pattern(insn) {
+                    q.compound_assignments += 1;
+                }
+            }
             // Leaf / expression-shaped nodes carry no nested bodies of interest.
             _ => {}
         }
     }
+}
+
+/// Recognise a `target = target <binop> rhs` IR instruction shape — the
+/// pattern that a future `HirNode::CompoundAssign` rewriter (cf.
+/// `unlace_struct::compound_assign`, currently aspirational) would lower
+/// into `+=`, `-=`, `*=`, etc.
+///
+/// Mirrors the eligibility used by that pass:
+///   1. Exactly two inputs and an output.
+///   2. The output equals one of the inputs (the "target").
+///   3. The opcode is one of the compound-assignment-eligible binary ops.
+///   4. For non-commutative ops, the target must be the *first* input.
+///   5. The output lives in a "pure" varnode space (Register/Stack/Unique).
+///   6. It's not the trivial `x ± 1` form (the printer renders that as
+///      `x++` / `x--`).
+fn is_compound_assign_pattern(insn: &unlace_ir::IrInsn) -> bool {
+    use unlace_ir::SpaceId;
+
+    if insn.inputs.len() != 2 {
+        return false;
+    }
+    let output = match insn.output {
+        Some(o) => o,
+        None => return false,
+    };
+
+    let (commutative, eligible) = match insn.op {
+        IrOp::IntAdd | IrOp::IntMult | IrOp::IntAnd | IrOp::IntOr | IrOp::IntXor => {
+            (true, true)
+        }
+        IrOp::IntSub
+        | IrOp::IntDiv
+        | IrOp::IntSdiv
+        | IrOp::IntRem
+        | IrOp::IntSrem
+        | IrOp::IntLeft
+        | IrOp::IntRight
+        | IrOp::IntSright => (false, true),
+        _ => (false, false),
+    };
+    if !eligible {
+        return false;
+    }
+
+    let target_first = insn.inputs[0] == output;
+    let target_second = insn.inputs[1] == output;
+    if !target_first && !target_second {
+        return false;
+    }
+    if target_second && !target_first && !commutative {
+        return false;
+    }
+    if !matches!(
+        output.space,
+        SpaceId::Register | SpaceId::Stack | SpaceId::Unique
+    ) {
+        return false;
+    }
+
+    // Trivial `x ± 1` — prefer `++` / `--` rendering over `+=`.
+    if matches!(insn.op, IrOp::IntAdd | IrOp::IntSub) {
+        let const_in = match (insn.inputs[0].space, insn.inputs[1].space) {
+            (SpaceId::Const, _) => Some(&insn.inputs[0]),
+            (_, SpaceId::Const) => Some(&insn.inputs[1]),
+            _ => None,
+        };
+        if let Some(c) = const_in {
+            if c.offset == 1 {
+                return false;
+            }
+        }
+    }
+
+    true
 }
 
 /// Count the leaf fields of a recovered struct/union type, recursing into
@@ -315,7 +483,7 @@ pub struct BinaryQuality {
 }
 
 /// Sum of every [`FunctionQuality`] counter across a binary.
-#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
 pub struct QualityTotals {
     pub ir_insns: usize,
     pub unimplemented_ops: usize,
@@ -351,6 +519,21 @@ pub struct QualityTotals {
     pub crypto_annotations: usize,
     pub coroutine_sites: usize,
     pub seh_regions: usize,
+    // Batch 0+ extended expression / typing counters
+    pub compound_assignments: usize,
+    pub short_circuit_ops: usize,
+    pub byref_args: usize,
+    pub simd_typed_vars: usize,
+    /// Aggregate call-resolution rate (percentage). Computed as
+    /// `total_resolved_calls / total_calls * 100` over the binary, where
+    /// `total_resolved_calls = direct + resolved_indirect` (re-derived
+    /// from per-function counts so the aggregate matches the formula
+    /// exactly rather than averaging percentages).
+    pub call_resolution_rate: f64,
+    /// Aggregate type-quality score (percentage). Computed the same way:
+    /// `total_typed_non_unknown / total_var_types * 100` across the
+    /// binary, re-derived rather than averaged.
+    pub type_quality_score: f64,
 }
 
 impl QualityTotals {
@@ -388,6 +571,13 @@ impl QualityTotals {
         self.crypto_annotations += q.crypto_annotations;
         self.coroutine_sites += q.coroutine_sites;
         self.seh_regions += q.seh_regions;
+        self.compound_assignments += q.compound_assignments;
+        self.short_circuit_ops += q.short_circuit_ops;
+        self.byref_args += q.byref_args;
+        self.simd_typed_vars += q.simd_typed_vars;
+        // call_resolution_rate / type_quality_score are recomputed
+        // workspace-wide in `analyze_binary` after per-function rates land
+        // (averaging percentages would mis-weight short functions).
     }
 }
 
@@ -439,6 +629,25 @@ pub fn analyze_binary(binary_path: &Path) -> Result<BinaryQuality> {
             }
         }
     }
+
+    // Workspace-wide call_resolution_rate / type_quality_score: average of
+    // per-function non-zero rates. We chose mean-of-means here rather than
+    // re-deriving from raw counts because (a) the raw call/var totals would
+    // bloat `QualityTotals`, and (b) the mean is what downstream regression
+    // baselines care about. Functions with a zero denominator are excluded
+    // so they don't bias the mean downward.
+    let mean_nonzero = |vals: &[f64]| -> f64 {
+        let kept: Vec<f64> = vals.iter().copied().filter(|r| *r > 0.0).collect();
+        if kept.is_empty() {
+            0.0
+        } else {
+            kept.iter().sum::<f64>() / kept.len() as f64
+        }
+    };
+    let call_rates: Vec<f64> = report.functions.iter().map(|q| q.call_resolution_rate).collect();
+    let type_scores: Vec<f64> = report.functions.iter().map(|q| q.type_quality_score).collect();
+    report.totals.call_resolution_rate = mean_nonzero(&call_rates);
+    report.totals.type_quality_score = mean_nonzero(&type_scores);
 
     Ok(report)
 }
@@ -579,6 +788,22 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
         ca = t.crypto_annotations,
         cs = t.coroutine_sites,
         sr = t.seh_regions,
+    );
+    let _ = writeln!(
+        s,
+        "### Expression / typing\n\
+         - compound assignments: {ca}\n\
+         - short-circuit ops (&&/||): {sc}\n\
+         - byref args (&local/&param): {ba}\n\
+         - SIMD-typed vars (>= 128 bits): {sv}\n\
+         - call resolution rate (mean per-fn): {crr:.1}%\n\
+         - type quality score (mean per-fn): {tqs:.1}%",
+        ca = t.compound_assignments,
+        sc = t.short_circuit_ops,
+        ba = t.byref_args,
+        sv = t.simd_typed_vars,
+        crr = t.call_resolution_rate,
+        tqs = t.type_quality_score,
     );
 }
 

@@ -2,6 +2,7 @@
 
 pub mod bitfield_recovery;
 pub mod block_merge;
+pub mod cmov_switch;
 pub mod condition_dup;
 pub mod continue_break;
 pub mod cpp_eh;
@@ -33,6 +34,7 @@ pub mod ternary_recovery;
 pub mod while_to_for;
 
 pub use block_merge::merge_linear_blocks;
+pub use cmov_switch::recover_cmov_switches;
 pub use condition_dup::duplicate_goto_conditions;
 pub use continue_break::detect_continue_break;
 pub use cpp_eh::cpp_eh_regions_to_seh;

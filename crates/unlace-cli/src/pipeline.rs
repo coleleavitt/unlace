@@ -2064,6 +2064,7 @@ pub fn emit_output(
             unlace_struct::flatten_if_else_chains(&mut hir);
             unlace_struct::simplify_chain_conditions(&mut hir, ssa);
             unlace_struct::if_chain_to_switch(&mut hir, ssa);
+            unlace_struct::recover_cmov_switches(&mut hir, ssa);
             unlace_struct::goto_to_break(&mut hir);
             unlace_struct::goto_to_continue(&mut hir);
             unlace_struct::while_to_for(&mut hir);

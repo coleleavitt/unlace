@@ -161,6 +161,7 @@ mod tests {
             cpp_lambda_captures: Vec::new(),
             seh_regions: Vec::new(),
             coroutine_sites: Vec::new(),
+            resolved_jump_tables: std::collections::BTreeMap::new(),
             rust_async: None,
             vtable_calls: BTreeMap::new(),
             cpp_vtable_calls: BTreeMap::new(),

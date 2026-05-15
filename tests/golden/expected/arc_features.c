@@ -4,7 +4,7 @@ void _start(void) {
     int v7;
     int v8;
     v7(); v8();
-    _Bool cond = v1 == 1; // temp
+    _BOOL cond = v1 == 1; // temp
     if (cond) {
     }
     v1 = v1; return;

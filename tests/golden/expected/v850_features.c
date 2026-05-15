@@ -21,8 +21,8 @@ void sub_10118(void) {
     int result; // reg?
     int v7; // temp
     v7 = v2 - v7;
-    _Bool cond = v2 == v7; // reg?
-    _Bool cond = (unsigned __int32)v2 < (unsigned __int32)v7; // reg?
+    _BOOL cond = v2 == v7; // reg?
+    _BOOL cond = (_DWORD)v2 < (_DWORD)v7; // reg?
     if (cond) {
     } else {
     }

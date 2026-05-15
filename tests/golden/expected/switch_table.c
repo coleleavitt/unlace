@@ -6,8 +6,8 @@ void _start(void) {
 /* Function:   dispatch | Address: 0x1129 | Size: 0x4c (76 bytes) | Convention: System V AMD64 | Stack frame: 0x4 (4 bytes) | Xrefs from: unknown */
 void dispatch(void) {
     int v5; // rip
-    int v10;
-    unsigned int v8; // temp
+    int v10; // reg?
+    _DWORD v8; // temp
     if (v10) {
         return result;
     } else {
@@ -31,9 +31,9 @@ struct __anon0 {
 
 /* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
 void sub_10e0(void) {
-    long long v1; // rsp
+    __int64 v1; // rsp
     int v4; // rip
-    unsigned long long c1; // temp
+    _QWORD c1; // temp
     if (v4) {
         return result;
     } else {

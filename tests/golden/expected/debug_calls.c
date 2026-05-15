@@ -37,30 +37,22 @@ int cube(int x) {
 }
 /* Function:   abs_val | Address: 0x11b7 | Size: 0x16 (22 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 int abs_val(int x) {
-    int v1; // eax
     int v5; // edi
-    int v8; // temp
     *(_QWORD *)(0LL) = 0LL; *(_DWORD *)(0LL) = v5;
-    // fixtures/src/calls.c:6
-    unsigned int cond = *(_DWORD *)(0LL); // temp
-    // fixtures/src/calls.c:6
-    v1 = cond;
-    v2 = cond; v8 = v8; cond = v8 < 0;
-    v11 = LOBYTE(cond); v2 = v8; if (!v11) { cond = v8; }
     return result;
 }
 /* Function:   max | Address: 0x11ce | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 int max(int a, int b) {
-    int v5; // esi
-    int v6; // edi
-    *(_QWORD *)(0LL) = 0LL; *(_DWORD *)(0LL) = v6; *(_DWORD *)(0LL) = v5;
-    v8 = LOBYTE(0); if (!v8) { 0 = 0; } return result;
-}
-/* Function:   min | Address: 0x11e9 | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-int min(int a, int b) {
     int v4; // esi
     int v5; // edi
     *(_QWORD *)(0LL) = 0LL; *(_DWORD *)(0LL) = v5; *(_DWORD *)(0LL) = v4;
+    return result;
+}
+/* Function:   min | Address: 0x11e9 | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+int min(int a, int b) {
+    int v5; // esi
+    int v6; // edi
+    *(_QWORD *)(0LL) = 0LL; *(_DWORD *)(0LL) = v6; *(_DWORD *)(0LL) = v5;
     return result;
 }
 /* Function:   clamp | Address: 0x1204 | Size: 0x33 (51 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   max, min | Xrefs from: unknown */
@@ -94,9 +86,9 @@ struct __anon0 {
 
 /* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
 void sub_10e0(void) {
-    long long v1; // rsp
+    __int64 v1; // rsp
     int v4; // rip
-    unsigned long long c1; // temp
+    _QWORD c1; // temp
     if (v4) {
         return result;
     } else {

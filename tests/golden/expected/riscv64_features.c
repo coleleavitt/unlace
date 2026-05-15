@@ -22,12 +22,12 @@ void logic_test(void) {
 }
 /* Function:   memory_test | Address: 0x10164 | Size: 0x34 (52 bytes) | Convention: unknown | Stack frame: 0x24 (36 bytes) | Xrefs from: unknown */
 void memory_test(void) {
-    unsigned int v8; // temp
-    unsigned long long v10; // temp
-    long long result = 0x42LL; // rdx
+    _DWORD v8; // temp
+    _QWORD v10; // temp
+    __int64 result = 0x42LL; // rdx
     *(_QWORD *)(0x42LL) = v10; *(_QWORD *)(0x42LL) = v10; *(_DWORD *)(0x42LL) = LODWORD(0x42LL);
     v8 = *(_DWORD *)(0x42LL); v10 = (__int64)(v8); v4 = v10;
-    v10 = (unsigned __int64)(v10 < 0x64LL); v5 = v10; cond = v10 == 0LL;
+    v10 = (_QWORD)(v10 < 0x64LL); v5 = v10; cond = v10 == 0LL;
     if (cond) {
     }
     v10 = *(_QWORD *)(0x42LL); v6 = v10; v10 = *(_QWORD *)(0x42LL);

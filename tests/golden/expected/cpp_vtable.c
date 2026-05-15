@@ -12,7 +12,7 @@ void _start(void) {
 // use_base(Base*)
 void use_base(void * a1) {
     int v2; // rdi
-    unsigned long long v3; // temp
+    _QWORD v3; // temp
     v3 = *(_QWORD *)(v2); v1 = v3; return;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
@@ -23,9 +23,9 @@ struct __anon0 {
 
 /* Function:   sub_1130 | Address: 0x1130 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_10c0 | Xrefs from: unknown */
 void sub_1130(void) {
-    long long v1; // rsp
+    __int64 v1; // rsp
     int v4; // rip
-    unsigned long long c1; // temp
+    _QWORD c1; // temp
     if (v4) {
         return result;
     } else {

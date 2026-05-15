@@ -76,14 +76,14 @@ void Cat_speak(Cat *this) {
 /* Function:   Dog::~Dog() | Address: 0x1320 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Dog::~Dog()
 void Dog_Dog(Dog *this) {
-    long long result = 0LL; // temp
+    __int64 result = 0LL; // temp
     return result;
 }
 
 /* Function:   Cat::~Cat() | Address: 0x1330 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Cat::~Cat()
 void Cat_Cat(Cat *this) {
-    long long result = 0LL; // temp
+    __int64 result = 0LL; // temp
     return result;
 }
 
@@ -107,9 +107,9 @@ struct __anon0 {
 
 /* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
 void sub_11e0(void) {
-    long long v1; // rsp
+    __int64 v1; // rsp
     int v4; // rip
-    unsigned long long c1; // temp
+    _QWORD c1; // temp
     if (v4) {
         return result;
     } else {

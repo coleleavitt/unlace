@@ -21,7 +21,7 @@ void __noreturn __aapcs may_throw(void * a1) {
 
 /* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0x9f (159 bytes) | Convention: stdcall | Stack frame: 0x88 (136 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_throw | Xrefs from: unknown */
 // safe_call(int) [clone .cold]
-__int32 __noreturn __stdcall safe_call(void) {
+int __noreturn __stdcall safe_call(void) {
     int v7; // rip
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0x119cLL;
     /* allocate exception */
@@ -37,7 +37,7 @@ __int32 __noreturn __stdcall safe_call(void) {
         /* catch */
         __cxa_begin_catch();
         qword_FFFFFFFFFFFFFFFF = 0x11f6LL;
-        unsigned long long pfn = *(_QWORD *)(0LL); // temp
+        _QWORD pfn = *(_QWORD *)(0LL); // temp
         ((void (*)())pfn)(); qword_FFFFFFFFFFFFFFFF = 0x1211LL; return result;
     }
     return;
@@ -58,17 +58,17 @@ void _start(void) {
 /* Function:   may_throw(int) | Address: 0x1350 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // may_throw(int)
 void may_throw(void) {
-    int v4;
+    int v4; // reg?
     if (v4) {
     }
-    long long result = 0LL; // temp
+    __int64 result = 0LL; // temp
     return result;
 }
 
 /* Function:   safe_call(int) | Address: 0x1360 | Size: 0x6 (6 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // safe_call(int)
 void safe_call(void) {
-    int v5;
+    int v5; // reg?
     if (v5) {
     }
     return;
@@ -89,7 +89,7 @@ struct __anon0 {
 
 /* Function:   sub_11c4 | Address: 0x11c4 | Size: 0x54 (84 bytes) | Convention: System V AMD64 | Stack frame: 0x20 (32 bytes) | Xrefs to:   __cxa_begin_catch, __cxa_free_exception | Xrefs from: unknown */
 void sub_11c4(void) {
-    long long v4; // rsp
+    __int64 v4; // rsp
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; v4 = 0LL;
     *(_QWORD *)(0LL) = 0x11d9LL; __cxa_free_exception();
     if (v4) {
@@ -98,14 +98,14 @@ void sub_11c4(void) {
     /* catch */
     __cxa_begin_catch();
     *(_QWORD *)(0LL) = 0x11f6LL;
-    unsigned long long pfn = *(_QWORD *)(0x10LL); // temp
+    _QWORD pfn = *(_QWORD *)(0x10LL); // temp
     ((void (*)())pfn)(); *(_QWORD *)(0x10LL) = 0x1211LL; return;
 }
 
 /* Function:   sub_121c | Address: 0x121c | Size: 0x9 (9 bytes) | Convention: Microsoft x64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   _Unwind_Resume | Xrefs from: unknown */
 void __noreturn __fastcall sub_121c(void) {
     int v2; // rdx
-    long long v5; // temp
+    __int64 v5; // temp
     a3 = v2; sub_11e2(); v5 -= 8LL;
     v3 = v5; *(_QWORD *)(v5) = 0x122dLL; _Unwind_Resume();
     return;
@@ -128,9 +128,9 @@ struct __anon0 {
 
 /* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
 void sub_1300(void) {
-    long long v1; // rsp
+    __int64 v1; // rsp
     int v4; // rip
-    unsigned long long c1; // temp
+    _QWORD c1; // temp
     if (v4) {
         return result;
     } else {

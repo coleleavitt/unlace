@@ -16,9 +16,9 @@ struct __anon0 {
 
 /* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
 void sub_1100(void) {
-    long long v1; // rsp
+    __int64 v1; // rsp
     int v4; // rip
-    unsigned long long c1; // temp
+    _QWORD c1; // temp
     if (v4) {
         return result;
     } else {

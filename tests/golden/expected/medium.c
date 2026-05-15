@@ -6,61 +6,59 @@ struct __anon0 {
 
 /* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: System V AMD64 | Stack frame: 0xc (12 bytes) | Xrefs to:   __stack_chk_fail, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 void __noreturn main(void) {
+    int v1; // eax
+    __int64 v2; // rax
     int v5; // edx
-    long long v13; // rdi
+    __int64 v13; // rdi
     int v20; // rip
-    int c2;
+    int v59; // reg?
     int result;
-    int v51;
-    __m128i v37; // temp
-    *(_QWORD *)(0LL) = 0LL; v37 = *(_OWORD *)(0LL); v26 = v37;
-    _mm_load_ps(0LL, 0); v37 = *(_OWORD *)(0LL); v26 = v37;
+    *(_QWORD *)(0LL) = 0LL; v37 = *(_OWORD *)(0LL);
+    __int128 v53 = v37; // xmm0
     _mm_load_ps(0LL, 0); v37 = *(_OWORD *)(0LL); v26 = v37;
     _mm_load_ps(0LL, 0); v37 = *(_OWORD *)(0LL); v26 = v37;
     _mm_load_ps(0LL, 0);
-    for (; v34; v50 = 0) {
+    for (; v34; v54 = 0) {
     }
-    if (v51) {
+    while (v5) {
     }
-    for (; v34; v50 = 0) {
+    while (v34) {
     }
-    if (v51) {
+    while (v1) {
     }
     v16 = 0LL;
-    if (v51) {
+    while (v2) {
     }
     v13 = 0LL;
     if (v16) {
         v34 = 0;
-        if (v51) {
+        for (; v34; v54 = 0) {
         }
     } else {
-        if (0) { 0 = 0LL; }
         if (v13) {
         }
     }
-    if (v5) {
-        for (; v34; v50 = 0) {
-            if (0) { 0 = 0LL; } if (0) { 0 = 0LL; }
+    if (v59) {
+        for (; v34; v54 = 0) {
         }
     } else {
-        v34 = 0; if (0) { 0 = 0; }
         if (v13) {
         }
     }
-    if (v51) {
+    while (v2) {
+        v37 = *(_OWORD *)(0LL); v26 = v37;
     }
     if (v23) {
     }
     if (v44) {
     }
-    for (; v34; v50 = 0) {
+    for (; v34; v54 = 0) {
     }
-    if (c2) {
+    if (v59) {
     }
-    if (c2) {
+    if (v59) {
     }
-    if (v51) {
+    while (v1) {
     }
     if (v23) {
         if (v23) {
@@ -99,16 +97,15 @@ void f_rec_fib(__int64 a1 /* BYREF */) {
 }
 /* Function:   f_ackermann | Address: 0x1830 | Size: 0x34e (846 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   f_ackermann | Xrefs from: unknown */
 void f_ackermann(void) {
-    long long v8; // rsp
-    int v28;
-    int v50;
-    signed char v37; // temp
+    __int64 v8; // rsp
+    int v47; // reg?
+    char v37; // temp
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
     v37 = 0; *(_QWORD *)(0LL) = 0LL;
     while (v32) {
         *(_DWORD *)(0LL) = 0;
-        if (v28) {
+        if (v47) {
         } else {
             v33 = 0;
             if (v25) {
@@ -117,14 +114,28 @@ void f_ackermann(void) {
             } else {
             }
         }
-        if (v50) {
-            if (v25) {
-                v32 = 1;
-                if (v32) {
+        while (v47) {
+            if (v32) {
+            } else {
+                if (v25) {
+                    v32 = 1;
+                    if (v32) {
+                    } else {
+                    }
                 } else {
                 }
-            } else {
-                while (v32) {
+            }
+            if (v32) {
+                if (v32) {
+                } else {
+                    if (v25) {
+                        if (v32) {
+                        } else {
+                        }
+                    } else {
+                    }
+                }
+                if (v32) {
                     if (v32) {
                     } else {
                         if (v25) {
@@ -135,70 +146,50 @@ void f_ackermann(void) {
                         }
                     }
                     if (v32) {
+                        *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0x1978LL;
+                        f_ackermann();
                         if (v32) {
                         } else {
-                            if (v25) {
-                                if (v37) {
-                                } else {
-                                }
+                            if (v37) {
                             } else {
-                            }
-                        }
-                        if (v32) {
-                            if (v32) {
-                            } else {
-                                if (v25) {
-                                    if (v32) {
-                                    } else {
-                                    }
+                                if (v33) {
                                 } else {
                                 }
                             }
-                            *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0x1978LL;
-                            f_ackermann();
-                            if (v32) {
-                            } else {
-                                if (v37) {
-                                } else {
-                                }
-                            }
-                        }
-                        if (v33) {
-                        } else {
-                            if (v33) {
-                            } else {
-                            }
-                        }
-                    }
-                    if (v33) {
-                    } else {
-                        if (v33) {
-                        } else {
                         }
                     }
                 }
                 if (v33) {
                 } else {
+                    if (v33) {
+                    } else {
+                    }
+                }
+            }
+            if (v33) {
+            } else {
+                if (v33) {
+                } else {
                 }
             }
         }
-        if (v8) {
-        }
         if (v33) {
         } else {
+            if (v8) {
+            }
         }
     }
     return result;
 }
 /* Function:   f_rec_power.constprop.0 | Address: 0x1b80 | Size: 0x119 (281 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   f_rec_power.constprop.0 | Xrefs from: unknown */
-__int32 f_rec_power.constprop.0(__int64 a1) {
+int f_rec_power.constprop.0(__int64 a1) {
     int v1; // al
     int v2; // eax
     int v39; // eax
     int v3; // cl
     int v8; // dil
     int v22; // temp
-    long long result; // temp
+    __int64 result; // temp
     if (v8) {
     } else {
         v22 = -1;
@@ -247,9 +238,9 @@ struct __anon0 {
 
 /* Function:   sub_1520 | Address: 0x1520 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_14b0 | Xrefs from: unknown */
 void sub_1520(void) {
-    long long v1; // rsp
+    __int64 v1; // rsp
     int v4; // rip
-    unsigned long long c1; // temp
+    _QWORD c1; // temp
     if (v4) {
         return result;
     } else {
@@ -266,14 +257,14 @@ void sub_1520(void) {
 /* Function:   sub_1560 | Address: 0x1560 | Size: 0x735 (1845 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
 void sub_1560(__int64 a1 /* BYREF */, __int64 a2, __int64 a3 /* BYREF */, __int64 a4 /* BYREF */) {
     int v15; // rdi
-    signed char v56; // temp
+    char v56; // temp
     sub_14e0();
-    signed char v45 = LOBYTE(0); // temp
+    char v45 = LOBYTE(0); // temp
     v42 = 1;
     if (v42) {
         return result;
     } else {
-        long long v9 = cond; // rsp
+        __int64 v9 = cond; // rsp
         *(_QWORD *)(cond) = cond; v9 = cond; *(_QWORD *)(cond) = cond;
         v9 = cond; *(_QWORD *)(cond) = cond; v9 = cond;
         *(_QWORD *)(cond) = cond; v9 = cond; *(_QWORD *)(cond) = cond;

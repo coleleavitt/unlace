@@ -12,15 +12,15 @@ void __aapcs mul_test(void) {
 void __fastcall csel_test(__int64 a1) {
     int v1; // rax
     int v2; // rcx
-    long long v3; // rdx
-    long long v4; // rbx
-    long long v5; // rsp
-    long long v6; // rbp
+    __int64 v3; // rdx
+    __int64 v4; // rbx
+    __int64 v5; // rsp
+    __int64 v6; // rbp
     int result; // reg?
-    signed char v9; // reg?
-    long long v13; // temp
+    char v9; // reg?
+    __int64 v13; // temp
     v13 = v1 - v2;
-    _Bool cond = v1 == v2; // reg?
+    _BOOL cond = v1 == v2; // reg?
     v16 = LOBYTE(v13 < 0LL); v9 = v16;
     if (v16 ^ __OFSUB__(v1, v2)) { cond = v1; } else { cond = v2; }
     __csinv__(v16 ^ __OFSUB__(v1, v2), v1, v2, 2);
@@ -44,10 +44,10 @@ void __aapcs bitfield_test(void) {
     char buf_16[24];
     int v2; // rbp
     int v5; // reg?
-    unsigned long long v8; // temp
-    long long v6 = v5 - 16; // temp
+    _QWORD v8; // temp
+    __int64 v6 = v5 - 16; // temp
     *(_QWORD *)(v6) = v6; v5->field_FFFFFFFFFFFFFFF8 = v8; v10 = *(_QWORD *)(v5);
     v3 = v10; v8 = v5->field_8;
-    long long result = v8; // reg?
+    __int64 result = v8; // reg?
     __dmb__(); return result;
 }

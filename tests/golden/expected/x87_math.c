@@ -18,9 +18,9 @@ void compare_floats_x87(void) {
     int v7; // reg?
     v13 = *(_QWORD *)(0LL);
     int v14 = /* CALLOTHER tag=784 */ 0; // reg?
-    _Bool cond = !v4; // temp
-    _Bool cond = !v5; // temp
-    _Bool c2 = cond && cond; // temp
+    _BOOL cond = !v4; // temp
+    _BOOL cond = !v5; // temp
+    _BOOL c2 = cond && cond; // temp
     if (c2) {
     } else {
         /* CALLOTHER tag=791 */ 0;
@@ -37,7 +37,7 @@ void mix_ops_x87(void) {
 }
 /* Function:   main | Address: 0x1181 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void main(void) {
-    long long result = 0LL; // temp
+    __int64 result = 0LL; // temp
     return result;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
@@ -48,9 +48,9 @@ struct __anon0 {
 
 /* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
 void sub_10e0(void) {
-    long long v1; // rsp
+    __int64 v1; // rsp
     int v4; // rip
-    unsigned long long c1; // temp
+    _QWORD c1; // temp
     if (v4) {
         return result;
     } else {

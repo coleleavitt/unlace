@@ -4,9 +4,9 @@ void _start(void) {
     *(_QWORD *)(0LL) = 0x1085LL; return;
 }
 /* Function:   area | Address: 0x1149 | Size: 0xb (11 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-__int32 area(__int64 a1 /* BYREF */) {
+int area(__int64 a1 /* BYREF */) {
     int v3; // rdi
-    unsigned int v5; // temp
+    _DWORD v5; // temp
     // /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
     v5 = *(_DWORD *)(0LL);
     // /home/cole/RustProjects/active/unlace/fixtures/src/debug_structs.c:4
@@ -29,9 +29,9 @@ struct __anon0 {
 
 /* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */
 void sub_1100(void) {
-    long long v1; // rsp
+    __int64 v1; // rsp
     int v4; // rip
-    unsigned long long c1; // temp
+    _QWORD c1; // temp
     if (v4) {
         return result;
     } else {

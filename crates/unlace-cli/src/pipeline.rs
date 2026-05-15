@@ -771,6 +771,47 @@ pub fn run_passes_with_resolver(
     Ok(report.ir_changes)
 }
 
+/// Drive the whole-program interprocedural fixed-point loop over a map of
+/// already-built (lifted + SSA-constructed) functions.
+///
+/// This is plan.md Batch 5: refines per-function signatures using caller
+/// context until quiescence (or `cap` iterations).
+///
+/// `cap` of `0` selects [`DEFAULT_INTERPROC_CAP`]. The per-function pass
+/// invoked inside the loop is [`run_passes`], so callers must have already
+/// finished any one-time setup that should *not* be re-run (DWARF apply,
+/// EH-landing-pad population, etc.).
+///
+/// This helper is intentionally separate from the per-function CLI path:
+/// the existing `decompile_function_with_symbols` keeps emitting output
+/// immediately after one pass run, so wiring this in by default would
+/// require splitting the per-function pipeline into "lift+passes" and
+/// "structure+emit" phases — a bigger refactor than this Batch 5 slice
+/// targets. Callers who want whole-program propagation can build their own
+/// SSA map and call this helper before emit.
+pub fn run_whole_program_interproc(
+    funcs: &mut std::collections::BTreeMap<u64, SsaFunction>,
+    cap: usize,
+) -> Result<unlace_passes::InterprocReport> {
+    let cap = if cap == 0 {
+        unlace_passes::DEFAULT_INTERPROC_CAP
+    } else {
+        cap
+    };
+    unlace_passes::run_interproc_fixpoint(funcs, cap, |ssa| {
+        // The per-function pass surface used inside the cross-function loop
+        // is the standard `run_passes`. We discard the inner `PassError`
+        // chain via `?` — the outer driver already records iteration count
+        // and signature deltas.
+        run_passes(ssa).map(|_| ()).map_err(|e| {
+            unlace_passes::PassError::InvariantViolation {
+                message: format!("per-function pass failed: {e}"),
+            }
+        })
+    })
+    .context("interprocedural fixed-point loop failed")
+}
+
 /// Detailed report from one [`run_passes`] invocation.
 ///
 /// Captures the outer-fixed-point behaviour: how many outer iterations ran,

@@ -65,18 +65,16 @@ mod tests {
             !result.ir_ops.iter().any(|i| i.op == IrOp::Copy),
             "CMOVE must not become an unconditional Copy"
         );
-        let cmov = result
+        let sel = result
             .ir_ops
             .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("CMOVE should emit a Callother");
+            .find(|i| i.op == IrOp::Select)
+            .expect("CMOVE should emit a Select");
+        assert!(sel.output.is_some(), "Select must have an output");
+        assert_eq!(sel.inputs.len(), 3, "Select takes (cond, true_val, false_val)");
+        // input[0] is the condition (ZF for CMOVE)
         assert_eq!(
-            cmov.inputs[0],
-            unlace_ir::Varnode::constant(crate::ops::data_move::CMOV_CALLOTHER_TAG, 8)
-        );
-        assert_eq!(cmov.inputs.len(), 4, "CMOV takes (tag, cond, src, dst)");
-        assert_eq!(
-            cmov.inputs[1],
+            sel.inputs[0],
             unlace_ir::Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::ZF, 1)
         );
     }
@@ -92,16 +90,13 @@ mod tests {
             result.ir_ops.iter().any(|i| i.op == IrOp::BoolNegate),
             "CMOVNE should negate ZF for its condition"
         );
-        let cmov = result
+        let sel = result
             .ir_ops
             .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .expect("CMOVNE should emit a Callother");
-        assert_eq!(
-            cmov.inputs[0],
-            unlace_ir::Varnode::constant(crate::ops::data_move::CMOV_CALLOTHER_TAG, 8)
-        );
-        assert_eq!(cmov.inputs.len(), 4, "CMOVNE takes (tag, cond, src, dst)");
+            .find(|i| i.op == IrOp::Select)
+            .expect("CMOVNE should emit a Select");
+        assert!(sel.output.is_some(), "Select must have an output");
+        assert_eq!(sel.inputs.len(), 3, "Select takes (cond, true_val, false_val)");
     }
 
     #[test]

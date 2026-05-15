@@ -799,7 +799,7 @@ pub fn print_c_with_annotations(
         // (post-dead-drop, post-byte-mask-narrow) instead of the raw
         // `func.params`. This is how the dead-param drop becomes
         // visible in the header and `int8` byte-masked params show up
-        // as `__int8` instead of `__int64`.
+        // as `char` instead of `__int64`.
         if let Some(sig) = func.finalized_signature.as_ref() {
             for (i, (pname, pty)) in sig.params.iter().enumerate() {
                 if param_idx > 0 || i > 0 {
@@ -3595,11 +3595,11 @@ fn emit_stack_frame_decls(
             emitted.insert(name);
         } else {
             let ty = match local.size {
-                1 => "__int8",
+                1 => "char",
                 2 => "__int16",
-                4 => "__int32",
+                4 => "int",
                 8 => "__int64",
-                _ => "__int32",
+                _ => "int",
             };
             let name = format!("v_{}", abs);
             let _ = writeln!(out, "    {} {}{};", ty, name, byref_marker);
@@ -4081,22 +4081,22 @@ fn is_catch_all_type(ty: &unlace_ir::types::Type) -> bool {
 fn c_type(ty: &PrimitiveType) -> &'static str {
     match ty {
         PrimitiveType::Unknown => "int",
-        PrimitiveType::Bool => "_Bool",
+        PrimitiveType::Bool => "_BOOL",
         PrimitiveType::Int(w) => match w {
-            1 => "signed char",
-            2 => "short",
+            1 => "char",
+            2 => "__int16",
             4 => "int",
-            8 => "long long",
-            16 => "__m128i",
+            8 => "__int64",
+            16 => "__int128",
             _ => "int",
         },
         PrimitiveType::UnsignedInt(w) => match w {
-            1 => "unsigned char",
-            2 => "unsigned short",
-            4 => "unsigned int",
-            8 => "unsigned long long",
-            16 => "__m128i",
-            _ => "unsigned int",
+            1 => "_BYTE",
+            2 => "_WORD",
+            4 => "_DWORD",
+            8 => "_QWORD",
+            16 => "_OWORD",
+            _ => "_DWORD",
         },
         PrimitiveType::Float => "float",
         PrimitiveType::Double => "double",
@@ -4169,18 +4169,18 @@ fn c_sig_type(ty: &PrimitiveType) -> &'static str {
         PrimitiveType::Unknown => "__int64",
         PrimitiveType::Bool => "_BOOL",
         PrimitiveType::Int(w) => match w {
-            1 => "__int8",
+            1 => "char",
             2 => "__int16",
-            4 => "__int32",
+            4 => "int",
             8 => "__int64",
             _ => "__int64",
         },
         PrimitiveType::UnsignedInt(w) => match w {
-            1 => "unsigned __int8",
-            2 => "unsigned __int16",
-            4 => "unsigned __int32",
-            8 => "unsigned __int64",
-            _ => "unsigned __int64",
+            1 => "_BYTE",
+            2 => "_WORD",
+            4 => "_DWORD",
+            8 => "_QWORD",
+            _ => "_QWORD",
         },
         PrimitiveType::Float => "float",
         PrimitiveType::Double => "double",
@@ -4207,17 +4207,19 @@ fn dwarf_type_to_c(dwarf_type: &str) -> String {
     normalized = normalized.replace('*', " ");
     let normalized = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
     let base = match normalized.as_str() {
-        "" => "long long",
+        "" => "__int64",
         "void" => "void",
-        "_Bool" | "bool" => "_Bool",
-        "signed char" => "char",
-        "short int" | "signed short" | "signed short int" => "short",
-        "unsigned short int" => "unsigned short",
-        "signed int" => "int",
-        "long int" | "signed long" | "signed long int" => "long",
-        "unsigned long int" | "long unsigned int" => "unsigned long",
-        "long long int" | "signed long long" | "signed long long int" => "long long",
-        "unsigned long long int" | "long long unsigned int" => "unsigned long long",
+        "_Bool" | "bool" => "_BOOL",
+        "char" | "signed char" => "char",
+        "unsigned char" => "_BYTE",
+        "short" | "short int" | "signed short" | "signed short int" => "__int16",
+        "unsigned short" | "unsigned short int" => "_WORD",
+        "int" | "signed int" => "int",
+        "unsigned int" | "unsigned" => "_DWORD",
+        "long" | "long int" | "signed long" | "signed long int" => "int",
+        "unsigned long" | "unsigned long int" | "long unsigned int" => "_DWORD",
+        "long long" | "long long int" | "signed long long" | "signed long long int" => "__int64",
+        "unsigned long long" | "unsigned long long int" | "long long unsigned int" => "_QWORD",
         other => other,
     };
     if ptr_depth == 0 {
@@ -5263,18 +5265,18 @@ pub fn objc_type_encoding_to_c(encoding: &str) -> String {
         trimmed.trim_start_matches(['r', 'n', 'N', 'o', 'O', 'R', 'V']);
     match trimmed {
         "c" => return "char".into(),
-        "C" => return "unsigned char".into(),
-        "s" => return "short".into(),
-        "S" => return "unsigned short".into(),
+        "C" => return "_BYTE".into(),
+        "s" => return "__int16".into(),
+        "S" => return "_WORD".into(),
         "i" => return "int".into(),
-        "I" => return "unsigned int".into(),
-        "l" => return "long".into(),
-        "L" => return "unsigned long".into(),
-        "q" => return "long long".into(),
-        "Q" => return "unsigned long long".into(),
+        "I" => return "_DWORD".into(),
+        "l" => return "int".into(),
+        "L" => return "_DWORD".into(),
+        "q" => return "__int64".into(),
+        "Q" => return "_QWORD".into(),
         "f" => return "float".into(),
         "d" => return "double".into(),
-        "B" => return "_Bool".into(),
+        "B" => return "_BOOL".into(),
         "v" => return "void".into(),
         "*" => return "char*".into(),
         "@" => return "id".into(),
@@ -5453,9 +5455,9 @@ pub fn compute_array_struct_indices(func: &SsaFunction) -> BTreeMap<SsaVarnode, 
 /// in the printer for unrecovered scalar types.
 fn primitive_for_width(width: u8) -> &'static str {
     match width {
-        1 => "__int8",
+        1 => "char",
         2 => "__int16",
-        4 => "__int32",
+        4 => "int",
         8 => "__int64",
         16 => "__int128",
         _ => "__int64",
@@ -5943,6 +5945,9 @@ fn ida_precedence(op: IrOp) -> u8 {
 
         // Logical OR
         IrOp::BoolOr => 12,
+
+        // Ternary (conditional select)
+        IrOp::Select => 13,
 
         // Calls, copies, loads — leaves
         _ => 0,
@@ -6506,6 +6511,26 @@ fn emit_expr_with_prec(
         IrOp::IntNegate => emit_unaryop(insn, "~", stmt_idx, parent, ctx),
         IrOp::BoolNegate => emit_bool_negate(insn, stmt_idx, parent, ctx),
         IrOp::Int2comp | IrOp::FloatNeg => emit_unaryop(insn, "-", stmt_idx, parent, ctx),
+
+        // -- Conditional select (ternary) --
+        IrOp::Select => {
+            let cond = if !insn.inputs.is_empty() {
+                emit_operand_resolved(&insn.inputs[0], 0, stmt_idx, ctx)
+            } else {
+                "0".to_string()
+            };
+            let true_val = if insn.inputs.len() > 1 {
+                emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx)
+            } else {
+                "0".to_string()
+            };
+            let false_val = if insn.inputs.len() > 2 {
+                emit_operand_resolved(&insn.inputs[2], 2, stmt_idx, ctx)
+            } else {
+                "0".to_string()
+            };
+            format!("{} ? {} : {}", cond, true_val, false_val)
+        }
 
         // -- Copy / move --
         IrOp::Copy => {
@@ -8685,19 +8710,19 @@ fn indent(depth: usize, tab_width: usize, out: &mut String) {
 fn type_for_size(size: u8, signed: bool) -> &'static str {
     if signed {
         match size {
-            1 => "__int8",
+            1 => "char",
             2 => "__int16",
-            4 => "__int32",
+            4 => "int",
             8 => "__int64",
-            _ => "__int32",
+            _ => "int",
         }
     } else {
         match size {
-            1 => "unsigned __int8",
-            2 => "unsigned __int16",
-            4 => "unsigned __int32",
-            8 => "unsigned __int64",
-            _ => "unsigned __int32",
+            1 => "_BYTE",
+            2 => "_WORD",
+            4 => "_DWORD",
+            8 => "_QWORD",
+            _ => "_DWORD",
         }
     }
 }
@@ -8856,7 +8881,7 @@ fn calling_convention_annotation(convention: &str) -> Option<&'static str> {
 const IDA_TYPEDEFS: &str = "\
 typedef unsigned char _BYTE;
 typedef unsigned char _BOOL; typedef unsigned short _WORD; typedef unsigned int _DWORD; typedef unsigned long long _QWORD;
-typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD; typedef signed char __int8; typedef signed short __int16; typedef signed int __int32; typedef signed long long __int64;
+typedef struct _OWORD { unsigned long long lo; unsigned long long hi; } _OWORD; typedef signed short __int16; typedef signed long long __int64;
 #define LOBYTE(x)  ((_BYTE)(x))
 #define BYTE1(x)   ((_BYTE)((x) >> 8))
 #define BYTE2(x)   ((_BYTE)((x) >> 16))
@@ -9230,7 +9255,7 @@ mod tests {
     }
 
     /// t230 — a finalized parameter narrowed to `Int(1)` renders as
-    /// `__int8` in the header (instead of the raw `__int64` we'd see
+    /// `char` in the header (instead of the raw `__int64` we'd see
     /// from a pre-narrow `inferred_params` entry).
     #[test]
     fn t230_narrowed_byte_param_renders_as_int8() {
@@ -9247,8 +9272,8 @@ mod tests {
         });
         let output = print_c(&func);
         assert!(
-            output.contains("__int8 a1"),
-            "byte-narrowed param should render as __int8: {output}",
+            output.contains("char a1"),
+            "byte-narrowed param should render as char: {output}",
         );
         // No dropped-param comment should appear when count is zero.
         assert!(
@@ -9277,9 +9302,9 @@ mod tests {
         });
         let output = print_c(&func);
         // First line of the body is the function decl; that should
-        // start with `__int8` now rather than `void`.
+        // start with `char` now rather than `void`.
         assert!(
-            output.contains("__int8") && output.contains("ret_finalize"),
+            output.contains("char") && output.contains("ret_finalize"),
             "finalized return type should drive header: {output}",
         );
     }
@@ -9459,19 +9484,13 @@ mod tests {
 
     #[test]
     fn test_print_types() {
-        assert_eq!(super::c_type(&PrimitiveType::Bool), "_Bool");
-        assert_eq!(super::c_type(&PrimitiveType::Int(1)), "signed char");
-        assert_eq!(super::c_type(&PrimitiveType::Int(2)), "short");
+        assert_eq!(super::c_type(&PrimitiveType::Bool), "_BOOL");
+        assert_eq!(super::c_type(&PrimitiveType::Int(1)), "char");
+        assert_eq!(super::c_type(&PrimitiveType::Int(2)), "__int16");
         assert_eq!(super::c_type(&PrimitiveType::Int(4)), "int");
-        assert_eq!(super::c_type(&PrimitiveType::Int(8)), "long long");
-        assert_eq!(
-            super::c_type(&PrimitiveType::UnsignedInt(1)),
-            "unsigned char"
-        );
-        assert_eq!(
-            super::c_type(&PrimitiveType::UnsignedInt(4)),
-            "unsigned int"
-        );
+        assert_eq!(super::c_type(&PrimitiveType::Int(8)), "__int64");
+        assert_eq!(super::c_type(&PrimitiveType::UnsignedInt(1)), "_BYTE");
+        assert_eq!(super::c_type(&PrimitiveType::UnsignedInt(4)), "_DWORD");
         assert_eq!(super::c_type(&PrimitiveType::Float), "float");
         assert_eq!(super::c_type(&PrimitiveType::Double), "double");
         assert_eq!(super::c_type(&PrimitiveType::Ptr), "void *");
@@ -9480,8 +9499,8 @@ mod tests {
 
     #[test]
     fn test_oword_type_for_128_bit_values() {
-        assert_eq!(super::c_type(&PrimitiveType::UnsignedInt(16)), "__m128i");
-        assert_eq!(super::c_type(&PrimitiveType::Int(16)), "__m128i");
+        assert_eq!(super::c_type(&PrimitiveType::UnsignedInt(16)), "_OWORD");
+        assert_eq!(super::c_type(&PrimitiveType::Int(16)), "__int128");
         assert_eq!(super::ida_ptr_type(16), "_OWORD *");
     }
 
@@ -9573,7 +9592,7 @@ mod tests {
 
         let output = print_c(&func);
         assert!(
-            output.contains("void * with_params(__int32 a, void * b)"),
+            output.contains("void * with_params(int a, void * b)"),
             "params: {output}"
         );
     }
@@ -10223,8 +10242,8 @@ mod tests {
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(
-            output.contains("long get_value("),
-            "should use DWARF return type 'long': {output}",
+            output.contains("int get_value("),
+            "should use DWARF return type (normalized to int): {output}",
         );
     }
 
@@ -10311,7 +10330,7 @@ mod tests {
 
         let output = super::print_c(&func);
         assert!(
-            output.contains("__int32 sub_1000(void)"),
+            output.contains("int sub_1000(void)"),
             "should use fallback sub_NNNN naming: {output}",
         );
     }
@@ -10415,16 +10434,8 @@ mod tests {
             "should contain _QWORD typedef: {output}",
         );
         assert!(
-            output.contains("typedef signed char __int8;"),
-            "should contain __int8 typedef: {output}",
-        );
-        assert!(
             output.contains("typedef signed short __int16;"),
             "should contain __int16 typedef: {output}",
-        );
-        assert!(
-            output.contains("typedef signed int __int32;"),
-            "should contain __int32 typedef: {output}",
         );
         assert!(
             output.contains("typedef signed long long __int64;"),
@@ -10467,8 +10478,9 @@ mod tests {
         let func = make_func("unsigned_cast", body);
         let output = print_c(&func);
 
+        let body = output.rsplit_once("unsigned_cast").map(|(_,b)| b).unwrap_or(&output);
         assert!(
-            !output.contains("(unsigned __int64)"),
+            !body.contains("(_QWORD)"),
             "i32 -> i64 IntZext should be elided as implicit C widening: {output}",
         );
     }
@@ -10484,8 +10496,9 @@ mod tests {
         let func = make_func("same_size_widen", body);
         let output = print_c(&func);
 
+        let body = output.rsplit_once("same_size_widen").map(|(_,b)| b).unwrap_or(&output);
         assert!(
-            !output.contains("(unsigned __int64)") && !output.contains("(__int64)"),
+            !body.contains("(_QWORD)") && !body.contains("(__int64)"),
             "same-size IntZext must not emit a cast: {output}",
         );
     }
@@ -10541,7 +10554,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            !output.contains("(__int32)") && !output.contains("(int)(short)"),
+            !output.contains("(int)") && !output.contains("(int)(short)"),
             "sign-extension from an already-short value should not emit a redundant cast: {output}",
         );
     }
@@ -10568,8 +10581,9 @@ mod tests {
         let func = make_func("ushort_zext_elided", body);
         let output = print_c(&func);
 
+        let body = output.rsplit_once("ushort_zext_elided").map(|(_,b)| b).unwrap_or(&output);
         assert!(
-            !output.contains("(unsigned __int32)"),
+            !body.contains("(_DWORD)"),
             "zero-extension from an already-unsigned-short value should not emit a redundant cast: {output}",
         );
     }
@@ -11726,7 +11740,7 @@ mod tests {
         let func = make_func("unsigned_div", body);
         let output = print_c(&func);
         assert!(
-            output.contains("(unsigned __int32)v1 / (unsigned __int32)v2"),
+            output.contains("(_DWORD)v1 / (_DWORD)v2"),
             "IntDiv should cast both operands to unsigned: {output}",
         );
     }
@@ -11781,7 +11795,7 @@ mod tests {
         let func = make_func("unsigned_shift", body);
         let output = print_c(&func);
         assert!(
-            output.contains("(unsigned __int32)v1 >> v2"),
+            output.contains("(_DWORD)v1 >> v2"),
             "IntRight should cast LHS to unsigned, not RHS: {output}",
         );
     }
@@ -11827,7 +11841,7 @@ mod tests {
         let func = make_func("unsigned_less", body);
         let output = print_c(&func);
         assert!(
-            output.contains("(unsigned __int32)v1 < (unsigned __int32)v2"),
+            output.contains("(_DWORD)v1 < (_DWORD)v2"),
             "IntLess should cast both operands to unsigned: {output}",
         );
     }
@@ -11873,7 +11887,7 @@ mod tests {
         let func = make_func("unsigned_rem", body);
         let output = print_c(&func);
         assert!(
-            output.contains("(unsigned __int64)v1 % (unsigned __int64)v2"),
+            output.contains("(_QWORD)v1 % (_QWORD)v2"),
             "IntRem should cast both operands to unsigned: {output}",
         );
     }
@@ -11896,7 +11910,7 @@ mod tests {
         let func = make_func("unsigned_leq", body);
         let output = print_c(&func);
         assert!(
-            output.contains("(unsigned __int32)v1 <= (unsigned __int32)v2"),
+            output.contains("(_DWORD)v1 <= (_DWORD)v2"),
             "IntLessequal should cast both operands to unsigned: {output}",
         );
     }
@@ -13020,7 +13034,7 @@ mod tests {
             .find(|l| l.contains("sub_401000("))
             .expect("function sig");
         assert!(
-            sig_line.starts_with("__int32 sub_401000("),
+            sig_line.starts_with("int sub_401000("),
             "SysV should have no convention annotation: {sig_line}",
         );
     }
@@ -13050,7 +13064,7 @@ mod tests {
             .find(|l| l.contains("sub_500000("))
             .expect("function sig");
         assert!(
-            sig_line.starts_with("__int32 sub_500000("),
+            sig_line.starts_with("int sub_500000("),
             "unknown convention should have no annotation: {sig_line}",
         );
     }
@@ -14627,7 +14641,7 @@ mod tests {
     #[test]
     fn test_t232_stack_frame_emits_named_local_decls() {
         // Two recovered 4-byte locals at offsets -8 and -16 → output
-        // contains `__int32 v_8;` and `__int32 v_16;` declarations.
+        // contains `int v_8;` and `int v_16;` declarations.
         use unlace_ir::ssa::{StackFrame, StackLocal};
 
         let mut func = make_func("t232_decls", vec![HirNode::Return(None)]);
@@ -14657,12 +14671,12 @@ mod tests {
 
         let output = print_c(&func);
         assert!(
-            output.contains("__int32 v_8;"),
-            "expected `__int32 v_8;` decl, got:\n{output}",
+            output.contains("int v_8;"),
+            "expected `int v_8;` decl, got:\n{output}",
         );
         assert!(
-            output.contains("__int32 v_16;"),
-            "expected `__int32 v_16;` decl, got:\n{output}",
+            output.contains("int v_16;"),
+            "expected `int v_16;` decl, got:\n{output}",
         );
     }
 
@@ -14731,7 +14745,7 @@ mod tests {
         let func = make_func("t232_empty", vec![HirNode::Return(None)]);
         let output = print_c(&func);
         assert!(
-            !output.contains("__int32 v_"),
+            !output.contains("int v_"),
             "expected no synthesized stack-frame decls, got:\n{output}",
         );
         assert!(
@@ -15131,7 +15145,7 @@ mod tests {
 
         let output = print_c(&func);
         assert!(
-            output.contains("__int64 sub_401000(__int64 a1, unsigned __int32 a2, void * a3)"),
+            output.contains("__int64 sub_401000(__int64 a1, _DWORD a2, void * a3)"),
             "signature should use IDA-style types: {output}",
         );
     }
@@ -15168,7 +15182,7 @@ mod tests {
 
         let output = print_c(&func);
         assert!(
-            output.contains("__int32 sub_402000(void)"),
+            output.contains("int sub_402000(void)"),
             "empty params should emit (void): {output}",
         );
     }
@@ -15205,7 +15219,7 @@ mod tests {
 
         let output = print_c(&func);
         assert!(
-            output.contains("_BOOL sub_403000(__int32 a1)"),
+            output.contains("_BOOL sub_403000(int a1)"),
             "Bool return type should emit _BOOL: {output}",
         );
     }
@@ -15388,7 +15402,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("((__int32 (*)())pfn)()"),
+            output.contains("((int (*)())pfn)()"),
             "CALLIND target should be named 'pfn' with cast: {output}",
         );
         assert!(
@@ -15460,7 +15474,7 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("((__int32 (*)(__int32, __int32))pfn)("),
+            output.contains("((int (*)(int, int))pfn)("),
             "CALLIND with two int32 args should emit param-typed cast: {output}",
         );
     }
@@ -17370,7 +17384,7 @@ mod tests {
         let out = super::render_objc_class_struct(&class).expect("two ivars → Some");
         assert!(out.contains("struct ClassName {"), "{out}");
         assert!(out.contains("id name;"), "{out}");
-        assert!(out.contains("long long count;"), "{out}");
+        assert!(out.contains("__int64 count;"), "{out}");
         assert!(out.trim_end().ends_with("};"), "{out}");
     }
 
@@ -17742,7 +17756,7 @@ mod tests {
         let output = super::print_c_full(&func, None, None, Some(&symbols), Some(&string_table));
 
         assert!(
-            output.contains("scanf(\"%ld\", (long long *)"),
+            output.contains("scanf(\"%ld\", (__int64 *)"),
             "scanf(\"%%ld\", &y) must wrap variadic in a pointer cast:\n{output}",
         );
     }
@@ -17938,8 +17952,8 @@ mod tests {
 
         let out = super::emit_inferred_struct_preamble(&ssa);
         assert!(out.contains("struct __anon0 {"), "header missing: {out}");
-        // Width 4 → __int32, width 8 → __int64; offsets verbatim.
-        assert!(out.contains("__int32 field_0;"), "field_0: {out}");
+        // Width 4 → int, width 8 → __int64; offsets verbatim.
+        assert!(out.contains("int field_0;"), "field_0: {out}");
         assert!(out.contains("__int64 field_8;"), "field_8: {out}");
     }
 

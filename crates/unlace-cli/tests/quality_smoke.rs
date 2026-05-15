@@ -73,6 +73,16 @@ fn baseline_hello_world() {
     let t = analyze("hello_world.elf");
     assert_eq!(t.unimplemented_ops, 0, "hello_world should have no Unimplemented ops");
     assert_eq!(t.asm_blocks, 0, "hello_world should have no raw __asm blocks");
+    // Batch 0+ extended counters pinned baselines. hello_world is a
+    // single direct-call printf wrapper — no compound assigns, no
+    // short-circuit, no SIMD, all calls direct (rate = 100%).
+    assert_eq!(t.compound_assignments, 0, "hello_world: no compound assigns");
+    assert_eq!(t.short_circuit_ops, 0, "hello_world: no &&/||");
+    assert_eq!(t.simd_typed_vars, 0, "hello_world: no SIMD-typed vars");
+    assert_eq!(
+        t.call_resolution_rate, 100.0,
+        "hello_world: every call site is direct → 100% resolved",
+    );
 }
 
 /// Pinned baseline for `branches.elf`. Captures the current shape: one
@@ -99,4 +109,11 @@ fn baseline_loops() {
     // loops.elf must produce a non-trivial amount of IR — a guard against
     // the pipeline silently collapsing to empty output.
     assert!(t.ir_insns > 20, "loops: expected >20 IR insns, got {}", t.ir_insns);
+    // Batch 0+ extended counters: loops contains a `&local` flowing into
+    // a call (current detector picks up exactly one byref local).
+    assert_eq!(t.byref_args, 1, "loops: one byref-taken local");
+    assert_eq!(
+        t.call_resolution_rate, 100.0,
+        "loops: every call site is direct → 100% resolved",
+    );
 }

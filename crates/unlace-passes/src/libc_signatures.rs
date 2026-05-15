@@ -78,6 +78,15 @@ const LIBC_TABLE: &[LibcSignature] = &[
     sig("puts", 1, "int", false, false),
     sig("snprintf", 3, "int", false, true),
     sig("sprintf", 2, "int", false, true),
+    // glibc FORTIFY_SOURCE variants — same calling convention as the
+    // non-_chk forms but with one extra leading "flag" argument that
+    // shifts the format-string position by 1.
+    sig("__printf_chk", 2, "int", false, true),
+    sig("__fprintf_chk", 3, "int", false, true),
+    sig("__sprintf_chk", 4, "int", false, true),
+    sig("__snprintf_chk", 5, "int", false, true),
+    sig("__vprintf_chk", 2, "int", false, true),
+    sig("__vsprintf_chk", 4, "int", false, true),
     sig("abort", 0, "void", true, false),
     sig("atoi", 1, "int", false, false),
     sig("atol", 1, "long", false, false),

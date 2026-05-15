@@ -111,6 +111,10 @@ pub struct FunctionQuality {
     /// `__cxa_finalize`) legitimately report `0` — the roster intentionally
     /// excludes those because they aren't simplifiable idioms.
     pub libc_annotated_calls: usize,
+    /// Variadic call sites for which the format string was resolved and
+    /// per-slot argument types were inferred (`ssa.variadic_call_types`).
+    /// Wired in Batch 6.
+    pub variadic_call_sites: usize,
     /// Rust panic sites detected (`ssa.panic_sites`).
     pub rust_panic_sites: usize,
     /// Functions detected as `__noreturn`.
@@ -175,6 +179,7 @@ impl FunctionQuality {
             q.functions_with_params = 1;
         }
         q.libc_annotated_calls = ssa.libc_call_annotations.len();
+        q.variadic_call_sites = ssa.variadic_call_types.len();
         q.rust_panic_sites = ssa.panic_sites.len();
         if ssa.noreturn {
             q.noreturn_functions = 1;
@@ -338,6 +343,7 @@ pub struct QualityTotals {
     pub functions_with_params: usize,
     pub inferred_params: usize,
     pub libc_annotated_calls: usize,
+    pub variadic_call_sites: usize,
     pub rust_panic_sites: usize,
     pub noreturn_functions: usize,
     pub cpp_vtable_calls: usize,
@@ -374,6 +380,7 @@ impl QualityTotals {
         self.functions_with_params += q.functions_with_params;
         self.inferred_params += q.inferred_params;
         self.libc_annotated_calls += q.libc_annotated_calls;
+        self.variadic_call_sites += q.variadic_call_sites;
         self.rust_panic_sites += q.rust_panic_sites;
         self.noreturn_functions += q.noreturn_functions;
         self.cpp_vtable_calls += q.cpp_vtable_calls;
@@ -479,6 +486,17 @@ fn analyze_function(
         tracing::debug!(func = %entry.name, err = %e, "quality: pass pipeline failed");
     }
 
+    // Batch 6: mirror the main pipeline's post-pass annotation step so
+    // variadic_call_types lands in the SSA we measure. Without this, the
+    // measurement under-reports against the actual decompile output.
+    let _libc_annotations_added =
+        unlace_passes::annotate_libc_calls(&mut ssa, &|addr| symbols.get(&addr).cloned());
+    let _variadic_types_added = unlace_passes::parse_printf_format_strings(
+        &mut ssa,
+        &|addr| stable_symbol_names.get(&addr).copied(),
+        &image.string_table,
+    );
+
     let hir = unlace_struct::structure(&ssa).context("control-flow structuring failed")?;
     Ok(FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir))
 }
@@ -542,6 +560,7 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
          - functions with params: {fp}\n\
          - inferred params (total): {ip}\n\
          - libc-annotated calls: {lc}\n\
+         - variadic call sites (printf-family resolved): {vs}\n\
          - noreturn functions: {nr}\n\
          - rust panic sites: {rp}\n\
          - C++ vtable calls: {cv}\n\
@@ -552,6 +571,7 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
         fp = t.functions_with_params,
         ip = t.inferred_params,
         lc = t.libc_annotated_calls,
+        vs = t.variadic_call_sites,
         nr = t.noreturn_functions,
         rp = t.rust_panic_sites,
         cv = t.cpp_vtable_calls,

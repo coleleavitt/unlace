@@ -1,10 +1,10 @@
-/* Function:   _start | Address: 0x400100 | Size: 0xc (12 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   bitfield_test, csel_test, mul_test | Xrefs from: unknown */
-void _start(void) {
+/* Function:   _start | Address: 0x400100 | Size: 0xc (12 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   bitfield_test, csel_test, mul_test | Xrefs from: unknown */
+void __aapcs _start(void) {
     mul_test(); csel_test(); bitfield_test();
     return;
 }
-/* Function:   mul_test | Address: 0x400118 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void mul_test(void) {
+/* Function:   mul_test | Address: 0x400118 | Size: 0x4 (4 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void __aapcs mul_test(void) {
     int result; // reg?
     return result;
 }
@@ -39,8 +39,8 @@ struct __anon0 {
     __int64 field_16;
 };
 
-/* Function:   bitfield_test | Address: 0x400148 | Size: 0x1c (28 bytes) | Convention: unknown | Stack frame: 0x18 (24 bytes) | Xrefs from: unknown */
-void bitfield_test(void) {
+/* Function:   bitfield_test | Address: 0x400148 | Size: 0x1c (28 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x18 (24 bytes) | Xrefs from: unknown */
+void __aapcs bitfield_test(void) {
     char buf_16[24];
     int v2; // rbp
     int v5; // reg?

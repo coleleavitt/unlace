@@ -1,9 +1,9 @@
-/* Function:   main | Address: 0x1060 | Size: 0x1b (27 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   __printf_chk | Xrefs from: unknown */
+/* Function:   main | Address: 0x1060 | Size: 0x1b (27 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   __printf_chk | Xrefs from: unknown */
 void main(void) {
     int result;
     *(_QWORD *)(0LL) = 0x1080LL; printf(); return result;
 }
-/* Function:   _start | Address: 0x1090 | Size: 0x1f (31 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   _start | Address: 0x1090 | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
     int v6; // rip
     *(_QWORD *)(0LL) = 0x10b5LL; return;
@@ -21,7 +21,7 @@ struct __anon0 {
     __int64 field_8;
 };
 
-/* Function:   sub_1130 | Address: 0x1130 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_10c0 | Xrefs from: unknown */
+/* Function:   sub_1130 | Address: 0x1130 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_10c0 | Xrefs from: unknown */
 void sub_1130(void) {
     long long v1; // rsp
     int v4; // rip
@@ -39,11 +39,11 @@ void sub_1130(void) {
         result = *(_QWORD *)(c1); return result;
     }
 }
-/* Function:   sub_1170 | Address: 0x1170 | Size: 0x4 (4 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   sub_1170 | Address: 0x1170 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1170(void) {
     sub_10f0(); return;
 }
-/* Function:   sub_10c0 | Address: 0x10c0 | Size: 0x6c (108 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   sub_10c0 | Address: 0x10c0 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_10c0(void) {
     int v5; // rip
     v8 = 1;

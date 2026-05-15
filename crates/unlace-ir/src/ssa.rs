@@ -628,6 +628,15 @@ pub struct SsaFunction {
     /// suspension points (`co_await` / `co_yield`). Empty until the pass
     /// runs.
     pub coroutine_sites: Vec<CoroutineSite>,
+    /// Recovered jump tables for indexed indirect branches (`Branchind`).
+    /// Keyed by the **branch instruction's virtual address**; value is the
+    /// table metadata + decoded targets. Populated in two phases by
+    /// [`unlace_passes::indirect_jump_resolve::IndirectJumpResolvePass`]
+    /// (candidate detection) and the CLI pipeline's section-aware
+    /// resolution step (target decoding). Empty when no Branchind in the
+    /// function matches the table-load pattern, or when the candidate's
+    /// table base falls outside any read-only section.
+    pub resolved_jump_tables: BTreeMap<u64, JumpTableInfo>,
 }
 
 /// One recovered C++ lambda capture.
@@ -727,6 +736,35 @@ pub struct CoroutineSite {
     pub promise_offset: Option<u64>,
     /// Detected suspension points in the resume body.
     pub suspension_points: Vec<SuspensionPoint>,
+}
+
+/// A recovered jump table backing an indexed indirect branch (`Branchind`).
+///
+/// Batch 9: populated by
+/// [`IndirectJumpResolvePass`](https://docs.rs/unlace-passes) — which detects
+/// the `Branchind`-after-table-load pattern — and finalized by the CLI
+/// pipeline once the binary's read-only sections are available to decode the
+/// concrete target addresses. The C-emit path converts each entry into the
+/// `unlace_struct::switch_recovery::JumpTable` shape and feeds it to
+/// `refine_switches_with_tables` so structured `HirNode::Switch` arms get
+/// explicit `case` labels.
+///
+/// Lives in `unlace-ir` (rather than reusing `unlace-struct`'s `JumpTable`)
+/// because `unlace-struct` depends on `unlace-ir`, not the reverse; the two
+/// types are intentionally kept field-compatible.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct JumpTableInfo {
+    /// Base virtual address of the table in the binary image.
+    pub base: u64,
+    /// Size of each table entry in bytes (typically 4 or 8).
+    pub entry_size: u8,
+    /// Number of entries. `0` means "candidate detected, not yet resolved".
+    pub num_entries: u32,
+    /// `true` for little-endian table entries, `false` for big-endian.
+    pub endian_little: bool,
+    /// Concrete target addresses, one per entry. Empty until the pipeline's
+    /// section-aware resolution step decodes the table bytes.
+    pub targets: Vec<u64>,
 }
 
 impl CppLambdaCapture {
@@ -990,6 +1028,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         cpp_lambda_captures: Vec::new(),
         seh_regions: Vec::new(),
         coroutine_sites: Vec::new(),
+        resolved_jump_tables: BTreeMap::new(),
     }
 }
 

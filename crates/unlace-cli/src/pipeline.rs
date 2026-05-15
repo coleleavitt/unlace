@@ -66,7 +66,7 @@ use unlace_passes::{
     CopyPropagationPass, CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
     DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass,
     DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
-    IndirectCallResolvePass, IvElimPass, LicmPass, ModuloIdiomPass, NoreturnDetectPass,
+    IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass, LicmPass, ModuloIdiomPass, NoreturnDetectPass,
     OpTypeBindingPass, OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass,
     RedundantFlagElimPass, RegisterCoalescePass, ReturnTypeInferPass, RustEnumPass, RustPanicPass,
     RustVtablePass, SccpPass, SignatureSnapshot, StackOffsetSnapshotPass, StackPointerTrackingPass,
@@ -1043,6 +1043,15 @@ fn run_passes_with_report_inner(
     IndirectCallResolvePass
         .run(ssa)
         .context("indirect call resolve pass failed")?;
+    // Batch 9: companion to IndirectCallResolvePass — detect Branchind
+    // jump-table patterns and record candidate (base, entry_size) pairs
+    // on `ssa.resolved_jump_tables`. Concrete target decoding happens
+    // later in `decompile_function_with_symbols` once the binary's
+    // read-only sections are in scope; emit_output then feeds the
+    // resolved tables to `refine_switches_with_tables`.
+    IndirectJumpResolvePass
+        .run(ssa)
+        .context("indirect jump resolve pass failed")?;
     OpTypeBindingPass
         .run(ssa)
         .context("op type binding pass failed")?;
@@ -1654,6 +1663,16 @@ pub fn decompile_function_with_symbols(
     printer_annotations.libc_call_canonical = libc_call_canonical;
     printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
     let printer_annotations = Some(printer_annotations);
+
+    // Batch 9: section-aware second phase of jump-table recovery.
+    // `IndirectJumpResolvePass` (run as a post-loop one-shot above) has
+    // already detected candidate `Branchind` table dispatches and stashed
+    // their bases on `ssa.resolved_jump_tables`; here we walk the binary
+    // image to decode the concrete target addresses out of `.rodata`.
+    // No-op when no candidates were detected.
+    resolve_jump_table_targets(&mut ssa, image);
+    let jt_sections = build_jump_table_section_views(image);
+
     let result = emit_output(
         emit,
         &ssa,
@@ -1663,6 +1682,7 @@ pub fn decompile_function_with_symbols(
         rtti,
         config.print_config,
         printer_annotations.as_ref(),
+        &jt_sections,
     );
     tracing::trace!(
         elapsed_us = t.elapsed().as_micros() as u64,
@@ -1807,6 +1827,182 @@ fn collect_go_iface_devirtualized_calls(
     resolved
 }
 
+/// Convert the loader's `Section` list into the `unlace-struct`-flavoured
+/// `SectionView` slice that `refine_switches_with_tables` /
+/// `read_jump_table` expect. Skips zero-length sections.
+pub fn build_jump_table_section_views(
+    image: &unlace_loader::BinaryImage,
+) -> Vec<unlace_struct::SectionView<'_>> {
+    use unlace_loader::SectionFlags;
+    let mut out = Vec::with_capacity(image.sections.len());
+    for sec in &image.sections {
+        if sec.data.is_empty() {
+            continue;
+        }
+        let perms = if sec.flags.contains(SectionFlags::EXEC) {
+            unlace_struct::SectionPerms::RX
+        } else {
+            unlace_struct::SectionPerms::RO
+        };
+        out.push(unlace_struct::SectionView {
+            name: sec.name.as_str(),
+            vaddr: sec.vaddr,
+            data: &sec.data,
+            perms,
+        });
+    }
+    out
+}
+
+/// Section-aware second phase of jump-table recovery: walks each candidate
+/// recorded by [`unlace_passes::IndirectJumpResolvePass`], decodes the
+/// concrete target addresses by reading the binary's read-only sections,
+/// and stores the result back on `ssa.resolved_jump_tables`.
+///
+/// The pass alone cannot do this because it sees only the SSA function;
+/// the bytes behind the table base live in the loader's section table.
+/// Candidates whose base falls outside any section are left as
+/// `num_entries == 0` (which `refine_switches_with_tables` then ignores
+/// via its `validate_table_base` gate).
+///
+/// ## Follow-up: why `branches.elf` still reports `switch_statements=0`
+///
+/// `branches.c` contains a real `switch (x % 4) { case 0: …; case 1: …; }`
+/// source construct, but GCC -O2 lowers it to a `lea` + `cmove`
+/// branchless cmov-cascade rather than a table dispatch — there is *no*
+/// jump table in `.rodata` for the candidate detector to find, and so no
+/// `Branchind` for the new pass to anchor onto. Recovering this case
+/// requires a *separate* idiom recognizer that walks the `cmov` chain in
+/// IR and rebuilds the original switch; that work is intentionally
+/// out-of-scope for the Batch 9 wiring slice and is queued as Batch 9
+/// follow-up "cmov-cascade switch recovery". Until it lands, this
+/// pipeline correctly emits zero recovered switches for `branches.elf`.
+pub fn resolve_jump_table_targets(
+    ssa: &mut unlace_ir::ssa::SsaFunction,
+    image: &unlace_loader::BinaryImage,
+) {
+    use unlace_ir::ssa::JumpTableInfo;
+    use unlace_struct::{JumpTable, JumpTableKind, SectionView, TableEndian, read_jump_table};
+
+    if ssa.resolved_jump_tables.is_empty() {
+        return;
+    }
+    let sections = build_jump_table_section_views(image);
+    if sections.is_empty() {
+        return;
+    }
+
+    let endian = match image.endian {
+        unlace_loader::Endian::Little => TableEndian::Little,
+        unlace_loader::Endian::Big => TableEndian::Big,
+    };
+
+    // Heuristic upper bound on how many entries we'll try to decode: we
+    // don't yet recover the bounds-check at the dispatch site, so cap at
+    // a generous slot count and let xref / size logic shorten later. For
+    // the wiring slice we simply walk until either the base section ends
+    // or we've decoded `MAX_PROBE_ENTRIES` slots.
+    const MAX_PROBE_ENTRIES: u32 = 64;
+
+    let mut updated = std::collections::BTreeMap::new();
+    for (&branch_addr, cand) in &ssa.resolved_jump_tables {
+        // Already resolved? keep as-is.
+        if cand.num_entries > 0 && !cand.targets.is_empty() {
+            updated.insert(branch_addr, cand.clone());
+            continue;
+        }
+        let entry_size = cand.entry_size;
+        if !matches!(entry_size, 4 | 8) {
+            // Compressed-offset / byte-secondary tables aren't handled by
+            // this initial pass; pass through unresolved.
+            updated.insert(branch_addr, cand.clone());
+            continue;
+        }
+        let Some(section): Option<&SectionView<'_>> = sections.iter().find(|s| {
+            s.contains_addr(cand.base)
+                && (s.name == ".rodata"
+                    || s.name == ".data.rel.ro"
+                    || s.perms == unlace_struct::SectionPerms::RO)
+        }) else {
+            updated.insert(branch_addr, cand.clone());
+            continue;
+        };
+        // Determine the maximum entry count that fits inside the section.
+        let bytes_left = section
+            .data
+            .len()
+            .saturating_sub((cand.base.saturating_sub(section.vaddr)) as usize);
+        let fit_entries = (bytes_left / entry_size as usize) as u32;
+        let probe_entries = fit_entries.min(MAX_PROBE_ENTRIES);
+        if probe_entries == 0 {
+            updated.insert(branch_addr, cand.clone());
+            continue;
+        }
+        let table = JumpTable {
+            base: cand.base,
+            entry_size,
+            num_entries: probe_entries,
+            endian,
+            kind: JumpTableKind::DenseAbsolute,
+        };
+        if let Some(targets) = read_jump_table(&table, section) {
+            // Sanity check: every entry must point inside the binary's
+            // executable footprint, otherwise this isn't really a table.
+            let plausible = targets.iter().all(|&t| {
+                sections
+                    .iter()
+                    .any(|s| s.contains_addr(t) && s.perms == unlace_struct::SectionPerms::RX)
+            });
+            if plausible {
+                updated.insert(
+                    branch_addr,
+                    JumpTableInfo {
+                        base: cand.base,
+                        entry_size,
+                        num_entries: probe_entries,
+                        endian_little: matches!(endian, TableEndian::Little),
+                        targets,
+                    },
+                );
+                continue;
+            }
+        }
+        updated.insert(branch_addr, cand.clone());
+    }
+    ssa.resolved_jump_tables = updated;
+}
+
+/// Bridge the `unlace-ir` [`JumpTableInfo`](unlace_ir::ssa::JumpTableInfo)
+/// map (keyed by branch address) into the
+/// `unlace-struct::switch_recovery::JumpTable` shape that
+/// `refine_switches_with_tables` consumes. Only *resolved* candidates
+/// (`num_entries > 0`, non-empty `targets`) are bridged; bare candidates
+/// are dropped since the refiner has nothing actionable to do with them.
+pub fn jump_table_info_map_to_struct(
+    info: &BTreeMap<u64, unlace_ir::ssa::JumpTableInfo>,
+) -> BTreeMap<u64, (unlace_struct::JumpTable, Vec<u64>)> {
+    use unlace_struct::{JumpTable, JumpTableKind, TableEndian};
+    let mut out = BTreeMap::new();
+    for (&branch_addr, cand) in info {
+        if cand.num_entries == 0 || cand.targets.is_empty() {
+            continue;
+        }
+        let table = JumpTable {
+            base: cand.base,
+            entry_size: cand.entry_size,
+            num_entries: cand.num_entries,
+            endian: if cand.endian_little {
+                TableEndian::Little
+            } else {
+                TableEndian::Big
+            },
+            kind: JumpTableKind::DenseAbsolute,
+        };
+        out.insert(branch_addr, (table, cand.targets.clone()));
+    }
+    out
+}
+
 pub fn emit_output(
     format: EmitFormat,
     ssa: &SsaFunction,
@@ -1816,6 +2012,7 @@ pub fn emit_output(
     rtti: Option<&unlace_loader::RttiInfo>,
     print_config: Option<unlace_output::PrintConfig>,
     annotations: Option<&unlace_output::PrinterAnnotations>,
+    jump_table_sections: &[unlace_struct::SectionView<'_>],
 ) -> Result<String> {
     match format {
         EmitFormat::Ir => Ok(unlace_output::dump_ir(ssa)),
@@ -1829,15 +2026,25 @@ pub fn emit_output(
                 unlace_struct::structure_with_landing_pads(ssa, &ssa.eh_landing_pads)
                     .context("control-flow structuring failed")?
             };
-            // Batch 9 slice: post-structuring switch recovery. Walks the HIR
-            // and preserves/normalises any `HirNode::Switch` produced by the
-            // structurer, plus logs any remaining unresolved `BRANCHIND`
-            // statements for diagnostics. The full `refine_switches_with_tables`
-            // path needs a `BTreeMap<u64, (JumpTable, Vec<u64>)>` keyed by
-            // switch-instruction address — SsaFunction currently exposes
-            // `resolved_indirect_calls` but no equivalent jump-table map, so
-            // refinement is deferred until that wiring lands.
+            // Batch 9: post-structuring switch recovery, followed by
+            // jump-table-aware refinement. `recover_switches` walks the
+            // HIR and normalises any `HirNode::Switch` produced by the
+            // structurer; `refine_switches_with_tables` then promotes
+            // those switches' arm labels from synthetic indices to the
+            // concrete case values decoded from the binary's jump
+            // tables (populated upstream by
+            // `IndirectJumpResolvePass` + `resolve_jump_table_targets`).
             unlace_struct::recover_switches(&mut hir);
+            if !ssa.resolved_jump_tables.is_empty() && !jump_table_sections.is_empty() {
+                let tables_for_refine = jump_table_info_map_to_struct(&ssa.resolved_jump_tables);
+                if !tables_for_refine.is_empty() {
+                    unlace_struct::refine_switches_with_tables(
+                        &mut hir,
+                        &tables_for_refine,
+                        jump_table_sections,
+                    );
+                }
+            }
             unlace_struct::ternary_recovery(&mut hir);
             unlace_struct::short_circuit_recovery(&mut hir);
             unlace_struct::flatten_if_else_chains(&mut hir);

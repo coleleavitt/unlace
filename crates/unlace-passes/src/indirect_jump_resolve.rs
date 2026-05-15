@@ -87,54 +87,107 @@ pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTa
                 continue;
             };
 
-            // Target must be produced by a Load (the table-slot read).
-            let Some(load_loc) = find_def(func, target_sv) else {
-                continue;
+            // Chase through Copy chains to find the producing operation.
+            let (prod_loc, prod_op) = match chase_copies_to_producer(func, target_sv) {
+                Some(v) => v,
+                None => continue,
             };
-            let Some(load_insn) = func
-                .function
-                .blocks
-                .get(&load_loc.0)
-                .and_then(|b| b.insns.get(load_loc.1))
-            else {
-                continue;
-            };
-            if load_insn.op != IrOp::Load {
-                continue;
-            }
-            let entry_size = load_insn
-                .output
-                .as_ref()
-                .map(|o| o.size as u8)
-                .unwrap_or(0);
-            if !matches!(entry_size, 1 | 2 | 4 | 8) {
-                continue;
-            }
 
-            // The Load's address operand (input 1; input 0 is the space).
-            // First try a constant address baked straight into the insn.
-            if let Some(addr_vn) = load_insn.inputs.get(1) {
-                if addr_vn.space == SpaceId::Const {
-                    out.insert(insn.addr, unresolved(addr_vn.offset, entry_size));
+            // --- Pattern 1: Branchind ← Load (absolute jump table) ---
+            if prod_op == IrOp::Load {
+                if let Some(cand) = extract_load_candidate(func, prod_loc) {
+                    out.insert(insn.addr, cand);
                     continue;
                 }
             }
 
-            let Some(&addr_sv) =
-                func.var_map
-                    .get(&(load_loc.0, load_loc.1, VarnodeSlot::Input(1)))
-            else {
-                continue;
-            };
-
-            let mut visited = BTreeSet::new();
-            if let Some(base) = trace_table_base(func, addr_sv, &mut visited) {
-                out.insert(insn.addr, unresolved(base, entry_size));
+            // --- Pattern 2: Branchind ← IntAdd(base, Load) (RIP-relative) ---
+            // GCC PIC: target = table_base + sign_extend(table[idx])
+            if prod_op == IrOp::IntAdd {
+                for slot in [VarnodeSlot::Input(0), VarnodeSlot::Input(1)] {
+                    let Some(&operand_sv) =
+                        func.var_map.get(&(prod_loc.0, prod_loc.1, slot))
+                    else {
+                        continue;
+                    };
+                    let Some((inner_loc, inner_op)) =
+                        chase_copies_to_producer(func, operand_sv)
+                    else {
+                        continue;
+                    };
+                    if inner_op != IrOp::Load {
+                        continue;
+                    }
+                    if let Some(cand) = extract_load_candidate(func, inner_loc) {
+                        out.insert(insn.addr, cand);
+                        break;
+                    }
+                }
             }
         }
     }
 
     out
+}
+
+/// Chase through Copy instructions via var_map, returning the first
+/// non-Copy producer's location and opcode.
+fn chase_copies_to_producer(
+    func: &SsaFunction,
+    start: SsaVarnode,
+) -> Option<((BlockId, usize), IrOp)> {
+    let mut cur_sv = start;
+    for _ in 0..16 {
+        let def_loc = find_def(func, cur_sv)?;
+        let di = func
+            .function
+            .blocks
+            .get(&def_loc.0)
+            .and_then(|b| b.insns.get(def_loc.1))?;
+        if di.op != IrOp::Copy {
+            return Some((def_loc, di.op));
+        }
+        let next = func
+            .var_map
+            .get(&(def_loc.0, def_loc.1, VarnodeSlot::Input(0)))?;
+        cur_sv = *next;
+    }
+    None
+}
+
+/// Given a Load instruction location, extract the jump-table candidate
+/// (base address + entry size). Returns None if the Load's address
+/// can't be traced to a constant base.
+fn extract_load_candidate(
+    func: &SsaFunction,
+    load_loc: (BlockId, usize),
+) -> Option<JumpTableInfo> {
+    let load_insn = func
+        .function
+        .blocks
+        .get(&load_loc.0)
+        .and_then(|b| b.insns.get(load_loc.1))?;
+
+    let entry_size = load_insn.output.as_ref().map(|o| o.size as u8).unwrap_or(0);
+    if !matches!(entry_size, 1 | 2 | 4 | 8) {
+        return None;
+    }
+
+    // First try a constant address in the raw instruction inputs
+    // (skip placeholder values where offset < 0x1000).
+    if let Some(addr_vn) = load_insn.inputs.get(1) {
+        if addr_vn.space == SpaceId::Const && addr_vn.offset >= 0x1000 {
+            return Some(unresolved(addr_vn.offset, entry_size));
+        }
+    }
+
+    // Follow the SSA var_map for the Load's address input.
+    let addr_sv = func
+        .var_map
+        .get(&(load_loc.0, load_loc.1, VarnodeSlot::Input(1)))?;
+
+    let mut visited = BTreeSet::new();
+    trace_table_base(func, *addr_sv, &mut visited).map(|base| unresolved(base, entry_size))
 }
 
 /// Build an unresolved candidate — base + entry size known, targets pending
@@ -170,10 +223,13 @@ fn trace_table_base(
 
     match insn.op {
         IrOp::Copy => {
+            // Check the raw input for a real constant (plausible address,
+            // not a zero-offset placeholder that SLEIGH uses for computed values).
             let inp = insn.inputs.first()?;
-            if inp.space == SpaceId::Const {
+            if inp.space == SpaceId::Const && inp.offset >= 0x1000 {
                 return Some(inp.offset);
             }
+            // Otherwise follow via SSA var_map
             let next = func
                 .var_map
                 .get(&(def_loc.0, def_loc.1, VarnodeSlot::Input(0)))?;
@@ -184,19 +240,22 @@ fn trace_table_base(
         IrOp::IntAdd => {
             let a = insn.inputs.first()?;
             let b = insn.inputs.get(1)?;
-            // Direct const + const → fold.
-            if a.space == SpaceId::Const && b.space == SpaceId::Const {
+            // Direct const + const → fold (at least one must be plausible).
+            if a.space == SpaceId::Const
+                && b.space == SpaceId::Const
+                && (a.offset >= 0x1000 || b.offset >= 0x1000)
+            {
                 return Some(a.offset.wrapping_add(b.offset));
             }
-            // const + reg/unique → the const is the base.
-            if a.space == SpaceId::Const {
+            // One operand is a plausible constant (≥ 0x1000) → that's the base.
+            if a.space == SpaceId::Const && a.offset >= 0x1000 {
                 return Some(a.offset);
             }
-            if b.space == SpaceId::Const {
+            if b.space == SpaceId::Const && b.offset >= 0x1000 {
                 return Some(b.offset);
             }
-            // reg + reg → recurse on both; accept iff exactly one side
-            // reaches a constant base.
+            // Both operands are reg/unique or small consts → recurse via
+            // var_map; accept iff exactly one side reaches a plausible base.
             let mut found = None;
             for slot in [VarnodeSlot::Input(0), VarnodeSlot::Input(1)] {
                 if let Some(next) = func.var_map.get(&(def_loc.0, def_loc.1, slot)) {
@@ -212,18 +271,10 @@ fn trace_table_base(
             found
         }
 
-        // scale only — keep walking the non-constant side toward the base.
-        IrOp::IntMult | IrOp::IntLeft => {
-            for slot in [VarnodeSlot::Input(0), VarnodeSlot::Input(1)] {
-                if let Some(next) = func.var_map.get(&(def_loc.0, def_loc.1, slot)) {
-                    let mut sub = visited.clone();
-                    if let Some(base) = trace_table_base(func, *next, &mut sub) {
-                        return Some(base);
-                    }
-                }
-            }
-            None
-        }
+        // scale only — a multiply/shift produces `idx * scale_factor`
+        // which is NOT a table base. Return None so the parent IntAdd
+        // picks the correct (non-scaled) operand as the base.
+        IrOp::IntMult | IrOp::IntLeft => None,
 
         _ => None,
     }

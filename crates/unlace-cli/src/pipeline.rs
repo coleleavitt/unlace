@@ -1938,36 +1938,50 @@ pub fn resolve_jump_table_targets(
             updated.insert(branch_addr, cand.clone());
             continue;
         }
-        let table = JumpTable {
-            base: cand.base,
-            entry_size,
-            num_entries: probe_entries,
-            endian,
-            kind: JumpTableKind::DenseAbsolute,
+        // Try multiple table kinds — GCC PIC uses RipRelative (4-byte
+        // signed offsets from the table base) while non-PIC uses DenseAbsolute.
+        let kinds_to_try: &[JumpTableKind] = if entry_size == 4 {
+            &[JumpTableKind::RipRelative, JumpTableKind::DenseAbsolute]
+        } else {
+            &[JumpTableKind::DenseAbsolute, JumpTableKind::RipRelative]
         };
-        if let Some(targets) = read_jump_table(&table, section) {
-            // Sanity check: every entry must point inside the binary's
-            // executable footprint, otherwise this isn't really a table.
-            let plausible = targets.iter().all(|&t| {
-                sections
-                    .iter()
-                    .any(|s| s.contains_addr(t) && s.perms == unlace_struct::SectionPerms::RX)
-            });
-            if plausible {
-                updated.insert(
-                    branch_addr,
-                    JumpTableInfo {
-                        base: cand.base,
-                        entry_size,
-                        num_entries: probe_entries,
-                        endian_little: matches!(endian, TableEndian::Little),
-                        targets,
-                    },
-                );
-                continue;
+        let mut resolved = false;
+        for &kind in kinds_to_try {
+            let table = JumpTable {
+                base: cand.base,
+                entry_size,
+                num_entries: probe_entries,
+                endian,
+                kind,
+            };
+            if let Some(targets) = read_jump_table(&table, section) {
+                // Sanity check: every entry must point inside the binary's
+                // executable footprint, otherwise this isn't really a table.
+                let plausible = !targets.is_empty()
+                    && targets.iter().all(|&t| {
+                        sections
+                            .iter()
+                            .any(|s| s.contains_addr(t) && s.perms == unlace_struct::SectionPerms::RX)
+                    });
+                if plausible {
+                    updated.insert(
+                        branch_addr,
+                        JumpTableInfo {
+                            base: cand.base,
+                            entry_size,
+                            num_entries: targets.len() as u32,
+                            endian_little: matches!(endian, TableEndian::Little),
+                            targets,
+                        },
+                    );
+                    resolved = true;
+                    break;
+                }
             }
         }
-        updated.insert(branch_addr, cand.clone());
+        if !resolved {
+            updated.insert(branch_addr, cand.clone());
+        }
     }
     ssa.resolved_jump_tables = updated;
 }

@@ -92,7 +92,7 @@ fn baseline_hello_world() {
 fn baseline_branches() {
     let t = analyze("branches.elf");
     assert_eq!(t.unimplemented_ops, 0, "branches: no Unimplemented ops");
-    assert_eq!(t.callother_ops, 1, "branches: one Callother (leaked intrinsic)");
+    assert_eq!(t.callother_ops, 0, "branches: no Callother ops (SSE mov lowered to Copy)");
     assert_eq!(t.stack_vars_recovered, 3, "branches: three stack vars recovered");
     assert_eq!(t.struct_fields_recovered, 2, "branches: two struct fields recovered");
     assert_eq!(t.gotos_emitted, 0, "branches: no gotos emitted");

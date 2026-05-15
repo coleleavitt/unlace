@@ -10,39 +10,39 @@
 # re-measured against a newer Hex-Rays release.
 
 [medium]
-if_count = 60
+if_count = 51
 for_count = 5
-while_count = 3
-return_count = 8
+while_count = 8
+return_count = 19
 goto_count = 0
 var_count = 30
 line_count = 500
 
 [debug_calls]
-if_count = 5
+if_count = 4
 for_count = 0
 while_count = 0
-return_count = 5
+return_count = 18
 goto_count = 0
 var_count = 10
 line_count = 50
 
 [debug_structs]
-if_count = 0
+if_count = 4
 for_count = 0
 while_count = 0
-return_count = 3
+return_count = 10
 goto_count = 0
 var_count = 8
 line_count = 30
 
 [debug_hello]
-if_count = 0
+if_count = 4
 for_count = 0
 while_count = 0
-return_count = 1
+return_count = 8
 goto_count = 0
-var_count = 3
+var_count = 4
 line_count = 15
 
 [branches]
@@ -55,28 +55,28 @@ var_count = 5
 line_count = 20
 
 [cpp_vtable]
-if_count = 2
+if_count = 4
 for_count = 0
 while_count = 0
-return_count = 3
+return_count = 9
 goto_count = 0
 var_count = 5
 line_count = 30
 
 [cpp_exceptions]
-if_count = 3
+if_count = 8
 for_count = 0
 while_count = 0
-return_count = 2
+return_count = 17
 goto_count = 0
-var_count = 8
+var_count = 11
 line_count = 40
 
 [cpp_rtti]
-if_count = 5
-for_count = 0
+if_count = 8
+for_count = 2
 while_count = 0
-return_count = 3
+return_count = 17
 goto_count = 0
 var_count = 10
 line_count = 50
@@ -87,47 +87,47 @@ for_count = 0
 while_count = 0
 return_count = 4
 goto_count = 0
-var_count = 8
+var_count = 12
 line_count = 80
 
 [mips64_features]
 if_count = 2
 for_count = 0
-while_count = 0
+while_count = 1
 return_count = 4
 goto_count = 0
 var_count = 8
 line_count = 60
 
 [riscv64_features]
-if_count = 2
+if_count = 3
 for_count = 0
-while_count = 0
+while_count = 1
 return_count = 4
 goto_count = 0
 var_count = 8
 line_count = 60
 
 [x87_math]
-if_count = 2
+if_count = 5
 for_count = 0
 while_count = 0
-return_count = 4
+return_count = 11
 goto_count = 0
 var_count = 12
 line_count = 120
 
 [v850_features]
-if_count = 1
+if_count = 2
 for_count = 0
 while_count = 0
-return_count = 2
+return_count = 4
 goto_count = 0
 var_count = 4
 line_count = 30
 
 [arc_features]
-if_count = 1
+if_count = 2
 for_count = 0
 while_count = 0
 return_count = 2
@@ -136,10 +136,10 @@ var_count = 4
 line_count = 30
 
 [ppc64_features]
-if_count = 1
+if_count = 2
 for_count = 0
 while_count = 0
-return_count = 2
+return_count = 4
 goto_count = 0
 var_count = 4
 line_count = 30

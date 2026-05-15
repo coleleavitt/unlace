@@ -95,8 +95,8 @@ fn baseline_branches() {
     assert_eq!(t.callother_ops, 1, "branches: one Callother (leaked intrinsic)");
     assert_eq!(t.stack_vars_recovered, 3, "branches: three stack vars recovered");
     assert_eq!(t.struct_fields_recovered, 2, "branches: two struct fields recovered");
-    assert_eq!(t.gotos_emitted, 1, "branches: one goto emitted");
-    assert_eq!(t.labels_emitted, 1, "branches: one label emitted");
+    assert_eq!(t.gotos_emitted, 0, "branches: no gotos emitted");
+    assert_eq!(t.labels_emitted, 0, "branches: no labels emitted");
     assert_eq!(t.asm_blocks, 0, "branches: no raw __asm blocks");
 }
 

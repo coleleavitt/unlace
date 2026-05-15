@@ -479,7 +479,7 @@ fn bench_e2e(c: &mut Criterion) {
 
             let mut output = String::new();
             for entry in &funcs {
-                if let Some(ir_func) = lift_function(&image, lifter.as_ref(), &entry) {
+                if let Some(ir_func) = lift_function(&image, lifter.as_ref(), entry) {
                     let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
                     run_passes(&mut ssa);
                     run_type_infer_bounded(&mut ssa);

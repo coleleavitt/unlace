@@ -184,9 +184,8 @@ pub fn is_zmm_dst(insn: &iced_x86::Instruction) -> bool {
 pub fn lift_sse_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
     use iced_x86::OpKind;
 
-    let tag_vn = Varnode::constant(callother_tag, 8);
-
     if insn.op_kind(0) == OpKind::Memory {
+        let tag_vn = Varnode::constant(callother_tag, 8);
         let Some(dst_addr) = ctx.memory_address(insn) else {
             ctx.emit_unimplemented();
             return;
@@ -211,10 +210,11 @@ pub fn lift_sse_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_t
         ctx.emit_unimplemented();
         return;
     };
+    // Non-store SSE moves are pure data copies — lower to Copy.
     ctx.emit(IrInsn::with_output(
-        IrOp::Callother,
+        IrOp::Copy,
         dst,
-        smallvec![tag_vn, src],
+        smallvec![src],
         ctx.addr,
     ));
 }
@@ -242,6 +242,35 @@ pub fn lift_sse_binop(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother
         smallvec![tag_vn, src0, src1],
         ctx.addr,
     ));
+}
+
+/// PXOR / XORPS / XORPD with self-XOR detection.
+///
+/// `pxor xmm0, xmm0` is an idiom for zeroing a register — we lower it to
+/// `Copy(0)` instead of emitting a Callother.
+pub fn lift_sse_xor(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    use iced_x86::OpKind;
+
+    // Detect self-XOR idiom: both operands are the same register.
+    if insn.op_kind(0) == OpKind::Register
+        && insn.op_kind(1) == OpKind::Register
+        && insn.op_register(0) == insn.op_register(1)
+    {
+        let Some(dst) = ctx.operand_write(insn, 0) else {
+            ctx.emit_unimplemented();
+            return;
+        };
+        ctx.emit(IrInsn::with_output(
+            IrOp::Copy,
+            dst,
+            smallvec![Varnode::constant(0, dst.size)],
+            ctx.addr,
+        ));
+        return;
+    }
+
+    // Non-idiom case: fall through to normal binop.
+    lift_sse_binop(ctx, insn, callother_tag);
 }
 
 /// Single-source packed SSE (e.g. SQRTPS, PMOVMSKB): `dst = Callother(tag, src)`.

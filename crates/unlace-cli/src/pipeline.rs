@@ -1364,6 +1364,118 @@ pub fn build_symbol_table_with_functions(
     table
 }
 
+/// Phase-1 helper for interproc batch: lift a function, build SSA, apply DWARF
+/// and EH info, and run the pass pipeline (with symbol resolver). Returns the
+/// fully-optimised `SsaFunction` ready for interprocedural refinement and later
+/// emission.
+///
+/// This deliberately stops *before* `emit_output` — the caller is expected to
+/// collect all results into a `BTreeMap<u64, SsaFunction>`, run
+/// [`run_whole_program_interproc`] over the map, and then call
+/// [`emit_function_interproc`] on each entry.
+pub fn lift_and_run_passes(
+    image: &BinaryImage,
+    lifter: &dyn Lifter,
+    entry: &FunctionEntry,
+    config: &PipelineConfig,
+    dwarf: Option<&DwarfInfo>,
+    discovered: &[FunctionEntry],
+) -> Result<SsaFunction> {
+    let _span = tracing::debug_span!("lift_and_run_passes", func = %entry.name).entered();
+    let deadline = Instant::now() + config.timeout;
+
+    let mut ir_func = lift_function(image, lifter, entry)?;
+    unlace_struct::merge_linear_blocks(&mut ir_func);
+    unlace_struct::tail_duplicate_small_blocks(&mut ir_func);
+    unlace_struct::split_irreducible_entries(&mut ir_func);
+
+    check_timeout(deadline, &entry.name)?;
+
+    let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
+    ssa.arch = image.arch;
+
+    if let Some(dwarf_info) = dwarf {
+        apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
+    }
+
+    populate_eh_landing_pads(image, entry, &mut ssa);
+    warn_if_large_ir(&entry.name, &ssa);
+    check_timeout(deadline, &entry.name)?;
+
+    let symbols = build_symbol_table_with_functions(image, discovered);
+    let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
+    for (&addr, name) in &symbols {
+        stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
+    }
+    let resolve_name = |addr: u64| -> Option<&'static str> {
+        stable_symbol_names.get(&addr).copied()
+    };
+    if let Err(e) = run_passes_with_resolver(&mut ssa, &resolve_name) {
+        tracing::warn!(func = %entry.name, err = %e, "pass pipeline failed; continuing with unoptimized");
+    }
+
+    check_timeout(deadline, &entry.name)?;
+    Ok(ssa)
+}
+
+/// Phase-3 helper for interproc batch: emit output from a refined `SsaFunction`.
+pub fn emit_function_interproc(
+    ssa: &mut SsaFunction,
+    image: &BinaryImage,
+    entry: &FunctionEntry,
+    emit: EmitFormat,
+    config: &PipelineConfig,
+    dwarf: Option<&DwarfInfo>,
+    discovered: &[FunctionEntry],
+    rtti: Option<&unlace_loader::RttiInfo>,
+) -> Result<String> {
+    let _span = tracing::debug_span!("emit_function_interproc", func = %entry.name).entered();
+    let symbols = build_symbol_table_with_functions(image, discovered);
+    let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
+    for (&addr, name) in &symbols {
+        stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
+    }
+    if !symbols.is_empty() {
+        ssa.go_defer_sites = detect_go_defer(ssa, |addr| stable_symbol_names.get(&addr).copied())
+            .into_iter()
+            .map(|site| unlace_ir::ssa::GoDeferSite {
+                defer_block: site.defer_block,
+                deferred_func: site.deferred_func,
+                has_recover: site.has_recover,
+            })
+            .collect();
+    }
+    let _libc = annotate_libc_calls(ssa, &|addr| symbols.get(&addr).cloned());
+    let _var = parse_printf_format_strings(ssa, &|addr| stable_symbol_names.get(&addr).copied(), &image.string_table);
+    let go_iface_devirtualized_calls = collect_go_iface_devirtualized_calls(ssa, image, &symbols);
+    let mut libc_call_canonical: BTreeMap<u64, String> = BTreeMap::new();
+    for (&(bid, idx), canonical) in &ssa.libc_call_annotations {
+        if let Some(block) = ssa.function.blocks.get(&bid) {
+            if let Some(insn) = block.insns.get(idx) {
+                libc_call_canonical.insert(insn.addr, canonical.clone());
+            }
+        }
+    }
+    let mut printer_annotations = config.annotations.as_ref()
+        .map(|db| build_printer_annotations(db, entry.addr))
+        .unwrap_or_default();
+    printer_annotations.go_defer_sites = ssa.go_defer_sites.clone();
+    let hash_pass = unlace_passes::StringHashSwitchPass::from_strings(&image.string_table);
+    printer_annotations.string_hash_table = hash_pass.hash_table().clone();
+    if let Some(pdb_types) = image.pdb_types.as_ref() {
+        printer_annotations.pdb_constants_by_value = pdb_types.constants_by_value.clone();
+    }
+    let objc_info = unlace_loader::scan_objc_classlist(image);
+    printer_annotations.objc_classes = objc_info.classes.into_values().collect();
+    printer_annotations.go_interfaces = image.go_types.clone();
+    printer_annotations.libc_call_canonical = libc_call_canonical;
+    printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
+    let printer_annotations = Some(printer_annotations);
+    resolve_jump_table_targets(ssa, image);
+    let jt_sections = build_jump_table_section_views(image);
+    emit_output(emit, ssa, dwarf, &symbols, &image.string_table, rtti, config.print_config, printer_annotations.as_ref(), &jt_sections)
+}
+
 #[allow(dead_code)]
 pub fn decompile_function(
     image: &BinaryImage,

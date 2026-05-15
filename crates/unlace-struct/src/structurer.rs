@@ -1154,7 +1154,14 @@ impl<'a> StructureCtx<'a> {
         // Determine loop kind: while vs do-while.
         // While: header has CBRANCH (exit test at top).
         // DoWhile: header has no exit test, latch has CBRANCH.
-        let header_has_cbranch = self.block_has_cbranch(header);
+        //
+        // Fallback: if the CBRANCH instruction was eliminated by optimization
+        // passes (e.g. SCCP folding after SSE Copy lowering) but the CFG still
+        // retains ConditionalTrue/ConditionalFalse edges, treat the header as
+        // having an implicit conditional — the loop structure is real even when
+        // the branch instruction is gone.
+        let header_has_cbranch = self.block_has_cbranch(header)
+            || self.header_has_conditional_edges(header);
         let single_latch = if latches.len() == 1 {
             Some(latches[0])
         } else {
@@ -1492,6 +1499,22 @@ impl<'a> StructureCtx<'a> {
             .is_some_and(|insn| insn.op == IrOp::Cbranch)
     }
 
+    /// Returns true when the header block has no CBRANCH instruction but the
+    /// CFG still retains conditional edges (ConditionalTrue / ConditionalFalse).
+    /// This happens when a CBRANCH's condition was folded to a constant by SCCP
+    /// and the instruction was subsequently replaced by Copy then DCE'd, but
+    /// the CFG edges were not pruned.  The loop is still structurally valid.
+    fn header_has_conditional_edges(&self, bid: BlockId) -> bool {
+        let edges = self.func.cfg.edges_from(bid);
+        let has_cond_true = edges
+            .iter()
+            .any(|(_, kind)| *kind == EdgeKind::ConditionalTrue);
+        let has_cond_false = edges
+            .iter()
+            .any(|(_, kind)| *kind == EdgeKind::ConditionalFalse);
+        has_cond_true && has_cond_false
+    }
+
     fn find_cbranch_cond(&self, bid: BlockId) -> SsaVarnode {
         // The CBRANCH condition is typically in input slot 1.
         // Try to resolve it from the var_map; fall back to a synthetic varnode.
@@ -1509,9 +1532,21 @@ impl<'a> StructureCtx<'a> {
         {
             return *sv;
         }
-        // Fallback: synthetic unknown condition.
+        // Fallback: when the CBRANCH instruction is missing (optimized away)
+        // but the header still has a phi with a back-edge input, use that phi's
+        // SSA output as a synthetic loop condition. This preserves the `while`
+        // structure even when the branch was folded by SCCP.
+        if let Some(phis) = self.func.phi_map.get(&bid) {
+            for phi in phis {
+                if phi.inputs.iter().any(|(pred, _)| *pred == bid) {
+                    return phi.output;
+                }
+            }
+        }
+        // Final fallback: synthetic non-constant condition so the while loop
+        // is emitted rather than collapsed.
         SsaVarnode {
-            base: unlace_ir::Varnode::constant(0, 1),
+            base: unlace_ir::Varnode::reg(0xFFFF_DEAD, 1),
             version: 0,
         }
     }

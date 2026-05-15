@@ -128,6 +128,11 @@ pub enum Cmd {
         #[arg(long, default_value = "30")]
         timeout: u64,
 
+        /// Run whole-program interprocedural analysis between lift+passes and emit.
+        /// Refines cross-function signatures via fixed-point iteration.
+        #[arg(long)]
+        interproc: bool,
+
         /// Increase verbosity (-v, -vv, -vvv).
         #[arg(long, short, action = clap::ArgAction::Count)]
         verbose: u8,

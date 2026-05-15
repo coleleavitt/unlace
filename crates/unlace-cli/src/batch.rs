@@ -7,6 +7,7 @@ use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
 
 use unlace_ir::ArchId;
+use unlace_ir::ssa::SsaFunction;
 use unlace_lift::get_lifter;
 use unlace_loader::{
     BinaryImage, DwarfInfo, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf,
@@ -19,6 +20,9 @@ pub struct BatchConfig {
     pub jobs: usize,
     pub emit: EmitFormat,
     pub timeout_secs: u64,
+    /// When true, run whole-program interprocedural analysis between
+    /// lift+passes and emit phases.
+    pub interproc: bool,
 }
 
 pub struct BatchResult {
@@ -129,8 +133,11 @@ pub fn run_batch(
     let rtti = unlace_loader::scan_rtti(&image);
     let rtti_opt = if rtti.is_empty() { None } else { Some(&rtti) };
 
-    let results: Vec<BatchResult> = pool
-        .install(|| decompile_all_parallel(&image, &functions, config, dwarf.as_ref(), rtti_opt));
+    let results: Vec<BatchResult> = if config.interproc {
+        pool.install(|| decompile_interproc(&image, &functions, config, dwarf.as_ref(), rtti_opt))
+    } else {
+        pool.install(|| decompile_all_parallel(&image, &functions, config, dwarf.as_ref(), rtti_opt))
+    };
 
     if let Some(dir) = output_dir {
         write_per_file(dir, &results)?;
@@ -188,6 +195,51 @@ fn decompile_all_parallel(
         .collect::<Vec<_>>()
         .into_iter()
         .collect::<Vec<_>>()
+}
+
+/// Three-phase interprocedural decompilation (Phase 1 parallel, Phase 2 sequential, Phase 3 parallel).
+/// NOTE: The SSA map for a large binary can consume significant memory since we hold *all* functions' SSA simultaneously.
+fn decompile_interproc(image: &BinaryImage, functions: &[FunctionEntry], config: &BatchConfig, dwarf: Option<&DwarfInfo>, rtti: Option<&unlace_loader::RttiInfo>) -> Vec<BatchResult> {
+    let lifter = get_lifter(image.arch);
+    let pipeline_config = PipelineConfig { timeout: std::time::Duration::from_secs(config.timeout_secs), print_config: None, annotations: None };
+    let mut indexed: BTreeMap<u64, &FunctionEntry> = BTreeMap::new();
+    for entry in functions { indexed.entry(entry.addr).or_insert(entry); }
+    let sorted: Vec<&FunctionEntry> = indexed.into_values().collect();
+
+    // Phase 1: parallel lift + passes
+    tracing::info!(count = sorted.len(), "interproc phase 1: lift + passes (parallel)");
+    let phase1: Vec<(u64, String, Result<SsaFunction, anyhow::Error>)> = sorted.par_iter().map(|entry| {
+        let r = pipeline::lift_and_run_passes(image, lifter.as_ref(), entry, &pipeline_config, dwarf, functions);
+        (entry.addr, entry.name.clone(), r)
+    }).collect();
+    let mut ssa_map: BTreeMap<u64, SsaFunction> = BTreeMap::new();
+    let mut failures: Vec<BatchResult> = Vec::new();
+    for (addr, name, result) in phase1 {
+        match result {
+            Ok(ssa) => { ssa_map.insert(addr, ssa); }
+            Err(e) => { failures.push(BatchResult { addr, name, output: Err(e) }); }
+        }
+    }
+
+    // Phase 2: sequential interproc fixpoint
+    tracing::info!(functions = ssa_map.len(), "interproc phase 2: whole-program fixed-point (sequential)");
+    if let Err(e) = pipeline::run_whole_program_interproc(&mut ssa_map, 0) {
+        tracing::warn!(err = %e, "interprocedural fixed-point failed; emitting with per-function results");
+    }
+
+    // Phase 3: parallel emit
+    tracing::info!(functions = ssa_map.len(), "interproc phase 3: emit output (parallel)");
+    let emit_entries: Vec<(u64, String, SsaFunction)> = ssa_map.into_iter().map(|(addr, ssa)| {
+        let name = sorted.iter().find(|e| e.addr == addr).map(|e| e.name.clone()).unwrap_or_else(|| format!("sub_{addr:x}"));
+        (addr, name, ssa)
+    }).collect();
+    let mut emit_results: Vec<BatchResult> = emit_entries.into_par_iter().map(|(addr, name, mut ssa)| {
+        let entry = sorted.iter().find(|e| e.addr == addr).map(|e| FunctionEntry { name: e.name.clone(), addr: e.addr, size: e.size }).unwrap_or(FunctionEntry { name: name.clone(), addr, size: 0 });
+        let output = pipeline::emit_function_interproc(&mut ssa, image, &entry, config.emit, &pipeline_config, dwarf, functions, rtti);
+        BatchResult { addr, name, output }
+    }).collect();
+    emit_results.append(&mut failures);
+    emit_results
 }
 
 fn write_merged(results: &[BatchResult]) {
@@ -281,6 +333,7 @@ mod tests {
             jobs: 2,
             emit: EmitFormat::C,
             timeout_secs: 30,
+            interproc: false,
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -321,6 +374,7 @@ mod tests {
             jobs: 2,
             emit: EmitFormat::C,
             timeout_secs: 30,
+            interproc: false,
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -349,6 +403,7 @@ mod tests {
             jobs: 1,
             emit: EmitFormat::C,
             timeout_secs: 0,
+            interproc: false,
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -372,6 +427,7 @@ mod tests {
             jobs: 1,
             emit: EmitFormat::C,
             timeout_secs: 30,
+            interproc: false,
         };
 
         let data = fs::read(fixture("hello_world.elf")).unwrap();
@@ -394,5 +450,17 @@ mod tests {
             "std__vector_int_.c"
         );
         assert_eq!(sanitize_filename("", 0x3000), "func_3000.c");
+    }
+
+    #[test]
+    fn test_batch_interproc_produces_output() {
+        let config = BatchConfig { jobs: 2, emit: EmitFormat::C, timeout_secs: 60, interproc: true };
+        let data = fs::read(fixture("medium.elf")).unwrap();
+        let image = ElfLoader::load(&data).unwrap();
+        let functions = pipeline::discover_functions(&image, None).unwrap();
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(2).build().unwrap();
+        let results: Vec<BatchResult> = pool.install(|| decompile_interproc(&image, &functions, &config, None, None));
+        let succeeded = results.iter().filter(|r| r.output.is_ok()).count();
+        assert!(succeeded >= 2, "interproc batch should decompile at least 2 functions, got {succeeded}");
     }
 }

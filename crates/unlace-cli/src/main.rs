@@ -104,6 +104,7 @@ fn main() {
             output_dir,
             merged: _,
             timeout,
+            interproc,
             verbose,
         } => {
             init_tracing(verbose);
@@ -111,6 +112,7 @@ fn main() {
                 jobs,
                 emit,
                 timeout_secs: timeout,
+                interproc,
             };
             batch::run_batch(&binary, &config, arch.as_deref(), output_dir.as_deref())
         }

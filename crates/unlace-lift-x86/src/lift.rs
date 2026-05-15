@@ -427,7 +427,7 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
 
         M::Pand => sse::lift_sse_binop(ctx, insn, sse::tag::PAND),
         M::Por => sse::lift_sse_binop(ctx, insn, sse::tag::POR),
-        M::Pxor => sse::lift_sse_binop(ctx, insn, sse::tag::PXOR),
+        M::Pxor => sse::lift_sse_xor(ctx, insn, sse::tag::PXOR),
 
         M::Pmulld => sse::lift_sse_binop(ctx, insn, sse::tag::PMULLD),
         M::Pmuludq => sse::lift_sse_binop(ctx, insn, sse::tag::PMULUDQ),

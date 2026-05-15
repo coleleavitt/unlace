@@ -564,16 +564,16 @@ mod tests {
     #[test]
     fn test_lift_sse_movdqa_mem_to_reg() {
         // 66 0F 6F 07 = movdqa xmm0, [rdi]
-        assert_callother_tag(&[0x66, 0x0F, 0x6F, 0x07], sse_tag::MOVDQA);
+        // Non-store SSE moves lower to Copy (the Load is in operand_read).
         let result = lifter()
             .lift_insn(&[0x66, 0x0F, 0x6F, 0x07], 0x1000)
             .unwrap();
-        let co = result
+        let copy = result
             .ir_ops
             .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        let dst = co.output.expect("load form should have output");
+            .find(|i| i.op == IrOp::Copy)
+            .expect("load form should emit Copy");
+        let dst = copy.output.expect("Copy should have output");
         assert_eq!(dst.size, 16);
         assert_eq!(dst.space, unlace_ir::SpaceId::Register);
     }
@@ -581,16 +581,16 @@ mod tests {
     #[test]
     fn test_lift_sse_movdqu_mem_to_reg() {
         // F3 0F 6F 0E = movdqu xmm1, [rsi]
-        assert_callother_tag(&[0xF3, 0x0F, 0x6F, 0x0E], sse_tag::MOVDQU);
+        // Non-store SSE moves lower to Copy.
         let result = lifter()
             .lift_insn(&[0xF3, 0x0F, 0x6F, 0x0E], 0x1000)
             .unwrap();
-        let co = result
+        let copy = result
             .ir_ops
             .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        let dst = co.output.expect("load form should have output");
+            .find(|i| i.op == IrOp::Copy)
+            .expect("load form should emit Copy");
+        let dst = copy.output.expect("Copy should have output");
         assert_eq!(dst.size, 16);
     }
 
@@ -614,19 +614,19 @@ mod tests {
     #[test]
     fn test_lift_sse_pxor_self() {
         // 66 0F EF C0 = pxor xmm0, xmm0
-        assert_callother_tag(&[0x66, 0x0F, 0xEF, 0xC0], sse_tag::PXOR);
+        // Self-XOR is a zeroing idiom — lowered to Copy(0).
         let result = lifter()
             .lift_insn(&[0x66, 0x0F, 0xEF, 0xC0], 0x1000)
             .unwrap();
-        let co = result
+        let copy = result
             .ir_ops
             .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        assert_eq!(
-            co.inputs[1], co.inputs[2],
-            "pxor xmm0,xmm0 sources should be equal"
-        );
+            .find(|i| i.op == IrOp::Copy)
+            .expect("self-xor should emit Copy");
+        let dst = copy.output.expect("Copy should have output");
+        assert_eq!(dst.size, 16, "self-xor zeroes a 16-byte XMM register");
+        assert_eq!(copy.inputs[0].space, unlace_ir::SpaceId::Const);
+        assert_eq!(copy.inputs[0].offset, 0);
     }
 
     #[test]
@@ -1459,28 +1459,28 @@ mod tests {
     #[test]
     fn test_lift_movaps_reg_to_reg() {
         // 0F 28 C1 = movaps xmm0, xmm1
-        assert_callother_tag(&[0x0F, 0x28, 0xC1], sse_tag::MOVAPS);
+        // Reg-to-reg SSE moves lower to Copy.
         let result = lifter().lift_insn(&[0x0F, 0x28, 0xC1], 0x1000).unwrap();
-        let co = result
+        let copy = result
             .ir_ops
             .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        let dst = co.output.expect("reg form should have output");
+            .find(|i| i.op == IrOp::Copy)
+            .expect("reg form should emit Copy");
+        let dst = copy.output.expect("Copy should have output");
         assert_eq!(dst.size, 16);
     }
 
     #[test]
     fn test_lift_movups_mem_to_reg() {
         // 0F 10 07 = movups xmm0, [rdi]
-        assert_callother_tag(&[0x0F, 0x10, 0x07], sse_tag::MOVUPS);
+        // Non-store SSE moves lower to Copy.
         let result = lifter().lift_insn(&[0x0F, 0x10, 0x07], 0x1000).unwrap();
-        let co = result
+        let copy = result
             .ir_ops
             .iter()
-            .find(|i| i.op == IrOp::Callother)
-            .unwrap();
-        let dst = co.output.expect("load form should have output");
+            .find(|i| i.op == IrOp::Copy)
+            .expect("load form should emit Copy");
+        let dst = copy.output.expect("Copy should have output");
         assert_eq!(dst.size, 16);
     }
 

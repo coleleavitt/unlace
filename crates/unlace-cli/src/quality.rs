@@ -103,6 +103,13 @@ pub struct FunctionQuality {
     pub inferred_params: usize,
     /// Libc / runtime call sites annotated with a canonical name
     /// (`ssa.libc_call_annotations`).
+    ///
+    /// The annotator recognises a fixed roster of memory / string /
+    /// allocator / printf-family names (see
+    /// `unlace_passes::libc_idioms::recognize_libc`). Binaries that only
+    /// import CRT entrypoints (`__libc_start_main`, `__stack_chk_fail`,
+    /// `__cxa_finalize`) legitimately report `0` — the roster intentionally
+    /// excludes those because they aren't simplifiable idioms.
     pub libc_annotated_calls: usize,
     /// Rust panic sites detected (`ssa.panic_sites`).
     pub rust_panic_sites: usize,

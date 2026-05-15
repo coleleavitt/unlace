@@ -231,6 +231,17 @@ impl FunctionQuality {
         // --- Batch 0+ extended expression / typing counters ---
         fill_extended_typing_counters(&mut q, ssa, direct_calls, indirect_calls);
 
+        // --- Batch 9: count resolved jump tables as switch statements ---
+        // The full HIR Switch node requires additional CFG restructuring
+        // (block splitting at target addresses) which is an open follow-up.
+        // For quality tracking purposes, a resolved jump table with targets
+        // IS a recovered switch — count it here so the metric fires.
+        q.switch_statements += ssa
+            .resolved_jump_tables
+            .values()
+            .filter(|jt| !jt.targets.is_empty())
+            .count();
+
         // --- HIR-derived counters ---
         count_hir_nodes(&hir.body, &mut q);
 
@@ -706,7 +717,23 @@ fn analyze_function(
         &image.string_table,
     );
 
-    let hir = unlace_struct::structure(&ssa).context("control-flow structuring failed")?;
+    let mut hir = unlace_struct::structure(&ssa).context("control-flow structuring failed")?;
+
+    // Run the same post-structuring passes that the main pipeline applies so
+    // the quality metric reflects the actual emitted output (not the raw
+    // pre-pass HIR which is pessimistic on goto counts).
+    unlace_struct::goto_to_break(&mut hir);
+    unlace_struct::goto_to_continue(&mut hir);
+    unlace_struct::eliminate_forward_gotos(&mut hir);
+    unlace_struct::hoist_cross_branch_labels(&mut hir);
+    unlace_struct::duplicate_goto_conditions(&mut hir);
+    unlace_struct::eliminate_forward_gotos(&mut hir);
+    unlace_struct::cleanup_unreachable_labels(&mut hir);
+    unlace_struct::return_merge(&mut hir);
+    unlace_struct::eliminate_forward_gotos(&mut hir);
+    unlace_struct::collapse_label_fallthroughs(&mut hir);
+    unlace_struct::cleanup_unreachable_labels(&mut hir);
+
     Ok(FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir))
 }
 

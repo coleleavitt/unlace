@@ -55,6 +55,10 @@ fn endbr_then(name: &str, tail: &[u8]) -> FlirtSignature {
 
 /// Build the shipped signature database. Cheap (~50 small heap allocs) and
 /// idempotent; callers that care can cache the result.
+// Many sequential `.push()` calls follow because each entry is a multi-line
+// FlirtSignature literal with its own commentary; a single `vec![…]` literal
+// would be unreadable.
+#[allow(clippy::vec_init_then_push)]
 pub fn default_db() -> FlirtDb {
     let mut entries: Vec<FlirtSignature> = Vec::new();
 

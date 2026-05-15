@@ -319,9 +319,11 @@ mod tests {
     }
 
     /// Build a synthetic x86_64 image whose `.rdata` contains:
-    ///   - vtable layout: [COL*][m0][m1][m2][garbage...]
-    ///   - COL with signature, p_type_descriptor pointing into `.rdata`
-    ///   - TypeDescriptor with the supplied mangled name
+    ///
+    /// - vtable layout: [COL*][m0][m1][m2][garbage...]
+    /// - COL with signature, p_type_descriptor pointing into `.rdata`
+    /// - TypeDescriptor with the supplied mangled name
+    ///
     /// `.text` is sized to cover three method addresses.
     fn synthetic_pe(col_signature: u32, mangled: &str) -> BinaryImage {
         const RDATA_BASE: u64 = 0x4000_0000;

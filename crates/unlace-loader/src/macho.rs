@@ -85,19 +85,19 @@ pub struct FatArch {
 impl FatArch {
     fn arch_id(&self) -> ArchId {
         let ct = self.cputype;
-        if ct == macho::CPU_TYPE_X86_64 as u32 {
+        if ct == macho::CPU_TYPE_X86_64 {
             ArchId::X86_64
-        } else if ct == macho::CPU_TYPE_X86 as u32 {
+        } else if ct == macho::CPU_TYPE_X86 {
             ArchId::X86
-        } else if ct == macho::CPU_TYPE_ARM64 as u32 || ct == macho::CPU_TYPE_ARM64_32 as u32 {
+        } else if ct == macho::CPU_TYPE_ARM64 || ct == macho::CPU_TYPE_ARM64_32 {
             ArchId::AArch64
-        } else if ct == macho::CPU_TYPE_ARM as u32 {
+        } else if ct == macho::CPU_TYPE_ARM {
             ArchId::Arm
-        } else if ct == macho::CPU_TYPE_POWERPC as u32 {
+        } else if ct == macho::CPU_TYPE_POWERPC {
             ArchId::Ppc
-        } else if ct == macho::CPU_TYPE_POWERPC64 as u32 {
+        } else if ct == macho::CPU_TYPE_POWERPC64 {
             ArchId::Ppc64
-        } else if ct == macho::CPU_TYPE_MIPS as u32 {
+        } else if ct == macho::CPU_TYPE_MIPS {
             ArchId::Mips
         } else {
             ArchId::Unknown(self.cputype as u16)
@@ -402,13 +402,21 @@ where
 fn read_linkedit_range(data: &[u8], off: u32, size: u32) -> &[u8] {
     let off = off as usize;
     let size = size as usize;
-    if size == 0 || off.checked_add(size).is_none_or(|end| end > data.len()) {
+    // MSRV 1.80 doesn't have `is_none_or`; spell out the `None`-or-too-large
+    // check explicitly.
+    if size == 0
+        || match off.checked_add(size) {
+            Some(end) => end > data.len(),
+            None => true,
+        }
+    {
         return &[];
     }
     &data[off..off + size]
 }
 
 #[derive(Debug, Clone, Copy)]
+#[derive(Default)]
 struct SegmentOffset {
     segment: usize,
     offset: u64,
@@ -530,14 +538,6 @@ struct BindState {
     loc: SegmentOffset,
 }
 
-impl Default for SegmentOffset {
-    fn default() -> Self {
-        Self {
-            segment: 0,
-            offset: 0,
-        }
-    }
-}
 
 fn decode_bind_opcodes(
     bytes: &[u8],
@@ -3066,23 +3066,23 @@ mod tests {
     #[test]
     fn parse_fat_arches_synthetic_32() {
         let data = synthetic_fat32_header(&[
-            (macho::CPU_TYPE_X86_64 as u32, 3, 0x1000, 0x4000, 12),
-            (macho::CPU_TYPE_ARM64 as u32, 0, 0x5000, 0x4000, 12),
+            (macho::CPU_TYPE_X86_64, 3, 0x1000, 0x4000, 12),
+            (macho::CPU_TYPE_ARM64, 0, 0x5000, 0x4000, 12),
         ]);
         let arches = parse_fat_arches(&data).expect("parse 32-bit fat header");
         assert_eq!(arches.len(), 2);
-        assert_eq!(arches[0].cputype, macho::CPU_TYPE_X86_64 as u32);
+        assert_eq!(arches[0].cputype, macho::CPU_TYPE_X86_64);
         assert_eq!(arches[0].offset, 0x1000);
         assert_eq!(arches[0].size, 0x4000);
-        assert_eq!(arches[1].cputype, macho::CPU_TYPE_ARM64 as u32);
+        assert_eq!(arches[1].cputype, macho::CPU_TYPE_ARM64);
         assert_eq!(arches[1].offset, 0x5000);
     }
 
     #[test]
     fn parse_fat_arches_64() {
         let data = synthetic_fat64_header(&[
-            (macho::CPU_TYPE_X86_64 as u32, 3, 0x1_0000_0000, 0x4000, 12),
-            (macho::CPU_TYPE_ARM64 as u32, 0, 0x2_0000_0000, 0x8000, 14),
+            (macho::CPU_TYPE_X86_64, 3, 0x1_0000_0000, 0x4000, 12),
+            (macho::CPU_TYPE_ARM64, 0, 0x2_0000_0000, 0x8000, 14),
         ]);
         let arches = parse_fat_arches(&data).expect("parse 64-bit fat header");
         assert_eq!(arches.len(), 2);
@@ -3095,8 +3095,8 @@ mod tests {
     #[test]
     fn select_slice_prefers_arm64() {
         let mut data = synthetic_fat32_header(&[
-            (macho::CPU_TYPE_X86_64 as u32, 3, 0x1000, 0x10, 12),
-            (macho::CPU_TYPE_ARM64 as u32, 0, 0x1010, 0x10, 12),
+            (macho::CPU_TYPE_X86_64, 3, 0x1000, 0x10, 12),
+            (macho::CPU_TYPE_ARM64, 0, 0x1010, 0x10, 12),
         ]);
         data.resize(0x1020, 0);
         for b in &mut data[0x1000..0x1010] {

@@ -242,32 +242,22 @@ fn parse_dictabi_at(
         return None;
     }
     let table_off = off + 8;
-    if image_data.get(table_off..table_off + count * 16).is_none() {
-        return None;
-    }
+    image_data.get(table_off..table_off + count * 16)?;
     let mut params = Vec::with_capacity(count);
     for i in 0..count {
         let ent = table_off + i * 16;
         let name_ptr = read_u64(image_data, ent)?;
         let constraint_ptr = read_u64(image_data, ent + 8)?;
-        let Some(name_off) = va_to_offset(name_ptr) else {
-            return None;
-        };
-        let Some(name) = decode_name(image_data, name_off) else {
-            return None;
-        };
+        let name_off = va_to_offset(name_ptr)?;
+        let name = decode_name(image_data, name_off)?;
         if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             return None;
         }
         let constraint = if constraint_ptr == 0 {
             "any".to_string()
         } else {
-            let Some(constraint_off) = va_to_offset(constraint_ptr) else {
-                return None;
-            };
-            let Some(decoded) = decode_name(image_data, constraint_off) else {
-                return None;
-            };
+            let constraint_off = va_to_offset(constraint_ptr)?;
+            let decoded = decode_name(image_data, constraint_off)?;
             if decoded.is_empty() {
                 return None;
             }

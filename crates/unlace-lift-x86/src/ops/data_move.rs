@@ -6,6 +6,7 @@ use crate::lift::LiftCtx;
 use crate::ops::arithmetic::atomic_tag;
 use crate::register_file::*;
 
+#[allow(dead_code)]
 pub const CMOV_CALLOTHER_TAG: u64 = 0x350;
 
 pub fn lift_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
@@ -44,9 +45,12 @@ pub fn lift_cmov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
         }
     };
 
-    ctx.emit(IrInsn::without_output(
-        IrOp::Callother,
-        smallvec![Varnode::constant(CMOV_CALLOTHER_TAG, 8), cond, src, dst,],
+    // SELECT(cond, true_val=src, false_val=dst) → dst
+    // Semantics: dst = cond ? src : dst
+    ctx.emit(IrInsn::with_output(
+        IrOp::Select,
+        dst,
+        smallvec![cond, src, dst],
         ctx.addr,
     ));
 }

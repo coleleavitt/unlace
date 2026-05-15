@@ -1,6 +1,6 @@
-//! The 75 IR opcodes defined in the frozen IR spec v1.0.
+//! The 76 IR opcodes defined in the frozen IR spec v1.0.
 
-/// All 75 opcodes of the unlace low-level IR.
+/// All 76 opcodes of the unlace low-level IR.
 ///
 /// Discriminants `0..=74` follow the stable ordering defined in IR spec SS4.4.
 /// New opcodes must be appended at position >= 75 with a spec version bump.
@@ -110,10 +110,15 @@ pub enum IrOp {
     New = 72,
     Segmentop = 73,
     Unimplemented = 74,
+
+    // -- SS3.14 Conditional (1) --
+    /// `SELECT(cond, true_val, false_val) → dst`
+    /// Semantics: `dst = cond ? true_val : false_val`
+    Select = 75,
 }
 
 /// Total number of opcodes in the frozen v1.0 spec.
-pub const IROP_COUNT: usize = 75;
+pub const IROP_COUNT: usize = 76;
 
 impl IrOp {
     /// Returns the canonical uppercase opcode name (e.g. `"INT_ADD"`).
@@ -194,6 +199,7 @@ impl IrOp {
             Self::New => "NEW",
             Self::Segmentop => "SEGMENTOP",
             Self::Unimplemented => "UNIMPLEMENTED",
+            Self::Select => "SELECT",
         }
     }
 
@@ -286,6 +292,10 @@ impl IrOp {
             // CBRANCH: input0 is the target (integer), input1 is condition (boolean)
             Self::Cbranch if index == 1 => 'b',
             Self::Cbranch => 'i',
+            
+            // SELECT: input0 is condition (boolean), inputs 1,2 are integer
+            Self::Select if index == 0 => 'b',
+            Self::Select => 'i',
 
             // Float ops: inputs are float
             Self::FloatAdd

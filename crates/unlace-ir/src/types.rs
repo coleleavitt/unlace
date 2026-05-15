@@ -362,17 +362,17 @@ fn primitive_size(p: PrimitiveType) -> Option<u8> {
 fn primitive_c_name(p: PrimitiveType) -> &'static str {
     match p {
         PrimitiveType::Unknown => "int",
-        PrimitiveType::Bool => "_Bool",
-        PrimitiveType::Int(1) => "__int8",
+        PrimitiveType::Bool => "_BOOL",
+        PrimitiveType::Int(1) => "char",
         PrimitiveType::Int(2) => "__int16",
-        PrimitiveType::Int(4) => "__int32",
+        PrimitiveType::Int(4) => "int",
         PrimitiveType::Int(8) => "__int64",
         PrimitiveType::Int(_) => "__int64",
-        PrimitiveType::UnsignedInt(1) => "unsigned __int8",
-        PrimitiveType::UnsignedInt(2) => "unsigned __int16",
-        PrimitiveType::UnsignedInt(4) => "unsigned __int32",
-        PrimitiveType::UnsignedInt(8) => "unsigned __int64",
-        PrimitiveType::UnsignedInt(_) => "unsigned __int64",
+        PrimitiveType::UnsignedInt(1) => "_BYTE",
+        PrimitiveType::UnsignedInt(2) => "_WORD",
+        PrimitiveType::UnsignedInt(4) => "_DWORD",
+        PrimitiveType::UnsignedInt(8) => "_QWORD",
+        PrimitiveType::UnsignedInt(_) => "_QWORD",
         PrimitiveType::Float => "float",
         PrimitiveType::Double => "double",
         PrimitiveType::Ptr => "void *",
@@ -387,19 +387,19 @@ impl fmt::Display for Type {
                 // Print typed pointers compactly, e.g. `int *`, `int **`.
                 Type::Primitive(p) if !matches!(p, PrimitiveType::Ptr) => {
                     let base = match p {
-                        PrimitiveType::Bool => "_Bool",
+                        PrimitiveType::Bool => "_BOOL",
                         PrimitiveType::Int(1) => "char",
-                        PrimitiveType::Int(2) => "short",
+                        PrimitiveType::Int(2) => "__int16",
                         PrimitiveType::Int(4) => "int",
-                        PrimitiveType::Int(8) => "long long",
-                        PrimitiveType::UnsignedInt(1) => "unsigned char",
-                        PrimitiveType::UnsignedInt(2) => "unsigned short",
-                        PrimitiveType::UnsignedInt(4) => "unsigned int",
-                        PrimitiveType::UnsignedInt(8) => "unsigned long long",
+                        PrimitiveType::Int(8) => "__int64",
+                        PrimitiveType::UnsignedInt(1) => "_BYTE",
+                        PrimitiveType::UnsignedInt(2) => "_WORD",
+                        PrimitiveType::UnsignedInt(4) => "_DWORD",
+                        PrimitiveType::UnsignedInt(8) => "_QWORD",
                         PrimitiveType::Float => "float",
                         PrimitiveType::Double => "double",
                         PrimitiveType::Unknown => "void",
-                        PrimitiveType::Int(_) | PrimitiveType::UnsignedInt(_) => "long long",
+                        PrimitiveType::Int(_) | PrimitiveType::UnsignedInt(_) => "__int64",
                         PrimitiveType::Ptr => unreachable!(),
                     };
                     write!(f, "{base} *")
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     fn display_int_pointer() {
         let p = Type::ptr_to(Type::int(8));
-        assert_eq!(p.to_string(), "long long *");
+        assert_eq!(p.to_string(), "__int64 *");
     }
 
     #[test]
@@ -560,7 +560,7 @@ mod tests {
             return_type: Box::new(Type::int(4)),
             variadic: false,
         };
-        assert_eq!(fp.to_string(), "__int32 (*)(__int32, __int32)");
+        assert_eq!(fp.to_string(), "int (*)(int, int)");
     }
 
     #[test]
@@ -570,7 +570,7 @@ mod tests {
             return_type: Box::new(Type::int(4)),
             variadic: true,
         };
-        assert_eq!(fp.to_string(), "__int32 (*)(char *, ...)");
+        assert_eq!(fp.to_string(), "int (*)(char *, ...)");
     }
 
     #[test]
@@ -579,13 +579,13 @@ mod tests {
             element: Box::new(Type::int(4)),
             size: Some(8),
         };
-        assert_eq!(a.to_string(), "__int32[8]");
+        assert_eq!(a.to_string(), "int[8]");
 
         let a_unsized = Type::Array {
             element: Box::new(Type::int(4)),
             size: None,
         };
-        assert_eq!(a_unsized.to_string(), "__int32[]");
+        assert_eq!(a_unsized.to_string(), "int[]");
     }
 
     #[test]
@@ -666,7 +666,7 @@ mod tests {
         };
         // The `int(4)` primitive renders as `__int32` in C; the slice
         // wrapper inherits that rendering and prefixes `[]` Go-style.
-        assert_eq!(s.to_string(), "[]__int32");
+        assert_eq!(s.to_string(), "[]int");
         assert!(s.is_composite());
         // Slice header is three 64-bit words.
         assert_eq!(s.size(), Some(24));
@@ -678,7 +678,7 @@ mod tests {
             key: Box::new(Type::Primitive(PrimitiveType::Ptr)),
             value: Box::new(Type::int(4)),
         };
-        assert_eq!(m.to_string(), "map[void *]__int32");
+        assert_eq!(m.to_string(), "map[void *]int");
         assert!(m.is_composite());
         // Map is a single `*hmap` pointer at the value level.
         assert_eq!(m.size(), Some(8));
@@ -698,7 +698,7 @@ mod tests {
             key: Box::new(Type::int(4)),
             value: Box::new(inner),
         };
-        assert_eq!(outer.to_string(), "map[__int32]map[__int8][]__int32",);
+        assert_eq!(outer.to_string(), "map[int]map[char][]int",);
     }
 
     #[test]

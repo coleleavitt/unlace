@@ -2,6 +2,8 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 
+mod compare_golden;
+
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     match args.first().map(String::as_str) {
@@ -9,6 +11,10 @@ fn main() {
         Some("lint-determinism") => lint_determinism(),
         Some("regen-goldens") => regen_goldens(),
         Some("measure-parity") => measure_parity(&args[1..]),
+        Some("compare-golden") => {
+            let root = workspace_root();
+            compare_golden::run(&root);
+        }
         Some(cmd) => {
             eprintln!("unknown xtask command: {cmd}");
             process::exit(1);
@@ -16,7 +22,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden"
             );
             process::exit(1);
         }

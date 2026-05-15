@@ -420,7 +420,7 @@ pub fn analyze_binary(binary_path: &Path) -> Result<BinaryQuality> {
     };
 
     for entry in &functions {
-        match analyze_function(&image, lifter.as_ref(), entry) {
+        match analyze_function(&image, lifter.as_ref(), entry, &functions) {
             Ok(q) => {
                 report.totals.accumulate(&q);
                 report.functions.push(q);
@@ -437,10 +437,18 @@ pub fn analyze_binary(binary_path: &Path) -> Result<BinaryQuality> {
 }
 
 /// Run lift → SSA → passes → structure for one function and collect counters.
+///
+/// `discovered` is the full function list of the binary; it's needed to
+/// build the call-target VA → name resolver so the symbol-pattern-gated
+/// passes (`NoreturnDetectPass`, `RustPanicPass`) fire here exactly as they
+/// do in the real `decompile` path. Without the resolver those passes are
+/// silently skipped and the `noreturn_functions` / `rust_panic_sites`
+/// counters under-report (they read SSA fields those passes populate).
 fn analyze_function(
     image: &unlace_loader::BinaryImage,
     lifter: &dyn Lifter,
     entry: &FunctionEntry,
+    discovered: &[FunctionEntry],
 ) -> Result<FunctionQuality> {
     let mut ir_func = pipeline::lift_function(image, lifter, entry)?;
     unlace_struct::merge_linear_blocks(&mut ir_func);
@@ -451,7 +459,21 @@ fn analyze_function(
     // Batch 2: tag the SSA function with its arch so stack-recovery passes
     // consult the right StackSpec — same plumbing as the main pipeline.
     ssa.arch = image.arch;
-    if let Err(e) = pipeline::run_passes(&mut ssa) {
+
+    // Build the same call-target VA → name resolver the main pipeline uses
+    // so resolver-gated passes (noreturn, rust-panic) fire and their SSA
+    // fields are populated for the counters below.
+    let symbols = pipeline::build_symbol_table_with_functions(image, discovered);
+    let mut stable_symbol_names: std::collections::BTreeMap<u64, &'static str> =
+        std::collections::BTreeMap::new();
+    for (&addr, name) in &symbols {
+        stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
+    }
+    let resolve_name = |addr: u64| -> Option<&'static str> {
+        stable_symbol_names.get(&addr).copied()
+    };
+
+    if let Err(e) = pipeline::run_passes_with_resolver(&mut ssa, &resolve_name) {
         // Match the pipeline's behaviour: a failed pass run still yields a
         // measurable (unoptimised) function rather than aborting.
         tracing::debug!(func = %entry.name, err = %e, "quality: pass pipeline failed");

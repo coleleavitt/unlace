@@ -706,6 +706,12 @@ fn analyze_function(
         tracing::debug!(func = %entry.name, err = %e, "quality: pass pipeline failed");
     }
 
+    // Batch 9: resolve jump-table candidates (base + entry_size) into
+    // concrete target addresses by reading the binary's .rodata sections.
+    // This mirrors what `decompile_function_with_symbols` does in the main
+    // pipeline so the switch_statements counter fires.
+    pipeline::resolve_jump_table_targets(&mut ssa, image);
+
     // Batch 6: mirror the main pipeline's post-pass annotation step so
     // variadic_call_types lands in the SSA we measure. Without this, the
     // measurement under-reports against the actual decompile output.

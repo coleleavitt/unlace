@@ -493,6 +493,11 @@ fn golden_ppc64_features() {
 }
 
 #[test]
+fn golden_switch_table() {
+    run_golden("switch_table");
+}
+
+#[test]
 fn golden_fixtures_metrics_summary() {
     let fixtures = [
         "medium",

@@ -306,7 +306,7 @@ pub fn parse_try_block_map(data: &[u8], off: usize, n: usize) -> Vec<TryBlockMap
     const ENTRY_SIZE: usize = 20;
     let mut out = Vec::with_capacity(n);
     for i in 0..n {
-        let base = match off.checked_add(i.checked_mul(ENTRY_SIZE).unwrap_or(usize::MAX)) {
+        let base = match off.checked_add(i.saturating_mul(ENTRY_SIZE)) {
             Some(b) => b,
             None => break,
         };

@@ -12,7 +12,7 @@
 //!   - `[8..N]`  nfunc (pointer-sized, little-endian)
 //!   - `[N..M]`  nfiles (pointer-sized, little-endian)
 //!   - Then: funcnametab offset, cutab offset, filetab offset, pctab offset,
-//!           funcdata offset, functab offset (each pointer-sized).
+//!     funcdata offset, functab offset (each pointer-sized).
 //!   - The functab is an array of `(func_entry, func_offset)` pairs
 //!     (each pointer-sized). `func_offset` points into funcdata where
 //!     `_func` structs live; the name is at `funcnametab[nameoff]`.
@@ -185,7 +185,7 @@ fn decode_pcdata_table(
         let (n1, uvdelta) = read_uvarint(pctab, cursor)?;
         cursor += n1;
         // zigzag: int32(-(uv & 1) ^ (uv >> 1))
-        let zigzag = ((-((uvdelta & 1) as i32)) ^ ((uvdelta >> 1) as i32)) as i32;
+        let zigzag = (-((uvdelta & 1) as i32)) ^ ((uvdelta >> 1) as i32);
         val = val.wrapping_add(zigzag);
         let (n2, pcdelta) = read_uvarint(pctab, cursor)?;
         cursor += n2;

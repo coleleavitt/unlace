@@ -1529,9 +1529,7 @@ mod tests {
     #[test]
     fn decode_v5_auth_ia_pointer() {
         // is_auth=1, key=0 (IA), addr_div=0, diversity=0x1234, target=0xCAFE.
-        let raw: u64 = (1u64 << 50)        // is_auth
-            | (0u64 << 48)                 // key = IA
-            | (0u64 << 47)                 // addr_div=0
+        let raw: u64 = (1u64 << 50)                 // addr_div=0
             | (0x1234u64 << 32)            // diversity
             | 0xCAFEu64; // target offset
         let entry = decode_v5_chain_entry(raw);
@@ -1886,9 +1884,8 @@ mod tests {
         // Plain entry: target=0x2000, next=2
         let plain_raw: u64 = (2u64 << 51) | 0x0000_2000u64;
         // Auth entry: key=DA(2), addr_div=0, diversity=0x0123, target=0x3000, next=0 (end)
-        let auth1_raw: u64 = (1u64 << 50)             // is_auth
-            | (2u64 << 48)                            // key = DA
-            | (0u64 << 47)                            // addr_div = 0
+        let auth1_raw: u64 = ((1u64 << 50)             // is_auth
+            | (2u64 << 48))                            // addr_div = 0
             | (0x0123u64 << 32)                       // diversity
             | 0x0000_3000u64;
         page[0..8].copy_from_slice(&auth0_raw.to_le_bytes());
@@ -2060,9 +2057,8 @@ mod tests {
             | (0x2BADu64 << 32)                    // diversity
             | 0x0000_1000u64; // 32-bit target offset
         let plain_raw: u64 = (2u64 << 51) | 0x0000_2000u64;
-        let auth1_raw: u64 = (1u64 << 50)         // is_auth, next=0
-            | (2u64 << 48)                         // key = DA (2)
-            | (0u64 << 47)                         // addr_div = 0
+        let auth1_raw: u64 = ((1u64 << 50)         // is_auth, next=0
+            | (2u64 << 48))                         // addr_div = 0
             | (0x0123u64 << 32)
             | 0x0000_3000u64;
         image[0..8].copy_from_slice(&auth0_raw.to_le_bytes());

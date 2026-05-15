@@ -181,7 +181,7 @@ fn resolve_relative(slot_va: u64, slot_value: i32) -> u64 {
 /// Find the section that contains `va` and return a `(byte_offset,
 /// bytes)` view rooted at `va`. Returns `None` if `va` falls outside
 /// every mapped section (or inside a section with no backing bytes).
-fn locate<'a>(image: &'a BinaryImage, va: u64) -> Option<(usize, &'a [u8])> {
+fn locate(image: &BinaryImage, va: u64) -> Option<(usize, &[u8])> {
     for sec in &image.sections {
         let end = sec.vaddr.saturating_add(sec.size);
         if va >= sec.vaddr && va < end {

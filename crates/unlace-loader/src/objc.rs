@@ -106,7 +106,7 @@ fn read_u64(data: &[u8], offset: usize, endian: Endian) -> Option<u64> {
     })
 }
 
-fn read_bytes_at_va<'a>(image: &'a BinaryImage, va: u64, len: usize) -> Option<&'a [u8]> {
+fn read_bytes_at_va(image: &BinaryImage, va: u64, len: usize) -> Option<&[u8]> {
     for section in &image.sections {
         let sec_end = section.vaddr + section.data.len() as u64;
         if va >= section.vaddr && va < sec_end {
@@ -266,7 +266,7 @@ fn parse_ivar_list(image: &BinaryImage, list_va: u64) -> Option<Vec<ObjcIvar>> {
     let header = read_bytes_at_va(image, list_va, 8)?;
     let entsize = u32::from_le_bytes(header[0..4].try_into().ok()?);
     let count = u32::from_le_bytes(header[4..8].try_into().ok()?);
-    if count == 0 || count > 4096 || entsize < 32 || entsize > 64 {
+    if count == 0 || count > 4096 || !(32..=64).contains(&entsize) {
         return None;
     }
     let mut out = Vec::with_capacity(count as usize);
@@ -298,7 +298,7 @@ fn parse_property_list(image: &BinaryImage, list_va: u64) -> Option<Vec<ObjcProp
     let header = read_bytes_at_va(image, list_va, 8)?;
     let entsize = u32::from_le_bytes(header[0..4].try_into().ok()?);
     let count = u32::from_le_bytes(header[4..8].try_into().ok()?);
-    if count == 0 || count > 4096 || entsize < 16 || entsize > 64 {
+    if count == 0 || count > 4096 || !(16..=64).contains(&entsize) {
         return None;
     }
     let mut out = Vec::with_capacity(count as usize);

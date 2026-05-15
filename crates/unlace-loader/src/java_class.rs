@@ -192,7 +192,7 @@ impl<'a> Cursor<'a> {
 
 /// Resolve a 1-indexed constant-pool slot into the entry array (which is
 /// 1-indexed internally; slot 0 holds `Other`).
-fn cp_get<'a>(pool: &'a [CpEntry], idx: u16) -> Result<&'a CpEntry, JavaError> {
+fn cp_get(pool: &[CpEntry], idx: u16) -> Result<&CpEntry, JavaError> {
     let count = pool.len() as u16;
     if idx == 0 || idx >= count {
         return Err(JavaError::BadCpIndex(idx, count));

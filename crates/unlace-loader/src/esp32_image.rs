@@ -178,11 +178,7 @@ mod tests {
         entry: u32,
         segments: &[(u32, &[u8])],
     ) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.push(magic);
-        out.push(segments.len() as u8);
-        out.push(spi_mode);
-        out.push(spi_speed_size);
+        let mut out = vec![magic, segments.len() as u8, spi_mode, spi_speed_size];
         out.extend_from_slice(&entry.to_le_bytes());
         for (load_addr, data) in segments {
             out.extend_from_slice(&load_addr.to_le_bytes());

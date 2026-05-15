@@ -493,8 +493,7 @@ mod tests {
         for lsda in info.functions.values() {
             for region in &lsda.try_regions {
                 assert!(
-                    region.pc_range.start < region.pc_range.end
-                        || region.pc_range.start == region.pc_range.end,
+                    region.pc_range.start <= region.pc_range.end,
                     "try region should have valid range: {:?}",
                     region.pc_range,
                 );

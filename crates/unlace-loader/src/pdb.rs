@@ -131,7 +131,7 @@ fn collect_global_symbols(
         if let Ok(data) = sym.parse() {
             match data {
                 SymbolData::Public(pub_sym) if pub_sym.function => {
-                    if let Some(rva) = pub_sym.offset.to_rva(&address_map) {
+                    if let Some(rva) = pub_sym.offset.to_rva(address_map) {
                         insert_symbol(out, rva, pub_sym.name.to_string().to_string(), 0);
                     }
                 }
@@ -154,12 +154,12 @@ fn collect_module_symbols(
         if let Ok(data) = sym.parse() {
             match data {
                 SymbolData::Procedure(proc) => {
-                    if let Some(rva) = proc.offset.to_rva(&address_map) {
+                    if let Some(rva) = proc.offset.to_rva(address_map) {
                         insert_symbol(out, rva, proc.name.to_string().to_string(), proc.len as u64);
                     }
                 }
                 SymbolData::Data(data_sym) if data_sym.global => {
-                    if let Some(rva) = data_sym.offset.to_rva(&address_map) {
+                    if let Some(rva) = data_sym.offset.to_rva(address_map) {
                         insert_data_symbol(out, rva, data_sym.name.to_string().to_string());
                     }
                 }
@@ -180,7 +180,7 @@ fn collect_line_info(
     let mut line_iter = line_program.lines();
 
     while let Some(line) = line_iter.next()? {
-        let rva = match line.offset.to_rva(&address_map) {
+        let rva = match line.offset.to_rva(address_map) {
             Some(r) => r,
             None => continue,
         };

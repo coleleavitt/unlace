@@ -88,7 +88,7 @@ pub fn detect_packer(image: &BinaryImage) -> Option<PackerKind> {
     // Section counts are small (typically <30) so a linear scan beats
     // building a HashSet here.
     let names: Vec<&str> = image.sections.iter().map(|s| s.name.as_str()).collect();
-    let has = |needle: &str| names.iter().any(|n| *n == needle);
+    let has = |needle: &str| names.contains(&needle);
 
     // UPX: PE uses UPX0/UPX1/UPX2; ELF uses .UPX. A single hit is enough
     // because no other common packer reuses these names.

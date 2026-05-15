@@ -415,8 +415,8 @@ fn parse_typeinfo_at(image: &BinaryImage, typeinfo_addr: u64, name: &str) -> Opt
             // [20] base_count (4 bytes)
             let section_data = find_section_data(image, typeinfo_addr + 16)?;
             let local_off = (typeinfo_addr + 16 - section_data.0) as usize;
-            let _flags = read_u32(&section_data.1, local_off, image.endian)?;
-            let base_count = read_u32(&section_data.1, local_off + 4, image.endian)?;
+            let _flags = read_u32(section_data.1, local_off, image.endian)?;
+            let base_count = read_u32(section_data.1, local_off + 4, image.endian)?;
 
             for i in 0..base_count.min(32) {
                 let base_offset = typeinfo_addr + 24 + (i as u64) * 16;
@@ -533,7 +533,6 @@ fn associate_vtables(image: &BinaryImage, classes: &mut BTreeMap<u64, CppClass>)
 /// re-synchronise on each `(offset-to-top, known-typeinfo)` pair we
 /// encounter — a robust heuristic because the typeinfo addresses are
 /// already known from `scan_typeinfo_symbols`.
-
 fn resolve_method_name(image: &BinaryImage, va: u64) -> Option<String> {
     image.symbols.get(&va).map(|sym| sym.name.clone())
 }
@@ -632,8 +631,7 @@ fn reconstruct_vtable_layout(
 
         let end = subtable_starts.get(idx + 1).copied().unwrap_or(slots.len());
         let mut fns = Vec::new();
-        for j in (start + 2)..end {
-            let v = slots[j];
+        for &v in &slots[(start + 2)..end] {
             if v == 0 {
                 fns.push(VtableSlotKind::Zero);
                 continue;

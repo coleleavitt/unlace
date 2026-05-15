@@ -17,7 +17,7 @@ use crate::image::{
 };
 
 /// DOS header magic bytes: `MZ`.
-const PE_DOS_MAGIC: [u8; 2] = [b'M', b'Z'];
+const PE_DOS_MAGIC: [u8; 2] = *b"MZ";
 
 /// Loader for PE binaries (PE32 and PE32+).
 pub struct PeLoader;
@@ -238,11 +238,7 @@ fn load_delay_imports<Pe>(
             Err(_) => continue,
         };
 
-        loop {
-            let thunk = match thunks.next::<Pe>() {
-                Ok(Some(t)) => t,
-                Ok(None) | Err(_) => break,
-            };
+        while let Ok(Some(thunk)) = thunks.next::<Pe>() {
             let name = match table.import::<Pe>(thunk) {
                 Ok(object::read::pe::Import::Name(_, n)) => String::from_utf8_lossy(n).to_string(),
                 Ok(object::read::pe::Import::Ordinal(n)) => format!("#{n}"),
@@ -1711,7 +1707,7 @@ mod tests {
         let dir_count: u32 = 16;
         buf[oh + 108..oh + 112].copy_from_slice(&dir_count.to_le_bytes());
 
-        let basereloc_dir = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_BASERELOC as usize) * 8;
+        let basereloc_dir = oh + 112 + pe::IMAGE_DIRECTORY_ENTRY_BASERELOC * 8;
         let reloc_rva: u32 = 0x3000;
         buf[basereloc_dir..basereloc_dir + 4].copy_from_slice(&reloc_rva.to_le_bytes());
         let reloc_block_size: u32 = 8 + 3 * 2 + 2;
@@ -1746,9 +1742,9 @@ mod tests {
         buf[r..r + 4].copy_from_slice(&reloc_rva.to_le_bytes());
         buf[r + 4..r + 8].copy_from_slice(&reloc_block_size.to_le_bytes());
 
-        let entry_dir64: u16 = (u16::from(pe::IMAGE_REL_BASED_DIR64) << 12) | 0x100;
-        let entry_highlow: u16 = (u16::from(pe::IMAGE_REL_BASED_HIGHLOW) << 12) | 0x200;
-        let entry_padding: u16 = u16::from(pe::IMAGE_REL_BASED_ABSOLUTE) << 12;
+        let entry_dir64: u16 = (pe::IMAGE_REL_BASED_DIR64 << 12) | 0x100;
+        let entry_highlow: u16 = (pe::IMAGE_REL_BASED_HIGHLOW << 12) | 0x200;
+        let entry_padding: u16 = pe::IMAGE_REL_BASED_ABSOLUTE << 12;
         buf[r + 8..r + 10].copy_from_slice(&entry_dir64.to_le_bytes());
         buf[r + 10..r + 12].copy_from_slice(&entry_highlow.to_le_bytes());
         buf[r + 12..r + 14].copy_from_slice(&entry_padding.to_le_bytes());
@@ -2328,7 +2324,7 @@ mod tests {
         write_cstr(&mut buf, rd + fwd2_off, "NTDLL.#142");
 
         // Wire the EXPORT data directory entry.
-        let export_dir_entry = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_EXPORT as usize) * 8;
+        let export_dir_entry = oh + 112 + pe::IMAGE_DIRECTORY_ENTRY_EXPORT * 8;
         buf[export_dir_entry..export_dir_entry + 4].copy_from_slice(&export_dir_rva.to_le_bytes());
         buf[export_dir_entry + 4..export_dir_entry + 8]
             .copy_from_slice(&export_dir_size.to_le_bytes());
@@ -2557,12 +2553,12 @@ mod tests {
         write_cstr(&mut buf, id + hn2_off + 2, "ZwQuerySystem");
 
         // Wire EXPORT and IMPORT data directory entries.
-        let export_dir_entry = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_EXPORT as usize) * 8;
+        let export_dir_entry = oh + 112 + pe::IMAGE_DIRECTORY_ENTRY_EXPORT * 8;
         buf[export_dir_entry..export_dir_entry + 4].copy_from_slice(&export_dir_rva.to_le_bytes());
         buf[export_dir_entry + 4..export_dir_entry + 8]
             .copy_from_slice(&export_dir_size.to_le_bytes());
 
-        let import_dir_entry = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_IMPORT as usize) * 8;
+        let import_dir_entry = oh + 112 + pe::IMAGE_DIRECTORY_ENTRY_IMPORT * 8;
         buf[import_dir_entry..import_dir_entry + 4].copy_from_slice(&idata_rva.to_le_bytes());
         // size = two descriptors (the loader doesn't actually use this).
         buf[import_dir_entry + 4..import_dir_entry + 8].copy_from_slice(&40u32.to_le_bytes());
@@ -2678,7 +2674,7 @@ mod tests {
         buf[oh + 108..oh + 112].copy_from_slice(&16u32.to_le_bytes());
 
         // ── IMAGE_DIRECTORY_ENTRY_TLS (index 9) → RVA 0x2000, size 40 ─
-        let tls_dir_slot = oh + 112 + (pe::IMAGE_DIRECTORY_ENTRY_TLS as usize) * 8;
+        let tls_dir_slot = oh + 112 + pe::IMAGE_DIRECTORY_ENTRY_TLS * 8;
         let tls_rva: u32 = 0x2000;
         buf[tls_dir_slot..tls_dir_slot + 4].copy_from_slice(&tls_rva.to_le_bytes());
         buf[tls_dir_slot + 4..tls_dir_slot + 8].copy_from_slice(&40u32.to_le_bytes());

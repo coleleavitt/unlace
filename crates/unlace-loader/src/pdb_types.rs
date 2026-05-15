@@ -501,11 +501,7 @@ fn lower_one(cv: &CvType, table: &BTreeMap<u32, CvType>, out: &PdbTypes) -> Type
         CvType::Array { element, len_bytes } => {
             let elem = resolve(*element, table, out);
             let elem_size = elem.size().map(|s| s as u32).unwrap_or(0);
-            let count = if elem_size > 0 {
-                Some((*len_bytes / elem_size) as u64)
-            } else {
-                None
-            };
+            let count = len_bytes.checked_div(elem_size).map(u64::from);
             Type::Array {
                 element: Box::new(elem),
                 size: count,

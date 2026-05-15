@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use unlace_ir::{ArchId, Lifter};
+    use unlace_ir::ArchId;
     use unlace_lift::get_lifter;
 
     fn check_register_file(arch: ArchId) {
@@ -14,10 +14,11 @@ mod tests {
         for reg in &rf.registers {
             assert!(!reg.name.is_empty(), "{arch}: register with empty name");
         }
-        // Size should be reasonable (1-128 bytes)
+        // Size should be reasonable: nonzero. (Upper bound is implicit —
+        // `Varnode::size` is `u8`, so any value is already <= 255.)
         for reg in &rf.registers {
-            assert!(reg.varnode.size > 0 && reg.varnode.size <= 255,
-                "{arch}: register {} has unreasonable size {}", reg.name, reg.varnode.size);
+            assert!(reg.varnode.size > 0,
+                "{arch}: register {} has zero size", reg.name);
         }
     }
 

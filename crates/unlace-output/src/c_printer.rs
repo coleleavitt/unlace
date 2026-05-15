@@ -9065,6 +9065,7 @@ mod tests {
     /// When `merged_names` is empty (pass not run) the printer falls back to
     /// its native `vN` allocator — regression guard for the new code path.
     #[test]
+    #[allow(non_snake_case)] // "vN" is the IDA-style varname pattern under test
     fn test_empty_merged_names_falls_back_to_vN() {
         let r0 = reg(0, 4);
         let c1 = con(1, 4);

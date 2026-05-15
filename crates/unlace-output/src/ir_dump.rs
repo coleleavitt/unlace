@@ -248,7 +248,7 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::cfg::build_cfg;
-    use unlace_ir::ssa::{DominatorTree, PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
+    use unlace_ir::ssa::{DominatorTree, PhiNode, SsaFunction, SsaVarnode};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::dump_ir;

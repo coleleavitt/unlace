@@ -172,10 +172,14 @@ pub fn parse_printf_format_strings(
 /// fprintf/snprintf-family.
 fn printf_format_index(name: &str) -> usize {
     match name {
-        "printf" => 0,
-        "sprintf" => 1,
-        "fprintf" => 1,
+        "printf" | "vprintf" => 0,
+        "sprintf" | "fprintf" | "vsprintf" => 1,
         "snprintf" => 2,
+        // glibc FORTIFY variants take a leading flag arg, shifting the
+        // format-string position by 1.
+        "__printf_chk" | "__vprintf_chk" => 1,
+        "__fprintf_chk" | "__sprintf_chk" | "__vsprintf_chk" => 2,
+        "__snprintf_chk" => 3,
         _ => 0,
     }
 }

@@ -108,9 +108,13 @@ pub fn recognize_libc(callee_name: &str) -> Option<LibcKind> {
 
         "free" | "_ZdlPv" | "_ZdaPv" | "qfree" => Some(LibcKind::Free),
 
-        "printf" | "fprintf" | "sprintf" | "snprintf" | "vprintf" | "vsprintf" => {
-            Some(LibcKind::PrintfFamily)
-        }
+        // The `_chk` variants are FORTIFY_SOURCE-hardened spellings glibc
+        // emits when compiled with `-D_FORTIFY_SOURCE`. They take the same
+        // format-string arg (in the same position) so they belong to the
+        // same family for our purposes.
+        "printf" | "fprintf" | "sprintf" | "snprintf" | "vprintf" | "vsprintf"
+        | "__printf_chk" | "__fprintf_chk" | "__sprintf_chk" | "__snprintf_chk"
+        | "__vprintf_chk" | "__vsprintf_chk" => Some(LibcKind::PrintfFamily),
 
         _ => None,
     }

@@ -26,7 +26,7 @@ void __noreturn main(void) {
     int result;
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
     *(_QWORD *)(0LL) = 0x10f9LL; identify(); *(_QWORD *)(0LL) = 0x1106LL;
-    identify(); *(_QWORD *)(0LL) = 0x111fLL; __printf_chk();
+    identify(); *(_QWORD *)(0LL) = 0x111fLL; printf();
     v8 = 0;
     if (v8) {
         *(_QWORD *)(0LL) = 0x113cLL; __stack_chk_fail();

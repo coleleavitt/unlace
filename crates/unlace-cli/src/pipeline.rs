@@ -72,8 +72,8 @@ use unlace_passes::{
     RustVtablePass, SccpPass, SignatureSnapshot, StackOffsetSnapshotPass, StackPointerTrackingPass,
     StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass, TailCallDetectPass,
     TypeConstraintSolverPass, VarNamingPass, VariableMergePass, annotate_libc_calls,
-    bump_if_signature_changed, detect_byref, detect_go_defer, recover_stack_frame, recover_structs,
-    run_outer_fixedpoint, run_to_fixedpoint,
+    bump_if_signature_changed, detect_byref, detect_go_defer, parse_printf_format_strings,
+    recover_stack_frame, recover_structs, run_outer_fixedpoint, run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -1607,6 +1607,19 @@ pub fn decompile_function_with_symbols(
     // here if the printer would also have rendered it.
     let _libc_annotations_added =
         annotate_libc_calls(&mut ssa, &|addr| symbols.get(&addr).cloned());
+
+    // Batch 6: recover per-slot variadic argument types for printf-style
+    // call sites. Walks each Call to a variadic libc function, resolves
+    // the format-string argument's constant address through the string
+    // table, parses the conversions, and stashes the inferred
+    // `PrimitiveType` list in `ssa.variadic_call_types`. The resolver is
+    // the same `&'static str` symbol map the noreturn/rust-panic passes
+    // used; the string table is the loader's read-only data map.
+    let _variadic_types_added = parse_printf_format_strings(
+        &mut ssa,
+        &|addr| stable_symbol_names.get(&addr).copied(),
+        &image.string_table,
+    );
 
     // t298 — Go iface-to-concrete devirtualization. When a `Callind`
     // target resolves to a unique method pointer recorded in a

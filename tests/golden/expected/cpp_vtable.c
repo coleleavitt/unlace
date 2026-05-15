@@ -1,7 +1,7 @@
 /* Function:   main | Address: 0x1060 | Size: 0x1b (27 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs to:   __printf_chk | Xrefs from: unknown */
 void main(void) {
     int result;
-    *(_QWORD *)(0LL) = 0x1080LL; __printf_chk(); return result;
+    *(_QWORD *)(0LL) = 0x1080LL; printf(); return result;
 }
 /* Function:   _start | Address: 0x1090 | Size: 0x1f (31 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {

@@ -50,7 +50,7 @@ impl Pass for CallingConventionDetectPass {
 fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
     let entry = func.function.entry;
     let Some(entry_block) = func.function.blocks.get(&entry) else {
-        return CallingConvention::Unknown;
+        return arch_default_cc(func);
     };
 
     // Collect registers that are READ before being WRITTEN in the entry block.
@@ -85,7 +85,65 @@ fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
     }
 
     let base = score_convention(&read_before_write);
-    refine_convention(func, base, &read_before_write)
+    let result = refine_convention(func, base, &read_before_write);
+
+    // If entry-block-only analysis produced Unknown (common after SSA
+    // optimisation pushes arg register reads into successor blocks or
+    // propagates them away entirely), fall back to the architecture-implied
+    // default calling convention.
+    if result == CallingConvention::Unknown {
+        return arch_default_cc(func);
+    }
+
+    result
+}
+
+/// Collect registers that are read before being written in any block of the
+/// function. This captures argument register usage that has migrated out of
+/// the entry block due to SSA optimisation (copy-prop, DCE, block merging).
+fn collect_whole_function_reads(func: &SsaFunction) -> BTreeSet<u64> {
+    let mut reads = BTreeSet::new();
+    for (bid, block) in &func.function.blocks {
+        let mut defined_in_block: BTreeSet<u64> = BTreeSet::new();
+        if let Some(phis) = func.phi_map.get(bid) {
+            for phi in phis {
+                if phi.output.base.space == SpaceId::Register {
+                    defined_in_block.insert(phi.output.base.offset);
+                }
+            }
+        }
+        for insn in &block.insns {
+            match insn.op {
+                IrOp::Branch | IrOp::Cbranch | IrOp::Branchind => continue,
+                _ => {}
+            }
+            for inp in &insn.inputs {
+                if inp.space == SpaceId::Register
+                    && !defined_in_block.contains(&inp.offset)
+                {
+                    reads.insert(inp.offset);
+                }
+            }
+            if let Some(output) = insn.output {
+                if output.space == SpaceId::Register {
+                    defined_in_block.insert(output.offset);
+                }
+            }
+        }
+    }
+    reads
+}
+
+/// Architecture-implied default calling convention. Used as a final fallback
+/// when heuristic detection cannot classify the function (e.g. leaf functions
+/// whose argument usage was optimised away).
+fn arch_default_cc(func: &SsaFunction) -> CallingConvention {
+    use unlace_ir::ArchId;
+    match func.arch {
+        ArchId::X86_64 => CallingConvention::SystemV,
+        ArchId::AArch64 => CallingConvention::AArch64,
+        _ => CallingConvention::Unknown,
+    }
 }
 
 /// Post-process the score-based CC pick by looking for **strong, positive**
@@ -330,6 +388,9 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
         }
     }
 
+    // If the entry block has no arg-register reads (common after SSA
+    // optimisation pushes usage into successor blocks), fall back to the
+    // whole-function scan so we still detect parameters.
     let (int_regs, float_regs): (&[u64], &[u64]) = match cc {
         CallingConvention::SystemV => (SYSV_ARG_REGS, SYSV_FLOAT_REGS),
         CallingConvention::MicrosoftX64 => (MSX64_ARG_REGS, MSX64_FLOAT_REGS),
@@ -340,9 +401,23 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
         }
     };
 
-    // Build a map of which registers feed into which ops in the entry block,
-    // for type inference of each parameter.
-    let reg_consumer_ops = collect_reg_consumer_ops(func, entry);
+    let has_arg_reg_in_entry = int_regs
+        .iter()
+        .chain(float_regs.iter())
+        .any(|r| read_before_write.contains(r));
+
+    if !has_arg_reg_in_entry {
+        read_before_write = collect_whole_function_reads(func);
+    }
+
+    // Build a map of which registers feed into which ops for type inference
+    // of each parameter. When we fell back to the whole-function scan, collect
+    // consumer ops across all blocks too.
+    let reg_consumer_ops = if has_arg_reg_in_entry {
+        collect_reg_consumer_ops_block(func, entry)
+    } else {
+        collect_reg_consumer_ops_all(func)
+    };
 
     let mut params = Vec::new();
     let mut param_idx = 1u32;
@@ -369,7 +444,7 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
     params
 }
 
-fn collect_reg_consumer_ops(func: &SsaFunction, entry: BlockId) -> BTreeMap<u64, Vec<IrOp>> {
+fn collect_reg_consumer_ops_block(func: &SsaFunction, entry: BlockId) -> BTreeMap<u64, Vec<IrOp>> {
     let Some(block) = func.function.blocks.get(&entry) else {
         return BTreeMap::new();
     };
@@ -378,6 +453,21 @@ fn collect_reg_consumer_ops(func: &SsaFunction, entry: BlockId) -> BTreeMap<u64,
         for inp in &insn.inputs {
             if inp.space == SpaceId::Register {
                 map.entry(inp.offset).or_default().push(insn.op);
+            }
+        }
+    }
+    map
+}
+
+/// Collect register→consumer-op mappings across all blocks.
+fn collect_reg_consumer_ops_all(func: &SsaFunction) -> BTreeMap<u64, Vec<IrOp>> {
+    let mut map: BTreeMap<u64, Vec<IrOp>> = BTreeMap::new();
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            for inp in &insn.inputs {
+                if inp.space == SpaceId::Register {
+                    map.entry(inp.offset).or_default().push(insn.op);
+                }
             }
         }
     }

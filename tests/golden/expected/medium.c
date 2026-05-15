@@ -4,8 +4,8 @@ struct __anon0 {
     __int32 field_8;
 };
 
-/* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: unknown | Stack frame: 0xc (12 bytes) | Xrefs to:   __stack_chk_fail, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
-void __noreturn main(void) {
+/* Function:   main | Address: 0x1060 | Size: 0x40d (1037 bytes) | Convention: System V AMD64 | Stack frame: 0xc (12 bytes) | Xrefs to:   __stack_chk_fail, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
+void __noreturn main(void) // dropped 1 param(s) (dead in body) {
     int v5; // edx
     long long v13; // rdi
     int v21; // rip
@@ -75,7 +75,7 @@ void __noreturn main(void) {
     }
     return result;
 }
-/* Function:   _start | Address: 0x1480 | Size: 0x1f (31 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   _start | Address: 0x1480 | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void _start(void) {
     int v6; // rip
     *(_QWORD *)(0LL) = 0x14a5LL; return;
@@ -86,8 +86,8 @@ struct __anon0 {
     void * field_8;
 };
 
-/* Function:   f_rec_fib | Address: 0x1570 | Size: 0x2b1 (689 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_rec_fib | Xrefs from: unknown */
-void f_rec_fib(void) {
+/* Function:   f_rec_fib | Address: 0x1570 | Size: 0x2b1 (689 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_rec_fib | Xrefs from: unknown */
+void f_rec_fib(__int64 a1 /* BYREF */) {
     int v12; // rdi
     v37 = 0;
     if (v37) {
@@ -104,7 +104,7 @@ void f_rec_fib(void) {
     }
     return;
 }
-/* Function:   f_ackermann | Address: 0x1830 | Size: 0x34e (846 bytes) | Convention: unknown | Stack frame: 0x8 (8 bytes) | Xrefs to:   f_ackermann | Xrefs from: unknown */
+/* Function:   f_ackermann | Address: 0x1830 | Size: 0x34e (846 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   f_ackermann | Xrefs from: unknown */
 void f_ackermann(void) {
     long long v8; // rsp
     int v28;
@@ -252,7 +252,7 @@ struct __anon0 {
     __int64 field_8;
 };
 
-/* Function:   sub_1520 | Address: 0x1520 | Size: 0x38 (56 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_14b0 | Xrefs from: unknown */
+/* Function:   sub_1520 | Address: 0x1520 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_14b0 | Xrefs from: unknown */
 void sub_1520(void) {
     long long v1; // rsp
     int v4; // rip
@@ -270,8 +270,8 @@ void sub_1520(void) {
         result = *(_QWORD *)(c1); return result;
     }
 }
-/* Function:   sub_1560 | Address: 0x1560 | Size: 0x735 (1845 bytes) | Convention: unknown | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
-void sub_1560(void) {
+/* Function:   sub_1560 | Address: 0x1560 | Size: 0x735 (1845 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   f_ackermann, f_rec_fib, f_rec_power.constprop.0 | Xrefs from: unknown */
+void sub_1560(__int64 a1 /* BYREF */, __int64 a2, __int64 a3 /* BYREF */, __int64 a4 /* BYREF */) {
     int v15; // rdi
     signed char v56; // temp
     sub_14e0();
@@ -302,7 +302,7 @@ void sub_1560(void) {
     }
     return;
 }
-/* Function:   sub_14b0 | Address: 0x14b0 | Size: 0x6c (108 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   sub_14b0 | Address: 0x14b0 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_14b0(void) {
     int v5; // rip
     v8 = 1;

@@ -68,26 +68,41 @@ pub fn run_interproc_fixpoint<F>(
 where
     F: FnMut(&mut SsaFunction) -> Result<(), PassError>,
 {
+    use unlace_ir::xref::compute_sccs;
+
     let mut report = InterprocReport::default();
     let mut registry: FunctionSignatureRegistry = FunctionSignatureRegistry::new();
 
+    // Build the call graph and compute SCCs for bottom-up traversal.
+    // SCCs are recomputed each round in case the call graph mutates
+    // (e.g. indirect calls resolved to direct ones).
     for iter in 0..cap.max(1) {
         report.iterations = iter + 1;
 
         let prev_sigs = snapshot_signatures(funcs);
-
-        for ssa in funcs.values_mut() {
-            ssa.external_signatures = registry.clone();
-            per_function(ssa)?;
-        }
-
-        let new_sigs = snapshot_signatures(funcs);
 
         let ir_funcs: BTreeMap<u64, _> = funcs
             .iter()
             .map(|(a, s)| (*a, s.function.clone()))
             .collect();
         let cg: CallGraph = build_call_graph(&ir_funcs);
+        let all_addrs: Vec<u64> = funcs.keys().copied().collect();
+        let sccs = compute_sccs(&cg, &all_addrs);
+
+        // Process functions in SCC reverse-topological order (leaves first).
+        // For each SCC, run every function in the component so that mutually-
+        // recursive groups see each other's latest signatures within the same
+        // outer round.
+        for scc in &sccs {
+            for &addr in scc {
+                if let Some(ssa) = funcs.get_mut(&addr) {
+                    ssa.external_signatures = registry.clone();
+                    per_function(ssa)?;
+                }
+            }
+        }
+
+        let new_sigs = snapshot_signatures(funcs);
 
         seed_registry_from_funcs(funcs, &mut registry);
         let registry_changed = propagate_caller_params(funcs, &cg, &mut registry);

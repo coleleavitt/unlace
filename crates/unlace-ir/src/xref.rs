@@ -104,6 +104,91 @@ pub fn build_call_graph(functions: &BTreeMap<u64, Function>) -> CallGraph {
     }
 }
 
+/// Compute Strongly Connected Components of the call graph using Tarjan's
+/// algorithm. Returns SCCs in reverse topological order (leaves first),
+/// which is the correct iteration order for a bottom-up fixed-point:
+/// analyze callees before callers.
+///
+/// Each SCC is a `Vec<u64>` of function entry addresses. Singleton SCCs
+/// (no self-recursion) represent non-recursive functions; multi-element
+/// SCCs represent mutually-recursive groups that must be iterated together.
+pub fn compute_sccs(cg: &CallGraph, all_addrs: &[u64]) -> Vec<Vec<u64>> {
+    // Tarjan's algorithm state.
+    let mut index_counter: u32 = 0;
+    let mut stack: Vec<u64> = Vec::new();
+    let mut on_stack: BTreeSet<u64> = BTreeSet::new();
+    let mut indices: BTreeMap<u64, u32> = BTreeMap::new();
+    let mut lowlinks: BTreeMap<u64, u32> = BTreeMap::new();
+    let mut result: Vec<Vec<u64>> = Vec::new();
+
+    fn strongconnect(
+        v: u64,
+        cg: &CallGraph,
+        index_counter: &mut u32,
+        stack: &mut Vec<u64>,
+        on_stack: &mut BTreeSet<u64>,
+        indices: &mut BTreeMap<u64, u32>,
+        lowlinks: &mut BTreeMap<u64, u32>,
+        result: &mut Vec<Vec<u64>>,
+    ) {
+        indices.insert(v, *index_counter);
+        lowlinks.insert(v, *index_counter);
+        *index_counter += 1;
+        stack.push(v);
+        on_stack.insert(v);
+
+        for &w in cg.callees_of(v) {
+            if !indices.contains_key(&w) {
+                strongconnect(w, cg, index_counter, stack, on_stack, indices, lowlinks, result);
+                let w_low = lowlinks[&w];
+                let v_low = lowlinks.get_mut(&v).unwrap();
+                if w_low < *v_low {
+                    *v_low = w_low;
+                }
+            } else if on_stack.contains(&w) {
+                let w_idx = indices[&w];
+                let v_low = lowlinks.get_mut(&v).unwrap();
+                if w_idx < *v_low {
+                    *v_low = w_idx;
+                }
+            }
+        }
+
+        if lowlinks[&v] == indices[&v] {
+            let mut component = Vec::new();
+            loop {
+                let w = stack.pop().unwrap();
+                on_stack.remove(&w);
+                component.push(w);
+                if w == v {
+                    break;
+                }
+            }
+            component.sort_unstable(); // deterministic order within SCC
+            result.push(component);
+        }
+    }
+
+    for &addr in all_addrs {
+        if !indices.contains_key(&addr) {
+            strongconnect(
+                addr,
+                cg,
+                &mut index_counter,
+                &mut stack,
+                &mut on_stack,
+                &mut indices,
+                &mut lowlinks,
+                &mut result,
+            );
+        }
+    }
+
+    // Tarjan produces SCCs in reverse finish order — which IS the reverse
+    // topological order we want (leaves first). No reversal needed.
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;

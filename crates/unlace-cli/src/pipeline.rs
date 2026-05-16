@@ -63,7 +63,7 @@ use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
 use unlace_passes::{
     AlgebraicSimplifyPass, BitfieldIdiomPass, BmiIdiomPass, CallBoundaryCopyPropPass,
     CallingConvFinalizePass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
+    CopyPropagationPass, CppMethodPass, CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
     DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass,
     DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
     IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass, LicmPass, ModuloIdiomPass, NoreturnDetectPass,
@@ -1017,6 +1017,13 @@ fn run_passes_with_report_inner(
             // the same `resolved_indirect_calls` map.
             run_instrumented(&IndirectCallResolvePass, ssa)?;
             run_instrumented(&CppVtablePass, ssa)?;
+            // Batch 14 slice 1: classify C++ ctor/dtor/method from the
+            // Itanium mangled name, rename `a1` → `this`, and propagate
+            // `class T *` typing into recognised vtable call sites. Runs
+            // *after* CppVtablePass so the vtable call site map is
+            // populated before propagation walks it. Annotation-only —
+            // does not alter the IR.
+            run_instrumented(&CppMethodPass, ssa)?;
 
             // ---- Type recovery ----
             run_instrumented(&CallingConventionDetectPass, ssa)?;

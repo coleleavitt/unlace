@@ -121,6 +121,17 @@ pub struct FunctionQuality {
     pub noreturn_functions: usize,
     /// C++ vtable dispatch sites resolved.
     pub cpp_vtable_calls: usize,
+    /// C++ constructors detected via the Itanium mangled name
+    /// (`SsaFunction::cpp_kind == Some(CppKind::Ctor)`).
+    pub cpp_ctors: usize,
+    /// C++ destructors detected via the Itanium mangled name
+    /// (`SsaFunction::cpp_kind == Some(CppKind::Dtor)`).
+    pub cpp_dtors: usize,
+    /// Per-function flag: `1` when the C++ method pass renamed the first
+    /// parameter from the generic `a1` to `this`, `0` otherwise. The
+    /// workspace total exposes "how many functions across the binary now
+    /// carry a proper `this` pointer".
+    pub this_pointer_renamed: usize,
     /// ObjC `objc_msgSend` sites resolved.
     pub objc_dispatch_calls: usize,
     /// Crypto-algorithm annotations recovered.
@@ -223,6 +234,20 @@ impl FunctionQuality {
             q.noreturn_functions = 1;
         }
         q.cpp_vtable_calls = ssa.cpp_vtable_calls.len();
+        // Batch 14 slice 1: C++ method classification counters.
+        match ssa.cpp_kind {
+            Some(unlace_ir::ssa::CppKind::Ctor) => q.cpp_ctors = 1,
+            Some(unlace_ir::ssa::CppKind::Dtor) => q.cpp_dtors = 1,
+            _ => {}
+        }
+        if ssa
+            .inferred_params
+            .first()
+            .map(|(n, _)| n == "this")
+            .unwrap_or(false)
+        {
+            q.this_pointer_renamed = 1;
+        }
         q.objc_dispatch_calls = ssa.objc_dispatch_calls.len();
         q.crypto_annotations = ssa.crypto_annotations.len();
         q.coroutine_sites = ssa.coroutine_sites.len();
@@ -526,6 +551,9 @@ pub struct QualityTotals {
     pub rust_panic_sites: usize,
     pub noreturn_functions: usize,
     pub cpp_vtable_calls: usize,
+    pub cpp_ctors: usize,
+    pub cpp_dtors: usize,
+    pub this_pointer_renamed: usize,
     pub objc_dispatch_calls: usize,
     pub crypto_annotations: usize,
     pub coroutine_sites: usize,
@@ -578,6 +606,9 @@ impl QualityTotals {
         self.rust_panic_sites += q.rust_panic_sites;
         self.noreturn_functions += q.noreturn_functions;
         self.cpp_vtable_calls += q.cpp_vtable_calls;
+        self.cpp_ctors += q.cpp_ctors;
+        self.cpp_dtors += q.cpp_dtors;
+        self.this_pointer_renamed += q.this_pointer_renamed;
         self.objc_dispatch_calls += q.objc_dispatch_calls;
         self.crypto_annotations += q.crypto_annotations;
         self.coroutine_sites += q.coroutine_sites;

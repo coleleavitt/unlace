@@ -651,6 +651,35 @@ pub struct SsaFunction {
     /// function matches the table-load pattern, or when the candidate's
     /// table base falls outside any read-only section.
     pub resolved_jump_tables: BTreeMap<u64, JumpTableInfo>,
+    /// C++ method classification recovered from the Itanium ABI mangled
+    /// symbol name. `Some(CppKind::Ctor)` / `Some(CppKind::Dtor)` for
+    /// constructors / destructors; `Some(CppKind::RegularMethod)` for
+    /// any other `_ZN...E...` symbol with a parseable class prefix; and
+    /// `None` for free functions or unmangled names.
+    ///
+    /// Populated by `unlace_passes::cpp_method::CppMethodPass`.
+    pub cpp_kind: Option<CppKind>,
+    /// Demangled class name for the method (`"Foo"` for `_ZN3FooC1Ev`),
+    /// or `None` for free functions. Populated alongside `cpp_kind`.
+    pub cpp_class_name: Option<String>,
+    /// Call-site indices whose first argument has been classified as a
+    /// `this` pointer of the enclosing class. Keyed by
+    /// `(BlockId, insn_index)` of the `Call` / `Callind`. Populated by
+    /// `CppMethodPass` when the call target is a vtable slot read off
+    /// `[this + N]`.
+    pub cpp_this_args: BTreeSet<(BlockId, usize)>,
+}
+
+/// Classification of a C++ method recovered from its mangled name.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CppKind {
+    /// Constructor (Itanium `C1`/`C2`/`C3` tag).
+    Ctor,
+    /// Destructor (Itanium `D0`/`D1`/`D2` tag).
+    Dtor,
+    /// Any other member function with a recognised nested-name prefix
+    /// (`_ZN...E...` shape).
+    RegularMethod,
 }
 
 /// One recovered C++ lambda capture.
@@ -1044,6 +1073,9 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         seh_regions: Vec::new(),
         coroutine_sites: Vec::new(),
         resolved_jump_tables: BTreeMap::new(),
+        cpp_kind: None,
+        cpp_class_name: None,
+        cpp_this_args: BTreeSet::new(),
     }
 }
 

@@ -5,6 +5,7 @@
 //!
 //! See `docs/ir-spec.md` for the full specification.
 
+pub mod alias;
 mod arch;
 mod block;
 pub mod cfg;
@@ -23,6 +24,7 @@ pub mod types;
 mod varnode;
 pub mod xref;
 
+pub use alias::AliasCategory;
 pub use arch::ArchId;
 pub use block::{BasicBlock, BlockId};
 pub use function::Function;

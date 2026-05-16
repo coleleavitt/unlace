@@ -34,5 +34,5 @@ pub use lifter::{LiftError, LiftedInsn, Lifter, RegisterDef, RegisterFile};
 pub use op::{IROP_COUNT, IrOp};
 pub use space::SpaceId;
 pub use ssa::Maturity;
-pub use tinfo::{CallingConv, TEnumVariant, TField, TInfo, TQualifiers, TypeSource};
+pub use tinfo::{CallingConv, MemberPathEntry, ResolvedMember, TEnumVariant, TField, TInfo, TQualifiers, TypeSource};
 pub use varnode::Varnode;

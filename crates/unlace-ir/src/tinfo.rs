@@ -214,6 +214,194 @@ impl TInfo {
             TInfo::Unknown => None,
         }
     }
+
+    // ── Best-fit member resolution (models IDA udt_type_data_t__get_best_fit_member) ──
+
+    /// Resolve a byte offset into a struct/union to the innermost field
+    /// that contains that offset.
+    ///
+    /// For nested structs, this recurses: if offset 12 lands inside a
+    /// sub-struct at offset 8 whose first field is at relative offset 0,
+    /// the result chain is `[outer_field, inner_field]`.
+    ///
+    /// Returns `None` if `self` is not a struct/union or if the offset
+    /// falls into padding (a "gap").
+    pub fn get_best_fit_member(&self, offset: u64) -> Option<ResolvedMember> {
+        match self {
+            TInfo::Struct { fields, .. } => {
+                // Find the field whose range [field.offset, field.offset + field.ty.size())
+                // contains `offset`. Among candidates, pick the one with the
+                // highest offset (most specific / tightest fit).
+                let mut best: Option<&TField> = None;
+                for f in fields {
+                    if f.offset > offset {
+                        continue;
+                    }
+                    let f_end = f.offset.saturating_add(f.ty.size().unwrap_or(1));
+                    if offset < f_end {
+                        match best {
+                            None => best = Some(f),
+                            Some(prev) if f.offset > prev.offset => best = Some(f),
+                            _ => {}
+                        }
+                    }
+                }
+                let field = best?;
+                let relative_offset = offset - field.offset;
+                // If the field is itself a struct/union, recurse.
+                if relative_offset > 0 {
+                    if let Some(inner) = field.ty.get_best_fit_member(relative_offset) {
+                        return Some(ResolvedMember {
+                            path: std::iter::once(MemberPathEntry {
+                                name: field.name.clone(),
+                                offset: field.offset,
+                            })
+                            .chain(inner.path)
+                            .collect(),
+                            ty: inner.ty,
+                            remainder_offset: inner.remainder_offset,
+                        });
+                    }
+                }
+                Some(ResolvedMember {
+                    path: vec![MemberPathEntry {
+                        name: field.name.clone(),
+                        offset: field.offset,
+                    }],
+                    ty: field.ty.clone(),
+                    remainder_offset: relative_offset,
+                })
+            }
+            TInfo::Union { fields, .. } => {
+                // For unions, every field starts at offset 0. Pick the
+                // field whose size is large enough to contain `offset`.
+                for f in fields {
+                    let f_size = f.ty.size().unwrap_or(0);
+                    if offset < f_size {
+                        if let Some(inner) = f.ty.get_best_fit_member(offset) {
+                            return Some(ResolvedMember {
+                                path: std::iter::once(MemberPathEntry {
+                                    name: f.name.clone(),
+                                    offset: 0,
+                                })
+                                .chain(inner.path)
+                                .collect(),
+                                ty: inner.ty,
+                                remainder_offset: inner.remainder_offset,
+                            });
+                        }
+                        return Some(ResolvedMember {
+                            path: vec![MemberPathEntry {
+                                name: f.name.clone(),
+                                offset: 0,
+                            }],
+                            ty: f.ty.clone(),
+                            remainder_offset: offset,
+                        });
+                    }
+                }
+                None
+            }
+            TInfo::Array { elem, len } => {
+                let elem_size = elem.size()?;
+                if elem_size == 0 {
+                    return None;
+                }
+                let index = offset / elem_size;
+                if let Some(n) = len {
+                    if index >= *n {
+                        return None;
+                    }
+                }
+                let inner_offset = offset % elem_size;
+                if let Some(inner) = elem.get_best_fit_member(inner_offset) {
+                    Some(ResolvedMember {
+                        path: std::iter::once(MemberPathEntry {
+                            name: Some(format!("[{}]", index)),
+                            offset: index * elem_size,
+                        })
+                        .chain(inner.path)
+                        .collect(),
+                        ty: inner.ty,
+                        remainder_offset: inner.remainder_offset,
+                    })
+                } else {
+                    Some(ResolvedMember {
+                        path: vec![MemberPathEntry {
+                            name: Some(format!("[{}]", index)),
+                            offset: index * elem_size,
+                        }],
+                        ty: *elem.clone(),
+                        remainder_offset: inner_offset,
+                    })
+                }
+            }
+            TInfo::Qualified { inner, .. } => inner.get_best_fit_member(offset),
+            _ => None,
+        }
+    }
+
+    /// Compute structural gaps (padding bytes) in a struct layout.
+    ///
+    /// Models IDA's `calc_tinfo_gaps`: returns byte ranges `[start, end)`
+    /// within the struct that are not covered by any declared field.
+    /// Useful for detecting implicit padding, bitfield storage units, and
+    /// union candidates (when the same offset is accessed through
+    /// incompatible types).
+    pub fn calc_gaps(&self) -> Vec<(u64, u64)> {
+        let TInfo::Struct { fields, .. } = self else {
+            return Vec::new();
+        };
+        let struct_size = match self.size() {
+            Some(s) => s,
+            None => return Vec::new(),
+        };
+
+        // Build a sorted list of covered ranges.
+        let mut covered: Vec<(u64, u64)> = Vec::new();
+        for f in fields {
+            let f_size = f.ty.size().unwrap_or(0);
+            if f_size > 0 {
+                covered.push((f.offset, f.offset + f_size));
+            }
+        }
+        covered.sort_unstable();
+
+        // Merge overlapping/adjacent ranges and collect gaps.
+        let mut gaps = Vec::new();
+        let mut cursor: u64 = 0;
+        for (start, end) in &covered {
+            if *start > cursor {
+                gaps.push((cursor, *start));
+            }
+            cursor = cursor.max(*end);
+        }
+        if cursor < struct_size {
+            gaps.push((cursor, struct_size));
+        }
+        gaps
+    }
+}
+
+/// Result of [`TInfo::get_best_fit_member`] — the resolved member path
+/// from a byte offset into a struct.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedMember {
+    /// Chain of field accesses from outermost struct to the resolved leaf.
+    pub path: Vec<MemberPathEntry>,
+    /// Type of the resolved leaf field.
+    pub ty: TInfo,
+    /// Remaining byte offset within the leaf field (0 if exact match).
+    pub remainder_offset: u64,
+}
+
+/// One step in a [`ResolvedMember`] access path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemberPathEntry {
+    /// Field name (`None` for anonymous/padding fields).
+    pub name: Option<String>,
+    /// Byte offset of this field within its parent.
+    pub offset: u64,
 }
 
 // ── Display (IDA-style) ───────────────────────────────────────────────────────
@@ -759,5 +947,94 @@ mod tests {
         let kind = TypeKind::CharPtr;
         let ti = TInfo::from(kind);
         assert_eq!(TypeKind::try_from(ti), Ok(kind));
+    }
+
+    // ── Best-fit member resolution ──────────────────────────────────────────
+
+    #[test]
+    fn best_fit_flat_struct() {
+        let s = TInfo::Struct {
+            name: Some("Point".into()),
+            fields: vec![
+                TField { name: Some("x".into()), offset: 0, ty: TInfo::Int { width: 4, signed: true } },
+                TField { name: Some("y".into()), offset: 4, ty: TInfo::Int { width: 4, signed: true } },
+            ],
+        };
+        let r = s.get_best_fit_member(0).unwrap();
+        assert_eq!(r.path.len(), 1);
+        assert_eq!(r.path[0].name.as_deref(), Some("x"));
+        assert_eq!(r.remainder_offset, 0);
+
+        let r = s.get_best_fit_member(4).unwrap();
+        assert_eq!(r.path[0].name.as_deref(), Some("y"));
+        assert_eq!(r.remainder_offset, 0);
+
+        // Offset 8 is beyond the struct — returns None.
+        assert!(s.get_best_fit_member(8).is_none());
+    }
+
+    #[test]
+    fn best_fit_nested_struct() {
+        let inner = TInfo::Struct {
+            name: Some("Inner".into()),
+            fields: vec![
+                TField { name: Some("a".into()), offset: 0, ty: TInfo::Int { width: 4, signed: true } },
+                TField { name: Some("b".into()), offset: 4, ty: TInfo::Int { width: 4, signed: true } },
+            ],
+        };
+        let outer = TInfo::Struct {
+            name: Some("Outer".into()),
+            fields: vec![
+                TField { name: Some("hdr".into()), offset: 0, ty: TInfo::Int { width: 8, signed: false } },
+                TField { name: Some("payload".into()), offset: 8, ty: inner },
+            ],
+        };
+        // Offset 12 → outer.payload (at 8) → inner offset 4 → field "b"
+        let r = outer.get_best_fit_member(12).unwrap();
+        assert_eq!(r.path.len(), 2);
+        assert_eq!(r.path[0].name.as_deref(), Some("payload"));
+        assert_eq!(r.path[1].name.as_deref(), Some("b"));
+        assert_eq!(r.remainder_offset, 0);
+    }
+
+    #[test]
+    fn best_fit_array() {
+        let arr = TInfo::Array {
+            elem: Box::new(TInfo::Int { width: 4, signed: true }),
+            len: Some(10),
+        };
+        // Offset 12 → element [3]
+        let r = arr.get_best_fit_member(12).unwrap();
+        assert_eq!(r.path[0].name.as_deref(), Some("[3]"));
+        assert_eq!(r.remainder_offset, 0);
+
+        // Out of bounds → None
+        assert!(arr.get_best_fit_member(40).is_none());
+    }
+
+    #[test]
+    fn calc_gaps_detects_padding() {
+        let s = TInfo::Struct {
+            name: Some("Padded".into()),
+            fields: vec![
+                TField { name: Some("a".into()), offset: 0, ty: TInfo::Int { width: 1, signed: true } },
+                // 3 bytes of padding here
+                TField { name: Some("b".into()), offset: 4, ty: TInfo::Int { width: 4, signed: true } },
+            ],
+        };
+        let gaps = s.calc_gaps();
+        assert_eq!(gaps, vec![(1, 4)]);
+    }
+
+    #[test]
+    fn calc_gaps_no_gaps() {
+        let s = TInfo::Struct {
+            name: Some("Packed".into()),
+            fields: vec![
+                TField { name: Some("x".into()), offset: 0, ty: TInfo::Int { width: 4, signed: true } },
+                TField { name: Some("y".into()), offset: 4, ty: TInfo::Int { width: 4, signed: true } },
+            ],
+        };
+        assert!(s.calc_gaps().is_empty());
     }
 }

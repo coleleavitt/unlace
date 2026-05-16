@@ -22,7 +22,9 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, StackFrame, StackLocal, VarnodeSlot};
+use unlace_ir::ssa::{
+    CallingConvention, FrameSlotKind, SsaFunction, StackFrame, StackLocal, VarnodeSlot,
+};
 use unlace_ir::stack::StackSpec;
 use unlace_ir::{ArchId, BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
@@ -148,6 +150,7 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
                 offset,
                 size: max_w as u64,
                 access_widths: widths,
+                kind: FrameSlotKind::Local,
             },
         );
         last_kept = Some(offset);
@@ -208,11 +211,75 @@ pub fn recover_stack_frame(func: &SsaFunction) -> StackFrame {
         frame_size = (hi - lo).max(0) as u64;
     }
 
+    classify_slot_kinds(func, &spec, &mut locals);
+
     StackFrame {
         locals,
         frame_size,
         max_pos_offset,
         min_neg_offset,
+    }
+}
+
+/// Tag every recovered slot with a [`FrameSlotKind`] using the
+/// post-prologue SP delta and the calling convention (Batch 2 slice 2).
+///
+/// Conventions used here (consistent with [`recover_stack_frame`]'s
+/// offset model): the recovered offset is relative to **function-entry
+/// RSP**, i.e. the value of RSP *before* the prologue. On x86_64 the
+/// return address occupies `[entry_rsp + 0 .. entry_rsp + ptr_size)`,
+/// so:
+///
+/// * negative offsets → callee-local storage (default
+///   [`FrameSlotKind::Local`])
+/// * offsets in `[0, ptr_size)` → the saved return-address slot. Not
+///   strictly part of the user-visible frame; we leave it as `Local` so
+///   the caller can still see it if recovery surfaced one.
+/// * offsets `>= ptr_size` → caller-pushed stack arguments
+///   (SysV / cdecl) — tagged [`FrameSlotKind::StackArg`].
+/// * for Microsoft x64 the 32-byte shadow region at
+///   `[ptr_size, ptr_size + 32)` is tagged [`FrameSlotKind::ShadowSpace`];
+///   slots at `>= ptr_size + 32` are real stack args.
+///
+/// Slot offsets that also appear in [`SsaFunction::saved_register_slots`]
+/// are tagged [`FrameSlotKind::SavedRegister`] regardless of sign; that
+/// classification wins because the printer keys saved-register rendering
+/// off the same set.
+fn classify_slot_kinds(
+    func: &SsaFunction,
+    spec: &StackSpec,
+    locals: &mut BTreeMap<i64, StackLocal>,
+) {
+    let ptr = spec.ptr_size as i64;
+    let cc = func.calling_convention;
+    let shadow_size: i64 = match cc {
+        CallingConvention::MicrosoftX64 => 32,
+        _ => 0,
+    };
+    for (&offset, slot) in locals.iter_mut() {
+        // Saved-register classification wins — those slots are already
+        // anchored by `StackPointerTrackingPass` and we must not relabel
+        // them as locals/args even if their offset happens to coincide.
+        if func.saved_register_slots.contains(&offset) {
+            slot.kind = FrameSlotKind::SavedRegister;
+            continue;
+        }
+        if offset < 0 {
+            slot.kind = FrameSlotKind::Local;
+            continue;
+        }
+        if offset < ptr {
+            // Saved return-address region — keep as Local so existing
+            // renderers don't suddenly grow a phantom "stack arg" entry
+            // for the return slot.
+            slot.kind = FrameSlotKind::Local;
+            continue;
+        }
+        if shadow_size > 0 && offset < ptr + shadow_size {
+            slot.kind = FrameSlotKind::ShadowSpace;
+            continue;
+        }
+        slot.kind = FrameSlotKind::StackArg;
     }
 }
 
@@ -566,5 +633,137 @@ mod tests {
         assert_eq!(local.offset, -16);
         assert_eq!(local.size, 8);
         assert_eq!(local.access_widths, vec![8]);
+    }
+
+    /// Batch 2 slice 2: negative offsets get tagged `Local`, positive
+    /// offsets above `ptr_size` get tagged `StackArg`. Uses an x86_64
+    /// SysV calling convention (no shadow space).
+    #[test]
+    fn b2s2_classifies_negative_local_and_positive_stack_arg() {
+        let ram = Varnode::constant(1, 8);
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        let local_val = Varnode::reg(0, 8);
+        let arg_dst = Varnode::reg(8, 8);
+        let c8 = Varnode::constant(8, 8);
+        let c16 = Varnode::constant(16, 8);
+
+        let insns = vec![
+            // STORE at rsp-8 → local at offset -8.
+            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), c8], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![ram, u0, local_val], 0x1004),
+            // LOAD from rsp+16 → stack-arg slot at offset 16.
+            IrInsn::with_output(IrOp::IntAdd, u1, smallvec![rsp(), c16], 0x1008),
+            IrInsn::with_output(IrOp::Load, arg_dst, smallvec![ram, u1], 0x100c),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.calling_convention = CallingConvention::SystemV;
+        let frame = recover_stack_frame(&ssa);
+
+        assert_eq!(frame.locals[&-8].kind, FrameSlotKind::Local);
+        assert_eq!(
+            frame.locals[&16].kind,
+            FrameSlotKind::StackArg,
+            "positive offset above ptr_size on SysV must classify as StackArg, got {:?}",
+            frame.locals[&16].kind
+        );
+    }
+
+    /// Batch 2 slice 2: a Microsoft x64 callee sees its shadow space at
+    /// `[rsp+8 .. rsp+40)`. Slots in that range must tag as `ShadowSpace`,
+    /// and the first real stack arg at `rsp+40` must tag as `StackArg`.
+    #[test]
+    fn b2s2_microsoft_x64_shadow_space_and_stack_arg() {
+        let ram = Varnode::constant(1, 8);
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        let val = Varnode::reg(0, 8);
+        let c16 = Varnode::constant(16, 8); // inside shadow region
+        let c40 = Varnode::constant(40, 8); // first real stack arg
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, u0, smallvec![rsp(), c16], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![ram, u0, val], 0x1004),
+            IrInsn::with_output(IrOp::IntAdd, u1, smallvec![rsp(), c40], 0x1008),
+            IrInsn::with_output(IrOp::Load, val, smallvec![ram, u1], 0x100c),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.calling_convention = CallingConvention::MicrosoftX64;
+        let frame = recover_stack_frame(&ssa);
+
+        assert_eq!(
+            frame.locals[&16].kind,
+            FrameSlotKind::ShadowSpace,
+            "offset 16 on Microsoft x64 must be ShadowSpace, got {:?}",
+            frame.locals[&16].kind
+        );
+        assert_eq!(
+            frame.locals[&40].kind,
+            FrameSlotKind::StackArg,
+            "offset 40 on Microsoft x64 must be StackArg (above shadow), got {:?}",
+            frame.locals[&40].kind
+        );
+    }
+
+    /// Batch 2 slice 2: a slot offset listed in
+    /// `saved_register_slots` must classify as `SavedRegister`, beating
+    /// any sign-based default. Uses a negative offset to verify the
+    /// saved-register branch wins over the `Local` default for negative
+    /// offsets.
+    #[test]
+    fn b2s2_saved_register_slot_wins_over_default() {
+        let ram = Varnode::constant(1, 8);
+        let u0 = Varnode::unique(0, 8);
+        let val = Varnode::reg(0, 8);
+        let c8 = Varnode::constant(8, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntSub, u0, smallvec![rsp(), c8], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![ram, u0, val], 0x1004),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.calling_convention = CallingConvention::SystemV;
+        ssa.saved_register_slots.insert(-8);
+        let frame = recover_stack_frame(&ssa);
+
+        assert_eq!(
+            frame.locals[&-8].kind,
+            FrameSlotKind::SavedRegister,
+            "saved-register classification must override Local, got {:?}",
+            frame.locals[&-8].kind
+        );
+    }
+
+    /// Batch 2 slice 2: the return-address slot at offset `[0, ptr_size)`
+    /// must NOT classify as `StackArg` — keeping it tagged `Local`
+    /// preserves the legacy renderer's behaviour for the rare case where
+    /// recovery surfaces the return slot.
+    #[test]
+    fn b2s2_return_address_slot_stays_local() {
+        let ram = Varnode::constant(1, 8);
+        let u0 = Varnode::unique(0, 8);
+        let val = Varnode::reg(0, 8);
+        let c0 = Varnode::constant(0, 8);
+
+        let insns = vec![
+            IrInsn::with_output(IrOp::IntAdd, u0, smallvec![rsp(), c0], 0x1000),
+            IrInsn::with_output(IrOp::Load, val, smallvec![ram, u0], 0x1004),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        ssa.calling_convention = CallingConvention::SystemV;
+        let frame = recover_stack_frame(&ssa);
+
+        if let Some(local) = frame.locals.get(&0) {
+            assert_eq!(
+                local.kind,
+                FrameSlotKind::Local,
+                "return-addr slot [0, ptr_size) must stay Local, got {:?}",
+                local.kind
+            );
+        }
     }
 }

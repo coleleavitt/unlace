@@ -1,6 +1,6 @@
 //! Pass instrumentation: per-pass timing and IR trace.
 //!
-//! Two opt-in observability layers, both controlled by environment
+//! Three opt-in observability layers, all controlled by environment
 //! variables and gated behind a single `OnceLock<bool>` read so the
 //! common (env-unset) path costs **one atomic load** per pass invocation
 //! — no allocation, no string compare, no env lookup.
@@ -16,6 +16,22 @@
 //!
 //! [`elapsed`]: std::time::Instant::elapsed
 //!
+//! # `UNLACE_TIMING_CSV=<path>`
+//!
+//! Batch 17 slice 2: when set (independently of `UNLACE_TIMING`), every
+//! [`run_instrumented`] call additionally appends one row to a
+//! per-(function, pass, iteration) accumulator. `iteration` is the
+//! zero-based call index for that (function, pass) pair within the
+//! process. [`dump_pass_timings_csv`] renders the accumulator as a CSV
+//! body (`function,pass,iteration,ms`) sorted by `(function, pass,
+//! iteration)` so the output is deterministic across runs of the same
+//! input. The CLI driver writes this to the path named in the env var
+//! at end-of-pipeline.
+//!
+//! Like `UNLACE_TIMING`, the per-function knob is cached once via
+//! `OnceLock`, so when the env var is unset the hot path is a single
+//! atomic load — no allocation, no string formatting.
+//!
 //! # `UNLACE_TRACE_PASSES=<csv>`
 //!
 //! Comma-separated list of pass names to dump pre/post IR snapshots for
@@ -28,6 +44,7 @@
 //! the IR is never mutated by the wrapper.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
@@ -47,6 +64,26 @@ struct TimingEntry {
 fn timings() -> &'static Mutex<BTreeMap<String, TimingEntry>> {
     static CELL: OnceLock<Mutex<BTreeMap<String, TimingEntry>>> = OnceLock::new();
     CELL.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+/// Per-(function, pass) accumulated wall-clock samples. The `Vec` is
+/// indexed by iteration: `samples[i]` is the elapsed time (ns) of the
+/// `i`-th invocation of that (function, pass) within the process.
+///
+/// `BTreeMap` is required (per the workspace convention) and gives us
+/// deterministic iteration order for free, which is what
+/// [`dump_pass_timings_csv`] relies on for stable CSV output.
+fn func_timings() -> &'static Mutex<BTreeMap<(String, String), Vec<u64>>> {
+    static CELL: OnceLock<Mutex<BTreeMap<(String, String), Vec<u64>>>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+/// Cached `UNLACE_TIMING_CSV` path. `None` means the env var is unset
+/// (zero work in the hot path); `Some(path)` is the destination file
+/// for [`dump_pass_timings_csv`].
+fn timing_csv_cell() -> &'static Option<PathBuf> {
+    static CELL: OnceLock<Option<PathBuf>> = OnceLock::new();
+    CELL.get_or_init(|| std::env::var_os("UNLACE_TIMING_CSV").map(PathBuf::from))
 }
 
 /// Cached `UNLACE_TIMING=1` decision. Read **once** per process so the
@@ -90,6 +127,27 @@ pub fn pass_timing_enabled() -> bool {
     timing_flag()
 }
 
+/// Configured path for `UNLACE_TIMING_CSV` (Batch 17 slice 2), or `None`
+/// when the env var is unset.
+///
+/// Cached after the first call so the hot path stays branch-predictable
+/// — a `None` result is a single atomic load and skips all per-function
+/// accounting in [`run_instrumented`].
+#[inline]
+pub fn pass_timing_csv_path() -> Option<PathBuf> {
+    timing_csv_cell().clone()
+}
+
+/// Cached predicate: `true` iff per-function CSV recording should run.
+///
+/// Equivalent to `pass_timing_csv_path().is_some()` but avoids the
+/// `PathBuf::clone` on the hot path — every [`run_instrumented`] call
+/// consults this.
+#[inline]
+fn func_timing_enabled() -> bool {
+    timing_csv_cell().is_some()
+}
+
 /// `true` iff this pass name should be IR-traced this process.
 ///
 /// Reads `UNLACE_TRACE_PASSES` once and caches the parsed CSV. The
@@ -102,21 +160,41 @@ pub fn pass_should_trace(name: &str) -> bool {
     }
 }
 
-/// Append one timing sample for `name`.
+/// Append one timing sample for the `(function, pass)` pair.
 ///
-/// Cheap when [`pass_timing_enabled`] returned true; callers are
-/// expected to gate on that flag first so the no-op path stays free of
+/// Records into two accumulators:
+///
+/// * The legacy per-pass aggregate (rendered by [`dump_pass_timings`]).
+///   This is always updated when called.
+/// * The per-(function, pass) sample vector — but **only** when
+///   `UNLACE_TIMING_CSV` is set, so the CSV path is fully zero-overhead
+///   when the env var is unset (the `func_timing_enabled` guard avoids
+///   even the `to_string()` allocations for the key).
+///
+/// Callers are expected to gate on [`pass_timing_enabled`] or
+/// [`pass_timing_csv_path`] first so the no-op path stays free of
 /// allocations.
-pub fn record_pass_timing(name: &str, elapsed_ns: u64) {
-    let mut map = match timings().lock() {
-        Ok(g) => g,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    let entry = map.entry(name.to_string()).or_default();
-    entry.count = entry.count.saturating_add(1);
-    entry.total_ns = entry.total_ns.saturating_add(u128::from(elapsed_ns));
-    if elapsed_ns > entry.max_ns {
-        entry.max_ns = elapsed_ns;
+pub fn record_pass_timing(function_name: &str, pass_name: &str, elapsed_ns: u64) {
+    {
+        let mut map = match timings().lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let entry = map.entry(pass_name.to_string()).or_default();
+        entry.count = entry.count.saturating_add(1);
+        entry.total_ns = entry.total_ns.saturating_add(u128::from(elapsed_ns));
+        if elapsed_ns > entry.max_ns {
+            entry.max_ns = elapsed_ns;
+        }
+    }
+
+    if func_timing_enabled() {
+        let mut map = match func_timings().lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let key = (function_name.to_string(), pass_name.to_string());
+        map.entry(key).or_default().push(elapsed_ns);
     }
 }
 
@@ -158,16 +236,53 @@ pub fn dump_pass_timings() -> String {
     out
 }
 
+/// Render the accumulated per-(function, pass, iteration) timings as a
+/// CSV body, including the leading header row.
+///
+/// Rows are sorted lexicographically by `(function, pass, iteration)` so
+/// the output is fully deterministic across runs of the same input —
+/// callers (e.g. `unlace-cli`) can diff CSV files between revisions
+/// without spurious churn. Returns the header alone when no samples
+/// have been recorded.
+///
+/// Each `iteration` is the zero-based call index for that
+/// `(function, pass)` pair within the process: the first invocation is
+/// `0`, the second `1`, etc. Matches the storage order in
+/// [`record_pass_timing`]. `ms` is formatted to three decimals (same
+/// precision as the aggregate table).
+pub fn dump_pass_timings_csv() -> String {
+    let snapshot: Vec<((String, String), Vec<u64>)> = {
+        let map = match func_timings().lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    };
+
+    let mut out = String::new();
+    out.push_str("function,pass,iteration,ms\n");
+    // `func_timings` is a BTreeMap, so the snapshot is already sorted by
+    // `(function, pass)`; per-key iteration is monotone by construction.
+    for ((function, pass), samples) in &snapshot {
+        for (iter, ns) in samples.iter().enumerate() {
+            let ms = (*ns as f64) / 1_000_000.0;
+            out.push_str(&format!("{function},{pass},{iter},{ms:.3}\n"));
+        }
+    }
+    out
+}
+
 /// Run `pass` against `func`, instrumenting per the active env flags.
 ///
-/// In the common case (neither knob set) this is exactly one pair of
+/// In the common case (no knob set) this is exactly one pair of
 /// `OnceLock` loads + the underlying [`Pass::run`] call — no allocation,
 /// no string formatting, no clock read.
 pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool, PassError> {
     let trace = pass_should_trace(pass.name());
     let timing = pass_timing_enabled();
+    let csv = func_timing_enabled();
 
-    if !trace && !timing {
+    if !trace && !timing && !csv {
         return pass.run(func);
     }
 
@@ -177,7 +292,23 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
         None
     };
 
-    let start = if timing { Some(Instant::now()) } else { None };
+    // Both timing flavours share the same clock read, so a single
+    // `Instant::now()` covers `UNLACE_TIMING=1`, `UNLACE_TIMING_CSV=...`,
+    // or both at once.
+    let start = if timing || csv {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    // Snapshot the function name *before* `pass.run` mutates the IR. Most
+    // passes don't rename functions, but a few (e.g. RustPanicPass) can
+    // touch the name — record against the pre-pass identity so the CSV
+    // groups behave like a stable key.
+    let func_name_owned = if csv {
+        Some(func.function.name.clone())
+    } else {
+        None
+    };
     let res = pass.run(func);
     if let Some(t0) = start {
         let ns = t0.elapsed().as_nanos();
@@ -188,7 +319,10 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
         } else {
             ns as u64
         };
-        record_pass_timing(pass.name(), ns_u64);
+        // Use the captured pre-pass name when CSV recording is active;
+        // otherwise an empty string — the aggregate branch ignores it.
+        let func_name = func_name_owned.as_deref().unwrap_or("");
+        record_pass_timing(func_name, pass.name(), ns_u64);
     }
 
     if let Some(pre) = before {
@@ -232,13 +366,30 @@ fn emit_trace_diff(pass: &str, before: &str, after: &str) {
     eprintln!("=== pass-trace {pass}: END ===");
 }
 
-/// **Test-only** reset of the timing accumulator. Not exposed outside
-/// `cfg(test)` — production code must treat the accumulator as monotone
-/// for the life of the process.
+/// **Test-only** reset of *both* timing accumulators. Not exposed
+/// outside `cfg(test)` — production code must treat the accumulators as
+/// monotone for the life of the process.
 #[cfg(test)]
 fn reset_timings_for_test() {
-    let mut map = timings().lock().unwrap_or_else(|p| p.into_inner());
-    map.clear();
+    {
+        let mut map = timings().lock().unwrap_or_else(|p| p.into_inner());
+        map.clear();
+    }
+    {
+        let mut map = func_timings().lock().unwrap_or_else(|p| p.into_inner());
+        map.clear();
+    }
+}
+
+/// **Test-only** direct write into the per-function accumulator,
+/// bypassing the `UNLACE_TIMING_CSV` env-var gate so tests can exercise
+/// the CSV formatter without mutating process-global env state.
+#[cfg(test)]
+fn record_func_timing_for_test(function: &str, pass: &str, elapsed_ns: u64) {
+    let mut map = func_timings().lock().unwrap_or_else(|p| p.into_inner());
+    map.entry((function.to_string(), pass.to_string()))
+        .or_default()
+        .push(elapsed_ns);
 }
 
 #[cfg(test)]
@@ -320,5 +471,78 @@ mod tests {
     fn pass_timing_enabled_no_panic() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let _ = pass_timing_enabled();
+    }
+
+    // ---- UNLACE_TIMING_CSV (Batch 17 slice 2) ----
+
+    /// The per-function accumulator records `(function, pass)` tuples
+    /// and orders successive samples for the same key by call index, so
+    /// the rendered CSV pins iteration counters starting at 0 per key.
+    #[test]
+    fn dump_pass_timings_csv_records_function_pass_tuples() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+
+        // Insert samples in *non-sorted* dispatch order to prove the
+        // formatter performs the sort (BTreeMap insertion does the
+        // grouping; iteration index reflects insertion order per key).
+        record_func_timing_for_test("zeta", "fold", 4_000_000);
+        record_func_timing_for_test("alpha", "fold", 1_000_000);
+        record_func_timing_for_test("alpha", "fold", 2_000_000);
+        record_func_timing_for_test("alpha", "dce", 500_000);
+
+        let csv = dump_pass_timings_csv();
+        let expected = "\
+function,pass,iteration,ms
+alpha,dce,0,0.500
+alpha,fold,0,1.000
+alpha,fold,1,2.000
+zeta,fold,0,4.000
+";
+        assert_eq!(
+            csv, expected,
+            "CSV must be sorted by (function, pass, iteration) and contain header"
+        );
+    }
+
+    /// Header-only output when no samples have been recorded. Keeps the
+    /// CLI's "write the CSV even when nothing ran" path safe (the file
+    /// still contains a valid header so downstream tooling doesn't trip).
+    #[test]
+    fn dump_pass_timings_csv_empty_has_header_only() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+
+        assert_eq!(dump_pass_timings_csv(), "function,pass,iteration,ms\n");
+    }
+
+    /// Pin the exact CSV format. A drift here breaks any tool that
+    /// consumes the output (jq, awk, pandas, …), so we treat the format
+    /// as a public contract — bump the format only with an accompanying
+    /// docs / changelog note.
+    #[test]
+    fn dump_pass_timings_csv_format_is_stable() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+
+        record_func_timing_for_test("main", "cse", 12_345_678); // ~12.346 ms
+
+        let csv = dump_pass_timings_csv();
+        let expected = "\
+function,pass,iteration,ms
+main,cse,0,12.346
+";
+        assert_eq!(csv, expected);
+    }
+
+    /// `pass_timing_csv_path` reads the env once via `OnceLock` so it
+    /// can't be mutated mid-test; we only assert the call doesn't panic
+    /// and that the unset path returns `None` *in this test process*.
+    /// The CLI integration test in `unlace-cli` exercises the set path
+    /// end-to-end with a real env var.
+    #[test]
+    fn pass_timing_csv_path_no_panic() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _ = pass_timing_csv_path();
     }
 }

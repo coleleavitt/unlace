@@ -148,6 +148,24 @@ fn main() {
         }
     }
 
+    // Batch 17 slice 2: per-function CSV export. When
+    // `UNLACE_TIMING_CSV=<path>` was set on the parent process, the
+    // instrumentation harness has been recording one entry per
+    // `(function, pass, iteration)` for the whole run. Flush it now,
+    // *after* commands complete, so the file reflects the entire
+    // pipeline rather than a partial state. Failure to write the file
+    // is reported on stderr but does not fail the command — timing is
+    // observability, not correctness.
+    if let Some(csv_path) = unlace_passes::pass_timing_csv_path() {
+        let csv = unlace_passes::dump_pass_timings_csv();
+        if let Err(e) = fs::write(&csv_path, &csv) {
+            eprintln!(
+                "warning: UNLACE_TIMING_CSV write to '{}' failed: {e}",
+                csv_path.display()
+            );
+        }
+    }
+
     if let Err(e) = result {
         eprintln!("Error: {e:#}");
         std::process::exit(1);

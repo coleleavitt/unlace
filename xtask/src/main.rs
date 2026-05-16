@@ -4,6 +4,7 @@ use std::process::{self, Command};
 
 mod compare_corpus;
 mod compare_golden;
+mod validate_corpus;
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -20,6 +21,10 @@ fn main() {
             let root = workspace_root();
             compare_corpus::run(&root);
         }
+        Some("validate-corpus-toml") => {
+            let root = workspace_root();
+            validate_corpus::run(&root);
+        }
         Some(cmd) => {
             eprintln!("unknown xtask command: {cmd}");
             process::exit(1);
@@ -27,7 +32,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, compare-corpus"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, compare-corpus, validate-corpus-toml"
             );
             process::exit(1);
         }

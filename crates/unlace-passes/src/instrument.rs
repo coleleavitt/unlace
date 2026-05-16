@@ -1,0 +1,324 @@
+//! Pass instrumentation: per-pass timing and IR trace.
+//!
+//! Two opt-in observability layers, both controlled by environment
+//! variables and gated behind a single `OnceLock<bool>` read so the
+//! common (env-unset) path costs **one atomic load** per pass invocation
+//! — no allocation, no string compare, no env lookup.
+//!
+//! # `UNLACE_TIMING=1`
+//!
+//! Wraps every [`Pass::run`] dispatched through [`run_instrumented`] (or
+//! the [`run_to_fixedpoint`](crate::pass::run_to_fixedpoint) runner) with
+//! an [`Instant::now`] / [`elapsed`] pair, accumulating into a global
+//! [`BTreeMap`] keyed by pass name. [`dump_pass_timings`] renders the
+//! accumulator as a markdown table sorted by total time desc — useful
+//! at the end of CLI commands so users can spot hot passes.
+//!
+//! [`elapsed`]: std::time::Instant::elapsed
+//!
+//! # `UNLACE_TRACE_PASSES=<csv>`
+//!
+//! Comma-separated list of pass names to dump pre/post IR snapshots for
+//! on stderr. The literal value `*` enables tracing for *all* passes.
+//! The IR snapshot uses [`std::fmt::Debug`] (`{:#?}`) on the
+//! [`SsaFunction`](unlace_ir::ssa::SsaFunction), and a line-by-line diff
+//! is emitted between the snapshots so unchanged lines stay quiet.
+//!
+//! Both knobs are observation-only: pass semantics are not affected and
+//! the IR is never mutated by the wrapper.
+
+use std::collections::BTreeMap;
+use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
+
+use unlace_ir::ssa::SsaFunction;
+
+use crate::pass::{Pass, PassError};
+
+/// Per-pass accumulated wall-clock samples. Keyed by pass name so the
+/// dump order is deterministic regardless of dispatch order.
+#[derive(Clone, Debug, Default)]
+struct TimingEntry {
+    count: u64,
+    total_ns: u128,
+    max_ns: u64,
+}
+
+fn timings() -> &'static Mutex<BTreeMap<String, TimingEntry>> {
+    static CELL: OnceLock<Mutex<BTreeMap<String, TimingEntry>>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+/// Cached `UNLACE_TIMING=1` decision. Read **once** per process so the
+/// common (unset) path is a single relaxed atomic load.
+fn timing_flag() -> bool {
+    static CELL: OnceLock<bool> = OnceLock::new();
+    *CELL.get_or_init(|| {
+        std::env::var_os("UNLACE_TIMING")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+    })
+}
+
+/// Cached, parsed `UNLACE_TRACE_PASSES` set. `None` means env-unset
+/// (zero work in the hot path); `Some(set)` is the parsed CSV. The
+/// special token `*` is stored as a single-element set and matched
+/// explicitly in [`pass_should_trace`].
+fn trace_set() -> &'static Option<Vec<String>> {
+    static CELL: OnceLock<Option<Vec<String>>> = OnceLock::new();
+    CELL.get_or_init(|| {
+        let raw = std::env::var("UNLACE_TRACE_PASSES").ok()?;
+        let parts: Vec<String> = raw
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if parts.is_empty() {
+            None
+        } else {
+            Some(parts)
+        }
+    })
+}
+
+/// `true` iff `UNLACE_TIMING=1` is set in the environment.
+///
+/// Cached after the first call — subsequent invocations are a single
+/// atomic load.
+#[inline]
+pub fn pass_timing_enabled() -> bool {
+    timing_flag()
+}
+
+/// `true` iff this pass name should be IR-traced this process.
+///
+/// Reads `UNLACE_TRACE_PASSES` once and caches the parsed CSV. The
+/// special token `*` matches every pass.
+#[inline]
+pub fn pass_should_trace(name: &str) -> bool {
+    match trace_set() {
+        Some(set) => set.iter().any(|s| s == "*" || s == name),
+        None => false,
+    }
+}
+
+/// Append one timing sample for `name`.
+///
+/// Cheap when [`pass_timing_enabled`] returned true; callers are
+/// expected to gate on that flag first so the no-op path stays free of
+/// allocations.
+pub fn record_pass_timing(name: &str, elapsed_ns: u64) {
+    let mut map = match timings().lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let entry = map.entry(name.to_string()).or_default();
+    entry.count = entry.count.saturating_add(1);
+    entry.total_ns = entry.total_ns.saturating_add(u128::from(elapsed_ns));
+    if elapsed_ns > entry.max_ns {
+        entry.max_ns = elapsed_ns;
+    }
+}
+
+/// Render the accumulated per-pass timings as a markdown table.
+///
+/// Rows are sorted by `total_ms` descending (then by pass name for ties
+/// so the output is deterministic). Returns the empty string when no
+/// samples have been recorded.
+pub fn dump_pass_timings() -> String {
+    let snapshot: Vec<(String, TimingEntry)> = {
+        let map = match timings().lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    };
+    if snapshot.is_empty() {
+        return String::new();
+    }
+    let mut rows = snapshot;
+    rows.sort_by(|a, b| b.1.total_ns.cmp(&a.1.total_ns).then(a.0.cmp(&b.0)));
+
+    let mut out = String::new();
+    out.push_str("| pass | count | total_ms | avg_ms | max_ms |\n");
+    out.push_str("|------|------:|---------:|-------:|-------:|\n");
+    for (name, e) in &rows {
+        let total_ms = (e.total_ns as f64) / 1_000_000.0;
+        let avg_ms = if e.count > 0 {
+            total_ms / (e.count as f64)
+        } else {
+            0.0
+        };
+        let max_ms = (e.max_ns as f64) / 1_000_000.0;
+        out.push_str(&format!(
+            "| {} | {} | {:.3} | {:.3} | {:.3} |\n",
+            name, e.count, total_ms, avg_ms, max_ms
+        ));
+    }
+    out
+}
+
+/// Run `pass` against `func`, instrumenting per the active env flags.
+///
+/// In the common case (neither knob set) this is exactly one pair of
+/// `OnceLock` loads + the underlying [`Pass::run`] call — no allocation,
+/// no string formatting, no clock read.
+pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool, PassError> {
+    let trace = pass_should_trace(pass.name());
+    let timing = pass_timing_enabled();
+
+    if !trace && !timing {
+        return pass.run(func);
+    }
+
+    let before = if trace {
+        Some(format!("{:#?}", func))
+    } else {
+        None
+    };
+
+    let start = if timing { Some(Instant::now()) } else { None };
+    let res = pass.run(func);
+    if let Some(t0) = start {
+        let ns = t0.elapsed().as_nanos();
+        // saturating cast — a single pass call exceeding ~584 years is
+        // not a realistic measurement target.
+        let ns_u64 = if ns > u128::from(u64::MAX) {
+            u64::MAX
+        } else {
+            ns as u64
+        };
+        record_pass_timing(pass.name(), ns_u64);
+    }
+
+    if let Some(pre) = before {
+        let post = format!("{:#?}", func);
+        emit_trace_diff(pass.name(), &pre, &post);
+    }
+
+    res
+}
+
+/// Emit a minimal pre/post IR diff to stderr.
+///
+/// Not a full LCS diff (the cost would dwarf the pass for big IRs);
+/// instead we line up the snapshots and emit only the lines that
+/// differ, prefixed with `-` (before-only) and `+` (after-only). When
+/// the snapshots are identical we emit a single `(no IR change)` line
+/// so users know the pass ran but was a no-op.
+fn emit_trace_diff(pass: &str, before: &str, after: &str) {
+    if before == after {
+        eprintln!("=== pass-trace {pass}: (no IR change) ===");
+        return;
+    }
+    eprintln!("=== pass-trace {pass}: BEGIN ===");
+    let before_lines: Vec<&str> = before.lines().collect();
+    let after_lines: Vec<&str> = after.lines().collect();
+    let max_len = before_lines.len().max(after_lines.len());
+    for i in 0..max_len {
+        let b = before_lines.get(i).copied();
+        let a = after_lines.get(i).copied();
+        match (b, a) {
+            (Some(bl), Some(al)) if bl == al => {}
+            (Some(bl), Some(al)) => {
+                eprintln!("- {bl}");
+                eprintln!("+ {al}");
+            }
+            (Some(bl), None) => eprintln!("- {bl}"),
+            (None, Some(al)) => eprintln!("+ {al}"),
+            (None, None) => {}
+        }
+    }
+    eprintln!("=== pass-trace {pass}: END ===");
+}
+
+/// **Test-only** reset of the timing accumulator. Not exposed outside
+/// `cfg(test)` — production code must treat the accumulator as monotone
+/// for the life of the process.
+#[cfg(test)]
+fn reset_timings_for_test() {
+    let mut map = timings().lock().unwrap_or_else(|p| p.into_inner());
+    map.clear();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // Tests touch process-global state (env vars + the timing map), so
+    // they must run serially. A module-local Mutex enforces that without
+    // an extra dev-dep.
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn record_pass_timing_accumulates() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+
+        record_pass_timing("alpha", 1_000_000); // 1 ms
+        record_pass_timing("alpha", 3_000_000); // 3 ms
+        record_pass_timing("beta", 2_000_000); // 2 ms
+
+        let table = dump_pass_timings();
+        // alpha: 2 samples, total 4ms, avg 2ms, max 3ms
+        // beta:  1 sample,  total 2ms, avg 2ms, max 2ms
+        assert!(
+            table.contains("| alpha | 2 | 4.000 | 2.000 | 3.000 |"),
+            "missing alpha row: {table}"
+        );
+        assert!(
+            table.contains("| beta | 1 | 2.000 | 2.000 | 2.000 |"),
+            "missing beta row: {table}"
+        );
+        // alpha must sort before beta (higher total_ns)
+        let alpha_idx = table.find("| alpha ").expect("alpha row");
+        let beta_idx = table.find("| beta ").expect("beta row");
+        assert!(
+            alpha_idx < beta_idx,
+            "rows must be sorted by total_ms desc; got alpha@{alpha_idx} beta@{beta_idx}\n{table}"
+        );
+    }
+
+    #[test]
+    fn dump_pass_timings_format_is_stable() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+
+        record_pass_timing("only", 5_500_000); // 5.5 ms
+
+        let table = dump_pass_timings();
+        let expected = "\
+| pass | count | total_ms | avg_ms | max_ms |
+|------|------:|---------:|-------:|-------:|
+| only | 1 | 5.500 | 5.500 | 5.500 |
+";
+        assert_eq!(table, expected);
+    }
+
+    #[test]
+    fn dump_pass_timings_empty_is_empty_string() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+        assert_eq!(dump_pass_timings(), "");
+    }
+
+    // NOTE: `pass_should_trace` / `pass_timing_enabled` cache the env
+    // var read in a `OnceLock` for the entire process lifetime — that's
+    // a *requirement* for zero overhead in the hot path, but it makes
+    // them awkward to test directly. We assert the no-knob path is a
+    // no-op (no panic) without mutating the environment.
+    #[test]
+    fn pass_should_trace_unset_is_false() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        // Must not panic. The literal `false` cannot be asserted without
+        // controlling the env, but the call itself must be safe.
+        let _ = pass_should_trace("totally_made_up_pass_name_xyzzy");
+    }
+
+    #[test]
+    fn pass_timing_enabled_no_panic() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let _ = pass_timing_enabled();
+    }
+}

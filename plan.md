@@ -1702,6 +1702,41 @@ can `git show <sha>` to see exactly what was done. Append-only.
   Added regression test pinning SSA field → counter end-to-end on
   `medium.elf` + `cpp_vtable.elf`.
 
+### Session 2026-05-17 (master `437413dce`)
+
+Multi-batch slice landing session. All five merge commits sustain
+`scripts/score_parity.sh` at 100.0%.
+
+- **Batch 2 slice 2 — stack arg vs local classification** — merge
+  commit `fa9ae13e6` (feat `f3993d0bf`). `classify_stack_args` now uses
+  the SP-delta tracked by `StackPointerTrackingPass` to split frame
+  slots into args (above entry SP) vs locals (below), instead of the
+  prior heuristic offset cutoff. Removes false-positive "argN" naming
+  on deep locals.
+- **Batch 3 slices 1+2 — Lvar model + collector + live_range** —
+  merge commit `0d9968bf3` (feat `af37de820`, recovery of earlier
+  collector work). New `Lvar` struct in `unlace-ir` with `live_range:
+  Option<(InsnId, InsnId)>` computed from SSA def/use spans. Collector
+  walks the SSA function once, dedups by storage key (reg / stack
+  slot), and seeds the symbol table consumed by VarMerge.
+- **Batch 11 slice 2 — CExpr wiring for member/index/deref** —
+  merge commit `f891acd12` (feat `df16417e3`). All struct-member,
+  array-index, and pointer-deref emit paths in `unlace-output` now
+  route through the typed `CExpr` builder instead of raw string
+  formatting. Eliminates the last ad-hoc `format!("{}->{}", ...)`
+  sites in the printer.
+- **Batch 14 slice 1 — C++ ctor/dtor + this pointer** — merge commit
+  `3af36425d`. Detects ctor/dtor signatures (vtable store in first
+  block / mangled name pattern), promotes the first arg to a `this`
+  pointer with the inferred class type, and threads it through
+  member-access lowering. Enables future C++ member-function naming.
+- **Batch 15 slice 1 — AliasCategory + volatile/MMIO barrier** —
+  merge commit `437413dce` (feat `cc75c0cd4`, refire). New
+  `AliasCategory` enum (`Stack`, `Heap`, `Global`, `Mmio`, `Unknown`)
+  attached to memory ops; a barrier pass prevents reordering across
+  volatile / MMIO accesses. Foundation for safer dead-store
+  elimination near hardware registers.
+
 ### Verified state at end of session
 
 - `bash scripts/score_parity.sh`: 100.0% (sustained — this session is a

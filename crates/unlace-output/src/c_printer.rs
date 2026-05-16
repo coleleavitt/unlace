@@ -115,6 +115,8 @@ use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::DwarfInfo;
 use unlace_struct::{HirFunction, HirNode, SwitchCase};
 
+use crate::expr_ast::CExpr;
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -2132,7 +2134,14 @@ fn try_struct_field_access(
         .unwrap_or_else(|| format!("field_{:X}", const_offset));
 
     let base_expr = emit_operand_resolved(base_vn, 0, def_stmt, ctx);
-    Some(format!("{}->{}", base_expr, field_name))
+    // Batch 11 slice 1: route this one emit path through the semantic
+    // `CExpr` AST so we get correct precedence handling for free.
+    // For a simple identifier base this renders byte-identically to
+    // the legacy `format!("{}->{}", base, field)` form; for a more
+    // complex base (e.g. a cast or deref produced by a future pass)
+    // the `Member` printer will insert parens as needed.
+    let member = CExpr::arrow(CExpr::Lit(base_expr), field_name);
+    Some(member.to_string())
 }
 
 // ---------------------------------------------------------------------------

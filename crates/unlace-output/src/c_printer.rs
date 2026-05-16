@@ -5657,15 +5657,21 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                     Some(format!("{} = {};", field_expr, val))
                 } else if let Some(sub) = try_array_subscript(&insn.inputs[1], idx, store_size, ctx)
                 {
-                    Some(format!("{}[{}] = {};", sub.base, sub.index, val))
+                    // Batch 11 slice 2: route subscript stores through CExpr.
+                    let lhs = CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index));
+                    Some(format!("{} = {};", lhs, val))
                 } else {
                     let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
-                    Some(format!(
-                        "*({})({}) = {};",
+                    // Batch 11 slice 2: route `*(T*)(addr) = val` stores
+                    // through CExpr — `Deref(Cast(T*, addr))` renders
+                    // byte-identically for simple addr expressions and gets
+                    // correct parens when future passes produce non-atomic
+                    // addresses.
+                    let lhs = CExpr::deref(CExpr::cast(
                         ida_ptr_type(store_size),
-                        addr,
-                        val
-                    ))
+                        CExpr::lit(addr),
+                    ));
+                    Some(format!("{} = {};", lhs, val))
                 }
             }
             IrOp::Store => Some("/* STORE (bad arity) */;".to_string()),
@@ -5850,18 +5856,26 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     } else if let Some(sub) =
                         try_array_subscript(&insn.inputs[1], idx, store_size, ctx)
                     {
-                        let _ = writeln!(out, "{}[{}] = {};", sub.base, sub.index, val);
+                        // Batch 11 slice 2: route subscript stores through CExpr.
+                        let lhs = CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index));
+                        let _ = writeln!(out, "{} = {};", lhs, val);
                     } else {
                         let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
                         let cast = ida_ptr_type(store_size);
                         // t259: surface MMIO writes by qualifying the cast.
                         let is_mmio = insn.inputs[1].space == SpaceId::Const
                             && ctx.mmio_addrs.contains(&insn.inputs[1].offset);
-                        if is_mmio {
-                            let _ = writeln!(out, "*(volatile {})({}) = {};", cast, addr, val);
+                        // Batch 11 slice 2: route `*(T*)(addr) = val` stores
+                        // through CExpr.  The `volatile` qualifier is folded
+                        // into the cast type string (CExpr::Cast is opaque on
+                        // the type spelling).
+                        let cast_ty = if is_mmio {
+                            format!("volatile {}", cast)
                         } else {
-                            let _ = writeln!(out, "*({})({}) = {};", cast, addr, val);
-                        }
+                            cast.to_string()
+                        };
+                        let lhs = CExpr::deref(CExpr::cast(cast_ty, CExpr::lit(addr)));
+                        let _ = writeln!(out, "{} = {};", lhs, val);
                     }
                 } else {
                     let _ = writeln!(out, "/* STORE (bad arity) */;");
@@ -6662,13 +6676,23 @@ fn emit_expr_with_prec(
                 if let Some(sub) =
                     try_array_subscript(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
                 {
-                    return format!("{}[{}]", sub.base, sub.index);
+                    // Batch 11 slice 2: route subscript loads through CExpr.
+                    return CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index)).to_string();
                 }
                 let is_mmio = insn.inputs[addr_idx].space == SpaceId::Const
                     && ctx.mmio_addrs.contains(&insn.inputs[addr_idx].offset);
                 if let Some(memory) = try_emit_memory_annotation(&insn.inputs[addr_idx], ctx) {
                     // t257: wrap MEMORY[…] with load-sized cast. t259: add
                     // `volatile` when classified as MMIO.
+                    //
+                    // TODO(Batch 11 slice 2): this path emits
+                    // `*(_QWORD *)MEMORY[…]` — no parens around the
+                    // MEMORY[…] subexpression.  Routing through
+                    // `CExpr::deref(CExpr::cast(...))` would insert them
+                    // (CExpr::Cast always wraps its inner), which changes
+                    // the t257 golden assertion at the MEMORY[…] test.
+                    // Leave as-is until CExpr::Cast learns to elide parens
+                    // around already-postfix operands.
                     let cast = ida_ptr_type(load_size);
                     let cast_prim = cast.trim_end_matches(" *");
                     return if load_size == 1 && !is_mmio {
@@ -6684,11 +6708,13 @@ fn emit_expr_with_prec(
                 // t259: when the address was classified as MMIO by the
                 // tight-succession heuristic, qualify the dereference cast
                 // with `volatile`.
-                if is_mmio {
-                    format!("*(volatile {})({})", cast, addr)
+                // Batch 11 slice 2: route `*(T*)(addr)` loads through CExpr.
+                let cast_ty = if is_mmio {
+                    format!("volatile {}", cast)
                 } else {
-                    format!("*({})({})", cast, addr)
-                }
+                    cast.to_string()
+                };
+                CExpr::deref(CExpr::cast(cast_ty, CExpr::lit(addr))).to_string()
             } else {
                 "/* LOAD (bad arity) */ 0".to_string()
             }

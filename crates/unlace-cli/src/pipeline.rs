@@ -73,7 +73,8 @@ use unlace_passes::{
     StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass, TailCallDetectPass,
     TypeConstraintSolverPass, VarNamingPass, VariableMergePass, annotate_libc_calls,
     bump_if_signature_changed, detect_byref, detect_go_defer, parse_printf_format_strings,
-    recover_stack_frame, recover_structs, run_outer_fixedpoint, run_to_fixedpoint,
+    recover_stack_frame, recover_structs, run_instrumented, run_outer_fixedpoint,
+    run_to_fixedpoint,
 };
 
 use crate::args::EmitFormat;
@@ -909,8 +910,7 @@ fn run_passes_with_report_inner(
     // (1) One-time pre-pass: snapshot pre-optimization stack offsets so
     // later iterations of stack-var recovery still see the original
     // RSP/RBP-relative addressing.
-    StackOffsetSnapshotPass
-        .run(ssa)
+    run_instrumented(&StackOffsetSnapshotPass, ssa)
         .context("stack offset snapshot failed")?;
 
     // Snapshot the signature triple so we can bump `signature_revision`
@@ -988,23 +988,23 @@ fn run_passes_with_report_inner(
             total_ir_changes = total_ir_changes.saturating_add(inner);
 
             // ---- Cleanup passes (single-run per outer iter) ----
-            DeadStoreElimPass.run(ssa)?;
-            DeadFlagElimPass.run(ssa)?;
+            run_instrumented(&DeadStoreElimPass, ssa)?;
+            run_instrumented(&DeadFlagElimPass, ssa)?;
             // Batch 1: cross-block DSE picks up stores killed by writes in
             // a successor block — the intra-block DSE above misses them.
-            DeadStoreElimGlobalPass.run(ssa)?;
-            DivisionIdiomPass.run(ssa)?;
-            ModuloIdiomPass.run(ssa)?;
+            run_instrumented(&DeadStoreElimGlobalPass, ssa)?;
+            run_instrumented(&DivisionIdiomPass, ssa)?;
+            run_instrumented(&ModuloIdiomPass, ssa)?;
 
             // ---- Structural detection ----
-            PrologueElimPass.run(ssa)?;
-            TailCallDetectPass.run(ssa)?;
+            run_instrumented(&PrologueElimPass, ssa)?;
+            run_instrumented(&TailCallDetectPass, ssa)?;
             // Batch 1: SP-delta tracking populates `sp_delta_at`,
             // `stack_holes`, `dynamic_sp` *before* stack var recovery so
             // the latter can resolve frame addresses through the right
             // SP-state at each instruction.
-            StackPointerTrackingPass.run(ssa)?;
-            StackVarRecoveryPass.run(ssa)?;
+            run_instrumented(&StackPointerTrackingPass, ssa)?;
+            run_instrumented(&StackVarRecoveryPass, ssa)?;
             // Wave 24 / t209: synthesise the high-level stack frame layout
             // (one slot per offset, fused partial-access groups, array
             // collapsing) so the type-recovery layer can consume a stable
@@ -1015,14 +1015,14 @@ fn run_passes_with_report_inner(
             // narrows to a single `Const` after copy-prop. Runs before
             // CppVtablePass / language-specific devirt so they all see
             // the same `resolved_indirect_calls` map.
-            IndirectCallResolvePass.run(ssa)?;
-            CppVtablePass.run(ssa)?;
+            run_instrumented(&IndirectCallResolvePass, ssa)?;
+            run_instrumented(&CppVtablePass, ssa)?;
 
             // ---- Type recovery ----
-            CallingConventionDetectPass.run(ssa)?;
-            ParamInferPass.run(ssa)?;
-            ReturnTypeInferPass.run(ssa)?;
-            StructFieldDetectPass.run(ssa)?;
+            run_instrumented(&CallingConventionDetectPass, ssa)?;
+            run_instrumented(&ParamInferPass, ssa)?;
+            run_instrumented(&ReturnTypeInferPass, ssa)?;
+            run_instrumented(&StructFieldDetectPass, ssa)?;
             // Wave 24 / t210: address-taken / byref bookkeeping. Runs
             // after ParamInferPass so the detector knows how many
             // parameter registers are "live" for this calling convention.
@@ -1048,13 +1048,13 @@ fn run_passes_with_report_inner(
             // pipeline. Replaces the historical `run_type_infer_bounded`
             // CLI-local stub (left only in `benches/decompile_medium.rs`
             // as a frozen benchmark baseline).
-            unlace_passes::type_infer::TypeInferPass.run(ssa)?;
+            run_instrumented(&unlace_passes::type_infer::TypeInferPass, ssa)?;
             // t228: TIE-style constraint solver fills the holes left by
             // the ad-hoc walker (LOAD/STORE addresses as `Ptr`, phi joins,
             // binop SameType edges) so the outer fixed-point's type-
             // signature comparison can settle once the constraint graph
             // converges.
-            TypeConstraintSolverPass.run(ssa)?;
+            run_instrumented(&TypeConstraintSolverPass, ssa)?;
 
             Ok(())
         },
@@ -1083,14 +1083,11 @@ fn run_passes_with_report_inner(
     //   bindings to LOAD/STORE/compare operands. Reads
     //   `composite_var_types` and `enum_discriminants`, both of which
     //   are stable by the time the outer loop exits.
-    BitfieldIdiomPass
-        .run(ssa)
+    run_instrumented(&BitfieldIdiomPass, ssa)
         .context("bitfield idiom pass failed")?;
-    CryptoIdiomPass
-        .run(ssa)
+    run_instrumented(&CryptoIdiomPass, ssa)
         .context("crypto idiom pass failed")?;
-    IndirectCallResolvePass
-        .run(ssa)
+    run_instrumented(&IndirectCallResolvePass, ssa)
         .context("indirect call resolve pass failed")?;
     // Batch 9: companion to IndirectCallResolvePass — detect Branchind
     // jump-table patterns and record candidate (base, entry_size) pairs
@@ -1098,22 +1095,18 @@ fn run_passes_with_report_inner(
     // later in `decompile_function_with_symbols` once the binary's
     // read-only sections are in scope; emit_output then feeds the
     // resolved tables to `refine_switches_with_tables`.
-    IndirectJumpResolvePass
-        .run(ssa)
+    run_instrumented(&IndirectJumpResolvePass, ssa)
         .context("indirect jump resolve pass failed")?;
-    OpTypeBindingPass
-        .run(ssa)
+    run_instrumented(&OpTypeBindingPass, ssa)
         .context("op type binding pass failed")?;
 
     // (3) Presentation-layer post-passes. These run once, after the type
     // and IR shape have stabilised, because they encode print-time
     // decisions that should be made against the final IR.
-    ExpressionTreePass
-        .run(ssa)
+    run_instrumented(&ExpressionTreePass, ssa)
         .context("expression tree pass failed")?;
 
-    VariableMergePass
-        .run(ssa)
+    run_instrumented(&VariableMergePass, ssa)
         .context("variable merge pass failed")?;
 
     // Batch 1: Chaitin-Briggs PHI-operand coalescing. Sits after the
@@ -1121,8 +1114,7 @@ fn run_passes_with_report_inner(
     // interference-graph-driven merge groups land in `merged_names`
     // alongside the merger's output — VarNamingPass then names one C
     // variable per coalesced cluster.
-    RegisterCoalescePass
-        .run(ssa)
+    run_instrumented(&RegisterCoalescePass, ssa)
         .context("register coalesce pass failed")?;
 
     // Batch 1: language-specific recovery passes. Each is gated by its
@@ -1131,8 +1123,8 @@ fn run_passes_with_report_inner(
     // no-ops on non-Rust binaries. RustPanicPass needs the symbol
     // resolver (panic-function name matching) and so only runs on the
     // resolver-aware path.
-    RustEnumPass.run(ssa).context("rust enum pass failed")?;
-    RustVtablePass.run(ssa).context("rust vtable pass failed")?;
+    run_instrumented(&RustEnumPass, ssa).context("rust enum pass failed")?;
+    run_instrumented(&RustVtablePass, ssa).context("rust vtable pass failed")?;
     if let Some(resolve) = resolver {
         RustPanicPass
             .run_with_resolver(ssa, resolve)
@@ -1144,13 +1136,12 @@ fn run_passes_with_report_inner(
     // `vN` choices, while still losing to *meaningful* (non-`vN`) names
     // produced by the merger (it occasionally promotes a DWARF name into
     // its output map).
-    VarNamingPass.run(ssa).context("var naming pass failed")?;
+    run_instrumented(&VarNamingPass, ssa).context("var naming pass failed")?;
 
     // t230 — calling-convention finalization. Runs last so the
     // dead-param drop, byte-mask narrowing, and caller-side
     // return-type inference all see the fully-stabilised IR + names.
-    CallingConvFinalizePass
-        .run(ssa)
+    run_instrumented(&CallingConvFinalizePass, ssa)
         .context("calling-conv finalization pass failed")?;
 
     // Bump the signature revision iff the pipeline mutated any of the three

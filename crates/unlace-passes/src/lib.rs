@@ -45,6 +45,7 @@ pub mod idiom_recognition;
 pub mod indirect_call_resolve;
 pub mod indirect_jump_resolve;
 pub mod inline_foldback;
+pub mod instrument;
 pub mod interproc_fixpoint;
 pub mod iv_elim;
 pub mod lazy_lift;
@@ -160,6 +161,10 @@ pub use idiom_recognition::IdiomRecognitionPass;
 pub use indirect_call_resolve::IndirectCallResolvePass;
 pub use indirect_jump_resolve::{IndirectJumpResolvePass, collect_jump_table_candidates};
 pub use inline_foldback::{InlineFoldback, detect_inlined_calls};
+pub use instrument::{
+    dump_pass_timings, pass_should_trace, pass_timing_enabled, record_pass_timing,
+    run_instrumented,
+};
 pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint};
 pub use iv_elim::IvElimPass;
 pub use libc_idioms::{LibcKind, annotate_libc_calls, recognize_libc};

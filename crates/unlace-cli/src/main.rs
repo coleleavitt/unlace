@@ -126,6 +126,19 @@ fn main() {
         }
     };
 
+    // Batch 17: per-pass timing dump. The wrapper inside
+    // `unlace_passes::run_instrumented` accumulates into a process-global
+    // BTreeMap when `UNLACE_TIMING=1`; here we render that table to
+    // stderr after the command has run so users get a hot-pass summary.
+    // The `pass_timing_enabled()` guard keeps the no-op path free of any
+    // string formatting in the common case.
+    if unlace_passes::pass_timing_enabled() {
+        let table = unlace_passes::dump_pass_timings();
+        if !table.is_empty() {
+            eprintln!("\n=== UNLACE_TIMING: per-pass wall-clock ===\n{table}");
+        }
+    }
+
     if let Err(e) = result {
         eprintln!("Error: {e:#}");
         std::process::exit(1);

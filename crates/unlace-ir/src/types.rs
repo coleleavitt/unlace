@@ -113,6 +113,116 @@ pub enum Type {
     TypeParam { name: String, constraint: String },
 }
 
+
+
+/// Compact, `Copy` type tag used to stamp libc-call argument/return shapes
+/// onto SSA call sites without dragging the full composite [`Type`] tree
+/// (which owns `String`/`Vec` and isn't `Copy`).
+///
+/// The variant set is *only* what the hardcoded libc signature database
+/// (`unlace_passes::libc_signatures`) needs to express the common C
+/// prototypes — pointer kinds are tracked separately from raw `Void*` so
+/// the printer can choose `char *` vs `void *` vs `FILE *` faithfully.
+/// Anything outside this roster falls back to [`TypeKind::Void`] (which the
+/// printer renders as `void`) or to the richer [`Type`] enum elsewhere in
+/// the pipeline.
+///
+/// Stored in [`crate::ssa::SsaFunction::libc_sig_annotations`] via
+/// [`CallSiteLibcSig`].
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub enum TypeKind {
+    /// `void` (return only).
+    Void,
+    /// `int` (signed, target-natural width — printer renders as `int`).
+    Int,
+    /// `unsigned int`.
+    UInt,
+    /// `long` (signed, target-natural width — printer renders as `long`).
+    Long,
+    /// `unsigned long`.
+    ULong,
+    /// `size_t`.
+    SizeT,
+    /// `ssize_t`.
+    SSizeT,
+    /// `off_t`.
+    OffT,
+    /// `char *`.
+    CharPtr,
+    /// `const char *`.
+    ConstCharPtr,
+    /// `char **`.
+    CharPtrPtr,
+    /// `void *`.
+    VoidPtr,
+    /// `const void *`.
+    ConstVoidPtr,
+    /// `FILE *`.
+    FilePtr,
+}
+
+impl TypeKind {
+    /// Render as a splice-ready C type string (matches the existing
+    /// `LibcSignature` `return_type` strings so the printer can use one
+    /// rendering path).
+    pub const fn c_name(self) -> &'static str {
+        match self {
+            TypeKind::Void => "void",
+            TypeKind::Int => "int",
+            TypeKind::UInt => "unsigned int",
+            TypeKind::Long => "long",
+            TypeKind::ULong => "unsigned long",
+            TypeKind::SizeT => "size_t",
+            TypeKind::SSizeT => "ssize_t",
+            TypeKind::OffT => "off_t",
+            TypeKind::CharPtr => "char *",
+            TypeKind::ConstCharPtr => "const char *",
+            TypeKind::CharPtrPtr => "char **",
+            TypeKind::VoidPtr => "void *",
+            TypeKind::ConstVoidPtr => "const void *",
+            TypeKind::FilePtr => "FILE *",
+        }
+    }
+}
+
+impl fmt::Display for TypeKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.c_name())
+    }
+}
+
+/// Per-call-site libc-signature stamp.
+///
+/// Owned copy of a `unlace_passes::libc_signatures::LibcSig` static
+/// entry, materialised onto a `Call` instruction by
+/// `unlace_passes::libc_idioms::annotate_libc_calls`. The owned form keeps
+/// `SsaFunction` independent of the passes-crate static table (avoids a
+/// circular dependency) and stays trivially `serde`-serializable.
+///
+/// Stored in [`crate::ssa::SsaFunction::libc_sig_annotations`] keyed by
+/// `(BlockId, insn_idx)` of the `Call`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct CallSiteLibcSig {
+    /// Return type of the libc function.
+    pub ret: TypeKind,
+    /// Fixed positional argument types (excludes the variadic tail).
+    pub args: Vec<TypeKind>,
+    /// Whether the function takes additional variadic arguments after the
+    /// fixed prefix.
+    pub varargs: bool,
+}
+
 /// A single field within a [`Type::Struct`] or [`Type::Union`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct StructFieldType {

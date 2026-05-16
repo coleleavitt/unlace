@@ -283,3 +283,308 @@ mod tests {
         assert!(resume.noreturn);
     }
 }
+
+// ─── LibcSig table (rich TypeKind shapes) ─────────────────────────────
+//
+// The entries below are the families called out in t-libc-sig-db: each
+// is the canonical *exact-name* prototype. Family-level recognition
+// (aliases like `__aeabi_memcpy4`, `_Znwm`, `__printf_chk`, …) is the
+// job of `crate::libc_idioms::recognize_libc`; this table is keyed
+// strictly on the C standard / POSIX spelling.
+
+use unlace_ir::types::{CallSiteLibcSig, TypeKind};
+use TypeKind::*;
+
+/// Full per-prototype libc signature, expressed in terms of the compact
+/// [`TypeKind`] enum so the table can live in static storage
+/// (`&'static [TypeKind]` for the argument list).
+///
+/// Complement to [`LibcSignature`], which carries the older string-typed
+/// metadata still consumed by `vararg_detect` (param count, variadic
+/// flag, return-type string). The two tables are kept in sync by
+/// construction — every name in [`LIBC_SIG_TABLE`] is also expected to
+/// resolve via [`lookup_libc`] when applicable, but the *richer* shape
+/// (per-argument [`TypeKind`]) lives only here.
+///
+/// Looked up by [`lookup_libc_sig`] and stamped onto SSA call sites by
+/// `crate::libc_idioms::annotate_libc_calls` into
+/// [`unlace_ir::ssa::SsaFunction::libc_sig_annotations`] as the owned
+/// [`CallSiteLibcSig`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LibcSig {
+    /// Return type.
+    pub ret: TypeKind,
+    /// Fixed positional argument types (excluding any variadic tail).
+    pub args: &'static [TypeKind],
+    /// Whether the function takes additional variadic arguments after
+    /// `args`.
+    pub varargs: bool,
+}
+
+impl LibcSig {
+    /// Materialise as an owned [`CallSiteLibcSig`] suitable for storage
+    /// in [`unlace_ir::ssa::SsaFunction::libc_sig_annotations`].
+    pub fn to_call_site(&self) -> CallSiteLibcSig {
+        CallSiteLibcSig {
+            ret: self.ret,
+            args: self.args.to_vec(),
+            varargs: self.varargs,
+        }
+    }
+}
+
+const NO_ARGS: &[TypeKind] = &[];
+
+// printf family — first arg is `const char *` format; varargs follow.
+const PRINTF_ARGS: &[TypeKind] = &[ConstCharPtr];
+const FPRINTF_ARGS: &[TypeKind] = &[FilePtr, ConstCharPtr];
+const SPRINTF_ARGS: &[TypeKind] = &[CharPtr, ConstCharPtr];
+const SNPRINTF_ARGS: &[TypeKind] = &[CharPtr, SizeT, ConstCharPtr];
+const DPRINTF_ARGS: &[TypeKind] = &[Int, ConstCharPtr];
+// `va_list` is opaque; surface as `void *` for the printer.
+const VPRINTF_ARGS: &[TypeKind] = &[ConstCharPtr, VoidPtr];
+const VFPRINTF_ARGS: &[TypeKind] = &[FilePtr, ConstCharPtr, VoidPtr];
+const VSPRINTF_ARGS: &[TypeKind] = &[CharPtr, ConstCharPtr, VoidPtr];
+const VSNPRINTF_ARGS: &[TypeKind] = &[CharPtr, SizeT, ConstCharPtr, VoidPtr];
+
+// scanf family — first arg is `const char *` format; varargs follow.
+const SCANF_ARGS: &[TypeKind] = &[ConstCharPtr];
+const FSCANF_ARGS: &[TypeKind] = &[FilePtr, ConstCharPtr];
+const SSCANF_ARGS: &[TypeKind] = &[ConstCharPtr, ConstCharPtr];
+
+// mem ops.
+const MEMCPY_ARGS: &[TypeKind] = &[VoidPtr, ConstVoidPtr, SizeT];
+const MEMSET_ARGS: &[TypeKind] = &[VoidPtr, Int, SizeT];
+const MEMCMP_ARGS: &[TypeKind] = &[ConstVoidPtr, ConstVoidPtr, SizeT];
+
+// str ops.
+const STRLEN_ARGS: &[TypeKind] = &[ConstCharPtr];
+const STRCPY_ARGS: &[TypeKind] = &[CharPtr, ConstCharPtr];
+const STRNCPY_ARGS: &[TypeKind] = &[CharPtr, ConstCharPtr, SizeT];
+const STRCAT_ARGS: &[TypeKind] = &[CharPtr, ConstCharPtr];
+const STRNCAT_ARGS: &[TypeKind] = &[CharPtr, ConstCharPtr, SizeT];
+const STRCMP_ARGS: &[TypeKind] = &[ConstCharPtr, ConstCharPtr];
+const STRNCMP_ARGS: &[TypeKind] = &[ConstCharPtr, ConstCharPtr, SizeT];
+const STRCHR_ARGS: &[TypeKind] = &[ConstCharPtr, Int];
+const STRSTR_ARGS: &[TypeKind] = &[ConstCharPtr, ConstCharPtr];
+
+// alloc.
+const MALLOC_ARGS: &[TypeKind] = &[SizeT];
+const CALLOC_ARGS: &[TypeKind] = &[SizeT, SizeT];
+const REALLOC_ARGS: &[TypeKind] = &[VoidPtr, SizeT];
+const FREE_ARGS: &[TypeKind] = &[VoidPtr];
+
+// stdio.
+const FOPEN_ARGS: &[TypeKind] = &[ConstCharPtr, ConstCharPtr];
+const FCLOSE_ARGS: &[TypeKind] = &[FilePtr];
+const FREAD_ARGS: &[TypeKind] = &[VoidPtr, SizeT, SizeT, FilePtr];
+const FWRITE_ARGS: &[TypeKind] = &[ConstVoidPtr, SizeT, SizeT, FilePtr];
+const FSEEK_ARGS: &[TypeKind] = &[FilePtr, Long, Int];
+const FTELL_ARGS: &[TypeKind] = &[FilePtr];
+
+// fd io (POSIX).
+const OPEN_ARGS: &[TypeKind] = &[ConstCharPtr, Int];
+const CLOSE_ARGS: &[TypeKind] = &[Int];
+const READ_ARGS: &[TypeKind] = &[Int, VoidPtr, SizeT];
+const WRITE_ARGS: &[TypeKind] = &[Int, ConstVoidPtr, SizeT];
+const LSEEK_ARGS: &[TypeKind] = &[Int, OffT, Int];
+
+// exit / env.
+const EXIT_ARGS: &[TypeKind] = &[Int];
+const GETENV_ARGS: &[TypeKind] = &[ConstCharPtr];
+const SETENV_ARGS: &[TypeKind] = &[ConstCharPtr, ConstCharPtr, Int];
+
+// str-to-num.
+const ATOI_ARGS: &[TypeKind] = &[ConstCharPtr];
+const STRTOL_ARGS: &[TypeKind] = &[ConstCharPtr, CharPtrPtr, Int];
+
+const fn s(ret: TypeKind, args: &'static [TypeKind], varargs: bool) -> LibcSig {
+    LibcSig { ret, args, varargs }
+}
+
+/// Static `(name, signature)` table. Linear scan via [`lookup_libc_sig`]
+/// is O(N) but N ≲ 60 so this stays well under cache-line cost; an
+/// alphabetical sort is enforced so an inadvertent unsorted insertion is
+/// caught by the `t_libc_sig_table_is_alphabetical` unit test.
+pub const LIBC_SIG_TABLE: &[(&str, LibcSig)] = &[
+    // exit / env (underscore sorts before lowercase letters).
+    ("_exit", s(Void, EXIT_ARGS, false)),
+    ("abort", s(Void, NO_ARGS, false)),
+    ("atoi", s(Int, ATOI_ARGS, false)),
+    ("atol", s(Long, ATOI_ARGS, false)),
+    ("atoll", s(Long, ATOI_ARGS, false)),
+    ("calloc", s(VoidPtr, CALLOC_ARGS, false)),
+    ("close", s(Int, CLOSE_ARGS, false)),
+    ("dprintf", s(Int, DPRINTF_ARGS, true)),
+    ("exit", s(Void, EXIT_ARGS, false)),
+    ("fclose", s(Int, FCLOSE_ARGS, false)),
+    ("fopen", s(FilePtr, FOPEN_ARGS, false)),
+    ("fprintf", s(Int, FPRINTF_ARGS, true)),
+    ("fread", s(SizeT, FREAD_ARGS, false)),
+    ("free", s(Void, FREE_ARGS, false)),
+    ("fscanf", s(Int, FSCANF_ARGS, true)),
+    ("fseek", s(Int, FSEEK_ARGS, false)),
+    ("ftell", s(Long, FTELL_ARGS, false)),
+    ("fwrite", s(SizeT, FWRITE_ARGS, false)),
+    ("getenv", s(CharPtr, GETENV_ARGS, false)),
+    ("lseek", s(OffT, LSEEK_ARGS, false)),
+    ("malloc", s(VoidPtr, MALLOC_ARGS, false)),
+    ("memcmp", s(Int, MEMCMP_ARGS, false)),
+    ("memcpy", s(VoidPtr, MEMCPY_ARGS, false)),
+    ("memmove", s(VoidPtr, MEMCPY_ARGS, false)),
+    ("memset", s(VoidPtr, MEMSET_ARGS, false)),
+    // POSIX `open` is technically variadic (`mode_t` only when O_CREAT
+    // is in `flags`); model the common two-arg shape and flag varargs.
+    ("open", s(Int, OPEN_ARGS, true)),
+    ("printf", s(Int, PRINTF_ARGS, true)),
+    ("read", s(SSizeT, READ_ARGS, false)),
+    ("realloc", s(VoidPtr, REALLOC_ARGS, false)),
+    ("scanf", s(Int, SCANF_ARGS, true)),
+    ("setenv", s(Int, SETENV_ARGS, false)),
+    ("snprintf", s(Int, SNPRINTF_ARGS, true)),
+    ("sprintf", s(Int, SPRINTF_ARGS, true)),
+    ("sscanf", s(Int, SSCANF_ARGS, true)),
+    ("strcat", s(CharPtr, STRCAT_ARGS, false)),
+    ("strchr", s(CharPtr, STRCHR_ARGS, false)),
+    ("strcmp", s(Int, STRCMP_ARGS, false)),
+    ("strcpy", s(CharPtr, STRCPY_ARGS, false)),
+    ("strlen", s(SizeT, STRLEN_ARGS, false)),
+    ("strncat", s(CharPtr, STRNCAT_ARGS, false)),
+    ("strncmp", s(Int, STRNCMP_ARGS, false)),
+    ("strncpy", s(CharPtr, STRNCPY_ARGS, false)),
+    ("strrchr", s(CharPtr, STRCHR_ARGS, false)),
+    ("strstr", s(CharPtr, STRSTR_ARGS, false)),
+    ("strtol", s(Long, STRTOL_ARGS, false)),
+    ("strtoll", s(Long, STRTOL_ARGS, false)),
+    ("vfprintf", s(Int, VFPRINTF_ARGS, false)),
+    ("vprintf", s(Int, VPRINTF_ARGS, false)),
+    ("vsnprintf", s(Int, VSNPRINTF_ARGS, false)),
+    ("vsprintf", s(Int, VSPRINTF_ARGS, false)),
+    ("write", s(SSizeT, WRITE_ARGS, false)),
+];
+
+/// Exact-name lookup into [`LIBC_SIG_TABLE`].
+///
+/// Linear scan; the table is small (≲ 60 entries) and the call-site
+/// annotator runs once per function so total cost is bounded. Returns
+/// `None` for unknown names — callers must NOT fall back to fuzzy
+/// matching, since the family-level classifier
+/// (`crate::libc_idioms::recognize_libc`) is responsible for resolving
+/// platform / hardened aliases (`__memcpy_chk`, `__printf_chk`, …) to
+/// their canonical spelling first.
+pub fn lookup_libc_sig(name: &str) -> Option<&'static LibcSig> {
+    LIBC_SIG_TABLE
+        .iter()
+        .find_map(|(n, sig)| (*n == name).then_some(sig))
+}
+
+/// Number of entries in [`LIBC_SIG_TABLE`].
+pub fn sig_table_len() -> usize {
+    LIBC_SIG_TABLE.len()
+}
+
+#[cfg(test)]
+mod libc_sig_tests {
+    use super::*;
+
+    #[test]
+    fn t_libc_sig_table_is_alphabetical() {
+        for w in LIBC_SIG_TABLE.windows(2) {
+            assert!(
+                w[0].0 < w[1].0,
+                "LIBC_SIG_TABLE not sorted: {:?} >= {:?}",
+                w[0].0,
+                w[1].0,
+            );
+        }
+    }
+
+    #[test]
+    fn t_libc_sig_table_has_every_required_family_head() {
+        for name in [
+            "printf", "scanf", "memcpy", "memset", "memcmp", "strlen", "strcpy", "strcmp",
+            "strchr", "strstr", "malloc", "calloc", "realloc", "free", "fopen", "fclose",
+            "fread", "fwrite", "open", "close", "read", "write", "lseek", "abort", "exit",
+            "_exit", "getenv", "setenv", "atoi", "atol", "strtol", "strtoll",
+        ] {
+            assert!(
+                lookup_libc_sig(name).is_some(),
+                "LIBC_SIG_TABLE missing required name `{name}`",
+            );
+        }
+    }
+
+    #[test]
+    fn t_libc_sig_unknown_name_returns_none() {
+        assert!(lookup_libc_sig("definitely_not_a_libc_function").is_none());
+        assert!(lookup_libc_sig("").is_none());
+        assert!(lookup_libc_sig("Printf").is_none(), "lookup is case-sensitive");
+    }
+
+    #[test]
+    fn t_libc_sig_printf_is_varargs_with_const_char_format() {
+        let sig = lookup_libc_sig("printf").unwrap();
+        assert!(sig.varargs);
+        assert_eq!(sig.ret, TypeKind::Int);
+        assert_eq!(sig.args, &[TypeKind::ConstCharPtr]);
+    }
+
+    #[test]
+    fn t_libc_sig_memcpy_args() {
+        let sig = lookup_libc_sig("memcpy").unwrap();
+        assert!(!sig.varargs);
+        assert_eq!(sig.ret, TypeKind::VoidPtr);
+        assert_eq!(
+            sig.args,
+            &[TypeKind::VoidPtr, TypeKind::ConstVoidPtr, TypeKind::SizeT]
+        );
+    }
+
+    #[test]
+    fn t_libc_sig_strlen_returns_size_t() {
+        let sig = lookup_libc_sig("strlen").unwrap();
+        assert_eq!(sig.ret, TypeKind::SizeT);
+        assert_eq!(sig.args, &[TypeKind::ConstCharPtr]);
+        assert!(!sig.varargs);
+    }
+
+    #[test]
+    fn t_libc_sig_read_write_use_ssize_t() {
+        let read = lookup_libc_sig("read").unwrap();
+        assert_eq!(read.ret, TypeKind::SSizeT);
+        let write = lookup_libc_sig("write").unwrap();
+        assert_eq!(write.ret, TypeKind::SSizeT);
+    }
+
+    #[test]
+    fn t_libc_sig_lseek_uses_off_t() {
+        let lseek = lookup_libc_sig("lseek").unwrap();
+        assert_eq!(lseek.ret, TypeKind::OffT);
+        assert!(lseek.args.contains(&TypeKind::OffT));
+    }
+
+    #[test]
+    fn t_libc_sig_free_returns_void() {
+        let sig = lookup_libc_sig("free").unwrap();
+        assert_eq!(sig.ret, TypeKind::Void);
+        assert_eq!(sig.args, &[TypeKind::VoidPtr]);
+    }
+
+    #[test]
+    fn t_libc_sig_to_call_site_round_trips() {
+        let sig = lookup_libc_sig("memcpy").unwrap();
+        let cs = sig.to_call_site();
+        assert_eq!(cs.ret, sig.ret);
+        assert_eq!(cs.varargs, sig.varargs);
+        assert_eq!(cs.args.as_slice(), sig.args);
+    }
+
+    #[test]
+    fn t_libc_sig_table_size_lower_bound() {
+        assert!(
+            sig_table_len() >= 35,
+            "LIBC_SIG_TABLE has only {} entries; expected ≥35",
+            sig_table_len()
+        );
+    }
+}

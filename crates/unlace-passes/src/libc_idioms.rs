@@ -22,7 +22,10 @@
 use std::collections::BTreeMap;
 
 use unlace_ir::ssa::SsaFunction;
+use unlace_ir::types::CallSiteLibcSig;
 use unlace_ir::{BlockId, IrOp, SpaceId};
+
+use crate::libc_signatures::lookup_libc_sig;
 
 /// Canonical libc family classification.
 ///
@@ -137,6 +140,7 @@ pub fn annotate_libc_calls(
     callee_name_at_addr: &dyn Fn(u64) -> Option<String>,
 ) -> usize {
     let mut new_entries: BTreeMap<(BlockId, usize), String> = BTreeMap::new();
+    let mut new_sigs: BTreeMap<(BlockId, usize), CallSiteLibcSig> = BTreeMap::new();
 
     for (&bid, block) in &func.function.blocks {
         for (idx, insn) in block.insns.iter().enumerate() {
@@ -153,7 +157,18 @@ pub fn annotate_libc_calls(
                 continue;
             };
             if let Some(kind) = recognize_libc(&name) {
-                new_entries.insert((bid, idx), kind.canonical_name().to_string());
+                let canonical = kind.canonical_name();
+                new_entries.insert((bid, idx), canonical.to_string());
+                // Stamp the full prototype when the signature DB has an
+                // entry — first try the *raw* spelling (e.g. `strlen`),
+                // then the canonical family name (so `__printf_chk` and
+                // friends pick up the `printf` shape). The lookup is
+                // exact-match; alias-to-canonical collapsing is the
+                // family classifier's job above.
+                let sig = lookup_libc_sig(&name).or_else(|| lookup_libc_sig(canonical));
+                if let Some(sig) = sig {
+                    new_sigs.insert((bid, idx), sig.to_call_site());
+                }
             }
         }
     }
@@ -161,6 +176,9 @@ pub fn annotate_libc_calls(
     let added = new_entries.len();
     for (loc, name) in new_entries {
         func.libc_call_annotations.insert(loc, name);
+    }
+    for (loc, sig) in new_sigs {
+        func.libc_sig_annotations.insert(loc, sig);
     }
     added
 }
@@ -261,5 +279,52 @@ mod tests {
         let added = annotate_libc_calls(&mut ssa, &|_| Some("blah_foo".to_string()));
         assert_eq!(added, 0);
         assert!(ssa.libc_call_annotations.is_empty());
+        assert!(
+            ssa.libc_sig_annotations.is_empty(),
+            "unrecognised callee must not get a libc_sig stamp either",
+        );
+    }
+
+    // ── libc_signatures wiring ─────────────────────────────────────
+
+    #[test]
+    fn libc_sig_stamped_for_exact_name() {
+        // `strlen` is a direct hit in both the family roster and the
+        // signature DB.
+        let mut ssa = make_func_with_call(0x2000);
+        let added = annotate_libc_calls(&mut ssa, &|_| Some("strlen".to_string()));
+        assert_eq!(added, 1);
+        let sig = ssa
+            .libc_sig_annotations
+            .get(&(BlockId(0), 0))
+            .expect("strlen call must receive a libc_sig stamp");
+        assert_eq!(sig.ret, unlace_ir::types::TypeKind::SizeT);
+        assert_eq!(sig.args, vec![unlace_ir::types::TypeKind::ConstCharPtr]);
+        assert!(!sig.varargs);
+    }
+
+    #[test]
+    fn libc_sig_stamped_via_canonical_family_alias() {
+        // `__printf_chk` is recognised as the `printf` family by
+        // `recognize_libc`; the signature DB has no exact `__printf_chk`
+        // entry, so the wiring must fall back to the canonical family
+        // name ("printf") for the stamp. This is the precise path
+        // exercised by `cpp_vtable.elf`.
+        let mut ssa = make_func_with_call(0x2000);
+        let added = annotate_libc_calls(&mut ssa, &|_| Some("__printf_chk".to_string()));
+        assert_eq!(added, 1, "family annotation counter must bump");
+        assert_eq!(
+            ssa.libc_call_annotations
+                .get(&(BlockId(0), 0))
+                .map(String::as_str),
+            Some("printf"),
+        );
+        let sig = ssa
+            .libc_sig_annotations
+            .get(&(BlockId(0), 0))
+            .expect("__printf_chk must stamp the canonical printf shape");
+        assert!(sig.varargs, "printf is variadic");
+        assert_eq!(sig.ret, unlace_ir::types::TypeKind::Int);
+        assert_eq!(sig.args, vec![unlace_ir::types::TypeKind::ConstCharPtr]);
     }
 }

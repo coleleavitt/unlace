@@ -572,6 +572,20 @@ pub struct SsaFunction {
     /// family label that later analyses (e.g. allocator escape, copy
     /// elision, string idiom) gate on.
     pub libc_call_annotations: BTreeMap<(BlockId, usize), String>,
+    /// Full per-call-site libc prototype stamped from the static
+    /// signature database in `unlace_passes::libc_signatures::LIBC_SIG_TABLE`.
+    /// Keyed identically to [`Self::libc_call_annotations`]; an entry here
+    /// implies an entry there for the same `(BlockId, insn_idx)` (the
+    /// reverse is *not* guaranteed — a call may be recognised as a libc
+    /// family without a full prototype, e.g. when the symbol name maps to
+    /// a `LibcKind` family but the signature DB has no exact-name match).
+    ///
+    /// Used by the C printer to render call sites with their proper return
+    /// and argument types. The stored value is an *owned* clone of the
+    /// static table entry so this crate stays free of any
+    /// `unlace_passes` dependency (avoiding a `passes → ir → passes`
+    /// cycle).
+    pub libc_sig_annotations: BTreeMap<(BlockId, usize), crate::types::CallSiteLibcSig>,
     /// Array-of-structs layouts recovered from per-loop access patterns:
     /// `*(arr_ptr + stride * iv + offset) = ...`.
     /// Keyed by the *base pointer* SSA varnode (`arr_ptr`); value is the
@@ -1021,6 +1035,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         stack_frame: None,
         byref_info: None,
         libc_call_annotations: BTreeMap::new(),
+        libc_sig_annotations: BTreeMap::new(),
         array_struct_layouts: BTreeMap::new(),
         var_role_names: BTreeMap::new(),
         finalized_signature: None,

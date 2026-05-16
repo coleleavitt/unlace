@@ -249,6 +249,7 @@ mod tests {
             stack_frame: None,
             byref_info: None,
             libc_call_annotations: BTreeMap::new(),
+            libc_sig_annotations: BTreeMap::new(),
             array_struct_layouts: BTreeMap::new(),
             var_role_names: BTreeMap::new(),
             finalized_signature: None,

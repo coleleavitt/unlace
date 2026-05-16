@@ -337,6 +337,9 @@ mod tests {
             coroutine_sites: Vec::new(),
             resolved_jump_tables: std::collections::BTreeMap::new(),
             lvars: Vec::new(),
+            cpp_kind: None,
+            cpp_class_name: None,
+            cpp_this_args: std::collections::BTreeSet::new(),
             rust_async: None,
         }
     }

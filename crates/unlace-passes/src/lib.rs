@@ -17,6 +17,7 @@ pub mod condition_simplify;
 pub mod const_fold;
 pub mod copy_prop;
 pub mod coverage_ingest;
+pub mod cpp_method;
 pub mod cpp_stl;
 pub mod cpp_vtable;
 pub mod crypto_idioms;
@@ -140,6 +141,7 @@ pub use coverage_ingest::{
     AFL_MAP_SIZE, CoverageError, CoverageMap, LLVM_PROFRAW_MAGIC_BE, LLVM_PROFRAW_MAGIC_LE,
     ProfRaw, parse_afl_coverage, parse_profraw,
 };
+pub use cpp_method::{CppMethodPass, ParsedMethod, parse_mangled_method};
 pub use cpp_stl::recognize_stl_type;
 pub use cpp_vtable::CppVtablePass;
 pub use crypto_idioms::CryptoIdiomPass;

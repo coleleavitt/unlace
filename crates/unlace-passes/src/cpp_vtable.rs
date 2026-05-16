@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VtableCallInfo};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, TargetSet, VtableCallInfo};
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -61,6 +61,23 @@ impl Pass for CppVtablePass {
             return Ok(false);
         }
 
+        // Stamp `TargetSet::VtableSlot` on every recognised virtual dispatch
+        // so the C printer can emit `this->__vftable->method_N(args)` without
+        // needing the class name. `CppMethodPass` (which runs afterwards) will
+        // override entries it can name with the real class name.
+        for (&(bid, idx), info) in &found {
+            let slot_idx = u16::try_from(info.slot_index).unwrap_or(u16::MAX);
+            // Only insert when there is not already a more-informative entry
+            // (e.g. a VtableSlot with a non-empty class_name placed by a
+            // previous run — the pass framework can run fixedpoint rounds).
+            func.indirect_call_targets
+                .entry((bid, idx))
+                .or_insert_with(|| TargetSet::VtableSlot {
+                    class_name: String::new(),
+                    slot_idx,
+                });
+        }
+
         func.cpp_vtable_calls.extend(found);
         Ok(true)
     }
@@ -98,11 +115,7 @@ fn try_match_cpp_vtable(insns: &[IrInsn], callind_idx: usize) -> Option<VtableCa
     }
 
     // vtable_ptr must come from a LOAD — the vptr load: LOAD(this + 0)
-    let vtable_load_idx = find_def(insns, method_load_idx, &vtable_vn)?;
-    let vtable_load = &insns[vtable_load_idx];
-    if vtable_load.op != IrOp::Load {
-        return None;
-    }
+    let (vtable_load_idx, vtable_load) = find_load_def(insns, method_load_idx, &vtable_vn)?;
 
     let vtable_addr_vn = load_address(vtable_load)?;
 
@@ -189,6 +202,36 @@ fn find_def(insns: &[IrInsn], before: usize, target: &Varnode) -> Option<usize> 
         }
     }
     None
+}
+
+/// Like [`find_def`], but also follows `COPY` chains so that:
+/// ```text
+/// v0 = LOAD(...)
+/// v1 = COPY(v0)
+/// ... LOAD(v1) ...    ← find_load_def sees LOAD(v0) here
+/// ```
+/// Returns the index and the resolved (LOAD) instruction together.
+fn find_load_def<'a>(
+    insns: &'a [IrInsn],
+    before: usize,
+    target: &Varnode,
+) -> Option<(usize, &'a IrInsn)> {
+    let mut vn = *target;
+    let mut limit = before;
+    loop {
+        let idx = find_def(insns, limit, &vn)?;
+        let insn = &insns[idx];
+        if insn.op == IrOp::Load {
+            return Some((idx, insn));
+        }
+        // Follow COPY one level.
+        if insn.op == IrOp::Copy && insn.inputs.len() == 1 {
+            vn = insns[idx].inputs[0];
+            limit = idx;
+        } else {
+            return None;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -423,5 +466,70 @@ mod tests {
             .expect("tail-jmp vtable call recorded");
         assert_eq!(info.slot_index, 0);
         assert_eq!(info.vtable_offset, 0);
+
+        // VtableSlot should also be stamped in indirect_call_targets.
+        assert!(
+            ssa.indirect_call_targets.contains_key(&(BlockId(0), 2)),
+            "indirect_call_targets should have a VtableSlot entry"
+        );
+    }
+
+    // ── COPY-chain: LOAD → COPY → LOAD → BRANCHIND. Tests that find_load_def
+    //    follows COPY instructions so real-world `-O2` output (where the
+    //    compiler inserts a COPY between the two LOADs) is still matched.
+    //    This reproduces the `_Z8use_baseP4Base` pattern from cpp_vtable.elf.
+    #[test]
+    fn test_cpp_vtable_through_copy_chain() {
+        let this_ptr = Varnode::reg(0, 8);
+        let vtable_ptr = Varnode::unique(0, 8);
+        let vtable_ptr_copy = Varnode::unique(32, 8); // COPY of vtable_ptr
+        let method_ptr = Varnode::unique(8, 8);
+
+        let insns = vec![
+            // vtable_ptr = LOAD(ram, this_ptr)
+            IrInsn::with_output(
+                IrOp::Load,
+                vtable_ptr,
+                smallvec![Varnode::constant(1, 4), this_ptr],
+                0x1000,
+            ),
+            // vtable_ptr_copy = COPY(vtable_ptr) — compiler-generated copy
+            IrInsn::with_output(
+                IrOp::Copy,
+                vtable_ptr_copy,
+                smallvec![vtable_ptr],
+                0x1008,
+            ),
+            // method_ptr = LOAD(ram, vtable_ptr_copy) — load via the copy
+            IrInsn::with_output(
+                IrOp::Load,
+                method_ptr,
+                smallvec![Varnode::constant(1, 4), vtable_ptr_copy],
+                0x1010,
+            ),
+            // BRANCHIND(method_ptr) — tail-jmp through slot 0.
+            IrInsn::without_output(IrOp::Branchind, smallvec![method_ptr], 0x1018),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let changed = CppVtablePass.run(&mut ssa).expect("pass succeeds");
+        assert!(
+            changed,
+            "should detect vtable tail-jmp through COPY chain"
+        );
+
+        let info = ssa
+            .cpp_vtable_calls
+            .get(&(BlockId(0), 3))
+            .expect("vtable call recorded through COPY chain");
+        assert_eq!(info.slot_index, 0);
+        assert_eq!(info.vtable_offset, 0);
+        assert_eq!(info.base_varnode.base, this_ptr);
+
+        // VtableSlot stamped.
+        assert!(
+            ssa.indirect_call_targets.contains_key(&(BlockId(0), 3)),
+            "indirect_call_targets should have VtableSlot"
+        );
     }
 }

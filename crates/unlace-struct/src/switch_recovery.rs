@@ -1168,6 +1168,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
         }
     }
 
@@ -1213,6 +1214,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
         };
 
         recover_switches(&mut func);
@@ -1376,6 +1378,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
         };
 
         let targets = [0x4200u64, 0x4210, 0x4220];

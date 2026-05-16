@@ -72,10 +72,61 @@ use unlace_passes::{
     RustVtablePass, SccpPass, SignatureSnapshot, StackOffsetSnapshotPass, StackPointerTrackingPass,
     StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass, TailCallDetectPass,
     TypeConstraintSolverPass, VarNamingPass, VariableMergePass, annotate_libc_calls,
-    bump_if_signature_changed, detect_byref, detect_go_defer, parse_printf_format_strings,
-    recover_stack_frame, recover_structs, run_instrumented, run_outer_fixedpoint,
-    run_to_fixedpoint,
+    bump_if_signature_changed, canonical_pipeline_descriptor, detect_byref, detect_go_defer,
+    parse_printf_format_strings, recover_stack_frame, recover_structs, run_instrumented,
+    run_outer_fixedpoint, run_to_fixedpoint, validate_named_phase_monotonicity,
 };
+
+/// Once-per-process pipeline phase-monotonicity check.
+///
+/// In debug builds (or any build with `UNLACE_VALIDATE_PIPELINE=1` set),
+/// the first call to `run_passes_with_report_inner` runs
+/// [`validate_named_phase_monotonicity`] against
+/// [`canonical_pipeline_descriptor`] and emits one warning line per
+/// out-of-order transition to stderr. Subsequent calls are a single
+/// atomic load — the validator runs at most once per process.
+///
+/// The schedule is *intentionally* not monotone (Batch 10 slice 1 pins
+/// 11 backward transitions inside the inner fixed-point cluster); the
+/// purpose of this hook is purely to flag accidental further drift,
+/// not to enforce strict monotonicity at runtime.
+fn maybe_validate_pipeline_once() {
+    use std::sync::OnceLock;
+    static DONE: OnceLock<()> = OnceLock::new();
+    DONE.get_or_init(|| {
+        // Gate: debug builds always run the check; release builds opt in
+        // via the env var so production binaries don't pay the (cheap)
+        // walk on the first decompile.
+        let env_on = std::env::var_os("UNLACE_VALIDATE_PIPELINE")
+            .map(|v| v != "0")
+            .unwrap_or(false);
+        if !cfg!(debug_assertions) && !env_on {
+            return;
+        }
+        let desc = canonical_pipeline_descriptor();
+        match validate_named_phase_monotonicity(&desc) {
+            Ok(()) => {
+                eprintln!(
+                    "[unlace] pipeline phase-monotonicity check passed ({} passes)",
+                    desc.len()
+                );
+            }
+            Err(violations) => {
+                eprintln!(
+                    "[unlace] pipeline phase-monotonicity check: {} out-of-order transition(s)",
+                    violations.len()
+                );
+                for v in &violations {
+                    eprintln!("[unlace]   {v}");
+                }
+                eprintln!(
+                    "[unlace]   (intentional in current pipeline; see \
+                     unlace_passes::pass::canonical_pipeline_descriptor)"
+                );
+            }
+        }
+    });
+}
 
 use crate::args::EmitFormat;
 
@@ -948,6 +999,12 @@ fn run_passes_with_report_inner(
     ssa: &mut SsaFunction,
     resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
 ) -> Result<PassesReport> {
+    // Startup-time validation: a single phase-monotonicity check the
+    // first time any pipeline run happens in this process. No-op in
+    // release builds unless `UNLACE_VALIDATE_PIPELINE=1`. See the
+    // function comment for the rationale.
+    maybe_validate_pipeline_once();
+
     // (1) One-time pre-pass: snapshot pre-optimization stack offsets so
     // later iterations of stack-var recovery still see the original
     // RSP/RBP-relative addressing.

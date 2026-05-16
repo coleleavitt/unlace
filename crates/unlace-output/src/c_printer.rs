@@ -12961,6 +12961,9 @@ mod tests {
             stack_frame: 0,
             callees: vec!["printf".to_string()],
             dynamic_sp: false,
+            block_entry_sp_delta: std::collections::BTreeMap::new(),
+            frame_holes: Vec::new(),
+            saved_register_slots: std::collections::BTreeSet::new(),
         };
 
         let output = super::print_c_full(&func, None, Some(&header), Some(&symbols), None);

@@ -56,6 +56,15 @@ pub struct FunctionQuality {
     pub stack_vars_recovered: usize,
     /// Frame holes detected (`ssa.stack_holes`) — gaps in the recovered frame.
     pub frame_holes: usize,
+    /// Inter-slot frame-hole entries from `ssa.frame_holes` (the new
+    /// `FrameHole { offset, size }` Vec surfaced by
+    /// `StackPointerTrackingPass`). Distinct from `frame_holes` above,
+    /// which sums `ssa.stack_holes` (the full byte-range coverage map).
+    pub frame_hole_entries: usize,
+    /// Stack slots classified as callee-saved register stashes
+    /// (`ssa.saved_register_slots`). Higher = better recovery — these
+    /// slots no longer leak into the local-variable output.
+    pub saved_register_slots: usize,
     /// Struct fields recovered across stack composites + array-of-structs.
     pub struct_fields_recovered: usize,
     /// `switch` statements in the structured output.
@@ -191,6 +200,8 @@ impl FunctionQuality {
         }
         q.stack_vars_recovered = ssa.stack_vars.len();
         q.frame_holes = ssa.stack_holes.len();
+        q.frame_hole_entries = ssa.frame_holes.len();
+        q.saved_register_slots = ssa.saved_register_slots.len();
         q.indirect_calls_resolved = ssa.resolved_indirect_calls.len();
         q.unknown_types = ssa
             .var_types
@@ -501,6 +512,8 @@ pub struct QualityTotals {
     pub callother_ops: usize,
     pub stack_vars_recovered: usize,
     pub frame_holes: usize,
+    pub frame_hole_entries: usize,
+    pub saved_register_slots: usize,
     pub struct_fields_recovered: usize,
     pub switch_statements: usize,
     pub indirect_calls_resolved: usize,
@@ -554,6 +567,8 @@ impl QualityTotals {
         self.callother_ops += q.callother_ops;
         self.stack_vars_recovered += q.stack_vars_recovered;
         self.frame_holes += q.frame_holes;
+        self.frame_hole_entries += q.frame_hole_entries;
+        self.saved_register_slots += q.saved_register_slots;
         self.struct_fields_recovered += q.struct_fields_recovered;
         self.switch_statements += q.switch_statements;
         self.indirect_calls_resolved += q.indirect_calls_resolved;
@@ -842,13 +857,17 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
          - byref args (&local/&param): {ba}\n\
          - SIMD-typed vars (>= 128 bits): {sv}\n\
          - call resolution rate (mean per-fn): {crr:.1}%\n\
-         - type quality score (mean per-fn): {tqs:.1}%",
+         - type quality score (mean per-fn): {tqs:.1}%\n\
+         - frame_hole entries (inter-slot): {fhe}\n\
+         - saved_register slots: {srs}",
         ca = t.compound_assignments,
         sc = t.short_circuit_ops,
         ba = t.byref_args,
         sv = t.simd_typed_vars,
         crr = t.call_resolution_rate,
         tqs = t.type_quality_score,
+        fhe = t.frame_hole_entries,
+        srs = t.saved_register_slots,
     );
 }
 

@@ -124,6 +124,24 @@ RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
 cargo fmt --all -- --check
 ```
 
+## Tooling
+
+Developer-facing tools beyond the `unlace` CLI:
+
+| Tool                                                    | Purpose                                                                                                |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `cargo xtask compare-corpus`                            | IDA-vs-Unlace pattern coverage report across the 16 x86_64 fixtures + 150 IDA references.              |
+| `cargo xtask lifter-coverage`                           | Per-arch unimplemented / `callother` instruction stats (which opcodes each lifter still drops).        |
+| `cargo xtask validate-corpus-toml`                      | Fixture manifest validator (`fixtures/*.toml`) — catches drift between expected counters and reality. |
+| `unlace quality <binary>`                               | Quality-counter report (no C emission) — markdown + JSON output across the 30+ feature counters.       |
+
+Environment variables for pipeline introspection:
+
+| Variable                                | Effect                                                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `UNLACE_TRACE_PASSES=name1,name2,...`   | Emit per-pass IR diffs (before/after) for the listed pass names. Useful for bisecting regressions.      |
+| `UNLACE_TIMING=1`                       | Emit a per-pass timing summary at the end of each function — surfaces pipeline hot spots.               |
+
 ## Status
 
 What is currently true (last verified per `CLAUDE.md`, 2026-05-14):

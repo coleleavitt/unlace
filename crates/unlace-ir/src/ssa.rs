@@ -291,7 +291,9 @@ pub struct RustAsyncInfo {
     pub poll_returns: Vec<RustPollReturnKind>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum RustPollReturnKind {
     Ready,
     Pending,
@@ -390,6 +392,70 @@ pub struct GoDeferSite {
     pub has_recover: bool,
 }
 
+/// Pipeline maturity level, modeled after Hex-Rays `sub_14B8B0`.
+///
+/// Each level represents a guarantee about what analysis has been performed
+/// on the function. The pipeline driver advances maturity monotonically,
+/// with the exception of the "type-changed" downgrade (`sub_F9180`
+/// equivalent) which may reset to `Generated` to re-run optimization
+/// with newly-discovered type facts.
+///
+/// Ordinal values match the IDA `mba_maturity_t` constants:
+/// `MMAT_ZERO`=0 through `MMAT_LVARS`=6, plus our `Final`=7.
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub enum Maturity {
+    /// Raw lifted IR, no optimization applied.
+    #[default]
+    Zero = 0,
+    /// SSA built, initial microcode refinement complete.
+    Generated = 1,
+    /// Peephole/algebraic simplification done.
+    PreOptimized = 2,
+    /// Local dataflow, stack/frame recovery, intra-block opts done.
+    LocalOpt = 3,
+    /// Inter-procedural facts resolved (call targets, signatures).
+    Calls = 4,
+    /// Global optimization fixed-point converged.
+    GlobalOpt = 5,
+    /// Local variable allocation and naming complete.
+    Lvars = 6,
+    /// Ctree/HIR construction and final C output ready.
+    Final = 7,
+}
+
+impl Maturity {
+    /// Stable 0-based ordinal for serialization and diagnostics.
+    pub const fn ordinal(self) -> u8 {
+        self as u8
+    }
+
+    /// Human-readable short name for tracing/diagnostics.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Zero => "M_ZERO",
+            Self::Generated => "M_GENERATED",
+            Self::PreOptimized => "M_PREOPTIMIZED",
+            Self::LocalOpt => "M_LOCOPT",
+            Self::Calls => "M_CALLS",
+            Self::GlobalOpt => "M_GLBOPT",
+            Self::Lvars => "M_LVARS",
+            Self::Final => "M_FINAL",
+        }
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SsaFunction {
     pub function: Function,
@@ -402,6 +468,10 @@ pub struct SsaFunction {
     /// pipeline overwrites it from the loaded `BinaryImage` before passes
     /// run.
     pub arch: ArchId,
+    /// Current pipeline maturity level. Initialized to [`Maturity::Zero`]
+    /// in [`build_ssa`]; advanced by the pipeline driver as passes complete.
+    /// May be downgraded by the type-changed check (sub_F9180 equivalent).
+    pub maturity: Maturity,
     pub cfg: ControlFlowGraph,
     pub dom_tree: DominatorTree,
     /// Post-dominator tree computed from the reversed CFG.
@@ -1162,6 +1232,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         // treat `Unknown` as "no stack spec → skip recovery" rather than
         // panicking, so this default is safe.
         arch: ArchId::Unknown(0),
+        maturity: Maturity::Zero,
         cfg,
         dom_tree,
         post_dom_tree: Some(post_dom_tree),

@@ -1,12 +1,18 @@
 //! C++ vtable dispatch detection.
 //!
 //! Detects the single-pointer pattern used by C++ virtual calls and annotates
-//! `CALLIND` instructions that dispatch through vtable slots.
+//! `CALLIND` (and tail-dispatch `BRANCHIND`) instructions that dispatch
+//! through vtable slots.
 //!
 //! Pattern: `CALLIND(LOAD(LOAD(this + 0) + N))` where the vptr lives at
 //! offset 0 of the object (C++ ABI convention — contrast with Rust trait
 //! objects where the vtable pointer is at offset 8 in the fat pointer).
 //! Slot index = N / 8.
+//!
+//! Tail-call shapes that compile to `jmp *(*(this) + N)` surface as the
+//! same chain terminated by `BRANCHIND` instead of `CALLIND`; those are
+//! recognised too (Itanium-ABI `virtual int Base::value()` forwarded
+//! through a thunk is the canonical example).
 
 use std::collections::BTreeMap;
 
@@ -37,7 +43,12 @@ impl Pass for CppVtablePass {
         for (&bid, block) in &func.function.blocks {
             let insns = &block.insns;
             for (i, insn) in insns.iter().enumerate() {
-                if insn.op != IrOp::Callind {
+                // The same vptr->method->dispatch chain compiles to a
+                // `CALLIND` for normal virtual calls and to a `BRANCHIND`
+                // for tail-jmp-via-vtable forwarders (`void use_base(Base*
+                // b) { return b->value(); }` lowers to `jmp *(*rdi)` under
+                // -O2). Both are virtual dispatches semantically.
+                if !matches!(insn.op, IrOp::Callind | IrOp::Branchind) {
                     continue;
                 }
                 if let Some(info) = try_match_cpp_vtable(insns, i) {
@@ -371,5 +382,46 @@ mod tests {
         let info = ssa.cpp_vtable_calls.get(&(BlockId(0), 3)).expect("found");
         assert_eq!(info.slot_index, 2);
         assert_eq!(info.vtable_offset, 16);
+    }
+
+    // ── Branchind variant: tail-jmp through the vtable (slot 0). ──
+    //
+    // `int use_base(Base* b) { return b->value(); }` lowers to
+    //   mov  rax, [rdi]    ; vtable = LOAD(this)
+    //   jmp  qword ptr [rax]  ; tail-jmp through slot 0
+    // → `BRANCHIND` instead of `CALLIND`. Both should be recognised.
+    #[test]
+    fn test_detect_cpp_vtable_tail_jmp() {
+        let this_ptr = Varnode::reg(0, 8);
+        let vtable_ptr = Varnode::unique(0, 8);
+        let method_ptr = Varnode::unique(8, 8);
+
+        let insns = vec![
+            IrInsn::with_output(
+                IrOp::Load,
+                vtable_ptr,
+                smallvec![Varnode::constant(1, 4), this_ptr],
+                0x1000,
+            ),
+            IrInsn::with_output(
+                IrOp::Load,
+                method_ptr,
+                smallvec![Varnode::constant(1, 4), vtable_ptr],
+                0x1008,
+            ),
+            // BRANCHIND(method_ptr) — tail-jmp through slot 0.
+            IrInsn::without_output(IrOp::Branchind, smallvec![method_ptr], 0x1010),
+        ];
+
+        let mut ssa = make_single_block_ssa(insns);
+        let changed = CppVtablePass.run(&mut ssa).expect("pass succeeds");
+        assert!(changed, "should detect tail-jmp through C++ vtable");
+
+        let info = ssa
+            .cpp_vtable_calls
+            .get(&(BlockId(0), 2))
+            .expect("tail-jmp vtable call recorded");
+        assert_eq!(info.slot_index, 0);
+        assert_eq!(info.vtable_offset, 0);
     }
 }

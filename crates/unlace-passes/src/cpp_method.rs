@@ -32,7 +32,7 @@
 
 use std::collections::BTreeSet;
 
-use unlace_ir::ssa::{CppKind, PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{CppKind, PrimitiveType, SsaFunction, SsaVarnode, TargetSet, VarnodeSlot};
 use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{BlockId, SpaceId};
 
@@ -47,6 +47,10 @@ impl Pass for CppMethodPass {
         "cpp-method"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let Some(parsed) = parse_mangled_method(&func.function.name) else {
             return Ok(false);
@@ -55,6 +59,7 @@ impl Pass for CppMethodPass {
         let prev_kind = func.cpp_kind;
         let prev_class = func.cpp_class_name.clone();
         let prev_this_args = func.cpp_this_args.clone();
+        let prev_indirect_targets = func.indirect_call_targets.clone();
         let prev_first_param_name: Option<String> = func
             .inferred_params
             .first()
@@ -92,6 +97,12 @@ impl Pass for CppMethodPass {
         // (c) Propagate through every vtable call site already recognised
         // by `CppVtablePass`: the first argument register of the
         // CALLIND IS the receiver. Stamp the same class pointer type.
+        //
+        // Same loop also feeds the printer's semantic-rendering channel:
+        // record `TargetSet::VtableSlot { class_name, slot_idx }` against
+        // every recognised dispatch so the C printer can emit
+        // `this->__vftable->method_<N>(args)` instead of the IDA-style
+        // `((ret (*)(args))*((__int64 *)this + N))(this, args)` cast.
         let mut this_args: BTreeSet<(BlockId, usize)> = BTreeSet::new();
         let call_sites: Vec<(BlockId, usize)> = func.cpp_vtable_calls.keys().copied().collect();
         for (bid, idx) in call_sites {
@@ -100,12 +111,32 @@ impl Pass for CppMethodPass {
                     .insert(arg_sv, class_ptr.clone());
                 this_args.insert((bid, idx));
             }
+            // Slot index lookup is infallible at this point — the key
+            // came straight out of `cpp_vtable_calls.keys()`.
+            if let Some(info) = func.cpp_vtable_calls.get(&(bid, idx)) {
+                // `slot_index` is a `usize` (effectively the SSA / IR
+                // type for a vtable byte-offset / 8). `TargetSet::VtableSlot`
+                // narrows to `u16` to keep the metadata compact; the cast
+                // is safe for any vtable we can lift (the largest
+                // observed vtable is `_ZTVNSt8ios_base*` at ~80 slots; the
+                // hard ceiling is 2^16 - 1 = 65535 slots, far beyond what
+                // any real C++ binary ships).
+                let slot_idx_u16 = u16::try_from(info.slot_index).unwrap_or(u16::MAX);
+                func.indirect_call_targets.insert(
+                    (bid, idx),
+                    TargetSet::VtableSlot {
+                        class_name: parsed.class_name.clone(),
+                        slot_idx: slot_idx_u16,
+                    },
+                );
+            }
         }
         func.cpp_this_args = this_args;
 
         let changed = prev_kind != func.cpp_kind
             || prev_class != func.cpp_class_name
             || prev_this_args != func.cpp_this_args
+            || prev_indirect_targets != func.indirect_call_targets
             || renamed
             || prev_first_param_name.as_deref()
                 != func.inferred_params.first().map(|(n, _)| n.as_str());

@@ -85,6 +85,24 @@ impl Pass for IndirectCallResolvePass {
             }
         }
 
+        // Semantic devirtualization entries (`VtableSlot` populated by
+        // `CppMethodPass`, `ObjcSelector` populated by
+        // `ObjcDispatchPass`) outrank our constant-tracing classification:
+        // we only know there's a `LOAD(LOAD(this+0)+N)` chain, the
+        // language-aware passes know which class/selector it dispatches
+        // through. Preserve those when they're already recorded so the
+        // pipeline's second run of this pass (after `CppVtablePass` +
+        // `CppMethodPass` in the outer fixed point) doesn't downgrade a
+        // `VtableSlot` to a generic `Unknown`/`Resolved` entry.
+        for (key, prev) in &targets_snapshot {
+            if matches!(
+                prev,
+                TargetSet::VtableSlot { .. } | TargetSet::ObjcSelector(_)
+            ) {
+                targets.insert(*key, prev.clone());
+            }
+        }
+
         let changed = found != snapshot || targets != targets_snapshot;
         func.resolved_indirect_calls = found;
         func.indirect_call_targets = targets;

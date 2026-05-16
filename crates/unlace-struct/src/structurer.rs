@@ -134,6 +134,16 @@ pub fn structure_with_arch(
             .unwrap_or_default(),
         stack_frame: func.stack_frame.clone(),
         cpp_lambda_captures: func.cpp_lambda_captures.clone(),
+        vtable_call_targets: func
+            .indirect_call_targets
+            .iter()
+            .filter(|(_, ts)| matches!(ts, unlace_ir::ssa::TargetSet::VtableSlot { .. }))
+            .filter_map(|(&(bid, idx), ts)| {
+                let block = func.function.blocks.get(&bid)?;
+                let insn = block.insns.get(idx)?;
+                Some((insn.addr, ts.clone()))
+            })
+            .collect(),
     })
 }
 
@@ -552,9 +562,24 @@ impl<'a> StructureCtx<'a> {
                         .copied()
                         .map(|target| HirNode::TailCall { target })
                 }
-                IrOp::Cbranch | IrOp::Branchind => {
+                IrOp::Cbranch => {
                     flush_guard(&mut pending_guard, nodes);
                     continue;
+                }
+                IrOp::Branchind => {
+                    flush_guard(&mut pending_guard, nodes);
+                    // When a BRANCHIND is a recognised C++ vtable tail-call,
+                    // emit it as a Statement so the C printer can render it
+                    // as `return this->__vftable->method_N(args);`.
+                    if self
+                        .func
+                        .indirect_call_targets
+                        .contains_key(&(bid, i))
+                    {
+                        Some(HirNode::Statement(insn.clone()))
+                    } else {
+                        continue;
+                    }
                 }
                 IrOp::Return => {
                     flush_guard(&mut pending_guard, nodes);

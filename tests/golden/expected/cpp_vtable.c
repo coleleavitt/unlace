@@ -13,7 +13,8 @@ void _start(void) {
 void use_base(void * a1) {
     int v2; // rdi
     _QWORD v3; // temp
-    v3 = *(_QWORD *)(v2); v1 = v3; return;
+    v3 = *(_QWORD *)(v2); v1 = v3; v3 = *(_QWORD *)(v3);
+    return this->__vftable->method_0(); return;
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {

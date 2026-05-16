@@ -109,7 +109,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
-use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaFunction, SsaVarnode};
+use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaFunction, SsaVarnode, TargetSet};
 use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::DwarfInfo;
@@ -528,6 +528,7 @@ pub fn print_c_with_annotations(
     ctx.objc_dispatch_calls = func.objc_dispatch_calls.clone();
     ctx.byref_boxes = func.byref_boxes.clone();
     ctx.go_defer_sites = func.go_defer_sites.clone();
+    ctx.vtable_call_targets = func.vtable_call_targets.clone();
 
     let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
     compute_dwarf_locals(dwarf_func, header, &mut ctx);
@@ -1660,6 +1661,14 @@ struct PrintCtx {
     /// dereference cast at every Load/Store through these addresses
     /// to surface the side-effecting nature of the access.
     mmio_addrs: BTreeSet<u64>,
+    /// C++ vtable call targets keyed by instruction VA.
+    ///
+    /// When a `Callind` at `insn.addr` is in this map as
+    /// `TargetSet::VtableSlot { class_name, slot_idx }`, `emit_callind_cast`
+    /// renders the call as `this->__vftable->method_<slot_idx>(args)`.
+    ///
+    /// Lifted from [`HirFunction::vtable_call_targets`] at construction.
+    vtable_call_targets: BTreeMap<u64, TargetSet>,
 }
 
 fn render_go_defer_summary(
@@ -1776,6 +1785,7 @@ impl PrintCtx {
             go_defer_sites: Vec::new(),
             byref_union_types: BTreeMap::new(),
             mmio_addrs: BTreeSet::new(),
+            vtable_call_targets: BTreeMap::new(),
         }
     }
 
@@ -5149,6 +5159,42 @@ fn format_tail_call_text(target: u64, ctx: &PrintCtx) -> String {
 fn emit_callind_cast(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     let target = resolve_call_target(insn, stmt_idx, ctx);
 
+    // C++ vtable dispatch: `this->__vftable->method_N(args)`.
+    //
+    // When `CppMethodPass` recognised a virtual call at this site and
+    // stamped `TargetSet::VtableSlot` on `indirect_call_targets`, we
+    // render a semantically meaningful form instead of the raw IDA-style
+    // function-pointer cast. The `this` receiver is `inputs[1]` (inputs[0]
+    // is the indirect call target itself); remaining inputs are ordinary
+    // arguments.
+    if let Some(TargetSet::VtableSlot { slot_idx, .. }) =
+        ctx.vtable_call_targets.get(&insn.addr)
+    {
+        let slot = *slot_idx;
+        // Resolve the `this` expression. inputs[0] is the function pointer,
+        // inputs[1] is the receiver. Fall back to `this` literal when the
+        // call has no explicit receiver input (shouldn't happen for a well-
+        // formed vtable dispatch, but be defensive).
+        let receiver = if insn.inputs.len() >= 2 {
+            emit_operand_resolved(&insn.inputs[1], 1, stmt_idx, ctx)
+        } else {
+            "this".to_string()
+        };
+        // Collect all args after the receiver (inputs[2..]).
+        let args: Vec<String> = insn
+            .inputs
+            .iter()
+            .enumerate()
+            .skip(2)
+            .map(|(i, vn)| emit_operand_resolved(vn, i, stmt_idx, ctx))
+            .collect();
+        let args_str = args.join(", ");
+        return format!(
+            "{}->__vftable->method_{}({})",
+            receiver, slot, args_str
+        );
+    }
+
     // t201: when this call site is in the auth-call annotation table,
     // render the IDA-cast form as a `__builtin_arm_authcall` intrinsic
     // instead. The builtin signature is
@@ -5708,6 +5754,34 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                 })
             }
             IrOp::Branchind => {
+                // If this is a vtable tail-call (e.g. `jmp *(*(this))`),
+                // render as a return of the virtual call rather than JUMPOUT.
+                if let Some(TargetSet::VtableSlot { slot_idx, .. }) =
+                    ctx.vtable_call_targets.get(&insn.addr)
+                {
+                    let slot = *slot_idx;
+                    let receiver = if insn.inputs.len() >= 2 {
+                        emit_operand_resolved(&insn.inputs[1], 1, idx, ctx)
+                    } else if !insn.inputs.is_empty() {
+                        // For BRANCHIND the only explicit input is the target
+                        // function pointer — the receiver was in a register.
+                        "this".to_string()
+                    } else {
+                        "this".to_string()
+                    };
+                    let args: Vec<String> = insn
+                        .inputs
+                        .iter()
+                        .enumerate()
+                        .skip(2)
+                        .map(|(i, vn)| emit_operand_resolved(vn, i, idx, ctx))
+                        .collect();
+                    let args_str = args.join(", ");
+                    return Some(format!(
+                        "return {}->__vftable->method_{}({});",
+                        receiver, slot, args_str
+                    ));
+                }
                 let target = insn.inputs.first().map_or_else(
                     || "0".to_string(),
                     |input| emit_operand_resolved(input, 0, idx, ctx),
@@ -5920,12 +5994,37 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 }
             }
             IrOp::Branchind => {
-                let target = if !insn.inputs.is_empty() {
-                    emit_operand_resolved(&insn.inputs[0], 0, idx, ctx)
+                // vtable tail-call: render as `return this->__vftable->method_N(args);`
+                if let Some(TargetSet::VtableSlot { slot_idx, .. }) =
+                    ctx.vtable_call_targets.get(&insn.addr)
+                {
+                    let slot = *slot_idx;
+                    let receiver = if insn.inputs.len() >= 2 {
+                        emit_operand_resolved(&insn.inputs[1], 1, idx, ctx)
+                    } else {
+                        "this".to_string()
+                    };
+                    let args: Vec<String> = insn
+                        .inputs
+                        .iter()
+                        .enumerate()
+                        .skip(2)
+                        .map(|(i, vn)| emit_operand_resolved(vn, i, idx, ctx))
+                        .collect();
+                    let args_str = args.join(", ");
+                    let _ = writeln!(
+                        out,
+                        "return {}->__vftable->method_{}({});",
+                        receiver, slot, args_str
+                    );
                 } else {
-                    "0".to_string()
-                };
-                let _ = writeln!(out, "JUMPOUT({});", target);
+                    let target = if !insn.inputs.is_empty() {
+                        emit_operand_resolved(&insn.inputs[0], 0, idx, ctx)
+                    } else {
+                        "0".to_string()
+                    };
+                    let _ = writeln!(out, "JUMPOUT({});", target);
+                }
             }
             _ => {
                 let _ = writeln!(out, "/* {} */;", insn.op.name());
@@ -9030,6 +9129,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         }
@@ -9665,6 +9765,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         };
@@ -10239,6 +10340,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         };
@@ -10353,6 +10455,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         };
@@ -10391,6 +10494,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         };
@@ -13457,6 +13561,86 @@ mod tests {
     // P4-23: CALLOTHER resolution tests
     // -------------------------------------------------------------------
 
+    // -------------------------------------------------------------------
+    // vtable call rendering tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_vtable_call_renders_arrow_syntax() {
+        // Simulate: this->__vftable->method_0(this)
+        // CALLIND(fptr, this_arg) at VA 0x1000 where fptr=reg(0), this=reg(8)
+        use unlace_ir::ssa::TargetSet;
+
+        let fptr = reg(0, 8);
+        let this_arg = reg(8, 8);
+
+        let callind = IrInsn::without_output(
+            IrOp::Callind,
+            smallvec![fptr, this_arg],
+            0x1000,
+        );
+        let body = vec![HirNode::Statement(callind), HirNode::Return(None)];
+
+        let mut func = make_func("vtable_test", body);
+        func.vtable_call_targets.insert(
+            0x1000,
+            TargetSet::VtableSlot { class_name: "Base".to_string(), slot_idx: 0 },
+        );
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("->__vftable->method_0("),
+            "vtable CALLIND should emit arrow syntax: {output}",
+        );
+        assert!(
+            !output.contains("(*"),
+            "vtable CALLIND should NOT emit IDA-style cast: {output}",
+        );
+    }
+
+    #[test]
+    fn test_vtable_call_slot_index() {
+        // slot_idx = 2 → method_2
+        use unlace_ir::ssa::TargetSet;
+
+        let fptr = reg(0, 8);
+        let this_arg = reg(8, 8);
+        let extra_arg = reg(16, 8);
+
+        let callind = IrInsn::without_output(
+            IrOp::Callind,
+            smallvec![fptr, this_arg, extra_arg],
+            0x2000,
+        );
+        let body = vec![HirNode::Statement(callind), HirNode::Return(None)];
+
+        let mut func = make_func("vtable_slot2", body);
+        func.vtable_call_targets.insert(
+            0x2000,
+            TargetSet::VtableSlot { class_name: "Derived".to_string(), slot_idx: 2 },
+        );
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("->__vftable->method_2("),
+            "vtable slot 2 should emit method_2: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callind_without_vtable_annotation_still_cast() {
+        // CALLIND without a vtable entry still uses the IDA-style cast.
+        let fptr = reg(0, 8);
+        let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr], 0x3000);
+        let body = vec![HirNode::Statement(callind), HirNode::Return(None)];
+        let func = make_func("no_vtable", body);
+        let output = print_c(&func);
+        assert!(
+            output.contains("(*)"),
+            "non-vtable CALLIND should still emit IDA-style cast: {output}",
+        );
+    }
+
     #[test]
     fn test_callother_resolved() {
         let r0 = reg(0, 16);
@@ -15191,6 +15375,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         };
@@ -15228,6 +15413,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         };
@@ -15269,6 +15455,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         };
@@ -15306,6 +15493,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         };
@@ -15343,6 +15531,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         };
@@ -15406,6 +15595,7 @@ mod tests {
             byref_locals: std::collections::BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
         };

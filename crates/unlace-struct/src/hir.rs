@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaVarnode};
+use unlace_ir::ssa::{GoDeferSite, PanicKind, PrimitiveType, SsaVarnode, TargetSet};
 use unlace_ir::types::Type;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
@@ -602,4 +602,14 @@ pub struct HirFunction {
     /// The C printer renders them as a source-like capture list (for example
     /// `[&x, this]`) on lambda closure `operator()` annotations.
     pub cpp_lambda_captures: Vec<unlace_ir::ssa::CppLambdaCapture>,
+    /// C++ vtable call targets keyed by instruction VA.
+    ///
+    /// When a `Callind` instruction's VA is a key here and the value is
+    /// `TargetSet::VtableSlot { class_name, slot_idx }`, the C printer renders
+    /// the call as `this->__vftable->method_<slot_idx>(args)` in place of the
+    /// raw IDA-style function-pointer cast.
+    ///
+    /// Populated from [`unlace_ir::ssa::SsaFunction::indirect_call_targets`]
+    /// (filtering for `VtableSlot` entries) at structuring time.
+    pub vtable_call_targets: BTreeMap<u64, TargetSet>,
 }

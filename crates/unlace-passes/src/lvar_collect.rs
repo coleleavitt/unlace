@@ -28,14 +28,28 @@ use unlace_ir::lvar::{LiveRange, Lvar, LvarFlags, LvarId, LvarSource, LvarStorag
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode};
 use unlace_ir::types::TypeKind;
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{Pass, PassError, PassPhase};
 
 /// Candidate-collector pass. Stateless. See module docs.
+///
+/// Slice 2 (this revision) populates each [`Lvar::live_range`] with a
+/// proper SSA-derived `[start_block, end_block]` bracket rather than
+/// the previous entry-block placeholder. Liveness is approximated by
+/// the `(min, max)` block ids at which the SSA varnodes backing the
+/// lvar appear in `var_map` (def or use). Stack/Param/Return lvars
+/// without a per-varnode binding get a `[entry, max_block]` range. No
+/// interference graph and no coalescing — those land in later slices.
 pub struct LvarCollectPass;
 
 impl Pass for LvarCollectPass {
     fn name(&self) -> &str {
         "lvar-collect"
+    }
+
+    fn phase(&self) -> PassPhase {
+        // Runs after VariableMergePass (LVarAlloc) and before the C
+        // printer; it's pure post-recovery presentation metadata.
+        PassPhase::FinalCleanup
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
@@ -52,7 +66,13 @@ impl Pass for LvarCollectPass {
 /// by [`LvarId`] (dense from 0), which matches insertion order.
 fn collect(func: &SsaFunction) -> Vec<Lvar> {
     let entry = func.cfg.entry_block();
-    let entry_range = LiveRange::point(entry);
+    let use_blocks = collect_use_blocks(func);
+    // Function-wide span: entry block → highest real BlockId. Used as
+    // a sound (over-)approximation for storage classes (Param/Return,
+    // stack slots without recorded accesses) whose values logically
+    // live across the whole CFG and whose individual SSA varnodes
+    // aren't tracked elsewhere.
+    let func_range = function_wide_range(func, entry);
 
     let mut out: Vec<Lvar> = Vec::new();
     let mut next_id: u32 = 0;
@@ -62,12 +82,29 @@ fn collect(func: &SsaFunction) -> Vec<Lvar> {
         r
     };
 
-    collect_stack(func, &mut out, &mut next_id, &alloc_id, entry_range);
-    collect_temps(func, &mut out, &mut next_id, &alloc_id, entry);
-    collect_params(func, &mut out, &mut next_id, &alloc_id, entry_range);
-    collect_return(func, &mut out, &mut next_id, &alloc_id, entry_range);
+    collect_stack(func, &mut out, &mut next_id, &alloc_id, &use_blocks, func_range);
+    collect_temps(func, &mut out, &mut next_id, &alloc_id, &use_blocks, entry);
+    collect_params(func, &mut out, &mut next_id, &alloc_id, func_range);
+    collect_return(func, &mut out, &mut next_id, &alloc_id, func_range);
 
     out
+}
+
+/// `[entry, max_block_id]` covering every real block in the function.
+/// Falls back to a single-point range at `entry` if the function has
+/// no blocks (defensive — shouldn't happen for well-formed SSA).
+fn function_wide_range(func: &SsaFunction, entry: BlockId) -> LiveRange {
+    let max = func
+        .function
+        .blocks
+        .keys()
+        .copied()
+        .last()
+        .unwrap_or(entry);
+    LiveRange {
+        start_block: entry.min(max),
+        end_block: entry.max(max),
+    }
 }
 
 /// (1) Recovered stack frame members. Prefer the higher-level
@@ -79,7 +116,8 @@ fn collect_stack(
     out: &mut Vec<Lvar>,
     next_id: &mut u32,
     alloc_id: &impl Fn(&mut u32) -> LvarId,
-    entry_range: LiveRange,
+    use_blocks: &BTreeMap<SsaVarnode, (BlockId, BlockId)>,
+    func_range: LiveRange,
 ) {
     let mut emitted: std::collections::BTreeSet<i64> = std::collections::BTreeSet::new();
     if let Some(frame) = &func.stack_frame {
@@ -87,10 +125,11 @@ fn collect_stack(
             let ty = stack_local_typekind(func, offset, local.size);
             let flags = stack_flags(func, offset);
             let source = stack_source(func, offset);
+            let lr = stack_live_range(func, offset, use_blocks, func_range);
             out.push(Lvar::new(
                 alloc_id(next_id),
                 LvarStorage::Stack { offset },
-                entry_range,
+                lr,
                 ty,
                 source,
                 flags,
@@ -105,16 +144,54 @@ fn collect_stack(
         let ty = primitive_to_kind(sv.ty);
         let flags = stack_flags(func, offset);
         let source = stack_source(func, offset);
+        let lr = stack_live_range(func, offset, use_blocks, func_range);
         out.push(Lvar::new(
             alloc_id(next_id),
             LvarStorage::Stack { offset },
-            entry_range,
+            lr,
             ty,
             source,
             flags,
         ));
         emitted.insert(offset);
     }
+}
+
+/// Compute a stack-slot's live range by unioning the per-block ranges
+/// of every SSA varnode that accesses it (from
+/// [`unlace_ir::ssa::StackVar::accesses`]). When no accesses are
+/// recorded (e.g. the slot was recovered purely from
+/// `stack_frame.locals` without a matching `stack_vars` entry), fall
+/// back to the function-wide range — sound because we *know* the slot
+/// is referenced somewhere.
+fn stack_live_range(
+    func: &SsaFunction,
+    offset: i64,
+    use_blocks: &BTreeMap<SsaVarnode, (BlockId, BlockId)>,
+    func_range: LiveRange,
+) -> LiveRange {
+    let Some(sv) = func.stack_vars.get(&offset) else {
+        return func_range;
+    };
+    let mut lr: Option<LiveRange> = None;
+    for access in &sv.accesses {
+        let Some(&(start, end)) = use_blocks.get(access) else {
+            continue;
+        };
+        match lr.as_mut() {
+            Some(r) => {
+                r.extend_to(start);
+                r.extend_to(end);
+            }
+            None => {
+                lr = Some(LiveRange {
+                    start_block: start,
+                    end_block: end,
+                });
+            }
+        }
+    }
+    lr.unwrap_or(func_range)
 }
 
 /// (2) SSA temporaries surviving `variable_merge`. `merged_names` is
@@ -125,11 +202,11 @@ fn collect_temps(
     out: &mut Vec<Lvar>,
     next_id: &mut u32,
     alloc_id: &impl Fn(&mut u32) -> LvarId,
+    use_blocks: &BTreeMap<SsaVarnode, (BlockId, BlockId)>,
     entry: BlockId,
 ) {
-    let use_blocks = collect_use_blocks(func);
     for (sv, _) in &func.merged_names {
-        let lr = live_range_for_temp(*sv, &use_blocks, entry);
+        let lr = live_range_for_temp(*sv, use_blocks, entry);
         let ty = primitive_to_kind(
             func.var_types
                 .get(sv)
@@ -155,7 +232,7 @@ fn collect_params(
     out: &mut Vec<Lvar>,
     next_id: &mut u32,
     alloc_id: &impl Fn(&mut u32) -> LvarId,
-    entry_range: LiveRange,
+    func_range: LiveRange,
 ) {
     for (idx, (name, pty)) in func.inferred_params.iter().enumerate() {
         let mut flags = LvarFlags::IS_PARAM;
@@ -164,10 +241,14 @@ fn collect_params(
                 flags |= LvarFlags::ADDRESS_TAKEN;
             }
         }
+        // Params have no per-SSA-varnode binding in
+        // `inferred_params`, so use the function-wide range — sound
+        // because params are live from entry until at least the last
+        // block that observes them.
         let mut lv = Lvar::new(
             alloc_id(next_id),
             LvarStorage::Param { idx: idx as u32 },
-            entry_range,
+            func_range,
             primitive_to_kind(*pty),
             LvarSource::FromSig,
             flags,
@@ -187,13 +268,15 @@ fn collect_return(
     out: &mut Vec<Lvar>,
     next_id: &mut u32,
     alloc_id: &impl Fn(&mut u32) -> LvarId,
-    entry_range: LiveRange,
+    func_range: LiveRange,
 ) {
     if func.inferred_return_type != PrimitiveType::Unknown {
+        // Return slot can be written from any RETURN block; use the
+        // function-wide range.
         out.push(Lvar::new(
             alloc_id(next_id),
             LvarStorage::Return,
-            entry_range,
+            func_range,
             primitive_to_kind(func.inferred_return_type),
             LvarSource::Inferred,
             LvarFlags::IS_RETURN,
@@ -415,6 +498,106 @@ mod tests {
         assert!(LvarCollectPass.run(&mut ssa).unwrap());
         assert_eq!(ssa.lvars.len(), 1);
         assert!(matches!(ssa.lvars[0].storage, LvarStorage::Temp { .. }));
+    }
+
+    /// (Batch 3 slice 2, case a) A `Temp` lvar whose SSA varnode is
+    /// observed in two distinct blocks must end up with a `LiveRange`
+    /// spanning both — `start_block` = lower id, `end_block` = higher.
+    #[test]
+    fn temp_live_range_spans_observed_blocks() {
+        let mut ssa = empty_ssa("temp_span");
+        let sv = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Register,
+                offset: 0,
+                size: 8,
+            },
+            version: 0,
+        };
+        ssa.merged_names.insert(sv, "v0".to_string());
+        // Def in block 0, use in block 3 — the collector reads
+        // `var_map` directly, so the live-range comes from the
+        // observed varnode keys regardless of whether the function's
+        // `blocks` map physically contains BlockId(3).
+        ssa.var_map
+            .insert((BlockId(0), 0, VarnodeSlot::Output), sv);
+        ssa.var_map
+            .insert((BlockId(3), 2, VarnodeSlot::Input(0)), sv);
+
+        assert!(LvarCollectPass.run(&mut ssa).unwrap());
+        let temp = ssa
+            .lvars
+            .iter()
+            .find(|l| matches!(l.storage, LvarStorage::Temp { .. }))
+            .expect("temp lvar emitted");
+        assert_eq!(temp.live_range.start_block, BlockId(0));
+        assert_eq!(temp.live_range.end_block, BlockId(3));
+    }
+
+    /// (Batch 3 slice 2, case b) A stack lvar whose backing
+    /// `StackVar.accesses` SSA varnodes appear in five different
+    /// blocks must end up with a `LiveRange` covering the full span.
+    #[test]
+    fn stack_live_range_spans_all_access_blocks() {
+        let mut ssa = empty_ssa("stack_span");
+        // Build 5 distinct SSA varnodes (one per access), each placed
+        // into `var_map` at a different block id.
+        let mut accesses: Vec<SsaVarnode> = Vec::new();
+        for v in 0..5u32 {
+            let sv = SsaVarnode {
+                base: Varnode {
+                    space: SpaceId::Register,
+                    offset: 0,
+                    size: 8,
+                },
+                version: v,
+            };
+            ssa.var_map
+                .insert((BlockId(v), 0, VarnodeSlot::Output), sv);
+            accesses.push(sv);
+        }
+        ssa.stack_vars.insert(
+            -24,
+            StackVar {
+                offset: -24,
+                name: "local_18".into(),
+                ty: PrimitiveType::Int(4),
+                accesses: accesses.clone(),
+            },
+        );
+
+        assert!(LvarCollectPass.run(&mut ssa).unwrap());
+        let slot = ssa
+            .lvars
+            .iter()
+            .find(|l| matches!(l.storage, LvarStorage::Stack { offset: -24 }))
+            .expect("stack lvar emitted");
+        assert_eq!(slot.live_range.start_block, BlockId(0));
+        assert_eq!(slot.live_range.end_block, BlockId(4));
+    }
+
+    /// Stack slots with no SSA accesses fall back to the function-wide
+    /// range (entry → max real block). For the test fixture that's
+    /// `[BlockId(0), BlockId(0)]` since `empty_ssa` only builds one
+    /// block; the point is that the fallback path doesn't panic and
+    /// produces a defined range.
+    #[test]
+    fn stack_live_range_falls_back_when_no_accesses() {
+        let mut ssa = empty_ssa("stack_noaccess");
+        ssa.stack_vars.insert(
+            -8,
+            StackVar {
+                offset: -8,
+                name: "local_8".into(),
+                ty: PrimitiveType::Int(4),
+                accesses: vec![],
+            },
+        );
+        assert!(LvarCollectPass.run(&mut ssa).unwrap());
+        let slot = &ssa.lvars[0];
+        assert!(matches!(slot.storage, LvarStorage::Stack { offset: -8 }));
+        assert_eq!(slot.live_range.start_block, BlockId(0));
+        assert_eq!(slot.live_range.end_block, BlockId(0));
     }
 
     #[test]

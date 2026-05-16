@@ -14664,6 +14664,7 @@ mod tests {
                 offset: -8,
                 size: 4,
                 access_widths: vec![4],
+                kind: Default::default(),
             },
         );
         locals.insert(
@@ -14672,6 +14673,7 @@ mod tests {
                 offset: -16,
                 size: 4,
                 access_widths: vec![4],
+                kind: Default::default(),
             },
         );
         func.stack_frame = Some(StackFrame {
@@ -14733,6 +14735,7 @@ mod tests {
                 offset: 8,
                 size: 4,
                 access_widths: vec![4],
+                kind: Default::default(),
             },
         );
         func.stack_frame = Some(StackFrame {
@@ -14784,6 +14787,7 @@ mod tests {
                 offset: -32,
                 size: 16,
                 access_widths: vec![1],
+                kind: Default::default(),
             },
         );
         func.stack_frame = Some(StackFrame {
@@ -14837,6 +14841,7 @@ mod tests {
                 offset: -8,
                 size: 4,
                 access_widths: vec![4],
+                kind: Default::default(),
             },
         );
         func.stack_frame = Some(StackFrame {

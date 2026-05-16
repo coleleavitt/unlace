@@ -106,6 +106,33 @@ pub trait Pass: Send + Sync {
         &[]
     }
 
+    /// Minimum pipeline maturity required for this pass to run.
+    ///
+    /// The pipeline driver skips passes whose `min_maturity()` exceeds
+    /// the current `SsaFunction::maturity`. Default: derived from
+    /// [`phase()`](Self::phase) for backward compatibility so existing
+    /// passes get a correct default without per-file changes.
+    fn min_maturity(&self) -> unlace_ir::Maturity {
+        use unlace_ir::Maturity;
+        match self.phase() {
+            PassPhase::PreOpt => Maturity::Zero,
+            PassPhase::LocalOpt => Maturity::Generated,
+            PassPhase::GlobalOpt => Maturity::PreOptimized,
+            PassPhase::TypeRecovery => Maturity::LocalOpt,
+            PassPhase::StackRecovery => Maturity::Generated,
+            PassPhase::LVarAlloc => Maturity::GlobalOpt,
+            PassPhase::FinalCleanup => Maturity::Lvars,
+        }
+    }
+
+    /// Maximum maturity at which this pass produces useful work.
+    ///
+    /// Above this level, the pass is skipped. Default: [`Maturity::Final`]
+    /// (always runs when `min_maturity` is satisfied).
+    fn max_maturity(&self) -> unlace_ir::Maturity {
+        unlace_ir::Maturity::Final
+    }
+
     /// Run one iteration of the pass.
     ///
     /// Returns `Ok(true)` if the function was modified, `Ok(false)` if

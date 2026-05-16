@@ -89,8 +89,7 @@ impl Pass for CppVariantPass {
                 changed = true;
             }
         }
-        func.enum_discriminants
-            .sort_by_key(|a| a.load_loc);
+        func.enum_discriminants.sort_by_key(|a| a.load_loc);
         Ok(changed)
     }
 }
@@ -277,6 +276,7 @@ mod tests {
         SsaFunction {
             function: func,
             arch: unlace_ir::ArchId::Unknown(0),
+            maturity: unlace_ir::ssa::Maturity::Zero,
             cfg,
             dom_tree,
             post_dom_tree: None,

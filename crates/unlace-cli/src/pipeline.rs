@@ -56,25 +56,26 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 
 use unlace_ir::ssa::SsaFunction;
-use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
+use unlace_ir::ssa::{Maturity, PrimitiveType, SsaVarnode};
 use unlace_ir::types::{StructFieldType, Type};
 use unlace_ir::{ArchId, BasicBlock, BlockId, Function, IrOp, Lifter, SpaceId};
 use unlace_loader::{BinaryImage, DwarfInfo, FlirtDb, Section, SymbolKind};
 use unlace_passes::{
     AlgebraicSimplifyPass, BitfieldIdiomPass, BmiIdiomPass, CallBoundaryCopyPropPass,
     CallingConvFinalizePass, CallingConventionDetectPass, ConditionSimplifyPass, ConstantFoldPass,
-    CopyPropagationPass, CppMethodPass, CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
-    DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass,
-    DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
-    IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass, LicmPass, LvarCollectPass, ModuloIdiomPass, NoreturnDetectPass,
-    OpTypeBindingPass, OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass,
-    RedundantFlagElimPass, RegisterCoalescePass, ReturnTypeInferPass, RustEnumPass, RustPanicPass,
-    RustVtablePass, SccpPass, SignatureSnapshot, StackOffsetSnapshotPass, StackPointerTrackingPass,
-    StackVarRecoveryPass, StrengthReducePass, StructFieldDetectPass, TailCallDetectPass,
-    TypeConstraintSolverPass, VarNamingPass, VariableMergePass, annotate_libc_calls,
-    bump_if_signature_changed, canonical_pipeline_descriptor, detect_byref, detect_go_defer,
-    parse_printf_format_strings, recover_stack_frame, recover_structs, run_instrumented,
-    run_outer_fixedpoint, run_to_fixedpoint, validate_named_phase_monotonicity,
+    CopyPropagationPass, CppMethodPass, CppVtablePass, CryptoIdiomPass, CsePass,
+    DEFAULT_OUTER_FIXEDPOINT_CAP, DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimGlobalPass,
+    DeadStoreElimPass, DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass,
+    IdiomRecognitionPass, IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass, LicmPass,
+    LvarCollectPass, ModuloIdiomPass, NoreturnDetectPass, OpTypeBindingPass, OuterFixedpointReport,
+    ParamInferPass, Pass, PrologueElimPass, RedundantFlagElimPass, RegisterCoalescePass,
+    ReturnTypeInferPass, RustEnumPass, RustPanicPass, RustVtablePass, SccpPass, SignatureSnapshot,
+    StackOffsetSnapshotPass, StackPointerTrackingPass, StackVarRecoveryPass, StrengthReducePass,
+    StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
+    VariableMergePass, annotate_libc_calls, bump_if_signature_changed,
+    canonical_pipeline_descriptor, detect_byref, detect_go_defer, parse_printf_format_strings,
+    recover_stack_frame, recover_structs, run_instrumented, run_outer_fixedpoint,
+    run_to_fixedpoint, validate_named_phase_monotonicity,
 };
 
 /// Once-per-process pipeline phase-monotonicity check.
@@ -262,12 +263,7 @@ fn add_symbol_gap_functions(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>)
     let mut bounds: Vec<(u64, u64)> = funcs
         .iter()
         .filter(|func| func.addr >= text_start && func.addr < text_end)
-        .map(|func| {
-            (
-                func.addr,
-                func.addr.saturating_add(func.size).min(text_end),
-            )
-        })
+        .map(|func| (func.addr, func.addr.saturating_add(func.size).min(text_end)))
         .collect();
     bounds.sort_unstable();
 
@@ -855,11 +851,11 @@ pub fn run_whole_program_interproc(
         // is the standard `run_passes`. We discard the inner `PassError`
         // chain via `?` — the outer driver already records iteration count
         // and signature deltas.
-        run_passes(ssa).map(|_| ()).map_err(|e| {
-            unlace_passes::PassError::InvariantViolation {
+        run_passes(ssa)
+            .map(|_| ())
+            .map_err(|e| unlace_passes::PassError::InvariantViolation {
                 message: format!("per-function pass failed: {e}"),
-            }
-        })
+            })
     })
     .context("interprocedural fixed-point loop failed")
 }
@@ -892,9 +888,7 @@ pub fn run_whole_program_printf_parse(
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
     }
-    let resolver = |addr: u64| -> Option<&'static str> {
-        stable_symbol_names.get(&addr).copied()
-    };
+    let resolver = |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
 
     for ssa in funcs.values_mut() {
         let _changed = parse_printf_format_strings(ssa, &resolver, &image.string_table);
@@ -999,179 +993,60 @@ fn run_passes_with_report_inner(
     ssa: &mut SsaFunction,
     resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
 ) -> Result<PassesReport> {
-    // Startup-time validation: a single phase-monotonicity check the
-    // first time any pipeline run happens in this process. No-op in
-    // release builds unless `UNLACE_VALIDATE_PIPELINE=1`. See the
-    // function comment for the rationale.
     maybe_validate_pipeline_once();
 
-    // (1) One-time pre-pass: snapshot pre-optimization stack offsets so
-    // later iterations of stack-var recovery still see the original
-    // RSP/RBP-relative addressing.
-    run_instrumented(&StackOffsetSnapshotPass, ssa)
-        .context("stack offset snapshot failed")?;
+    // (1) One-time pre-pass: snapshot pre-optimization stack offsets.
+    run_instrumented(&StackOffsetSnapshotPass, ssa).context("stack offset snapshot failed")?;
 
-    // Batch 15 (slice 1): alias categorization
-    // ([`unlace_passes::alias_categorize::AliasCategorizePass`]) tags
-    // every LOAD/STORE with an [`unlace_ir::AliasCategory`]. The pass
-    // is intentionally NOT wired into the default pipeline in this
-    // slice — empirical measurement showed that tagging interacts with
-    // downstream stack-recovery heuristics enough to nudge aggregate
-    // parity by ~0.2% on the medium fixture. The barrier semantics in
-    // `copy_prop`/`sccp`/`dead_store_elim` are wired *unconditionally*
-    // and trip whenever a Mmio/Volatile category is set; callers that
-    // want the categorization (e.g. a future driver-binary subcommand)
-    // can run the pass on demand by calling it directly.
-
-    // Snapshot the signature triple so we can bump `signature_revision`
-    // exactly once if the per-function pipeline mutates it. This makes the
-    // revision counter usable as a dirty-flag for any whole-program
-    // [`unlace_passes::reanalysis_fixpoint`] driver layered on top.
     let pre_pipeline_sig = SignatureSnapshot::of(ssa);
 
-    // Batch 1: noreturn detection runs *once* before the outer loop, with
-    // the caller-provided PLT/import-name resolver. Strips unreachable
-    // instructions after recognised noreturn calls (`exit`, `abort`,
-    // `__cxa_throw`, …) so the IR-fixedpoint and structural detection
-    // never re-process them. Symbols are stable across outer iterations,
-    // so re-running this inside the loop would be wasted work.
+    // Noreturn detection runs once before the maturity loop.
     if let Some(resolve) = resolver {
         NoreturnDetectPass::new()
             .run_with_resolver(ssa, resolve)
             .context("noreturn detect pass failed")?;
     }
 
-    let mut total_ir_changes: usize = 0usize;
+    // === MATURITY PIPELINE (models sub_14B8B0's while-loop) ===
+    ssa.maturity = Maturity::Zero;
+    let mut total_ir_changes: usize = 0;
 
-    // (2) Outer fixed-point loop. The inner cluster already converges per
-    // call to `run_to_fixedpoint`; the outer loop re-runs the whole sweep
-    // when type recovery learned something new that the IR-level passes
-    // couldn't see on the previous round.
+    // (2) Outer fixed-point loop. Each iteration runs the staged pipeline;
+    // the outer loop re-runs when type recovery discovers new facts.
     let outer_report = run_outer_fixedpoint(
         ssa,
         DEFAULT_OUTER_FIXEDPOINT_CAP,
         |ssa, _iter| -> Result<(), unlace_passes::PassError> {
-            // ---- IR-level fixed-point cluster ----
-            let fold = ConstantFoldPass;
-            let prop = CopyPropagationPass;
-            let gprop = GlobalCopyPropPass;
-            let dce = DeadCodeElimPass;
-            let sccp = SccpPass;
-            let cse = CsePass;
-            let gvn = GvnPass;
-            let licm = LicmPass;
-            let iv_elim = IvElimPass;
-            let strength_reduce = StrengthReducePass;
-            let idiom = IdiomRecognitionPass;
-            let bmi = BmiIdiomPass;
-            let cond = ConditionSimplifyPass;
-            // Batch 1 additions to the inner fixed-point cluster:
-            // - call-boundary copy-prop removes the spurious post-call
-            //   register restore version (`reg_post = LOAD(stkN)` → fold
-            //   into the pre-call name) so CSE/GVN see one canonical name.
-            // - redundant-flag elim rewrites lifter-emitted `(a-b)==0`
-            //   shape into direct comparisons.
-            // - algebraic-simplify is currently a skeleton landing zone;
-            //   wiring now means future rules light up automatically.
-            let call_bound = CallBoundaryCopyPropPass;
-            let red_flag = RedundantFlagElimPass;
-            let algebraic = AlgebraicSimplifyPass;
-            let passes: &[&dyn Pass] = &[
-                &fold,
-                &prop,
-                &gprop,
-                &dce,
-                &sccp,
-                &cse,
-                &gvn,
-                &bmi,
-                &licm,
-                &iv_elim,
-                &strength_reduce,
-                &idiom,
-                &cond,
-                &call_bound,
-                &red_flag,
-                &algebraic,
-            ];
-            let inner = run_to_fixedpoint(passes, ssa)?;
-            total_ir_changes = total_ir_changes.saturating_add(inner);
+            // Stage 1: M_GENERATED — IR-level fixed-point cluster
+            // Note: re-entry from outer loop constitutes a maturity
+            // downgrade (sub_F9180 equivalent) — types changed, so we
+            // re-run from Generated to let IR passes exploit new facts.
+            if _iter > 0 {
+                tracing::debug!(
+                    func = %ssa.function.name,
+                    iter = _iter,
+                    "maturity downgrade: types changed, re-running from M_GENERATED"
+                );
+            }
+            ssa.maturity = Maturity::Generated;
+            let ir_changes = pipeline_stage_ir_fixedpoint(ssa)?;
+            total_ir_changes = total_ir_changes.saturating_add(ir_changes);
 
-            // ---- Cleanup passes (single-run per outer iter) ----
-            run_instrumented(&DeadStoreElimPass, ssa)?;
-            run_instrumented(&DeadFlagElimPass, ssa)?;
-            // Batch 1: cross-block DSE picks up stores killed by writes in
-            // a successor block — the intra-block DSE above misses them.
-            run_instrumented(&DeadStoreElimGlobalPass, ssa)?;
-            run_instrumented(&DivisionIdiomPass, ssa)?;
-            run_instrumented(&ModuloIdiomPass, ssa)?;
+            // Stage 2: M_PREOPTIMIZED — cleanup passes
+            ssa.maturity = Maturity::PreOptimized;
+            pipeline_stage_cleanup(ssa)?;
 
-            // ---- Structural detection ----
-            run_instrumented(&PrologueElimPass, ssa)?;
-            run_instrumented(&TailCallDetectPass, ssa)?;
-            // Batch 1: SP-delta tracking populates `sp_delta_at`,
-            // `stack_holes`, `dynamic_sp` *before* stack var recovery so
-            // the latter can resolve frame addresses through the right
-            // SP-state at each instruction.
-            run_instrumented(&StackPointerTrackingPass, ssa)?;
-            run_instrumented(&StackVarRecoveryPass, ssa)?;
-            // Wave 24 / t209: synthesise the high-level stack frame layout
-            // (one slot per offset, fused partial-access groups, array
-            // collapsing) so the type-recovery layer can consume a stable
-            // BTreeMap<i64, StackLocal> instead of re-walking the IR.
-            ssa.stack_frame = Some(recover_stack_frame(ssa));
-            // Batch 1: indirect-call resolution recovers a unique
-            // constant target for `Callind` chains where the source
-            // narrows to a single `Const` after copy-prop. Runs before
-            // CppVtablePass / language-specific devirt so they all see
-            // the same `resolved_indirect_calls` map.
-            run_instrumented(&IndirectCallResolvePass, ssa)?;
-            run_instrumented(&CppVtablePass, ssa)?;
-            // Batch 14 slice 1: classify C++ ctor/dtor/method from the
-            // Itanium mangled name, rename `a1` → `this`, and propagate
-            // `class T *` typing into recognised vtable call sites. Runs
-            // *after* CppVtablePass so the vtable call site map is
-            // populated before propagation walks it. Annotation-only —
-            // does not alter the IR.
-            run_instrumented(&CppMethodPass, ssa)?;
+            // Stage 3: M_LOCOPT — structural detection + stack recovery
+            ssa.maturity = Maturity::LocalOpt;
+            pipeline_stage_structural(ssa)?;
 
-            // ---- Type recovery ----
-            run_instrumented(&CallingConventionDetectPass, ssa)?;
-            run_instrumented(&ParamInferPass, ssa)?;
-            run_instrumented(&ReturnTypeInferPass, ssa)?;
-            run_instrumented(&StructFieldDetectPass, ssa)?;
-            // Wave 24 / t210: address-taken / byref bookkeeping. Runs
-            // after ParamInferPass so the detector knows how many
-            // parameter registers are "live" for this calling convention.
-            ssa.byref_info = Some(detect_byref(ssa));
-            // Wave 24 / t213: array-of-structs layout recovery. Runs
-            // after IvElim/LicmPass have stabilised loop induction
-            // variables so `recover_structs` can identify
-            // `(base_sv, stride, iv, offset)` access chains inside
-            // natural loops. The resulting `InferredStruct` layouts
-            // are keyed by base-pointer SSA varnode and consumed by
-            // (a) `emit_inferred_struct_preamble` (t224) for the
-            // `struct __anon<N>` declarations, and (b) the c_printer
-            // Load/Store renderer (t231) which rewrites the matching
-            // address arithmetic as `arr<N>[i].field_<offset>`.
-            ssa.array_struct_layouts = recover_structs(ssa);
-            // Real TypeInferPass (unlace-passes). Self-bounded at 100 inner
-            // iterations with monotone lattice joins, plus
-            // `seed_from_composites` so pointer-typed struct fields are
-            // recognised as `Ptr` instead of bottoming out at `Int(8)`.
-            // The caller's per-function deadline (`config.timeout`,
-            // default 30s) still applies; an inner divergence emits a
-            // `tracing::warn!` and breaks out, so this cannot wedge the
-            // pipeline. Replaces the historical `run_type_infer_bounded`
-            // CLI-local stub (left only in `benches/decompile_medium.rs`
-            // as a frozen benchmark baseline).
-            run_instrumented(&unlace_passes::type_infer::TypeInferPass, ssa)?;
-            // t228: TIE-style constraint solver fills the holes left by
-            // the ad-hoc walker (LOAD/STORE addresses as `Ptr`, phi joins,
-            // binop SameType edges) so the outer fixed-point's type-
-            // signature comparison can settle once the constraint graph
-            // converges.
-            run_instrumented(&TypeConstraintSolverPass, ssa)?;
+            // Stage 4: M_CALLS — call resolution + vtables
+            ssa.maturity = Maturity::Calls;
+            pipeline_stage_call_resolution(ssa)?;
+
+            // Stage 5: M_GLBOPT — type recovery
+            ssa.maturity = Maturity::GlobalOpt;
+            pipeline_stage_type_recovery(ssa)?;
 
             Ok(())
         },
@@ -1186,107 +1061,15 @@ fn run_passes_with_report_inner(
         );
     }
 
-    // Batch 1: pattern-recognition / annotation-only passes that don't
-    // influence the outer-loop type/IR fixedpoint. Running them once
-    // after convergence (instead of every outer iter) keeps large
-    // functions inside the per-function timeout — wiring all four inside
-    // the loop pushed `medium.elf::sub_1560` (1845 bytes) past 30 s.
-    //
-    // - BitfieldIdiomPass: byte-swap (`bswap`) idiom recognition.
-    // - CryptoIdiomPass: AES / RISC-V Zk sequence annotation.
-    // - IndirectCallResolvePass: traces `Callind` chains back to a
-    //   unique `Const` target after copy-prop has settled.
-    // - OpTypeBindingPass: attaches struct-offset / enum-constant
-    //   bindings to LOAD/STORE/compare operands. Reads
-    //   `composite_var_types` and `enum_discriminants`, both of which
-    //   are stable by the time the outer loop exits.
-    run_instrumented(&BitfieldIdiomPass, ssa)
-        .context("bitfield idiom pass failed")?;
-    run_instrumented(&CryptoIdiomPass, ssa)
-        .context("crypto idiom pass failed")?;
-    run_instrumented(&IndirectCallResolvePass, ssa)
-        .context("indirect call resolve pass failed")?;
-    // Batch 9: companion to IndirectCallResolvePass — detect Branchind
-    // jump-table patterns and record candidate (base, entry_size) pairs
-    // on `ssa.resolved_jump_tables`. Concrete target decoding happens
-    // later in `decompile_function_with_symbols` once the binary's
-    // read-only sections are in scope; emit_output then feeds the
-    // resolved tables to `refine_switches_with_tables`.
-    run_instrumented(&IndirectJumpResolvePass, ssa)
-        .context("indirect jump resolve pass failed")?;
-    run_instrumented(&OpTypeBindingPass, ssa)
-        .context("op type binding pass failed")?;
+    // Stage 6: M_LVARS — post-loop one-shots + lvar allocation
+    ssa.maturity = Maturity::Lvars;
+    pipeline_stage_post_loop(ssa)?;
+    pipeline_stage_lvar(ssa)?;
 
-    // (3) Presentation-layer post-passes. These run once, after the type
-    // and IR shape have stabilised, because they encode print-time
-    // decisions that should be made against the final IR.
-    run_instrumented(&ExpressionTreePass, ssa)
-        .context("expression tree pass failed")?;
+    // Stage 7: M_FINAL — language-specific + naming + finalization
+    ssa.maturity = Maturity::Final;
+    pipeline_stage_final(ssa, resolver)?;
 
-    run_instrumented(&VariableMergePass, ssa)
-        .context("variable merge pass failed")?;
-
-    // Batch 3 slice 1: Lvar candidate collection. Runs after the
-    // variable-merge coalescer (whose `merged_names` we read as the
-    // surviving-temp set) and before the C printer (which currently
-    // ignores `lvars` — pure metadata). No IR changes; no emitter
-    // impact; goldens unchanged. See
-    // `unlace_passes::lvar_collect::LvarCollectPass`.
-    run_instrumented(&LvarCollectPass, ssa)
-        .context("lvar collect pass failed")?;
-
-    // Batch 1: Chaitin-Briggs PHI-operand coalescing. Sits after the
-    // variable-merge coalescer and before role-based naming so its
-    // interference-graph-driven merge groups land in `merged_names`
-    // alongside the merger's output — VarNamingPass then names one C
-    // variable per coalesced cluster.
-    run_instrumented(&RegisterCoalescePass, ssa)
-        .context("register coalesce pass failed")?;
-
-    // Batch 1: language-specific recovery passes. Each is gated by its
-    // own data shape — Rust enum/vtable passes early-return when no
-    // discriminant-load / fat-pointer pattern is present, so they are
-    // no-ops on non-Rust binaries. RustPanicPass needs the symbol
-    // resolver (panic-function name matching) and so only runs on the
-    // resolver-aware path.
-    run_instrumented(&RustEnumPass, ssa).context("rust enum pass failed")?;
-    run_instrumented(&RustVtablePass, ssa).context("rust vtable pass failed")?;
-    if let Some(resolve) = resolver {
-        RustPanicPass
-            .run_with_resolver(ssa, resolve)
-            .context("rust panic pass failed")?;
-    }
-
-    // t227 — role-based naming. Sits after the variable-merge coalescer so
-    // role names like `i`/`saved_rbx` can override the merger's generic
-    // `vN` choices, while still losing to *meaningful* (non-`vN`) names
-    // produced by the merger (it occasionally promotes a DWARF name into
-    // its output map).
-    run_instrumented(&VarNamingPass, ssa).context("var naming pass failed")?;
-
-    // t230 — calling-convention finalization. Runs last so the
-    // dead-param drop, byte-mask narrowing, and caller-side
-    // return-type inference all see the fully-stabilised IR + names.
-    run_instrumented(&CallingConvFinalizePass, ssa)
-        .context("calling-conv finalization pass failed")?;
-
-    // Batch 15 (slice 1): opt-in alias categorization. Only fires when
-    // `UNLACE_ALIAS_DUMP=1`. Runs at the END of the pipeline so the
-    // category tags can't influence any opt pass — they're purely
-    // observational here. The pass itself also self-gates its eprintln
-    // on the same env var; we still gate the call site so the (cheap)
-    // walk doesn't run on production decompiles.
-    if std::env::var_os("UNLACE_ALIAS_DUMP").is_some() {
-        run_instrumented(
-            &unlace_passes::alias_categorize::AliasCategorizePass::new(),
-            ssa,
-        )
-        .context("alias categorize pass failed")?;
-    }
-
-    // Bump the signature revision iff the pipeline mutated any of the three
-    // observable signature components. Whole-program drivers can compare
-    // revisions across runs to know which functions to re-analyze.
     let _ = bump_if_signature_changed(ssa, &pre_pipeline_sig);
 
     tracing::debug!(
@@ -1294,6 +1077,7 @@ fn run_passes_with_report_inner(
         outer_iters = outer_report.iterations,
         outer_hit_cap = outer_report.hit_cap,
         signature_revision = ssa.signature_revision,
+        maturity = ?ssa.maturity,
         "pass pipeline complete"
     );
 
@@ -1301,6 +1085,140 @@ fn run_passes_with_report_inner(
         ir_changes: total_ir_changes,
         outer: outer_report,
     })
+}
+
+// ─── Pipeline Stage Helpers ─────────────────────────────────────────────────
+// Each helper below corresponds to one maturity-level stage. The pass
+// composition and execution order is identical to the prior monolithic
+// closure — this is a pure structural extraction.
+
+/// Stage 1 (M_GENERATED): IR-level fixed-point cluster.
+/// Runs ConstFold, CopyProp, SCCP, CSE, GVN, LICM, IV-elim, idioms,
+/// and condition simplification to convergence.
+fn pipeline_stage_ir_fixedpoint(ssa: &mut SsaFunction) -> Result<usize, unlace_passes::PassError> {
+    let fold = ConstantFoldPass;
+    let prop = CopyPropagationPass;
+    let gprop = GlobalCopyPropPass;
+    let dce = DeadCodeElimPass;
+    let sccp = SccpPass;
+    let cse = CsePass;
+    let gvn = GvnPass;
+    let licm = LicmPass;
+    let iv_elim = IvElimPass;
+    let strength_reduce = StrengthReducePass;
+    let idiom = IdiomRecognitionPass;
+    let bmi = BmiIdiomPass;
+    let cond = ConditionSimplifyPass;
+    let call_bound = CallBoundaryCopyPropPass;
+    let red_flag = RedundantFlagElimPass;
+    let algebraic = AlgebraicSimplifyPass;
+    let passes: &[&dyn Pass] = &[
+        &fold,
+        &prop,
+        &gprop,
+        &dce,
+        &sccp,
+        &cse,
+        &gvn,
+        &bmi,
+        &licm,
+        &iv_elim,
+        &strength_reduce,
+        &idiom,
+        &cond,
+        &call_bound,
+        &red_flag,
+        &algebraic,
+    ];
+    run_to_fixedpoint(passes, ssa)
+}
+
+/// Stage 2 (M_PREOPTIMIZED): single-run cleanup passes.
+/// DSE (intra + cross-block), dead flags, division/modulo idioms.
+fn pipeline_stage_cleanup(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&DeadStoreElimPass, ssa)?;
+    run_instrumented(&DeadFlagElimPass, ssa)?;
+    run_instrumented(&DeadStoreElimGlobalPass, ssa)?;
+    run_instrumented(&DivisionIdiomPass, ssa)?;
+    run_instrumented(&ModuloIdiomPass, ssa)?;
+    Ok(())
+}
+
+/// Stage 3 (M_LOCOPT): structural detection + stack/frame recovery.
+/// Prologue elim, tail-call, SP tracking, stack vars, frame layout.
+fn pipeline_stage_structural(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&PrologueElimPass, ssa)?;
+    run_instrumented(&TailCallDetectPass, ssa)?;
+    run_instrumented(&StackPointerTrackingPass, ssa)?;
+    run_instrumented(&StackVarRecoveryPass, ssa)?;
+    ssa.stack_frame = Some(recover_stack_frame(ssa));
+    Ok(())
+}
+
+/// Stage 4 (M_CALLS): indirect call resolution + vtable detection.
+fn pipeline_stage_call_resolution(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&IndirectCallResolvePass, ssa)?;
+    run_instrumented(&CppVtablePass, ssa)?;
+    run_instrumented(&CppMethodPass, ssa)?;
+    Ok(())
+}
+
+/// Stage 5 (M_GLBOPT): type recovery, calling convention, struct/byref.
+/// This is the stage whose output feeds the outer-fixedpoint convergence
+/// check via `ssa_type_signature`.
+fn pipeline_stage_type_recovery(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&CallingConventionDetectPass, ssa)?;
+    run_instrumented(&ParamInferPass, ssa)?;
+    run_instrumented(&ReturnTypeInferPass, ssa)?;
+    run_instrumented(&StructFieldDetectPass, ssa)?;
+    ssa.byref_info = Some(detect_byref(ssa));
+    ssa.array_struct_layouts = recover_structs(ssa);
+    run_instrumented(&unlace_passes::type_infer::TypeInferPass, ssa)?;
+    run_instrumented(&TypeConstraintSolverPass, ssa)?;
+    Ok(())
+}
+
+/// Stage 6a (M_LVARS): post-loop one-shot annotation passes.
+/// Pattern-recognition that doesn't influence the outer fixedpoint.
+fn pipeline_stage_post_loop(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&BitfieldIdiomPass, ssa)?;
+    run_instrumented(&CryptoIdiomPass, ssa)?;
+    run_instrumented(&IndirectCallResolvePass, ssa)?;
+    run_instrumented(&IndirectJumpResolvePass, ssa)?;
+    run_instrumented(&OpTypeBindingPass, ssa)?;
+    Ok(())
+}
+
+/// Stage 6b (M_LVARS): lvar allocation and variable merging.
+fn pipeline_stage_lvar(ssa: &mut SsaFunction) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&ExpressionTreePass, ssa)?;
+    run_instrumented(&VariableMergePass, ssa)?;
+    run_instrumented(&LvarCollectPass, ssa)?;
+    run_instrumented(&RegisterCoalescePass, ssa)?;
+    Ok(())
+}
+
+/// Stage 7 (M_FINAL): language-specific passes, naming, finalization.
+fn pipeline_stage_final(
+    ssa: &mut SsaFunction,
+    resolver: Option<&dyn Fn(u64) -> Option<&'static str>>,
+) -> Result<(), unlace_passes::PassError> {
+    run_instrumented(&RustEnumPass, ssa)?;
+    run_instrumented(&RustVtablePass, ssa)?;
+    if let Some(resolve) = resolver {
+        RustPanicPass.run_with_resolver(ssa, resolve)?;
+    }
+    run_instrumented(&VarNamingPass, ssa)?;
+    run_instrumented(&CallingConvFinalizePass, ssa)?;
+
+    // Opt-in alias categorization for debugging.
+    if std::env::var_os("UNLACE_ALIAS_DUMP").is_some() {
+        run_instrumented(
+            &unlace_passes::alias_categorize::AliasCategorizePass::new(),
+            ssa,
+        )?;
+    }
+    Ok(())
 }
 
 fn apply_dwarf_to_ssa(ssa: &mut SsaFunction, dwarf: &DwarfInfo, entry: &FunctionEntry) {
@@ -1521,9 +1439,8 @@ pub fn lift_and_run_passes(
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
     }
-    let resolve_name = |addr: u64| -> Option<&'static str> {
-        stable_symbol_names.get(&addr).copied()
-    };
+    let resolve_name =
+        |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
 
     // Batch 6 (pre-pass): parse printf-family format strings against the
     // raw post-SSA IR. The pre-pass run is load-bearing because the
@@ -1576,7 +1493,11 @@ pub fn emit_function_interproc(
             .collect();
     }
     let _libc = annotate_libc_calls(ssa, &|addr| symbols.get(&addr).cloned());
-    let _var = parse_printf_format_strings(ssa, &|addr| stable_symbol_names.get(&addr).copied(), &image.string_table);
+    let _var = parse_printf_format_strings(
+        ssa,
+        &|addr| stable_symbol_names.get(&addr).copied(),
+        &image.string_table,
+    );
     let go_iface_devirtualized_calls = collect_go_iface_devirtualized_calls(ssa, image, &symbols);
     let mut libc_call_canonical: BTreeMap<u64, String> = BTreeMap::new();
     for (&(bid, idx), canonical) in &ssa.libc_call_annotations {
@@ -1586,7 +1507,9 @@ pub fn emit_function_interproc(
             }
         }
     }
-    let mut printer_annotations = config.annotations.as_ref()
+    let mut printer_annotations = config
+        .annotations
+        .as_ref()
         .map(|db| build_printer_annotations(db, entry.addr))
         .unwrap_or_default();
     printer_annotations.go_defer_sites = ssa.go_defer_sites.clone();
@@ -1603,7 +1526,17 @@ pub fn emit_function_interproc(
     let printer_annotations = Some(printer_annotations);
     resolve_jump_table_targets(ssa, image);
     let jt_sections = build_jump_table_section_views(image);
-    emit_output(emit, ssa, dwarf, &symbols, &image.string_table, rtti, config.print_config, printer_annotations.as_ref(), &jt_sections)
+    emit_output(
+        emit,
+        ssa,
+        dwarf,
+        &symbols,
+        &image.string_table,
+        rtti,
+        config.print_config,
+        printer_annotations.as_ref(),
+        &jt_sections,
+    )
 }
 
 #[allow(dead_code)]
@@ -1824,9 +1757,8 @@ pub fn decompile_function_with_symbols(
     }
 
     let t = Instant::now();
-    let resolve_name = |addr: u64| -> Option<&'static str> {
-        stable_symbol_names.get(&addr).copied()
-    };
+    let resolve_name =
+        |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
 
     // Batch 6 (pre-pass): parse printf-family format strings *before*
     // the optimization pipeline runs. The IR pattern that
@@ -2215,9 +2147,9 @@ pub fn resolve_jump_table_targets(
                 // executable footprint, otherwise this isn't really a table.
                 let plausible = !targets.is_empty()
                     && targets.iter().all(|&t| {
-                        sections
-                            .iter()
-                            .any(|s| s.contains_addr(t) && s.perms == unlace_struct::SectionPerms::RX)
+                        sections.iter().any(|s| {
+                            s.contains_addr(t) && s.perms == unlace_struct::SectionPerms::RX
+                        })
                     });
                 if plausible {
                     updated.insert(

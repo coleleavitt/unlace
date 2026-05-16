@@ -450,6 +450,7 @@ mod tests {
         SsaFunction {
             function: func,
             arch: unlace_ir::ArchId::Unknown(0),
+            maturity: unlace_ir::ssa::Maturity::Zero,
             cfg,
             dom_tree,
             post_dom_tree: None,
@@ -1156,8 +1157,7 @@ mod tests {
 
         let mut bb = BasicBlock::new(BlockId(0));
         // insn 0: MMIO STORE addr, c5  — must survive.
-        let mut insn0 =
-            IrInsn::without_output(IrOp::Store, smallvec![addr.base, c5], 0x1000);
+        let mut insn0 = IrInsn::without_output(IrOp::Store, smallvec![addr.base, c5], 0x1000);
         insn0.category = Some(unlace_ir::AliasCategory::Mmio);
         bb.insns.push(insn0);
         // insn 1: plain STORE addr, c10
@@ -1210,8 +1210,7 @@ mod tests {
         ));
         // Volatile store on a *different* address — barrier should
         // still flush the alias maps so addr_a's first store is kept.
-        let mut vol =
-            IrInsn::without_output(IrOp::Store, smallvec![addr_b.base, c99], 0x1004);
+        let mut vol = IrInsn::without_output(IrOp::Store, smallvec![addr_b.base, c99], 0x1004);
         vol.category = Some(unlace_ir::AliasCategory::Volatile);
         bb.insns.push(vol);
         bb.insns.push(IrInsn::without_output(

@@ -330,6 +330,7 @@ mod tests {
         SsaFunction {
             function: func,
             arch: unlace_ir::ArchId::Unknown(0),
+            maturity: unlace_ir::ssa::Maturity::Zero,
             cfg,
             dom_tree,
             post_dom_tree: None,
@@ -717,9 +718,7 @@ mod tests {
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = NoreturnDetectPass::new();
-        let changed = pass
-            .run_with_resolver(&mut ssa, fixpoint_resolver)
-            .unwrap();
+        let changed = pass.run_with_resolver(&mut ssa, fixpoint_resolver).unwrap();
         assert!(changed);
         assert!(ssa.noreturn);
     }
@@ -739,9 +738,7 @@ mod tests {
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = NoreturnDetectPass::new();
-        let changed = pass
-            .run_with_resolver(&mut ssa, fixpoint_resolver)
-            .unwrap();
+        let changed = pass.run_with_resolver(&mut ssa, fixpoint_resolver).unwrap();
         assert!(changed);
         assert!(ssa.noreturn, "prefix-matched callee must promote caller");
     }
@@ -761,9 +758,7 @@ mod tests {
 
         let mut ssa = make_ssa(vec![bb], BTreeMap::new());
         let pass = NoreturnDetectPass::new();
-        let changed = pass
-            .run_with_resolver(&mut ssa, fixpoint_resolver)
-            .unwrap();
+        let changed = pass.run_with_resolver(&mut ssa, fixpoint_resolver).unwrap();
         assert!(!changed);
         assert!(!ssa.noreturn);
     }

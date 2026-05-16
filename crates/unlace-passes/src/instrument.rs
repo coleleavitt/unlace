@@ -110,11 +110,7 @@ fn trace_set() -> &'static Option<Vec<String>> {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
-        if parts.is_empty() {
-            None
-        } else {
-            Some(parts)
-        }
+        if parts.is_empty() { None } else { Some(parts) }
     })
 }
 
@@ -407,9 +403,9 @@ mod tests {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         reset_timings_for_test();
 
-        record_pass_timing("alpha", 1_000_000); // 1 ms
-        record_pass_timing("alpha", 3_000_000); // 3 ms
-        record_pass_timing("beta", 2_000_000); // 2 ms
+        record_pass_timing("test_fn", "alpha", 1_000_000); // 1 ms
+        record_pass_timing("test_fn", "alpha", 3_000_000); // 3 ms
+        record_pass_timing("test_fn", "beta", 2_000_000); // 2 ms
 
         let table = dump_pass_timings();
         // alpha: 2 samples, total 4ms, avg 2ms, max 3ms
@@ -436,7 +432,7 @@ mod tests {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         reset_timings_for_test();
 
-        record_pass_timing("only", 5_500_000); // 5.5 ms
+        record_pass_timing("test_fn", "only", 5_500_000); // 5.5 ms
 
         let table = dump_pass_timings();
         let expected = "\

@@ -163,9 +163,7 @@ mod tests {
 
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{
-        CallingConvention, DominatorTree, PrimitiveType, SsaFunction,
-    };
+    use unlace_ir::ssa::{CallingConvention, DominatorTree, PrimitiveType, SsaFunction};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -181,6 +179,7 @@ mod tests {
         SsaFunction {
             function: func,
             arch: unlace_ir::ArchId::Unknown(0),
+            maturity: unlace_ir::ssa::Maturity::Zero,
             cfg,
             dom_tree,
             post_dom_tree: None,

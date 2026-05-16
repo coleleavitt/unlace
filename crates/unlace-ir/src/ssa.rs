@@ -219,6 +219,21 @@ impl std::fmt::Display for PrimitiveType {
     }
 }
 
+/// Explicit gap between two recovered stack slots.
+///
+/// Surfaced by `StackPointerTrackingPass`. Distinct from
+/// [`SsaFunction::stack_holes`]: that map covers every uncovered byte
+/// range in `[min_sp_depth, 0)`; `FrameHole` only flags inter-slot gaps
+/// whose width is suspicious (too large for a single saved register but
+/// smaller than the widest known primitive type — 8 bytes on 64-bit ABIs).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct FrameHole {
+    /// RSP-relative offset of the hole's first byte.
+    pub offset: i64,
+    /// Byte length of the hole.
+    pub size: u32,
+}
+
 /// A recovered stack variable at a fixed RSP-relative offset.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StackVar {
@@ -501,6 +516,19 @@ pub struct SsaFunction {
     /// (alloca / dynamic stack arrays). When true the C printer emits an
     /// explanatory comment in the function preamble.
     pub dynamic_sp: bool,
+    /// SP delta at the *entry* of each block, relative to function entry.
+    /// The entry block's delta is always `0`; successor blocks inherit the
+    /// fall-through delta from their CFG predecessor. Computed by
+    /// [`StackPointerTrackingPass`](https://docs.rs/unlace-passes).
+    pub block_entry_sp_delta: BTreeMap<BlockId, i64>,
+    /// Inter-slot gaps detected in the recovered stack layout. See
+    /// [`FrameHole`] for the precise definition; this is a strictly
+    /// additive companion to [`Self::stack_holes`].
+    pub frame_holes: Vec<FrameHole>,
+    /// Stack slot offsets (RSP-relative) that hold callee-saved registers
+    /// stashed by the prologue. Surfaced so later passes / the printer
+    /// can render those slots as `saved_<reg>` rather than as `local_*`.
+    pub saved_register_slots: BTreeSet<i64>,
     /// Type associated with an `IrInsn` whose constant operand was
     /// recognised as `sizeof(T)`. Keyed by `(BlockId, insn_index)`. The
     /// IR has no `Sizeof` opcode (the 75-opcode spec is frozen), so this
@@ -1025,6 +1053,9 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         sp_delta_at: BTreeMap::new(),
         stack_holes: BTreeMap::new(),
         dynamic_sp: false,
+        block_entry_sp_delta: BTreeMap::new(),
+        frame_holes: Vec::new(),
+        saved_register_slots: BTreeSet::new(),
         sizeof_type_map: BTreeMap::new(),
         alignof_type_map: BTreeMap::new(),
         resolved_indirect_calls: BTreeMap::new(),

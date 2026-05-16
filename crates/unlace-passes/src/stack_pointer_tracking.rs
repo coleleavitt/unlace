@@ -14,11 +14,18 @@
 //!   byte ranges in `[min_sp_depth, 0)` keyed by RSP-relative start offset.
 //! * [`dynamic_sp`](unlace_ir::ssa::SsaFunction::dynamic_sp) — true when
 //!   `IntAdd(rsp, var)` / `IntSub(rsp, var)` is observed (alloca / VLA).
+//! * [`block_entry_sp_delta`](unlace_ir::ssa::SsaFunction::block_entry_sp_delta)
+//!   — SP delta at the entry of each block (CFG fall-through threading).
+//! * [`frame_holes`](unlace_ir::ssa::SsaFunction::frame_holes) — explicit
+//!   inter-slot gaps too wide for a saved register but narrower than a
+//!   known primitive type.
+//! * [`saved_register_slots`](unlace_ir::ssa::SsaFunction::saved_register_slots)
+//!   — RSP-relative slot offsets that hold callee-saved registers stashed
+//!   by the prologue.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use unlace_ir::ssa::PrimitiveType;
-use unlace_ir::ssa::SsaFunction;
+use unlace_ir::ssa::{CallingConvention, FrameHole, PrimitiveType, SsaFunction};
 use unlace_ir::stack::StackSpec;
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
@@ -39,16 +46,25 @@ impl Pass for StackPointerTrackingPass {
         let Some(spec) = StackSpec::for_arch(func.arch) else {
             return Ok(false);
         };
-        let (sp_delta_at, dynamic_sp, min_depth) = walk_sp_deltas(func, &spec);
+        let (sp_delta_at, block_entry_sp_delta, dynamic_sp, min_depth) =
+            walk_sp_deltas(func, &spec);
         let stack_holes = compute_stack_holes(func, min_depth);
+        let saved_register_slots = classify_saved_register_slots(func, &spec);
+        let frame_holes = compute_frame_holes(func, &spec, &saved_register_slots);
 
         let changed = sp_delta_at != func.sp_delta_at
             || stack_holes != func.stack_holes
-            || dynamic_sp != func.dynamic_sp;
+            || dynamic_sp != func.dynamic_sp
+            || block_entry_sp_delta != func.block_entry_sp_delta
+            || frame_holes != func.frame_holes
+            || saved_register_slots != func.saved_register_slots;
 
         func.sp_delta_at = sp_delta_at;
         func.stack_holes = stack_holes;
         func.dynamic_sp = dynamic_sp;
+        func.block_entry_sp_delta = block_entry_sp_delta;
+        func.frame_holes = frame_holes;
+        func.saved_register_slots = saved_register_slots;
 
         Ok(changed)
     }
@@ -78,11 +94,18 @@ fn dom_order(func: &SsaFunction) -> Vec<BlockId> {
 }
 
 /// Walk every block in dom-order, threading the SP delta through every
-/// instruction. Returns `(sp_delta_at, dynamic_sp, min_depth_seen)`.
+/// instruction. Returns `(sp_delta_at, block_entry_sp_delta, dynamic_sp,
+/// min_depth_seen)`. The block-entry map starts with `0` for the entry
+/// block and propagates per-block deltas to CFG successors fall-through.
 fn walk_sp_deltas(
     func: &SsaFunction,
     spec: &StackSpec,
-) -> (BTreeMap<(BlockId, usize), i64>, bool, i64) {
+) -> (
+    BTreeMap<(BlockId, usize), i64>,
+    BTreeMap<BlockId, i64>,
+    bool,
+    i64,
+) {
     let mut entry_delta: BTreeMap<BlockId, i64> = BTreeMap::new();
     entry_delta.insert(func.dom_tree.root(), 0);
 
@@ -158,7 +181,7 @@ fn walk_sp_deltas(
         }
     }
 
-    (sp_delta_at, dynamic_sp, min_depth)
+    (sp_delta_at, entry_delta, dynamic_sp, min_depth)
 }
 
 /// If `insn` is `IntAdd/IntSub(sp, X)`, return `(sp_input_pos, |X|, is_dynamic)`.
@@ -251,6 +274,111 @@ fn compute_stack_holes(func: &SsaFunction, min_depth: i64) -> BTreeMap<i64, u32>
         }
     }
 
+    holes
+}
+
+/// Callee-saved register offsets for SysV AMD64 (rbx, rbp, r12-r15) and
+/// Microsoft x64 (rbp, rsi, rdi, rbx, r12-r15). Offsets match the
+/// SLEIGH-style x86_64 register-file layout used by `var_naming.rs`.
+fn callee_saved_x86_64(cc: CallingConvention, reg_offset: u64) -> Option<&'static str> {
+    let sysv = match reg_offset {
+        0x18 => Some("rbx"),
+        0x28 => Some("rbp"),
+        0x80 => Some("r12"),
+        0x88 => Some("r13"),
+        0x90 => Some("r14"),
+        0x98 => Some("r15"),
+        _ => None,
+    };
+    if sysv.is_some() {
+        return sysv;
+    }
+    if matches!(cc, CallingConvention::MicrosoftX64) {
+        return match reg_offset {
+            0x30 => Some("rsi"),
+            0x38 => Some("rdi"),
+            _ => None,
+        };
+    }
+    None
+}
+
+/// Scan the first few instructions of the entry block for prologue stores
+/// of callee-saved registers (`mov [rsp+N], rbx`, etc.) and return the
+/// set of RSP-relative stack slot offsets those stores target.
+fn classify_saved_register_slots(func: &SsaFunction, spec: &StackSpec) -> BTreeSet<i64> {
+    const PROLOGUE_WINDOW: usize = 32;
+    let mut slots: BTreeSet<i64> = BTreeSet::new();
+    let entry = func.function.entry;
+    let Some(block) = func.function.blocks.get(&entry) else {
+        return slots;
+    };
+    let cc = func.calling_convention;
+    for (idx, insn) in block.insns.iter().take(PROLOGUE_WINDOW).enumerate() {
+        if insn.op != IrOp::Store || insn.inputs.len() < 3 {
+            continue;
+        }
+        // STORE inputs: [space_id, address, value]. Only flag stores
+        // whose *value* operand is a physical callee-saved register read.
+        let value = &insn.inputs[2];
+        if value.space != SpaceId::Register {
+            continue;
+        }
+        if callee_saved_x86_64(cc, value.offset).is_none() {
+            continue;
+        }
+        if let Some(&offset) = func.stack_offset_hints.get(&(entry, idx)) {
+            slots.insert(offset);
+            continue;
+        }
+        let addr = &insn.inputs[1];
+        if spec.is_frame_base(addr) {
+            slots.insert(0);
+        } else if addr.space == SpaceId::Stack {
+            slots.insert(addr.offset as i64);
+        }
+    }
+    slots
+}
+
+/// Walk recovered stack slots (sorted by offset) and emit a `FrameHole`
+/// for any inter-slot gap whose width is greater than `ptr_size` (so it's
+/// not a saved-register stash) and strictly less than the widest
+/// primitive type we'd expect to land there. Saved-register slots are
+/// excluded so their natural gaps don't pollute the map.
+fn compute_frame_holes(
+    func: &SsaFunction,
+    spec: &StackSpec,
+    saved_register_slots: &BTreeSet<i64>,
+) -> Vec<FrameHole> {
+    let ptr_size = spec.ptr_size as u32;
+    let max_known: u32 = 8;
+    let mut spans: Vec<(i64, i64)> = func
+        .stack_vars
+        .iter()
+        .filter(|(off, _)| !saved_register_slots.contains(*off))
+        .map(|(_, sv)| {
+            let size = primitive_size(sv.ty);
+            (sv.offset, sv.offset + size as i64)
+        })
+        .collect();
+    spans.sort();
+
+    let mut holes = Vec::new();
+    for win in spans.windows(2) {
+        let (_, prev_end) = win[0];
+        let (next_start, _) = win[1];
+        if next_start <= prev_end {
+            continue;
+        }
+        let gap = (next_start - prev_end) as u32;
+        if gap > ptr_size && gap < max_known {
+            holes.push(FrameHole {
+                offset: prev_end,
+                size: gap,
+            });
+        }
+    }
     holes
 }
 
@@ -418,5 +546,144 @@ mod tests {
             "fully-covered frame must produce no holes, got {:?}",
             ssa.stack_holes
         );
+    }
+
+    /// Block-entry SP delta is zero at the entry block; per-insn delta
+    /// matches the post-prologue `sub rsp, 48`.
+    #[test]
+    fn test_block_entry_sp_delta() {
+        let u0 = Varnode::unique(0, 8);
+        let mut ssa = build(vec![
+            IrInsn::with_output(
+                IrOp::IntSub,
+                u0,
+                smallvec![rsp(), Varnode::constant(48, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u0], 0x1004),
+        ]);
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+
+        let entry = BlockId(0);
+        assert_eq!(
+            ssa.block_entry_sp_delta.get(&entry),
+            Some(&0),
+            "entry block must start at SP delta 0, got {:?}",
+            ssa.block_entry_sp_delta
+        );
+        assert_eq!(ssa.sp_delta_at.get(&(entry, 2)), Some(&-48));
+    }
+
+    /// Saved-register classification: a prologue `mov [rsp], rbx` shape
+    /// (Store space_ram, rsp, rbx) gets recorded as a saved-register slot.
+    #[test]
+    fn test_saved_register_classification() {
+        let rbx = Varnode::reg(0x18, 8);
+        let space_ram = Varnode::constant(0, 8);
+        let mut ssa = build(vec![IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, rsp(), rbx],
+            0x1000,
+        )]);
+        ssa.calling_convention = CallingConvention::SystemV;
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+
+        assert!(
+            ssa.saved_register_slots.contains(&0),
+            "expected slot 0 to be classified as saved register, got {:?}",
+            ssa.saved_register_slots
+        );
+    }
+
+    /// Frame-hole detection on x86_64: ptr_size==max_known==8 suppresses
+    /// every candidate hole (gap can't be both > 8 and < 8).
+    #[test]
+    fn test_frame_hole_detection_x86_64_suppressed() {
+        let u0 = Varnode::unique(0, 8);
+        let mut ssa = build(vec![
+            IrInsn::with_output(
+                IrOp::IntSub,
+                u0,
+                smallvec![rsp(), Varnode::constant(32, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u0], 0x1004),
+        ]);
+        ssa.stack_vars.insert(
+            -16,
+            StackVar {
+                offset: -16,
+                name: "v1".into(),
+                ty: PrimitiveType::Int(4),
+                accesses: vec![],
+            },
+        );
+        ssa.stack_vars.insert(
+            -5,
+            StackVar {
+                offset: -5,
+                name: "v2".into(),
+                ty: PrimitiveType::Int(4),
+                accesses: vec![],
+            },
+        );
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+
+        assert!(
+            ssa.frame_holes.is_empty(),
+            "x86_64 ptr_size==max_known suppresses every candidate hole, got {:?}",
+            ssa.frame_holes
+        );
+    }
+
+    /// Frame-hole detection on a 32-bit ABI: PPC32 has ptr_size==4 so a
+    /// 5-byte inter-slot gap (5 > 4 && 5 < 8) surfaces as a FrameHole.
+    #[test]
+    fn test_frame_hole_detection_narrow_ptr() {
+        use unlace_ir::{ArchId, BasicBlock, Function};
+
+        let mut func = Function::new("t", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x2000,
+        ));
+        func.insert_block(bb);
+        let mut ssa = build_ssa(func);
+        ssa.arch = ArchId::Ppc;
+
+        ssa.stack_vars.insert(
+            -16,
+            StackVar {
+                offset: -16,
+                name: "v1".into(),
+                ty: PrimitiveType::Int(4),
+                accesses: vec![],
+            },
+        );
+        ssa.stack_vars.insert(
+            -7,
+            StackVar {
+                offset: -7,
+                name: "v2".into(),
+                ty: PrimitiveType::Int(4),
+                accesses: vec![],
+            },
+        );
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+
+        assert_eq!(
+            ssa.frame_holes.len(),
+            1,
+            "expected exactly one inter-slot frame hole, got {:?}",
+            ssa.frame_holes
+        );
+        assert_eq!(ssa.frame_holes[0].offset, -12);
+        assert_eq!(ssa.frame_holes[0].size, 5);
     }
 }

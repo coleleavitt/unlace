@@ -268,6 +268,11 @@ mod tests {
             resolved_jump_tables: std::collections::BTreeMap::new(),
             lvars: Vec::new(),
             rust_async: None,
+            cpp_kind: None,
+            cpp_class_name: None,
+            cpp_this_args: BTreeSet::new(),
+            is_varargs: false,
+            inferred_stack_params: BTreeSet::new(),
         }
     }
 

@@ -750,6 +750,21 @@ pub struct SsaFunction {
     /// `CppMethodPass` when the call target is a vtable slot read off
     /// `[this + N]`.
     pub cpp_this_args: BTreeSet<(BlockId, usize)>,
+    /// Whether the function has been detected as variadic (uses C-style
+    /// `...` / `va_arg`). Populated by
+    /// [`ParamInferPass`](https://docs.rs/unlace-passes) when the entry
+    /// block reads `%rax` (SysV's vector-register count) before writing
+    /// it, or when it spills more than one consecutive XMM register to a
+    /// contiguous stack region (the classic `va_arg` save area). Defaults
+    /// to `false`.
+    pub is_varargs: bool,
+    /// Stack-passed parameters detected as positive RSP-relative loads
+    /// (`[rsp + 8 + N*8]` on SysV — past the saved return address) in the
+    /// entry block, before any matching write. Each entry is the
+    /// RSP-relative byte offset of the slot. Empty when no stack-passed
+    /// parameters were detected. Populated by
+    /// [`ParamInferPass`](https://docs.rs/unlace-passes).
+    pub inferred_stack_params: BTreeSet<i64>,
 }
 
 /// Classification of a C++ method recovered from its mangled name.
@@ -1211,6 +1226,8 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         cpp_kind: None,
         cpp_class_name: None,
         cpp_this_args: BTreeSet::new(),
+        is_varargs: false,
+        inferred_stack_params: BTreeSet::new(),
     }
 }
 

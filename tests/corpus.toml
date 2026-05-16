@@ -1,0 +1,244 @@
+# Fixture manifest for the unlace decompiler test corpus.
+#
+# Each [[fixture]] entry describes one binary under fixtures/. Compiler
+# and flag info is sourced from fixtures/README.md and the original
+# `feat(fixtures):` commit messages. When a flag set is not documented,
+# the field is "unknown" rather than guessed.
+#
+# `feature_tags` uses the controlled vocabulary from plan.md:
+#   stack_vars, frame_pointer_omitted, alloca_dynamic_stack,
+#   structs_arrays, switches_jump_tables, indirect_calls,
+#   varargs_printf, cpp_methods_vtables, rust_panics_enums,
+#   objc_dispatch, go_interfaces_defer, eh_landing_pads,
+#   simd_callother_heavy, multi_arch.
+#
+# Tags are conservative: only assigned when the binary's source or
+# build recipe makes the feature obvious. Missing tags ≠ absent
+# feature; they just mean we didn't claim coverage.
+#
+# Validated by `cargo run -p xtask -- validate-corpus-toml`.
+
+# ---------- Core C fixtures (x86_64, gcc -O2, no debug) ----------
+
+[[fixture]]
+name = "hello_world"
+source_path = "fixtures/src/hello_world.c"
+binary_path = "fixtures/hello_world.elf"
+compiler = "gcc"
+flags = "-O2"
+architecture = "x86_64"
+feature_tags = []
+
+[[fixture]]
+name = "branches"
+source_path = "fixtures/src/branches.c"
+binary_path = "fixtures/branches.elf"
+compiler = "gcc"
+flags = "-O2"
+architecture = "x86_64"
+feature_tags = ["switches_jump_tables"]
+
+[[fixture]]
+name = "loops"
+source_path = "fixtures/src/loops.c"
+binary_path = "fixtures/loops.elf"
+compiler = "gcc"
+flags = "-O2"
+architecture = "x86_64"
+feature_tags = ["stack_vars"]
+
+[[fixture]]
+name = "calls"
+source_path = "fixtures/src/calls.c"
+binary_path = "fixtures/calls.elf"
+compiler = "gcc"
+flags = "-O2"
+architecture = "x86_64"
+feature_tags = []
+
+[[fixture]]
+name = "medium"
+source_path = "fixtures/src/medium.c"
+binary_path = "fixtures/medium.elf"
+compiler = "gcc"
+flags = "-O2"
+architecture = "x86_64"
+feature_tags = ["stack_vars", "switches_jump_tables"]
+
+[[fixture]]
+name = "stripped"
+source_path = "fixtures/src/medium.c"
+binary_path = "fixtures/stripped.elf"
+compiler = "gcc"
+flags = "-O2 (then strip -s)"
+architecture = "x86_64"
+feature_tags = ["stack_vars", "switches_jump_tables"]
+
+[[fixture]]
+name = "empty"
+source_path = "fixtures/src/empty.c"
+binary_path = "fixtures/empty.elf"
+compiler = "gcc"
+flags = "-O2"
+architecture = "x86_64"
+feature_tags = []
+
+# ---------- DWARF debug-info fixtures ----------
+
+[[fixture]]
+name = "debug_calls"
+source_path = "fixtures/src/calls.c"
+binary_path = "fixtures/debug_calls.elf"
+compiler = "gcc"
+flags = "-g -O0"
+architecture = "x86_64"
+feature_tags = ["stack_vars"]
+
+[[fixture]]
+name = "debug_structs"
+source_path = "fixtures/src/debug_structs.c"
+binary_path = "fixtures/debug_structs.elf"
+compiler = "gcc"
+flags = "-g -O1"
+architecture = "x86_64"
+feature_tags = ["structs_arrays"]
+
+[[fixture]]
+name = "debug_hello"
+source_path = "fixtures/src/hello_world.c"
+binary_path = "fixtures/debug_hello.elf"
+compiler = "gcc"
+flags = "-g -O1"
+architecture = "x86_64"
+feature_tags = []
+
+[[fixture]]
+name = "debug_templates"
+source_path = "fixtures/src/debug_templates.cpp"
+binary_path = "fixtures/debug_templates.elf"
+compiler = "g++"
+flags = "unknown"
+architecture = "x86_64"
+feature_tags = []
+
+# ---------- Targeted-feature fixtures ----------
+
+[[fixture]]
+name = "switch_table"
+source_path = "fixtures/src/switch_table.c"
+binary_path = "fixtures/switch_table.elf"
+compiler = "gcc"
+flags = "-O1 -fno-tree-switch-conversion"
+architecture = "x86_64"
+feature_tags = ["switches_jump_tables"]
+
+[[fixture]]
+name = "x87_math"
+source_path = "fixtures/src/x87_math.c"
+binary_path = "fixtures/x87_math.elf"
+compiler = "gcc"
+flags = "-O2 -m80"
+architecture = "x86_64"
+feature_tags = ["simd_callother_heavy"]
+
+# ---------- C++ fixtures ----------
+
+[[fixture]]
+name = "cpp_vtable"
+source_path = "fixtures/src/cpp_vtable.cpp"
+binary_path = "fixtures/cpp_vtable.elf"
+compiler = "g++"
+flags = "-O2 -std=c++17"
+architecture = "x86_64"
+feature_tags = ["cpp_methods_vtables", "indirect_calls", "varargs_printf"]
+
+[[fixture]]
+name = "cpp_exceptions"
+source_path = "fixtures/src/cpp_exceptions.cpp"
+binary_path = "fixtures/cpp_exceptions.elf"
+compiler = "g++"
+flags = "-O2"
+architecture = "x86_64"
+feature_tags = ["eh_landing_pads", "varargs_printf"]
+
+[[fixture]]
+name = "cpp_rtti"
+source_path = "fixtures/src/cpp_rtti.cpp"
+binary_path = "fixtures/cpp_rtti.elf"
+compiler = "g++"
+flags = "-O2 -std=c++17 -frtti"
+architecture = "x86_64"
+feature_tags = ["cpp_methods_vtables", "indirect_calls", "varargs_printf"]
+
+# ---------- Multi-arch ELF fixtures ----------
+
+[[fixture]]
+name = "arm64_features"
+source_path = "fixtures/src/arm64_features.S"
+binary_path = "fixtures/arm64_features.elf"
+compiler = "unknown"
+flags = "unknown"
+architecture = "arm64"
+feature_tags = ["multi_arch"]
+
+[[fixture]]
+name = "mips64_features"
+source_path = "fixtures/src/mips64_features.py"
+binary_path = "fixtures/mips64_features.elf"
+compiler = "unknown"
+flags = "hand-assembled via python script"
+architecture = "mips"
+feature_tags = ["multi_arch"]
+
+[[fixture]]
+name = "riscv64_features"
+source_path = "fixtures/src/riscv64_features.py"
+binary_path = "fixtures/riscv64_features.elf"
+compiler = "unknown"
+flags = "hand-assembled via python script"
+architecture = "riscv"
+feature_tags = ["multi_arch"]
+
+[[fixture]]
+name = "ppc64_features"
+binary_path = "fixtures/ppc64_features.elf"
+compiler = "unknown"
+flags = "unknown"
+architecture = "ppc"
+feature_tags = ["multi_arch"]
+
+[[fixture]]
+name = "arc_features"
+binary_path = "fixtures/arc_features.elf"
+compiler = "unknown"
+flags = "unknown"
+architecture = "arc"
+feature_tags = ["multi_arch"]
+
+[[fixture]]
+name = "v850_features"
+binary_path = "fixtures/v850_features.elf"
+compiler = "unknown"
+flags = "unknown"
+architecture = "v850"
+feature_tags = ["multi_arch"]
+
+# ---------- Language-runtime fixtures ----------
+
+[[fixture]]
+name = "go_hello"
+binary_path = "fixtures/go_hello.elf"
+compiler = "unknown"
+flags = "unknown"
+architecture = "x86_64"
+feature_tags = []
+
+# ---------- Mach-O fixture ----------
+
+[[fixture]]
+name = "ios_kcm"
+binary_path = "fixtures/ios_kcm.arm64.macho"
+compiler = "unknown"
+flags = "unknown"
+architecture = "arm64"
+feature_tags = ["objc_dispatch", "multi_arch"]

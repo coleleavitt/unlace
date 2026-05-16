@@ -56,6 +56,10 @@ impl Pass for PrologueElimPass {
         "prologue-elim"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::PreOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut marked = std::collections::BTreeSet::new();
 

@@ -24,6 +24,10 @@ impl Pass for CppLambdaCapturePass {
         "cpp-lambda-captures"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let captures = recover_lambda_captures(func);
         if captures == func.cpp_lambda_captures {

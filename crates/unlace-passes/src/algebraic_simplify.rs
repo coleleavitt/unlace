@@ -18,6 +18,10 @@ impl Pass for AlgebraicSimplifyPass {
         "algebraic-simplify"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::PreOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let func_name = func.function.name.clone();
         let block_count = func.function.blocks.len();

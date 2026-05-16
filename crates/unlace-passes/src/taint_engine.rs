@@ -55,6 +55,10 @@ impl Pass for TaintEnginePass {
         "taint-engine"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let findings = propagate_taint(func, &self.symbols);
         // Record findings as annotations (future: store in func metadata).

@@ -34,6 +34,10 @@ impl Pass for DeadStoreElimPass {
         "dse"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::LocalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let ssa_dead = find_dead_ssa_defs(func);
         let store_dead = find_dead_stores(func);

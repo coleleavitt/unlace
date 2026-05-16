@@ -36,6 +36,10 @@ impl Pass for TailDuplicationPass {
         "tail-duplication"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::GlobalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let total_insns: usize = func.function.blocks.values().map(|b| b.insns.len()).sum();
         // 10% of IR, but at least enough room for one duplication of a

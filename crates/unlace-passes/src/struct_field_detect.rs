@@ -17,6 +17,10 @@ impl Pass for StructFieldDetectPass {
         "struct-field-detect"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let before = func.composite_var_types.clone();
         let def_map = build_def_map(func);

@@ -50,6 +50,10 @@ impl Pass for DeadCodeElimPass {
         "dce"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::LocalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut used: BTreeSet<SsaVarnode> = BTreeSet::new();
 

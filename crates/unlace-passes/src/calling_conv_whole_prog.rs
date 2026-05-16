@@ -19,6 +19,10 @@ impl Pass for WholeProgCallingConvPass {
         "whole-prog-calling-conv"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut changed = false;
 

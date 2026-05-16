@@ -34,6 +34,10 @@ impl Pass for ConditionSimplifyPass {
         "condition-simplify"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::LocalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         const MAX_INNER: usize = 100;
         let func_name = func.function.name.clone();

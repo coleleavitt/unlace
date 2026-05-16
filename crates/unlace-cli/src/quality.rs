@@ -162,6 +162,19 @@ pub struct FunctionQuality {
     /// is a width-based proxy: count `var_types` keys whose `base.size`
     /// is at least 16 bytes.
     pub simd_typed_vars: usize,
+    /// Total [`unlace_ir::lvar::Lvar`] candidates emitted by
+    /// `LvarCollectPass`. Batch 3 slice 1 introduced the data model;
+    /// slice 2 wires proper SSA-derived liveness, so the count is the
+    /// denominator for `lvars_with_nonempty_range`.
+    pub lvars_total: usize,
+    /// Number of lvars whose `live_range` covers more than a single
+    /// block (`start_block < end_block`). Lvars span > 1 block when
+    /// the SSA varnodes backing them appear in multiple CFG blocks —
+    /// typical of stack/param/return slots and any temp surviving a
+    /// branch. Single-block lvars are still "non-empty" structurally,
+    /// but only multi-block ones exercise the new liveness path, so
+    /// this is the slice 2 quality signal.
+    pub lvars_with_nonempty_range: usize,
     /// Percentage of call sites whose target is known (0.0..=100.0).
     /// Numerator: direct calls (`IrOp::Call`, always carrying a concrete
     /// target address) plus resolved indirect calls
@@ -241,6 +254,18 @@ impl FunctionQuality {
 
         // --- Batch 0+ extended expression / typing counters ---
         fill_extended_typing_counters(&mut q, ssa, direct_calls, indirect_calls);
+
+        // --- Batch 3 slice 2: lvar liveness coverage ---
+        // `lvars_total` is the candidate-collector output; non-empty
+        // ranges (span > 1 block) signal the new SSA-derived liveness
+        // is actually firing rather than collapsing to the entry-block
+        // placeholder. Both are pure metadata — no emitter impact.
+        q.lvars_total = ssa.lvars.len();
+        q.lvars_with_nonempty_range = ssa
+            .lvars
+            .iter()
+            .filter(|l| l.live_range.start_block < l.live_range.end_block)
+            .count();
 
         // --- Batch 9: count resolved jump tables as switch statements ---
         // The full HIR Switch node requires additional CFG restructuring
@@ -548,6 +573,11 @@ pub struct QualityTotals {
     pub short_circuit_ops: usize,
     pub byref_args: usize,
     pub simd_typed_vars: usize,
+    /// Sum of [`FunctionQuality::lvars_total`] across the binary.
+    pub lvars_total: usize,
+    /// Sum of [`FunctionQuality::lvars_with_nonempty_range`] across
+    /// the binary.
+    pub lvars_with_nonempty_range: usize,
     /// Aggregate call-resolution rate (percentage). Computed as
     /// `total_resolved_calls / total_calls * 100` over the binary, where
     /// `total_resolved_calls = direct + resolved_indirect` (re-derived
@@ -601,6 +631,8 @@ impl QualityTotals {
         self.short_circuit_ops += q.short_circuit_ops;
         self.byref_args += q.byref_args;
         self.simd_typed_vars += q.simd_typed_vars;
+        self.lvars_total += q.lvars_total;
+        self.lvars_with_nonempty_range += q.lvars_with_nonempty_range;
         // call_resolution_rate / type_quality_score are recomputed
         // workspace-wide in `analyze_binary` after per-function rates land
         // (averaging percentages would mis-weight short functions).
@@ -859,7 +891,9 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
          - call resolution rate (mean per-fn): {crr:.1}%\n\
          - type quality score (mean per-fn): {tqs:.1}%\n\
          - frame_hole entries (inter-slot): {fhe}\n\
-         - saved_register slots: {srs}",
+         - saved_register slots: {srs}\n\
+         - lvars total: {lt}\n\
+         - lvars with non-empty live_range (multi-block): {lne}",
         ca = t.compound_assignments,
         sc = t.short_circuit_ops,
         ba = t.byref_args,
@@ -868,6 +902,8 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
         tqs = t.type_quality_score,
         fhe = t.frame_hole_entries,
         srs = t.saved_register_slots,
+        lt = t.lvars_total,
+        lne = t.lvars_with_nonempty_range,
     );
 }
 

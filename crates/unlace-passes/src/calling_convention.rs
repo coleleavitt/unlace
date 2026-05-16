@@ -354,13 +354,27 @@ impl Pass for ParamInferPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
+        let mut changed = false;
+
         let params = infer_params(func);
         if params != func.inferred_params {
             func.inferred_params = params;
-            Ok(true)
-        } else {
-            Ok(false)
+            changed = true;
         }
+
+        let stack_params = infer_stack_params(func);
+        if stack_params != func.inferred_stack_params {
+            func.inferred_stack_params = stack_params;
+            changed = true;
+        }
+
+        let is_varargs = detect_varargs(func);
+        if is_varargs != func.is_varargs {
+            func.is_varargs = is_varargs;
+            changed = true;
+        }
+
+        Ok(changed)
     }
 }
 
@@ -480,6 +494,141 @@ fn collect_reg_consumer_ops_all(func: &SsaFunction) -> BTreeMap<u64, Vec<IrOp>> 
         }
     }
     map
+}
+
+// ---------------------------------------------------------------------------
+// Stack-passed parameter detection
+// ---------------------------------------------------------------------------
+//
+// SysV / cdecl convention: caller pushes overflow arguments onto the stack,
+// then `call` pushes the return address (8 bytes on x86-64, 4 on i386). So
+// at function entry, `[rsp + ptr_size]` is the first stack-passed arg,
+// `[rsp + ptr_size + 8]` is the second, and so on.
+//
+// MS x64 reserves a 32-byte shadow region above the return address for
+// the four register arguments, so the first real stack arg lands at
+// `[rsp + ptr_size + 32]`.
+//
+// We detect stack params by walking the entry block for `Load`s whose
+// address resolves to a positive RSP-relative offset above the
+// return-address slot. The detection runs regardless of whether the
+// stack-frame-recovery pass has materialised `stack_frame.locals`, so
+// it works even when `StackPointerTrackingPass` hasn't fired yet (e.g.
+// on the first call inside the reanalysis fixpoint).
+
+fn infer_stack_params(func: &SsaFunction) -> BTreeSet<i64> {
+    let mut out = BTreeSet::new();
+    let cc = func.calling_convention;
+    let ptr_size: i64 = 8;
+    let min_off: i64 = match cc {
+        CallingConvention::SystemV | CallingConvention::Cdecl => ptr_size,
+        CallingConvention::MicrosoftX64 => ptr_size + 32,
+        // Other CCs (AArch64, Thiscall, Stdcall, Unknown) are skipped:
+        // their stack-arg shape isn't a flat positive RSP displacement
+        // we can recognise cheaply here.
+        _ => return out,
+    };
+
+    // Primary signal: the stack-frame-recovery pass already classified
+    // slot kinds. Trust its `StackArg` tag when present.
+    if let Some(frame) = func.stack_frame.as_ref() {
+        for (&off, slot) in &frame.locals {
+            if slot.kind == unlace_ir::ssa::FrameSlotKind::StackArg && off >= min_off {
+                out.insert(off);
+            }
+        }
+        if !out.is_empty() {
+            return out;
+        }
+    }
+
+    // Fallback: scan the entry block for `Load`s addressed at
+    // `[rsp + const]` where `const >= min_off`. The address operand of a
+    // `Load` is `inputs[1]`; `inputs[0]` is the space id constant.
+    let entry = func.function.entry;
+    let Some(block) = func.function.blocks.get(&entry) else {
+        return out;
+    };
+
+    for insn in &block.insns {
+        if insn.op != IrOp::Load {
+            continue;
+        }
+        let Some(addr) = insn.inputs.get(1) else { continue; };
+        // Direct Stack-space load: e.g. `Load(stack, off)`.
+        if addr.space == SpaceId::Stack {
+            let off = addr.offset as i64;
+            if off >= min_off && off % ptr_size == 0 {
+                out.insert(off);
+            }
+        }
+    }
+
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Varargs detection
+// ---------------------------------------------------------------------------
+//
+// On SysV AMD64 a variadic call requires the caller to set `%al` to the
+// number of XMM registers it used to pass float args. The callee's
+// `va_start` macro saves all six int arg regs and (conditionally on
+// `%al > 0`) the eight XMM arg regs into a contiguous save area on the
+// stack. The two strongest residual signals after SSA optimisation are:
+//
+// 1. `%rax` is read-before-write in the entry block (the `va_start`
+//    prologue reads it to branch on the XMM count).
+// 2. The function spills XMM0..XMM7 to consecutive stack slots — only
+//    `va_start` produces this exact pattern (regular code spills the
+//    callee-saved XMMs, not the volatile ones).
+//
+// We require BOTH of: `rax` read AND all 6 SysV int arg regs read
+// before-write — the latter is the classic `va_start` register-save-area
+// fingerprint. This avoids false positives on functions that simply use
+// `rax` as a scratch-arg slot before assigning to it.
+
+fn detect_varargs(func: &SsaFunction) -> bool {
+    if func.calling_convention != CallingConvention::SystemV {
+        // MS x64 / Win64 has no `%al`-style varargs marker — varargs there
+        // looks identical to regular calls. We can't tell from the callee.
+        return false;
+    }
+
+    let reads = collect_whole_function_reads(func);
+
+    // Signal A: %al / %rax read-before-write somewhere in the function.
+    let reads_rax = reads.contains(&RAX);
+
+    // Signal B: all 6 SysV int arg regs read-before-write. `va_start`'s
+    // register save area spills each one to `gp_offset_save`.
+    let all_int_args_read = SYSV_ARG_REGS.iter().all(|r| reads.contains(r));
+
+    // Signal C: XMM-save-area spill — stores of XMM0..XMM7 to consecutive
+    // stack slots. This is the most specific signal but also the most
+    // expensive; only consult it when A and B aren't both satisfied.
+    let has_xmm_save_area = || -> bool {
+        let mut xmm_spilled = 0u32;
+        for block in func.function.blocks.values() {
+            for insn in &block.insns {
+                if insn.op != IrOp::Store {
+                    continue;
+                }
+                let Some(value) = insn.inputs.get(2) else { continue; };
+                if value.space == SpaceId::Register
+                    && SYSV_FLOAT_REGS.contains(&value.offset)
+                {
+                    xmm_spilled += 1;
+                }
+            }
+        }
+        // The full save area spills all 8; require >= 4 to allow for
+        // DSE-elided slots while still rejecting incidental single-XMM
+        // spills.
+        xmm_spilled >= 4
+    };
+
+    (reads_rax && all_int_args_read) || has_xmm_save_area()
 }
 
 fn infer_param_type(reg_off: u64, consumer_ops: &BTreeMap<u64, Vec<IrOp>>) -> PrimitiveType {
@@ -662,5 +811,229 @@ mod tests {
         ));
         func.insert_block(bb);
         build_ssa(func)
+    }
+
+    /// Helper: a "uses RDI as an int param" insn — `Copy(uniq, rdi)`.
+    fn read_reg_to_unique(reg_off: u64, addr: u64) -> IrInsn {
+        IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::unique(0x1000 + reg_off, 8),
+            smallvec![Varnode::reg(reg_off, 8)],
+            addr,
+        )
+    }
+
+    fn store_reg_to_stack(reg_off: u64, stack_off: u64, addr: u64) -> IrInsn {
+        // STORE has 3 inputs: space-id const, address, value.
+        IrInsn::without_output(
+            IrOp::Store,
+            smallvec![
+                Varnode::constant(SpaceId::Stack as u64, 4),
+                Varnode::stack(stack_off, 8),
+                Varnode::reg(reg_off, 8),
+            ],
+            addr,
+        )
+    }
+
+    // -- Stack param detection ------------------------------------------------
+
+    #[test]
+    fn stack_param_load_above_return_address_is_detected_sysv() {
+        // SysV: a load from [rsp + 8] is the first stack-passed arg.
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::unique(0, 8),
+            smallvec![
+                Varnode::constant(SpaceId::Stack as u64, 4),
+                Varnode::stack(8, 8),
+            ],
+            0x1001,
+        );
+        let mut ssa = make_entry_block_ssa(vec![load]);
+        ssa.calling_convention = CallingConvention::SystemV;
+        let stack_params = infer_stack_params(&ssa);
+        assert!(
+            stack_params.contains(&8),
+            "expected stack offset 8 in {stack_params:?}"
+        );
+    }
+
+    #[test]
+    fn stack_param_below_return_address_ignored() {
+        // [rsp + 0] is the return-address slot, not a parameter.
+        let load = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::unique(0, 8),
+            smallvec![
+                Varnode::constant(SpaceId::Stack as u64, 4),
+                Varnode::stack(0, 8),
+            ],
+            0x1001,
+        );
+        let mut ssa = make_entry_block_ssa(vec![load]);
+        ssa.calling_convention = CallingConvention::SystemV;
+        let stack_params = infer_stack_params(&ssa);
+        assert!(stack_params.is_empty(), "got {stack_params:?}");
+    }
+
+    #[test]
+    fn stack_param_msx64_shadow_space_skipped() {
+        // MS x64: [rsp + 8 .. rsp + 40) is the shadow region. First real
+        // stack arg is at [rsp + 40].
+        let shadow = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::unique(0, 8),
+            smallvec![
+                Varnode::constant(SpaceId::Stack as u64, 4),
+                Varnode::stack(16, 8),
+            ],
+            0x1001,
+        );
+        let real_arg = IrInsn::with_output(
+            IrOp::Load,
+            Varnode::unique(1, 8),
+            smallvec![
+                Varnode::constant(SpaceId::Stack as u64, 4),
+                Varnode::stack(40, 8),
+            ],
+            0x1002,
+        );
+        let mut ssa = make_entry_block_ssa(vec![shadow, real_arg]);
+        ssa.calling_convention = CallingConvention::MicrosoftX64;
+        let stack_params = infer_stack_params(&ssa);
+        assert!(!stack_params.contains(&16), "shadow @16 leaked");
+        assert!(stack_params.contains(&40), "missed real arg @40: {stack_params:?}");
+    }
+
+    // -- Varargs detection ----------------------------------------------------
+
+    #[test]
+    fn varargs_detected_when_rax_plus_all_int_args_read() {
+        let insns = vec![
+            read_reg_to_unique(RDI, 0x1001),
+            read_reg_to_unique(RSI, 0x1002),
+            read_reg_to_unique(RDX, 0x1003),
+            read_reg_to_unique(RCX, 0x1004),
+            read_reg_to_unique(R8, 0x1005),
+            read_reg_to_unique(R9, 0x1006),
+            read_reg_to_unique(RAX, 0x1007),
+        ];
+        let mut ssa = make_entry_block_ssa(insns);
+        ssa.calling_convention = CallingConvention::SystemV;
+        assert!(detect_varargs(&ssa));
+    }
+
+    #[test]
+    fn varargs_not_detected_when_rax_alone() {
+        let insns = vec![
+            read_reg_to_unique(RDI, 0x1001),
+            read_reg_to_unique(RAX, 0x1002),
+        ];
+        let mut ssa = make_entry_block_ssa(insns);
+        ssa.calling_convention = CallingConvention::SystemV;
+        assert!(
+            !detect_varargs(&ssa),
+            "RAX read alone should not flag varargs"
+        );
+    }
+
+    #[test]
+    fn varargs_detected_via_xmm_save_area() {
+        // Spilling XMM0..XMM3 to consecutive stack slots — the classic
+        // `va_start` register save area fingerprint.
+        let insns = vec![
+            store_reg_to_stack(XMM0, 0x100, 0x1001),
+            store_reg_to_stack(XMM1, 0x110, 0x1002),
+            store_reg_to_stack(XMM2, 0x120, 0x1003),
+            store_reg_to_stack(XMM3, 0x130, 0x1004),
+        ];
+        let mut ssa = make_entry_block_ssa(insns);
+        ssa.calling_convention = CallingConvention::SystemV;
+        assert!(detect_varargs(&ssa), "XMM0..3 spill should flag varargs");
+    }
+
+    #[test]
+    fn varargs_disabled_for_non_sysv() {
+        let insns = vec![
+            read_reg_to_unique(RDI, 0x1001),
+            read_reg_to_unique(RSI, 0x1002),
+            read_reg_to_unique(RDX, 0x1003),
+            read_reg_to_unique(RCX, 0x1004),
+            read_reg_to_unique(R8, 0x1005),
+            read_reg_to_unique(R9, 0x1006),
+            read_reg_to_unique(RAX, 0x1007),
+        ];
+        let mut ssa = make_entry_block_ssa(insns);
+        ssa.calling_convention = CallingConvention::MicrosoftX64;
+        // The MS x64 ABI has no callee-visible varargs marker.
+        assert!(!detect_varargs(&ssa));
+    }
+
+    // -- Return inference -----------------------------------------------------
+
+    #[test]
+    fn return_type_void_when_no_rax_write_before_return() {
+        // Empty entry block (just the RETURN added by the helper).
+        let ssa = make_entry_block_ssa(vec![]);
+        let ty = infer_return_type(&ssa);
+        // No RAX write → caller sees Unknown (= treated as void downstream).
+        assert_eq!(ty, PrimitiveType::Unknown);
+    }
+
+    #[test]
+    fn return_type_int_when_rax_written_before_return() {
+        // Mov rax, 42  ;  ret
+        let write_rax = IrInsn::with_output(
+            IrOp::Copy,
+            Varnode::reg(RAX, 8),
+            smallvec![Varnode::constant(42, 8)],
+            0x1001,
+        );
+        let ssa = make_entry_block_ssa(vec![write_rax]);
+        let ty = infer_return_type(&ssa);
+        assert!(
+            matches!(ty, PrimitiveType::Int(_) | PrimitiveType::Bool),
+            "got {ty:?}"
+        );
+    }
+
+    // -- End-to-end via the pass ---------------------------------------------
+
+    #[test]
+    fn param_infer_pass_sets_varargs_flag_and_stack_params_together() {
+        let insns = vec![
+            read_reg_to_unique(RDI, 0x1001),
+            read_reg_to_unique(RSI, 0x1002),
+            read_reg_to_unique(RDX, 0x1003),
+            read_reg_to_unique(RCX, 0x1004),
+            read_reg_to_unique(R8, 0x1005),
+            read_reg_to_unique(R9, 0x1006),
+            read_reg_to_unique(RAX, 0x1007),
+            // Stack-arg read at [rsp + 8]
+            IrInsn::with_output(
+                IrOp::Load,
+                Varnode::unique(0xdead, 8),
+                smallvec![
+                    Varnode::constant(SpaceId::Stack as u64, 4),
+                    Varnode::stack(8, 8),
+                ],
+                0x1008,
+            ),
+        ];
+        let mut ssa = make_entry_block_ssa(insns);
+        ssa.calling_convention = CallingConvention::SystemV;
+        let pass = ParamInferPass;
+        pass.run(&mut ssa).unwrap();
+        assert!(ssa.is_varargs, "varargs flag not set");
+        assert!(
+            ssa.inferred_stack_params.contains(&8),
+            "stack param missing: {:?}",
+            ssa.inferred_stack_params
+        );
+        assert!(
+            !ssa.inferred_params.is_empty(),
+            "register params should also be populated"
+        );
     }
 }

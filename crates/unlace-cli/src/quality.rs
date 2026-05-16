@@ -115,6 +115,18 @@ pub struct FunctionQuality {
     pub functions_with_params: usize,
     /// Total inferred parameters across all functions.
     pub inferred_params: usize,
+    /// Stack-passed parameters detected by `ParamInferPass`
+    /// (`[rsp + 8 + N*8]` reads after the return-address slot).
+    /// Per-function: the count of distinct stack offsets recorded in
+    /// `SsaFunction::inferred_stack_params`.
+    pub inferred_stack_params: usize,
+    /// `1` if the function's return-type inference produced a non-void
+    /// (i.e. non-`PrimitiveType::Unknown`) type. Workspace total is the
+    /// count of functions with a concrete return type.
+    pub inferred_return_present: usize,
+    /// `1` if the function was detected as variadic (`SsaFunction::is_varargs`).
+    /// Workspace total is the varargs-function count.
+    pub inferred_varargs_count: usize,
     /// Libc / runtime call sites annotated with a canonical name
     /// (`ssa.libc_call_annotations`).
     ///
@@ -267,6 +279,13 @@ impl FunctionQuality {
         q.inferred_params = param_count;
         if param_count > 0 {
             q.functions_with_params = 1;
+        }
+        q.inferred_stack_params = ssa.inferred_stack_params.len();
+        if ssa.inferred_return_type != PrimitiveType::Unknown {
+            q.inferred_return_present = 1;
+        }
+        if ssa.is_varargs {
+            q.inferred_varargs_count = 1;
         }
         q.libc_annotated_calls = ssa.libc_call_annotations.len();
         q.variadic_call_sites = ssa.variadic_call_types.len();
@@ -602,6 +621,9 @@ pub struct QualityTotals {
     pub try_finally_blocks: usize,
     pub functions_with_params: usize,
     pub inferred_params: usize,
+    pub inferred_stack_params: usize,
+    pub inferred_return_present: usize,
+    pub inferred_varargs_count: usize,
     pub libc_annotated_calls: usize,
     pub variadic_call_sites: usize,
     pub rust_panic_sites: usize,
@@ -665,6 +687,9 @@ impl QualityTotals {
         self.try_finally_blocks += q.try_finally_blocks;
         self.functions_with_params += q.functions_with_params;
         self.inferred_params += q.inferred_params;
+        self.inferred_stack_params += q.inferred_stack_params;
+        self.inferred_return_present += q.inferred_return_present;
+        self.inferred_varargs_count += q.inferred_varargs_count;
         self.libc_annotated_calls += q.libc_annotated_calls;
         self.variadic_call_sites += q.variadic_call_sites;
         self.rust_panic_sites += q.rust_panic_sites;
@@ -910,6 +935,10 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
         "### Signatures / recognition\n\
          - functions with params: {fp}\n\
          - inferred params (total): {ip}\n\
+         - inferred_param_count: {ip}\n\
+         - inferred_stack_params: {isp}\n\
+         - inferred_return_present: {irp}\n\
+         - inferred_varargs_count: {ivc}\n\
          - libc-annotated calls: {lc}\n\
          - variadic call sites (printf-family resolved): {vs}\n\
          - noreturn functions: {nr}\n\
@@ -921,6 +950,9 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
          - SEH regions: {sr}",
         fp = t.functions_with_params,
         ip = t.inferred_params,
+        isp = t.inferred_stack_params,
+        irp = t.inferred_return_present,
+        ivc = t.inferred_varargs_count,
         lc = t.libc_annotated_calls,
         vs = t.variadic_call_sites,
         nr = t.noreturn_functions,

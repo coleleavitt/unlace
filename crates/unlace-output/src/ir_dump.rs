@@ -280,6 +280,8 @@ mod tests {
             cpp_kind: None,
             cpp_class_name: None,
             cpp_this_args: std::collections::BTreeSet::new(),
+            is_varargs: false,
+            inferred_stack_params: std::collections::BTreeSet::new(),
             vtable_calls: BTreeMap::new(),
             cpp_vtable_calls: BTreeMap::new(),
             objc_dispatch_calls: BTreeMap::new(),

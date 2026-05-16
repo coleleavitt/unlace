@@ -29,6 +29,7 @@ pub mod return_merge;
 pub mod seh_lower;
 pub mod short_circuit;
 pub mod structurer;
+pub mod switch_cleanup;
 pub mod switch_recovery;
 pub mod tail_duplication;
 pub mod ternary_recovery;
@@ -68,6 +69,7 @@ pub use structurer::{
     structure_preserve_returns_with_landing_pads, structure_with_arch, structure_with_landing_pads,
     structure_with_landing_pads_and_arch,
 };
+pub use switch_cleanup::cleanup_switches;
 pub use switch_recovery::{
     ComputedGoto, IndirectBranchKind, JumpTable, JumpTableKind, SectionPerms, SectionView,
     TableEndian, classify_indirect_branch, computed_goto_to_switch, detect_computed_goto,

@@ -88,6 +88,7 @@ mod tests {
             go_defer_recover_calls: BTreeMap::new(),
             rust_async: None,
             go_defer_sites: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
         }
     }
 

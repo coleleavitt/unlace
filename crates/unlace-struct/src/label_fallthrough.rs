@@ -253,6 +253,7 @@ mod tests {
             byref_locals: BTreeSet::new(),
             stack_frame: None,
             cpp_lambda_captures: Vec::new(),
+            vtable_call_targets: BTreeMap::new(),
         }
     }
 

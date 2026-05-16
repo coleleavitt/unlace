@@ -221,6 +221,20 @@ fn decompile_interproc(image: &BinaryImage, functions: &[FunctionEntry], config:
         }
     }
 
+    // Phase 1.5: whole-program printf format-string parse. The
+    // per-function pre-pass inside `lift_and_run_passes` already
+    // populates `variadic_call_types` for each function in isolation; this
+    // whole-program sweep is a belt-and-braces safety net using the union
+    // of all discovered functions as the symbol-resolution context, which
+    // catches sites whose Call target was only resolvable once every
+    // function was lifted. Additive merge guarantees idempotence.
+    let total_variadic_sites =
+        pipeline::run_whole_program_printf_parse(&mut ssa_map, image, functions);
+    tracing::info!(
+        variadic_call_sites = total_variadic_sites,
+        "interproc phase 1.5: whole-program printf format-string parse"
+    );
+
     // Phase 2: sequential interproc fixpoint
     tracing::info!(functions = ssa_map.len(), "interproc phase 2: whole-program fixed-point (sequential)");
     if let Err(e) = pipeline::run_whole_program_interproc(&mut ssa_map, 0) {

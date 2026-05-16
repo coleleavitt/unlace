@@ -112,25 +112,37 @@ pub fn detect_variadic_callees(
 
 /// Recover the per-slot variadic argument types for printf-style call
 /// sites within `ssa`. `string_table` maps absolute addresses of
-/// read-only string constants to their byte content. Updates
-/// `ssa.variadic_call_types` and returns `true` if anything was added.
+/// read-only string constants to their byte content. Merges newly
+/// recovered entries into `ssa.variadic_call_types` (additive — never
+/// drops a previously-recorded site) and returns `true` if any entry was
+/// inserted or modified.
+///
+/// The additive contract is load-bearing: this function is invoked
+/// twice on the canonical pipeline path — once on the raw post-SSA IR
+/// (where the format-string `Copy(reg, …)` pattern is intact) and a
+/// second time after `run_passes` (where copyprop / sccp may have
+/// folded the pattern away). The second call must not clobber what the
+/// first observed.
 pub fn parse_printf_format_strings(
     ssa: &mut SsaFunction,
     callee_name_at_addr: &dyn Fn(u64) -> Option<&'static str>,
     string_table: &BTreeMap<u64, String>,
 ) -> bool {
-    let snapshot = ssa.variadic_call_types.clone();
-
     let cc = if matches!(ssa.calling_convention, CallingConvention::Unknown) {
         CallingConvention::SystemV
     } else {
         ssa.calling_convention
     };
 
-    let mut new_entries: BTreeMap<(BlockId, usize), Vec<PrimitiveType>> = BTreeMap::new();
+    let mut changed = false;
 
-    for (&bid, block) in &ssa.function.blocks {
-        for (idx, insn) in block.insns.iter().enumerate() {
+    let block_ids: Vec<BlockId> = ssa.function.blocks.keys().copied().collect();
+    for bid in block_ids {
+        let insns_snapshot = match ssa.function.blocks.get(&bid) {
+            Some(b) => b.insns.clone(),
+            None => continue,
+        };
+        for (idx, insn) in insns_snapshot.iter().enumerate() {
             if insn.op != IrOp::Call {
                 continue;
             }
@@ -150,20 +162,27 @@ pub fn parse_printf_format_strings(
                 continue;
             }
             let format_arg_index = printf_format_index(name);
-            let format_string = match find_constant_arg(&block.insns, idx, format_arg_index, cc) {
+            let format_string = match find_constant_arg(&insns_snapshot, idx, format_arg_index, cc)
+            {
                 Some(addr) => string_table.get(&addr).cloned(),
                 None => None,
             };
             let Some(fmt) = format_string else { continue };
             let parsed = parse_format_string(&fmt);
-            if !parsed.is_empty() {
-                new_entries.insert((bid, idx), parsed);
+            if parsed.is_empty() {
+                continue;
+            }
+            let key = (bid, idx);
+            match ssa.variadic_call_types.get(&key) {
+                Some(existing) if existing == &parsed => {}
+                _ => {
+                    ssa.variadic_call_types.insert(key, parsed);
+                    changed = true;
+                }
             }
         }
     }
 
-    let changed = new_entries != snapshot;
-    ssa.variadic_call_types = new_entries;
     changed
 }
 
@@ -184,8 +203,22 @@ fn printf_format_index(name: &str) -> usize {
     }
 }
 
-/// Walk back from `call_idx` and find the most recent `Copy(reg, const)`
-/// targeting the `arg_index`-th argument register; returns the constant.
+/// Walk back from `call_idx` and find the most recent assignment to the
+/// `arg_index`-th argument register; returns the absolute string-table
+/// address embedded in that assignment, if one can be recovered.
+///
+/// Two patterns are recognised:
+///
+/// 1. **Direct constant** — `Copy(reg, const)`. Returns the constant.
+/// 2. **PIE base-relative load** — `Copy(reg, t)` where `t` is defined
+///    earlier in the same block as `IntAdd(base, const)` with one
+///    constant operand. The lifter encodes `lea reg, [rip+disp]` this
+///    way for position-independent ELF; the loader normalises `disp`
+///    to a string-table-resolvable VA so the constant alone suffices.
+///
+/// Only the immediately preceding write to `target_reg` is consulted —
+/// any other write (an unrecognised op, a non-constant source) means
+/// a non-format-string path reached the call site and we give up.
 fn find_constant_arg(
     insns: &[unlace_ir::IrInsn],
     call_idx: usize,
@@ -195,18 +228,43 @@ fn find_constant_arg(
     let regs = arg_regs(cc);
     let target_reg = *regs.get(arg_index)?;
 
-    for insn in insns[..call_idx].iter().rev() {
+    let mut write_idx: Option<usize> = None;
+    for (idx, insn) in insns[..call_idx].iter().enumerate().rev() {
         let Some(out) = insn.output else { continue };
         if out.space == SpaceId::Register && out.offset == target_reg {
-            if matches!(insn.op, IrOp::Copy) {
-                if let Some(c) = insn.inputs.first() {
-                    if c.space == SpaceId::Const {
-                        return Some(c.offset);
-                    }
-                }
-            }
+            write_idx = Some(idx);
+            break;
+        }
+    }
+    let write_idx = write_idx?;
+    let writer = &insns[write_idx];
+    if !matches!(writer.op, IrOp::Copy) {
+        return None;
+    }
+    let src = writer.inputs.first()?;
+
+    if src.space == SpaceId::Const {
+        return Some(src.offset);
+    }
+
+    for prior in insns[..write_idx].iter().rev() {
+        let Some(out) = prior.output else { continue };
+        if out.space != src.space || out.offset != src.offset || out.size != src.size {
+            continue;
+        }
+        if !matches!(prior.op, IrOp::IntAdd) {
             return None;
         }
+        let consts: Vec<u64> = prior
+            .inputs
+            .iter()
+            .filter(|v| v.space == SpaceId::Const)
+            .map(|v| v.offset)
+            .collect();
+        if consts.len() == 1 {
+            return Some(consts[0]);
+        }
+        return None;
     }
     None
 }

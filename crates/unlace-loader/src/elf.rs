@@ -502,6 +502,29 @@ mod tests {
         );
     }
 
+    /// Batch 12 slice 1: `medium.elf` is built with stack protector so it
+    /// imports `__stack_chk_fail` via PLT. The loader must surface at least
+    /// one PLT entry for it; the indirect-call-resolve pass keys off this
+    /// map when a `Callind` chain narrows to a PLT stub VA.
+    #[test]
+    fn test_plt_resolution_medium() {
+        let data =
+            std::fs::read("../../fixtures/medium.elf").expect("fixture medium.elf must exist");
+        let img = ElfLoader::load(&data).expect("should parse medium.elf");
+
+        assert!(
+            !img.plt_symbols.is_empty(),
+            "medium.elf should expose at least one PLT import"
+        );
+        assert!(
+            img.plt_symbols
+                .values()
+                .any(|n| n == "__stack_chk_fail"),
+            "medium.elf PLT should include __stack_chk_fail; got {:?}",
+            img.plt_symbols
+        );
+    }
+
     #[test]
     fn test_no_plt_for_static() {
         let data = std::fs::read("../../fixtures/empty.elf").expect("fixture empty.elf must exist");

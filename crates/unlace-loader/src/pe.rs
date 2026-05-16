@@ -93,6 +93,10 @@ where
     let rich_header = parse_rich_header(data);
 
     let forwarded_resolutions = build_forwarded_resolutions::<Pe>(&file, &forwarded_exports);
+    // Batch 12 slice 1: PE equivalent of ELF's PLT — IAT slot VA →
+    // `"dll!fn"` for every named import. Lets the indirect-call-resolve
+    // pass name `Callind` chains that narrow to an IAT slot.
+    let iat_imports = build_iat_imports::<Pe>(&file);
 
     let mut image = BinaryImage {
         arch,
@@ -100,7 +104,7 @@ where
         entry,
         sections,
         symbols,
-        plt_symbols: BTreeMap::new(),
+        plt_symbols: iat_imports,
         relocations,
         string_table: BTreeMap::new(),
         tls_callbacks,
@@ -1277,6 +1281,72 @@ where
                                 let slot_va =
                                     image_base + u64::from(iat_rva) + slot_idx * thunk_size;
                                 out.insert(slot_va, resolved.clone());
+                            }
+                        }
+                    }
+                    slot_idx += 1;
+                }
+            }
+        }
+    }
+
+    out
+}
+
+/// Build the PE equivalent of ELF's `plt_symbols`: IAT slot VA →
+/// `"dll!function"` for every named eager and delay-load import (Batch 12
+/// slice 1).
+///
+/// PE images don't have a PLT in the ELF sense; instead, the loader patches
+/// `[iat_slot]` with the resolved function address at load time and calls
+/// look like `call qword ptr [iat_slot]` (i.e. an indirect call through the
+/// IAT). For the indirect-call-resolve pass we want a `BTreeMap<u64, String>`
+/// keyed on the IAT slot's runtime VA — when a `Callind` chain narrows to
+/// one of these addresses, we name the resolved target after the imported
+/// symbol instead of the canonical `sub_<addr>` placeholder.
+///
+/// Ordinal-only imports are skipped (they have no name to plumb through).
+/// Returns an empty map for COFF objects or PEs without an import directory.
+fn build_iat_imports<'data, Pe>(file: &PeFile<'data, Pe>) -> BTreeMap<u64, String>
+where
+    Pe: ImageNtHeaders,
+{
+    let mut out: BTreeMap<u64, String> = BTreeMap::new();
+
+    let image_base = file.relative_address_base();
+    let thunk_size = std::mem::size_of::<Pe::ImageThunkData>() as u64;
+
+    // Eager imports (`IMAGE_DIRECTORY_ENTRY_IMPORT`).
+    if let Ok(Some(table)) = file.import_table() {
+        if let Ok(mut descs) = table.descriptors() {
+            while let Ok(Some(desc)) = descs.next() {
+                let lib = match table.name(desc.name.get(object::endian::LittleEndian)) {
+                    Ok(b) => String::from_utf8_lossy(b).to_string(),
+                    Err(_) => continue,
+                };
+                let iat_rva = desc.first_thunk.get(object::endian::LittleEndian);
+                if iat_rva == 0 {
+                    continue;
+                }
+                // Names live in OFT when present; fall back to first_thunk
+                // (matches `build_forwarded_resolutions`).
+                let name_thunk_rva = {
+                    let oft = desc.original_first_thunk.get(object::endian::LittleEndian);
+                    if oft != 0 { oft } else { iat_rva }
+                };
+                let mut thunks = match table.thunks(name_thunk_rva) {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let mut slot_idx: u64 = 0;
+                while let Ok(Some(thunk)) = thunks.next::<Pe>() {
+                    if !thunk.is_ordinal() {
+                        if let Ok((_hint, name)) = table.hint_name(thunk.address()) {
+                            let fn_name = std::str::from_utf8(name).unwrap_or("");
+                            if !fn_name.is_empty() {
+                                let slot_va =
+                                    image_base + u64::from(iat_rva) + slot_idx * thunk_size;
+                                out.insert(slot_va, format!("{lib}!{fn_name}"));
                             }
                         }
                     }
@@ -2594,6 +2664,38 @@ mod tests {
             .expect("ZwQuerySystem IAT slot must be in forwarded_resolutions");
         // Ordinal forwards keep their `#N` form in the resolved target.
         assert_eq!(resolved, "NTDLL!#142");
+    }
+
+    /// Batch 12 slice 1: `plt_symbols` is populated with IAT slot VA →
+    /// `"dll!fn"` for every named import. The `pe64_with_self_import_of_forwarders`
+    /// fixture imports `HeapAlloc` and `ZwQuerySystem` from itself, so both
+    /// slots must surface in `plt_symbols` regardless of forwarder semantics.
+    #[test]
+    fn plt_symbols_populated_from_iat_imports() {
+        let (pe, iat_heap, iat_zw) = pe64_with_self_import_of_forwarders();
+        let img = PeLoader::load(&pe).expect("PE must parse");
+        assert!(
+            !img.plt_symbols.is_empty(),
+            "PE with named imports must populate plt_symbols"
+        );
+        let heap = img
+            .plt_symbols
+            .get(&iat_heap)
+            .expect("HeapAlloc IAT slot must be in plt_symbols");
+        // The fixture self-imports under its own filename ("self"); we only
+        // need to assert the `!HeapAlloc` suffix.
+        assert!(
+            heap.ends_with("!HeapAlloc"),
+            "expected `*!HeapAlloc`, got {heap:?}"
+        );
+        let zw = img
+            .plt_symbols
+            .get(&iat_zw)
+            .expect("ZwQuerySystem IAT slot must be in plt_symbols");
+        assert!(
+            zw.ends_with("!ZwQuerySystem"),
+            "expected `*!ZwQuerySystem`, got {zw:?}"
+        );
     }
 
     #[test]

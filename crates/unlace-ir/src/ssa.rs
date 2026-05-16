@@ -679,6 +679,18 @@ pub struct SsaFunction {
     /// function matches the table-load pattern, or when the candidate's
     /// table base falls outside any read-only section.
     pub resolved_jump_tables: BTreeMap<u64, JumpTableInfo>,
+    /// Logical-variable candidates (Batch 3 slice 1).
+    ///
+    /// Populated by
+    /// [`unlace_passes::lvar_collect::LvarCollectPass`] after
+    /// `VariableMergePass` runs. Empty by default. Ordered by
+    /// [`crate::lvar::LvarId`] (dense from 0) so iteration is
+    /// deterministic across runs. Duplicates across storage classes are
+    /// permitted in this slice; coalescing lands in a follow-up batch.
+    ///
+    /// Treated as **metadata only** by the current C printer — emitter
+    /// behaviour does not consult `lvars` yet.
+    pub lvars: Vec<crate::lvar::Lvar>,
 }
 
 /// One recovered C++ lambda capture.
@@ -1075,6 +1087,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         seh_regions: Vec::new(),
         coroutine_sites: Vec::new(),
         resolved_jump_tables: BTreeMap::new(),
+        lvars: Vec::new(),
     }
 }
 

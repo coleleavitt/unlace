@@ -320,6 +320,336 @@ where
     Ok(report)
 }
 
+/// Validate that a slice of passes is phase-monotonic — i.e. every pair
+/// of adjacent passes satisfies `prev.phase() <= next.phase()`.
+///
+/// Returns `Ok(())` when the slice is monotonic. Otherwise returns
+/// `Err(Vec<String>)` with one human-readable line per out-of-order
+/// transition, in the form:
+///
+/// ```text
+/// "at index 7: pass 'CallBoundaryCopyPropPass' [PreOpt] follows 'IvElimPass' [LocalOpt]"
+/// ```
+///
+/// The current canonical pipeline is *intentionally not* strictly
+/// monotonic (see the comment on [`PassPhase`] and the unit test
+/// `canonical_pipeline_is_documented` for the pinned transgression
+/// count). This function is the runtime equivalent of that test — it
+/// exists so the pipeline driver, an xtask, or a future scheduler can
+/// surface phase-order regressions on the live `passes` slice instead
+/// of relying on a hand-maintained mirror.
+///
+/// The function is name-agnostic: it pulls `pass.name()` and
+/// `pass.phase()` through the [`Pass`] trait, so any sequence (the
+/// inner fixedpoint cluster, a one-shot vector, or the full canonical
+/// pipeline) can be checked.
+pub fn validate_phase_monotonicity(passes: &[&dyn Pass]) -> Result<(), Vec<String>> {
+    let mut violations: Vec<String> = Vec::new();
+    for (i, pair) in passes.windows(2).enumerate() {
+        let prev = pair[0];
+        let next = pair[1];
+        if next.phase().ordinal() < prev.phase().ordinal() {
+            violations.push(format!(
+                "at index {next_i}: pass '{next_name}' [{next_phase:?}] follows '{prev_name}' [{prev_phase:?}]",
+                next_i = i + 1,
+                next_name = next.name(),
+                next_phase = next.phase(),
+                prev_name = prev.name(),
+                prev_phase = prev.phase(),
+            ));
+        }
+    }
+    if violations.is_empty() {
+        Ok(())
+    } else {
+        Err(violations)
+    }
+}
+
+/// Name + phase pair used by [`canonical_pipeline_descriptor`] and
+/// [`validate_named_phase_monotonicity`]. Lightweight (no `dyn Pass`)
+/// so xtask binaries and CLI startup checks can use it without
+/// constructing every pass instance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PassDescriptor {
+    /// Display name, matching `Pass::name()` for the underlying pass.
+    pub name: &'static str,
+    /// Phase tag, matching `Pass::phase()` for the underlying pass.
+    pub phase: PassPhase,
+}
+
+impl PassDescriptor {
+    /// Construct a descriptor from a literal name + phase.
+    pub const fn new(name: &'static str, phase: PassPhase) -> Self {
+        Self { name, phase }
+    }
+}
+
+/// `&[PassDescriptor]` equivalent of [`validate_phase_monotonicity`].
+///
+/// Useful when the caller wants to validate a *schedule* described as
+/// name/phase pairs (e.g. the canonical CLI pipeline, an xtask dump,
+/// or a future config-driven scheduler) without constructing the full
+/// `dyn Pass` graph.
+pub fn validate_named_phase_monotonicity(passes: &[PassDescriptor]) -> Result<(), Vec<String>> {
+    let mut violations: Vec<String> = Vec::new();
+    for (i, pair) in passes.windows(2).enumerate() {
+        let prev = pair[0];
+        let next = pair[1];
+        if next.phase.ordinal() < prev.phase.ordinal() {
+            violations.push(format!(
+                "at index {next_i}: pass '{next_name}' [{next_phase:?}] follows '{prev_name}' [{prev_phase:?}]",
+                next_i = i + 1,
+                next_name = next.name,
+                next_phase = next.phase,
+                prev_name = prev.name,
+                prev_phase = prev.phase,
+            ));
+        }
+    }
+    if violations.is_empty() {
+        Ok(())
+    } else {
+        Err(violations)
+    }
+}
+
+/// The canonical per-function pipeline schedule, in the *exact* order
+/// `unlace_cli::pipeline::run_passes_with_report_inner` runs them.
+///
+/// This is the runtime mirror of the (test-only)
+/// `canonical_pipeline_phases` table in this file: it must be kept in
+/// sync with the literal calls in `pipeline.rs`. The two are
+/// cross-checked by the `canonical_descriptor_matches_test_phases`
+/// unit test below.
+///
+/// Consumers:
+///   * `unlace-cli` startup-time validation when `UNLACE_VALIDATE_PIPELINE=1`
+///     (or `cfg!(debug_assertions)`).
+///   * `cargo xtask dump-pipeline`.
+pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
+    use PassPhase::*;
+    vec![
+        // (1) one-time pre-pass
+        PassDescriptor::new("StackOffsetSnapshotPass", StackRecovery),
+        PassDescriptor::new("NoreturnDetectPass", PreOpt),
+        // (2) outer fixed-point body — IR-level cluster
+        PassDescriptor::new("ConstantFoldPass", LocalOpt),
+        PassDescriptor::new("CopyPropagationPass", LocalOpt),
+        PassDescriptor::new("GlobalCopyPropPass", GlobalOpt),
+        PassDescriptor::new("DeadCodeElimPass", LocalOpt),
+        PassDescriptor::new("SccpPass", LocalOpt),
+        PassDescriptor::new("CsePass", GlobalOpt),
+        PassDescriptor::new("GvnPass", GlobalOpt),
+        PassDescriptor::new("BmiIdiomPass", LocalOpt),
+        PassDescriptor::new("LicmPass", GlobalOpt),
+        PassDescriptor::new("IvElimPass", LocalOpt),
+        PassDescriptor::new("StrengthReducePass", LocalOpt),
+        PassDescriptor::new("IdiomRecognitionPass", LocalOpt),
+        PassDescriptor::new("ConditionSimplifyPass", LocalOpt),
+        PassDescriptor::new("CallBoundaryCopyPropPass", PreOpt),
+        PassDescriptor::new("RedundantFlagElimPass", PreOpt),
+        PassDescriptor::new("AlgebraicSimplifyPass", PreOpt),
+        // ---- cleanup ----
+        PassDescriptor::new("DeadStoreElimPass", LocalOpt),
+        PassDescriptor::new("DeadFlagElimPass", LocalOpt),
+        PassDescriptor::new("DeadStoreElimGlobalPass", GlobalOpt),
+        PassDescriptor::new("DivisionIdiomPass", LocalOpt),
+        PassDescriptor::new("ModuloIdiomPass", LocalOpt),
+        // ---- structural detection ----
+        PassDescriptor::new("PrologueElimPass", PreOpt),
+        PassDescriptor::new("TailCallDetectPass", GlobalOpt),
+        PassDescriptor::new("StackPointerTrackingPass", StackRecovery),
+        PassDescriptor::new("StackVarRecoveryPass", StackRecovery),
+        PassDescriptor::new("IndirectCallResolvePass", GlobalOpt),
+        PassDescriptor::new("CppVtablePass", TypeRecovery),
+        // ---- type recovery ----
+        PassDescriptor::new("CallingConventionDetectPass", TypeRecovery),
+        PassDescriptor::new("ParamInferPass", TypeRecovery),
+        PassDescriptor::new("ReturnTypeInferPass", TypeRecovery),
+        PassDescriptor::new("StructFieldDetectPass", TypeRecovery),
+        PassDescriptor::new("TypeInferPass", TypeRecovery),
+        PassDescriptor::new("TypeConstraintSolverPass", TypeRecovery),
+        // (post-loop, single shot)
+        PassDescriptor::new("BitfieldIdiomPass", LocalOpt),
+        PassDescriptor::new("CryptoIdiomPass", LocalOpt),
+        PassDescriptor::new("IndirectCallResolvePass", GlobalOpt),
+        PassDescriptor::new("IndirectJumpResolvePass", GlobalOpt),
+        PassDescriptor::new("OpTypeBindingPass", TypeRecovery),
+        // (3) presentation post-passes
+        PassDescriptor::new("ExpressionTreePass", FinalCleanup),
+        PassDescriptor::new("VariableMergePass", LVarAlloc),
+        PassDescriptor::new("RegisterCoalescePass", FinalCleanup),
+        PassDescriptor::new("RustEnumPass", TypeRecovery),
+        PassDescriptor::new("RustVtablePass", TypeRecovery),
+        PassDescriptor::new("RustPanicPass", TypeRecovery),
+        PassDescriptor::new("VarNamingPass", FinalCleanup),
+        PassDescriptor::new("CallingConvFinalizePass", FinalCleanup),
+    ]
+}
+
+#[cfg(test)]
+mod validate_tests {
+    use super::*;
+
+    /// Minimal `Pass` impl whose only purpose is to carry a phase tag
+    /// for the monotonicity tests; `run` panics so a misuse can't
+    /// silently no-op.
+    struct StubPass {
+        name: &'static str,
+        phase: PassPhase,
+    }
+    impl Pass for StubPass {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn phase(&self) -> PassPhase {
+            self.phase
+        }
+        fn run(&self, _func: &mut unlace_ir::ssa::SsaFunction) -> Result<bool, PassError> {
+            unreachable!("validate_tests StubPass should never be executed")
+        }
+    }
+
+    #[test]
+    fn validate_accepts_monotonic_sequence() {
+        let a = StubPass {
+            name: "a",
+            phase: PassPhase::PreOpt,
+        };
+        let b = StubPass {
+            name: "b",
+            phase: PassPhase::LocalOpt,
+        };
+        let c = StubPass {
+            name: "c",
+            phase: PassPhase::TypeRecovery,
+        };
+        let d = StubPass {
+            name: "d",
+            phase: PassPhase::FinalCleanup,
+        };
+        let passes: &[&dyn Pass] = &[&a, &b, &c, &d];
+        assert!(validate_phase_monotonicity(passes).is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_equal_phase_runs() {
+        // Same phase repeated should be considered monotone (`<=`).
+        let p1 = StubPass {
+            name: "x",
+            phase: PassPhase::LocalOpt,
+        };
+        let p2 = StubPass {
+            name: "y",
+            phase: PassPhase::LocalOpt,
+        };
+        let p3 = StubPass {
+            name: "z",
+            phase: PassPhase::LocalOpt,
+        };
+        let passes: &[&dyn Pass] = &[&p1, &p2, &p3];
+        assert!(validate_phase_monotonicity(passes).is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_empty_and_single() {
+        assert!(validate_phase_monotonicity(&[]).is_ok());
+        let only = StubPass {
+            name: "only",
+            phase: PassPhase::GlobalOpt,
+        };
+        let passes: &[&dyn Pass] = &[&only];
+        assert!(validate_phase_monotonicity(passes).is_ok());
+    }
+
+    #[test]
+    fn validate_reports_single_violation() {
+        // GlobalOpt → LocalOpt is a backward jump.
+        let a = StubPass {
+            name: "gvn",
+            phase: PassPhase::GlobalOpt,
+        };
+        let b = StubPass {
+            name: "sccp",
+            phase: PassPhase::LocalOpt,
+        };
+        let passes: &[&dyn Pass] = &[&a, &b];
+        let err = validate_phase_monotonicity(passes).unwrap_err();
+        assert_eq!(err.len(), 1);
+        let msg = &err[0];
+        assert!(msg.contains("sccp"), "msg = {msg}");
+        assert!(msg.contains("gvn"), "msg = {msg}");
+        assert!(msg.contains("LocalOpt"), "msg = {msg}");
+        assert!(msg.contains("GlobalOpt"), "msg = {msg}");
+        assert!(msg.contains("index 1"), "msg = {msg}");
+    }
+
+    #[test]
+    fn validate_reports_multiple_violations_in_order() {
+        // FinalCleanup → PreOpt → LocalOpt → PreOpt yields two violations.
+        let a = StubPass {
+            name: "p_final",
+            phase: PassPhase::FinalCleanup,
+        };
+        let b = StubPass {
+            name: "p_pre",
+            phase: PassPhase::PreOpt,
+        };
+        let c = StubPass {
+            name: "p_local",
+            phase: PassPhase::LocalOpt,
+        };
+        let d = StubPass {
+            name: "p_pre2",
+            phase: PassPhase::PreOpt,
+        };
+        let passes: &[&dyn Pass] = &[&a, &b, &c, &d];
+        let err = validate_phase_monotonicity(passes).unwrap_err();
+        assert_eq!(err.len(), 2);
+        // First violation: index 1 (b follows a, FinalCleanup → PreOpt).
+        assert!(err[0].contains("index 1"), "{:?}", err[0]);
+        assert!(err[0].contains("p_pre"), "{:?}", err[0]);
+        // Second violation: index 3 (d follows c, LocalOpt → PreOpt).
+        assert!(err[1].contains("index 3"), "{:?}", err[1]);
+        assert!(err[1].contains("p_pre2"), "{:?}", err[1]);
+    }
+
+    #[test]
+    fn validate_named_matches_dyn_pass_variant_on_canonical() {
+        // The canonical descriptor is the runtime mirror of the
+        // (test-only) `canonical_pipeline_phases` table. Both should
+        // produce the same transgression count when fed through their
+        // respective validators. We exercise the named variant here;
+        // the dyn-Pass variant is exercised on synthetic stubs above
+        // because constructing every real pass is heavy.
+        let desc = canonical_pipeline_descriptor();
+        let err = validate_named_phase_monotonicity(&desc)
+            .expect_err("canonical pipeline is intentionally not monotone (Batch 10 slice 1)");
+        // Must match the count pinned by the existing
+        // `canonical_pipeline_is_documented` test.
+        assert_eq!(
+            err.len(),
+            super::phase_tests::canonical_pipeline_transgression_count(),
+            "descriptor transgression count drifted from phase_tests pin: {err:#?}"
+        );
+    }
+
+    #[test]
+    fn canonical_descriptor_matches_test_phases() {
+        // The phase sequence emitted by `canonical_pipeline_descriptor`
+        // must align with the (test-only) `canonical_pipeline_phases`
+        // table to prove the two mirrors of the CLI schedule agree.
+        let desc = canonical_pipeline_descriptor();
+        let phases: Vec<PassPhase> = desc.iter().map(|d| d.phase).collect();
+        let expected = super::phase_tests::canonical_pipeline_phases();
+        assert_eq!(
+            phases, expected,
+            "canonical_pipeline_descriptor diverged from canonical_pipeline_phases"
+        );
+    }
+}
+
 #[cfg(test)]
 mod phase_tests {
     //! Tests pinning the [`PassPhase`] assignment of every concrete pass
@@ -486,7 +816,7 @@ mod phase_tests {
     /// Kept here (not in unlace-cli) so this crate's test suite alone
     /// can detect monotonicity regressions. Changes to either side
     /// must update the other.
-    fn canonical_pipeline_phases() -> Vec<PassPhase> {
+    pub(super) fn canonical_pipeline_phases() -> Vec<PassPhase> {
         use PassPhase::*;
         // Order mirrors the literal calls in `run_passes_with_report_inner`.
         // See the matching comment in unlace-cli/src/pipeline.rs.
@@ -602,7 +932,7 @@ mod phase_tests {
     /// it changes. Counted from `canonical_pipeline_phases()` above as
     /// of Batch 10 slice 1 (11 backward transitions across 47 windows,
     /// 48 scheduled passes total).
-    const fn canonical_pipeline_transgression_count() -> usize {
+    pub(super) const fn canonical_pipeline_transgression_count() -> usize {
         11
     }
 }

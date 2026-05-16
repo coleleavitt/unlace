@@ -4,6 +4,7 @@ use std::process::{self, Command};
 
 mod compare_corpus;
 mod compare_golden;
+mod dump_pipeline;
 mod lifter_coverage;
 mod validate_corpus;
 
@@ -30,6 +31,9 @@ fn main() {
             let root = workspace_root();
             validate_corpus::run(&root);
         }
+        Some("dump-pipeline") => {
+            dump_pipeline::run();
+        }
         Some(cmd) => {
             eprintln!("unknown xtask command: {cmd}");
             process::exit(1);
@@ -37,7 +41,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, compare-corpus, lifter-coverage, validate-corpus-toml"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, compare-corpus, lifter-coverage, validate-corpus-toml, dump-pipeline"
             );
             process::exit(1);
         }

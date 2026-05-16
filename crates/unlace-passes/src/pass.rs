@@ -358,6 +358,7 @@ mod phase_tests {
         // can't appear here without first declaring `pub mod …;`.
         vec![
             // ---- PreOpt ----
+            Box::new(crate::alias_categorize::AliasCategorizePass::new()),
             Box::new(crate::algebraic_simplify::AlgebraicSimplifyPass),
             Box::new(crate::call_boundary_copyprop::CallBoundaryCopyPropPass),
             Box::new(crate::redundant_flag_elim::RedundantFlagElimPass),
@@ -459,7 +460,7 @@ mod phase_tests {
         // GoIfaceDevirtPass (TypeRecovery) is omitted from `all_passes`
         // because it borrows a `&dyn` resolver.
         let expected: BTreeMap<u8, usize> = [
-            (PassPhase::PreOpt.ordinal(), 5),
+            (PassPhase::PreOpt.ordinal(), 6),
             (PassPhase::LocalOpt.ordinal(), 17),
             (PassPhase::GlobalOpt.ordinal(), 10),
             (PassPhase::TypeRecovery.ordinal(), 18),

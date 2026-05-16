@@ -394,6 +394,7 @@ mod tests {
             inputs: smallvec::smallvec![],
             addr: 0,
             guard: None,
+            category: None,
         });
         let mut func = Function::new(name, bid, 0);
         func.insert_block(block);

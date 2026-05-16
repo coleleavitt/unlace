@@ -195,6 +195,13 @@ fn find_dead_ssa_defs(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
 /// can be resolved to the same RSP/RBP-relative stack offset (e.g.
 /// `STORE [rsp+8], v1` followed by `STORE [rsp+8], v2` even when each
 /// address is computed by a separate `INT_ADD(rsp, 8)`).
+///
+/// **Alias-category barrier**: STORE/LOAD instructions whose
+/// [`unlace_ir::AliasCategory`] is `Mmio` or `Volatile` are *never*
+/// eliminated and never let a previous store be eliminated even if the
+/// addresses look redundant. They flush the per-address maps the same
+/// way a CALL does, and bump the global
+/// [`unlace_ir::alias::record_preserved`] counter for observability.
 fn find_dead_stores(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
     let mut dead = Vec::new();
 
@@ -209,6 +216,20 @@ fn find_dead_stores(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
         let mut last_store_stack: BTreeMap<i64, usize> = BTreeMap::new();
 
         for (insn_idx, insn) in block.insns.iter().enumerate() {
+            // Preserved (MMIO/Volatile) accesses act as a full barrier:
+            // they are never eliminated, never let a previous store be
+            // eliminated, and flush the pending-store maps the same way
+            // a CALL does. Bump the global preservation counter so
+            // tests can observe that the barrier actually fired.
+            let preserved = matches!(insn.category, Some(c) if c.is_preserved())
+                && matches!(insn.op, IrOp::Load | IrOp::Store);
+            if preserved {
+                unlace_ir::alias::record_preserved();
+                last_store_sv.clear();
+                last_store_stack.clear();
+                continue;
+            }
+
             match insn.op {
                 IrOp::Store => {
                     let (addr_slot, raw_addr) = store_address_slot(insn);
@@ -1113,5 +1134,107 @@ mod tests {
             .filter(|i| i.op == IrOp::Store)
             .count();
         assert_eq!(store_count, 2, "both STOREs must survive");
+    }
+
+    // ── Alias-category barrier tests ────────────────────────────────────
+
+    /// Two STOREs to the same address that would normally be coalesced
+    /// down to one. When the *first* store is tagged `Mmio`, the barrier
+    /// must keep it: an MMIO write may have a side-effect (e.g. clearing
+    /// an interrupt) even when followed by another write to the same
+    /// register.
+    #[test]
+    fn test_dse_mmio_store_not_eliminated() {
+        let addr = sv(16, 0);
+        let c5 = Varnode::constant(5, 8);
+        let c10 = Varnode::constant(10, 8);
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        // insn 0: MMIO STORE addr, c5  — must survive.
+        let mut insn0 =
+            IrInsn::without_output(IrOp::Store, smallvec![addr.base, c5], 0x1000);
+        insn0.category = Some(unlace_ir::AliasCategory::Mmio);
+        bb.insns.push(insn0);
+        // insn 1: plain STORE addr, c10
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![addr.base, c10],
+            0x1004,
+        ));
+        // insn 2: RETURN
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
+
+        let mut var_map = BTreeMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), addr);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(0)), addr);
+
+        let mut ssa = make_ssa(vec![bb], var_map, BTreeMap::new());
+
+        let before = unlace_ir::alias::preserved_count();
+        let pass = DeadStoreElimPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+        let after = unlace_ir::alias::preserved_count();
+
+        assert!(!changed, "MMIO STORE barrier must block elimination");
+        let store_count = ssa.function.blocks[&BlockId(0)]
+            .insns
+            .iter()
+            .filter(|i| i.op == IrOp::Store)
+            .count();
+        assert_eq!(store_count, 2, "MMIO store must survive");
+        assert!(after > before, "preservation counter must have incremented");
+    }
+
+    /// `Volatile` STORE between two redundant ones acts as a barrier
+    /// too — the volatile store is itself untouchable, and it must
+    /// prevent the surrounding pair from being coalesced through it.
+    #[test]
+    fn test_dse_volatile_store_blocks_coalesce() {
+        let addr_a = sv(16, 0);
+        let addr_b = sv(24, 0);
+        let c5 = Varnode::constant(5, 8);
+        let c10 = Varnode::constant(10, 8);
+        let c99 = Varnode::constant(99, 8);
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![addr_a.base, c5],
+            0x1000,
+        ));
+        // Volatile store on a *different* address — barrier should
+        // still flush the alias maps so addr_a's first store is kept.
+        let mut vol =
+            IrInsn::without_output(IrOp::Store, smallvec![addr_b.base, c99], 0x1004);
+        vol.category = Some(unlace_ir::AliasCategory::Volatile);
+        bb.insns.push(vol);
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![addr_a.base, c10],
+            0x1008,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
+
+        let mut var_map = BTreeMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), addr_a);
+        var_map.insert((BlockId(0), 1, VarnodeSlot::Input(0)), addr_b);
+        var_map.insert((BlockId(0), 2, VarnodeSlot::Input(0)), addr_a);
+
+        let mut ssa = make_ssa(vec![bb], var_map, BTreeMap::new());
+
+        let pass = DeadStoreElimPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+        assert!(
+            !changed,
+            "volatile store must act as alias barrier between addr_a stores"
+        );
+        let store_count = ssa.function.blocks[&BlockId(0)]
+            .insns
+            .iter()
+            .filter(|i| i.op == IrOp::Store)
+            .count();
+        assert_eq!(store_count, 3, "all three stores must survive");
     }
 }

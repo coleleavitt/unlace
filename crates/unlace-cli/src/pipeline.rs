@@ -66,7 +66,7 @@ use unlace_passes::{
     CopyPropagationPass, CppVtablePass, CryptoIdiomPass, CsePass, DEFAULT_OUTER_FIXEDPOINT_CAP,
     DeadCodeElimPass, DeadFlagElimPass, DeadStoreElimGlobalPass, DeadStoreElimPass,
     DivisionIdiomPass, ExpressionTreePass, GlobalCopyPropPass, GvnPass, IdiomRecognitionPass,
-    IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass, LicmPass, ModuloIdiomPass, NoreturnDetectPass,
+    IndirectCallResolvePass, IndirectJumpResolvePass, IvElimPass, LicmPass, LvarCollectPass, ModuloIdiomPass, NoreturnDetectPass,
     OpTypeBindingPass, OuterFixedpointReport, ParamInferPass, Pass, PrologueElimPass,
     RedundantFlagElimPass, RegisterCoalescePass, ReturnTypeInferPass, RustEnumPass, RustPanicPass,
     RustVtablePass, SccpPass, SignatureSnapshot, StackOffsetSnapshotPass, StackPointerTrackingPass,
@@ -1108,6 +1108,15 @@ fn run_passes_with_report_inner(
 
     run_instrumented(&VariableMergePass, ssa)
         .context("variable merge pass failed")?;
+
+    // Batch 3 slice 1: Lvar candidate collection. Runs after the
+    // variable-merge coalescer (whose `merged_names` we read as the
+    // surviving-temp set) and before the C printer (which currently
+    // ignores `lvars` — pure metadata). No IR changes; no emitter
+    // impact; goldens unchanged. See
+    // `unlace_passes::lvar_collect::LvarCollectPass`.
+    run_instrumented(&LvarCollectPass, ssa)
+        .context("lvar collect pass failed")?;
 
     // Batch 1: Chaitin-Briggs PHI-operand coalescing. Sits after the
     // variable-merge coalescer and before role-based naming so its

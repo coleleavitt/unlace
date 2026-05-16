@@ -2243,6 +2243,10 @@ pub fn emit_output(
             unlace_struct::eliminate_forward_gotos(&mut hir);
             unlace_struct::recover_guarded_whiles(&mut hir);
             unlace_struct::cleanup_empty_ifs(&mut hir);
+            // Batch 9 slice 2: collapse consecutive cases with equal
+            // bodies and drop redundant `default:` arms so the printer
+            // emits IDA-style stacked case labels.
+            unlace_struct::cleanup_switches(&mut hir);
             let header = unlace_output::FunctionHeaderInfo::from_ssa(ssa, symbols);
 
             // t224: precompute the recovered-composite preamble from the

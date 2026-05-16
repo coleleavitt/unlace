@@ -4242,6 +4242,37 @@ fn dwarf_type_to_c(dwarf_type: &str) -> String {
 // Node emission
 // ---------------------------------------------------------------------------
 
+/// `true` if the last node in `body` already transfers control out of the
+/// enclosing block (return / unconditional goto / break / continue / tail
+/// call / `__noreturn`-style raw RETURN statement). Used by the switch
+/// emit path to suppress redundant trailing `break;` markers — emitting
+/// `return X; break;` is both ugly and triggers a "statement after return
+/// is unreachable" diagnostic on many C compilers.
+///
+/// Conservative: returns `false` when `body` is empty, or when the last
+/// node is anything we don't recognise as a terminator. The cost of a
+/// false negative is a redundant `break;`; the cost of a false positive
+/// is a switch case that falls through unintentionally. We prefer the
+/// former.
+fn body_ends_with_terminator(body: &[HirNode]) -> bool {
+    let Some(last) = body.last() else {
+        return false;
+    };
+    match last {
+        HirNode::Return(_)
+        | HirNode::Goto(_)
+        | HirNode::Break
+        | HirNode::Continue
+        | HirNode::TailCall { .. } => true,
+        HirNode::Statement(insn) => matches!(insn.op, IrOp::Return),
+        HirNode::Block(inner) => body_ends_with_terminator(inner),
+        HirNode::Commented { inner, .. } => {
+            body_ends_with_terminator(std::slice::from_ref(inner.as_ref()))
+        }
+        _ => false,
+    }
+}
+
 fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut String) {
     let mut i = 0;
     while i < nodes.len() {
@@ -4593,23 +4624,36 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                     }
                 }
                 if *fall_through {
-                    if !body.is_empty() {
+                    if body.is_empty() {
+                        // Stacked case label (Batch 9 slice 2 dedup
+                        // chain): just emit `case X:` with no body and
+                        // no comment — the next iteration will print
+                        // the next label, and the terminal case will
+                        // carry the shared body.
+                    } else {
+                        // Explicit fall-through: body runs, then control
+                        // intentionally flows into the next case. Surface
+                        // the intent with a `/* fall through */` marker.
                         emit_nodes(body, depth + 1, ctx, out);
+                        indent(depth + 1, ctx.config.tab_width, out);
+                        let _ = writeln!(out, "/* fall through */");
                     }
-                    indent(depth + 1, ctx.config.tab_width, out);
-                    let _ = writeln!(out, "/* fall through */");
                 } else {
                     emit_nodes(body, depth + 1, ctx, out);
-                    indent(depth + 1, ctx.config.tab_width, out);
-                    let _ = writeln!(out, "break;");
+                    if !body_ends_with_terminator(body) {
+                        indent(depth + 1, ctx.config.tab_width, out);
+                        let _ = writeln!(out, "break;");
+                    }
                 }
             }
             if let Some(def) = default {
                 indent(depth, ctx.config.tab_width, out);
                 let _ = writeln!(out, "default:");
                 emit_nodes(def, depth + 1, ctx, out);
-                indent(depth + 1, ctx.config.tab_width, out);
-                let _ = writeln!(out, "break;");
+                if !body_ends_with_terminator(def) {
+                    indent(depth + 1, ctx.config.tab_width, out);
+                    let _ = writeln!(out, "break;");
+                }
             }
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}}");
@@ -12970,9 +13014,6 @@ mod tests {
             stack_frame: 0,
             callees: vec!["printf".to_string()],
             dynamic_sp: false,
-            block_entry_sp_delta: std::collections::BTreeMap::new(),
-            frame_holes: Vec::new(),
-            saved_register_slots: std::collections::BTreeSet::new(),
         };
 
         let output = super::print_c_full(&func, None, Some(&header), Some(&symbols), None);
@@ -14402,11 +14443,22 @@ mod tests {
 
     #[test]
     fn test_switch_normal_has_break() {
+        // Batch 9 slice 2: bodies that don't already terminate must each
+        // be followed by an explicit `break;` so control doesn't fall
+        // through. Use a non-terminating Statement body (IntAdd) so the
+        // printer emits a break — return-bodies are exercised by
+        // `test_switch_return_suppresses_break`.
+        let stmt = HirNode::Statement(IrInsn::with_output(
+            IrOp::IntAdd,
+            reg(0, 8),
+            smallvec![reg(0, 8), con(1, 8)],
+            0,
+        ));
         let body = vec![HirNode::Switch {
             cond: sv(0, 8),
             cases: vec![
-                (SwitchCase::Value(0), vec![HirNode::Return(None)], false),
-                (SwitchCase::Value(1), vec![HirNode::Return(None)], false),
+                (SwitchCase::Value(0), vec![stmt.clone()], false),
+                (SwitchCase::Value(1), vec![stmt], false),
             ],
             default: None,
             jumptable_addr: None,
@@ -14419,7 +14471,7 @@ mod tests {
         let break_count = output.matches("break;").count();
         assert!(
             break_count >= 2,
-            "each non-fallthrough case should have break;, got {break_count} in:\n{output}",
+            "each non-fallthrough non-terminating case should have break;, got {break_count} in:\n{output}",
         );
         assert!(
             !output.contains("fall through"),
@@ -14428,7 +14480,12 @@ mod tests {
     }
 
     #[test]
-    fn test_switch_fallthrough_no_break() {
+    fn test_switch_stacked_case_labels() {
+        // Batch 9 slice 2: `fall_through=true` with an empty body is a
+        // stacked case-label group (case 0: case 1: handler;). The
+        // printer emits *just* the `case 0:` line with no `/* fall
+        // through */` comment and no `break;`, because the next case
+        // label immediately follows.
         let body = vec![HirNode::Switch {
             cond: sv(0, 8),
             cases: vec![
@@ -14443,11 +14500,6 @@ mod tests {
         let func = make_func("switch_ft", body);
         let output = print_c(&func);
 
-        assert!(
-            output.contains("fall through"),
-            "fall-through case should have /* fall through */ comment:\n{output}",
-        );
-
         let lines: Vec<&str> = output.lines().collect();
         let case0_line = lines.iter().position(|l| l.contains("case 0:")).unwrap();
         let case1_line = lines.iter().position(|l| l.contains("case 1:")).unwrap();
@@ -14455,7 +14507,42 @@ mod tests {
         let between = &lines[case0_line..case1_line];
         assert!(
             !between.iter().any(|l| l.trim() == "break;"),
-            "fall-through case 0 should NOT have break; between case labels:\n{output}",
+            "stacked case label run should NOT have break; between case labels:\n{output}",
+        );
+        assert!(
+            !between.iter().any(|l| l.contains("fall through")),
+            "stacked case-label group (empty body) should NOT emit a fall-through comment:\n{output}",
+        );
+    }
+
+    #[test]
+    fn test_switch_return_suppresses_break() {
+        // Batch 9 slice 2: when a case body terminates with `return;`,
+        // the printer must NOT append a redundant `break;` — that would
+        // produce unreachable code and trip "statement after return"
+        // warnings.
+        let body = vec![HirNode::Switch {
+            cond: sv(0, 8),
+            cases: vec![(SwitchCase::Value(0), vec![HirNode::Return(None)], false)],
+            default: None,
+            jumptable_addr: None,
+            jumptable_cases: None,
+        }];
+
+        let func = make_func("switch_ret_no_break", body);
+        let output = print_c(&func);
+
+        let lines: Vec<&str> = output.lines().collect();
+        let case_line = lines.iter().position(|l| l.contains("case 0:")).unwrap();
+        let close_brace = lines[case_line..]
+            .iter()
+            .position(|l| l.trim() == "}")
+            .map(|p| p + case_line)
+            .unwrap_or(lines.len());
+        let segment = &lines[case_line..close_brace];
+        assert!(
+            !segment.iter().any(|l| l.trim() == "break;"),
+            "case 0 ends in return; must not also emit break;:\n{output}",
         );
     }
 

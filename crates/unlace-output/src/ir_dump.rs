@@ -320,6 +320,7 @@ mod tests {
             go_defer_recover_calls: BTreeMap::new(),
             cpp_lambda_captures: Vec::new(),
             rust_async: None,
+            lvars: Vec::new(),
         }
     }
 

@@ -124,6 +124,15 @@ fn main() {
             init_tracing(verbose);
             run_quality(&binary, format)
         }
+        Cmd::IrDump {
+            binary,
+            function,
+            phase,
+            verbose,
+        } => {
+            init_tracing(verbose);
+            run_ir_dump(&binary, function.as_deref(), phase.as_deref())
+        }
     };
 
     // Batch 17: per-pass timing dump. The wrapper inside
@@ -166,6 +175,96 @@ fn run_siggen(
         stdout.write_all(toml.as_bytes())?;
     }
     tracing::info!(count = patterns.len(), archive = %archive_path.display(), "generated FLIRT patterns");
+    Ok(())
+}
+
+/// Pipeline milestone selected by `ir-dump --phase`.
+///
+/// `Lift` snapshots the SSA function immediately after construction (no
+/// optimisation passes have run). `PostPasses` is the default and matches
+/// the IR the C printer would receive. `PostStructuring` re-runs
+/// `structure_preserve_returns`, which may rewrite the SSA in place
+/// (eager-return splitting, etc.), then dumps the resulting IR.
+#[derive(Clone, Copy)]
+enum IrDumpPhase {
+    Lift,
+    PostPasses,
+    PostStructuring,
+}
+
+fn parse_ir_dump_phase(s: Option<&str>) -> Result<IrDumpPhase> {
+    match s.unwrap_or("post-passes") {
+        "lift" => Ok(IrDumpPhase::Lift),
+        "post-passes" | "passes" => Ok(IrDumpPhase::PostPasses),
+        "post-structuring" | "structuring" | "post-struct" => Ok(IrDumpPhase::PostStructuring),
+        other => bail!(
+            "unknown --phase '{other}' (expected: lift, post-passes, post-structuring)"
+        ),
+    }
+}
+
+fn run_ir_dump(
+    binary_path: &std::path::Path,
+    function_filter: Option<&str>,
+    phase_str: Option<&str>,
+) -> Result<()> {
+    let phase = parse_ir_dump_phase(phase_str)?;
+
+    let data = fs::read(binary_path)
+        .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
+
+    let image = if ElfLoader::can_load(&data) {
+        ElfLoader::load(&data)
+    } else if MachoLoader::can_load(&data) {
+        MachoLoader::load(&data)
+    } else if PeLoader::can_load(&data) {
+        PeLoader::load(&data)
+    } else {
+        bail!(
+            "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
+            binary_path.display(),
+        );
+    }
+    .with_context(|| format!("failed to parse '{}'", binary_path.display()))?;
+
+    let lifter = get_lifter(image.arch);
+    let functions = pipeline::discover_functions(&image, function_filter)?;
+
+    let mut out = String::new();
+    for entry in &functions {
+        let ir_func = match pipeline::lift_function(&image, lifter.as_ref(), entry) {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::warn!(name = %entry.name, err = %e, "lift failed; skipping");
+                out.push_str(&format!(
+                    "// [ir-dump] lift failed for '{}': {}\n",
+                    entry.name, e
+                ));
+                continue;
+            }
+        };
+
+        let mut ssa = unlace_ir::ssa::build_ssa(ir_func);
+        ssa.arch = image.arch;
+
+        match phase {
+            IrDumpPhase::Lift => {}
+            IrDumpPhase::PostPasses | IrDumpPhase::PostStructuring => {
+                if let Err(e) = pipeline::run_passes(&mut ssa) {
+                    tracing::warn!(name = %entry.name, err = %e, "pass pipeline failed; dumping unoptimized");
+                }
+                if matches!(phase, IrDumpPhase::PostStructuring) {
+                    if let Err(e) = unlace_struct::structure_preserve_returns(&mut ssa) {
+                        tracing::warn!(name = %entry.name, err = ?e, "structurer failed; dumping post-passes IR");
+                    }
+                }
+            }
+        }
+
+        out.push_str(&unlace_output::dump_ir(&ssa));
+    }
+
+    print!("{out}");
     Ok(())
 }
 

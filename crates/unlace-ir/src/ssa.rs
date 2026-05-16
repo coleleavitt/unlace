@@ -303,6 +303,38 @@ pub struct VtableCallInfo {
     pub slot_index: usize,
 }
 
+/// Classification of an indirect call's resolved target set.
+///
+/// Companion metadata to [`SsaFunction::resolved_indirect_calls`] (which
+/// stores only a single concrete address). The C printer / downstream
+/// consumers use this enum to decide how to render the call site —
+/// `Resolved` becomes a direct symbol, `VtableSlot` becomes a
+/// `this->vftable[N]` slot, `ObjcSelector` becomes `[receiver sel]`,
+/// `Multiple` becomes a comment listing candidates, and `Unknown` falls
+/// back to the raw indirect printer.
+///
+/// Populated lazily and per-call-site by specialised passes:
+/// - `Resolved` / `Multiple` / `Unknown` by
+///   [`IndirectCallResolvePass`](https://docs.rs/unlace-passes).
+/// - `VtableSlot` by `CppVtablePass` (separate follow-up).
+/// - `ObjcSelector` by `ObjcDispatchPass` (separate follow-up).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum TargetSet {
+    /// Single direct target recovered by constant-pointer tracing.
+    Resolved { addr: u64, name: String },
+    /// Multiple plausible targets (e.g. a function pointer fed from
+    /// several constant call sites within the same function body).
+    Multiple(Vec<(u64, String)>),
+    /// C++ virtual method call: dispatch is `this->vftable[slot_idx]`,
+    /// where the static type is `class_name`.
+    VtableSlot { class_name: String, slot_idx: u16 },
+    /// Objective-C message send: selector is fixed, receiver class is
+    /// dynamic.
+    ObjcSelector(String),
+    /// No analysis could identify the target — render as raw indirect.
+    Unknown,
+}
+
 /// Kind of C++ variant-like discriminator recovered by `CppVariantPass`.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum CppVariantKind {
@@ -518,6 +550,16 @@ pub struct SsaFunction {
     /// `Callind`; value is the resolved callee address. Populated by
     /// [`IndirectCallResolvePass`](https://docs.rs/unlace-passes).
     pub resolved_indirect_calls: BTreeMap<(BlockId, usize), u64>,
+    /// Per-call-site classification of an indirect call's recovered target
+    /// set. Keyed by `(BlockId, insn_index)` of the `Callind` (or `Call`
+    /// for ObjC `objc_msgSend`). See [`TargetSet`] for variant semantics.
+    ///
+    /// This is *metadata* — emitters consult it to decide how to render
+    /// the call, but it does not replace
+    /// [`Self::resolved_indirect_calls`] (which remains the
+    /// singleton-address fast path consumed by interprocedural type
+    /// propagation).
+    pub indirect_call_targets: BTreeMap<(BlockId, usize), TargetSet>,
     /// Inferred argument types for variadic-tail slots at each call site.
     /// Keyed by `(BlockId, insn_index)` of a `Call`/`Callind`; value is the
     /// list of `PrimitiveType`s in argument order, starting at the first
@@ -1028,6 +1070,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         sizeof_type_map: BTreeMap::new(),
         alignof_type_map: BTreeMap::new(),
         resolved_indirect_calls: BTreeMap::new(),
+        indirect_call_targets: BTreeMap::new(),
         variadic_call_types: BTreeMap::new(),
         signature_revision: 0,
         op_bindings: OpTypeBindings::default(),

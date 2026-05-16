@@ -14,7 +14,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, TargetSet, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
@@ -28,7 +28,9 @@ impl Pass for IndirectCallResolvePass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let snapshot = func.resolved_indirect_calls.clone();
+        let targets_snapshot = func.indirect_call_targets.clone();
         let mut found: BTreeMap<(BlockId, usize), u64> = BTreeMap::new();
+        let mut targets: BTreeMap<(BlockId, usize), TargetSet> = BTreeMap::new();
 
         for (&bid, block) in &func.function.blocks {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
@@ -39,76 +41,138 @@ impl Pass for IndirectCallResolvePass {
                     continue;
                 };
 
+                // Direct constant target in inputs[0] — trivial single hit.
                 if target_vn.space == SpaceId::Const {
-                    found.insert((bid, insn_idx), target_vn.offset);
+                    let addr = target_vn.offset;
+                    found.insert((bid, insn_idx), addr);
+                    targets.insert((bid, insn_idx), resolved_target(addr));
                     continue;
                 }
 
                 let Some(&target_sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0)))
                 else {
+                    targets.insert((bid, insn_idx), TargetSet::Unknown);
                     continue;
                 };
 
+                // Collect every reachable constant target through Copy
+                // chains, Load(const_addr), IntAdd(const, const), and phi
+                // joins. The set's cardinality classifies the call:
+                //   0 → `Unknown`, 1 → `Resolved`, ≥2 → `Multiple`.
                 let mut visited = BTreeSet::new();
-                if let Some(addr) = trace_constant(func, target_sv, &mut visited) {
-                    found.insert((bid, insn_idx), addr);
+                let mut sinks: BTreeSet<u64> = BTreeSet::new();
+                gather_constants(func, target_sv, &mut visited, &mut sinks);
+
+                match sinks.len() {
+                    0 => {
+                        targets.insert((bid, insn_idx), TargetSet::Unknown);
+                    }
+                    1 => {
+                        let addr = *sinks.iter().next().unwrap();
+                        found.insert((bid, insn_idx), addr);
+                        targets.insert((bid, insn_idx), resolved_target(addr));
+                    }
+                    _ => {
+                        let multi: Vec<(u64, String)> =
+                            sinks.into_iter().map(|a| (a, name_for(a))).collect();
+                        targets.insert((bid, insn_idx), TargetSet::Multiple(multi));
+                    }
                 }
             }
         }
 
-        let changed = found != snapshot;
+        let changed = found != snapshot || targets != targets_snapshot;
         func.resolved_indirect_calls = found;
+        func.indirect_call_targets = targets;
         Ok(changed)
     }
 }
 
-/// Walk backwards through `Copy` chains and `Load(const_address)`
-/// indirections, looking for a single concrete address.
+/// Build a `TargetSet::Resolved` for a single concrete target address.
+/// Name is the canonical `sub_<addr>` placeholder; the C printer already
+/// understands this fallback and replaces it with the real symbol name
+/// when a global resolver is wired in.
+fn resolved_target(addr: u64) -> TargetSet {
+    TargetSet::Resolved {
+        addr,
+        name: name_for(addr),
+    }
+}
+
+fn name_for(addr: u64) -> String {
+    format!("sub_{:x}", addr)
+}
+
+/// Phi-aware constant collector for backwards SSA traversal.
 ///
-/// Returns `Some(addr)` only when a *unique* constant is reached; cycles,
-/// phi joins, or multi-source aliasing yield `None` — preserving the
-/// "singleton-only" rule.
-fn trace_constant(
+/// Accumulates every constant address reachable through `Copy` / `Load`
+/// chains, `IntAdd(const, const)`, and phi inputs. Cycles are broken via
+/// the shared `visited` set; the caller decides whether to map the
+/// resulting set to `Resolved` (singleton), `Multiple`, or `Unknown`
+/// (empty).
+fn gather_constants(
     func: &SsaFunction,
     sv: SsaVarnode,
     visited: &mut BTreeSet<SsaVarnode>,
-) -> Option<u64> {
+    sinks: &mut BTreeSet<u64>,
+) {
     if !visited.insert(sv) {
-        return None;
+        return;
     }
 
-    let def_loc = find_def(func, sv)?;
-    let block = func.function.blocks.get(&def_loc.0)?;
-    let insn = block.insns.get(def_loc.1)?;
+    // Phi-defined value: recurse into every incoming SSA varnode.
+    for phis in func.phi_map.values() {
+        for phi in phis {
+            if phi.output == sv {
+                for (_, inp) in &phi.inputs {
+                    gather_constants(func, *inp, visited, sinks);
+                }
+                return;
+            }
+        }
+    }
+
+    let Some(def_loc) = find_def(func, sv) else {
+        return;
+    };
+    let Some(block) = func.function.blocks.get(&def_loc.0) else {
+        return;
+    };
+    let Some(insn) = block.insns.get(def_loc.1) else {
+        return;
+    };
 
     match insn.op {
         IrOp::Copy => {
-            let inp = insn.inputs.first()?;
-            if inp.space == SpaceId::Const {
-                return Some(inp.offset);
+            if let Some(inp) = insn.inputs.first() {
+                if inp.space == SpaceId::Const {
+                    sinks.insert(inp.offset);
+                    return;
+                }
             }
-            let next = func
+            if let Some(next) = func
                 .var_map
-                .get(&(def_loc.0, def_loc.1, VarnodeSlot::Input(0)))?;
-            trace_constant(func, *next, visited)
+                .get(&(def_loc.0, def_loc.1, VarnodeSlot::Input(0)))
+                .copied()
+            {
+                gather_constants(func, next, visited, sinks);
+            }
         }
-
         IrOp::Load => {
-            let addr = insn.inputs.get(1)?;
-            if addr.space == SpaceId::Const {
-                return Some(addr.offset);
+            if let Some(addr) = insn.inputs.get(1) {
+                if addr.space == SpaceId::Const {
+                    sinks.insert(addr.offset);
+                }
             }
-            None
         }
-
-        IrOp::IntAdd => match (insn.inputs.first(), insn.inputs.get(1)) {
-            (Some(a), Some(b)) if a.space == SpaceId::Const && b.space == SpaceId::Const => {
-                Some(a.offset.wrapping_add(b.offset))
+        IrOp::IntAdd => {
+            if let (Some(a), Some(b)) = (insn.inputs.first(), insn.inputs.get(1)) {
+                if a.space == SpaceId::Const && b.space == SpaceId::Const {
+                    sinks.insert(a.offset.wrapping_add(b.offset));
+                }
             }
-            _ => None,
-        },
-
-        _ => None,
+        }
+        _ => {}
     }
 }
 
@@ -255,5 +319,109 @@ mod tests {
             *ssa.resolved_indirect_calls.values().next().unwrap(),
             0xFEED_FACE
         );
+    }
+
+    // ------------------------------------------------------------------
+    // TargetSet wiring (Batch 8 slice 1)
+    // ------------------------------------------------------------------
+
+    /// Direct constant `CALLIND(0xDEAD_BEEF)` populates
+    /// `TargetSet::Resolved` with the canonical `sub_<addr>` name.
+    #[test]
+    fn target_set_resolved_for_direct_constant() {
+        let mut func = Function::new("direct", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Callind,
+            smallvec![Varnode::constant(0xDEAD_BEEF, 8)],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1004,
+        ));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        IndirectCallResolvePass.run(&mut ssa).unwrap();
+
+        assert_eq!(ssa.indirect_call_targets.len(), 1);
+        let ts = ssa.indirect_call_targets.values().next().unwrap();
+        match ts {
+            TargetSet::Resolved { addr, name } => {
+                assert_eq!(*addr, 0xDEAD_BEEF);
+                assert_eq!(name, "sub_deadbeef");
+            }
+            other => panic!("expected Resolved, got {other:?}"),
+        }
+    }
+
+    /// `Copy` chain to a constant ⇒ `Resolved` populated alongside
+    /// `resolved_indirect_calls`.
+    #[test]
+    fn target_set_resolved_for_copy_chain() {
+        let mut func = Function::new("chain", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            u0,
+            smallvec![Varnode::constant(0xFEED_FACE, 8)],
+            0x1000,
+        ));
+        bb.insns
+            .push(IrInsn::with_output(IrOp::Copy, u1, smallvec![u0], 0x1004));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Callind, smallvec![u1], 0x1008));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x100c,
+        ));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        IndirectCallResolvePass.run(&mut ssa).unwrap();
+
+        let ts = ssa.indirect_call_targets.values().next().unwrap();
+        match ts {
+            TargetSet::Resolved { addr, name } => {
+                assert_eq!(*addr, 0xFEED_FACE);
+                assert_eq!(name, "sub_feedface");
+            }
+            other => panic!("expected Resolved, got {other:?}"),
+        }
+    }
+
+    /// Opaque parameter target ⇒ `Unknown` populated, singleton map
+    /// stays empty.
+    #[test]
+    fn target_set_unknown_for_opaque_parameter() {
+        let mut func = Function::new("unk", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        let rdi = Varnode::reg(56, 8);
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Callind,
+            smallvec![rdi],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1004,
+        ));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        IndirectCallResolvePass.run(&mut ssa).unwrap();
+
+        assert!(ssa.resolved_indirect_calls.is_empty());
+        assert_eq!(ssa.indirect_call_targets.len(), 1);
+        assert!(matches!(
+            ssa.indirect_call_targets.values().next().unwrap(),
+            TargetSet::Unknown
+        ));
     }
 }

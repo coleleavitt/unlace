@@ -399,6 +399,41 @@ pub enum HirNode {
     },
 }
 
+/// High-level loop classification, derived from the structured HIR shape.
+///
+/// The structurer already emits distinct [`HirNode::While`], [`HirNode::DoWhile`],
+/// and [`HirNode::For`] variants. `LoopForm` is the read-only *tag* attached to
+/// each loop by [`crate::loop_classify::classify_loop_form`]; it lets downstream
+/// consumers (metrics, parity scoring, plugin annotators) reason about loop
+/// shape without re-pattern-matching the HIR enum.
+///
+/// `Infinite` is a refinement of `While`: a loop whose body never reaches a
+/// `break` / `return` / `tail-call` — its only way out is by re-evaluating the
+/// header (presumed-tautological) condition. Conservative: when in doubt,
+/// classify as `While`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum LoopForm {
+    /// `while (cond) { body }` — test before body.
+    While,
+    /// `do { body } while (cond)` — test after body, runs ≥1 iteration.
+    DoWhile,
+    /// `for (init; cond; step) { body }` — counted iteration with all three slots.
+    For,
+    /// `while (true) { body }` / `for (;;) { body }` — exit only via `break` or `return`.
+    Infinite,
+}
+
+impl fmt::Display for LoopForm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LoopForm::While => write!(f, "while"),
+            LoopForm::DoWhile => write!(f, "do_while"),
+            LoopForm::For => write!(f, "for"),
+            LoopForm::Infinite => write!(f, "infinite"),
+        }
+    }
+}
+
 impl HirNode {
     /// Wrap `self` with a single pre-statement comment, building (or extending)
     /// a [`HirNode::Commented`] wrapper. Convenience for plugin/DWARF code that

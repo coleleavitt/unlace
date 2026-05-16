@@ -5,6 +5,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
+use regex::Regex;
 
 use unlace_ir::ArchId;
 use unlace_ir::ssa::SsaFunction;
@@ -23,6 +24,23 @@ pub struct BatchConfig {
     /// When true, run whole-program interprocedural analysis between
     /// lift+passes and emit phases.
     pub interproc: bool,
+    /// Process every discovered function. No-op today (current default).
+    pub all_functions: bool,
+    /// Optional regex name filter, compiled once by the caller.
+    pub scope: Option<Regex>,
+    /// Cap on interproc fixed-point iterations (0 = pass through to default).
+    pub max_iterations: usize,
+}
+
+/// Drop entries whose name doesn't match `re`. Errors if the filter empties the set.
+fn apply_scope_filter(functions: &mut Vec<pipeline::FunctionEntry>, re: &Regex) -> Result<()> {
+    let before = functions.len();
+    functions.retain(|f| re.is_match(&f.name));
+    tracing::info!(kept = functions.len(), dropped = before - functions.len(), "scope filter");
+    if functions.is_empty() {
+        bail!("--scope regex matched zero functions");
+    }
+    Ok(())
 }
 
 pub struct BatchResult {
@@ -89,8 +107,11 @@ pub fn run_batch(
         );
     }
 
-    let functions = pipeline::discover_functions(&image, None)?;
+    let mut functions = pipeline::discover_functions(&image, None)?;
     tracing::info!(count = functions.len(), "discovered functions for batch");
+    if let Some(re) = config.scope.as_ref() {
+        apply_scope_filter(&mut functions, re)?;
+    }
 
     let dwarf = match import_dwarf(&image) {
         Ok(d) if !d.functions.is_empty() || !d.structs.is_empty() => {
@@ -237,7 +258,7 @@ fn decompile_interproc(image: &BinaryImage, functions: &[FunctionEntry], config:
 
     // Phase 2: sequential interproc fixpoint
     tracing::info!(functions = ssa_map.len(), "interproc phase 2: whole-program fixed-point (sequential)");
-    if let Err(e) = pipeline::run_whole_program_interproc(&mut ssa_map, 0) {
+    if let Err(e) = pipeline::run_whole_program_interproc(&mut ssa_map, config.max_iterations) {
         tracing::warn!(err = %e, "interprocedural fixed-point failed; emitting with per-function results");
     }
 
@@ -348,6 +369,9 @@ mod tests {
             emit: EmitFormat::C,
             timeout_secs: 30,
             interproc: false,
+            all_functions: false,
+            scope: None,
+            max_iterations: 0,
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -389,6 +413,9 @@ mod tests {
             emit: EmitFormat::C,
             timeout_secs: 30,
             interproc: false,
+            all_functions: false,
+            scope: None,
+            max_iterations: 0,
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -418,6 +445,9 @@ mod tests {
             emit: EmitFormat::C,
             timeout_secs: 0,
             interproc: false,
+            all_functions: false,
+            scope: None,
+            max_iterations: 0,
         };
 
         let data = fs::read(fixture("medium.elf")).unwrap();
@@ -442,6 +472,9 @@ mod tests {
             emit: EmitFormat::C,
             timeout_secs: 30,
             interproc: false,
+            all_functions: false,
+            scope: None,
+            max_iterations: 0,
         };
 
         let data = fs::read(fixture("hello_world.elf")).unwrap();
@@ -468,7 +501,15 @@ mod tests {
 
     #[test]
     fn test_batch_interproc_produces_output() {
-        let config = BatchConfig { jobs: 2, emit: EmitFormat::C, timeout_secs: 60, interproc: true };
+        let config = BatchConfig {
+            jobs: 2,
+            emit: EmitFormat::C,
+            timeout_secs: 60,
+            interproc: true,
+            all_functions: false,
+            scope: None,
+            max_iterations: 0,
+        };
         let data = fs::read(fixture("medium.elf")).unwrap();
         let image = ElfLoader::load(&data).unwrap();
         let functions = pipeline::discover_functions(&image, None).unwrap();

@@ -2,6 +2,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 
+mod compare_corpus;
 mod compare_golden;
 
 fn main() {
@@ -15,6 +16,10 @@ fn main() {
             let root = workspace_root();
             compare_golden::run(&root);
         }
+        Some("compare-corpus") => {
+            let root = workspace_root();
+            compare_corpus::run(&root);
+        }
         Some(cmd) => {
             eprintln!("unknown xtask command: {cmd}");
             process::exit(1);
@@ -22,7 +27,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, compare-corpus"
             );
             process::exit(1);
         }

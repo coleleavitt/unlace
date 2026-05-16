@@ -4,6 +4,7 @@ use std::process::{self, Command};
 
 mod compare_corpus;
 mod compare_golden;
+mod lifter_coverage;
 mod validate_corpus;
 
 fn main() {
@@ -21,6 +22,10 @@ fn main() {
             let root = workspace_root();
             compare_corpus::run(&root);
         }
+        Some("lifter-coverage") => {
+            let root = workspace_root();
+            lifter_coverage::run(&root);
+        }
         Some("validate-corpus-toml") => {
             let root = workspace_root();
             validate_corpus::run(&root);
@@ -32,7 +37,7 @@ fn main() {
         None => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!(
-                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, compare-corpus, validate-corpus-toml"
+                "available commands: scaffold, lint-determinism, regen-goldens, measure-parity, compare-golden, compare-corpus, lifter-coverage, validate-corpus-toml"
             );
             process::exit(1);
         }

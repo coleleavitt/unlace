@@ -33,6 +33,10 @@ impl Pass for RedundantFlagElimPass {
         "redundant-flag-elim"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::PreOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let sub_defs = collect_sub_defs(func);
         if sub_defs.is_empty() {

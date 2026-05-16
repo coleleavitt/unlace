@@ -14,6 +14,10 @@ impl Pass for CopyPropagationPass {
         "copy-propagation"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::LocalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let copy_map = build_copy_map(func);
         if copy_map.is_empty() {

@@ -21,6 +21,10 @@ impl Pass for RustEnumPass {
         "rust-enum"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let loads = find_discriminant_loads(func);
         if loads.is_empty() {

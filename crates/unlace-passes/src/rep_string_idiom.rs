@@ -50,6 +50,10 @@ impl Pass for RepStringIdiomPass {
         "rep-string-idiom"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::LocalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let _ = detect_rep_string_loops(func);
         Ok(false)

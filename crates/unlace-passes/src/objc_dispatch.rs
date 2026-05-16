@@ -156,6 +156,10 @@ impl Pass for ObjcDispatchPass {
         "objc-dispatch"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         if self.msgsend_addrs.is_empty() {
             return Ok(false);

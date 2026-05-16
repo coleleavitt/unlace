@@ -37,6 +37,10 @@ impl Pass for DaikonInvariantPass {
         "daikon-invariants"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let _invariants = detect_invariants(func);
         // Currently discovery-only; future work: annotate func.

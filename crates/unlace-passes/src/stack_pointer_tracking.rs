@@ -31,6 +31,10 @@ impl Pass for StackPointerTrackingPass {
         "stack-pointer-tracking"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::StackRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         // Batch 2: stack recovery is per-arch. When the spec is missing
         // (Unknown / unsupported arch) the pass is a no-op rather than

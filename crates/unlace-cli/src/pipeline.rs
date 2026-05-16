@@ -869,19 +869,60 @@ pub struct PassesReport {
 
 /// Run the pass pipeline and return a structured report.
 ///
-/// The pipeline mirrors IDA's two-tier driver (sub_14B8B0 / sub_F9180):
+/// The pipeline mirrors IDA's two-tier driver (sub_14B8B0 / sub_F9180).
 ///
-/// 1. **One-time pre-pass.** [`StackOffsetSnapshotPass`] captures the
-///    pre-optimization stack-offset map, used later by stack var recovery.
+/// # Canonical PassPhase order (Batch 10 slice 1)
+///
+/// Each pass below carries a `phase()` tag — see
+/// [`unlace_passes::PassPhase`] for the seven canonical buckets:
+///
+/// | Phase         | Examples                                              |
+/// |---------------|-------------------------------------------------------|
+/// | `PreOpt`      | CallBoundaryCopyProp, RedundantFlagElim, AlgSimp,     |
+/// |               | PrologueElim, NoreturnDetect                          |
+/// | `LocalOpt`    | SCCP, CopyProp, ConstFold, DCE, DSE, DFE,             |
+/// |               | StrengthReduce, IvElim, IdiomRec, BMI, Cond/Bool      |
+/// | `GlobalOpt`   | GVN, CSE, LICM, GlobalCopyProp, DseGlobal,            |
+/// |               | TailCall, TailDup, IndirectCall/JumpResolve,          |
+/// |               | MsvcSEH                                               |
+/// | `TypeRecovery`| TypeInfer, TypeConstraintSolver, OpTypeBinding,       |
+/// |               | CC detect/param/return, Struct/Sizeof, Cpp/Rust/Objc, |
+/// |               | RustAsync                                             |
+/// | `StackRecovery`| StackOffsetSnapshot, StackPointerTracking,           |
+/// |               | StackVarRecovery                                      |
+/// | `LVarAlloc`   | VariableMerge                                         |
+/// | `FinalCleanup`| RegisterCoalesce, ExpressionTree, VarNaming,          |
+/// |               | CallingConvFinalize                                   |
+///
+/// The schedule below interleaves phases **intentionally** — for
+/// example, `CallBoundaryCopyPropPass` (PreOpt) is wired into the inner
+/// fixed-point cluster alongside LocalOpt/GlobalOpt passes because the
+/// three only converge when run together. As of Batch 10 slice 1 the
+/// canonical schedule has 11 "backward" phase transitions across 47
+/// adjacent pairs; the count is pinned by the
+/// `canonical_pipeline_is_documented` test in
+/// `unlace_passes::pass::phase_tests`. Reducing the count is a strict
+/// win and is the goal of a follow-up Batch 10 slice.
+///
+/// # Schedule
+///
+/// 1. **One-time pre-pass.** [`StackOffsetSnapshotPass`] (StackRecovery)
+///    captures the pre-optimization stack-offset map, used later by
+///    stack var recovery. Followed by [`NoreturnDetectPass`] (PreOpt)
+///    when a resolver is supplied.
 /// 2. **Outer fixed-point loop** (capped at [`DEFAULT_OUTER_FIXEDPOINT_CAP`]).
 ///    Each outer iteration runs:
-///      - the inner IR-level fixed-point cluster (sccp / copy-prop / cse /
-///        gvn / algebraic simplify / dce / cond-simplify), which itself
-///        converges via [`run_to_fixedpoint`];
-///      - cleanup passes (dead store / dead flag / division / modulo);
-///      - structural detection (prologue / tail call / stack vars / C++ vt);
-///      - type recovery (calling convention / param infer / return infer /
-///        struct field detect / primitive type infer).
+///      - the inner IR-level fixed-point cluster — mostly LocalOpt /
+///        GlobalOpt with three PreOpt cleanups (call-boundary, redundant
+///        flag, algebraic simplify), converging via [`run_to_fixedpoint`];
+///      - LocalOpt/GlobalOpt cleanup (dead store, dead flag, cross-block
+///        DSE, division/modulo idioms);
+///      - PreOpt + StackRecovery + GlobalOpt + TypeRecovery structural
+///        detection (prologue elim, tail-call detect, stack-pointer
+///        tracking, stack-var recovery, indirect-call resolve, C++
+///        vtable);
+///      - TypeRecovery proper (calling-convention detect/param/return,
+///        struct-field, primitive type infer, constraint solver).
 ///
 ///    After each iteration we hash the type-recovery state via
 ///    [`unlace_passes::ssa_type_signature`]; if it changed we run again.

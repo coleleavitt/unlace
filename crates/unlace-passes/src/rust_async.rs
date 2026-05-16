@@ -32,6 +32,10 @@ impl Pass for RustAsyncPass {
         "rust-async"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let machines = detect_async_state_machines(func);
         if machines.is_empty() {

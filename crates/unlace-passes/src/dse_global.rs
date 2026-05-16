@@ -32,6 +32,10 @@ impl Pass for DeadStoreElimGlobalPass {
         "dse-global"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::GlobalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let dead = find_globally_dead_stores(func);
         if dead.is_empty() {

@@ -182,6 +182,10 @@ impl Pass for MsvcSehPass {
         "msvc-seh"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::GlobalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let entry_addr = func.function.addr;
         let Some(scope_table) = self.scope_tables.get(&entry_addr) else {

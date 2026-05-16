@@ -237,6 +237,10 @@ impl Pass for VarNamingPass {
         "VarNamingPass"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::FinalCleanup
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let cls = classify_variables(func);
 

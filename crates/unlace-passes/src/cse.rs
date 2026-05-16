@@ -180,6 +180,10 @@ impl Pass for CsePass {
         "cse"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::GlobalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let rewrites = collect_rewrites(func);
         if rewrites.is_empty() {

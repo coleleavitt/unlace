@@ -225,6 +225,7 @@ mod tests {
             sizeof_type_map: std::collections::BTreeMap::new(),
             alignof_type_map: std::collections::BTreeMap::new(),
             resolved_indirect_calls: std::collections::BTreeMap::new(),
+            indirect_call_targets: std::collections::BTreeMap::new(),
             variadic_call_types: std::collections::BTreeMap::new(),
             signature_revision: 0,
             op_bindings: unlace_ir::ssa::OpTypeBindings::default(),

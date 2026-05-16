@@ -366,6 +366,7 @@ mod tests {
             sizeof_type_map: BTreeMap::new(),
             alignof_type_map: BTreeMap::new(),
             resolved_indirect_calls: BTreeMap::new(),
+            indirect_call_targets: BTreeMap::new(),
             variadic_call_types: BTreeMap::new(),
             signature_revision: 0,
             op_bindings: unlace_ir::ssa::OpTypeBindings::default(),

@@ -121,7 +121,14 @@ impl Pass for VariableMergePass {
         let live_ranges = compute_live_ranges(func, &all_vars);
 
         // 3. Bucket by coalescence key, then greedy-coalesce inside each bucket.
-        let clusters = coalesce_clusters(&all_vars, &live_ranges, &func.var_types);
+        // Pass byref offsets so address-taken variables are never merged.
+        let byref_offsets = func
+            .byref_info
+            .as_ref()
+            .map(|bi| &bi.byref_locals)
+            .cloned()
+            .unwrap_or_default();
+        let clusters = coalesce_clusters(&all_vars, &live_ranges, &func.var_types, &byref_offsets);
 
         // 4. Assign deterministic v-names per cluster.
         let merged = assign_names(&all_vars, &clusters);
@@ -409,6 +416,7 @@ fn coalesce_clusters(
     all_vars: &BTreeSet<SsaVarnode>,
     live_ranges: &BTreeMap<SsaVarnode, BTreeSet<ProgramPoint>>,
     var_types: &BTreeMap<SsaVarnode, PrimitiveType>,
+    byref_offsets: &BTreeSet<i64>,
 ) -> Vec<Vec<SsaVarnode>> {
     let mut by_base: BTreeMap<Varnode, Vec<SsaVarnode>> = BTreeMap::new();
     for sv in all_vars {

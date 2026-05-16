@@ -66,6 +66,9 @@ pub enum VarRole {
     SavedRegister(&'static str),
     Temporary,
     Argument(u32),
+    /// The varnode written to the return register immediately before a
+    /// Return instruction. Named `result` in the output.
+    ReturnValue,
 }
 
 #[derive(Debug, Default)]
@@ -180,6 +183,44 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
         }
     }
 
+    // 2b. Return-value classification: find the last write to the return
+    //     register (RAX on x86-64, X0 on AArch64) immediately before a
+    //     Return instruction. The SSA varnode written there is the `result`.
+    let return_reg_offset: Option<u64> = match func.calling_convention {
+        unlace_ir::ssa::CallingConvention::SystemV
+        | unlace_ir::ssa::CallingConvention::MicrosoftX64
+        | unlace_ir::ssa::CallingConvention::Cdecl
+        | unlace_ir::ssa::CallingConvention::Stdcall
+        | unlace_ir::ssa::CallingConvention::Thiscall => Some(0), // RAX/EAX
+        unlace_ir::ssa::CallingConvention::AArch64 => Some(0),    // X0
+        unlace_ir::ssa::CallingConvention::Unknown => Some(0),    // assume RAX
+    };
+    if let Some(ret_off) = return_reg_offset {
+        for (bid, block) in &func.function.blocks {
+            for (idx, insn) in block.insns.iter().enumerate() {
+                if insn.op != IrOp::Return {
+                    continue;
+                }
+                // Walk backward from the Return to find the last write to
+                // the return register in this block.
+                for prev_idx in (0..idx).rev() {
+                    let prev_insn = &block.insns[prev_idx];
+                    let Some(out) = prev_insn.output else { continue };
+                    if out.space == SpaceId::Register && out.offset == ret_off {
+                        if let Some(&sv) =
+                            func.var_map.get(&(*bid, prev_idx, VarnodeSlot::Output))
+                        {
+                            if !roles.contains_key(&sv) {
+                                roles.insert(sv, VarRole::ReturnValue);
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     // 3. Everything else: Temporary.
     for sv in func.var_map.values() {
         roles.entry(*sv).or_insert(VarRole::Temporary);
@@ -206,6 +247,7 @@ pub fn suggest_name(role: VarRole, idx: usize) -> String {
         }
         VarRole::SavedRegister(name) => format!("saved_{}", name),
         VarRole::Argument(i) => format!("a{}", i + 1),
+        VarRole::ReturnValue => "result".into(),
         VarRole::Temporary => format!("v{}", idx),
     }
 }
@@ -256,6 +298,7 @@ impl Pass for VarNamingPass {
             LoopArrayBase,
             SavedRegister(&'static str),
             Argument(u32),
+            ReturnValue,
         }
         let mut counters: std::collections::BTreeMap<Family, usize> =
             std::collections::BTreeMap::new();
@@ -272,6 +315,7 @@ impl Pass for VarNamingPass {
                 VarRole::LoopArrayBase => Family::LoopArrayBase,
                 VarRole::SavedRegister(reg) => Family::SavedRegister(reg),
                 VarRole::Argument(k) => Family::Argument(*k),
+                VarRole::ReturnValue => Family::ReturnValue,
             };
             let counter = counters.entry(family).or_insert(0);
             let idx = *counter;

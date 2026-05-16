@@ -105,16 +105,16 @@ fn main() {
             merged: _,
             timeout,
             interproc,
+            all_functions,
+            scope,
+            max_iterations,
             verbose,
         } => {
             init_tracing(verbose);
-            let config = BatchConfig {
-                jobs,
-                emit,
-                timeout_secs: timeout,
-                interproc,
-            };
-            batch::run_batch(&binary, &config, arch.as_deref(), output_dir.as_deref())
+            run_batch_cmd(
+                binary, jobs, emit, arch, output_dir, timeout, interproc,
+                all_functions, scope, max_iterations,
+            )
         }
         Cmd::Quality {
             binary,
@@ -344,3 +344,34 @@ fn run_decompile(
 
 // `parse_arch` moved to `unlace_cli::parse_arch` (lib.rs) so the
 // library's `batch` module can also use it.
+
+#[allow(clippy::too_many_arguments)]
+fn run_batch_cmd(
+    binary: std::path::PathBuf,
+    jobs: usize,
+    emit: args::EmitFormat,
+    arch: Option<String>,
+    output_dir: Option<std::path::PathBuf>,
+    timeout: u64,
+    interproc: bool,
+    all_functions: bool,
+    scope: Option<String>,
+    max_iterations: usize,
+) -> Result<()> {
+    let scope_re = match scope.as_deref() {
+        Some(pat) => Some(
+            regex::Regex::new(pat).with_context(|| format!("invalid --scope regex: {pat}"))?,
+        ),
+        None => None,
+    };
+    let config = BatchConfig {
+        jobs,
+        emit,
+        timeout_secs: timeout,
+        interproc,
+        all_functions,
+        scope: scope_re,
+        max_iterations,
+    };
+    batch::run_batch(&binary, &config, arch.as_deref(), output_dir.as_deref())
+}

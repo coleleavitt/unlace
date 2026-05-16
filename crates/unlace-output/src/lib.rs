@@ -2,6 +2,7 @@
 
 pub mod c_printer;
 pub mod cfg_dot;
+pub mod expr_ast;
 pub mod cpp_class;
 pub mod cpp_stl;
 pub mod demangle;

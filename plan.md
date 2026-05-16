@@ -106,10 +106,13 @@ way to see whether output is getting closer to IDA-like C or just changing.
   - expected feature tags
   - expected IDA output path if available
 
-- [ ] Add IDA-vs-Unlace golden comparison tooling:
+- [~] Add IDA-vs-Unlace golden comparison tooling:
   - normalize whitespace
   - normalize local variable names where needed
-  - compare structure, not only text
+  - compare structure, not only text (partial — `cargo xtask
+    compare-golden` reports aggregate keyword/density similarity;
+    `cargo xtask compare-corpus` reports per-pattern IDA-vs-Unlace
+    coverage table to stdout + `target/corpus-compare.md`)
   - report changed functions
   - report missing constructs
   - report newly introduced gotos
@@ -193,11 +196,14 @@ the project look more complete in source than it is in actual output.
   devirtualization (landed; placed post-outer-loop one-shot).
 - [x] Wire `OpTypeBindingPass` after type inference and before struct recovery
   output decisions (landed; placed post-outer-loop).
-- [ ] Wire vararg and printf-format recovery:
+- [~] Wire vararg and printf-format recovery:
   - `detect_variadic_callees` (deferred — whole-program, needs Batch 6
     follow-up; not blocking)
-  - `parse_printf_format_strings` (the C printer already does printf
-    parsing inline; SSA-side variadic_call_types population deferred)
+  - `parse_printf_format_strings` (landed `b7bce9462` — per-function
+    pre-pass inside `lift_and_run_passes` + whole-program safety net
+    `run_whole_program_printf_parse` driven from the interproc batch
+    phase; populates `SsaFunction::variadic_call_types` end-to-end and
+    handles PIE base-relative loads)
   - callsite argument naming/type hints (deferred)
 
 - [x] Wire noreturn detection before CFG structuring (landed as one-shot
@@ -215,8 +221,12 @@ the project look more complete in source than it is in actual output.
     `CppVariantPass` landed)
   - Go interface/defer recovery (`detect_go_defer` already wired)
 
-- [ ] Replace or augment `run_type_infer_bounded` with the real `TypeInferPass`
-  if tests show it is stable (deferred — needs separate stability eval).
+- [x] Replace or augment `run_type_infer_bounded` with the real `TypeInferPass`
+  (landed `439c0903c` — production `unlace_passes::type_infer::TypeInferPass`
+  now runs inside the outer fixed-point with per-function deadline
+  `config.timeout` and `seed_from_composites` for pointer-typed struct
+  fields; CLI stub removed, only the frozen benchmark baseline keeps
+  the old helper).
 
 - [x] Ensure each newly wired pass has:
   - a pass-level feature flag if risky (data-driven gates documented per
@@ -854,8 +864,15 @@ ctree construction/validation pipeline is more mature.
 
 ### Tasks
 
-- [ ] Wire switch table recovery/refinement into CLI output path.
-- [ ] Feed binary section/relocation data into switch recovery.
+- [x] Wire switch table recovery/refinement into CLI output path
+  (landed `bc6169cef` + `4cf784d12` — `IndirectJumpResolvePass`
+  populates `SsaFunction::resolved_jump_tables`, `refine_switches_with_tables`
+  rewrites the HIR switch in the structurer pipeline).
+- [x] Feed binary section/relocation data into switch recovery
+  (landed `bc6169cef` + `0160f8858` — `pipeline::resolve_jump_table_targets`
+  decodes `.rodata` / `.data.rel.ro` table entries and gates promotions on
+  RX-section plausibility; new `switch_table.elf` fixture exercises a real
+  jump table).
 - [ ] Support switch table forms:
   - direct address table
   - relative offset table
@@ -1652,3 +1669,41 @@ can `git show <sha>` to see exactly what was done. Append-only.
   printer ctree model, etc.).
 - **Workspace clippy** — `unlace-loader` is the only output-side crate
   not yet clippy-clean.
+
+### Session 2026-05-16 (master `a27e994ad`)
+
+- **Batch 0 IDA-vs-Unlace corpus tooling** — commit `a27e994ad`. New
+  `cargo xtask compare-corpus` enumerates 16 x86_64 fixtures + 150 IDA
+  references, counts 20+ patterns (_QWORD/aN/vN/result/LOBYTE/etc.),
+  emits markdown coverage table to stdout + `target/corpus-compare.md`.
+  Complements `cargo xtask compare-golden` (commit `59d756732`,
+  aggregate keyword/density similarity). Top-level Batch 0 checkbox
+  remains `[~]` — neither tool reports per-function changed/missing
+  constructs or diff-introduced gotos/`Unimplemented` yet.
+- **Batch 1 TypeInferPass wiring** — commit `439c0903c`. Replaced
+  `run_type_infer_bounded` with the real `TypeInferPass` + 30s per-fn
+  deadline. Recovers pointer-typed struct fields (`__int64 field_N`
+  → `void * field_N` via `seed_from_composites`). Parity sustained at
+  100%.
+- **Batch 6 printf whole-program** — commit `b7bce9462`. Added per-fn
+  pre-pass + whole-program `run_whole_program_printf_parse` call to
+  `parse_printf_format_strings`. PIE base-relative load pattern now
+  matched. `cpp_exceptions.elf` `variadic_call_types` 0 → 2. Top-level
+  Batch 1 vararg/printf checkbox remains `[~]` —
+  `detect_variadic_callees` + callsite arg naming still deferred.
+- **Batch 9 switch table recovery wiring** — commits `bc6169cef`,
+  `4cf784d12`, `0160f8858`. `IndirectJumpResolvePass` populates
+  `SsaFunction::resolved_jump_tables`; `pipeline::resolve_jump_table_targets`
+  decodes `.rodata` / `.data.rel.ro` entries with RX-section gating;
+  `refine_switches_with_tables` rewrites HIR in the structurer.
+  New `switch_table.elf` fixture exercises a real jump table end-to-end.
+- **noreturn/libc counter wiring fix** — commit `334745b93`. No
+  underlying bug — producer/consumer plumbing was already intact.
+  Added regression test pinning SSA field → counter end-to-end on
+  `medium.elf` + `cpp_vtable.elf`.
+
+### Verified state at end of session
+
+- `bash scripts/score_parity.sh`: 100.0% (sustained — this session is a
+  pure doc edit, no code touched).
+

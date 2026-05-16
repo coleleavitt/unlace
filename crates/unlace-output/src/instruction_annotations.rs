@@ -303,6 +303,7 @@ mod tests {
             inputs: ins.iter().copied().collect(),
             addr,
             guard: None,
+            category: None,
         }
     }
 
@@ -315,6 +316,7 @@ mod tests {
             inputs: smallvec![space, addr_in],
             addr,
             guard: None,
+            category: None,
         }
     }
 
@@ -325,6 +327,7 @@ mod tests {
             inputs: smallvec![],
             addr,
             guard: None,
+            category: None,
         }
     }
 
@@ -378,6 +381,7 @@ mod tests {
             inputs: smallvec![c0],
             addr: 0x3000,
             guard: None,
+            category: None,
         });
         bb0.successors = smallvec![BlockId(1)];
 
@@ -390,6 +394,7 @@ mod tests {
             inputs: smallvec![Varnode::constant(0x3010, 8), r_i],
             addr: 0x3014,
             guard: None,
+            category: None,
         });
         bb1.successors = smallvec![BlockId(1), BlockId(2)];
 

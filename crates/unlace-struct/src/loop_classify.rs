@@ -238,6 +238,7 @@ mod tests {
             inputs: smallvec![],
             addr: 0,
             guard: None,
+            category: None,
         }
     }
 

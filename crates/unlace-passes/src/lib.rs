@@ -1,5 +1,6 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
+pub mod alias_categorize;
 pub mod algebraic_simplify;
 pub mod auth_call_resolve;
 pub mod bitfield_idioms;

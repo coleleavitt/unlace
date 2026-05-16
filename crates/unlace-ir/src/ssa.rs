@@ -927,6 +927,47 @@ pub struct FinalizedSignature {
     pub dropped_param_count: usize,
 }
 
+/// Classification of a recovered stack-frame slot (Batch 2 slice 2).
+///
+/// Distinguishes locally-allocated storage from caller-frame regions
+/// surfaced by post-prologue SP delta tracking. Consumers use this to
+/// render parameter-region slots as `a1+N` style stack args rather than
+/// fictional locals like `local_8`, and to suppress declarations for
+/// callee-saved register stashes that already live in
+/// [`SsaFunction::saved_register_slots`].
+#[derive(
+    Copy, Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
+pub enum FrameSlotKind {
+    /// Function-local storage below the post-prologue SP (offset < 0
+    /// when measured from function-entry RSP). The default for slots
+    /// the classifier did not otherwise tag.
+    #[default]
+    Local,
+    /// Caller-passed argument that overflowed the register file. On
+    /// SysV x86_64 the first such slot lives at `[rsp+8]` after the
+    /// caller's `call` pushed the return address; on Microsoft x64 the
+    /// first stack arg lives at `[rsp+40]` (above the 32-byte shadow
+    /// space + return address).
+    StackArg,
+    /// Microsoft x64 shadow space — the 32-byte caller-reserved region
+    /// at `[rsp+8 .. rsp+40]` used as scratch storage for the four
+    /// register-passed arguments. Always non-arguments per the ABI but
+    /// frequently *written* by the callee, so the recovery pass would
+    /// otherwise mistake it for an inbound stack arg.
+    ShadowSpace,
+    /// Callee-saved register stashed by the prologue (mirrors the
+    /// offset already present in [`SsaFunction::saved_register_slots`]).
+    /// Rendered as `saved_rbx` etc. rather than `local_*`.
+    SavedRegister,
+    /// Register spill slot — a local slot whose only stores are register
+    /// writes followed by register reads of the same width. Reserved for
+    /// a future refinement pass; currently unused by the classifier but
+    /// part of the public enum so downstream consumers can match
+    /// exhaustively.
+    SpillSlot,
+}
+
 /// One synthesised local-frame slot.
 ///
 /// Mirrors the spec from Wave 24 / t209: the `access_widths` vector
@@ -946,6 +987,13 @@ pub struct StackLocal {
     /// order. Helps the type-recovery layer notice unions / mixed-size
     /// uses without re-walking the IR.
     pub access_widths: Vec<u8>,
+    /// Classification produced by Batch 2 slice 2 — distinguishes locals
+    /// from stack-passed arguments, shadow space, and saved registers
+    /// using the post-prologue SP delta plus the calling convention.
+    /// Defaults to [`FrameSlotKind::Local`] for backward compatibility
+    /// with literal struct constructions in tests.
+    #[serde(default)]
+    pub kind: FrameSlotKind,
 }
 
 /// Recovered logical layout of a function's stack frame.

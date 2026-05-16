@@ -23,7 +23,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
-use unlace_ir::ssa::{PrimitiveType, SsaFunction};
+use unlace_ir::ssa::{FrameSlotKind, PrimitiveType, SsaFunction};
 use unlace_ir::{IrOp, Lifter};
 use unlace_lift::get_lifter;
 use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader};
@@ -65,6 +65,11 @@ pub struct FunctionQuality {
     /// (`ssa.saved_register_slots`). Higher = better recovery — these
     /// slots no longer leak into the local-variable output.
     pub saved_register_slots: usize,
+    /// Stack-frame slots classified as caller-passed arguments
+    /// (`FrameSlotKind::StackArg`) by Batch 2 slice 2. Higher = better
+    /// recovery — these slots are now rendered as `aN` arguments rather
+    /// than fictional `local_*` declarations.
+    pub stack_args_classified: usize,
     /// Struct fields recovered across stack composites + array-of-structs.
     pub struct_fields_recovered: usize,
     /// `switch` statements in the structured output.
@@ -202,6 +207,18 @@ impl FunctionQuality {
         q.frame_holes = ssa.stack_holes.len();
         q.frame_hole_entries = ssa.frame_holes.len();
         q.saved_register_slots = ssa.saved_register_slots.len();
+        // Batch 2 slice 2: count frame slots tagged StackArg by the
+        // post-prologue SP-delta classifier in stack_frame_recovery.
+        q.stack_args_classified = ssa
+            .stack_frame
+            .as_ref()
+            .map(|sf| {
+                sf.locals
+                    .values()
+                    .filter(|l| l.kind == FrameSlotKind::StackArg)
+                    .count()
+            })
+            .unwrap_or(0);
         q.indirect_calls_resolved = ssa.resolved_indirect_calls.len();
         q.unknown_types = ssa
             .var_types
@@ -514,6 +531,7 @@ pub struct QualityTotals {
     pub frame_holes: usize,
     pub frame_hole_entries: usize,
     pub saved_register_slots: usize,
+    pub stack_args_classified: usize,
     pub struct_fields_recovered: usize,
     pub switch_statements: usize,
     pub indirect_calls_resolved: usize,
@@ -569,6 +587,7 @@ impl QualityTotals {
         self.frame_holes += q.frame_holes;
         self.frame_hole_entries += q.frame_hole_entries;
         self.saved_register_slots += q.saved_register_slots;
+        self.stack_args_classified += q.stack_args_classified;
         self.struct_fields_recovered += q.struct_fields_recovered;
         self.switch_statements += q.switch_statements;
         self.indirect_calls_resolved += q.indirect_calls_resolved;
@@ -859,7 +878,8 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
          - call resolution rate (mean per-fn): {crr:.1}%\n\
          - type quality score (mean per-fn): {tqs:.1}%\n\
          - frame_hole entries (inter-slot): {fhe}\n\
-         - saved_register slots: {srs}",
+         - saved_register slots: {srs}\n\
+         - stack_args classified: {sac}",
         ca = t.compound_assignments,
         sc = t.short_circuit_ops,
         ba = t.byref_args,
@@ -868,6 +888,7 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
         tqs = t.type_quality_score,
         fhe = t.frame_hole_entries,
         srs = t.saved_register_slots,
+        sac = t.stack_args_classified,
     );
 }
 

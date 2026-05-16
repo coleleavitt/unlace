@@ -3623,11 +3623,17 @@ fn compute_dwarf_locals(
 /// DWARF entries take priority: this function never overwrites an
 /// existing key in `name_overrides`.
 fn compute_stack_frame_names(func: &HirFunction, ctx: &mut PrintCtx) {
+    use unlace_ir::ssa::FrameSlotKind;
     let frame = match func.stack_frame.as_ref() {
         Some(f) => f,
         None => return,
     };
     for local in frame.locals.values() {
+        // Only name user-visible locals — saved registers, return addresses,
+        // and stack arguments are suppressed from the output.
+        if !matches!(local.kind, FrameSlotKind::Local) {
+            continue;
+        }
         let abs = local.offset.unsigned_abs();
         let name = if local.size > 8 {
             format!("buf_{}", abs)
@@ -3666,12 +3672,18 @@ fn emit_stack_frame_decls(
     func: &HirFunction,
     out: &mut String,
 ) -> std::collections::BTreeSet<String> {
+    use unlace_ir::ssa::FrameSlotKind;
     let mut emitted = std::collections::BTreeSet::new();
     let frame = match func.stack_frame.as_ref() {
         Some(f) => f,
         None => return emitted,
     };
     for local in frame.locals.values() {
+        // Suppress saved-register slots, return-address slots, and stack
+        // arguments — only emit user-visible local variables.
+        if !matches!(local.kind, FrameSlotKind::Local) {
+            continue;
+        }
         let abs = local.offset.unsigned_abs();
         // t233: append `/* BYREF */` to slots whose address escapes.
         let byref_marker = if func.byref_locals.contains(&local.offset) {

@@ -7,26 +7,75 @@
 use std::collections::BTreeSet;
 
 use unlace_ir::ssa::{SsaFunction, VarnodeSlot};
-use unlace_ir::{IrOp, SpaceId};
+use unlace_ir::{BlockId, IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
 
+/// Exact-match roster of known-noreturn function names.
+///
+/// Covers libc termination (`exit`/`abort`/`quick_exit`), assertion helpers
+/// (`__assert_fail` & friends), stack-smashing handlers, longjmp family,
+/// C++ exception machinery (`__cxa_throw`, `_Unwind_*`), POSIX thread exit,
+/// and Rust panic entry points.
+///
+/// Names are matched **case-sensitive, exact** against the symbol returned
+/// by the resolver (typically the PLT/import name). For prefix matches see
+/// [`is_noreturn_by_name`].
 const NORETURN_NAMES: &[&str] = &[
+    // libc termination
     "exit",
     "_exit",
     "_Exit",
     "abort",
+    "_abort",
+    "quick_exit",
+    // assertion handlers (glibc, BSD, macOS, GNU `_perror_` variant)
     "__assert_fail",
+    "__assert_rtn",
+    "__assert",
+    "__assert_perror_fail",
+    // stack protector / fortify
     "__stack_chk_fail",
+    "__chk_fail",
+    // longjmp family
     "longjmp",
+    "_longjmp",
+    "siglongjmp",
+    // C++/Itanium ABI exception machinery
     "_Unwind_Resume",
-    "panic",
-    "rust_begin_unwind",
-    "rust_panic",
-    "core::panicking::panic_fmt",
-    "throw",
+    "_Unwind_RaiseException",
     "__cxa_throw",
+    "__cxa_rethrow",
+    "throw",
+    // POSIX / C11 thread exit
+    "pthread_exit",
+    "thrd_exit",
+    // Rust panic
+    "panic",
+    "panic_impl",
+    "panic_handler",
+    "rust_panic",
+    "rust_begin_unwind",
+    "core::panicking::panic_fmt",
 ];
+
+/// Prefix used as a sigil for "compiler-emitted noreturn helper" — e.g. a
+/// frontend may emit `__noreturn_my_unreachable_branch`. Matched as a
+/// prefix on the resolved symbol name.
+const NORETURN_PREFIX: &str = "__noreturn_";
+
+/// Returns true if `name` matches the noreturn roster — either exact match
+/// against [`NORETURN_NAMES`] or prefix match against [`NORETURN_PREFIX`].
+///
+/// Note: callers that already hold a `BTreeSet<&str>` of the roster (e.g.
+/// the [`NoreturnDetectPass`] instance) prefer the set lookup + prefix
+/// check inlined. This free function exists for ad-hoc callers and tests.
+pub fn is_noreturn_by_name(name: &str) -> bool {
+    if name.starts_with(NORETURN_PREFIX) {
+        return true;
+    }
+    NORETURN_NAMES.iter().any(|n| *n == name)
+}
 
 pub struct NoreturnDetectPass {
     noreturn_names: BTreeSet<&'static str>,
@@ -45,8 +94,34 @@ impl NoreturnDetectPass {
         }
     }
 
+    /// Does `name` match the noreturn roster? Combines the cached exact
+    /// `BTreeSet` lookup with the `__noreturn_*` prefix rule.
+    fn matches_name(&self, name: &str) -> bool {
+        if name.starts_with(NORETURN_PREFIX) {
+            return true;
+        }
+        self.noreturn_names.contains(name)
+    }
+
     /// Run the pass with an external name resolver that maps call-target
     /// addresses to function names (e.g. from `BinaryImage.plt_symbols`).
+    ///
+    /// Two-phase logic:
+    ///
+    /// 1. **Per-block scan** — for each block, find the first `Call` to a
+    ///    roster-known noreturn target and trim every instruction after it
+    ///    (those are unreachable). If any block had such a call, the
+    ///    function is itself noreturn-reachable and `noreturn = true`.
+    /// 2. **Exit-block fixpoint** — additionally, if **every** CFG exit
+    ///    block of the function ends in a `Call` to a roster-known
+    ///    noreturn target, mark the function `noreturn = true`. Iterates
+    ///    up to [`NORETURN_FIXPOINT_CAP`] rounds. Per-function this is
+    ///    largely redundant with the per-block scan (any noreturn call
+    ///    promotes the function), but stays as a defensive belt: future
+    ///    callers that pre-trim blocks before invoking this pass would
+    ///    otherwise lose the promotion. Cross-function tail-call
+    ///    propagation lives in
+    ///    [`crate::noreturn_propagation::propagate_noreturn`].
     pub fn run_with_resolver(
         &self,
         func: &mut SsaFunction,
@@ -76,7 +151,7 @@ impl NoreturnDetectPass {
                 };
 
                 if let Some(name) = resolve_name(target_addr) {
-                    if self.noreturn_names.contains(name) {
+                    if self.matches_name(name) {
                         found_noreturn = true;
                         noreturn_insn_idx = Some(insn_idx);
                         break;
@@ -108,9 +183,108 @@ impl NoreturnDetectPass {
             changed = true;
         }
 
+        // Phase 2: exit-block fixpoint. If we did not already flag this
+        // function noreturn, check whether every CFG exit terminates with
+        // a noreturn-named call. Idempotent after one iteration but we
+        // loop defensively (cap = 10) in case a future hook mutates the
+        // CFG mid-pass.
+        if !func.noreturn {
+            for _ in 0..NORETURN_FIXPOINT_CAP {
+                if !self.all_exits_end_in_noreturn_call(func, &resolve_name) {
+                    break;
+                }
+                if func.noreturn {
+                    break;
+                }
+                func.noreturn = true;
+                changed = true;
+                // Single mutation per fixpoint round; the condition
+                // becomes stable once noreturn = true, so the next
+                // iteration's early-exit terminates the loop.
+            }
+        }
+
         Ok(changed)
     }
+
+    /// True iff the function has at least one exit block (no CFG
+    /// successors) **and** every such exit block's terminator is a `Call`
+    /// to a roster-known noreturn target.
+    ///
+    /// A function with zero exit blocks (pure infinite loop) is
+    /// conservatively reported `false` here — the propagation pass owns
+    /// that case via a separate signal so we do not double-fire.
+    fn all_exits_end_in_noreturn_call(
+        &self,
+        func: &SsaFunction,
+        resolve_name: &impl Fn(u64) -> Option<&'static str>,
+    ) -> bool {
+        let exit_blocks: Vec<BlockId> = func
+            .function
+            .blocks
+            .keys()
+            .copied()
+            .filter(|&bid| Self::is_exit_block(func, bid))
+            .collect();
+
+        if exit_blocks.is_empty() {
+            return false;
+        }
+
+        for bid in exit_blocks {
+            if !self.block_ends_with_noreturn_call(func, bid, resolve_name) {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn is_exit_block(func: &SsaFunction, bid: BlockId) -> bool {
+        let Some(node) = func.cfg.node_index(bid) else {
+            return false;
+        };
+        func.cfg
+            .inner()
+            .neighbors_directed(node, petgraph::Direction::Outgoing)
+            .next()
+            .is_none()
+    }
+
+    /// True iff block `bid`'s last `Call` instruction targets a
+    /// roster-known noreturn name. Earlier `Call`s don't count — we want
+    /// the *terminator-position* call, the one whose unreachable-fall-
+    /// through would be the return.
+    fn block_ends_with_noreturn_call(
+        &self,
+        func: &SsaFunction,
+        bid: BlockId,
+        resolve_name: &impl Fn(u64) -> Option<&'static str>,
+    ) -> bool {
+        let Some(block) = func.function.blocks.get(&bid) else {
+            return false;
+        };
+        let last_call_target = block.insns.iter().rev().find_map(|insn| match insn.op {
+            IrOp::Call => insn
+                .inputs
+                .first()
+                .filter(|vn| vn.space == SpaceId::Const)
+                .map(|vn| vn.offset),
+            _ => None,
+        });
+        let Some(target) = last_call_target else {
+            return false;
+        };
+        match resolve_name(target) {
+            Some(name) => self.matches_name(name),
+            None => false,
+        }
+    }
 }
+
+/// Hard cap on fixpoint iterations in [`NoreturnDetectPass::run_with_resolver`].
+/// Per-function logic stabilises in a single round; the cap exists purely
+/// as a safety belt.
+pub const NORETURN_FIXPOINT_CAP: usize = 10;
 
 impl Pass for NoreturnDetectPass {
     fn name(&self) -> &str {
@@ -419,6 +593,163 @@ mod tests {
 
         let pass = NoreturnDetectPass::new();
         let changed = pass.run(&mut ssa).unwrap();
+        assert!(!changed);
+        assert!(!ssa.noreturn);
+    }
+
+    // ---------------------------------------------------------------
+    // Name-roster tests (step 1: expanded noreturn names + prefix).
+    // ---------------------------------------------------------------
+
+    /// Every name we explicitly added (or kept) in the roster must be
+    /// recognised by `is_noreturn_by_name`. If this test fails the roster
+    /// drifted from the task spec — re-check `NORETURN_NAMES`.
+    #[test]
+    fn test_roster_contains_all_expected_names() {
+        let must_have = [
+            // libc termination
+            "abort",
+            "_abort",
+            "exit",
+            "_exit",
+            "_Exit",
+            "quick_exit",
+            // panic / Rust
+            "panic",
+            "panic_impl",
+            "panic_handler",
+            "rust_panic",
+            // assertion handlers
+            "__assert_fail",
+            "__assert_rtn",
+            "__assert",
+            "__assert_perror_fail",
+            // longjmp family
+            "longjmp",
+            "siglongjmp",
+            "_longjmp",
+            // C++ exceptions / unwinder
+            "__cxa_throw",
+            "_Unwind_Resume",
+            "__cxa_rethrow",
+            "_Unwind_RaiseException",
+            // POSIX/C11 thread exit
+            "pthread_exit",
+            "thrd_exit",
+            // stack protector
+            "__stack_chk_fail",
+            "__chk_fail",
+        ];
+        for n in must_have {
+            assert!(
+                is_noreturn_by_name(n),
+                "name `{n}` should be recognised as noreturn"
+            );
+        }
+    }
+
+    /// The `__noreturn_*` prefix rule must match arbitrary suffixes — this
+    /// is the compiler-emitted-helper escape hatch.
+    #[test]
+    fn test_noreturn_prefix_match() {
+        assert!(is_noreturn_by_name("__noreturn_my_function"));
+        assert!(is_noreturn_by_name("__noreturn_X"));
+        assert!(is_noreturn_by_name("__noreturn_")); // bare prefix matches
+        // Negative controls: similar but not exact prefix.
+        assert!(!is_noreturn_by_name("noreturn_foo"));
+        assert!(!is_noreturn_by_name("_noreturn_foo"));
+        assert!(!is_noreturn_by_name("__noreturnfoo"));
+    }
+
+    /// A non-roster name (e.g. `printf`) must NOT be recognised — guards
+    /// against accidental over-broad prefix logic.
+    #[test]
+    fn test_roster_negative_controls() {
+        for n in ["printf", "malloc", "free", "memcpy", "fopen", "main"] {
+            assert!(!is_noreturn_by_name(n), "`{n}` must not be flagged");
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Exit-block fixpoint tests (step 2: tail-call-only noreturn).
+    // ---------------------------------------------------------------
+
+    /// Resolver for the fixpoint tests: maps some synthetic addresses to
+    /// new-roster names. Distinct address range from `mock_resolver` so
+    /// the two tests do not interfere if combined.
+    fn fixpoint_resolver(addr: u64) -> Option<&'static str> {
+        match addr {
+            0xAA01 => Some("__cxa_throw"),
+            0xAA02 => Some("longjmp"),
+            0xAA03 => Some("pthread_exit"),
+            0xAA04 => Some("__noreturn_helper_xyz"), // prefix-matched
+            0x1234 => Some("printf"),                // normal returning fn
+            _ => None,
+        }
+    }
+
+    /// Single-block function whose only call is to a *newly-added* roster
+    /// name (`__cxa_throw`) must be marked noreturn.
+    #[test]
+    fn test_new_roster_name_detected() {
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![Varnode::constant(0xAA01, 8)],
+            0x1000,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+
+        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let pass = NoreturnDetectPass::new();
+        let changed = pass
+            .run_with_resolver(&mut ssa, fixpoint_resolver)
+            .unwrap();
+        assert!(changed);
+        assert!(ssa.noreturn);
+    }
+
+    /// A call to a name matched only by the `__noreturn_*` prefix rule
+    /// must promote the containing function.
+    #[test]
+    fn test_prefix_matched_callee_promotes_caller() {
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![Varnode::constant(0xAA04, 8)],
+            0x1000,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+
+        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let pass = NoreturnDetectPass::new();
+        let changed = pass
+            .run_with_resolver(&mut ssa, fixpoint_resolver)
+            .unwrap();
+        assert!(changed);
+        assert!(ssa.noreturn, "prefix-matched callee must promote caller");
+    }
+
+    /// Plain returning function (no noreturn calls anywhere) must remain
+    /// `noreturn = false` after the new fixpoint runs.
+    #[test]
+    fn test_fixpoint_does_not_overpromote_normal_function() {
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![Varnode::constant(0x1234, 8)], // printf
+            0x1000,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+
+        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let pass = NoreturnDetectPass::new();
+        let changed = pass
+            .run_with_resolver(&mut ssa, fixpoint_resolver)
+            .unwrap();
         assert!(!changed);
         assert!(!ssa.noreturn);
     }

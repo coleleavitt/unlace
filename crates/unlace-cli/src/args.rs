@@ -133,6 +133,21 @@ pub enum Cmd {
         #[arg(long)]
         interproc: bool,
 
+        /// Process every discovered function (default behavior — flag is
+        /// surfaced for future "main+exports-only" gating; currently a no-op).
+        #[arg(long)]
+        all_functions: bool,
+
+        /// Regex restricting which functions are decompiled by name match.
+        /// Combines with `--all-functions`: discovery runs first, then filter.
+        #[arg(long)]
+        scope: Option<String>,
+
+        /// Cap on interprocedural fixed-point iterations (0 = use default).
+        /// Only relevant when `--interproc` is set.
+        #[arg(long, default_value_t = 0)]
+        max_iterations: usize,
+
         /// Increase verbosity (-v, -vv, -vvv).
         #[arg(long, short, action = clap::ArgAction::Count)]
         verbose: u8,

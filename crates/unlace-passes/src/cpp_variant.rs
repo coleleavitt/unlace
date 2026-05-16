@@ -25,6 +25,10 @@ impl Pass for CppVariantPass {
         "cpp-variant"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let loads = find_tag_loads(func);
         if loads.is_empty() {

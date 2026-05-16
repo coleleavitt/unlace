@@ -22,6 +22,10 @@ impl Pass for CounterexampleRefinePass {
         "counterexample-type-refine"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let constraints = collect_constraints(func);
         let mut changed = false;

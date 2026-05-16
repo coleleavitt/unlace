@@ -49,6 +49,10 @@ impl Pass for IndirectJumpResolvePass {
         "indirect-jump-resolve"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::GlobalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let candidates = collect_jump_table_candidates(func);
         // Merge into any pre-existing (already section-resolved) entries

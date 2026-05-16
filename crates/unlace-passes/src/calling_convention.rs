@@ -36,6 +36,10 @@ impl Pass for CallingConventionDetectPass {
         "calling-convention-detect"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let detected = detect_calling_convention(func);
         if detected != func.calling_convention {
@@ -345,6 +349,10 @@ impl Pass for ParamInferPass {
         "param-infer"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let params = infer_params(func);
         if params != func.inferred_params {
@@ -514,6 +522,10 @@ pub struct ReturnTypeInferPass;
 impl Pass for ReturnTypeInferPass {
     fn name(&self) -> &str {
         "return-type-infer"
+    }
+
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {

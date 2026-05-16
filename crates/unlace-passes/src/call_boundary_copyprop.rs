@@ -30,6 +30,10 @@ impl Pass for CallBoundaryCopyPropPass {
         "call-boundary-copyprop"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::PreOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let pairs = collect_restore_pairs(func);
         if pairs.is_empty() {

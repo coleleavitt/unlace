@@ -15,6 +15,10 @@ impl Pass for TypeInferPass {
         "TypeInfer"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let before_len = func.var_types.len();
         let snapshot: BTreeMap<SsaVarnode, PrimitiveType> = func.var_types.clone();

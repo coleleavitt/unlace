@@ -105,6 +105,10 @@ impl Pass for RustPanicPass {
         "rust-panic"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         self.run_with_resolver(func, |_| None)
     }

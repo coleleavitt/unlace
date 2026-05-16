@@ -26,6 +26,10 @@ impl Pass for IndirectCallResolvePass {
         "indirect-call-resolve"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::GlobalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let snapshot = func.resolved_indirect_calls.clone();
         let targets_snapshot = func.indirect_call_targets.clone();

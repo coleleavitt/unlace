@@ -53,6 +53,10 @@ impl Pass for LicmPass {
         "licm"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::GlobalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut any_changed = false;
         for _ in 0..MAX_INNER_ITERS {

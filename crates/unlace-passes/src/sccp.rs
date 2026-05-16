@@ -913,6 +913,10 @@ impl Pass for SccpPass {
         "sccp"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::LocalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let results = {
             let mut solver = SccpSolver::new(func);

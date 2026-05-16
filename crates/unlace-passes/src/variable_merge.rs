@@ -103,6 +103,10 @@ impl Pass for VariableMergePass {
         "variable-merge"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::LVarAlloc
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         // 1. Collect every SSA varnode that needs a name.
         let all_vars = collect_all_ssa_vars(func);

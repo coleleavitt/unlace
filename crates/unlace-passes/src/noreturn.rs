@@ -291,6 +291,10 @@ impl Pass for NoreturnDetectPass {
         "noreturn-detect"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::PreOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         // When run via the Pass trait without an external resolver, we use a
         // no-op resolver. The caller is expected to use `run_with_resolver`

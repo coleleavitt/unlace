@@ -38,6 +38,10 @@ impl Pass for ExpressionTreePass {
         "expression-tree"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::FinalCleanup
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut use_counts: BTreeMap<SsaVarnode, usize> = BTreeMap::new();
 

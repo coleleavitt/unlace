@@ -46,6 +46,10 @@ impl Pass for CryptoIdiomPass {
         "crypto-idioms"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::LocalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut changed = false;
 

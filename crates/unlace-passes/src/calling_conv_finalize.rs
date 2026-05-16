@@ -330,6 +330,10 @@ impl crate::pass::Pass for CallingConvFinalizePass {
         "CallingConvFinalizePass"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::FinalCleanup
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, crate::pass::PassError> {
         let sig = finalize_signature(func, &[]);
         func.finalized_signature = Some(sig);

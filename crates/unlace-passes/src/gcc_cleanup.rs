@@ -35,6 +35,10 @@ impl Pass for GccCleanupPass {
         "gcc-cleanup"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::PreOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let handlers = detect_cleanup_calls(func, &self.cleanup_symbols);
         Ok(!handlers.is_empty())

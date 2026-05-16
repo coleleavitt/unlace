@@ -238,6 +238,10 @@ impl Pass for SizeofRecognitionPass {
         "sizeof-recognition"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut structs: Vec<Type> = func.composite_var_types.values().cloned().collect();
         structs.extend(func.inferred_structs.values().cloned());

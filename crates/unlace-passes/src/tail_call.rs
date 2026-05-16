@@ -13,6 +13,10 @@ impl Pass for TailCallDetectPass {
         "tail-call-detect"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::GlobalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let func_start = func.function.addr;
         let func_end = max_insn_addr(&func.function);

@@ -34,6 +34,10 @@ impl Pass for RegisterCoalescePass {
         "register-coalesce"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::FinalCleanup
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let all_vars = collect_all_ssa_vars(func);
         if all_vars.is_empty() {

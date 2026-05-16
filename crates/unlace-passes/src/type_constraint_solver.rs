@@ -441,6 +441,10 @@ impl Pass for TypeConstraintSolverPass {
         "TypeConstraintSolver"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         Ok(collect_and_apply(func))
     }

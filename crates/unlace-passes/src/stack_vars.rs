@@ -35,6 +35,10 @@ impl Pass for StackOffsetSnapshotPass {
         "stack-offset-snapshot"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::StackRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let spec = resolve_spec(func);
         let def_map = build_def_map(func);
@@ -62,6 +66,10 @@ impl Pass for StackOffsetSnapshotPass {
 impl Pass for StackVarRecoveryPass {
     fn name(&self) -> &str {
         "stack-var-recovery"
+    }
+
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::StackRecovery
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {

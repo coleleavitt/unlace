@@ -31,6 +31,10 @@ impl Pass for PathSensitivePass {
         "path-sensitive"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let facts = collect_path_facts(func);
         let mut changed = false;

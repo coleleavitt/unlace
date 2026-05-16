@@ -21,6 +21,10 @@ impl Pass for BoolCoveragePass {
         "bool-coverage"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::GlobalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let fingerprints = fingerprint_bool_exprs(func);
         let mut changed = false;

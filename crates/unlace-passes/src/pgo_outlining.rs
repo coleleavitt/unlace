@@ -59,6 +59,10 @@ impl Pass for PgoOutliningPass {
         "pgo-outlining"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, _func: &mut SsaFunction) -> Result<bool, PassError> {
         Ok(false)
     }

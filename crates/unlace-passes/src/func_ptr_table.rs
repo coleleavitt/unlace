@@ -45,6 +45,10 @@ impl Pass for FuncPtrTablePass {
         "func-ptr-table"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::GlobalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let tables = detect_table_loads(func);
         Ok(!tables.is_empty())

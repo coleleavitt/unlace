@@ -40,6 +40,10 @@ impl Pass for SymbolicHeapPass {
         "symbolic-heap"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let _accesses = collect_mem_accesses(func);
         Ok(false) // Analysis-only pass.

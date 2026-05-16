@@ -68,6 +68,10 @@ impl Pass for GoIfaceDevirtPass<'_> {
         "go-iface-devirt"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let found = resolve_go_iface_calls(func, self.itabs);
         if found.is_empty() {

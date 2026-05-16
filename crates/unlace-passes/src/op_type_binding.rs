@@ -29,6 +29,10 @@ impl Pass for OpTypeBindingPass {
         "op_type_binding"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::TypeRecovery
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let stroff = build_stroff(func);
         let enum_const = build_enum_const(func);

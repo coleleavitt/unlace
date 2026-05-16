@@ -24,6 +24,10 @@ impl Pass for BoolSimplifyPass {
         "bool-simplify"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::LocalOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let def_map = build_def_map(func);
         let mut changed = false;

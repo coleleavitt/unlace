@@ -18,6 +18,10 @@ impl Pass for JunkCodeRemovalPass {
         "junk-code-removal"
     }
 
+    fn phase(&self) -> crate::pass::PassPhase {
+        crate::pass::PassPhase::PreOpt
+    }
+
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let mut changed = false;
 

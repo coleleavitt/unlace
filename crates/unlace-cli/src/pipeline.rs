@@ -24,7 +24,7 @@
 //!    solver. Depends on byref_info (constraints from address-taken
 //!    sites) and on stack_frame (constraints from same-slot accesses).
 //!    *Wired (Wave 26): runs inside the outer fixedpoint immediately
-//!    after `run_type_infer_bounded`.*
+//!    after `TypeInferPass`.*
 //!
 //! 5. **`annotate_libc_calls`** (t229) — annotates calls to recognised
 //!    libc functions in [`SsaFunction::libc_call_annotations`]. Depends
@@ -999,7 +999,17 @@ fn run_passes_with_report_inner(
             // Load/Store renderer (t231) which rewrites the matching
             // address arithmetic as `arr<N>[i].field_<offset>`.
             ssa.array_struct_layouts = recover_structs(ssa);
-            run_type_infer_bounded(ssa);
+            // Real TypeInferPass (unlace-passes). Self-bounded at 100 inner
+            // iterations with monotone lattice joins, plus
+            // `seed_from_composites` so pointer-typed struct fields are
+            // recognised as `Ptr` instead of bottoming out at `Int(8)`.
+            // The caller's per-function deadline (`config.timeout`,
+            // default 30s) still applies; an inner divergence emits a
+            // `tracing::warn!` and breaks out, so this cannot wedge the
+            // pipeline. Replaces the historical `run_type_infer_bounded`
+            // CLI-local stub (left only in `benches/decompile_medium.rs`
+            // as a frozen benchmark baseline).
+            unlace_passes::type_infer::TypeInferPass.run(ssa)?;
             // t228: TIE-style constraint solver fills the holes left by
             // the ad-hoc walker (LOAD/STORE addresses as `Ptr`, phi joins,
             // binop SameType edges) so the outer fixed-point's type-
@@ -1236,72 +1246,6 @@ fn dwarf_base_type_to_ssa(base_name: &str, dwarf: &DwarfInfo) -> Option<Type> {
         _ => return None,
     };
     Some(Type::Primitive(primitive))
-}
-
-fn run_type_infer_bounded(ssa: &mut SsaFunction) {
-    use unlace_ir::SpaceId;
-    use unlace_ir::ssa::{PrimitiveType, SsaVarnode, VarnodeSlot};
-
-    let max_iterations = 50;
-    for _ in 0..max_iterations {
-        let snapshot: BTreeMap<unlace_ir::ssa::SsaVarnode, unlace_ir::ssa::PrimitiveType> =
-            ssa.var_types.clone();
-        let before_len = ssa.var_types.len();
-
-        for (&bid, block) in &ssa.function.blocks {
-            for (insn_idx, insn) in block.insns.iter().enumerate() {
-                let output_sv = ssa
-                    .var_map
-                    .get(&(bid, insn_idx, VarnodeSlot::Output))
-                    .copied();
-                let input_sv = |idx: usize| -> Option<SsaVarnode> {
-                    ssa.var_map
-                        .get(&(bid, insn_idx, VarnodeSlot::Input(idx)))
-                        .copied()
-                };
-
-                if let Some(out) = output_sv {
-                    let ty = match insn.op.type_family() {
-                        Some('b') => PrimitiveType::Bool,
-                        Some('f') => {
-                            if out.base.size == 4 {
-                                PrimitiveType::Float
-                            } else {
-                                PrimitiveType::Double
-                            }
-                        }
-                        Some('i') | Some(_) => PrimitiveType::Int(out.base.size),
-                        None => continue,
-                    };
-                    ssa.var_types.entry(out).or_insert(ty);
-                }
-
-                for (idx, inp) in insn.inputs.iter().enumerate() {
-                    if inp.space == SpaceId::Const {
-                        continue;
-                    }
-                    if let Some(sv) = input_sv(idx) {
-                        let ty = match insn.op.input_type_family(idx) {
-                            'b' => PrimitiveType::Bool,
-                            'f' => {
-                                if sv.base.size == 4 {
-                                    PrimitiveType::Float
-                                } else {
-                                    PrimitiveType::Double
-                                }
-                            }
-                            _ => PrimitiveType::Int(sv.base.size),
-                        };
-                        ssa.var_types.entry(sv).or_insert(ty);
-                    }
-                }
-            }
-        }
-
-        if ssa.var_types.len() == before_len && ssa.var_types == snapshot {
-            break;
-        }
-    }
 }
 
 pub fn ir_node_count(ssa: &SsaFunction) -> usize {
@@ -2655,7 +2599,7 @@ mod tests {
         );
 
         // (3) At least one var has a more-specific type than Unknown.
-        //     Driven by `run_type_infer_bounded` + the cluster of type
+        //     Driven by `TypeInferPass` + the cluster of type
         //     recovery passes; this is the most permissive assertion
         //     because the t228 constraint solver is not yet wired.
         let non_unknown = ssa

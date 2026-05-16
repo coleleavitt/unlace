@@ -10,8 +10,8 @@ int main(void) {
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
-    __int64 field_0;
-    __int64 field_8;
+    void * field_0;
+    void * field_8;
 };
 
 /* Function:   sub_1100 | Address: 0x1100 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1040, sub_1090 | Xrefs from: unknown */

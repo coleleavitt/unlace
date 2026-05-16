@@ -21,9 +21,9 @@ void __fastcall csel_test(__int64 a1) {
     __int64 v13; // temp
     v13 = v1 - v2;
     _BOOL cond = v1 == v2; // reg?
-    v16 = LOBYTE(v13 < 0LL); v9 = v16;
-    if (v16 ^ __OFSUB__(v1, v2)) { cond = v1; } else { cond = v2; }
-    __csinv__(v16 ^ __OFSUB__(v1, v2), v1, v2, 2);
+    v12 = LOBYTE(v13 < 0LL); v9 = v12;
+    if (v12 ^ __OFSUB__(v1, v2)) { cond = v1; } else { cond = v2; }
+    __csinv__(v12 ^ __OFSUB__(v1, v2), v1, v2, 2);
     /* COPY */; /* BOOL_NEGATE */;
     __csneg__(!cond, v1, v2, 0xb);
     if (cond) {
@@ -34,9 +34,9 @@ void __fastcall csel_test(__int64 a1) {
 }
 // Recovered composite layouts (t147 stack frame, t213 array-of-structs)
 struct __anon0 {
-    __int64 field_0;
-    __int64 field_8;
-    __int64 field_16;
+    void * field_0;
+    void * field_8;
+    void * field_16;
 };
 
 /* Function:   bitfield_test | Address: 0x400148 | Size: 0x1c (28 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x18 (24 bytes) | Xrefs from: unknown */

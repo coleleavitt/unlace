@@ -700,6 +700,18 @@ fn analyze_function(
         stable_symbol_names.get(&addr).copied()
     };
 
+    // Pre-pass mirror of `decompile_function_with_symbols`: the IR
+    // pattern keyed by `find_constant_arg` (`Copy(arg_reg, t)` defined by
+    // `IntAdd(image_base, const)`) is folded away by copyprop / sccp, so
+    // a post-pass call alone would always come up empty on PIE binaries.
+    // The post-pass call below is kept (additive merge) as a belt-and-
+    // braces guard.
+    let _variadic_types_pre = unlace_passes::parse_printf_format_strings(
+        &mut ssa,
+        &|addr| stable_symbol_names.get(&addr).copied(),
+        &image.string_table,
+    );
+
     if let Err(e) = pipeline::run_passes_with_resolver(&mut ssa, &resolve_name) {
         // Match the pipeline's behaviour: a failed pass run still yields a
         // measurable (unoptimised) function rather than aborting.

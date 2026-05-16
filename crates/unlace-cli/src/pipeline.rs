@@ -812,6 +812,45 @@ pub fn run_whole_program_interproc(
     .context("interprocedural fixed-point loop failed")
 }
 
+/// Whole-program driver for printf-style format-string parsing.
+///
+/// Walks every `(addr, SsaFunction)` in `funcs` and merges newly
+/// recovered variadic-call-site type lists into
+/// [`SsaFunction::variadic_call_types`]. Each per-function invocation is
+/// additive — the additive contract is documented on
+/// [`parse_printf_format_strings`] — so calling this driver after the
+/// per-function pre-pass that already runs inside
+/// [`decompile_function_with_symbols`] only ever *adds* entries, never
+/// drops them.
+///
+/// The symbol table is built once (function entries + import/PLT
+/// thunks) and the resulting `&'static str` references are leaked so a
+/// single resolver closure can be shared across all functions without
+/// per-call allocation.
+///
+/// Returns the total count of `(BlockId, insn_idx)` entries populated
+/// across the whole-program SSA map after the merge.
+pub fn run_whole_program_printf_parse(
+    funcs: &mut std::collections::BTreeMap<u64, SsaFunction>,
+    image: &BinaryImage,
+    discovered: &[FunctionEntry],
+) -> usize {
+    let symbols = build_symbol_table_with_functions(image, discovered);
+    let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
+    for (&addr, name) in &symbols {
+        stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
+    }
+    let resolver = |addr: u64| -> Option<&'static str> {
+        stable_symbol_names.get(&addr).copied()
+    };
+
+    for ssa in funcs.values_mut() {
+        let _changed = parse_printf_format_strings(ssa, &resolver, &image.string_table);
+    }
+
+    funcs.values().map(|f| f.variadic_call_types.len()).sum()
+}
+
 /// Detailed report from one [`run_passes`] invocation.
 ///
 /// Captures the outer-fixed-point behaviour: how many outer iterations ran,
@@ -1410,6 +1449,22 @@ pub fn lift_and_run_passes(
     let resolve_name = |addr: u64| -> Option<&'static str> {
         stable_symbol_names.get(&addr).copied()
     };
+
+    // Batch 6 (pre-pass): parse printf-family format strings against the
+    // raw post-SSA IR. The pre-pass run is load-bearing because the
+    // copyprop / sccp clusters inside `run_passes_with_resolver` fold the
+    // `Copy(reg, …) ; IntAdd(base, const)` pattern that
+    // `find_constant_arg` keys on — once those passes run, the format
+    // string's absolute address is no longer reachable from the call
+    // site. The post-pass call below remains for completeness and to
+    // capture sites the pre-pass missed; `parse_printf_format_strings`
+    // is additive and never clobbers existing entries.
+    let _variadic_types_pre = parse_printf_format_strings(
+        &mut ssa,
+        &|addr| stable_symbol_names.get(&addr).copied(),
+        &image.string_table,
+    );
+
     if let Err(e) = run_passes_with_resolver(&mut ssa, &resolve_name) {
         tracing::warn!(func = %entry.name, err = %e, "pass pipeline failed; continuing with unoptimized");
     }
@@ -1697,6 +1752,20 @@ pub fn decompile_function_with_symbols(
     let resolve_name = |addr: u64| -> Option<&'static str> {
         stable_symbol_names.get(&addr).copied()
     };
+
+    // Batch 6 (pre-pass): parse printf-family format strings *before*
+    // the optimization pipeline runs. The IR pattern that
+    // `find_constant_arg` relies on (`Copy(arg_reg, t)` where `t` is
+    // defined by `IntAdd(image_base, const)`) is destroyed by copyprop /
+    // sccp, so the call must precede `run_passes_with_resolver`. The
+    // post-pass call below is kept (additive merge) to cover any sites
+    // the pre-pass missed.
+    let _variadic_types_pre = parse_printf_format_strings(
+        &mut ssa,
+        &|addr| stable_symbol_names.get(&addr).copied(),
+        &image.string_table,
+    );
+
     if let Err(e) = run_passes_with_resolver(&mut ssa, &resolve_name) {
         tracing::warn!(err = %e, "pass pipeline failed; emitting unoptimized");
     }

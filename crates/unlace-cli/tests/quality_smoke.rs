@@ -100,6 +100,45 @@ fn baseline_branches() {
     assert_eq!(t.asm_blocks, 0, "branches: no raw __asm blocks");
 }
 
+/// `noreturn_functions` and `libc_annotated_calls` are SSA-field-derived
+/// counters wired in Batch 1 / Batch 6. Both have a producer
+/// (`NoreturnDetectPass` writing `ssa.noreturn`; `annotate_libc_calls`
+/// writing `ssa.libc_call_annotations`) and a reader
+/// (`FunctionQuality::collect`). This test pins the wiring end-to-end so
+/// a future refactor that renames either side — or skips the resolver
+/// hand-off in `analyze_function` — is caught at test time rather than
+/// silently zeroing the counter in the report.
+///
+/// `medium.elf` is the chosen anchor because it calls `__stack_chk_fail`
+/// from `f_rec_fib` (a recognised noreturn name), so the counter MUST be
+/// at least 1 whenever the producer / consumer agree on the SSA field
+/// name (`SsaFunction::noreturn`). `cpp_vtable.elf` is the anchor for the
+/// libc counter because it imports `__printf_chk` — which IS in the
+/// `recognize_libc` roster — so the annotator must place at least one
+/// entry in `ssa.libc_call_annotations`.
+#[test]
+fn noreturn_and_libc_counters_wired() {
+    let medium = analyze("medium.elf");
+    assert!(
+        medium.noreturn_functions > 0,
+        "medium.elf must report >0 noreturn functions (got {}); \
+         NoreturnDetectPass writes ssa.noreturn and FunctionQuality reads \
+         it — if this assertion fires, the producer / consumer wiring has \
+         drifted (e.g. field renamed, resolver dropped from analyze_function)",
+        medium.noreturn_functions,
+    );
+
+    let vtable = analyze("cpp_vtable.elf");
+    assert!(
+        vtable.libc_annotated_calls > 0,
+        "cpp_vtable.elf must report >0 libc-annotated calls (got {}); \
+         annotate_libc_calls writes ssa.libc_call_annotations and \
+         FunctionQuality reads it — if this fires, the resolver / annotator \
+         hand-off in quality::analyze_function is broken",
+        vtable.libc_annotated_calls,
+    );
+}
+
 /// Pinned baseline for `loops.elf`.
 #[test]
 fn baseline_loops() {

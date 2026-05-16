@@ -52,6 +52,7 @@ pub mod lazy_lift;
 pub mod libc_idioms;
 pub mod libc_signatures;
 pub mod licm;
+pub mod lvar_collect;
 pub mod modulo_idiom;
 pub mod msvc_seh;
 pub mod nday_correlate;
@@ -169,6 +170,7 @@ pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interpr
 pub use iv_elim::IvElimPass;
 pub use libc_idioms::{LibcKind, annotate_libc_calls, recognize_libc};
 pub use licm::{LicmPass, NaturalLoop, find_natural_loops};
+pub use lvar_collect::LvarCollectPass;
 pub use modulo_idiom::ModuloIdiomPass;
 pub use nday_correlate::{NdayHit, NdayPattern, match_against_binary as match_nday_patterns};
 pub use noreturn::NoreturnDetectPass;

@@ -13,6 +13,7 @@ mod display;
 mod function;
 mod insn;
 mod lifter;
+pub mod lvar;
 mod op;
 pub mod reg_alias;
 mod space;

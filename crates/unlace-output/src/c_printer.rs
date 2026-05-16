@@ -540,6 +540,7 @@ pub fn print_c_with_annotations(
     compute_loop_counter_names(&func.body, 0, &mut ctx);
     collect_varnodes(&func.body, &mut ctx);
     compute_foldable(&mut ctx);
+    propagate_dead_chains(&mut ctx);
     compute_byref_bases(&mut ctx);
     compute_heuristic_names(&func.body, &mut ctx);
     compute_hoist_plan(&mut ctx);
@@ -3065,6 +3066,76 @@ fn compute_foldable(ctx: &mut PrintCtx) {
     }
 
     ctx.sv_use_counts = use_counts;
+}
+
+/// 2-level dead-variable chain propagation (Batch 3 / Wave 4).
+///
+/// After `compute_foldable` sets `sv_use_counts`, this pass iterates to
+/// a fixpoint: for each statement whose output has `use_count == 0` AND
+/// is suppressible storage AND has no side effects, decrement the use
+/// counts of its inputs. This propagates "dead-ness" backward through
+/// chains like:
+///
+/// ```text
+/// v2 = LOAD(addr)     // only used by v3
+/// v3 = v2 + 1         // never read → dead
+/// ```
+///
+/// After propagation, `v2` also becomes dead (use_count drops to 0),
+/// so both declarations are suppressed.
+fn propagate_dead_chains(ctx: &mut PrintCtx) {
+    // Build a reverse map: input_sv → list of (stmt_idx) that read it.
+    // We don't need it for the algorithm — we iterate stmt_outputs directly.
+
+    let max_rounds = 8; // safety cap
+    for _round in 0..max_rounds {
+        let mut changed = false;
+
+        // Collect dead stmts in this round (can't mutate while iterating).
+        let dead_stmts: Vec<u32> = ctx
+            .stmt_outputs
+            .iter()
+            .filter_map(|(&stmt_idx, output_sv_opt)| {
+                let out_sv = (*output_sv_opt)?;
+                // Already folded → skip (handled by expression folding).
+                if ctx.foldable_stmts.contains(&stmt_idx) {
+                    return None;
+                }
+                // Must have zero uses.
+                if ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0) != 0 {
+                    return None;
+                }
+                // Output must be suppressible storage.
+                if !is_suppressible_storage(&out_sv.base, ctx) {
+                    return None;
+                }
+                // Statement must not have side effects.
+                let insn = ctx.stmt_insns.get(&stmt_idx)?;
+                if instr_has_side_effects(insn) {
+                    return None;
+                }
+                Some(stmt_idx)
+            })
+            .collect();
+
+        for stmt_idx in dead_stmts {
+            let Some(inputs) = ctx.stmt_inputs.get(&stmt_idx).cloned() else {
+                continue;
+            };
+            for input_sv in inputs {
+                if let Some(count) = ctx.sv_use_counts.get_mut(&input_sv) {
+                    if *count > 0 {
+                        *count -= 1;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
 }
 
 /// Recognise `vN = 0` whose result is never read.

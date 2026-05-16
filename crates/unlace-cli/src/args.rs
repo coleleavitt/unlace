@@ -153,6 +153,29 @@ pub enum Cmd {
         verbose: u8,
     },
 
+    /// Dump end-state SSA IR text for one (or all) functions at a chosen
+    /// pipeline phase. Complementary to `UNLACE_TRACE_PASSES`, which prints
+    /// per-pass diffs *inside* the pipeline — `ir-dump` snapshots the final
+    /// IR after a named milestone instead.
+    IrDump {
+        /// Path to the binary file.
+        binary: PathBuf,
+        /// Function to dump (name or hex address like 0x401000).
+        /// Default: dump every discovered function.
+        #[arg(long)]
+        function: Option<String>,
+        /// Pipeline phase whose end-state IR to dump.
+        /// One of: `lift` (SSA built, no passes), `post-passes` (default;
+        /// after the full pass pipeline), `post-structuring` (passes +
+        /// structurer; structurer may rewrite the SSA in place via
+        /// `structure_preserve_returns`).
+        #[arg(long, default_value = "post-passes")]
+        phase: Option<String>,
+        /// Increase verbosity (-v, -vv, -vvv).
+        #[arg(long, short, action = clap::ArgAction::Count)]
+        verbose: u8,
+    },
+
     /// Measure decompiler output quality (feature counters, no C emission).
     Quality {
         /// Path to the binary file.

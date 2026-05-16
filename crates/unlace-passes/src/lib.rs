@@ -166,8 +166,8 @@ pub use indirect_call_resolve::IndirectCallResolvePass;
 pub use indirect_jump_resolve::{IndirectJumpResolvePass, collect_jump_table_candidates};
 pub use inline_foldback::{InlineFoldback, detect_inlined_calls};
 pub use instrument::{
-    dump_pass_timings, pass_should_trace, pass_timing_enabled, record_pass_timing,
-    run_instrumented,
+    dump_pass_timings, dump_pass_timings_csv, pass_should_trace, pass_timing_csv_path,
+    pass_timing_enabled, record_pass_timing, run_instrumented,
 };
 pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint};
 pub use iv_elim::IvElimPass;

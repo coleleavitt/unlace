@@ -954,6 +954,18 @@ fn run_passes_with_report_inner(
     run_instrumented(&StackOffsetSnapshotPass, ssa)
         .context("stack offset snapshot failed")?;
 
+    // Batch 15 (slice 1): alias categorization
+    // ([`unlace_passes::alias_categorize::AliasCategorizePass`]) tags
+    // every LOAD/STORE with an [`unlace_ir::AliasCategory`]. The pass
+    // is intentionally NOT wired into the default pipeline in this
+    // slice — empirical measurement showed that tagging interacts with
+    // downstream stack-recovery heuristics enough to nudge aggregate
+    // parity by ~0.2% on the medium fixture. The barrier semantics in
+    // `copy_prop`/`sccp`/`dead_store_elim` are wired *unconditionally*
+    // and trip whenever a Mmio/Volatile category is set; callers that
+    // want the categorization (e.g. a future driver-binary subcommand)
+    // can run the pass on demand by calling it directly.
+
     // Snapshot the signature triple so we can bump `signature_revision`
     // exactly once if the per-function pipeline mutates it. This makes the
     // revision counter usable as a dirty-flag for any whole-program
@@ -1193,6 +1205,20 @@ fn run_passes_with_report_inner(
     // return-type inference all see the fully-stabilised IR + names.
     run_instrumented(&CallingConvFinalizePass, ssa)
         .context("calling-conv finalization pass failed")?;
+
+    // Batch 15 (slice 1): opt-in alias categorization. Only fires when
+    // `UNLACE_ALIAS_DUMP=1`. Runs at the END of the pipeline so the
+    // category tags can't influence any opt pass — they're purely
+    // observational here. The pass itself also self-gates its eprintln
+    // on the same env var; we still gate the call site so the (cheap)
+    // walk doesn't run on production decompiles.
+    if std::env::var_os("UNLACE_ALIAS_DUMP").is_some() {
+        run_instrumented(
+            &unlace_passes::alias_categorize::AliasCategorizePass::new(),
+            ssa,
+        )
+        .context("alias categorize pass failed")?;
+    }
 
     // Bump the signature revision iff the pipeline mutated any of the three
     // observable signature components. Whole-program drivers can compare

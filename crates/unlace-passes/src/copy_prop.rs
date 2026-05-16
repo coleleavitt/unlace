@@ -1,6 +1,16 @@
 //! Copy propagation pass: replace uses of `v2 = COPY v1` with `v1`.
+//!
+//! ## Alias-category barrier
+//!
+//! `LOAD` instructions whose `category` is
+//! [`unlace_ir::AliasCategory::Mmio`] or
+//! [`unlace_ir::AliasCategory::Volatile`] act as a propagation barrier:
+//! we must not collapse a `COPY` whose source (or destination) is the
+//! output of a preserved LOAD, because each downstream use must observe
+//! the explicit memory access. Each preserved LOAD found bumps the
+//! global [`unlace_ir::alias::record_preserved`] counter.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{IrOp, SpaceId, Varnode};
@@ -19,7 +29,8 @@ impl Pass for CopyPropagationPass {
     }
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
-        let copy_map = build_copy_map(func);
+        let preserved_load_outputs = collect_preserved_load_outputs(func);
+        let copy_map = build_copy_map(func, &preserved_load_outputs);
         if copy_map.is_empty() {
             return Ok(false);
         }
@@ -59,19 +70,55 @@ impl Pass for CopyPropagationPass {
     }
 }
 
+/// Outputs of `LOAD` instructions whose [`unlace_ir::AliasCategory`] is
+/// preserved (`Mmio` or `Volatile`). Copy-prop must never resolve any
+/// varnode equivalent to one of these to its source — the LOAD has
+/// observable side-effects that downstream accesses must not skip over.
+///
+/// Each preserved LOAD found also bumps the global preservation
+/// counter via [`unlace_ir::alias::record_preserved`].
+fn collect_preserved_load_outputs(func: &SsaFunction) -> BTreeSet<Varnode> {
+    let mut set = BTreeSet::new();
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            if insn.op != IrOp::Load {
+                continue;
+            }
+            if let (Some(c), Some(out)) = (insn.category, insn.output) {
+                if c.is_preserved() {
+                    set.insert(out);
+                    unlace_ir::alias::record_preserved();
+                }
+            }
+        }
+    }
+    set
+}
+
 /// Build a map from COPY outputs to their sources.
 ///
-/// Only considers `output = COPY input0` where output is *not* in Const space.
-fn build_copy_map(func: &SsaFunction) -> BTreeMap<Varnode, Varnode> {
+/// Only considers `output = COPY input0` where output is *not* in Const
+/// space. Skips entries whose source or output is a preserved LOAD
+/// result — see [`collect_preserved_load_outputs`] for the barrier.
+fn build_copy_map(
+    func: &SsaFunction,
+    preserved_load_outputs: &BTreeSet<Varnode>,
+) -> BTreeMap<Varnode, Varnode> {
     let mut map = BTreeMap::new();
 
     for block in func.function.blocks.values() {
         for insn in &block.insns {
             if insn.op == IrOp::Copy {
                 if let (Some(output), Some(&source)) = (insn.output, insn.inputs.first()) {
-                    if output.space != SpaceId::Const {
+                    if output.space != SpaceId::Const
+                        && !preserved_load_outputs.contains(&source)
+                        && !preserved_load_outputs.contains(&output)
+                    {
                         map.insert(output, source);
                     }
+                    // else: barrier — copy whose source/output is a
+                    // preserved LOAD result. Skipping the map entry
+                    // keeps later uses tied to the explicit LOAD.
                 }
             }
         }
@@ -200,5 +247,52 @@ mod tests {
             .run(&mut ssa)
             .expect("pass should succeed");
         assert!(!changed);
+    }
+
+    /// Barrier test: `v2 = LOAD<Volatile> addr ; v3 = COPY v2 ; use v3`.
+    /// Copy-prop must NOT rewrite `use v3` to `use v2` because the
+    /// COPY's source is the output of a preserved LOAD. (Even though
+    /// the rewrite is semantically equivalent here, leaving the COPY in
+    /// place keeps later passes from collapsing the volatile read.)
+    #[test]
+    fn test_copy_prop_volatile_load_barrier() {
+        let addr = Varnode::reg(0, 8);
+        let v_load = Varnode::unique(0, 8);
+        let v_copy = Varnode::unique(8, 8);
+        let v_use = Varnode::unique(16, 8);
+
+        let mut load = IrInsn::with_output(IrOp::Load, v_load, smallvec![addr], 0x1000);
+        load.category = Some(unlace_ir::AliasCategory::Volatile);
+        let copy_insn = IrInsn::with_output(IrOp::Copy, v_copy, smallvec![v_load], 0x1004);
+        let use_insn = IrInsn::with_output(
+            IrOp::IntAdd,
+            v_use,
+            smallvec![v_copy, Varnode::constant(1, 8)],
+            0x1008,
+        );
+
+        let mut ssa = make_single_block_ssa(vec![load, copy_insn, use_insn]);
+        let before = unlace_ir::alias::preserved_count();
+        let _ = CopyPropagationPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        let after = unlace_ir::alias::preserved_count();
+
+        // The use must still reference v_copy — NOT v_load.
+        let add_insn = &ssa
+            .function
+            .blocks
+            .values()
+            .next()
+            .expect("has block")
+            .insns[2];
+        assert_eq!(
+            add_insn.inputs[0], v_copy,
+            "volatile-LOAD barrier must keep COPY chain intact"
+        );
+        assert!(
+            after > before,
+            "preservation counter must have incremented"
+        );
     }
 }

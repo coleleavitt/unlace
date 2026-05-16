@@ -197,6 +197,7 @@ fn cse_flat(nodes: &mut [HirNode]) {
                         inputs: smallvec::smallvec![prior_out],
                         addr,
                         guard,
+                        category: None,
                     };
                     // Record the write to `output`.
                     last_write.insert(output, generation);

@@ -861,6 +861,20 @@ fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
                 continue;
             }
 
+            // Alias-category barrier: never rewrite a LOAD whose
+            // category is Mmio/Volatile to a constant COPY. Each
+            // downstream read of a memory-mapped or volatile address
+            // must observe the explicit access. Bump the global
+            // preserved-access counter for observability.
+            if insn.op == IrOp::Load {
+                if let Some(c) = insn.category {
+                    if c.is_preserved() {
+                        unlace_ir::alias::record_preserved();
+                        continue;
+                    }
+                }
+            }
+
             let key = (bid, insn_idx, VarnodeSlot::Output);
             let sv = match func.var_map.get(&key) {
                 Some(sv) => *sv,
@@ -1322,5 +1336,35 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Barrier test: an MMIO-tagged LOAD whose evaluated lattice would
+    /// be constant (e.g. because the lifter could prove the address)
+    /// must not be rewritten to a constant COPY. The LOAD must remain
+    /// intact so the memory access is preserved.
+    #[test]
+    fn test_sccp_mmio_load_not_rewritten_to_const() {
+        let addr = Varnode::constant(0xFFFF_0000, 8);
+        let out = Varnode::unique(0, 4);
+        // MMIO LOAD from a constant address.
+        let mut load = IrInsn::with_output(IrOp::Load, out, smallvec![addr], 0x1000);
+        load.category = Some(unlace_ir::AliasCategory::Mmio);
+
+        let mut ssa = make_single_block_ssa(vec![load]);
+        let before = unlace_ir::alias::preserved_count();
+        let _ = SccpPass.run(&mut ssa).expect("pass should succeed");
+        let after = unlace_ir::alias::preserved_count();
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        // The LOAD insn must still be a LOAD — not folded to COPY.
+        assert_eq!(
+            block.insns[0].op,
+            IrOp::Load,
+            "MMIO LOAD must survive SCCP rewrite"
+        );
+        assert!(
+            after > before,
+            "preservation counter must have incremented"
+        );
     }
 }

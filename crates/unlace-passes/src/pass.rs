@@ -483,6 +483,7 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("DeadStoreElimGlobalPass", GlobalOpt),
         PassDescriptor::new("DivisionIdiomPass", LocalOpt),
         PassDescriptor::new("ModuloIdiomPass", LocalOpt),
+        PassDescriptor::new("SixtyFourBitDemotePass", GlobalOpt),
         // ---- structural detection ----
         PassDescriptor::new("PrologueElimPass", PreOpt),
         PassDescriptor::new("TailCallDetectPass", GlobalOpt),
@@ -721,6 +722,7 @@ mod phase_tests {
             Box::new(crate::redundant_flag_elim::RedundantFlagElimPass),
             Box::new(crate::prologue_elim::PrologueElimPass),
             Box::new(crate::noreturn::NoreturnDetectPass::new()),
+            Box::new(crate::cmov_preserve::CmovPreservePass),
             // ---- LocalOpt ----
             Box::new(crate::sccp::SccpPass),
             Box::new(crate::copy_prop::CopyPropagationPass),
@@ -749,6 +751,7 @@ mod phase_tests {
             Box::new(crate::tail_duplication::TailDuplicationPass),
             Box::new(crate::indirect_call_resolve::IndirectCallResolvePass),
             Box::new(crate::indirect_jump_resolve::IndirectJumpResolvePass),
+            Box::new(crate::sixty_four_bit_demote::SixtyFourBitDemotePass),
             Box::new(crate::msvc_seh::MsvcSehPass {
                 scope_tables: std::collections::BTreeMap::new(),
             }),
@@ -817,9 +820,9 @@ mod phase_tests {
         // GoIfaceDevirtPass (TypeRecovery) is omitted from `all_passes`
         // because it borrows a `&dyn` resolver.
         let expected: BTreeMap<u8, usize> = [
-            (PassPhase::PreOpt.ordinal(), 6),
+            (PassPhase::PreOpt.ordinal(), 7),
             (PassPhase::LocalOpt.ordinal(), 17),
-            (PassPhase::GlobalOpt.ordinal(), 10),
+            (PassPhase::GlobalOpt.ordinal(), 11),
             (PassPhase::TypeRecovery.ordinal(), 18),
             (PassPhase::StackRecovery.ordinal(), 3),
             (PassPhase::LVarAlloc.ordinal(), 1),
@@ -874,6 +877,7 @@ mod phase_tests {
             GlobalOpt, // DeadStoreElimGlobalPass
             LocalOpt,  // DivisionIdiomPass
             LocalOpt,  // ModuloIdiomPass
+            GlobalOpt, // SixtyFourBitDemotePass
             // ---- structural detection ----
             PreOpt,        // PrologueElimPass
             GlobalOpt,     // TailCallDetectPass
@@ -957,8 +961,8 @@ mod phase_tests {
 
     /// Pinned count, kept as a separate fn so the diff is obvious when
     /// it changes. Counted from `canonical_pipeline_phases()` above as
-    /// of Batch 10 slice 1 (11 backward transitions across 47 windows,
-    /// 48 scheduled passes total).
+    /// of Batch 10 slice 1 (11 backward transitions across 49 windows,
+    /// 50 scheduled passes total).
     pub(super) const fn canonical_pipeline_transgression_count() -> usize {
         11
     }

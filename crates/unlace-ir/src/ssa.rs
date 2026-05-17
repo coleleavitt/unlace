@@ -1039,6 +1039,12 @@ pub struct FinalizedSignature {
     /// Number of parameters dropped relative to
     /// [`SsaFunction::inferred_params`].
     pub dropped_param_count: usize,
+    /// When `true`, the first parameter is a hidden struct-return pointer
+    /// (sret). The printer should hide it from the parameter list and
+    /// render the function as returning the pointed-to struct type instead.
+    /// Detected by [`unlace_passes::calling_conv_finalize::detect_sret`].
+    #[serde(default)]
+    pub sret: bool,
 }
 
 /// Classification of a recovered stack-frame slot (Batch 2 slice 2).

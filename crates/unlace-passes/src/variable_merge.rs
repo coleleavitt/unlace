@@ -416,7 +416,7 @@ fn coalesce_clusters(
     all_vars: &BTreeSet<SsaVarnode>,
     live_ranges: &BTreeMap<SsaVarnode, BTreeSet<ProgramPoint>>,
     var_types: &BTreeMap<SsaVarnode, PrimitiveType>,
-    byref_offsets: &BTreeSet<i64>,
+    _byref_offsets: &BTreeSet<i64>,
 ) -> Vec<Vec<SsaVarnode>> {
     let mut by_base: BTreeMap<Varnode, Vec<SsaVarnode>> = BTreeMap::new();
     for sv in all_vars {

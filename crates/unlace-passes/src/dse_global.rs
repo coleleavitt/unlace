@@ -163,7 +163,9 @@ fn is_globally_dead(
                         return BlockResult::Lives;
                     }
                 }
-                IrOp::Call | IrOp::Callind | IrOp::Callother => {
+                IrOp::Call | IrOp::Callind | IrOp::Callother
+                | IrOp::Fence | IrOp::AtomicLoad | IrOp::AtomicStore
+                | IrOp::AtomicRmw | IrOp::AtomicCas => {
                     return BlockResult::Lives;
                 }
                 IrOp::Return => {

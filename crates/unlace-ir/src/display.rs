@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn irop_variant_count() {
-        assert_eq!(crate::IROP_COUNT, 76);
+        assert_eq!(crate::IROP_COUNT, 84);
         assert_eq!(IrOp::Unimplemented as u8, 74);
         assert_eq!(IrOp::Copy as u8, 0);
     }

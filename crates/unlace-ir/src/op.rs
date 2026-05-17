@@ -115,10 +115,43 @@ pub enum IrOp {
     /// `SELECT(cond, true_val, false_val) → dst`
     /// Semantics: `dst = cond ? true_val : false_val`
     Select = 75,
+
+    // -- SS3.15 Vector / SIMD (3) --
+    /// `VECTOR_INSERT(vec, elem, index) → new_vec`
+    /// Insert a scalar element into a vector register at a given lane index.
+    /// Supports ARM NEON `INS`, x86 `PINSRB/W/D/Q`, RISC-V vector insert.
+    VectorInsert = 76,
+    /// `VECTOR_EXTRACT(vec, index) → scalar`
+    /// Extract a scalar element from a vector register at a given lane index.
+    /// Supports ARM NEON `UMOV`/`SMOV`, x86 `PEXTRB/W/D/Q`.
+    VectorExtract = 77,
+    /// `VECTOR_SHUFFLE(vec_a, vec_b, mask) → new_vec`
+    /// Permute lanes from two source vectors according to a mask.
+    /// Supports x86 `SHUFPS`/`VPERM`, ARM `TBL`/`TBX`.
+    VectorShuffle = 78,
+
+    // -- SS3.16 Atomics & Memory Ordering (5) --
+    /// `FENCE(ordering)` — memory barrier with no output.
+    /// `ordering` is encoded as a constant: 1=Acquire, 2=Release, 3=AcqRel, 4=SeqCst.
+    /// Prevents the decompiler from reordering loads/stores across this point.
+    Fence = 79,
+    /// `ATOMIC_LOAD(space, addr, ordering) → value`
+    /// Atomic load with memory ordering semantics.
+    AtomicLoad = 80,
+    /// `ATOMIC_STORE(space, addr, value, ordering)` — no output.
+    /// Atomic store with memory ordering semantics.
+    AtomicStore = 81,
+    /// `ATOMIC_RMW(space, addr, operand, op_kind, ordering) → old_value`
+    /// Atomic read-modify-write. `op_kind` encodes the operation:
+    /// 0=Xchg, 1=Add, 2=Sub, 3=And, 4=Or, 5=Xor, 6=Nand, 7=Min, 8=Max.
+    AtomicRmw = 82,
+    /// `ATOMIC_CAS(space, addr, expected, desired, ordering) → old_value`
+    /// Atomic compare-and-swap.
+    AtomicCas = 83,
 }
 
 /// Total number of opcodes in the frozen v1.0 spec.
-pub const IROP_COUNT: usize = 76;
+pub const IROP_COUNT: usize = 84;
 
 impl IrOp {
     /// Returns the canonical uppercase opcode name (e.g. `"INT_ADD"`).
@@ -200,6 +233,14 @@ impl IrOp {
             Self::Segmentop => "SEGMENTOP",
             Self::Unimplemented => "UNIMPLEMENTED",
             Self::Select => "SELECT",
+            Self::VectorInsert => "VECTOR_INSERT",
+            Self::VectorExtract => "VECTOR_EXTRACT",
+            Self::VectorShuffle => "VECTOR_SHUFFLE",
+            Self::Fence => "FENCE",
+            Self::AtomicLoad => "ATOMIC_LOAD",
+            Self::AtomicStore => "ATOMIC_STORE",
+            Self::AtomicRmw => "ATOMIC_RMW",
+            Self::AtomicCas => "ATOMIC_CAS",
         }
     }
 
@@ -247,7 +288,13 @@ impl IrOp {
             | Self::FloatFloat2float => Some('f'),
 
             // No output
-            Self::Store | Self::Branch | Self::Cbranch | Self::Branchind | Self::Return => None,
+            Self::Store
+            | Self::Branch
+            | Self::Cbranch
+            | Self::Branchind
+            | Self::Return
+            | Self::Fence
+            | Self::AtomicStore => None,
 
             // Everything else is integer / generic
             _ => Some('i'),

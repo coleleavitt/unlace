@@ -269,7 +269,9 @@ fn find_dead_stores(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
                         last_store_stack.remove(&off);
                     }
                 }
-                IrOp::Call | IrOp::Callind | IrOp::Callother => {
+                IrOp::Call | IrOp::Callind | IrOp::Callother
+                | IrOp::Fence | IrOp::AtomicLoad | IrOp::AtomicStore
+                | IrOp::AtomicRmw | IrOp::AtomicCas => {
                     // Any call may read any memory — conservatively
                     // invalidate all pending stores.
                     last_store_sv.clear();

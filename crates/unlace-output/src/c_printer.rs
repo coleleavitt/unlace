@@ -3242,6 +3242,10 @@ fn instr_has_side_effects(insn: &IrInsn) -> bool {
             | IrOp::New
             | IrOp::Segmentop
             | IrOp::Unimplemented
+            | IrOp::Fence
+            | IrOp::AtomicStore
+            | IrOp::AtomicRmw
+            | IrOp::AtomicCas
     )
 }
 
@@ -7098,11 +7102,69 @@ fn emit_expr_with_prec(
         // -- Unknown / unimplemented instruction --
         IrOp::Unimplemented => format!("__unknown_insn_0x{:X}()", insn.addr),
 
+        // -- SIMD vector operations --
+        IrOp::VectorInsert => {
+            let args = emit_input_args(insn, stmt_idx, ctx);
+            format!("__vector_insert({})", args)
+        }
+        IrOp::VectorExtract => {
+            let args = emit_input_args(insn, stmt_idx, ctx);
+            format!("__vector_extract({})", args)
+        }
+        IrOp::VectorShuffle => {
+            let args = emit_input_args(insn, stmt_idx, ctx);
+            format!("__vector_shuffle({})", args)
+        }
+
+        // -- Atomic / memory-ordering operations --
+        IrOp::Fence => {
+            let ordering = insn.inputs.first().map(|v| v.offset).unwrap_or(4);
+            let name = atomic_ordering_name(ordering);
+            format!("__atomic_thread_fence({})", name)
+        }
+        IrOp::AtomicLoad => {
+            let args = emit_input_args(insn, stmt_idx, ctx);
+            format!("__atomic_load({})", args)
+        }
+        IrOp::AtomicStore => {
+            let args = emit_input_args(insn, stmt_idx, ctx);
+            format!("__atomic_store({})", args)
+        }
+        IrOp::AtomicRmw => {
+            let args = emit_input_args(insn, stmt_idx, ctx);
+            format!("__atomic_rmw({})", args)
+        }
+        IrOp::AtomicCas => {
+            let args = emit_input_args(insn, stmt_idx, ctx);
+            format!("__atomic_cas({})", args)
+        }
+
         // -- CALLOTHER: resolve to intrinsic name if known --
         IrOp::Callother => emit_callother(insn, stmt_idx, ctx),
 
         // -- Fallback --
         _ => format!("/* {} */ 0", insn.op.name()),
+    }
+}
+
+/// Render all inputs of an instruction as a comma-separated argument list.
+fn emit_input_args(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    insn.inputs
+        .iter()
+        .enumerate()
+        .map(|(i, vn)| emit_operand_resolved(vn, i, stmt_idx, ctx))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Map an atomic ordering constant to its C11 name.
+fn atomic_ordering_name(ordering: u64) -> &'static str {
+    match ordering {
+        0 => "memory_order_relaxed",
+        1 => "memory_order_acquire",
+        2 => "memory_order_release",
+        3 => "memory_order_acq_rel",
+        _ => "memory_order_seq_cst",
     }
 }
 
@@ -9471,6 +9533,7 @@ mod tests {
             params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(8)))],
             return_type: Type::Primitive(PrimitiveType::Unknown),
             dropped_param_count: 1,
+            sret: false,
         });
         let output = print_c(&func);
         assert!(
@@ -9508,6 +9571,7 @@ mod tests {
             params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(8)))],
             return_type: Type::Primitive(PrimitiveType::Unknown),
             dropped_param_count: 2,
+            sret: false,
         });
         let output = print_c(&func);
         assert!(
@@ -9531,6 +9595,7 @@ mod tests {
             params: vec![("a1".into(), Type::Primitive(PrimitiveType::Int(1)))],
             return_type: Type::Primitive(PrimitiveType::Unknown),
             dropped_param_count: 0,
+            sret: false,
         });
         let output = print_c(&func);
         assert!(
@@ -9561,6 +9626,7 @@ mod tests {
             params: vec![],
             return_type: Type::Primitive(PrimitiveType::Int(1)),
             dropped_param_count: 0,
+            sret: false,
         });
         let output = print_c(&func);
         // First line of the body is the function decl; that should

@@ -1109,6 +1109,7 @@ fn pipeline_stage_ir_fixedpoint(ssa: &mut SsaFunction) -> Result<usize, unlace_p
     let idiom = IdiomRecognitionPass;
     let bmi = BmiIdiomPass;
     let cond = ConditionSimplifyPass;
+    let cmov = unlace_passes::CmovPreservePass;
     let call_bound = CallBoundaryCopyPropPass;
     let red_flag = RedundantFlagElimPass;
     let algebraic = AlgebraicSimplifyPass;
@@ -1126,6 +1127,7 @@ fn pipeline_stage_ir_fixedpoint(ssa: &mut SsaFunction) -> Result<usize, unlace_p
         &strength_reduce,
         &idiom,
         &cond,
+        &cmov,
         &call_bound,
         &red_flag,
         &algebraic,
@@ -1141,6 +1143,7 @@ fn pipeline_stage_cleanup(ssa: &mut SsaFunction) -> Result<(), unlace_passes::Pa
     run_instrumented(&DeadStoreElimGlobalPass, ssa)?;
     run_instrumented(&DivisionIdiomPass, ssa)?;
     run_instrumented(&ModuloIdiomPass, ssa)?;
+    run_instrumented(&unlace_passes::SixtyFourBitDemotePass, ssa)?;
     Ok(())
 }
 

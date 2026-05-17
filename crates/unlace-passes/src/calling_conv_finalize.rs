@@ -117,10 +117,14 @@ pub fn finalize_signature(func: &SsaFunction, callers: &[&SsaFunction]) -> Final
     let return_type = infer_return_from_callers(func, callers)
         .unwrap_or(Type::Primitive(func.inferred_return_type));
 
+    // Rule 4: detect sret (hidden struct-return pointer).
+    let sret = detect_sret(func);
+
     FinalizedSignature {
         params: final_params,
         return_type,
         dropped_param_count: dropped,
+        sret,
     }
 }
 
@@ -305,6 +309,107 @@ fn infer_consumer_type(insn: &unlace_ir::IrInsn, reg_input: &Varnode) -> Type {
     // Generic copy / move / store / further arithmetic on the full
     // register treats it as the register's full width.
     Type::Primitive(PrimitiveType::Int(reg_input.size))
+}
+
+/// Detect the sret (struct-return) pattern: the first parameter is a
+/// pointer that is used exclusively (or predominantly) as a store
+/// destination and is returned in the return register (RAX/X0).
+///
+/// IDA's `sub_1F8DC0` logic similarly detects the "hidden output pointer"
+/// idiom used by compilers when a function returns a struct larger than
+/// can fit in register(s). The calling convention passes the struct
+/// address as a hidden first argument; the function fills it in via
+/// stores and returns the same pointer.
+///
+/// Heuristic:
+/// 1. The first argument register must be typed as `Ptr` or have all
+///    uses be `Store` (address operand) or passed to another call.
+/// 2. The return register (RAX/X0) must be written from the same
+///    register (or a copy of it) before at least one Return instruction.
+/// 3. The pointer must be used in at least 2 distinct `Store` instructions
+///    (otherwise it's just a passthrough, not a struct fill).
+pub fn detect_sret(func: &SsaFunction) -> bool {
+    let cc = func.calling_convention;
+    let first_arg_reg = match cc {
+        CallingConvention::SystemV => RDI,
+        CallingConvention::MicrosoftX64 => RCX,
+        CallingConvention::AArch64 => 0, // X0
+        CallingConvention::Thiscall => return false, // `this` is never sret
+        _ => return false,
+    };
+    let ret_reg = match return_register(cc) {
+        Some(r) => r,
+        None => return false,
+    };
+
+    // Check if the first arg is typed as Ptr.
+    let first_param_is_ptr = func
+        .inferred_params
+        .first()
+        .map(|(_, ty)| *ty == PrimitiveType::Ptr)
+        .unwrap_or(false);
+
+    // Count how the first arg register is used in the function body.
+    let mut store_addr_uses = 0usize;
+    let mut other_uses = 0usize;
+    let mut returned_through_rax = false;
+
+    for block in func.function.blocks.values() {
+        let mut first_arg_overwritten = false;
+        for insn in &block.insns {
+            // Track if the first arg register has been overwritten.
+            if let Some(out) = insn.output {
+                if out.space == SpaceId::Register && out.offset == first_arg_reg {
+                    first_arg_overwritten = true;
+                }
+                // Check if RAX/X0 is written from the first arg register.
+                if out.space == SpaceId::Register && out.offset == ret_reg {
+                    for inp in &insn.inputs {
+                        if inp.space == SpaceId::Register
+                            && inp.offset == first_arg_reg
+                            && !first_arg_overwritten
+                        {
+                            returned_through_rax = true;
+                        }
+                    }
+                }
+            }
+
+            // Count uses of the first arg register as a store address.
+            if !first_arg_overwritten {
+                match insn.op {
+                    IrOp::Store => {
+                        // Store(space, addr, value) — addr is input[1]
+                        if let Some(addr) = insn.inputs.get(1) {
+                            if addr.space == SpaceId::Register && addr.offset == first_arg_reg {
+                                store_addr_uses += 1;
+                            }
+                        }
+                    }
+                    _ => {
+                        for inp in &insn.inputs {
+                            if inp.space == SpaceId::Register && inp.offset == first_arg_reg {
+                                // Used as something other than a store addr
+                                if insn.op != IrOp::Copy {
+                                    other_uses += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Heuristic: sret if:
+    // - First param looks like a pointer (typed or inferred from use)
+    // - Used as store address at least twice (struct fill)
+    // - Returned through RAX (or copy chain to RAX)
+    // - Store uses dominate other uses (predominantly used for writing)
+    let predominantly_store = store_addr_uses >= 2 && store_addr_uses > other_uses;
+    let is_ptr_like = first_param_is_ptr || (store_addr_uses >= 2 && other_uses == 0);
+
+    is_ptr_like && predominantly_store && returned_through_rax
 }
 
 /// Late-pipeline pass that runs [`finalize_signature`] against the
@@ -530,5 +635,72 @@ mod tests {
         // Smoke: one declared param, RDI is used; RSI activity
         // shouldn't matter.
         let _ = rsi();
+    }
+
+    /// Test: sret detected when first arg is a Ptr used predominantly
+    /// for stores and returned through RAX.
+    #[test]
+    fn detect_sret_struct_return_pattern() {
+        // Build a function that:
+        //   1. Takes RDI (first arg) as a pointer
+        //   2. Stores to [RDI] at two offsets (struct fill)
+        //   3. Copies RDI to RAX before return
+        let insns = vec![
+            // Store field_0: *(RDI + 0) = 42
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![
+                    Varnode::constant(SpaceId::Stack as u64, 4),
+                    rdi(),
+                    Varnode::constant(42, 8),
+                ],
+                0x1000,
+            ),
+            // Store field_8: *(RDI + 8) = 99
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![
+                    Varnode::constant(SpaceId::Stack as u64, 4),
+                    rdi(),
+                    Varnode::constant(99, 8),
+                ],
+                0x1004,
+            ),
+            // RAX = RDI (return the sret pointer)
+            IrInsn::with_output(IrOp::Copy, rax(), smallvec![rdi()], 0x1008),
+        ];
+        let mut ssa = make_func(0x1000, insns, vec![("a1".into(), PrimitiveType::Ptr)]);
+        ssa.calling_convention = CallingConvention::SystemV;
+
+        assert!(
+            detect_sret(&ssa),
+            "should detect sret: first param is Ptr, stored to twice, returned via RAX"
+        );
+    }
+
+    /// Test: sret NOT detected when the first arg is used for arithmetic
+    /// (not predominantly stores).
+    #[test]
+    fn detect_sret_not_triggered_for_regular_ptr() {
+        // Function that uses RDI as a regular pointer: loads from it, does math.
+        let t1 = Varnode::unique(0, 8);
+        let insns = vec![
+            // Load from [RDI]
+            IrInsn::with_output(
+                IrOp::Load,
+                t1,
+                smallvec![Varnode::constant(SpaceId::Stack as u64, 4), rdi()],
+                0x1000,
+            ),
+            // RAX = t1 (returns the loaded value, not RDI itself)
+            IrInsn::with_output(IrOp::Copy, rax(), smallvec![t1], 0x1004),
+        ];
+        let mut ssa = make_func(0x1000, insns, vec![("a1".into(), PrimitiveType::Ptr)]);
+        ssa.calling_convention = CallingConvention::SystemV;
+
+        assert!(
+            !detect_sret(&ssa),
+            "should NOT detect sret: RDI is loaded from, not stored to"
+        );
     }
 }

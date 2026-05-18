@@ -74,7 +74,7 @@ impl Lifter for MipsLifter {
             .ok_or_else(|| LiftError::Decode(format!("no instruction at {addr:#x}")))?;
 
         let detail = cs
-            .insn_detail(&insn)
+            .insn_detail(insn)
             .map_err(|e| LiftError::Decode(format!("no detail: {e}")))?;
 
         let arch_detail = detail.arch_detail();
@@ -625,25 +625,36 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_addq_updates_dsp_outflag() {
         let mut ctx = LiftCtx::new(0x1000);
         let ops = [
-            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_2 as u16)),
-            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_4 as u16)),
-            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_5 as u16)),
+            MipsOperand::Reg(capstone::RegId(
+                capstone::arch::mips::MipsReg::MIPS_REG_2 as u16,
+            )),
+            MipsOperand::Reg(capstone::RegId(
+                capstone::arch::mips::MipsReg::MIPS_REG_4 as u16,
+            )),
+            MipsOperand::Reg(capstone::RegId(
+                capstone::arch::mips::MipsReg::MIPS_REG_5 as u16,
+            )),
         ];
         crate::ops::dsp::lift_addq(&mut ctx, &ops);
         assert!(ctx.ir_ops().iter().any(|op| op.op == IrOp::IntAdd));
-        assert!(ctx.ir_ops().iter().any(|op| op.output == Some(Varnode::reg(crate::register_file::DSPOUTFLAG, 8))));
+        assert!(
+            ctx.ir_ops()
+                .iter()
+                .any(|op| op.output == Some(Varnode::reg(crate::register_file::DSPOUTFLAG, 8)))
+        );
     }
 
     #[test]
     fn test_rddsp_lowers_to_callother() {
         let mut ctx = LiftCtx::new(0x1000);
         let ops = [
-            MipsOperand::Reg(capstone::RegId(capstone::arch::mips::MipsReg::MIPS_REG_2 as u16)),
+            MipsOperand::Reg(capstone::RegId(
+                capstone::arch::mips::MipsReg::MIPS_REG_2 as u16,
+            )),
             MipsOperand::Imm(0x1f),
         ];
         crate::ops::dsp::lift_rddsp(&mut ctx, &ops);

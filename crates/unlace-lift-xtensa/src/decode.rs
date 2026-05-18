@@ -30,39 +30,90 @@
 pub enum XtensaOp {
     Nop,
     /// ADD a_r, a_s, a_t   (a_r = a_s + a_t)
-    Add { r: u8, s: u8, t: u8 },
+    Add {
+        r: u8,
+        s: u8,
+        t: u8,
+    },
     /// SUB a_r, a_s, a_t
-    Sub { r: u8, s: u8, t: u8 },
+    Sub {
+        r: u8,
+        s: u8,
+        t: u8,
+    },
     /// AND a_r, a_s, a_t
-    And { r: u8, s: u8, t: u8 },
+    And {
+        r: u8,
+        s: u8,
+        t: u8,
+    },
     /// OR  a_r, a_s, a_t
-    Or { r: u8, s: u8, t: u8 },
+    Or {
+        r: u8,
+        s: u8,
+        t: u8,
+    },
     /// XOR a_r, a_s, a_t
-    Xor { r: u8, s: u8, t: u8 },
+    Xor {
+        r: u8,
+        s: u8,
+        t: u8,
+    },
     /// L32I a_t, a_s, imm8   (32-bit load: a_t = M[a_s + imm8*4])
-    L32i { t: u8, s: u8, imm: u8 },
+    L32i {
+        t: u8,
+        s: u8,
+        imm: u8,
+    },
     /// S32I a_t, a_s, imm8   (32-bit store: M[a_s + imm8*4] = a_t)
-    S32i { t: u8, s: u8, imm: u8 },
+    S32i {
+        t: u8,
+        s: u8,
+        imm: u8,
+    },
     /// MOVI a_t, imm8 (sign-extended)
-    Movi { t: u8, imm: i32 },
+    Movi {
+        t: u8,
+        imm: i32,
+    },
     /// CALL0 offset (18-bit, MVP uses 16-bit signed offset)
-    Call0 { offset: i32 },
+    Call0 {
+        offset: i32,
+    },
     /// CALLX0 a_s   (indirect call through a_s)
-    Callx0 { s: u8 },
+    Callx0 {
+        s: u8,
+    },
     /// RET — return via a0
     Ret,
     /// RETW — windowed return
     Retw,
     /// J — unconditional jump, 16-bit signed offset (MVP, real is 18-bit)
-    J { offset: i32 },
+    J {
+        offset: i32,
+    },
     /// BEQ a_s, a_t, off8
-    Beq { s: u8, t: u8, offset: i32 },
+    Beq {
+        s: u8,
+        t: u8,
+        offset: i32,
+    },
     /// BNE a_s, a_t, off8
-    Bne { s: u8, t: u8, offset: i32 },
+    Bne {
+        s: u8,
+        t: u8,
+        offset: i32,
+    },
     /// BEQZ a_s, off8
-    Beqz { s: u8, offset: i32 },
+    Beqz {
+        s: u8,
+        offset: i32,
+    },
     /// BNEZ a_s, off8
-    Bnez { s: u8, offset: i32 },
+    Bnez {
+        s: u8,
+        offset: i32,
+    },
     /// Unknown / unimplemented (still decoded to a length).
     Unknown,
 }

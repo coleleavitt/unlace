@@ -372,6 +372,163 @@ impl AvrLifter {
             });
         }
 
+        // -- AVR stub expansion (Batch 22 follow-up) --
+        // INC Rd:  1001 010d dddd 0011
+        if word & 0xFE0F == 0x9403 {
+            let rd = rd5(word);
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::with_output(
+                    IrOp::IntAdd,
+                    reg(rd),
+                    SmallVec::from_slice(&[reg(rd), const_vn(1, 1)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+        // DEC Rd:  1001 010d dddd 1010
+        if word & 0xFE0F == 0x940A {
+            let rd = rd5(word);
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::with_output(
+                    IrOp::IntSub,
+                    reg(rd),
+                    SmallVec::from_slice(&[reg(rd), const_vn(1, 1)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+        // COM Rd:  1001 010d dddd 0000  — Rd = 0xFF ^ Rd (one's complement).
+        if word & 0xFE0F == 0x9400 {
+            let rd = rd5(word);
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::with_output(
+                    IrOp::IntXor,
+                    reg(rd),
+                    SmallVec::from_slice(&[reg(rd), const_vn(0xFF, 1)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+        // NEG Rd:  1001 010d dddd 0001  — Rd = 0 - Rd.
+        if word & 0xFE0F == 0x9401 {
+            let rd = rd5(word);
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::with_output(
+                    IrOp::IntSub,
+                    reg(rd),
+                    SmallVec::from_slice(&[const_vn(0, 1), reg(rd)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+        // SWAP Rd: 1001 010d dddd 0010  — swap nibbles ((Rd<<4)|(Rd>>4)).
+        // Modelled as `Callother` so downstream passes / printer can
+        // surface a `__avr_swap` helper while keeping side-effect-free
+        // semantics. Output is still Rd so dataflow tracking sees it.
+        if word & 0xFE0F == 0x9402 {
+            let rd = rd5(word);
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::with_output(
+                    IrOp::Callother,
+                    reg(rd),
+                    SmallVec::from_slice(&[reg(rd)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+        // ANDI Rd, K: 0111 KKKK dddd KKKK  (Rd = r16..r31)
+        if word & 0xF000 == 0x7000 {
+            let rd = rd4_ldi(word);
+            let k = k8_ldi(word);
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::with_output(
+                    IrOp::IntAnd,
+                    reg(rd),
+                    SmallVec::from_slice(&[reg(rd), const_vn(k as u64, 1)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+        // ORI Rd, K:  0110 KKKK dddd KKKK  (Rd = r16..r31)
+        if word & 0xF000 == 0x6000 {
+            let rd = rd4_ldi(word);
+            let k = k8_ldi(word);
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::with_output(
+                    IrOp::IntOr,
+                    reg(rd),
+                    SmallVec::from_slice(&[reg(rd), const_vn(k as u64, 1)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+        // SBI A, b:   1001 1010 AAAA Abbb  — set bit in I/O register A.
+        if word & 0xFF00 == 0x9A00 {
+            let a = ((word >> 3) & 0x1F) as u64;
+            let b = (word & 0x07) as u64;
+            // Render as `io[A] |= (1 << b)` — modelled here as a
+            // Callother so the IO-port semantics survive.
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::without_output(
+                    IrOp::Callother,
+                    SmallVec::from_slice(&[const_vn(a, 1), const_vn(b, 1)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+        // CBI A, b:   1001 1000 AAAA Abbb  — clear bit in I/O register A.
+        if word & 0xFF00 == 0x9800 {
+            let a = ((word >> 3) & 0x1F) as u64;
+            let b = (word & 0x07) as u64;
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::without_output(
+                    IrOp::Callother,
+                    SmallVec::from_slice(&[const_vn(a, 1), const_vn(b, 1)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+        // IN Rd, A:   1011 0AAd dddd AAAA  — Rd = io[A].
+        if word & 0xF800 == 0xB000 {
+            let rd = rd5(word);
+            let a_hi = (word >> 9) & 0x03;
+            let a_lo = word & 0x0F;
+            let a = ((a_hi << 4) | a_lo) as u64;
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::with_output(
+                    IrOp::Callother,
+                    reg(rd),
+                    SmallVec::from_slice(&[const_vn(a, 1)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+        // OUT A, Rr:  1011 1AAr rrrr AAAA  — io[A] = Rr.
+        if word & 0xF800 == 0xB800 {
+            let rr = rd5(word);
+            let a_hi = (word >> 9) & 0x03;
+            let a_lo = word & 0x0F;
+            let a = ((a_hi << 4) | a_lo) as u64;
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::without_output(
+                    IrOp::Callother,
+                    SmallVec::from_slice(&[const_vn(a, 1), reg(rr)]),
+                    addr,
+                )],
+                len: 2,
+            });
+        }
+
         // Unrecognized → Unimplemented
         Ok(LiftedInsn {
             ir_ops: vec![IrInsn::without_output(
@@ -730,5 +887,107 @@ mod tests {
         assert_eq!(result.ir_ops[2].op, IrOp::Cbranch);
         // target = 0x500 + 2 + 2*2 = 0x506
         assert_eq!(result.ir_ops[2].inputs[0], ram_target(0x506));
+    }
+
+    // ---------------------------------------------------------------
+    // Batch 22 stub-tier expansion: common AVR opcodes.
+    // ---------------------------------------------------------------
+
+    /// INC r1: 1001 0100 0001 0011 → 0x9413  (rd=1)
+    #[test]
+    fn test_inc_lifts_to_intadd_with_one() {
+        let lifter = AvrLifter::new();
+        let bytes = encode(0x9413);
+        let result = lifter.lift_insn(&bytes, 0).unwrap();
+        assert_eq!(result.ir_ops.len(), 1);
+        assert_eq!(result.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(result.ir_ops[0].output, Some(reg(1)));
+    }
+
+    /// DEC r1: 1001 0100 0001 1010 → 0x941A  (rd=1)
+    #[test]
+    fn test_dec_lifts_to_intsub_with_one() {
+        let lifter = AvrLifter::new();
+        let bytes = encode(0x941A);
+        let result = lifter.lift_insn(&bytes, 0).unwrap();
+        assert_eq!(result.ir_ops.len(), 1);
+        assert_eq!(result.ir_ops[0].op, IrOp::IntSub);
+    }
+
+    /// COM r1: 1001 0100 0001 0000 → 0x9410 — Rd ^= 0xFF.
+    #[test]
+    fn test_com_lifts_to_xor_with_ff() {
+        let lifter = AvrLifter::new();
+        let bytes = encode(0x9410);
+        let result = lifter.lift_insn(&bytes, 0).unwrap();
+        assert_eq!(result.ir_ops[0].op, IrOp::IntXor);
+        assert_eq!(result.ir_ops[0].inputs[1], const_vn(0xFF, 1));
+    }
+
+    /// NEG r1: 1001 0100 0001 0001 → 0x9411 — Rd = 0 - Rd.
+    #[test]
+    fn test_neg_lifts_to_subtract_from_zero() {
+        let lifter = AvrLifter::new();
+        let bytes = encode(0x9411);
+        let result = lifter.lift_insn(&bytes, 0).unwrap();
+        assert_eq!(result.ir_ops[0].op, IrOp::IntSub);
+        assert_eq!(result.ir_ops[0].inputs[0], const_vn(0, 1));
+    }
+
+    /// SWAP r1: 1001 0100 0001 0010 → 0x9412 — emitted as Callother.
+    #[test]
+    fn test_swap_lifts_to_callother() {
+        let lifter = AvrLifter::new();
+        let bytes = encode(0x9412);
+        let result = lifter.lift_insn(&bytes, 0).unwrap();
+        assert_eq!(result.ir_ops[0].op, IrOp::Callother);
+        assert_eq!(result.ir_ops[0].output, Some(reg(1)));
+    }
+
+    /// ANDI r16, 0x0F: 0111 0000 0000 1111 → 0x700F
+    #[test]
+    fn test_andi_lifts_to_intand_with_immediate() {
+        let lifter = AvrLifter::new();
+        let bytes = encode(0x700F);
+        let result = lifter.lift_insn(&bytes, 0).unwrap();
+        assert_eq!(result.ir_ops[0].op, IrOp::IntAnd);
+        assert_eq!(result.ir_ops[0].output, Some(reg(16)));
+        assert_eq!(result.ir_ops[0].inputs[1], const_vn(0x0F, 1));
+    }
+
+    /// ORI r16, 0xF0: 0110 1111 0000 0000 → 0x6F00
+    #[test]
+    fn test_ori_lifts_to_intor_with_immediate() {
+        let lifter = AvrLifter::new();
+        let bytes = encode(0x6F00);
+        let result = lifter.lift_insn(&bytes, 0).unwrap();
+        assert_eq!(result.ir_ops[0].op, IrOp::IntOr);
+        assert_eq!(result.ir_ops[0].output, Some(reg(16)));
+        // K nibbles 1111 + 0000 = 0xF0.
+        assert_eq!(result.ir_ops[0].inputs[1], const_vn(0xF0, 1));
+    }
+
+    /// IN r5, 0x10: 1011 0|01|00101|0000 → 0xB250.
+    /// `A=0x10` → `A_hi=1` (bits 10-9), `A_lo=0` (bits 3-0); `rd=5`.
+    #[test]
+    fn test_in_reads_io_port_into_register() {
+        let lifter = AvrLifter::new();
+        let bytes = encode(0xB250);
+        let result = lifter.lift_insn(&bytes, 0).unwrap();
+        assert_eq!(result.ir_ops[0].op, IrOp::Callother);
+        assert_eq!(result.ir_ops[0].output, Some(reg(5)));
+        assert_eq!(result.ir_ops[0].inputs[0], const_vn(0x10, 1));
+    }
+
+    /// OUT 0x10, r5: 1011 1|01|00101|0000 → 0xBA50.
+    #[test]
+    fn test_out_writes_register_to_io_port() {
+        let lifter = AvrLifter::new();
+        let bytes = encode(0xBA50);
+        let result = lifter.lift_insn(&bytes, 0).unwrap();
+        assert_eq!(result.ir_ops[0].op, IrOp::Callother);
+        assert_eq!(result.ir_ops[0].output, None);
+        assert_eq!(result.ir_ops[0].inputs[0], const_vn(0x10, 1));
+        assert_eq!(result.ir_ops[0].inputs[1], reg(5));
     }
 }

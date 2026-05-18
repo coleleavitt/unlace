@@ -142,12 +142,22 @@ pub fn lift(insn: &RxInsn, addr: u64) -> LiftCtx {
         RxOp::MovImm4L { dst, imm } => {
             let dst_v = ctx.reg(*dst);
             let imm_v = Varnode::constant(*imm as u64, REG_SIZE);
-            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![imm_v], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst_v,
+                smallvec![imm_v],
+                ctx.addr,
+            ));
         }
         RxOp::MovRegL { dst, src } => {
             let dst_v = ctx.reg(*dst);
             let src_v = ctx.reg(*src);
-            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![src_v], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst_v,
+                smallvec![src_v],
+                ctx.addr,
+            ));
         }
         RxOp::MovLoadL { dst, src } => {
             let dst_v = ctx.reg(*dst);
@@ -180,7 +190,12 @@ pub fn lift(insn: &RxInsn, addr: u64) -> LiftCtx {
                 smallvec![dst_v, src_v],
                 ctx.addr,
             ));
-            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst_v,
+                smallvec![result],
+                ctx.addr,
+            ));
             ctx.emit_arith_flags(dst_v, src_v, result, false);
         }
         RxOp::Sub { dst, src } => {
@@ -193,7 +208,12 @@ pub fn lift(insn: &RxInsn, addr: u64) -> LiftCtx {
                 smallvec![dst_v, src_v],
                 ctx.addr,
             ));
-            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst_v,
+                smallvec![result],
+                ctx.addr,
+            ));
             ctx.emit_arith_flags(dst_v, src_v, result, true);
         }
         RxOp::And { dst, src } => {
@@ -206,7 +226,12 @@ pub fn lift(insn: &RxInsn, addr: u64) -> LiftCtx {
                 smallvec![dst_v, src_v],
                 ctx.addr,
             ));
-            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst_v,
+                smallvec![result],
+                ctx.addr,
+            ));
         }
         RxOp::Or { dst, src } => {
             let dst_v = ctx.reg(*dst);
@@ -218,7 +243,12 @@ pub fn lift(insn: &RxInsn, addr: u64) -> LiftCtx {
                 smallvec![dst_v, src_v],
                 ctx.addr,
             ));
-            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst_v,
+                smallvec![result],
+                ctx.addr,
+            ));
         }
         RxOp::Xor { dst, src } => {
             let dst_v = ctx.reg(*dst);
@@ -230,7 +260,12 @@ pub fn lift(insn: &RxInsn, addr: u64) -> LiftCtx {
                 smallvec![dst_v, src_v],
                 ctx.addr,
             ));
-            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst_v,
+                smallvec![result],
+                ctx.addr,
+            ));
         }
         RxOp::Mul { dst, src } => {
             let dst_v = ctx.reg(*dst);
@@ -242,7 +277,12 @@ pub fn lift(insn: &RxInsn, addr: u64) -> LiftCtx {
                 smallvec![dst_v, src_v],
                 ctx.addr,
             ));
-            ctx.emit(IrInsn::with_output(IrOp::Copy, dst_v, smallvec![result], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst_v,
+                smallvec![result],
+                ctx.addr,
+            ));
         }
         RxOp::Cmp { src1, src2 } => {
             // CMP src, dst sets flags from (dst - src). Result is discarded.
@@ -324,7 +364,11 @@ pub fn lift(insn: &RxInsn, addr: u64) -> LiftCtx {
             ));
         }
         RxOp::Unknown => {
-            ctx.emit(IrInsn::without_output(IrOp::Unimplemented, smallvec![], ctx.addr));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Unimplemented,
+                smallvec![],
+                ctx.addr,
+            ));
         }
     }
 

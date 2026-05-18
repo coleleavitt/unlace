@@ -214,7 +214,7 @@ fn decode_word_ir(word: u32, addr: u64, seq: usize) -> (DecodedKind, Vec<IrInsn>
         // Scalar register-register ALU group. The field layout mirrors the
         // common Hexagon Rdd/Rs/Rt form well enough for analysis to recover data
         // flow even for sub-variants.
-        0x00 | 0x01 | 0x02 | 0x03 => {
+        0x00..=0x03 => {
             let op = match sop & 0x0f {
                 0x0 => IrOp::IntAdd,
                 0x1 => IrOp::IntSub,
@@ -235,7 +235,7 @@ fn decode_word_ir(word: u32, addr: u64, seq: usize) -> (DecodedKind, Vec<IrInsn>
         }
 
         // ALU with small immediate, including common add/sub/logic/shift forms.
-        0x04 | 0x05 | 0x06 | 0x07 => {
+        0x04..=0x07 => {
             let op = match sop & 0x0f {
                 0x0 => IrOp::IntAdd,
                 0x1 => IrOp::IntSub,
@@ -274,7 +274,7 @@ fn decode_word_ir(word: u32, addr: u64, seq: usize) -> (DecodedKind, Vec<IrInsn>
 
         // Memory load: Rd = mem{b/h/w/d}(Rs + off). The exact size is encoded in
         // low subop bits; the IR address calculation is shared.
-        0x0a | 0x0b | 0x0c => {
+        0x0a..=0x0c => {
             let size = match sop & 0x03 {
                 0 => 1,
                 1 => 2,
@@ -303,7 +303,7 @@ fn decode_word_ir(word: u32, addr: u64, seq: usize) -> (DecodedKind, Vec<IrInsn>
         }
 
         // Memory store: mem{b/h/w/d}(Rs + off) = Rt.
-        0x0d | 0x0e | 0x0f => {
+        0x0d..=0x0f => {
             let size = match sop & 0x03 {
                 0 => 1,
                 1 => 2,
@@ -800,6 +800,65 @@ mod tests {
             .unwrap();
         assert_eq!(lifted.ir_ops.len(), 1);
         assert_eq!(lifted.ir_ops[0].op, IrOp::Unimplemented);
+    }
+
+    // ----- §5.13 backfill tests ----------------------------------------
+
+    /// Sub-op selector picks distinct ALU ops from major=0x00 per
+    /// the decoder's actual dispatch table.
+    #[test]
+    fn alu_subop_dispatch_covers_add_sub_mul_and() {
+        let lifter = HexagonLifter::new();
+        for (subop, expected_op) in [
+            (0x00u8, IrOp::IntAdd),
+            (0x01, IrOp::IntSub),
+            (0x02, IrOp::IntMult),
+            (0x03, IrOp::IntAnd),
+        ] {
+            let bytes = word(0x00, subop, 3, 1, 2, 0b11);
+            let lifted = lifter.lift_insn(&bytes, 0x1000).unwrap();
+            assert_eq!(
+                lifted.ir_ops[0].op, expected_op,
+                "ALU subop {subop:#x} should lift to {expected_op:?}"
+            );
+        }
+    }
+
+    /// Major 0x04 (immediate ALU) lifts to an IntAdd/Sub/And per the
+    /// decoder's subop table.
+    #[test]
+    fn immediate_alu_dispatches_by_subop() {
+        let lifter = HexagonLifter::new();
+        for (subop, expected) in [(0x0u8, IrOp::IntAdd), (0x1, IrOp::IntSub), (0x2, IrOp::IntAnd)]
+        {
+            let bytes = word(0x04, subop, 5, 3, 0, 0b11);
+            let lifted = lifter.lift_insn(&bytes, 0x1000).unwrap();
+            assert_eq!(
+                lifted.ir_ops[0].op, expected,
+                "imm ALU subop {subop:#x} → {expected:?}"
+            );
+        }
+    }
+
+    /// Major 0x10 (predicate compare) lifts to IntEqual.
+    #[test]
+    fn predicate_compare_lifts_to_int_equal() {
+        let lifter = HexagonLifter::new();
+        let bytes = word(0x10, 0x00, 0, 1, 2, 0b11);
+        let lifted = lifter.lift_insn(&bytes, 0x1000).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntEqual);
+    }
+
+    /// Multiple packets in a single 4-word slot still terminate properly.
+    #[test]
+    fn three_word_packet_terminates_on_end_bit() {
+        let lifter = HexagonLifter::new();
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&word(0x00, 0x00, 3, 1, 2, 0b00));
+        bytes.extend_from_slice(&word(0x00, 0x01, 4, 1, 2, 0b00));
+        bytes.extend_from_slice(&word(0x00, 0x02, 5, 1, 2, 0b11));
+        let lifted = lifter.lift_insn(&bytes, 0x1000).unwrap();
+        assert_eq!(lifted.len, 12); // 3 × 4 bytes
     }
 
     #[test]

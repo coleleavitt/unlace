@@ -79,7 +79,7 @@ pub fn decode(bytes: &[u8]) -> Option<SparcInsn> {
                         0b0001 => Some(SparcInsn::Be { disp22 }),  // BE (equal)
                         0b1001 => Some(SparcInsn::Bne { disp22 }), // BNE (not equal)
                         0b0011 => Some(SparcInsn::Bl { disp22 }),  // BL (less)
-                        _ => None, // unsupported branch condition
+                        _ => None,                                 // unsupported branch condition
                     }
                 }
                 // SETHI
@@ -136,8 +136,8 @@ pub fn decode(bytes: &[u8]) -> Option<SparcInsn> {
             } else {
                 // Load/Store (op=11)
                 match op3 {
-                    0b000000 => Some(SparcInsn::Ld { rd, rs1, src2 }),  // ld
-                    0b000100 => Some(SparcInsn::St { rd, rs1, src2 }),  // st
+                    0b000000 => Some(SparcInsn::Ld { rd, rs1, src2 }), // ld
+                    0b000100 => Some(SparcInsn::St { rd, rs1, src2 }), // st
                     _ => None,
                 }
             }

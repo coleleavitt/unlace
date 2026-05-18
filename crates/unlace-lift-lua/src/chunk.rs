@@ -3,7 +3,7 @@
 //! Parses the binary chunk format for Lua 5.1, 5.2, 5.3, and 5.4.
 //! Extracts headers, function prototypes, constants, upvalues, and debug info.
 
-use crate::decode::{decode_instructions_versioned, DecodedInsn};
+use crate::decode::{DecodedInsn, decode_instructions_versioned};
 
 /// Lua version identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -313,10 +313,7 @@ impl Chunk {
 
         let main_proto = Self::parse_prototype(&mut cursor, &header, true)?;
 
-        Ok(Chunk {
-            header,
-            main_proto,
-        })
+        Ok(Chunk { header, main_proto })
     }
 
     fn parse_header(cursor: &mut Cursor) -> Result<ChunkHeader, ParseError> {
@@ -431,19 +428,10 @@ impl Chunk {
     fn parse_prototype(
         cursor: &mut Cursor,
         header: &ChunkHeader,
-        is_main: bool,
+        _is_main: bool,
     ) -> Result<Prototype, ParseError> {
         // Source name (only present for main function in 5.2+, always in 5.1)
-        let source_name = match header.version {
-            LuaVersion::Lua51 => cursor.read_lua_string()?,
-            _ => {
-                if is_main {
-                    cursor.read_lua_string()?
-                } else {
-                    cursor.read_lua_string()?
-                }
-            }
-        };
+        let source_name = cursor.read_lua_string()?;
 
         let line_defined = cursor.read_int()?;
         let last_line_defined = cursor.read_int()?;

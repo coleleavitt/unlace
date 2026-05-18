@@ -18,12 +18,30 @@ use crate::EvmOpcode;
 
 /// Keccak-256 round constants.
 const RC: [u64; 24] = [
-    0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
-    0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
-    0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
-    0x000000008000808b, 0x800000000000008b, 0x8000000000008089, 0x8000000000008003,
-    0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a,
-    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+    0x0000000000000001,
+    0x0000000000008082,
+    0x800000000000808a,
+    0x8000000080008000,
+    0x000000000000808b,
+    0x0000000080000001,
+    0x8000000080008081,
+    0x8000000000008009,
+    0x000000000000008a,
+    0x0000000000000088,
+    0x0000000080008009,
+    0x000000008000000a,
+    0x000000008000808b,
+    0x800000000000008b,
+    0x8000000000008089,
+    0x8000000000008003,
+    0x8000000000008002,
+    0x8000000000000080,
+    0x000000000000800a,
+    0x800000008000000a,
+    0x8000000080008081,
+    0x8000000000008080,
+    0x0000000080000001,
+    0x8000000080008008,
 ];
 
 /// Rotation offsets for the rho step.
@@ -36,7 +54,7 @@ const ROTATIONS: [[u32; 5]; 5] = [
 ];
 
 fn keccak_f1600(state: &mut [u64; 25]) {
-    for round in 0..24 {
+    for &rc in &RC {
         // θ step
         let mut c = [0u64; 5];
         for x in 0..5 {
@@ -61,11 +79,12 @@ fn keccak_f1600(state: &mut [u64; 25]) {
         // χ step
         for x in 0..5 {
             for y in 0..5 {
-                state[x + 5 * y] = b[x + 5 * y] ^ (!b[(x + 1) % 5 + 5 * y] & b[(x + 2) % 5 + 5 * y]);
+                state[x + 5 * y] =
+                    b[x + 5 * y] ^ (!b[(x + 1) % 5 + 5 * y] & b[(x + 2) % 5 + 5 * y]);
             }
         }
         // ι step
-        state[0] ^= RC[round];
+        state[0] ^= rc;
     }
 }
 
@@ -78,7 +97,8 @@ pub fn keccak256(data: &[u8]) -> [u8; 32] {
     let mut offset = 0;
     while offset + rate <= data.len() {
         for i in 0..(rate / 8) {
-            let word = u64::from_le_bytes(data[offset + i * 8..offset + i * 8 + 8].try_into().unwrap());
+            let word =
+                u64::from_le_bytes(data[offset + i * 8..offset + i * 8 + 8].try_into().unwrap());
             state[i] ^= word;
         }
         keccak_f1600(&mut state);
@@ -255,7 +275,11 @@ pub fn analyse(bytecode: &[u8], known_signatures: &[(&str, [u8; 4])]) -> Solidit
         // of the contract (or anywhere, for Vyper/unusual layouts).
         if matches!(opcode, EvmOpcode::Eq) {
             // Look back for a PUSH4 that holds a selector
-            if let Some(push_entry) = window.iter().rev().find(|(_, op, _)| matches!(op, EvmOpcode::Push(4))) {
+            if let Some(push_entry) = window
+                .iter()
+                .rev()
+                .find(|(_, op, _)| matches!(op, EvmOpcode::Push(4)))
+            {
                 let sel_value = push_entry.2;
                 let sel_bytes = [
                     ((sel_value >> 24) & 0xFF) as u8,
@@ -353,12 +377,12 @@ pub fn analyse(bytecode: &[u8], known_signatures: &[(&str, [u8; 4])]) -> Solidit
         if matches!(opcode, EvmOpcode::Revert) {
             // Check if the error selector 0x08c379a0 was pushed nearby
             let has_error_selector = window.iter().any(|(_, op, imm)| {
-                matches!(op, EvmOpcode::Push(_)) && (*imm == 0x08c3_79a0 || *imm & 0xFFFF_FFFF == 0x08c3_79a0)
+                matches!(op, EvmOpcode::Push(_))
+                    && (*imm == 0x08c3_79a0 || *imm & 0xFFFF_FFFF == 0x08c3_79a0)
             });
             if has_error_selector {
-                info.patterns.push(SolidityPattern::Require {
-                    offset: pc as u64,
-                });
+                info.patterns
+                    .push(SolidityPattern::Require { offset: pc as u64 });
             }
         }
 
@@ -366,24 +390,25 @@ pub fn analyse(bytecode: &[u8], known_signatures: &[(&str, [u8; 4])]) -> Solidit
         // Pattern: ADD/MUL followed by comparison (LT/GT) then JUMPI to revert
         // Simplified: detect ADD/MUL followed quickly by LT/GT + ISZERO
         if matches!(opcode, EvmOpcode::Iszero) {
-            let has_comparison = window.iter().rev().take(3).any(|(_, op, _)| {
-                matches!(op, EvmOpcode::Lt | EvmOpcode::Gt)
-            });
-            let has_arithmetic = window.iter().rev().take(6).any(|(_, op, _)| {
-                matches!(op, EvmOpcode::Add | EvmOpcode::Mul | EvmOpcode::Sub)
-            });
-            if has_comparison && has_arithmetic {
-                info.patterns.push(SolidityPattern::SafeMathCheck {
-                    offset: pc as u64,
+            let has_comparison = window
+                .iter()
+                .rev()
+                .take(3)
+                .any(|(_, op, _)| matches!(op, EvmOpcode::Lt | EvmOpcode::Gt));
+            let has_arithmetic =
+                window.iter().rev().take(6).any(|(_, op, _)| {
+                    matches!(op, EvmOpcode::Add | EvmOpcode::Mul | EvmOpcode::Sub)
                 });
+            if has_comparison && has_arithmetic {
+                info.patterns
+                    .push(SolidityPattern::SafeMathCheck { offset: pc as u64 });
             }
         }
 
         // ── Pattern detection: proxy delegation ─────────────────────────
         if matches!(opcode, EvmOpcode::Delegatecall) {
-            info.patterns.push(SolidityPattern::ProxyDelegation {
-                offset: pc as u64,
-            });
+            info.patterns
+                .push(SolidityPattern::ProxyDelegation { offset: pc as u64 });
         }
 
         // Maintain sliding window (keep last 16 entries)
@@ -434,7 +459,11 @@ fn find_jump_target(bytecode: &[u8], start: usize, len: usize) -> Option<u64> {
 /// Check if the recent instruction window contains a SHA3 opcode (indicating a
 /// computed storage slot — mapping or dynamic array).
 fn window_has_sha3(window: &[(usize, EvmOpcode, u64)]) -> bool {
-    window.iter().rev().take(8).any(|(_, op, _)| matches!(op, EvmOpcode::Sha3))
+    window
+        .iter()
+        .rev()
+        .take(8)
+        .any(|(_, op, _)| matches!(op, EvmOpcode::Sha3))
 }
 
 /// Return the immediate value of the most recent PUSH instruction in the window.
@@ -487,10 +516,10 @@ mod tests {
         // Minimal dispatcher: PUSH4 0xa9059cbb; DUP2; EQ; PUSH2 0x0040; JUMPI
         let bytecode = vec![
             0x63, 0xa9, 0x05, 0x9c, 0xbb, // PUSH4 selector for transfer
-            0x81,                           // DUP2
-            0x14,                           // EQ
-            0x61, 0x00, 0x40,              // PUSH2 0x0040
-            0x57,                           // JUMPI
+            0x81, // DUP2
+            0x14, // EQ
+            0x61, 0x00, 0x40, // PUSH2 0x0040
+            0x57, // JUMPI
         ];
 
         let known = [("transfer(address,uint256)", [0xa9u8, 0x05, 0x9c, 0xbb])];
@@ -510,7 +539,7 @@ mod tests {
         // PUSH1 0x02; SLOAD
         let bytecode = vec![
             0x60, 0x02, // PUSH1 2
-            0x54,       // SLOAD
+            0x54, // SLOAD
         ];
         let info = analyse(&bytecode, &[]);
         assert_eq!(info.storage_accesses.len(), 1);
@@ -525,8 +554,8 @@ mod tests {
         let bytecode = vec![
             0x60, 0x00, // PUSH1 0
             0x60, 0x20, // PUSH1 32
-            0x20,       // SHA3
-            0x54,       // SLOAD
+            0x20, // SHA3
+            0x54, // SLOAD
         ];
         let info = analyse(&bytecode, &[]);
         assert_eq!(info.storage_accesses.len(), 1);
@@ -538,7 +567,7 @@ mod tests {
         // PUSH4 <topic>; ... LOG1
         let bytecode = vec![
             0x63, 0xdd, 0xf2, 0x52, 0xad, // PUSH4 topic (Transfer event)
-            0xa1,                           // LOG1
+            0xa1, // LOG1
         ];
         let info = analyse(&bytecode, &[]);
         assert_eq!(info.events.len(), 1);
@@ -551,7 +580,10 @@ mod tests {
         let bytecode = vec![0xf4]; // DELEGATECALL
         let info = analyse(&bytecode, &[]);
         assert_eq!(info.patterns.len(), 1);
-        assert!(matches!(info.patterns[0], SolidityPattern::ProxyDelegation { offset: 0 }));
+        assert!(matches!(
+            info.patterns[0],
+            SolidityPattern::ProxyDelegation { offset: 0 }
+        ));
     }
 
     #[test]
@@ -559,11 +591,15 @@ mod tests {
         // Simplified: PUSH4 0x08c379a0 (Error selector) ... REVERT
         let bytecode = vec![
             0x63, 0x08, 0xc3, 0x79, 0xa0, // PUSH4 Error(string) selector
-            0x60, 0x20,                     // PUSH1 0x20 (memory offset)
-            0xfd,                           // REVERT
+            0x60, 0x20, // PUSH1 0x20 (memory offset)
+            0xfd, // REVERT
         ];
         let info = analyse(&bytecode, &[]);
-        assert!(info.patterns.iter().any(|p| matches!(p, SolidityPattern::Require { .. })));
+        assert!(
+            info.patterns
+                .iter()
+                .any(|p| matches!(p, SolidityPattern::Require { .. }))
+        );
     }
 
     #[test]

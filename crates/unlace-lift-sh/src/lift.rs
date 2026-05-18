@@ -326,10 +326,7 @@ fn lift_load(ctx: &mut LiftCtx, n: u8, m: u8, mem_size: u8, sign_extend: bool, p
         ctx.emit(IrInsn::with_output(
             IrOp::IntAdd,
             bumped,
-            smallvec![
-                ctx.r(m),
-                Varnode::constant(post_inc as u64, REG_SIZE),
-            ],
+            smallvec![ctx.r(m), Varnode::constant(post_inc as u64, REG_SIZE),],
             ctx.addr,
         ));
         ctx.emit(IrInsn::with_output(
@@ -352,10 +349,7 @@ fn lift_store(ctx: &mut LiftCtx, n: u8, m: u8, mem_size: u8, pre_dec: u8) {
         ctx.emit(IrInsn::with_output(
             IrOp::IntSub,
             dec,
-            smallvec![
-                ctx.r(n),
-                Varnode::constant(pre_dec as u64, REG_SIZE),
-            ],
+            smallvec![ctx.r(n), Varnode::constant(pre_dec as u64, REG_SIZE),],
             ctx.addr,
         ));
         ctx.emit(IrInsn::with_output(

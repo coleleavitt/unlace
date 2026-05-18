@@ -151,10 +151,7 @@ pub fn try_lift_apx(ctx: &mut LiftCtx, bytes: &[u8]) -> Option<usize> {
         }
     };
 
-    let (modrm, mut off) = match ModRm::parse(bytes, off) {
-        Some(x) => x,
-        None => return None,
-    };
+    let (modrm, mut off) = ModRm::parse(bytes, off)?;
 
     let operand_size = if rex2.w() { 8 } else { 4 };
     let reg = gp_reg(rex2.reg_index(modrm.reg()), operand_size);

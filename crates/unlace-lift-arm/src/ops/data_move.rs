@@ -9,13 +9,7 @@ type Ops = [(Arm64OperandType, Arm64Shift)];
 
 fn dst_size(ops: &Ops) -> u8 {
     match ops.first() {
-        Some((Arm64OperandType::Reg(reg), _)) => {
-            if register_file::is_w_reg(*reg) {
-                4
-            } else {
-                8
-            }
-        }
+        Some((Arm64OperandType::Reg(reg), _)) if register_file::is_w_reg(*reg) => 4,
         _ => 8,
     }
 }
@@ -352,13 +346,7 @@ pub fn lift_stp(ctx: &mut LiftCtx, ops: &Ops) {
     let src1 = operand_to_varnode(ctx, &ops[0].0);
     let src2 = operand_to_varnode(ctx, &ops[1].0);
     let size = match &ops[0].0 {
-        Arm64OperandType::Reg(reg) => {
-            if register_file::is_w_reg(*reg) {
-                4u8
-            } else {
-                8u8
-            }
-        }
+        Arm64OperandType::Reg(reg) if register_file::is_w_reg(*reg) => 4u8,
         _ => 8,
     };
 

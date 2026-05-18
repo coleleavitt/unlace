@@ -144,10 +144,10 @@ mod tests {
         assert!(xor.ir_ops.iter().any(|i| i.op == IrOp::IntXor));
 
         // Result should target a3 — register offset 3*8 = 24.
-        let writes_a3 = add.ir_ops.iter().any(|i| {
-            i.output
-                .map_or(false, |v| v.offset == 24 && v.size == 4)
-        });
+        let writes_a3 = add
+            .ir_ops
+            .iter()
+            .any(|i| i.output.map_or(false, |v| v.offset == 24 && v.size == 4));
         assert!(writes_a3, "ADD should write to a3");
     }
 
@@ -166,7 +166,14 @@ mod tests {
         let s32 = lift_bytes(&[0x22, 0x61, 0x01], 0x1000);
         assert!(s32.ir_ops.iter().any(|i| i.op == IrOp::Store));
         // STORE has no output.
-        assert!(s32.ir_ops.iter().find(|i| i.op == IrOp::Store).unwrap().output.is_none());
+        assert!(
+            s32.ir_ops
+                .iter()
+                .find(|i| i.op == IrOp::Store)
+                .unwrap()
+                .output
+                .is_none()
+        );
 
         // MOVI a3, 0x42: r=0xA, t=3
         // byte0 = (3<<4)|2 = 0x32, byte1 = 0|(0xA<<4) = 0xA0, byte2 = 0x42
@@ -190,9 +197,12 @@ mod tests {
         let call0 = lift_bytes(&[0x05, 0x34, 0x12], 0x1000);
         assert!(call0.ir_ops.iter().any(|i| i.op == IrOp::Call));
         // Should also write a0 (link).
-        assert!(call0.ir_ops.iter().any(|i| {
-            i.op == IrOp::Copy && i.output.map_or(false, |v| v.offset == 0)
-        }));
+        assert!(
+            call0
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::Copy && i.output.map_or(false, |v| v.offset == 0) })
+        );
 
         // CALLX0 a5: op0=0, op1=0, op2=0, r=0, s=5, t=0xC
         // byte0 = (0xC<<4)|0 = 0xC0, byte1 = 5|(0<<4) = 0x05, byte2 = 0
@@ -259,8 +269,14 @@ mod tests {
         let l = XtensaLifter::new();
         assert!(matches!(l.lift_insn(&[], 0), Err(LiftError::ShortBuffer)));
         // 3-byte insn header with only 1 byte
-        assert!(matches!(l.lift_insn(&[0x00], 0), Err(LiftError::ShortBuffer)));
+        assert!(matches!(
+            l.lift_insn(&[0x00], 0),
+            Err(LiftError::ShortBuffer)
+        ));
         // 2-byte narrow header with only 1 byte
-        assert!(matches!(l.lift_insn(&[0x0D], 0), Err(LiftError::ShortBuffer)));
+        assert!(matches!(
+            l.lift_insn(&[0x0D], 0),
+            Err(LiftError::ShortBuffer)
+        ));
     }
 }

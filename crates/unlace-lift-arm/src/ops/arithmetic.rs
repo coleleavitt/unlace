@@ -144,13 +144,7 @@ fn emit_sub_flags(ctx: &mut LiftCtx, a: Varnode, b: Varnode, result: Varnode, op
 
 fn dst_size(ops: &Ops) -> u8 {
     match ops.first() {
-        Some((Arm64OperandType::Reg(reg), _)) => {
-            if crate::register_file::is_w_reg(*reg) {
-                4
-            } else {
-                8
-            }
-        }
+        Some((Arm64OperandType::Reg(reg), _)) if crate::register_file::is_w_reg(*reg) => 4,
         _ => 8,
     }
 }
@@ -270,13 +264,7 @@ pub fn lift_cmp(ctx: &mut LiftCtx, ops: &Ops) {
         return;
     }
     let size = match ops.first() {
-        Some((Arm64OperandType::Reg(reg), _)) => {
-            if crate::register_file::is_w_reg(*reg) {
-                4
-            } else {
-                8
-            }
-        }
+        Some((Arm64OperandType::Reg(reg), _)) if crate::register_file::is_w_reg(*reg) => 4,
         _ => 8,
     };
     let a = operand_to_varnode(ctx, &ops[0].0);
@@ -302,13 +290,7 @@ pub fn lift_cmn(ctx: &mut LiftCtx, ops: &Ops) {
         return;
     }
     let size = match ops.first() {
-        Some((Arm64OperandType::Reg(reg), _)) => {
-            if crate::register_file::is_w_reg(*reg) {
-                4
-            } else {
-                8
-            }
-        }
+        Some((Arm64OperandType::Reg(reg), _)) if crate::register_file::is_w_reg(*reg) => 4,
         _ => 8,
     };
     let a = operand_to_varnode(ctx, &ops[0].0);
@@ -334,13 +316,7 @@ pub fn lift_tst(ctx: &mut LiftCtx, ops: &Ops) {
         return;
     }
     let size = match ops.first() {
-        Some((Arm64OperandType::Reg(reg), _)) => {
-            if crate::register_file::is_w_reg(*reg) {
-                4
-            } else {
-                8
-            }
-        }
+        Some((Arm64OperandType::Reg(reg), _)) if crate::register_file::is_w_reg(*reg) => 4,
         _ => 8,
     };
     let a = operand_to_varnode(ctx, &ops[0].0);

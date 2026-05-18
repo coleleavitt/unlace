@@ -63,7 +63,12 @@ struct StubLifter {
 
 impl StubLifter {
     fn new(arch: ArchId) -> Self {
-        Self { arch, reg_file: RegisterFile { registers: Vec::new() } }
+        Self {
+            arch,
+            reg_file: RegisterFile {
+                registers: Vec::new(),
+            },
+        }
     }
 }
 

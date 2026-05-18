@@ -97,7 +97,12 @@ fn dispatch(ctx: &mut LiftCtx, op: &XtensaOp, insn_len: usize) {
                 ctx.addr,
             ));
             let dst = reg_vn(t);
-            ctx.emit(IrInsn::with_output(IrOp::Load, dst, smallvec![ea], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Load,
+                dst,
+                smallvec![ea],
+                ctx.addr,
+            ));
         }
         XtensaOp::S32i { t, s, imm } => {
             let base = reg_vn(s);
@@ -123,12 +128,20 @@ fn dispatch(ctx: &mut LiftCtx, op: &XtensaOp, insn_len: usize) {
         XtensaOp::Movi { t, imm } => {
             let dst = reg_vn(t);
             let val = Varnode::constant(imm as i64 as u64, REG_SIZE);
-            ctx.emit(IrInsn::with_output(IrOp::Copy, dst, smallvec![val], ctx.addr));
+            ctx.emit(IrInsn::with_output(
+                IrOp::Copy,
+                dst,
+                smallvec![val],
+                ctx.addr,
+            ));
         }
 
         // -- CALL0: direct call to PC + offset; link in a0. --
         XtensaOp::Call0 { offset } => {
-            let target = ctx.addr.wrapping_add(insn_len as u64).wrapping_add(offset as i64 as u64);
+            let target = ctx
+                .addr
+                .wrapping_add(insn_len as u64)
+                .wrapping_add(offset as i64 as u64);
             // Save return address in a0.
             let ret_addr = Varnode::constant(ctx.addr.wrapping_add(insn_len as u64), REG_SIZE);
             ctx.emit(IrInsn::with_output(
@@ -165,9 +178,16 @@ fn dispatch(ctx: &mut LiftCtx, op: &XtensaOp, insn_len: usize) {
 
         // -- J: unconditional branch to PC + offset. --
         XtensaOp::J { offset } => {
-            let target = ctx.addr.wrapping_add(insn_len as u64).wrapping_add(offset as i64 as u64);
+            let target = ctx
+                .addr
+                .wrapping_add(insn_len as u64)
+                .wrapping_add(offset as i64 as u64);
             let tgt = Varnode::new(SpaceId::Ram, target, 1);
-            ctx.emit(IrInsn::without_output(IrOp::Branch, smallvec![tgt], ctx.addr));
+            ctx.emit(IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![tgt],
+                ctx.addr,
+            ));
         }
 
         // -- Conditional branches: emit IntEqual / IntNotequal + Cbranch. --
@@ -175,7 +195,14 @@ fn dispatch(ctx: &mut LiftCtx, op: &XtensaOp, insn_len: usize) {
             emit_cbranch(ctx, IrOp::IntEqual, reg_vn(s), reg_vn(t), offset, insn_len);
         }
         XtensaOp::Bne { s, t, offset } => {
-            emit_cbranch(ctx, IrOp::IntNotequal, reg_vn(s), reg_vn(t), offset, insn_len);
+            emit_cbranch(
+                ctx,
+                IrOp::IntNotequal,
+                reg_vn(s),
+                reg_vn(t),
+                offset,
+                insn_len,
+            );
         }
         XtensaOp::Beqz { s, offset } => {
             let zero = Varnode::constant(0, REG_SIZE);
@@ -206,7 +233,12 @@ fn emit_cbranch(
     insn_len: usize,
 ) {
     let cond = ctx.alloc_unique(1);
-    ctx.emit(IrInsn::with_output(cmp, cond, smallvec![lhs, rhs], ctx.addr));
+    ctx.emit(IrInsn::with_output(
+        cmp,
+        cond,
+        smallvec![lhs, rhs],
+        ctx.addr,
+    ));
     let target = ctx
         .addr
         .wrapping_add(insn_len as u64)

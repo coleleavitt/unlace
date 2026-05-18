@@ -19,6 +19,7 @@
 //! - `TDPB{SSD,SUD,USD,UUD,F16PS}`    → `dst_tmm = Callother(TDP*, dst_tmm, src1_tmm, src2_tmm)`
 //!   (destructive: op0 is read-modify-write, identical shape to the AES binop)
 
+//!
 //! TODO(t309): AMX dispatch is staged; lifters are exercised only via
 //! `#[ignore]`-tagged tests until the EVEX dispatch path is wired up.
 #![allow(dead_code)]

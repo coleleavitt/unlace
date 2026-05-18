@@ -87,12 +87,9 @@ pub fn lift_mfhi(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         MipsOperand::Reg(r) => ctx.write_reg(*r),
         _ => None,
     };
-    match dst {
-        Some(dst) => {
-            let hi = register_file::reg64(register_file::HI);
-            ctx.write_to_reg(dst, hi);
-        }
-        None => {}
+    if let Some(dst) = dst {
+        let hi = register_file::reg64(register_file::HI);
+        ctx.write_to_reg(dst, hi);
     }
 }
 
@@ -105,11 +102,8 @@ pub fn lift_mflo(ctx: &mut LiftCtx, ops: &[MipsOperand]) {
         MipsOperand::Reg(r) => ctx.write_reg(*r),
         _ => None,
     };
-    match dst {
-        Some(dst) => {
-            let lo = register_file::reg64(register_file::LO);
-            ctx.write_to_reg(dst, lo);
-        }
-        None => {}
+    if let Some(dst) = dst {
+        let lo = register_file::reg64(register_file::LO);
+        ctx.write_to_reg(dst, lo);
     }
 }

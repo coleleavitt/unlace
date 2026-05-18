@@ -71,7 +71,11 @@ mod tests {
             .find(|i| i.op == IrOp::Select)
             .expect("CMOVE should emit a Select");
         assert!(sel.output.is_some(), "Select must have an output");
-        assert_eq!(sel.inputs.len(), 3, "Select takes (cond, true_val, false_val)");
+        assert_eq!(
+            sel.inputs.len(),
+            3,
+            "Select takes (cond, true_val, false_val)"
+        );
         // input[0] is the condition (ZF for CMOVE)
         assert_eq!(
             sel.inputs[0],
@@ -96,7 +100,11 @@ mod tests {
             .find(|i| i.op == IrOp::Select)
             .expect("CMOVNE should emit a Select");
         assert!(sel.output.is_some(), "Select must have an output");
-        assert_eq!(sel.inputs.len(), 3, "Select takes (cond, true_val, false_val)");
+        assert_eq!(
+            sel.inputs.len(),
+            3,
+            "Select takes (cond, true_val, false_val)"
+        );
     }
 
     #[test]
@@ -251,9 +259,10 @@ mod tests {
             .lift_insn(&[0xe8, 0x10, 0x00, 0x00, 0x00], 0x1000)
             .expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Call));
-        // Should push return address: RSP decrement + STORE
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntSub));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Store));
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Store),
+            "CALL should not leak the machine return-address push into decompiler IR"
+        );
     }
 
     #[test]
@@ -261,8 +270,10 @@ mod tests {
         // c3 = ret
         let result = lifter().lift_insn(&[0xc3], 0x1000).expect("should decode");
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Return));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Load));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::Load),
+            "RET should not load the machine return address as the C return value"
+        );
     }
 
     #[test]
@@ -1046,9 +1057,10 @@ mod tests {
         assert_eq!(paddq_out.size, 16);
 
         // PSUBQ reads xmm0 (operand 0 as source) and writes xmm0 again.
-        let psubq_reads_xmm0 = psubq_co.inputs.iter().any(|v| {
-            v.space == SpaceId::Register && v.offset == XMM0 && v.size == 16
-        });
+        let psubq_reads_xmm0 = psubq_co
+            .inputs
+            .iter()
+            .any(|v| v.space == SpaceId::Register && v.offset == XMM0 && v.size == 16);
         assert!(
             psubq_reads_xmm0,
             "PSUBQ must read the same XMM0 reg varnode PADDQ wrote — \
@@ -1162,9 +1174,10 @@ mod tests {
             .lift_insn(&[0x66, 0x0F, 0xDB, 0xC1], 0x1000)
             .unwrap();
         let is_intand = result.ir_ops.iter().any(|i| i.op == IrOp::IntAnd);
-        let is_callother_pand = result.ir_ops.iter().any(|i| {
-            i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PAND
-        });
+        let is_callother_pand = result
+            .ir_ops
+            .iter()
+            .any(|i| i.op == IrOp::Callother && i.inputs[0].offset == sse_tag::PAND);
         assert!(
             is_intand || is_callother_pand,
             "PAND must lift to either IntAnd or Callother(tag::PAND)"
@@ -2429,28 +2442,19 @@ mod tests {
     /// t205 — VPADDQ zmm0, zmm1, zmm2 → `_mm512_add_epi64`.
     #[test]
     fn t205_vpaddq_zmm_lift() {
-        assert_avx512_lift(
-            &[0x62, 0xF1, 0xF5, 0x48, 0xD4, 0xC2],
-            sse_tag::VPADDQ_512,
-        );
+        assert_avx512_lift(&[0x62, 0xF1, 0xF5, 0x48, 0xD4, 0xC2], sse_tag::VPADDQ_512);
     }
 
     /// t205 — VPSUBQ zmm0, zmm1, zmm2 → `_mm512_sub_epi64`.
     #[test]
     fn t205_vpsubq_zmm_lift() {
-        assert_avx512_lift(
-            &[0x62, 0xF1, 0xF5, 0x48, 0xFB, 0xC2],
-            sse_tag::VPSUBQ_512,
-        );
+        assert_avx512_lift(&[0x62, 0xF1, 0xF5, 0x48, 0xFB, 0xC2], sse_tag::VPSUBQ_512);
     }
 
     /// t205 — VPMULLQ zmm0, zmm1, zmm2 → `_mm512_mullo_epi64`.
     #[test]
     fn t205_vpmullq_zmm_lift() {
-        assert_avx512_lift(
-            &[0x62, 0xF2, 0xF5, 0x48, 0x40, 0xC2],
-            sse_tag::VPMULLQ_512,
-        );
+        assert_avx512_lift(&[0x62, 0xF2, 0xF5, 0x48, 0x40, 0xC2], sse_tag::VPMULLQ_512);
     }
 
     /// t205 — ZMM register-write sanity. The Callother destination must

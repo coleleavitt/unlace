@@ -82,7 +82,12 @@ pub enum V850Op {
 
     // --- Conditional move ---
     /// CMOV cond, reg1, reg2, reg3  (reg3 = cond ? reg1 : reg2)
-    Cmov { cond: BranchCond, reg1: u8, reg2: u8, reg3: u8 },
+    Cmov {
+        cond: BranchCond,
+        reg1: u8,
+        reg2: u8,
+        reg3: u8,
+    },
 
     // --- Short load (EP-relative) ---
     /// SLD.B disp7, reg2   (reg2 = sign_ext8([ep + disp7]))
@@ -317,21 +322,30 @@ fn decode_16bit(hw0: u16, bits_10_7: u16, bits_6_5: u16, reg1: u8, reg2: u8) -> 
             if reg2 == 0 {
                 V850Op::Zxb { reg: reg1 }
             } else {
-                V850Op::Satsubr { dst: reg2, src: reg1 }
+                V850Op::Satsubr {
+                    dst: reg2,
+                    src: reg1,
+                }
             }
         }
         (0b0001, 0b01) => {
             if reg2 == 0 {
                 V850Op::Sxb { reg: reg1 }
             } else {
-                V850Op::Satsub { dst: reg2, src: reg1 }
+                V850Op::Satsub {
+                    dst: reg2,
+                    src: reg1,
+                }
             }
         }
         (0b0001, 0b10) => {
             if reg2 == 0 {
                 V850Op::Zxh { reg: reg1 }
             } else {
-                V850Op::Satadd { dst: reg2, src: reg1 }
+                V850Op::Satadd {
+                    dst: reg2,
+                    src: reg1,
+                }
             }
         }
         (0b0001, 0b11) => {

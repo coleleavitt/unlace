@@ -161,9 +161,9 @@ impl EbpfLifter {
         let names: [&'static str; NUM_REGS] = [
             "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10",
         ];
-        for i in 0..NUM_REGS {
+        for (i, name) in names.iter().enumerate().take(NUM_REGS) {
             regs.push(RegisterDef {
-                name: names[i],
+                name,
                 varnode: Varnode::reg((i as u64) * 8, 8),
             });
         }
@@ -209,7 +209,7 @@ impl EbpfLifter {
     fn lift_ldx(&self, insn: &EbpfInsn, addr: u64) -> Result<Vec<IrInsn>, LiftError> {
         let size = mem_size(insn.opcode);
         let base = reg(insn.src, 8);
-        let off = const_vn(insn.offset as i16 as i64 as u64, 8);
+        let off = const_vn(insn.offset as i64 as u64, 8);
         let ea = tmp(0, 8);
         let dst_vn = reg(insn.dst, 8);
 
@@ -251,22 +251,14 @@ impl EbpfLifter {
     fn lift_stx(&self, insn: &EbpfInsn, addr: u64) -> Result<Vec<IrInsn>, LiftError> {
         let size = mem_size(insn.opcode);
         let base = reg(insn.dst, 8);
-        let off = const_vn(insn.offset as i16 as i64 as u64, 8);
+        let off = const_vn(insn.offset as i64 as u64, 8);
         let ea = tmp(0, 8);
         let src_vn = reg(insn.src, size);
 
-        let mut ops = Vec::with_capacity(2);
-        ops.push(IrInsn::with_output(
-            IrOp::IntAdd,
-            ea,
-            SmallVec::from_slice(&[base, off]),
-            addr,
-        ));
-        ops.push(IrInsn::without_output(
-            IrOp::Store,
-            SmallVec::from_slice(&[ea, src_vn]),
-            addr,
-        ));
+        let ops = vec![
+            IrInsn::with_output(IrOp::IntAdd, ea, SmallVec::from_slice(&[base, off]), addr),
+            IrInsn::without_output(IrOp::Store, SmallVec::from_slice(&[ea, src_vn]), addr),
+        ];
         Ok(ops)
     }
 
@@ -274,22 +266,14 @@ impl EbpfLifter {
     fn lift_st(&self, insn: &EbpfInsn, addr: u64) -> Result<Vec<IrInsn>, LiftError> {
         let size = mem_size(insn.opcode);
         let base = reg(insn.dst, 8);
-        let off = const_vn(insn.offset as i16 as i64 as u64, 8);
+        let off = const_vn(insn.offset as i64 as u64, 8);
         let ea = tmp(0, 8);
-        let imm_vn = const_vn(insn.imm as i32 as i64 as u64, size);
+        let imm_vn = const_vn(insn.imm as i64 as u64, size);
 
-        let mut ops = Vec::with_capacity(2);
-        ops.push(IrInsn::with_output(
-            IrOp::IntAdd,
-            ea,
-            SmallVec::from_slice(&[base, off]),
-            addr,
-        ));
-        ops.push(IrInsn::without_output(
-            IrOp::Store,
-            SmallVec::from_slice(&[ea, imm_vn]),
-            addr,
-        ));
+        let ops = vec![
+            IrInsn::with_output(IrOp::IntAdd, ea, SmallVec::from_slice(&[base, off]), addr),
+            IrInsn::without_output(IrOp::Store, SmallVec::from_slice(&[ea, imm_vn]), addr),
+        ];
         Ok(ops)
     }
 

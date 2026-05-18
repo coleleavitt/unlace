@@ -330,22 +330,70 @@ pub fn x86_64_register_file() -> RegisterFile {
                 name: "R15",
                 varnode: reg64(R15),
             },
-            RegisterDef { name: "R16", varnode: reg64(R16) },
-            RegisterDef { name: "R17", varnode: reg64(R17) },
-            RegisterDef { name: "R18", varnode: reg64(R18) },
-            RegisterDef { name: "R19", varnode: reg64(R19) },
-            RegisterDef { name: "R20", varnode: reg64(R20) },
-            RegisterDef { name: "R21", varnode: reg64(R21) },
-            RegisterDef { name: "R22", varnode: reg64(R22) },
-            RegisterDef { name: "R23", varnode: reg64(R23) },
-            RegisterDef { name: "R24", varnode: reg64(R24) },
-            RegisterDef { name: "R25", varnode: reg64(R25) },
-            RegisterDef { name: "R26", varnode: reg64(R26) },
-            RegisterDef { name: "R27", varnode: reg64(R27) },
-            RegisterDef { name: "R28", varnode: reg64(R28) },
-            RegisterDef { name: "R29", varnode: reg64(R29) },
-            RegisterDef { name: "R30", varnode: reg64(R30) },
-            RegisterDef { name: "R31", varnode: reg64(R31) },
+            RegisterDef {
+                name: "R16",
+                varnode: reg64(R16),
+            },
+            RegisterDef {
+                name: "R17",
+                varnode: reg64(R17),
+            },
+            RegisterDef {
+                name: "R18",
+                varnode: reg64(R18),
+            },
+            RegisterDef {
+                name: "R19",
+                varnode: reg64(R19),
+            },
+            RegisterDef {
+                name: "R20",
+                varnode: reg64(R20),
+            },
+            RegisterDef {
+                name: "R21",
+                varnode: reg64(R21),
+            },
+            RegisterDef {
+                name: "R22",
+                varnode: reg64(R22),
+            },
+            RegisterDef {
+                name: "R23",
+                varnode: reg64(R23),
+            },
+            RegisterDef {
+                name: "R24",
+                varnode: reg64(R24),
+            },
+            RegisterDef {
+                name: "R25",
+                varnode: reg64(R25),
+            },
+            RegisterDef {
+                name: "R26",
+                varnode: reg64(R26),
+            },
+            RegisterDef {
+                name: "R27",
+                varnode: reg64(R27),
+            },
+            RegisterDef {
+                name: "R28",
+                varnode: reg64(R28),
+            },
+            RegisterDef {
+                name: "R29",
+                varnode: reg64(R29),
+            },
+            RegisterDef {
+                name: "R30",
+                varnode: reg64(R30),
+            },
+            RegisterDef {
+                name: "R31",
+                varnode: reg64(R31),
+            },
             RegisterDef {
                 name: "RIP",
                 varnode: reg64(RIP),
@@ -538,56 +586,200 @@ pub fn x86_64_register_file() -> RegisterFile {
             },
             // ZMM0..ZMM31 (512-bit AVX-512). ZMM0..ZMM15 alias YMM0..YMM15
             // and XMM0..XMM15 at the same base offset.
-            RegisterDef { name: "ZMM0",  varnode: reg512(ZMM0)  },
-            RegisterDef { name: "ZMM1",  varnode: reg512(ZMM1)  },
-            RegisterDef { name: "ZMM2",  varnode: reg512(ZMM2)  },
-            RegisterDef { name: "ZMM3",  varnode: reg512(ZMM3)  },
-            RegisterDef { name: "ZMM4",  varnode: reg512(ZMM4)  },
-            RegisterDef { name: "ZMM5",  varnode: reg512(ZMM5)  },
-            RegisterDef { name: "ZMM6",  varnode: reg512(ZMM6)  },
-            RegisterDef { name: "ZMM7",  varnode: reg512(ZMM7)  },
-            RegisterDef { name: "ZMM8",  varnode: reg512(ZMM8)  },
-            RegisterDef { name: "ZMM9",  varnode: reg512(ZMM9)  },
-            RegisterDef { name: "ZMM10", varnode: reg512(ZMM10) },
-            RegisterDef { name: "ZMM11", varnode: reg512(ZMM11) },
-            RegisterDef { name: "ZMM12", varnode: reg512(ZMM12) },
-            RegisterDef { name: "ZMM13", varnode: reg512(ZMM13) },
-            RegisterDef { name: "ZMM14", varnode: reg512(ZMM14) },
-            RegisterDef { name: "ZMM15", varnode: reg512(ZMM15) },
-            RegisterDef { name: "ZMM16", varnode: reg512(ZMM16) },
-            RegisterDef { name: "ZMM17", varnode: reg512(ZMM17) },
-            RegisterDef { name: "ZMM18", varnode: reg512(ZMM18) },
-            RegisterDef { name: "ZMM19", varnode: reg512(ZMM19) },
-            RegisterDef { name: "ZMM20", varnode: reg512(ZMM20) },
-            RegisterDef { name: "ZMM21", varnode: reg512(ZMM21) },
-            RegisterDef { name: "ZMM22", varnode: reg512(ZMM22) },
-            RegisterDef { name: "ZMM23", varnode: reg512(ZMM23) },
-            RegisterDef { name: "ZMM24", varnode: reg512(ZMM24) },
-            RegisterDef { name: "ZMM25", varnode: reg512(ZMM25) },
-            RegisterDef { name: "ZMM26", varnode: reg512(ZMM26) },
-            RegisterDef { name: "ZMM27", varnode: reg512(ZMM27) },
-            RegisterDef { name: "ZMM28", varnode: reg512(ZMM28) },
-            RegisterDef { name: "ZMM29", varnode: reg512(ZMM29) },
-            RegisterDef { name: "ZMM30", varnode: reg512(ZMM30) },
-            RegisterDef { name: "ZMM31", varnode: reg512(ZMM31) },
+            RegisterDef {
+                name: "ZMM0",
+                varnode: reg512(ZMM0),
+            },
+            RegisterDef {
+                name: "ZMM1",
+                varnode: reg512(ZMM1),
+            },
+            RegisterDef {
+                name: "ZMM2",
+                varnode: reg512(ZMM2),
+            },
+            RegisterDef {
+                name: "ZMM3",
+                varnode: reg512(ZMM3),
+            },
+            RegisterDef {
+                name: "ZMM4",
+                varnode: reg512(ZMM4),
+            },
+            RegisterDef {
+                name: "ZMM5",
+                varnode: reg512(ZMM5),
+            },
+            RegisterDef {
+                name: "ZMM6",
+                varnode: reg512(ZMM6),
+            },
+            RegisterDef {
+                name: "ZMM7",
+                varnode: reg512(ZMM7),
+            },
+            RegisterDef {
+                name: "ZMM8",
+                varnode: reg512(ZMM8),
+            },
+            RegisterDef {
+                name: "ZMM9",
+                varnode: reg512(ZMM9),
+            },
+            RegisterDef {
+                name: "ZMM10",
+                varnode: reg512(ZMM10),
+            },
+            RegisterDef {
+                name: "ZMM11",
+                varnode: reg512(ZMM11),
+            },
+            RegisterDef {
+                name: "ZMM12",
+                varnode: reg512(ZMM12),
+            },
+            RegisterDef {
+                name: "ZMM13",
+                varnode: reg512(ZMM13),
+            },
+            RegisterDef {
+                name: "ZMM14",
+                varnode: reg512(ZMM14),
+            },
+            RegisterDef {
+                name: "ZMM15",
+                varnode: reg512(ZMM15),
+            },
+            RegisterDef {
+                name: "ZMM16",
+                varnode: reg512(ZMM16),
+            },
+            RegisterDef {
+                name: "ZMM17",
+                varnode: reg512(ZMM17),
+            },
+            RegisterDef {
+                name: "ZMM18",
+                varnode: reg512(ZMM18),
+            },
+            RegisterDef {
+                name: "ZMM19",
+                varnode: reg512(ZMM19),
+            },
+            RegisterDef {
+                name: "ZMM20",
+                varnode: reg512(ZMM20),
+            },
+            RegisterDef {
+                name: "ZMM21",
+                varnode: reg512(ZMM21),
+            },
+            RegisterDef {
+                name: "ZMM22",
+                varnode: reg512(ZMM22),
+            },
+            RegisterDef {
+                name: "ZMM23",
+                varnode: reg512(ZMM23),
+            },
+            RegisterDef {
+                name: "ZMM24",
+                varnode: reg512(ZMM24),
+            },
+            RegisterDef {
+                name: "ZMM25",
+                varnode: reg512(ZMM25),
+            },
+            RegisterDef {
+                name: "ZMM26",
+                varnode: reg512(ZMM26),
+            },
+            RegisterDef {
+                name: "ZMM27",
+                varnode: reg512(ZMM27),
+            },
+            RegisterDef {
+                name: "ZMM28",
+                varnode: reg512(ZMM28),
+            },
+            RegisterDef {
+                name: "ZMM29",
+                varnode: reg512(ZMM29),
+            },
+            RegisterDef {
+                name: "ZMM30",
+                varnode: reg512(ZMM30),
+            },
+            RegisterDef {
+                name: "ZMM31",
+                varnode: reg512(ZMM31),
+            },
             // K0..K7 — 8-byte AVX-512 mask registers.
-            RegisterDef { name: "K0", varnode: reg64(K0) },
-            RegisterDef { name: "K1", varnode: reg64(K1) },
-            RegisterDef { name: "K2", varnode: reg64(K2) },
-            RegisterDef { name: "K3", varnode: reg64(K3) },
-            RegisterDef { name: "K4", varnode: reg64(K4) },
-            RegisterDef { name: "K5", varnode: reg64(K5) },
-            RegisterDef { name: "K6", varnode: reg64(K6) },
-            RegisterDef { name: "K7", varnode: reg64(K7) },
+            RegisterDef {
+                name: "K0",
+                varnode: reg64(K0),
+            },
+            RegisterDef {
+                name: "K1",
+                varnode: reg64(K1),
+            },
+            RegisterDef {
+                name: "K2",
+                varnode: reg64(K2),
+            },
+            RegisterDef {
+                name: "K3",
+                varnode: reg64(K3),
+            },
+            RegisterDef {
+                name: "K4",
+                varnode: reg64(K4),
+            },
+            RegisterDef {
+                name: "K5",
+                varnode: reg64(K5),
+            },
+            RegisterDef {
+                name: "K6",
+                varnode: reg64(K6),
+            },
+            RegisterDef {
+                name: "K7",
+                varnode: reg64(K7),
+            },
             // TMM0..TMM7 — Intel AMX tile registers (1024 architectural bytes).
-            RegisterDef { name: "TMM0", varnode: reg1024(TMM0) },
-            RegisterDef { name: "TMM1", varnode: reg1024(TMM1) },
-            RegisterDef { name: "TMM2", varnode: reg1024(TMM2) },
-            RegisterDef { name: "TMM3", varnode: reg1024(TMM3) },
-            RegisterDef { name: "TMM4", varnode: reg1024(TMM4) },
-            RegisterDef { name: "TMM5", varnode: reg1024(TMM5) },
-            RegisterDef { name: "TMM6", varnode: reg1024(TMM6) },
-            RegisterDef { name: "TMM7", varnode: reg1024(TMM7) },
+            RegisterDef {
+                name: "TMM0",
+                varnode: reg1024(TMM0),
+            },
+            RegisterDef {
+                name: "TMM1",
+                varnode: reg1024(TMM1),
+            },
+            RegisterDef {
+                name: "TMM2",
+                varnode: reg1024(TMM2),
+            },
+            RegisterDef {
+                name: "TMM3",
+                varnode: reg1024(TMM3),
+            },
+            RegisterDef {
+                name: "TMM4",
+                varnode: reg1024(TMM4),
+            },
+            RegisterDef {
+                name: "TMM5",
+                varnode: reg1024(TMM5),
+            },
+            RegisterDef {
+                name: "TMM6",
+                varnode: reg1024(TMM6),
+            },
+            RegisterDef {
+                name: "TMM7",
+                varnode: reg1024(TMM7),
+            },
             RegisterDef {
                 name: "ST0",
                 varnode: st_reg(0),
@@ -827,7 +1019,8 @@ mod tests {
     #[test]
     fn test_xmm_no_overlap_with_gp() {
         let gp_offsets = [
-            RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15, R16, R17, R18, R19, R20, R21, R22, R23, R24, R25, R26, R27, R28, R29, R30, R31, RIP,
+            RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15, R16, R17,
+            R18, R19, R20, R21, R22, R23, R24, R25, R26, R27, R28, R29, R30, R31, RIP,
         ];
         let gp_max = gp_offsets.iter().copied().max().unwrap() + 8;
         let flag_max = OF + 1;
@@ -1018,7 +1211,10 @@ mod tests {
         // K-block must sit entirely above the vector region so a ZMM
         // write never accidentally clobbers a mask register.
         let vec_end = vec_offset(32);
-        assert!(K0 >= vec_end, "K0 {K0:#x} must sit above ZMM region end {vec_end:#x}");
+        assert!(
+            K0 >= vec_end,
+            "K0 {K0:#x} must sit above ZMM region end {vec_end:#x}"
+        );
 
         // iced mapping round-trips.
         use iced_x86::Register as R;
@@ -1075,5 +1271,4 @@ mod tests {
         assert_eq!(sz7, TMM_SIZE);
         assert_eq!(TMM7 - TMM0, 7 * TMM_STRIDE);
     }
-
 }

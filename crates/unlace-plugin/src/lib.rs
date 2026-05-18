@@ -230,4 +230,88 @@ mod tests {
         let findings = reg.run_all_on_function(&ssa);
         assert!(findings.is_empty(), "NoopPlugin must not produce findings");
     }
+
+    /// A plugin that tries to forge "user-authored" findings — used to
+    /// prove that running it does not mutate the SSA or anything the host
+    /// considers authoritative. The trait API only exposes `&SsaFunction`,
+    /// so the type system already prevents mutation; this test pins the
+    /// contract so future trait changes cannot silently introduce
+    /// `&mut SsaFunction`.
+    struct ForgePlugin;
+    impl UnlacePlugin for ForgePlugin {
+        fn name(&self) -> &str {
+            "forge"
+        }
+        fn version(&self) -> &str {
+            "0.0.1"
+        }
+        fn on_function(&self, func: &SsaFunction) -> Vec<PluginFinding> {
+            vec![PluginFinding {
+                kind: "forge".into(),
+                message: format!("saw {}", func.function.name),
+                addr: Some(func.function.addr),
+            }]
+        }
+    }
+
+    /// BATCH24 DoD: running a plugin over an SSA function MUST NOT mutate
+    /// the function (rename suppression / etc). The trait API enforces
+    /// this structurally — `on_function` takes `&SsaFunction`. We also
+    /// assert that running the plugin twice produces byte-identical
+    /// findings so plugins cannot inject non-determinism into the host.
+    #[test]
+    fn plugin_cannot_mutate_ssa_and_is_deterministic_across_runs() {
+        let ssa = empty_ssa();
+        let original_name = ssa.function.name.clone();
+        let original_addr = ssa.function.addr;
+        let original_block_count = ssa.function.blocks.len();
+
+        let plugin = ForgePlugin;
+        let run1 = plugin.on_function(&ssa);
+        let run2 = plugin.on_function(&ssa);
+
+        // SSA function is untouched after plugin invocation.
+        assert_eq!(ssa.function.name, original_name);
+        assert_eq!(ssa.function.addr, original_addr);
+        assert_eq!(ssa.function.blocks.len(), original_block_count);
+        // Findings are deterministic across reruns (same input → same output).
+        assert_eq!(run1, run2);
+        assert_eq!(run1.len(), 1);
+        assert_eq!(run1[0].kind, "forge");
+    }
+
+    /// Plugin findings are accumulated in registration order — a
+    /// deterministic, host-controlled order so that adding/removing
+    /// plugins changes only which findings appear, never the order of the
+    /// surviving ones. Pins the contract for deterministic output.
+    #[test]
+    fn registry_preserves_registration_order_for_findings() {
+        struct Tag(&'static str);
+        impl UnlacePlugin for Tag {
+            fn name(&self) -> &str {
+                self.0
+            }
+            fn version(&self) -> &str {
+                "0.1.0"
+            }
+            fn on_function(&self, _: &SsaFunction) -> Vec<PluginFinding> {
+                vec![PluginFinding {
+                    kind: self.0.into(),
+                    message: String::new(),
+                    addr: None,
+                }]
+            }
+        }
+
+        let ssa = empty_ssa();
+        let mut reg = PluginRegistry::new();
+        reg.register(Box::new(Tag("zeta")));
+        reg.register(Box::new(Tag("alpha")));
+        reg.register(Box::new(Tag("mu")));
+
+        let findings = reg.run_all_on_function(&ssa);
+        let kinds: Vec<&str> = findings.iter().map(|f| f.kind.as_str()).collect();
+        // Registration order — NOT alphabetical — is the spec.
+        assert_eq!(kinds, vec!["zeta", "alpha", "mu"]);
+    }
 }

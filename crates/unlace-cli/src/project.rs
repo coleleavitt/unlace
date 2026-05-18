@@ -118,7 +118,11 @@ impl std::fmt::Display for ProjectError {
         match self {
             ProjectError::Io(path, err) => write!(f, "I/O error on {}: {err}", path.display()),
             ProjectError::Parse(msg) => write!(f, "project parse failed: {msg}"),
-            ProjectError::Sha256Mismatch { path, expected, actual } => write!(
+            ProjectError::Sha256Mismatch {
+                path,
+                expected,
+                actual,
+            } => write!(
                 f,
                 "project sha256 mismatch — expected {expected}, got {actual} ({}); refusing to load",
                 path.display()
@@ -171,17 +175,15 @@ impl ProjectFile {
                 p
             }
         };
-        std::fs::write(&tmp_path, &json)
-            .map_err(|e| ProjectError::Io(tmp_path.clone(), e))?;
-        std::fs::rename(&tmp_path, dest)
-            .map_err(|e| ProjectError::Io(dest.to_path_buf(), e))?;
+        std::fs::write(&tmp_path, &json).map_err(|e| ProjectError::Io(tmp_path.clone(), e))?;
+        std::fs::rename(&tmp_path, dest).map_err(|e| ProjectError::Io(dest.to_path_buf(), e))?;
         Ok(())
     }
 
     /// Load a project file from disk.
     pub fn load_from(src: &Path) -> Result<Self, ProjectError> {
-        let body = std::fs::read_to_string(src)
-            .map_err(|e| ProjectError::Io(src.to_path_buf(), e))?;
+        let body =
+            std::fs::read_to_string(src).map_err(|e| ProjectError::Io(src.to_path_buf(), e))?;
         Self::from_json(&body).map_err(ProjectError::Parse)
     }
 
@@ -259,7 +261,11 @@ impl ProjectFile {
 
     /// Add a bookmark.
     pub fn bookmark(&mut self, addr: u64, label: &str) {
-        self.bookmarks.push(Bookmark { addr, label: label.into(), color: None });
+        self.bookmarks.push(Bookmark {
+            addr,
+            label: label.into(),
+            color: None,
+        });
     }
 
     /// Tag a set of addresses with a label.
@@ -306,9 +312,14 @@ mod tests {
     #[test]
     fn type_override() {
         let mut proj = ProjectFile::new("x", "y");
-        proj.type_overrides.insert(0x1000, TypeOverride {
-            type_name: "char*".into(), is_pointer: true, array_size: None,
-        });
+        proj.type_overrides.insert(
+            0x1000,
+            TypeOverride {
+                type_name: "char*".into(),
+                is_pointer: true,
+                array_size: None,
+            },
+        );
         let json = proj.to_json();
         let r = ProjectFile::from_json(&json).unwrap();
         assert_eq!(r.type_overrides[&0x1000].type_name, "char*");
@@ -332,10 +343,7 @@ mod tests {
 
         assert_eq!(recovered, proj);
         assert_eq!(recovered.source_of(0x401000), AnnotationSource::User);
-        assert_eq!(
-            recovered.function_boundaries[&0x401200].size,
-            128,
-        );
+        assert_eq!(recovered.function_boundaries[&0x401200].size, 128,);
     }
 
     /// `load_and_verify` rejects a project whose recorded SHA doesn't
@@ -364,6 +372,81 @@ mod tests {
         let applied = proj.apply_renames_to(&mut symbols);
         assert_eq!(applied, 1);
         assert_eq!(symbols[&0x1000], "user_chosen_name");
+    }
+
+    /// BATCH24 Definition of Done: a user can rename a *function*, *variable*,
+    /// and *type*, save the project, rerun analysis (re-loading the project),
+    /// and find all three edits intact. This exercises the full
+    /// rename → persist → reanalyse loop end-to-end.
+    #[test]
+    fn rename_function_variable_and_type_survives_save_load_rerun() {
+        let mut proj = ProjectFile::new("/tmp/dod.elf", "feedface");
+        // Function rename.
+        proj.rename(0x401000, "main");
+        proj.record_source(0x401000, AnnotationSource::User);
+        // Variable rename (stack var at function-local offset).
+        proj.rename(0x401040, "user_input_buf");
+        proj.record_source(0x401040, AnnotationSource::User);
+        // Type override on a global.
+        proj.type_overrides.insert(
+            0x402000,
+            TypeOverride {
+                type_name: "session_t".into(),
+                is_pointer: true,
+                array_size: None,
+            },
+        );
+
+        let tmp = std::env::temp_dir().join("unlace_dod_rerun.unlace");
+        let _ = std::fs::remove_file(&tmp);
+        proj.save_to(&tmp).expect("save");
+
+        // Simulate "rerun analysis": re-load the project as a fresh
+        // pipeline would, then apply edits onto a freshly populated
+        // symbol table (as if the analyser had just re-discovered names).
+        let recovered = ProjectFile::load_and_verify(&tmp, "feedface").expect("load");
+        let _ = std::fs::remove_file(&tmp);
+
+        let mut fresh_symbols: BTreeMap<u64, String> = BTreeMap::new();
+        fresh_symbols.insert(0x401000, "sub_401000".into());
+        fresh_symbols.insert(0x401040, "v1".into());
+        let applied = recovered.apply_renames_to(&mut fresh_symbols);
+        assert_eq!(applied, 2);
+        assert_eq!(fresh_symbols[&0x401000], "main");
+        assert_eq!(fresh_symbols[&0x401040], "user_input_buf");
+        assert_eq!(recovered.type_overrides[&0x402000].type_name, "session_t");
+        assert_eq!(recovered.source_of(0x401000), AnnotationSource::User);
+        assert_eq!(recovered.source_of(0x401040), AnnotationSource::User);
+    }
+
+    /// BATCH24 invariant: applying a project's renames is idempotent and
+    /// deterministic regardless of insertion order — the BTreeMap-backed
+    /// storage guarantees a stable iteration order so two rerun cycles
+    /// observe byte-identical output.
+    #[test]
+    fn apply_renames_is_deterministic_across_reruns() {
+        let mut proj = ProjectFile::new("x", "y");
+        // Insert in a deliberately scrambled order.
+        proj.rename(0x4030, "g");
+        proj.rename(0x4010, "a");
+        proj.rename(0x4020, "f");
+        proj.rename(0x4000, "main");
+
+        // Rerun 1.
+        let mut syms_a: BTreeMap<u64, String> = BTreeMap::new();
+        proj.apply_renames_to(&mut syms_a);
+        // Rerun 2 (different starting state — apply should converge).
+        let mut syms_b: BTreeMap<u64, String> = BTreeMap::new();
+        syms_b.insert(0x4000, "stub".into());
+        proj.apply_renames_to(&mut syms_b);
+
+        assert_eq!(syms_a, syms_b);
+        // Round-trip through JSON and re-apply: same result.
+        let json = proj.to_json();
+        let reloaded = ProjectFile::from_json(&json).unwrap();
+        let mut syms_c: BTreeMap<u64, String> = BTreeMap::new();
+        reloaded.apply_renames_to(&mut syms_c);
+        assert_eq!(syms_a, syms_c);
     }
 
     /// Schema is forward-compatible: a project saved with v1 fields only

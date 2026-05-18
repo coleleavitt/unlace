@@ -1,71 +1,139 @@
 # unlace
 
-`unlace` is a high-performance, multi-architecture decompiler engine written in Rust. Its long-term engineering target is high functional and structural parity with industry-standard decompilers such as Hex-Rays, but current support is measured fixture-by-fixture rather than claimed as complete.
+`unlace` is a multi-architecture decompiler engine written in Rust. The
+long-term engineering target is high functional and structural parity with
+industry-standard decompilers (Hex-Rays, Ghidra). Current support is **measured
+fixture-by-fixture** and recorded in [`docs/status.md`](docs/status.md) — not
+claimed as complete.
 
-Through a milestone-driven implementation of the classic decompiler pipeline, `unlace` transforms raw binary blobs into clean, structured, and human-readable C source code.
+If you are evaluating unlace, start with the status matrix. Everything below is
+either evidence that has already landed or design intent we have not yet
+verified end-to-end.
 
-## 🚀 The North Star: Measured Decompiler Quality
-Unlike traditional decompilers that focus solely on lifting instructions to IR, `unlace` focuses on **high-fidelity logic recovery**. 
-- **0-Goto Output:** Advanced control-flow structuring eliminates unnecessary gotos in standard compiler patterns.
-- **Data-Flow Excellence:** Leverages an SSA-based optimization suite (SCCP, GVN, CSE) to collapse thousands of temporaries into original source variables.
-- **Total Stability:** A formalized 7-stage Maturity Pipeline (`sub_14B8B0` model) ensures that every pass runs at the optimal moment, preventing oscillation and ensuring deterministic output.
+## What ships today
 
-## 🧠 Key Architectural Pillars
+| Area | Evidence | Source of truth |
+|------|----------|-----------------|
+| Architecture tiers (production / beta / fixture-only / stub) | `arch_support::support_matrix_markdown()` pinned by a unit test | [`docs/status.md`](docs/status.md) |
+| Loader support (ELF, PE/COFF, Mach-O, dyld cache, Intel HEX, …) | Per-format parser + symbol/debug-ingest matrix | [`docs/status.md`](docs/status.md) |
+| Expression printer (IDA `cot_*` coverage) | 36 explicit `CExpr` variants pinned by `cexpr_coverage_lists_every_variant`; remaining ~33 dispatch through `Binary` | [`crates/unlace-output/src/COVERAGE.md`](crates/unlace-output/src/COVERAGE.md) |
+| Output quality counters (`nullderef`, `badret`, `badtok`, `empty_bodies`, `impossible_lvalue`, `lost_frame_offsets`) | Pinned at 0 for `hello_world.elf`, `branches.elf`, `loops.elf` | [`docs/status.md`](docs/status.md) §"Output quality counters" |
+| Narrow parity score | `Aggregate Parity: 100.0%` from `bash scripts/score_parity.sh` on the current fixture metric | [`docs/rebaseline-2026-05-17.md`](docs/rebaseline-2026-05-17.md) |
+| Determinism in output-affecting crates | `cargo xtask lint-determinism` rejects `HashMap` / `HashSet` in `unlace-ir`, `unlace-passes`, `unlace-struct`, `unlace-output` (use `BTreeMap` / `BTreeSet` or `// determinism:allow`) | [`docs/determinism.md`](docs/determinism.md) |
+| Reproducible-build / SBOM tooling | `cargo xtask sbom` emits a CycloneDX 1.4 BOM from `Cargo.lock` | [`crates/unlace-sbom`](crates/unlace-sbom/) |
 
-### 1. Milestone-Driven Maturity Pipeline
-Mimicking the `mba_maturity_t` orchestrator, `unlace` executes passes in discrete milestones:
-- `M_GENERATED`: IR Fixed-point (Folding, CopyProp).
-- `M_PREOPTIMIZED`: Instruction-level cleanup and 64-bit demotion.
-- `M_LOCOPT`: Local structural recovery and stack frame layout.
-- `M_CALLS`: Interprocedural signature stabilization.
-- `M_GLBOPT`: Global type-recovery and data-flow fixed-point.
-- `M_LVARS`: Interference-graph-based variable merging and naming.
-- `M_FINAL`: High-level Ctree construction and formatted emission.
+The aggregate parity score is a **regression watchdog** on a narrow fixture
+metric. It is not full Hex-Rays parity. Anything claiming "100% parity" without
+that qualification is wrong.
 
-### 2. TInfo Recursive Type System
-A high-fidelity type engine (`sub_40FBC0` model) that understands complex data layouts:
-- **Best-Fit Resolver:** Recursively resolves byte offsets into nested structs, unions, and array indices.
-- **Type Propagation:** Flows types through calls, pointer math, and memory accesses.
-- **Library Awareness:** Integrated `TypeDb` with standard signatures for Libc, Win32, and language runtimes (Rust/Go/C++).
+## What is experimental
 
-### 3. Whole-Program Interprocedural Analysis
-`unlace` treats binaries as interconnected systems, not isolated functions:
-- **SCC-Based Traversal:** Uses Tarjan's algorithm to analyze the call graph in optimal bottom-up order.
-- **Signature Recovery:** Propagates parameter types from callers and return types from callees.
-- **Class Recovery:** Automatically identifies `this` pointers and promotes virtual calls (`this->vtable->method()`) to class-aware syntax.
+Items where code exists and basic cases work, but full-corpus quality is not
+yet measured. These are the *next* things to land, not what you can rely on
+today.
 
-### 4. Professional C Printer (CTree)
-The output isn't just C; it's **source code**.
-- **69-Opcode CTree Model:** Uses a dedicated `cot_*` AST for precise rendering of complex expressions.
-- **Inverted Precedence:** Employs the Hex-Rays 0-15 precedence scale to ensure perfect, noise-free parenthesization.
-- **Width-Aware Formatting:** Implements a 20-character threshold rule for deterministic line-breaking and operand alignment.
-- **TaggedStream Tokenization:** Emits a stream of semantic tokens (`Token::Identifier`, `Token::Address`), enabling instant UI integration for renaming and Xrefs.
+- ABI / calling-convention recovery beyond x86_64 / AArch64 / x86.
+- DWARF v5 split-DWARF (`.dwo` / `.dwp`) and full DW_OP location lists.
+- PDB TPI/IPI walker beyond the slice currently surfaced in
+  `composite_var_types`.
+- dyld shared cache extraction past plan/assemble of standalone Mach-O blobs.
+- Switch / EH structuring on broad real-binary corpora.
+- Cross-statement expression folding and IDA-style helper macros
+  (`LOBYTE`, `HIDWORD`, `COERCE_*`).
 
-## 🛠 Supported Architectures
-`unlace` features an architecture-neutral core driven by `StackSpec` and deep metadata:
-- **x86 / x86_64** (Full SIMD and Flag recovery)
-- **AArch64 / ARM** (PAC/BTI, NEON support)
-- **RISC-V** (Hardware-loop and Branch tuning)
-- **PowerPC / MIPS / ARC** (Delay slot and condition refinement)
-- **EVM / Lua / 6502 / 8051** (Specialized lifters)
+## What is aspirational
 
-## 🏗 Engineering Excellence
-- **Determinism:** No `HashMap`/`HashSet`. The entire pipeline uses `BTreeMap`/`BTreeSet` to guarantee identical output across identical inputs.
-- **Validation:** The current full verification snapshot is recorded in `docs/rebaseline-2026-05-17.md`.
-- **Parity Tracking:** `bash scripts/score_parity.sh` provides an aggregate metric against the current fixture profile. That score is a regression signal, not a full IDA/Hex-Rays parity claim.
-- **Clippy-Clean:** The current workspace passes `cargo clippy --workspace -- -D warnings` with `RUSTC_WRAPPER=`.
+Listed in [`docs/roadmap.md`](docs/roadmap.md). These items have **no shipped
+code** behind them yet:
 
-## 📖 Usage
-```bash
-# Decompile a function to C
-unlace decompile <binary> --addr <offset>
+- FLIRT/SIG-driven library name recovery wired into the active CLI path.
+- Persistent `.unlace` project format with rename/comment/type round-trip.
+- LSP / TUI / Web UI front-ends.
+- Reproducible signed releases published to GitHub (the local
+  [`docs/signed-releases.md`](docs/signed-releases.md) describes the intended
+  layout; the workflow is not yet active).
+- Plugin SDK with Rust + WASM sandbox + Python bindings.
 
-# Generate a quality report against the IDA baseline
-unlace quality <binary>
+If an item appears in `docs/roadmap.md` but not in `docs/status.md`, it has
+**not landed**. The status file is the only authority for "shipped".
 
-# Run the parity scoring suite
-bash scripts/score_parity.sh
+## Architecture overview
+
+```
+loaders → lifters (per-arch) → IR (pcode-like + SSA) → passes
+       → control-flow structuring (HIR) → C printer → output
 ```
 
-## ⚖️ License
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+Key crates:
+
+- `crates/unlace-ir` — core IR, SSA, arch ids, types.
+- `crates/unlace-loader` — binary loaders, DWARF/PDB/signature support.
+- `crates/unlace-lift-*` — per-architecture lifters.
+- `crates/unlace-passes` — IR and SSA recovery passes.
+- `crates/unlace-struct` — HIR and control-flow structuring.
+- `crates/unlace-output` — C printer with `TaggedStream` token model.
+- `crates/unlace-cli` — CLI + end-to-end pipeline + `quality` subcommand.
+- `crates/unlace-sbom` — CycloneDX SBOM generator.
+- `crates/unlace-test-harness` — golden fixture scoring.
+
+## Quickstart
+
+```bash
+# Decompile a function (production-tier archs only — see docs/status.md).
+unlace decompile <binary> --addr <offset>
+
+# Score recovered output against the IDA-style quality counters.
+unlace quality <binary>
+
+# Aggregate parity score on the current fixture set.
+bash scripts/score_parity.sh
+
+# Generate a CycloneDX SBOM from Cargo.lock.
+cargo xtask sbom --out sbom.json
+```
+
+## Verification gates
+
+Run these locally — the rebaseline note records the last set of pass results.
+
+```bash
+RUSTC_WRAPPER= cargo check --workspace
+RUSTC_WRAPPER= cargo test --workspace
+RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings
+RUSTC_WRAPPER= cargo xtask lint-determinism
+cargo fmt --all -- --check
+RUSTC_WRAPPER= bash scripts/score_parity.sh
+```
+
+Disable `sccache` (`RUSTC_WRAPPER=`) — the workspace builds reliably without
+it, and the cached macro-expansion can stale on this codebase.
+
+## Documentation map
+
+| File | Purpose |
+|------|---------|
+| [`docs/status.md`](docs/status.md) | **Source of truth.** Architecture, loader, type/debug, and output support matrices. |
+| [`docs/roadmap.md`](docs/roadmap.md) | Long-term parity direction. Bands, not schedule. |
+| [`docs/research-ideas.md`](docs/research-ideas.md) | Speculative / parking-lot items with no commitment. |
+| [`docs/historical-sessions.md`](docs/historical-sessions.md) | Older session-export claims, segregated from current status. |
+| [`docs/rebaseline-2026-05-17.md`](docs/rebaseline-2026-05-17.md) | Most recent verification snapshot. |
+| [`docs/handoffs/README.md`](docs/handoffs/README.md) | Per-batch handoffs and the active implementation backlog. |
+| [`docs/determinism.md`](docs/determinism.md) | Why output-affecting crates use ordered maps. |
+| [`docs/signed-releases.md`](docs/signed-releases.md) | Intended reproducible-build / signed-release layout. |
+| [`docs/PARITY_PLAN.md`](docs/PARITY_PLAN.md) | Long-range roadmap. Numbers inside are *historical* — use `docs/status.md` for current state. |
+| [`plan.md`](plan.md) | Active backlog with batch boundaries. |
+| [`CLAUDE.md`](CLAUDE.md) | Guidance for AI agents working in this repo. |
+
+If two documents disagree about what is "done", `docs/status.md` wins.
+
+## License
+
+Dual-licensed under either of:
+
+- Apache License, Version 2.0 — <https://www.apache.org/licenses/LICENSE-2.0>
+- MIT license — <https://opensource.org/licenses/MIT>
+
+at your option. This matches the `license = "MIT OR Apache-2.0"` field in the
+workspace `Cargo.toml`. Local `LICENSE-APACHE` / `LICENSE-MIT` files are not
+yet committed — adding them is tracked in
+[`docs/roadmap.md`](docs/roadmap.md) under "production hardening".

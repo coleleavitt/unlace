@@ -8,7 +8,9 @@ use tracing_subscriber::EnvFilter;
 
 use unlace_ir::ArchId;
 use unlace_lift::get_lifter;
-use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf};
+use unlace_loader::{
+    BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader, import_dwarf, import_pdb_types,
+};
 use unlace_plugin::PluginManager;
 
 use unlace_cli::annotations::{self, AnnotationDb};
@@ -392,6 +394,66 @@ fn load_plugins(dir: Option<&std::path::Path>) -> Result<PluginManager> {
     Ok(mgr)
 }
 
+/// Look for a `.pdb` sidecar next to `binary_path` and, if one exists,
+/// parse its TPI stream into [`unlace_loader::pdb_types::PdbTypes`] and
+/// attach it to `image.pdb_types`. Downstream `apply_pdb_types_to_ssa`
+/// + the C printer's annotation overlay consume this field.
+///
+/// Resolution order:
+/// 1. Any `DebugRecord.pdb_path` recorded by the PE CodeView parser,
+///    interpreted *only by basename* and looked up next to the binary
+///    (the absolute path baked into the PE points at the build host).
+/// 2. A sibling `<stem>.pdb` next to the binary.
+///
+/// Failure is non-fatal: we trace and move on, mirroring how DWARF is
+/// handled in `run_decompile`.
+fn attach_pdb_sidecar(image: &mut BinaryImage, binary_path: &std::path::Path) {
+    if image.pdb_types.is_some() {
+        return;
+    }
+    let parent = binary_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+
+    for rec in &image.debug_records {
+        if let Some(pdb_path) = rec.pdb_path.as_deref() {
+            if let Some(name) = std::path::Path::new(pdb_path).file_name() {
+                candidates.push(parent.join(name));
+            }
+        }
+    }
+    if let Some(stem) = binary_path.file_stem() {
+        let mut sibling = parent.join(stem);
+        sibling.set_extension("pdb");
+        candidates.push(sibling);
+    }
+
+    for candidate in candidates {
+        if !candidate.exists() {
+            continue;
+        }
+        match import_pdb_types(&candidate) {
+            Ok(types) => {
+                tracing::info!(
+                    pdb = %candidate.display(),
+                    structs = types.structs.len(),
+                    "loaded PDB type sidecar",
+                );
+                image.pdb_types = Some(types);
+                return;
+            }
+            Err(e) => {
+                tracing::debug!(
+                    pdb = %candidate.display(),
+                    err = %e,
+                    "PDB sidecar import failed; continuing without it",
+                );
+            }
+        }
+    }
+}
+
 fn run_decompile(
     binary_path: &std::path::Path,
     function_filter: Option<&str>,
@@ -404,7 +466,7 @@ fn run_decompile(
     let data = fs::read(binary_path)
         .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
 
-    let image = if ElfLoader::can_load(&data) {
+    let mut image = if ElfLoader::can_load(&data) {
         ElfLoader::load(&data)
     } else if MachoLoader::can_load(&data) {
         MachoLoader::load(&data)
@@ -419,6 +481,8 @@ fn run_decompile(
     .with_context(|| format!("failed to parse '{}'", binary_path.display()))?;
 
     tracing::info!(arch = %image.arch, entry = %format_args!("{:#x}", image.entry), "loaded binary");
+
+    attach_pdb_sidecar(&mut image, binary_path);
 
     if let Some(override_str) = arch_override {
         let requested = unlace_cli::parse_arch(override_str)?;
@@ -552,4 +616,66 @@ fn run_batch_cmd(
         max_iterations,
     };
     batch::run_batch(&binary, &config, arch.as_deref(), output_dir.as_deref())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use unlace_loader::{DebugRecord, Endian};
+
+    #[test]
+    fn attach_pdb_sidecar_is_noop_when_no_pdb_present() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let bin = tmp.path().join("nopdb.exe");
+        std::fs::write(&bin, b"MZ").unwrap();
+
+        let mut image = BinaryImage::empty(ArchId::X86_64, Endian::Little);
+        assert!(image.pdb_types.is_none());
+        attach_pdb_sidecar(&mut image, &bin);
+        assert!(
+            image.pdb_types.is_none(),
+            "no sidecar should leave pdb_types empty",
+        );
+    }
+
+    #[test]
+    fn attach_pdb_sidecar_skips_when_already_populated() {
+        // Pre-populate pdb_types to force the early-return branch and
+        // confirm the helper does not stomp existing data.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let bin = tmp.path().join("preloaded.exe");
+        std::fs::write(&bin, b"MZ").unwrap();
+
+        let mut image = BinaryImage::empty(ArchId::X86_64, Endian::Little);
+        image.pdb_types = Some(Default::default());
+        let before_ptr = image.pdb_types.as_ref().map(|t| t as *const _);
+        attach_pdb_sidecar(&mut image, &bin);
+        let after_ptr = image.pdb_types.as_ref().map(|t| t as *const _);
+        assert_eq!(before_ptr, after_ptr, "existing pdb_types must be preserved");
+    }
+
+    #[test]
+    fn attach_pdb_sidecar_drops_absolute_build_host_path() {
+        // PE CodeView records frequently contain a Windows build-host
+        // absolute path (e.g. `D:\src\foo\bar.pdb`). The helper must
+        // resolve only by basename next to the binary, so a nonexistent
+        // absolute path never causes a panic or attempts to load it.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let bin = tmp.path().join("absolute-cv.exe");
+        std::fs::write(&bin, b"MZ").unwrap();
+
+        let mut image = BinaryImage::empty(ArchId::X86_64, Endian::Little);
+        image.debug_records.push(DebugRecord {
+            typ: 2, // IMAGE_DEBUG_TYPE_CODEVIEW
+            time_stamp: 0,
+            pdb_path: Some("D:\\nonexistent\\absolute\\path.pdb".into()),
+            pdb_guid: None,
+            pdb_age: None,
+        });
+        attach_pdb_sidecar(&mut image, &bin);
+        assert!(
+            image.pdb_types.is_none(),
+            "no real .pdb on disk → no panic, no spurious load",
+        );
+    }
 }

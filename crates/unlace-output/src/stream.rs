@@ -48,7 +48,11 @@ pub enum TokenKind {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenMeta {
     /// This token refers to an SSA varnode (for variable tracking).
-    Varnode { space: u8, offset: u64, version: u32 },
+    Varnode {
+        space: u8,
+        offset: u64,
+        version: u32,
+    },
     /// This token refers to a function at the given entry address.
     FunctionAddr(u64),
     /// This token refers to a global data address.
@@ -154,7 +158,11 @@ impl TaggedStream {
         self.tokens.push(Token::with_meta(
             TokenKind::Identifier,
             name,
-            TokenMeta::Varnode { space, offset, version },
+            TokenMeta::Varnode {
+                space,
+                offset,
+                version,
+            },
         ));
     }
 
@@ -254,7 +262,11 @@ mod tests {
         assert_eq!(tok.text, "v1");
         assert_eq!(
             tok.meta,
-            TokenMeta::Varnode { space: 3, offset: 0x100, version: 2 }
+            TokenMeta::Varnode {
+                space: 3,
+                offset: 0x100,
+                version: 2
+            }
         );
     }
 

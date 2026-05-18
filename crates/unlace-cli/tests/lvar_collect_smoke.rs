@@ -23,8 +23,7 @@ fn medium_elf_collects_lvars_for_every_function() {
     let data = std::fs::read(fixture("medium.elf")).expect("read fixture");
     let image = ElfLoader::load(&data).expect("parse ELF");
     let lifter = get_lifter(image.arch);
-    let entries: Vec<FunctionEntry> =
-        pipeline::discover_functions(&image, None).expect("discover");
+    let entries: Vec<FunctionEntry> = pipeline::discover_functions(&image, None).expect("discover");
 
     let mut analyzed = 0usize;
     let mut total_lvars = 0usize;

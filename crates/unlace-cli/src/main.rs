@@ -112,8 +112,16 @@ fn main() {
         } => {
             init_tracing(verbose);
             run_batch_cmd(
-                binary, jobs, emit, arch, output_dir, timeout, interproc,
-                all_functions, scope, max_iterations,
+                binary,
+                jobs,
+                emit,
+                arch,
+                output_dir,
+                timeout,
+                interproc,
+                all_functions,
+                scope,
+                max_iterations,
             )
         }
         Cmd::Quality {
@@ -166,6 +174,31 @@ fn main() {
         }
     }
 
+    // Batch 16: schedule audit. When `UNLACE_SCHEDULE_AUDIT=<path>` was
+    // set, the instrumentation harness recorded a row per
+    // `(function, pass, iteration)` invocation with the declared phase.
+    // Flush the CSV here so consumers can diff schedules across revisions
+    // and a one-line summary of oscillations is surfaced to stderr.
+    if let Some(audit_path) = unlace_passes::schedule_audit_path() {
+        let csv = unlace_passes::dump_schedule_audit_csv();
+        if let Err(e) = fs::write(&audit_path, &csv) {
+            eprintln!(
+                "warning: UNLACE_SCHEDULE_AUDIT write to '{}' failed: {e}",
+                audit_path.display()
+            );
+        }
+        let osc = unlace_passes::schedule_audit_oscillations();
+        if !osc.is_empty() {
+            eprintln!(
+                "\n=== UNLACE_SCHEDULE_AUDIT: {} oscillation(s) detected ===",
+                osc.len()
+            );
+            for v in &osc {
+                eprintln!("  {v}");
+            }
+        }
+    }
+
     if let Err(e) = result {
         eprintln!("Error: {e:#}");
         std::process::exit(1);
@@ -208,6 +241,10 @@ enum IrDumpPhase {
     Lift,
     PostPasses,
     PostStructuring,
+    /// Batch 18: emit the lvar audit table instead of raw SSA.
+    Lvars,
+    /// Batch 20: emit the type-recovery audit table instead of raw SSA.
+    Types,
 }
 
 fn parse_ir_dump_phase(s: Option<&str>) -> Result<IrDumpPhase> {
@@ -215,8 +252,10 @@ fn parse_ir_dump_phase(s: Option<&str>) -> Result<IrDumpPhase> {
         "lift" => Ok(IrDumpPhase::Lift),
         "post-passes" | "passes" => Ok(IrDumpPhase::PostPasses),
         "post-structuring" | "structuring" | "post-struct" => Ok(IrDumpPhase::PostStructuring),
+        "lvars" => Ok(IrDumpPhase::Lvars),
+        "types" | "type-audit" => Ok(IrDumpPhase::Types),
         other => bail!(
-            "unknown --phase '{other}' (expected: lift, post-passes, post-structuring)"
+            "unknown --phase '{other}' (expected: lift, post-passes, post-structuring, lvars, types)"
         ),
     }
 }
@@ -228,15 +267,17 @@ fn run_ir_dump(
 ) -> Result<()> {
     let phase = parse_ir_dump_phase(phase_str)?;
 
-    let data = fs::read(binary_path)
+    // Batch 25: mmap path for large binaries, heap path for small ones.
+    let input = unlace_cli::binary_input::BinaryInput::open(binary_path)
         .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
+    let data = input.as_bytes();
 
-    let image = if ElfLoader::can_load(&data) {
-        ElfLoader::load(&data)
-    } else if MachoLoader::can_load(&data) {
-        MachoLoader::load(&data)
-    } else if PeLoader::can_load(&data) {
-        PeLoader::load(&data)
+    let image = if ElfLoader::can_load(data) {
+        ElfLoader::load(data)
+    } else if MachoLoader::can_load(data) {
+        MachoLoader::load(data)
+    } else if PeLoader::can_load(data) {
+        PeLoader::load(data)
     } else {
         bail!(
             "'{}' is not a recognized binary format (ELF, Mach-O, or PE)",
@@ -267,7 +308,10 @@ fn run_ir_dump(
 
         match phase {
             IrDumpPhase::Lift => {}
-            IrDumpPhase::PostPasses | IrDumpPhase::PostStructuring => {
+            IrDumpPhase::PostPasses
+            | IrDumpPhase::PostStructuring
+            | IrDumpPhase::Lvars
+            | IrDumpPhase::Types => {
                 if let Err(e) = pipeline::run_passes(&mut ssa) {
                     tracing::warn!(name = %entry.name, err = %e, "pass pipeline failed; dumping unoptimized");
                 }
@@ -279,7 +323,11 @@ fn run_ir_dump(
             }
         }
 
-        out.push_str(&unlace_output::dump_ir(&ssa));
+        match phase {
+            IrDumpPhase::Lvars => out.push_str(&unlace_output::dump_lvars(&ssa)),
+            IrDumpPhase::Types => out.push_str(&unlace_output::dump_type_audit(&ssa)),
+            _ => out.push_str(&unlace_output::dump_ir(&ssa)),
+        }
     }
 
     print!("{out}");
@@ -489,9 +537,9 @@ fn run_batch_cmd(
     max_iterations: usize,
 ) -> Result<()> {
     let scope_re = match scope.as_deref() {
-        Some(pat) => Some(
-            regex::Regex::new(pat).with_context(|| format!("invalid --scope regex: {pat}"))?,
-        ),
+        Some(pat) => {
+            Some(regex::Regex::new(pat).with_context(|| format!("invalid --scope regex: {pat}"))?)
+        }
         None => None,
     };
     let config = BatchConfig {

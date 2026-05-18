@@ -3,13 +3,14 @@
 //! Walks the HIR looking for:
 //! 1. `Goto(label)` where the label's target is immediately followed by
 //!    `Return` → replace the goto with the return directly.
-//! 2. Functions named `main` that lack an explicit `return 0` at the end →
-//!    append one (C99 §5.1.2.2.3).
+//! 2. Functions that lack an explicit tail return get a synthetic tail return:
+//!    `main` and known non-void functions get `return 0`, while void/unknown
+//!    functions keep a bare `return`.
 
 use std::collections::BTreeMap;
 
 use unlace_ir::Varnode;
-use unlace_ir::ssa::SsaVarnode;
+use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
 
 use crate::hir::{HirFunction, HirNode, LabelId};
 
@@ -17,7 +18,7 @@ use crate::hir::{HirFunction, HirNode, LabelId};
 ///
 /// Replaces `Goto(label)` with `Return(val)` when the label is immediately
 /// followed by a return statement, then strips labels that become unused.
-/// Also ensures `main` has an explicit `return 0`.
+/// Also ensures functions with fallthrough tails have an explicit return.
 pub fn return_merge(hir: &mut HirFunction) {
     let label_returns = collect_label_returns(&hir.body);
 
@@ -385,15 +386,16 @@ fn strip_label_return_pairs(
 }
 
 /// If a function falls off the end without an explicit return, make that tail
-/// path visible in the recovered HIR. `main` gets C's implicit `return 0`;
-/// other recovered functions get a bare `return` because their precise ABI
-/// return value was not recovered on that path.
+/// path visible in the recovered HIR. `main` gets C's implicit `return 0`.
+/// Known non-void functions also get `return 0` as a C-valid placeholder rather
+/// than an invalid bare `return;`; void/unknown functions keep a bare return.
 fn ensure_tail_return(hir: &mut HirFunction) {
     if ends_with_return(&hir.body) {
         return;
     }
 
-    let value = (hir.name == "main").then_some(SsaVarnode {
+    let should_return_zero = hir.name == "main" || hir.return_type != PrimitiveType::Unknown;
+    let value = should_return_zero.then_some(SsaVarnode {
         base: Varnode::constant(0, 4),
         version: 0,
     });
@@ -522,6 +524,24 @@ mod tests {
         assert!(
             matches!(hir.body.last(), Some(HirNode::Return(None))),
             "non-main fallthrough should get a bare tail return"
+        );
+    }
+
+    #[test]
+    fn test_known_nonvoid_non_main_gets_zero_tail_return() {
+        let body = vec![HirNode::Statement(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![],
+            0x1000,
+        ))];
+
+        let mut hir = make_hir("foo", body);
+        hir.return_type = PrimitiveType::Int(4);
+        return_merge(&mut hir);
+
+        assert!(
+            matches!(hir.body.last(), Some(HirNode::Return(Some(sv))) if sv.base.offset == 0),
+            "known non-void fallthrough should get a C-valid zero tail return"
         );
     }
 

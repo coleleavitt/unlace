@@ -571,11 +571,7 @@ impl<'a> StructureCtx<'a> {
                     // When a BRANCHIND is a recognised C++ vtable tail-call,
                     // emit it as a Statement so the C printer can render it
                     // as `return this->__vftable->method_N(args);`.
-                    if self
-                        .func
-                        .indirect_call_targets
-                        .contains_key(&(bid, i))
-                    {
+                    if self.func.indirect_call_targets.contains_key(&(bid, i)) {
                         Some(HirNode::Statement(insn.clone()))
                     } else {
                         continue;
@@ -1185,8 +1181,8 @@ impl<'a> StructureCtx<'a> {
         // retains ConditionalTrue/ConditionalFalse edges, treat the header as
         // having an implicit conditional — the loop structure is real even when
         // the branch instruction is gone.
-        let header_has_cbranch = self.block_has_cbranch(header)
-            || self.header_has_conditional_edges(header);
+        let header_has_cbranch =
+            self.block_has_cbranch(header) || self.header_has_conditional_edges(header);
         let single_latch = if latches.len() == 1 {
             Some(latches[0])
         } else {
@@ -1195,6 +1191,29 @@ impl<'a> StructureCtx<'a> {
         let latch_has_cbranch = single_latch.is_some_and(|l| self.block_has_cbranch(l));
 
         if header_has_cbranch {
+            if latches.contains(&header) {
+                let cond = self.find_cbranch_cond(header);
+                self.emitted.insert(header);
+
+                let mut body_nodes = Vec::new();
+                if let Some(block) = self.func.function.blocks.get(&header) {
+                    for (i, insn) in block.insns.iter().enumerate() {
+                        if self.is_frame_setup(header, i) {
+                            continue;
+                        }
+                        match insn.op {
+                            IrOp::Cbranch | IrOp::Branch | IrOp::Branchind | IrOp::Return => {}
+                            _ => body_nodes.push(HirNode::Statement(insn.clone())),
+                        }
+                    }
+                }
+
+                return Some(HirNode::DoWhile {
+                    body: body_nodes,
+                    cond,
+                });
+            }
+
             // While loop: condition at header.
             let cond = self.find_cbranch_cond(header);
 
@@ -1598,7 +1617,30 @@ impl<'a> StructureCtx<'a> {
         insn_idx: usize,
         slot: VarnodeSlot,
     ) -> Option<SsaVarnode> {
-        self.func.var_map.get(&(bid, insn_idx, slot)).copied()
+        if let Some(sv) = self
+            .func
+            .var_map
+            .get(&(bid, insn_idx, slot.clone()))
+            .copied()
+        {
+            return Some(sv);
+        }
+        let VarnodeSlot::Input(input_idx) = slot else {
+            return None;
+        };
+        let vn = self
+            .func
+            .function
+            .blocks
+            .get(&bid)?
+            .insns
+            .get(insn_idx)?
+            .inputs
+            .get(input_idx)?;
+        (vn.space == SpaceId::Const).then_some(SsaVarnode {
+            base: *vn,
+            version: 0,
+        })
     }
 
     /// Classify loop edges: which successor goes into the loop body, which exits.
@@ -2611,7 +2653,12 @@ const _: fn(&Varnode) -> bool = is_aarch64_flag_varnode;
 fn fuse_guarded_if_else(nodes: &mut Vec<HirNode>) {
     let mut i = 0;
     while i < nodes.len() {
-        let HirNode::GuardedIf { cond_code: first_cc, else_body, .. } = &nodes[i] else {
+        let HirNode::GuardedIf {
+            cond_code: first_cc,
+            else_body,
+            ..
+        } = &nodes[i]
+        else {
             i += 1;
             continue;
         };
@@ -2653,7 +2700,11 @@ fn fuse_guarded_if_else(nodes: &mut Vec<HirNode>) {
         if saw_inverse && end > i + 1 {
             nodes.splice(
                 i..end,
-                [HirNode::GuardedIf { cond_code: first_cc, then_body, else_body }],
+                [HirNode::GuardedIf {
+                    cond_code: first_cc,
+                    then_body,
+                    else_body,
+                }],
             );
             i += 1;
         } else {
@@ -3869,6 +3920,50 @@ mod tests {
         assert!(
             contains_do_while(&hir.body),
             "do-while CFG should produce a DoWhile node, got: {:#?}",
+            hir.body
+        );
+    }
+
+    #[test]
+    fn test_self_loop_bottom_test_is_do_while() {
+        let r0 = Varnode::reg(0, 8);
+        let r8 = Varnode::reg(8, 8);
+        let c1 = Varnode::constant(1, 8);
+        let cond_vn = Varnode::reg(256, 1);
+
+        let mut func = Function::new("self_loop_do_while", BlockId(0), 0xA100);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0xA100));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(arith_insn(r0, &[r8, c1], 0xA110));
+        bb1.insns.push(cbranch_insn(cond_vn, 0xA114));
+        bb1.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns.push(ctrl_insn(IrOp::Return, 0xA120));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+
+        let ssa = build_ssa(func);
+        let hir = structure(&ssa).expect("structuring should succeed");
+
+        fn contains_do_while(nodes: &[HirNode]) -> bool {
+            nodes.iter().any(|n| match n {
+                HirNode::DoWhile { .. } => true,
+                HirNode::Block(inner) => contains_do_while(inner),
+                _ => false,
+            })
+        }
+
+        assert!(
+            contains_do_while(&hir.body),
+            "self-loop bottom test should produce DoWhile, got: {:#?}",
             hir.body
         );
     }
@@ -5671,7 +5766,11 @@ mod tests {
 
         let mut found = Vec::new();
         collect_guarded_ifs(&hir.body, &mut found);
-        assert_eq!(found.len(), 1, "ITETE should become one GuardedIf, got {found:?}");
+        assert_eq!(
+            found.len(),
+            1,
+            "ITETE should become one GuardedIf, got {found:?}"
+        );
         assert_eq!(found[0].0, 0);
         assert_eq!(found[0].1, 2, "two T-lane statements in then_body");
         assert_eq!(found[0].2, 2, "two E-lane statements in else_body");

@@ -9,7 +9,11 @@
 pub mod annotations;
 pub mod args;
 pub mod batch;
+pub mod binary_input;
+pub mod cache;
+pub mod lsp;
 pub mod pipeline;
+pub mod project;
 pub mod quality;
 
 use anyhow::{Result, bail};

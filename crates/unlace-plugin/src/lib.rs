@@ -43,11 +43,11 @@ mod manager;
 
 pub use error::PluginError;
 pub use manager::PluginManager;
-pub mod registry;
-pub mod wasm_sandbox;
-pub mod python_bridge;
 pub mod lua_bridge;
+pub mod python_bridge;
+pub mod registry;
 pub mod samples;
+pub mod wasm_sandbox;
 
 /// Entry point symbol name that every plugin shared library must export.
 pub const PLUGIN_ENTRY: &str = "unlace_plugin_create";

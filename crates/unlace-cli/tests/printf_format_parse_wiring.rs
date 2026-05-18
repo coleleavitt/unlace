@@ -67,9 +67,7 @@ fn printf_wiring_cpp_exceptions_reports_two_sites() {
     let line = stdout
         .lines()
         .find(|l| l.contains("variadic call sites"))
-        .unwrap_or_else(|| {
-            panic!("no 'variadic call sites' line in quality output:\n{stdout}")
-        });
+        .unwrap_or_else(|| panic!("no 'variadic call sites' line in quality output:\n{stdout}"));
     // Format from quality.rs:
     //   "- variadic call sites (printf-family resolved): N"
     let n: usize = line
@@ -130,8 +128,7 @@ fn whole_program_driver_populates_variadic_call_types() {
         "Phase 1 lift produced no SSA functions for cpp_exceptions.elf"
     );
 
-    let total =
-        pipeline::run_whole_program_printf_parse(&mut ssa_map, &image, &functions);
+    let total = pipeline::run_whole_program_printf_parse(&mut ssa_map, &image, &functions);
     assert!(
         total >= 2,
         "whole-program printf parse should populate at least 2 variadic_call_types entries on cpp_exceptions.elf, got {total}"

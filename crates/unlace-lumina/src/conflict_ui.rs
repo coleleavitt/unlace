@@ -50,23 +50,32 @@ pub enum ResolutionStrategy {
 }
 
 /// Resolve a conflict using the given strategy.
-pub fn resolve_conflict(conflict: &mut AnnotationConflict, strategy: ResolutionStrategy) -> Option<&Proposal> {
-    if conflict.proposals.is_empty() { return None; }
+pub fn resolve_conflict(
+    conflict: &mut AnnotationConflict,
+    strategy: ResolutionStrategy,
+) -> Option<&Proposal> {
+    if conflict.proposals.is_empty() {
+        return None;
+    }
 
     let winner_index = match strategy {
-        ResolutionStrategy::MajorityVote => {
-            conflict.proposals.iter().enumerate()
-                .max_by_key(|(_, p)| p.votes)
-                .map(|(i, _)| i)?
-        }
-        ResolutionStrategy::MostRecent => {
-            conflict.proposals.iter().enumerate()
-                .max_by_key(|(_, p)| p.timestamp)
-                .map(|(i, _)| i)?
-        }
+        ResolutionStrategy::MajorityVote => conflict
+            .proposals
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, p)| p.votes)
+            .map(|(i, _)| i)?,
+        ResolutionStrategy::MostRecent => conflict
+            .proposals
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, p)| p.timestamp)
+            .map(|(i, _)| i)?,
         ResolutionStrategy::FirstWins => 0,
         ResolutionStrategy::Manual(idx) => {
-            if idx >= conflict.proposals.len() { return None; }
+            if idx >= conflict.proposals.len() {
+                return None;
+            }
             idx
         }
     };
@@ -77,16 +86,25 @@ pub fn resolve_conflict(conflict: &mut AnnotationConflict, strategy: ResolutionS
 
 /// Detect conflicts in a set of proposals for the same address.
 pub fn detect_conflicts(proposals: &[(u64, String, String, u64)]) -> Vec<AnnotationConflict> {
-    let mut by_addr: std::collections::BTreeMap<u64, Vec<Proposal>> = std::collections::BTreeMap::new();
+    let mut by_addr: std::collections::BTreeMap<u64, Vec<Proposal>> =
+        std::collections::BTreeMap::new();
     for (addr, author, value, ts) in proposals {
         by_addr.entry(*addr).or_default().push(Proposal {
-            author: author.clone(), value: value.clone(), timestamp: *ts, votes: 0,
+            author: author.clone(),
+            value: value.clone(),
+            timestamp: *ts,
+            votes: 0,
         });
     }
 
-    by_addr.into_iter()
+    by_addr
+        .into_iter()
         .filter(|(_, props)| props.len() > 1)
-        .map(|(addr, proposals)| AnnotationConflict { addr, proposals, status: ConflictStatus::Pending })
+        .map(|(addr, proposals)| AnnotationConflict {
+            addr,
+            proposals,
+            status: ConflictStatus::Pending,
+        })
         .collect()
 }
 
@@ -112,14 +130,27 @@ mod tests {
         let mut conflict = AnnotationConflict {
             addr: 0x1000,
             proposals: vec![
-                Proposal { author: "a".into(), value: "foo".into(), timestamp: 1, votes: 5 },
-                Proposal { author: "b".into(), value: "bar".into(), timestamp: 2, votes: 3 },
+                Proposal {
+                    author: "a".into(),
+                    value: "foo".into(),
+                    timestamp: 1,
+                    votes: 5,
+                },
+                Proposal {
+                    author: "b".into(),
+                    value: "bar".into(),
+                    timestamp: 2,
+                    votes: 3,
+                },
             ],
             status: ConflictStatus::Pending,
         };
         let winner = resolve_conflict(&mut conflict, ResolutionStrategy::MajorityVote).unwrap();
         assert_eq!(winner.value, "foo");
-        assert!(matches!(conflict.status, ConflictStatus::Resolved { winner_index: 0 }));
+        assert!(matches!(
+            conflict.status,
+            ConflictStatus::Resolved { winner_index: 0 }
+        ));
     }
 
     #[test]
@@ -127,8 +158,18 @@ mod tests {
         let mut conflict = AnnotationConflict {
             addr: 0x1000,
             proposals: vec![
-                Proposal { author: "a".into(), value: "old".into(), timestamp: 1, votes: 0 },
-                Proposal { author: "b".into(), value: "new".into(), timestamp: 99, votes: 0 },
+                Proposal {
+                    author: "a".into(),
+                    value: "old".into(),
+                    timestamp: 1,
+                    votes: 0,
+                },
+                Proposal {
+                    author: "b".into(),
+                    value: "new".into(),
+                    timestamp: 99,
+                    votes: 0,
+                },
             ],
             status: ConflictStatus::Pending,
         };

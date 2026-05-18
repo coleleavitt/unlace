@@ -241,13 +241,13 @@ mod tests {
 
     #[test]
     fn printer_emits_bitfield_width_syntax() {
-        // Display impl on Type::Bitfield emits `<underlying> : <width>`.
+        // Display impl on Type::Bitfield emits the underlying IDA-style alias.
         let bf = Type::Bitfield {
             underlying: Box::new(Type::uint(4)),
             offset: 0,
             width: 3,
         };
-        assert_eq!(bf.to_string(), "unsigned __int32 : 3");
+        assert_eq!(bf.to_string(), "_DWORD : 3");
     }
 
     #[test]

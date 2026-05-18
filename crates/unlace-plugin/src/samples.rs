@@ -16,12 +16,18 @@ pub struct EntropyPlugin {
 }
 
 impl Default for EntropyPlugin {
-    fn default() -> Self { Self { threshold: 6.5 } }
+    fn default() -> Self {
+        Self { threshold: 6.5 }
+    }
 }
 
 impl UnlacePlugin for EntropyPlugin {
-    fn name(&self) -> &str { "entropy-analyzer" }
-    fn version(&self) -> &str { "0.1.0" }
+    fn name(&self) -> &str {
+        "entropy-analyzer"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
 
     fn on_function(&self, func: &SsaFunction) -> Vec<PluginFinding> {
         let mut findings = Vec::new();
@@ -31,7 +37,10 @@ impl UnlacePlugin for EntropyPlugin {
         if entropy_proxy > self.threshold {
             findings.push(PluginFinding {
                 kind: "high-entropy".into(),
-                message: format!("function has high structural complexity ({:.2} bits)", entropy_proxy),
+                message: format!(
+                    "function has high structural complexity ({:.2} bits)",
+                    entropy_proxy
+                ),
                 addr: Some(func.function.addr),
             });
         }
@@ -51,16 +60,24 @@ impl Default for StringXrefPlugin {
     fn default() -> Self {
         Self {
             patterns: vec![
-                "password".into(), "secret".into(), "key".into(),
-                "token".into(), "http://".into(), "https://".into(),
+                "password".into(),
+                "secret".into(),
+                "key".into(),
+                "token".into(),
+                "http://".into(),
+                "https://".into(),
             ],
         }
     }
 }
 
 impl UnlacePlugin for StringXrefPlugin {
-    fn name(&self) -> &str { "string-xref" }
-    fn version(&self) -> &str { "0.1.0" }
+    fn name(&self) -> &str {
+        "string-xref"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
 
     fn on_binary(&self, image: &BinaryImage) -> Vec<PluginFinding> {
         let mut findings = Vec::new();
@@ -89,19 +106,28 @@ pub struct FunctionSizePlugin {
 }
 
 impl Default for FunctionSizePlugin {
-    fn default() -> Self { Self { max_blocks: 100 } }
+    fn default() -> Self {
+        Self { max_blocks: 100 }
+    }
 }
 
 impl UnlacePlugin for FunctionSizePlugin {
-    fn name(&self) -> &str { "function-size" }
-    fn version(&self) -> &str { "0.1.0" }
+    fn name(&self) -> &str {
+        "function-size"
+    }
+    fn version(&self) -> &str {
+        "0.1.0"
+    }
 
     fn on_function(&self, func: &SsaFunction) -> Vec<PluginFinding> {
         let bc = func.function.blocks.len();
         if bc > self.max_blocks {
             vec![PluginFinding {
                 kind: "large-function".into(),
-                message: format!("function has {} blocks (threshold: {})", bc, self.max_blocks),
+                message: format!(
+                    "function has {} blocks (threshold: {})",
+                    bc, self.max_blocks
+                ),
                 addr: Some(func.function.addr),
             }]
         } else {

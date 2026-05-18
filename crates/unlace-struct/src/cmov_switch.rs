@@ -254,7 +254,7 @@ fn rewrite_block(nodes: Vec<HirNode>, def_map: &BTreeMap<SsaVarnode, IrInsn>) ->
         // Skip the cmov nodes.
         let _ = result.drain(..count);
         new_result.push(switch);
-        new_result.extend(result.drain(..));
+        new_result.append(&mut result);
         result = new_result;
     }
 
@@ -364,8 +364,6 @@ mod tests {
         }
     }
 
-
-
     /// Build a def_map with IntEqual conditions and an expression definition.
     ///
     /// `entries`: list of (condition_sv, discriminant_varnode, constant_value).
@@ -418,11 +416,7 @@ mod tests {
         let cond1 = sv(0x108, 1, 1);
         let cond2 = sv(0x110, 1, 2);
 
-        let def_map = make_def_map(vec![
-            (cond0, disc, 0),
-            (cond1, disc, 1),
-            (cond2, disc, 2),
-        ]);
+        let def_map = make_def_map(vec![(cond0, disc, 0), (cond1, disc, 1), (cond2, disc, 2)]);
 
         // Three flat if-statements (no else), each writing to `dst`.
         let body = vec![
@@ -448,9 +442,7 @@ mod tests {
         // Should have collapsed into a single Switch node.
         assert_eq!(result.len(), 1);
         match &result[0] {
-            HirNode::Switch {
-                cases, default, ..
-            } => {
+            HirNode::Switch { cases, default, .. } => {
                 assert_eq!(cases.len(), 3);
                 assert!(default.is_none());
                 assert_eq!(cases[0].0, SwitchCase::Value(0));
@@ -542,11 +534,7 @@ mod tests {
         let cond1 = sv(0x108, 1, 1);
         let cond2 = sv(0x110, 1, 2);
 
-        let def_map = make_def_map(vec![
-            (cond0, disc, 0),
-            (cond1, disc, 1),
-            (cond2, disc, 2),
-        ]);
+        let def_map = make_def_map(vec![(cond0, disc, 0), (cond1, disc, 1), (cond2, disc, 2)]);
 
         let body = vec![
             HirNode::If {
@@ -589,11 +577,7 @@ mod tests {
         let cond1 = sv(0x108, 1, 1);
         let cond2 = sv(0x110, 1, 2);
 
-        let def_map = make_def_map(vec![
-            (cond0, disc, 0),
-            (cond1, disc, 1),
-            (cond2, disc, 2),
-        ]);
+        let def_map = make_def_map(vec![(cond0, disc, 0), (cond1, disc, 1), (cond2, disc, 2)]);
 
         let extra = HirNode::Statement(IrInsn::with_output(
             IrOp::Copy,
@@ -640,11 +624,7 @@ mod tests {
         let cond1 = sv(0x108, 1, 1);
         let cond2 = sv(0x110, 1, 2);
 
-        let def_map = make_def_map(vec![
-            (cond0, disc, 0),
-            (cond1, disc, 1),
-            (cond2, disc, 2),
-        ]);
+        let def_map = make_def_map(vec![(cond0, disc, 0), (cond1, disc, 1), (cond2, disc, 2)]);
 
         // cmov cascade is inside a while-loop body.
         let loop_cond = sv(0x200, 1, 10);
@@ -692,11 +672,7 @@ mod tests {
         let cond1 = sv(0x108, 1, 1);
         let cond2 = sv(0x110, 1, 2);
 
-        let def_map = make_def_map(vec![
-            (cond0, disc, 0),
-            (cond1, disc, 1),
-            (cond2, disc, 2),
-        ]);
+        let def_map = make_def_map(vec![(cond0, disc, 0), (cond1, disc, 1), (cond2, disc, 2)]);
 
         // These have else bodies — not cmov pattern.
         let body = vec![

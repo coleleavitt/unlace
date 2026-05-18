@@ -15,13 +15,19 @@ pub struct SemVer {
 
 impl SemVer {
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     /// Parse "X.Y.Z" format.
     pub fn parse(s: &str) -> Option<Self> {
         let parts: Vec<&str> = s.split('.').collect();
-        if parts.len() != 3 { return None; }
+        if parts.len() != 3 {
+            return None;
+        }
         Some(Self {
             major: parts[0].parse().ok()?,
             minor: parts[1].parse().ok()?,
@@ -36,7 +42,8 @@ impl SemVer {
             self.major == 0 && self.minor == req.minor && self.patch >= req.patch
         } else {
             // Post-1.0: same major, >= minor.patch
-            self.major == req.major && (self.minor > req.minor || (self.minor == req.minor && self.patch >= req.patch))
+            self.major == req.major
+                && (self.minor > req.minor || (self.minor == req.minor && self.patch >= req.patch))
         }
     }
 }
@@ -64,16 +71,22 @@ pub struct PluginRegistry {
 }
 
 impl PluginRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Register a plugin manifest.
     pub fn register(&mut self, manifest: PluginManifest) {
-        self.plugins.entry(manifest.name.clone()).or_default().push(manifest);
+        self.plugins
+            .entry(manifest.name.clone())
+            .or_default()
+            .push(manifest);
     }
 
     /// Find the latest compatible version of a plugin.
     pub fn resolve(&self, name: &str, min_version: &SemVer) -> Option<&PluginManifest> {
-        self.plugins.get(name)?
+        self.plugins
+            .get(name)?
             .iter()
             .filter(|m| m.version.is_compatible_with(min_version))
             .max_by(|a, b| a.version.cmp(&b.version))
@@ -124,13 +137,17 @@ mod tests {
     fn registry_resolve() {
         let mut reg = PluginRegistry::new();
         reg.register(PluginManifest {
-            name: "yara".into(), version: SemVer::new(1, 0, 0),
-            description: "Yara scanner".into(), min_host_version: SemVer::new(0, 1, 0),
+            name: "yara".into(),
+            version: SemVer::new(1, 0, 0),
+            description: "Yara scanner".into(),
+            min_host_version: SemVer::new(0, 1, 0),
             dependencies: vec![],
         });
         reg.register(PluginManifest {
-            name: "yara".into(), version: SemVer::new(1, 2, 0),
-            description: "Yara scanner v2".into(), min_host_version: SemVer::new(0, 1, 0),
+            name: "yara".into(),
+            version: SemVer::new(1, 2, 0),
+            description: "Yara scanner v2".into(),
+            min_host_version: SemVer::new(0, 1, 0),
             dependencies: vec![],
         });
         let resolved = reg.resolve("yara", &SemVer::new(1, 0, 0)).unwrap();
@@ -141,8 +158,10 @@ mod tests {
     fn missing_dependency() {
         let reg = PluginRegistry::new();
         let manifest = PluginManifest {
-            name: "my-plugin".into(), version: SemVer::new(0, 1, 0),
-            description: "test".into(), min_host_version: SemVer::new(0, 1, 0),
+            name: "my-plugin".into(),
+            version: SemVer::new(0, 1, 0),
+            description: "test".into(),
+            min_host_version: SemVer::new(0, 1, 0),
             dependencies: vec![("missing-dep".into(), SemVer::new(1, 0, 0))],
         };
         let missing = reg.check_dependencies(&manifest);
@@ -153,8 +172,20 @@ mod tests {
     #[test]
     fn list_plugins() {
         let mut reg = PluginRegistry::new();
-        reg.register(PluginManifest { name: "a".into(), version: SemVer::new(1,0,0), description: String::new(), min_host_version: SemVer::new(0,1,0), dependencies: vec![] });
-        reg.register(PluginManifest { name: "b".into(), version: SemVer::new(1,0,0), description: String::new(), min_host_version: SemVer::new(0,1,0), dependencies: vec![] });
+        reg.register(PluginManifest {
+            name: "a".into(),
+            version: SemVer::new(1, 0, 0),
+            description: String::new(),
+            min_host_version: SemVer::new(0, 1, 0),
+            dependencies: vec![],
+        });
+        reg.register(PluginManifest {
+            name: "b".into(),
+            version: SemVer::new(1, 0, 0),
+            description: String::new(),
+            min_host_version: SemVer::new(0, 1, 0),
+            dependencies: vec![],
+        });
         assert_eq!(reg.list_plugins().len(), 2);
     }
 }

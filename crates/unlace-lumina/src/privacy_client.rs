@@ -54,7 +54,11 @@ pub fn sanitize_for_sharing(author: &str, policy: &PrivacyPolicy) -> String {
 
 mod hex {
     pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes.as_ref().iter().map(|b| format!("{:02x}", b)).collect()
+        bytes
+            .as_ref()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect()
     }
 }
 
@@ -99,10 +103,16 @@ mod tests {
 
     #[test]
     fn anonymize_author() {
-        let policy = PrivacyPolicy { anonymize: true, ..Default::default() };
+        let policy = PrivacyPolicy {
+            anonymize: true,
+            ..Default::default()
+        };
         assert_eq!(sanitize_for_sharing("cole", &policy), "anonymous");
 
-        let policy2 = PrivacyPolicy { anonymize: false, ..Default::default() };
+        let policy2 = PrivacyPolicy {
+            anonymize: false,
+            ..Default::default()
+        };
         assert_eq!(sanitize_for_sharing("cole", &policy2), "cole");
     }
 }

@@ -70,10 +70,17 @@ pub struct BinaryMetadata {
 }
 
 /// Apply a filter to function summaries.
-pub fn filter_functions<'a>(functions: &'a [FunctionSummary], filter: &str) -> Vec<&'a FunctionSummary> {
+pub fn filter_functions<'a>(
+    functions: &'a [FunctionSummary],
+    filter: &str,
+) -> Vec<&'a FunctionSummary> {
     let filter_lower = filter.to_lowercase();
-    functions.iter()
-        .filter(|f| f.name.to_lowercase().contains(&filter_lower) || format!("0x{:x}", f.addr).contains(&filter_lower))
+    functions
+        .iter()
+        .filter(|f| {
+            f.name.to_lowercase().contains(&filter_lower)
+                || format!("0x{:x}", f.addr).contains(&filter_lower)
+        })
         .collect()
 }
 
@@ -91,9 +98,27 @@ mod tests {
     #[test]
     fn filter_by_name() {
         let funcs = vec![
-            FunctionSummary { addr: 0x1000, name: "main".into(), size: 100, block_count: 5, has_xrefs: true },
-            FunctionSummary { addr: 0x2000, name: "crypto_init".into(), size: 200, block_count: 10, has_xrefs: false },
-            FunctionSummary { addr: 0x3000, name: "helper".into(), size: 50, block_count: 2, has_xrefs: true },
+            FunctionSummary {
+                addr: 0x1000,
+                name: "main".into(),
+                size: 100,
+                block_count: 5,
+                has_xrefs: true,
+            },
+            FunctionSummary {
+                addr: 0x2000,
+                name: "crypto_init".into(),
+                size: 200,
+                block_count: 10,
+                has_xrefs: false,
+            },
+            FunctionSummary {
+                addr: 0x3000,
+                name: "helper".into(),
+                size: 50,
+                block_count: 2,
+                has_xrefs: true,
+            },
         ];
         let filtered = filter_functions(&funcs, "crypto");
         assert_eq!(filtered.len(), 1);
@@ -102,9 +127,13 @@ mod tests {
 
     #[test]
     fn filter_by_address() {
-        let funcs = vec![
-            FunctionSummary { addr: 0x401000, name: "foo".into(), size: 10, block_count: 1, has_xrefs: false },
-        ];
+        let funcs = vec![FunctionSummary {
+            addr: 0x401000,
+            name: "foo".into(),
+            size: 10,
+            block_count: 1,
+            has_xrefs: false,
+        }];
         let filtered = filter_functions(&funcs, "401000");
         assert_eq!(filtered.len(), 1);
     }
@@ -119,7 +148,11 @@ mod tests {
 
     #[test]
     fn decompile_request_serde() {
-        let req = DecompileRequest { binary_id: "abc".into(), function_addr: 0x1000, emit_ir: true };
+        let req = DecompileRequest {
+            binary_id: "abc".into(),
+            function_addr: 0x1000,
+            emit_ir: true,
+        };
         let json = serde_json::to_string(&req).unwrap();
         let parsed: DecompileRequest = serde_json::from_str(&json).unwrap();
         assert_eq!(req, parsed);

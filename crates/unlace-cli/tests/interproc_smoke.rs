@@ -35,8 +35,8 @@ fn build_ssa_map(binary: &str) -> BTreeMap<u64, SsaFunction> {
     });
     let image = ElfLoader::load(&data).expect("parse ELF");
     let lifter = get_lifter(image.arch);
-    let entries: Vec<FunctionEntry> = pipeline::discover_functions(&image, None)
-        .expect("discover functions");
+    let entries: Vec<FunctionEntry> =
+        pipeline::discover_functions(&image, None).expect("discover functions");
 
     let mut funcs = BTreeMap::new();
     for entry in &entries {
@@ -56,12 +56,19 @@ fn interproc_converges_on_branches() {
     // user function (main, classify, sub_*). Small enough that the
     // fixed-point loop must converge within the default cap.
     let mut funcs = build_ssa_map("branches.elf");
-    assert!(funcs.len() >= 2, "expected ≥2 functions, got {}", funcs.len());
+    assert!(
+        funcs.len() >= 2,
+        "expected ≥2 functions, got {}",
+        funcs.len()
+    );
 
     let report = pipeline::run_whole_program_interproc(&mut funcs, 0)
         .expect("interproc fixed-point should succeed");
 
-    assert!(report.iterations >= 1, "must perform at least one iteration");
+    assert!(
+        report.iterations >= 1,
+        "must perform at least one iteration"
+    );
     assert!(
         report.iterations <= unlace_passes::DEFAULT_INTERPROC_CAP,
         "should converge within DEFAULT_INTERPROC_CAP ({}), got {}",
@@ -77,7 +84,11 @@ fn interproc_runs_on_medium_without_panic() {
     // functions, ~2000 IR insns). Verify the helper doesn't panic on
     // realistic input and produces a report.
     let mut funcs = build_ssa_map("medium.elf");
-    assert!(funcs.len() >= 5, "expected ≥5 functions, got {}", funcs.len());
+    assert!(
+        funcs.len() >= 5,
+        "expected ≥5 functions, got {}",
+        funcs.len()
+    );
 
     let report = pipeline::run_whole_program_interproc(&mut funcs, 0)
         .expect("interproc fixed-point should succeed on medium.elf");

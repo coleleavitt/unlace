@@ -102,9 +102,7 @@ fn node_has_exit(node: &HirNode) -> bool {
             else_body,
             ..
         } => body_has_exit(then_body) || else_body.as_deref().is_some_and(body_has_exit),
-        HirNode::Switch {
-            cases, default, ..
-        } => {
+        HirNode::Switch { cases, default, .. } => {
             for (_case, arm, _ft) in cases {
                 if body_has_exit(arm) {
                     return true;
@@ -115,9 +113,7 @@ fn node_has_exit(node: &HirNode) -> bool {
         HirNode::TryCatch {
             try_body,
             catch_arms,
-        } => {
-            body_has_exit(try_body) || catch_arms.iter().any(|(_t, arm)| body_has_exit(arm))
-        }
+        } => body_has_exit(try_body) || catch_arms.iter().any(|(_t, arm)| body_has_exit(arm)),
         HirNode::TryFinally {
             try_body,
             finally_body,
@@ -173,9 +169,7 @@ fn walk(nodes: &[HirNode], counts: &mut LoopFormCounts) {
             HirNode::While { body, .. }
             | HirNode::DoWhile { body, .. }
             | HirNode::For { body, .. } => walk(body, counts),
-            HirNode::Switch {
-                cases, default, ..
-            } => {
+            HirNode::Switch { cases, default, .. } => {
                 for (_c, arm, _ft) in cases {
                     walk(arm, counts);
                 }

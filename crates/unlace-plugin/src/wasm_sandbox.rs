@@ -33,7 +33,10 @@ pub struct SandboxPolicy {
 impl Default for SandboxPolicy {
     fn default() -> Self {
         Self {
-            capabilities: vec![PluginCapability::ReadFunctions, PluginCapability::WriteFindings],
+            capabilities: vec![
+                PluginCapability::ReadFunctions,
+                PluginCapability::WriteFindings,
+            ],
             max_memory_pages: 256, // 16 MiB
             max_fuel: 10_000_000,
             max_findings: 1000,
@@ -78,10 +81,8 @@ pub fn validate_wasm_imports(import_names: &[&str]) -> Vec<PluginCapability> {
                     required.push(PluginCapability::WriteFindings);
                 }
             }
-            "unlace_alloc" => {
-                if !required.contains(&PluginCapability::Allocate) {
-                    required.push(PluginCapability::Allocate);
-                }
+            "unlace_alloc" if !required.contains(&PluginCapability::Allocate) => {
+                required.push(PluginCapability::Allocate);
             }
             _ => {}
         }
@@ -124,7 +125,10 @@ mod tests {
 
     #[test]
     fn policy_check_fail() {
-        let policy = SandboxPolicy { capabilities: vec![PluginCapability::ReadFunctions], ..Default::default() };
+        let policy = SandboxPolicy {
+            capabilities: vec![PluginCapability::ReadFunctions],
+            ..Default::default()
+        };
         let required = vec![PluginCapability::Allocate];
         assert!(!policy_satisfies(&policy, &required));
     }

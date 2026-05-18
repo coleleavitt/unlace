@@ -460,8 +460,10 @@ impl FunctionQuality {
         self.output_null_deref_sites = null_deref_regex().find_iter(emitted_c).count();
         self.output_stale_return_result = stale_return_result_count(emitted_c);
         self.output_unimplemented_tokens = emitted_c.matches("Unimplemented").count();
-        self.output_impossible_lvalue_sites = impossible_lvalue_regex().find_iter(emitted_c).count();
-        self.output_lost_frame_offset_sites = lost_frame_offset_regex().find_iter(emitted_c).count();
+        self.output_impossible_lvalue_sites =
+            impossible_lvalue_regex().find_iter(emitted_c).count();
+        self.output_lost_frame_offset_sites =
+            lost_frame_offset_regex().find_iter(emitted_c).count();
     }
 }
 
@@ -582,7 +584,10 @@ fn count_hir_nodes(body: &[HirNode], q: &mut FunctionQuality) {
             } => {
                 q.if_statements += 1;
                 if hir_body_is_empty(then_body)
-                    && else_body.as_ref().map(|e| hir_body_is_empty(e)).unwrap_or(true)
+                    && else_body
+                        .as_ref()
+                        .map(|e| hir_body_is_empty(e))
+                        .unwrap_or(true)
                 {
                     q.output_empty_bodies += 1;
                 }
@@ -1110,8 +1115,7 @@ fn analyze_function(
 
     let emitted_c =
         unlace_output::print_c_full(&hir, None, None, Some(&symbols), Some(&image.string_table));
-    let mut quality =
-        FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir, &flirt_calls);
+    let mut quality = FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir, &flirt_calls);
     quality.collect_output_sanity(&emitted_c);
     Ok(quality)
 }
@@ -1345,9 +1349,7 @@ pub fn render_json(report: &BinaryQuality) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        impossible_lvalue_regex, lost_frame_offset_regex, stale_return_result_count,
-    };
+    use super::{impossible_lvalue_regex, lost_frame_offset_regex, stale_return_result_count};
 
     #[test]
     fn impossible_lvalue_matches_small_immediate_write() {

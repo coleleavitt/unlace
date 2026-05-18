@@ -61,14 +61,8 @@ pub fn dump_type_audit(func: &SsaFunction) -> String {
         "## type audit for {} @ 0x{:x}\n",
         func.function.name, func.function.addr,
     );
-    let _ = writeln!(
-        out,
-        "| var | inferred type | provenance | notes |"
-    );
-    let _ = writeln!(
-        out,
-        "|-----|--------------|------------|-------|"
-    );
+    let _ = writeln!(out, "| var | inferred type | provenance | notes |");
+    let _ = writeln!(out, "|-----|--------------|------------|-------|");
 
     // Stack offsets named by DWARF feed the `debug` provenance bucket.
     let dwarf_offsets: BTreeSet<i64> = func.dwarf_local_names.keys().copied().collect();
@@ -104,21 +98,15 @@ pub fn dump_type_audit(func: &SsaFunction) -> String {
 
     if !func.composite_var_types.is_empty() {
         let _ = writeln!(out);
-        let _ = writeln!(out, "### composite types ({}):", func.composite_var_types.len());
         let _ = writeln!(
             out,
-            "| var | composite type |"
+            "### composite types ({}):",
+            func.composite_var_types.len()
         );
-        let _ = writeln!(
-            out,
-            "|-----|---------------|"
-        );
+        let _ = writeln!(out, "| var | composite type |");
+        let _ = writeln!(out, "|-----|---------------|");
         for (sv, ty) in &func.composite_var_types {
-            let _ = writeln!(
-                out,
-                "| {:?}#{} | {:?} |",
-                sv.base.space, sv.version, ty
-            );
+            let _ = writeln!(out, "| {:?}#{} | {:?} |", sv.base.space, sv.version, ty);
         }
     }
     out
@@ -162,9 +150,7 @@ fn sv_param_index(
         CallingConvention::SystemV => &[RDI, RSI, RDX, RCX, R8, R9],
         CallingConvention::MicrosoftX64 => &[RCX, RDX, R8, R9],
         CallingConvention::AArch64 => &[0, 8, 16, 24, 32, 40, 48, 56],
-        CallingConvention::Cdecl
-        | CallingConvention::Stdcall
-        | CallingConvention::Thiscall => {
+        CallingConvention::Cdecl | CallingConvention::Stdcall | CallingConvention::Thiscall => {
             // x86-32 stack ABIs pass via the stack — `this` lives in ECX
             // for thiscall, but the audit reports stack-based args via
             // the stack bucket, not signature.
@@ -852,7 +838,10 @@ mod tests {
         assert!(md.contains("type audit for ty_audit"));
         assert!(md.contains("| var | inferred type |"));
         // Two rows.
-        assert_eq!(md.matches("| Register#1 ").count() + md.matches("| Stack#1 ").count(), 2);
+        assert_eq!(
+            md.matches("| Register#1 ").count() + md.matches("| Stack#1 ").count(),
+            2
+        );
     }
 
     /// Batch 20: provenance bucketing recognises argument registers
@@ -866,15 +855,26 @@ mod tests {
         let mut ssa = make_ssa(func);
         ssa.calling_convention = CallingConvention::SystemV;
         // SysV first three int arg regs (RDI=56, RSI=48, RDX=16).
-        let rdi = SsaVarnode { base: Varnode::reg(56, 8), version: 1 };
-        let rsi = SsaVarnode { base: Varnode::reg(48, 8), version: 1 };
-        let rax = SsaVarnode { base: Varnode::reg(0, 8), version: 1 };
+        let rdi = SsaVarnode {
+            base: Varnode::reg(56, 8),
+            version: 1,
+        };
+        let rsi = SsaVarnode {
+            base: Varnode::reg(48, 8),
+            version: 1,
+        };
+        let rax = SsaVarnode {
+            base: Varnode::reg(0, 8),
+            version: 1,
+        };
         ssa.var_types.insert(rdi, PrimitiveType::Int(8));
         ssa.var_types.insert(rsi, PrimitiveType::Int(8));
         ssa.var_types.insert(rax, PrimitiveType::Int(8));
         // Drive `signature_param_count >= 2`.
-        ssa.inferred_params.push(("a1".into(), PrimitiveType::Int(8)));
-        ssa.inferred_params.push(("a2".into(), PrimitiveType::Int(8)));
+        ssa.inferred_params
+            .push(("a1".into(), PrimitiveType::Int(8)));
+        ssa.inferred_params
+            .push(("a2".into(), PrimitiveType::Int(8)));
 
         let md = dump_type_audit(&ssa);
         // RDI and RSI both lie within the 2-param window → `signature`.
@@ -893,9 +893,13 @@ mod tests {
         let func = Function::new("no_cc", BlockId(0), 0x1000);
         let mut ssa = make_ssa(func);
         ssa.calling_convention = CallingConvention::Unknown;
-        let rdi = SsaVarnode { base: Varnode::reg(56, 8), version: 1 };
+        let rdi = SsaVarnode {
+            base: Varnode::reg(56, 8),
+            version: 1,
+        };
         ssa.var_types.insert(rdi, PrimitiveType::Int(8));
-        ssa.inferred_params.push(("a1".into(), PrimitiveType::Int(8)));
+        ssa.inferred_params
+            .push(("a1".into(), PrimitiveType::Int(8)));
 
         let md = dump_type_audit(&ssa);
         assert!(!md.contains("| signature "));

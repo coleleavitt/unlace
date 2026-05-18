@@ -121,14 +121,14 @@ struct SpirVInsn<'a> {
 
 fn read_words(bytes: &[u8]) -> Result<&[u32], LiftError> {
     if bytes.len() % WORD_BYTES != 0 {
-        return Err(LiftError::Decode("SPIR-V byte stream not word-aligned".into()));
+        return Err(LiftError::Decode(
+            "SPIR-V byte stream not word-aligned".into(),
+        ));
     }
     // Safety: cast is sound because length is multiple of 4 and SPIR-V
     // requires word alignment in practice. Tests construct aligned slices.
     let len = bytes.len() / WORD_BYTES;
-    Ok(unsafe {
-        std::slice::from_raw_parts(bytes.as_ptr() as *const u32, len)
-    })
+    Ok(unsafe { std::slice::from_raw_parts(bytes.as_ptr() as *const u32, len) })
 }
 
 fn decode<'a>(words: &'a [u32]) -> Result<SpirVInsn<'a>, LiftError> {
@@ -242,15 +242,34 @@ fn lift_return_value(insn: &SpirVInsn<'_>, addr: u64) -> Vec<IrInsn> {
 
 fn lift_store(insn: &SpirVInsn<'_>, addr: u64) -> Vec<IrInsn> {
     // OpStore <ptr-id> <value-id> [memory-access]
-    let ptr = insn.operands.first().copied().map(id_var).unwrap_or_else(|| tmp(0));
-    let val = insn.operands.get(1).copied().map(id_var).unwrap_or_else(|| tmp(1));
-    vec![IrInsn::without_output(IrOp::Store, smallvec![ptr, val], addr)]
+    let ptr = insn
+        .operands
+        .first()
+        .copied()
+        .map(id_var)
+        .unwrap_or_else(|| tmp(0));
+    let val = insn
+        .operands
+        .get(1)
+        .copied()
+        .map(id_var)
+        .unwrap_or_else(|| tmp(1));
+    vec![IrInsn::without_output(
+        IrOp::Store,
+        smallvec![ptr, val],
+        addr,
+    )]
 }
 
 fn lift_load(insn: &SpirVInsn<'_>, addr: u64) -> Vec<IrInsn> {
     // OpLoad <result-type-id> <result-id> <ptr-id> [memory-access]
     let result_id = insn.operands.get(1).copied().unwrap_or(0);
-    let ptr = insn.operands.get(2).copied().map(id_var).unwrap_or_else(|| tmp(0));
+    let ptr = insn
+        .operands
+        .get(2)
+        .copied()
+        .map(id_var)
+        .unwrap_or_else(|| tmp(0));
     vec![IrInsn::with_output(
         IrOp::Load,
         id_var(result_id),
@@ -271,7 +290,12 @@ fn lift_branch(insn: &SpirVInsn<'_>, addr: u64) -> Vec<IrInsn> {
 
 fn lift_branch_cond(insn: &SpirVInsn<'_>, addr: u64) -> Vec<IrInsn> {
     // OpBranchConditional <cond-id> <true-label> <false-label>
-    let cond = insn.operands.first().copied().map(id_var).unwrap_or_else(|| tmp(0));
+    let cond = insn
+        .operands
+        .first()
+        .copied()
+        .map(id_var)
+        .unwrap_or_else(|| tmp(0));
     let true_lbl = insn.operands.get(1).copied().unwrap_or(0);
     vec![IrInsn::without_output(
         IrOp::Cbranch,
@@ -283,9 +307,24 @@ fn lift_branch_cond(insn: &SpirVInsn<'_>, addr: u64) -> Vec<IrInsn> {
 fn lift_arith(insn: &SpirVInsn<'_>, op: IrOp, addr: u64) -> Vec<IrInsn> {
     // Op<I/F>{Add,Sub,Mul} <type-id> <result-id> <a-id> <b-id>
     let result_id = insn.operands.get(1).copied().unwrap_or(0);
-    let a = insn.operands.get(2).copied().map(id_var).unwrap_or_else(|| tmp(0));
-    let b = insn.operands.get(3).copied().map(id_var).unwrap_or_else(|| tmp(1));
-    vec![IrInsn::with_output(op, id_var(result_id), smallvec![a, b], addr)]
+    let a = insn
+        .operands
+        .get(2)
+        .copied()
+        .map(id_var)
+        .unwrap_or_else(|| tmp(0));
+    let b = insn
+        .operands
+        .get(3)
+        .copied()
+        .map(id_var)
+        .unwrap_or_else(|| tmp(1));
+    vec![IrInsn::with_output(
+        op,
+        id_var(result_id),
+        smallvec![a, b],
+        addr,
+    )]
 }
 
 fn lift_function_call(insn: &SpirVInsn<'_>, addr: u64) -> Vec<IrInsn> {

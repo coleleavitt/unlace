@@ -460,6 +460,202 @@ impl PassDescriptor {
     }
 }
 
+/// Explicitly-allowed backward phase transition in the canonical
+/// pipeline, with a human-readable reason. Replaces the prior
+/// "intentional in current pipeline" generic blurb so a representative
+/// decompile run can explain *why* each apparent phase regression is
+/// not a bug.
+///
+/// Matched by `(prev_name, next_name)`; the names must equal the
+/// adjacent passes' `PassDescriptor::name` in the canonical schedule.
+/// Adding a brand-new backward transition without a matching entry
+/// here makes [`validate_named_phase_monotonicity_with_exceptions`]
+/// (and therefore the `every_canonical_backedge_has_a_registered_exception`
+/// test) fail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AllowedBackedge {
+    /// `PassDescriptor::name` of the earlier (higher-phase) pass.
+    pub prev_name: &'static str,
+    /// `PassDescriptor::name` of the later (lower-phase) pass.
+    pub next_name: &'static str,
+    /// Why this backward transition is intentional. One short sentence;
+    /// surfaced verbatim by `cargo xtask dump-pipeline` and by the
+    /// `UNLACE_VALIDATE_PIPELINE=1` CLI startup hook.
+    pub reason: &'static str,
+}
+
+impl AllowedBackedge {
+    /// Construct a backedge entry from string literals.
+    pub const fn new(
+        prev_name: &'static str,
+        next_name: &'static str,
+        reason: &'static str,
+    ) -> Self {
+        Self {
+            prev_name,
+            next_name,
+            reason,
+        }
+    }
+}
+
+/// The list of *intentional* backward phase transitions in
+/// [`canonical_pipeline_descriptor`], each tagged with a reason.
+///
+/// Every entry corresponds to one of the 11 pinned out-of-order
+/// transitions in the current schedule. They cluster into four
+/// well-understood patterns:
+///
+/// 1. **One-time pre-pass cluster** — `StackOffsetSnapshotPass` runs
+///    *before* phase-zero `NoreturnDetectPass` because it has to snapshot
+///    pre-optimization RSP/RBP offsets before any rewrite touches them.
+/// 2. **Inner outer-fixedpoint cluster** — IDA's GLBOPT loops co-iterate
+///    PreOpt cleanups, LocalOpt simplifiers and GlobalOpt analyses
+///    inside one `run_to_fixedpoint`. We mirror that, so a few
+///    `LocalOpt` passes appear after `GlobalOpt` passes inside the
+///    cluster.
+/// 3. **Post-fixedpoint cleanup + structural detection re-entry** —
+///    After the IR-level fixedpoint converges we run targeted passes
+///    (Prologue elim, indirect-call resolve) that legitimately sit at
+///    earlier phases.
+/// 4. **Presentation post-passes** — `VariableMergePass` (LVarAlloc)
+///    and `RustEnumPass` (TypeRecovery) intentionally run *after*
+///    presentation-layer cleanups because their inputs are the
+///    presentation-cleaned IR.
+pub fn canonical_pipeline_backedge_exceptions() -> &'static [AllowedBackedge] {
+    // The order of this slice matches the canonical schedule, but the
+    // matcher is name-keyed, so reordering is harmless.
+    const ENTRIES: &[AllowedBackedge] = &[
+        AllowedBackedge::new(
+            "StackOffsetSnapshotPass",
+            "NoreturnDetectPass",
+            "one-time pre-pass: snapshot RSP/RBP offsets before any IR rewrite",
+        ),
+        AllowedBackedge::new(
+            "GlobalCopyPropPass",
+            "DeadCodeElimPass",
+            "inner fixedpoint cluster: DCE follows global copy-prop to clean up dead defs",
+        ),
+        AllowedBackedge::new(
+            "GvnPass",
+            "BmiIdiomPass",
+            "inner fixedpoint cluster: BMI idiom recognition needs GVN-canonical inputs",
+        ),
+        AllowedBackedge::new(
+            "LicmPass",
+            "IvElimPass",
+            "inner fixedpoint cluster: IV elim consumes LICM-hoisted loop invariants",
+        ),
+        AllowedBackedge::new(
+            "ConditionSimplifyPass",
+            "CallBoundaryCopyPropPass",
+            "inner fixedpoint cluster: re-run PreOpt cleanups after condition simplify exposes new copies",
+        ),
+        AllowedBackedge::new(
+            "DeadStoreElimGlobalPass",
+            "DivisionIdiomPass",
+            "post-fixedpoint cleanup: idiom recognition after global DSE removes redundant stores",
+        ),
+        AllowedBackedge::new(
+            "SixtyFourBitDemotePass",
+            "PrologueElimPass",
+            "structural detection re-entry: prologue elim after 64-bit demote may expose new prologue patterns",
+        ),
+        AllowedBackedge::new(
+            "StackVarRecoveryPass",
+            "IndirectCallResolvePass",
+            "structural detection re-entry: indirect-call resolve after stack vars exposes pointer args",
+        ),
+        AllowedBackedge::new(
+            "TypeConstraintSolverPass",
+            "BitfieldIdiomPass",
+            "post-loop single shot: bitfield idiom recognition uses solved types",
+        ),
+        AllowedBackedge::new(
+            "ExpressionTreePass",
+            "VariableMergePass",
+            "presentation post-pass: variable merge runs on expression-tree-cleaned IR",
+        ),
+        AllowedBackedge::new(
+            "RegisterCoalescePass",
+            "RustEnumPass",
+            "presentation post-pass: Rust-runtime detection consumes coalesced registers",
+        ),
+    ];
+    ENTRIES
+}
+
+/// One violation row returned by
+/// [`validate_named_phase_monotonicity_with_exceptions`].
+///
+/// Distinct from the human-readable strings of
+/// [`validate_named_phase_monotonicity`] because callers (xtask, CLI,
+/// tests) want structured access to the offending pair to decide
+/// whether to print, exit non-zero, or assert in tests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PhaseViolation {
+    /// Index of `next` in the schedule (i.e. `i + 1`).
+    pub index: usize,
+    /// Name of the earlier (higher-phase) pass.
+    pub prev_name: String,
+    /// Phase of the earlier pass.
+    pub prev_phase: PassPhase,
+    /// Name of the later (lower-phase) pass.
+    pub next_name: String,
+    /// Phase of the later pass.
+    pub next_phase: PassPhase,
+}
+
+impl PhaseViolation {
+    /// Render the violation as a one-line diagnostic, suitable for CLI
+    /// warnings or test failure messages.
+    pub fn to_message(&self) -> String {
+        format!(
+            "at index {}: pass '{}' [{:?}] follows '{}' [{:?}]",
+            self.index, self.next_name, self.next_phase, self.prev_name, self.prev_phase,
+        )
+    }
+}
+
+/// Like [`validate_named_phase_monotonicity`], but subtracts the
+/// explicitly-allowed backedges in
+/// [`canonical_pipeline_backedge_exceptions`].
+///
+/// Returns `Ok(())` when every backward transition in `passes` is
+/// covered by a registered exception. Otherwise returns the offending
+/// transitions as structured [`PhaseViolation`] rows. Use this from
+/// CLI startup checks, xtask, and tests that need to fail loudly on
+/// *new* (un-explained) phase regressions.
+pub fn validate_named_phase_monotonicity_with_exceptions(
+    passes: &[PassDescriptor],
+) -> Result<(), Vec<PhaseViolation>> {
+    let allowed = canonical_pipeline_backedge_exceptions();
+    let mut violations: Vec<PhaseViolation> = Vec::new();
+    for (i, pair) in passes.windows(2).enumerate() {
+        let prev = pair[0];
+        let next = pair[1];
+        if next.phase.ordinal() < prev.phase.ordinal() {
+            let allowed_hit = allowed
+                .iter()
+                .any(|e| e.prev_name == prev.name && e.next_name == next.name);
+            if !allowed_hit {
+                violations.push(PhaseViolation {
+                    index: i + 1,
+                    prev_name: prev.name.to_string(),
+                    prev_phase: prev.phase,
+                    next_name: next.name.to_string(),
+                    next_phase: next.phase,
+                });
+            }
+        }
+    }
+    if violations.is_empty() {
+        Ok(())
+    } else {
+        Err(violations)
+    }
+}
+
 /// `&[PassDescriptor]` equivalent of [`validate_phase_monotonicity`].
 ///
 /// Useful when the caller wants to validate a *schedule* described as
@@ -1013,5 +1209,117 @@ mod phase_tests {
     /// 50 scheduled passes total).
     pub(super) const fn canonical_pipeline_transgression_count() -> usize {
         11
+    }
+
+    /// Batch 16: the canonical pipeline's backward transitions must all
+    /// be covered by `canonical_pipeline_backedge_exceptions`. Adding a
+    /// new backward transition without registering an exception (or
+    /// inserting a pass into the wrong phase) fails this test.
+    ///
+    /// This is the DoD test for Batch 16: "inserting a pass into the
+    /// wrong phase fails a test."
+    #[test]
+    fn every_canonical_backedge_has_a_registered_exception() {
+        let desc = super::canonical_pipeline_descriptor();
+        match super::validate_named_phase_monotonicity_with_exceptions(&desc) {
+            Ok(()) => {}
+            Err(violations) => {
+                let lines: Vec<String> = violations.iter().map(|v| v.to_message()).collect();
+                panic!(
+                    "canonical pipeline has unexplained backward phase transition(s):\n  {}\n\
+                     If this is intentional, register a matching \
+                     `AllowedBackedge` in \
+                     `canonical_pipeline_backedge_exceptions()`. \
+                     Otherwise move the offending pass into a correct \
+                     phase.",
+                    lines.join("\n  ")
+                );
+            }
+        }
+    }
+
+    /// Inserting a pass into the wrong phase (here: a `LocalOpt` pass
+    /// shoved in *after* the `FinalCleanup` block, with no registered
+    /// backedge exception) must fail the exception-aware validator.
+    /// This proves Batch 16's enforcement is wired and not silently
+    /// permissive — if someone moves `CallingConvFinalizePass`
+    /// (FinalCleanup) before a fresh `LocalOpt` pass without
+    /// registering the new backward jump, CI breaks.
+    #[test]
+    fn inserting_local_opt_after_final_cleanup_is_rejected() {
+        use super::{PassDescriptor, PassPhase};
+
+        let mut desc = super::canonical_pipeline_descriptor();
+        // Splice a brand-new LocalOpt pass *after* the final-cleanup
+        // pass. Its name is unique so no allowed-backedge entry can
+        // possibly cover it.
+        desc.push(PassDescriptor::new(
+            "BogusLocalOptAfterFinalCleanup",
+            PassPhase::LocalOpt,
+        ));
+        let err = super::validate_named_phase_monotonicity_with_exceptions(&desc)
+            .expect_err("inserting a LocalOpt pass after FinalCleanup must be a violation");
+        assert!(
+            err.iter()
+                .any(|v| v.next_name == "BogusLocalOptAfterFinalCleanup"),
+            "violation list must name the inserted pass: {err:#?}"
+        );
+    }
+
+    /// Inserting a `PreOpt` pass *after* a `TypeRecovery` pass, where
+    /// no exception covers it, must be rejected.
+    #[test]
+    fn inserting_pre_opt_after_type_recovery_is_rejected() {
+        use super::{PassDescriptor, PassPhase};
+
+        let mut desc = super::canonical_pipeline_descriptor();
+        // Find a TypeRecovery pass and inject a PreOpt pass right
+        // after it. We pick `OpTypeBindingPass` because it sits late
+        // in the schedule and is unambiguously TypeRecovery.
+        let pos = desc
+            .iter()
+            .position(|d| d.name == "OpTypeBindingPass")
+            .expect("OpTypeBindingPass must exist in the canonical pipeline");
+        desc.insert(
+            pos + 1,
+            PassDescriptor::new("BogusPreOptAfterTypeRecovery", PassPhase::PreOpt),
+        );
+        let err = super::validate_named_phase_monotonicity_with_exceptions(&desc)
+            .expect_err("PreOpt pass following TypeRecovery must be a violation");
+        assert!(
+            err.iter()
+                .any(|v| v.next_name == "BogusPreOptAfterTypeRecovery"),
+            "violation list must name the inserted pass: {err:#?}"
+        );
+    }
+
+    /// A descriptor that already has every backward transition covered
+    /// by an exception must pass cleanly. This is the positive twin of
+    /// the "wrong phase fails" test: it shows the validator isn't a
+    /// false-positive generator.
+    #[test]
+    fn canonical_pipeline_passes_exception_aware_validator() {
+        let desc = super::canonical_pipeline_descriptor();
+        super::validate_named_phase_monotonicity_with_exceptions(&desc)
+            .expect("canonical pipeline must be exception-clean");
+    }
+
+    /// The exception list count must match the raw-transgression count.
+    /// If they diverge, either an unused entry crept in or someone
+    /// added a transgression without registering a reason.
+    #[test]
+    fn allowed_backedges_cover_every_transgression() {
+        let desc = super::canonical_pipeline_descriptor();
+        let raw =
+            super::validate_named_phase_monotonicity(&desc).expect_err("schedule is not monotone");
+        let allowed = super::canonical_pipeline_backedge_exceptions();
+        assert_eq!(
+            raw.len(),
+            allowed.len(),
+            "allowed-backedge count drifted from raw transgression count: \
+             {} raw vs {} allowed",
+            raw.len(),
+            allowed.len()
+        );
     }
 }

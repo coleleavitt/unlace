@@ -192,9 +192,11 @@ pub use op_type_binding::{OpTypeBindingPass, render_enum_const, render_field_acc
 pub use opaque_pred::opaque_predicate_detect;
 pub use packet_struct::{PacketStruct, detect_packet_struct};
 pub use pass::{
-    DEFAULT_OUTER_FIXEDPOINT_CAP, OuterFixedpointReport, Pass, PassDescriptor, PassError,
-    PassPhase, canonical_pipeline_descriptor, run_outer_fixedpoint, run_to_fixedpoint,
-    ssa_type_signature, validate_named_phase_monotonicity, validate_phase_monotonicity,
+    AllowedBackedge, DEFAULT_OUTER_FIXEDPOINT_CAP, OuterFixedpointReport, Pass, PassDescriptor,
+    PassError, PassPhase, PhaseViolation, canonical_pipeline_backedge_exceptions,
+    canonical_pipeline_descriptor, run_outer_fixedpoint, run_to_fixedpoint, ssa_type_signature,
+    validate_named_phase_monotonicity, validate_named_phase_monotonicity_with_exceptions,
+    validate_phase_monotonicity,
 };
 pub use prologue_elim::PrologueElimPass;
 pub use reanalysis::{

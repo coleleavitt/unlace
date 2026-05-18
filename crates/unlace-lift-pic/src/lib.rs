@@ -112,7 +112,10 @@ impl Lifter for Pic16Lifter {
         let word = u16::from_le_bytes([bytes[0], bytes[1]]) & 0x3FFF;
 
         let ops = decode(word, addr);
-        Ok(LiftedInsn { ir_ops: ops, len: 2 })
+        Ok(LiftedInsn {
+            ir_ops: ops,
+            len: 2,
+        })
     }
 }
 
@@ -132,21 +135,9 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
         // RETFIE
         0x0009 => return vec![IrInsn::without_output(IrOp::Return, smallvec![], addr)],
         // SLEEP
-        0x0063 => {
-            return vec![IrInsn::without_output(
-                IrOp::Callother,
-                smallvec![],
-                addr,
-            )]
-        }
+        0x0063 => return vec![IrInsn::without_output(IrOp::Callother, smallvec![], addr)],
         // CLRWDT
-        0x0064 => {
-            return vec![IrInsn::without_output(
-                IrOp::Callother,
-                smallvec![],
-                addr,
-            )]
-        }
+        0x0064 => return vec![IrInsn::without_output(IrOp::Callother, smallvec![], addr)],
         _ => {}
     }
 
@@ -175,7 +166,7 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
                 dst,
                 smallvec![f, const_vn(1)],
                 addr,
-            )]
+            )];
         }
         // DECF f, d  (0b000011)
         0x03 => {
@@ -184,14 +175,19 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
                 dst,
                 smallvec![f, const_vn(1)],
                 addr,
-            )]
+            )];
         }
         // CLRF f      (0b000001 1fffffff)
         0x01 => {
             // CLRW shares 0b000001 but with f field zero; both clear
             // the destination.
             let target = if d_bit { f } else { w };
-            return vec![IrInsn::with_output(IrOp::Copy, target, smallvec![const_vn(0)], addr)];
+            return vec![IrInsn::with_output(
+                IrOp::Copy,
+                target,
+                smallvec![const_vn(0)],
+                addr,
+            )];
         }
         // RLF f, d    (0b001101)
         0x0D => {
@@ -200,7 +196,7 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
                 dst,
                 smallvec![f, const_vn(1)],
                 addr,
-            )]
+            )];
         }
         // RRF f, d    (0b001100)
         0x0C => {
@@ -209,11 +205,11 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
                 dst,
                 smallvec![f, const_vn(1)],
                 addr,
-            )]
+            )];
         }
         // MOVWF f     (0b000000 1fffffff)
         0x00 if (word & 0x80) != 0 => {
-            return vec![IrInsn::with_output(IrOp::Copy, f, smallvec![w], addr)]
+            return vec![IrInsn::with_output(IrOp::Copy, f, smallvec![w], addr)];
         }
         _ => {}
     }
@@ -264,14 +260,14 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
                 vn_w(),
                 smallvec![const_vn(k8)],
                 addr,
-            )]
+            )];
         }
         // RETLW k    (0b1101_xxxx = 0x34..=0x37)
         0x34..=0x37 => {
             return vec![
                 IrInsn::with_output(IrOp::Copy, vn_w(), smallvec![const_vn(k8)], addr),
                 IrInsn::without_output(IrOp::Return, smallvec![], addr),
-            ]
+            ];
         }
         // ADDLW k    (0b111110)
         0x3E | 0x3F => {
@@ -280,7 +276,7 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
                 vn_w(),
                 smallvec![vn_w(), const_vn(k8)],
                 addr,
-            )]
+            )];
         }
         // SUBLW k    (0b111100)
         0x3C | 0x3D => {
@@ -289,7 +285,7 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
                 vn_w(),
                 smallvec![const_vn(k8), vn_w()],
                 addr,
-            )]
+            )];
         }
         // ANDLW k    (0b111001)
         0x39 => {
@@ -298,7 +294,7 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
                 vn_w(),
                 smallvec![vn_w(), const_vn(k8)],
                 addr,
-            )]
+            )];
         }
         // IORLW k    (0b111000)
         0x38 => {
@@ -307,7 +303,7 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
                 vn_w(),
                 smallvec![vn_w(), const_vn(k8)],
                 addr,
-            )]
+            )];
         }
         // XORLW k    (0b111010)
         0x3A => {
@@ -316,12 +312,16 @@ fn decode(word: u16, addr: u64) -> Vec<IrInsn> {
                 vn_w(),
                 smallvec![vn_w(), const_vn(k8)],
                 addr,
-            )]
+            )];
         }
         _ => {}
     }
 
-    vec![IrInsn::without_output(IrOp::Unimplemented, smallvec![], addr)]
+    vec![IrInsn::without_output(
+        IrOp::Unimplemented,
+        smallvec![],
+        addr,
+    )]
 }
 
 fn alu(op: IrOp, dst: Varnode, f: Varnode, w: Varnode, addr: u64) -> IrInsn {

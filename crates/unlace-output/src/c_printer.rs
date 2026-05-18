@@ -14914,16 +14914,8 @@ mod tests {
         ann.flirt_call_annotations
             .insert(target_va, ("strlen".to_string(), 0.5));
 
-        let output = super::print_c_with_annotations(
-            &func,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
 
         assert!(
             output.contains("/* flirt: strlen@0.50 */"),

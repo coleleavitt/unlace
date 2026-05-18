@@ -170,13 +170,13 @@ impl Z80Lifter {
         // (ir_op, writes_a) — `CP` is flags-only, modelled as IntSub
         // whose result goes to a temp.
         let (ir_op, write_a) = match op_sel {
-            0 => (IrOp::IntAdd, true), // ADD
-            1 => (IrOp::IntAdd, true), // ADC
-            2 => (IrOp::IntSub, true), // SUB
-            3 => (IrOp::IntSub, true), // SBC
-            4 => (IrOp::IntAnd, true), // AND
-            5 => (IrOp::IntXor, true), // XOR
-            6 => (IrOp::IntOr, true),  // OR
+            0 => (IrOp::IntAdd, true),  // ADD
+            1 => (IrOp::IntAdd, true),  // ADC
+            2 => (IrOp::IntSub, true),  // SUB
+            3 => (IrOp::IntSub, true),  // SBC
+            4 => (IrOp::IntAnd, true),  // AND
+            5 => (IrOp::IntXor, true),  // XOR
+            6 => (IrOp::IntOr, true),   // OR
             7 => (IrOp::IntSub, false), // CP
             _ => return Err(LiftError::Unsupported),
         };
@@ -672,12 +672,42 @@ impl Lifter for Z80Lifter {
             let t_e = tmp(5, 1);
             return Ok(LiftedInsn {
                 ir_ops: vec![
-                    IrInsn::with_output(IrOp::Copy, t_d, SmallVec::from_slice(&[reg(REG_D, 1)]), addr),
-                    IrInsn::with_output(IrOp::Copy, t_e, SmallVec::from_slice(&[reg(REG_E, 1)]), addr),
-                    IrInsn::with_output(IrOp::Copy, reg(REG_D, 1), SmallVec::from_slice(&[reg(REG_H, 1)]), addr),
-                    IrInsn::with_output(IrOp::Copy, reg(REG_E, 1), SmallVec::from_slice(&[reg(REG_L, 1)]), addr),
-                    IrInsn::with_output(IrOp::Copy, reg(REG_H, 1), SmallVec::from_slice(&[t_d]), addr),
-                    IrInsn::with_output(IrOp::Copy, reg(REG_L, 1), SmallVec::from_slice(&[t_e]), addr),
+                    IrInsn::with_output(
+                        IrOp::Copy,
+                        t_d,
+                        SmallVec::from_slice(&[reg(REG_D, 1)]),
+                        addr,
+                    ),
+                    IrInsn::with_output(
+                        IrOp::Copy,
+                        t_e,
+                        SmallVec::from_slice(&[reg(REG_E, 1)]),
+                        addr,
+                    ),
+                    IrInsn::with_output(
+                        IrOp::Copy,
+                        reg(REG_D, 1),
+                        SmallVec::from_slice(&[reg(REG_H, 1)]),
+                        addr,
+                    ),
+                    IrInsn::with_output(
+                        IrOp::Copy,
+                        reg(REG_E, 1),
+                        SmallVec::from_slice(&[reg(REG_L, 1)]),
+                        addr,
+                    ),
+                    IrInsn::with_output(
+                        IrOp::Copy,
+                        reg(REG_H, 1),
+                        SmallVec::from_slice(&[t_d]),
+                        addr,
+                    ),
+                    IrInsn::with_output(
+                        IrOp::Copy,
+                        reg(REG_L, 1),
+                        SmallVec::from_slice(&[t_e]),
+                        addr,
+                    ),
                 ],
                 len: 1,
             });

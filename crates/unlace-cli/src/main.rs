@@ -651,7 +651,10 @@ mod tests {
         let before_ptr = image.pdb_types.as_ref().map(|t| t as *const _);
         attach_pdb_sidecar(&mut image, &bin);
         let after_ptr = image.pdb_types.as_ref().map(|t| t as *const _);
-        assert_eq!(before_ptr, after_ptr, "existing pdb_types must be preserved");
+        assert_eq!(
+            before_ptr, after_ptr,
+            "existing pdb_types must be preserved"
+        );
     }
 
     #[test]

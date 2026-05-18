@@ -864,7 +864,7 @@ mod tests {
             | (4u32 << 15)    // sdst = s4
             | (1u32 << 9)     // sbase = 1 (meaning s2:s3)
             | (1u32 << 8)     // IMM = 1
-            | 4u32;           // offset = 4 (in dwords, so byte offset = 16)
+            | 4u32; // offset = 4 (in dwords, so byte offset = 16)
         let r = lifter().lift_insn(&bytes(word), 0x120).unwrap();
         assert_eq!(r.len, 4);
         assert_eq!(r.ir_ops[0].op, IrOp::IntAdd);
@@ -884,7 +884,7 @@ mod tests {
             | (0x10u32 << 18) // op = S_STORE_DWORD
             | (4u32 << 12)    // sdata = s4
             | (1u32 << 6)     // sbase = 1 (meaning s2:s3)
-            | 0;              // reserved
+            | 0; // reserved
         let word1: u32 = 0x20; // offset = 32
         let mut enc = [0u8; 8];
         enc[..4].copy_from_slice(&word0.to_le_bytes());

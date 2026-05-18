@@ -3,6 +3,17 @@ use std::process::{Command, Output};
 fn unlace_bin() -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.env_remove("RUST_LOG");
+    // Batch 16: the spec verification gate is run as
+    // `UNLACE_VALIDATE_PIPELINE=1 cargo test --test cli_smoke`. That
+    // env var leaks to child unlace processes spawned here, which
+    // would make every test's stderr noisy with the scheduler-audit
+    // banner and break the `decompile_emit_c` assertion that "normal
+    // CLI runs should not emit scheduler-audit noise by default".
+    //
+    // Tests that explicitly want the audit banner re-set the env var
+    // on the returned `Command` themselves; everything else gets the
+    // clean stderr a normal user would see.
+    cmd.env_remove("UNLACE_VALIDATE_PIPELINE");
     cmd
 }
 
@@ -124,6 +135,47 @@ fn decompile_emit_c() {
     assert!(
         stdout.contains("return 0;"),
         "C output should fold the zero written to eax into a direct return: {stdout}"
+    );
+}
+
+/// Batch 16: when `UNLACE_VALIDATE_PIPELINE=1` is set, the CLI must
+/// emit a single line that confirms the schedule passed the
+/// exception-aware monotonicity check, naming the registered backedge
+/// exceptions instead of the prior ambiguous "intentional in current
+/// pipeline" blurb. This proves a representative decompile can explain
+/// its scheduler order without ambiguous warnings.
+#[test]
+fn decompile_with_validate_pipeline_env_emits_explicit_backedge_summary() {
+    let output = unlace_bin()
+        .env("UNLACE_VALIDATE_PIPELINE", "1")
+        .args(["decompile", "--emit", "c", "--function", "main"])
+        .arg(fixture("hello_world.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // Must produce a phase-monotonicity audit line.
+    assert!(
+        stderr.contains("phase-monotonicity check"),
+        "with UNLACE_VALIDATE_PIPELINE=1 the CLI must emit the audit banner: {stderr}"
+    );
+    // The banner must name how many backedges are explicitly allowed
+    // — proving the new exception-aware validator is wired, not the
+    // pre-Batch-16 generic "intentional in current pipeline" message.
+    assert!(
+        stderr.contains("explicitly-allowed backedges")
+            || stderr.contains("unexplained out-of-order"),
+        "audit banner must use the exception-aware wording: {stderr}"
+    );
+    // And there must NOT be any unexplained transition in the
+    // canonical pipeline — if there is, the schedule has drifted.
+    assert!(
+        !stderr.contains("unexplained out-of-order"),
+        "canonical pipeline contains an unexplained backward transition: {stderr}"
     );
 }
 

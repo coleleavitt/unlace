@@ -785,7 +785,10 @@ mod tests {
         assert_eq!(insn.len, 2);
         assert_eq!(insn.ir_ops[0].op, IrOp::Copy);
         assert_eq!(insn.ir_ops[0].output, Some(reg(0, C28X_REG_SIZE)));
-        assert_eq!(insn.ir_ops[0].inputs[0], Varnode::constant(0x42, C28X_REG_SIZE));
+        assert_eq!(
+            insn.ir_ops[0].inputs[0],
+            Varnode::constant(0x42, C28X_REG_SIZE)
+        );
     }
 
     #[test]
@@ -795,7 +798,10 @@ mod tests {
         let insn = lifter.lift_insn(&word16(0x17ff), 0x100).unwrap();
         assert_eq!(insn.ir_ops[0].op, IrOp::Copy);
         assert_eq!(insn.ir_ops[0].output, Some(reg(7, C28X_REG_SIZE)));
-        assert_eq!(insn.ir_ops[0].inputs[0], Varnode::constant(0xff, C28X_REG_SIZE));
+        assert_eq!(
+            insn.ir_ops[0].inputs[0],
+            Varnode::constant(0xff, C28X_REG_SIZE)
+        );
     }
 
     #[test]
@@ -931,7 +937,10 @@ mod tests {
         let insn = lifter.lift_insn(&word16(0xa0fe), 0x200).unwrap();
         assert_eq!(insn.ir_ops[0].op, IrOp::Branch);
         // 0x200 + 2 + 0xfffc = 0x101fe
-        assert_eq!(insn.ir_ops[0].inputs[0].offset, 0x200u64.wrapping_add(2).wrapping_add(0xfffc));
+        assert_eq!(
+            insn.ir_ops[0].inputs[0].offset,
+            0x200u64.wrapping_add(2).wrapping_add(0xfffc)
+        );
     }
 
     #[test]
@@ -953,7 +962,9 @@ mod tests {
         let lifter = TiLifter::new_c28x();
         let insn = lifter.lift_insn(&word16(0xb080), 0x400).unwrap();
         assert_eq!(insn.ir_ops[0].op, IrOp::Cbranch);
-        let expected = 0x400u64.wrapping_add(2).wrapping_add((-256i16) as u16 as u64);
+        let expected = 0x400u64
+            .wrapping_add(2)
+            .wrapping_add((-256i16) as u16 as u64);
         assert_eq!(insn.ir_ops[0].inputs[0].offset, expected);
     }
 
@@ -1051,7 +1062,10 @@ mod tests {
         let insn = lifter.lift_insn(&word16(0x1500), 0x100).unwrap();
         assert_eq!(insn.ir_ops[0].op, IrOp::Copy);
         assert_eq!(insn.ir_ops[0].output, Some(reg(5, C28X_REG_SIZE)));
-        assert_eq!(insn.ir_ops[0].inputs[0], Varnode::constant(0, C28X_REG_SIZE));
+        assert_eq!(
+            insn.ir_ops[0].inputs[0],
+            Varnode::constant(0, C28X_REG_SIZE)
+        );
     }
 
     #[test]
@@ -1072,10 +1086,16 @@ mod tests {
             if opc == 0xc {
                 let bytes = [word.to_le_bytes()[0], word.to_le_bytes()[1], 0x00, 0x10];
                 let insn = lifter.lift_insn(&bytes, 0x100).unwrap();
-                assert!(!insn.ir_ops.is_empty(), "opcode 0x{opc:x} produced empty IR");
+                assert!(
+                    !insn.ir_ops.is_empty(),
+                    "opcode 0x{opc:x} produced empty IR"
+                );
             } else {
                 let insn = lifter.lift_insn(&word.to_le_bytes(), 0x100).unwrap();
-                assert!(!insn.ir_ops.is_empty(), "opcode 0x{opc:x} produced empty IR");
+                assert!(
+                    !insn.ir_ops.is_empty(),
+                    "opcode 0x{opc:x} produced empty IR"
+                );
             }
         }
     }

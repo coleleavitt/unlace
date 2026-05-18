@@ -47,10 +47,7 @@ pub fn parse_cor20_header(bytes: &[u8]) -> Option<Cor20Header> {
 /// `ClrMethodDef` becomes a Function symbol at its RVA (relocated by
 /// `image_base`). The assembly name lands in the string table at the
 /// reserved manifest slot for downstream inspection.
-pub fn cil_to_binary_image(
-    meta: &ClrMetadata,
-    image_base: u64,
-) -> crate::image::BinaryImage {
+pub fn cil_to_binary_image(meta: &ClrMetadata, image_base: u64) -> crate::image::BinaryImage {
     use crate::image::{ArchId, BinaryImage, Endian, Symbol, SymbolKind};
     let mut out = BinaryImage::empty(ArchId::Unknown(0xC11), Endian::Little); // "CIL"
     if let Some(name) = &meta.assembly_name {
@@ -114,16 +111,16 @@ pub fn parse_clr_header(data: &[u8], offset: usize) -> Option<ClrMetadata> {
     if offset + 16 > data.len() {
         return None;
     }
-    let magic = u32::from_le_bytes(data[offset..offset+4].try_into().ok()?);
+    let magic = u32::from_le_bytes(data[offset..offset + 4].try_into().ok()?);
     if magic != CLR_MAGIC {
         return None;
     }
     // Version string length at offset+12.
-    let ver_len = u32::from_le_bytes(data[offset+12..offset+16].try_into().ok()?) as usize;
+    let ver_len = u32::from_le_bytes(data[offset + 12..offset + 16].try_into().ok()?) as usize;
     if offset + 16 + ver_len > data.len() {
         return None;
     }
-    let version = String::from_utf8_lossy(&data[offset+16..offset+16+ver_len])
+    let version = String::from_utf8_lossy(&data[offset + 16..offset + 16 + ver_len])
         .trim_end_matches('\0')
         .to_string();
 
@@ -143,7 +140,7 @@ mod tests {
         assert!(!detect_clr(&data));
         // Insert BSJB magic.
         let offset = 100;
-        data[offset..offset+4].copy_from_slice(&CLR_MAGIC.to_le_bytes());
+        data[offset..offset + 4].copy_from_slice(&CLR_MAGIC.to_le_bytes());
         assert!(detect_clr(&data));
     }
 
@@ -156,7 +153,7 @@ mod tests {
         // Version length at offset 12.
         let ver = b"v4.0.30319\0\0"; // padded to 4-byte boundary
         data[12..16].copy_from_slice(&(ver.len() as u32).to_le_bytes());
-        data[16..16+ver.len()].copy_from_slice(ver);
+        data[16..16 + ver.len()].copy_from_slice(ver);
 
         let meta = parse_clr_header(&data, offset).unwrap();
         assert_eq!(meta.runtime_version, "v4.0.30319");
@@ -225,7 +222,9 @@ mod tests {
         let helper = bin.symbols.get(&0x0040_2080).unwrap();
         assert_eq!(helper.name, "MyApp.Program.Helper");
         assert_eq!(
-            bin.string_table.get(&0xFFFF_FFFF_FFFF_FF03).map(|s| s.as_str()),
+            bin.string_table
+                .get(&0xFFFF_FFFF_FFFF_FF03)
+                .map(|s| s.as_str()),
             Some("MyApp")
         );
     }

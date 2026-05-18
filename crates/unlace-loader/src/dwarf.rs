@@ -876,10 +876,13 @@ pub fn evaluate_simple_location(value: AttributeValue<R<'_>>) -> Option<SimpleLo
 /// constant into compatible shapes (FrameOffset/RegisterPlus/Absolute).
 fn apply_plus_uconst(base: Option<SimpleLocation>, k: u64) -> Option<SimpleLocation> {
     match base? {
-        SimpleLocation::FrameOffset(off) => Some(SimpleLocation::FrameOffset(off.saturating_add(k as i64))),
-        SimpleLocation::RegisterPlus(r, off) => {
-            Some(SimpleLocation::RegisterPlus(r, off.saturating_add(k as i64)))
+        SimpleLocation::FrameOffset(off) => {
+            Some(SimpleLocation::FrameOffset(off.saturating_add(k as i64)))
         }
+        SimpleLocation::RegisterPlus(r, off) => Some(SimpleLocation::RegisterPlus(
+            r,
+            off.saturating_add(k as i64),
+        )),
         SimpleLocation::Absolute(addr) => Some(SimpleLocation::Absolute(addr.wrapping_add(k))),
         _ => None,
     }
@@ -892,7 +895,10 @@ fn read_implicit_value(cursor: &[u8]) -> Option<(SimpleLocation, &[u8])> {
     if rest.len() < len {
         return None;
     }
-    Some((SimpleLocation::ImplicitValue(rest[..len].to_vec()), &rest[len..]))
+    Some((
+        SimpleLocation::ImplicitValue(rest[..len].to_vec()),
+        &rest[len..],
+    ))
 }
 
 /// Read `DW_OP_bregx` operands `<uleb reg> <sleb offset>` and emit a
@@ -918,11 +924,7 @@ enum OpEffect {
     Piece(SimpleLocation, u32),
 }
 
-fn decode_one_op(
-    op: u8,
-    cursor: &[u8],
-    base: Option<SimpleLocation>,
-) -> Option<(OpEffect, &[u8])> {
+fn decode_one_op(op: u8, cursor: &[u8], base: Option<SimpleLocation>) -> Option<(OpEffect, &[u8])> {
     match op {
         // DW_OP_addr — 8-byte little-endian absolute (64-bit form).
         0x03 => {
@@ -1432,8 +1434,7 @@ mod tests {
     fn evaluator_models_indirection() {
         // breg5 with sleb 0 (=0x00) then DW_OP_deref (0x06).
         let bytes = [0x75, 0x00, 0x06];
-        let Some(SimpleLocation::Indirect(inner, width)) =
-            evaluate_simple_location_bytes(&bytes)
+        let Some(SimpleLocation::Indirect(inner, width)) = evaluate_simple_location_bytes(&bytes)
         else {
             panic!("expected Indirect");
         };
@@ -1456,7 +1457,9 @@ mod tests {
         let bytes = [0x35, 0x9f];
         assert_eq!(
             evaluate_simple_location_bytes(&bytes),
-            Some(SimpleLocation::StackValue(Box::new(SimpleLocation::Absolute(5))))
+            Some(SimpleLocation::StackValue(Box::new(
+                SimpleLocation::Absolute(5)
+            )))
         );
     }
 
@@ -2077,12 +2080,7 @@ int main(void) {
         std::fs::write(&src, source).expect("write source");
 
         let status = std::process::Command::new("clang")
-            .args([
-                "-gdwarf-5",
-                "-O2",
-                "-fbasic-block-sections=all",
-                "-o",
-            ])
+            .args(["-gdwarf-5", "-O2", "-fbasic-block-sections=all", "-o"])
             .arg(&elf)
             .arg(&src)
             .status()
@@ -2127,7 +2125,9 @@ int main(void) {
     /// absent or the compiler doesn't emit a loclists-backed local.
     #[test]
     fn loclists_decode_single_range_fbreg() {
-        let Ok(temp) = tempfile::tempdir() else { return };
+        let Ok(temp) = tempfile::tempdir() else {
+            return;
+        };
         let src = temp.path().join("loclists_fbreg.c");
         let elf = temp.path().join("loclists_fbreg.elf");
         let source = r#"
@@ -2150,8 +2150,12 @@ int main(void) { return add_one(41); }
         if !status.success() {
             return;
         }
-        let Ok(data) = std::fs::read(&elf) else { return };
-        let Ok(img) = ElfLoader::load(&data) else { return };
+        let Ok(data) = std::fs::read(&elf) else {
+            return;
+        };
+        let Ok(img) = ElfLoader::load(&data) else {
+            return;
+        };
         let Ok(info) = import_dwarf(&img) else { return };
 
         // Find any local with a non-empty v5 location list. Some
@@ -2185,7 +2189,9 @@ int main(void) { return add_one(41); }
     /// should preserve both entries.
     #[test]
     fn loclists_two_ranges_keep_both() {
-        let Ok(temp) = tempfile::tempdir() else { return };
+        let Ok(temp) = tempfile::tempdir() else {
+            return;
+        };
         let src = temp.path().join("loclists_split.c");
         let elf = temp.path().join("loclists_split.elf");
         let source = r#"
@@ -2214,8 +2220,12 @@ int main(void) { return split(2) + split(-1); }
         if !status.success() {
             return;
         }
-        let Ok(data) = std::fs::read(&elf) else { return };
-        let Ok(img) = ElfLoader::load(&data) else { return };
+        let Ok(data) = std::fs::read(&elf) else {
+            return;
+        };
+        let Ok(img) = ElfLoader::load(&data) else {
+            return;
+        };
         let Ok(info) = import_dwarf(&img) else { return };
 
         // Find any local with ≥ 2 v5 entries. Skip when the compiler
@@ -2252,8 +2262,11 @@ int main(void) { return split(2) + split(-1); }
         };
         let src = tmp.path().join("skeleton.c");
         let obj = tmp.path().join("skeleton.elf");
-        std::fs::write(&src, "int f(int x) { return x + 1; }\nint main(void){ return f(0); }\n")
-            .expect("write skeleton.c");
+        std::fs::write(
+            &src,
+            "int f(int x) { return x + 1; }\nint main(void){ return f(0); }\n",
+        )
+        .expect("write skeleton.c");
 
         let status = std::process::Command::new("clang")
             .arg("-gdwarf-5")
@@ -2315,7 +2328,9 @@ int main(void) { return split(2) + split(-1); }
         // Reuse the debug_calls fixture as our "external partner".
         let dwo_bytes = std::fs::read("../../fixtures/debug_calls.elf")
             .expect("debug_calls fixture must exist");
-        parent.merge_split_dwarf(&dwo_bytes).expect("merge should succeed");
+        parent
+            .merge_split_dwarf(&dwo_bytes)
+            .expect("merge should succeed");
         assert!(
             !parent.functions.is_empty(),
             "merge should populate functions from the .dwo partner"

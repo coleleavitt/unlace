@@ -2651,7 +2651,10 @@ mod tests {
         };
         assert_eq!(*offset, 5);
         assert_eq!(*width, 3);
-        assert!(matches!(**underlying, Type::Primitive(PrimitiveType::Int(4))));
+        assert!(matches!(
+            **underlying,
+            Type::Primitive(PrimitiveType::Int(4))
+        ));
     }
 
     /// `LF_MODIFIER` passes through to the underlying type.

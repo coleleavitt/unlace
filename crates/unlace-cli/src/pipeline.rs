@@ -1136,7 +1136,13 @@ fn maturity_snapshot(ssa: &SsaFunction, stage: &str, iter: usize) {
         .function
         .name
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     let file_name = format!("{safe_func}-{stage}-iter{iter}.txt");
     let path = dir.join(file_name);
@@ -1770,10 +1776,12 @@ pub fn decompile_one_function_cached(
         .iter()
         .filter(|f| f.addr <= target_addr)
         .max_by_key(|f| f.addr)
-        .ok_or_else(|| anyhow::anyhow!(
-            "no function at or below 0x{target_addr:x} (out of {} discovered)",
-            functions.len()
-        ))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "no function at or below 0x{target_addr:x} (out of {} discovered)",
+                functions.len()
+            )
+        })?;
 
     // Cache lookup before the heavy pipeline.
     let cache_key = match (cache, binary_sha256) {
@@ -3201,8 +3209,7 @@ mod tests {
             addr: base,
             size: memcpy_bytes.len() as u64,
         };
-        let (symbols, flirt) =
-            super::build_symbol_table_and_flirt_with_functions(&image, &[entry]);
+        let (symbols, flirt) = super::build_symbol_table_and_flirt_with_functions(&image, &[entry]);
         assert_eq!(symbols.get(&base).map(String::as_str), Some("memcpy"));
         let fc = flirt.get(&base).expect("flirt confidence missing");
         assert_eq!(fc.name, "memcpy");
@@ -3323,10 +3330,8 @@ mod tests {
             .map(|(addr, _)| *addr)
             .expect("main symbol");
 
-        let tmp = std::env::temp_dir().join(format!(
-            "unlace_pipeline_cache_test_{}",
-            std::process::id()
-        ));
+        let tmp =
+            std::env::temp_dir().join(format!("unlace_pipeline_cache_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         let cache = crate::cache::DiskCache::new(&tmp);
         let sha = crate::cache::sha256_hex(&data);
@@ -3347,8 +3352,7 @@ mod tests {
         let key = crate::cache::CacheKey::new(&sha, main_addr, 0);
         // The recorded size may differ from `0`; recover it from `discover_functions`
         // the same way the cached entry was built.
-        let functions =
-            super::discover_functions(&image, None).expect("discover");
+        let functions = super::discover_functions(&image, None).expect("discover");
         let entry = functions
             .iter()
             .filter(|f| f.addr <= main_addr)

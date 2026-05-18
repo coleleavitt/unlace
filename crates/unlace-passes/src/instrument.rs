@@ -165,9 +165,7 @@ fn record_schedule_event(function: &str, pass: &str, phase: PassPhase, changed: 
         *entry = entry.saturating_add(1);
         idx
     };
-    let mut log = schedule_log()
-        .lock()
-        .unwrap_or_else(|p| p.into_inner());
+    let mut log = schedule_log().lock().unwrap_or_else(|p| p.into_inner());
     log.push(ScheduleRow {
         function: function.to_string(),
         pass: pass.to_string(),
@@ -183,9 +181,7 @@ fn record_schedule_event(function: &str, pass: &str, phase: PassPhase, changed: 
 /// named by `UNLACE_SCHEDULE_AUDIT`.
 pub fn dump_schedule_audit_csv() -> String {
     let rows: Vec<ScheduleRow> = {
-        let log = schedule_log()
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let log = schedule_log().lock().unwrap_or_else(|p| p.into_inner());
         log.clone()
     };
     let mut out = String::from("function,pass,phase,iteration,changed\n");
@@ -211,9 +207,7 @@ pub fn dump_schedule_audit_csv() -> String {
 /// the schedule is well-ordered. Used by the xtask audit subcommand.
 pub fn schedule_audit_oscillations() -> Vec<String> {
     let rows: Vec<ScheduleRow> = {
-        let log = schedule_log()
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let log = schedule_log().lock().unwrap_or_else(|p| p.into_inner());
         log.clone()
     };
     let mut violations = Vec::new();

@@ -165,7 +165,9 @@ pub fn parse_vector_table(data: &[u8]) -> Option<Stm32VectorTable> {
     if data.len() < MIN_VECTORS * 4 {
         return None;
     }
-    let read_u32 = |off: usize| -> Option<u32> { Some(u32::from_le_bytes(data[off..off+4].try_into().ok()?)) };
+    let read_u32 = |off: usize| -> Option<u32> {
+        Some(u32::from_le_bytes(data[off..off + 4].try_into().ok()?))
+    };
     let initial_sp = read_u32(0)?;
     let reset_vector = read_u32(4)?;
     let nmi_handler = read_u32(8)?;

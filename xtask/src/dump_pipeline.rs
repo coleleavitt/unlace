@@ -14,14 +14,19 @@
 //!
 //! After the numbered list, prints a summary line reporting the count
 //! of out-of-order transitions (from
-//! [`unlace_passes::validate_named_phase_monotonicity`]). The current
-//! pipeline is *intentionally* not strictly monotone (see the
-//! `canonical_pipeline_is_documented` test in `unlace-passes`); this
-//! subcommand always exits 0 regardless — it's an introspection tool,
-//! not a CI gate.
+//! [`unlace_passes::validate_named_phase_monotonicity`]) and the
+//! human-readable reason registered for each in
+//! [`unlace_passes::canonical_pipeline_backedge_exceptions`] (Batch 16).
+//! Then it consults
+//! [`unlace_passes::validate_named_phase_monotonicity_with_exceptions`]
+//! and exits non-zero if any backedge is unexplained — that's the CI
+//! gate: a representative decompile can explain its scheduler order
+//! without ambiguous warnings, and inserting a pass into the wrong
+//! phase makes this command fail.
 
 use unlace_passes::{
-    PassPhase, canonical_pipeline_descriptor, validate_named_phase_monotonicity,
+    PassPhase, canonical_pipeline_backedge_exceptions, canonical_pipeline_descriptor,
+    validate_named_phase_monotonicity, validate_named_phase_monotonicity_with_exceptions,
 };
 
 pub fn run() {
@@ -54,19 +59,70 @@ pub fn run() {
         println!("  {phase:?}: {n}");
     }
     println!();
+
+    // Raw monotonicity: list every backward transition, with its
+    // registered exception reason (Batch 16). Each backedge MUST be
+    // covered, otherwise the exception-aware check below surfaces it
+    // as an unexplained anomaly.
+    let allowed = canonical_pipeline_backedge_exceptions();
     match validate_named_phase_monotonicity(&desc) {
         Ok(()) => {
             println!("phase monotonicity: OK (no out-of-order transitions)");
         }
         Err(violations) => {
             println!(
-                "phase monotonicity: {} out-of-order transition(s) \
-                 (intentional in current pipeline)",
+                "phase monotonicity: {} backward transition(s), \
+                 {} explicitly allowed:",
+                violations.len(),
+                allowed.len()
+            );
+            for (i, pair) in desc.windows(2).enumerate() {
+                let prev = pair[0];
+                let next = pair[1];
+                if next.phase.ordinal() < prev.phase.ordinal() {
+                    let reason = allowed
+                        .iter()
+                        .find(|e| e.prev_name == prev.name && e.next_name == next.name)
+                        .map(|e| e.reason)
+                        .unwrap_or("UNEXPLAINED — register an AllowedBackedge");
+                    println!(
+                        "  at index {idx}: {next_name} [{next_phase:?}] \
+                         follows {prev_name} [{prev_phase:?}] — {reason}",
+                        idx = i + 1,
+                        next_name = next.name,
+                        next_phase = next.phase,
+                        prev_name = prev.name,
+                        prev_phase = prev.phase,
+                    );
+                }
+            }
+        }
+    }
+    println!();
+    match validate_named_phase_monotonicity_with_exceptions(&desc) {
+        Ok(()) => {
+            println!(
+                "exception-aware monotonicity: OK \
+                 (every backward transition is covered by a registered \
+                 AllowedBackedge — see \
+                 unlace_passes::canonical_pipeline_backedge_exceptions)"
+            );
+        }
+        Err(violations) => {
+            println!(
+                "exception-aware monotonicity: FAIL — \
+                 {} unexplained backward transition(s):",
                 violations.len()
             );
             for v in &violations {
-                println!("  {v}");
+                println!("  {}", v.to_message());
             }
+            println!(
+                "  register a matching AllowedBackedge in \
+                 unlace_passes::canonical_pipeline_backedge_exceptions \
+                 or fix the schedule."
+            );
+            std::process::exit(1);
         }
     }
 }

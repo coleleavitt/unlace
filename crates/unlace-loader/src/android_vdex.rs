@@ -288,7 +288,8 @@ fn parse_quickening_section(
     // The quickening section size is: total - dex_data - verifier_deps.
     // We'll parse entries until we hit the verifier deps section or EOF.
     let verifier_deps_start = if header.verifier_deps_size > 0 {
-        data.len().saturating_sub(header.verifier_deps_size as usize)
+        data.len()
+            .saturating_sub(header.verifier_deps_size as usize)
     } else {
         data.len()
     };

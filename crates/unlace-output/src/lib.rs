@@ -24,9 +24,9 @@ pub use cpp_stl::{
     recognize_stl,
 };
 pub use demangle::{DemangleResult, SymbolKind, SymbolLanguage, demangle, sanitize_for_c};
-pub use instruction_annotations::collect_function_annotations;
 pub use expr_ast::{
-    COT_NAMES, CExpr, CExprCoverageRow, CoerceKind, cexpr_coverage_markdown,
-    cexpr_coverage_rows, cot_name,
+    CExpr, CExprCoverageRow, COT_NAMES, CoerceKind, cexpr_coverage_markdown, cexpr_coverage_rows,
+    cot_name,
 };
+pub use instruction_annotations::collect_function_annotations;
 pub use ir_dump::{dump_ir, dump_lvars, dump_type_audit};

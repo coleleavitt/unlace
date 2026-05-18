@@ -636,11 +636,13 @@ mod tests {
 
     #[test]
     fn sh_nop_emits_no_ir() {
-        assert!(SharcBlackfinLifter::sharc()
-            .lift_insn(&[0, 0, 0, 0], 0)
-            .unwrap()
-            .ir_ops
-            .is_empty());
+        assert!(
+            SharcBlackfinLifter::sharc()
+                .lift_insn(&[0, 0, 0, 0], 0)
+                .unwrap()
+                .ir_ops
+                .is_empty()
+        );
     }
     #[test]
     fn sh_mov_emits_copy() {

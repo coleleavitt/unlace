@@ -103,7 +103,7 @@ mod tests {
         data[4..7].copy_from_slice(b"035");
         data[32..36].copy_from_slice(&1024u32.to_le_bytes()); // file_size
         data[56..60].copy_from_slice(&100u32.to_le_bytes()); // string_ids
-        data[64..68].copy_from_slice(&50u32.to_le_bytes());  // type_ids
+        data[64..68].copy_from_slice(&50u32.to_le_bytes()); // type_ids
         data[80..84].copy_from_slice(&200u32.to_le_bytes()); // method_ids
         data[96..100].copy_from_slice(&10u32.to_le_bytes()); // class_defs
 
@@ -115,7 +115,8 @@ mod tests {
 
     #[test]
     fn test_bad_magic() {
-        let mut data = vec![0xDE, 0xAD, 0xBE, 0xEF]; data.resize(112, 0);
+        let mut data = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        data.resize(112, 0);
         assert!(matches!(parse_dex_header(&data), Err(DexError::BadMagic)));
     }
 

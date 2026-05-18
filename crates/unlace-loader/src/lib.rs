@@ -98,9 +98,11 @@ pub use flirt::{
 };
 pub use gcc_except_table::{FunctionLsda, GccExceptTableInfo, TryRegion, parse_gcc_except_table};
 pub use image::{
-    ArchId, BinaryImage, BoundImport, DebugRecord, DylibDep, DylibKind, Endian, LoadConfig,
-    PeMitigations, RelocKind, Relocation, ResourceEntry, RichHeader, RichRecord, Section,
-    SectionFlags, Symbol, SymbolKind,
+    ArchId, AuthenticodeCertificate, BinaryImage, BoundImport, DebugRecord, DylibDep, DylibKind,
+    Endian, LoadConfig, PeMitigations, RelocKind, Relocation, ResourceEntry, RichHeader,
+    RichRecord, Section, SectionFlags, Symbol, SymbolKind, WIN_CERT_REVISION_1_0,
+    WIN_CERT_REVISION_2_0, WIN_CERT_TYPE_PKCS_SIGNED_DATA, WIN_CERT_TYPE_RESERVED_1,
+    WIN_CERT_TYPE_TS_STACK_SIGNED, WIN_CERT_TYPE_X509,
 };
 pub use intel_hex::{
     IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,

@@ -472,26 +472,8 @@ where
     // IMAGE_DIRECTORY_ENTRY_SECURITY (4) carries Authenticode. Unlike
     // other data directories its RVA is a *file offset* — the entry
     // points at a `WIN_CERTIFICATE` blob in the security section.
-    let (authenticode_present, authenticode_size) = match file
-        .data_directories()
-        .get(pe::IMAGE_DIRECTORY_ENTRY_SECURITY)
-    {
-        Some(dir) if dir.size.get(object::LittleEndian) > 0 => {
-            let file_off = dir.virtual_address.get(object::LittleEndian) as usize;
-            let size = dir.size.get(object::LittleEndian);
-            if file_off + (size as usize) <= data.len() {
-                (true, size)
-            } else {
-                tracing::debug!(
-                    file_off,
-                    size,
-                    "PE security directory references bytes outside the file"
-                );
-                (false, 0)
-            }
-        }
-        _ => (false, 0),
-    };
+    let (authenticode_present, authenticode_size, authenticode_certificates, authenticode_malformed) =
+        parse_security_directory(file, data);
 
     crate::image::PeMitigations {
         nx_compat: (dll_characteristics & NX_COMPAT) != 0,
@@ -502,7 +484,113 @@ where
         xf_or_xfg_guarded,
         authenticode_present,
         authenticode_size,
+        authenticode_certificates,
+        authenticode_malformed,
     }
+}
+
+/// Walk `IMAGE_DIRECTORY_ENTRY_SECURITY` and decode each
+/// `WIN_CERTIFICATE` header. Returns `(present, total_size, entries, malformed)`.
+fn parse_security_directory<Pe>(
+    file: &PeFile<Pe>,
+    data: &[u8],
+) -> (
+    bool,
+    u32,
+    Vec<crate::image::AuthenticodeCertificate>,
+    bool,
+)
+where
+    Pe: ImageNtHeaders,
+{
+    let dir = match file
+        .data_directories()
+        .get(pe::IMAGE_DIRECTORY_ENTRY_SECURITY)
+    {
+        Some(d) if d.size.get(object::LittleEndian) > 0 => d,
+        _ => return (false, 0, Vec::new(), false),
+    };
+
+    let dir_off = dir.virtual_address.get(object::LittleEndian);
+    let dir_size = dir.size.get(object::LittleEndian);
+    let (entries, malformed) = match walk_certificate_table(data, dir_off, dir_size) {
+        Some(out) => out,
+        None => {
+            tracing::debug!(
+                dir_off,
+                dir_size,
+                "PE security directory references bytes outside the file"
+            );
+            return (false, 0, Vec::new(), false);
+        }
+    };
+
+    (true, dir_size, entries, malformed)
+}
+
+/// Pure-bytes walk of the security directory. Returns `None` when the
+/// `(offset, size)` pair would read past `data`; returns
+/// `Some((entries, malformed))` otherwise. `malformed` is set when a
+/// header inside the directory truncates the walk early.
+///
+/// The certificate table is a packed sequence of `WIN_CERTIFICATE`
+/// records, each 8-byte-aligned. Each header is 8 bytes:
+///
+/// ```text
+/// u32 dwLength
+/// u16 wRevision
+/// u16 wCertificateType
+/// ```
+///
+/// followed by `dwLength - 8` payload bytes. The next entry starts at
+/// the next 8-byte boundary past the current `dwLength`.
+pub(crate) fn walk_certificate_table(
+    data: &[u8],
+    dir_offset: u32,
+    dir_size: u32,
+) -> Option<(Vec<crate::image::AuthenticodeCertificate>, bool)> {
+    let dir_off = dir_offset as usize;
+    let dir_sz = dir_size as usize;
+
+    let end = dir_off.checked_add(dir_sz)?;
+    if end > data.len() {
+        return None;
+    }
+
+    let mut entries = Vec::new();
+    let mut cursor = dir_off;
+    let mut malformed = false;
+
+    while cursor + 8 <= end {
+        let dw_length =
+            u32::from_le_bytes([data[cursor], data[cursor + 1], data[cursor + 2], data[cursor + 3]]);
+        let revision = u16::from_le_bytes([data[cursor + 4], data[cursor + 5]]);
+        let cert_type = u16::from_le_bytes([data[cursor + 6], data[cursor + 7]]);
+
+        if (dw_length as usize) < 8 || cursor + (dw_length as usize) > end {
+            tracing::debug!(
+                cursor,
+                dw_length,
+                end,
+                "PE WIN_CERTIFICATE entry truncated or invalid"
+            );
+            malformed = true;
+            break;
+        }
+
+        entries.push(crate::image::AuthenticodeCertificate {
+            file_offset: cursor as u32,
+            length: dw_length,
+            revision,
+            cert_type,
+            data_size: dw_length - 8,
+        });
+
+        let next = cursor + (dw_length as usize);
+        cursor = (next + 7) & !7;
+    }
+
+    Some((entries, malformed))
 }
 
 /// Parse `IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG` into a [`LoadConfig`].
@@ -1659,6 +1747,11 @@ mod tests {
             .expect("PE input must yield pe_mitigations");
         assert!(!mits.authenticode_present, "minimal PE has no signature");
         assert_eq!(mits.authenticode_size, 0);
+        assert!(
+            mits.authenticode_certificates.is_empty(),
+            "no certificate entries expected for an unsigned PE"
+        );
+        assert!(!mits.authenticode_malformed);
 
         assert_eq!(img.arch, ArchId::X86_64);
         assert_eq!(img.endian, Endian::Little);
@@ -3050,5 +3143,140 @@ mod tests {
             vec!["LibX!B".to_string(), "LibX!A".to_string()],
             "cycle A→B→A must record both hops then halt without recursing"
         );
+    }
+
+    /// Build a single `WIN_CERTIFICATE` header (8 bytes) at `offset`
+    /// in `out`, then fill the payload with `payload`. Returns the
+    /// byte length the entry consumed including header.
+    fn write_win_cert(out: &mut Vec<u8>, revision: u16, cert_type: u16, payload: &[u8]) -> u32 {
+        let total = 8 + payload.len() as u32;
+        out.extend_from_slice(&total.to_le_bytes());
+        out.extend_from_slice(&revision.to_le_bytes());
+        out.extend_from_slice(&cert_type.to_le_bytes());
+        out.extend_from_slice(payload);
+        total
+    }
+
+    /// Pad `out` up to the next 8-byte boundary.
+    fn pad_to_align8(out: &mut Vec<u8>) {
+        while out.len() % 8 != 0 {
+            out.push(0);
+        }
+    }
+
+    #[test]
+    fn certificate_table_walks_single_pkcs7_entry() {
+        // dir_offset = 0; build one PKCS#7 v2 record with a tiny payload.
+        let mut blob: Vec<u8> = Vec::new();
+        write_win_cert(
+            &mut blob,
+            crate::image::WIN_CERT_REVISION_2_0,
+            crate::image::WIN_CERT_TYPE_PKCS_SIGNED_DATA,
+            &[0xAA, 0xBB, 0xCC, 0xDD],
+        );
+        // Pad the directory so the size is exactly a multiple of 8 —
+        // matches what real PEs do.
+        pad_to_align8(&mut blob);
+
+        let (entries, malformed) =
+            walk_certificate_table(&blob, 0, blob.len() as u32).expect("in-bounds");
+        assert!(!malformed);
+        assert_eq!(entries.len(), 1);
+        let e = &entries[0];
+        assert_eq!(e.file_offset, 0);
+        assert_eq!(e.length, 12);
+        assert_eq!(e.revision, crate::image::WIN_CERT_REVISION_2_0);
+        assert_eq!(e.cert_type, crate::image::WIN_CERT_TYPE_PKCS_SIGNED_DATA);
+        assert_eq!(e.data_size, 4);
+    }
+
+    #[test]
+    fn certificate_table_walks_two_entries_with_padding() {
+        // Two records: first one whose dwLength (10) is not 8-aligned —
+        // the walker must skip 6 padding bytes to land on the next
+        // header at offset 16.
+        let mut blob: Vec<u8> = Vec::new();
+        write_win_cert(
+            &mut blob,
+            crate::image::WIN_CERT_REVISION_1_0,
+            crate::image::WIN_CERT_TYPE_X509,
+            &[0x11, 0x22],
+        );
+        pad_to_align8(&mut blob);
+        write_win_cert(
+            &mut blob,
+            crate::image::WIN_CERT_REVISION_2_0,
+            crate::image::WIN_CERT_TYPE_PKCS_SIGNED_DATA,
+            &[0xFF; 16],
+        );
+        pad_to_align8(&mut blob);
+
+        let (entries, malformed) =
+            walk_certificate_table(&blob, 0, blob.len() as u32).expect("in-bounds");
+        assert!(!malformed);
+        assert_eq!(entries.len(), 2);
+
+        assert_eq!(entries[0].file_offset, 0);
+        assert_eq!(entries[0].length, 10);
+        assert_eq!(entries[0].cert_type, crate::image::WIN_CERT_TYPE_X509);
+        assert_eq!(entries[0].data_size, 2);
+
+        // Second header must start at the next 8-byte boundary past
+        // entry-0's tail (10 → next aligned offset is 16).
+        assert_eq!(entries[1].file_offset, 16);
+        assert_eq!(entries[1].length, 24);
+        assert_eq!(
+            entries[1].cert_type,
+            crate::image::WIN_CERT_TYPE_PKCS_SIGNED_DATA
+        );
+        assert_eq!(entries[1].data_size, 16);
+    }
+
+    #[test]
+    fn certificate_table_marks_truncated_entry_as_malformed() {
+        // dwLength claims 64 bytes but only 16 are in the directory.
+        let mut blob: Vec<u8> = Vec::new();
+        blob.extend_from_slice(&64u32.to_le_bytes());
+        blob.extend_from_slice(&crate::image::WIN_CERT_REVISION_2_0.to_le_bytes());
+        blob.extend_from_slice(&crate::image::WIN_CERT_TYPE_PKCS_SIGNED_DATA.to_le_bytes());
+        blob.extend_from_slice(&[0; 8]);
+
+        let (entries, malformed) =
+            walk_certificate_table(&blob, 0, blob.len() as u32).expect("in-bounds");
+        assert!(malformed, "claimed length 64 in a 16-byte blob must be flagged");
+        assert!(entries.is_empty(), "no entries should be emitted past the truncation");
+    }
+
+    #[test]
+    fn certificate_table_rejects_zero_dwlength() {
+        // dwLength = 0 is invalid: the header itself is 8 bytes long,
+        // so any record needs dwLength >= 8.
+        let mut blob: Vec<u8> = Vec::new();
+        blob.extend_from_slice(&0u32.to_le_bytes());
+        blob.extend_from_slice(&0u16.to_le_bytes());
+        blob.extend_from_slice(&0u16.to_le_bytes());
+
+        let (entries, malformed) =
+            walk_certificate_table(&blob, 0, 8).expect("in-bounds");
+        assert!(malformed);
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn certificate_table_out_of_bounds_directory_returns_none() {
+        // dir_offset+size points past the file end → None, so the
+        // caller leaves `authenticode_present` false even though the
+        // optional header advertises a security directory.
+        let blob = vec![0u8; 32];
+        assert!(walk_certificate_table(&blob, 16, 32).is_none());
+    }
+
+    #[test]
+    fn certificate_table_empty_directory_yields_no_entries() {
+        let blob = vec![0u8; 0];
+        let (entries, malformed) =
+            walk_certificate_table(&blob, 0, 0).expect("zero-length dir is in-bounds");
+        assert!(!malformed);
+        assert!(entries.is_empty());
     }
 }

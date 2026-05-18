@@ -782,6 +782,33 @@ pub struct PeMitigationsReport {
     pub xf_or_xfg_guarded: bool,
     pub authenticode_present: bool,
     pub authenticode_size: u32,
+    #[serde(default)]
+    pub authenticode_certificates: Vec<AuthenticodeCertificateReport>,
+    #[serde(default)]
+    pub authenticode_malformed: bool,
+}
+
+/// Serialisable view of a single `WIN_CERTIFICATE` entry parsed from
+/// the PE security directory.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct AuthenticodeCertificateReport {
+    pub file_offset: u32,
+    pub length: u32,
+    pub revision: u16,
+    pub cert_type: u16,
+    pub data_size: u32,
+}
+
+impl From<&unlace_loader::AuthenticodeCertificate> for AuthenticodeCertificateReport {
+    fn from(c: &unlace_loader::AuthenticodeCertificate) -> Self {
+        Self {
+            file_offset: c.file_offset,
+            length: c.length,
+            revision: c.revision,
+            cert_type: c.cert_type,
+            data_size: c.data_size,
+        }
+    }
 }
 
 impl From<&unlace_loader::PeMitigations> for PeMitigationsReport {
@@ -795,6 +822,12 @@ impl From<&unlace_loader::PeMitigations> for PeMitigationsReport {
             xf_or_xfg_guarded: m.xf_or_xfg_guarded,
             authenticode_present: m.authenticode_present,
             authenticode_size: m.authenticode_size,
+            authenticode_certificates: m
+                .authenticode_certificates
+                .iter()
+                .map(AuthenticodeCertificateReport::from)
+                .collect(),
+            authenticode_malformed: m.authenticode_malformed,
         }
     }
 }

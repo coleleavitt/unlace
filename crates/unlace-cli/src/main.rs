@@ -14,7 +14,7 @@ use unlace_loader::{
 use unlace_plugin::PluginManager;
 
 use unlace_cli::annotations::{self, AnnotationDb};
-use unlace_cli::args::{self, Args, Cmd};
+use unlace_cli::args::{self, Args, Cmd, LuminaAction};
 use unlace_cli::batch::{self, BatchConfig};
 use unlace_cli::pipeline::{self, PipelineConfig};
 
@@ -143,6 +143,7 @@ fn main() {
             init_tracing(verbose);
             run_ir_dump(&binary, function.as_deref(), phase.as_deref())
         }
+        Cmd::Lumina { action } => run_lumina(action),
     };
 
     // Batch 17: per-pass timing dump. The wrapper inside
@@ -347,6 +348,137 @@ fn run_quality(binary_path: &std::path::Path, format: args::QualityFormat) -> Re
         println!();
     }
     Ok(())
+}
+
+/// Run the `unlace lumina` subcommand. The async runtime is spun up here so
+/// non-Lumina invocations stay synchronous (and don't pay the tokio cost).
+fn run_lumina(action: LuminaAction) -> Result<()> {
+    use sha2::{Digest, Sha256};
+    use std::net::ToSocketAddrs;
+    use std::sync::Arc;
+    use unlace_lumina::client::Client;
+    use unlace_lumina::db::SqliteStore;
+    use unlace_lumina::server::{FuncMetadata, serve};
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("build tokio runtime")?;
+    rt.block_on(async move {
+        match action {
+            LuminaAction::Serve { bind, db } => {
+                let addr = bind
+                    .to_socket_addrs()?
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("could not resolve --bind {bind}"))?;
+                let store = if db == ":memory:" {
+                    SqliteStore::open_in_memory()?
+                } else {
+                    SqliteStore::open(&db)?
+                };
+                tracing::info!(%addr, db = %db, "starting Lumina v6 server");
+                serve(addr, Arc::new(store)).await?;
+                Ok::<_, anyhow::Error>(())
+            }
+            LuminaAction::Push {
+                server,
+                binary,
+                name,
+                proto,
+                user,
+                password,
+            } => {
+                let bytes =
+                    std::fs::read(&binary).with_context(|| format!("read {}", binary.display()))?;
+                let mut hasher = Sha256::new();
+                hasher.update(&bytes);
+                let mut hash = [0u8; 32];
+                hash.copy_from_slice(&hasher.finalize());
+                let addr = server
+                    .to_socket_addrs()?
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("could not resolve --server {server}"))?;
+                let mut c = Client::connect(addr).await?;
+                let outcome = c.helo(proto, &user, &password).await?;
+                if let Some(b) = outcome.server_banner {
+                    println!("connected: {b}");
+                }
+                let rec = FuncMetadata {
+                    name,
+                    size: bytes.len() as u64,
+                    metadata: bytes,
+                    counter: 1,
+                    calcrel_hash: hash,
+                };
+                let statuses = c.push_md(&[rec]).await?;
+                println!("PUSH_MD statuses: {statuses:?}");
+                println!("hash: {}", hex_encode(&hash));
+                Ok(())
+            }
+            LuminaAction::Pull {
+                server,
+                hash,
+                proto,
+                user,
+                password,
+            } => {
+                let hash_bytes = hex_decode(&hash)
+                    .ok_or_else(|| anyhow::anyhow!("--hash must be 64 hex chars"))?;
+                let addr = server
+                    .to_socket_addrs()?
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("could not resolve --server {server}"))?;
+                let mut c = Client::connect(addr).await?;
+                let _ = c.helo(proto, &user, &password).await?;
+                let rows = c.pull_md(&[hash_bytes]).await?;
+                match &rows[0] {
+                    Some(r) => {
+                        println!(
+                            "name={} size={} counter={} metadata_len={}",
+                            r.name,
+                            r.size,
+                            r.counter,
+                            r.metadata.len()
+                        );
+                    }
+                    None => println!("(no record found for hash)"),
+                }
+                Ok(())
+            }
+        }
+    })
+}
+
+fn hex_encode(b: &[u8; 32]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut s = String::with_capacity(64);
+    for &byte in b {
+        s.push(HEX[(byte >> 4) as usize] as char);
+        s.push(HEX[(byte & 0xf) as usize] as char);
+    }
+    s
+}
+
+fn hex_decode(s: &str) -> Option<[u8; 32]> {
+    if s.len() != 64 {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (i, chunk) in s.as_bytes().chunks(2).enumerate() {
+        let hi = hex_nibble(chunk[0])?;
+        let lo = hex_nibble(chunk[1])?;
+        out[i] = (hi << 4) | lo;
+    }
+    Some(out)
+}
+
+fn hex_nibble(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn init_tracing(verbose: u8) {

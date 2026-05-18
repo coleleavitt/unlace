@@ -62,11 +62,31 @@ pub struct FlirtRef {
 }
 
 /// Result of matching one function body against the FLIRT DB.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// §5.5: `confidence` is a synthetic 0.5–1.0 score derived from the
+/// signature evidence quality:
+/// - `1.0` when every recorded outbound reference resolved to the
+///   expected callee name (refs_matched && sig has refs).
+/// - `0.9` when the signature carries no outbound references but the
+///   byte/CRC prefix matched exactly — high confidence because there
+///   was no second-stage check that could have raised it further.
+/// - `0.5` when byte/CRC matched but at least one outbound reference
+///   failed to resolve (the byte prefix is still suggestive but the
+///   reference table didn't line up).
+///
+/// `signature_id` is the index of the matched signature inside the
+/// owning [`FlirtDb`]'s entry vector. Stable for the lifetime of a
+/// given DB (insertion-ordered), useful as a per-match correlation
+/// key in higher-level annotations.
+#[derive(Debug, Clone, PartialEq)]
 pub struct FlirtMatch<'a> {
     pub name: &'a str,
     /// Whether all available reference-name checks succeeded.
     pub refs_matched: bool,
+    /// Confidence score in `[0.5, 1.0]`.
+    pub confidence: f32,
+    /// Index of the matched signature in the owning [`FlirtDb`].
+    pub signature_id: usize,
 }
 
 /// In-memory FLIRT database.
@@ -116,21 +136,32 @@ impl FlirtDb {
         resolved_names: &BTreeMap<u64, String>,
     ) -> Option<FlirtMatch<'a>> {
         let mut fallback: Option<FlirtMatch<'a>> = None;
-        for sig in &self.entries {
+        for (signature_id, sig) in self.entries.iter().enumerate() {
             if !signature_matches(sig, bytes) {
                 continue;
             }
             let refs_matched = references_match(sig, bytes, resolved_names);
             if refs_matched {
+                // refs_matched is true both when the signature *has* refs
+                // and they all resolved, and when the signature carries
+                // no refs at all (vacuous truth). Distinguish those:
+                // explicit-reference success is the highest-confidence
+                // signal we have (1.0); pure byte/CRC matches with no
+                // reference evidence land at 0.9.
+                let confidence = if sig.refs.is_empty() { 0.9 } else { 1.0 };
                 return Some(FlirtMatch {
                     name: &sig.name,
                     refs_matched: true,
+                    confidence,
+                    signature_id,
                 });
             }
             if fallback.is_none() {
                 fallback = Some(FlirtMatch {
                     name: &sig.name,
                     refs_matched: false,
+                    confidence: 0.5,
+                    signature_id,
                 });
             }
         }
@@ -418,6 +449,66 @@ mod tests {
         assert!(db.match_function(&[0x90, 0x90, 0x90, 0x90]).is_none());
         assert!(db.match_function(&[]).is_none());
         assert!(db.match_function(&[0x48]).is_none());
+    }
+
+    #[test]
+    fn flirt_match_carries_confidence_and_signature_id() {
+        // §5.5: surfacing confidence + signature_id on FlirtMatch.
+        // Two signatures pushed in order — index 0 has refs that resolve
+        // (high-confidence path, 1.0); index 1 has refs that *do not*
+        // resolve (fallback path, 0.5).
+        let mut db = FlirtDb::new();
+
+        // Signature 0: resolves to "malloc" via reference at offset 4.
+        let mut bytes_a = vec![0x55, 0x48, 0x89, 0xE5];
+        bytes_a.extend_from_slice(&rel32(0xE8, 0x40, 4));
+        db.push(FlirtSignature {
+            name: "calls_malloc".into(),
+            pattern: bytes_a[..4].to_vec(),
+            mask: vec![0xFF; 4],
+            min_len: 4,
+            max_len: None,
+            crc16_at: None,
+            refs: vec![FlirtRef {
+                offset: 4,
+                name: "malloc".into(),
+            }],
+        });
+        // Signature 1: distinct prefix; refs claim "free" but resolved map is empty.
+        let mut bytes_b = vec![0x53, 0x48, 0x89, 0xE5];
+        bytes_b.extend_from_slice(&rel32(0xE8, 0x80, 4));
+        db.push(FlirtSignature {
+            name: "calls_free".into(),
+            pattern: bytes_b[..4].to_vec(),
+            mask: vec![0xFF; 4],
+            min_len: 4,
+            max_len: None,
+            crc16_at: None,
+            refs: vec![FlirtRef {
+                offset: 4,
+                name: "free".into(),
+            }],
+        });
+
+        // High-confidence: refs resolve → confidence 1.0, signature_id = 0.
+        let mut resolved = BTreeMap::new();
+        resolved.insert(0x40, "malloc".to_string());
+        let m_hi = db.match_function_with_refs(&bytes_a, &resolved).unwrap();
+        assert_eq!(m_hi.name, "calls_malloc");
+        assert!(m_hi.refs_matched);
+        assert!((m_hi.confidence - 1.0).abs() < 1e-6, "expected 1.0 got {}", m_hi.confidence);
+        assert_eq!(m_hi.signature_id, 0);
+
+        // Low-confidence fallback: byte prefix matches sig 1 but no
+        // resolved name for 0x80 → refs_matched=false, confidence=0.5,
+        // signature_id=1 (preserves DB insertion order).
+        let m_lo = db
+            .match_function_with_refs(&bytes_b, &BTreeMap::new())
+            .unwrap();
+        assert_eq!(m_lo.name, "calls_free");
+        assert!(!m_lo.refs_matched);
+        assert!((m_lo.confidence - 0.5).abs() < 1e-6, "expected 0.5 got {}", m_lo.confidence);
+        assert_eq!(m_lo.signature_id, 1);
     }
 
     #[test]

@@ -1,10 +1,10 @@
 # unlace
 
-`unlace` is a high-performance, multi-architecture decompiler engine written in Rust. It is engineered to achieve 100% functional and structural parity with industry-standard decompilers (Hex-Rays) across a wide range of architectures.
+`unlace` is a high-performance, multi-architecture decompiler engine written in Rust. Its long-term engineering target is high functional and structural parity with industry-standard decompilers such as Hex-Rays, but current support is measured fixture-by-fixture rather than claimed as complete.
 
 Through a milestone-driven implementation of the classic decompiler pipeline, `unlace` transforms raw binary blobs into clean, structured, and human-readable C source code.
 
-## 🚀 The North Star: 100.0% Parity
+## 🚀 The North Star: Measured Decompiler Quality
 Unlike traditional decompilers that focus solely on lifting instructions to IR, `unlace` focuses on **high-fidelity logic recovery**. 
 - **0-Goto Output:** Advanced control-flow structuring eliminates unnecessary gotos in standard compiler patterns.
 - **Data-Flow Excellence:** Leverages an SSA-based optimization suite (SCCP, GVN, CSE) to collapse thousands of temporaries into original source variables.
@@ -51,9 +51,9 @@ The output isn't just C; it's **source code**.
 
 ## 🏗 Engineering Excellence
 - **Determinism:** No `HashMap`/`HashSet`. The entire pipeline uses `BTreeMap`/`BTreeSet` to guarantee identical output across identical inputs.
-- **Validation:** 4,528+ passing tests and 30+ golden fixtures.
-- **Parity Tracking:** `bash scripts/score_parity.sh` provides an aggregate metric against the IDA Pro reference profile.
-- **Clippy-Clean:** 100% adherence to Rust safety and performance standards across all crates.
+- **Validation:** The current full verification snapshot is recorded in `docs/rebaseline-2026-05-17.md`.
+- **Parity Tracking:** `bash scripts/score_parity.sh` provides an aggregate metric against the current fixture profile. That score is a regression signal, not a full IDA/Hex-Rays parity claim.
+- **Clippy-Clean:** The current workspace passes `cargo clippy --workspace -- -D warnings` with `RUSTC_WRAPPER=`.
 
 ## 📖 Usage
 ```bash

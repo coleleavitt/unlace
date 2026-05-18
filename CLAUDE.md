@@ -89,15 +89,14 @@ changes and verify the resulting output is actually better.
 
 ## Current Verified State
 
-Last verified on 2026-05-14 (after the Batch 0/1/2/5 session — see
-`plan.md` "Session Log" for commit SHAs):
+Last verified on 2026-05-17 (see `docs/rebaseline-2026-05-17.md`):
 
 - `RUSTC_WRAPPER= bash scripts/score_parity.sh` reports `Aggregate Parity: 100.0%`.
-- Golden fixture test passes: 29 tests, all fixture scores at 100% on the current narrow metric.
-- `RUSTC_WRAPPER= cargo test --workspace` passes outside the sandbox — 3059 tests passing, 0 failed.
-- `cargo xtask lint-determinism` now **passes** (was: 26 `HashMap`/`HashSet` violations — fixed in commit `9226a74d7`).
-- `cargo clippy -p {unlace-ir,unlace-passes,unlace-struct,unlace-output,unlace-cli} --no-deps -- -D warnings` is **clean**. `unlace-loader` still has ~36 clippy errors (open backlog item) — so the full-workspace `cargo clippy --workspace -- -D warnings` still fails, but only in `unlace-loader` and transitive lifter deps.
-- `cargo build --workspace` is **0 errors, 0 warnings** except 4 dead-code warnings still in `unlace-passes` (was: 127 warnings — lifter dead-code wired in commit `8299056d7`).
+- Golden fixture tests pass on the current narrow metric.
+- `RUSTC_WRAPPER= cargo test --workspace` passes in the current sandbox.
+- `RUSTC_WRAPPER= cargo xtask lint-determinism` passes.
+- `RUSTC_WRAPPER= cargo clippy --workspace -- -D warnings` is clean.
+- `RUSTC_WRAPPER= cargo check --workspace` passes.
 - A root `README.md` now exists (commit `8ddb9369b`).
 - `unlace quality <binary>` subcommand exists for honest output measurement (commits `137b743f7`, `84c38e68d`). 33 feature counters, md/json output.
 - Sandboxed `cargo test --workspace` can fail in `unlace_lumina` because a test binds a local TCP socket. Rerun outside the sandbox when needed.

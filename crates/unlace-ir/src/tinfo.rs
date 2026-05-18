@@ -448,10 +448,7 @@ impl fmt::Display for TInfo {
                 None => f.write_str("enum <anonymous>"),
             },
             TInfo::Func {
-                ret,
-                args,
-                varargs,
-                ..
+                ret, args, varargs, ..
             } => {
                 write!(f, "{ret} (*)(")?;
                 for (i, arg) in args.iter().enumerate() {
@@ -504,16 +501,43 @@ impl From<TypeKind> for TInfo {
     fn from(kind: TypeKind) -> Self {
         match kind {
             TypeKind::Void => TInfo::Void,
-            TypeKind::Int => TInfo::Int { width: 4, signed: true },
-            TypeKind::UInt => TInfo::Int { width: 4, signed: false },
-            TypeKind::Long => TInfo::Int { width: 8, signed: true },
-            TypeKind::ULong => TInfo::Int { width: 8, signed: false },
-            TypeKind::SizeT => TInfo::Int { width: 8, signed: false },
-            TypeKind::SSizeT => TInfo::Int { width: 8, signed: true },
-            TypeKind::OffT => TInfo::Int { width: 8, signed: true },
-            TypeKind::CharPtr => TInfo::Ptr(Box::new(TInfo::Int { width: 1, signed: true })),
+            TypeKind::Int => TInfo::Int {
+                width: 4,
+                signed: true,
+            },
+            TypeKind::UInt => TInfo::Int {
+                width: 4,
+                signed: false,
+            },
+            TypeKind::Long => TInfo::Int {
+                width: 8,
+                signed: true,
+            },
+            TypeKind::ULong => TInfo::Int {
+                width: 8,
+                signed: false,
+            },
+            TypeKind::SizeT => TInfo::Int {
+                width: 8,
+                signed: false,
+            },
+            TypeKind::SSizeT => TInfo::Int {
+                width: 8,
+                signed: true,
+            },
+            TypeKind::OffT => TInfo::Int {
+                width: 8,
+                signed: true,
+            },
+            TypeKind::CharPtr => TInfo::Ptr(Box::new(TInfo::Int {
+                width: 1,
+                signed: true,
+            })),
             TypeKind::ConstCharPtr => TInfo::Ptr(Box::new(TInfo::Qualified {
-                inner: Box::new(TInfo::Int { width: 1, signed: true }),
+                inner: Box::new(TInfo::Int {
+                    width: 1,
+                    signed: true,
+                }),
                 qualifiers: TQualifiers::CONST,
             })),
             TypeKind::CharPtrPtr => TInfo::Ptr(Box::new(TInfo::Ptr(Box::new(TInfo::Int {
@@ -543,22 +567,38 @@ impl TryFrom<TInfo> for TypeKind {
     fn try_from(ti: TInfo) -> Result<TypeKind, TInfo> {
         match &ti {
             TInfo::Void => Ok(TypeKind::Void),
-            TInfo::Int { width: 4, signed: true } => Ok(TypeKind::Int),
-            TInfo::Int { width: 4, signed: false } => Ok(TypeKind::UInt),
+            TInfo::Int {
+                width: 4,
+                signed: true,
+            } => Ok(TypeKind::Int),
+            TInfo::Int {
+                width: 4,
+                signed: false,
+            } => Ok(TypeKind::UInt),
             TInfo::Ptr(inner) => match inner.as_ref() {
                 TInfo::Void => Ok(TypeKind::VoidPtr),
-                TInfo::Int { width: 1, signed: true } => Ok(TypeKind::CharPtr),
+                TInfo::Int {
+                    width: 1,
+                    signed: true,
+                } => Ok(TypeKind::CharPtr),
                 TInfo::Ptr(inner2) => match inner2.as_ref() {
-                    TInfo::Int { width: 1, signed: true } => Ok(TypeKind::CharPtrPtr),
+                    TInfo::Int {
+                        width: 1,
+                        signed: true,
+                    } => Ok(TypeKind::CharPtrPtr),
                     _ => Err(ti),
                 },
-                TInfo::Qualified { inner: qi, qualifiers } if qualifiers == &TQualifiers::CONST => {
-                    match qi.as_ref() {
-                        TInfo::Void => Ok(TypeKind::ConstVoidPtr),
-                        TInfo::Int { width: 1, signed: true } => Ok(TypeKind::ConstCharPtr),
-                        _ => Err(ti),
-                    }
-                }
+                TInfo::Qualified {
+                    inner: qi,
+                    qualifiers,
+                } if qualifiers == &TQualifiers::CONST => match qi.as_ref() {
+                    TInfo::Void => Ok(TypeKind::ConstVoidPtr),
+                    TInfo::Int {
+                        width: 1,
+                        signed: true,
+                    } => Ok(TypeKind::ConstCharPtr),
+                    _ => Err(ti),
+                },
                 _ => Err(ti),
             },
             _ => Err(ti),
@@ -605,12 +645,24 @@ mod tests {
 
     #[test]
     fn is_pointer_non_ptr() {
-        assert!(!TInfo::Int { width: 4, signed: true }.is_pointer());
+        assert!(
+            !TInfo::Int {
+                width: 4,
+                signed: true
+            }
+            .is_pointer()
+        );
     }
 
     #[test]
     fn is_integer_int_and_bool() {
-        assert!(TInfo::Int { width: 4, signed: true }.is_integer());
+        assert!(
+            TInfo::Int {
+                width: 4,
+                signed: true
+            }
+            .is_integer()
+        );
         assert!(TInfo::Bool.is_integer());
         assert!(!TInfo::Void.is_integer());
         assert!(!TInfo::Ptr(Box::new(TInfo::Void)).is_integer());
@@ -633,11 +685,20 @@ mod tests {
         let e = TInfo::Enum {
             name: Some("Color".into()),
             variants: vec![],
-            underlying: Box::new(TInfo::Int { width: 4, signed: true }),
+            underlying: Box::new(TInfo::Int {
+                width: 4,
+                signed: true,
+            }),
         };
         assert!(e.is_aggregate());
 
-        assert!(!TInfo::Int { width: 4, signed: false }.is_aggregate());
+        assert!(
+            !TInfo::Int {
+                width: 4,
+                signed: false
+            }
+            .is_aggregate()
+        );
     }
 
     // ── Size ─────────────────────────────────────────────────────────────────
@@ -646,8 +707,22 @@ mod tests {
     fn size_primitives() {
         assert_eq!(TInfo::Void.size(), Some(0));
         assert_eq!(TInfo::Bool.size(), Some(1));
-        assert_eq!(TInfo::Int { width: 4, signed: true }.size(), Some(4));
-        assert_eq!(TInfo::Int { width: 8, signed: false }.size(), Some(8));
+        assert_eq!(
+            TInfo::Int {
+                width: 4,
+                signed: true
+            }
+            .size(),
+            Some(4)
+        );
+        assert_eq!(
+            TInfo::Int {
+                width: 8,
+                signed: false
+            }
+            .size(),
+            Some(8)
+        );
         assert_eq!(TInfo::Float { width: 4 }.size(), Some(4));
         assert_eq!(TInfo::Float { width: 8 }.size(), Some(8));
         assert_eq!(TInfo::Ptr(Box::new(TInfo::Void)).size(), Some(8));
@@ -656,7 +731,10 @@ mod tests {
     #[test]
     fn size_array_sized() {
         let a = TInfo::Array {
-            elem: Box::new(TInfo::Int { width: 4, signed: true }),
+            elem: Box::new(TInfo::Int {
+                width: 4,
+                signed: true,
+            }),
             len: Some(10),
         };
         assert_eq!(a.size(), Some(40));
@@ -665,7 +743,10 @@ mod tests {
     #[test]
     fn size_array_unsized_none() {
         let a = TInfo::Array {
-            elem: Box::new(TInfo::Int { width: 4, signed: true }),
+            elem: Box::new(TInfo::Int {
+                width: 4,
+                signed: true,
+            }),
             len: None,
         };
         assert_eq!(a.size(), None);
@@ -679,12 +760,18 @@ mod tests {
                 TField {
                     name: Some("x".into()),
                     offset: 0,
-                    ty: TInfo::Int { width: 4, signed: true },
+                    ty: TInfo::Int {
+                        width: 4,
+                        signed: true,
+                    },
                 },
                 TField {
                     name: Some("y".into()),
                     offset: 4,
-                    ty: TInfo::Int { width: 4, signed: true },
+                    ty: TInfo::Int {
+                        width: 4,
+                        signed: true,
+                    },
                 },
             ],
         };
@@ -699,12 +786,18 @@ mod tests {
                 TField {
                     name: None,
                     offset: 0,
-                    ty: TInfo::Int { width: 1, signed: false },
+                    ty: TInfo::Int {
+                        width: 1,
+                        signed: false,
+                    },
                 },
                 TField {
                     name: None,
                     offset: 0,
-                    ty: TInfo::Int { width: 8, signed: false },
+                    ty: TInfo::Int {
+                        width: 8,
+                        signed: false,
+                    },
                 },
             ],
         };
@@ -732,7 +825,11 @@ mod tests {
     #[test]
     fn display_ida_style_unsigned_byte() {
         assert_eq!(
-            TInfo::Int { width: 1, signed: false }.to_string(),
+            TInfo::Int {
+                width: 1,
+                signed: false
+            }
+            .to_string(),
             "_BYTE"
         );
     }
@@ -740,7 +837,11 @@ mod tests {
     #[test]
     fn display_ida_style_word() {
         assert_eq!(
-            TInfo::Int { width: 2, signed: false }.to_string(),
+            TInfo::Int {
+                width: 2,
+                signed: false
+            }
+            .to_string(),
             "_WORD"
         );
     }
@@ -748,7 +849,11 @@ mod tests {
     #[test]
     fn display_ida_style_dword() {
         assert_eq!(
-            TInfo::Int { width: 4, signed: false }.to_string(),
+            TInfo::Int {
+                width: 4,
+                signed: false
+            }
+            .to_string(),
             "_DWORD"
         );
     }
@@ -756,7 +861,11 @@ mod tests {
     #[test]
     fn display_ida_style_qword() {
         assert_eq!(
-            TInfo::Int { width: 8, signed: false }.to_string(),
+            TInfo::Int {
+                width: 8,
+                signed: false
+            }
+            .to_string(),
             "_QWORD"
         );
     }
@@ -764,17 +873,18 @@ mod tests {
     #[test]
     fn display_ida_style_int64() {
         assert_eq!(
-            TInfo::Int { width: 8, signed: true }.to_string(),
+            TInfo::Int {
+                width: 8,
+                signed: true
+            }
+            .to_string(),
             "__int64"
         );
     }
 
     #[test]
     fn display_void_ptr() {
-        assert_eq!(
-            TInfo::Ptr(Box::new(TInfo::Void)).to_string(),
-            "void *"
-        );
+        assert_eq!(TInfo::Ptr(Box::new(TInfo::Void)).to_string(), "void *");
     }
 
     #[test]
@@ -788,14 +898,20 @@ mod tests {
 
     #[test]
     fn display_struct_anonymous() {
-        let s = TInfo::Struct { name: None, fields: vec![] };
+        let s = TInfo::Struct {
+            name: None,
+            fields: vec![],
+        };
         assert_eq!(s.to_string(), "struct <anonymous>");
     }
 
     #[test]
     fn display_const_qualifier() {
         let t = TInfo::Qualified {
-            inner: Box::new(TInfo::Int { width: 4, signed: true }),
+            inner: Box::new(TInfo::Int {
+                width: 4,
+                signed: true,
+            }),
             qualifiers: TQualifiers::CONST,
         };
         assert_eq!(t.to_string(), "const _DWORD");
@@ -805,7 +921,10 @@ mod tests {
     fn display_func_ptr() {
         let fp = TInfo::Func {
             ret: Box::new(TInfo::Void),
-            args: vec![TInfo::Int { width: 4, signed: true }],
+            args: vec![TInfo::Int {
+                width: 4,
+                signed: true,
+            }],
             varargs: false,
             cc: CallingConv::Cdecl,
         };
@@ -815,8 +934,14 @@ mod tests {
     #[test]
     fn display_variadic_func_ptr() {
         let fp = TInfo::Func {
-            ret: Box::new(TInfo::Int { width: 4, signed: true }),
-            args: vec![TInfo::Ptr(Box::new(TInfo::Int { width: 1, signed: true }))],
+            ret: Box::new(TInfo::Int {
+                width: 4,
+                signed: true,
+            }),
+            args: vec![TInfo::Ptr(Box::new(TInfo::Int {
+                width: 1,
+                signed: true,
+            }))],
             varargs: true,
             cc: CallingConv::Cdecl,
         };
@@ -834,7 +959,10 @@ mod tests {
     fn from_typekind_int() {
         assert_eq!(
             TInfo::from(TypeKind::Int),
-            TInfo::Int { width: 4, signed: true }
+            TInfo::Int {
+                width: 4,
+                signed: true
+            }
         );
     }
 
@@ -842,7 +970,10 @@ mod tests {
     fn from_typekind_uint() {
         assert_eq!(
             TInfo::from(TypeKind::UInt),
-            TInfo::Int { width: 4, signed: false }
+            TInfo::Int {
+                width: 4,
+                signed: false
+            }
         );
     }
 
@@ -861,7 +992,10 @@ mod tests {
         assert_eq!(
             t,
             TInfo::Ptr(Box::new(TInfo::Qualified {
-                inner: Box::new(TInfo::Int { width: 1, signed: true }),
+                inner: Box::new(TInfo::Int {
+                    width: 1,
+                    signed: true
+                }),
                 qualifiers: TQualifiers::CONST,
             }))
         );
@@ -883,7 +1017,10 @@ mod tests {
     #[test]
     fn tryfrom_tinfo_int_ok() {
         assert_eq!(
-            TypeKind::try_from(TInfo::Int { width: 4, signed: true }),
+            TypeKind::try_from(TInfo::Int {
+                width: 4,
+                signed: true
+            }),
             Ok(TypeKind::Int)
         );
     }
@@ -956,8 +1093,22 @@ mod tests {
         let s = TInfo::Struct {
             name: Some("Point".into()),
             fields: vec![
-                TField { name: Some("x".into()), offset: 0, ty: TInfo::Int { width: 4, signed: true } },
-                TField { name: Some("y".into()), offset: 4, ty: TInfo::Int { width: 4, signed: true } },
+                TField {
+                    name: Some("x".into()),
+                    offset: 0,
+                    ty: TInfo::Int {
+                        width: 4,
+                        signed: true,
+                    },
+                },
+                TField {
+                    name: Some("y".into()),
+                    offset: 4,
+                    ty: TInfo::Int {
+                        width: 4,
+                        signed: true,
+                    },
+                },
             ],
         };
         let r = s.get_best_fit_member(0).unwrap();
@@ -978,15 +1129,40 @@ mod tests {
         let inner = TInfo::Struct {
             name: Some("Inner".into()),
             fields: vec![
-                TField { name: Some("a".into()), offset: 0, ty: TInfo::Int { width: 4, signed: true } },
-                TField { name: Some("b".into()), offset: 4, ty: TInfo::Int { width: 4, signed: true } },
+                TField {
+                    name: Some("a".into()),
+                    offset: 0,
+                    ty: TInfo::Int {
+                        width: 4,
+                        signed: true,
+                    },
+                },
+                TField {
+                    name: Some("b".into()),
+                    offset: 4,
+                    ty: TInfo::Int {
+                        width: 4,
+                        signed: true,
+                    },
+                },
             ],
         };
         let outer = TInfo::Struct {
             name: Some("Outer".into()),
             fields: vec![
-                TField { name: Some("hdr".into()), offset: 0, ty: TInfo::Int { width: 8, signed: false } },
-                TField { name: Some("payload".into()), offset: 8, ty: inner },
+                TField {
+                    name: Some("hdr".into()),
+                    offset: 0,
+                    ty: TInfo::Int {
+                        width: 8,
+                        signed: false,
+                    },
+                },
+                TField {
+                    name: Some("payload".into()),
+                    offset: 8,
+                    ty: inner,
+                },
             ],
         };
         // Offset 12 → outer.payload (at 8) → inner offset 4 → field "b"
@@ -1000,7 +1176,10 @@ mod tests {
     #[test]
     fn best_fit_array() {
         let arr = TInfo::Array {
-            elem: Box::new(TInfo::Int { width: 4, signed: true }),
+            elem: Box::new(TInfo::Int {
+                width: 4,
+                signed: true,
+            }),
             len: Some(10),
         };
         // Offset 12 → element [3]
@@ -1017,9 +1196,23 @@ mod tests {
         let s = TInfo::Struct {
             name: Some("Padded".into()),
             fields: vec![
-                TField { name: Some("a".into()), offset: 0, ty: TInfo::Int { width: 1, signed: true } },
+                TField {
+                    name: Some("a".into()),
+                    offset: 0,
+                    ty: TInfo::Int {
+                        width: 1,
+                        signed: true,
+                    },
+                },
                 // 3 bytes of padding here
-                TField { name: Some("b".into()), offset: 4, ty: TInfo::Int { width: 4, signed: true } },
+                TField {
+                    name: Some("b".into()),
+                    offset: 4,
+                    ty: TInfo::Int {
+                        width: 4,
+                        signed: true,
+                    },
+                },
             ],
         };
         let gaps = s.calc_gaps();
@@ -1031,8 +1224,22 @@ mod tests {
         let s = TInfo::Struct {
             name: Some("Packed".into()),
             fields: vec![
-                TField { name: Some("x".into()), offset: 0, ty: TInfo::Int { width: 4, signed: true } },
-                TField { name: Some("y".into()), offset: 4, ty: TInfo::Int { width: 4, signed: true } },
+                TField {
+                    name: Some("x".into()),
+                    offset: 0,
+                    ty: TInfo::Int {
+                        width: 4,
+                        signed: true,
+                    },
+                },
+                TField {
+                    name: Some("y".into()),
+                    offset: 4,
+                    ty: TInfo::Int {
+                        width: 4,
+                        signed: true,
+                    },
+                },
             ],
         };
         assert!(s.calc_gaps().is_empty());

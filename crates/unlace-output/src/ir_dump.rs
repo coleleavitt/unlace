@@ -38,12 +38,20 @@ pub fn dump_lvars(func: &SsaFunction) -> String {
 /// and the producing instruction's address when known.
 ///
 /// Provenance buckets are inferred from supporting bookkeeping fields on
-/// [`SsaFunction`]: a SSA varnode whose offset matches a `dwarf_local_names`
-/// key is tagged `debug`, one tied to a finalised signature parameter is
-/// `signature`, an entry that survives in `composite_var_types` is
-/// `composite` (a deeper recovered struct/union), and the default is
-/// `inferred`. Rows are emitted in `SsaVarnode` order so the dump is
-/// deterministic across runs.
+/// [`SsaFunction`]:
+///
+/// - `debug`: stack varnode whose offset matches a `dwarf_local_names` key.
+/// - `stack`: any other stack varnode.
+/// - `signature`: a register varnode whose register matches an argument
+///   slot of [`SsaFunction::calling_convention`] within the recovered
+///   parameter-count window (`max(finalized_signature.len, inferred_params.len)`).
+/// - `composite`: surfaced separately below the main table when an entry
+///   survives in [`SsaFunction::composite_var_types`] — a deeper recovered
+///   struct/union/array shape.
+/// - `inferred`: default for everything else.
+///
+/// Rows are emitted in `SsaVarnode` order so the dump is deterministic
+/// across runs.
 pub fn dump_type_audit(func: &SsaFunction) -> String {
     use std::collections::BTreeSet;
     use std::fmt::Write;
@@ -70,6 +78,7 @@ pub fn dump_type_audit(func: &SsaFunction) -> String {
         .map(|s| s.params.len())
         .unwrap_or(0);
     let inferred_param_count = func.inferred_params.len();
+    let signature_param_count = finalized_param_count.max(inferred_param_count);
 
     for (sv, ty) in &func.var_types {
         let provenance = if let Some(off) = stack_offset_for_var(sv) {
@@ -79,8 +88,8 @@ pub fn dump_type_audit(func: &SsaFunction) -> String {
                 "stack"
             }
         } else if sv.base.space == unlace_ir::SpaceId::Register
-            && finalized_param_count > 0
-            && sv_param_index(sv, finalized_param_count + inferred_param_count).is_some()
+            && signature_param_count > 0
+            && sv_param_index(sv, func.calling_convention, signature_param_count).is_some()
         {
             "signature"
         } else {
@@ -123,15 +132,57 @@ fn stack_offset_for_var(sv: &unlace_ir::ssa::SsaVarnode) -> Option<i64> {
     }
 }
 
+/// Map a register-space [`SsaVarnode`] back to a calling-convention
+/// argument index. Returns `Some(i)` when `sv` lives in the i-th
+/// argument register for `cc` and `i < total_params`. The audit uses
+/// this to bucket parameter-register varnodes into the `signature`
+/// provenance — distinct from generic inferred types.
+///
+/// Register encodings match the Ghidra-style x86_64 file numbering
+/// used by `unlace-passes::calling_convention`. AArch64 maps X0..X7 in
+/// the v-register space at offsets 0,8,16,...,56.
 fn sv_param_index(
-    _sv: &unlace_ir::ssa::SsaVarnode,
-    _total_params: usize,
+    sv: &unlace_ir::ssa::SsaVarnode,
+    cc: unlace_ir::ssa::CallingConvention,
+    total_params: usize,
 ) -> Option<u32> {
-    // Placeholder; the deeper provenance match relies on calling-convention
-    // tables that the printer doesn't currently re-derive here. The audit
-    // tags this rough bucket as "signature" when the function had any
-    // recovered signature, which matches the intent of the report.
-    None
+    use unlace_ir::ssa::CallingConvention;
+    if sv.base.space != unlace_ir::SpaceId::Register || total_params == 0 {
+        return None;
+    }
+    // x86_64 register file offsets — must match calling_convention.rs.
+    const RAX: u64 = 0;
+    const RCX: u64 = 8;
+    const RDX: u64 = 16;
+    const RSI: u64 = 48;
+    const RDI: u64 = 56;
+    const R8: u64 = 64;
+    const R9: u64 = 72;
+    let regs: &[u64] = match cc {
+        CallingConvention::SystemV => &[RDI, RSI, RDX, RCX, R8, R9],
+        CallingConvention::MicrosoftX64 => &[RCX, RDX, R8, R9],
+        CallingConvention::AArch64 => &[0, 8, 16, 24, 32, 40, 48, 56],
+        CallingConvention::Cdecl
+        | CallingConvention::Stdcall
+        | CallingConvention::Thiscall => {
+            // x86-32 stack ABIs pass via the stack — `this` lives in ECX
+            // for thiscall, but the audit reports stack-based args via
+            // the stack bucket, not signature.
+            if matches!(cc, CallingConvention::Thiscall) {
+                &[RCX]
+            } else {
+                return None;
+            }
+        }
+        CallingConvention::Unknown => return None,
+    };
+    // Suppress: RAX is the return-value register, never an arg in any
+    // CC above. If it ever shows up at offset 0 we still skip it.
+    let _ = RAX;
+    regs.iter()
+        .take(total_params)
+        .position(|&r| r == sv.base.offset)
+        .map(|i| i as u32)
 }
 
 fn write_function(func: &SsaFunction, out: &mut String) {
@@ -802,5 +853,52 @@ mod tests {
         assert!(md.contains("| var | inferred type |"));
         // Two rows.
         assert_eq!(md.matches("| Register#1 ").count() + md.matches("| Stack#1 ").count(), 2);
+    }
+
+    /// Batch 20: provenance bucketing recognises argument registers
+    /// from the recovered calling convention and tags them `signature`,
+    /// distinct from generic `inferred` register varnodes.
+    #[test]
+    fn dump_type_audit_buckets_signature_params() {
+        use super::dump_type_audit;
+        use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaVarnode};
+        let func = Function::new("sig_bucket", BlockId(0), 0x1000);
+        let mut ssa = make_ssa(func);
+        ssa.calling_convention = CallingConvention::SystemV;
+        // SysV first three int arg regs (RDI=56, RSI=48, RDX=16).
+        let rdi = SsaVarnode { base: Varnode::reg(56, 8), version: 1 };
+        let rsi = SsaVarnode { base: Varnode::reg(48, 8), version: 1 };
+        let rax = SsaVarnode { base: Varnode::reg(0, 8), version: 1 };
+        ssa.var_types.insert(rdi, PrimitiveType::Int(8));
+        ssa.var_types.insert(rsi, PrimitiveType::Int(8));
+        ssa.var_types.insert(rax, PrimitiveType::Int(8));
+        // Drive `signature_param_count >= 2`.
+        ssa.inferred_params.push(("a1".into(), PrimitiveType::Int(8)));
+        ssa.inferred_params.push(("a2".into(), PrimitiveType::Int(8)));
+
+        let md = dump_type_audit(&ssa);
+        // RDI and RSI both lie within the 2-param window → `signature`.
+        assert_eq!(md.matches("| signature ").count(), 2);
+        // RAX is the return-value register, never an arg → `inferred`.
+        assert!(md.contains("| inferred "));
+    }
+
+    /// Batch 20: with `calling_convention = Unknown`, no register
+    /// varnode is bucketed as `signature` — guesses must not look like
+    /// debug facts.
+    #[test]
+    fn dump_type_audit_signature_requires_known_cc() {
+        use super::dump_type_audit;
+        use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaVarnode};
+        let func = Function::new("no_cc", BlockId(0), 0x1000);
+        let mut ssa = make_ssa(func);
+        ssa.calling_convention = CallingConvention::Unknown;
+        let rdi = SsaVarnode { base: Varnode::reg(56, 8), version: 1 };
+        ssa.var_types.insert(rdi, PrimitiveType::Int(8));
+        ssa.inferred_params.push(("a1".into(), PrimitiveType::Int(8)));
+
+        let md = dump_type_audit(&ssa);
+        assert!(!md.contains("| signature "));
+        assert!(md.contains("| inferred "));
     }
 }

@@ -258,6 +258,64 @@ fn unwrap_octet_string(inner: &[u8]) -> Option<&[u8]> {
     if c.is_empty() { Some(val) } else { None }
 }
 
+/// Quick magic-byte probe: returns `true` if `data` looks like a DER
+/// SEQUENCE whose first inner element is the IA5String `"IMG4"`.
+///
+/// IMG4 payloads are DER-encoded so they always begin with the SEQUENCE
+/// tag `0x30`. Within roughly the first 8 bytes the IA5String
+/// `b"IMG4"` should appear as a TLV: tag `0x16` (IA5String), length
+/// `0x04`, then the four ASCII bytes. The exact byte offset depends
+/// on the DER long-form length encoding used for the outer SEQUENCE.
+pub fn is_img4(data: &[u8]) -> bool {
+    if data.len() < 8 || data[0] != TAG_SEQUENCE {
+        return false;
+    }
+    // Search a small window for `0x16 0x04 'I' 'M' 'G' '4'` — the exact
+    // offset varies with DER length encoding.
+    data[..data.len().min(16)]
+        .windows(6)
+        .any(|w| w == [TAG_IA5STRING, 0x04, b'I', b'M', b'G', b'4'])
+}
+
+/// Project a parsed [`Img4Container`] onto a generic [`BinaryImage`].
+///
+/// The inner payload (which is itself a DER `im4p` SEQUENCE containing
+/// the actual compressed firmware) is surfaced as a single `.text`
+/// section anchored at `base`. Callers responsible for downstream
+/// decompression (LZSS for kernelcaches, etc.) operate on
+/// `bin.sections[0].data` after this projection.
+///
+/// `manifest_hash` of the IM4M ticket (when present) is dropped into
+/// the string table at synthetic address `0xFFFF_FFFF_FFFF_FF00` so
+/// downstream consumers can recover it without re-running the ASN.1
+/// walker.
+pub fn img4_to_binary_image(
+    container: &Img4Container,
+    arch: crate::image::ArchId,
+    base: u64,
+) -> crate::image::BinaryImage {
+    use crate::image::{BinaryImage, Endian, Section, SectionFlags};
+    let mut out = BinaryImage::empty(arch, Endian::Little);
+    out.entry = base;
+    out.sections.push(Section {
+        name: ".text".to_string(),
+        vaddr: base,
+        size: container.payload.len() as u64,
+        data: container.payload.clone(),
+        flags: SectionFlags::READ | SectionFlags::EXEC,
+    });
+    if let Some(m) = &container.manifest {
+        // Surface a hex preview of the manifest for downstream consumers.
+        let preview = m
+            .iter()
+            .take(32)
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>();
+        out.string_table.insert(0xFFFF_FFFF_FFFF_FF00, preview);
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -357,5 +415,41 @@ mod tests {
             }) => {}
             other => panic!("expected UnexpectedTag, got {:?}", other),
         }
+    }
+
+    /// `img4_to_binary_image_exposes_payload` — the projection must
+    /// expose the inner DER bytes via `bin.sections[0].data`.
+    #[test]
+    fn img4_to_binary_image_exposes_payload() {
+        use crate::image::{ArchId, SectionFlags};
+        let im4p_inner: &[u8] = &[0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02];
+        let bytes = build_img4(im4p_inner, None, None);
+        let container = parse_img4(&bytes).expect("img4 must parse");
+        let bin = img4_to_binary_image(&container, ArchId::AArch64, 0xFFFF_FFF0_0000_0000);
+        assert_eq!(bin.sections.len(), 1);
+        assert_eq!(bin.sections[0].vaddr, 0xFFFF_FFF0_0000_0000);
+        assert_eq!(bin.sections[0].data, im4p_inner);
+        assert!(bin.sections[0].flags.contains(SectionFlags::EXEC));
+        // `is_img4` should also accept the raw bytes.
+        assert!(is_img4(&bytes));
+    }
+
+    /// `img4_manifest_hash_surfaces_when_present` — when the IM4M
+    /// manifest is present, a hex preview must land in `string_table`
+    /// at the reserved manifest-hash slot.
+    #[test]
+    fn img4_manifest_hash_surfaces_when_present() {
+        use crate::image::ArchId;
+        let im4p: &[u8] = &[1, 2, 3, 4];
+        let manifest_bytes: &[u8] = &[0xAB; 16];
+        let bytes = build_img4(im4p, Some(manifest_bytes), None);
+        let container = parse_img4(&bytes).expect("img4 must parse");
+        assert!(container.manifest.is_some());
+        let bin = img4_to_binary_image(&container, ArchId::AArch64, 0);
+        let hash = bin
+            .string_table
+            .get(&0xFFFF_FFFF_FFFF_FF00)
+            .expect("manifest hash must land in string table");
+        assert_eq!(hash, &"ab".repeat(16));
     }
 }

@@ -9,7 +9,11 @@
 //! - Intel HEX: <https://en.wikipedia.org/wiki/Intel_HEX>
 //! - Motorola S-record: <https://en.wikipedia.org/wiki/SREC_(file_format)>
 
+use std::collections::BTreeMap;
+
 use thiserror::Error;
+
+use crate::image::{ArchId, BinaryImage, Endian, Section, SectionFlags};
 
 // ---------------------------------------------------------------------------
 // Intel HEX
@@ -355,6 +359,79 @@ fn hex_nibble(b: u8) -> Option<u8> {
 }
 
 // ---------------------------------------------------------------------------
+// Converter: IntelHexImage → BinaryImage
+// ---------------------------------------------------------------------------
+
+/// Convert a parsed [`IntelHexImage`] into a [`BinaryImage`].
+///
+/// Each contiguous segment becomes a separate `.text` section (suffixed with
+/// the segment index when there are multiple). The entry point is taken from
+/// [`IntelHexImage::start_addr`], falling back to the base address of the
+/// first segment. The caller supplies the target [`ArchId`] since the HEX
+/// format itself carries no architecture metadata.
+pub fn intel_hex_to_binary_image(img: &IntelHexImage, arch: ArchId) -> BinaryImage {
+    let sections: Vec<Section> = img
+        .segments
+        .iter()
+        .enumerate()
+        .map(|(i, (base, data))| {
+            let name = if img.segments.len() == 1 {
+                ".text".to_string()
+            } else {
+                format!(".text.{}", i)
+            };
+            Section {
+                name,
+                vaddr: *base as u64,
+                size: data.len() as u64,
+                data: data.clone(),
+                flags: SectionFlags::READ.union(SectionFlags::EXEC),
+            }
+        })
+        .collect();
+
+    let entry = img
+        .start_addr
+        .or(img.segments.first().map(|(base, _)| *base))
+        .unwrap_or(0) as u64;
+
+    BinaryImage {
+        arch,
+        endian: Endian::Little,
+        entry,
+        sections,
+        symbols: BTreeMap::new(),
+        plt_symbols: BTreeMap::new(),
+        relocations: Vec::new(),
+        string_table: BTreeMap::new(),
+        tls_callbacks: Vec::new(),
+        function_starts: Vec::new(),
+        debug_records: Vec::new(),
+        load_config: None,
+        pe_mitigations: None,
+        runtime_functions: Vec::new(),
+        resources: Vec::new(),
+        bound_imports: Vec::new(),
+        delay_imports: Vec::new(),
+        forwarded_exports: Vec::new(),
+        forwarded_resolutions: BTreeMap::new(),
+        rich_header: None,
+        dylibs: Vec::new(),
+        rpaths: Vec::new(),
+        pdb_types: None,
+        msvc_rtti: None,
+        seh: None,
+        go_module: None,
+        go_itabs: BTreeMap::new(),
+        go_types: BTreeMap::new(),
+        swift_info: None,
+        auth_pointers: Vec::new(),
+        auth_ptr_slots: Vec::new(),
+        wasm_component: None,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -476,6 +553,42 @@ mod tests {
         assert!(
             matches!(err, SRecordError::BadChecksum { .. }),
             "got {err:?}"
+        );
+    }
+
+    // ----- intel_hex_to_binary_image -----
+
+    #[test]
+    fn intel_hex_round_trips_with_known_arch() {
+        use crate::image::ArchId;
+
+        // A minimal Intel HEX stream with verified checksums:
+        //   - Extended Linear Address 0x0000 (`:020000040000FA`)
+        //   - 16 bytes of data at offset 0x0000 (bytes 0x00..0x0F)
+        //   - EOF (`:00000001FF`)
+        // Data record checksum: 0x78 = (0x100 - (0x10 + 0x00 + 0x00 + 0x00
+        // + sum(0x00..=0x0F)) mod 0x100).
+        let hex_text = ":020000040000FA\n\
+                        :10000000000102030405060708090A0B0C0D0E0F78\n\
+                        :00000001FF\n";
+
+        let ihex = load_intel_hex(hex_text).expect("hex stream parses");
+        let bin = intel_hex_to_binary_image(&ihex, ArchId::Arm);
+
+        // Architecture is passed through.
+        assert_eq!(bin.arch, ArchId::Arm);
+
+        // Entry falls back to the first segment base (no type-05 record).
+        assert_eq!(bin.entry, 0x0000_0000);
+
+        // Single section with the expected 16-byte ramp.
+        assert_eq!(bin.sections.len(), 1);
+        let sec = &bin.sections[0];
+        assert_eq!(sec.name, ".text");
+        assert_eq!(sec.vaddr, 0);
+        assert_eq!(
+            sec.data,
+            (0u8..16).collect::<Vec<u8>>()
         );
     }
 }

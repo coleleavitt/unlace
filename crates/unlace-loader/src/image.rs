@@ -186,6 +186,35 @@ pub struct LoadConfig {
     pub cfg_targets: Vec<u64>,
 }
 
+/// Mitigations declared by a PE's optional-header `DllCharacteristics`
+/// field plus the `IMAGE_LOAD_CONFIG_DIRECTORY` guard flags. Batch 23
+/// surfaces these so the quality report can flag binaries with /without
+/// CET shadow stacks, CFG, and stripped Authenticode signatures.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PeMitigations {
+    /// `IMAGE_DLLCHARACTERISTICS_NX_COMPAT` (0x0100).
+    pub nx_compat: bool,
+    /// `IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE` (0x0040) — ASLR.
+    pub dynamic_base: bool,
+    /// `IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA` (0x0020) — 64-bit ASLR.
+    pub high_entropy_va: bool,
+    /// `IMAGE_DLLCHARACTERISTICS_GUARD_CF` (0x4000) — Control Flow Guard.
+    pub guard_cf: bool,
+    /// `IMAGE_GUARD_CF_INSTRUMENTED` (0x100) in `LoadConfig::guard_flags`.
+    pub cfg_instrumented: bool,
+    /// `IMAGE_GUARD_CET_*` family in `LoadConfig::guard_flags`. Set when
+    /// any of `IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT`,
+    /// `IMAGE_GUARD_XFG_ENABLED`, or `IMAGE_GUARD_RF_*` bits are present.
+    pub xf_or_xfg_guarded: bool,
+    /// `true` when an `IMAGE_DIRECTORY_ENTRY_SECURITY` blob (Authenticode
+    /// PKCS#7 envelope) is present in the file. We only record presence
+    /// and size — actual signature validation is out of scope.
+    pub authenticode_present: bool,
+    /// Length of the Authenticode certificate blob in bytes when
+    /// [`authenticode_present`](Self::authenticode_present) is true.
+    pub authenticode_size: u32,
+}
+
 /// A resource entry from the PE resource directory tree.
 ///
 /// The PE resource tree has three levels: type → name → language. Each leaf
@@ -347,6 +376,9 @@ pub struct BinaryImage {
     pub debug_records: Vec<DebugRecord>,
     /// PE load configuration directory. `None` for ELF/Mach-O or if absent.
     pub load_config: Option<LoadConfig>,
+    /// Batch 23: PE mitigations summary (DllCharacteristics + LoadConfig
+    /// guard flags + Authenticode presence). `None` for ELF/Mach-O.
+    pub pe_mitigations: Option<PeMitigations>,
     /// Exception handling runtime functions (PE `.pdata`). Empty for ELF/Mach-O.
     pub runtime_functions: Vec<RuntimeFunction>,
     /// PE resource directory entries. Empty for ELF/Mach-O or if absent.
@@ -482,6 +514,49 @@ pub struct UnwindInfo {
 }
 
 impl BinaryImage {
+    /// Construct an empty `BinaryImage` for `arch` / `endian`. The
+    /// caller is responsible for populating `sections`, `entry`, and
+    /// any architecture-specific tables; every other field defaults
+    /// to the equivalent of "absent". Useful for narrow firmware
+    /// loaders (Intel HEX, S-record, ESP32, STM32) that don't carry
+    /// the heavy ELF/PE/Mach-O metadata graph.
+    pub fn empty(arch: ArchId, endian: Endian) -> Self {
+        Self {
+            arch,
+            endian,
+            entry: 0,
+            sections: Vec::new(),
+            symbols: BTreeMap::new(),
+            plt_symbols: BTreeMap::new(),
+            relocations: Vec::new(),
+            string_table: BTreeMap::new(),
+            tls_callbacks: Vec::new(),
+            function_starts: Vec::new(),
+            debug_records: Vec::new(),
+            load_config: None,
+            pe_mitigations: None,
+            runtime_functions: Vec::new(),
+            resources: Vec::new(),
+            bound_imports: Vec::new(),
+            delay_imports: Vec::new(),
+            forwarded_exports: Vec::new(),
+            forwarded_resolutions: BTreeMap::new(),
+            rich_header: None,
+            dylibs: Vec::new(),
+            rpaths: Vec::new(),
+            pdb_types: None,
+            msvc_rtti: None,
+            seh: None,
+            go_module: None,
+            go_itabs: BTreeMap::new(),
+            go_types: BTreeMap::new(),
+            swift_info: None,
+            auth_pointers: Vec::new(),
+            auth_ptr_slots: Vec::new(),
+            wasm_component: None,
+        }
+    }
+
     /// Look up a section by name.
     pub fn section_by_name(&self, name: &str) -> Option<&Section> {
         self.sections.iter().find(|s| s.name == name)
@@ -552,6 +627,7 @@ mod tests {
             function_starts: Vec::new(),
             debug_records: Vec::new(),
             load_config: None,
+            pe_mitigations: None,
             runtime_functions: Vec::new(),
             resources: Vec::new(),
             bound_imports: Vec::new(),

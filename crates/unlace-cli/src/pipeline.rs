@@ -73,9 +73,10 @@ use unlace_passes::{
     StackOffsetSnapshotPass, StackPointerTrackingPass, StackVarRecoveryPass, StrengthReducePass,
     StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     VariableMergePass, annotate_libc_calls, bump_if_signature_changed,
-    canonical_pipeline_descriptor, detect_byref, detect_go_defer, parse_printf_format_strings,
-    recover_direct_call_args, recover_stack_frame, recover_structs, run_instrumented,
-    run_outer_fixedpoint, run_to_fixedpoint, validate_named_phase_monotonicity,
+    canonical_pipeline_backedge_exceptions, canonical_pipeline_descriptor, detect_byref,
+    detect_go_defer, parse_printf_format_strings, recover_direct_call_args, recover_stack_frame,
+    recover_structs, run_instrumented, run_outer_fixedpoint, run_to_fixedpoint,
+    validate_named_phase_monotonicity_with_exceptions,
 };
 
 /// Once-per-process pipeline phase-monotonicity check.
@@ -102,24 +103,29 @@ fn maybe_validate_pipeline_once() {
             return;
         }
         let desc = canonical_pipeline_descriptor();
-        match validate_named_phase_monotonicity(&desc) {
+        match validate_named_phase_monotonicity_with_exceptions(&desc) {
             Ok(()) => {
+                let allowed = canonical_pipeline_backedge_exceptions();
                 eprintln!(
-                    "[unlace] pipeline phase-monotonicity check passed ({} passes)",
-                    desc.len()
+                    "[unlace] pipeline phase-monotonicity check passed \
+                     ({} passes, {} explicitly-allowed backedges)",
+                    desc.len(),
+                    allowed.len()
                 );
             }
             Err(violations) => {
                 eprintln!(
-                    "[unlace] pipeline phase-monotonicity check: {} out-of-order transition(s)",
+                    "[unlace] pipeline phase-monotonicity check: \
+                     {} unexplained out-of-order transition(s)",
                     violations.len()
                 );
                 for v in &violations {
-                    eprintln!("[unlace]   {v}");
+                    eprintln!("[unlace]   {}", v.to_message());
                 }
                 eprintln!(
-                    "[unlace]   (intentional in current pipeline; see \
-                     unlace_passes::pass::canonical_pipeline_descriptor)"
+                    "[unlace]   register an `AllowedBackedge` in \
+                     unlace_passes::canonical_pipeline_backedge_exceptions \
+                     or fix the schedule"
                 );
             }
         }
@@ -1508,7 +1514,21 @@ pub fn build_symbol_table_with_functions(
     image: &BinaryImage,
     discovered: &[FunctionEntry],
 ) -> BTreeMap<u64, String> {
+    build_symbol_table_and_flirt_with_functions(image, discovered).0
+}
+
+/// §5.5: extended variant of [`build_symbol_table_with_functions`] that
+/// also returns the per-function FLIRT confidence map keyed by function
+/// entry address. Downstream consumers (printer annotations, quality
+/// counters) use the map to surface confidence at call sites; callers
+/// that don't need it should keep using `build_symbol_table_with_functions`
+/// (a thin wrapper that drops the second tuple element).
+pub fn build_symbol_table_and_flirt_with_functions(
+    image: &BinaryImage,
+    discovered: &[FunctionEntry],
+) -> (BTreeMap<u64, String>, BTreeMap<u64, FlirtConfidence>) {
     let mut table = BTreeMap::new();
+    let mut flirt = BTreeMap::new();
     for entry in discovered {
         table.insert(entry.addr, entry.name.clone());
     }
@@ -1526,15 +1546,20 @@ pub fn build_symbol_table_with_functions(
     // the recognised name rather than the stripped-binary placeholder.
     // We only overwrite names that look like stripped-binary stubs;
     // application code keeps its original name.
+    //
+    // §5.5: collect the full `FlirtConfidence` per entry address so
+    // downstream printer annotations and quality counters can see the
+    // confidence + signature_id without re-running the matcher.
     for entry in discovered {
         if !is_flirt_eligible_name(&entry.name) {
             continue;
         }
-        if let Some(canonical) = flirt_match(image, entry) {
-            table.insert(entry.addr, canonical);
+        if let Some(fc) = flirt_match_detailed(image, entry) {
+            table.insert(entry.addr, fc.name.clone());
+            flirt.insert(entry.addr, fc);
         }
     }
-    table
+    (table, flirt)
 }
 
 /// Phase-1 helper for interproc batch: lift a function, build SSA, apply DWARF
@@ -1621,7 +1646,7 @@ pub fn emit_function_interproc(
     rtti: Option<&unlace_loader::RttiInfo>,
 ) -> Result<String> {
     let _span = tracing::debug_span!("emit_function_interproc", func = %entry.name).entered();
-    let symbols = build_symbol_table_with_functions(image, discovered);
+    let (symbols, flirt_map) = build_symbol_table_and_flirt_with_functions(image, discovered);
     let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
@@ -1667,6 +1692,12 @@ pub fn emit_function_interproc(
     printer_annotations.go_interfaces = image.go_types.clone();
     printer_annotations.libc_call_canonical = libc_call_canonical;
     printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
+    // §5.5: surface per-callee FLIRT confidence so the C printer can
+    // emit `/* flirt: <name>@<conf> */` trailing comments at Call sites.
+    printer_annotations.flirt_call_annotations = flirt_map
+        .iter()
+        .map(|(addr, fc)| (*addr, (fc.name.clone(), fc.confidence)))
+        .collect();
     let printer_annotations = Some(printer_annotations);
     resolve_jump_table_targets(ssa, image);
     let jt_sections = build_jump_table_section_views(image);
@@ -1801,14 +1832,22 @@ pub fn flirt_match(image: &BinaryImage, entry: &FunctionEntry) -> Option<String>
 
 /// §5.5: confidence-aware FLIRT match result.
 ///
-/// `confidence` is a synthetic 0.0–1.0 score: 1.0 when the matched
-/// signature's outbound-reference checks passed (best evidence), 0.5
-/// when only the byte/CRC prefix matched (signature still applies but
-/// the reference table didn't resolve), 0.0 when no match.
+/// `confidence` is the synthetic 0.5–1.0 score reported by the
+/// underlying [`unlace_loader::flirt::FlirtMatch`]:
+///  - `1.0` — every recorded outbound reference resolved (strongest).
+///  - `0.9` — byte/CRC matched, signature carried no references.
+///  - `0.5` — byte/CRC matched but at least one outbound reference
+///    failed to resolve.
+///
+/// `signature_id` is the matched signature's insertion-order index in
+/// the process-wide `FlirtDb`. Surfaced so downstream consumers can
+/// correlate annotations to a specific entry without re-running the
+/// matcher.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FlirtConfidence {
     pub name: String,
     pub confidence: f32,
+    pub signature_id: usize,
 }
 
 /// Like [`flirt_match`] but returns the confidence score and the
@@ -1849,7 +1888,8 @@ fn flirt_match_detailed_with_resolved(
         .match_function_with_refs(bytes, resolved)
         .map(|m| FlirtConfidence {
             name: m.name.to_string(),
-            confidence: if m.refs_matched { 1.0 } else { 0.5 },
+            confidence: m.confidence,
+            signature_id: m.signature_id,
         })
 }
 
@@ -2007,7 +2047,7 @@ pub fn decompile_function_with_symbols(
     // RustPanicPass) can match against PLT/import names. The leaked
     // `&'static str`s previously built only for `detect_go_defer` are now
     // also reused as the resolver backing store.
-    let symbols = build_symbol_table_with_functions(image, discovered);
+    let (symbols, flirt_map) = build_symbol_table_and_flirt_with_functions(image, discovered);
     let mut stable_symbol_names: BTreeMap<u64, &'static str> = BTreeMap::new();
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
@@ -2109,6 +2149,12 @@ pub fn decompile_function_with_symbols(
     printer_annotations.go_interfaces = image.go_types.clone();
     printer_annotations.libc_call_canonical = libc_call_canonical;
     printer_annotations.go_iface_devirtualized_calls = go_iface_devirtualized_calls;
+    // §5.5: surface per-callee FLIRT confidence so the C printer can
+    // emit `/* flirt: <name>@<conf> */` trailing comments at Call sites.
+    printer_annotations.flirt_call_annotations = flirt_map
+        .iter()
+        .map(|(addr, fc)| (*addr, (fc.name.clone(), fc.confidence)))
+        .collect();
     let printer_annotations = Some(printer_annotations);
 
     // Batch 9: section-aware second phase of jump-table recovery.
@@ -3136,6 +3182,34 @@ mod tests {
             symbols.get(&base).map(String::as_str),
             Some("memcpy"),
             "FLIRT canonical name must replace `sub_XXXX` in the symbol table",
+        );
+    }
+
+    /// §5.5: `build_symbol_table_and_flirt_with_functions` returns the
+    /// per-entry FLIRT confidence map alongside the symbol table so
+    /// downstream printer annotations and quality counters can drive
+    /// off the same data without re-running the matcher.
+    #[test]
+    fn build_symbol_table_and_flirt_surfaces_confidence() {
+        let memcpy_bytes: Vec<u8> = vec![
+            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
+        ];
+        let base: u64 = 0x1000;
+        let image = make_text_image(memcpy_bytes.clone(), base);
+        let entry = FunctionEntry {
+            name: "sub_1000".into(),
+            addr: base,
+            size: memcpy_bytes.len() as u64,
+        };
+        let (symbols, flirt) =
+            super::build_symbol_table_and_flirt_with_functions(&image, &[entry]);
+        assert_eq!(symbols.get(&base).map(String::as_str), Some("memcpy"));
+        let fc = flirt.get(&base).expect("flirt confidence missing");
+        assert_eq!(fc.name, "memcpy");
+        assert!(
+            fc.confidence >= 0.5 && fc.confidence <= 1.0,
+            "confidence in [0.5, 1.0], got {}",
+            fc.confidence
         );
     }
 

@@ -29,7 +29,9 @@ use unlace_lift::get_lifter;
 use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader};
 use unlace_struct::{HirFunction, HirNode};
 
-use crate::pipeline::{self, FunctionEntry};
+use crate::pipeline::{self, FlirtConfidence, FunctionEntry};
+use std::collections::BTreeMap;
+use unlace_ir::SpaceId;
 
 fn null_deref_regex() -> &'static regex::Regex {
     static RE: OnceLock<regex::Regex> = OnceLock::new();
@@ -207,6 +209,15 @@ pub struct FunctionQuality {
     /// `__cxa_finalize`) legitimately report `0` — the roster intentionally
     /// excludes those because they aren't simplifiable idioms.
     pub libc_annotated_calls: usize,
+    /// §5.5: number of direct Call instructions in this function whose
+    /// callee was identified by FLIRT with confidence ≥ 0.9. Sourced
+    /// from the `(symbol_table, flirt_map)` pair built by
+    /// [`build_symbol_table_and_flirt_with_functions`] and projected
+    /// against each Call's constant target operand. Low-confidence
+    /// matches (refs failed to resolve, raw byte/CRC only) are
+    /// intentionally excluded so the counter tracks the *strong-evidence*
+    /// signal pipeline-quality dashboards care about.
+    pub flirt_matched_calls_high_confidence: usize,
     /// Variadic call sites for which the format string was resolved and
     /// per-slot argument types were inferred (`ssa.variadic_call_types`).
     /// Wired in Batch 6.
@@ -286,7 +297,18 @@ pub struct FunctionQuality {
 
 impl FunctionQuality {
     /// Collect counters for one already-built SSA + HIR pair.
-    fn collect(name: &str, addr: u64, ssa: &SsaFunction, hir: &HirFunction) -> Self {
+    ///
+    /// `flirt_calls` is the per-callee FLIRT confidence map built by
+    /// [`pipeline::build_symbol_table_and_flirt_with_functions`]; entries
+    /// with confidence ≥ 0.9 that are referenced by a direct Call in this
+    /// function increment `flirt_matched_calls_high_confidence` (§5.5).
+    fn collect(
+        name: &str,
+        addr: u64,
+        ssa: &SsaFunction,
+        hir: &HirFunction,
+        flirt_calls: &BTreeMap<u64, FlirtConfidence>,
+    ) -> Self {
         let mut q = FunctionQuality {
             name: name.to_string(),
             addr,
@@ -303,7 +325,20 @@ impl FunctionQuality {
                     IrOp::Unimplemented => q.unimplemented_ops += 1,
                     IrOp::Callother => q.callother_ops += 1,
                     IrOp::BoolAnd | IrOp::BoolOr => q.short_circuit_ops += 1,
-                    IrOp::Call => direct_calls += 1,
+                    IrOp::Call => {
+                        direct_calls += 1;
+                        // §5.5: tally high-confidence FLIRT matches at
+                        // direct-call sites. The target VA lives in
+                        // `inputs[0]` (SpaceId::Const) for direct calls;
+                        // we only count matches that cleared the 0.9 bar.
+                        if let Some(target) = insn.inputs.first()
+                            && target.space == SpaceId::Const
+                            && let Some(fc) = flirt_calls.get(&target.offset)
+                            && fc.confidence >= 0.9
+                        {
+                            q.flirt_matched_calls_high_confidence += 1;
+                        }
+                    }
                     IrOp::Callind => indirect_calls += 1,
                     _ => {}
                 }
@@ -802,6 +837,8 @@ pub struct QualityTotals {
     pub inferred_return_present: usize,
     pub inferred_varargs_count: usize,
     pub libc_annotated_calls: usize,
+    /// §5.5: aggregate of `FunctionQuality::flirt_matched_calls_high_confidence`.
+    pub flirt_matched_calls_high_confidence: usize,
     pub variadic_call_sites: usize,
     pub rust_panic_sites: usize,
     pub noreturn_functions: usize,
@@ -876,6 +913,7 @@ impl QualityTotals {
         self.inferred_return_present += q.inferred_return_present;
         self.inferred_varargs_count += q.inferred_varargs_count;
         self.libc_annotated_calls += q.libc_annotated_calls;
+        self.flirt_matched_calls_high_confidence += q.flirt_matched_calls_high_confidence;
         self.variadic_call_sites += q.variadic_call_sites;
         self.rust_panic_sites += q.rust_panic_sites;
         self.noreturn_functions += q.noreturn_functions;
@@ -1008,7 +1046,8 @@ fn analyze_function(
     // Build the same call-target VA → name resolver the main pipeline uses
     // so resolver-gated passes (noreturn, rust-panic) fire and their SSA
     // fields are populated for the counters below.
-    let symbols = pipeline::build_symbol_table_with_functions(image, discovered);
+    let (symbols, flirt_calls) =
+        pipeline::build_symbol_table_and_flirt_with_functions(image, discovered);
     let mut stable_symbol_names: std::collections::BTreeMap<u64, &'static str> =
         std::collections::BTreeMap::new();
     for (&addr, name) in &symbols {
@@ -1071,7 +1110,8 @@ fn analyze_function(
 
     let emitted_c =
         unlace_output::print_c_full(&hir, None, None, Some(&symbols), Some(&image.string_table));
-    let mut quality = FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir);
+    let mut quality =
+        FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir, &flirt_calls);
     quality.collect_output_sanity(&emitted_c);
     Ok(quality)
 }
@@ -1139,6 +1179,7 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
          - inferred_return_present: {irp}\n\
          - inferred_varargs_count: {ivc}\n\
          - libc-annotated calls: {lc}\n\
+         - flirt-matched calls (high confidence ≥0.9): {fh}\n\
          - variadic call sites (printf-family resolved): {vs}\n\
          - noreturn functions: {nr}\n\
          - rust panic sites: {rp}\n\
@@ -1153,6 +1194,7 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
         irp = t.inferred_return_present,
         ivc = t.inferred_varargs_count,
         lc = t.libc_annotated_calls,
+        fh = t.flirt_matched_calls_high_confidence,
         vs = t.variadic_call_sites,
         nr = t.noreturn_functions,
         rp = t.rust_panic_sites,

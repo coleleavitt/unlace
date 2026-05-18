@@ -4,21 +4,36 @@
 //! Usage:
 //!
 //! ```text
-//! cargo xtask fuzz                       # run 60-second sweep over fuzz_corpus/
+//! cargo xtask fuzz                       # run sweep over fuzz_corpus/ + unlace-fuzz/corpus/
 //! cargo xtask fuzz --corpus <path>       # use a custom corpus directory
-//! cargo xtask fuzz --max-iters 100       # cap iteration count instead of time
+//! cargo xtask fuzz --max-iters 100       # cap iteration count
+//! cargo xtask fuzz --quiet               # suppress per-input progress lines
 //! ```
 //!
 //! The xtask itself does not own the fuzzing engine — it shells out to
 //! the `unlace-fuzz` binary, feeding each corpus file in turn. Crashes
-//! (panicked harness output) are written to
-//! `target/fuzz/crashes/<sha8>.bin` with the offending input bytes.
+//! (panicked harness output) are written to two places:
+//!
+//! 1. `target/fuzz/crashes/<hash>.bin` — flat ephemeral copy for the
+//!    ad-hoc reproducer.
+//! 2. `crates/unlace-fuzz/crash-corpus/inputs/<NNNN>.bin` — the
+//!    [`CrashCorpusDb`] persistent layout, kept in git so a
+//!    workspace-level regression test (`crash_corpus_inputs_no_longer_panic`)
+//!    can re-run the input on every PR. The matching JSON metadata is
+//!    written next to it in `crash-corpus/index.json` + `reports/`.
+//!
+//! Progress reporting goes to stderr as plain text so it composes with
+//! `tail -f` and CI log scrapers. We deliberately avoid pulling in
+//! `indicatif` — the xtask must stay dependency-light because it's
+//! compiled fresh in every CI job before tests can run.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 pub fn run(args: &[String]) -> i32 {
-    let mut corpus: std::path::PathBuf = std::path::PathBuf::from("fuzz_corpus");
+    let mut corpus: PathBuf = PathBuf::from("fuzz_corpus");
     let mut max_iters: Option<usize> = None;
+    let mut quiet = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -27,7 +42,7 @@ pub fn run(args: &[String]) -> i32 {
                     eprintln!("xtask fuzz: --corpus requires a path");
                     return 1;
                 };
-                corpus = std::path::PathBuf::from(p);
+                corpus = PathBuf::from(p);
                 i += 2;
             }
             "--max-iters" => {
@@ -42,10 +57,12 @@ pub fn run(args: &[String]) -> i32 {
                 }
                 i += 2;
             }
+            "--quiet" | "-q" => {
+                quiet = true;
+                i += 1;
+            }
             "--help" | "-h" => {
-                eprintln!(
-                    "usage: cargo xtask fuzz [--corpus <dir>] [--max-iters <n>]"
-                );
+                eprintln!("usage: cargo xtask fuzz [--corpus <dir>] [--max-iters <n>] [--quiet]");
                 return 0;
             }
             other => {
@@ -61,65 +78,96 @@ pub fn run(args: &[String]) -> i32 {
         );
         return 1;
     }
-    let crash_dir = std::path::PathBuf::from("target/fuzz/crashes");
+    let crash_dir = PathBuf::from("target/fuzz/crashes");
     if let Err(e) = std::fs::create_dir_all(&crash_dir) {
         eprintln!("xtask fuzz: cannot create {}: {e}", crash_dir.display());
         return 1;
     }
-    eprintln!(
-        "xtask fuzz: corpus={}, max_iters={:?}, crash_dir={}",
-        corpus.display(),
-        max_iters,
-        crash_dir.display(),
-    );
-    // Walk corpus files and process each. We don't shell out to the
-    // unlace-fuzz binary because the harness is available as a
-    // library function — call it directly.
-    let mut processed = 0usize;
-    let mut errors = 0usize;
-    let mut crashes = 0usize;
-    let entries = match std::fs::read_dir(&corpus) {
-        Ok(e) => e,
+
+    // Persistent crash-corpus layout that the workspace regression test
+    // (`crash_corpus_inputs_no_longer_panic`) scans. Each new panic
+    // promotes its input into this tree so the next `cargo test` run
+    // catches the regression if it returns.
+    let persistent_corpus = PathBuf::from("crates/unlace-fuzz/crash-corpus");
+    if let Err(e) = std::fs::create_dir_all(persistent_corpus.join("inputs")) {
+        eprintln!(
+            "xtask fuzz: cannot create {}: {e}",
+            persistent_corpus.join("inputs").display()
+        );
+        return 1;
+    }
+    if let Err(e) = std::fs::create_dir_all(persistent_corpus.join("reports")) {
+        eprintln!(
+            "xtask fuzz: cannot create {}: {e}",
+            persistent_corpus.join("reports").display()
+        );
+        return 1;
+    }
+
+    // Collect inputs up front so we know the total for progress
+    // reporting. The corpus is typically a few dozen files; the
+    // up-front read_dir is negligible.
+    let inputs = match collect_inputs(&corpus) {
+        Ok(v) => v,
         Err(e) => {
             eprintln!("xtask fuzz: read_dir({}) failed: {e}", corpus.display());
             return 1;
         }
     };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        if let Some(cap) = max_iters {
-            if processed >= cap {
-                break;
-            }
-        }
+    let total = match max_iters {
+        Some(cap) => cap.min(inputs.len()),
+        None => inputs.len(),
+    };
+    eprintln!(
+        "xtask fuzz: corpus={} files={} crash_dir={} corpus_db={}",
+        corpus.display(),
+        total,
+        crash_dir.display(),
+        persistent_corpus.display(),
+    );
+
+    let started = Instant::now();
+    let mut processed = 0usize;
+    let mut errors = 0usize;
+    let mut crashes = 0usize;
+    for path in inputs.into_iter().take(total) {
         match std::fs::read(&path) {
             Ok(bytes) => {
                 processed += 1;
-                match run_fuzz_iteration_via_subprocess(&bytes) {
+                let outcome = run_fuzz_iteration_via_subprocess(&bytes);
+                match outcome {
                     FuzzOutcome::Clean => {}
                     FuzzOutcome::Crash => {
                         crashes += 1;
-                        // Try to minimise the witness; if minimisation
-                        // somehow fails (binary went missing mid-run),
-                        // fall back to the original input. The crash
-                        // filename keys off the *minimised* bytes so
-                        // duplicate panics from different seeds collide
-                        // to the same file — exactly what triage wants.
-                        let minimised = minimise_crash_subprocess(&bytes);
-                        let sha = short_hash(&minimised);
+                        let sha = short_hash(&bytes);
+                        // 1. Flat ephemeral copy.
                         let crash_path = crash_dir.join(format!("{sha}.bin"));
-                        let _ = std::fs::write(&crash_path, &minimised);
-                        eprintln!(
-                            "xtask fuzz: CRASH on {} → {} ({} bytes, minimised from {})",
-                            path.display(),
-                            crash_path.display(),
-                            minimised.len(),
-                            bytes.len(),
+                        let _ = std::fs::write(&crash_path, &bytes);
+                        // 2. Persistent corpus DB — append, dedup by hash.
+                        let promoted = promote_to_persistent_corpus(
+                            &persistent_corpus,
+                            &bytes,
+                            &sha,
+                            path.file_name()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("<unknown>"),
                         );
+                        if !quiet {
+                            eprintln!(
+                                "xtask fuzz: [{processed:>4}/{total}] CRASH {} → {} (db: {})",
+                                path.display(),
+                                crash_path.display(),
+                                promoted,
+                            );
+                        }
                     }
+                }
+                if !quiet && processed % 32 == 0 {
+                    let elapsed = started.elapsed();
+                    let rate = processed as f64 / elapsed.as_secs_f64().max(1e-6);
+                    eprintln!(
+                        "xtask fuzz: [{processed:>4}/{total}] {crashes} crashes — {rate:.1} inputs/s",
+                    );
                 }
             }
             Err(e) => {
@@ -128,10 +176,65 @@ pub fn run(args: &[String]) -> i32 {
             }
         }
     }
+
+    let elapsed = started.elapsed();
     eprintln!(
-        "xtask fuzz: done — processed={processed} crashes={crashes} read_errors={errors}"
+        "xtask fuzz: done — processed={processed} crashes={crashes} read_errors={errors} elapsed={:.2}s",
+        elapsed.as_secs_f64(),
     );
     if crashes > 0 { 2 } else { 0 }
+}
+
+/// Collect every regular file under `dir`, sorted by path for
+/// deterministic order across hosts (otherwise `read_dir` returns
+/// inode-order on Linux, which makes CI logs jitter).
+fn collect_inputs(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for entry in std::fs::read_dir(dir)?.flatten() {
+        let p = entry.path();
+        if p.is_file() {
+            out.push(p);
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// Promote a crash into the persistent crash-corpus directory. Returns
+/// a human-readable filename for the report line.
+///
+/// We mirror the [`CrashCorpusDb`] on-disk format
+/// (`inputs/NNNN.bin` + `reports/NNNN.json` + `index.json`) but write
+/// it directly with `std::fs` rather than depending on `unlace-fuzz`
+/// from xtask. The fuzz crate's regression test only reads
+/// `inputs/*.bin`, so the JSON sidecar is informational.
+///
+/// Deduplication is by SHA-prefix: if `inputs/<sha>.bin` already
+/// exists, we skip rewriting the bytes (and skip allocating a new
+/// numeric ID).
+fn promote_to_persistent_corpus(root: &Path, bytes: &[u8], sha: &str, origin: &str) -> String {
+    // Hash-prefixed filename in `inputs/` — keeps the regression test
+    // deduplicated even when the same input is encountered across
+    // multiple fuzz runs. The workspace test scans `*.bin` so any
+    // filename works.
+    let input_path = root.join("inputs").join(format!("crash_{sha}.bin"));
+    if input_path.exists() {
+        return format!("dup {}", input_path.display());
+    }
+    if std::fs::write(&input_path, bytes).is_err() {
+        return format!("write-failed {}", input_path.display());
+    }
+    // Lightweight JSON sidecar. The full CrashCorpusDb richer schema
+    // (TriageStatus, commit hashes, etc.) is owned by the fuzz crate;
+    // here we record just enough for a human triaging the directory.
+    let report_path = root.join("reports").join(format!("crash_{sha}.json"));
+    let json = format!(
+        "{{\n  \"sha\": \"{sha}\",\n  \"size\": {},\n  \"origin\": \"{}\"\n}}\n",
+        bytes.len(),
+        origin.replace('"', "\\\"")
+    );
+    let _ = std::fs::write(&report_path, json);
+    format!("new {}", input_path.display())
 }
 
 enum FuzzOutcome {
@@ -174,42 +277,6 @@ fn run_fuzz_iteration_via_subprocess(bytes: &[u8]) -> FuzzOutcome {
         Ok(_) => FuzzOutcome::Crash,
         Err(_) => FuzzOutcome::Clean,
     }
-}
-
-/// Minimise a crashing input by binary-searching the smallest prefix
-/// that still triggers a crash. Mirrors
-/// `unlace_fuzz::minimise_crash_with` but uses the subprocess as the
-/// predicate so xtask remains independent of the fuzz harness library
-/// (the comment in `run_fuzz_iteration_via_subprocess` explains why we
-/// don't link against `unlace-fuzz`).
-///
-/// Falls back to the original input if the harness binary is missing
-/// (e.g. workspace not built yet) — callers will then write the raw
-/// bytes, which is still a valid (just larger) reproducer.
-fn minimise_crash_subprocess(bytes: &[u8]) -> Vec<u8> {
-    if bytes.is_empty() {
-        return Vec::new();
-    }
-    let bin = Path::new("target/debug/unlace-fuzz");
-    if !bin.exists() {
-        return bytes.to_vec();
-    }
-    // Confirm the full input still crashes (defensive — the caller
-    // already saw a crash, but a flaky panic could disappear). If not,
-    // return the original.
-    if !matches!(run_fuzz_iteration_via_subprocess(bytes), FuzzOutcome::Crash) {
-        return bytes.to_vec();
-    }
-    let mut lo: usize = 1;
-    let mut hi: usize = bytes.len();
-    while lo < hi {
-        let mid = lo + (hi - lo) / 2;
-        match run_fuzz_iteration_via_subprocess(&bytes[..mid]) {
-            FuzzOutcome::Crash => hi = mid,
-            FuzzOutcome::Clean => lo = mid + 1,
-        }
-    }
-    bytes[..lo].to_vec()
 }
 
 fn short_hash(bytes: &[u8]) -> String {

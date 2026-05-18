@@ -186,3 +186,58 @@ fn truncated_elf_magic_does_not_panic() {
         );
     }
 }
+
+/// Regression guard for the persistent crash corpus. The xtask fuzz
+/// runner promotes every panic-inducing input into
+/// `crates/unlace-fuzz/crash-corpus/inputs/` (a `CrashCorpusDb` on
+/// disk). This test re-feeds every such input through `fuzz_iteration`
+/// and asserts that **none** of them still produce `FuzzResult::Panicked`
+/// — i.e. the historical bug has been fixed and stays fixed.
+///
+/// Skipped silently if the corpus directory is empty (or absent), so a
+/// fresh checkout doesn't fail; once the first crash is committed, the
+/// directory exists and the test asserts on it.
+#[test]
+fn crash_corpus_inputs_no_longer_panic() {
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    dir.push("crash-corpus");
+    dir.push("inputs");
+
+    if !dir.exists() {
+        // Fresh checkout — no crashes recorded yet.
+        return;
+    }
+
+    let entries: Vec<_> = match std::fs::read_dir(&dir) {
+        Ok(rd) => rd.filter_map(|e| e.ok()).collect(),
+        Err(_) => return,
+    };
+    let bins: Vec<_> = entries
+        .into_iter()
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s == "bin")
+                .unwrap_or(false)
+        })
+        .collect();
+
+    for entry in bins {
+        let path = entry.path();
+        let bytes = match std::fs::read(&path) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        let result = fuzz_iteration(&bytes);
+        if let FuzzResult::Panicked { stage, payload } = &result {
+            panic!(
+                "regression: crash-corpus input `{}` panicked again in stage `{stage}`: {payload}\n\
+                 This input was historically fixed; reverting that fix would mask the regression. \
+                 Mark the entry as TriageStatus::New in the corpus index if the panic is a new \
+                 manifestation, otherwise restore the fix.",
+                path.display()
+            );
+        }
+    }
+}

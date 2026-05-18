@@ -532,6 +532,7 @@ pub fn print_c_with_annotations(
 
     let dwarf_func = dwarf.and_then(|d| dwarf_function_for_func(d, func, header));
     compute_dwarf_locals(dwarf_func, header, &mut ctx);
+    compute_suppressed_stack_offsets(func, &mut ctx);
     // t232: register recovered stack-frame slots as named locals
     // (`v_<offset>` for scalars, `buf_<offset>` for arrays). DWARF
     // locals take priority and have already been registered above; this
@@ -545,6 +546,12 @@ pub fn print_c_with_annotations(
     compute_heuristic_names(&func.body, &mut ctx);
     compute_hoist_plan(&mut ctx);
     detect_mmio_addrs(&mut ctx);
+    let merged_return_stmts = merged_assign_return_stmt_indices(&func.body, &ctx);
+    let merged_return_svs: BTreeSet<SsaVarnode> = merged_return_stmts
+        .iter()
+        .filter_map(|stmt_idx| ctx.stmt_outputs.get(stmt_idx).copied().flatten())
+        .collect();
+    let post_dowhile_return_svs = post_dowhile_recovered_return_svs(&func.body, &ctx);
 
     let mut out = String::with_capacity(1024);
 
@@ -882,8 +889,6 @@ pub fn print_c_with_annotations(
     out.push_str(" {\n");
 
     let mut foldable_svs: BTreeSet<SsaVarnode> = ctx.sv_defining_stmt.keys().copied().collect();
-    // Also suppress variables that the expression tree pass marked as
-    // single-use temporaries — these are inlined at their use site.
     foldable_svs.extend(&func.foldable_exprs);
 
     // Build the set of variable names that are actually referenced in the
@@ -894,6 +899,15 @@ pub fn print_c_with_annotations(
         let mut names = BTreeSet::new();
         // Variables read as inputs.
         for (sv, count) in &ctx.sv_use_counts {
+            if merged_return_svs.contains(sv) {
+                continue;
+            }
+            if post_dowhile_return_svs.contains(sv) {
+                continue;
+            }
+            if is_control_only_condition_use_or_base(sv, &ctx) {
+                continue;
+            }
             if *count > 0 {
                 if let Some(n) = ctx.var_names.get(sv) {
                     names.insert(n.as_str());
@@ -902,17 +916,32 @@ pub fn print_c_with_annotations(
         }
         // Variables used as conditions.
         for sv in &ctx.cond_uses {
+            if merged_return_svs.contains(sv) {
+                continue;
+            }
+            if post_dowhile_return_svs.contains(sv) {
+                continue;
+            }
+            if is_control_only_condition_use_or_base(sv, &ctx) {
+                continue;
+            }
             if let Some(n) = ctx.var_names.get(sv) {
                 names.insert(n.as_str());
             }
         }
         // Variables written in visible (non-foldable) statements.
         for (&stmt_idx, output_sv_opt) in &ctx.stmt_outputs {
+            if merged_return_stmts.contains(&stmt_idx) {
+                continue;
+            }
             if let Some(sv) = output_sv_opt {
-                if foldable_svs.contains(sv) {
+                if ctx.foldable_stmts.contains(&stmt_idx) {
                     continue;
                 }
                 if let Some(insn) = ctx.stmt_insns.get(&stmt_idx) {
+                    if is_control_only_condition_assignment(stmt_idx, sv, insn, &ctx) {
+                        continue;
+                    }
                     if is_dead_zero_init(insn, stmt_idx, &ctx) {
                         continue;
                     }
@@ -941,11 +970,18 @@ pub fn print_c_with_annotations(
     for n in &stack_frame_names {
         declared_names.insert(n.as_str());
     }
+    let hoisted_decl_names: BTreeSet<&str> = ctx
+        .hoist_decl_plan
+        .values()
+        .filter(|plan| plan.fold_into_assignment)
+        .filter_map(|plan| ctx.stmt_outputs.get(&plan.stmt_idx).copied().flatten())
+        .filter_map(|sv| ctx.var_names.get(&sv).map(String::as_str))
+        .collect();
     for (sv, name) in &ctx.var_names {
         if foldable_svs.contains(sv) {
             continue;
         }
-        if !declared_names.insert(name.as_str()) {
+        if post_dowhile_return_svs.contains(sv) {
             continue;
         }
         if !referenced_names.contains(name.as_str()) || should_suppress_var_decl(sv, &ctx) {
@@ -954,7 +990,10 @@ pub fn print_c_with_annotations(
         // Hoisted decls are emitted in the function body at the point of
         // first use; skip the function-top entry so we don't emit a
         // duplicate `int v3;` line.
-        if ctx.hoist_decl_plan.contains_key(&sv.base) {
+        if hoisted_decl_names.contains(name.as_str()) {
+            continue;
+        }
+        if !declared_names.insert(name.as_str()) {
             continue;
         }
         let ty = ctx
@@ -1002,11 +1041,14 @@ pub fn print_c_with_annotations(
             let _ = writeln!(out, "    {} {};", c_type_for_var(&ctx, &sv.base, &ty), name);
         }
     }
+    if referenced_names.contains("cond") && !declared_names.contains("cond") {
+        let _ = writeln!(out, "    _BOOL cond;");
+    }
 
     emit_nodes(&func.body, 1, &mut ctx, &mut out);
 
     out.push_str("}\n");
-    out
+    prune_unused_plain_local_decls(prune_dead_plain_assignments(out))
 }
 
 // ---------------------------------------------------------------------------
@@ -1523,6 +1565,7 @@ struct PrintCtx {
     /// dead stores that DSE cannot eliminate within a single block).
     sv_use_counts: BTreeMap<SsaVarnode, usize>,
     cond_uses: Vec<SsaVarnode>,
+    control_cond_uses: Vec<SsaVarnode>,
     /// `(varnode, anchor stmt idx)` pairs recording which statement reads
     /// each `cond_uses` entry.  Used together with `stmt_inputs`/`stmt_outputs`
     /// to compute the LCA scope of a declared name when deciding whether to
@@ -1662,6 +1705,9 @@ struct PrintCtx {
     /// dereference cast at every Load/Store through these addresses
     /// to surface the side-effecting nature of the access.
     mmio_addrs: BTreeSet<u64>,
+    /// Stack-frame offsets that should not be rendered as source locals or raw
+    /// memory stores, such as saved-register slots and ABI-owned stack areas.
+    suppressed_stack_offsets: BTreeSet<i64>,
     /// C++ vtable call targets keyed by instruction VA.
     ///
     /// When a `Callind` at `insn.addr` is in this map as
@@ -1750,6 +1796,7 @@ impl PrintCtx {
             sv_defining_stmt: BTreeMap::new(),
             sv_use_counts: BTreeMap::new(),
             cond_uses: Vec::new(),
+            control_cond_uses: Vec::new(),
             cond_use_stmts: Vec::new(),
             collect_depth: 0,
             stmt_depths: BTreeMap::new(),
@@ -1786,6 +1833,7 @@ impl PrintCtx {
             go_defer_sites: Vec::new(),
             byref_union_types: BTreeMap::new(),
             mmio_addrs: BTreeSet::new(),
+            suppressed_stack_offsets: BTreeSet::new(),
             vtable_call_targets: BTreeMap::new(),
         }
     }
@@ -2382,14 +2430,29 @@ fn try_array_struct_field_access(
 /// Minimum address to consider as a global (below this is likely stack-relative).
 const GLOBAL_ADDR_THRESHOLD: u64 = 0x10000;
 
-fn try_global_var_name(addr_vn: &Varnode, access_size: u8, ctx: &PrintCtx) -> Option<String> {
-    if addr_vn.space != SpaceId::Const {
+/// Minimum address to consider as an instruction-pointer-relative static
+/// reference. Small PIE/shared-library fixtures often have data symbols in
+/// the 0x3000..0x5000 range, while ordinary raw constants still use the
+/// stricter global threshold above to avoid naming small immediates as data.
+const IP_REL_GLOBAL_ADDR_THRESHOLD: u64 = 0x1000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct StaticAddr {
+    addr: u64,
+    from_instruction_pointer: bool,
+}
+
+fn try_global_var_name(
+    addr_vn: &Varnode,
+    stmt_idx: u32,
+    access_size: u8,
+    ctx: &PrintCtx,
+) -> Option<String> {
+    let static_addr = try_static_addr_for_addr(addr_vn, stmt_idx, ctx)?;
+    if !is_global_addr_candidate(static_addr) {
         return None;
     }
-    let addr = addr_vn.offset;
-    if addr < GLOBAL_ADDR_THRESHOLD {
-        return None;
-    }
+    let addr = static_addr.addr;
     if let Some(sym) = ctx.symbols.get(&addr) {
         return Some(sym.clone());
     }
@@ -2401,6 +2464,115 @@ fn try_global_var_name(addr_vn: &Varnode, access_size: u8, ctx: &PrintCtx) -> Op
         _ => "unk",
     };
     Some(format!("{}_{:X}", prefix, addr))
+}
+
+fn is_global_addr_candidate(static_addr: StaticAddr) -> bool {
+    let threshold = if static_addr.from_instruction_pointer {
+        IP_REL_GLOBAL_ADDR_THRESHOLD
+    } else {
+        GLOBAL_ADDR_THRESHOLD
+    };
+    static_addr.addr >= threshold
+}
+
+fn try_static_addr_for_addr(
+    addr_vn: &Varnode,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> Option<StaticAddr> {
+    resolve_static_addr_for_addr(addr_vn, stmt_idx, ctx, 0)
+}
+
+fn resolve_static_addr_for_addr(
+    vn: &Varnode,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+    depth: u8,
+) -> Option<StaticAddr> {
+    const MAX_DEPTH: u8 = 16;
+    if depth > MAX_DEPTH {
+        return None;
+    }
+    if vn.space == SpaceId::Const {
+        return Some(StaticAddr {
+            addr: vn.offset,
+            from_instruction_pointer: false,
+        });
+    }
+    if is_instruction_pointer_reg(vn) {
+        return None;
+    }
+
+    let sv = input_or_latest_sv_for_operand(vn, stmt_idx, ctx)?;
+    let def_stmt = defining_stmt_for_sv(&sv, ctx)?;
+    let def = ctx.stmt_insns.get(&def_stmt)?;
+
+    match def.op {
+        IrOp::Copy if !def.inputs.is_empty() => {
+            resolve_static_addr_for_addr(&def.inputs[0], def_stmt, ctx, depth + 1)
+        }
+        IrOp::IntAdd if def.inputs.len() >= 2 => {
+            resolve_static_addr_add(&def.inputs[0], &def.inputs[1], def_stmt, ctx, depth + 1)
+        }
+        IrOp::IntSub if def.inputs.len() >= 2 => {
+            let lhs = resolve_static_addr_for_addr(&def.inputs[0], def_stmt, ctx, depth + 1)?;
+            let rhs = &def.inputs[1];
+            if rhs.space == SpaceId::Const {
+                Some(StaticAddr {
+                    addr: lhs.addr.wrapping_sub(rhs.offset),
+                    from_instruction_pointer: lhs.from_instruction_pointer,
+                })
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn resolve_static_addr_add(
+    a: &Varnode,
+    b: &Varnode,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+    depth: u8,
+) -> Option<StaticAddr> {
+    match (is_instruction_pointer_reg(a), is_instruction_pointer_reg(b)) {
+        (true, false) if b.space == SpaceId::Const => {
+            return Some(StaticAddr {
+                addr: b.offset,
+                from_instruction_pointer: true,
+            });
+        }
+        (false, true) if a.space == SpaceId::Const => {
+            return Some(StaticAddr {
+                addr: a.offset,
+                from_instruction_pointer: true,
+            });
+        }
+        _ => {}
+    }
+
+    if b.space == SpaceId::Const {
+        let base = resolve_static_addr_for_addr(a, stmt_idx, ctx, depth)?;
+        return Some(StaticAddr {
+            addr: base.addr.wrapping_add(b.offset),
+            from_instruction_pointer: base.from_instruction_pointer,
+        });
+    }
+    if a.space == SpaceId::Const {
+        let base = resolve_static_addr_for_addr(b, stmt_idx, ctx, depth)?;
+        return Some(StaticAddr {
+            addr: base.addr.wrapping_add(a.offset),
+            from_instruction_pointer: base.from_instruction_pointer,
+        });
+    }
+    None
+}
+
+fn is_instruction_pointer_reg(vn: &Varnode) -> bool {
+    vn.space == SpaceId::Register
+        && matches!(x86_64_register_name(vn.offset, vn.size), "rip" | "eip")
 }
 
 /// Recognize an x86-64 stack-canary read of the form `*(FS:0x28)` and emit
@@ -2507,11 +2679,8 @@ fn try_emit_byref_union_param(
 /// to give a name to. Limited to constant addresses outside the canonical
 /// stack-canary range to avoid stomping on `__readfsqword(0x28u)`. Skipped
 /// when the address is in the string table — string inlining must win.
-fn try_emit_memory_annotation(addr_vn: &Varnode, ctx: &PrintCtx) -> Option<String> {
-    if addr_vn.space != SpaceId::Const {
-        return None;
-    }
-    let addr = addr_vn.offset;
+fn try_emit_memory_annotation(addr_vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> Option<String> {
+    let addr = try_static_addr_for_addr(addr_vn, stmt_idx, ctx)?.addr;
     if addr < 0x1000 {
         return None;
     }
@@ -2614,6 +2783,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             } => {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+                ctx.control_cond_uses.push(*cond);
                 // Anchor the cond read at the next-allocated stmt so the
                 // hoist pass treats it as a use at the enclosing scope.
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
@@ -2636,6 +2806,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             HirNode::While { cond, body } => {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+                ctx.control_cond_uses.push(*cond);
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
                 ctx.collect_depth += 1;
                 let body_scope = ctx.next_scope_id;
@@ -2656,6 +2827,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 ctx.collect_depth -= 1;
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+                ctx.control_cond_uses.push(*cond);
                 // do/while reads the cond *after* the body; anchor at the
                 // last-allocated stmt index inside the loop body.
                 ctx.cond_use_stmts
@@ -2673,6 +2845,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
                 }
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+                ctx.control_cond_uses.push(*cond);
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
                 ctx.collect_depth += 1;
                 let body_scope = ctx.next_scope_id;
@@ -2712,9 +2885,11 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             }
 
             HirNode::Return(Some(sv)) => {
-                ctx.name_of(sv);
-                ctx.cond_uses.push(*sv);
-                ctx.cond_use_stmts.push((*sv, ctx.next_stmt));
+                if !ctx.parent_returns_void && sv.base.space != SpaceId::Const {
+                    ctx.name_of(sv);
+                    ctx.cond_uses.push(*sv);
+                    ctx.cond_use_stmts.push((*sv, ctx.next_stmt));
+                }
             }
 
             HirNode::Ternary {
@@ -2725,6 +2900,7 @@ fn collect_varnodes(nodes: &[HirNode], ctx: &mut PrintCtx) {
             } => {
                 ctx.name_of(cond);
                 ctx.cond_uses.push(*cond);
+                ctx.control_cond_uses.push(*cond);
 
                 ctx.cond_use_stmts.push((*cond, ctx.next_stmt));
 
@@ -3170,11 +3346,17 @@ fn is_dead_suppressible_store(insn: &IrInsn, stmt_idx: u32, ctx: &PrintCtx) -> b
     if ctx.byref_bases.contains(&out_sv.base) || ctx.cond_uses.contains(&out_sv) {
         return false;
     }
+    if is_redundant_inverted_control_compare(insn, stmt_idx, &out_sv, ctx) {
+        return true;
+    }
     ctx.sv_use_counts.get(&out_sv).copied().unwrap_or(0) == 0
         && is_suppressible_storage(&out_sv.base, ctx)
 }
 
 fn should_suppress_var_decl(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
+    if is_instruction_pointer_reg(&sv.base) {
+        return true;
+    }
     if !is_suppressible_storage(&sv.base, ctx) {
         return false;
     }
@@ -3184,9 +3366,51 @@ fn should_suppress_var_decl(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
     ctx.sv_use_counts.get(sv).copied().unwrap_or(0) == 0
 }
 
+fn is_redundant_inverted_control_compare(
+    insn: &IrInsn,
+    stmt_idx: u32,
+    out_sv: &SsaVarnode,
+    ctx: &PrintCtx,
+) -> bool {
+    let Some(inverse_op) = inverse_equality_op(insn.op) else {
+        return false;
+    };
+    if insn.inputs.len() != 2 {
+        return false;
+    }
+    if !ctx.var_names.get(out_sv).is_some_and(|name| name == "cond") {
+        return false;
+    }
+
+    ctx.stmt_outputs
+        .range((stmt_idx + 1)..)
+        .any(|(&later_idx, later_output)| {
+            let Some(later_sv) = later_output else {
+                return false;
+            };
+            let Some(later_insn) = ctx.stmt_insns.get(&later_idx) else {
+                return false;
+            };
+            later_insn.op == inverse_op
+                && later_insn.inputs == insn.inputs
+                && is_control_only_condition_assignment(later_idx, later_sv, later_insn, ctx)
+        })
+}
+
+fn inverse_equality_op(op: IrOp) -> Option<IrOp> {
+    match op {
+        IrOp::IntEqual => Some(IrOp::IntNotequal),
+        IrOp::IntNotequal => Some(IrOp::IntEqual),
+        IrOp::FloatEqual => Some(IrOp::FloatNotequal),
+        IrOp::FloatNotequal => Some(IrOp::FloatEqual),
+        _ => None,
+    }
+}
+
 fn is_suppressible_storage(vn: &Varnode, ctx: &PrintCtx) -> bool {
     is_temp_varnode(vn)
         || is_flag_register(vn)
+        || is_instruction_pointer_reg(vn)
         || is_synthetic_suppressed_name(vn, ctx)
         || matches!(
             ctx.base_names.get(vn).map(String::as_str),
@@ -3665,6 +3889,164 @@ fn compute_stack_frame_names(func: &HirFunction, ctx: &mut PrintCtx) {
     }
 }
 
+fn compute_suppressed_stack_offsets(func: &HirFunction, ctx: &mut PrintCtx) {
+    use unlace_ir::ssa::FrameSlotKind;
+    let Some(frame) = func.stack_frame.as_ref() else {
+        return;
+    };
+    for local in frame.locals.values() {
+        if !matches!(local.kind, FrameSlotKind::Local) {
+            ctx.suppressed_stack_offsets.insert(local.offset);
+        }
+    }
+}
+
+fn try_stack_frame_access_name(
+    addr_vn: &Varnode,
+    stmt_idx: u32,
+    access_size: u8,
+    ctx: &PrintCtx,
+) -> Option<String> {
+    let offset = resolve_stack_offset_for_addr(addr_vn, stmt_idx, ctx, 0)?;
+    stack_name_for_offset(offset, access_size, ctx)
+}
+
+fn stack_name_for_offset(offset: i64, access_size: u8, ctx: &PrintCtx) -> Option<String> {
+    for size in [access_size, 8, 4, 2, 1] {
+        if size == 0 {
+            continue;
+        }
+        let stk = Varnode::stack(offset as u64, size);
+        if let Some(name) = ctx.name_overrides.get(&stk) {
+            return Some(name.clone());
+        }
+    }
+    None
+}
+
+fn resolve_stack_offset_for_addr(
+    vn: &Varnode,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+    depth: u8,
+) -> Option<i64> {
+    const MAX_DEPTH: u8 = 16;
+    if depth > MAX_DEPTH {
+        return None;
+    }
+    if vn.space == SpaceId::Stack {
+        return Some(vn.offset as i64);
+    }
+    if is_x86_frame_base(vn) {
+        return Some(0);
+    }
+    if vn.space == SpaceId::Const {
+        return None;
+    }
+
+    let sv = input_or_latest_sv_for_operand(vn, stmt_idx, ctx)?;
+    let def_stmt = defining_stmt_for_sv(&sv, ctx)?;
+    let def = ctx.stmt_insns.get(&def_stmt)?;
+
+    match def.op {
+        IrOp::Copy if !def.inputs.is_empty() => {
+            resolve_stack_offset_for_addr(&def.inputs[0], def_stmt, ctx, depth + 1)
+        }
+        IrOp::IntAdd if def.inputs.len() >= 2 => {
+            resolve_stack_offset_add(&def.inputs[0], &def.inputs[1], def_stmt, ctx, depth + 1)
+        }
+        IrOp::IntSub if def.inputs.len() >= 2 => {
+            let base = resolve_stack_offset_for_addr(&def.inputs[0], def_stmt, ctx, depth + 1)?;
+            let rhs = &def.inputs[1];
+            if rhs.space == SpaceId::Const {
+                Some(base.wrapping_sub(rhs.offset as i64))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn input_or_latest_sv_for_operand(
+    vn: &Varnode,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+) -> Option<SsaVarnode> {
+    if let Some(sv) = ctx
+        .stmt_inputs
+        .get(&stmt_idx)
+        .and_then(|inputs| inputs.iter().find(|sv| sv.base == *vn).copied())
+    {
+        return Some(sv);
+    }
+    ctx.stmt_outputs
+        .range(..stmt_idx)
+        .rev()
+        .find_map(|(_, output)| output.filter(|sv| sv.base == *vn))
+}
+
+fn defining_stmt_for_sv(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<u32> {
+    if let Some(&def_stmt) = ctx.sv_defining_stmt.get(sv) {
+        return Some(def_stmt);
+    }
+    ctx.stmt_outputs.iter().find_map(|(&stmt_idx, output)| {
+        output.filter(|output_sv| output_sv == sv).map(|_| stmt_idx)
+    })
+}
+
+fn resolve_stack_offset_add(
+    a: &Varnode,
+    b: &Varnode,
+    stmt_idx: u32,
+    ctx: &PrintCtx,
+    depth: u8,
+) -> Option<i64> {
+    if b.space == SpaceId::Const {
+        let base = resolve_stack_offset_for_addr(a, stmt_idx, ctx, depth)?;
+        return Some(base.wrapping_add(b.offset as i64));
+    }
+    if a.space == SpaceId::Const {
+        let base = resolve_stack_offset_for_addr(b, stmt_idx, ctx, depth)?;
+        return Some(base.wrapping_add(a.offset as i64));
+    }
+    None
+}
+
+fn is_x86_frame_base(vn: &Varnode) -> bool {
+    const RSP_REG_OFF: u64 = 32;
+    const RBP_REG_OFF: u64 = 40;
+    vn.space == SpaceId::Register && matches!(vn.offset, RSP_REG_OFF | RBP_REG_OFF)
+}
+
+fn emit_memory_address_operand(
+    vn: &Varnode,
+    raw_idx: usize,
+    stmt_idx: u32,
+    ctx: &mut PrintCtx,
+) -> String {
+    let rendered = emit_operand_resolved(vn, raw_idx, stmt_idx, ctx);
+    if vn.space != SpaceId::Const
+        && is_zero_address_literal(&rendered)
+        && let Some(sv) = ctx
+            .stmt_inputs
+            .get(&stmt_idx)
+            .and_then(|inputs| inputs.iter().find(|sv| sv.base == *vn).copied())
+    {
+        return ctx.name_of(&sv);
+    }
+    rendered
+}
+
+fn is_zero_address_literal(rendered: &str) -> bool {
+    matches!(rendered, "0" | "0LL" | "nullptr")
+}
+
+fn is_suppressed_stack_access(addr_vn: &Varnode, stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    resolve_stack_offset_for_addr(addr_vn, stmt_idx, ctx, 0)
+        .is_some_and(|offset| ctx.suppressed_stack_offsets.contains(&offset))
+}
+
 /// t232: emit `__intN v_<offset>;` (or `char buf_<offset>[N];`) declarations
 /// for each [`StackLocal`] in the recovered frame. Called from
 /// [`print_c_with_rtti_config`] at the start of the local-decl block.
@@ -3987,7 +4369,9 @@ fn walk_collect_roles(nodes: &[HirNode], ctx: &PrintCtx, roles: &mut BTreeMap<Va
         match node {
             HirNode::Block(children) => walk_collect_roles(children, ctx, roles),
             HirNode::Return(Some(sv)) => {
-                record_role(roles, sv.base, VarRole::Result);
+                if !ctx.parent_returns_void && sv.base.space != SpaceId::Const {
+                    record_role(roles, sv.base, VarRole::Result);
+                }
             }
             HirNode::If {
                 cond,
@@ -4372,12 +4756,32 @@ fn body_ends_with_terminator(body: &[HirNode]) -> bool {
 
 fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut String) {
     let mut i = 0;
+    let mut last_dowhile_stmt_range: Option<(u32, u32)> = None;
     while i < nodes.len() {
+        if let HirNode::Return(Some(sv)) = &nodes[i] {
+            if !ctx.parent_returns_void
+                && let Some((start, end)) = last_dowhile_stmt_range
+                && let Some(expr) = resolve_post_dowhile_return_expr(sv, start, end, ctx)
+            {
+                indent(depth, ctx.config.tab_width, out);
+                let _ = writeln!(out, "return {};", expr);
+                let next_is_label = nodes
+                    .get(i + 1)
+                    .is_some_and(|n| matches!(n, HirNode::Label(_)));
+                if !next_is_label {
+                    break;
+                }
+                i += 1;
+                last_dowhile_stmt_range = None;
+                continue;
+            }
+        }
         if let Some(merged) = try_merge_assign_return(&nodes[i..], ctx) {
             ctx.emit_stmt += 1;
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "return {};", merged);
             i += 2;
+            last_dowhile_stmt_range = None;
             continue;
         }
         if let Some(first) = inline_node_text(&nodes[i], ctx) {
@@ -4389,6 +4793,13 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
             }
             i += 1;
             while !first_is_terminal && i < nodes.len() && parts.len() < 3 {
+                if let Some(merged) = try_merge_assign_return(&nodes[i..], ctx) {
+                    ctx.emit_stmt += 1;
+                    parts.push(format!("return {};", merged));
+                    i += 2;
+                    group_has_terminal = true;
+                    break;
+                }
                 let Some(next) = inline_node_text(&nodes[i], ctx) else {
                     break;
                 };
@@ -4409,17 +4820,24 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
                 let _ = writeln!(out, "{}", parts.join(" "));
             }
             if group_has_terminal {
-                let next_is_label = nodes
-                    .get(i)
-                    .is_some_and(|n| matches!(n, HirNode::Label(_)));
+                let next_is_label = nodes.get(i).is_some_and(|n| matches!(n, HirNode::Label(_)));
                 if !next_is_label {
                     break;
                 }
             }
+            last_dowhile_stmt_range = None;
             continue;
         }
         let is_terminal = matches!(nodes[i], HirNode::Return(_) | HirNode::Goto(_));
+        let start_stmt = ctx.emit_stmt;
+        let is_dowhile = matches!(nodes[i], HirNode::DoWhile { .. });
         emit_node(&nodes[i], depth, ctx, out);
+        let end_stmt = ctx.emit_stmt;
+        last_dowhile_stmt_range = if is_dowhile {
+            Some((start_stmt, end_stmt))
+        } else {
+            None
+        };
         if is_terminal {
             // Don't break if the next node is a Label — labels must still be emitted
             let next_is_label = nodes
@@ -4436,7 +4854,13 @@ fn emit_nodes(nodes: &[HirNode], depth: usize, ctx: &mut PrintCtx, out: &mut Str
 fn inline_node_text(node: &HirNode, ctx: &mut PrintCtx) -> Option<String> {
     match node {
         HirNode::Statement(insn) => inline_statement_text(insn, ctx),
-        HirNode::Return(Some(sv)) => Some(format!("return {};", resolve_sv_expr(sv, ctx))),
+        HirNode::Return(Some(sv)) => {
+            if ctx.parent_returns_void {
+                Some("return;".to_string())
+            } else {
+                Some(format!("return {};", resolve_sv_expr(sv, ctx)))
+            }
+        }
         HirNode::Return(None) => Some("return;".to_string()),
         HirNode::Goto(label) => Some(format!("goto {};", label)),
         HirNode::TailCall { target } => Some(format_tail_call_text(*target, ctx)),
@@ -4469,6 +4893,244 @@ fn inline_node_text(node: &HirNode, ctx: &mut PrintCtx) -> Option<String> {
     }
 }
 
+fn merged_assign_return_stmt_indices(nodes: &[HirNode], ctx: &PrintCtx) -> BTreeSet<u32> {
+    if ctx.parent_returns_void {
+        return BTreeSet::new();
+    }
+    let mut out = BTreeSet::new();
+    let mut next_stmt = 0;
+    collect_merged_assign_return_stmt_indices(nodes, ctx, &mut next_stmt, &mut out);
+    out
+}
+
+fn collect_merged_assign_return_stmt_indices(
+    nodes: &[HirNode],
+    ctx: &PrintCtx,
+    next_stmt: &mut u32,
+    out: &mut BTreeSet<u32>,
+) {
+    for (node_idx, node) in nodes.iter().enumerate() {
+        match node {
+            HirNode::Block(children) => {
+                collect_merged_assign_return_stmt_indices(children, ctx, next_stmt, out);
+            }
+            HirNode::Statement(_) => {
+                let stmt_idx = *next_stmt;
+                if can_merge_assign_return_at(&nodes[node_idx..], stmt_idx, ctx) {
+                    out.insert(stmt_idx);
+                }
+                *next_stmt += 1;
+            }
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_merged_assign_return_stmt_indices(then_body, ctx, next_stmt, out);
+                if let Some(else_body) = else_body {
+                    collect_merged_assign_return_stmt_indices(else_body, ctx, next_stmt, out);
+                }
+            }
+            HirNode::While { body, .. } | HirNode::DoWhile { body, .. } => {
+                collect_merged_assign_return_stmt_indices(body, ctx, next_stmt, out);
+            }
+            HirNode::For { init, body, .. } => {
+                if init.is_some() {
+                    *next_stmt += 1;
+                }
+                collect_merged_assign_return_stmt_indices(body, ctx, next_stmt, out);
+                *next_stmt += 1;
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (_case, body, _) in cases {
+                    collect_merged_assign_return_stmt_indices(body, ctx, next_stmt, out);
+                }
+                if let Some(default) = default {
+                    collect_merged_assign_return_stmt_indices(default, ctx, next_stmt, out);
+                }
+            }
+            HirNode::Ternary { .. } | HirNode::GuardedTernary { .. } => {
+                *next_stmt += 2;
+            }
+            HirNode::CselTernary { .. } => {
+                *next_stmt += 1;
+            }
+            HirNode::IfCmp {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_merged_assign_return_stmt_indices(then_body, ctx, next_stmt, out);
+                if let Some(else_body) = else_body {
+                    collect_merged_assign_return_stmt_indices(else_body, ctx, next_stmt, out);
+                }
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_arms,
+            } => {
+                collect_merged_assign_return_stmt_indices(try_body, ctx, next_stmt, out);
+                for (_ty, body) in catch_arms {
+                    collect_merged_assign_return_stmt_indices(body, ctx, next_stmt, out);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_merged_assign_return_stmt_indices(try_body, ctx, next_stmt, out);
+                collect_merged_assign_return_stmt_indices(finally_body, ctx, next_stmt, out);
+            }
+            HirNode::Commented { inner, .. } => {
+                collect_merged_assign_return_stmt_indices(
+                    std::slice::from_ref(inner.as_ref()),
+                    ctx,
+                    next_stmt,
+                    out,
+                );
+            }
+            HirNode::GuardedIf {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_merged_assign_return_stmt_indices(then_body, ctx, next_stmt, out);
+                collect_merged_assign_return_stmt_indices(else_body, ctx, next_stmt, out);
+            }
+            HirNode::Return(_)
+            | HirNode::Goto(_)
+            | HirNode::Label(_)
+            | HirNode::TailCall { .. }
+            | HirNode::Continue
+            | HirNode::Break
+            | HirNode::ObjcBlock { .. }
+            | HirNode::Asm { .. } => {}
+        }
+    }
+}
+
+fn post_dowhile_recovered_return_svs(nodes: &[HirNode], ctx: &PrintCtx) -> BTreeSet<SsaVarnode> {
+    if ctx.parent_returns_void {
+        return BTreeSet::new();
+    }
+    let mut out = BTreeSet::new();
+    let mut next_stmt = 0;
+    collect_post_dowhile_recovered_return_svs(nodes, ctx, &mut next_stmt, &mut out);
+    out
+}
+
+fn collect_post_dowhile_recovered_return_svs(
+    nodes: &[HirNode],
+    ctx: &PrintCtx,
+    next_stmt: &mut u32,
+    out: &mut BTreeSet<SsaVarnode>,
+) {
+    for (idx, node) in nodes.iter().enumerate() {
+        match node {
+            HirNode::Block(children) => {
+                collect_post_dowhile_recovered_return_svs(children, ctx, next_stmt, out);
+            }
+            HirNode::Statement(_) => {
+                *next_stmt += 1;
+            }
+            HirNode::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_post_dowhile_recovered_return_svs(then_body, ctx, next_stmt, out);
+                if let Some(else_body) = else_body {
+                    collect_post_dowhile_recovered_return_svs(else_body, ctx, next_stmt, out);
+                }
+            }
+            HirNode::While { body, .. } => {
+                collect_post_dowhile_recovered_return_svs(body, ctx, next_stmt, out);
+            }
+            HirNode::DoWhile { body, .. } => {
+                let start_stmt = *next_stmt;
+                collect_post_dowhile_recovered_return_svs(body, ctx, next_stmt, out);
+                let end_stmt = *next_stmt;
+                if let Some(HirNode::Return(Some(sv))) = nodes.get(idx + 1)
+                    && can_resolve_post_dowhile_return_expr(sv, start_stmt, end_stmt, ctx)
+                {
+                    out.insert(*sv);
+                }
+            }
+            HirNode::For { init, body, .. } => {
+                if init.is_some() {
+                    *next_stmt += 1;
+                }
+                collect_post_dowhile_recovered_return_svs(body, ctx, next_stmt, out);
+                *next_stmt += 1;
+            }
+            HirNode::Switch { cases, default, .. } => {
+                for (_, body, _) in cases {
+                    collect_post_dowhile_recovered_return_svs(body, ctx, next_stmt, out);
+                }
+                if let Some(default) = default {
+                    collect_post_dowhile_recovered_return_svs(default, ctx, next_stmt, out);
+                }
+            }
+            HirNode::Ternary { .. } | HirNode::GuardedTernary { .. } => {
+                *next_stmt += 2;
+            }
+            HirNode::CselTernary { .. } => {
+                *next_stmt += 1;
+            }
+            HirNode::TryCatch {
+                try_body,
+                catch_arms,
+            } => {
+                collect_post_dowhile_recovered_return_svs(try_body, ctx, next_stmt, out);
+                for (_, body) in catch_arms {
+                    collect_post_dowhile_recovered_return_svs(body, ctx, next_stmt, out);
+                }
+            }
+            HirNode::TryFinally {
+                try_body,
+                finally_body,
+            } => {
+                collect_post_dowhile_recovered_return_svs(try_body, ctx, next_stmt, out);
+                collect_post_dowhile_recovered_return_svs(finally_body, ctx, next_stmt, out);
+            }
+            HirNode::Commented { inner, .. } => {
+                collect_post_dowhile_recovered_return_svs(
+                    std::slice::from_ref(inner.as_ref()),
+                    ctx,
+                    next_stmt,
+                    out,
+                );
+            }
+            HirNode::GuardedIf {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_post_dowhile_recovered_return_svs(then_body, ctx, next_stmt, out);
+                collect_post_dowhile_recovered_return_svs(else_body, ctx, next_stmt, out);
+            }
+            HirNode::IfCmp {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_post_dowhile_recovered_return_svs(then_body, ctx, next_stmt, out);
+                if let Some(else_body) = else_body {
+                    collect_post_dowhile_recovered_return_svs(else_body, ctx, next_stmt, out);
+                }
+            }
+            HirNode::Return(_)
+            | HirNode::Goto(_)
+            | HirNode::Label(_)
+            | HirNode::TailCall { .. }
+            | HirNode::Continue
+            | HirNode::Break
+            | HirNode::ObjcBlock { .. }
+            | HirNode::Asm { .. } => {}
+        }
+    }
+}
+
 /// Detect `Statement(insn) ; Return(Some(sv))` where the statement defines
 /// `sv` via the return register (RAX, offset 0) and fold into `return <expr>;`.
 ///
@@ -4476,80 +5138,388 @@ fn inline_node_text(node: &HirNode, ctx: &mut PrintCtx) -> Option<String> {
 /// from the perspective of non-return uses), so that the merged form doesn't
 /// lose a named variable that other code references.
 fn try_merge_assign_return(nodes: &[HirNode], ctx: &mut PrintCtx) -> Option<String> {
-    if nodes.len() < 2 {
+    if ctx.parent_returns_void {
+        return None;
+    }
+    let stmt_idx = ctx.emit_stmt;
+    if !can_merge_assign_return_at(nodes, stmt_idx, ctx) {
         return None;
     }
     let insn = match &nodes[0] {
         HirNode::Statement(insn) => insn,
         _ => return None,
     };
+    Some(emit_expr(insn, stmt_idx, ctx))
+}
+
+fn can_merge_assign_return_at(nodes: &[HirNode], stmt_idx: u32, ctx: &PrintCtx) -> bool {
+    if nodes.len() < 2 {
+        return false;
+    }
+    let insn = match &nodes[0] {
+        HirNode::Statement(insn) => insn,
+        _ => return false,
+    };
 
     match &nodes[1] {
         HirNode::Return(Some(ret_sv)) => {
             if ret_sv.base.space != SpaceId::Register || ret_sv.base.offset != 0 {
-                return None;
+                return false;
             }
-            let stmt_idx = ctx.emit_stmt;
-            let output_sv = ctx.stmt_outputs.get(&stmt_idx).cloned().flatten()?;
+            let Some(output_sv) = ctx.stmt_outputs.get(&stmt_idx).copied().flatten() else {
+                return false;
+            };
             if output_sv != *ret_sv {
-                return None;
+                return false;
             }
             if ctx.foldable_stmts.contains(&stmt_idx) {
-                return None;
+                return false;
             }
             if is_dead_zero_init(insn, stmt_idx, ctx) {
-                return None;
+                return false;
             }
             // Don't drop a hoisted variable's declaration into a `return`
             // shortcut — the variable is referenced elsewhere too.
             if let Some(plan) = ctx.hoist_decl_plan.get(&output_sv.base) {
                 if plan.stmt_idx == stmt_idx {
-                    return None;
+                    return false;
                 }
             }
             let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
             if total_uses > 1 {
-                return None;
+                return false;
             }
-            let expr = emit_expr(insn, stmt_idx, ctx);
-            Some(expr)
+            true
         }
         HirNode::Return(None) => {
-            let out_vn = insn.output?;
+            let Some(out_vn) = insn.output else {
+                return false;
+            };
             if out_vn.space != SpaceId::Register || out_vn.offset != 0 {
-                return None;
+                return false;
             }
-            let stmt_idx = ctx.emit_stmt;
-            let output_sv = ctx.stmt_outputs.get(&stmt_idx).cloned().flatten()?;
+            let Some(output_sv) = ctx.stmt_outputs.get(&stmt_idx).copied().flatten() else {
+                return false;
+            };
             if ctx.foldable_stmts.contains(&stmt_idx) {
-                return None;
+                return false;
             }
             if is_dead_zero_init(insn, stmt_idx, ctx) {
-                return None;
+                return false;
             }
             if let Some(plan) = ctx.hoist_decl_plan.get(&output_sv.base) {
                 if plan.stmt_idx == stmt_idx {
-                    return None;
+                    return false;
                 }
             }
             let total_uses = ctx.sv_use_counts.get(&output_sv).copied().unwrap_or(0);
             if total_uses > 0 {
-                return None;
+                return false;
             }
-            let expr = emit_expr(insn, stmt_idx, ctx);
-            Some(expr)
+            true
         }
-        _ => None,
+        _ => false,
     }
 }
 
 fn resolve_sv_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
+    if sv.base.space == SpaceId::Const {
+        if let Some(s) = ctx.string_table.get(&sv.base.offset) {
+            return format!("\"{}\"", escape_c_string(s));
+        }
+        return format_constant_ctx(sv.base.offset, sv.base.size, ConstContext::Signed);
+    }
     if let Some(&def_stmt) = ctx.sv_defining_stmt.get(sv) {
         if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
             return emit_expr(&def_insn, def_stmt, ctx);
         }
     }
     ctx.name_of(sv)
+}
+
+fn resolve_post_dowhile_return_expr(
+    sv: &SsaVarnode,
+    start_stmt: u32,
+    end_stmt: u32,
+    ctx: &mut PrintCtx,
+) -> Option<String> {
+    if !can_resolve_post_dowhile_return_expr(sv, start_stmt, end_stmt, ctx) {
+        return None;
+    }
+
+    if let Some(alias_sv) =
+        latest_visible_copy_from_base_in_range(&sv.base, start_stmt, end_stmt, ctx)
+    {
+        return Some(ctx.name_of(&alias_sv));
+    }
+
+    let (def_stmt, _def_sv) = latest_output_for_base_in_range(&sv.base, start_stmt, end_stmt, ctx)?;
+    let def_insn = ctx.stmt_insns.get(&def_stmt)?.clone();
+    if instr_has_side_effects(&def_insn) {
+        return None;
+    }
+    Some(emit_expr(&def_insn, def_stmt, ctx))
+}
+
+fn can_resolve_post_dowhile_return_expr(
+    sv: &SsaVarnode,
+    start_stmt: u32,
+    end_stmt: u32,
+    ctx: &PrintCtx,
+) -> bool {
+    if sv.base.space != SpaceId::Unique {
+        return false;
+    }
+    if latest_visible_copy_from_base_in_range(&sv.base, start_stmt, end_stmt, ctx).is_some() {
+        return true;
+    }
+    let Some((def_stmt, _def_sv)) =
+        latest_output_for_base_in_range(&sv.base, start_stmt, end_stmt, ctx)
+    else {
+        return false;
+    };
+    let Some(def_insn) = ctx.stmt_insns.get(&def_stmt) else {
+        return false;
+    };
+    !instr_has_side_effects(def_insn)
+}
+
+fn latest_visible_copy_from_base_in_range(
+    base: &Varnode,
+    start_stmt: u32,
+    end_stmt: u32,
+    ctx: &PrintCtx,
+) -> Option<SsaVarnode> {
+    ctx.stmt_outputs
+        .range(start_stmt..end_stmt)
+        .rev()
+        .find_map(|(&stmt_idx, output)| {
+            let output_sv = (*output)?;
+            if is_suppressible_storage(&output_sv.base, ctx) {
+                return None;
+            }
+            let insn = ctx.stmt_insns.get(&stmt_idx)?;
+            if insn.op != IrOp::Copy || insn.inputs.first() != Some(base) {
+                return None;
+            }
+            if ctx.foldable_stmts.contains(&stmt_idx)
+                || is_dead_zero_init(insn, stmt_idx, ctx)
+                || is_dead_suppressible_store(insn, stmt_idx, ctx)
+            {
+                return None;
+            }
+            Some(output_sv)
+        })
+}
+
+fn latest_output_for_base_in_range(
+    base: &Varnode,
+    start_stmt: u32,
+    end_stmt: u32,
+    ctx: &PrintCtx,
+) -> Option<(u32, SsaVarnode)> {
+    ctx.stmt_outputs
+        .range(start_stmt..end_stmt)
+        .rev()
+        .find_map(|(&stmt_idx, output)| {
+            let output_sv = (*output)?;
+            (output_sv.base == *base).then_some((stmt_idx, output_sv))
+        })
+}
+
+fn resolve_control_cond_expr(sv: &SsaVarnode, ctx: &mut PrintCtx) -> String {
+    if let Some(def_stmt) = inlineable_condition_def_stmt(sv, ctx) {
+        if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
+            return emit_expr(&def_insn, def_stmt, ctx);
+        }
+    }
+    if let Some(def_stmt) = latest_inlineable_condition_def_stmt_for_base(sv, ctx) {
+        if let Some(def_insn) = ctx.stmt_insns.get(&def_stmt).cloned() {
+            return emit_expr(&def_insn, def_stmt, ctx);
+        }
+    }
+    resolve_sv_expr(sv, ctx)
+}
+
+fn negate_condition_expr(expr: &str) -> String {
+    let expr = expr.trim();
+    if let Some((lhs, op, rhs)) = split_top_level_comparison(expr) {
+        let negated = match op {
+            "==" => "!=",
+            "!=" => "==",
+            "<" => ">=",
+            "<=" => ">",
+            ">" => "<=",
+            ">=" => "<",
+            _ => return format!("!({expr})"),
+        };
+        return format!("{} {} {}", lhs.trim(), negated, rhs.trim());
+    }
+    format!("!({expr})")
+}
+
+fn split_top_level_comparison(expr: &str) -> Option<(&str, &str, &str)> {
+    let bytes = expr.as_bytes();
+    let ops = ["==", "!=", ">=", "<=", ">", "<"];
+    let mut depth = 0usize;
+    let mut found: Option<(usize, &str)> = None;
+    let mut i = 0usize;
+
+    'scan: while i < bytes.len() {
+        match bytes[i] {
+            b'(' => {
+                depth += 1;
+                i += 1;
+                continue;
+            }
+            b')' => {
+                depth = depth.saturating_sub(1);
+                i += 1;
+                continue;
+            }
+            _ => {}
+        }
+
+        if depth == 0 {
+            if bytes[i..].starts_with(b"&&")
+                || bytes[i..].starts_with(b"||")
+                || bytes[i] == b'?'
+                || bytes[i] == b':'
+            {
+                return None;
+            }
+
+            for op in ops {
+                if top_level_condition_op_at(bytes, i, op) {
+                    if found.replace((i, op)).is_some() {
+                        return None;
+                    }
+                    i += op.len();
+                    continue 'scan;
+                }
+            }
+        }
+
+        i += 1;
+    }
+
+    let (idx, op) = found?;
+    let lhs = &expr[..idx];
+    let rhs = &expr[idx + op.len()..];
+    (!lhs.trim().is_empty() && !rhs.trim().is_empty()).then_some((lhs, op, rhs))
+}
+
+fn top_level_condition_op_at(bytes: &[u8], idx: usize, op: &str) -> bool {
+    if !bytes[idx..].starts_with(op.as_bytes()) {
+        return false;
+    }
+    match op {
+        "<" => bytes.get(idx + 1).copied() != Some(b'<'),
+        ">" => {
+            bytes.get(idx + 1).copied() != Some(b'>')
+                && idx.checked_sub(1).and_then(|prev| bytes.get(prev)).copied() != Some(b'-')
+        }
+        _ => true,
+    }
+}
+
+fn inlineable_condition_def_stmt(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<u32> {
+    let def_stmt = defining_stmt_for_sv(sv, ctx)?;
+    let def_insn = ctx.stmt_insns.get(&def_stmt)?;
+    (def_insn.op.type_family() == Some('b')).then_some(def_stmt)
+}
+
+fn latest_inlineable_condition_def_stmt_for_base(sv: &SsaVarnode, ctx: &PrintCtx) -> Option<u32> {
+    ctx.stmt_outputs
+        .range(..ctx.emit_stmt)
+        .rev()
+        .find_map(|(&stmt_idx, output)| {
+            let output_sv = (*output)?;
+            if output_sv.base != sv.base {
+                return None;
+            }
+            let insn = ctx.stmt_insns.get(&stmt_idx)?;
+            (insn.op.type_family() == Some('b')).then_some(stmt_idx)
+        })
+}
+
+fn is_control_only_condition_use(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
+    if inlineable_condition_def_stmt(sv, ctx).is_none() {
+        return false;
+    }
+    let control_uses = ctx
+        .control_cond_uses
+        .iter()
+        .filter(|cond| *cond == sv)
+        .count();
+    control_uses > 0 && ctx.sv_use_counts.get(sv).copied().unwrap_or(0) <= control_uses
+}
+
+fn is_control_only_condition_use_or_base(sv: &SsaVarnode, ctx: &PrintCtx) -> bool {
+    if is_control_only_condition_use(sv, ctx) {
+        return true;
+    }
+    if !ctx
+        .control_cond_uses
+        .iter()
+        .any(|cond| cond.base == sv.base)
+    {
+        return false;
+    }
+    has_inlineable_condition_def_for_base(&sv.base, ctx)
+        && same_base_non_control_use_count(&sv.base, ctx) == 0
+}
+
+fn has_inlineable_condition_def_for_base(base: &Varnode, ctx: &PrintCtx) -> bool {
+    ctx.stmt_outputs.iter().any(|(&stmt_idx, output)| {
+        let Some(output_sv) = output else {
+            return false;
+        };
+        if output_sv.base != *base {
+            return false;
+        }
+        ctx.stmt_insns
+            .get(&stmt_idx)
+            .is_some_and(|insn| insn.op.type_family() == Some('b'))
+    })
+}
+
+fn same_base_non_control_use_count(base: &Varnode, ctx: &PrintCtx) -> usize {
+    let total_uses = ctx
+        .sv_use_counts
+        .iter()
+        .filter(|(sv, _)| sv.base == *base)
+        .map(|(_, count)| *count)
+        .sum::<usize>();
+    let control_uses = ctx
+        .control_cond_uses
+        .iter()
+        .filter(|cond| cond.base == *base)
+        .count();
+    total_uses.saturating_sub(control_uses)
+}
+
+fn is_control_only_condition_assignment(
+    stmt_idx: u32,
+    sv: &SsaVarnode,
+    insn: &IrInsn,
+    ctx: &PrintCtx,
+) -> bool {
+    if insn.op.type_family() != Some('b') {
+        return false;
+    }
+    if is_flag_register(&sv.base) {
+        return false;
+    }
+    if inlineable_condition_def_stmt(sv, ctx) == Some(stmt_idx) {
+        return is_control_only_condition_use(sv, ctx);
+    }
+    defining_stmt_for_sv(sv, ctx) == Some(stmt_idx)
+        && ctx
+            .control_cond_uses
+            .iter()
+            .any(|cond| cond.base == sv.base)
+        && same_base_non_control_use_count(&sv.base, ctx) == 0
 }
 
 fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String) {
@@ -4563,7 +5533,18 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             then_body,
             else_body,
         } => {
-            let cond_expr = resolve_sv_expr(cond, ctx);
+            let cond_expr = resolve_control_cond_expr(cond, ctx);
+            if then_body.is_empty()
+                && let Some(eb) = else_body
+                && !eb.is_empty()
+            {
+                indent(depth, ctx.config.tab_width, out);
+                let _ = writeln!(out, "if ({}) {{", negate_condition_expr(&cond_expr));
+                emit_nodes(eb, depth + 1, ctx, out);
+                indent(depth, ctx.config.tab_width, out);
+                let _ = writeln!(out, "}}");
+                return;
+            }
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "if ({}) {{", cond_expr);
             emit_nodes(then_body, depth + 1, ctx, out);
@@ -4607,8 +5588,20 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                 IrOp::IntSlessequal => "<=",
                 _ => "/*?*/",
             };
+            let cond_expr = format!("{lhs_s} {op_str} {rhs_s}");
+            if then_body.is_empty()
+                && let Some(eb) = else_body
+                && !eb.is_empty()
+            {
+                indent(depth, ctx.config.tab_width, out);
+                let _ = writeln!(out, "if ({}) {{", negate_condition_expr(&cond_expr));
+                emit_nodes(eb, depth + 1, ctx, out);
+                indent(depth, ctx.config.tab_width, out);
+                let _ = writeln!(out, "}}");
+                return;
+            }
             indent(depth, ctx.config.tab_width, out);
-            let _ = writeln!(out, "if ({} {} {}) {{", lhs_s, op_str, rhs_s);
+            let _ = writeln!(out, "if ({cond_expr}) {{");
             emit_nodes(then_body, depth + 1, ctx, out);
             if let Some(eb) = else_body {
                 indent(depth, ctx.config.tab_width, out);
@@ -4620,7 +5613,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
         }
 
         HirNode::While { cond, body } => {
-            let cond_expr = resolve_sv_expr(cond, ctx);
+            let cond_expr = resolve_control_cond_expr(cond, ctx);
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "while ({}) {{", cond_expr);
             emit_nodes(body, depth + 1, ctx, out);
@@ -4632,7 +5625,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "do {{");
             emit_nodes(body, depth + 1, ctx, out);
-            let cond_expr = resolve_sv_expr(cond, ctx);
+            let cond_expr = resolve_control_cond_expr(cond, ctx);
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "}} while ({});", cond_expr);
         }
@@ -4658,7 +5651,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
             ctx.emit_stmt += 1;
             let update_str = emit_for_clause(update, update_idx, ctx);
 
-            let cond_expr = resolve_sv_expr(cond, ctx);
+            let cond_expr = resolve_control_cond_expr(cond, ctx);
 
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(out, "for ({}; {}; {}) {{", init_str, cond_expr, update_str);
@@ -4692,12 +5685,8 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
                         } else if let Some(s) = ctx.string_hash_table.get(v) {
                             let _ =
                                 writeln!(out, "case 0x{:X}u:  /* \"{}\" */", v, s.escape_default());
-                            let _ = writeln!(
-                                out,
-                                "case 0x{:X}u:  /* \"{}\" */",
-                                v,
-                                s.escape_default()
-                            );
+                            let _ =
+                                writeln!(out, "case 0x{:X}u:  /* \"{}\" */", v, s.escape_default());
                         } else if let Some(names) = i64::try_from(*v)
                             .ok()
                             .and_then(|value| ctx.pdb_constants_by_value.get(&value))
@@ -4757,9 +5746,13 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
         }
 
         HirNode::Return(Some(sv)) => {
-            let name = resolve_sv_expr(sv, ctx);
             indent(depth, ctx.config.tab_width, out);
-            let _ = writeln!(out, "return {};", name);
+            if ctx.parent_returns_void {
+                let _ = writeln!(out, "return;");
+            } else {
+                let name = resolve_sv_expr(sv, ctx);
+                let _ = writeln!(out, "return {};", name);
+            }
         }
 
         HirNode::Return(None) => {
@@ -4798,7 +5791,7 @@ fn emit_node(node: &HirNode, depth: usize, ctx: &mut PrintCtx, out: &mut String)
 
             let then_expr = emit_expr(then_insn, then_idx, ctx);
             let else_expr = emit_expr(else_insn, else_idx, ctx);
-            let cond_name = resolve_sv_expr(cond, ctx);
+            let cond_name = resolve_control_cond_expr(cond, ctx);
 
             indent(depth, ctx.config.tab_width, out);
             let _ = writeln!(
@@ -5159,34 +6152,50 @@ fn try_emit_printf_call(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Opt
     }
     let raw_name = ctx.symbols.get(&target_vn.offset)?;
     let name = demangle_callee_name(raw_name);
-    if !unlace_passes::printf_type_infer::is_format_string_call(&name) {
-        return None;
-    }
+    let format_arg_index = printf_format_arg_index(&name)?;
     // Need at least the format-string slot (inputs[1]); a printf with
     // zero variadics is still a valid call and rendered as
     // `printf("hello")` — without args, no casts to emit, but the
     // format-string literal still surfaces.
-    let fmt_vn = insn.inputs.get(1)?;
-    if fmt_vn.space != SpaceId::Const {
-        // Format string is not a known constant (e.g. taken from a
-        // parameter / global). We can't parse specifiers, so don't
-        // emit casts — but we *also* don't try to render args, since
-        // the legacy path doesn't either. Fall through to the
-        // default `printf();` rendering by returning None.
-        return None;
-    }
-    let fmt = ctx.string_table.get(&fmt_vn.offset)?.clone();
+    let fmt_input_idx = 1 + format_arg_index;
+    let fmt_vn = insn.inputs.get(fmt_input_idx)?;
+    let display_name = ctx
+        .libc_call_canonical
+        .get(&insn.addr)
+        .cloned()
+        .unwrap_or_else(|| name.clone());
+    let fmt = if fmt_vn.space == SpaceId::Const {
+        ctx.string_table.get(&fmt_vn.offset).cloned()
+    } else {
+        None
+    };
+    let inferred = fmt
+        .as_deref()
+        .map(|fmt| unlace_passes::printf_type_infer::infer_printf_arg_types(&display_name, fmt))
+        .unwrap_or_default();
+    let hidden_fixed_args = hidden_fortify_arg_indices(&name);
 
-    let inferred = unlace_passes::printf_type_infer::infer_printf_arg_types(&name, &fmt);
+    let mut args: Vec<String> = Vec::with_capacity(insn.inputs.len() - 1);
+    for arg_index in 0..format_arg_index {
+        if hidden_fixed_args.contains(&arg_index) {
+            continue;
+        }
+        let input_idx = 1 + arg_index;
+        if let Some(vn) = insn.inputs.get(input_idx) {
+            args.push(emit_operand_resolved(vn, input_idx, stmt_idx, ctx));
+        }
+    }
 
     // Render the format-string slot as a quoted C literal.
-    let mut args: Vec<String> = Vec::with_capacity(insn.inputs.len() - 1);
-    args.push(format!("\"{}\"", escape_c_string(&fmt)));
+    match fmt {
+        Some(fmt) => args.push(format!("\"{}\"", escape_c_string(&fmt))),
+        None => args.push(emit_operand_resolved(fmt_vn, fmt_input_idx, stmt_idx, ctx)),
+    }
 
-    // Variadic slots — inputs[2..] map onto `inferred[0..]`.
-    for (slot, vn) in insn.inputs.iter().enumerate().skip(2) {
+    // Variadic slots after the format string map onto `inferred[0..]`.
+    for (slot, vn) in insn.inputs.iter().enumerate().skip(fmt_input_idx + 1) {
         let expr = emit_operand_resolved(vn, slot, stmt_idx, ctx);
-        let variadic_idx = slot - 2;
+        let variadic_idx = slot - fmt_input_idx - 1;
         let cast = inferred
             .get(variadic_idx)
             .map(render_type_as_c)
@@ -5197,7 +6206,54 @@ fn try_emit_printf_call(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> Opt
         }
     }
 
-    Some(format!("{}({})", name, args.join(", ")))
+    Some(format!("{}({})", display_name, args.join(", ")))
+}
+
+fn printf_format_arg_index(name: &str) -> Option<usize> {
+    if unlace_passes::printf_type_infer::is_format_string_call(name) {
+        return Some(match name {
+            "fprintf" | "sprintf" | "dprintf" | "asprintf" | "syslog" | "vfprintf" | "vsprintf"
+            | "fscanf" | "sscanf" => 1,
+            "snprintf" | "vsnprintf" => 2,
+            _ => 0,
+        });
+    }
+    match name {
+        "__printf_chk" | "__vprintf_chk" => Some(1),
+        "__fprintf_chk" => Some(2),
+        "__sprintf_chk" | "__vsprintf_chk" => Some(3),
+        "__snprintf_chk" => Some(4),
+        _ => None,
+    }
+}
+
+fn hidden_fortify_arg_indices(name: &str) -> &'static [usize] {
+    match name {
+        "__printf_chk" | "__vprintf_chk" => &[0],
+        "__fprintf_chk" => &[1],
+        "__sprintf_chk" | "__vsprintf_chk" => &[1, 2],
+        "__snprintf_chk" => &[2, 3],
+        _ => &[],
+    }
+}
+
+fn emit_call_args(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    insn.inputs
+        .iter()
+        .enumerate()
+        .skip(1)
+        .map(|(i, vn)| emit_operand_resolved(vn, i, stmt_idx, ctx))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn emit_direct_call_expr(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    if let Some(printf_call) = try_emit_printf_call(insn, stmt_idx, ctx) {
+        return printf_call;
+    }
+    let target = resolve_call_target(insn, stmt_idx, ctx);
+    let args = emit_call_args(insn, stmt_idx, ctx);
+    format!("{}({})", target, args)
 }
 
 /// Resolve a tail-call target address to a C identifier. Falls back to the
@@ -5254,9 +6310,7 @@ fn emit_callind_cast(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String
     // function-pointer cast. The `this` receiver is `inputs[1]` (inputs[0]
     // is the indirect call target itself); remaining inputs are ordinary
     // arguments.
-    if let Some(TargetSet::VtableSlot { slot_idx, .. }) =
-        ctx.vtable_call_targets.get(&insn.addr)
-    {
+    if let Some(TargetSet::VtableSlot { slot_idx, .. }) = ctx.vtable_call_targets.get(&insn.addr) {
         let slot = *slot_idx;
         // Resolve the `this` expression. inputs[0] is the function pointer,
         // inputs[1] is the receiver. Fall back to `this` literal when the
@@ -5276,10 +6330,7 @@ fn emit_callind_cast(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String
             .map(|(i, vn)| emit_operand_resolved(vn, i, stmt_idx, ctx))
             .collect();
         let args_str = args.join(", ");
-        return format!(
-            "{}->__vftable->method_{}({})",
-            receiver, slot, args_str
-        );
+        return format!("{}->__vftable->method_{}({})", receiver, slot, args_str);
     }
 
     // t201: when this call site is in the auth-call annotation table,
@@ -5447,8 +6498,7 @@ fn objc_bracket_call(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
 /// intended type.  Compound encodings (`^X`, `[N X]`) recurse on `X`.
 pub fn objc_type_encoding_to_c(encoding: &str) -> String {
     let trimmed = encoding.trim();
-    let trimmed =
-        trimmed.trim_start_matches(['r', 'n', 'N', 'o', 'O', 'R', 'V']);
+    let trimmed = trimmed.trim_start_matches(['r', 'n', 'N', 'o', 'O', 'R', 'V']);
     match trimmed {
         "c" => return "char".into(),
         "C" => return "_BYTE".into(),
@@ -5750,6 +6800,9 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     }
 
     if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
+        if is_control_only_condition_assignment(idx, &sv, insn, ctx) {
+            return Some(String::new());
+        }
         let lhs = ctx.name_of(&sv);
         if let Some(short) = try_emit_increment_form(insn, &lhs) {
             Some(format!("{};", short))
@@ -5758,10 +6811,12 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
         } else if insn.op == IrOp::Call {
             if let Some(bracket) = objc_bracket_call(insn, ctx) {
                 Some(format!("{} = {};", lhs, bracket))
-            } else if let Some(printf_call) = try_emit_printf_call(insn, idx, ctx) {
-                Some(format!("{} = {};", lhs, printf_call))
             } else {
-                Some(format!("{} = {};", lhs, emit_expr(insn, idx, ctx)))
+                Some(format!(
+                    "{} = {};",
+                    lhs,
+                    emit_direct_call_expr(insn, idx, ctx)
+                ))
             }
         } else {
             Some(format!("{} = {};", lhs, emit_expr(insn, idx, ctx)))
@@ -5769,9 +6824,12 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
     } else {
         match insn.op {
             IrOp::Store if insn.inputs.len() >= 3 => {
+                if is_suppressed_stack_access(&insn.inputs[1], idx, ctx) {
+                    return Some(String::new());
+                }
                 let store_size = insn.inputs[2].size;
                 let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
-                if let Some(global) = try_global_var_name(&insn.inputs[1], store_size, ctx) {
+                if let Some(global) = try_global_var_name(&insn.inputs[1], idx, store_size, ctx) {
                     Some(format!("{} = {};", global, val))
                 } else if let Some(field_expr) =
                     try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx)
@@ -5793,17 +6851,18 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                     // Batch 11 slice 2: route subscript stores through CExpr.
                     let lhs = CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index));
                     Some(format!("{} = {};", lhs, val))
+                } else if let Some(local) =
+                    try_stack_frame_access_name(&insn.inputs[1], idx, store_size, ctx)
+                {
+                    Some(format!("{} = {};", local, val))
                 } else {
-                    let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
+                    let addr = emit_memory_address_operand(&insn.inputs[1], 1, idx, ctx);
                     // Batch 11 slice 2: route `*(T*)(addr) = val` stores
                     // through CExpr — `Deref(Cast(T*, addr))` renders
                     // byte-identically for simple addr expressions and gets
                     // correct parens when future passes produce non-atomic
                     // addresses.
-                    let lhs = CExpr::deref(CExpr::cast(
-                        ida_ptr_type(store_size),
-                        CExpr::lit(addr),
-                    ));
+                    let lhs = CExpr::deref(CExpr::cast(ida_ptr_type(store_size), CExpr::lit(addr)));
                     Some(format!("{} = {};", lhs, val))
                 }
             }
@@ -5819,10 +6878,8 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
             IrOp::Call => {
                 let base = if let Some(bracket) = objc_bracket_call(insn, ctx) {
                     format!("{};", bracket)
-                } else if let Some(printf_call) = try_emit_printf_call(insn, idx, ctx) {
-                    format!("{};", printf_call)
                 } else {
-                    format!("{}();", resolve_call_target(insn, idx, ctx))
+                    format!("{};", emit_direct_call_expr(insn, idx, ctx))
                 };
                 let mut s = base;
                 if let Some(c) = forwarded_call_comment(insn, ctx) {
@@ -5923,6 +6980,12 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
         return;
     }
 
+    if let Some(Some(sv)) = ctx.stmt_outputs.get(&idx).cloned() {
+        if is_control_only_condition_assignment(idx, &sv, insn, ctx) {
+            return;
+        }
+    }
+
     // t264 — when DWARF/PDB line-number info maps this instruction
     // back to a source file:line, emit it as a leading provenance
     // comment. Format is `// file.c:42` to match the task spec; the
@@ -5994,9 +7057,13 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
         match insn.op {
             IrOp::Store => {
                 if insn.inputs.len() >= 3 {
+                    if is_suppressed_stack_access(&insn.inputs[1], idx, ctx) {
+                        return;
+                    }
                     let store_size = insn.inputs[2].size;
                     let val = emit_operand_resolved(&insn.inputs[2], 2, idx, ctx);
-                    if let Some(global) = try_global_var_name(&insn.inputs[1], store_size, ctx) {
+                    if let Some(global) = try_global_var_name(&insn.inputs[1], idx, store_size, ctx)
+                    {
                         let _ = writeln!(out, "{} = {};", global, val);
                     } else if let Some(field_expr) =
                         try_resolve_field_from_addr(&insn.inputs[1], 1, idx, store_size, ctx)
@@ -6020,8 +7087,12 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                         // Batch 11 slice 2: route subscript stores through CExpr.
                         let lhs = CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index));
                         let _ = writeln!(out, "{} = {};", lhs, val);
+                    } else if let Some(local) =
+                        try_stack_frame_access_name(&insn.inputs[1], idx, store_size, ctx)
+                    {
+                        let _ = writeln!(out, "{} = {};", local, val);
                     } else {
-                        let addr = emit_operand_resolved(&insn.inputs[1], 1, idx, ctx);
+                        let addr = emit_memory_address_operand(&insn.inputs[1], 1, idx, ctx);
                         let cast = ida_ptr_type(store_size);
                         // t259: surface MMIO writes by qualifying the cast.
                         let is_mmio = insn.inputs[1].space == SpaceId::Const
@@ -6061,11 +7132,11 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                         let _ = writeln!(out, "{};", expr);
                     }
                 } else {
-                    let target = resolve_call_target(insn, idx, ctx);
+                    let expr = emit_direct_call_expr(insn, idx, ctx);
                     if let Some(c) = fwd {
-                        let _ = writeln!(out, "{}(); {}", target, c);
+                        let _ = writeln!(out, "{}; {}", expr, c);
                     } else {
-                        let _ = writeln!(out, "{}();", target);
+                        let _ = writeln!(out, "{};", expr);
                     }
                 }
             }
@@ -6832,7 +7903,9 @@ fn emit_expr_with_prec(
                 if let Some(canary) = try_macos_canary_load(&insn.inputs[addr_idx], ctx) {
                     return canary;
                 }
-                if let Some(global) = try_global_var_name(&insn.inputs[addr_idx], load_size, ctx) {
+                if let Some(global) =
+                    try_global_var_name(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
+                {
                     return global;
                 }
                 if let Some(resolved) = try_resolve_field_from_addr(
@@ -6865,9 +7938,16 @@ fn emit_expr_with_prec(
                     // Batch 11 slice 2: route subscript loads through CExpr.
                     return CExpr::index(CExpr::lit(sub.base), CExpr::lit(sub.index)).to_string();
                 }
+                if let Some(local) =
+                    try_stack_frame_access_name(&insn.inputs[addr_idx], stmt_idx, load_size, ctx)
+                {
+                    return local;
+                }
                 let is_mmio = insn.inputs[addr_idx].space == SpaceId::Const
                     && ctx.mmio_addrs.contains(&insn.inputs[addr_idx].offset);
-                if let Some(memory) = try_emit_memory_annotation(&insn.inputs[addr_idx], ctx) {
+                if let Some(memory) =
+                    try_emit_memory_annotation(&insn.inputs[addr_idx], stmt_idx, ctx)
+                {
                     // t257: wrap MEMORY[…] with load-sized cast. t259: add
                     // `volatile` when classified as MMIO.
                     //
@@ -6889,7 +7969,8 @@ fn emit_expr_with_prec(
                         format!("*({} *){}", cast_prim, memory)
                     };
                 }
-                let addr = emit_operand_resolved(&insn.inputs[addr_idx], addr_idx, stmt_idx, ctx);
+                let addr =
+                    emit_memory_address_operand(&insn.inputs[addr_idx], addr_idx, stmt_idx, ctx);
                 let cast = ida_ptr_type(load_size);
                 // t259: when the address was classified as MMIO by the
                 // tight-succession heuristic, qualify the dereference cast
@@ -7086,11 +8167,8 @@ fn emit_expr_with_prec(
         IrOp::Call | IrOp::Callind => {
             let base = if insn.op == IrOp::Callind {
                 emit_callind_cast(insn, stmt_idx, ctx)
-            } else if let Some(printf_call) = try_emit_printf_call(insn, stmt_idx, ctx) {
-                printf_call
             } else {
-                let target = resolve_call_target(insn, stmt_idx, ctx);
-                format!("{}()", target)
+                emit_direct_call_expr(insn, stmt_idx, ctx)
             };
             if let Some(c) = forwarded_call_comment(insn, ctx) {
                 format!("{} {}", base, c)
@@ -9030,6 +10108,278 @@ fn indent(depth: usize, tab_width: usize, out: &mut String) {
     }
 }
 
+fn prune_unused_plain_local_decls(output: String) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    let Some(body_start) = lines
+        .iter()
+        .position(|line| line.contains('(') && line.trim_end().ends_with('{'))
+    else {
+        return output;
+    };
+
+    let mut remove = BTreeSet::new();
+    for (idx, line) in lines.iter().enumerate().skip(body_start + 1) {
+        let Some(name) = parse_plain_local_decl_name(line) else {
+            continue;
+        };
+        let used_later = lines
+            .iter()
+            .enumerate()
+            .skip(idx + 1)
+            .any(|(_, later)| contains_identifier(later, name));
+        if !used_later {
+            remove.insert(idx);
+        }
+    }
+
+    if remove.is_empty() {
+        return output;
+    }
+
+    let mut pruned = String::with_capacity(output.len());
+    for (idx, line) in lines.iter().enumerate() {
+        if remove.contains(&idx) {
+            continue;
+        }
+        pruned.push_str(line);
+        pruned.push('\n');
+    }
+    pruned
+}
+
+fn prune_dead_plain_assignments(output: String) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    let mut changed = false;
+    let mut pruned_lines = Vec::with_capacity(lines.len());
+
+    for (idx, line) in lines.iter().enumerate() {
+        let Some((indent, segments)) = split_plain_statement_segments(line) else {
+            pruned_lines.push((*line).to_string());
+            continue;
+        };
+
+        let mut kept = Vec::new();
+        for (seg_idx, segment) in segments.iter().enumerate() {
+            let remove = parse_plain_assignment_lhs(segment).is_some_and(|lhs| {
+                let used_later_on_line = segments
+                    .iter()
+                    .skip(seg_idx + 1)
+                    .any(|later| contains_identifier(later, lhs));
+                let used_later = used_later_on_line
+                    || lines
+                        .iter()
+                        .skip(idx + 1)
+                        .any(|later| contains_identifier(later, lhs));
+                !used_later
+            });
+            if remove {
+                changed = true;
+            } else {
+                kept.push(segment.trim());
+            }
+        }
+
+        if !kept.is_empty() {
+            pruned_lines.push(format!("{}{}", indent, kept.join(" ")));
+        }
+    }
+
+    if !changed {
+        return output;
+    }
+
+    let mut pruned = pruned_lines.join("\n");
+    pruned.push('\n');
+    pruned
+}
+
+fn split_plain_statement_segments(line: &str) -> Option<(&str, Vec<&str>)> {
+    let indent_len = line.len() - line.trim_start().len();
+    if indent_len == 0 {
+        return None;
+    }
+    let indent = &line[..indent_len];
+    let rest = line[indent_len..].trim();
+    if rest.contains("BYREF") || rest.contains("[rsp") || rest.contains("[rbp") {
+        return None;
+    }
+    if !rest.contains(';') || rest.contains('{') || rest.contains('}') {
+        return None;
+    }
+    let mut segments = Vec::new();
+    for segment in rest.split_inclusive(';') {
+        if !segment.trim().is_empty() {
+            segments.push(segment.trim());
+        }
+    }
+    (segments.len() > 1 || parse_plain_assignment_lhs(segments[0]).is_some())
+        .then_some((indent, segments))
+}
+
+fn parse_plain_assignment_lhs(segment: &str) -> Option<&str> {
+    let stmt = segment.trim().strip_suffix(';')?.trim();
+    let (lhs, rhs) = stmt.split_once(" = ")?;
+    if lhs.contains(char::is_whitespace)
+        || !is_c_identifier(lhs)
+        || !is_prunable_synthetic_local(lhs)
+        || rhs.contains('(')
+    {
+        return None;
+    }
+    Some(lhs)
+}
+
+fn parse_plain_local_decl_name(line: &str) -> Option<&str> {
+    let rest = line.strip_prefix("    ")?;
+    if rest.contains("BYREF") || rest.contains("[rsp") || rest.contains("[rbp") {
+        return None;
+    }
+    if rest.starts_with(' ') || rest.starts_with("//") {
+        return None;
+    }
+    let semi = rest.find(';')?;
+    let stmt = rest[..semi].trim();
+    let decl = if let Some((decl, init)) = stmt.split_once(" = ") {
+        if !rest.contains("// temp") || !is_side_effect_free_temp_initializer(init) {
+            return None;
+        }
+        decl.trim()
+    } else {
+        stmt
+    };
+    if decl.contains('(') || decl.contains(')') || decl.contains('[') {
+        return None;
+    }
+    let first = decl.split_whitespace().next()?;
+    if !is_plain_local_decl_type_start(first) {
+        return None;
+    }
+    if matches!(
+        first,
+        "return"
+            | "if"
+            | "while"
+            | "do"
+            | "for"
+            | "switch"
+            | "case"
+            | "goto"
+            | "break"
+            | "continue"
+    ) {
+        return None;
+    }
+    let name = decl.split_whitespace().last()?.trim_start_matches('*');
+    (is_c_identifier(name) && is_prunable_synthetic_local(name)).then_some(name)
+}
+
+fn is_plain_local_decl_type_start(first: &str) -> bool {
+    matches!(
+        first,
+        "char"
+            | "short"
+            | "int"
+            | "long"
+            | "unsigned"
+            | "signed"
+            | "float"
+            | "double"
+            | "void"
+            | "struct"
+            | "union"
+            | "enum"
+            | "_BYTE"
+            | "_BOOL"
+            | "_WORD"
+            | "_DWORD"
+            | "_QWORD"
+            | "_OWORD"
+            | "__int16"
+            | "__int64"
+    )
+}
+
+fn is_side_effect_free_temp_initializer(init: &str) -> bool {
+    let init = init.trim();
+    if init.contains("sub_") || init.contains("->") || init.contains('[') || init.contains(']') {
+        return false;
+    }
+
+    let mut rest = init;
+    while let Some(paren) = rest.find('(') {
+        let before = rest[..paren].trim_end();
+        let ident_start = before
+            .rfind(|c: char| !(c == '_' || c.is_ascii_alphanumeric()))
+            .map_or(0, |idx| idx + 1);
+        let ident = &before[ident_start..];
+        if !is_known_pure_macro_call(ident) {
+            return false;
+        }
+        rest = &rest[paren + 1..];
+    }
+    true
+}
+
+fn is_known_pure_macro_call(name: &str) -> bool {
+    matches!(
+        name,
+        "LOBYTE"
+            | "BYTE1"
+            | "BYTE2"
+            | "BYTE3"
+            | "LOWORD"
+            | "HIWORD"
+            | "LODWORD"
+            | "HIDWORD"
+            | "__OFADD__"
+            | "__OFSUB__"
+    )
+}
+
+fn is_prunable_synthetic_local(name: &str) -> bool {
+    name == "cond" || is_v_number_name(name)
+}
+
+fn is_v_number_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix('v') else {
+        return false;
+    };
+    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn contains_identifier(haystack: &str, needle: &str) -> bool {
+    let bytes = haystack.as_bytes();
+    let needle_bytes = needle.as_bytes();
+    if needle_bytes.is_empty() || needle_bytes.len() > bytes.len() {
+        return false;
+    }
+    let mut start = 0usize;
+    while let Some(pos) = haystack[start..].find(needle) {
+        let idx = start + pos;
+        let before = idx.checked_sub(1).and_then(|i| bytes.get(i)).copied();
+        let after = bytes.get(idx + needle_bytes.len()).copied();
+        let before_boundary = before.is_none_or(|b| !is_ident_byte(b));
+        let after_boundary = after.is_none_or(|b| !is_ident_byte(b));
+        if before_boundary && after_boundary {
+            return true;
+        }
+        start = idx + needle_bytes.len();
+    }
+    false
+}
+
+fn is_c_identifier(s: &str) -> bool {
+    let mut bytes = s.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+    (first == b'_' || first.is_ascii_alphabetic()) && bytes.all(is_ident_byte)
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b == b'_' || b.is_ascii_alphanumeric()
+}
+
 fn type_for_size(size: u8, signed: bool) -> &'static str {
     if signed {
         match size {
@@ -9247,7 +10597,7 @@ mod tests {
     use unlace_ir::{IrInsn, IrOp, Varnode};
     use unlace_struct::{HirFunction, HirNode, LabelId, SwitchCase};
 
-    use super::print_c;
+    use super::{PrinterAnnotations, print_c};
 
     fn make_func(name: &str, body: Vec<HirNode>) -> HirFunction {
         HirFunction {
@@ -9330,6 +10680,195 @@ mod tests {
     }
 
     #[test]
+    fn test_empty_then_else_prints_inverted_condition() {
+        let r8 = reg(8, 4);
+        let c1 = con(1, 4);
+
+        let body = vec![
+            HirNode::If {
+                cond: sv(0, 4),
+                then_body: vec![],
+                else_body: Some(vec![HirNode::Statement(IrInsn::with_output(
+                    IrOp::Copy,
+                    r8,
+                    smallvec![c1],
+                    0x1000,
+                ))]),
+            },
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("empty_then_else", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("if (!(v1)) {"),
+            "empty then-branch should render as an inverted guard: {output}"
+        );
+        assert!(
+            !output.contains("} else {"),
+            "empty then-branch should not print an else shell: {output}"
+        );
+    }
+
+    #[test]
+    fn test_negate_condition_expr_inverts_top_level_comparison() {
+        assert_eq!(super::negate_condition_expr("v6 == v13"), "v6 != v13");
+        assert_eq!(super::negate_condition_expr("v6 != v13"), "v6 == v13");
+        assert_eq!(super::negate_condition_expr("v6 <= v13"), "v6 > v13");
+        assert_eq!(super::negate_condition_expr("v6 && v13"), "!(v6 && v13)");
+    }
+
+    #[test]
+    fn test_prune_unused_plain_local_decls_keeps_used_and_preamble_fields() {
+        let output = concat!(
+            "struct __anon0 {\n",
+            "    int field_0;\n",
+            "};\n",
+            "int f(void) {\n",
+            "    int v1;\n",
+            "    int v2; // eax\n",
+            "    int v3;\n",
+            "    char v20 = LOBYTE(v1); // temp\n",
+            "    result &= flags;\n",
+            "    return v1;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned = super::prune_unused_plain_local_decls(output);
+
+        assert!(pruned.contains("int field_0;"), "{pruned}");
+        assert!(pruned.contains("int v1;"), "{pruned}");
+        assert!(!pruned.contains("int v2;"), "{pruned}");
+        assert!(!pruned.contains("int v3;"), "{pruned}");
+        assert!(!pruned.contains("v20"), "{pruned}");
+        assert!(pruned.contains("result &= flags;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_prune_dead_plain_cond_assignment_before_decl_prune() {
+        let output = concat!(
+            "int f(void) {\n",
+            "    _BOOL cond;\n",
+            "    int v3;\n",
+            "    int v34;\n",
+            "    do {\n",
+            "        v3 = v1 + v2; v34 = v2; cond = v1 == v2;\n",
+            "    } while (v1 != v2);\n",
+            "    return v3;\n",
+            "}\n",
+        )
+        .to_string();
+
+        let pruned =
+            super::prune_unused_plain_local_decls(super::prune_dead_plain_assignments(output));
+
+        assert!(!pruned.contains("_BOOL cond;"), "{pruned}");
+        assert!(!pruned.contains("int v34;"), "{pruned}");
+        assert!(!pruned.contains("cond ="), "{pruned}");
+        assert!(!pruned.contains("v34 ="), "{pruned}");
+        assert!(pruned.contains("v3 = v1 + v2;"), "{pruned}");
+        assert!(pruned.contains("while (v1 != v2);"), "{pruned}");
+        assert!(pruned.contains("return v3;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_constant_return_renders_literal() {
+        let body = vec![HirNode::Return(Some(SsaVarnode {
+            base: con(6, 4),
+            version: 0,
+        }))];
+        let func = make_func("constant_return", body);
+        let output = print_c(&func);
+
+        assert!(output.contains("return 6;"), "return literal: {output}");
+        assert!(
+            !output.contains("result;"),
+            "constant return should not allocate a result local: {output}"
+        );
+    }
+
+    #[test]
+    fn test_void_function_return_operand_does_not_emit_result() {
+        let body = vec![HirNode::Return(Some(sv(0, 4)))];
+        let mut func = make_func("void_return_operand", body);
+        func.return_type = PrimitiveType::Unknown;
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("void void_return_operand(void)"),
+            "{output}"
+        );
+        assert!(output.contains("return;"), "{output}");
+        assert!(
+            !output.contains("return result;") && !output.contains("int result;"),
+            "void return operand should not leak a result local: {output}"
+        );
+    }
+
+    #[test]
+    fn test_post_dowhile_version_skewed_temp_return_uses_loop_copy() {
+        let tmp = Varnode::unique(0x200, 8);
+        let cond = Varnode::unique(0x208, 1);
+        let acc32 = reg(16, 4);
+        let acc64 = reg(16, 8);
+
+        let body = vec![
+            HirNode::DoWhile {
+                body: vec![
+                    HirNode::Statement(IrInsn::with_output(
+                        IrOp::IntAdd,
+                        tmp,
+                        smallvec![acc64, con(1, 8)],
+                        0x1000,
+                    )),
+                    HirNode::Statement(IrInsn::with_output(
+                        IrOp::Copy,
+                        acc32,
+                        smallvec![tmp],
+                        0x1001,
+                    )),
+                    HirNode::Statement(IrInsn::with_output(
+                        IrOp::IntNotequal,
+                        cond,
+                        smallvec![acc32, con(0, 4)],
+                        0x1002,
+                    )),
+                ],
+                cond: SsaVarnode {
+                    base: cond,
+                    version: 0,
+                },
+            },
+            // Real loop exits can carry an SSA version produced by phi
+            // bookkeeping that the C printer's raw-HIR collection does not
+            // recreate.  Returning that version directly used to invent an
+            // unassigned `result` local even though the just-emitted loop
+            // copied the value into visible storage.
+            HirNode::Return(Some(SsaVarnode {
+                base: tmp,
+                version: 1,
+            })),
+        ];
+        let func = make_func("loop_temp_return", body);
+        let output = print_c(&func);
+
+        assert!(
+            !output.contains("return result;"),
+            "post-loop return should not use an unassigned result temp: {output}"
+        );
+        assert!(
+            !output.contains("int result;"),
+            "post-loop recovered return temp should not request a result declaration: {output}"
+        );
+        assert!(
+            output.contains("return v") || output.contains("return result +"),
+            "post-loop return should resolve to a concrete loop value: {output}"
+        );
+    }
+
+    #[test]
     fn test_print_while() {
         let r0 = reg(0, 4);
         let c1 = con(1, 4);
@@ -9353,6 +10892,78 @@ mod tests {
         assert!(output.contains("while (v1)"), "while: {output}");
         assert!(output.contains("v1--;"), "body: {output}");
         assert!(output.contains("return;"), "return: {output}");
+    }
+
+    #[test]
+    fn test_control_condition_assignment_inlines_when_control_only() {
+        let r0 = reg(0, 4);
+        let cmp_out = Varnode::unique(0x220, 1);
+        let cond = SsaVarnode {
+            base: cmp_out,
+            version: 0,
+        };
+
+        let cmp = IrInsn::with_output(IrOp::IntEqual, cmp_out, smallvec![r0, con(0, 4)], 0x1000);
+        let body = vec![
+            HirNode::Statement(cmp),
+            HirNode::If {
+                cond,
+                then_body: vec![HirNode::Return(None)],
+                else_body: None,
+            },
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("inline_cond", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("if (v1 == 0)"),
+            "control-only condition should inline its comparison: {output}",
+        );
+        assert!(
+            !output.contains("cond ="),
+            "standalone condition assignment should be suppressed: {output}",
+        );
+        assert!(
+            !output.contains("_BOOL cond"),
+            "suppressed condition temp should not leave a declaration: {output}",
+        );
+    }
+
+    #[test]
+    fn test_control_condition_inlines_latest_same_base_version() {
+        let r0 = reg(0, 4);
+        let cmp_out = Varnode::unique(0x224, 1);
+        let stale_cond = SsaVarnode {
+            base: cmp_out,
+            version: 7,
+        };
+
+        let cmp = IrInsn::with_output(IrOp::IntEqual, cmp_out, smallvec![r0, con(0, 4)], 0x1000);
+        let body = vec![
+            HirNode::DoWhile {
+                body: vec![HirNode::Statement(cmp)],
+                cond: stale_cond,
+            },
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("inline_stale_cond", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("} while (v1 == 0);"),
+            "do/while condition should inline the latest same-base comparison: {output}",
+        );
+        assert!(
+            !output.contains("cond ="),
+            "same-base condition assignment should stay suppressed: {output}",
+        );
+        assert!(
+            !output.contains("_BOOL cond"),
+            "same-base condition temp should not leave a declaration: {output}",
+        );
     }
 
     /// `merged_names` from [`unlace_passes::VariableMergePass`] should drive
@@ -9411,8 +11022,8 @@ mod tests {
         );
     }
 
-    /// When `merged_names` is empty (pass not run) the printer falls back to
-    /// its native `vN` allocator — regression guard for the new code path.
+    /// When `merged_names` is empty (pass not run) the printer still folds a
+    /// trivial return temporary instead of forcing a synthetic result local.
     #[test]
     #[allow(non_snake_case)] // "vN" is the IDA-style varname pattern under test
     fn test_empty_merged_names_falls_back_to_vN() {
@@ -9428,10 +11039,14 @@ mod tests {
         // merged_names is empty in make_func.
         let output = print_c(&func);
 
-        // result is the canonical name for a returned value (Result role).
+        // The return-folding path is independent of merged_names.
         assert!(
-            output.contains("result"),
-            "fallback path should still produce a Result-role name: {output}",
+            output.contains("return 1;"),
+            "fallback path should fold the copied return value: {output}",
+        );
+        assert!(
+            !output.contains("result"),
+            "folded return temp should not leak a synthetic result local: {output}",
         );
     }
 
@@ -10118,6 +11733,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            dwo_references: vec![],
         };
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(output.contains("->size"), "should contain ->size: {output}");
@@ -10179,6 +11795,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            dwo_references: vec![],
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10244,6 +11861,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            dwo_references: vec![],
         };
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
         assert!(!output.contains("->"), "should NOT contain ->: {output}");
@@ -10395,6 +12013,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            dwo_references: vec![],
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10447,6 +12066,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            dwo_references: vec![],
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10525,6 +12145,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            dwo_references: vec![],
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10568,6 +12189,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            dwo_references: vec![],
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -10810,7 +12432,10 @@ mod tests {
         let func = make_func("unsigned_cast", body);
         let output = print_c(&func);
 
-        let body = output.rsplit_once("unsigned_cast").map(|(_,b)| b).unwrap_or(&output);
+        let body = output
+            .rsplit_once("unsigned_cast")
+            .map(|(_, b)| b)
+            .unwrap_or(&output);
         assert!(
             !body.contains("(_QWORD)"),
             "i32 -> i64 IntZext should be elided as implicit C widening: {output}",
@@ -10828,7 +12453,10 @@ mod tests {
         let func = make_func("same_size_widen", body);
         let output = print_c(&func);
 
-        let body = output.rsplit_once("same_size_widen").map(|(_,b)| b).unwrap_or(&output);
+        let body = output
+            .rsplit_once("same_size_widen")
+            .map(|(_, b)| b)
+            .unwrap_or(&output);
         assert!(
             !body.contains("(_QWORD)") && !body.contains("(__int64)"),
             "same-size IntZext must not emit a cast: {output}",
@@ -10913,7 +12541,10 @@ mod tests {
         let func = make_func("ushort_zext_elided", body);
         let output = print_c(&func);
 
-        let body = output.rsplit_once("ushort_zext_elided").map(|(_,b)| b).unwrap_or(&output);
+        let body = output
+            .rsplit_once("ushort_zext_elided")
+            .map(|(_, b)| b)
+            .unwrap_or(&output);
         assert!(
             !body.contains("(_DWORD)"),
             "zero-extension from an already-unsigned-short value should not emit a redundant cast: {output}",
@@ -12615,6 +14246,111 @@ mod tests {
     }
 
     #[test]
+    fn test_rip_relative_low_global_load_uses_symbol() {
+        let space = con(0, 8);
+        let rip = reg(128, 8);
+        let addr_tmp = Varnode::unique(0x100, 8);
+        let r8 = reg(8, 8);
+
+        let add = IrInsn::with_output(
+            IrOp::IntAdd,
+            addr_tmp,
+            smallvec![rip, con(0x4008, 8)],
+            0x1000,
+        );
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr_tmp], 0x1004);
+        let body = vec![
+            HirNode::Statement(add),
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("rip_global", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x4008u64, "__dso_handle".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("__dso_handle"),
+            "RIP-relative low static address should use the symbol: {output}",
+        );
+        assert!(
+            !output.contains("[2049]"),
+            "RIP-relative static address must not fall through to array indexing: {output}",
+        );
+    }
+
+    #[test]
+    fn test_rip_relative_low_global_load_uses_fallback_name() {
+        let space = con(0, 8);
+        let rip = reg(128, 8);
+        let addr_tmp = Varnode::unique(0x110, 8);
+        let r8 = reg(8, 8);
+
+        let add = IrInsn::with_output(
+            IrOp::IntAdd,
+            addr_tmp,
+            smallvec![rip, con(0x4010, 8)],
+            0x1000,
+        );
+        let load = IrInsn::with_output(IrOp::Load, r8, smallvec![space, addr_tmp], 0x1004);
+        let body = vec![
+            HirNode::Statement(add),
+            HirNode::Statement(load),
+            HirNode::Return(Some(sv(8, 8))),
+        ];
+
+        let func = make_func("rip_global_fallback", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("qword_4010"),
+            "RIP-relative low static address should get a global fallback name: {output}",
+        );
+        assert!(
+            !output.contains("[2050]"),
+            "RIP-relative fallback address must not render as an array index: {output}",
+        );
+    }
+
+    #[test]
+    fn test_rip_relative_low_global_store_uses_symbol() {
+        let space = con(0, 8);
+        let rip = reg(128, 8);
+        let addr_tmp = Varnode::unique(0x120, 8);
+        let r0 = reg(0, 4);
+
+        let add = IrInsn::with_output(
+            IrOp::IntAdd,
+            addr_tmp,
+            smallvec![rip, con(0x4018, 8)],
+            0x1000,
+        );
+        let store = IrInsn::without_output(IrOp::Store, smallvec![space, addr_tmp, r0], 0x1004);
+        let body = vec![
+            HirNode::Statement(add),
+            HirNode::Statement(store),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("rip_global_store", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x4018u64, "g_counter".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("g_counter ="),
+            "RIP-relative store should use the global symbol: {output}",
+        );
+        assert!(
+            !output.contains("[4102]"),
+            "RIP-relative store must not render as an array index: {output}",
+        );
+    }
+
+    #[test]
     fn test_no_global_for_small_addr() {
         let space = con(0, 8);
         let r0 = reg(0, 8);
@@ -12860,6 +14596,101 @@ mod tests {
         assert!(
             !output.contains("sub_401030"),
             "should NOT contain fallback sub_401030: {output}",
+        );
+    }
+
+    #[test]
+    fn test_direct_call_renders_recovered_string_arg() {
+        let target_addr = con(0x401030, 8);
+        let string_addr = con(0x2004, 8);
+
+        let call_insn =
+            IrInsn::without_output(IrOp::Call, smallvec![target_addr, string_addr], 0x1000);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "puts".to_string());
+        let mut strings = BTreeMap::new();
+        strings.insert(0x2004, "Hello".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), Some(&strings));
+
+        assert!(
+            output.contains("puts(\"Hello\");"),
+            "CALL args should render after the resolved callee: {output}",
+        );
+    }
+
+    #[test]
+    fn test_printf_chk_drops_hidden_fortify_arg() {
+        let target_addr = con(0x401030, 8);
+        let flag = con(1, 4);
+        let fmt = con(0x2004, 8);
+        let value = con(42, 4);
+
+        let call_insn =
+            IrInsn::without_output(IrOp::Call, smallvec![target_addr, flag, fmt, value], 0x1000);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "__printf_chk".to_string());
+        let mut strings = BTreeMap::new();
+        strings.insert(0x2004, "value=%d\n".to_string());
+        let mut ann = PrinterAnnotations::default();
+        ann.libc_call_canonical.insert(0x1000, "printf".to_string());
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            Some(&symbols),
+            Some(&strings),
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(
+            output.contains("printf(\"value=%d\\n\", (int)0x2a);"),
+            "__printf_chk should render as canonical printf without the flag: {output}",
+        );
+    }
+
+    #[test]
+    fn test_inline_group_merges_assignment_return_after_call() {
+        let target_addr = con(0x401030, 8);
+        let r0 = reg(0, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Call,
+                smallvec![target_addr],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                r0,
+                smallvec![con(0, 4)],
+                0x1004,
+            )),
+            HirNode::Return(Some(sv(0, 4))),
+        ];
+
+        let func = make_func("caller", body);
+        let mut symbols = BTreeMap::new();
+        symbols.insert(0x401030, "puts".to_string());
+
+        let output = super::print_c_full(&func, None, None, Some(&symbols), None);
+
+        assert!(
+            output.contains("puts(); return 0;"),
+            "assignment feeding an immediate return should merge inside inline groups: {output}",
+        );
+        assert!(
+            !output.contains("result = 0; return result;"),
+            "merged return should not keep the temporary assignment: {output}",
         );
     }
 
@@ -13150,6 +14981,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            dwo_references: vec![],
         };
 
         let output = super::print_c_with_dwarf(&func, Some(&dwarf));
@@ -13723,17 +15555,16 @@ mod tests {
         let fptr = reg(0, 8);
         let this_arg = reg(8, 8);
 
-        let callind = IrInsn::without_output(
-            IrOp::Callind,
-            smallvec![fptr, this_arg],
-            0x1000,
-        );
+        let callind = IrInsn::without_output(IrOp::Callind, smallvec![fptr, this_arg], 0x1000);
         let body = vec![HirNode::Statement(callind), HirNode::Return(None)];
 
         let mut func = make_func("vtable_test", body);
         func.vtable_call_targets.insert(
             0x1000,
-            TargetSet::VtableSlot { class_name: "Base".to_string(), slot_idx: 0 },
+            TargetSet::VtableSlot {
+                class_name: "Base".to_string(),
+                slot_idx: 0,
+            },
         );
 
         let output = print_c(&func);
@@ -13756,17 +15587,17 @@ mod tests {
         let this_arg = reg(8, 8);
         let extra_arg = reg(16, 8);
 
-        let callind = IrInsn::without_output(
-            IrOp::Callind,
-            smallvec![fptr, this_arg, extra_arg],
-            0x2000,
-        );
+        let callind =
+            IrInsn::without_output(IrOp::Callind, smallvec![fptr, this_arg, extra_arg], 0x2000);
         let body = vec![HirNode::Statement(callind), HirNode::Return(None)];
 
         let mut func = make_func("vtable_slot2", body);
         func.vtable_call_targets.insert(
             0x2000,
-            TargetSet::VtableSlot { class_name: "Derived".to_string(), slot_idx: 2 },
+            TargetSet::VtableSlot {
+                class_name: "Derived".to_string(),
+                slot_idx: 2,
+            },
         );
 
         let output = print_c(&func);
@@ -14317,8 +16148,6 @@ mod tests {
         let output = print_c(&func);
         assert!(output.contains("__autib("), "got: {output}");
     }
-
-
 
     #[test]
     fn test_callother_pacda_renders_as_pacda() {
@@ -15017,6 +16846,7 @@ mod tests {
                     type_name: Some("long long".to_string()),
                     frame_offset: Some(-0x50),
                     locations: vec![],
+                    locations_dwarf_v5: vec![],
                 }],
             },
         );
@@ -15027,6 +16857,7 @@ mod tests {
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
             macros: vec![],
+            dwo_references: vec![],
         };
 
         let output = super::print_c_full(&func, Some(&dwarf), Some(&header), None, None);
@@ -15196,6 +17027,168 @@ mod tests {
         assert!(
             output.contains("v_8 = 5"),
             "expected `v_8 = 5` assignment, got:\n{output}",
+        );
+    }
+
+    #[test]
+    fn test_t232_rsp_derived_store_uses_recovered_stack_name() {
+        use unlace_ir::ssa::{StackFrame, StackLocal};
+
+        let rsp = reg(32, 8);
+        let addr = Varnode::unique(0x100, 8);
+        let ram = con(1, 8);
+        let five = con(5, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSub,
+                addr,
+                smallvec![rsp, con(8, 8)],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Store,
+                smallvec![ram, addr, five],
+                0x1004,
+            )),
+            HirNode::Return(None),
+        ];
+        let mut func = make_func("t232_rsp_store", body);
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -8,
+            StackLocal {
+                offset: -8,
+                size: 4,
+                access_widths: vec![4],
+                kind: Default::default(),
+            },
+        );
+        func.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 4,
+            max_pos_offset: -4,
+            min_neg_offset: -8,
+        });
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("v_8 = 5;"),
+            "RSP-derived store should render as recovered stack local: {output}",
+        );
+        assert!(
+            !output.contains("*(int *)(0LL)") && !output.contains("*(_DWORD *)(0LL)"),
+            "RSP-derived stack store must not fall back to a null deref: {output}",
+        );
+    }
+
+    #[test]
+    fn test_t232_multi_use_rsp_derived_store_uses_recovered_stack_name() {
+        use unlace_ir::ssa::{StackFrame, StackLocal};
+
+        let rsp = reg(32, 8);
+        let addr = Varnode::unique(0x100, 8);
+        let ram = con(1, 8);
+        let five = con(5, 4);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSub,
+                addr,
+                smallvec![rsp, con(8, 8)],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Copy,
+                rsp,
+                smallvec![addr],
+                0x1002,
+            )),
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Store,
+                smallvec![ram, addr, five],
+                0x1004,
+            )),
+            HirNode::Return(None),
+        ];
+        let mut func = make_func("t232_rsp_store_multi_use", body);
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -8,
+            StackLocal {
+                offset: -8,
+                size: 4,
+                access_widths: vec![4],
+                kind: Default::default(),
+            },
+        );
+        func.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 4,
+            max_pos_offset: -4,
+            min_neg_offset: -8,
+        });
+
+        let output = print_c(&func);
+        assert!(
+            output.contains("v_8 = 5;"),
+            "multi-use RSP-derived store should still render as recovered stack local: {output}",
+        );
+        assert!(
+            !output.contains("*(_DWORD *)") && !output.contains("*(int *)"),
+            "multi-use RSP-derived stack store must not fall back to a raw pointer store: {output}",
+        );
+    }
+
+    #[test]
+    fn test_t232_saved_register_stack_store_is_suppressed() {
+        use unlace_ir::ssa::{FrameSlotKind, StackFrame, StackLocal};
+
+        let rsp = reg(32, 8);
+        let rbp = reg(40, 8);
+        let addr = Varnode::unique(0x100, 8);
+        let ram = con(1, 8);
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::IntSub,
+                addr,
+                smallvec![rsp, con(8, 8)],
+                0x1000,
+            )),
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Store,
+                smallvec![ram, addr, rbp],
+                0x1004,
+            )),
+            HirNode::Return(None),
+        ];
+        let mut func = make_func("t232_saved_reg_store", body);
+        let mut locals = BTreeMap::new();
+        locals.insert(
+            -8,
+            StackLocal {
+                offset: -8,
+                size: 8,
+                access_widths: vec![8],
+                kind: FrameSlotKind::SavedRegister,
+            },
+        );
+        func.stack_frame = Some(StackFrame {
+            locals,
+            frame_size: 8,
+            max_pos_offset: 0,
+            min_neg_offset: -8,
+        });
+
+        let output = print_c(&func);
+        assert!(
+            !output.contains("v_8;"),
+            "saved-register slot should not be declared as a source local: {output}",
+        );
+        assert!(
+            !output.contains("*(_QWORD *)") && !output.contains("*(__int64 *)"),
+            "saved-register stack store should not render as a raw pointer store: {output}",
         );
     }
 
@@ -15849,8 +17842,10 @@ mod tests {
         let output = print_c(&func);
 
         assert!(
-            output.contains("_Bool cond") || output.contains("_BOOL cond"),
-            "comparison output should be named 'cond': {output}",
+            output.contains("_Bool cond")
+                || output.contains("_BOOL cond")
+                || output.contains("if (v1 == v2)"),
+            "comparison output should be named or inlined as a condition: {output}",
         );
     }
 
@@ -16317,6 +18312,10 @@ mod tests {
         assert!(
             !has_v1_decl,
             "write-only variable v1 (r0, never read) should NOT be declared: {output}",
+        );
+        assert!(
+            !output.contains("v1 = 1;"),
+            "write-only register assignment should not be emitted: {output}",
         );
     }
 
@@ -17968,9 +19967,8 @@ mod tests {
         ann.pdb_constants_by_value
             .insert(42, vec!["kAnswer".into(), "kAlsoAnswer".into()]);
 
-        let output = super::print_c_with_annotations(
-            &func, None, None, None, None, None, None, Some(&ann),
-        );
+        let output =
+            super::print_c_with_annotations(&func, None, None, None, None, None, None, Some(&ann));
 
         assert!(
             output.contains("case 42:  /* kAnswer, kAlsoAnswer */"),
@@ -18232,9 +20230,8 @@ mod tests {
 
     /// When the format-string slot is *not* a const pointer (i.e. the
     /// fmt comes from a runtime variable / parameter), we can't parse
-    /// specifiers and must not invent any casts. The printer falls
-    /// back to the legacy `printf();` rendering — the test asserts
-    /// neither `(int)` nor a quoted literal leaks into the output.
+    /// specifiers and must not invent any casts. The printer should still
+    /// render the recovered runtime arguments without format-driven casts.
     #[test]
     fn t202_non_const_format_string_emits_no_casts() {
         let printf_addr = con(0x401030, 8);
@@ -18267,11 +20264,9 @@ mod tests {
             !output.contains("(long long *)"),
             "non-const fmt must not produce any (long long *) casts:\n{output}",
         );
-        // The legacy fallback emits `printf();` — confirm the printer
-        // didn't get confused and start emitting arg expressions.
         assert!(
-            output.contains("printf();"),
-            "non-const fmt should fall back to legacy printf() rendering:\n{output}",
+            output.contains("printf(str, v2);"),
+            "non-const fmt should render recovered runtime args:\n{output}",
         );
     }
 

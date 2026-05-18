@@ -214,6 +214,67 @@ fn is_decompilable_arch(arch: unlace_ir::ArchId) -> bool {
     )
 }
 
+/// Minimise a crashing input by trimming trailing bytes until the
+/// crash no longer reproduces, then back off to the smallest prefix
+/// that still triggers it.
+///
+/// Algorithm (deliberately tiny — full delta-debugging is overkill for
+/// the fuzz harness's purposes):
+///
+/// 1. Confirm the input still panics. If not, return it unchanged
+///    (callers shouldn't have invoked us, but we're defensive).
+/// 2. Binary-search the smallest prefix length `n ∈ [1, input.len()]`
+///    such that `predicate(&input[..n])` still reports a panic. Each
+///    probe halves the search window, so we run `O(log n)` predicate
+///    calls — important because each call re-drives the full pipeline
+///    and is expensive.
+/// 3. Return the minimal prefix.
+///
+/// This is *prefix* minimisation, not full delta-debugging: we don't
+/// try to remove bytes from the middle. The ELF format is
+/// header-driven (header offsets reference later sections), so trimming
+/// from the end is the operation most likely to preserve the panic
+/// while shrinking the witness. A future revision could layer
+/// delta-debugging on top, but the marginal triage benefit is small
+/// versus the implementation cost.
+pub fn minimise_crash_with<F>(input: &[u8], mut predicate: F) -> Vec<u8>
+where
+    F: FnMut(&[u8]) -> bool,
+{
+    if input.is_empty() || !predicate(input) {
+        return input.to_vec();
+    }
+    // Binary search for smallest `n` in [1, input.len()] where
+    // predicate(&input[..n]) is still true.
+    //
+    // Invariant: predicate(&input[..hi]) == true, predicate(&input[..lo-1]) == false (or lo == 1).
+    let mut lo: usize = 1;
+    let mut hi: usize = input.len();
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if predicate(&input[..mid]) {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    input[..lo].to_vec()
+}
+
+/// Convenience wrapper around [`minimise_crash_with`] that uses
+/// [`fuzz_iteration`] as the predicate — i.e. the prefix "still
+/// triggers a crash" iff `fuzz_iteration` returns
+/// [`FuzzResult::Panicked`].
+///
+/// Tools driving the harness (the `xtask fuzz` runner, manual triage)
+/// can call this directly when they observe a panic outcome to obtain a
+/// shorter reproducer suitable for filing.
+pub fn minimise_crash(input: &[u8]) -> Vec<u8> {
+    minimise_crash_with(input, |bytes| {
+        matches!(fuzz_iteration(bytes), FuzzResult::Panicked { .. })
+    })
+}
+
 /// Best-effort stringification of a `catch_unwind` panic payload.
 ///
 /// `Box<dyn Any + Send>` is opaque — the standard library only
@@ -247,6 +308,70 @@ mod tests {
             fuzz_iteration(&[0xff; 64]),
             FuzzResult::NotElf
         );
+    }
+
+    /// Synthetic panicking predicate: the input "crashes" iff it
+    /// contains the marker byte sequence `[0xCA, 0xFE]`. The minimiser
+    /// must shrink an arbitrary prefix containing this marker down to
+    /// the smallest prefix that still includes both marker bytes.
+    ///
+    /// We deliberately don't drive the real pipeline here — building a
+    /// panic-triggering ELF would be brittle and slow. The minimiser's
+    /// logic is independent of *what* the predicate detects.
+    #[test]
+    fn minimise_crash_with_shrinks_to_marker_prefix() {
+        // 100 bytes of padding, marker at [40, 41], more padding.
+        let mut input = vec![0u8; 100];
+        input[40] = 0xCA;
+        input[41] = 0xFE;
+        let predicate = |bytes: &[u8]| {
+            bytes.windows(2).any(|w| w == [0xCA, 0xFE])
+        };
+        let minimised = minimise_crash_with(&input, predicate);
+        // Smallest prefix that still contains the marker is
+        // `input[..42]` (indices 0..=41 inclusive).
+        assert_eq!(minimised.len(), 42);
+        assert_eq!(minimised[40], 0xCA);
+        assert_eq!(minimised[41], 0xFE);
+    }
+
+    /// If the predicate doesn't fire on the full input, the minimiser
+    /// must not silently shrink — that would be a footgun where a
+    /// caller passes a "false alarm" and gets back an empty buffer.
+    #[test]
+    fn minimise_crash_with_returns_input_when_predicate_false() {
+        let input = vec![0xAAu8; 32];
+        let minimised = minimise_crash_with(&input, |_| false);
+        assert_eq!(minimised, input);
+    }
+
+    /// Empty input is a no-op.
+    #[test]
+    fn minimise_crash_with_empty_input() {
+        let minimised = minimise_crash_with(&[], |_| true);
+        assert!(minimised.is_empty());
+    }
+
+    /// When the smallest-triggering prefix is exactly length 1, the
+    /// binary search must terminate at `lo == hi == 1` rather than
+    /// looping or off-by-one'ing.
+    #[test]
+    fn minimise_crash_with_single_byte_witness() {
+        let input = vec![0xDEu8; 50];
+        // Predicate: any non-empty input "crashes". Smallest is len 1.
+        let minimised = minimise_crash_with(&input, |b| !b.is_empty());
+        assert_eq!(minimised.len(), 1);
+    }
+
+    /// End-to-end check on the real pipeline: feeding a non-panicking
+    /// input to `minimise_crash` must return it unchanged (defensive
+    /// path — the caller should know the input panics before calling,
+    /// but we don't want to corrupt non-witnesses).
+    #[test]
+    fn minimise_crash_no_op_on_clean_input() {
+        let bytes = b"not an ELF, will return NotElf";
+        let minimised = minimise_crash(bytes);
+        assert_eq!(minimised.as_slice(), bytes.as_slice());
     }
 
     /// A truncated ELF that has the magic but no valid header must

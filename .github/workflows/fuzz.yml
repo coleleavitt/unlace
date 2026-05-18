@@ -1,0 +1,80 @@
+name: Nightly Fuzz
+
+# Whole-pipeline fuzz sweep (§5.9). Runs the in-tree `unlace-fuzz`
+# harness — deliberately *not* `cargo-fuzz` / libfuzzer-sys, since the
+# harness was built to run on stable without sanitizers (see
+# `crates/unlace-fuzz/src/lib.rs` docstring).
+#
+# Two trigger paths:
+#   * nightly cron — long-running coverage drift detection.
+#   * workflow_dispatch — on-demand reruns when investigating a crash.
+#
+# Crash outputs (minimised reproducers, `target/fuzz/crashes/*.bin`) are
+# uploaded as build artifacts so triage can pull them down without
+# rerunning the sweep locally.
+
+on:
+  schedule:
+    # 06:17 UTC daily — offset from the top of the hour to dodge the
+    # scheduler peak that delays mass-cron'd jobs.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+    inputs:
+      max_iters:
+        description: 'Maximum corpus inputs to process (blank = unlimited)'
+        required: false
+        default: ''
+
+env:
+  CARGO_TERM_COLOR: always
+  # Note: we don't set RUSTFLAGS=-D warnings here — fuzz runs care about
+  # crashes, not lints, and the regular CI workflow already gates that.
+
+jobs:
+  fuzz:
+    name: cargo xtask fuzz
+    runs-on: ubuntu-latest
+    # 50 min cap: nightly cron can afford a long sweep, but we don't
+    # want a runaway harness eating GHA minutes forever.
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Build the harness binary up front so the xtask's subprocess
+      # path is exercised (rather than its no-op fallback).
+      - name: Build unlace-fuzz binary
+        run: cargo build -p unlace-fuzz --bin unlace-fuzz
+
+      - name: Run fuzz sweep
+        id: fuzz
+        run: |
+          set +e
+          if [ -n "${{ github.event.inputs.max_iters }}" ]; then
+            cargo xtask fuzz --max-iters "${{ github.event.inputs.max_iters }}"
+          else
+            cargo xtask fuzz
+          fi
+          code=$?
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          # Exit code 2 = crashes found; surface them as artifacts but
+          # don't fail the job — a nightly sweep that flips red on
+          # every new finding would just train people to ignore it.
+          # The artifact list (or its absence) is the signal.
+          if [ "${code}" = "2" ]; then
+            echo "Fuzz sweep found crashes; reproducers uploaded as artifact."
+            exit 0
+          fi
+          exit ${code}
+
+      - name: Upload crash reproducers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ github.run_id }}
+          path: target/fuzz/crashes/
+          if-no-files-found: ignore
+          retention-days: 30

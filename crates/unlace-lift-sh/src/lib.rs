@@ -48,17 +48,43 @@ impl ShLifter {
         }
 
         // Special registers
-        regs.push(RegisterDef { name: "PR", varnode: Varnode::reg(128, 4) });
-        regs.push(RegisterDef { name: "SR", varnode: Varnode::reg(136, 4) });
-        regs.push(RegisterDef { name: "GBR", varnode: Varnode::reg(144, 4) });
-        regs.push(RegisterDef { name: "VBR", varnode: Varnode::reg(152, 4) });
-        regs.push(RegisterDef { name: "MACH", varnode: Varnode::reg(160, 4) });
-        regs.push(RegisterDef { name: "MACL", varnode: Varnode::reg(168, 4) });
-        regs.push(RegisterDef { name: "PC", varnode: Varnode::reg(176, 4) });
+        regs.push(RegisterDef {
+            name: "PR",
+            varnode: Varnode::reg(128, 4),
+        });
+        regs.push(RegisterDef {
+            name: "SR",
+            varnode: Varnode::reg(136, 4),
+        });
+        regs.push(RegisterDef {
+            name: "GBR",
+            varnode: Varnode::reg(144, 4),
+        });
+        regs.push(RegisterDef {
+            name: "VBR",
+            varnode: Varnode::reg(152, 4),
+        });
+        regs.push(RegisterDef {
+            name: "MACH",
+            varnode: Varnode::reg(160, 4),
+        });
+        regs.push(RegisterDef {
+            name: "MACL",
+            varnode: Varnode::reg(168, 4),
+        });
+        regs.push(RegisterDef {
+            name: "PC",
+            varnode: Varnode::reg(176, 4),
+        });
         // T flag is bit 0 of SR; expose as a 1-byte sub-register.
-        regs.push(RegisterDef { name: "T", varnode: Varnode::reg(184, 1) });
+        regs.push(RegisterDef {
+            name: "T",
+            varnode: Varnode::reg(184, 1),
+        });
 
-        Self { register_file: RegisterFile { registers: regs } }
+        Self {
+            register_file: RegisterFile { registers: regs },
+        }
     }
 }
 
@@ -79,7 +105,10 @@ impl Lifter for ShLifter {
         }
         let decoded = decode::decode(bytes, addr).ok_or(LiftError::ShortBuffer)?;
         let ctx = lift::lift(&decoded, addr);
-        Ok(LiftedInsn { ir_ops: ctx.ops, len: decoded.len })
+        Ok(LiftedInsn {
+            ir_ops: ctx.ops,
+            len: decoded.len,
+        })
     }
 
     fn register_file(&self) -> &RegisterFile {
@@ -158,11 +187,36 @@ mod tests {
 
     #[test]
     fn lift_add_sub_and_or_xor() {
-        assert!(lift_bytes(0x335C, 0).ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
-        assert!(lift_bytes(0x3358, 0).ir_ops.iter().any(|i| i.op == IrOp::IntSub));
-        assert!(lift_bytes(0x2359, 0).ir_ops.iter().any(|i| i.op == IrOp::IntAnd));
-        assert!(lift_bytes(0x235B, 0).ir_ops.iter().any(|i| i.op == IrOp::IntOr));
-        assert!(lift_bytes(0x235A, 0).ir_ops.iter().any(|i| i.op == IrOp::IntXor));
+        assert!(
+            lift_bytes(0x335C, 0)
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntAdd)
+        );
+        assert!(
+            lift_bytes(0x3358, 0)
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntSub)
+        );
+        assert!(
+            lift_bytes(0x2359, 0)
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntAnd)
+        );
+        assert!(
+            lift_bytes(0x235B, 0)
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntOr)
+        );
+        assert!(
+            lift_bytes(0x235A, 0)
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntXor)
+        );
     }
 
     #[test]
@@ -184,8 +238,10 @@ mod tests {
         // MOV.L @R5,R3 -> 0x6352
         let lifted = lift_bytes(0x6352, 0x1000);
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Load));
-        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Copy
-            && i.output.map_or(false, |v| v.offset == 3 * 8 && v.size == 4)));
+        assert!(
+            lifted.ir_ops.iter().any(|i| i.op == IrOp::Copy
+                && i.output.map_or(false, |v| v.offset == 3 * 8 && v.size == 4))
+        );
         assert!(!lifted.ir_ops.iter().any(|i| i.op == IrOp::IntSext));
     }
 
@@ -203,8 +259,10 @@ mod tests {
         let lifted = lift_bytes(0x6356, 0x1000);
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Load));
         assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::IntAdd));
-        assert!(lifted.ir_ops.iter().any(|i| i.op == IrOp::Copy
-            && i.output.map_or(false, |v| v.offset == 5 * 8 && v.size == 4)));
+        assert!(
+            lifted.ir_ops.iter().any(|i| i.op == IrOp::Copy
+                && i.output.map_or(false, |v| v.offset == 5 * 8 && v.size == 4))
+        );
     }
 
     #[test]
@@ -223,7 +281,10 @@ mod tests {
             .iter()
             .position(|i| i.op == IrOp::Store)
             .expect("store");
-        assert!(sub_idx < store_idx, "pre-decrement must happen before store");
+        assert!(
+            sub_idx < store_idx,
+            "pre-decrement must happen before store"
+        );
     }
 
     #[test]
@@ -236,19 +297,34 @@ mod tests {
 
     #[test]
     fn lift_shifts() {
-        assert!(lift_bytes(0x4300, 0).ir_ops.iter().any(|i| i.op == IrOp::IntLeft));
-        assert!(lift_bytes(0x4301, 0).ir_ops.iter().any(|i| i.op == IrOp::IntRight));
-        assert!(lift_bytes(0x4321, 0).ir_ops.iter().any(|i| i.op == IrOp::IntSright));
+        assert!(
+            lift_bytes(0x4300, 0)
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntLeft)
+        );
+        assert!(
+            lift_bytes(0x4301, 0)
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntRight)
+        );
+        assert!(
+            lift_bytes(0x4321, 0)
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::IntSright)
+        );
     }
 
     #[test]
     fn lift_compares_write_t() {
         let cases = [
-            (0x3350u16, IrOp::IntEqual),       // CMP/EQ
-            (0x3352u16, IrOp::IntLessequal),   // CMP/HS
-            (0x3353u16, IrOp::IntSlessequal),  // CMP/GE
-            (0x3356u16, IrOp::IntLess),        // CMP/HI
-            (0x3357u16, IrOp::IntSless),       // CMP/GT
+            (0x3350u16, IrOp::IntEqual),      // CMP/EQ
+            (0x3352u16, IrOp::IntLessequal),  // CMP/HS
+            (0x3353u16, IrOp::IntSlessequal), // CMP/GE
+            (0x3356u16, IrOp::IntLess),       // CMP/HI
+            (0x3357u16, IrOp::IntSless),      // CMP/GT
         ];
         for (hw, expected) in cases {
             let lifted = lift_bytes(hw, 0x1000);

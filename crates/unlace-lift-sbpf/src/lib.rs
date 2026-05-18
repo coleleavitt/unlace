@@ -11,16 +11,15 @@ const PC_OFFSET: u64 = (REG_COUNT as u64) * (REG_SIZE as u64);
 
 fn build_register_file() -> RegisterFile {
     static NAMES: [&str; 32] = [
-        "r0","r1","r2","r3","r4","r5","r6","r7",
-        "r8","r9","r10","r11","r12","r13","r14","r15",
-        "r16","r17","r18","r19","r20","r21","r22","r23",
-        "r24","r25","r26","r27","r28","r29","r30","r31",
+        "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13",
+        "r14", "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25", "r26",
+        "r27", "r28", "r29", "r30", "r31",
     ];
     let count = REG_COUNT.min(32);
     let mut regs = Vec::with_capacity(count + 1);
-    for i in 0..count {
+    for (i, name) in NAMES.iter().enumerate().take(count) {
         regs.push(RegisterDef {
-            name: NAMES[i],
+            name,
             varnode: Varnode::reg((i as u64) * (REG_SIZE as u64), REG_SIZE),
         });
     }
@@ -36,20 +35,39 @@ pub struct SbpfLifter {
 }
 
 impl SbpfLifter {
-    pub fn new() -> Self { Self { reg_file: build_register_file() } }
+    pub fn new() -> Self {
+        Self {
+            reg_file: build_register_file(),
+        }
+    }
 }
-impl Default for SbpfLifter { fn default() -> Self { Self::new() } }
+impl Default for SbpfLifter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Lifter for SbpfLifter {
-    fn arch(&self) -> ArchId { ArchId::Sbpf }
-    fn register_file(&self) -> &RegisterFile { &self.reg_file }
+    fn arch(&self) -> ArchId {
+        ArchId::Sbpf
+    }
+    fn register_file(&self) -> &RegisterFile {
+        &self.reg_file
+    }
 
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
         if bytes.len() < 8 {
             return Err(LiftError::ShortBuffer);
         }
-        let ops = vec![IrInsn::without_output(IrOp::Unimplemented, smallvec![], addr)];
-        Ok(LiftedInsn { ir_ops: ops, len: 8 })
+        let ops = vec![IrInsn::without_output(
+            IrOp::Unimplemented,
+            smallvec![],
+            addr,
+        )];
+        Ok(LiftedInsn {
+            ir_ops: ops,
+            len: 8,
+        })
     }
 }
 
@@ -58,7 +76,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_arch() { assert_eq!(SbpfLifter::new().arch(), ArchId::Sbpf); }
+    fn test_arch() {
+        assert_eq!(SbpfLifter::new().arch(), ArchId::Sbpf);
+    }
 
     #[test]
     fn test_register_file() {

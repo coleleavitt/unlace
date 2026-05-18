@@ -8,13 +8,7 @@ type Ops = [(Arm64OperandType, Arm64Shift)];
 
 fn dst_size(ops: &Ops) -> u8 {
     match ops.first() {
-        Some((Arm64OperandType::Reg(reg), _)) => {
-            if crate::register_file::is_w_reg(*reg) {
-                4
-            } else {
-                8
-            }
-        }
+        Some((Arm64OperandType::Reg(reg), _)) if crate::register_file::is_w_reg(*reg) => 4,
         _ => 8,
     }
 }

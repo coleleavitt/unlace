@@ -690,4 +690,145 @@ mod tests {
             Err(LiftError::ShortBuffer)
         ));
     }
+
+    // ----- §3 expansion: per-opcode tests pinning lifter coverage --------
+
+    #[test]
+    fn lifts_ret() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0x81], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Return);
+    }
+
+    #[test]
+    fn lifts_callr() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xAD, 0x10], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Call);
+    }
+
+    #[test]
+    fn lifts_call_extended() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xCD, 0x12, 0x34], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Call);
+    }
+
+    #[test]
+    fn lifts_jp_extended() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xCC, 0x12, 0x34], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Branch);
+    }
+
+    #[test]
+    fn lifts_jp_x() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xBC], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Branchind);
+    }
+
+    /// LD A, (short_mem) — 0xB6 + 1-byte direct address.
+    #[test]
+    fn lifts_ld_a_direct_short() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xB6, 0x10], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Load);
+    }
+
+    /// LD A, (long_mem) — 0xC6 + 2-byte big-endian address.
+    #[test]
+    fn lifts_ld_a_direct_long() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xC6, 0x12, 0x34], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Load);
+    }
+
+    /// LD A, (X) — 0xF6.
+    #[test]
+    fn lifts_ld_a_indirect_x() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xF6], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Load);
+    }
+
+    /// LD (short_mem), A — 0xB7.
+    #[test]
+    fn lifts_st_a_direct_short() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xB7, 0x10], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Store);
+    }
+
+    /// LD (long_mem), A — 0xC7.
+    #[test]
+    fn lifts_st_a_direct_long() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xC7, 0x12, 0x34], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Store);
+    }
+
+    /// ADD A, #imm8 — 0xAB.
+    #[test]
+    fn lifts_add_a_imm() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xAB, 0x05], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::IntAdd);
+    }
+
+    /// SUB A, #imm8 — 0xA0.
+    #[test]
+    fn lifts_sub_a_imm() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xA0, 0x05], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::IntSub);
+    }
+
+    /// AND A, #imm8 — 0xA4.
+    #[test]
+    fn lifts_and_a_imm() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xA4, 0x0F], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::IntAnd);
+    }
+
+    /// OR A, #imm8 — 0xAA.
+    #[test]
+    fn lifts_or_a_imm() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xAA, 0xF0], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::IntOr);
+    }
+
+    /// XOR A, #imm8 — 0xA8.
+    #[test]
+    fn lifts_xor_a_imm() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0xA8, 0xAA], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::IntXor);
+    }
+
+    /// SLA A — 0x48 → IntLeft.
+    #[test]
+    fn lifts_sla_a() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0x48], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::IntLeft);
+    }
+
+    /// SRL A — 0x44 → IntRight.
+    #[test]
+    fn lifts_srl_a() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0x44], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::IntRight);
+    }
+
+    /// SRA A — 0x47 → IntSright.
+    #[test]
+    fn lifts_sra_a() {
+        let lifter = Stm8Lifter::new();
+        let r = lifter.lift_insn(&[0x47], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::IntSright);
+    }
 }

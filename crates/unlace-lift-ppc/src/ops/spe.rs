@@ -314,7 +314,11 @@ fn lift_move_or_callother(ctx: &mut LiftCtx, ops: &[PpcOperand], mnemonic: &str)
 fn emit_callother(ctx: &mut LiftCtx, ops: &[PpcOperand], tag: u64, output_size: Option<u8>) {
     let ptr_size = ctx.ptr_size;
     let inputs = std::iter::once(Varnode::constant(tag, 8))
-        .chain(ops.iter().skip(1).filter_map(|o| operand_reg_sized(o, ptr_size)))
+        .chain(
+            ops.iter()
+                .skip(1)
+                .filter_map(|o| operand_reg_sized(o, ptr_size)),
+        )
         .collect::<smallvec::SmallVec<[Varnode; 3]>>();
 
     if let (Some(rd), Some(_)) = (ops.first().and_then(|o| operand_reg(ctx, o)), output_size) {
@@ -332,7 +336,9 @@ fn operand_reg_sized(op: &PpcOperand, ptr_size: u8) -> Option<Varnode> {
 }
 
 fn destination_size(ctx: &LiftCtx, ops: &[PpcOperand]) -> Option<u8> {
-    ops.first().and_then(|o| operand_reg(ctx, o)).map(|v| v.size)
+    ops.first()
+        .and_then(|o| operand_reg(ctx, o))
+        .map(|v| v.size)
 }
 
 fn generic_tag(mnemonic: &str) -> u64 {

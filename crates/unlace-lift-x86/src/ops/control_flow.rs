@@ -265,31 +265,7 @@ fn jcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Varn
 }
 
 pub fn lift_call(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
-    let rsp = Varnode::new(SpaceId::Register, RSP, 8);
-    let eight = Varnode::constant(8, 8);
-    let new_rsp = Varnode::unique(ctx.alloc_unique(), 8);
-    ctx.emit(IrInsn::with_output(
-        IrOp::IntSub,
-        new_rsp,
-        smallvec![rsp, eight],
-        ctx.addr,
-    ));
-    ctx.emit(IrInsn::with_output(
-        IrOp::Copy,
-        rsp,
-        smallvec![new_rsp],
-        ctx.addr,
-    ));
-
-    let return_addr = Varnode::constant(ctx.addr.wrapping_add(insn.len() as u64), 8);
-    let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
-    ctx.emit(IrInsn::without_output(
-        IrOp::Store,
-        smallvec![ram_space, new_rsp, return_addr],
-        ctx.addr,
-    ));
-
-    let target = match insn.op0_kind() {
+    match insn.op0_kind() {
         iced_x86::OpKind::NearBranch16
         | iced_x86::OpKind::NearBranch32
         | iced_x86::OpKind::NearBranch64 => {
@@ -307,38 +283,13 @@ pub fn lift_call(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             None => ctx.emit_unimplemented(),
         },
     };
-    let _ = target;
 }
 
 pub fn lift_ret(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
-    let rsp = Varnode::new(SpaceId::Register, RSP, 8);
-    let ram_space = Varnode::constant(SpaceId::Ram as u64, 8);
-    let return_addr = Varnode::unique(ctx.alloc_unique(), 8);
-    ctx.emit(IrInsn::with_output(
-        IrOp::Load,
-        return_addr,
-        smallvec![ram_space, rsp],
-        ctx.addr,
-    ));
-
-    let eight = Varnode::constant(8, 8);
-    let new_rsp = Varnode::unique(ctx.alloc_unique(), 8);
-    ctx.emit(IrInsn::with_output(
-        IrOp::IntAdd,
-        new_rsp,
-        smallvec![rsp, eight],
-        ctx.addr,
-    ));
-    ctx.emit(IrInsn::with_output(
-        IrOp::Copy,
-        rsp,
-        smallvec![new_rsp],
-        ctx.addr,
-    ));
-
+    let return_value = Varnode::new(SpaceId::Register, RAX, 4);
     ctx.emit(IrInsn::without_output(
         IrOp::Return,
-        smallvec![return_addr],
+        smallvec![return_value],
         ctx.addr,
     ));
 }

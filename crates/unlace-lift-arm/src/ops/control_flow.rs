@@ -336,7 +336,7 @@ pub fn lift_ccmp(ctx: &mut LiftCtx, ops: &Ops, detail: &InsnDetail, is_neg: bool
     //    pack the computed flag temps; on the cond=false side we pack
     //    the immediate `#nzcv` (which already uses the same N/Z/C/V bit
     //    order, just at bit positions 3..0 → shift up by 28).
-    let packed_imm = (nzcv_imm as u64) << 28;
+    let packed_imm = nzcv_imm << 28;
     let packed_imm_vn = Varnode::constant(packed_imm, 4);
     let packed_computed = pack_computed_nzcv(ctx, comp_nf, comp_zf, comp_cf, comp_vf);
     blend_word_nzcv(ctx, cond, packed_computed, packed_imm_vn);

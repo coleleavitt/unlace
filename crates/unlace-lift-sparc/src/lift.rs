@@ -5,7 +5,7 @@ use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterDef, RegisterFile, Varnode,
 };
 
-use crate::decode::{self, Src2, SparcInsn};
+use crate::decode::{self, SparcInsn, Src2};
 
 // ---------------------------------------------------------------------------
 // Register file layout
@@ -16,10 +16,8 @@ const REG_SIZE: u8 = 4;
 
 /// Register names: g0-g7, o0-o7, l0-l7, i0-i7 (32 registers).
 const SPARC_REG_NAMES: [&str; 32] = [
-    "g0", "g1", "g2", "g3", "g4", "g5", "g6", "g7",
-    "o0", "o1", "o2", "o3", "o4", "o5", "o6", "o7",
-    "l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7",
-    "i0", "i1", "i2", "i3", "i4", "i5", "i6", "i7",
+    "g0", "g1", "g2", "g3", "g4", "g5", "g6", "g7", "o0", "o1", "o2", "o3", "o4", "o5", "o6", "o7",
+    "l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7", "i0", "i1", "i2", "i3", "i4", "i5", "i6", "i7",
 ];
 
 /// PC offset in the register space (after the 32 GPRs).
@@ -164,12 +162,7 @@ fn lift_one(insn: &SparcInsn, addr: u64) -> Result<Vec<IrInsn>, LiftError> {
                 addr,
             ));
             if let Some(dst) = write_reg(*rd) {
-                ops.push(IrInsn::with_output(
-                    IrOp::Load,
-                    dst,
-                    smallvec![ea],
-                    addr,
-                ));
+                ops.push(IrInsn::with_output(IrOp::Load, dst, smallvec![ea], addr));
             }
         }
 
@@ -239,11 +232,7 @@ fn lift_one(insn: &SparcInsn, addr: u64) -> Result<Vec<IrInsn>, LiftError> {
 
         // -- Return --
         SparcInsn::Retl | SparcInsn::Ret => {
-            ops.push(IrInsn::without_output(
-                IrOp::Return,
-                smallvec![],
-                addr,
-            ));
+            ops.push(IrInsn::without_output(IrOp::Return, smallvec![], addr));
         }
 
         // -- SETHI --

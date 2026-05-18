@@ -161,18 +161,23 @@ impl Z80Lifter {
         }
     }
 
-    /// Lift an ALU operation (ADD/SUB/AND/OR/XOR A, r).
+    /// Lift an ALU operation (ADD/ADC/SUB/SBC/AND/XOR/OR/CP A, r).
     /// Opcode format: 10ooo_rrr where ooo selects the operation and rrr the source reg.
     fn lift_alu_a_r(&self, opcode: u8, addr: u64) -> Result<Vec<IrInsn>, LiftError> {
         let op_sel = (opcode >> 3) & 0x07;
         let src_enc = opcode & 0x07;
 
-        let ir_op = match op_sel {
-            0 => IrOp::IntAdd, // ADD
-            2 => IrOp::IntSub, // SUB
-            4 => IrOp::IntAnd, // AND
-            6 => IrOp::IntOr,  // OR
-            5 => IrOp::IntXor, // XOR
+        // (ir_op, writes_a) — `CP` is flags-only, modelled as IntSub
+        // whose result goes to a temp.
+        let (ir_op, write_a) = match op_sel {
+            0 => (IrOp::IntAdd, true), // ADD
+            1 => (IrOp::IntAdd, true), // ADC
+            2 => (IrOp::IntSub, true), // SUB
+            3 => (IrOp::IntSub, true), // SBC
+            4 => (IrOp::IntAnd, true), // AND
+            5 => (IrOp::IntXor, true), // XOR
+            6 => (IrOp::IntOr, true),  // OR
+            7 => (IrOp::IntSub, false), // CP
             _ => return Err(LiftError::Unsupported),
         };
 
@@ -182,10 +187,42 @@ impl Z80Lifter {
         };
 
         let a = reg(REG_A, 1);
+        let dst = if write_a { a } else { tmp(7, 1) };
         Ok(vec![IrInsn::with_output(
             ir_op,
-            a,
+            dst,
             SmallVec::from_slice(&[a, src]),
+            addr,
+        )])
+    }
+
+    /// Lift `ALU A, n` for the immediate-byte family
+    /// (`ADD A,n` / `ADC A,n` / `SUB n` / `SBC A,n` / `AND n` /
+    /// `XOR n` / `OR n` / `CP n`).
+    ///
+    /// Opcode format: `11ooo110` where `ooo` selects the operation.
+    /// `CP n` writes the result to a temp (flags-only) rather than to
+    /// `A`, mirroring `CP r` above.
+    fn lift_alu_a_imm(&self, opcode: u8, imm: u8, addr: u64) -> Result<Vec<IrInsn>, LiftError> {
+        let op_sel = (opcode >> 3) & 0x07;
+        let a = reg(REG_A, 1);
+        let k = const_vn(imm as u64, 1);
+        let (ir_op, write_a) = match op_sel {
+            0 => (IrOp::IntAdd, true),  // ADD A, n
+            1 => (IrOp::IntAdd, true),  // ADC A, n — carry input modelled in flags pass
+            2 => (IrOp::IntSub, true),  // SUB n
+            3 => (IrOp::IntSub, true),  // SBC A, n
+            4 => (IrOp::IntAnd, true),  // AND n
+            5 => (IrOp::IntXor, true),  // XOR n
+            6 => (IrOp::IntOr, true),   // OR n
+            7 => (IrOp::IntSub, false), // CP n — flags only
+            _ => return Err(LiftError::Unsupported),
+        };
+        let dst = if write_a { a } else { tmp(6, 1) };
+        Ok(vec![IrInsn::with_output(
+            ir_op,
+            dst,
+            SmallVec::from_slice(&[a, k]),
             addr,
         )])
     }
@@ -538,6 +575,147 @@ impl Lifter for Z80Lifter {
             });
         }
 
+        // ----- §3 expansion: bring Z80 to ≥ 30 distinct mnemonics -----
+
+        // ALU A, n: 11ooo110 + imm — same op_sel mapping as ALU A,r.
+        // ADD A,n=0xC6, ADC A,n=0xCE, SUB n=0xD6, SBC A,n=0xDE,
+        // AND n=0xE6, XOR n=0xEE, OR n=0xF6, CP n=0xFE.
+        if opcode & 0xC7 == 0xC6 {
+            if bytes.len() < 2 {
+                return Err(LiftError::ShortBuffer);
+            }
+            let imm = bytes[1];
+            let ops = self.lift_alu_a_imm(opcode, imm, addr)?;
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 2,
+            });
+        }
+
+        // JR cc, e: 001cc000 (cc ∈ {NZ, Z, NC, C}) — opcodes 0x20,
+        // 0x28, 0x30, 0x38. Uses the same condition-extraction shape as
+        // JP cc, nn.
+        if matches!(opcode, 0x20 | 0x28 | 0x30 | 0x38) {
+            if bytes.len() < 2 {
+                return Err(LiftError::ShortBuffer);
+            }
+            // Convert 0x20/0x28/0x30/0x38 → cc ∈ 0..=3 (NZ/Z/NC/C).
+            let cc = (opcode - 0x20) >> 3;
+            let target = (addr as i64 + 2 + (bytes[1] as i8) as i64) as u64;
+            let ops = self.lift_jp_cc_nn(cc, target as u16, addr)?;
+            return Ok(LiftedInsn {
+                ir_ops: ops,
+                len: 2,
+            });
+        }
+
+        // RET cc: 11ccc000 — 0xC0/0xC8/0xD0/0xD8/0xE0/0xE8/0xF0/0xF8.
+        if opcode & 0xC7 == 0xC0 {
+            let _cc = (opcode >> 3) & 0x07;
+            // Model as a plain Return; the structurer recovers
+            // conditional-return shape from the surrounding CFG.
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::without_output(
+                    IrOp::Return,
+                    SmallVec::from_slice(&[reg(REG_SP, 2)]),
+                    addr,
+                )],
+                len: 1,
+            });
+        }
+
+        // CALL cc, nn: 11ccc100 — 0xC4/0xCC/0xD4/0xDC/0xE4/0xEC/0xF4/0xFC.
+        if opcode & 0xC7 == 0xC4 {
+            if bytes.len() < 3 {
+                return Err(LiftError::ShortBuffer);
+            }
+            let target = u16::from_le_bytes([bytes[1], bytes[2]]);
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::without_output(
+                    IrOp::Call,
+                    SmallVec::from_slice(&[ram_target(target as u64)]),
+                    addr,
+                )],
+                len: 3,
+            });
+        }
+
+        // HALT: 0x76 (must be checked *after* LD r,r' since 01110110
+        // would otherwise match LD (HL),(HL)).
+        if opcode == 0x76 {
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::without_output(
+                    IrOp::Callother,
+                    SmallVec::new(),
+                    addr,
+                )],
+                len: 1,
+            });
+        }
+
+        // EI: 0xFB / DI: 0xF3 — interrupt enable / disable. Side-effect
+        // only; lift as Callother so dataflow sees them.
+        if opcode == 0xFB || opcode == 0xF3 {
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::without_output(
+                    IrOp::Callother,
+                    SmallVec::new(),
+                    addr,
+                )],
+                len: 1,
+            });
+        }
+
+        // EX DE, HL: 0xEB — swap DE↔HL via temps.
+        if opcode == 0xEB {
+            let t_d = tmp(4, 1);
+            let t_e = tmp(5, 1);
+            return Ok(LiftedInsn {
+                ir_ops: vec![
+                    IrInsn::with_output(IrOp::Copy, t_d, SmallVec::from_slice(&[reg(REG_D, 1)]), addr),
+                    IrInsn::with_output(IrOp::Copy, t_e, SmallVec::from_slice(&[reg(REG_E, 1)]), addr),
+                    IrInsn::with_output(IrOp::Copy, reg(REG_D, 1), SmallVec::from_slice(&[reg(REG_H, 1)]), addr),
+                    IrInsn::with_output(IrOp::Copy, reg(REG_E, 1), SmallVec::from_slice(&[reg(REG_L, 1)]), addr),
+                    IrInsn::with_output(IrOp::Copy, reg(REG_H, 1), SmallVec::from_slice(&[t_d]), addr),
+                    IrInsn::with_output(IrOp::Copy, reg(REG_L, 1), SmallVec::from_slice(&[t_e]), addr),
+                ],
+                len: 1,
+            });
+        }
+
+        // LD A, (nn): 0x3A + nn nn
+        if opcode == 0x3A {
+            if bytes.len() < 3 {
+                return Err(LiftError::ShortBuffer);
+            }
+            let target = u16::from_le_bytes([bytes[1], bytes[2]]) as u64;
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::with_output(
+                    IrOp::Load,
+                    reg(REG_A, 1),
+                    SmallVec::from_slice(&[const_vn(target, 2)]),
+                    addr,
+                )],
+                len: 3,
+            });
+        }
+
+        // LD (nn), A: 0x32 + nn nn
+        if opcode == 0x32 {
+            if bytes.len() < 3 {
+                return Err(LiftError::ShortBuffer);
+            }
+            let target = u16::from_le_bytes([bytes[1], bytes[2]]) as u64;
+            return Ok(LiftedInsn {
+                ir_ops: vec![IrInsn::without_output(
+                    IrOp::Store,
+                    SmallVec::from_slice(&[const_vn(target, 2), reg(REG_A, 1)]),
+                    addr,
+                )],
+                len: 3,
+            });
+        }
+
         Err(LiftError::Unsupported)
     }
 
@@ -705,5 +883,109 @@ mod tests {
         assert_eq!(result.ir_ops[1].op, IrOp::Load);
         assert_eq!(result.ir_ops[1].output, Some(reg(REG_D, 1)));
         assert_eq!(result.ir_ops[2].op, IrOp::IntAdd);
+    }
+
+    // ----- §3 expansion tests --------------------------------------------
+
+    /// ADD A, 0x42 → 0xC6 0x42 — lifts to IntAdd(A, A, 0x42).
+    #[test]
+    fn test_add_a_imm() {
+        let lifter = Z80Lifter::new();
+        let r = lifter.lift_insn(&[0xC6, 0x42], 0x100).unwrap();
+        assert_eq!(r.len, 2);
+        assert_eq!(r.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(r.ir_ops[0].output, Some(reg(REG_A, 1)));
+        assert_eq!(r.ir_ops[0].inputs[1], const_vn(0x42, 1));
+    }
+
+    /// CP 0x10 → 0xFE 0x10 — IntSub with output going to a temp (not A).
+    #[test]
+    fn test_cp_imm() {
+        let lifter = Z80Lifter::new();
+        let r = lifter.lift_insn(&[0xFE, 0x10], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::IntSub);
+        assert_ne!(r.ir_ops[0].output, Some(reg(REG_A, 1)));
+        assert_eq!(r.ir_ops[0].inputs[1], const_vn(0x10, 1));
+    }
+
+    /// CP B → 0xB8 — IntSub(temp, A, B).
+    #[test]
+    fn test_cp_reg() {
+        let lifter = Z80Lifter::new();
+        let r = lifter.lift_insn(&[0xB8], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::IntSub);
+        assert_ne!(r.ir_ops[0].output, Some(reg(REG_A, 1)));
+        assert_eq!(r.ir_ops[0].inputs[1], reg(REG_B, 1));
+    }
+
+    /// JR NZ, +4 → 0x20 0x04. Target = addr + 2 + 4 = addr + 6.
+    #[test]
+    fn test_jr_cc_e() {
+        let lifter = Z80Lifter::new();
+        let r = lifter.lift_insn(&[0x20, 0x04], 0x1000).unwrap();
+        assert_eq!(r.len, 2);
+        // Three ops: IntRight, IntAnd, Cbranch (and one BoolNegate for "NZ").
+        let cbranch = r.ir_ops.last().unwrap();
+        assert_eq!(cbranch.op, IrOp::Cbranch);
+        assert_eq!(cbranch.inputs[0], ram_target(0x1006));
+    }
+
+    /// RET cc (RET Z, 0xC8) → plain Return.
+    #[test]
+    fn test_ret_cc() {
+        let lifter = Z80Lifter::new();
+        let r = lifter.lift_insn(&[0xC8], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Return);
+    }
+
+    /// CALL Z, 0x2000 → 0xCC 0x00 0x20.
+    #[test]
+    fn test_call_cc_nn() {
+        let lifter = Z80Lifter::new();
+        let r = lifter.lift_insn(&[0xCC, 0x00, 0x20], 0x100).unwrap();
+        assert_eq!(r.len, 3);
+        assert_eq!(r.ir_ops[0].op, IrOp::Call);
+        assert_eq!(r.ir_ops[0].inputs[0], ram_target(0x2000));
+    }
+
+    /// HALT (0x76), DI (0xF3), EI (0xFB) lift to Callother no-output.
+    #[test]
+    fn test_halt_ei_di() {
+        let lifter = Z80Lifter::new();
+        for byte in [0x76, 0xF3, 0xFB] {
+            let r = lifter.lift_insn(&[byte], 0x100).unwrap();
+            assert_eq!(r.ir_ops.len(), 1);
+            assert_eq!(r.ir_ops[0].op, IrOp::Callother);
+        }
+    }
+
+    /// EX DE, HL (0xEB) → 6 Copy ops shuffling via temps.
+    #[test]
+    fn test_ex_de_hl() {
+        let lifter = Z80Lifter::new();
+        let r = lifter.lift_insn(&[0xEB], 0x100).unwrap();
+        assert_eq!(r.len, 1);
+        assert_eq!(r.ir_ops.len(), 6);
+        assert!(r.ir_ops.iter().all(|i| i.op == IrOp::Copy));
+    }
+
+    /// LD A, (0x1234) → 0x3A 0x34 0x12 → Load(A, 0x1234).
+    #[test]
+    fn test_ld_a_indirect_nn() {
+        let lifter = Z80Lifter::new();
+        let r = lifter.lift_insn(&[0x3A, 0x34, 0x12], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Load);
+        assert_eq!(r.ir_ops[0].output, Some(reg(REG_A, 1)));
+        assert_eq!(r.ir_ops[0].inputs[0], const_vn(0x1234, 2));
+    }
+
+    /// LD (0x1234), A → 0x32 0x34 0x12 → Store(A, 0x1234).
+    #[test]
+    fn test_ld_indirect_nn_a() {
+        let lifter = Z80Lifter::new();
+        let r = lifter.lift_insn(&[0x32, 0x34, 0x12], 0x100).unwrap();
+        assert_eq!(r.ir_ops[0].op, IrOp::Store);
+        assert_eq!(r.ir_ops[0].inputs[0], const_vn(0x1234, 2));
+        assert_eq!(r.ir_ops[0].inputs[1], reg(REG_A, 1));
     }
 }

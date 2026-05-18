@@ -17,13 +17,13 @@
 //! - Branch targets are program-counter indices encoded as `Const` varnodes;
 //!   `addr` on each `IrInsn` is the pc it was lifted from.
 
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
 use crate::chunk::{Chunk, ParseError, Prototype};
 use crate::decode::DecodedInsn;
 use crate::opcodes::LuaOpcode;
-use crate::stdlib::{detect_stdlib_calls, StdlibAnnotation};
+use crate::stdlib::{StdlibAnnotation, detect_stdlib_calls};
 
 /// A single Lua function prototype lowered to IR.
 #[derive(Debug, Clone)]
@@ -131,7 +131,11 @@ impl LiftCtx {
             || self.lift_control_flow(pc, insn)
             || self.lift_misc(pc, insn);
         if !handled {
-            self.push(IrInsn::without_output(IrOp::Unimplemented, SmallVec::new(), pc));
+            self.push(IrInsn::without_output(
+                IrOp::Unimplemented,
+                SmallVec::new(),
+                pc,
+            ));
         }
     }
 
@@ -140,7 +144,12 @@ impl LiftCtx {
         let a = reg(insn.a);
         match insn.opcode {
             LuaOpcode::Move => {
-                self.push(IrInsn::with_output(IrOp::Copy, a, smallvec![reg(insn.b)], pc));
+                self.push(IrInsn::with_output(
+                    IrOp::Copy,
+                    a,
+                    smallvec![reg(insn.b)],
+                    pc,
+                ));
             }
             LuaOpcode::LoadK => {
                 let src = const_from_pool(proto, insn.bx as usize);
@@ -153,21 +162,46 @@ impl LiftCtx {
             }
             LuaOpcode::LoadI => {
                 let v = insn.sbx as i64 as u64;
-                self.push(IrInsn::with_output(IrOp::Copy, a, smallvec![Varnode::constant(v, 8)], pc));
+                self.push(IrInsn::with_output(
+                    IrOp::Copy,
+                    a,
+                    smallvec![Varnode::constant(v, 8)],
+                    pc,
+                ));
             }
             LuaOpcode::LoadF => {
                 let v = (insn.sbx as f64).to_bits();
-                self.push(IrInsn::with_output(IrOp::Copy, a, smallvec![Varnode::constant(v, 8)], pc));
+                self.push(IrInsn::with_output(
+                    IrOp::Copy,
+                    a,
+                    smallvec![Varnode::constant(v, 8)],
+                    pc,
+                ));
             }
             LuaOpcode::LoadBool => {
                 let v = u64::from(insn.b != 0);
-                self.push(IrInsn::with_output(IrOp::Copy, a, smallvec![Varnode::constant(v, 8)], pc));
+                self.push(IrInsn::with_output(
+                    IrOp::Copy,
+                    a,
+                    smallvec![Varnode::constant(v, 8)],
+                    pc,
+                ));
             }
             LuaOpcode::LoadTrue => {
-                self.push(IrInsn::with_output(IrOp::Copy, a, smallvec![Varnode::constant(1, 8)], pc));
+                self.push(IrInsn::with_output(
+                    IrOp::Copy,
+                    a,
+                    smallvec![Varnode::constant(1, 8)],
+                    pc,
+                ));
             }
             LuaOpcode::LoadFalse | LuaOpcode::LFalseSkip => {
-                self.push(IrInsn::with_output(IrOp::Copy, a, smallvec![Varnode::constant(0, 8)], pc));
+                self.push(IrInsn::with_output(
+                    IrOp::Copy,
+                    a,
+                    smallvec![Varnode::constant(0, 8)],
+                    pc,
+                ));
             }
             LuaOpcode::LoadNil => {
                 // LOADNIL R(A)..R(A+B) := nil
@@ -190,7 +224,12 @@ impl LiftCtx {
     fn lift_arith(&mut self, pc: u64, insn: &DecodedInsn, proto: &Prototype) -> bool {
         let a = reg(insn.a);
         if let Some(op) = rr_binop(insn.opcode) {
-            self.push(IrInsn::with_output(op, a, smallvec![reg(insn.b), reg(insn.c)], pc));
+            self.push(IrInsn::with_output(
+                op,
+                a,
+                smallvec![reg(insn.b), reg(insn.c)],
+                pc,
+            ));
             return true;
         }
         match insn.opcode {
@@ -229,16 +268,36 @@ impl LiftCtx {
                 self.push(IrInsn::with_output(op, a, smallvec![reg(insn.b), k], pc));
             }
             LuaOpcode::Unm => {
-                self.push(IrInsn::with_output(IrOp::IntNegate, a, smallvec![reg(insn.b)], pc));
+                self.push(IrInsn::with_output(
+                    IrOp::IntNegate,
+                    a,
+                    smallvec![reg(insn.b)],
+                    pc,
+                ));
             }
             LuaOpcode::BNot => {
-                self.push(IrInsn::with_output(IrOp::Int2comp, a, smallvec![reg(insn.b)], pc));
+                self.push(IrInsn::with_output(
+                    IrOp::Int2comp,
+                    a,
+                    smallvec![reg(insn.b)],
+                    pc,
+                ));
             }
             LuaOpcode::Not => {
-                self.push(IrInsn::with_output(IrOp::BoolNegate, a, smallvec![reg(insn.b)], pc));
+                self.push(IrInsn::with_output(
+                    IrOp::BoolNegate,
+                    a,
+                    smallvec![reg(insn.b)],
+                    pc,
+                ));
             }
             LuaOpcode::Len => {
-                self.push(IrInsn::with_output(IrOp::Callother, a, smallvec![reg(insn.b)], pc));
+                self.push(IrInsn::with_output(
+                    IrOp::Callother,
+                    a,
+                    smallvec![reg(insn.b)],
+                    pc,
+                ));
             }
             LuaOpcode::MmBin | LuaOpcode::MmBinI | LuaOpcode::MmBinK => {
                 // Metamethod binop resolves into R(A) — model as opaque.
@@ -358,17 +417,33 @@ impl LiftCtx {
             }
             LuaOpcode::TForCall => {
                 // Iterator call: R(A+4..) := R(A)(R(A+1), R(A+2)).
-                self.push(IrInsn::without_output(IrOp::Callind, smallvec![reg(insn.a)], pc));
+                self.push(IrInsn::without_output(
+                    IrOp::Callind,
+                    smallvec![reg(insn.a)],
+                    pc,
+                ));
             }
             LuaOpcode::Call => {
-                self.push(IrInsn::without_output(IrOp::Callind, smallvec![reg(insn.a)], pc));
+                self.push(IrInsn::without_output(
+                    IrOp::Callind,
+                    smallvec![reg(insn.a)],
+                    pc,
+                ));
             }
             LuaOpcode::TailCall => {
-                self.push(IrInsn::without_output(IrOp::Callind, smallvec![reg(insn.a)], pc));
+                self.push(IrInsn::without_output(
+                    IrOp::Callind,
+                    smallvec![reg(insn.a)],
+                    pc,
+                ));
                 self.push(IrInsn::without_output(IrOp::Return, SmallVec::new(), pc));
             }
             LuaOpcode::Return | LuaOpcode::Return1 => {
-                self.push(IrInsn::without_output(IrOp::Return, smallvec![reg(insn.a)], pc));
+                self.push(IrInsn::without_output(
+                    IrOp::Return,
+                    smallvec![reg(insn.a)],
+                    pc,
+                ));
             }
             LuaOpcode::Return0 => {
                 self.push(IrInsn::without_output(IrOp::Return, SmallVec::new(), pc));
@@ -382,12 +457,14 @@ impl LiftCtx {
     fn lift_misc(&mut self, pc: u64, insn: &DecodedInsn) -> bool {
         match insn.opcode {
             LuaOpcode::Vararg => {
-                self.push(IrInsn::with_output(IrOp::Callother, reg(insn.a), SmallVec::new(), pc));
+                self.push(IrInsn::with_output(
+                    IrOp::Callother,
+                    reg(insn.a),
+                    SmallVec::new(),
+                    pc,
+                ));
             }
-            LuaOpcode::VarargPrep
-            | LuaOpcode::Close
-            | LuaOpcode::Tbc
-            | LuaOpcode::ExtraArg => {
+            LuaOpcode::VarargPrep | LuaOpcode::Close | LuaOpcode::Tbc | LuaOpcode::ExtraArg => {
                 // Keep a placeholder so pc indices stay aligned with source.
                 self.push(IrInsn::without_output(IrOp::Callother, SmallVec::new(), pc));
             }
@@ -442,9 +519,7 @@ fn const_from_pool(proto: &Prototype, idx: usize) -> Varnode {
         Some(Constant::Integer(v)) => Varnode::constant(*v as u64, 8),
         Some(Constant::Float(f)) => Varnode::constant(f.to_bits(), 8),
         Some(Constant::Bool(b)) => Varnode::constant(u64::from(*b), 8),
-        Some(Constant::String(_)) | Some(Constant::Nil) | None => {
-            Varnode::constant(idx as u64, 8)
-        }
+        Some(Constant::String(_)) | Some(Constant::Nil) | None => Varnode::constant(idx as u64, 8),
     }
 }
 

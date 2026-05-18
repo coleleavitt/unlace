@@ -518,11 +518,7 @@ impl M6502Lifter {
     }
     fn lift_flag(&self, addr: u64, flag: u8, set: bool) -> LiftedInsn {
         let op = if set { IrOp::IntOr } else { IrOp::IntAnd };
-        let mask = if set {
-            flag as u64
-        } else {
-            (!flag) as u8 as u64
-        };
+        let mask = if set { flag as u64 } else { (!flag) as u64 };
         lifted(
             vec![IrInsn::with_output(
                 op,
@@ -562,7 +558,7 @@ impl Default for M6502Lifter {
 }
 impl Lifter for M6502Lifter {
     fn arch(&self) -> ArchId {
-        ArchId::M6502
+        ArchId::Mos6502
     }
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
         self.lift_inner(bytes, addr)
@@ -581,7 +577,7 @@ mod tests {
     #[test]
     fn register_file_contains_65816_state() {
         let lifter = M6502Lifter::for_variant(CpuVariant::Wdc65816);
-        assert_eq!(lifter.arch(), ArchId::M6502);
+        assert_eq!(lifter.arch(), ArchId::Mos6502);
         assert_eq!(lifter.variant(), CpuVariant::Wdc65816);
         assert_eq!(lifter.register_file().registers.len(), 9);
     }

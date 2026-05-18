@@ -95,11 +95,11 @@ pub const CALLOTHER_RVV_MASK_OP: u64 = 0x5256_5630;
 fn cs_reg_to_varnode(reg: RegId) -> Option<Varnode> {
     let id = reg.0 as u32;
     // capstone riscv_reg: RISCV_REG_X0 = 1, RISCV_REG_X1 = 2, …, RISCV_REG_X31 = 32
-    if id == RiscVReg::RISCV_REG_X0 as u32 {
+    if id == RiscVReg::RISCV_REG_X0 {
         return None; // x0 is hardwired zero
     }
-    if id >= RiscVReg::RISCV_REG_X0 as u32 && id <= RiscVReg::RISCV_REG_X31 as u32 {
-        let idx = id - RiscVReg::RISCV_REG_X0 as u32;
+    if (RiscVReg::RISCV_REG_X0..=RiscVReg::RISCV_REG_X31).contains(&id) {
+        let idx = id - RiscVReg::RISCV_REG_X0;
         return Some(Varnode::reg((idx as u64) * 8, 8));
     }
     None
@@ -1627,8 +1627,8 @@ fn dispatch_insn(
                         addr,
                     ));
 
-                    let is_ret = rd.0 as u32 == RiscVReg::RISCV_REG_X0 as u32
-                        && rs1.0 as u32 == RiscVReg::RISCV_REG_X1 as u32
+                    let is_ret = rd.0 as u32 == RiscVReg::RISCV_REG_X0
+                        && rs1.0 as u32 == RiscVReg::RISCV_REG_X1
                         && *imm == 0;
 
                     if is_ret {
@@ -1638,7 +1638,7 @@ fn dispatch_insn(
                             addr,
                         ));
                     } else {
-                        let is_call = rd.0 as u32 != RiscVReg::RISCV_REG_X0 as u32;
+                        let is_call = rd.0 as u32 != RiscVReg::RISCV_REG_X0;
                         if is_call {
                             ctx.emit(IrInsn::without_output(
                                 IrOp::Callind,
@@ -1683,8 +1683,8 @@ fn dispatch_insn(
                         addr,
                     ));
 
-                    let is_ret = rd.0 as u32 == RiscVReg::RISCV_REG_X0 as u32
-                        && mem.base().0 as u32 == RiscVReg::RISCV_REG_X1 as u32
+                    let is_ret = rd.0 as u32 == RiscVReg::RISCV_REG_X0
+                        && mem.base().0 as u32 == RiscVReg::RISCV_REG_X1
                         && mem.disp() == 0;
 
                     if is_ret {
@@ -1694,7 +1694,7 @@ fn dispatch_insn(
                             addr,
                         ));
                     } else {
-                        let is_call = rd.0 as u32 != RiscVReg::RISCV_REG_X0 as u32;
+                        let is_call = rd.0 as u32 != RiscVReg::RISCV_REG_X0;
                         if is_call {
                             ctx.emit(IrInsn::without_output(
                                 IrOp::Callind,
@@ -2034,7 +2034,6 @@ fn dispatch_insn(
 // Tests
 // ===========================================================================
 
-
 /// RISC-V ISA extension flags detected from ELF attributes or instruction patterns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RiscvExtensions {
@@ -2072,20 +2071,46 @@ impl RiscvExtensions {
         let lower = s.to_ascii_lowercase();
         let mut ext = Self::default();
         // Base extensions in the ISA string
-        if lower.contains('m') { ext.m = true; }
-        if lower.contains('a') { ext.a = true; }
-        if lower.contains('f') { ext.f = true; }
-        if lower.contains('d') { ext.d = true; }
-        if lower.contains('c') { ext.c = true; }
-        if lower.chars().enumerate().any(|(i, c)| c == 'v' && i > 3) { ext.v = true; }
+        if lower.contains('m') {
+            ext.m = true;
+        }
+        if lower.contains('a') {
+            ext.a = true;
+        }
+        if lower.contains('f') {
+            ext.f = true;
+        }
+        if lower.contains('d') {
+            ext.d = true;
+        }
+        if lower.contains('c') {
+            ext.c = true;
+        }
+        if lower.chars().enumerate().any(|(i, c)| c == 'v' && i > 3) {
+            ext.v = true;
+        }
         // Named extensions after underscore
-        if lower.contains("zba") { ext.zba = true; }
-        if lower.contains("zbb") { ext.zbb = true; }
-        if lower.contains("zbc") { ext.zbc = true; }
-        if lower.contains("zbs") { ext.zbs = true; }
-        if lower.contains("zbk") { ext.zbk = true; }
-        if lower.contains("zk") { ext.zk = true; }
-        if lower.contains("_h") || lower.ends_with('h') { ext.h = true; }
+        if lower.contains("zba") {
+            ext.zba = true;
+        }
+        if lower.contains("zbb") {
+            ext.zbb = true;
+        }
+        if lower.contains("zbc") {
+            ext.zbc = true;
+        }
+        if lower.contains("zbs") {
+            ext.zbs = true;
+        }
+        if lower.contains("zbk") {
+            ext.zbk = true;
+        }
+        if lower.contains("zk") {
+            ext.zk = true;
+        }
+        if lower.contains("_h") || lower.ends_with('h') {
+            ext.h = true;
+        }
         ext
     }
 }

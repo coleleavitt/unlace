@@ -2430,10 +2430,8 @@ pub fn aarch64_neon_op_info(ctx: &mut LiftCtx, detail: &InsnDetail) -> NeonOpInf
                     info.addr = compute_mem_address(ctx, &mem);
                 }
             }
-            Arm64OperandType::Imm(i) => {
-                if info.imm.is_none() {
-                    info.imm = Some(i);
-                }
+            Arm64OperandType::Imm(i) if info.imm.is_none() => {
+                info.imm = Some(i);
             }
             _ => {}
         }
@@ -2713,7 +2711,7 @@ pub fn decode_thumb1_push_pop(insn: u16) -> Option<LdmStmDecoded> {
 pub fn decode_thumb2_ldm_stm(hw1: u16, hw2: u16) -> Option<LdmStmDecoded> {
     // Top 7 bits of hw1 must be 1110_100 (the T32 load/store-multiple
     // class).
-    if (hw1 >> 9) & 0x7F != 0b1110_100 {
+    if (hw1 >> 9) & 0x7F != 0b111_0100 {
         return None;
     }
     let p = (hw1 >> 8) & 1 == 1;

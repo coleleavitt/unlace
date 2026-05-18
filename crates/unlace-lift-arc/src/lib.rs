@@ -159,13 +159,13 @@ fn decode_major04(w: u32, addr: u64) -> LiftedInsn {
         0b01 => {
             // Register-immediate u6: a = dest, imm = bits[5:0]
             let a = extract_a_reg(w);
-            let u6 = (w & 0x3F) as u32;
+            let u6 = w & 0x3F;
             (a, Operand::Imm(u6))
         }
         0b10 => {
             // Register-immediate s12: b = dest/src1, s12 in bits[5:0]|[11:6]
-            let s12_lo = (w & 0x3F) as u32;
-            let s12_hi = ((w >> 6) & 0x3F) as u32;
+            let s12_lo = w & 0x3F;
+            let s12_hi = (w >> 6) & 0x3F;
             let s12 = sign_extend((s12_hi << 6) | s12_lo, 12) as u32;
             (b, Operand::Imm(s12))
         }
@@ -228,8 +228,8 @@ fn decode_major00(w: u32, addr: u64) -> LiftedInsn {
     let d = ((w >> 5) & 1) != 0; // delay slot bit
     let _ = d; // not modeled in MVP
     let s_bit = (w >> 31) & 1;
-    let s9 = ((w >> 17) & 0x1FF) as u32;
-    let s10 = ((w >> 6) & 0x3FF) as u32;
+    let s9 = (w >> 17) & 0x1FF;
+    let s10 = (w >> 6) & 0x3FF;
     let offset_raw = (s_bit << 20) | (s9 << 11) | (s10 << 1);
     let offset = sign_extend(offset_raw, 21);
     let target = (addr as i64 + offset as i64) as u64;
@@ -249,8 +249,8 @@ fn decode_major01(w: u32, addr: u64) -> LiftedInsn {
     // BL: save return addr to BLINK (r31), then branch
     // Offset: 25-bit signed
     let s_bit = (w >> 31) & 1;
-    let s12_hi = ((w >> 6) & 0x3FF) as u32;
-    let s12_lo = ((w >> 17) & 0x1FF) as u32;
+    let s12_hi = (w >> 6) & 0x3FF;
+    let s12_lo = (w >> 17) & 0x1FF;
     let offset_raw = (s_bit << 24) | (s12_lo << 15) | (s12_hi << 2);
     // Sign-extend from 25 bits
     let offset = sign_extend(offset_raw, 25);
@@ -278,8 +278,8 @@ fn decode_major02(w: u32, addr: u64) -> LiftedInsn {
     let b = extract_b_reg(w);
     let a = extract_a_reg(w);
     // Signed 9-bit offset in bits [15:9] | bits [26:24] (approx)
-    let s9_lo = ((w >> 16) & 0xFF) as u32;
-    let s9_hi = ((w >> 15) & 0x01) as u32;
+    let s9_lo = (w >> 16) & 0xFF;
+    let s9_hi = (w >> 15) & 0x01;
     let s9 = sign_extend((s9_hi << 8) | s9_lo, 9) as u32;
 
     let base = reg(b);
@@ -303,8 +303,8 @@ fn decode_major03(w: u32, addr: u64) -> LiftedInsn {
     // ST src, [base, offset]
     let b = extract_b_reg(w);
     let c = extract_c_reg(w);
-    let s9_lo = ((w >> 16) & 0xFF) as u32;
-    let s9_hi = ((w >> 15) & 0x01) as u32;
+    let s9_lo = (w >> 16) & 0xFF;
+    let s9_hi = (w >> 15) & 0x01;
     let s9 = sign_extend((s9_hi << 8) | s9_lo, 9) as u32;
 
     let base = reg(b);
@@ -382,8 +382,8 @@ fn decode_branch_on_compare(w: u32, addr: u64) -> LiftedInsn {
     // Simplified: extract offset, emit as conditional branch
     let b = extract_b_reg(w);
     let _n = (w >> 5) & 1; // nullify bit
-    let s9_lo = ((w >> 17) & 0x7F) as u32;
-    let s9_hi = ((w >> 15) & 0x01) as u32;
+    let s9_lo = (w >> 17) & 0x7F;
+    let s9_hi = (w >> 15) & 0x01;
     let s9 = sign_extend((s9_hi << 8) | s9_lo, 9);
     let target = (addr as i64 + (s9 as i64) * 2) as u64;
 

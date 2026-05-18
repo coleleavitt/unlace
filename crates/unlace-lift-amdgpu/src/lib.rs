@@ -241,6 +241,7 @@ impl AmdGpuLifter {
             23 | 24 => Some(IrOp::IntLeft),
             25 | 26 => Some(IrOp::IntRight),
             27 | 28 => Some(IrOp::IntSright),
+            36 => Some(IrOp::IntMult), // S_MUL_I32
             _ => None,
         };
         let Some(op) = op else {
@@ -283,7 +284,7 @@ impl AmdGpuLifter {
 
     fn lift_sopp(&self, word: u32, addr: u64) -> LiftedInsn {
         let op = ((word >> 16) & 0x7f) as u8;
-        let simm = (word & 0xffff) as u32;
+        let simm = word & 0xffff;
         match op {
             0x00 => LiftedInsn {
                 ir_ops: Vec::new(),
@@ -318,6 +319,19 @@ impl AmdGpuLifter {
                 let dest = addr.wrapping_add(4).wrapping_add(disp as u64);
                 LiftedInsn {
                     ir_ops: vec![no_output(IrOp::Cbranch, &[target(dest), scc()], addr)],
+                    len: 4,
+                }
+            }
+            0x08 => {
+                // S_CBRANCH_EXECZ — branch if EXEC == 0
+                let disp = sign_extend_u32(simm, 16) * 4;
+                let dest = addr.wrapping_add(4).wrapping_add(disp as u64);
+                let cond = tmp(1, 1);
+                LiftedInsn {
+                    ir_ops: vec![
+                        with_output(IrOp::IntEqual, cond, &[exec(), c(0, 8)], addr),
+                        no_output(IrOp::Cbranch, &[target(dest), cond], addr),
+                    ],
                     len: 4,
                 }
             }
@@ -465,18 +479,123 @@ impl AmdGpuLifter {
         }
     }
 
-    fn lift_extended_family(&self, word: u32, addr: u64) -> Option<LiftedInsn> {
+    fn lift_extended_family(&self, word: u32, bytes: &[u8], addr: u64) -> Option<LiftedInsn> {
         let hi = (word >> 24) as u8;
         let tag = match hi {
             0xd8 | 0xd9 => callother::DS,
             0xdc | 0xdd => callother::FLAT,
             0xe0..=0xe7 => callother::MUBUF,
-            0xc0..=0xc7 => callother::SMEM,
+            0xc0..=0xc7 => return Some(self.lift_smem(word, bytes, addr)),
             0xf0..=0xf7 => callother::IMAGE,
             0xf8..=0xfb => callother::EXPORT,
             _ => return None,
         };
         Some(callother(tag, word, addr, 4))
+    }
+
+    /// Decode SMRD (GCN1/2, 32-bit) and SMEM (GCN3+, 64-bit) scalar memory ops.
+    ///
+    /// SMRD 32-bit layout (GCN1/2):
+    ///   [31:27] = 11000
+    ///   [26:22] = opcode (5 bits)
+    ///   [21:15] = sdst (SGPR index)
+    ///   [14:9]  = sbase (SGPR-pair base index, actual reg = sbase*2)
+    ///   [8]     = IMM flag (1 = immediate offset in [7:0]*4, 0 = SGPR offset)
+    ///   [7:0]   = offset or SGPR index
+    ///
+    /// SMEM 64-bit layout (GCN3+):
+    ///   Word 0:
+    ///     [31:26] = 110000 (0xC0 top 6 bits)
+    ///     [25:18] = opcode (8 bits)
+    ///     [17:12] = sdata (SGPR index for data)
+    ///     [11:6]  = sbase (SGPR-pair base index)
+    ///     [5:0]   = reserved/flags
+    ///   Word 1:
+    ///     [20:0]  = offset (21-bit immediate)
+    ///
+    /// We detect SMRD vs SMEM by checking bit [26]: if the top 5 bits are
+    /// exactly 11000 we use SMRD (32-bit); otherwise we use SMEM (64-bit).
+    fn lift_smem(&self, word: u32, bytes: &[u8], addr: u64) -> LiftedInsn {
+        // Distinguish SMRD (32-bit, GCN1/2) from SMEM (64-bit, GCN3+).
+        // SMRD: bits [31:27] = 11000, uses 5-bit opcode in [26:22]
+        // SMEM: bits [31:26] = 110000 (loads) or 110001+ (stores), 8-bit opcode in [25:18]
+        //
+        // Heuristic: if bits [26] == 0 AND the 5-bit opcode [26:22] is < 8,
+        // treat as SMRD (32-bit load). Otherwise use SMEM (64-bit).
+        let top6 = (word >> 26) & 0x3f;
+        let smrd_opcode = ((word >> 22) & 0x1f) as u8;
+
+        if top6 == 0b110000 && smrd_opcode < 8 {
+            // SMRD 32-bit
+            let sdst = ((word >> 15) & 0x7f) as u16;
+            let sbase = ((word >> 9) & 0x3f) as u16;
+            let imm_flag = (word >> 8) & 1;
+            let offset_val = (word & 0xff) as u16;
+
+            let base_reg = sgpr(sbase * 2); // sbase is a pair index
+            let offset = if imm_flag == 1 {
+                c((offset_val as u64) * 4, 4) // immediate offset in dwords
+            } else {
+                sgpr(offset_val)
+            };
+
+            let t = tmp(2, 4);
+            let dst = sgpr(sdst.min(SGPR_COUNT - 1));
+
+            match smrd_opcode {
+                0x00 => {
+                    // S_LOAD_DWORD
+                    LiftedInsn {
+                        ir_ops: vec![
+                            with_output(IrOp::IntAdd, t, &[base_reg, offset], addr),
+                            with_output(IrOp::Load, dst, &[c(0, 4), t], addr),
+                        ],
+                        len: 4,
+                    }
+                }
+                _ => callother(callother::SMEM, word, addr, 4),
+            }
+        } else {
+            // SMEM 64-bit (GCN3+)
+            if bytes.len() < 8 {
+                return unimpl(addr, 4);
+            }
+            let word1 = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+            let opcode = ((word >> 18) & 0xff) as u8;
+            let sdata = ((word >> 12) & 0x3f) as u16;
+            let sbase = ((word >> 6) & 0x3f) as u16;
+            let offset = (word1 & 0x001f_ffff) as u64; // 21-bit offset
+
+            let base_reg = sgpr(sbase * 2);
+            let off_vn = c(offset, 4);
+            let t = tmp(2, 4);
+
+            match opcode {
+                0x00 => {
+                    // S_LOAD_DWORD (SMEM)
+                    let dst = sgpr(sdata.min(SGPR_COUNT - 1));
+                    LiftedInsn {
+                        ir_ops: vec![
+                            with_output(IrOp::IntAdd, t, &[base_reg, off_vn], addr),
+                            with_output(IrOp::Load, dst, &[c(0, 4), t], addr),
+                        ],
+                        len: 8,
+                    }
+                }
+                0x10 => {
+                    // S_STORE_DWORD (SMEM)
+                    let src = sgpr(sdata.min(SGPR_COUNT - 1));
+                    LiftedInsn {
+                        ir_ops: vec![
+                            with_output(IrOp::IntAdd, t, &[base_reg, off_vn], addr),
+                            no_output(IrOp::Store, &[c(0, 4), t, src], addr),
+                        ],
+                        len: 8,
+                    }
+                }
+                _ => callother(callother::SMEM, word, addr, 8),
+            }
+        }
     }
 }
 
@@ -504,7 +623,7 @@ impl Lifter for AmdGpuLifter {
         if word & 0xf000_0000 == 0xb000_0000 {
             return Ok(self.lift_sopk(word, addr));
         }
-        if let Some(lifted) = self.lift_extended_family(word, addr) {
+        if let Some(lifted) = self.lift_extended_family(word, bytes, addr) {
             return Ok(lifted);
         }
         if (word >> 31) == 0 {
@@ -638,5 +757,217 @@ mod tests {
     fn unknown_instruction_is_unimplemented_not_error() {
         let r = lifter().lift_insn(&bytes(0xff00_0000), 0x6000).unwrap();
         assert_eq!(r.ir_ops[0].op, IrOp::Unimplemented);
+    }
+
+    // ======================================================================
+    // Per-opcode tests for the 15 target opcodes
+    // ======================================================================
+
+    /// SOP2 op=0: s_add_u32 s3, s1, s2
+    #[test]
+    fn opcode_s_add_u32() {
+        let word = sop2(0, 3, 2, 1);
+        let r = lifter().lift_insn(&bytes(word), 0x100).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(r.ir_ops[0].output, Some(sgpr(3)));
+        assert_eq!(r.ir_ops[0].inputs[0], sgpr(1));
+        assert_eq!(r.ir_ops[0].inputs[1], sgpr(2));
+        // SCC flag set
+        assert_eq!(r.ir_ops[1].op, IrOp::IntNotequal);
+        assert_eq!(r.ir_ops[1].output, Some(scc()));
+    }
+
+    /// SOP2 op=1: s_sub_u32 s5, s3, s4
+    #[test]
+    fn opcode_s_sub_u32() {
+        let word = sop2(1, 5, 4, 3);
+        let r = lifter().lift_insn(&bytes(word), 0x104).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::IntSub);
+        assert_eq!(r.ir_ops[0].output, Some(sgpr(5)));
+        assert_eq!(r.ir_ops[0].inputs[0], sgpr(3));
+        assert_eq!(r.ir_ops[0].inputs[1], sgpr(4));
+        // SCC flag set
+        assert_eq!(r.ir_ops[1].op, IrOp::IntNotequal);
+    }
+
+    /// SOP2 op=36: s_mul_i32 s6, s1, s2
+    #[test]
+    fn opcode_s_mul_i32() {
+        let word = sop2(36, 6, 2, 1);
+        let r = lifter().lift_insn(&bytes(word), 0x108).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::IntMult);
+        assert_eq!(r.ir_ops[0].output, Some(sgpr(6)));
+        assert_eq!(r.ir_ops[0].inputs[0], sgpr(1));
+        assert_eq!(r.ir_ops[0].inputs[1], sgpr(2));
+        // s_mul_i32 does NOT set SCC
+        assert_eq!(r.ir_ops.len(), 1);
+    }
+
+    /// SOP2 op=10: s_and_b32 s7, s1, s2
+    #[test]
+    fn opcode_s_and_b32() {
+        let word = sop2(10, 7, 2, 1);
+        let r = lifter().lift_insn(&bytes(word), 0x10c).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::IntAnd);
+        assert_eq!(r.ir_ops[0].output, Some(sgpr(7)));
+        assert_eq!(r.ir_ops[0].inputs[0], sgpr(1));
+        assert_eq!(r.ir_ops[0].inputs[1], sgpr(2));
+    }
+
+    /// SOP2 op=14: s_or_b32 s8, s1, s2
+    #[test]
+    fn opcode_s_or_b32() {
+        let word = sop2(14, 8, 2, 1);
+        let r = lifter().lift_insn(&bytes(word), 0x110).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::IntOr);
+        assert_eq!(r.ir_ops[0].output, Some(sgpr(8)));
+        assert_eq!(r.ir_ops[0].inputs[0], sgpr(1));
+        assert_eq!(r.ir_ops[0].inputs[1], sgpr(2));
+    }
+
+    /// SOP2 op=16: s_xor_b32 s9, s1, s2
+    #[test]
+    fn opcode_s_xor_b32() {
+        let word = sop2(16, 9, 2, 1);
+        let r = lifter().lift_insn(&bytes(word), 0x114).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::IntXor);
+        assert_eq!(r.ir_ops[0].output, Some(sgpr(9)));
+        assert_eq!(r.ir_ops[0].inputs[0], sgpr(1));
+        assert_eq!(r.ir_ops[0].inputs[1], sgpr(2));
+    }
+
+    /// SOP1 op=0x03: s_mov_b32 s10, s5
+    #[test]
+    fn opcode_s_mov_b32() {
+        // SOP1 encoding: 0xBE80_0000 | (dst << 16) | (op << 8) | src
+        let word = 0xbe80_0000 | (10u32 << 16) | (0x03u32 << 8) | 5u32;
+        let r = lifter().lift_insn(&bytes(word), 0x118).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(r.ir_ops[0].output, Some(sgpr(10)));
+        assert_eq!(r.ir_ops[0].inputs[0], sgpr(5));
+    }
+
+    /// SMRD: s_load_dword s4, s[2:3], 0x10
+    /// Encoding: [31:27]=11000, [26:22]=0(op), [21:15]=dst(4),
+    ///           [14:9]=sbase(1, meaning s2:s3), [8]=1(IMM), [7:0]=4(offset=4*4=0x10)
+    #[test]
+    fn opcode_s_load_dword() {
+        let word: u32 = (0b11000u32 << 27)
+            | (0x00u32 << 22) // op = S_LOAD_DWORD
+            | (4u32 << 15)    // sdst = s4
+            | (1u32 << 9)     // sbase = 1 (meaning s2:s3)
+            | (1u32 << 8)     // IMM = 1
+            | 4u32;           // offset = 4 (in dwords, so byte offset = 16)
+        let r = lifter().lift_insn(&bytes(word), 0x120).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(r.ir_ops[0].inputs[0], sgpr(2)); // sbase*2 = s2
+        assert_eq!(r.ir_ops[0].inputs[1], c(16, 4)); // 4*4 = 16
+        assert_eq!(r.ir_ops[1].op, IrOp::Load);
+        assert_eq!(r.ir_ops[1].output, Some(sgpr(4)));
+    }
+
+    /// SMEM 64-bit: s_store_dword s4, s[2:3], 0x20
+    /// Word 0: [31:26]=110001 (0xC4), [25:18]=0x10 (S_STORE_DWORD),
+    ///         [17:12]=sdata(4), [11:6]=sbase(1), [5:0]=0
+    /// Word 1: offset = 0x20
+    #[test]
+    fn opcode_s_store_dword() {
+        let word0: u32 = (0b110001u32 << 26)
+            | (0x10u32 << 18) // op = S_STORE_DWORD
+            | (4u32 << 12)    // sdata = s4
+            | (1u32 << 6)     // sbase = 1 (meaning s2:s3)
+            | 0;              // reserved
+        let word1: u32 = 0x20; // offset = 32
+        let mut enc = [0u8; 8];
+        enc[..4].copy_from_slice(&word0.to_le_bytes());
+        enc[4..].copy_from_slice(&word1.to_le_bytes());
+        let r = lifter().lift_insn(&enc, 0x128).unwrap();
+        assert_eq!(r.len, 8);
+        assert_eq!(r.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(r.ir_ops[0].inputs[0], sgpr(2)); // sbase*2 = s2
+        assert_eq!(r.ir_ops[0].inputs[1], c(0x20, 4)); // offset=32
+        assert_eq!(r.ir_ops[1].op, IrOp::Store);
+        assert_eq!(r.ir_ops[1].inputs[2], sgpr(4)); // stored value
+    }
+
+    /// SOPP op=0x02: s_branch (forward by 2 dwords)
+    #[test]
+    fn opcode_s_branch() {
+        let word = 0xbf80_0000 | (0x02u32 << 16) | 2u32; // simm16=2
+        let r = lifter().lift_insn(&bytes(word), 0x200).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::Branch);
+        // target = addr + 4 + (2 * 4) = 0x200 + 4 + 8 = 0x20C
+        assert_eq!(r.ir_ops[0].inputs[0], target(0x20c));
+    }
+
+    /// SOPP op=0x08: s_cbranch_execz (forward by 3 dwords)
+    #[test]
+    fn opcode_s_cbranch_execz() {
+        let word = 0xbf80_0000 | (0x08u32 << 16) | 3u32; // simm16=3
+        let r = lifter().lift_insn(&bytes(word), 0x300).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::IntEqual);
+        assert_eq!(r.ir_ops[0].inputs[0], exec());
+        assert_eq!(r.ir_ops[0].inputs[1], c(0, 8));
+        assert_eq!(r.ir_ops[1].op, IrOp::Cbranch);
+        // target = 0x300 + 4 + (3 * 4) = 0x310
+        assert_eq!(r.ir_ops[1].inputs[0], target(0x310));
+    }
+
+    /// SOPP op=0x01: s_endpgm
+    #[test]
+    fn opcode_s_endpgm() {
+        let word = 0xbf80_0000 | (0x01u32 << 16);
+        let r = lifter().lift_insn(&bytes(word), 0x400).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::Return);
+    }
+
+    /// VOP2 op=0x03: v_add_f32 v3, 1.0, v1
+    #[test]
+    fn opcode_v_add_f32() {
+        // src0=242 (inline 1.0f), src1=v1, dst=v3
+        let word = vop2(0x03, 3, 1, 242);
+        let r = lifter().lift_insn(&bytes(word), 0x500).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::FloatAdd);
+        assert_eq!(r.ir_ops[0].output, Some(vgpr(3)));
+        assert_eq!(r.ir_ops[0].inputs[0], c(0x3f80_0000, 4)); // 1.0f
+        assert_eq!(r.ir_ops[0].inputs[1], vgpr(1));
+    }
+
+    /// VOP2 op=0x08: v_mul_f32 v5, v2, v3
+    #[test]
+    fn opcode_v_mul_f32() {
+        // src0=v2 (256+2=258), src1=v3, dst=v5
+        let word = vop2(0x08, 5, 3, 256 + 2);
+        let r = lifter().lift_insn(&bytes(word), 0x504).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::FloatMult);
+        assert_eq!(r.ir_ops[0].output, Some(vgpr(5)));
+        assert_eq!(r.ir_ops[0].inputs[0], vgpr(2));
+        assert_eq!(r.ir_ops[0].inputs[1], vgpr(3));
+    }
+
+    /// VOP1 op=0x01: v_mov_b32 v10, v5
+    #[test]
+    fn opcode_v_mov_b32() {
+        // VOP1: [31:25]=0x3e (0b0111110), [24:17]=dst, [16:9]=op, [8:0]=src0
+        // src0 = 256+5 (v5); top bit 0 so [31]=0, major=0x3e
+        let word: u32 = (0x3eu32 << 25) | (10u32 << 17) | (0x01u32 << 9) | (256 + 5);
+        let r = lifter().lift_insn(&bytes(word), 0x508).unwrap();
+        assert_eq!(r.len, 4);
+        assert_eq!(r.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(r.ir_ops[0].output, Some(vgpr(10)));
+        assert_eq!(r.ir_ops[0].inputs[0], vgpr(5));
     }
 }

@@ -591,4 +591,112 @@ mod tests {
             Err(LiftError::ShortBuffer)
         ));
     }
+
+    #[test]
+    fn lifts_scalar_sub() {
+        let lifter = AgxLifter::new();
+        let result = lifter
+            .lift_insn(&encode(OP_SUB, 5, 6, 7, 0), 0x2000)
+            .unwrap();
+        assert_eq!(result.len, INSN_SIZE);
+        assert_eq!(result.ir_ops[0].op, IrOp::IntSub);
+        assert_eq!(result.ir_ops[0].output, Some(gpr(5, 8)));
+        assert_eq!(result.ir_ops[0].inputs[0], gpr(6, 8));
+        assert_eq!(result.ir_ops[0].inputs[1], gpr(7, 8));
+    }
+
+    #[test]
+    fn lifts_scalar_mul() {
+        let lifter = AgxLifter::new();
+        let result = lifter
+            .lift_insn(&encode(OP_MUL, 10, 11, 12, 0), 0)
+            .unwrap();
+        assert_eq!(result.ir_ops[0].op, IrOp::IntMult);
+        assert_eq!(result.ir_ops[0].output, Some(gpr(10, 8)));
+        assert_eq!(result.ir_ops[0].inputs[0], gpr(11, 8));
+        assert_eq!(result.ir_ops[0].inputs[1], gpr(12, 8));
+    }
+
+    #[test]
+    fn lifts_float_add_sub_mul() {
+        let lifter = AgxLifter::new();
+
+        let fadd = lifter
+            .lift_insn(&encode(OP_FADD, 1, 2, 3, 0), 0)
+            .unwrap();
+        assert_eq!(fadd.ir_ops[0].op, IrOp::FloatAdd);
+        assert_eq!(fadd.ir_ops[0].output, Some(gpr(1, 4)));
+        assert_eq!(fadd.ir_ops[0].inputs[0], gpr(2, 4));
+        assert_eq!(fadd.ir_ops[0].inputs[1], gpr(3, 4));
+
+        let fsub = lifter
+            .lift_insn(&encode(OP_FSUB, 4, 5, 6, 0), 0)
+            .unwrap();
+        assert_eq!(fsub.ir_ops[0].op, IrOp::FloatSub);
+        assert_eq!(fsub.ir_ops[0].output, Some(gpr(4, 4)));
+
+        let fmul = lifter
+            .lift_insn(&encode(OP_FMUL, 7, 8, 9, 0), 0)
+            .unwrap();
+        assert_eq!(fmul.ir_ops[0].op, IrOp::FloatMult);
+        assert_eq!(fmul.ir_ops[0].output, Some(gpr(7, 4)));
+    }
+
+    #[test]
+    fn lifts_register_mov() {
+        let lifter = AgxLifter::new();
+        let result = lifter
+            .lift_insn(&encode(OP_MOV, 3, 10, 0, 0), 0)
+            .unwrap();
+        assert_eq!(result.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(result.ir_ops[0].output, Some(gpr(3, 8)));
+        assert_eq!(result.ir_ops[0].inputs[0], gpr(10, 8));
+    }
+
+    #[test]
+    fn lifts_return() {
+        let lifter = AgxLifter::new();
+        let result = lifter
+            .lift_insn(&encode(OP_RET, 0, 0, 0, 0), 0x3000)
+            .unwrap();
+        assert_eq!(result.len, INSN_SIZE);
+        assert_eq!(result.ir_ops[0].op, IrOp::Return);
+        assert_eq!(result.ir_ops[0].output, None);
+        assert!(result.ir_ops[0].inputs.is_empty());
+    }
+
+    #[test]
+    fn lifts_atomic_and_lane_as_callother() {
+        let lifter = AgxLifter::new();
+
+        let atomic = lifter
+            .lift_insn(&encode(OP_ATOMIC, 2, 3, 4, 0), 0)
+            .unwrap();
+        assert_eq!(atomic.ir_ops[0].op, IrOp::Callother);
+        assert_eq!(atomic.ir_ops[0].output, Some(gpr(2, 8)));
+        assert_eq!(
+            atomic.ir_ops[0].inputs[0],
+            const_vn(CALLOTHER_AGX_ATOMIC, 8)
+        );
+
+        let lane = lifter
+            .lift_insn(&encode(OP_LANE, 5, 6, 7, 0), 0)
+            .unwrap();
+        assert_eq!(lane.ir_ops[0].op, IrOp::Callother);
+        assert_eq!(lane.ir_ops[0].output, Some(gpr(5, 8)));
+        assert_eq!(
+            lane.ir_ops[0].inputs[0],
+            const_vn(CALLOTHER_AGX_LANE_OP, 8)
+        );
+    }
+
+    #[test]
+    fn lifts_nop() {
+        let lifter = AgxLifter::new();
+        let result = lifter
+            .lift_insn(&encode(OP_NOP, 0, 0, 0, 0), 0)
+            .unwrap();
+        assert_eq!(result.len, INSN_SIZE);
+        assert!(result.ir_ops.is_empty());
+    }
 }

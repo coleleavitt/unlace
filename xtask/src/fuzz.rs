@@ -102,13 +102,22 @@ pub fn run(args: &[String]) -> i32 {
                     FuzzOutcome::Clean => {}
                     FuzzOutcome::Crash => {
                         crashes += 1;
-                        let sha = short_hash(&bytes);
+                        // Try to minimise the witness; if minimisation
+                        // somehow fails (binary went missing mid-run),
+                        // fall back to the original input. The crash
+                        // filename keys off the *minimised* bytes so
+                        // duplicate panics from different seeds collide
+                        // to the same file — exactly what triage wants.
+                        let minimised = minimise_crash_subprocess(&bytes);
+                        let sha = short_hash(&minimised);
                         let crash_path = crash_dir.join(format!("{sha}.bin"));
-                        let _ = std::fs::write(&crash_path, &bytes);
+                        let _ = std::fs::write(&crash_path, &minimised);
                         eprintln!(
-                            "xtask fuzz: CRASH on {} → {}",
+                            "xtask fuzz: CRASH on {} → {} ({} bytes, minimised from {})",
                             path.display(),
-                            crash_path.display()
+                            crash_path.display(),
+                            minimised.len(),
+                            bytes.len(),
                         );
                     }
                 }
@@ -165,6 +174,42 @@ fn run_fuzz_iteration_via_subprocess(bytes: &[u8]) -> FuzzOutcome {
         Ok(_) => FuzzOutcome::Crash,
         Err(_) => FuzzOutcome::Clean,
     }
+}
+
+/// Minimise a crashing input by binary-searching the smallest prefix
+/// that still triggers a crash. Mirrors
+/// `unlace_fuzz::minimise_crash_with` but uses the subprocess as the
+/// predicate so xtask remains independent of the fuzz harness library
+/// (the comment in `run_fuzz_iteration_via_subprocess` explains why we
+/// don't link against `unlace-fuzz`).
+///
+/// Falls back to the original input if the harness binary is missing
+/// (e.g. workspace not built yet) — callers will then write the raw
+/// bytes, which is still a valid (just larger) reproducer.
+fn minimise_crash_subprocess(bytes: &[u8]) -> Vec<u8> {
+    if bytes.is_empty() {
+        return Vec::new();
+    }
+    let bin = Path::new("target/debug/unlace-fuzz");
+    if !bin.exists() {
+        return bytes.to_vec();
+    }
+    // Confirm the full input still crashes (defensive — the caller
+    // already saw a crash, but a flaky panic could disappear). If not,
+    // return the original.
+    if !matches!(run_fuzz_iteration_via_subprocess(bytes), FuzzOutcome::Crash) {
+        return bytes.to_vec();
+    }
+    let mut lo: usize = 1;
+    let mut hi: usize = bytes.len();
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        match run_fuzz_iteration_via_subprocess(&bytes[..mid]) {
+            FuzzOutcome::Crash => hi = mid,
+            FuzzOutcome::Clean => lo = mid + 1,
+        }
+    }
+    bytes[..lo].to_vec()
 }
 
 fn short_hash(bytes: &[u8]) -> String {

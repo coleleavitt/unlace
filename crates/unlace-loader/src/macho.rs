@@ -264,6 +264,7 @@ where
         function_starts,
         debug_records: Vec::new(),
         load_config: None,
+            pe_mitigations: None,
         runtime_functions: Vec::new(),
         resources: Vec::new(),
         bound_imports: Vec::new(),
@@ -415,8 +416,7 @@ fn read_linkedit_range(data: &[u8], off: u32, size: u32) -> &[u8] {
     &data[off..off + size]
 }
 
-#[derive(Debug, Clone, Copy)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Default)]
 struct SegmentOffset {
     segment: usize,
     offset: u64,
@@ -537,7 +537,6 @@ struct BindState {
     addend: i64,
     loc: SegmentOffset,
 }
-
 
 fn decode_bind_opcodes(
     bytes: &[u8],

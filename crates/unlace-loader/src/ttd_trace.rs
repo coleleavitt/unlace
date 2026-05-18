@@ -189,13 +189,13 @@ pub fn parse_thread_table(data: &[u8], header: &TtdRunHeader) -> Vec<TtdThread> 
         if base + record_size > data.len() {
             break;
         }
-        let id = u32::from_le_bytes(
-            data[base..base + 4].try_into().unwrap_or([0; 4]),
-        );
-        let instruction_count = u64::from_le_bytes(
-            data[base + 4..base + 12].try_into().unwrap_or([0; 8]),
-        );
-        threads.push(TtdThread { id, instruction_count });
+        let id = u32::from_le_bytes(data[base..base + 4].try_into().unwrap_or([0; 4]));
+        let instruction_count =
+            u64::from_le_bytes(data[base + 4..base + 12].try_into().unwrap_or([0; 8]));
+        threads.push(TtdThread {
+            id,
+            instruction_count,
+        });
     }
     threads
 }
@@ -216,15 +216,11 @@ pub fn parse_module_table(data: &[u8], header: &TtdRunHeader) -> Vec<TtdModule> 
         if offset + 18 > data.len() {
             break;
         }
-        let base = u64::from_le_bytes(
-            data[offset..offset + 8].try_into().unwrap_or([0; 8]),
-        );
-        let size = u64::from_le_bytes(
-            data[offset + 8..offset + 16].try_into().unwrap_or([0; 8]),
-        );
-        let name_len = u16::from_le_bytes(
-            data[offset + 16..offset + 18].try_into().unwrap_or([0; 2]),
-        ) as usize;
+        let base = u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap_or([0; 8]));
+        let size = u64::from_le_bytes(data[offset + 8..offset + 16].try_into().unwrap_or([0; 8]));
+        let name_len =
+            u16::from_le_bytes(data[offset + 16..offset + 18].try_into().unwrap_or([0; 2]))
+                as usize;
         offset += 18;
 
         if offset + name_len > data.len() {
@@ -245,7 +241,11 @@ pub fn parse_module_table(data: &[u8], header: &TtdRunHeader) -> Vec<TtdModule> 
 /// Parse memory deltas from the memory stream.
 ///
 /// Each record: `[thread: u32][sequence: u64][address: u64][len: u16][old: [u8; len]][new: [u8; len]]`.
-pub fn parse_memory_deltas(data: &[u8], header: &TtdRunHeader, limit: usize) -> Vec<TtdMemoryDelta> {
+pub fn parse_memory_deltas(
+    data: &[u8],
+    header: &TtdRunHeader,
+    limit: usize,
+) -> Vec<TtdMemoryDelta> {
     let mut offset = header.memory_stream_offset as usize;
     let mut deltas = Vec::new();
 
@@ -255,18 +255,13 @@ pub fn parse_memory_deltas(data: &[u8], header: &TtdRunHeader, limit: usize) -> 
             break;
         }
 
-        let thread = u32::from_le_bytes(
-            data[offset..offset + 4].try_into().unwrap_or([0; 4]),
-        );
-        let sequence = u64::from_le_bytes(
-            data[offset + 4..offset + 12].try_into().unwrap_or([0; 8]),
-        );
-        let address = u64::from_le_bytes(
-            data[offset + 12..offset + 20].try_into().unwrap_or([0; 8]),
-        );
-        let len = u16::from_le_bytes(
-            data[offset + 20..offset + 22].try_into().unwrap_or([0; 2]),
-        ) as usize;
+        let thread = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap_or([0; 4]));
+        let sequence =
+            u64::from_le_bytes(data[offset + 4..offset + 12].try_into().unwrap_or([0; 8]));
+        let address =
+            u64::from_le_bytes(data[offset + 12..offset + 20].try_into().unwrap_or([0; 8]));
+        let len = u16::from_le_bytes(data[offset + 20..offset + 22].try_into().unwrap_or([0; 2]))
+            as usize;
         offset += 22;
 
         if len == 0 || offset + len * 2 > data.len() {
@@ -341,19 +336,29 @@ impl TtdTrace {
     /// the requested register value. Register indices follow x86-64 convention:
     /// 0=RAX, 1=RCX, 2=RDX, 3=RBX, 4=RSP, 5=RBP, 6=RSI, 7=RDI, 8-15=R8-R15.
     pub fn register_at(&self, reg_index: usize, pos: TtdPosition) -> Option<u64> {
-        let snapshot = self.register_snapshots.iter().rev().find(|s| s.position <= pos)?;
+        let snapshot = self
+            .register_snapshots
+            .iter()
+            .rev()
+            .find(|s| s.position <= pos)?;
         snapshot.gp_regs.get(reg_index).copied()
     }
 
     /// Query the instruction pointer at a given position.
     pub fn rip_at(&self, pos: TtdPosition) -> Option<u64> {
-        let snapshot = self.register_snapshots.iter().rev().find(|s| s.position <= pos)?;
+        let snapshot = self
+            .register_snapshots
+            .iter()
+            .rev()
+            .find(|s| s.position <= pos)?;
         Some(snapshot.rip)
     }
 
     /// Find the module containing `address`.
     pub fn module_at(&self, address: u64) -> Option<&TtdModule> {
-        self.modules.iter().find(|m| address >= m.base && address < m.base + m.size)
+        self.modules
+            .iter()
+            .find(|m| address >= m.base && address < m.base + m.size)
     }
 
     /// Enumerate all positions where the given address was written.
@@ -543,12 +548,18 @@ mod tests {
         let trace = TtdTrace::parse(&data).unwrap();
 
         // Query at position after the write.
-        let pos = TtdPosition { thread: 1000, sequence: 100 };
+        let pos = TtdPosition {
+            thread: 1000,
+            sequence: 100,
+        };
         let val = trace.memory_at(0x7FF600001000, 4, pos).unwrap();
         assert_eq!(val, vec![0xAA, 0xBB, 0xCC, 0xDD]);
 
         // Query at position before the write returns None.
-        let pos_before = TtdPosition { thread: 1000, sequence: 10 };
+        let pos_before = TtdPosition {
+            thread: 1000,
+            sequence: 10,
+        };
         assert!(trace.memory_at(0x7FF600001000, 4, pos_before).is_none());
     }
 
@@ -580,12 +591,18 @@ mod tests {
     fn test_register_at() {
         let trace = TtdTrace {
             version: 2,
-            threads: vec![TtdThread { id: 1, instruction_count: 100 }],
+            threads: vec![TtdThread {
+                id: 1,
+                instruction_count: 100,
+            }],
             modules: vec![],
             memory_deltas: vec![],
             basic_blocks: vec![],
             register_snapshots: vec![TtdRegisterState {
-                position: TtdPosition { thread: 1, sequence: 50 },
+                position: TtdPosition {
+                    thread: 1,
+                    sequence: 50,
+                },
                 gp_regs: vec![0x1234, 0x5678, 0x9ABC],
                 rip: 0x7FF600001000,
                 rsp: 0x00007FFEAABB0000,
@@ -593,13 +610,19 @@ mod tests {
             }],
         };
 
-        let pos = TtdPosition { thread: 1, sequence: 60 };
+        let pos = TtdPosition {
+            thread: 1,
+            sequence: 60,
+        };
         assert_eq!(trace.register_at(0, pos), Some(0x1234)); // RAX
         assert_eq!(trace.register_at(1, pos), Some(0x5678)); // RCX
         assert_eq!(trace.rip_at(pos), Some(0x7FF600001000));
 
         // Before any snapshot.
-        let pos_early = TtdPosition { thread: 1, sequence: 10 };
+        let pos_early = TtdPosition {
+            thread: 1,
+            sequence: 10,
+        };
         assert_eq!(trace.register_at(0, pos_early), None);
     }
 
@@ -624,16 +647,31 @@ mod tests {
         let data = build_test_run_file();
         let trace = TtdTrace::parse(&data).unwrap();
 
-        let pos = TtdPosition { thread: 1000, sequence: 100 };
+        let pos = TtdPosition {
+            thread: 1000,
+            sequence: 100,
+        };
         let snap = trace.memory_snapshot_at(pos);
-        assert_eq!(snap.get(&0x7FF600001000).unwrap(), &vec![0xAA, 0xBB, 0xCC, 0xDD]);
+        assert_eq!(
+            snap.get(&0x7FF600001000).unwrap(),
+            &vec![0xAA, 0xBB, 0xCC, 0xDD]
+        );
     }
 
     #[test]
     fn test_position_ordering() {
-        let a = TtdPosition { thread: 1, sequence: 10 };
-        let b = TtdPosition { thread: 1, sequence: 20 };
-        let c = TtdPosition { thread: 2, sequence: 5 };
+        let a = TtdPosition {
+            thread: 1,
+            sequence: 10,
+        };
+        let b = TtdPosition {
+            thread: 1,
+            sequence: 20,
+        };
+        let c = TtdPosition {
+            thread: 2,
+            sequence: 5,
+        };
         assert!(a < b);
         // thread is compared first (u32), then sequence.
         assert!(a < c);

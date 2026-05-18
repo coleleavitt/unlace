@@ -15,6 +15,7 @@
 //!   translated file offset is returned. Full Mach-O reconstruction (segment
 //!   fix-ups, slid linkedit, stripped __OBJC_RO) is a follow-up.
 
+use std::collections::BTreeMap;
 use std::convert::TryInto;
 
 /// Maximum bytes returned from [`DyldCache::extract_image`] per image.
@@ -143,6 +144,766 @@ impl<'a> DyldCache<'a> {
         }
         Some(self.data[off..end].to_vec())
     }
+
+    /// Phase 1: produce a layout plan for the image installed at
+    /// `image_vaddr`. Walks every `LC_SEGMENT_64` load command and
+    /// records each segment's bounds inside the cache plus the
+    /// linearised output offset where it should land in a standalone
+    /// Mach-O blob.
+    ///
+    /// Returns `None` if the address doesn't translate, the header
+    /// magic isn't `MH_MAGIC_64`, or the load-command region runs off
+    /// the cache.
+    pub fn plan_image(&self, image_vaddr: u64) -> Option<ImagePlan> {
+        const MH_MAGIC_64_LE: u32 = 0xfeedfacf;
+        const LC_SEGMENT_64: u32 = 0x19;
+
+        let header_off = self.vaddr_to_file_offset(image_vaddr)? as usize;
+        if header_off.checked_add(32)? > self.data.len() {
+            return None;
+        }
+        let magic = u32::from_le_bytes(self.data[header_off..header_off + 4].try_into().ok()?);
+        if magic != MH_MAGIC_64_LE {
+            return None;
+        }
+        let ncmds =
+            u32::from_le_bytes(self.data[header_off + 16..header_off + 20].try_into().ok()?);
+        let sizeofcmds =
+            u32::from_le_bytes(self.data[header_off + 20..header_off + 24].try_into().ok()?);
+        let lc_start = header_off.checked_add(32)?;
+        let lc_end = lc_start.checked_add(sizeofcmds as usize)?;
+        if lc_end > self.data.len() {
+            return None;
+        }
+
+        // Reserve room for the original mach_header_64 + load commands.
+        let mach_header = self.data[header_off..lc_end].to_vec();
+
+        // First pass: walk load commands, capture LC_SEGMENT_64 entries.
+        let mut segments: Vec<SegmentPlan> = Vec::new();
+        let mut cursor = lc_start;
+        for _ in 0..ncmds {
+            if cursor + 8 > lc_end {
+                return None;
+            }
+            let cmd = u32::from_le_bytes(self.data[cursor..cursor + 4].try_into().ok()?);
+            let cmdsize =
+                u32::from_le_bytes(self.data[cursor + 4..cursor + 8].try_into().ok()?) as usize;
+            if cmdsize < 8 || cursor.checked_add(cmdsize)? > lc_end {
+                return None;
+            }
+            if cmd == LC_SEGMENT_64 {
+                if cmdsize < 72 {
+                    return None;
+                }
+                let mut segname_bytes = [0u8; 16];
+                segname_bytes.copy_from_slice(&self.data[cursor + 8..cursor + 24]);
+                let segname_end = segname_bytes
+                    .iter()
+                    .position(|&b| b == 0)
+                    .unwrap_or(segname_bytes.len());
+                let name = String::from_utf8_lossy(&segname_bytes[..segname_end]).into_owned();
+                let vmaddr =
+                    u64::from_le_bytes(self.data[cursor + 24..cursor + 32].try_into().ok()?);
+                let vmsize =
+                    u64::from_le_bytes(self.data[cursor + 32..cursor + 40].try_into().ok()?);
+                let _orig_fileoff =
+                    u64::from_le_bytes(self.data[cursor + 40..cursor + 48].try_into().ok()?);
+                let filesize =
+                    u64::from_le_bytes(self.data[cursor + 48..cursor + 56].try_into().ok()?);
+                let fileoff_in_cache = self
+                    .vaddr_to_file_offset(vmaddr)
+                    .unwrap_or(0);
+                segments.push(SegmentPlan {
+                    name,
+                    vmaddr,
+                    vmsize,
+                    fileoff_in_cache,
+                    filesize,
+                    // Filled in below after all segments are collected.
+                    fileoff_in_output: 0,
+                });
+            }
+            cursor += cmdsize;
+        }
+
+        // Page-align (0x1000) the linearised file offsets, starting
+        // right after the header + load commands.
+        let mut next_out: u64 = align_up(lc_end as u64, 0x1000);
+        for seg in segments.iter_mut() {
+            seg.fileoff_in_output = next_out;
+            next_out = align_up(next_out + seg.filesize, 0x1000);
+        }
+        let total_size = next_out;
+
+        Some(ImagePlan {
+            mach_header,
+            segments,
+            total_size,
+        })
+    }
+}
+
+fn align_up(value: u64, align: u64) -> u64 {
+    debug_assert!(align.is_power_of_two());
+    (value + align - 1) & !(align - 1)
+}
+
+impl<'a> DyldCache<'a> {
+    /// Phase 2: materialise an [`ImagePlan`] into a self-contained
+    /// Mach-O byte blob.
+    ///
+    /// Layout of the returned buffer:
+    ///
+    /// 1. `mach_header_64` + original load commands, with each
+    ///    `LC_SEGMENT_64` entry's `fileoff` rewritten to point at the
+    ///    linearised output offset.
+    /// 2. Each segment's bytes copied from its cache offset, placed at
+    ///    the planned output offset.
+    /// 3. Zero-padded up to `plan.total_size` so the blob is page-aligned.
+    pub fn assemble_image(&self, plan: &ImagePlan) -> Vec<u8> {
+        const LC_SEGMENT_64: u32 = 0x19;
+
+        let mut out = vec![0u8; plan.total_size as usize];
+        // 1. Copy the original header + load commands.
+        let hdr_len = plan.mach_header.len();
+        out[..hdr_len].copy_from_slice(&plan.mach_header);
+
+        // 1b. Rewrite each LC_SEGMENT_64 entry's `fileoff` field.
+        // The mach_header is the first 32 bytes; load commands follow.
+        let mut cursor = 32usize;
+        let mut seg_idx = 0usize;
+        while cursor + 8 <= hdr_len {
+            let cmd = u32::from_le_bytes(out[cursor..cursor + 4].try_into().unwrap());
+            let cmdsize = u32::from_le_bytes(out[cursor + 4..cursor + 8].try_into().unwrap())
+                as usize;
+            if cmdsize == 0 || cursor + cmdsize > hdr_len {
+                break;
+            }
+            if cmd == LC_SEGMENT_64 && seg_idx < plan.segments.len() {
+                let new_off = plan.segments[seg_idx].fileoff_in_output;
+                // `fileoff` is at offset 40 inside the LC_SEGMENT_64 command.
+                out[cursor + 40..cursor + 48].copy_from_slice(&new_off.to_le_bytes());
+                seg_idx += 1;
+            }
+            cursor += cmdsize;
+        }
+
+        // 2. Copy each segment's bytes.
+        for seg in &plan.segments {
+            let src_off = seg.fileoff_in_cache as usize;
+            let len = seg.filesize as usize;
+            if len == 0 {
+                continue;
+            }
+            let src_end = src_off.saturating_add(len).min(self.data.len());
+            if src_end <= src_off {
+                continue;
+            }
+            let real_len = src_end - src_off;
+            let dst_off = seg.fileoff_in_output as usize;
+            let dst_end = dst_off + real_len;
+            if dst_end > out.len() {
+                continue;
+            }
+            out[dst_off..dst_end].copy_from_slice(&self.data[src_off..src_end]);
+        }
+        out
+    }
+
+    /// Convenience wrapper: plan + assemble for an image identified by
+    /// path. Returns `None` when the path isn't registered or the
+    /// plan fails.
+    pub fn extract_image_as_macho(&self, path: &str) -> Option<Vec<u8>> {
+        let entry = self.images.iter().find(|e| e.path == path)?;
+        let plan = self.plan_image(entry.address)?;
+        Some(self.assemble_image(&plan))
+    }
+
+    /// Phase 4: read the subcache array from a macOS 12+ dyld shared
+    /// cache primary header. Pre-macOS 12 caches (single-file layout)
+    /// return an empty list.
+    ///
+    /// The fields read live at fixed offsets in the primary header:
+    ///   * 0x1c8 — `subCacheArrayOffset` (u32)
+    ///   * 0x1cc — `subCacheArrayCount`  (u32)
+    /// Each entry is 56 bytes:
+    ///   * uuid[16]
+    ///   * cacheVMOffset (u64)
+    ///   * fileSuffix[32] (NUL-terminated UTF-8)
+    pub fn subcaches(&self) -> Vec<SubCacheEntry> {
+        if self.data.len() < 0x1d0 {
+            return Vec::new();
+        }
+        let off = u32::from_le_bytes(
+            self.data[0x1c8..0x1cc]
+                .try_into()
+                .expect("4-byte slice"),
+        ) as usize;
+        let count = u32::from_le_bytes(
+            self.data[0x1cc..0x1d0]
+                .try_into()
+                .expect("4-byte slice"),
+        ) as usize;
+        if off == 0 || count == 0 {
+            return Vec::new();
+        }
+        const ENTRY_SIZE: usize = 16 + 8 + 32;
+        let end = match off.checked_add(count.checked_mul(ENTRY_SIZE).unwrap_or(usize::MAX)) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+        if end > self.data.len() {
+            return Vec::new();
+        }
+        let mut out = Vec::with_capacity(count);
+        for i in 0..count {
+            let base = off + i * ENTRY_SIZE;
+            let mut uuid = [0u8; 16];
+            uuid.copy_from_slice(&self.data[base..base + 16]);
+            let cache_vm_offset = u64::from_le_bytes(
+                self.data[base + 16..base + 24]
+                    .try_into()
+                    .expect("8-byte slice"),
+            );
+            let suffix_bytes = &self.data[base + 24..base + 24 + 32];
+            let nul = suffix_bytes
+                .iter()
+                .position(|&b| b == 0)
+                .unwrap_or(suffix_bytes.len());
+            let file_suffix =
+                String::from_utf8_lossy(&suffix_bytes[..nul]).into_owned();
+            out.push(SubCacheEntry {
+                uuid,
+                cache_vm_offset,
+                file_suffix,
+            });
+        }
+        out
+    }
+}
+
+/// One entry from a macOS 12+ dyld shared cache `subCacheArray`. Each
+/// entry tells the loader which subcache file holds bytes for a given
+/// `cacheVMOffset` and how the file suffix maps to the on-disk name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubCacheEntry {
+    /// The subcache's UUID (matches the LC_UUID inside that file).
+    pub uuid: [u8; 16],
+    /// VM offset where this subcache's mappings begin, relative to the
+    /// primary cache's first mapping.
+    pub cache_vm_offset: u64,
+    /// File suffix appended to the primary cache filename to locate
+    /// this subcache on disk (e.g. `".01"`, `".symbols"`).
+    pub file_suffix: String,
+}
+
+/// §5.4: collection of a primary dyld shared cache plus its subcaches.
+///
+/// macOS 12+ caches split across `dyld_shared_cache_arm64e` (primary)
+/// and `dyld_shared_cache_arm64e.<suffix>` files. The primary lists
+/// every subcache in its `subCacheArray`; callers that want to follow
+/// a virtual address across the whole cache pass each subcache file's
+/// bytes here, indexed by suffix.
+///
+/// `vaddr_to_bytes` performs a routed translation: it tries the
+/// primary first, then each subcache whose mapping range contains the
+/// target VA.
+pub struct DyldCacheCollection<'a> {
+    primary: DyldCache<'a>,
+    /// Map from file suffix → parsed subcache. Suffix matches
+    /// `SubCacheEntry::file_suffix` from the primary's
+    /// `subCacheArray`.
+    subs: BTreeMap<String, DyldCache<'a>>,
+}
+
+impl<'a> DyldCacheCollection<'a> {
+    /// Construct a collection from a parsed primary cache plus
+    /// per-suffix subcache bytes. Subcache bytes are parsed eagerly so
+    /// VA → bytes lookups are O(1) after construction.
+    ///
+    /// Returns `None` if any subcache fails to parse.
+    pub fn new(
+        primary: DyldCache<'a>,
+        subs: BTreeMap<String, &'a [u8]>,
+    ) -> Option<Self> {
+        let mut parsed = BTreeMap::new();
+        for (suffix, bytes) in subs {
+            let sub = DyldCache::parse(bytes)?;
+            parsed.insert(suffix, sub);
+        }
+        Some(Self {
+            primary,
+            subs: parsed,
+        })
+    }
+
+    /// Borrow the primary cache.
+    pub fn primary(&self) -> &DyldCache<'a> {
+        &self.primary
+    }
+
+    /// Iterate every subcache in (suffix, cache) order.
+    pub fn subcaches(&self) -> impl Iterator<Item = (&str, &DyldCache<'a>)> {
+        self.subs.iter().map(|(k, v)| (k.as_str(), v))
+    }
+
+    /// Translate `vaddr` into a `(bytes, offset)` pair: the byte slice
+    /// of whichever cache (primary or subcache) holds the address, plus
+    /// the offset inside that slice. Returns `None` when no cache
+    /// covers the address.
+    pub fn vaddr_to_bytes(&self, vaddr: u64) -> Option<(&[u8], u64)> {
+        if let Some(file_off) = self.primary.vaddr_to_file_offset(vaddr) {
+            return Some((self.primary.data, file_off));
+        }
+        for sub in self.subs.values() {
+            if let Some(file_off) = sub.vaddr_to_file_offset(vaddr) {
+                return Some((sub.data, file_off));
+            }
+        }
+        None
+    }
+
+    /// Extract a standalone Mach-O blob for the image at `path`. The
+    /// image's `__TEXT` is in the primary cache, but its `__LINKEDIT`
+    /// often lives in a subcache; we walk every segment through the
+    /// collection's routed translation.
+    pub fn extract_image_as_macho(&self, path: &str) -> Option<Vec<u8>> {
+        let entry = self.primary.images.iter().find(|e| e.path == path)?;
+        let plan = self.primary.plan_image(entry.address)?;
+
+        // Assemble manually so each segment's bytes come from whichever
+        // cache holds them (primary or subcache).
+        let mut out = vec![0u8; plan.total_size as usize];
+        let hdr_len = plan.mach_header.len();
+        out[..hdr_len].copy_from_slice(&plan.mach_header);
+
+        // Rewrite each LC_SEGMENT_64 fileoff to the linearised offset
+        // (mirrors DyldCache::assemble_image).
+        const LC_SEGMENT_64: u32 = 0x19;
+        let mut cursor = 32usize;
+        let mut seg_idx = 0usize;
+        while cursor + 8 <= hdr_len {
+            let cmd = u32::from_le_bytes(out[cursor..cursor + 4].try_into().ok()?);
+            let cmdsize =
+                u32::from_le_bytes(out[cursor + 4..cursor + 8].try_into().ok()?) as usize;
+            if cmdsize == 0 || cursor + cmdsize > hdr_len {
+                break;
+            }
+            if cmd == LC_SEGMENT_64 && seg_idx < plan.segments.len() {
+                let new_off = plan.segments[seg_idx].fileoff_in_output;
+                out[cursor + 40..cursor + 48].copy_from_slice(&new_off.to_le_bytes());
+                seg_idx += 1;
+            }
+            cursor += cmdsize;
+        }
+
+        // Copy each segment from wherever the collection routes its VA.
+        for seg in &plan.segments {
+            if seg.filesize == 0 {
+                continue;
+            }
+            let (bytes, src_off) = match self.vaddr_to_bytes(seg.vmaddr) {
+                Some(p) => p,
+                None => continue,
+            };
+            let src_off = src_off as usize;
+            let len = (seg.filesize as usize).min(bytes.len().saturating_sub(src_off));
+            if len == 0 {
+                continue;
+            }
+            let dst_off = seg.fileoff_in_output as usize;
+            let dst_end = dst_off + len;
+            if dst_end > out.len() {
+                continue;
+            }
+            out[dst_off..dst_end].copy_from_slice(&bytes[src_off..src_off + len]);
+        }
+        Some(out)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3: LC_DYLD_CHAINED_FIXUPS decoder
+// ---------------------------------------------------------------------------
+
+/// Parsed `LC_DYLD_CHAINED_FIXUPS` payload — the modern Mach-O fixup
+/// scheme that replaces the older `LC_DYLD_INFO_ONLY` rebase + bind
+/// opcode streams.
+///
+/// `imports` is the flat ordinal table; an entry's index is the
+/// `ordinal` referenced from chain entries. `rebases` is keyed by
+/// segment index and lists every rebase pointer the chain walker
+/// recovered for that segment.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ChainedFixups {
+    /// Flat list of ordinal-indexed imports.
+    pub imports: Vec<ChainedImport>,
+    /// Rebase targets per segment.
+    pub rebases: std::collections::BTreeMap<u32, Vec<RebaseEntry>>,
+}
+
+/// One ordinal-indexed import entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChainedImport {
+    /// Ordinal of the library this symbol comes from (0 = self,
+    /// 0xfe = main executable, 0xff = weak/flat).
+    pub lib_ordinal: u8,
+    /// True when the import is weakly-linked.
+    pub weak_import: bool,
+    /// Symbol name (NUL-terminated UTF-8 read from the symbols table).
+    pub name: String,
+}
+
+/// One rebase chain entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RebaseEntry {
+    /// Offset inside the segment where the pointer lives.
+    pub segment_offset: u64,
+    /// Resolved target VA (already-rebased; chain encodes the runtime
+    /// address as offset from `dyld_chained_fixups_header::imports_offset`'s
+    /// containing image base, but we surface the raw 64-bit target).
+    pub target_vmaddr: u64,
+    /// True when the chain entry carries arm64e PAC authentication
+    /// metadata. See [`auth_meta`] for the parsed fields.
+    pub auth: bool,
+    /// §5.7: structured ARM64E pointer-authentication metadata. `None`
+    /// for non-arm64e pointer formats; populated for `DYLD_CHAINED_PTR_ARM64E`
+    /// and `_ARM64E_KERNEL`.
+    pub auth_meta: Option<ArmAuthMeta>,
+}
+
+/// §5.7: ARM64E PAC pointer-authentication metadata extracted from a
+/// chained-fixup rebase entry.
+///
+/// The on-disk layout of an arm64e rebase pointer packs the diversity
+/// constant, address-diversifier bit, and key selector into the high
+/// bits of the 64-bit pointer slot. Surfacing the decoded fields lets
+/// the printer annotate `__auth(IA, 0x1234, 1)` style hints next to
+/// virtual call targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArmAuthMeta {
+    /// 16-bit diversity constant baked into the signed pointer.
+    pub diversity: u16,
+    /// `true` when the address itself is included in the diversifier.
+    pub addr_diversified: bool,
+    /// PAC key selector — one of `IA`, `IB`, `DA`, `DB`.
+    pub key: ArmAuthKey,
+}
+
+/// ARM64E PAC key selector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArmAuthKey {
+    /// Instruction A key — used for function pointers.
+    IA,
+    /// Instruction B key — used by some thunks.
+    IB,
+    /// Data A key — used for data pointers.
+    DA,
+    /// Data B key — used for some struct member pointers.
+    DB,
+}
+
+impl ArmAuthKey {
+    /// Decode the 2-bit key selector at bits 49–50 of an arm64e
+    /// authenticated rebase entry.
+    pub fn from_raw_bits(bits: u8) -> Self {
+        match bits & 0x3 {
+            0 => ArmAuthKey::IA,
+            1 => ArmAuthKey::IB,
+            2 => ArmAuthKey::DA,
+            _ => ArmAuthKey::DB,
+        }
+    }
+}
+
+/// Parse a `LC_DYLD_CHAINED_FIXUPS` payload starting at offset 0 of
+/// `data`. Returns `None` for malformed input.
+pub fn parse_chained_fixups(data: &[u8]) -> Option<ChainedFixups> {
+    if data.len() < 32 {
+        return None;
+    }
+    // dyld_chained_fixups_header (32 bytes):
+    //   fixups_version u32
+    //   starts_offset  u32
+    //   imports_offset u32
+    //   symbols_offset u32
+    //   imports_count  u32
+    //   imports_format u32
+    //   symbols_format u32  (0 = uncompressed, 1 = zlib)
+    let _version = u32::from_le_bytes(data[0..4].try_into().ok()?);
+    let starts_offset = u32::from_le_bytes(data[4..8].try_into().ok()?) as usize;
+    let imports_offset = u32::from_le_bytes(data[8..12].try_into().ok()?) as usize;
+    let symbols_offset = u32::from_le_bytes(data[12..16].try_into().ok()?) as usize;
+    let imports_count = u32::from_le_bytes(data[16..20].try_into().ok()?) as usize;
+    let imports_format = u32::from_le_bytes(data[20..24].try_into().ok()?);
+    let _symbols_format = u32::from_le_bytes(data[24..28].try_into().ok()?);
+
+    let imports = parse_chained_imports(
+        data,
+        imports_offset,
+        symbols_offset,
+        imports_count,
+        imports_format,
+    )?;
+
+    // dyld_chained_starts_in_image at `starts_offset`:
+    //   seg_count          u32
+    //   seg_info_offset[]  u32 — per-segment offset, 0 = no fixups in seg
+    if starts_offset.checked_add(4)? > data.len() {
+        return None;
+    }
+    let seg_count = u32::from_le_bytes(data[starts_offset..starts_offset + 4].try_into().ok()?)
+        as usize;
+    let mut rebases: std::collections::BTreeMap<u32, Vec<RebaseEntry>> =
+        std::collections::BTreeMap::new();
+    for seg in 0..seg_count {
+        let off = starts_offset + 4 + seg * 4;
+        if off + 4 > data.len() {
+            return None;
+        }
+        let seg_info_off =
+            u32::from_le_bytes(data[off..off + 4].try_into().ok()?) as usize;
+        if seg_info_off == 0 {
+            continue;
+        }
+        // Per-segment `dyld_chained_starts_in_segment`:
+        //   size                u32
+        //   page_size           u16
+        //   pointer_format      u16
+        //   segment_offset      u64
+        //   max_valid_pointer   u32
+        //   page_count          u16
+        //   page_start[]        u16
+        let base = starts_offset + seg_info_off;
+        if base + 22 > data.len() {
+            return None;
+        }
+        let _size = u32::from_le_bytes(data[base..base + 4].try_into().ok()?);
+        let page_size = u16::from_le_bytes(data[base + 4..base + 6].try_into().ok()?) as usize;
+        let pointer_format =
+            u16::from_le_bytes(data[base + 6..base + 8].try_into().ok()?);
+        let segment_offset =
+            u64::from_le_bytes(data[base + 8..base + 16].try_into().ok()?);
+        let _max_valid =
+            u32::from_le_bytes(data[base + 16..base + 20].try_into().ok()?);
+        let page_count = u16::from_le_bytes(data[base + 20..base + 22].try_into().ok()?)
+            as usize;
+
+        let mut entries = Vec::new();
+        for page in 0..page_count {
+            let ps_off = base + 22 + page * 2;
+            if ps_off + 2 > data.len() {
+                return None;
+            }
+            let page_start = u16::from_le_bytes(data[ps_off..ps_off + 2].try_into().ok()?);
+            // 0xFFFF = DYLD_CHAINED_PTR_START_NONE — no chain on this page.
+            if page_start == 0xFFFF {
+                continue;
+            }
+            walk_chain_for_page(
+                data,
+                segment_offset,
+                page,
+                page_size,
+                page_start,
+                pointer_format,
+                &mut entries,
+            );
+        }
+        if !entries.is_empty() {
+            rebases.insert(seg as u32, entries);
+        }
+    }
+
+    Some(ChainedFixups { imports, rebases })
+}
+
+/// Walk one page's fixup chain starting at `page_start`. Each entry's
+/// `next` field gives the stride (in stride units per the
+/// pointer_format) to the next entry; 0 terminates the chain.
+fn walk_chain_for_page(
+    data: &[u8],
+    segment_offset: u64,
+    page_index: usize,
+    page_size: usize,
+    page_start: u16,
+    pointer_format: u16,
+    out: &mut Vec<RebaseEntry>,
+) {
+    // Pointer formats we model:
+    //   1 = DYLD_CHAINED_PTR_ARM64E
+    //   2 = DYLD_CHAINED_PTR_64
+    //   6 = DYLD_CHAINED_PTR_64_OFFSET
+    //   7 = DYLD_CHAINED_PTR_ARM64E_KERNEL
+    const STRIDE_8: u64 = 8;
+    const STRIDE_4: u64 = 4;
+    let stride = match pointer_format {
+        1 | 7 => STRIDE_8,
+        2 | 6 => STRIDE_4,
+        _ => return,
+    };
+    let mut cursor_off =
+        page_index as u64 * page_size as u64 + page_start as u64;
+    // Safety cap so a malformed chain can't loop.
+    let max_iters = (page_size as u64 / stride) + 1;
+    for _ in 0..max_iters {
+        let entry_file_off = segment_offset + cursor_off;
+        if (entry_file_off as usize) + 8 > data.len() {
+            return;
+        }
+        let raw = u64::from_le_bytes(
+            data[entry_file_off as usize..entry_file_off as usize + 8]
+                .try_into()
+                .unwrap_or([0; 8]),
+        );
+        let next = chain_entry_next(raw, pointer_format);
+        let is_bind = chain_entry_is_bind(raw, pointer_format);
+        if !is_bind {
+            let target = chain_entry_rebase_target(raw, pointer_format);
+            let auth = chain_entry_is_auth(raw, pointer_format);
+            let auth_meta = if auth {
+                Some(decode_arm64e_auth(raw))
+            } else {
+                None
+            };
+            out.push(RebaseEntry {
+                segment_offset: cursor_off,
+                target_vmaddr: target,
+                auth,
+                auth_meta,
+            });
+        }
+        // 0 terminates the chain.
+        if next == 0 {
+            return;
+        }
+        cursor_off = cursor_off.saturating_add(next * stride);
+    }
+}
+
+/// Extract the `next` stride field for the given pointer format.
+fn chain_entry_next(raw: u64, pointer_format: u16) -> u64 {
+    match pointer_format {
+        1 | 7 => (raw >> 51) & 0x7FF, // arm64e: next is 11 bits at bit 51
+        2 | 6 => (raw >> 51) & 0xFFF, // ptr64*: next is 12 bits at bit 51
+        _ => 0,
+    }
+}
+
+fn chain_entry_is_bind(raw: u64, pointer_format: u16) -> bool {
+    match pointer_format {
+        1 | 7 => (raw >> 62) & 1 != 0,
+        2 | 6 => (raw >> 63) & 1 != 0,
+        _ => false,
+    }
+}
+
+fn chain_entry_is_auth(raw: u64, pointer_format: u16) -> bool {
+    match pointer_format {
+        1 | 7 => (raw >> 63) & 1 != 0,
+        _ => false,
+    }
+}
+
+fn chain_entry_rebase_target(raw: u64, pointer_format: u16) -> u64 {
+    match pointer_format {
+        // DYLD_CHAINED_PTR_ARM64E rebase: target is the low 43 bits.
+        1 | 7 => raw & ((1u64 << 43) - 1),
+        // DYLD_CHAINED_PTR_64 rebase: target is the low 36 bits;
+        // high 16 bits carry the high half of the 8-byte offset.
+        2 | 6 => raw & ((1u64 << 36) - 1),
+        _ => 0,
+    }
+}
+
+/// §5.7: decode the ARM64E PAC fields from an authenticated rebase
+/// entry. Layout (high → low):
+///
+///   bit 63  : auth flag (we only call this when set)
+///   bits 62..51 : `next` stride (already consumed by chain walker)
+///   bits 50..49 : key selector (IA/IB/DA/DB)
+///   bit 48      : address-diversifier
+///   bits 47..32 : 16-bit diversity constant
+///   bits 31..0  : authenticated target (rebased value)
+fn decode_arm64e_auth(raw: u64) -> ArmAuthMeta {
+    let key_bits = ((raw >> 49) & 0x3) as u8;
+    let addr_diversified = (raw >> 48) & 0x1 != 0;
+    let diversity = ((raw >> 32) & 0xFFFF) as u16;
+    ArmAuthMeta {
+        diversity,
+        addr_diversified,
+        key: ArmAuthKey::from_raw_bits(key_bits),
+    }
+}
+
+/// Decode the ordinal-indexed `dyld_chained_import` table. Format
+/// determines the entry width:
+///   `imports_format == 1` → DYLD_CHAINED_IMPORT       (4 bytes)
+///   `imports_format == 2` → DYLD_CHAINED_IMPORT_ADDEND (8 bytes)
+///   `imports_format == 3` → DYLD_CHAINED_IMPORT_ADDEND64 (16 bytes)
+///
+/// All variants share the leading 32 bits: `lib_ordinal:8`,
+/// `weak_import:1`, `name_offset:23`.
+fn parse_chained_imports(
+    data: &[u8],
+    imports_offset: usize,
+    symbols_offset: usize,
+    count: usize,
+    format: u32,
+) -> Option<Vec<ChainedImport>> {
+    let entry_size = match format {
+        1 => 4usize,
+        2 => 8usize,
+        3 => 16usize,
+        _ => return None,
+    };
+    let end = imports_offset.checked_add(count.checked_mul(entry_size)?)?;
+    if end > data.len() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        let off = imports_offset + i * entry_size;
+        let word = u32::from_le_bytes(data[off..off + 4].try_into().ok()?);
+        let lib_ordinal = (word & 0xFF) as u8;
+        let weak_import = (word >> 8) & 0x1 != 0;
+        let name_offset = (word >> 9) as usize;
+        let name = read_cstr(data, symbols_offset + name_offset).unwrap_or_default();
+        out.push(ChainedImport {
+            lib_ordinal,
+            weak_import,
+            name,
+        });
+    }
+    Some(out)
+}
+
+/// Layout plan for extracting a single image from the cache as a
+/// standalone Mach-O blob. Produced by [`DyldCache::plan_image`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImagePlan {
+    /// Original mach_header_64 + load-command bytes, sized to
+    /// `sizeofcmds + 32`.
+    pub mach_header: Vec<u8>,
+    /// One entry per `LC_SEGMENT_64` in declaration order.
+    pub segments: Vec<SegmentPlan>,
+    /// Total bytes needed to hold the assembled image (last segment's
+    /// `fileoff_in_output + filesize`, page-aligned).
+    pub total_size: u64,
+}
+
+/// Per-segment placement inside an [`ImagePlan`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SegmentPlan {
+    pub name: String,
+    pub vmaddr: u64,
+    pub vmsize: u64,
+    /// Where the segment lives in the cache file.
+    pub fileoff_in_cache: u64,
+    pub filesize: u64,
+    /// Where the segment should live in the assembled standalone blob.
+    pub fileoff_in_output: u64,
 }
 
 fn parse_header(data: &[u8]) -> Option<DyldCacheHeader> {
@@ -1675,6 +2436,57 @@ mod tests {
     /// then append (caller-supplied) extra bytes (slide-info blob). Stamp
     /// `image_bytes` at the image's mach_header file offset and return
     /// `(buffer, slide_blob_file_offset)`.
+    /// Construct a minimal 64-bit Mach-O blob with one LC_SEGMENT_64
+    /// command. The segment data immediately follows the header + load
+    /// commands so the resulting blob is self-contained.
+    ///
+    /// `seg_vmaddr` is the segment's virtual address; the load command
+    /// records its `fileoff` as `header_len`. `seg_filesize` is the
+    /// byte count of segment payload appended after the load command.
+    fn build_minimal_macho_one_segment(
+        seg_name: &str,
+        seg_vmaddr: u64,
+        seg_filesize: u64,
+    ) -> Vec<u8> {
+        const MH_MAGIC_64: u32 = 0xfeedfacf;
+        const LC_SEGMENT_64: u32 = 0x19;
+        const SEG_CMDSIZE: u32 = 72;
+
+        let mut out = Vec::new();
+        // mach_header_64 (32 bytes)
+        out.extend_from_slice(&MH_MAGIC_64.to_le_bytes());
+        out.extend_from_slice(&0x0100_0007u32.to_le_bytes()); // cputype x86_64
+        out.extend_from_slice(&0x0000_0003u32.to_le_bytes()); // cpusubtype
+        out.extend_from_slice(&0x0000_0006u32.to_le_bytes()); // MH_DYLIB
+        out.extend_from_slice(&1u32.to_le_bytes()); // ncmds
+        out.extend_from_slice(&SEG_CMDSIZE.to_le_bytes()); // sizeofcmds
+        out.extend_from_slice(&0u32.to_le_bytes()); // flags
+        out.extend_from_slice(&0u32.to_le_bytes()); // reserved
+
+        // LC_SEGMENT_64 (72 bytes)
+        out.extend_from_slice(&LC_SEGMENT_64.to_le_bytes());
+        out.extend_from_slice(&SEG_CMDSIZE.to_le_bytes());
+        let mut seg_name_bytes = [0u8; 16];
+        let copy_len = seg_name.len().min(16);
+        seg_name_bytes[..copy_len].copy_from_slice(&seg_name.as_bytes()[..copy_len]);
+        out.extend_from_slice(&seg_name_bytes);
+        out.extend_from_slice(&seg_vmaddr.to_le_bytes());
+        out.extend_from_slice(&seg_filesize.to_le_bytes()); // vmsize
+        // fileoff = 32 + 72 (header_len) — segment payload appended next
+        out.extend_from_slice(&(32u64 + 72).to_le_bytes());
+        out.extend_from_slice(&seg_filesize.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes()); // maxprot
+        out.extend_from_slice(&0u32.to_le_bytes()); // initprot
+        out.extend_from_slice(&0u32.to_le_bytes()); // nsects
+        out.extend_from_slice(&0u32.to_le_bytes()); // flags
+
+        // Segment payload — fill with a recognisable byte pattern.
+        for i in 0..seg_filesize {
+            out.push((i & 0xFF) as u8);
+        }
+        out
+    }
+
     fn build_cache_with_image(
         image_va: u64,
         image_file_off: u64,
@@ -2186,5 +2998,462 @@ mod tests {
         // And the v1 slide is actually applied (sanity).
         let s0 = u32::from_le_bytes(v1_extracted.bytes[0x10..0x14].try_into().unwrap());
         assert_eq!(s0, 0x0000_0140, "v1 slot rebased by slide_amount");
+    }
+
+    // ----- Phase 1: plan_image ------------------------------------------
+
+    /// Build a synthetic cache containing a minimal Mach-O at a fixed VA
+    /// and verify `plan_image` lists the segment in declaration order
+    /// with correct vmaddr / filesize / cache-relative file offset.
+    #[test]
+    fn plan_image_lists_segments_in_declaration_order() {
+        let image_va = 0x1_8000_0000u64;
+        let macho = build_minimal_macho_one_segment("__TEXT", image_va, 0x1000);
+        let (data, _) = build_cache_with_image(image_va, 0x1000, &macho, &[]);
+        let cache = DyldCache::parse(&data).expect("parse cache");
+
+        let plan = cache.plan_image(image_va).expect("plan_image succeeds");
+        assert_eq!(plan.segments.len(), 1);
+        let seg = &plan.segments[0];
+        assert_eq!(seg.name, "__TEXT");
+        assert_eq!(seg.vmaddr, image_va);
+        assert_eq!(seg.filesize, 0x1000);
+        // The segment lives at file offset 0x1000 + 32 + 72 = 0x10A8.
+        // (Cache image starts at file_offset 0x1000; mach_header is 32 B
+        // then load commands 72 B before the payload.)
+        // We assert the cache fileoff via vaddr_to_file_offset round-trip.
+        let expected = cache
+            .vaddr_to_file_offset(seg.vmaddr)
+            .expect("vaddr translation");
+        assert_eq!(seg.fileoff_in_cache, expected);
+        // Output offset is page-aligned (0x1000) and starts past the
+        // header + load commands.
+        assert_eq!(seg.fileoff_in_output % 0x1000, 0);
+        assert!(seg.fileoff_in_output >= 32 + 72);
+        // total_size covers header + load cmds + the segment, page-aligned.
+        assert!(plan.total_size >= seg.fileoff_in_output + seg.filesize);
+    }
+
+    /// An out-of-range VA returns `None` rather than panicking.
+    #[test]
+    fn plan_image_returns_none_for_unknown_vaddr() {
+        let image_va = 0x1_8000_0000u64;
+        let macho = build_minimal_macho_one_segment("__TEXT", image_va, 0x1000);
+        let (data, _) = build_cache_with_image(image_va, 0x1000, &macho, &[]);
+        let cache = DyldCache::parse(&data).expect("parse cache");
+        assert!(cache.plan_image(0xdead_beef).is_none());
+    }
+
+    /// `plan_image` rejects an address whose first 4 bytes aren't the
+    /// 64-bit Mach-O magic.
+    #[test]
+    fn plan_image_rejects_non_macho_magic() {
+        let image_va = 0x1_8000_0000u64;
+        let bogus = vec![0xffu8; 256]; // no mach-o magic
+        let (data, _) = build_cache_with_image(image_va, 0x1000, &bogus, &[]);
+        let cache = DyldCache::parse(&data).expect("parse cache");
+        assert!(cache.plan_image(image_va).is_none());
+    }
+
+    // ----- Phase 2: assemble_image + extract_image_as_macho ----------
+
+    /// Assemble round-trips through `MachoLoader::can_load` — the
+    /// extracted blob is a syntactically valid 64-bit Mach-O.
+    #[test]
+    fn extract_image_as_macho_round_trips_through_macho_loader() {
+        use crate::{Loader, MachoLoader};
+        let image_va = 0x1_8000_0000u64;
+        let macho = build_minimal_macho_one_segment("__TEXT", image_va, 0x1000);
+        let (data, _) = build_cache_with_image(image_va, 0x1000, &macho, &[]);
+        let cache = DyldCache::parse(&data).expect("parse cache");
+
+        let blob = cache
+            .extract_image_as_macho("/usr/lib/libtest.dylib")
+            .expect("extract");
+        assert!(MachoLoader::can_load(&blob), "Mach-O magic intact");
+        // Loader recognises the cputype as x86_64 (cputype 0x01000007).
+        let img = MachoLoader::load(&blob).expect("standalone macho parses");
+        assert_eq!(img.arch, unlace_ir::ArchId::X86_64);
+    }
+
+    /// `assemble_image` rewrites each LC_SEGMENT_64 `fileoff` to point
+    /// at the linearised output offset (not the cache offset).
+    #[test]
+    fn assemble_image_rewrites_segment_fileoff() {
+        const LC_SEGMENT_64: u32 = 0x19;
+        let image_va = 0x1_8000_0000u64;
+        let macho = build_minimal_macho_one_segment("__TEXT", image_va, 0x1000);
+        let (data, _) = build_cache_with_image(image_va, 0x1000, &macho, &[]);
+        let cache = DyldCache::parse(&data).expect("parse");
+        let plan = cache.plan_image(image_va).expect("plan");
+        let blob = cache.assemble_image(&plan);
+
+        // Walk the assembled blob and find the LC_SEGMENT_64.
+        let ncmds = u32::from_le_bytes(blob[16..20].try_into().unwrap());
+        let mut cursor = 32usize;
+        let mut found = false;
+        for _ in 0..ncmds {
+            let cmd = u32::from_le_bytes(blob[cursor..cursor + 4].try_into().unwrap());
+            let cmdsize =
+                u32::from_le_bytes(blob[cursor + 4..cursor + 8].try_into().unwrap()) as usize;
+            if cmd == LC_SEGMENT_64 {
+                let fileoff =
+                    u64::from_le_bytes(blob[cursor + 40..cursor + 48].try_into().unwrap());
+                assert_eq!(
+                    fileoff, plan.segments[0].fileoff_in_output,
+                    "LC_SEGMENT_64 fileoff must point at the linearised output offset",
+                );
+                found = true;
+                break;
+            }
+            cursor += cmdsize;
+        }
+        assert!(found, "LC_SEGMENT_64 not located in assembled blob");
+    }
+
+    // ----- Phase 3: parse_chained_fixups --------------------------------
+
+    /// Build a `LC_DYLD_CHAINED_FIXUPS` payload containing one segment
+    /// with one page whose chain holds a single PTR_64 rebase entry at
+    /// page offset `entry_off`, then terminates.
+    fn build_minimal_fixups_ptr64(entry_off: u64, target: u64) -> Vec<u8> {
+        // Layout:
+        //   [0 .. 32)  dyld_chained_fixups_header
+        //   [32 .. 36) starts.seg_count = 1
+        //   [36 .. 40) starts.seg_info_offset[0] = 8 (relative to starts_offset = 32)
+        //   [40 .. 62) dyld_chained_starts_in_segment
+        //   [62 .. 64) page_start[0] = entry_off
+        //   [64 .. )   imports table (empty: 0 entries, format=1 → 0 bytes)
+        let mut blob = vec![0u8; 64];
+        // Header
+        blob[0..4].copy_from_slice(&0u32.to_le_bytes()); // fixups_version
+        blob[4..8].copy_from_slice(&32u32.to_le_bytes()); // starts_offset
+        blob[8..12].copy_from_slice(&64u32.to_le_bytes()); // imports_offset
+        blob[12..16].copy_from_slice(&64u32.to_le_bytes()); // symbols_offset
+        blob[16..20].copy_from_slice(&0u32.to_le_bytes()); // imports_count = 0
+        blob[20..24].copy_from_slice(&1u32.to_le_bytes()); // imports_format = 1
+        blob[24..28].copy_from_slice(&0u32.to_le_bytes()); // symbols_format
+        blob[28..32].copy_from_slice(&0u32.to_le_bytes()); // padding
+        // starts_in_image
+        blob[32..36].copy_from_slice(&1u32.to_le_bytes()); // seg_count
+        blob[36..40].copy_from_slice(&8u32.to_le_bytes()); // seg_info_offset[0]
+        // starts_in_segment at offset 40 (= starts_offset 32 + seg_info_offset 8):
+        blob[40..44].copy_from_slice(&24u32.to_le_bytes()); // size of this struct
+        blob[44..46].copy_from_slice(&0x4000u16.to_le_bytes()); // page_size = 16 KiB
+        blob[46..48].copy_from_slice(&2u16.to_le_bytes()); // pointer_format = PTR_64
+        // segment_offset — where the chain entries actually live (relative
+        // to the start of *this* payload). We place them at offset 100
+        // so the chain walker reads from blob[100 + cursor_off..].
+        blob[48..56].copy_from_slice(&100u64.to_le_bytes());
+        blob[56..60].copy_from_slice(&0u32.to_le_bytes()); // max_valid_pointer
+        blob[60..62].copy_from_slice(&1u16.to_le_bytes()); // page_count
+        blob[62..64].copy_from_slice(&(entry_off as u16).to_le_bytes()); // page_start[0]
+
+        // Pad up to offset 100 + 8 to hold one chain entry.
+        let needed = 100 + 8;
+        if blob.len() < needed {
+            blob.resize(needed, 0);
+        }
+        // Encode one PTR_64 rebase entry at segment offset `entry_off`:
+        //   bit 63 = bind flag (0 = rebase)
+        //   bits 62..51 = next (12 bits; 0 = end of chain)
+        //   bits 50..36 = high
+        //   bits 35..0  = target VA
+        let raw = target & ((1u64 << 36) - 1);
+        let entry_pos = 100 + entry_off as usize;
+        if entry_pos + 8 > blob.len() {
+            blob.resize(entry_pos + 8, 0);
+        }
+        blob[entry_pos..entry_pos + 8].copy_from_slice(&raw.to_le_bytes());
+
+        blob
+    }
+
+    #[test]
+    fn chained_fixups_decodes_rebase_chain_for_ptr64() {
+        let blob = build_minimal_fixups_ptr64(0, 0xdeadbeef);
+        let fixups = parse_chained_fixups(&blob).expect("parse fixups");
+        assert!(fixups.imports.is_empty());
+        let rebases = fixups
+            .rebases
+            .get(&0)
+            .expect("segment 0 should have rebase entries");
+        assert_eq!(rebases.len(), 1);
+        assert_eq!(rebases[0].segment_offset, 0);
+        assert_eq!(rebases[0].target_vmaddr, 0xdeadbeef);
+        assert!(!rebases[0].auth);
+    }
+
+    /// `imports_count` = 1 ordinal entry that points at a NUL-terminated
+    /// symbol name in the symbols region.
+    #[test]
+    fn chained_fixups_resolves_imports_via_ordinal() {
+        // Header + minimal starts (no fixups for the single segment)
+        // + 1 import entry + symbols.
+        let header_len = 32usize;
+        let starts_len = 8usize; // seg_count + 1 seg_info_offset = 0
+        let import_len = 4usize;
+        let imports_offset = header_len + starts_len;
+        let symbols_offset = imports_offset + import_len;
+        let mut blob = vec![0u8; symbols_offset];
+        // Header
+        blob[4..8].copy_from_slice(&(header_len as u32).to_le_bytes()); // starts_offset
+        blob[8..12].copy_from_slice(&(imports_offset as u32).to_le_bytes());
+        blob[12..16].copy_from_slice(&(symbols_offset as u32).to_le_bytes());
+        blob[16..20].copy_from_slice(&1u32.to_le_bytes()); // imports_count
+        blob[20..24].copy_from_slice(&1u32.to_le_bytes()); // imports_format=1
+        // starts_in_image: 1 segment with seg_info_offset = 0 (no fixups).
+        blob[header_len..header_len + 4].copy_from_slice(&1u32.to_le_bytes());
+        // seg_info_offset[0] already zero
+        // import entry: lib_ordinal=2, weak=0, name_offset=0
+        let import = 2u32 | (0u32 << 8) | (0u32 << 9);
+        blob[imports_offset..imports_offset + 4].copy_from_slice(&import.to_le_bytes());
+        // symbols: "memcpy\0"
+        blob.extend_from_slice(b"memcpy\0");
+
+        let fixups = parse_chained_fixups(&blob).expect("parse");
+        assert_eq!(fixups.imports.len(), 1);
+        assert_eq!(fixups.imports[0].lib_ordinal, 2);
+        assert!(!fixups.imports[0].weak_import);
+        assert_eq!(fixups.imports[0].name, "memcpy");
+    }
+
+    /// §5.7: a synthetic arm64e auth rebase populates `auth_meta` with
+    /// the recovered diversity / key / addr-diversifier.
+    #[test]
+    fn arm64e_auth_metadata_decodes_diversity_key_and_addr_div() {
+        // Build a single arm64e PTR_ARM64E (format=1) auth rebase entry:
+        //   bit 63 = 1 (auth)
+        //   bits 62-51 = 0 (next = 0, terminates chain)
+        //   bits 50-49 = 2 (key = DA)
+        //   bit 48 = 1 (addr-diversified)
+        //   bits 47-32 = 0xCAFE (diversity)
+        //   bits 31-0 = 0x12345 (target — not validated here)
+        let auth = 1u64 << 63;
+        let key = (2u64) << 49;
+        let addr_div = 1u64 << 48;
+        let div = 0xCAFEu64 << 32;
+        let target = 0x12345u64;
+        let raw = auth | key | addr_div | div | target;
+
+        // Wrap into a fixups blob the parser can consume.
+        let mut blob = vec![0u8; 64];
+        blob[0..4].copy_from_slice(&0u32.to_le_bytes());
+        blob[4..8].copy_from_slice(&32u32.to_le_bytes()); // starts_offset
+        blob[8..12].copy_from_slice(&64u32.to_le_bytes());
+        blob[12..16].copy_from_slice(&64u32.to_le_bytes());
+        blob[16..20].copy_from_slice(&0u32.to_le_bytes());
+        blob[20..24].copy_from_slice(&1u32.to_le_bytes()); // imports_format
+        blob[24..28].copy_from_slice(&0u32.to_le_bytes());
+        blob[28..32].copy_from_slice(&0u32.to_le_bytes());
+        blob[32..36].copy_from_slice(&1u32.to_le_bytes()); // seg_count
+        blob[36..40].copy_from_slice(&8u32.to_le_bytes()); // seg_info_offset[0]
+        blob[40..44].copy_from_slice(&24u32.to_le_bytes()); // size
+        blob[44..46].copy_from_slice(&0x4000u16.to_le_bytes()); // page_size
+        blob[46..48].copy_from_slice(&1u16.to_le_bytes()); // PTR_ARM64E
+        blob[48..56].copy_from_slice(&100u64.to_le_bytes()); // segment_offset
+        blob[56..60].copy_from_slice(&0u32.to_le_bytes());
+        blob[60..62].copy_from_slice(&1u16.to_le_bytes()); // page_count
+        blob[62..64].copy_from_slice(&0u16.to_le_bytes()); // page_start[0] = 0
+
+        // The chain entry lives at file offset 100 + 0 = 100.
+        if blob.len() < 108 {
+            blob.resize(108, 0);
+        }
+        blob[100..108].copy_from_slice(&raw.to_le_bytes());
+
+        let fixups = parse_chained_fixups(&blob).expect("parse");
+        let rebases = fixups.rebases.get(&0).expect("seg 0 rebases");
+        assert_eq!(rebases.len(), 1);
+        let r = &rebases[0];
+        assert!(r.auth, "auth flag set");
+        let meta = r.auth_meta.as_ref().expect("auth_meta populated");
+        assert_eq!(meta.diversity, 0xCAFE);
+        assert!(meta.addr_diversified);
+        assert_eq!(meta.key, ArmAuthKey::DA);
+    }
+
+    /// A truncated payload returns `None` rather than panicking.
+    #[test]
+    fn chained_fixups_rejects_truncated_input() {
+        let too_short = vec![0u8; 16];
+        assert!(parse_chained_fixups(&too_short).is_none());
+    }
+
+    // ----- Phase 4: subcaches() reader ---------------------------------
+
+    /// Pre-macOS 12 caches have `subCacheArrayCount = 0` (the field
+    /// either lives at zero in the header, or is past the header
+    /// region entirely). Either way `subcaches()` returns an empty
+    /// list.
+    #[test]
+    fn subcaches_empty_for_pre_macos_12_caches() {
+        let data = build_cache(&magic_x86_64(), &[], &[]);
+        let cache = DyldCache::parse(&data).expect("parse cache");
+        assert!(cache.subcaches().is_empty());
+    }
+
+    /// macOS 12+ layout: write a 3-entry subCacheArray after the
+    /// existing cache shell and point the primary header's
+    /// subCacheArrayOffset/Count at it.
+    #[test]
+    fn subcaches_decodes_modern_layout() {
+        let mut data = build_cache(&magic_x86_64(), &[], &[]);
+        // Pad the cache up to the header field region we need to
+        // populate (offset 0x1d0 is the end of the (Count) field).
+        if data.len() < 0x200 {
+            data.resize(0x200, 0);
+        }
+        let entries_offset = 0x200u32;
+        let count = 3u32;
+        let entry_size = 16 + 8 + 32usize; // 56 bytes
+        let total = (count as usize) * entry_size;
+        if data.len() < entries_offset as usize + total {
+            data.resize(entries_offset as usize + total, 0);
+        }
+        // Write header fields.
+        data[0x1c8..0x1cc].copy_from_slice(&entries_offset.to_le_bytes());
+        data[0x1cc..0x1d0].copy_from_slice(&count.to_le_bytes());
+        // Three subcache entries.
+        for (i, (vm_off, suffix)) in [
+            (0x1000u64, ".01"),
+            (0x2000u64, ".02"),
+            (0x3000u64, ".symbols"),
+        ]
+        .iter()
+        .enumerate()
+        {
+            let base = entries_offset as usize + i * entry_size;
+            // UUID — fill with `i + 1` so each entry has a distinct value.
+            for b in &mut data[base..base + 16] {
+                *b = (i + 1) as u8;
+            }
+            data[base + 16..base + 24].copy_from_slice(&vm_off.to_le_bytes());
+            let suffix_bytes = suffix.as_bytes();
+            let len = suffix_bytes.len().min(32);
+            data[base + 24..base + 24 + len].copy_from_slice(&suffix_bytes[..len]);
+        }
+        let cache = DyldCache::parse(&data).expect("parse cache");
+        let subs = cache.subcaches();
+        assert_eq!(subs.len(), 3);
+        assert_eq!(subs[0].cache_vm_offset, 0x1000);
+        assert_eq!(subs[0].file_suffix, ".01");
+        assert_eq!(subs[1].cache_vm_offset, 0x2000);
+        assert_eq!(subs[1].file_suffix, ".02");
+        assert_eq!(subs[2].cache_vm_offset, 0x3000);
+        assert_eq!(subs[2].file_suffix, ".symbols");
+        // Distinct UUIDs.
+        assert_ne!(subs[0].uuid, subs[1].uuid);
+        assert_ne!(subs[1].uuid, subs[2].uuid);
+    }
+
+    // ----- §5.4 DyldCacheCollection -----------------------------------
+
+    /// Primary covers an image; lookup returns the primary's bytes.
+    #[test]
+    fn collection_routes_primary_vaddr_to_primary_bytes() {
+        let image_va = 0x1_8000_0000u64;
+        let macho = build_minimal_macho_one_segment("__TEXT", image_va, 0x1000);
+        let (data, _) = build_cache_with_image(image_va, 0x1000, &macho, &[]);
+        let primary = DyldCache::parse(&data).unwrap();
+        let col = DyldCacheCollection::new(primary, BTreeMap::new()).unwrap();
+        let (bytes, off) = col.vaddr_to_bytes(image_va).expect("primary route");
+        assert_eq!(bytes.as_ptr(), data.as_ptr());
+        assert_eq!(off, 0x1000);
+    }
+
+    /// VA outside the primary that falls inside a registered subcache
+    /// is routed to that subcache's bytes.
+    #[test]
+    fn collection_routes_subcache_vaddr_to_subcache_bytes() {
+        let primary_va = 0x1_8000_0000u64;
+        let primary_macho =
+            build_minimal_macho_one_segment("__TEXT", primary_va, 0x1000);
+        let (primary_bytes, _) =
+            build_cache_with_image(primary_va, 0x1000, &primary_macho, &[]);
+
+        let sub_va = 0x1_9000_0000u64;
+        let sub_macho = build_minimal_macho_one_segment("__TEXT", sub_va, 0x1000);
+        let (sub_bytes, _) = build_cache_with_image(sub_va, 0x1000, &sub_macho, &[]);
+
+        // We have to keep the sub_bytes alive for the lifetime of the
+        // collection. Box::leak is fine in a test.
+        let primary_leak: &'static [u8] = Box::leak(primary_bytes.into_boxed_slice());
+        let sub_leak: &'static [u8] = Box::leak(sub_bytes.into_boxed_slice());
+
+        let primary = DyldCache::parse(primary_leak).unwrap();
+        let mut subs = BTreeMap::new();
+        subs.insert(".01".to_string(), sub_leak);
+        let col = DyldCacheCollection::new(primary, subs).unwrap();
+
+        // Primary VA still resolves through the primary.
+        let (got_primary, _) = col.vaddr_to_bytes(primary_va).unwrap();
+        assert!(std::ptr::eq(got_primary.as_ptr(), primary_leak.as_ptr()));
+
+        // Subcache VA resolves through the subcache.
+        let (got_sub, _) = col.vaddr_to_bytes(sub_va).unwrap();
+        assert!(std::ptr::eq(got_sub.as_ptr(), sub_leak.as_ptr()));
+
+        // An out-of-range VA returns None.
+        assert!(col.vaddr_to_bytes(0xdead_beef).is_none());
+    }
+
+    /// `extract_image_as_macho` works through the collection.
+    #[test]
+    fn collection_extract_image_as_macho_round_trips() {
+        use crate::{Loader, MachoLoader};
+        let image_va = 0x1_8000_0000u64;
+        let macho = build_minimal_macho_one_segment("__TEXT", image_va, 0x1000);
+        let (data, _) = build_cache_with_image(image_va, 0x1000, &macho, &[]);
+        let primary = DyldCache::parse(&data).unwrap();
+        let col = DyldCacheCollection::new(primary, BTreeMap::new()).unwrap();
+        let blob = col
+            .extract_image_as_macho("/usr/lib/libtest.dylib")
+            .expect("extract");
+        assert!(MachoLoader::can_load(&blob));
+    }
+
+    /// `subCacheArrayOffset` pointing past the file is ignored, not
+    /// panicked on.
+    #[test]
+    fn subcaches_rejects_oversize_offset() {
+        let mut data = build_cache(&magic_x86_64(), &[], &[]);
+        if data.len() < 0x1d0 {
+            data.resize(0x1d0, 0);
+        }
+        data[0x1c8..0x1cc].copy_from_slice(&0xFFFFFFFFu32.to_le_bytes());
+        data[0x1cc..0x1d0].copy_from_slice(&1u32.to_le_bytes());
+        let cache = DyldCache::parse(&data).expect("parse cache");
+        assert!(cache.subcaches().is_empty());
+    }
+
+    /// The segment payload survives verbatim from the cache into the
+    /// assembled blob. In a real dyld cache the `__TEXT` segment
+    /// includes the mach_header + load commands at its start, so the
+    /// first byte at the segment's output offset is the Mach-O magic.
+    /// The synthetic payload bytes (`i & 0xFF`) start at offset
+    /// 32 + 72 = 104 inside the segment.
+    #[test]
+    fn assemble_image_preserves_segment_payload_bytes() {
+        let image_va = 0x1_8000_0000u64;
+        let seg_size = 0x1000u64;
+        let macho = build_minimal_macho_one_segment("__TEXT", image_va, seg_size);
+        let (data, _) = build_cache_with_image(image_va, 0x1000, &macho, &[]);
+        let cache = DyldCache::parse(&data).expect("parse");
+        let plan = cache.plan_image(image_va).expect("plan");
+        let blob = cache.assemble_image(&plan);
+
+        let seg = &plan.segments[0];
+        let off = seg.fileoff_in_output as usize;
+        // First 4 bytes at the segment boundary are the MH_MAGIC_64
+        // little-endian (0xfeedfacf).
+        assert_eq!(&blob[off..off + 4], &[0xcf, 0xfa, 0xed, 0xfe]);
+        // Synthetic payload (`i & 0xFF`) starts 104 bytes into the
+        // segment.
+        let payload_off = off + 104;
+        assert_eq!(blob[payload_off], 0);
+        assert_eq!(blob[payload_off + 1], 1);
+        assert_eq!(blob[payload_off + 0xFF], 0xFF);
+        assert_eq!(blob[payload_off + 0x100], 0); // wraps at byte 256
     }
 }

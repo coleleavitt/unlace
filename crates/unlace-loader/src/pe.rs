@@ -98,6 +98,8 @@ where
     // pass name `Callind` chains that narrow to an IAT slot.
     let iat_imports = build_iat_imports::<Pe>(&file);
 
+    let pe_mitigations = Some(parse_pe_mitigations::<Pe>(&file, data, load_config.as_ref()));
+
     let mut image = BinaryImage {
         arch,
         endian: Endian::Little,
@@ -111,6 +113,7 @@ where
         function_starts: Vec::new(),
         debug_records,
         load_config,
+        pe_mitigations,
         runtime_functions,
         resources,
         bound_imports,
@@ -421,6 +424,81 @@ fn parse_rsds_record(
     let pdb_path = if path.is_empty() { None } else { Some(path) };
 
     (pdb_path, Some(guid), Some(age))
+}
+
+/// Batch 23: extract PE mitigation flags from the optional header's
+/// `DllCharacteristics` field plus any `LoadConfig::guard_flags`, and
+/// note whether `IMAGE_DIRECTORY_ENTRY_SECURITY` (Authenticode) is
+/// populated.
+///
+/// Returns a fully-populated [`PeMitigations`] — fields default to
+/// `false`/`0` so an old PE without these directories doesn't generate
+/// noise.
+fn parse_pe_mitigations<Pe>(
+    file: &PeFile<Pe>,
+    data: &[u8],
+    load_config: Option<&LoadConfig>,
+) -> crate::image::PeMitigations
+where
+    Pe: ImageNtHeaders,
+{
+    // DLL characteristics flags from the optional header.
+    let dll_characteristics = file.nt_headers().optional_header().dll_characteristics();
+    const NX_COMPAT: u16 = 0x0100;
+    const DYNAMIC_BASE: u16 = 0x0040;
+    const HIGH_ENTROPY_VA: u16 = 0x0020;
+    const GUARD_CF: u16 = 0x4000;
+
+    // Guard flags from the load config (when present).
+    const IMAGE_GUARD_CF_INSTRUMENTED: u32 = 0x0000_0100;
+    const IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT: u32 = 0x0000_0400;
+    // IMAGE_GUARD_XFG_ENABLED: bit 16 (0x0001_0000) on recent SDKs.
+    const IMAGE_GUARD_XFG_ENABLED: u32 = 0x0001_0000;
+    // IMAGE_GUARD_RF_INSTRUMENTED: bit 11 (0x0000_2000).
+    const IMAGE_GUARD_RF_INSTRUMENTED: u32 = 0x0000_2000;
+
+    let guard_flags = load_config.map(|lc| lc.guard_flags).unwrap_or(0);
+    let cfg_instrumented = (guard_flags & IMAGE_GUARD_CF_INSTRUMENTED) != 0;
+    let xf_or_xfg_guarded = (guard_flags
+        & (IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT
+            | IMAGE_GUARD_XFG_ENABLED
+            | IMAGE_GUARD_RF_INSTRUMENTED))
+        != 0;
+
+    // IMAGE_DIRECTORY_ENTRY_SECURITY (4) carries Authenticode. Unlike
+    // other data directories its RVA is a *file offset* — the entry
+    // points at a `WIN_CERTIFICATE` blob in the security section.
+    let (authenticode_present, authenticode_size) = match file
+        .data_directories()
+        .get(pe::IMAGE_DIRECTORY_ENTRY_SECURITY)
+    {
+        Some(dir) if dir.size.get(object::LittleEndian) > 0 => {
+            let file_off = dir.virtual_address.get(object::LittleEndian) as usize;
+            let size = dir.size.get(object::LittleEndian);
+            if file_off + (size as usize) <= data.len() {
+                (true, size)
+            } else {
+                tracing::debug!(
+                    file_off,
+                    size,
+                    "PE security directory references bytes outside the file"
+                );
+                (false, 0)
+            }
+        }
+        _ => (false, 0),
+    };
+
+    crate::image::PeMitigations {
+        nx_compat: (dll_characteristics & NX_COMPAT) != 0,
+        dynamic_base: (dll_characteristics & DYNAMIC_BASE) != 0,
+        high_entropy_va: (dll_characteristics & HIGH_ENTROPY_VA) != 0,
+        guard_cf: (dll_characteristics & GUARD_CF) != 0,
+        cfg_instrumented,
+        xf_or_xfg_guarded,
+        authenticode_present,
+        authenticode_size,
+    }
 }
 
 /// Parse `IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG` into a [`LoadConfig`].
@@ -1567,6 +1645,16 @@ mod tests {
     fn test_load_minimal_pe64() {
         let pe = minimal_pe64();
         let img = PeLoader::load(&pe).expect("should parse minimal PE64");
+
+        // Batch 23: PE mitigation flags are populated even for the
+        // synthetic minimal PE — `pe_mitigations` is always `Some` for
+        // a successfully loaded PE.
+        let mits = img
+            .pe_mitigations
+            .as_ref()
+            .expect("PE input must yield pe_mitigations");
+        assert!(!mits.authenticode_present, "minimal PE has no signature");
+        assert_eq!(mits.authenticode_size, 0);
 
         assert_eq!(img.arch, ArchId::X86_64);
         assert_eq!(img.endian, Endian::Little);
@@ -2883,6 +2971,7 @@ mod tests {
             function_starts: Vec::new(),
             debug_records: Vec::new(),
             load_config: None,
+            pe_mitigations: None,
             runtime_functions: Vec::new(),
             resources: Vec::new(),
             bound_imports: Vec::new(),

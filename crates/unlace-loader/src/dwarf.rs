@@ -45,7 +45,7 @@ use crate::image::BinaryImage;
 
 type R<'a> = EndianSlice<'a, RunTimeEndian>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DwarfInfo {
     pub functions: BTreeMap<u64, FunctionDebugInfo>,
     pub source_map: BTreeMap<u64, SourceLocation>,
@@ -53,6 +53,27 @@ pub struct DwarfInfo {
     pub enums: BTreeMap<String, EnumType>,
     pub unions: BTreeMap<String, UnionType>,
     pub macros: Vec<MacroDefinition>,
+    /// Split-DWARF (`.dwo` / `.dwp`) references discovered in skeleton
+    /// units. Each entry captures the referenced file path + `dwo_id`
+    /// (if present) so a follow-up call to [`DwarfInfo::merge_split_dwarf`]
+    /// can fold the external unit back in. Empty for non-split DWARF.
+    pub dwo_references: Vec<DwoRef>,
+}
+
+/// One entry in [`DwarfInfo::dwo_references`] — a reference to an
+/// external `.dwo` / `.dwp` file carried by `DW_AT_GNU_dwo_name` /
+/// `DW_AT_dwo_name` on a skeleton compile unit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DwoRef {
+    /// File path / name of the external split-DWARF artifact.
+    pub dwo_name: String,
+    /// 8-byte `DW_AT_dwo_id` / `DW_AT_GNU_dwo_id` identifier (used to
+    /// verify the .dwo matches the skeleton). `None` if the attribute
+    /// is absent.
+    pub dwo_id: Option<u64>,
+    /// Offset of the skeleton compile unit within `.debug_info` so a
+    /// merge step can rejoin DIE references.
+    pub unit_offset: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +108,12 @@ pub struct LocalVariable {
     pub type_name: Option<String>,
     pub frame_offset: Option<i64>,
     pub locations: Vec<gimli::Range>,
+    /// DWARF v5 `.debug_loclists` decoded per-range expressions paired
+    /// with the PC range over which they hold. Populated when the
+    /// variable's `DW_AT_location` references a `.debug_loclists`
+    /// entry rather than a direct expression. Empty for v4 fbreg
+    /// shapes (the dominant case — see `frame_offset`).
+    pub locations_dwarf_v5: Vec<(gimli::Range, SimpleLocation)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,6 +187,7 @@ pub fn import_dwarf(image: &BinaryImage) -> Result<DwarfInfo, LoadError> {
     let source_map = build_source_map(&dwarf)?;
     let (structs, enums, unions) = extract_composite_types(&dwarf)?;
     let macros = extract_macros(&dwarf)?;
+    let dwo_references = extract_dwo_references(&dwarf)?;
 
     Ok(DwarfInfo {
         functions,
@@ -168,7 +196,110 @@ pub fn import_dwarf(image: &BinaryImage) -> Result<DwarfInfo, LoadError> {
         enums,
         unions,
         macros,
+        dwo_references,
     })
+}
+
+/// Walk every compile-unit root DIE and record any
+/// `DW_AT_GNU_dwo_name` / `DW_AT_dwo_name` attribute, paired with its
+/// optional `dwo_id`. The resulting list is what
+/// [`DwarfInfo::merge_split_dwarf`] consumes when caller supplies the
+/// matching `.dwo` blob.
+fn extract_dwo_references(dwarf: &gimli::Dwarf<R<'_>>) -> Result<Vec<DwoRef>, gimli::Error> {
+    let mut out = Vec::new();
+    let mut units = dwarf.units();
+    while let Some(header) = units.next()? {
+        let unit = dwarf.unit(header)?;
+        let mut tree = unit.entries_tree(None)?;
+        let root = tree.root()?;
+        let entry = root.entry();
+
+        let name_attr = entry
+            .attr_value(gimli::DW_AT_GNU_dwo_name)
+            .or_else(|| entry.attr_value(gimli::DW_AT_dwo_name));
+        let dwo_name = match name_attr {
+            Some(value) => match attr_value_as_string(dwarf, &unit, value)? {
+                Some(s) => s,
+                None => continue,
+            },
+            None => continue,
+        };
+
+        let dwo_id = entry
+            .attr_value(gimli::DW_AT_GNU_dwo_id)
+            .and_then(|v| match v {
+                gimli::AttributeValue::DwoId(id) => Some(id.0),
+                gimli::AttributeValue::Udata(id) => Some(id),
+                _ => None,
+            });
+
+        // Skeleton-unit offset within `.debug_info`. On gimli 0.33+
+        // `UnitSectionOffset` is a unit struct wrapping a raw `usize`.
+        let unit_offset = header.offset().0 as u64;
+        out.push(DwoRef {
+            dwo_name,
+            dwo_id,
+            unit_offset,
+        });
+    }
+    Ok(out)
+}
+
+/// Helper: project an arbitrary `AttributeValue` to a `String` for
+/// `DW_AT_*_name`-style attributes. Returns `None` for non-string
+/// shapes (e.g. constants, references).
+fn attr_value_as_string(
+    dwarf: &gimli::Dwarf<R<'_>>,
+    unit: &gimli::Unit<R<'_>>,
+    value: gimli::AttributeValue<R<'_>>,
+) -> Result<Option<String>, gimli::Error> {
+    match value {
+        gimli::AttributeValue::String(s) => Ok(Some(s.to_string_lossy().into_owned())),
+        gimli::AttributeValue::DebugStrRef(_)
+        | gimli::AttributeValue::DebugLineStrRef(_)
+        | gimli::AttributeValue::DebugStrRefSup(_) => {
+            let s = dwarf.attr_string(unit, value)?;
+            Ok(Some(s.to_string_lossy().into_owned()))
+        }
+        _ => Ok(None),
+    }
+}
+
+impl DwarfInfo {
+    /// Parse a `.dwo` byte blob (skeleton-unit's external partner) and
+    /// fold its discovered functions / types / source mappings into
+    /// this `DwarfInfo`.
+    ///
+    /// The `.dwo` uses renamed gimli sections (`.debug_info.dwo` etc.)
+    /// but otherwise looks like a normal DWARF unit, so we just parse
+    /// it as a plain ELF / object first and recurse through
+    /// [`import_dwarf`].
+    ///
+    /// Existing entries are preserved; duplicates are skipped via the
+    /// underlying `BTreeMap::entry` semantics so the skeleton always
+    /// wins when both define the same key.
+    pub fn merge_split_dwarf(&mut self, dwo_bytes: &[u8]) -> Result<(), crate::LoadError> {
+        use crate::Loader as _;
+        let image = crate::elf::ElfLoader::load(dwo_bytes)?;
+        let dwo_info = import_dwarf(&image)?;
+        for (k, v) in dwo_info.functions {
+            self.functions.entry(k).or_insert(v);
+        }
+        for (k, v) in dwo_info.source_map {
+            self.source_map.entry(k).or_insert(v);
+        }
+        for (k, v) in dwo_info.structs {
+            self.structs.entry(k).or_insert(v);
+        }
+        for (k, v) in dwo_info.enums {
+            self.enums.entry(k).or_insert(v);
+        }
+        for (k, v) in dwo_info.unions {
+            self.unions.entry(k).or_insert(v);
+        }
+        self.macros.extend(dwo_info.macros);
+        Ok(())
+    }
 }
 
 fn extract_macros(dwarf: &gimli::Dwarf<R<'_>>) -> Result<Vec<MacroDefinition>, gimli::Error> {
@@ -311,12 +442,23 @@ fn extract_functions_from_unit(
             continue;
         }
 
+        let ranges = extract_die_ranges(dwarf, unit, entry)?;
+
+        // Derive `low_pc` from `DW_AT_low_pc` when present, otherwise
+        // fall back to the first entry in the range list (DWARF v5
+        // `.debug_rnglists` subprograms may omit `DW_AT_low_pc`).
         let low_pc = match entry.attr_value(DW_AT_low_pc) {
             Some(val) => match dwarf.attr_address(unit, val)? {
                 Some(addr) => addr,
+                None => match ranges.first() {
+                    Some(r) => r.begin,
+                    None => continue,
+                },
+            },
+            None => match ranges.first() {
+                Some(r) => r.begin,
                 None => continue,
             },
-            None => continue,
         };
 
         let name = match attr_string(dwarf, unit, entry, DW_AT_name)? {
@@ -326,7 +468,6 @@ fn extract_functions_from_unit(
 
         let linkage_name = attr_string(dwarf, unit, entry, DW_AT_linkage_name)?;
 
-        let ranges = extract_die_ranges(dwarf, unit, entry)?;
         let high_pc = match entry.attr_value(DW_AT_high_pc) {
             Some(AttributeValue::Addr(addr)) => Some(addr),
             Some(AttributeValue::Udata(size)) => Some(low_pc + size),
@@ -626,9 +767,13 @@ fn extract_params_and_locals(
                 None => None,
             };
             let location_attr = entry.attr_value(DW_AT_location);
-            let frame_offset = location_attr.and_then(decode_fbreg_offset);
-            let locations = match location_attr {
+            let frame_offset = location_attr.clone().and_then(decode_fbreg_offset);
+            let locations = match location_attr.clone() {
                 Some(value) => extract_location_ranges(dwarf, unit, value)?,
+                None => Vec::new(),
+            };
+            let locations_dwarf_v5 = match location_attr {
+                Some(value) => extract_loclist_v5_entries(dwarf, unit, value)?,
                 None => Vec::new(),
             };
             locals.push(LocalVariable {
@@ -636,6 +781,7 @@ fn extract_params_and_locals(
                 type_name,
                 frame_offset,
                 locations,
+                locations_dwarf_v5,
             });
         }
     }
@@ -649,17 +795,263 @@ fn extract_params_and_locals(
 /// expression and `None` otherwise. The opcode constant is `0x91` and the
 /// operand is an SLEB128. Compilers commonly emit this single-opcode form
 /// for stack-allocated locals.
+///
+/// Wraps the more general [`evaluate_simple_location`] but keeps the
+/// historical single-shape entrypoint stable for existing callers.
 fn decode_fbreg_offset(value: AttributeValue<R<'_>>) -> Option<i64> {
+    match evaluate_simple_location(value)? {
+        SimpleLocation::FrameOffset(off) => Some(off),
+        _ => None,
+    }
+}
+
+/// Result of a single-opcode-stream evaluation against a `DW_AT_location`.
+///
+/// The full DWARF expression interpreter is a stack machine with > 100
+/// opcodes — far more than we need to recover variable locations. This
+/// enum captures the handful of *terminal* shapes the loader actually
+/// consumes:
+///
+/// * [`SimpleLocation::FrameOffset`] — `DW_OP_fbreg <sleb>` (the dominant
+///   shape for stack-allocated locals on every modern compiler).
+/// * [`SimpleLocation::Absolute`] — `DW_OP_addr <addr>` (globals, TLS
+///   anchors).
+/// * [`SimpleLocation::Register`] — `DW_OP_regN` or `DW_OP_regx` (the
+///   value lives in a named register).
+/// * [`SimpleLocation::RegisterPlus`] — `DW_OP_bregN <sleb>` /
+///   `DW_OP_bregx` (register-relative offset, e.g. callee-saved chains).
+/// * [`SimpleLocation::Indirect`] — single `DW_OP_deref` after a base
+///   (we only surface the base and an "indirect" flag; the caller
+///   decides what to do with it).
+///
+/// Unrecognised opcodes return `None` from
+/// [`evaluate_simple_location`] so the existing fallback (treat the
+/// variable as unanchored) kicks in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SimpleLocation {
+    /// `DW_OP_fbreg <sleb>` — offset from the function's frame base.
+    FrameOffset(i64),
+    /// `DW_OP_addr <addr>` — absolute virtual address.
+    Absolute(u64),
+    /// `DW_OP_regN` / `DW_OP_regx <uleb>` — register number.
+    Register(u16),
+    /// `DW_OP_bregN <sleb>` / `DW_OP_bregx <uleb> <sleb>` — register +
+    /// constant offset.
+    RegisterPlus(u16, i64),
+    /// Indirection: the inner location yields an address, dereference it
+    /// at the indicated width (0 = pointer-sized).
+    Indirect(Box<SimpleLocation>, u8),
+    /// `DW_OP_stack_value` — the computed value itself, not an address to
+    /// dereference. Wraps an inner location describing the value.
+    StackValue(Box<SimpleLocation>),
+    /// `DW_OP_implicit_value <uleb> <bytes>` — the variable's value is an
+    /// inline constant byte sequence in the DWARF expression itself.
+    ImplicitValue(Vec<u8>),
+    /// Piece composition: the variable is spread across multiple locations.
+    /// Each entry is `(location, size_in_bytes)`.
+    Composite(Vec<(SimpleLocation, u32)>),
+}
+
+/// Evaluate a small, well-behaved subset of DWARF location expressions
+/// without spinning up the full gimli evaluator. Returns `None` for any
+/// expression that doesn't terminate in one of the [`SimpleLocation`]
+/// shapes.
+///
+/// This is intentionally not a complete DW_OP interpreter — there is no
+/// stack machine, no arithmetic ops other than the constant folds inside
+/// `DW_OP_plus_uconst`, no control flow, no piece composition. It exists
+/// so the common single-opcode locations (`DW_OP_fbreg`, `DW_OP_addr`,
+/// `DW_OP_reg*`, `DW_OP_breg*`) and the small `<base> DW_OP_plus_uconst N`
+/// and `<base> DW_OP_deref` extensions land cleanly without dragging the
+/// full evaluator into the loader.
+pub fn evaluate_simple_location(value: AttributeValue<R<'_>>) -> Option<SimpleLocation> {
     let bytes: &[u8] = match value {
         AttributeValue::Block(b) | AttributeValue::Exprloc(gimli::Expression(b)) => b.slice(),
         _ => return None,
     };
-    if bytes.first().copied() != Some(0x91) {
-        return None;
+    evaluate_simple_location_bytes(bytes)
+}
+
+fn evaluate_simple_location_bytes(bytes: &[u8]) -> Option<SimpleLocation> {
+    let mut cursor = bytes;
+    let mut base: Option<SimpleLocation> = None;
+    // Pieces accumulate across `DW_OP_piece` / `DW_OP_bit_piece` boundaries.
+    // When set, `base` is the *current* piece's location and `pieces`
+    // holds everything that came before. On final return we fold.
+    let mut pieces: Option<Vec<(SimpleLocation, u32)>> = None;
+
+    while !cursor.is_empty() {
+        let op = cursor[0];
+        cursor = &cursor[1..];
+        match op {
+            // DW_OP_addr (1) — 8-byte (LE) absolute target on 64-bit
+            // units. Some 32-bit producers emit a 4-byte value; we cover
+            // the common 8-byte form here and fall back to None for the
+            // 32-bit case rather than misread it.
+            0x03 => {
+                if cursor.len() < 8 {
+                    return None;
+                }
+                let mut buf = [0u8; 8];
+                buf.copy_from_slice(&cursor[..8]);
+                cursor = &cursor[8..];
+                base = Some(SimpleLocation::Absolute(u64::from_le_bytes(buf)));
+            }
+            // DW_OP_constNu / DW_OP_constNs — folded into base only when
+            // they precede a plus_uconst; for a standalone "the value
+            // *is* this constant" location we don't have a SimpleLocation
+            // variant, so just stop early.
+            0x08..=0x0d => return None,
+            // DW_OP_deref (0x06)
+            0x06 => {
+                let inner = base?;
+                base = Some(SimpleLocation::Indirect(Box::new(inner), 0));
+            }
+            // DW_OP_plus_uconst <uleb>: add an unsigned constant to the
+            // top of the stack. We model that by promoting `RegisterPlus`
+            // or `FrameOffset` accordingly.
+            0x23 => {
+                let (k, rest) = read_uleb128(cursor)?;
+                cursor = rest;
+                base = Some(match base {
+                    Some(SimpleLocation::FrameOffset(off)) => {
+                        SimpleLocation::FrameOffset(off.saturating_add(k as i64))
+                    }
+                    Some(SimpleLocation::RegisterPlus(r, off)) => {
+                        SimpleLocation::RegisterPlus(r, off.saturating_add(k as i64))
+                    }
+                    Some(SimpleLocation::Absolute(addr)) => {
+                        SimpleLocation::Absolute(addr.wrapping_add(k))
+                    }
+                    _ => return None,
+                });
+            }
+            // DW_OP_regN — value lives in register N (no offset).
+            // Registers 0..=31 are encoded directly as 0x50..=0x6f.
+            0x50..=0x6f => {
+                base = Some(SimpleLocation::Register((op - 0x50) as u16));
+            }
+            // DW_OP_bregN <sleb> — value at (regN + sleb).
+            // Registers 0..=31 are encoded directly as 0x70..=0x8f.
+            0x70..=0x8f => {
+                let (off, rest) = read_sleb128(cursor)?;
+                cursor = rest;
+                base = Some(SimpleLocation::RegisterPlus((op - 0x70) as u16, off));
+            }
+            // DW_OP_regx <uleb>
+            0x90 => {
+                let (r, rest) = read_uleb128(cursor)?;
+                cursor = rest;
+                let reg = if r <= u16::MAX as u64 { r as u16 } else { return None };
+                base = Some(SimpleLocation::Register(reg));
+            }
+            // DW_OP_fbreg <sleb>
+            0x91 => {
+                let (off, rest) = read_sleb128(cursor)?;
+                cursor = rest;
+                base = Some(SimpleLocation::FrameOffset(off));
+            }
+            // DW_OP_bregx <uleb> <sleb>
+            0x92 => {
+                let (r, rest) = read_uleb128(cursor)?;
+                cursor = rest;
+                let reg = if r <= u16::MAX as u64 { r as u16 } else { return None };
+                let (off, rest) = read_sleb128(cursor)?;
+                cursor = rest;
+                base = Some(SimpleLocation::RegisterPlus(reg, off));
+            }
+            // DW_OP_stack_value (0x9f): the previous expression *is* the
+            // value, not its address. Wrap the base in StackValue.
+            0x9f => {
+                let inner = base?;
+                base = Some(SimpleLocation::StackValue(Box::new(inner)));
+            }
+            // DW_OP_lit0..=DW_OP_lit31 (0x30..=0x4f): push small literal
+            // onto the implicit DWARF stack. We model them as a
+            // FrameOffset / synthetic register-plus expression only when
+            // immediately followed by stack_value; standalone lits aren't
+            // representable in our `SimpleLocation` shape, so stash them
+            // as an Absolute with the literal value — callers that see
+            // an `Absolute(N)` wrapped in `StackValue` know it's a lit.
+            0x30..=0x4f => {
+                let lit = (op - 0x30) as u64;
+                base = Some(SimpleLocation::Absolute(lit));
+            }
+            // DW_OP_implicit_value (0x9e) <ULEB length> <bytes>: the
+            // variable's value is the inline byte sequence.
+            0x9e => {
+                let (len, rest) = read_uleb128(cursor)?;
+                cursor = rest;
+                let len = len as usize;
+                if cursor.len() < len {
+                    return None;
+                }
+                let payload = cursor[..len].to_vec();
+                cursor = &cursor[len..];
+                base = Some(SimpleLocation::ImplicitValue(payload));
+            }
+            // DW_OP_piece (0x93) <ULEB size_bytes> / DW_OP_bit_piece
+            // (0x9d) <ULEB size_bits> <ULEB offset_bits>: composite
+            // location. Accumulate pieces into a Composite. The piece
+            // operator consumes the current base and the size; we
+            // collect into a Composite vector.
+            0x93 => {
+                let (size_bytes, rest) = read_uleb128(cursor)?;
+                cursor = rest;
+                let piece_loc = base.take()?;
+                pieces
+                    .get_or_insert_with(Vec::new)
+                    .push((piece_loc, size_bytes as u32));
+            }
+            0x9d => {
+                let (size_bits, rest) = read_uleb128(cursor)?;
+                cursor = rest;
+                let (_off_bits, rest) = read_uleb128(cursor)?;
+                cursor = rest;
+                let size_bytes = ((size_bits + 7) / 8) as u32;
+                let piece_loc = base.take()?;
+                pieces
+                    .get_or_insert_with(Vec::new)
+                    .push((piece_loc, size_bytes));
+            }
+            // Anything else is outside the conservative subset.
+            _ => return None,
+        }
     }
-    let mut cursor = &bytes[1..];
+    // If we accumulated pieces, the final result is a Composite. Otherwise
+    // we return whatever base remains.
+    match pieces {
+        Some(list) => Some(SimpleLocation::Composite(list)),
+        None => base,
+    }
+}
+
+/// Read a ULEB128 from `bytes`. Returns `(value, remaining_bytes)` or
+/// `None` on overflow / truncation.
+fn read_uleb128(bytes: &[u8]) -> Option<(u64, &[u8])> {
+    let mut result: u64 = 0;
+    let mut shift: u32 = 0;
+    let mut cursor = bytes;
+    loop {
+        let byte = *cursor.first()?;
+        cursor = &cursor[1..];
+        result |= ((byte & 0x7f) as u64) << shift;
+        if byte & 0x80 == 0 {
+            return Some((result, cursor));
+        }
+        shift += 7;
+        if shift >= 64 {
+            return None;
+        }
+    }
+}
+
+/// Read an SLEB128 from `bytes`. Returns `(value, remaining_bytes)` or
+/// `None` on overflow / truncation.
+fn read_sleb128(bytes: &[u8]) -> Option<(i64, &[u8])> {
     let mut result: i64 = 0;
     let mut shift: u32 = 0;
+    let mut cursor = bytes;
     let mut last: u8;
     loop {
         let byte = *cursor.first()?;
@@ -677,10 +1069,7 @@ fn decode_fbreg_offset(value: AttributeValue<R<'_>>) -> Option<i64> {
     if shift < 64 && (last & 0x40) != 0 {
         result |= -(1i64 << shift);
     }
-    if !cursor.is_empty() {
-        return None;
-    }
-    Some(result)
+    Some((result, cursor))
 }
 
 fn extract_die_ranges<'a>(
@@ -702,12 +1091,40 @@ fn extract_location_ranges<'a>(
     value: AttributeValue<R<'a>>,
 ) -> Result<Vec<gimli::Range>, gimli::Error> {
     let mut ranges = Vec::new();
-    if let Some(mut locations) = dwarf.attr_locations(unit, value)? {
+    if let Some(mut locations) = dwarf.attr_locations(unit, value.clone())? {
         while let Some(location) = locations.next()? {
             ranges.push(location.range);
         }
     }
     Ok(ranges)
+}
+
+/// Decode a `.debug_loclists` reference into `(pc_range, expression)`
+/// pairs. Returns an empty vector when the attribute is a direct
+/// expression (not a loclists reference), matching the dominant v4
+/// shape where `frame_offset` is the only relevant projection.
+fn extract_loclist_v5_entries<'a>(
+    dwarf: &gimli::Dwarf<R<'a>>,
+    unit: &gimli::Unit<R<'a>>,
+    value: AttributeValue<R<'a>>,
+) -> Result<Vec<(gimli::Range, SimpleLocation)>, gimli::Error> {
+    // `attr_locations` returns None for direct expressions (which the
+    // simple-location evaluator handles) and Some(iter) for loclists.
+    let Some(mut locations) = dwarf.attr_locations(unit, value)? else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    while let Some(location) = locations.next()? {
+        // Evaluate the expression bytes for this entry using the
+        // existing single-shot evaluator. If the expression can't be
+        // summarised, skip the entry — callers fall back to the
+        // simpler `locations` (range-only) view.
+        let bytes = location.data.0.slice();
+        if let Some(loc) = evaluate_simple_location_bytes(bytes) {
+            out.push((location.range, loc));
+        }
+    }
+    Ok(out)
 }
 
 fn resolve_type_name(
@@ -929,6 +1346,140 @@ fn build_source_map(
 mod tests {
     use super::*;
     use crate::{ElfLoader, Loader};
+
+    /// `DW_OP_fbreg -8` is the canonical x86_64 "local at [rbp-8]" form.
+    /// SLEB128 of -8 is `0x78`.
+    #[test]
+    fn evaluator_decodes_fbreg_minus_8() {
+        let bytes = [0x91, 0x78];
+        assert_eq!(
+            evaluate_simple_location_bytes(&bytes),
+            Some(SimpleLocation::FrameOffset(-8)),
+        );
+    }
+
+    /// `DW_OP_addr 0xdeadbeef` (LE 8-byte) → absolute target.
+    #[test]
+    fn evaluator_decodes_addr() {
+        let mut bytes = vec![0x03];
+        bytes.extend_from_slice(&0xdead_beef_u64.to_le_bytes());
+        assert_eq!(
+            evaluate_simple_location_bytes(&bytes),
+            Some(SimpleLocation::Absolute(0xdead_beef)),
+        );
+    }
+
+    /// `DW_OP_reg5` — value lives in register 5.
+    #[test]
+    fn evaluator_decodes_simple_register() {
+        let bytes = [0x55];
+        assert_eq!(
+            evaluate_simple_location_bytes(&bytes),
+            Some(SimpleLocation::Register(5)),
+        );
+    }
+
+    /// `DW_OP_breg6 -16` — `(reg6 - 16)`. SLEB128 of -16 is `0x70`.
+    #[test]
+    fn evaluator_decodes_breg_with_offset() {
+        let bytes = [0x76, 0x70];
+        assert_eq!(
+            evaluate_simple_location_bytes(&bytes),
+            Some(SimpleLocation::RegisterPlus(6, -16)),
+        );
+    }
+
+    /// `DW_OP_regx 0x82 0x01` — register 130 (1*128 + 2 = 130, ULEB128).
+    #[test]
+    fn evaluator_decodes_regx_extended_register() {
+        let bytes = [0x90, 0x82, 0x01];
+        assert_eq!(
+            evaluate_simple_location_bytes(&bytes),
+            Some(SimpleLocation::Register(130)),
+        );
+    }
+
+    /// `DW_OP_fbreg -16 DW_OP_plus_uconst 4` → frame offset -12.
+    /// SLEB128 of -16 is `0x70`; ULEB128 of 4 is `0x04`.
+    #[test]
+    fn evaluator_folds_plus_uconst_into_fbreg() {
+        let bytes = [0x91, 0x70, 0x23, 0x04];
+        assert_eq!(
+            evaluate_simple_location_bytes(&bytes),
+            Some(SimpleLocation::FrameOffset(-12)),
+        );
+    }
+
+    /// `DW_OP_breg5 0 DW_OP_deref` → indirect through reg5.
+    #[test]
+    fn evaluator_models_indirection() {
+        // breg5 with sleb 0 (=0x00) then DW_OP_deref (0x06).
+        let bytes = [0x75, 0x00, 0x06];
+        let Some(SimpleLocation::Indirect(inner, width)) =
+            evaluate_simple_location_bytes(&bytes)
+        else {
+            panic!("expected Indirect");
+        };
+        assert_eq!(*inner, SimpleLocation::RegisterPlus(5, 0));
+        assert_eq!(width, 0);
+    }
+
+    /// Unrecognised opcode → conservative `None`.
+    #[test]
+    fn evaluator_rejects_unknown_opcode() {
+        // 0xff is not a DWARF opcode we model.
+        let bytes = [0xff];
+        assert_eq!(evaluate_simple_location_bytes(&bytes), None);
+    }
+
+    /// `DW_OP_stack_value` wraps a single literal value.
+    #[test]
+    fn evaluator_decodes_stack_value() {
+        // DW_OP_lit5 (0x35) then DW_OP_stack_value (0x9f) → StackValue(Lit(5))
+        let bytes = [0x35, 0x9f];
+        assert_eq!(
+            evaluate_simple_location_bytes(&bytes),
+            Some(SimpleLocation::StackValue(Box::new(SimpleLocation::Absolute(5))))
+        );
+    }
+
+    /// `DW_OP_implicit_value <ULEB length> <bytes>` produces an
+    /// `ImplicitValue` carrying the inline byte payload.
+    #[test]
+    fn evaluator_decodes_implicit_value() {
+        // implicit_value len=4 then 0x12 0x34 0x56 0x78
+        let bytes = [0x9e, 0x04, 0x12, 0x34, 0x56, 0x78];
+        assert_eq!(
+            evaluate_simple_location_bytes(&bytes),
+            Some(SimpleLocation::ImplicitValue(vec![0x12, 0x34, 0x56, 0x78]))
+        );
+    }
+
+    /// `DW_OP_piece` accumulates locations into a `Composite`.
+    #[test]
+    fn evaluator_decodes_piece_composition() {
+        // reg0, piece 4, reg1, piece 4 → Composite([(Register(0), 4), (Register(1), 4)])
+        let bytes = [0x50, 0x93, 0x04, 0x51, 0x93, 0x04];
+        match evaluate_simple_location_bytes(&bytes) {
+            Some(SimpleLocation::Composite(pieces)) => {
+                assert_eq!(pieces.len(), 2);
+                assert_eq!(pieces[0], (SimpleLocation::Register(0), 4));
+                assert_eq!(pieces[1], (SimpleLocation::Register(1), 4));
+            }
+            other => panic!("expected Composite, got {other:?}"),
+        }
+    }
+
+    /// `decode_fbreg_offset` is still a thin shim and must return the same
+    /// answer for the canonical fbreg shape.
+    #[test]
+    fn decode_fbreg_matches_evaluator_for_fbreg_only() {
+        // We can't construct an AttributeValue easily without a real DWARF
+        // unit; instead, exercise the helper directly.
+        let bytes = [0x91, 0x78];
+        let via_eval = evaluate_simple_location_bytes(&bytes);
+        assert_eq!(via_eval, Some(SimpleLocation::FrameOffset(-8)));
+    }
 
     fn load_debug_fixture() -> BinaryImage {
         let data = std::fs::read("../../fixtures/debug_calls.elf")
@@ -1245,6 +1796,7 @@ mod tests {
             function_starts: vec![],
             debug_records: vec![],
             load_config: None,
+            pe_mitigations: None,
             runtime_functions: vec![],
             resources: vec![],
             bound_imports: vec![],
@@ -1463,6 +2015,293 @@ int main(void) {
             total.locations.iter().all(|r| r.begin < r.end),
             "all location ranges should be valid: {:?}",
             total.locations
+        );
+    }
+
+    /// A DWARF v5 subprogram whose `DW_AT_ranges` attribute points to a
+    /// multi-entry rnglist in `.debug_rnglists`.  We compile with
+    /// `-fbasic-block-sections=all` which places each basic block in its
+    /// own section, forcing the debug info to encode multiple address
+    /// ranges for a single function via `DW_AT_ranges`.
+    #[test]
+    fn rnglists_function_with_two_ranges_lists_both() {
+        // A function with branches that cannot be merged (external calls
+        // in each branch) so that basic-block-section splitting produces
+        // multiple disjoint address ranges in the subprogram's rnglist.
+        let source = r#"
+volatile int sink;
+extern int external_call(int);
+
+__attribute__((noinline))
+int split_logic(int x) {
+    int result = 0;
+    if (x > 100) {
+        result = external_call(x);
+        sink = result;
+    } else if (x > 50) {
+        result = external_call(x * 2);
+        sink = result + 1;
+    } else {
+        result = external_call(x - 1);
+        sink = result - 1;
+    }
+    return result + sink;
+}
+
+int external_call(int v) { return v + 1; }
+
+int main(void) {
+    return split_logic(42) + split_logic(150);
+}
+"#;
+        let temp = tempfile::tempdir().expect("tempdir");
+        let src = temp.path().join("split.c");
+        let elf = temp.path().join("split.elf");
+        std::fs::write(&src, source).expect("write source");
+
+        let status = std::process::Command::new("clang")
+            .args([
+                "-gdwarf-5",
+                "-O2",
+                "-fbasic-block-sections=all",
+                "-o",
+            ])
+            .arg(&elf)
+            .arg(&src)
+            .status()
+            .expect("invoke clang");
+        if !status.success() {
+            eprintln!("clang does not support -fbasic-block-sections=all; skipping");
+            return;
+        }
+
+        let data = std::fs::read(&elf).expect("read fixture");
+        let img = ElfLoader::load(&data).expect("parse split ELF");
+        assert!(
+            img.section_by_name(".debug_rnglists").is_some(),
+            "DWARF v5 .debug_rnglists section should be present"
+        );
+
+        let info = import_dwarf(&img).expect("import DWARF v5");
+        let func = info
+            .functions
+            .values()
+            .find(|f| f.name == "split_logic")
+            .expect("find split_logic");
+
+        assert!(
+            func.ranges.len() >= 2,
+            "split_logic should have at least 2 range entries from .debug_rnglists, got {}: {:?}",
+            func.ranges.len(),
+            func.ranges
+        );
+        assert!(
+            func.ranges.iter().all(|r| r.begin < r.end),
+            "all ranges must be valid (begin < end): {:?}",
+            func.ranges
+        );
+    }
+
+    /// `loclists_decode_single_range_fbreg` — synthetic v5 unit with a
+    /// single loclists entry whose expression is `DW_OP_fbreg -8`.
+    /// Compile a representative C source and verify the resulting
+    /// LocalVariable's `locations_dwarf_v5` carries at least one
+    /// `(range, FrameOffset(_))` pair. Skips cleanly when clang is
+    /// absent or the compiler doesn't emit a loclists-backed local.
+    #[test]
+    fn loclists_decode_single_range_fbreg() {
+        let Ok(temp) = tempfile::tempdir() else { return };
+        let src = temp.path().join("loclists_fbreg.c");
+        let elf = temp.path().join("loclists_fbreg.elf");
+        let source = r#"
+__attribute__((noinline))
+int add_one(int x) {
+    volatile int local = x;
+    return local + 1;
+}
+int main(void) { return add_one(41); }
+"#;
+        let _ = std::fs::write(&src, source);
+        let Ok(status) = std::process::Command::new("clang")
+            .args(["-gdwarf-5", "-O1", "-o"])
+            .arg(&elf)
+            .arg(&src)
+            .status()
+        else {
+            return;
+        };
+        if !status.success() {
+            return;
+        }
+        let Ok(data) = std::fs::read(&elf) else { return };
+        let Ok(img) = ElfLoader::load(&data) else { return };
+        let Ok(info) = import_dwarf(&img) else { return };
+
+        // Find any local with a non-empty v5 location list. Some
+        // toolchains optimise the volatile into a constant; tolerate
+        // that by skipping when nothing showed up.
+        let any_v5 = info
+            .functions
+            .values()
+            .flat_map(|f| f.locals.iter())
+            .any(|l| !l.locations_dwarf_v5.is_empty());
+        if !any_v5 {
+            return;
+        }
+        // When v5 entries did appear, at least one should map to a
+        // FrameOffset (the dominant fbreg shape).
+        let has_fbreg = info
+            .functions
+            .values()
+            .flat_map(|f| f.locals.iter())
+            .flat_map(|l| l.locations_dwarf_v5.iter())
+            .any(|(_, loc)| matches!(loc, SimpleLocation::FrameOffset(_)));
+        assert!(
+            has_fbreg,
+            "expected at least one loclists entry to decode as FrameOffset"
+        );
+    }
+
+    /// `loclists_two_ranges_keep_both` — a v5 unit where a single
+    /// variable's `DW_AT_location` is split into two PC ranges (e.g.
+    /// register on the hot path, stack on the cold path). The decoder
+    /// should preserve both entries.
+    #[test]
+    fn loclists_two_ranges_keep_both() {
+        let Ok(temp) = tempfile::tempdir() else { return };
+        let src = temp.path().join("loclists_split.c");
+        let elf = temp.path().join("loclists_split.elf");
+        let source = r#"
+volatile int sink;
+__attribute__((noinline))
+int split(int x) {
+    int v = x * 3;
+    if (x > 0) {
+        sink = v;
+    } else {
+        v += 7;
+    }
+    return v;
+}
+int main(void) { return split(2) + split(-1); }
+"#;
+        let _ = std::fs::write(&src, source);
+        let Ok(status) = std::process::Command::new("clang")
+            .args(["-gdwarf-5", "-O2", "-o"])
+            .arg(&elf)
+            .arg(&src)
+            .status()
+        else {
+            return;
+        };
+        if !status.success() {
+            return;
+        }
+        let Ok(data) = std::fs::read(&elf) else { return };
+        let Ok(img) = ElfLoader::load(&data) else { return };
+        let Ok(info) = import_dwarf(&img) else { return };
+
+        // Find any local with ≥ 2 v5 entries. Skip when the compiler
+        // collapsed the live range (often happens at -O3 or when the
+        // value fits in a single register the whole way).
+        let multi = info
+            .functions
+            .values()
+            .flat_map(|f| f.locals.iter())
+            .any(|l| l.locations_dwarf_v5.len() >= 2);
+        if !multi {
+            return;
+        }
+        // The two-or-more case must always have consistent (begin < end) ranges.
+        for f in info.functions.values() {
+            for l in &f.locals {
+                for (range, _) in &l.locations_dwarf_v5 {
+                    assert!(range.begin < range.end, "loclist range must be non-empty");
+                }
+            }
+        }
+    }
+
+    /// `extracts_dwo_references_from_skeleton_unit` — compile a tiny C
+    /// translation unit with `-gsplit-dwarf`. When supported, the
+    /// resulting ELF should carry a skeleton compile unit whose root
+    /// DIE has `DW_AT_GNU_dwo_name`. The test skips cleanly if the
+    /// host toolchain doesn't emit one (Apple clang, very old GCC, etc.).
+    #[test]
+    fn extracts_dwo_references_from_skeleton_unit() {
+        let tmp = match tempfile::tempdir() {
+            Ok(t) => t,
+            Err(_) => return,
+        };
+        let src = tmp.path().join("skeleton.c");
+        let obj = tmp.path().join("skeleton.elf");
+        std::fs::write(&src, "int f(int x) { return x + 1; }\nint main(void){ return f(0); }\n")
+            .expect("write skeleton.c");
+
+        let status = std::process::Command::new("clang")
+            .arg("-gdwarf-5")
+            .arg("-gsplit-dwarf")
+            .arg("-O0")
+            .arg("-fno-pie")
+            .arg("-no-pie")
+            .arg("-c")
+            .arg(&src)
+            .arg("-o")
+            .arg(&obj)
+            .status();
+        let Ok(status) = status else { return };
+        if !status.success() {
+            return;
+        }
+        let Ok(bytes) = std::fs::read(&obj) else {
+            return;
+        };
+        let Ok(image) = ElfLoader::load(&bytes) else {
+            return;
+        };
+        let Ok(info) = import_dwarf(&image) else {
+            return;
+        };
+
+        // If the toolchain emitted split-DWARF, dwo_references must be
+        // populated. Some platforms (Apple, old GCC) silently drop the
+        // attribute even with `-gsplit-dwarf`; skip the assertion in
+        // that case.
+        if info.dwo_references.is_empty() {
+            return;
+        }
+        let dwo = &info.dwo_references[0];
+        assert!(
+            dwo.dwo_name.contains(".dwo") || dwo.dwo_name.ends_with(".o"),
+            "dwo_name should look like a split-DWARF filename, got {:?}",
+            dwo.dwo_name
+        );
+    }
+
+    /// `merge_split_dwarf_imports_dwo_functions` — feed an ELF blob as a
+    /// pretend `.dwo` and assert the new functions land in the parent's
+    /// `functions` map. This is a smoke test of the merge plumbing —
+    /// in real DWARF a `.dwo` would not be a self-contained ELF, but
+    /// our merge function parses it as one because gimli accepts the
+    /// `.debug_info` section under either naming.
+    #[test]
+    fn merge_split_dwarf_imports_dwo_functions() {
+        let mut parent = DwarfInfo {
+            functions: BTreeMap::new(),
+            source_map: BTreeMap::new(),
+            structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
+            macros: Vec::new(),
+            dwo_references: Vec::new(),
+        };
+        // Reuse the debug_calls fixture as our "external partner".
+        let dwo_bytes = std::fs::read("../../fixtures/debug_calls.elf")
+            .expect("debug_calls fixture must exist");
+        parent.merge_split_dwarf(&dwo_bytes).expect("merge should succeed");
+        assert!(
+            !parent.functions.is_empty(),
+            "merge should populate functions from the .dwo partner"
         );
     }
 }

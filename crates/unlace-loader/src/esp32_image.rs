@@ -27,6 +27,8 @@
 
 use thiserror::Error;
 
+use crate::image::{ArchId, BinaryImage, Endian, Section, SectionFlags};
+
 /// Magic byte that identifies the start of an ESP32 firmware image.
 pub const ESP32_MAGIC: u8 = 0xE9;
 
@@ -166,6 +168,31 @@ pub fn parse_esp32_image(data: &[u8]) -> Result<Esp32Image, Esp32Error> {
     })
 }
 
+/// Project an [`Esp32Image`] onto a generic [`BinaryImage`] so the rest
+/// of the unlace pipeline can ingest it without an ESP32-specific
+/// dispatcher. Each segment becomes a `.text<N>` section with its
+/// `load_addr` set as the segment's virtual base. The entry point is
+/// copied from the image header. Architecture defaults to
+/// [`ArchId::Xtensa`] (ESP32-original / S2 / S3 / ESP8266); callers
+/// targeting the RISC-V variants (`ArchId::RiscV64` for ESP32-C3/C6/
+/// H2) can post-process.
+pub fn esp32_to_binary_image(img: &Esp32Image) -> BinaryImage {
+    let mut out = BinaryImage::empty(ArchId::Xtensa, Endian::Little);
+    out.entry = img.entry as u64;
+    out.sections.reserve(img.segments.len());
+    for (idx, seg) in img.segments.iter().enumerate() {
+        let name = format!(".text{idx}");
+        out.sections.push(Section {
+            name,
+            vaddr: seg.load_addr as u64,
+            size: seg.data.len() as u64,
+            data: seg.data.clone(),
+            flags: SectionFlags::READ | SectionFlags::EXEC,
+        });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,5 +267,52 @@ mod tests {
                 available: 2,
             }
         );
+    }
+
+    /// `esp32_magic_recognised` — round-trip parse of a minimal valid
+    /// image header. Smoke-test that the magic byte gates entry.
+    #[test]
+    fn esp32_magic_recognised() {
+        let bytes = build_image(ESP32_MAGIC, 0, 0, 0x4008_0000, &[]);
+        let img = parse_esp32_image(&bytes).expect("magic should parse");
+        assert_eq!(img.entry, 0x4008_0000);
+        assert!(img.segments.is_empty());
+    }
+
+    /// `esp32_segments_round_trip` — a multi-segment image must
+    /// preserve every load_addr/data pair through the parser.
+    #[test]
+    fn esp32_segments_round_trip() {
+        let seg0: &[u8] = b"hello";
+        let seg1: &[u8] = b"world!!";
+        let bytes = build_image(
+            ESP32_MAGIC,
+            0,
+            0,
+            0x4008_0000,
+            &[(0x3FFB_0000, seg0), (0x4008_1000, seg1)],
+        );
+        let img = parse_esp32_image(&bytes).unwrap();
+        assert_eq!(img.segments[0].load_addr, 0x3FFB_0000);
+        assert_eq!(img.segments[0].data, seg0);
+        assert_eq!(img.segments[1].load_addr, 0x4008_1000);
+        assert_eq!(img.segments[1].data, seg1);
+    }
+
+    /// `esp32_to_binary_image_sets_xtensa_arch` — the BinaryImage
+    /// projection emits one section per segment with Xtensa as the
+    /// default architecture and entry preserved from the header.
+    #[test]
+    fn esp32_to_binary_image_sets_xtensa_arch() {
+        let seg0: &[u8] = &[0x00, 0x11, 0x22, 0x33];
+        let bytes = build_image(ESP32_MAGIC, 0, 0, 0x4008_0000, &[(0x3FFB_0000, seg0)]);
+        let img = parse_esp32_image(&bytes).unwrap();
+        let bin = esp32_to_binary_image(&img);
+        assert_eq!(bin.arch, ArchId::Xtensa);
+        assert_eq!(bin.entry, 0x4008_0000);
+        assert_eq!(bin.sections.len(), 1);
+        assert_eq!(bin.sections[0].vaddr, 0x3FFB_0000);
+        assert_eq!(bin.sections[0].data, seg0);
+        assert!(bin.sections[0].flags.contains(SectionFlags::EXEC));
     }
 }

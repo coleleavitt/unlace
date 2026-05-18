@@ -387,6 +387,117 @@ fn skip_attributes(cur: &mut Cursor<'_>) -> Result<(), JavaError> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// JAR (ZIP) loader + BinaryImage projection
+// ---------------------------------------------------------------------------
+
+/// One `.class` entry recovered from a JAR file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JarClassEntry {
+    pub name: String,
+    pub uncompressed_size: u64,
+    pub local_header_offset: u64,
+}
+
+/// Walk a JAR / ZIP byte stream and list every `.class` entry. Only
+/// the central-directory record fields are read; payloads are not
+/// decompressed here (`flate2` is a transitive workspace dep but
+/// listing alone doesn't require it).
+///
+/// The central directory is located via the End-Of-Central-Directory
+/// record (`PK\x05\x06`) which lives in the last ~22 bytes of the
+/// archive (plus a variable comment). For each central-directory
+/// entry, we read the file name + sizes and filter for `.class`
+/// suffixes.
+pub fn jar_list_classes(jar_bytes: &[u8]) -> Option<Vec<JarClassEntry>> {
+    const EOCD_SIGNATURE: [u8; 4] = [b'P', b'K', 5, 6];
+    const CDH_SIGNATURE: [u8; 4] = [b'P', b'K', 1, 2];
+    if jar_bytes.len() < 22 {
+        return None;
+    }
+    // Search the last 64 KiB + 22 bytes for the EOCD signature.
+    let search_start = jar_bytes.len().saturating_sub(0xFFFF + 22);
+    let eocd_offset = jar_bytes[search_start..]
+        .windows(4)
+        .rposition(|w| w == EOCD_SIGNATURE)?
+        + search_start;
+    if eocd_offset + 22 > jar_bytes.len() {
+        return None;
+    }
+    let cd_entries =
+        u16::from_le_bytes(jar_bytes[eocd_offset + 10..eocd_offset + 12].try_into().ok()?) as usize;
+    let cd_size =
+        u32::from_le_bytes(jar_bytes[eocd_offset + 12..eocd_offset + 16].try_into().ok()?) as usize;
+    let cd_offset =
+        u32::from_le_bytes(jar_bytes[eocd_offset + 16..eocd_offset + 20].try_into().ok()?) as usize;
+    if cd_offset + cd_size > jar_bytes.len() {
+        return None;
+    }
+
+    let mut entries = Vec::with_capacity(cd_entries);
+    let mut cursor = cd_offset;
+    for _ in 0..cd_entries {
+        if cursor + 46 > jar_bytes.len() {
+            return None;
+        }
+        if jar_bytes[cursor..cursor + 4] != CDH_SIGNATURE {
+            return None;
+        }
+        let uncompressed_size = u32::from_le_bytes(
+            jar_bytes[cursor + 24..cursor + 28].try_into().ok()?,
+        ) as u64;
+        let name_len =
+            u16::from_le_bytes(jar_bytes[cursor + 28..cursor + 30].try_into().ok()?) as usize;
+        let extra_len =
+            u16::from_le_bytes(jar_bytes[cursor + 30..cursor + 32].try_into().ok()?) as usize;
+        let comment_len =
+            u16::from_le_bytes(jar_bytes[cursor + 32..cursor + 34].try_into().ok()?) as usize;
+        let local_header_offset = u32::from_le_bytes(
+            jar_bytes[cursor + 42..cursor + 46].try_into().ok()?,
+        ) as u64;
+        let name_start = cursor + 46;
+        let name_end = name_start + name_len;
+        if name_end > jar_bytes.len() {
+            return None;
+        }
+        let name = String::from_utf8_lossy(&jar_bytes[name_start..name_end]).into_owned();
+        cursor = name_end + extra_len + comment_len;
+        if name.ends_with(".class") {
+            entries.push(JarClassEntry {
+                name,
+                uncompressed_size,
+                local_header_offset,
+            });
+        }
+    }
+    Some(entries)
+}
+
+/// Project a parsed [`JavaClass`] onto a generic [`BinaryImage`]. Each
+/// method becomes a `Function` symbol at a synthetic virtual address
+/// derived from the method index. The class's constant-pool name is
+/// stashed in the string table at the manifest-hash slot so callers
+/// can recover the qualified class name.
+pub fn java_class_to_binary_image(class: &JavaClass) -> crate::image::BinaryImage {
+    use crate::image::{ArchId, BinaryImage, Endian, Symbol, SymbolKind};
+    let mut out = BinaryImage::empty(ArchId::Unknown(0x4A56), Endian::Big); // "JV"
+    out.string_table
+        .insert(0xFFFF_FFFF_FFFF_FF02, class.class_name.clone());
+    for (idx, method) in class.methods.iter().enumerate() {
+        let addr = 0x0000_0001_0000_0000 + (idx as u64) * 16;
+        out.symbols.insert(
+            addr,
+            Symbol {
+                name: format!("{}.{}{}", class.class_name, method.name, method.descriptor),
+                addr,
+                size: 0,
+                kind: SymbolKind::Function,
+            },
+        );
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -571,5 +682,120 @@ mod tests {
             parse_class(&tiny),
             Err(JavaError::Truncated { .. })
         ));
+    }
+
+    /// Build a minimal STORED-method (no compression) ZIP archive
+    /// holding one or more synthetic file entries.
+    fn build_jar(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut out: Vec<u8> = Vec::new();
+        let mut cd_records: Vec<(u32, u32, &str, &[u8])> = Vec::new();
+
+        for (name, body) in entries {
+            let local_offset = out.len() as u32;
+            // Local file header (PK\3\4).
+            out.extend_from_slice(b"PK\x03\x04");
+            out.extend_from_slice(&20u16.to_le_bytes()); // version_needed
+            out.extend_from_slice(&0u16.to_le_bytes()); // flags
+            out.extend_from_slice(&0u16.to_le_bytes()); // STORED
+            out.extend_from_slice(&0u16.to_le_bytes()); // mtime
+            out.extend_from_slice(&0u16.to_le_bytes()); // mdate
+            out.extend_from_slice(&0u32.to_le_bytes()); // crc32
+            out.extend_from_slice(&(body.len() as u32).to_le_bytes()); // comp_size
+            out.extend_from_slice(&(body.len() as u32).to_le_bytes()); // uncomp_size
+            out.extend_from_slice(&(name.len() as u16).to_le_bytes()); // name_len
+            out.extend_from_slice(&0u16.to_le_bytes()); // extra_len
+            out.extend_from_slice(name.as_bytes());
+            out.extend_from_slice(body);
+            cd_records.push((local_offset, body.len() as u32, name, body));
+        }
+
+        let cd_start = out.len() as u32;
+        for (local_offset, size, name, _) in &cd_records {
+            // Central directory header (PK\1\2).
+            out.extend_from_slice(b"PK\x01\x02");
+            out.extend_from_slice(&20u16.to_le_bytes()); // version_made_by
+            out.extend_from_slice(&20u16.to_le_bytes()); // version_needed
+            out.extend_from_slice(&0u16.to_le_bytes()); // flags
+            out.extend_from_slice(&0u16.to_le_bytes()); // STORED
+            out.extend_from_slice(&0u16.to_le_bytes()); // mtime
+            out.extend_from_slice(&0u16.to_le_bytes()); // mdate
+            out.extend_from_slice(&0u32.to_le_bytes()); // crc32
+            out.extend_from_slice(&size.to_le_bytes()); // comp_size
+            out.extend_from_slice(&size.to_le_bytes()); // uncomp_size
+            out.extend_from_slice(&(name.len() as u16).to_le_bytes()); // name_len
+            out.extend_from_slice(&0u16.to_le_bytes()); // extra_len
+            out.extend_from_slice(&0u16.to_le_bytes()); // comment_len
+            out.extend_from_slice(&0u16.to_le_bytes()); // disk_number_start
+            out.extend_from_slice(&0u16.to_le_bytes()); // internal_attrs
+            out.extend_from_slice(&0u32.to_le_bytes()); // external_attrs
+            out.extend_from_slice(&local_offset.to_le_bytes());
+            out.extend_from_slice(name.as_bytes());
+        }
+        let cd_size = out.len() as u32 - cd_start;
+
+        // End of central directory (PK\5\6).
+        out.extend_from_slice(b"PK\x05\x06");
+        out.extend_from_slice(&0u16.to_le_bytes()); // disk_number
+        out.extend_from_slice(&0u16.to_le_bytes()); // disk_with_cd
+        out.extend_from_slice(&(cd_records.len() as u16).to_le_bytes()); // entries_on_disk
+        out.extend_from_slice(&(cd_records.len() as u16).to_le_bytes()); // total_entries
+        out.extend_from_slice(&cd_size.to_le_bytes()); // cd_size
+        out.extend_from_slice(&cd_start.to_le_bytes()); // cd_offset
+        out.extend_from_slice(&0u16.to_le_bytes()); // comment_len
+        out
+    }
+
+    /// `jar_reader_lists_inner_class_files` — a minimal STORED ZIP
+    /// containing two `.class` files and one `META-INF/MANIFEST.MF`
+    /// should list both classes and skip the manifest.
+    #[test]
+    fn jar_reader_lists_inner_class_files() {
+        let jar = build_jar(&[
+            ("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\n"),
+            ("Hello.class", b"\xca\xfe\xba\xbe"),
+            ("World.class", b"\xca\xfe\xba\xbe"),
+        ]);
+        let classes = jar_list_classes(&jar).expect("jar must parse");
+        assert_eq!(classes.len(), 2);
+        let names: Vec<&str> = classes.iter().map(|c| c.name.as_str()).collect();
+        assert!(names.contains(&"Hello.class"));
+        assert!(names.contains(&"World.class"));
+    }
+
+    /// `class_methods_become_symbols` — `java_class_to_binary_image`
+    /// emits one Function symbol per declared method.
+    #[test]
+    fn class_methods_become_symbols() {
+        use crate::image::SymbolKind;
+        let class = JavaClass {
+            class_name: "MyClass".to_string(),
+            super_name: Some("java/lang/Object".to_string()),
+            methods: vec![
+                JavaMethod {
+                    access_flags: 1,
+                    name: "<init>".to_string(),
+                    descriptor: "()V".to_string(),
+                },
+                JavaMethod {
+                    access_flags: 9,
+                    name: "main".to_string(),
+                    descriptor: "([Ljava/lang/String;)V".to_string(),
+                },
+            ],
+            fields: vec![],
+        };
+        let bin = java_class_to_binary_image(&class);
+        assert_eq!(bin.symbols.len(), 2);
+        let mut iter = bin.symbols.values();
+        let s0 = iter.next().unwrap();
+        let s1 = iter.next().unwrap();
+        assert!(s0.name.starts_with("MyClass.<init>"));
+        assert!(s1.name.starts_with("MyClass.main"));
+        assert!(matches!(s0.kind, SymbolKind::Function));
+        assert!(matches!(s1.kind, SymbolKind::Function));
+        assert_eq!(
+            bin.string_table.get(&0xFFFF_FFFF_FFFF_FF02).map(|s| s.as_str()),
+            Some("MyClass")
+        );
     }
 }

@@ -244,6 +244,42 @@ pub fn parse_android_boot(data: &[u8]) -> Result<AndroidBoot, AndroidBootError> 
     })
 }
 
+/// Project a parsed [`AndroidBoot`] onto a generic [`BinaryImage`].
+///
+/// The kernel payload becomes a `.kernel` section at virtual address
+/// `0x80000000` (a common Android arm64 kernel base; callers can
+/// rewrite if their target uses a different load address). The
+/// ramdisk lands as a `.ramdisk` data section at `0x90000000`. The
+/// cmdline is stuffed into the binary's `string_table` at the same
+/// reserved manifest slot used by other firmware loaders.
+pub fn android_boot_to_binary_image(
+    img: &AndroidBoot,
+    arch: crate::image::ArchId,
+) -> crate::image::BinaryImage {
+    use crate::image::{BinaryImage, Endian, Section, SectionFlags};
+    let mut out = BinaryImage::empty(arch, Endian::Little);
+    out.entry = 0x8000_0000;
+    out.sections.push(Section {
+        name: ".kernel".to_string(),
+        vaddr: 0x8000_0000,
+        size: img.kernel.len() as u64,
+        data: img.kernel.clone(),
+        flags: SectionFlags::READ | SectionFlags::EXEC,
+    });
+    out.sections.push(Section {
+        name: ".ramdisk".to_string(),
+        vaddr: 0x9000_0000,
+        size: img.ramdisk.len() as u64,
+        data: img.ramdisk.clone(),
+        flags: SectionFlags::READ,
+    });
+    if !img.cmdline.is_empty() {
+        out.string_table
+            .insert(0xFFFF_FFFF_FFFF_FF01, img.cmdline.clone());
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -357,5 +393,42 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    /// `android_boot_v0_layout` — a v0 image (header_version = 0)
+    /// parses with both kernel and ramdisk preserved.
+    #[test]
+    fn android_boot_v0_layout() {
+        let img = build_image(16, 8, b"console=ttyMSM0,115200n8", b"", 0, 2048);
+        let parsed = parse_android_boot(&img).expect("v0 image must parse");
+        assert_eq!(parsed.version, 0);
+        assert_eq!(parsed.kernel.len(), 16);
+        assert_eq!(parsed.ramdisk.len(), 8);
+        assert_eq!(parsed.cmdline, "console=ttyMSM0,115200n8");
+    }
+
+    /// `android_boot_v3_layout` — proxy for a v3 image: we tolerate
+    /// header_version=3 in the version field. Real v3 uses a different
+    /// header layout, but our parser surfaces what the legacy fields
+    /// describe; a follow-up can detect v3 by the absence of legacy
+    /// fields. Smoke-test the projection into BinaryImage.
+    #[test]
+    fn android_boot_v3_layout() {
+        use crate::image::{ArchId, SectionFlags};
+        let img = build_image(32, 16, b"androidboot.verifiedbootstate=green", b"", 3, 4096);
+        let parsed = parse_android_boot(&img).expect("legacy-shaped v3 image must parse");
+        assert_eq!(parsed.version, 3);
+
+        let bin = android_boot_to_binary_image(&parsed, ArchId::AArch64);
+        assert_eq!(bin.sections.len(), 2);
+        assert_eq!(bin.sections[0].name, ".kernel");
+        assert!(bin.sections[0].flags.contains(SectionFlags::EXEC));
+        assert_eq!(bin.sections[1].name, ".ramdisk");
+        assert_eq!(bin.sections[0].data, parsed.kernel);
+        assert_eq!(bin.sections[1].data, parsed.ramdisk);
+        assert_eq!(
+            bin.string_table.get(&0xFFFF_FFFF_FFFF_FF01),
+            Some(&parsed.cmdline)
+        );
     }
 }

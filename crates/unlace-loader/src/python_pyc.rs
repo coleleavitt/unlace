@@ -87,6 +87,64 @@ pub fn parse_pyc(data: &[u8]) -> Result<PycFile, PycError> {
     })
 }
 
+/// Simplified header representation exposing the mtime and source-size
+/// fields directly (only valid for non-hash-based `.pyc` files).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PycHeader {
+    /// Raw 4 magic bytes.
+    pub magic: [u8; 4],
+    /// Inferred Python `(major, minor)` version, or `None` if the magic is
+    /// unrecognised.
+    pub python_version: Option<(u8, u8)>,
+    /// Source modification time (seconds since epoch) from the timestamp
+    /// header.  Zero for hash-based `.pyc` files.
+    pub mtime: u32,
+    /// Source file size in bytes.  Zero for hash-based `.pyc` files.
+    pub source_size: u32,
+}
+
+/// Parse a `.pyc` header into the simplified [`PycHeader`] form.
+///
+/// Returns `None` if the buffer is shorter than 16 bytes or the magic
+/// terminator (`\r\n`) is invalid.  An unrecognised magic value still
+/// succeeds (with `python_version = None`) so callers can inspect the
+/// raw bytes.
+pub fn parse_pyc_header(data: &[u8]) -> Option<PycHeader> {
+    if data.len() < 16 {
+        return None;
+    }
+
+    let magic = [data[0], data[1], data[2], data[3]];
+
+    // Verify \r\n terminator in bytes 2..4.
+    if magic[2] != 0x0d || magic[3] != 0x0a {
+        return None;
+    }
+
+    let magic_lo = u16::from_le_bytes([magic[0], magic[1]]);
+    let python_version = magic_to_version(magic_lo);
+
+    let flags = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+
+    // For non-hash-based headers (flag bit 0 == 0) bytes 8..16 are
+    // (mtime_u32, source_size_u32).  Hash-based headers store a
+    // source hash instead — we report zeros in that case.
+    let (mtime, source_size) = if flags & 0x1 == 0 {
+        let mtime = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
+        let source_size = u32::from_le_bytes([data[12], data[13], data[14], data[15]]);
+        (mtime, source_size)
+    } else {
+        (0, 0)
+    };
+
+    Some(PycHeader {
+        magic,
+        python_version,
+        mtime,
+        source_size,
+    })
+}
+
 /// Map the low 16 bits of a `.pyc` magic number to its Python release.
 ///
 /// Sourced from CPython's `Lib/importlib/_bootstrap_external.py` —
@@ -305,5 +363,37 @@ mod tests {
             Err(PycError::BadMagicTerminator(0xFFFF)) => {}
             other => panic!("expected BadMagicTerminator, got {other:?}"),
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Tests for parse_pyc_header / PycHeader
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn pyc_python_3_11_magic_recognised() {
+        // Use magic 3495 which is in the Python 3.11 range.
+        let mtime: u32 = 1_700_000_000;
+        let source_size: u32 = 4096;
+        let mut tail = [0u8; 8];
+        tail[..4].copy_from_slice(&mtime.to_le_bytes());
+        tail[4..].copy_from_slice(&source_size.to_le_bytes());
+
+        let buf = header(3495, 0, tail);
+        let hdr = parse_pyc_header(&buf).expect("should parse");
+
+        assert_eq!(hdr.python_version, Some((3, 11)));
+        assert_eq!(hdr.magic[0..2], 3495u16.to_le_bytes());
+        assert_eq!(hdr.magic[2], 0x0d); // '\r'
+        assert_eq!(hdr.magic[3], 0x0a); // '\n'
+        assert_eq!(hdr.mtime, mtime);
+        assert_eq!(hdr.source_size, source_size);
+    }
+
+    #[test]
+    fn pyc_short_buffer_returns_none() {
+        // Any buffer shorter than 16 bytes must return None.
+        assert!(parse_pyc_header(&[]).is_none());
+        assert!(parse_pyc_header(&[0u8; 15]).is_none());
+        assert!(parse_pyc_header(&[0x0D, 0x0A]).is_none());
     }
 }

@@ -432,189 +432,189 @@ pub fn cexpr_coverage_rows() -> Vec<CExprCoverageRow> {
             arity: Some(0),
             precedence: 0,
             may_side_effect: false,
-            notes: "Opaque pre-rendered leaf (identifier, integer literal, etc.)",
+            notes: "Opaque pre-rendered leaf (identifier, integer literal, etc.); no direct `cot_*` — used by helpers and rendered output.",
         },
         CExprCoverageRow {
             variant: "Cast",
             arity: Some(1),
             precedence: 2,
             may_side_effect: false,
-            notes: "`(T)(inner)`; always parens the inner.",
+            notes: "`(T)(inner)`; always parens the inner. Maps to `cot_cast`.",
         },
         CExprCoverageRow {
             variant: "Member",
             arity: Some(1),
             precedence: 1,
             may_side_effect: false,
-            notes: "`obj->field` / `obj.field`; postfix.",
+            notes: "`obj->field` / `obj.field`; postfix. Maps to `cot_memptr` (arrow) / `cot_memref` (dot).",
         },
         CExprCoverageRow {
             variant: "Index",
             arity: Some(2),
             precedence: 1,
             may_side_effect: false,
-            notes: "`arr[idx]`; postfix.",
+            notes: "`arr[idx]`; postfix. Maps to `cot_idx`.",
         },
         CExprCoverageRow {
             variant: "Deref",
             arity: Some(1),
             precedence: 2,
             may_side_effect: false,
-            notes: "`*p`; unary prefix.",
+            notes: "`*p`; unary prefix. Maps to `cot_ptr`.",
         },
         CExprCoverageRow {
             variant: "AddrOf",
             arity: Some(1),
             precedence: 2,
             may_side_effect: false,
-            notes: "`&x`; unary prefix.",
+            notes: "`&x`; unary prefix. Maps to `cot_ref`.",
         },
         CExprCoverageRow {
             variant: "Binary",
             arity: Some(2),
             precedence: 14,
             may_side_effect: false,
-            notes: "Precedence recovered from token via `binary_precedence`.",
+            notes: "Precedence recovered from token via `binary_precedence`. Token dispatches to `cot_lor`/`cot_land`/`cot_bor`/`cot_xor`/`cot_band`/`cot_eq`/`cot_ne`/`cot_sge`/`cot_uge`/`cot_sle`/`cot_ule`/`cot_sgt`/`cot_ugt`/`cot_slt`/`cot_ult`/`cot_sshr`/`cot_ushr`/`cot_shl`/`cot_add`/`cot_sub`/`cot_mul`/`cot_sdiv`/`cot_udiv`/`cot_smod`/`cot_umod`.",
         },
         CExprCoverageRow {
             variant: "Call",
             arity: None,
             precedence: 1,
             may_side_effect: true,
-            notes: "`callee(args...)`; postfix and assumed to carry side effects.",
+            notes: "`callee(args...)`; postfix and assumed to carry side effects. Maps to `cot_call`.",
         },
         CExprCoverageRow {
             variant: "Coerce",
             arity: Some(1),
             precedence: 2,
             may_side_effect: false,
-            notes: "IDA narrowing cast: `(_DWORD)x`, `(_QWORD)x`, etc.",
+            notes: "IDA narrowing cast: `(_DWORD)x`, `(_QWORD)x`, etc. No direct `cot_*` — emitted by macro-folding passes.",
         },
         CExprCoverageRow {
             variant: "Macro",
             arity: None,
             precedence: 1,
             may_side_effect: false,
-            notes: "IDA pseudo-macros (`LOBYTE`, `HIDWORD`, …).",
+            notes: "IDA pseudo-macros (`LOBYTE`, `HIDWORD`, …). No direct `cot_*` — emitted by macro-folding passes.",
         },
         CExprCoverageRow {
             variant: "Ternary",
             arity: Some(3),
             precedence: 13,
             may_side_effect: false,
-            notes: "`cond ? then : else`; right-associative at prec 13.",
+            notes: "`cond ? then : else`; right-associative at prec 13. Maps to `cot_tern`.",
         },
         CExprCoverageRow {
             variant: "Sizeof",
             arity: Some(1),
             precedence: 1,
             may_side_effect: false,
-            notes: "`sizeof(inner)`; always parenthesises the operand.",
+            notes: "`sizeof(inner)`; always parenthesises the operand. Maps to `cot_sizeof`.",
         },
         CExprCoverageRow {
             variant: "PreInc",
             arity: Some(1),
             precedence: 2,
             may_side_effect: true,
-            notes: "`++x`; mutates its operand.",
+            notes: "`++x`; mutates its operand. Maps to `cot_preinc`.",
         },
         CExprCoverageRow {
             variant: "PreDec",
             arity: Some(1),
             precedence: 2,
             may_side_effect: true,
-            notes: "`--x`; mutates its operand.",
+            notes: "`--x`; mutates its operand. Maps to `cot_predec`.",
         },
         CExprCoverageRow {
             variant: "PostInc",
             arity: Some(1),
             precedence: 1,
             may_side_effect: true,
-            notes: "`x++`; postfix.",
+            notes: "`x++`; postfix. Maps to `cot_postinc`.",
         },
         CExprCoverageRow {
             variant: "PostDec",
             arity: Some(1),
             precedence: 1,
             may_side_effect: true,
-            notes: "`x--`; postfix.",
+            notes: "`x--`; postfix. Maps to `cot_postdec`.",
         },
         CExprCoverageRow {
             variant: "Comma",
             arity: Some(2),
             precedence: 15,
             may_side_effect: true,
-            notes: "`a, b`; result is `b`. Loosest binding in C.",
+            notes: "`a, b`; result is `b`. Loosest binding in C. Maps to `cot_comma`.",
         },
         CExprCoverageRow {
             variant: "Assign",
             arity: Some(2),
             precedence: 14,
             may_side_effect: true,
-            notes: "`lhs = rhs`; right-associative.",
+            notes: "`lhs = rhs`; right-associative. Maps to `cot_asg`.",
         },
         CExprCoverageRow {
             variant: "CompoundAssign",
             arity: Some(2),
             precedence: 14,
             may_side_effect: true,
-            notes: "`lhs <op>= rhs`; op is +, -, *, /, %, <<, >>, &, |, ^.",
+            notes: "`lhs <op>= rhs`; op is +, -, *, /, %, <<, >>, &, |, ^. Token dispatches to `cot_asgbor`/`cot_asgxor`/`cot_asgband`/`cot_asgadd`/`cot_asgsub`/`cot_asgmul`/`cot_asgsshr`/`cot_asgushr`/`cot_asgshl`/`cot_asgsdiv`/`cot_asgudiv`/`cot_asgsmod`/`cot_asgumod`.",
         },
         CExprCoverageRow {
             variant: "Neg",
             arity: Some(1),
             precedence: 2,
             may_side_effect: false,
-            notes: "`-x`; arithmetic negation.",
+            notes: "`-x`; arithmetic negation. Maps to `cot_neg`.",
         },
         CExprCoverageRow {
             variant: "LogicalNot",
             arity: Some(1),
             precedence: 2,
             may_side_effect: false,
-            notes: "`!x`; logical not.",
+            notes: "`!x`; logical not. Maps to `cot_lnot`.",
         },
         CExprCoverageRow {
             variant: "BitwiseNot",
             arity: Some(1),
             precedence: 2,
             may_side_effect: false,
-            notes: "`~x`; bitwise not.",
+            notes: "`~x`; bitwise not. Maps to `cot_bnot`.",
         },
         CExprCoverageRow {
             variant: "Helper",
             arity: None,
             precedence: 1,
             may_side_effect: true,
-            notes: "IDA helper call (no prototype).",
+            notes: "IDA helper call (no prototype). Maps to `cot_helper`.",
         },
         CExprCoverageRow {
             variant: "FuncId",
             arity: Some(0),
             precedence: 1,
             may_side_effect: false,
-            notes: "Function id literal `name@0xADDR`.",
+            notes: "Function id literal `name@0xADDR`. Re-uses `cot_fnum` slot semantics (function-pointer literal); rendered distinctly.",
         },
         CExprCoverageRow {
             variant: "StmtExpr",
             arity: Some(0),
             precedence: 1,
             may_side_effect: true,
-            notes: "GCC statement expression `({ ... })`.",
+            notes: "GCC statement expression `({ ... })`. Maps to `cot_insn` (embedded micro-instruction).",
         },
         CExprCoverageRow {
             variant: "Str",
             arity: Some(0),
             precedence: 1,
             may_side_effect: false,
-            notes: "C string literal `\"...\"` (escapes pre-applied).",
+            notes: "C string literal `\"...\"` (escapes pre-applied). Maps to `cot_str`.",
         },
         CExprCoverageRow {
             variant: "Obj",
             arity: Some(0),
             precedence: 1,
             may_side_effect: false,
-            notes: "Reference to a named global at a known address.",
+            notes: "Reference to a named global at a known address. Maps to `cot_obj`.",
         },
         // §4 additions.
         CExprCoverageRow {
@@ -1332,6 +1332,16 @@ pub fn cot_name(idx: usize) -> Option<&'static str> {
     COT_NAMES.get(idx).copied()
 }
 
+/// Total-function variant of [`cot_name`] keyed on `u8`.
+///
+/// Returns the canonical `cot_*` name for `idx` in `0..=68`, or
+/// `"cot_unknown"` for any out-of-range index (so a plugin that
+/// dispatches by raw opcode never has to unwrap an `Option`). The
+/// canonical (`Option`-returning) accessor is [`cot_name`].
+pub fn cot_index_to_name(idx: u8) -> &'static str {
+    COT_NAMES.get(idx as usize).copied().unwrap_or("cot_unknown")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1822,6 +1832,13 @@ mod tests {
         assert_eq!(cot_name(0), Some("cot_empty"));
         assert_eq!(cot_name(68), Some("cot_helper"));
         assert_eq!(cot_name(69), None);
+
+        // Total-function variant: in-range returns the name, out-of-range
+        // returns the canonical `"cot_unknown"` sentinel.
+        assert_eq!(cot_index_to_name(0), "cot_empty");
+        assert_eq!(cot_index_to_name(68), "cot_helper");
+        assert_eq!(cot_index_to_name(69), "cot_unknown");
+        assert_eq!(cot_index_to_name(u8::MAX), "cot_unknown");
     }
 
     /// Helper / FuncId / StmtExpr / Str / Obj render with their expected

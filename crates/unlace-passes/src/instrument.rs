@@ -50,7 +50,7 @@ use std::time::Instant;
 
 use unlace_ir::ssa::SsaFunction;
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{Pass, PassError, PassPhase};
 
 /// Per-pass accumulated wall-clock samples. Keyed by pass name so the
 /// dump order is deterministic regardless of dispatch order.
@@ -95,6 +95,149 @@ fn timing_flag() -> bool {
             .map(|v| v == "1")
             .unwrap_or(false)
     })
+}
+
+// ---------------------------------------------------------------------------
+// Batch 16: pass-schedule audit
+// ---------------------------------------------------------------------------
+
+/// One row of the pass-schedule audit log.
+///
+/// Captured for every [`run_instrumented`] invocation when
+/// `UNLACE_SCHEDULE_AUDIT` is non-empty (the value is the destination
+/// file path). Holds the function name, pass name, declared phase, the
+/// pass's reported `changed` flag, and the per-(function, pass) iteration
+/// index so out-of-order invocations and oscillations are visible after
+/// the fact.
+#[derive(Clone, Debug)]
+struct ScheduleRow {
+    function: String,
+    pass: String,
+    phase: PassPhase,
+    iteration: u32,
+    changed: bool,
+}
+
+fn schedule_log() -> &'static Mutex<Vec<ScheduleRow>> {
+    static CELL: OnceLock<Mutex<Vec<ScheduleRow>>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn schedule_iteration_counts() -> &'static Mutex<BTreeMap<(String, String), u32>> {
+    static CELL: OnceLock<Mutex<BTreeMap<(String, String), u32>>> = OnceLock::new();
+    CELL.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+fn schedule_audit_path_cell() -> &'static Option<PathBuf> {
+    static CELL: OnceLock<Option<PathBuf>> = OnceLock::new();
+    CELL.get_or_init(|| {
+        std::env::var_os("UNLACE_SCHEDULE_AUDIT")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    })
+}
+
+/// Configured destination path for the schedule audit, or `None` when
+/// the env var is unset (the common hot-path case).
+#[inline]
+pub fn schedule_audit_path() -> Option<PathBuf> {
+    schedule_audit_path_cell().clone()
+}
+
+#[inline]
+fn schedule_audit_enabled() -> bool {
+    schedule_audit_path_cell().is_some()
+}
+
+/// Append one row to the schedule audit. Cheap when the env var is unset
+/// (a single atomic load), so callers don't need to gate.
+fn record_schedule_event(function: &str, pass: &str, phase: PassPhase, changed: bool) {
+    if !schedule_audit_enabled() {
+        return;
+    }
+    let iteration = {
+        let mut counts = schedule_iteration_counts()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let key = (function.to_string(), pass.to_string());
+        let entry = counts.entry(key).or_insert(0);
+        let idx = *entry;
+        *entry = entry.saturating_add(1);
+        idx
+    };
+    let mut log = schedule_log()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    log.push(ScheduleRow {
+        function: function.to_string(),
+        pass: pass.to_string(),
+        phase,
+        iteration,
+        changed,
+    });
+}
+
+/// Render the accumulated schedule audit as a CSV body, including the
+/// header row. Stable order: insertion order, which is the same as
+/// dispatch order. Use this from `unlace-cli` when writing the file
+/// named by `UNLACE_SCHEDULE_AUDIT`.
+pub fn dump_schedule_audit_csv() -> String {
+    let rows: Vec<ScheduleRow> = {
+        let log = schedule_log()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        log.clone()
+    };
+    let mut out = String::from("function,pass,phase,iteration,changed\n");
+    for r in &rows {
+        out.push_str(&format!(
+            "{},{},{:?},{},{}\n",
+            r.function,
+            r.pass,
+            r.phase,
+            r.iteration,
+            if r.changed { 1 } else { 0 },
+        ));
+    }
+    out
+}
+
+/// Detect any pass invocation whose phase ordinal is strictly less than
+/// the previous invocation's *and* whose pass name appears later in the
+/// canonical schedule. The strict-less comparator means equal-phase
+/// repeats (the inner fixed-point cluster) don't flag.
+///
+/// Returns one human-readable line per oscillation. Empty `Ok(())` when
+/// the schedule is well-ordered. Used by the xtask audit subcommand.
+pub fn schedule_audit_oscillations() -> Vec<String> {
+    let rows: Vec<ScheduleRow> = {
+        let log = schedule_log()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        log.clone()
+    };
+    let mut violations = Vec::new();
+    let mut prev: Option<&ScheduleRow> = None;
+    for row in &rows {
+        if let Some(p) = prev {
+            if p.function == row.function
+                && row.phase.ordinal() < p.phase.ordinal()
+                && row.iteration > 0
+            {
+                violations.push(format!(
+                    "oscillation in '{fn_n}': pass '{p}' [{pp:?}] re-ran at iter {ri} after later phase '{ln}' [{lp:?}]",
+                    fn_n = row.function,
+                    p = row.pass,
+                    pp = row.phase,
+                    ri = row.iteration,
+                    ln = p.pass,
+                    lp = p.phase,
+                ));
+            }
+        }
+        prev = Some(row);
+    }
+    violations
 }
 
 /// Cached, parsed `UNLACE_TRACE_PASSES` set. `None` means env-unset
@@ -277,8 +420,9 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
     let trace = pass_should_trace(pass.name());
     let timing = pass_timing_enabled();
     let csv = func_timing_enabled();
+    let audit = schedule_audit_enabled();
 
-    if !trace && !timing && !csv {
+    if !trace && !timing && !csv && !audit {
         return pass.run(func);
     }
 
@@ -300,12 +444,17 @@ pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool,
     // passes don't rename functions, but a few (e.g. RustPanicPass) can
     // touch the name — record against the pre-pass identity so the CSV
     // groups behave like a stable key.
-    let func_name_owned = if csv {
+    let func_name_owned = if csv || audit {
         Some(func.function.name.clone())
     } else {
         None
     };
     let res = pass.run(func);
+    if audit {
+        let changed = matches!(res, Ok(true));
+        let func_name = func_name_owned.as_deref().unwrap_or("");
+        record_schedule_event(func_name, pass.name(), pass.phase(), changed);
+    }
     if let Some(t0) = start {
         let ns = t0.elapsed().as_nanos();
         // saturating cast — a single pass call exceeding ~584 years is
@@ -375,6 +524,41 @@ fn reset_timings_for_test() {
         let mut map = func_timings().lock().unwrap_or_else(|p| p.into_inner());
         map.clear();
     }
+    {
+        let mut log = schedule_log().lock().unwrap_or_else(|p| p.into_inner());
+        log.clear();
+    }
+    {
+        let mut counts = schedule_iteration_counts()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        counts.clear();
+    }
+}
+
+/// **Test-only** direct write into the schedule audit log, bypassing the
+/// `UNLACE_SCHEDULE_AUDIT` env gate. Lets the formatter be tested without
+/// mutating process-global env state.
+#[cfg(test)]
+fn record_schedule_event_for_test(function: &str, pass: &str, phase: PassPhase, changed: bool) {
+    let iteration = {
+        let mut counts = schedule_iteration_counts()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let key = (function.to_string(), pass.to_string());
+        let entry = counts.entry(key).or_insert(0);
+        let idx = *entry;
+        *entry = entry.saturating_add(1);
+        idx
+    };
+    let mut log = schedule_log().lock().unwrap_or_else(|p| p.into_inner());
+    log.push(ScheduleRow {
+        function: function.to_string(),
+        pass: pass.to_string(),
+        phase,
+        iteration,
+        changed,
+    });
 }
 
 /// **Test-only** direct write into the per-function accumulator,
@@ -540,5 +724,65 @@ main,cse,0,12.346
     fn pass_timing_csv_path_no_panic() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let _ = pass_timing_csv_path();
+    }
+
+    // ---- UNLACE_SCHEDULE_AUDIT (Batch 16) ----
+
+    #[test]
+    fn schedule_audit_records_iterations_and_phases() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+
+        record_schedule_event_for_test("f", "ConstantFoldPass", PassPhase::LocalOpt, true);
+        record_schedule_event_for_test("f", "ConstantFoldPass", PassPhase::LocalOpt, false);
+        record_schedule_event_for_test("f", "TypeInferPass", PassPhase::TypeRecovery, true);
+
+        let csv = dump_schedule_audit_csv();
+        let expected = "\
+function,pass,phase,iteration,changed
+f,ConstantFoldPass,LocalOpt,0,1
+f,ConstantFoldPass,LocalOpt,1,0
+f,TypeInferPass,TypeRecovery,0,1
+";
+        assert_eq!(csv, expected);
+    }
+
+    #[test]
+    fn schedule_audit_flags_phase_oscillation() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+
+        // 1. ConstantFoldPass (iter 0, LocalOpt) — initial run.
+        // 2. TypeInferPass (iter 0, TypeRecovery) — forward, fine.
+        // 3. ConstantFoldPass (iter 1, LocalOpt) — backward AND iteration>0
+        //    → oscillation, because the pass already ran once at the earlier
+        //    phase and is now re-running after a later phase.
+        record_schedule_event_for_test("g", "ConstantFoldPass", PassPhase::LocalOpt, true);
+        record_schedule_event_for_test("g", "TypeInferPass", PassPhase::TypeRecovery, true);
+        record_schedule_event_for_test("g", "ConstantFoldPass", PassPhase::LocalOpt, false);
+
+        let osc = schedule_audit_oscillations();
+        assert_eq!(
+            osc.len(),
+            1,
+            "expected exactly one oscillation row, got {osc:?}"
+        );
+        assert!(
+            osc[0].contains("ConstantFoldPass") && osc[0].contains("TypeInferPass"),
+            "row should name both passes: {osc:?}"
+        );
+    }
+
+    #[test]
+    fn schedule_audit_quiet_when_disabled() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_timings_for_test();
+        // No env-driven recording, no test recording: the dump must just be
+        // the header so consumers can rely on a stable shape.
+        assert_eq!(
+            dump_schedule_audit_csv(),
+            "function,pass,phase,iteration,changed\n"
+        );
+        assert!(schedule_audit_oscillations().is_empty());
     }
 }

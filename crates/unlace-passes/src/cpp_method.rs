@@ -60,10 +60,8 @@ impl Pass for CppMethodPass {
         let prev_class = func.cpp_class_name.clone();
         let prev_this_args = func.cpp_this_args.clone();
         let prev_indirect_targets = func.indirect_call_targets.clone();
-        let prev_first_param_name: Option<String> = func
-            .inferred_params
-            .first()
-            .map(|(n, _)| n.clone());
+        let prev_first_param_name: Option<String> =
+            func.inferred_params.first().map(|(n, _)| n.clone());
 
         func.cpp_kind = Some(parsed.kind);
         func.cpp_class_name = Some(parsed.class_name.clone());
@@ -89,8 +87,7 @@ impl Pass for CppMethodPass {
         // parameter register on entry to the function.
         let class_ptr = make_class_ptr(&parsed.class_name);
         if let Some(this_sv) = first_param_input(func) {
-            func.composite_var_types
-                .insert(this_sv, class_ptr.clone());
+            func.composite_var_types.insert(this_sv, class_ptr.clone());
             func.var_role_names.insert(this_sv, "this".to_string());
         }
 
@@ -107,8 +104,7 @@ impl Pass for CppMethodPass {
         let call_sites: Vec<(BlockId, usize)> = func.cpp_vtable_calls.keys().copied().collect();
         for (bid, idx) in call_sites {
             if let Some(arg_sv) = first_call_arg_input(func, bid, idx) {
-                func.composite_var_types
-                    .insert(arg_sv, class_ptr.clone());
+                func.composite_var_types.insert(arg_sv, class_ptr.clone());
                 this_args.insert((bid, idx));
             }
             // Slot index lookup is infallible at this point — the key
@@ -197,8 +193,8 @@ pub fn parse_mangled_method(name: &str) -> Option<ParsedMethod> {
     //   * `E<argchars>`       → regular method; the method name is the
     //                          LAST segment, the class is the second-to-
     //                          last segment when there are ≥ 2 segments.
-    if cursor.starts_with('E') {
-        if !args_are_valid(&cursor[1..]) {
+    if let Some(args) = cursor.strip_prefix('E') {
+        if !args_are_valid(args) {
             return None;
         }
         let class_name = if segments.len() >= 2 {
@@ -236,8 +232,7 @@ pub fn parse_mangled_method(name: &str) -> Option<ParsedMethod> {
 
 /// `[a-zA-Z_]*` per task spec.
 fn args_are_valid(s: &str) -> bool {
-    s.bytes()
-        .all(|b| b.is_ascii_alphabetic() || b == b'_')
+    s.bytes().all(|b| b.is_ascii_alphabetic() || b == b'_')
 }
 
 fn is_ident_char(c: char) -> bool {
@@ -312,11 +307,7 @@ fn first_param_input(func: &SsaFunction) -> Option<SsaVarnode> {
 /// `Call`/`Callind` at `(bid, idx)`. We look backward through prior
 /// instructions in the same block for a write to the first argument
 /// register (RDI / X0 / RCX).
-fn first_call_arg_input(
-    func: &SsaFunction,
-    bid: BlockId,
-    idx: usize,
-) -> Option<SsaVarnode> {
+fn first_call_arg_input(func: &SsaFunction, bid: BlockId, idx: usize) -> Option<SsaVarnode> {
     let block = func.function.blocks.get(&bid)?;
     let candidate_offsets: &[u64] = match func.calling_convention {
         unlace_ir::ssa::CallingConvention::MicrosoftX64 => &[24],
@@ -332,11 +323,7 @@ fn first_call_arg_input(
         if !candidate_offsets.contains(&out.offset) {
             continue;
         }
-        if let Some(sv) = func
-            .var_map
-            .get(&(bid, j, VarnodeSlot::Output))
-            .copied()
-        {
+        if let Some(sv) = func.var_map.get(&(bid, j, VarnodeSlot::Output)).copied() {
             return Some(sv);
         }
     }

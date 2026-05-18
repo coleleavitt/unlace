@@ -30,58 +30,93 @@ pub struct CallingConvSpec {
 /// All known calling convention specifications.
 pub static CALLING_CONV_SPECS: &[CallingConvSpec] = &[
     CallingConvSpec {
-        arch: ArchId::X86_64, name: "sysv_amd64",
+        arch: ArchId::X86_64,
+        name: "sysv_amd64",
         int_arg_regs: &[56, 48, 16, 8, 64, 72], // rdi,rsi,rdx,rcx,r8,r9
         float_arg_regs: &[],
-        int_ret_reg: 0, float_ret_reg: 0, stack_ptr: 32, link_reg: 0,
+        int_ret_reg: 0,
+        float_ret_reg: 0,
+        stack_ptr: 32,
+        link_reg: 0,
     },
     CallingConvSpec {
-        arch: ArchId::X86_64, name: "ms_x64",
+        arch: ArchId::X86_64,
+        name: "ms_x64",
         int_arg_regs: &[8, 16, 64, 72], // rcx,rdx,r8,r9
         float_arg_regs: &[],
-        int_ret_reg: 0, float_ret_reg: 0, stack_ptr: 32, link_reg: 0,
+        int_ret_reg: 0,
+        float_ret_reg: 0,
+        stack_ptr: 32,
+        link_reg: 0,
     },
     CallingConvSpec {
-        arch: ArchId::AArch64, name: "aapcs64",
+        arch: ArchId::AArch64,
+        name: "aapcs64",
         int_arg_regs: &[0, 8, 16, 24, 32, 40, 48, 56], // x0-x7
         float_arg_regs: &[],
-        int_ret_reg: 0, float_ret_reg: 0, stack_ptr: 248, link_reg: 240,
+        int_ret_reg: 0,
+        float_ret_reg: 0,
+        stack_ptr: 248,
+        link_reg: 240,
     },
     CallingConvSpec {
-        arch: ArchId::Arm, name: "aapcs32",
+        arch: ArchId::Arm,
+        name: "aapcs32",
         int_arg_regs: &[0, 4, 8, 12], // r0-r3
         float_arg_regs: &[],
-        int_ret_reg: 0, float_ret_reg: 0, stack_ptr: 52, link_reg: 56,
+        int_ret_reg: 0,
+        float_ret_reg: 0,
+        stack_ptr: 52,
+        link_reg: 56,
     },
     CallingConvSpec {
-        arch: ArchId::RiscV64, name: "riscv_lp64",
+        arch: ArchId::RiscV64,
+        name: "riscv_lp64",
         int_arg_regs: &[80, 88, 96, 104, 112, 120, 128, 136], // a0-a7 (x10-x17)
         float_arg_regs: &[],
-        int_ret_reg: 80, float_ret_reg: 0, stack_ptr: 16, link_reg: 8,
+        int_ret_reg: 80,
+        float_ret_reg: 0,
+        stack_ptr: 16,
+        link_reg: 8,
     },
     CallingConvSpec {
-        arch: ArchId::Mips64, name: "n64",
+        arch: ArchId::Mips64,
+        name: "n64",
         int_arg_regs: &[32, 40, 48, 56, 64, 72, 80, 88], // $a0-$a7
         float_arg_regs: &[],
-        int_ret_reg: 16, float_ret_reg: 0, stack_ptr: 232, link_reg: 248,
+        int_ret_reg: 16,
+        float_ret_reg: 0,
+        stack_ptr: 232,
+        link_reg: 248,
     },
     CallingConvSpec {
-        arch: ArchId::Ppc, name: "sysv_ppc32",
+        arch: ArchId::Ppc,
+        name: "sysv_ppc32",
         int_arg_regs: &[12, 16, 20, 24, 28, 32, 36, 40], // r3-r10
         float_arg_regs: &[],
-        int_ret_reg: 12, float_ret_reg: 0, stack_ptr: 4, link_reg: 264,
+        int_ret_reg: 12,
+        float_ret_reg: 0,
+        stack_ptr: 4,
+        link_reg: 264,
     },
     CallingConvSpec {
-        arch: ArchId::Ppc64, name: "elfv2_ppc64",
+        arch: ArchId::Ppc64,
+        name: "elfv2_ppc64",
         int_arg_regs: &[24, 32, 40, 48, 56, 64, 72, 80], // r3-r10
         float_arg_regs: &[],
-        int_ret_reg: 24, float_ret_reg: 0, stack_ptr: 8, link_reg: 264,
+        int_ret_reg: 24,
+        float_ret_reg: 0,
+        stack_ptr: 8,
+        link_reg: 264,
     },
 ];
 
 /// Look up calling convention specs for a given architecture.
 pub fn specs_for_arch(arch: ArchId) -> Vec<&'static CallingConvSpec> {
-    CALLING_CONV_SPECS.iter().filter(|s| s.arch == arch).collect()
+    CALLING_CONV_SPECS
+        .iter()
+        .filter(|s| s.arch == arch)
+        .collect()
 }
 
 #[cfg(test)]
@@ -110,7 +145,11 @@ mod tests {
     #[test]
     fn test_all_specs_have_args() {
         for spec in CALLING_CONV_SPECS {
-            assert!(!spec.int_arg_regs.is_empty(), "{} has no arg regs", spec.name);
+            assert!(
+                !spec.int_arg_regs.is_empty(),
+                "{} has no arg regs",
+                spec.name
+            );
         }
     }
 }

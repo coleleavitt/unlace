@@ -8,8 +8,8 @@
 //!    constraint conflicts (the "counterexample"), the candidate is rejected.
 //! 3. Applying the first consistent candidate.
 
-use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode};
 use unlace_ir::IrOp;
+use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode};
 
 use crate::pass::{Pass, PassError};
 use crate::type_constraint_solver::{Constraint, collect_constraints};
@@ -80,10 +80,18 @@ fn propose_candidates(sv: &SsaVarnode, func: &SsaFunction) -> Vec<PrimitiveType>
                         used_as_ptr = true;
                     }
                 }
-                IrOp::IntSless | IrOp::IntSlessequal | IrOp::IntSright | IrOp::IntSdiv
-                | IrOp::IntSrem | IrOp::IntSext => used_signed = true,
-                IrOp::IntLess | IrOp::IntLessequal | IrOp::IntRight | IrOp::IntDiv
-                | IrOp::IntRem | IrOp::IntZext => used_unsigned = true,
+                IrOp::IntSless
+                | IrOp::IntSlessequal
+                | IrOp::IntSright
+                | IrOp::IntSdiv
+                | IrOp::IntSrem
+                | IrOp::IntSext => used_signed = true,
+                IrOp::IntLess
+                | IrOp::IntLessequal
+                | IrOp::IntRight
+                | IrOp::IntDiv
+                | IrOp::IntRem
+                | IrOp::IntZext => used_unsigned = true,
                 IrOp::FloatAdd | IrOp::FloatSub | IrOp::FloatMult | IrOp::FloatDiv => {
                     used_float = true
                 }
@@ -127,10 +135,9 @@ fn verify_candidate(
                     return false;
                 }
             }
-            Constraint::Subtype(v, ty) if v == sv
-                && !types_compatible(candidate, ty) => {
-                    return false;
-                }
+            Constraint::Subtype(v, ty) if v == sv && !types_compatible(candidate, ty) => {
+                return false;
+            }
             _ => {}
         }
     }
@@ -161,7 +168,10 @@ mod tests {
     #[test]
     fn test_bool_candidate_accepted() {
         let v = Varnode::unique(0x100, 1);
-        let sv = SsaVarnode { base: v, version: 0 };
+        let sv = SsaVarnode {
+            base: v,
+            version: 0,
+        };
 
         let mut func = Function::new("test_bool", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));
@@ -190,7 +200,10 @@ mod tests {
     #[test]
     fn test_ptr_candidate_from_load() {
         let addr = Varnode::unique(0x100, 8);
-        let sv = SsaVarnode { base: addr, version: 0 };
+        let sv = SsaVarnode {
+            base: addr,
+            version: 0,
+        };
 
         let mut func = Function::new("test_ptr", BlockId(0), 0x2000);
         let mut bb = BasicBlock::new(BlockId(0));
@@ -219,7 +232,10 @@ mod tests {
     #[test]
     fn test_conflicting_constraint_rejects() {
         let v = Varnode::unique(0x100, 4);
-        let sv = SsaVarnode { base: v, version: 0 };
+        let sv = SsaVarnode {
+            base: v,
+            version: 0,
+        };
         let constraints = vec![Constraint::Equal(sv, PrimitiveType::Float)];
         assert!(!verify_candidate(&sv, &PrimitiveType::Int(4), &constraints));
         assert!(verify_candidate(&sv, &PrimitiveType::Float, &constraints));

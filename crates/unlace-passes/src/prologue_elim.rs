@@ -65,6 +65,7 @@ impl Pass for PrologueElimPass {
 
         // Detect prologue in the entry block.
         detect_prologue(func, &mut marked);
+        detect_split_prologues(func, &mut marked);
 
         // Detect epilogue in exit blocks (blocks containing RETURN).
         detect_epilogues(func, &mut marked);
@@ -117,6 +118,43 @@ fn detect_prologue(func: &SsaFunction, marked: &mut std::collections::BTreeSet<(
     let _i = scan_stack_canary(insns, i, entry, marked);
 }
 
+/// Detect prologue fragments that start a successor block after an early guard.
+///
+/// Optimized ELF startup helpers often test a global before executing the real
+/// `push rbp` sequence. The classic entry-block-only scan misses the pattern:
+///
+/// ```text
+/// tmp = rsp - 8
+/// rsp = tmp
+/// STORE ram, tmp, rbp
+/// ```
+///
+/// This scanner is intentionally limited to the start of non-entry blocks and
+/// to saved/frame-register stores so it does not hide ordinary stack writes.
+fn detect_split_prologues(
+    func: &SsaFunction,
+    marked: &mut std::collections::BTreeSet<(BlockId, usize)>,
+) {
+    let entry = func.function.entry;
+    for (&bid, block) in &func.function.blocks {
+        if bid == entry {
+            continue;
+        }
+        let insns = &block.insns;
+        let mut i = 0usize;
+        while let Some((end, _stored_reg)) = split_push_range(insns, i) {
+            for idx in i..=end {
+                marked.insert((bid, idx));
+            }
+            i = end + 1;
+            i = scan_mov_rbp_rsp(insns, i, bid, marked);
+            if i >= 8 {
+                break;
+            }
+        }
+    }
+}
+
 /// Scan for `push rbp` pattern: STORE to stack of RBP, then RSP decrement.
 fn scan_push_rbp(
     insns: &[unlace_ir::IrInsn],
@@ -151,6 +189,48 @@ fn scan_push_rbp(
     }
 
     i
+}
+
+fn split_push_range(insns: &[unlace_ir::IrInsn], start: usize) -> Option<(usize, u64)> {
+    if start + 2 >= insns.len() || start > 3 {
+        return None;
+    }
+
+    let sub = &insns[start];
+    if sub.op != IrOp::IntSub || sub.inputs.len() != 2 {
+        return None;
+    }
+    let temp = sub.output?;
+    if temp.space != SpaceId::Unique && !is_reg(&temp, RSP) {
+        return None;
+    }
+    if !is_reg(&sub.inputs[0], RSP) || !is_const(&sub.inputs[1]) || sub.inputs[1].offset != 8 {
+        return None;
+    }
+
+    let copy = &insns[start + 1];
+    if copy.op != IrOp::Copy
+        || !copy.output.is_some_and(|out| is_reg(&out, RSP))
+        || copy.inputs.first() != Some(&temp)
+    {
+        return None;
+    }
+
+    let store = &insns[start + 2];
+    if store.op != IrOp::Store || store.inputs.len() < 3 {
+        return None;
+    }
+    if store.inputs[1] != temp {
+        return None;
+    }
+    let value = store.inputs[2];
+    if value.space != SpaceId::Register {
+        return None;
+    }
+    if value.offset != RBP && !is_callee_saved(&value) {
+        return None;
+    }
+    Some((start + 2, value.offset))
 }
 
 /// Scan for `mov rbp, rsp` pattern: COPY(RSP) → RBP or INT_ADD(RSP, 0) → RBP.
@@ -514,8 +594,7 @@ fn scan_epilogue_callee_restores(
         // Also check single-instruction pattern where RSP is implicitly adjusted.
         if idx >= 1 {
             let maybe_load = &insns[idx - 1];
-            if maybe_load.op == IrOp::Load
-                && maybe_load.output.is_some_and(|o| is_callee_saved(&o))
+            if maybe_load.op == IrOp::Load && maybe_load.output.is_some_and(|o| is_callee_saved(&o))
             {
                 marked.insert((bid, idx - 1));
                 idx -= 1;
@@ -600,9 +679,10 @@ fn find_rsp_decrement(insns: &[unlace_ir::IrInsn], start: usize, expected: u64) 
             && insn.inputs.len() == 2
             && is_reg(&insn.inputs[0], RSP)
             && is_const(&insn.inputs[1])
-            && (expected == 0 || insn.inputs[1].offset == expected) {
-                return Some(idx);
-            }
+            && (expected == 0 || insn.inputs[1].offset == expected)
+        {
+            return Some(idx);
+        }
     }
     None
 }
@@ -610,11 +690,8 @@ fn find_rsp_decrement(insns: &[unlace_ir::IrInsn], start: usize, expected: u64) 
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
-    
 
-    use unlace_ir::ssa::{
-        SsaFunction, build_ssa,
-    };
+    use unlace_ir::ssa::{SsaFunction, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -842,6 +919,89 @@ mod tests {
         assert!(
             !ssa.frame_setup_insns.contains(&(BlockId(0), 8)),
             "real instruction at index 8 should not be marked",
+        );
+    }
+
+    #[test]
+    fn test_split_guard_block_push_rbp_detected() {
+        let tmp = Varnode::unique(0x100, 8);
+        let mut func = Function::new("split_guard", BlockId(0), 0x1000);
+
+        let mut entry = BasicBlock::new(BlockId(0));
+        entry.successors.push(BlockId(1));
+
+        let mut prologue = BasicBlock::new(BlockId(1));
+        prologue.insns.push(IrInsn::with_output(
+            IrOp::IntSub,
+            tmp,
+            smallvec![rsp(), c8()],
+            0x1010,
+        ));
+        prologue.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rsp(),
+            smallvec![tmp],
+            0x1011,
+        ));
+        prologue.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![Varnode::ram(0, 8), tmp, rbp()],
+            0x1012,
+        ));
+        prologue.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::unique(0x108, 8),
+            smallvec![Varnode::reg(0, 8), Varnode::constant(1, 8)],
+            0x1014,
+        ));
+        prologue.insns.push(IrInsn::with_output(
+            IrOp::IntEqual,
+            Varnode::unique(0x110, 1),
+            smallvec![Varnode::reg(0, 8), Varnode::constant(0, 8)],
+            0x1016,
+        ));
+        prologue.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            rbp(),
+            smallvec![rsp()],
+            0x1017,
+        ));
+        prologue.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            Varnode::reg(0, 8),
+            smallvec![Varnode::reg(0, 8), Varnode::constant(1, 8)],
+            0x1018,
+        ));
+        prologue.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1020,
+        ));
+
+        func.insert_block(entry);
+        func.insert_block(prologue);
+        let mut ssa = build_ssa(func);
+
+        PrologueElimPass.run(&mut ssa).expect("pass should succeed");
+
+        for idx in 0..=2 {
+            assert!(
+                ssa.frame_setup_insns.contains(&(BlockId(1), idx)),
+                "split prologue instruction {idx} should be marked, got {:?}",
+                ssa.frame_setup_insns
+            );
+        }
+        assert!(
+            !ssa.frame_setup_insns.contains(&(BlockId(1), 3)),
+            "intervening guard work in split block must not be marked"
+        );
+        assert!(
+            ssa.frame_setup_insns.contains(&(BlockId(1), 5)),
+            "delayed RBP = RSP setup should be marked"
+        );
+        assert!(
+            !ssa.frame_setup_insns.contains(&(BlockId(1), 6)),
+            "real work after delayed RBP setup must not be marked"
         );
     }
 

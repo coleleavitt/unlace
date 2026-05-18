@@ -252,6 +252,7 @@ mod tests {
             op_bindings: OpTypeBindings::default(),
             byref_boxes: BTreeMap::new(),
             stack_frame: None,
+            stack_accesses: Vec::new(),
             byref_info: None,
             libc_call_annotations: BTreeMap::new(),
             libc_sig_annotations: BTreeMap::new(),

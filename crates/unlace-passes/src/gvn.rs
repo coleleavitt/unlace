@@ -3,22 +3,22 @@
 //! Assigns a "value number" to every SSA varnode such that two varnodes
 //! receive the same number iff their defining expressions are guaranteed
 //! to evaluate to the same value.  Redundant computations are then
-//! rewritten as `COPY` of the canonical (earliest) varnode bearing that
+//! rewritten as `COPY` of an available canonical varnode bearing that
 //! number.
 //!
 //! # Relationship to CSE
 //!
 //! [`CsePass`](crate::CsePass) is dominator-tree-scoped CSE: an expression
 //! is only considered redundant if a syntactically identical earlier
-//! expression strictly dominates it.  GVN is strictly more powerful — it
-//! recognises equivalences that CSE misses on non-dominating paths by
-//! reasoning purely about value identity.
+//! expression strictly dominates it.  GVN additionally canonicalizes through
+//! value identity, so expressions whose operands are equivalent SSA values can
+//! match even when the raw syntax differs.  The final rewrite is still
+//! dominance-checked: a `COPY` source must dominate the replacement site.
 //!
-//! Concretely, GVN here uses an RPO walk and unifies any two pure
-//! computations that share the same `(opcode, operand value numbers,
-//! output size)` key.  Constants are interned so `c5 + c5` and
-//! `(c2 + c3) + (c2 + c3)` both end up with the same value number once
-//! their operand value numbers match.
+//! Concretely, GVN here uses an RPO walk and groups pure computations that
+//! share the same `(opcode, operand value numbers, output size)` key.
+//! Constants are interned so `c5 + c5` and `(c2 + c3) + (c2 + c3)` both end
+//! up with the same value number once their operand value numbers match.
 //!
 //! # Algorithm
 //!
@@ -28,11 +28,11 @@
 //!    `(opcode, output_size, sorted-or-ordered input value numbers)`.
 //!    Inputs are mapped through the existing value number table; constants
 //!    receive a stable per-`Varnode` identity-based number.
-//! 4. If the key has already been seen, the new instruction is redundant:
-//!    record a rewrite to `COPY canonical`.  Reuse the existing canonical's
-//!    value number for this output.
-//! 5. Otherwise, mint a fresh value number for the output and store
-//!    `key → (vn, canonical SSA varnode)` in the table.
+//! 4. If the key has already been seen and one of its canonical definitions
+//!    dominates the current instruction, record a rewrite to `COPY canonical`.
+//!    Reuse that canonical's value number for this output.
+//! 5. Otherwise, mint a fresh value number for the output and store this
+//!    instruction as another available definition for the key.
 //!
 //! # Commutativity
 //!
@@ -147,6 +147,15 @@ struct Rewrite {
     block: BlockId,
     insn_idx: usize,
     canonical: Varnode,
+    canonical_sv: SsaVarnode,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct CanonicalDef {
+    sv: SsaVarnode,
+    vn: ValueNumber,
+    block: BlockId,
+    insn_idx: usize,
 }
 
 /// Allocator for fresh [`ValueNumber`]s.
@@ -174,8 +183,8 @@ fn compute_rewrites(func: &SsaFunction) -> Vec<Rewrite> {
     let mut sv_vn: BTreeMap<SsaVarnode, ValueNumber> = BTreeMap::new();
     // raw constant Varnode → vn, since constants are not SSA-renamed.
     let mut const_vn: BTreeMap<Varnode, ValueNumber> = BTreeMap::new();
-    // Expression key → (canonical sv, value number).
-    let mut expr_table: BTreeMap<ValueKey, (SsaVarnode, ValueNumber)> = BTreeMap::new();
+    // Expression key → available canonical defs for that expression.
+    let mut expr_table: BTreeMap<ValueKey, Vec<CanonicalDef>> = BTreeMap::new();
 
     let mut rewrites: Vec<Rewrite> = Vec::new();
 
@@ -218,28 +227,76 @@ fn compute_rewrites(func: &SsaFunction) -> Vec<Rewrite> {
                 }
             };
 
-            match expr_table.get(&key).copied() {
-                Some((canonical_sv, canonical_vn)) => {
+            let available = expr_table.get(&key).and_then(|defs| {
+                defs.iter().copied().find(|def| {
+                    definition_dominates_use(func, def.block, def.insn_idx, bid, insn_idx)
+                })
+            });
+
+            match available {
+                Some(canonical) => {
                     // Redundant: this output joins the existing equivalence
                     // class.  Reuse the canonical's vn so any later op
                     // operating on `out_sv` keys identically.
-                    sv_vn.insert(out_sv, canonical_vn);
+                    sv_vn.insert(out_sv, canonical.vn);
                     rewrites.push(Rewrite {
                         block: bid,
                         insn_idx,
-                        canonical: canonical_sv.base,
+                        canonical: canonical.sv.base,
+                        canonical_sv: canonical.sv,
                     });
                 }
                 None => {
                     let vn = alloc.next();
                     sv_vn.insert(out_sv, vn);
-                    expr_table.insert(key, (out_sv, vn));
+                    expr_table.entry(key).or_default().push(CanonicalDef {
+                        sv: out_sv,
+                        vn,
+                        block: bid,
+                        insn_idx,
+                    });
                 }
             }
         }
     }
 
     rewrites
+}
+
+fn definition_dominates_use(
+    func: &SsaFunction,
+    def_bid: BlockId,
+    def_idx: usize,
+    use_bid: BlockId,
+    use_idx: usize,
+) -> bool {
+    if def_bid == use_bid {
+        return def_idx < use_idx;
+    }
+    block_dominates(&func.dom_tree, def_bid, use_bid)
+}
+
+fn block_dominates(
+    dom_tree: &unlace_ir::ssa::DominatorTree,
+    dominator: BlockId,
+    block: BlockId,
+) -> bool {
+    if dominator == block {
+        return true;
+    }
+
+    let mut cur = block;
+    while let Some(parent) = dom_tree.idom(cur) {
+        if parent == dominator {
+            return true;
+        }
+        if parent == cur {
+            break;
+        }
+        cur = parent;
+    }
+
+    false
 }
 
 /// Compute reverse post-order of the CFG starting from the entry block.
@@ -385,26 +442,15 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
                 .remove(&(rw.block, rw.insn_idx, VarnodeSlot::Input(i)));
         }
 
-        // Map the new sole input to a canonical SSA varnode.  We pick
-        // the first (deterministic) Output mapping whose base matches —
-        // version selection is unambiguous because a given Varnode base
-        // has only one Output entry per definition site.
+        // Map the new sole input to the exact canonical SSA varnode chosen
+        // during rewrite planning.
         if rw.canonical.space != SpaceId::Const {
-            if let Some(sv) = find_output_ssa_for_base(func, &rw.canonical) {
-                func.var_map
-                    .insert((rw.block, rw.insn_idx, VarnodeSlot::Input(0)), sv);
-            }
+            func.var_map.insert(
+                (rw.block, rw.insn_idx, VarnodeSlot::Input(0)),
+                rw.canonical_sv,
+            );
         }
     }
-}
-
-fn find_output_ssa_for_base(func: &SsaFunction, base: &Varnode) -> Option<SsaVarnode> {
-    for ((_, _, slot), &sv) in &func.var_map {
-        if matches!(slot, VarnodeSlot::Output) && sv.base == *base {
-            return Some(sv);
-        }
-    }
-    None
 }
 
 // ---------------------------------------------------------------------------
@@ -458,11 +504,12 @@ mod tests {
         assert_eq!(block.insns[1].inputs[0], v3);
     }
 
-    /// GVN catches sibling-block redundancies that dominator-scoped CSE
-    /// cannot.  CFG: BB0 → {BB1, BB2}; BB1: v3 = a + b; BB2: v7 = a + b.
-    /// Neither dominates the other, so CSE skips this; GVN merges them.
+    /// Sibling-block redundancies cannot be rewritten unless one definition
+    /// dominates the other.  CFG: BB0 -> {BB1, BB2}; BB1: v3 = a + b;
+    /// BB2: v7 = a + b.  Neither dominates the other, so both expressions
+    /// must remain as real definitions.
     #[test]
-    fn test_gvn_sibling_blocks_subsume_cse() {
+    fn test_gvn_sibling_blocks_do_not_rewrite_non_dominating_definitions() {
         let a = Varnode::reg(0, 4);
         let b = Varnode::reg(8, 4);
         let cond = Varnode::reg(16, 1);
@@ -513,18 +560,60 @@ mod tests {
         let mut ssa = build_ssa(func);
         let changed = GvnPass.run(&mut ssa).expect("pass should succeed");
         assert!(
-            changed,
-            "GVN must merge equivalent computations on sibling blocks"
+            !changed,
+            "GVN must not rewrite from a non-dominating sibling block"
         );
 
-        // Whichever block is visited second in RPO has its IntAdd rewritten
-        // to a COPY of the other.  Exactly one of BB1/BB2 should now be a COPY.
         let bb1_op = ssa.function.blocks[&BlockId(1)].insns[0].op;
         let bb2_op = ssa.function.blocks[&BlockId(2)].insns[0].op;
-        assert!(
-            (bb1_op == IrOp::Copy) ^ (bb2_op == IrOp::Copy),
-            "exactly one sibling must be rewritten (BB1: {bb1_op:?}, BB2: {bb2_op:?})"
-        );
+        assert_eq!(bb1_op, IrOp::IntAdd);
+        assert_eq!(bb2_op, IrOp::IntAdd);
+    }
+
+    /// A definition in a dominator can still be used as the canonical source
+    /// for an equivalent expression in a successor block.
+    #[test]
+    fn test_gvn_rewrites_when_canonical_dominates_successor() {
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let v3 = u(0);
+        let v7 = u(16);
+
+        let mut func = Function::new("dominated", BlockId(0), 0x3000);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            v3,
+            smallvec![a, b],
+            0x3000,
+        ));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x3004));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            v7,
+            smallvec![a, b],
+            0x3010,
+        ));
+        bb1.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x3014));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+
+        let mut ssa = build_ssa(func);
+        let changed = GvnPass.run(&mut ssa).expect("pass should succeed");
+        assert!(changed);
+
+        let bb0_op = ssa.function.blocks[&BlockId(0)].insns[0].op;
+        let bb1_insn = &ssa.function.blocks[&BlockId(1)].insns[0];
+        assert_eq!(bb0_op, IrOp::IntAdd);
+        assert_eq!(bb1_insn.op, IrOp::Copy);
+        assert_eq!(bb1_insn.inputs[0], v3);
     }
 
     /// `v3 = b + a` matches `v0 = a + b` via commutativity.

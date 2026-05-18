@@ -530,10 +530,7 @@ fn simplify_rhs_float_one(
 
 /// Looks up the defining instruction for an SSA value, if it lives in the
 /// current function.
-fn defining_insn(
-    func: &SsaFunction,
-    target: SsaVarnode,
-) -> Option<(BlockId, usize, &IrInsn)> {
+fn defining_insn(func: &SsaFunction, target: SsaVarnode) -> Option<(BlockId, usize, &IrInsn)> {
     for (&(def_bid, def_idx, ref slot), &def_ssa) in &func.var_map {
         if !matches!(slot, VarnodeSlot::Output) || def_ssa != target {
             continue;

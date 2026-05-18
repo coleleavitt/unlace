@@ -13,7 +13,8 @@
 //!    - **CFG edge**: mark target reachable; evaluate its phi nodes and instructions.
 //!    - **SSA edge**: re-evaluate the instruction using the updated operand.
 //! 5. **Rewrite**: replace `Constant` values with literal `COPY` instructions;
-//!    `Top` values (never reached) become `COPY 0` as a safe default.
+//!    `Top` values are left in place because they may be external inputs in
+//!    partially-renamed machine SSA.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -117,27 +118,19 @@ impl<'a> SccpSolver<'a> {
     /// SSA varnodes that are used but never defined within the function
     /// (version 0 registers, parameters) are external inputs — mark them Bottom.
     fn init_external_inputs(&mut self) {
-        let defined: BTreeSet<SsaVarnode> = self
-            .func
-            .var_map
-            .iter()
-            .filter_map(|((_, _, slot), sv)| {
-                if *slot == VarnodeSlot::Output {
-                    Some(*sv)
-                } else {
-                    None
-                }
-            })
-            .chain(
-                self.func
-                    .phi_map
-                    .values()
-                    .flat_map(|phis| phis.iter().map(|p| p.output)),
-            )
+        let def_locs = self.collect_instruction_def_locs();
+        let phi_def_blocks = self.collect_phi_def_blocks();
+        let defined: BTreeSet<SsaVarnode> = def_locs
+            .keys()
+            .copied()
+            .chain(phi_def_blocks.keys().copied())
             .collect();
 
-        for sv in self.uses.keys() {
-            if sv.base.space != SpaceId::Const && !defined.contains(sv) {
+        for (&(bid, insn_idx, ref slot), sv) in &self.func.var_map {
+            if !matches!(slot, VarnodeSlot::Input(_)) || sv.base.space == SpaceId::Const {
+                continue;
+            }
+            if !self.has_dominating_def(&def_locs, &phi_def_blocks, *sv, bid, insn_idx) {
                 self.values.insert(*sv, LatticeValue::Bottom);
             }
         }
@@ -147,6 +140,79 @@ impl<'a> SccpSolver<'a> {
                 self.values.insert(*sv, LatticeValue::Bottom);
             }
         }
+    }
+
+    fn collect_instruction_def_locs(&self) -> BTreeMap<SsaVarnode, Vec<(BlockId, usize)>> {
+        let mut defs: BTreeMap<SsaVarnode, Vec<(BlockId, usize)>> = BTreeMap::new();
+        for (&(bid, insn_idx, ref slot), sv) in &self.func.var_map {
+            if matches!(slot, VarnodeSlot::Output) {
+                defs.entry(*sv).or_default().push((bid, insn_idx));
+            }
+        }
+        defs
+    }
+
+    fn collect_phi_def_blocks(&self) -> BTreeMap<SsaVarnode, Vec<BlockId>> {
+        let mut defs: BTreeMap<SsaVarnode, Vec<BlockId>> = BTreeMap::new();
+        for (&bid, phis) in &self.func.phi_map {
+            for phi in phis {
+                defs.entry(phi.output).or_default().push(bid);
+            }
+        }
+        defs
+    }
+
+    fn has_dominating_def(
+        &self,
+        def_locs: &BTreeMap<SsaVarnode, Vec<(BlockId, usize)>>,
+        phi_def_blocks: &BTreeMap<SsaVarnode, Vec<BlockId>>,
+        sv: SsaVarnode,
+        use_bid: BlockId,
+        use_idx: usize,
+    ) -> bool {
+        let has_phi_def = phi_def_blocks.get(&sv).is_some_and(|blocks| {
+            blocks
+                .iter()
+                .any(|&def_bid| self.block_dominates(def_bid, use_bid))
+        });
+        if has_phi_def {
+            return true;
+        }
+
+        def_locs.get(&sv).is_some_and(|locs| {
+            locs.iter().any(|&(def_bid, def_idx)| {
+                self.instruction_def_dominates_use(def_bid, def_idx, use_bid, use_idx)
+            })
+        })
+    }
+
+    fn instruction_def_dominates_use(
+        &self,
+        def_bid: BlockId,
+        def_idx: usize,
+        use_bid: BlockId,
+        use_idx: usize,
+    ) -> bool {
+        if def_bid == use_bid {
+            return def_idx < use_idx;
+        }
+        self.block_dominates(def_bid, use_bid)
+    }
+
+    fn block_dominates(&self, dominator: BlockId, mut block: BlockId) -> bool {
+        if dominator == block {
+            return true;
+        }
+        while let Some(parent) = self.func.dom_tree.idom(block) {
+            if parent == dominator {
+                return true;
+            }
+            if parent == block {
+                break;
+            }
+            block = parent;
+        }
+        false
     }
 
     /// Get the lattice value for an SSA varnode. Defaults to `Top`.
@@ -763,7 +829,6 @@ fn two(inputs: &[Varnode]) -> Option<(Varnode, Varnode)> {
 /// Results extracted from the solver for use in the rewrite phase.
 struct SccpResults {
     values: BTreeMap<SsaVarnode, LatticeValue>,
-    reachable: BTreeSet<BlockId>,
 }
 
 impl SccpResults {
@@ -896,18 +961,7 @@ fn rewrite(func: &mut SsaFunction, results: &SccpResults) -> bool {
                     );
                     changed = true;
                 }
-                LatticeValue::Top => {
-                    if results.reachable.contains(&bid) {
-                        let const_vn = Varnode::constant(0, out.size);
-                        *insn = IrInsn::with_output(
-                            IrOp::Copy,
-                            out,
-                            smallvec::smallvec![const_vn],
-                            insn.addr,
-                        );
-                        changed = true;
-                    }
-                }
+                LatticeValue::Top => {}
                 LatticeValue::Bottom => {}
             }
         }
@@ -937,7 +991,6 @@ impl Pass for SccpPass {
             solver.solve();
             SccpResults {
                 values: solver.values,
-                reachable: solver.reachable,
             }
         };
         let changed = rewrite(func, &results);
@@ -1027,6 +1080,40 @@ mod tests {
         assert_eq!(block.insns[0].op, IrOp::IntSub);
         assert_eq!(block.insns[1].op, IrOp::IntEqual);
         assert_eq!(block.insns[2].op, IrOp::BoolNegate);
+    }
+
+    #[test]
+    fn test_sccp_preserves_initial_register_read_before_first_write() {
+        let rsp = Varnode::reg(32, 8);
+        let rbp = Varnode::reg(40, 8);
+        let stack_addr = Varnode::unique(0, 8);
+
+        let mut ssa = make_single_block_ssa(vec![
+            IrInsn::with_output(
+                IrOp::IntSub,
+                stack_addr,
+                smallvec![rsp, Varnode::constant(8, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rsp, smallvec![stack_addr], 0x1004),
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![Varnode::constant(SpaceId::Ram as u64, 8), stack_addr, rbp],
+                0x1008,
+            ),
+        ]);
+
+        let changed = SccpPass.run(&mut ssa).expect("pass should succeed");
+        assert!(
+            !changed,
+            "initial register reads are runtime inputs, not zero constants"
+        );
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[0].op, IrOp::IntSub);
+        assert_eq!(block.insns[0].inputs[0], rsp);
+        assert_eq!(block.insns[0].inputs[1], Varnode::constant(8, 8));
+        assert_eq!(block.insns[2].inputs[1], stack_addr);
     }
 
     /// SCCP through a taken branch: `if (true) v1 = 5; else v1 = 10; return v1;`
@@ -1362,9 +1449,6 @@ mod tests {
             IrOp::Load,
             "MMIO LOAD must survive SCCP rewrite"
         );
-        assert!(
-            after > before,
-            "preservation counter must have incremented"
-        );
+        assert!(after > before, "preservation counter must have incremented");
     }
 }

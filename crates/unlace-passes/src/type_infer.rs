@@ -191,7 +191,8 @@ fn seed_from_composites(func: &mut SsaFunction) {
             | Type::Interface { .. }
             | Type::Slice { .. }
             | Type::Map { .. }
-            | Type::TypeParam { .. } | Type::Union { .. } => PrimitiveType::Ptr,
+            | Type::TypeParam { .. }
+            | Type::Union { .. } => PrimitiveType::Ptr,
         };
         let entry = func.var_types.entry(*sv).or_insert(primitive);
         *entry = entry.join(primitive);
@@ -649,9 +650,11 @@ fn field_to_primitive(ty: &Type) -> PrimitiveType {
         // Slices reduce to their `*T` data pointer; maps to `*hmap`.
         // Generic type parameters flow via runtime dictionaries / iface words,
         // so model them as pointer-sized too.
-        Type::Interface { .. } | Type::Slice { .. } | Type::Map { .. } | Type::TypeParam { .. } | Type::Union { .. } => {
-            PrimitiveType::Ptr
-        }
+        Type::Interface { .. }
+        | Type::Slice { .. }
+        | Type::Map { .. }
+        | Type::TypeParam { .. }
+        | Type::Union { .. } => PrimitiveType::Ptr,
     }
 }
 
@@ -1279,8 +1282,6 @@ mod tests {
 
     #[test]
     fn test_pointer_chain_load_through_ptr_gets_ptr() {
-        
-
         // struct_ptr (r0) → Load → v1 (r8, 8B) → IntAdd(v1, 8) → addr → Load → v2
         // struct_ptr is Ptr (address of first Load), v1 should get Ptr (chain).
         let struct_ptr = Varnode::reg(0, 8);

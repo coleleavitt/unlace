@@ -156,18 +156,12 @@ impl Pass for AliasCategorizePass {
                     if !matches!(insn.op, IrOp::Load | IrOp::Store) {
                         continue;
                     }
-                    let key = insn
-                        .category
-                        .map(|c| c.name())
-                        .unwrap_or("Untagged");
+                    let key = insn.category.map(|c| c.name()).unwrap_or("Untagged");
                     *hist.entry(key).or_default() += 1;
                 }
             }
             if !hist.is_empty() {
-                eprintln!(
-                    "[alias-categorize] fn={} {:?}",
-                    func.function.name, hist
-                );
+                eprintln!("[alias-categorize] fn={} {:?}", func.function.name, hist);
             }
         }
 
@@ -226,13 +220,11 @@ impl AliasCategorizePass {
         // Constant address: check MMIO ranges. Static/Heap detection
         // requires loader-section / allocator info not plumbed in this
         // slice; the categorizer struct exposes the seams.
-        if addr.space == SpaceId::Const {
-            if self.mmio_ranges.contains(addr.offset) {
-                return AliasCategory::Mmio;
-            }
-            // TODO: consult loader sections to tag .data/.bss/.rodata
-            //       constants as Static. Today: Unknown.
+        if addr.space == SpaceId::Const && self.mmio_ranges.contains(addr.offset) {
+            return AliasCategory::Mmio;
         }
+        // TODO: consult loader sections to tag .data/.bss/.rodata
+        //       constants as Static. Today: Unknown.
 
         // TODO: walk var_map for the address def-site, recognise:
         //       - INT_ADD(rsp, _) → Stack
@@ -314,7 +306,7 @@ mod tests {
 
         let mut ssa = make_single_block_ssa(vec![load]);
         let pass = AliasCategorizePass::with_mmio_ranges(MmioRanges::with_ranges([
-            0xFFFF_0000..0xFFFF_FFFF,
+            0xFFFF_0000..0xFFFF_FFFF
         ]));
         assert!(pass.run(&mut ssa).expect("pass ok"));
 

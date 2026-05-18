@@ -27,8 +27,12 @@ pub struct BlockAlignment {
 
 /// Compute similarity between two opcode sequences (0..100).
 pub fn block_similarity(a: &[u16], b: &[u16]) -> u8 {
-    if a.is_empty() && b.is_empty() { return 100; }
-    if a.is_empty() || b.is_empty() { return 0; }
+    if a.is_empty() && b.is_empty() {
+        return 100;
+    }
+    if a.is_empty() || b.is_empty() {
+        return 0;
+    }
 
     let lcs_len = lcs_length(a, b);
     let max_len = a.len().max(b.len());
@@ -46,7 +50,9 @@ pub fn align_blocks(old: &[AlignBlock], new: &[AlignBlock]) -> BlockAlignment {
         let mut best_score = 0u8;
         let mut best_ni = None;
         for (ni, nb) in new.iter().enumerate() {
-            if used_new[ni] { continue; }
+            if used_new[ni] {
+                continue;
+            }
             let score = block_similarity(&ob.opcodes, &nb.opcodes);
             if score > best_score {
                 best_score = score;
@@ -54,7 +60,8 @@ pub fn align_blocks(old: &[AlignBlock], new: &[AlignBlock]) -> BlockAlignment {
             }
         }
         if let Some(ni) = best_ni {
-            if best_score >= 30 { // threshold
+            if best_score >= 30 {
+                // threshold
                 pairs.push((ob.id, new[ni].id, best_score));
                 used_new[ni] = true;
                 matched_old[oi] = true;
@@ -62,12 +69,24 @@ pub fn align_blocks(old: &[AlignBlock], new: &[AlignBlock]) -> BlockAlignment {
         }
     }
 
-    let old_only: Vec<u32> = old.iter().enumerate()
-        .filter(|(i, _)| !matched_old[*i]).map(|(_, b)| b.id).collect();
-    let new_only: Vec<u32> = new.iter().enumerate()
-        .filter(|(i, _)| !used_new[*i]).map(|(_, b)| b.id).collect();
+    let old_only: Vec<u32> = old
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !matched_old[*i])
+        .map(|(_, b)| b.id)
+        .collect();
+    let new_only: Vec<u32> = new
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !used_new[*i])
+        .map(|(_, b)| b.id)
+        .collect();
 
-    BlockAlignment { pairs, old_only, new_only }
+    BlockAlignment {
+        pairs,
+        old_only,
+        new_only,
+    }
 }
 
 fn lcs_length(a: &[u16], b: &[u16]) -> usize {
@@ -77,7 +96,11 @@ fn lcs_length(a: &[u16], b: &[u16]) -> usize {
     let mut curr = vec![0usize; n + 1];
     for i in 1..=m {
         for j in 1..=n {
-            curr[j] = if a[i-1] == b[j-1] { prev[j-1] + 1 } else { prev[j].max(curr[j-1]) };
+            curr[j] = if a[i - 1] == b[j - 1] {
+                prev[j - 1] + 1
+            } else {
+                prev[j].max(curr[j - 1])
+            };
         }
         std::mem::swap(&mut prev, &mut curr);
         curr.iter_mut().for_each(|x| *x = 0);
@@ -108,8 +131,16 @@ mod tests {
     #[test]
     fn align_identical_functions() {
         let blocks = vec![
-            AlignBlock { id: 0, opcodes: vec![1, 2, 3], insn_count: 3 },
-            AlignBlock { id: 1, opcodes: vec![4, 5], insn_count: 2 },
+            AlignBlock {
+                id: 0,
+                opcodes: vec![1, 2, 3],
+                insn_count: 3,
+            },
+            AlignBlock {
+                id: 1,
+                opcodes: vec![4, 5],
+                insn_count: 2,
+            },
         ];
         let result = align_blocks(&blocks, &blocks);
         assert_eq!(result.pairs.len(), 2);
@@ -119,10 +150,22 @@ mod tests {
 
     #[test]
     fn detect_inserted_block() {
-        let old = vec![AlignBlock { id: 0, opcodes: vec![1, 2], insn_count: 2 }];
+        let old = vec![AlignBlock {
+            id: 0,
+            opcodes: vec![1, 2],
+            insn_count: 2,
+        }];
         let new = vec![
-            AlignBlock { id: 0, opcodes: vec![1, 2], insn_count: 2 },
-            AlignBlock { id: 1, opcodes: vec![7, 8, 9], insn_count: 3 },
+            AlignBlock {
+                id: 0,
+                opcodes: vec![1, 2],
+                insn_count: 2,
+            },
+            AlignBlock {
+                id: 1,
+                opcodes: vec![7, 8, 9],
+                insn_count: 3,
+            },
         ];
         let result = align_blocks(&old, &new);
         assert_eq!(result.pairs.len(), 1);

@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use unlace_ir::ssa::{SsaFunction, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
 const RSP_OFFSET: u64 = 32;
 const RBP_OFFSET: u64 = 40;
@@ -62,21 +62,14 @@ impl Pass for DeadStoreElimGlobalPass {
             block.insns = Vec::with_capacity(keep.len());
             for (new_idx, &old_idx) in keep.iter().enumerate() {
                 block.insns.push(old[old_idx].clone());
-                if new_idx != old_idx {
-                    let in_count = block.insns.last().map_or(0, |i| i.inputs.len());
-                    if let Some(sv) = func.var_map.remove(&(*bid, old_idx, VarnodeSlot::Output)) {
-                        func.var_map
-                            .insert((*bid, new_idx, VarnodeSlot::Output), sv);
-                    }
-                    for i in 0..in_count {
-                        if let Some(sv) =
-                            func.var_map.remove(&(*bid, old_idx, VarnodeSlot::Input(i)))
-                        {
-                            func.var_map
-                                .insert((*bid, new_idx, VarnodeSlot::Input(i)), sv);
-                        }
-                    }
-                }
+                let input_count = block.insns.last().map_or(0, |i| i.inputs.len());
+                compact_var_map_for_moved_insn(
+                    &mut func.var_map,
+                    *bid,
+                    old_idx,
+                    new_idx,
+                    input_count,
+                );
             }
             let new_len = block.insns.len();
             let stale: Vec<_> = func
@@ -163,9 +156,14 @@ fn is_globally_dead(
                         return BlockResult::Lives;
                     }
                 }
-                IrOp::Call | IrOp::Callind | IrOp::Callother
-                | IrOp::Fence | IrOp::AtomicLoad | IrOp::AtomicStore
-                | IrOp::AtomicRmw | IrOp::AtomicCas => {
+                IrOp::Call
+                | IrOp::Callind
+                | IrOp::Callother
+                | IrOp::Fence
+                | IrOp::AtomicLoad
+                | IrOp::AtomicStore
+                | IrOp::AtomicRmw
+                | IrOp::AtomicCas => {
                     return BlockResult::Lives;
                 }
                 IrOp::Return => {
@@ -384,6 +382,7 @@ mod tests {
             op_bindings: unlace_ir::ssa::OpTypeBindings::default(),
             byref_boxes: std::collections::BTreeMap::new(),
             stack_frame: None,
+            stack_accesses: Vec::new(),
             byref_info: None,
             libc_call_annotations: std::collections::BTreeMap::new(),
             libc_sig_annotations: std::collections::BTreeMap::new(),

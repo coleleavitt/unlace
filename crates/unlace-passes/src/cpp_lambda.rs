@@ -58,16 +58,35 @@ pub fn recover_lambda_captures(func: &SsaFunction) -> Vec<CppLambdaCapture> {
             if insn.op != IrOp::Store || insn.inputs.len() < 2 {
                 continue;
             }
-            let Some(out) = func.var_map.get(&(block.id, idx, unlace_ir::ssa::VarnodeSlot::Input(0))).copied() else { continue; };
-            let Some(val) = func.var_map.get(&(block.id, idx, unlace_ir::ssa::VarnodeSlot::Input(1))).copied() else { continue; };
-            let Some((base, offset)) = resolve_this_field(func, out, &defs) else { continue; };
+            let Some(out) = func
+                .var_map
+                .get(&(block.id, idx, unlace_ir::ssa::VarnodeSlot::Input(0)))
+                .copied()
+            else {
+                continue;
+            };
+            let Some(val) = func
+                .var_map
+                .get(&(block.id, idx, unlace_ir::ssa::VarnodeSlot::Input(1)))
+                .copied()
+            else {
+                continue;
+            };
+            let Some((base, offset)) = resolve_this_field(func, out, &defs) else {
+                continue;
+            };
             if !this_vars.contains(&base) {
                 continue;
             }
 
             let ty = rich_type_for(func, val);
-            let primitive = func.var_types.get(&val).copied().unwrap_or(PrimitiveType::Unknown);
-            let by_ref = matches!(primitive, PrimitiveType::Ptr) || ty.as_ref().is_some_and(Type::is_pointer);
+            let primitive = func
+                .var_types
+                .get(&val)
+                .copied()
+                .unwrap_or(PrimitiveType::Unknown);
+            let by_ref = matches!(primitive, PrimitiveType::Ptr)
+                || ty.as_ref().is_some_and(Type::is_pointer);
             let name = if offset == 0 && by_ref {
                 "this".to_string()
             } else {
@@ -110,7 +129,10 @@ fn def_map(func: &SsaFunction) -> BTreeMap<SsaVarnode, (BlockId, usize)> {
     let mut defs = BTreeMap::new();
     for block in func.function.blocks.values() {
         for (idx, _insn) in block.insns.iter().enumerate() {
-            if let Some(out) = func.var_map.get(&(block.id, idx, unlace_ir::ssa::VarnodeSlot::Output)) {
+            if let Some(out) =
+                func.var_map
+                    .get(&(block.id, idx, unlace_ir::ssa::VarnodeSlot::Output))
+            {
                 defs.insert(*out, (block.id, idx));
             }
         }
@@ -176,7 +198,7 @@ fn rich_type_for(func: &SsaFunction, sv: SsaVarnode) -> Option<Type> {
 #[cfg(test)]
 mod tests {
     use smallvec::smallvec;
-    use unlace_ir::ssa::{build_ssa, PrimitiveType};
+    use unlace_ir::ssa::{PrimitiveType, build_ssa};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -190,9 +212,19 @@ mod tests {
         let mut f = Function::new("_ZZ11call_lambdaiENKUliE_clEi", BlockId(0), 0x1000);
         let mut bb = BasicBlock::new(BlockId(0));
         bb.insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, addr0, smallvec![this, Varnode::constant(0, 8)], 0x1000),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                addr0,
+                smallvec![this, Varnode::constant(0, 8)],
+                0x1000,
+            ),
             IrInsn::without_output(IrOp::Store, smallvec![addr0, this], 0x1004),
-            IrInsn::with_output(IrOp::IntAdd, addr8, smallvec![this, Varnode::constant(8, 8)], 0x1008),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                addr8,
+                smallvec![this, Varnode::constant(8, 8)],
+                0x1008,
+            ),
             IrInsn::without_output(IrOp::Store, smallvec![addr8, ptr], 0x100c),
         ];
         f.blocks.insert(BlockId(0), bb);

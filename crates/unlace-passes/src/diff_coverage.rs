@@ -32,7 +32,11 @@ pub fn diff_coverage(a: &BinaryCoverage, b: &BinaryCoverage) -> DiffCoverageResu
     let only_b: Vec<u64> = set_b.difference(&set_a).copied().collect();
     let common: Vec<u64> = set_a.intersection(&set_b).copied().collect();
 
-    DiffCoverageResult { only_a, only_b, common }
+    DiffCoverageResult {
+        only_a,
+        only_b,
+        common,
+    }
 }
 
 /// Compute a summary metric: how many new paths does version B explore
@@ -52,8 +56,14 @@ mod tests {
 
     #[test]
     fn identical_coverage() {
-        let a = BinaryCoverage { label: "v1".into(), covered_bbs: vec![1, 2, 3] };
-        let b = BinaryCoverage { label: "v2".into(), covered_bbs: vec![1, 2, 3] };
+        let a = BinaryCoverage {
+            label: "v1".into(),
+            covered_bbs: vec![1, 2, 3],
+        };
+        let b = BinaryCoverage {
+            label: "v2".into(),
+            covered_bbs: vec![1, 2, 3],
+        };
         let r = diff_coverage(&a, &b);
         assert!(r.only_a.is_empty());
         assert!(r.only_b.is_empty());
@@ -62,8 +72,14 @@ mod tests {
 
     #[test]
     fn new_paths_detected() {
-        let a = BinaryCoverage { label: "v1".into(), covered_bbs: vec![1, 2] };
-        let b = BinaryCoverage { label: "v2".into(), covered_bbs: vec![1, 2, 3, 4] };
+        let a = BinaryCoverage {
+            label: "v1".into(),
+            covered_bbs: vec![1, 2],
+        };
+        let b = BinaryCoverage {
+            label: "v2".into(),
+            covered_bbs: vec![1, 2, 3, 4],
+        };
         let r = diff_coverage(&a, &b);
         assert_eq!(r.only_b, vec![3, 4]);
         assert_eq!(new_coverage_count(&r), 2);
@@ -71,8 +87,14 @@ mod tests {
 
     #[test]
     fn regression_detected() {
-        let a = BinaryCoverage { label: "v1".into(), covered_bbs: vec![1, 2, 3] };
-        let b = BinaryCoverage { label: "v2".into(), covered_bbs: vec![2, 3] };
+        let a = BinaryCoverage {
+            label: "v1".into(),
+            covered_bbs: vec![1, 2, 3],
+        };
+        let b = BinaryCoverage {
+            label: "v2".into(),
+            covered_bbs: vec![2, 3],
+        };
         let r = diff_coverage(&a, &b);
         assert_eq!(r.only_a, vec![1]);
         assert_eq!(regression_count(&r), 1);
@@ -80,8 +102,14 @@ mod tests {
 
     #[test]
     fn disjoint_coverage() {
-        let a = BinaryCoverage { label: "v1".into(), covered_bbs: vec![1, 2] };
-        let b = BinaryCoverage { label: "v2".into(), covered_bbs: vec![3, 4] };
+        let a = BinaryCoverage {
+            label: "v1".into(),
+            covered_bbs: vec![1, 2],
+        };
+        let b = BinaryCoverage {
+            label: "v2".into(),
+            covered_bbs: vec![3, 4],
+        };
         let r = diff_coverage(&a, &b);
         assert_eq!(r.only_a, vec![1, 2]);
         assert_eq!(r.only_b, vec![3, 4]);

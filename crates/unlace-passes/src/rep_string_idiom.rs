@@ -228,17 +228,8 @@ mod tests {
         let rcx = Varnode::reg(0x20, 8);
         let val = Varnode::reg(0x100, 1);
         let insns = vec![
-            IrInsn::with_output(
-                IrOp::Load,
-                val,
-                smallvec![space, rsi],
-                0x1000,
-            ),
-            IrInsn::without_output(
-                IrOp::Store,
-                smallvec![space, rdi, val],
-                0x1004,
-            ),
+            IrInsn::with_output(IrOp::Load, val, smallvec![space, rsi], 0x1000),
+            IrInsn::without_output(IrOp::Store, smallvec![space, rdi, val], 0x1004),
             IrInsn::with_output(
                 IrOp::IntSub,
                 rcx,
@@ -349,12 +340,7 @@ mod tests {
         let rcx = Varnode::reg(0x20, 8);
         let val = Varnode::reg(0x100, lane);
         vec![
-            IrInsn::with_output(
-                IrOp::Load,
-                val,
-                smallvec![space, rsi],
-                0x1000,
-            ),
+            IrInsn::with_output(IrOp::Load, val, smallvec![space, rsi], 0x1000),
             IrInsn::without_output(IrOp::Store, smallvec![space, rdi, val], 0x1004),
             IrInsn::with_output(
                 IrOp::IntSub,

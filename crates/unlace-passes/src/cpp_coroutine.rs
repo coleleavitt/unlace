@@ -22,9 +22,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{
-    CoroutineRole, CoroutineSite, SsaFunction, SuspensionKind, SuspensionPoint,
-};
+use unlace_ir::ssa::{CoroutineRole, CoroutineSite, SsaFunction, SuspensionKind, SuspensionPoint};
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -208,9 +206,8 @@ fn detect_ramp(func: &SsaFunction) -> Option<CoroutineSite> {
 ///     store into the promise.
 fn detect_resume(func: &SsaFunction) -> Option<CoroutineSite> {
     let name = &func.function.name;
-    let is_resume_symbol = name.contains(".resume")
-        || name.contains("_resume")
-        || name.contains("__coro_resume");
+    let is_resume_symbol =
+        name.contains(".resume") || name.contains("_resume") || name.contains("__coro_resume");
 
     // The first argument (frame pointer) is typically in RDI (SysV) or RCX (MSVC).
     let frame_param = first_param_varnode();
@@ -256,9 +253,7 @@ fn detect_resume(func: &SsaFunction) -> Option<CoroutineSite> {
                         // The stored value is the new suspension index.
                         let idx = const_value(value_vn).unwrap_or(i as u64);
                         index_store = Some((i, idx));
-                    } else if offset > SUSPEND_INDEX_OFFSET
-                        && offset < SUSPEND_INDEX_OFFSET + 256
-                    {
+                    } else if offset > SUSPEND_INDEX_OFFSET && offset < SUSPEND_INDEX_OFFSET + 256 {
                         // Potential co_yield value store into the promise
                         // (only if it appears before the index store).
                         if index_store.is_none() {
@@ -324,9 +319,8 @@ fn detect_resume(func: &SsaFunction) -> Option<CoroutineSite> {
 ///     argument derived from the frame pointer parameter.
 fn detect_destroy(func: &SsaFunction) -> Option<CoroutineSite> {
     let name = &func.function.name;
-    let is_destroy_symbol = name.contains(".destroy")
-        || name.contains("_destroy")
-        || name.contains("__coro_destroy");
+    let is_destroy_symbol =
+        name.contains(".destroy") || name.contains("_destroy") || name.contains("__coro_destroy");
 
     if !is_destroy_symbol {
         return None;
@@ -391,21 +385,22 @@ fn resolve_base_offset_full(
         IrOp::Ptradd if def_insn.inputs.len() >= 2 => {
             let (ptr_base, idx_vn) = (def_insn.inputs[0], def_insn.inputs[1]);
             if ptr_base == base && idx_vn.space == SpaceId::Const {
-                let elem_size = if def_insn.inputs.len() >= 3
-                    && def_insn.inputs[2].space == SpaceId::Const
-                {
-                    def_insn.inputs[2].offset
-                } else {
-                    1
-                };
+                let elem_size =
+                    if def_insn.inputs.len() >= 3 && def_insn.inputs[2].space == SpaceId::Const {
+                        def_insn.inputs[2].offset
+                    } else {
+                        1
+                    };
                 return Some(idx_vn.offset * elem_size);
             }
         }
-        IrOp::Copy if def_insn.inputs.len() == 1
+        IrOp::Copy
+            if def_insn.inputs.len() == 1
             // Walk through copies.
-            && def_insn.inputs[0] == base => {
-                return Some(0);
-            }
+            && def_insn.inputs[0] == base =>
+        {
+            return Some(0);
+        }
         _ => {}
     }
     None
@@ -548,13 +543,11 @@ mod tests {
     #[test]
     fn detects_resume_function_by_name() {
         // Minimal resume function — just the name pattern is enough.
-        let insns = vec![
-            IrInsn::without_output(
-                IrOp::Store,
-                smallvec![Varnode::constant(0, 8), Varnode::constant(0, 8)],
-                0x1000,
-            ),
-        ];
+        let insns = vec![IrInsn::without_output(
+            IrOp::Store,
+            smallvec![Varnode::constant(0, 8), Varnode::constant(0, 8)],
+            0x1000,
+        )];
 
         let ssa = make_single_block_ssa("my_coroutine.resume", insns);
         let sites = detect_coroutine_sites(&ssa);
@@ -564,13 +557,11 @@ mod tests {
 
     #[test]
     fn detects_destroy_function_by_name() {
-        let insns = vec![
-            IrInsn::without_output(
-                IrOp::Store,
-                smallvec![Varnode::constant(0, 8), Varnode::constant(0, 8)],
-                0x1000,
-            ),
-        ];
+        let insns = vec![IrInsn::without_output(
+            IrOp::Store,
+            smallvec![Varnode::constant(0, 8), Varnode::constant(0, 8)],
+            0x1000,
+        )];
 
         let ssa = make_single_block_ssa("my_coroutine.destroy", insns);
         let sites = detect_coroutine_sites(&ssa);

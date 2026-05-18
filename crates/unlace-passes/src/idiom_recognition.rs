@@ -1214,7 +1214,9 @@ fn try_recognize(insn: &IrInsn, def_map: &BTreeMap<Varnode, IrInsn>) -> Option<I
                 Some(make_copy(insn, Varnode::constant(0, output.size)))
             } else if a == b && a.space != SpaceId::Const {
                 Some(make_copy(insn, a))
-            } else { try_and_simplify(insn, &a, &b, def_map) }
+            } else {
+                try_and_simplify(insn, &a, &b, def_map)
+            }
         }
 
         // ── v | 0 → v, v | all_ones → all_ones, v | v → v ────────

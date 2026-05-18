@@ -191,10 +191,7 @@ fn resolve_operand_const(func: &SsaFunction, insn: &IrInsn, idx: usize) -> Optio
 /// `var_map` for the `(BlockId, insn_idx, Output)` entry whose value is
 /// `target`. Mirrors the helper in `algebraic_simplify` so this module
 /// stays self-contained.
-fn defining_insn(
-    func: &SsaFunction,
-    target: SsaVarnode,
-) -> Option<(BlockId, usize, &IrInsn)> {
+fn defining_insn(func: &SsaFunction, target: SsaVarnode) -> Option<(BlockId, usize, &IrInsn)> {
     for (&(def_bid, def_idx, ref slot), &def_ssa) in &func.var_map {
         if !matches!(slot, VarnodeSlot::Output) || def_ssa != target {
             continue;

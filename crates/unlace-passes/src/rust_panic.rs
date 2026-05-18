@@ -204,6 +204,7 @@ mod tests {
             op_bindings: unlace_ir::ssa::OpTypeBindings::default(),
             byref_boxes: std::collections::BTreeMap::new(),
             stack_frame: None,
+            stack_accesses: Vec::new(),
             byref_info: None,
             libc_call_annotations: std::collections::BTreeMap::new(),
             libc_sig_annotations: std::collections::BTreeMap::new(),

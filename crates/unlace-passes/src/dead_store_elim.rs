@@ -18,7 +18,7 @@ use unlace_ir::IrOp;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{SpaceId, Varnode};
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
 /// Architecture-specific register offsets used to recognise stack-relative
 /// addresses.  Mirrors the constants in [`stack_vars`](crate::stack_vars)
@@ -75,30 +75,21 @@ impl Pass for DeadStoreElimPass {
             for (new_idx, &old_idx) in keep.iter().enumerate() {
                 block.insns.push(old_insns[old_idx].clone());
 
-                if new_idx != old_idx {
-                    // Re-key output
-                    if let Some(sv) = func.var_map.remove(&(bid, old_idx, VarnodeSlot::Output)) {
-                        func.var_map.insert((bid, new_idx, VarnodeSlot::Output), sv);
-                    }
-
-                    // Re-key inputs
-                    let input_count = block
-                        .insns
-                        .last()
-                        .ok_or_else(|| PassError::InvariantViolation {
-                            message: "block empty after compaction".into(),
-                        })?
-                        .inputs
-                        .len();
-                    for i in 0..input_count {
-                        if let Some(sv) =
-                            func.var_map.remove(&(bid, old_idx, VarnodeSlot::Input(i)))
-                        {
-                            func.var_map
-                                .insert((bid, new_idx, VarnodeSlot::Input(i)), sv);
-                        }
-                    }
-                }
+                let input_count = block
+                    .insns
+                    .last()
+                    .ok_or_else(|| PassError::InvariantViolation {
+                        message: "block empty after compaction".into(),
+                    })?
+                    .inputs
+                    .len();
+                compact_var_map_for_moved_insn(
+                    &mut func.var_map,
+                    bid,
+                    old_idx,
+                    new_idx,
+                    input_count,
+                );
             }
 
             // Purge var_map entries for removed instructions beyond new length.
@@ -269,9 +260,14 @@ fn find_dead_stores(func: &SsaFunction) -> Vec<(unlace_ir::BlockId, usize)> {
                         last_store_stack.remove(&off);
                     }
                 }
-                IrOp::Call | IrOp::Callind | IrOp::Callother
-                | IrOp::Fence | IrOp::AtomicLoad | IrOp::AtomicStore
-                | IrOp::AtomicRmw | IrOp::AtomicCas => {
+                IrOp::Call
+                | IrOp::Callind
+                | IrOp::Callother
+                | IrOp::Fence
+                | IrOp::AtomicLoad
+                | IrOp::AtomicStore
+                | IrOp::AtomicRmw
+                | IrOp::AtomicCas => {
                     // Any call may read any memory — conservatively
                     // invalidate all pending stores.
                     last_store_sv.clear();
@@ -512,6 +508,7 @@ mod tests {
             op_bindings: unlace_ir::ssa::OpTypeBindings::default(),
             byref_boxes: std::collections::BTreeMap::new(),
             stack_frame: None,
+            stack_accesses: Vec::new(),
             byref_info: None,
             libc_call_annotations: std::collections::BTreeMap::new(),
             libc_sig_annotations: std::collections::BTreeMap::new(),

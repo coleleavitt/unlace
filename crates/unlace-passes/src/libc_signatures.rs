@@ -292,8 +292,8 @@ mod tests {
 // job of `crate::libc_idioms::recognize_libc`; this table is keyed
 // strictly on the C standard / POSIX spelling.
 
-use unlace_ir::types::{CallSiteLibcSig, TypeKind};
 use TypeKind::*;
+use unlace_ir::types::{CallSiteLibcSig, TypeKind};
 
 /// Full per-prototype libc signature, expressed in terms of the compact
 /// [`TypeKind`] enum so the table can live in static storage
@@ -503,9 +503,9 @@ mod libc_sig_tests {
     fn t_libc_sig_table_has_every_required_family_head() {
         for name in [
             "printf", "scanf", "memcpy", "memset", "memcmp", "strlen", "strcpy", "strcmp",
-            "strchr", "strstr", "malloc", "calloc", "realloc", "free", "fopen", "fclose",
-            "fread", "fwrite", "open", "close", "read", "write", "lseek", "abort", "exit",
-            "_exit", "getenv", "setenv", "atoi", "atol", "strtol", "strtoll",
+            "strchr", "strstr", "malloc", "calloc", "realloc", "free", "fopen", "fclose", "fread",
+            "fwrite", "open", "close", "read", "write", "lseek", "abort", "exit", "_exit",
+            "getenv", "setenv", "atoi", "atol", "strtol", "strtoll",
         ] {
             assert!(
                 lookup_libc_sig(name).is_some(),
@@ -518,7 +518,10 @@ mod libc_sig_tests {
     fn t_libc_sig_unknown_name_returns_none() {
         assert!(lookup_libc_sig("definitely_not_a_libc_function").is_none());
         assert!(lookup_libc_sig("").is_none());
-        assert!(lookup_libc_sig("Printf").is_none(), "lookup is case-sensitive");
+        assert!(
+            lookup_libc_sig("Printf").is_none(),
+            "lookup is case-sensitive"
+        );
     }
 
     #[test]

@@ -12,7 +12,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_ir::ssa::SsaFunction;
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -30,43 +30,12 @@ impl Pass for CopyPropagationPass {
 
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError> {
         let preserved_load_outputs = collect_preserved_load_outputs(func);
-        let copy_map = build_copy_map(func, &preserved_load_outputs);
-        if copy_map.is_empty() {
+        let input_rewrites = collect_input_rewrites(func, &preserved_load_outputs);
+        if input_rewrites.is_empty() {
             return Ok(false);
         }
 
-        let resolved = resolve_chains(&copy_map);
-
-        let mut changed = false;
-        for block in func.function.blocks.values_mut() {
-            for insn in &mut block.insns {
-                for input in &mut insn.inputs {
-                    if let Some(&replacement) = resolved.get(input) {
-                        if *input != replacement {
-                            *input = replacement;
-                            changed = true;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Also propagate through phi node inputs.
-        for phis in func.phi_map.values_mut() {
-            for phi in phis.iter_mut() {
-                for (_pred, input) in &mut phi.inputs {
-                    let base = input.base;
-                    if let Some(&replacement) = resolved.get(&base) {
-                        if base != replacement {
-                            input.base = replacement;
-                            changed = true;
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(changed)
+        Ok(apply_input_rewrites(func, input_rewrites))
     }
 }
 
@@ -77,16 +46,23 @@ impl Pass for CopyPropagationPass {
 ///
 /// Each preserved LOAD found also bumps the global preservation
 /// counter via [`unlace_ir::alias::record_preserved`].
-fn collect_preserved_load_outputs(func: &SsaFunction) -> BTreeSet<Varnode> {
+fn collect_preserved_load_outputs(func: &SsaFunction) -> BTreeSet<SsaVarnode> {
     let mut set = BTreeSet::new();
-    for block in func.function.blocks.values() {
-        for insn in &block.insns {
+    for (&bid, block) in &func.function.blocks {
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
             if insn.op != IrOp::Load {
                 continue;
             }
             if let (Some(c), Some(out)) = (insn.category, insn.output) {
                 if c.is_preserved() {
-                    set.insert(out);
+                    if let Some(out_ssa) = output_ssa(func, bid, insn_idx) {
+                        set.insert(out_ssa);
+                    } else {
+                        set.insert(SsaVarnode {
+                            base: out,
+                            version: 0,
+                        });
+                    }
                     unlace_ir::alias::record_preserved();
                 }
             }
@@ -95,59 +71,204 @@ fn collect_preserved_load_outputs(func: &SsaFunction) -> BTreeSet<Varnode> {
     set
 }
 
-/// Build a map from COPY outputs to their sources.
-///
-/// Only considers `output = COPY input0` where output is *not* in Const
-/// space. Skips entries whose source or output is a preserved LOAD
-/// result — see [`collect_preserved_load_outputs`] for the barrier.
-fn build_copy_map(
-    func: &SsaFunction,
-    preserved_load_outputs: &BTreeSet<Varnode>,
-) -> BTreeMap<Varnode, Varnode> {
-    let mut map = BTreeMap::new();
-
-    for block in func.function.blocks.values() {
-        for insn in &block.insns {
-            if insn.op == IrOp::Copy {
-                if let (Some(output), Some(&source)) = (insn.output, insn.inputs.first()) {
-                    if output.space != SpaceId::Const
-                        && !preserved_load_outputs.contains(&source)
-                        && !preserved_load_outputs.contains(&output)
-                    {
-                        map.insert(output, source);
-                    }
-                    // else: barrier — copy whose source/output is a
-                    // preserved LOAD result. Skipping the map entry
-                    // keeps later uses tied to the explicit LOAD.
-                }
-            }
-        }
-    }
-
-    map
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct CopySource {
+    raw: Varnode,
+    ssa: Option<SsaVarnode>,
 }
 
-/// Chase COPY chains to their root: if v3 = COPY v2 and v2 = COPY v1,
-/// resolved[v3] = v1. Handles cycles by stopping after chain length
-/// exceeds the map size.
-fn resolve_chains(copy_map: &BTreeMap<Varnode, Varnode>) -> BTreeMap<Varnode, Varnode> {
-    let mut resolved = BTreeMap::new();
-    let limit = copy_map.len();
+/// One input slot to rewrite.
+#[derive(Clone, Debug)]
+struct InputRewrite {
+    block: unlace_ir::BlockId,
+    insn_idx: usize,
+    input_idx: usize,
+    new_input: Varnode,
+    new_ssa: Option<SsaVarnode>,
+}
 
-    for &target in copy_map.keys() {
-        let mut current = target;
-        let mut depth = 0;
-        while let Some(&source) = copy_map.get(&current) {
-            if depth >= limit {
-                break;
+fn input_ssa(
+    func: &SsaFunction,
+    bid: unlace_ir::BlockId,
+    insn_idx: usize,
+    input_idx: usize,
+) -> Option<SsaVarnode> {
+    func.var_map
+        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+        .copied()
+}
+
+fn output_ssa(func: &SsaFunction, bid: unlace_ir::BlockId, insn_idx: usize) -> Option<SsaVarnode> {
+    func.var_map
+        .get(&(bid, insn_idx, VarnodeSlot::Output))
+        .copied()
+}
+
+fn collect_input_rewrites(
+    func: &SsaFunction,
+    preserved_load_outputs: &BTreeSet<SsaVarnode>,
+) -> Vec<InputRewrite> {
+    let mut rewrites = Vec::new();
+
+    for (&bid, block) in &func.function.blocks {
+        let mut active: BTreeMap<SsaVarnode, CopySource> = BTreeMap::new();
+        for (insn_idx, insn) in block.insns.iter().enumerate() {
+            for (input_idx, &raw) in insn.inputs.iter().enumerate() {
+                if raw.space == SpaceId::Const {
+                    continue;
+                }
+                let Some(input_sv) = input_ssa(func, bid, insn_idx, input_idx) else {
+                    continue;
+                };
+                let Some(&source) = active.get(&input_sv) else {
+                    continue;
+                };
+                let source = resolve_active_source(&active, source);
+                let new_ssa = if source.raw.space == SpaceId::Const {
+                    None
+                } else {
+                    source.ssa
+                };
+                if raw != source.raw || Some(input_sv) != new_ssa {
+                    rewrites.push(InputRewrite {
+                        block: bid,
+                        insn_idx,
+                        input_idx,
+                        new_input: source.raw,
+                        new_ssa,
+                    });
+                }
             }
-            current = source;
-            depth += 1;
+
+            if let Some(output) = insn.output {
+                kill_active_for_def(&mut active, output);
+            }
+
+            if insn.op == IrOp::Copy {
+                record_copy_equiv(
+                    func,
+                    bid,
+                    insn_idx,
+                    insn,
+                    preserved_load_outputs,
+                    &mut active,
+                );
+            }
         }
-        resolved.insert(target, current);
     }
 
-    resolved
+    rewrites
+}
+
+fn resolve_active_source(
+    active: &BTreeMap<SsaVarnode, CopySource>,
+    source: CopySource,
+) -> CopySource {
+    let mut current = source;
+    let mut depth = 0usize;
+    let limit = active.len();
+
+    while let Some(source_ssa) = current.ssa {
+        if depth >= limit {
+            break;
+        }
+        let Some(&next) = active.get(&source_ssa) else {
+            break;
+        };
+        if next == current {
+            break;
+        }
+        current = next;
+        depth += 1;
+    }
+
+    current
+}
+
+fn kill_active_for_def(active: &mut BTreeMap<SsaVarnode, CopySource>, def: Varnode) {
+    if def.space == SpaceId::Const {
+        return;
+    }
+    active.retain(|key, source| {
+        key.base != def && source.raw != def && source.ssa.map_or(true, |ssa| ssa.base != def)
+    });
+}
+
+fn record_copy_equiv(
+    func: &SsaFunction,
+    bid: unlace_ir::BlockId,
+    insn_idx: usize,
+    insn: &unlace_ir::IrInsn,
+    preserved_load_outputs: &BTreeSet<SsaVarnode>,
+    active: &mut BTreeMap<SsaVarnode, CopySource>,
+) {
+    let (Some(output), Some(&source_raw)) = (insn.output, insn.inputs.first()) else {
+        return;
+    };
+    if output.space == SpaceId::Const {
+        return;
+    }
+    let Some(output_ssa) = output_ssa(func, bid, insn_idx) else {
+        return;
+    };
+    if preserved_load_outputs.contains(&output_ssa) {
+        return;
+    }
+
+    let source_ssa = if source_raw.space == SpaceId::Const {
+        None
+    } else {
+        input_ssa(func, bid, insn_idx, 0)
+    };
+    if source_ssa.is_some_and(|ssa| preserved_load_outputs.contains(&ssa)) {
+        return;
+    }
+
+    let source = resolve_active_source(
+        active,
+        CopySource {
+            raw: source_raw,
+            ssa: source_ssa,
+        },
+    );
+    if source.raw != output || source.ssa != Some(output_ssa) {
+        active.insert(output_ssa, source);
+    }
+}
+
+fn apply_input_rewrites(func: &mut SsaFunction, rewrites: Vec<InputRewrite>) -> bool {
+    let mut changed = false;
+
+    for rw in rewrites {
+        let Some(block) = func.function.blocks.get_mut(&rw.block) else {
+            continue;
+        };
+        let Some(insn) = block.insns.get_mut(rw.insn_idx) else {
+            continue;
+        };
+        let Some(input) = insn.inputs.get_mut(rw.input_idx) else {
+            continue;
+        };
+        if *input != rw.new_input {
+            *input = rw.new_input;
+            changed = true;
+        }
+
+        let key = (rw.block, rw.insn_idx, VarnodeSlot::Input(rw.input_idx));
+        if rw.new_input.space == SpaceId::Const {
+            if func.var_map.remove(&key).is_some() {
+                changed = true;
+            }
+        } else if let Some(new_ssa) = rw.new_ssa {
+            if func.var_map.insert(key, new_ssa) != Some(new_ssa) {
+                changed = true;
+            }
+        } else if func.var_map.remove(&key).is_some() {
+            changed = true;
+        }
+    }
+
+    changed
 }
 
 #[cfg(test)]
@@ -235,6 +356,74 @@ mod tests {
     }
 
     #[test]
+    fn test_copy_prop_keeps_register_redefinitions_scoped() {
+        let rsp = Varnode::reg(32, 8);
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        let u2 = Varnode::unique(16, 8);
+
+        let derive_stack_addr = IrInsn::with_output(
+            IrOp::IntSub,
+            u0,
+            smallvec![rsp, Varnode::constant(8, 8)],
+            0x1000,
+        );
+        let move_rsp = IrInsn::with_output(IrOp::Copy, rsp, smallvec![u0], 0x1004);
+        let use_adjusted_rsp = IrInsn::with_output(
+            IrOp::IntAdd,
+            u1,
+            smallvec![rsp, Varnode::constant(16, 8)],
+            0x1008,
+        );
+        let clobber_rsp =
+            IrInsn::with_output(IrOp::Copy, rsp, smallvec![Varnode::constant(0, 8)], 0x100C);
+        let use_clobbered_rsp = IrInsn::with_output(
+            IrOp::IntAdd,
+            u2,
+            smallvec![rsp, Varnode::constant(1, 8)],
+            0x1010,
+        );
+
+        let mut ssa = make_single_block_ssa(vec![
+            derive_stack_addr,
+            move_rsp,
+            use_adjusted_rsp,
+            clobber_rsp,
+            use_clobbered_rsp,
+        ]);
+        let changed = CopyPropagationPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(
+            block.insns[0].inputs[0], rsp,
+            "later rsp copies must not rewrite earlier rsp inputs"
+        );
+        assert_eq!(
+            block.insns[2].inputs[0], u0,
+            "the use dominated by `rsp = copy u0` may still be propagated"
+        );
+        assert_eq!(
+            block.insns[4].inputs[0],
+            Varnode::constant(0, 8),
+            "the use after `rsp = copy 0` should see only that later version"
+        );
+
+        let adjusted_input_ssa = ssa
+            .var_map
+            .get(&(BlockId(0), 2, VarnodeSlot::Input(0)))
+            .expect("rewritten input keeps source SSA metadata");
+        assert_eq!(adjusted_input_ssa.base, u0);
+        assert!(
+            !ssa.var_map
+                .contains_key(&(BlockId(0), 4, VarnodeSlot::Input(0))),
+            "constant rewrites must clear stale SSA metadata"
+        );
+    }
+
+    #[test]
     fn test_copy_prop_no_change() {
         let r0 = Varnode::reg(0, 4);
         let r8 = Varnode::reg(8, 4);
@@ -290,9 +479,6 @@ mod tests {
             add_insn.inputs[0], v_copy,
             "volatile-LOAD barrier must keep COPY chain intact"
         );
-        assert!(
-            after > before,
-            "preservation counter must have incremented"
-        );
+        assert!(after > before, "preservation counter must have incremented");
     }
 }

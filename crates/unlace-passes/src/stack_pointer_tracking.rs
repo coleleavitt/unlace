@@ -25,7 +25,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use unlace_ir::ssa::{CallingConvention, FrameHole, PrimitiveType, SsaFunction};
+use unlace_ir::ssa::{CallingConvention, FrameHole, PrimitiveType, SsaFunction, StackAccess};
 use unlace_ir::stack::StackSpec;
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
@@ -53,15 +53,18 @@ impl Pass for StackPointerTrackingPass {
         let (sp_delta_at, block_entry_sp_delta, dynamic_sp, min_depth) =
             walk_sp_deltas(func, &spec);
         let stack_holes = compute_stack_holes(func, min_depth);
-        let saved_register_slots = classify_saved_register_slots(func, &spec);
+        let saved_register_slots =
+            classify_saved_register_slots(func, &spec, &block_entry_sp_delta);
         let frame_holes = compute_frame_holes(func, &spec, &saved_register_slots);
+        let stack_accesses = collect_stack_accesses(func, &spec, &sp_delta_at);
 
         let changed = sp_delta_at != func.sp_delta_at
             || stack_holes != func.stack_holes
             || dynamic_sp != func.dynamic_sp
             || block_entry_sp_delta != func.block_entry_sp_delta
             || frame_holes != func.frame_holes
-            || saved_register_slots != func.saved_register_slots;
+            || saved_register_slots != func.saved_register_slots
+            || stack_accesses != func.stack_accesses;
 
         func.sp_delta_at = sp_delta_at;
         func.stack_holes = stack_holes;
@@ -69,9 +72,132 @@ impl Pass for StackPointerTrackingPass {
         func.block_entry_sp_delta = block_entry_sp_delta;
         func.frame_holes = frame_holes;
         func.saved_register_slots = saved_register_slots;
+        func.stack_accesses = stack_accesses;
 
         Ok(changed)
     }
+}
+
+/// Walk every LOAD / STORE in `func` and record the SP-delta-anchored
+/// offset for accesses whose address arithmetic reduces to `SP + const`.
+/// Conservative: an access whose base resolves to anything other than the
+/// stack-pointer register (after one level of `Copy`/`IntAdd`/`IntSub`)
+/// is ignored — that case lives in [`SsaFunction::stack_vars`] already.
+fn collect_stack_accesses(
+    func: &SsaFunction,
+    spec: &StackSpec,
+    sp_delta_at: &BTreeMap<(BlockId, usize), i64>,
+) -> Vec<StackAccess> {
+    let mut out = Vec::new();
+    for (&bid, block) in &func.function.blocks {
+        for (idx, insn) in block.insns.iter().enumerate() {
+            let (is_store, addr_idx) = match insn.op {
+                IrOp::Load => (false, 1usize),
+                IrOp::Store => (true, 1usize),
+                _ => continue,
+            };
+            if insn.inputs.len() <= addr_idx {
+                continue;
+            }
+            let addr = &insn.inputs[addr_idx];
+            let Some(delta) =
+                resolve_addr_to_sp_offset(func, bid, idx, addr, spec, sp_delta_at)
+            else {
+                continue;
+            };
+            // Final width comes from the value operand on STORE (input[2])
+            // or the output on LOAD. Default to 8 when the lifter left it
+            // unspecified.
+            let width = if is_store {
+                insn.inputs.get(2).map(|v| v.size).unwrap_or(8)
+            } else {
+                insn.output.as_ref().map(|v| v.size).unwrap_or(8)
+            };
+            let resolved_slot = func
+                .stack_vars
+                .keys()
+                .copied()
+                .find(|off| *off == delta);
+            let lost_provenance = resolved_slot.is_none()
+                && delta < 0
+                && delta >= func.dom_tree.root().0 as i64 - 4096;
+            out.push(StackAccess {
+                source_addr: insn.addr,
+                // No human-readable name for the SP varnode in the spec;
+                // record the architecture-neutral "sp" tag instead. Future
+                // work can map to "rsp"/"esp"/"sp"/etc. via per-arch tables.
+                base_register: "sp".to_string(),
+                delta,
+                width,
+                is_store,
+                resolved_slot,
+                lost_provenance,
+            });
+        }
+    }
+    out
+}
+
+/// Resolve `addr` to a numeric SP-delta if and only if its definition
+/// chain reduces to `SP_register + const`. Conservative: we walk back at
+/// most one [`IrOp::IntAdd`] / [`IrOp::IntSub`] from the address temp.
+fn resolve_addr_to_sp_offset(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    addr: &Varnode,
+    spec: &StackSpec,
+    sp_delta_at: &BTreeMap<(BlockId, usize), i64>,
+) -> Option<i64> {
+    let entry_delta = sp_delta_at.get(&(bid, insn_idx)).copied().unwrap_or(0);
+    if spec.is_sp(addr) {
+        return Some(entry_delta);
+    }
+    if addr.space != SpaceId::Unique {
+        return None;
+    }
+    let block = func.function.blocks.get(&bid)?;
+    for prev_idx in (0..insn_idx).rev() {
+        let prev = &block.insns[prev_idx];
+        let Some(out) = prev.output.as_ref() else {
+            continue;
+        };
+        if out.space != SpaceId::Unique || out.offset != addr.offset {
+            continue;
+        }
+        match prev.op {
+            IrOp::IntAdd | IrOp::IntSub => {
+                if prev.inputs.len() < 2 {
+                    return None;
+                }
+                let (sp_pos, other) = if spec.is_sp(&prev.inputs[0]) {
+                    (0usize, &prev.inputs[1])
+                } else if spec.is_sp(&prev.inputs[1]) {
+                    (1usize, &prev.inputs[0])
+                } else {
+                    return None;
+                };
+                let _ = sp_pos;
+                if other.space != SpaceId::Const {
+                    return None;
+                }
+                let k = other.offset as i64;
+                let signed = if prev.op == IrOp::IntAdd { k } else { -k };
+                return Some(entry_delta + signed);
+            }
+            IrOp::Copy => {
+                // One-level copy passthrough.
+                if let Some(src) = prev.inputs.first() {
+                    if spec.is_sp(src) {
+                        return Some(entry_delta);
+                    }
+                }
+                return None;
+            }
+            _ => return None,
+        }
+    }
+    None
 }
 
 /// Dominator-order traversal of all blocks reachable from the dom-tree
@@ -307,42 +433,122 @@ fn callee_saved_x86_64(cc: CallingConvention, reg_offset: u64) -> Option<&'stati
     None
 }
 
-/// Scan the first few instructions of the entry block for prologue stores
-/// of callee-saved registers (`mov [rsp+N], rbx`, etc.) and return the
-/// set of RSP-relative stack slot offsets those stores target.
-fn classify_saved_register_slots(func: &SsaFunction, spec: &StackSpec) -> BTreeSet<i64> {
+/// Scan the first few instructions of each block for prologue stores of
+/// callee-saved registers (`mov [rsp+N], rbx`, etc.) and return the set of
+/// entry-RSP-relative stack slot offsets those stores target.
+///
+/// Real binaries can split prologue work after an early guard branch; scanning
+/// only the entry block misses those saved-register slots and lets them leak as
+/// source locals.
+fn classify_saved_register_slots(
+    func: &SsaFunction,
+    spec: &StackSpec,
+    block_entry_sp_delta: &BTreeMap<BlockId, i64>,
+) -> BTreeSet<i64> {
     const PROLOGUE_WINDOW: usize = 32;
     let mut slots: BTreeSet<i64> = BTreeSet::new();
-    let entry = func.function.entry;
-    let Some(block) = func.function.blocks.get(&entry) else {
-        return slots;
-    };
     let cc = func.calling_convention;
-    for (idx, insn) in block.insns.iter().take(PROLOGUE_WINDOW).enumerate() {
-        if insn.op != IrOp::Store || insn.inputs.len() < 3 {
-            continue;
-        }
-        // STORE inputs: [space_id, address, value]. Only flag stores
-        // whose *value* operand is a physical callee-saved register read.
-        let value = &insn.inputs[2];
-        if value.space != SpaceId::Register {
-            continue;
-        }
-        if callee_saved_x86_64(cc, value.offset).is_none() {
-            continue;
-        }
-        if let Some(&offset) = func.stack_offset_hints.get(&(entry, idx)) {
-            slots.insert(offset);
-            continue;
-        }
-        let addr = &insn.inputs[1];
-        if spec.is_frame_base(addr) {
-            slots.insert(0);
-        } else if addr.space == SpaceId::Stack {
-            slots.insert(addr.offset as i64);
+    for (&bid, block) in &func.function.blocks {
+        let block_delta = block_entry_sp_delta.get(&bid).copied().unwrap_or(0);
+        for (idx, insn) in block.insns.iter().take(PROLOGUE_WINDOW).enumerate() {
+            if insn.op != IrOp::Store || insn.inputs.len() < 3 {
+                continue;
+            }
+            // STORE inputs: [space_id, address, value]. Only flag stores
+            // whose *value* operand is a physical callee-saved register read.
+            let value = &insn.inputs[2];
+            if value.space != SpaceId::Register {
+                continue;
+            }
+            if callee_saved_x86_64(cc, value.offset).is_none() {
+                continue;
+            }
+            if let Some(&offset) = func.stack_offset_hints.get(&(bid, idx)) {
+                slots.insert(offset);
+                continue;
+            }
+            let addr = &insn.inputs[1];
+            if let Some(offset) = resolve_stack_addr_in_block(&block.insns, idx, addr, spec, 0) {
+                slots.insert(block_delta + offset);
+            }
         }
     }
     slots
+}
+
+fn resolve_stack_addr_in_block(
+    insns: &[unlace_ir::IrInsn],
+    before_idx: usize,
+    addr: &Varnode,
+    spec: &StackSpec,
+    depth: u8,
+) -> Option<i64> {
+    const MAX_DEPTH: u8 = 16;
+    if depth > MAX_DEPTH {
+        return None;
+    }
+    if spec.is_frame_base(addr) {
+        return Some(0);
+    }
+    if addr.space == SpaceId::Stack {
+        return Some(addr.offset as i64);
+    }
+    if addr.space != SpaceId::Unique && addr.space != SpaceId::Register {
+        return None;
+    }
+
+    for prev_idx in (0..before_idx).rev() {
+        let prev = &insns[prev_idx];
+        let Some(out) = prev.output.as_ref() else {
+            continue;
+        };
+        if out.space != addr.space || out.offset != addr.offset {
+            continue;
+        }
+        match prev.op {
+            IrOp::Copy => {
+                let src = prev.inputs.first()?;
+                return resolve_stack_addr_in_block(insns, prev_idx, src, spec, depth + 1);
+            }
+            IrOp::IntAdd if prev.inputs.len() >= 2 => {
+                return resolve_stack_addr_add(
+                    insns,
+                    prev_idx,
+                    &prev.inputs[0],
+                    &prev.inputs[1],
+                    spec,
+                    depth + 1,
+                );
+            }
+            IrOp::IntSub if prev.inputs.len() >= 2 => {
+                let base =
+                    resolve_stack_addr_in_block(insns, prev_idx, &prev.inputs[0], spec, depth + 1)?;
+                let rhs = &prev.inputs[1];
+                return (rhs.space == SpaceId::Const).then_some(base - rhs.offset as i64);
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
+fn resolve_stack_addr_add(
+    insns: &[unlace_ir::IrInsn],
+    before_idx: usize,
+    a: &Varnode,
+    b: &Varnode,
+    spec: &StackSpec,
+    depth: u8,
+) -> Option<i64> {
+    if b.space == SpaceId::Const {
+        let base = resolve_stack_addr_in_block(insns, before_idx, a, spec, depth)?;
+        return Some(base + b.offset as i64);
+    }
+    if a.space == SpaceId::Const {
+        let base = resolve_stack_addr_in_block(insns, before_idx, b, spec, depth)?;
+        return Some(base + a.offset as i64);
+    }
+    None
 }
 
 /// Walk recovered stack slots (sorted by offset) and emit a `FrameHole`
@@ -601,6 +807,48 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_saved_register_classification_after_guard_block() {
+        let rbp = Varnode::reg(0x28, 8);
+        let addr = Varnode::unique(0x100, 8);
+        let space_ram = Varnode::constant(0, 8);
+
+        let mut func = Function::new("split_prologue", BlockId(0), 0x1000);
+        let mut entry = BasicBlock::new(BlockId(0));
+        entry.successors.push(BlockId(1));
+        let mut prologue = BasicBlock::new(BlockId(1));
+        prologue.insns.push(IrInsn::with_output(
+            IrOp::IntSub,
+            addr,
+            smallvec![rsp(), Varnode::constant(8, 8)],
+            0x1010,
+        ));
+        prologue.insns.push(IrInsn::without_output(
+            IrOp::Store,
+            smallvec![space_ram, addr, rbp],
+            0x1014,
+        ));
+        prologue.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 8)],
+            0x1018,
+        ));
+        func.insert_block(entry);
+        func.insert_block(prologue);
+
+        let mut ssa = build_ssa(func);
+        ssa.arch = unlace_ir::ArchId::X86_64;
+        ssa.calling_convention = CallingConvention::SystemV;
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+
+        assert!(
+            ssa.saved_register_slots.contains(&-8),
+            "split prologue saved rbp slot should be classified, got {:?}",
+            ssa.saved_register_slots
+        );
+    }
+
     /// Frame-hole detection on x86_64: ptr_size==max_known==8 suppresses
     /// every candidate hole (gap can't be both > 8 and < 8).
     #[test]
@@ -689,5 +937,90 @@ mod tests {
         );
         assert_eq!(ssa.frame_holes[0].offset, -12);
         assert_eq!(ssa.frame_holes[0].size, 5);
+    }
+
+    /// Batch 17: a `[rsp-8]` LOAD inside a prologue-adjusted frame produces
+    /// a [`StackAccess`] entry recording the resolved frame offset.
+    #[test]
+    fn stack_accesses_record_load_at_negative_offset() {
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        let u2 = Varnode::unique(16, 8);
+        let mut ssa = build(vec![
+            // sub rsp, 16
+            IrInsn::with_output(
+                IrOp::IntSub,
+                u0,
+                smallvec![rsp(), Varnode::constant(16, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u0], 0x1004),
+            // u1 = rsp + 8
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                u1,
+                smallvec![rsp(), Varnode::constant(8, 8)],
+                0x1008,
+            ),
+            // u2 = LOAD ram, u1
+            IrInsn::with_output(
+                IrOp::Load,
+                u2,
+                smallvec![Varnode::constant(0, 8), u1],
+                0x100C,
+            ),
+        ]);
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+
+        assert!(
+            !ssa.stack_accesses.is_empty(),
+            "load through (rsp+8) under a 16-byte prologue should record a stack access; got {:?}",
+            ssa.stack_accesses
+        );
+        let acc = &ssa.stack_accesses[0];
+        assert!(!acc.is_store, "this is a LOAD, not a STORE");
+        assert_eq!(acc.delta, -8, "expected sp-relative offset -8, got {acc:?}");
+        assert_eq!(acc.source_addr, 0x100C);
+        assert_eq!(acc.base_register, "sp");
+    }
+
+    /// A STORE through `[rsp-8]` is recorded with `is_store=true` and the
+    /// value-width of the source operand.
+    #[test]
+    fn stack_accesses_record_store_with_value_width() {
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        let value = Varnode::reg(0, 4); // 4-byte store
+        let mut ssa = build(vec![
+            IrInsn::with_output(
+                IrOp::IntSub,
+                u0,
+                smallvec![rsp(), Varnode::constant(16, 8)],
+                0x1000,
+            ),
+            IrInsn::with_output(IrOp::Copy, rsp(), smallvec![u0], 0x1004),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                u1,
+                smallvec![rsp(), Varnode::constant(8, 8)],
+                0x1008,
+            ),
+            IrInsn::without_output(
+                IrOp::Store,
+                smallvec![Varnode::constant(0, 8), u1, value],
+                0x100C,
+            ),
+        ]);
+
+        StackPointerTrackingPass.run(&mut ssa).unwrap();
+
+        let acc = ssa
+            .stack_accesses
+            .iter()
+            .find(|a| a.is_store)
+            .expect("store should be recorded");
+        assert_eq!(acc.delta, -8);
+        assert_eq!(acc.width, 4, "store width came from the value operand");
     }
 }

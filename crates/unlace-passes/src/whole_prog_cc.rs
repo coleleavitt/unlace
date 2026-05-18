@@ -158,10 +158,7 @@ pub fn run_whole_prog_cc(
 type CallerArgInfo = BTreeMap<u64, Vec<BTreeSet<PrimitiveType>>>;
 
 /// Gather caller-side argument types for each callee.
-fn collect_caller_info(
-    funcs: &BTreeMap<u64, SsaFunction>,
-    cg: &CallGraph,
-) -> CallerArgInfo {
+fn collect_caller_info(funcs: &BTreeMap<u64, SsaFunction>, cg: &CallGraph) -> CallerArgInfo {
     let mut info: CallerArgInfo = BTreeMap::new();
 
     for (&caller_addr, ssa) in funcs {
@@ -339,11 +336,7 @@ fn drop_dead_params(
 
 /// Check if all callers of `addr` ignore the return value. If so, set
 /// `inferred_return_type = Unknown` (void). Returns true if changed.
-fn void_unused_return(
-    funcs: &mut BTreeMap<u64, SsaFunction>,
-    addr: u64,
-    cg: &CallGraph,
-) -> bool {
+fn void_unused_return(funcs: &mut BTreeMap<u64, SsaFunction>, addr: u64, cg: &CallGraph) -> bool {
     let callers = cg.callers_of(addr);
     if callers.is_empty() {
         // No callers visible — can't prove void.
@@ -427,11 +420,7 @@ fn caller_uses_return_of(caller: &SsaFunction, callee_addr: u64, ret_reg: u64) -
 
 /// If `addr` has exactly one caller and the caller's convention is known,
 /// adopt it. Returns true if the convention changed.
-fn unify_convention(
-    funcs: &mut BTreeMap<u64, SsaFunction>,
-    addr: u64,
-    cg: &CallGraph,
-) -> bool {
+fn unify_convention(funcs: &mut BTreeMap<u64, SsaFunction>, addr: u64, cg: &CallGraph) -> bool {
     let callers = cg.callers_of(addr);
     if callers.len() != 1 {
         return false;

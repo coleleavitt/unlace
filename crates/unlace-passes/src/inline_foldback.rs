@@ -214,12 +214,7 @@ mod tests {
         let loaded = Varnode::reg(0x100, 1);
         let zf = Varnode::reg(0x200, 1);
         let insns = vec![
-            IrInsn::with_output(
-                IrOp::Load,
-                loaded,
-                smallvec![space, ptr],
-                0x1000,
-            ),
+            IrInsn::with_output(IrOp::Load, loaded, smallvec![space, ptr], 0x1000),
             IrInsn::with_output(
                 IrOp::IntEqual,
                 zf,
@@ -257,12 +252,7 @@ mod tests {
         let cnt = Varnode::reg(0x20, 8);
         let val = Varnode::reg(0x100, 1);
         let insns = vec![
-            IrInsn::with_output(
-                IrOp::Load,
-                val,
-                smallvec![space, src],
-                0x1000,
-            ),
+            IrInsn::with_output(IrOp::Load, val, smallvec![space, src], 0x1000),
             IrInsn::without_output(IrOp::Store, smallvec![space, dst, val], 0x1004),
             IrInsn::with_output(
                 IrOp::IntAdd,
@@ -309,12 +299,7 @@ mod tests {
         let byte = Varnode::reg(0x100, 1);
         let mixed = Varnode::reg(0x108, 4);
         let insns = vec![
-            IrInsn::with_output(
-                IrOp::Load,
-                byte,
-                smallvec![space, ptr],
-                0x1000,
-            ),
+            IrInsn::with_output(IrOp::Load, byte, smallvec![space, ptr], 0x1000),
             IrInsn::with_output(IrOp::IntXor, mixed, smallvec![crc, byte], 0x1004),
             IrInsn::with_output(
                 IrOp::IntAdd,
@@ -348,12 +333,7 @@ mod tests {
         let r1 = Varnode::reg(0x08, 8);
         let out = Varnode::reg(0x100, 8);
         let insns = vec![
-            IrInsn::with_output(
-                IrOp::IntAdd,
-                out,
-                smallvec![r0, r1],
-                0x1000,
-            ),
+            IrInsn::with_output(IrOp::IntAdd, out, smallvec![r0, r1], 0x1000),
             IrInsn::with_output(IrOp::IntMult, out, smallvec![r0, r1], 0x1004),
         ];
         let ssa = make_block(insns);

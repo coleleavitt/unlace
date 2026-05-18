@@ -1,8 +1,10 @@
 //! The [`Pass`] trait and fixed-point runner.
 
+use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
-use unlace_ir::ssa::SsaFunction;
+use unlace_ir::BlockId;
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 
 /// Error type for optimization passes.
 #[derive(Debug, thiserror::Error)]
@@ -139,6 +141,52 @@ pub trait Pass: Send + Sync {
     /// no changes were made. The caller is responsible for iterating
     /// until all passes return `Ok(false)`.
     fn run(&self, func: &mut SsaFunction) -> Result<bool, PassError>;
+}
+
+/// Move SSA var-map entries when a block compaction moves an instruction.
+///
+/// Several passes remove instructions and compact `block.insns` in place.
+/// If the destination index used to belong to a removed instruction, it may
+/// still have old output/input slots in `var_map`. Clear those destination
+/// slots before moving the source instruction's slots so stale metadata cannot
+/// make an output-less instruction look like it defines a variable.
+pub(crate) fn compact_var_map_for_moved_insn(
+    var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    bid: BlockId,
+    old_idx: usize,
+    new_idx: usize,
+    input_count: usize,
+) {
+    if new_idx == old_idx {
+        return;
+    }
+
+    clear_var_map_entries_at(var_map, bid, new_idx);
+
+    if let Some(sv) = var_map.remove(&(bid, old_idx, VarnodeSlot::Output)) {
+        var_map.insert((bid, new_idx, VarnodeSlot::Output), sv);
+    }
+
+    for input_idx in 0..input_count {
+        if let Some(sv) = var_map.remove(&(bid, old_idx, VarnodeSlot::Input(input_idx))) {
+            var_map.insert((bid, new_idx, VarnodeSlot::Input(input_idx)), sv);
+        }
+    }
+}
+
+fn clear_var_map_entries_at(
+    var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    bid: BlockId,
+    idx: usize,
+) {
+    let stale_keys: Vec<_> = var_map
+        .keys()
+        .filter(|(b, i, _)| *b == bid && *i == idx)
+        .cloned()
+        .collect();
+    for key in stale_keys {
+        var_map.remove(&key);
+    }
 }
 
 /// Run a sequence of passes to a fixed point, returning the total number

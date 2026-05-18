@@ -58,17 +58,26 @@ pub struct CveDatabase {
 }
 
 impl CveDatabase {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn insert(&mut self, record: CveRecord) {
         self.records.insert(record.cve_id.clone(), record);
     }
 
-    pub fn len(&self) -> usize { self.records.len() }
-    pub fn is_empty(&self) -> bool { self.records.is_empty() }
+    pub fn len(&self) -> usize {
+        self.records.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.records.is_empty()
+    }
 
     /// Classify all functions against known CVE patterns.
-    pub fn classify(&self, function_fingerprints: &[(u64, u64, Option<String>)]) -> Vec<CveClassification> {
+    pub fn classify(
+        &self,
+        function_fingerprints: &[(u64, u64, Option<String>)],
+    ) -> Vec<CveClassification> {
         let mut results = Vec::new();
         for record in self.records.values() {
             for &(addr, fp, ref name) in function_fingerprints {
@@ -88,7 +97,10 @@ impl CveDatabase {
 
     /// Get all CVEs above a given severity threshold.
     pub fn filter_by_severity(&self, min_severity: CvssSeverity) -> Vec<&CveRecord> {
-        self.records.values().filter(|r| r.severity >= min_severity).collect()
+        self.records
+            .values()
+            .filter(|r| r.severity >= min_severity)
+            .collect()
     }
 }
 
@@ -140,7 +152,15 @@ mod tests {
     fn severity_filter() {
         let mut db = CveDatabase::new();
         db.insert(sample_cve());
-        db.insert(CveRecord { cve_id: "CVE-2024-5678".into(), cvss_score: 3.0, severity: CvssSeverity::Low, cwe_id: None, description: "info leak".into(), affected_versions: vec![], vuln_fingerprint: 0x1111 });
+        db.insert(CveRecord {
+            cve_id: "CVE-2024-5678".into(),
+            cvss_score: 3.0,
+            severity: CvssSeverity::Low,
+            cwe_id: None,
+            description: "info leak".into(),
+            affected_versions: vec![],
+            vuln_fingerprint: 0x1111,
+        });
         assert_eq!(db.filter_by_severity(CvssSeverity::High).len(), 1);
     }
 }

@@ -333,7 +333,7 @@ pub fn detect_sret(func: &SsaFunction) -> bool {
     let first_arg_reg = match cc {
         CallingConvention::SystemV => RDI,
         CallingConvention::MicrosoftX64 => RCX,
-        CallingConvention::AArch64 => 0, // X0
+        CallingConvention::AArch64 => 0,             // X0
         CallingConvention::Thiscall => return false, // `this` is never sret
         _ => return false,
     };

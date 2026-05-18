@@ -192,8 +192,8 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
         | unlace_ir::ssa::CallingConvention::Cdecl
         | unlace_ir::ssa::CallingConvention::Stdcall
         | unlace_ir::ssa::CallingConvention::Thiscall => Some(0), // RAX/EAX
-        unlace_ir::ssa::CallingConvention::AArch64 => Some(0),    // X0
-        unlace_ir::ssa::CallingConvention::Unknown => Some(0),    // assume RAX
+        unlace_ir::ssa::CallingConvention::AArch64 => Some(0), // X0
+        unlace_ir::ssa::CallingConvention::Unknown => Some(0), // assume RAX
     };
     if let Some(ret_off) = return_reg_offset {
         for (bid, block) in &func.function.blocks {
@@ -205,14 +205,13 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
                 // the return register in this block.
                 for prev_idx in (0..idx).rev() {
                     let prev_insn = &block.insns[prev_idx];
-                    let Some(out) = prev_insn.output else { continue };
+                    let Some(out) = prev_insn.output else {
+                        continue;
+                    };
                     if out.space == SpaceId::Register && out.offset == ret_off {
-                        if let Some(&sv) =
-                            func.var_map.get(&(*bid, prev_idx, VarnodeSlot::Output))
+                        if let Some(&sv) = func.var_map.get(&(*bid, prev_idx, VarnodeSlot::Output))
                         {
-                            if !roles.contains_key(&sv) {
-                                roles.insert(sv, VarRole::ReturnValue);
-                            }
+                            roles.entry(sv).or_insert(VarRole::ReturnValue);
                         }
                         break;
                     }

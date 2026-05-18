@@ -115,7 +115,10 @@ impl ProgramTypeUnifier {
                 self.rewrite_struct_names(key);
                 self.rewrite_struct_names(value);
             }
-            Type::Primitive(_) | Type::Interface { .. } | Type::TypeParam { .. } | Type::Union { .. } => {}
+            Type::Primitive(_)
+            | Type::Interface { .. }
+            | Type::TypeParam { .. }
+            | Type::Union { .. } => {}
         }
     }
 }
@@ -176,7 +179,10 @@ fn collect_struct_hashes(ty: &Type, out: &mut BTreeMap<u64, String>) {
             collect_struct_hashes(key, out);
             collect_struct_hashes(value, out);
         }
-        Type::Primitive(_) | Type::Interface { .. } | Type::TypeParam { .. } | Type::Union { .. } => {}
+        Type::Primitive(_)
+        | Type::Interface { .. }
+        | Type::TypeParam { .. }
+        | Type::Union { .. } => {}
     }
 }
 

@@ -86,8 +86,7 @@ pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTa
                 continue;
             }
             // The branch target SSA value.
-            let Some(&target_sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0)))
-            else {
+            let Some(&target_sv) = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Input(0))) else {
                 continue;
             };
 
@@ -109,13 +108,11 @@ pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTa
             // GCC PIC: target = table_base + sign_extend(table[idx])
             if prod_op == IrOp::IntAdd {
                 for slot in [VarnodeSlot::Input(0), VarnodeSlot::Input(1)] {
-                    let Some(&operand_sv) =
-                        func.var_map.get(&(prod_loc.0, prod_loc.1, slot))
+                    let Some(&operand_sv) = func.var_map.get(&(prod_loc.0, prod_loc.1, slot))
                     else {
                         continue;
                     };
-                    let Some((inner_loc, inner_op)) =
-                        chase_copies_to_producer(func, operand_sv)
+                    let Some((inner_loc, inner_op)) = chase_copies_to_producer(func, operand_sv)
                     else {
                         continue;
                     };
@@ -162,17 +159,14 @@ fn chase_copies_to_producer(
 /// Given a Load instruction location, extract the jump-table candidate
 /// (base address + entry size). Returns None if the Load's address
 /// can't be traced to a constant base.
-fn extract_load_candidate(
-    func: &SsaFunction,
-    load_loc: (BlockId, usize),
-) -> Option<JumpTableInfo> {
+fn extract_load_candidate(func: &SsaFunction, load_loc: (BlockId, usize)) -> Option<JumpTableInfo> {
     let load_insn = func
         .function
         .blocks
         .get(&load_loc.0)
         .and_then(|b| b.insns.get(load_loc.1))?;
 
-    let entry_size = load_insn.output.as_ref().map(|o| o.size as u8).unwrap_or(0);
+    let entry_size = load_insn.output.as_ref().map(|o| o.size).unwrap_or(0);
     if !matches!(entry_size, 1 | 2 | 4 | 8) {
         return None;
     }

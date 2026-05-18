@@ -16,3 +16,4 @@ ida-notes
 notes
 rust_out
 .worktrees/
+.claude/

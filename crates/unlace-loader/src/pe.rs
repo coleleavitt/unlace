@@ -472,8 +472,12 @@ where
     // IMAGE_DIRECTORY_ENTRY_SECURITY (4) carries Authenticode. Unlike
     // other data directories its RVA is a *file offset* — the entry
     // points at a `WIN_CERTIFICATE` blob in the security section.
-    let (authenticode_present, authenticode_size, authenticode_certificates, authenticode_malformed) =
-        parse_security_directory(file, data);
+    let (
+        authenticode_present,
+        authenticode_size,
+        authenticode_certificates,
+        authenticode_malformed,
+    ) = parse_security_directory(file, data);
 
     crate::image::PeMitigations {
         nx_compat: (dll_characteristics & NX_COMPAT) != 0,
@@ -494,12 +498,7 @@ where
 fn parse_security_directory<Pe>(
     file: &PeFile<Pe>,
     data: &[u8],
-) -> (
-    bool,
-    u32,
-    Vec<crate::image::AuthenticodeCertificate>,
-    bool,
-)
+) -> (bool, u32, Vec<crate::image::AuthenticodeCertificate>, bool)
 where
     Pe: ImageNtHeaders,
 {
@@ -562,8 +561,12 @@ pub(crate) fn walk_certificate_table(
     let mut malformed = false;
 
     while cursor + 8 <= end {
-        let dw_length =
-            u32::from_le_bytes([data[cursor], data[cursor + 1], data[cursor + 2], data[cursor + 3]]);
+        let dw_length = u32::from_le_bytes([
+            data[cursor],
+            data[cursor + 1],
+            data[cursor + 2],
+            data[cursor + 3],
+        ]);
         let revision = u16::from_le_bytes([data[cursor + 4], data[cursor + 5]]);
         let cert_type = u16::from_le_bytes([data[cursor + 6], data[cursor + 7]]);
 
@@ -3243,8 +3246,14 @@ mod tests {
 
         let (entries, malformed) =
             walk_certificate_table(&blob, 0, blob.len() as u32).expect("in-bounds");
-        assert!(malformed, "claimed length 64 in a 16-byte blob must be flagged");
-        assert!(entries.is_empty(), "no entries should be emitted past the truncation");
+        assert!(
+            malformed,
+            "claimed length 64 in a 16-byte blob must be flagged"
+        );
+        assert!(
+            entries.is_empty(),
+            "no entries should be emitted past the truncation"
+        );
     }
 
     #[test]
@@ -3256,8 +3265,7 @@ mod tests {
         blob.extend_from_slice(&0u16.to_le_bytes());
         blob.extend_from_slice(&0u16.to_le_bytes());
 
-        let (entries, malformed) =
-            walk_certificate_table(&blob, 0, 8).expect("in-bounds");
+        let (entries, malformed) = walk_certificate_table(&blob, 0, 8).expect("in-bounds");
         assert!(malformed);
         assert!(entries.is_empty());
     }

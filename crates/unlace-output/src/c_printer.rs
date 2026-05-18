@@ -6974,7 +6974,10 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                 );
                 Some(format!("JUMPOUT({});", target))
             }
-            _ => Some(format!("/* {} */;", insn.op.name())),
+            // Batch 19 DOD: unsupported statement-level opcodes render as
+            // an annotated helper call (preserves opcode name + operand
+            // dataflow) instead of a comment-only `/* OP */;` placeholder.
+            _ => Some(format!("{};", emit_unsupported_op_helper(insn, idx, ctx))),
         }
     }
 }
@@ -7226,8 +7229,12 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     let _ = writeln!(out, "JUMPOUT({});", target);
                 }
             }
+            // Batch 19 DOD: emit an annotated helper call (preserves
+            // opcode name + operand dataflow) rather than a comment-only
+            // placeholder that would silently drop inputs.
             _ => {
-                let _ = writeln!(out, "/* {} */;", insn.op.name());
+                let call = emit_unsupported_op_helper(insn, idx, ctx);
+                let _ = writeln!(out, "{call};");
             }
         }
     }
@@ -8263,8 +8270,37 @@ fn emit_expr_with_prec(
         IrOp::Callother => emit_callother(insn, stmt_idx, ctx),
 
         // -- Fallback --
-        _ => format!("/* {} */ 0", insn.op.name()),
+        //
+        // Batch 19 DOD: "The printer can fail gracefully with annotated
+        // helper calls, but it does not emit invalid C for ordinary
+        // supported constructs." We render unsupported opcodes as
+        // `__unlace_<opname>(args)` — a syntactically-valid call
+        // expression that preserves both the opcode identifier *and* the
+        // input operands, so downstream passes / readers still see the
+        // dataflow rather than a bare `0` placeholder.
+        _ => emit_unsupported_op_helper(insn, stmt_idx, ctx),
     }
+}
+
+/// Render an unsupported opcode as `__unlace_<opname>(arg, arg, ...)`.
+///
+/// Used by the expression and statement fallbacks; the resulting
+/// expression is well-formed C and keeps the input dataflow visible
+/// (a `/* OP */ 0` placeholder would silently drop both the operands
+/// and the name from any downstream textual analysis).
+fn unsupported_helper_name(insn: &IrInsn) -> String {
+    let mut s = String::with_capacity("__unlace_".len() + 12);
+    s.push_str("__unlace_");
+    for ch in insn.op.name().chars() {
+        s.push(ch.to_ascii_lowercase());
+    }
+    s
+}
+
+fn emit_unsupported_op_helper(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
+    let name = unsupported_helper_name(insn);
+    let args = emit_input_args(insn, stmt_idx, ctx);
+    format!("{name}({args})")
 }
 
 /// Render all inputs of an instruction as a comma-separated argument list.
@@ -21267,6 +21303,163 @@ mod tests {
         assert!(
             !header.contains("@<"),
             "standard header must not carry @<reg> suffixes: {header:?}"
+        );
+    }
+
+    // ----- Batch 19 — annotated-helper fallback for unsupported ops -----
+    //
+    // Done-when: "The printer can fail gracefully with annotated helper
+    // calls, but it does not emit invalid C for ordinary supported
+    // constructs." When an opcode falls through every dispatch arm we
+    // now emit `__unlace_<opname>(args)` instead of `/* OP */ 0` (or
+    // `/* OP */;` at statement level). The helper-call shape is valid C,
+    // preserves the opcode identifier as a stable name, and keeps the
+    // input operands visible to readers and downstream textual passes.
+
+    #[test]
+    fn test_b19_unsupported_helper_name_lowercases_opname() {
+        // The helper identifier is `__unlace_` + lower(IrOp::name()).
+        // Use a stable opcode with a known name.
+        let insn = IrInsn::with_output(
+            IrOp::Insert,
+            reg(0, 4),
+            smallvec![reg(8, 4), reg(16, 4)],
+            0x1000,
+        );
+        let name = super::unsupported_helper_name(&insn);
+        assert_eq!(name, "__unlace_insert");
+    }
+
+    #[test]
+    fn test_b19_unsupported_op_renders_helper_call_in_statement() {
+        // `IrOp::Insert` is not dispatched by `emit_expr_with_prec` /
+        // `emit_statement`, so it falls into the fallback arm. The
+        // statement should render as `<lhs> = __unlace_insert(<args>);`
+        // (output path) — annotated, valid C, inputs visible.
+        let dst = reg(0, 4);
+        let a = reg(8, 4);
+        let b = reg(16, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Insert,
+                dst,
+                smallvec![a, b],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("b19_unsupported_expr", body);
+        let output = print_c(&func);
+
+        // Helper call appears with both inputs preserved.
+        assert!(
+            output.contains("__unlace_insert("),
+            "expected annotated helper call, got:\n{output}"
+        );
+        // Comment-only placeholder must NOT appear — that path silently
+        // drops operand visibility.
+        assert!(
+            !output.contains("/* INSERT */ 0") && !output.contains("/* INSERT */;"),
+            "unsupported op must not fall back to a comment placeholder:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_b19_unsupported_op_no_output_renders_helper_statement() {
+        // An unsupported opcode with no `output` slot hits the
+        // `emit_statement` / `emit_nodes` fallback paths. Those should
+        // emit `__unlace_<op>(args);` (terminated, valid C) rather than
+        // `/* OP */;`.
+        let a = reg(8, 4);
+        let b = reg(16, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::without_output(
+                IrOp::Insert,
+                smallvec![a, b],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("b19_unsupported_stmt", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("__unlace_insert("),
+            "expected statement-level helper call, got:\n{output}"
+        );
+        assert!(
+            !output.contains("/* INSERT */;"),
+            "must not emit comment-only fallback:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_b19_unsupported_helper_call_is_valid_c() {
+        // `gcc -fsyntax-only` on the rendered output must succeed —
+        // proving the fallback emits well-formed C even for ops the
+        // printer doesn't have a dedicated arm for.
+        let gcc_available = std::process::Command::new("gcc")
+            .arg("--version")
+            .output()
+            .is_ok();
+        if !gcc_available {
+            eprintln!("gcc not found, skipping test_b19_unsupported_helper_call_is_valid_c");
+            return;
+        }
+
+        let dst = reg(0, 4);
+        let a = reg(8, 4);
+        let b = reg(16, 4);
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Insert,
+                dst,
+                smallvec![a, b],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+        let func = make_func("b19_helper_valid", body);
+        let source = print_c(&func);
+
+        // Provide a prototype for the helper so the compiler accepts the
+        // call without complaining about implicit declarations.
+        let preamble = "\
+typedef unsigned int unsigned__int32;
+typedef int __int32;
+extern int __unlace_insert();
+";
+        let full = format!("{}\n{}", preamble, source);
+
+        let mut child = std::process::Command::new("gcc")
+            .args([
+                "-fsyntax-only",
+                "-x",
+                "c",
+                "-",
+                "-std=c11",
+                "-w", // suppress warnings — we only need parse + type-check
+            ])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn gcc");
+        {
+            use std::io::Write;
+            child
+                .stdin
+                .as_mut()
+                .expect("stdin")
+                .write_all(full.as_bytes())
+                .expect("write");
+        }
+        let out = child.wait_with_output().expect("wait gcc");
+        assert!(
+            out.status.success(),
+            "gcc rejected annotated-helper output:\n--- source ---\n{}\n--- stderr ---\n{}",
+            full,
+            String::from_utf8_lossy(&out.stderr)
         );
     }
 }

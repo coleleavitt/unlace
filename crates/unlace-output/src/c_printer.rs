@@ -437,6 +437,14 @@ pub struct PrinterAnnotations {
     /// t260: __usercall / __userpurge spec for functions whose register-
     /// passing scheme diverges from the active ABI's canonical sequence.
     pub usercall: Option<UsercallSpec>,
+    /// §5.5: per-callee-VA FLIRT match annotation. Key is the *target*
+    /// function's entry address (the Const operand of a direct Call);
+    /// value is `(canonical_name, confidence ∈ [0.5, 1.0])`. When a Call
+    /// instruction's target lands in this map, the printer appends a
+    /// trailing `/* flirt: <name>@<conf> */` comment so the reader can
+    /// see which calls were recognised by signature matching and how
+    /// strong the evidence was. Empty when no FLIRT matches occurred.
+    pub flirt_call_annotations: BTreeMap<u64, (String, f32)>,
 }
 
 /// t260: per-function `__usercall` / `__userpurge` annotation payload.
@@ -519,6 +527,7 @@ pub fn print_c_with_annotations(
         ctx.array_struct_indices = ann.array_struct_indices.clone();
         ctx.go_defer_sites = ann.go_defer_sites.clone();
         ctx.byref_union_types = ann.byref_union_types.clone();
+        ctx.flirt_call_annotations = ann.flirt_call_annotations.clone();
     }
     if let Some(cfg) = config {
         ctx.config = cfg;
@@ -1716,6 +1725,11 @@ struct PrintCtx {
     ///
     /// Lifted from [`HirFunction::vtable_call_targets`] at construction.
     vtable_call_targets: BTreeMap<u64, TargetSet>,
+    /// §5.5: FLIRT match annotation keyed by callee entry VA. Lifted
+    /// from [`PrinterAnnotations::flirt_call_annotations`]; consumed by
+    /// [`flirt_call_comment`] to emit `/* flirt: <name>@<conf> */` at
+    /// Call sites whose target was recognised by signature matching.
+    flirt_call_annotations: BTreeMap<u64, (String, f32)>,
 }
 
 fn render_go_defer_summary(
@@ -1835,6 +1849,7 @@ impl PrintCtx {
             mmio_addrs: BTreeSet::new(),
             suppressed_stack_offsets: BTreeSet::new(),
             vtable_call_targets: BTreeMap::new(),
+            flirt_call_annotations: BTreeMap::new(),
         }
     }
 
@@ -6090,6 +6105,28 @@ fn forwarded_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
     Some(format!("/* -> {} */", resolved))
 }
 
+/// §5.5: If this Call's *target* function was identified by FLIRT,
+/// return the trailing `/* flirt: <canonical>@<conf> */` comment text
+/// the printer should append at the call site. Returns `None` for
+/// non-direct calls, when the FLIRT map is empty, or when the target
+/// VA is not a key in the map. Confidence is rendered with two decimal
+/// digits (e.g. `1.00`, `0.90`, `0.50`) so the output is byte-stable
+/// across runs.
+fn flirt_call_comment(insn: &IrInsn, ctx: &PrintCtx) -> Option<String> {
+    if !matches!(insn.op, IrOp::Call) {
+        return None;
+    }
+    if ctx.flirt_call_annotations.is_empty() {
+        return None;
+    }
+    let target = insn.inputs.first()?;
+    if target.space != SpaceId::Const {
+        return None;
+    }
+    let (name, conf) = ctx.flirt_call_annotations.get(&target.offset)?;
+    Some(format!("/* flirt: {}@{:.2} */", name, conf))
+}
+
 fn resolve_call_target(insn: &IrInsn, stmt_idx: u32, ctx: &mut PrintCtx) -> String {
     if insn.inputs.is_empty() {
         return "/* unknown */".to_string();
@@ -6886,6 +6923,11 @@ fn inline_statement_text(insn: &IrInsn, ctx: &mut PrintCtx) -> Option<String> {
                     s.push(' ');
                     s.push_str(&c);
                 }
+                // §5.5: FLIRT-recognised callee → `/* flirt: <name>@<conf> */`.
+                if let Some(c) = flirt_call_comment(insn, ctx) {
+                    s.push(' ');
+                    s.push_str(&c);
+                }
                 Some(s)
             }
             IrOp::Unimplemented => Some(format!("__unknown_insn_0x{:X}();", insn.addr)),
@@ -7124,20 +7166,20 @@ fn emit_statement(insn: &IrInsn, depth: usize, ctx: &mut PrintCtx, out: &mut Str
                     indent(depth, ctx.config.tab_width, out);
                 }
                 let fwd = forwarded_call_comment(insn, ctx);
+                // §5.5: FLIRT match comment (direct-call only; the helper
+                // gates on IrOp::Call internally so Callind is a no-op).
+                let flirt = flirt_call_comment(insn, ctx);
+                let trailing: String = [fwd, flirt]
+                    .into_iter()
+                    .flatten()
+                    .map(|c| format!(" {}", c))
+                    .collect();
                 if insn.op == IrOp::Callind {
                     let expr = emit_callind_cast(insn, idx, ctx);
-                    if let Some(c) = fwd {
-                        let _ = writeln!(out, "{}; {}", expr, c);
-                    } else {
-                        let _ = writeln!(out, "{};", expr);
-                    }
+                    let _ = writeln!(out, "{};{}", expr, trailing);
                 } else {
                     let expr = emit_direct_call_expr(insn, idx, ctx);
-                    if let Some(c) = fwd {
-                        let _ = writeln!(out, "{}; {}", expr, c);
-                    } else {
-                        let _ = writeln!(out, "{};", expr);
-                    }
+                    let _ = writeln!(out, "{};{}", expr, trailing);
                 }
             }
             IrOp::Unimplemented => {
@@ -14777,6 +14819,79 @@ mod tests {
         assert!(
             output.contains("kernel32!HeapAlloc"),
             "primary symbol name must still render: {output}",
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // §5.5: FLIRT confidence trailing-comment on Call rendering
+    // -------------------------------------------------------------------
+
+    /// A direct Call whose target VA is present in
+    /// [`PrinterAnnotations::flirt_call_annotations`] gets a trailing
+    /// `/* flirt: <name>@<conf> */` comment. Confidence is rendered with
+    /// two decimal digits so the output is byte-stable across runs.
+    #[test]
+    fn call_renders_flirt_confidence_comment() {
+        let call_va: u64 = 0x1000;
+        let target_va: u64 = 0x4010_40;
+        let target_addr = con(target_va, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], call_va);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+        let func = make_func("caller", body);
+
+        let mut symbols = BTreeMap::new();
+        symbols.insert(target_va, "sub_401040".to_string());
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.flirt_call_annotations
+            .insert(target_va, ("memcpy".to_string(), 0.95));
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            Some(&symbols),
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(
+            output.contains("/* flirt: memcpy@0.95 */"),
+            "flirt confidence comment must render on direct Call: {output}",
+        );
+    }
+
+    /// Low-confidence (0.50) matches still render with two decimal
+    /// digits so the format is stable across confidence buckets.
+    #[test]
+    fn call_renders_flirt_low_confidence_comment() {
+        let call_va: u64 = 0x1100;
+        let target_va: u64 = 0x4011_00;
+        let target_addr = con(target_va, 8);
+        let call_insn = IrInsn::without_output(IrOp::Call, smallvec![target_addr], call_va);
+        let body = vec![HirNode::Statement(call_insn), HirNode::Return(None)];
+        let func = make_func("caller", body);
+
+        let mut ann = super::PrinterAnnotations::default();
+        ann.flirt_call_annotations
+            .insert(target_va, ("strlen".to_string(), 0.5));
+
+        let output = super::print_c_with_annotations(
+            &func,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(&ann),
+        );
+
+        assert!(
+            output.contains("/* flirt: strlen@0.50 */"),
+            "low-confidence flirt comment must render with 0.50 format: {output}",
         );
     }
 

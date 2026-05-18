@@ -1,0 +1,67 @@
+__int64 __fastcall sub_7E160(__int64 *a1)
+{
+  __int64 v1; // rbp
+  __int64 v2; // r13
+  unsigned __int64 v3; // r12
+  __int64 v4; // rsi
+  __m128i si128; // xmm0
+  __int64 v6; // rbp
+  unsigned __int64 v7; // r12
+  __int64 v8; // r13
+  __int64 v9; // rsi
+  __int64 v11; // rax
+  __int64 v12; // rax
+
+  v1 = a1[1];
+  if ( v1 )
+  {
+    v2 = v1 + 15;
+    v3 = v1 + 16;
+    v4 = *a1;
+    --v1;
+    if ( a1[2] >= v3 )
+      goto LABEL_3;
+  }
+  else
+  {
+    v4 = *a1;
+    v3 = 17;
+    v2 = 16;
+    if ( (unsigned __int64)a1[2] >= 0x11 )
+      goto LABEL_3;
+  }
+  v11 = sub_1987B0(a1, v4, v3, 1);
+  *a1 = v11;
+  v4 = v11;
+LABEL_3:
+  a1[1] = v3;
+  si128 = _mm_load_si128((const __m128i *)&xmmword_1B6D50);
+  *(_BYTE *)(v4 + v2) = 0;
+  *(__m128i *)(*a1 + v1) = si128;
+  sub_171F20(a1, 1);
+  v6 = a1[1];
+  if ( !v6 )
+  {
+    v9 = *a1;
+    v8 = 1;
+    v7 = 2;
+    if ( (unsigned __int64)a1[2] >= 2 )
+      goto LABEL_5;
+LABEL_9:
+    v12 = sub_1987B0(a1, v9, v7, 1);
+    *a1 = v12;
+    v9 = v12;
+    goto LABEL_5;
+  }
+  v7 = v6 + 1;
+  v8 = a1[1];
+  v9 = *a1;
+  --v6;
+  if ( a1[2] < v7 )
+    goto LABEL_9;
+LABEL_5:
+  a1[1] = v7;
+  *(_BYTE *)(v9 + v6) = 59;
+  *(_BYTE *)(*a1 + v8) = 0;
+  return 1;
+}

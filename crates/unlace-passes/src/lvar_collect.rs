@@ -23,12 +23,77 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::BlockId;
 use unlace_ir::lvar::{LiveRange, Lvar, LvarFlags, LvarId, LvarSource, LvarStorage};
 use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode};
 use unlace_ir::types::TypeKind;
+use unlace_ir::{BlockId, SpaceId};
 
 use crate::pass::{Pass, PassError, PassPhase};
+
+/// Minimum register-space offset for x86 RFLAGS bits (CF starts at 256).
+/// Mirrors [`crate::dead_flag_elim`] — any `Register`-space varnode at or
+/// above this offset is a flag bit and must not surface as a user-visible
+/// source variable in the lvar dump.
+const FLAG_OFFSET_MIN: u64 = 256;
+
+/// x86-64 RIP register offset in the lifter's register file. Matches
+/// [`unlace-lift-x86/src/register_file.rs`]; the instruction pointer is
+/// never a user-visible C declaration.
+const RIP_OFFSET: u64 = 128;
+
+/// Suppression reason recorded against a candidate `Temp` SSA varnode
+/// that the lvar collector dropped instead of emitting as an [`Lvar`].
+/// Used purely by the audit dump to explain why a `merged_names` entry
+/// did not become a user-visible declaration.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum SuppressionReason {
+    /// `Register`-space varnode at the lifter's RFLAGS offset region
+    /// (CF/ZF/SF/OF/PF/AF). Flag bits are emitter-suppressed and must
+    /// not be presented as source variables.
+    FlagRegister,
+    /// `Register`-space varnode aliasing the architectural instruction
+    /// pointer (RIP / EIP on x86-64). The IP is implicit in C control
+    /// flow and has no user-visible identity.
+    InstructionPointer,
+    /// `Unique`-space SSA temporary observed at exactly one program
+    /// point — a one-shot scratch slot that the printer always folds
+    /// inline. Materialising it as an Lvar would create a spurious
+    /// declaration the user has no way to recognise.
+    OneShotTemp,
+}
+
+impl SuppressionReason {
+    /// Stable short tag used by the dump.
+    pub const fn tag(self) -> &'static str {
+        match self {
+            Self::FlagRegister => "flag-reg",
+            Self::InstructionPointer => "ip-reg",
+            Self::OneShotTemp => "one-shot-temp",
+        }
+    }
+}
+
+/// Decide whether the candidate `Temp` lvar backed by `sv` must be
+/// suppressed and, if so, why. Returns `None` when the candidate is
+/// legitimately a user-visible declaration.
+///
+/// This is the single seam where flag-register / instruction-pointer /
+/// one-shot suppression moves from the C printer into the lvar layer.
+/// The printer keeps its parallel storage filter for now (it's a
+/// belt-and-braces check), but the audit dump is the new source of truth
+/// for "why didn't variable X appear in the output?".
+pub fn classify_temp_suppression(sv: SsaVarnode, use_count: usize) -> Option<SuppressionReason> {
+    match sv.base.space {
+        SpaceId::Register if sv.base.offset >= FLAG_OFFSET_MIN => {
+            Some(SuppressionReason::FlagRegister)
+        }
+        SpaceId::Register if sv.base.offset == RIP_OFFSET => {
+            Some(SuppressionReason::InstructionPointer)
+        }
+        SpaceId::Unique if use_count <= 1 => Some(SuppressionReason::OneShotTemp),
+        _ => None,
+    }
+}
 
 /// Candidate-collector pass. Stateless. See module docs.
 ///
@@ -90,7 +155,16 @@ fn collect(func: &SsaFunction) -> Vec<Lvar> {
         &use_blocks,
         func_range,
     );
-    collect_temps(func, &mut out, &mut next_id, &alloc_id, &use_blocks, entry);
+    let use_counts = count_var_uses(func);
+    collect_temps(
+        func,
+        &mut out,
+        &mut next_id,
+        &alloc_id,
+        &use_blocks,
+        &use_counts,
+        entry,
+    );
     collect_params(func, &mut out, &mut next_id, &alloc_id, func_range);
     collect_return(func, &mut out, &mut next_id, &alloc_id, func_range);
 
@@ -204,9 +278,18 @@ fn collect_temps(
     next_id: &mut u32,
     alloc_id: &impl Fn(&mut u32) -> LvarId,
     use_blocks: &BTreeMap<SsaVarnode, (BlockId, BlockId)>,
+    use_counts: &BTreeMap<SsaVarnode, usize>,
     entry: BlockId,
 ) {
     for sv in func.merged_names.keys() {
+        // Suppression: flag bits, the instruction pointer, and one-shot
+        // Unique temps never become user-visible declarations. The audit
+        // dump derives the same decision from `merged_names` keys so
+        // suppressed entries are still explainable.
+        let uses = use_counts.get(sv).copied().unwrap_or(0);
+        if classify_temp_suppression(*sv, uses).is_some() {
+            continue;
+        }
         let lr = live_range_for_temp(*sv, use_blocks, entry);
         let ty = primitive_to_kind(
             func.var_types
@@ -223,6 +306,60 @@ fn collect_temps(
             LvarFlags::EMPTY,
         ));
     }
+}
+
+/// Count how many times each SSA varnode appears in `var_map` as either
+/// a definition or a use. Used to recognise *one-shot* `Unique` temps
+/// (count ≤ 1 → single program-point varnode the printer inlines).
+fn count_var_uses(func: &SsaFunction) -> BTreeMap<SsaVarnode, usize> {
+    let mut counts: BTreeMap<SsaVarnode, usize> = BTreeMap::new();
+    for sv in func.var_map.values() {
+        *counts.entry(*sv).or_insert(0) += 1;
+    }
+    // Phi inputs and outputs also represent real references — count them
+    // so a varnode that appears only as a phi input isn't mis-classified
+    // as a dead one-shot temp.
+    for phis in func.phi_map.values() {
+        for phi in phis {
+            *counts.entry(phi.output).or_insert(0) += 1;
+            for &(_pred, sv) in &phi.inputs {
+                *counts.entry(sv).or_insert(0) += 1;
+            }
+        }
+    }
+    counts
+}
+
+/// Render a markdown trace of every `merged_names` entry the lvar
+/// collector dropped, paired with the reason (flag-reg / ip-reg /
+/// one-shot-temp). Pairs with [`dump_lvars`](unlace_ir::lvar::dump_lvars)
+/// so an audit reader can answer "where did variable X go?" from a
+/// single dump.
+///
+/// Rows are emitted in `SsaVarnode` order; the empty case yields just
+/// the header so the dump is uniform across binaries.
+pub fn dump_lvar_suppressions(func: &SsaFunction) -> String {
+    use std::fmt::Write;
+    let uses = count_var_uses(func);
+    let mut out = String::new();
+    let _ = writeln!(out, "| ssa | reason | uses |");
+    let _ = writeln!(out, "|-----|--------|-----:|");
+    for sv in func.merged_names.keys() {
+        let n = uses.get(sv).copied().unwrap_or(0);
+        let Some(reason) = classify_temp_suppression(*sv, n) else {
+            continue;
+        };
+        let _ = writeln!(
+            out,
+            "| {:?}@0x{:x}#{} | {} | {} |",
+            sv.base.space,
+            sv.base.offset,
+            sv.version,
+            reason.tag(),
+            n,
+        );
+    }
+    out
 }
 
 /// (3) Function parameters. Each `inferred_params` entry carries a name
@@ -619,5 +756,197 @@ mod tests {
         assert!(!LvarCollectPass.run(&mut ssa).unwrap());
         let second: Vec<_> = ssa.lvars.iter().map(|l| l.id).collect();
         assert_eq!(first, second);
+    }
+
+    /// Batch 18 — flag-register merged-names entry MUST NOT produce a
+    /// user-visible Temp lvar. The audit-side `dump_lvar_suppressions`
+    /// MUST attribute the drop to `flag-reg`.
+    #[test]
+    fn lvar_flag_register_temp_is_suppressed() {
+        let mut ssa = empty_ssa("flag_sup");
+        // CF lives at offset 256 in the x86-64 register file.
+        let cf = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Register,
+                offset: 256,
+                size: 1,
+            },
+            version: 0,
+        };
+        ssa.merged_names.insert(cf, "v_cf".to_string());
+        // Multiple uses → not a one-shot — suppression must come from the
+        // flag-register classifier specifically.
+        ssa.var_map.insert((BlockId(0), 0, VarnodeSlot::Output), cf);
+        ssa.var_map
+            .insert((BlockId(0), 1, VarnodeSlot::Input(0)), cf);
+
+        LvarCollectPass.run(&mut ssa).unwrap();
+        assert!(
+            ssa.lvars
+                .iter()
+                .all(|l| !matches!(l.storage, LvarStorage::Temp { ssa_var } if ssa_var == cf)),
+            "flag-register temp must not surface as an Lvar: {:?}",
+            ssa.lvars,
+        );
+
+        let trace = dump_lvar_suppressions(&ssa);
+        assert!(
+            trace.contains("flag-reg"),
+            "trace missing flag-reg: {trace}"
+        );
+    }
+
+    /// Batch 18 — instruction-pointer alias is dropped from the lvar set
+    /// regardless of how many uses appear in `var_map`.
+    #[test]
+    fn lvar_instruction_pointer_temp_is_suppressed() {
+        let mut ssa = empty_ssa("rip_sup");
+        let rip = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Register,
+                offset: 128, // RIP in the x86-64 register file.
+                size: 8,
+            },
+            version: 0,
+        };
+        ssa.merged_names.insert(rip, "v_rip".to_string());
+        ssa.var_map
+            .insert((BlockId(0), 0, VarnodeSlot::Output), rip);
+        ssa.var_map
+            .insert((BlockId(0), 1, VarnodeSlot::Input(0)), rip);
+
+        LvarCollectPass.run(&mut ssa).unwrap();
+        assert!(
+            ssa.lvars
+                .iter()
+                .all(|l| !matches!(l.storage, LvarStorage::Temp { ssa_var } if ssa_var == rip)),
+            "rip temp must not surface as an Lvar"
+        );
+        let trace = dump_lvar_suppressions(&ssa);
+        assert!(trace.contains("ip-reg"), "trace missing ip-reg: {trace}");
+    }
+
+    /// Batch 18 — a `SpaceId::Unique` temp seen at exactly one program
+    /// point is a one-shot and must not survive into the lvar set. A
+    /// Unique temp seen at *two* program points is a legitimate variable
+    /// and DOES emit an Lvar.
+    #[test]
+    fn lvar_one_shot_unique_temp_is_suppressed() {
+        let mut ssa = empty_ssa("one_shot");
+
+        // One-shot Unique: a single var_map entry.
+        let single = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Unique,
+                offset: 0x10,
+                size: 4,
+            },
+            version: 0,
+        };
+        ssa.merged_names.insert(single, "v_tmp_1".to_string());
+        ssa.var_map
+            .insert((BlockId(0), 0, VarnodeSlot::Output), single);
+
+        // Persistent Unique: two var_map entries → real value.
+        let kept = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Unique,
+                offset: 0x20,
+                size: 4,
+            },
+            version: 0,
+        };
+        ssa.merged_names.insert(kept, "v1".to_string());
+        ssa.var_map
+            .insert((BlockId(0), 1, VarnodeSlot::Output), kept);
+        ssa.var_map
+            .insert((BlockId(0), 2, VarnodeSlot::Input(0)), kept);
+
+        LvarCollectPass.run(&mut ssa).unwrap();
+        let temps: Vec<SsaVarnode> = ssa
+            .lvars
+            .iter()
+            .filter_map(|l| match l.storage {
+                LvarStorage::Temp { ssa_var } => Some(ssa_var),
+                _ => None,
+            })
+            .collect();
+        assert!(temps.contains(&kept), "two-use Unique temp must survive");
+        assert!(
+            !temps.contains(&single),
+            "one-shot Unique temp must be dropped, got: {temps:?}",
+        );
+        let trace = dump_lvar_suppressions(&ssa);
+        assert!(
+            trace.contains("one-shot-temp"),
+            "trace missing one-shot-temp: {trace}"
+        );
+    }
+
+    /// Batch 18 — `classify_temp_suppression` is the single decision
+    /// point. Cover each branch directly so future refactors don't drift.
+    #[test]
+    fn classify_temp_suppression_covers_each_reason() {
+        let flag = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Register,
+                offset: 260, // ZF region.
+                size: 1,
+            },
+            version: 0,
+        };
+        let rip = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Register,
+                offset: 128,
+                size: 8,
+            },
+            version: 0,
+        };
+        let one_shot = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Unique,
+                offset: 0x40,
+                size: 4,
+            },
+            version: 0,
+        };
+        let live_reg = SsaVarnode {
+            base: Varnode {
+                space: SpaceId::Register,
+                offset: 0, // RAX — real GPR.
+                size: 8,
+            },
+            version: 0,
+        };
+
+        assert_eq!(
+            classify_temp_suppression(flag, 5),
+            Some(SuppressionReason::FlagRegister),
+        );
+        assert_eq!(
+            classify_temp_suppression(rip, 12),
+            Some(SuppressionReason::InstructionPointer),
+        );
+        assert_eq!(
+            classify_temp_suppression(one_shot, 1),
+            Some(SuppressionReason::OneShotTemp),
+        );
+        // A Unique varnode seen >1 time is no longer one-shot.
+        assert_eq!(classify_temp_suppression(one_shot, 2), None);
+        // Real GPR survives at any use count.
+        assert_eq!(classify_temp_suppression(live_reg, 1), None);
+        assert_eq!(classify_temp_suppression(live_reg, 99), None);
+    }
+
+    /// Batch 18 — `dump_lvar_suppressions` always emits the header row
+    /// so an empty function still produces a parseable audit table.
+    #[test]
+    fn dump_lvar_suppressions_emits_header_for_empty() {
+        let ssa = empty_ssa("empty_dump");
+        let trace = dump_lvar_suppressions(&ssa);
+        assert!(trace.starts_with("| ssa | reason | uses |"));
+        // Header + separator = 2 lines, no data rows.
+        assert_eq!(trace.lines().count(), 2);
     }
 }

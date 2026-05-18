@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
@@ -55,6 +57,62 @@ pub struct BatchResult {
 
 const SEPARATOR_CHAR: char = '═';
 const SEPARATOR_LEN: usize = 60;
+
+/// Memory bound (in functions) for the interprocedural SSA map. When a
+/// batch exceeds this count, we emit a warning so operators running
+/// `unlace batch --interproc` on multi-thousand-function binaries
+/// understand why RSS climbs — and have a single env knob
+/// (`UNLACE_INTERPROC_MAX`) to raise or lower the threshold.
+///
+/// 4096 is empirically the rough crossover where a release-build
+/// `SsaFunction` map stays under ~2 GiB on the project's medium and
+/// large fixtures. Crossing it doesn't *fail* the run; it just
+/// surfaces a single tracing warning so users can hop to the
+/// per-function (non-interproc) path if they hit OOM.
+const DEFAULT_INTERPROC_FN_BOUND: usize = 4096;
+
+/// Returns true when stderr-based progress reporting should fire.
+/// Gated on `UNLACE_PROGRESS=1` so the default test/CLI behaviour is
+/// unchanged (golden tests scrape stderr and fail on unexpected
+/// noise).
+fn progress_enabled() -> bool {
+    matches!(std::env::var("UNLACE_PROGRESS").ok().as_deref(), Some("1"))
+}
+
+/// Emit a one-line progress update to stderr. We avoid `indicatif` /
+/// any terminal-control library because the CLI's stderr is also
+/// consumed by `tail -f`, CI log scrapers, and the `unlace lsp`
+/// adapter — plain trailing-newline text is the lowest-friction
+/// representation.
+fn report_progress(stage: &str, done: usize, total: usize, started: Instant) {
+    let elapsed = started.elapsed().as_secs_f64();
+    let rate = if elapsed > 1e-6 {
+        done as f64 / elapsed
+    } else {
+        0.0
+    };
+    let pct = if total > 0 {
+        (done as f64 / total as f64) * 100.0
+    } else {
+        0.0
+    };
+    let _ = writeln!(
+        std::io::stderr(),
+        "[unlace {stage}] {done}/{total} ({pct:>5.1}%) — {rate:.1} fn/s, {elapsed:.1}s",
+    );
+}
+
+/// Stride at which we emit progress lines, chosen so a small fixture
+/// (≈14 functions) gets at least a handful of updates while a large
+/// binary (10k+) doesn't drown stderr.
+fn progress_stride(total: usize) -> usize {
+    match total {
+        0..=64 => 4,
+        65..=1024 => 32,
+        1025..=8192 => 128,
+        _ => 512,
+    }
+}
 
 pub fn run_batch(
     binary_path: &Path,
@@ -199,6 +257,11 @@ fn decompile_all_parallel(
     }
 
     let sorted: Vec<&FunctionEntry> = indexed.into_values().collect();
+    let total = sorted.len();
+    let stride = progress_stride(total);
+    let report = progress_enabled();
+    let done = AtomicUsize::new(0);
+    let started = Instant::now();
 
     sorted
         .par_iter()
@@ -213,6 +276,15 @@ fn decompile_all_parallel(
                 functions,
                 rtti,
             );
+            // Atomic counter so per-thread completion order doesn't
+            // affect what the progress line shows — `done` is a count,
+            // not an index. We emit a stderr line every `stride`
+            // completions; rayon's work-stealing distributes the
+            // strided fan-out reasonably across threads.
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            if report && (n % stride == 0 || n == total) {
+                report_progress("batch", n, total, started);
+            }
             BatchResult {
                 addr: entry.addr,
                 name: entry.name.clone(),
@@ -245,9 +317,34 @@ fn decompile_interproc(
     }
     let sorted: Vec<&FunctionEntry> = indexed.into_values().collect();
 
+    // Memory-bound check: interproc holds *every* function's SSA in
+    // memory simultaneously (a documented hazard — see comment on
+    // `decompile_interproc`). When the function count crosses the
+    // configured bound we emit a single warning so operators know
+    // *why* RSS will climb and have a knob to opt out (rerun without
+    // `--interproc` to fall back to the per-function path).
+    let interproc_bound = std::env::var("UNLACE_INTERPROC_MAX")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(DEFAULT_INTERPROC_FN_BOUND);
+    if sorted.len() > interproc_bound {
+        tracing::warn!(
+            functions = sorted.len(),
+            bound = interproc_bound,
+            "interproc memory bound exceeded — peak RSS will be roughly proportional to function count; \
+             set UNLACE_INTERPROC_MAX=<n> or rerun without --interproc to use the streaming per-function path",
+        );
+    }
+
+    let total_phase1 = sorted.len();
+    let stride = progress_stride(total_phase1);
+    let report = progress_enabled();
+    let done = AtomicUsize::new(0);
+    let started = Instant::now();
+
     // Phase 1: parallel lift + passes
     tracing::info!(
-        count = sorted.len(),
+        count = total_phase1,
         "interproc phase 1: lift + passes (parallel)"
     );
     let phase1: Vec<(u64, String, Result<SsaFunction, anyhow::Error>)> = sorted
@@ -261,6 +358,10 @@ fn decompile_interproc(
                 dwarf,
                 functions,
             );
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            if report && (n % stride == 0 || n == total_phase1) {
+                report_progress("interproc-phase1", n, total_phase1, started);
+            }
             (entry.addr, entry.name.clone(), r)
         })
         .collect();
@@ -320,6 +421,11 @@ fn decompile_interproc(
             (addr, name, ssa)
         })
         .collect();
+    let total_phase3 = emit_entries.len();
+    let stride_phase3 = progress_stride(total_phase3);
+    let done_phase3 = AtomicUsize::new(0);
+    let started_phase3 = Instant::now();
+
     let mut emit_results: Vec<BatchResult> = emit_entries
         .into_par_iter()
         .map(|(addr, name, mut ssa)| {
@@ -346,6 +452,10 @@ fn decompile_interproc(
                 functions,
                 rtti,
             );
+            let n = done_phase3.fetch_add(1, Ordering::Relaxed) + 1;
+            if report && (n % stride_phase3 == 0 || n == total_phase3) {
+                report_progress("interproc-phase3", n, total_phase3, started_phase3);
+            }
             BatchResult { addr, name, output }
         })
         .collect();
@@ -426,6 +536,60 @@ mod tests {
     fn fixture(name: &str) -> PathBuf {
         let manifest = env!("CARGO_MANIFEST_DIR");
         PathBuf::from(format!("{manifest}/../../fixtures/{name}"))
+    }
+
+    /// Progress strides must be monotone non-decreasing in `total` —
+    /// otherwise a moderately-sized batch could emit *more* progress
+    /// lines than a small one, which is confusing in CI logs. The
+    /// stride function is small enough that a four-point smoke check
+    /// is sufficient.
+    #[test]
+    fn progress_stride_is_reasonable() {
+        // Small batch: dense updates.
+        assert_eq!(progress_stride(14), 4);
+        // Mid batch: every ~32.
+        assert_eq!(progress_stride(500), 32);
+        // Large batch: every ~128.
+        assert_eq!(progress_stride(5000), 128);
+        // XL batch: sparse.
+        assert_eq!(progress_stride(50_000), 512);
+        // Monotone.
+        let prev = [
+            progress_stride(0),
+            progress_stride(64),
+            progress_stride(1024),
+            progress_stride(8192),
+            progress_stride(1_000_000),
+        ];
+        for w in prev.windows(2) {
+            assert!(w[0] <= w[1], "progress_stride not monotone: {prev:?}");
+        }
+    }
+
+    /// `progress_enabled` is purely an env-var read, but the default
+    /// (unset) must be off so we don't pollute golden stderr in
+    /// existing tests.
+    #[test]
+    fn progress_disabled_by_default() {
+        // SAFETY of env mutation: this test runs single-threaded
+        // relative to itself; rust's test harness can interleave with
+        // other tests reading env, but no other test in this file
+        // touches UNLACE_PROGRESS.
+        // SAFETY of env mutation in 2024 edition: set/remove_var is
+        // `unsafe` because mutating env mid-process can race with
+        // other threads reading getenv. We isolate by only touching a
+        // variable that no other test in this crate observes.
+        unsafe {
+            std::env::remove_var("UNLACE_PROGRESS");
+        }
+        assert!(!progress_enabled());
+        unsafe {
+            std::env::set_var("UNLACE_PROGRESS", "1");
+        }
+        assert!(progress_enabled());
+        unsafe {
+            std::env::remove_var("UNLACE_PROGRESS");
+        }
     }
 
     #[test]

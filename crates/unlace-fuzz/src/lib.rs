@@ -44,6 +44,11 @@ use unlace_cli::pipeline::{self, PipelineConfig};
 use unlace_lift::get_lifter;
 use unlace_loader::{ElfLoader, Loader};
 
+/// Persistent crash-corpus database. New crashes found by the fuzz
+/// runner are appended here and re-run by the workspace test suite as
+/// regression guards. See [`corpus`] for the storage layout.
+pub mod corpus;
+
 /// Maximum number of functions the harness will decompile per iteration.
 ///
 /// Fuzzers prize *throughput* — covering one new edge per million inputs
@@ -304,10 +309,7 @@ mod tests {
     /// Random bytes that don't begin with `\x7fELF` are rejected.
     #[test]
     fn random_garbage_returns_not_elf() {
-        assert_eq!(
-            fuzz_iteration(&[0xff; 64]),
-            FuzzResult::NotElf
-        );
+        assert_eq!(fuzz_iteration(&[0xff; 64]), FuzzResult::NotElf);
     }
 
     /// Synthetic panicking predicate: the input "crashes" iff it
@@ -324,9 +326,7 @@ mod tests {
         let mut input = vec![0u8; 100];
         input[40] = 0xCA;
         input[41] = 0xFE;
-        let predicate = |bytes: &[u8]| {
-            bytes.windows(2).any(|w| w == [0xCA, 0xFE])
-        };
+        let predicate = |bytes: &[u8]| bytes.windows(2).any(|w| w == [0xCA, 0xFE]);
         let minimised = minimise_crash_with(&input, predicate);
         // Smallest prefix that still contains the marker is
         // `input[..42]` (indices 0..=41 inclusive).

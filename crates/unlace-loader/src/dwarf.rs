@@ -767,8 +767,8 @@ fn extract_params_and_locals(
                 None => None,
             };
             let location_attr = entry.attr_value(DW_AT_location);
-            let frame_offset = location_attr.clone().and_then(decode_fbreg_offset);
-            let locations = match location_attr.clone() {
+            let frame_offset = location_attr.and_then(decode_fbreg_offset);
+            let locations = match location_attr {
                 Some(value) => extract_location_ranges(dwarf, unit, value)?,
                 None => Vec::new(),
             };
@@ -872,154 +872,171 @@ pub fn evaluate_simple_location(value: AttributeValue<R<'_>>) -> Option<SimpleLo
     evaluate_simple_location_bytes(bytes)
 }
 
+/// Apply `DW_OP_plus_uconst <k>` to the base location, folding the
+/// constant into compatible shapes (FrameOffset/RegisterPlus/Absolute).
+fn apply_plus_uconst(base: Option<SimpleLocation>, k: u64) -> Option<SimpleLocation> {
+    match base? {
+        SimpleLocation::FrameOffset(off) => Some(SimpleLocation::FrameOffset(off.saturating_add(k as i64))),
+        SimpleLocation::RegisterPlus(r, off) => {
+            Some(SimpleLocation::RegisterPlus(r, off.saturating_add(k as i64)))
+        }
+        SimpleLocation::Absolute(addr) => Some(SimpleLocation::Absolute(addr.wrapping_add(k))),
+        _ => None,
+    }
+}
+
+/// Read `DW_OP_implicit_value`'s ULEB128 length + raw byte payload.
+fn read_implicit_value(cursor: &[u8]) -> Option<(SimpleLocation, &[u8])> {
+    let (len, rest) = read_uleb128(cursor)?;
+    let len = len as usize;
+    if rest.len() < len {
+        return None;
+    }
+    Some((SimpleLocation::ImplicitValue(rest[..len].to_vec()), &rest[len..]))
+}
+
+/// Read `DW_OP_bregx` operands `<uleb reg> <sleb offset>` and emit a
+/// `RegisterPlus`. Returns `None` if `reg` overflows `u16`.
+fn read_bregx(cursor: &[u8]) -> Option<(SimpleLocation, &[u8])> {
+    let (r, rest) = read_uleb128(cursor)?;
+    if r > u16::MAX as u64 {
+        return None;
+    }
+    let (off, rest) = read_sleb128(rest)?;
+    Some((SimpleLocation::RegisterPlus(r as u16, off), rest))
+}
+
+/// Effect of decoding one DW_OP.
+///
+/// `UpdateBase` replaces the running `base` location.
+/// `Piece` appends a piece (`SimpleLocation`, size_in_bytes) to the
+/// composite accumulator and clears `base`.
+enum OpEffect {
+    /// Update `base`, advance cursor.
+    UpdateBase(Option<SimpleLocation>),
+    /// Append a piece to the composite accumulator, clear `base`.
+    Piece(SimpleLocation, u32),
+}
+
+fn decode_one_op(
+    op: u8,
+    cursor: &[u8],
+    base: Option<SimpleLocation>,
+) -> Option<(OpEffect, &[u8])> {
+    match op {
+        // DW_OP_addr — 8-byte little-endian absolute (64-bit form).
+        0x03 => {
+            if cursor.len() < 8 {
+                return None;
+            }
+            let mut buf = [0u8; 8];
+            buf.copy_from_slice(&cursor[..8]);
+            Some((
+                OpEffect::UpdateBase(Some(SimpleLocation::Absolute(u64::from_le_bytes(buf)))),
+                &cursor[8..],
+            ))
+        }
+        // DW_OP_constNu / DW_OP_constNs — standalone constants aren't
+        // representable in our single-value shape.
+        0x08..=0x0d => None,
+        // DW_OP_deref
+        0x06 => Some((
+            OpEffect::UpdateBase(Some(SimpleLocation::Indirect(Box::new(base?), 0))),
+            cursor,
+        )),
+        // DW_OP_plus_uconst <uleb>
+        0x23 => {
+            let (k, rest) = read_uleb128(cursor)?;
+            Some((OpEffect::UpdateBase(apply_plus_uconst(base, k)), rest))
+        }
+        // DW_OP_lit0..=DW_OP_lit31 — push small literal.
+        0x30..=0x4f => Some((
+            OpEffect::UpdateBase(Some(SimpleLocation::Absolute((op - 0x30) as u64))),
+            cursor,
+        )),
+        // DW_OP_regN
+        0x50..=0x6f => Some((
+            OpEffect::UpdateBase(Some(SimpleLocation::Register((op - 0x50) as u16))),
+            cursor,
+        )),
+        // DW_OP_bregN <sleb>
+        0x70..=0x8f => {
+            let (off, rest) = read_sleb128(cursor)?;
+            Some((
+                OpEffect::UpdateBase(Some(SimpleLocation::RegisterPlus((op - 0x70) as u16, off))),
+                rest,
+            ))
+        }
+        // DW_OP_regx <uleb>
+        0x90 => {
+            let (r, rest) = read_uleb128(cursor)?;
+            if r > u16::MAX as u64 {
+                return None;
+            }
+            Some((
+                OpEffect::UpdateBase(Some(SimpleLocation::Register(r as u16))),
+                rest,
+            ))
+        }
+        // DW_OP_fbreg <sleb>
+        0x91 => {
+            let (off, rest) = read_sleb128(cursor)?;
+            Some((
+                OpEffect::UpdateBase(Some(SimpleLocation::FrameOffset(off))),
+                rest,
+            ))
+        }
+        // DW_OP_bregx <uleb> <sleb>
+        0x92 => {
+            let (loc, rest) = read_bregx(cursor)?;
+            Some((OpEffect::UpdateBase(Some(loc)), rest))
+        }
+        // DW_OP_piece <uleb size_bytes>
+        0x93 => {
+            let (size_bytes, rest) = read_uleb128(cursor)?;
+            Some((OpEffect::Piece(base?, size_bytes as u32), rest))
+        }
+        // DW_OP_implicit_value <uleb len> <bytes>
+        0x9e => {
+            let (loc, rest) = read_implicit_value(cursor)?;
+            Some((OpEffect::UpdateBase(Some(loc)), rest))
+        }
+        // DW_OP_stack_value — wrap base in StackValue.
+        0x9f => Some((
+            OpEffect::UpdateBase(Some(SimpleLocation::StackValue(Box::new(base?)))),
+            cursor,
+        )),
+        // DW_OP_bit_piece <uleb size_bits> <uleb off_bits>
+        0x9d => {
+            let (size_bits, rest) = read_uleb128(cursor)?;
+            let (_off_bits, rest) = read_uleb128(rest)?;
+            Some((OpEffect::Piece(base?, size_bits.div_ceil(8) as u32), rest))
+        }
+        // Anything else is outside the conservative subset.
+        _ => None,
+    }
+}
+
 fn evaluate_simple_location_bytes(bytes: &[u8]) -> Option<SimpleLocation> {
     let mut cursor = bytes;
     let mut base: Option<SimpleLocation> = None;
     // Pieces accumulate across `DW_OP_piece` / `DW_OP_bit_piece` boundaries.
-    // When set, `base` is the *current* piece's location and `pieces`
-    // holds everything that came before. On final return we fold.
     let mut pieces: Option<Vec<(SimpleLocation, u32)>> = None;
 
     while !cursor.is_empty() {
         let op = cursor[0];
         cursor = &cursor[1..];
-        match op {
-            // DW_OP_addr (1) — 8-byte (LE) absolute target on 64-bit
-            // units. Some 32-bit producers emit a 4-byte value; we cover
-            // the common 8-byte form here and fall back to None for the
-            // 32-bit case rather than misread it.
-            0x03 => {
-                if cursor.len() < 8 {
-                    return None;
-                }
-                let mut buf = [0u8; 8];
-                buf.copy_from_slice(&cursor[..8]);
-                cursor = &cursor[8..];
-                base = Some(SimpleLocation::Absolute(u64::from_le_bytes(buf)));
+        let (effect, rest) = decode_one_op(op, cursor, base)?;
+        cursor = rest;
+        match effect {
+            OpEffect::UpdateBase(next) => base = next,
+            OpEffect::Piece(loc, size) => {
+                base = None;
+                pieces.get_or_insert_with(Vec::new).push((loc, size));
             }
-            // DW_OP_constNu / DW_OP_constNs — folded into base only when
-            // they precede a plus_uconst; for a standalone "the value
-            // *is* this constant" location we don't have a SimpleLocation
-            // variant, so just stop early.
-            0x08..=0x0d => return None,
-            // DW_OP_deref (0x06)
-            0x06 => {
-                let inner = base?;
-                base = Some(SimpleLocation::Indirect(Box::new(inner), 0));
-            }
-            // DW_OP_plus_uconst <uleb>: add an unsigned constant to the
-            // top of the stack. We model that by promoting `RegisterPlus`
-            // or `FrameOffset` accordingly.
-            0x23 => {
-                let (k, rest) = read_uleb128(cursor)?;
-                cursor = rest;
-                base = Some(match base {
-                    Some(SimpleLocation::FrameOffset(off)) => {
-                        SimpleLocation::FrameOffset(off.saturating_add(k as i64))
-                    }
-                    Some(SimpleLocation::RegisterPlus(r, off)) => {
-                        SimpleLocation::RegisterPlus(r, off.saturating_add(k as i64))
-                    }
-                    Some(SimpleLocation::Absolute(addr)) => {
-                        SimpleLocation::Absolute(addr.wrapping_add(k))
-                    }
-                    _ => return None,
-                });
-            }
-            // DW_OP_regN — value lives in register N (no offset).
-            // Registers 0..=31 are encoded directly as 0x50..=0x6f.
-            0x50..=0x6f => {
-                base = Some(SimpleLocation::Register((op - 0x50) as u16));
-            }
-            // DW_OP_bregN <sleb> — value at (regN + sleb).
-            // Registers 0..=31 are encoded directly as 0x70..=0x8f.
-            0x70..=0x8f => {
-                let (off, rest) = read_sleb128(cursor)?;
-                cursor = rest;
-                base = Some(SimpleLocation::RegisterPlus((op - 0x70) as u16, off));
-            }
-            // DW_OP_regx <uleb>
-            0x90 => {
-                let (r, rest) = read_uleb128(cursor)?;
-                cursor = rest;
-                let reg = if r <= u16::MAX as u64 { r as u16 } else { return None };
-                base = Some(SimpleLocation::Register(reg));
-            }
-            // DW_OP_fbreg <sleb>
-            0x91 => {
-                let (off, rest) = read_sleb128(cursor)?;
-                cursor = rest;
-                base = Some(SimpleLocation::FrameOffset(off));
-            }
-            // DW_OP_bregx <uleb> <sleb>
-            0x92 => {
-                let (r, rest) = read_uleb128(cursor)?;
-                cursor = rest;
-                let reg = if r <= u16::MAX as u64 { r as u16 } else { return None };
-                let (off, rest) = read_sleb128(cursor)?;
-                cursor = rest;
-                base = Some(SimpleLocation::RegisterPlus(reg, off));
-            }
-            // DW_OP_stack_value (0x9f): the previous expression *is* the
-            // value, not its address. Wrap the base in StackValue.
-            0x9f => {
-                let inner = base?;
-                base = Some(SimpleLocation::StackValue(Box::new(inner)));
-            }
-            // DW_OP_lit0..=DW_OP_lit31 (0x30..=0x4f): push small literal
-            // onto the implicit DWARF stack. We model them as a
-            // FrameOffset / synthetic register-plus expression only when
-            // immediately followed by stack_value; standalone lits aren't
-            // representable in our `SimpleLocation` shape, so stash them
-            // as an Absolute with the literal value — callers that see
-            // an `Absolute(N)` wrapped in `StackValue` know it's a lit.
-            0x30..=0x4f => {
-                let lit = (op - 0x30) as u64;
-                base = Some(SimpleLocation::Absolute(lit));
-            }
-            // DW_OP_implicit_value (0x9e) <ULEB length> <bytes>: the
-            // variable's value is the inline byte sequence.
-            0x9e => {
-                let (len, rest) = read_uleb128(cursor)?;
-                cursor = rest;
-                let len = len as usize;
-                if cursor.len() < len {
-                    return None;
-                }
-                let payload = cursor[..len].to_vec();
-                cursor = &cursor[len..];
-                base = Some(SimpleLocation::ImplicitValue(payload));
-            }
-            // DW_OP_piece (0x93) <ULEB size_bytes> / DW_OP_bit_piece
-            // (0x9d) <ULEB size_bits> <ULEB offset_bits>: composite
-            // location. Accumulate pieces into a Composite. The piece
-            // operator consumes the current base and the size; we
-            // collect into a Composite vector.
-            0x93 => {
-                let (size_bytes, rest) = read_uleb128(cursor)?;
-                cursor = rest;
-                let piece_loc = base.take()?;
-                pieces
-                    .get_or_insert_with(Vec::new)
-                    .push((piece_loc, size_bytes as u32));
-            }
-            0x9d => {
-                let (size_bits, rest) = read_uleb128(cursor)?;
-                cursor = rest;
-                let (_off_bits, rest) = read_uleb128(cursor)?;
-                cursor = rest;
-                let size_bytes = ((size_bits + 7) / 8) as u32;
-                let piece_loc = base.take()?;
-                pieces
-                    .get_or_insert_with(Vec::new)
-                    .push((piece_loc, size_bytes));
-            }
-            // Anything else is outside the conservative subset.
-            _ => return None,
         }
     }
-    // If we accumulated pieces, the final result is a Composite. Otherwise
-    // we return whatever base remains.
+
     match pieces {
         Some(list) => Some(SimpleLocation::Composite(list)),
         None => base,
@@ -1091,7 +1108,7 @@ fn extract_location_ranges<'a>(
     value: AttributeValue<R<'a>>,
 ) -> Result<Vec<gimli::Range>, gimli::Error> {
     let mut ranges = Vec::new();
-    if let Some(mut locations) = dwarf.attr_locations(unit, value.clone())? {
+    if let Some(mut locations) = dwarf.attr_locations(unit, value)? {
         while let Some(location) = locations.next()? {
             ranges.push(location.range);
         }

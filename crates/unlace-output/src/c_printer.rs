@@ -10358,8 +10358,8 @@ fn contains_identifier(haystack: &str, needle: &str) -> bool {
         let idx = start + pos;
         let before = idx.checked_sub(1).and_then(|i| bytes.get(i)).copied();
         let after = bytes.get(idx + needle_bytes.len()).copied();
-        let before_boundary = before.is_none_or(|b| !is_ident_byte(b));
-        let after_boundary = after.is_none_or(|b| !is_ident_byte(b));
+        let before_boundary = before.map_or(true, |b| !is_ident_byte(b));
+        let after_boundary = after.map_or(true, |b| !is_ident_byte(b));
         if before_boundary && after_boundary {
             return true;
         }

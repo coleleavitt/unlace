@@ -325,12 +325,13 @@ impl<'a> DyldCache<'a> {
     /// return an empty list.
     ///
     /// The fields read live at fixed offsets in the primary header:
-    ///   * 0x1c8 — `subCacheArrayOffset` (u32)
-    ///   * 0x1cc — `subCacheArrayCount`  (u32)
+    ///   - `0x1c8` — `subCacheArrayOffset` (u32)
+    ///   - `0x1cc` — `subCacheArrayCount`  (u32)
+    ///
     /// Each entry is 56 bytes:
-    ///   * uuid[16]
-    ///   * cacheVMOffset (u64)
-    ///   * fileSuffix[32] (NUL-terminated UTF-8)
+    ///   - `uuid[16]`
+    ///   - `cacheVMOffset` (u64)
+    ///   - `fileSuffix[32]` (NUL-terminated UTF-8)
     pub fn subcaches(&self) -> Vec<SubCacheEntry> {
         if self.data.len() < 0x1d0 {
             return Vec::new();
@@ -349,9 +350,9 @@ impl<'a> DyldCache<'a> {
             return Vec::new();
         }
         const ENTRY_SIZE: usize = 16 + 8 + 32;
-        let end = match off.checked_add(count.checked_mul(ENTRY_SIZE).unwrap_or(usize::MAX)) {
-            Some(v) => v,
-            None => return Vec::new(),
+        let total = count.saturating_mul(ENTRY_SIZE);
+        let Some(end) = off.checked_add(total) else {
+            return Vec::new();
         };
         if end > self.data.len() {
             return Vec::new();

@@ -1186,13 +1186,7 @@ fn resolve_field_types(
             continue;
         }
         let ti = raw_field.field_type;
-        let resolved = if let Some(prim) = primitive_ti_to_type(ti) {
-            Some(prim)
-        } else if let Some(user) = by_index.get(&ti) {
-            Some(user.clone())
-        } else {
-            None
-        };
+        let resolved = primitive_ti_to_type(ti).or_else(|| by_index.get(&ti).cloned());
         if let Some(r) = resolved {
             fields_mut[i].ty = r;
             changed = true;

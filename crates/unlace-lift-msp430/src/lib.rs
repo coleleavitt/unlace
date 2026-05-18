@@ -221,16 +221,16 @@ fn lift_format_ii_two_op(word: u16, bytes: &[u8], addr: u64) -> Result<LiftedIns
 
     let dst = reg_vn(dst_reg);
     let (ir_op, writes_dst) = match opcode {
-        0x4 => (IrOp::Copy, true),   // MOV — single-input
-        0x5 => (IrOp::IntAdd, true), // ADD
-        0x6 => (IrOp::IntAdd, true), // ADDC
-        0x7 => (IrOp::IntSub, true), // SUBC
-        0x8 => (IrOp::IntSub, true), // SUB
+        0x4 => (IrOp::Copy, true),    // MOV — single-input
+        0x5 => (IrOp::IntAdd, true),  // ADD
+        0x6 => (IrOp::IntAdd, true),  // ADDC
+        0x7 => (IrOp::IntSub, true),  // SUBC
+        0x8 => (IrOp::IntSub, true),  // SUB
         0x9 => (IrOp::IntSub, false), // CMP — flags only
-        0xA => (IrOp::IntAdd, true), // DADD — BCD add modelled as IntAdd
+        0xA => (IrOp::IntAdd, true),  // DADD — BCD add modelled as IntAdd
         0xB => (IrOp::IntAnd, false), // BIT — test, flags only
-        0xC => (IrOp::IntAnd, true), // BIC — dst &= ~src (modelled as IntAnd, mask pass picks up
-                                     // the inversion when it sees the surrounding pattern)
+        0xC => (IrOp::IntAnd, true),  // BIC — dst &= ~src (modelled as IntAnd, mask pass picks up
+        // the inversion when it sees the surrounding pattern)
         0xD => (IrOp::IntOr, true),  // BIS — dst |= src
         0xE => (IrOp::IntXor, true), // XOR
         0xF => (IrOp::IntAnd, true), // AND
@@ -246,10 +246,14 @@ fn lift_format_ii_two_op(word: u16, bytes: &[u8], addr: u64) -> Result<LiftedIns
         }
     };
 
-    let target = if writes_dst { dst } else { Varnode::unique(0x1000, REG_SIZE) };
+    let target = if writes_dst {
+        dst
+    } else {
+        Varnode::unique(0x1000, REG_SIZE)
+    };
     let inputs = match opcode {
-        0x4 => smallvec![src_vn],         // MOV: dst = src
-        _ => smallvec![dst, src_vn],      // dst <op>= src
+        0x4 => smallvec![src_vn],    // MOV: dst = src
+        _ => smallvec![dst, src_vn], // dst <op>= src
     };
     Ok(LiftedInsn {
         ir_ops: vec![IrInsn::with_output(ir_op, target, inputs, addr)],
@@ -294,11 +298,7 @@ fn lift_format_iii_jump(word: u16, addr: u64) -> Result<LiftedInsn, LiftError> {
                 smallvec![reg_vn(2), const_vn(cc as u64)],
                 addr,
             ),
-            IrInsn::without_output(
-                IrOp::Cbranch,
-                smallvec![ram_target(target), cond],
-                addr,
-            ),
+            IrInsn::without_output(IrOp::Cbranch, smallvec![ram_target(target), cond], addr),
         ],
         len: 2,
     })

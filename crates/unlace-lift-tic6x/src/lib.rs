@@ -99,7 +99,10 @@ fn build_register_file() -> RegisterFile {
 #[inline]
 fn gpr(bank: u8, idx: u8, size: u8) -> Varnode {
     let base = if bank == 0 { BANK_A_BASE } else { BANK_B_BASE };
-    Varnode::reg(base + ((idx as u64) % REGS_PER_BANK as u64) * REG_SIZE as u64, size)
+    Varnode::reg(
+        base + ((idx as u64) % REGS_PER_BANK as u64) * REG_SIZE as u64,
+        size,
+    )
 }
 
 #[inline]
@@ -195,7 +198,12 @@ fn lift_load(
     if sext {
         let raw = tmp(1, size);
         ops.push(IrInsn::with_output(IrOp::Load, raw, smallvec![ea], addr));
-        ops.push(IrInsn::with_output(IrOp::IntSext, dst, smallvec![raw], addr));
+        ops.push(IrInsn::with_output(
+            IrOp::IntSext,
+            dst,
+            smallvec![raw],
+            addr,
+        ));
     } else {
         ops.push(IrInsn::with_output(IrOp::Load, dst, smallvec![ea], addr));
     }
@@ -272,9 +280,11 @@ impl Lifter for TiC6xLifter {
             OP_XOR => binary(IrOp::IntXor, d, s1, s2, addr),
             OP_SHL => binary(IrOp::IntLeft, d, s1, s2, addr),
             OP_SHR => binary(IrOp::IntSright, d, s1, s2, addr),
-            OP_LDW => lift_load(d, s1, insn.imm10, REG_SIZE, /*sext=*/false, addr),
+            OP_LDW => lift_load(d, s1, insn.imm10, REG_SIZE, /*sext=*/ false, addr),
             OP_STW => lift_store(s1, s2, insn.imm10, REG_SIZE, addr),
-            OP_LDB => lift_load(d, s1, insn.imm10, /*size=*/1, /*sext=*/true, addr),
+            OP_LDB => lift_load(
+                d, s1, insn.imm10, /*size=*/ 1, /*sext=*/ true, addr,
+            ),
             OP_STB => lift_store_byte(s1, s2, insn.imm10, addr),
             OP_B_REG => vec![IrInsn::without_output(IrOp::Branchind, smallvec![s1], addr)],
             OP_B_LABEL => {

@@ -83,7 +83,11 @@ impl DiskCache {
     /// growing pathologically large.
     pub fn entry_path(&self, key: &CacheKey) -> std::path::PathBuf {
         let digest = key.digest();
-        let prefix = if digest.len() >= 2 { &digest[..2] } else { &digest[..] };
+        let prefix = if digest.len() >= 2 {
+            &digest[..2]
+        } else {
+            &digest[..]
+        };
         self.root.join(prefix).join(&digest)
     }
 
@@ -172,10 +176,7 @@ mod tests {
     /// prefix-sharded path.
     #[test]
     fn disk_cache_round_trip() {
-        let dir = std::env::temp_dir().join(format!(
-            "unlace_disk_cache_{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("unlace_disk_cache_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
 
         let cache = DiskCache::new(&dir);
@@ -188,7 +189,12 @@ mod tests {
         // Path lives under <root>/<digest-prefix>/<digest>.
         let path = cache.entry_path(&key);
         assert!(path.exists(), "entry file must exist after put");
-        let prefix = path.parent().unwrap().file_name().unwrap().to_string_lossy();
+        let prefix = path
+            .parent()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy();
         assert_eq!(prefix.len(), 2, "prefix shard must be 2 chars: {prefix}");
 
         let got = cache.get(&key).expect("get").expect("hit");
@@ -204,10 +210,8 @@ mod tests {
     /// an error.
     #[test]
     fn disk_cache_miss_is_ok_none() {
-        let dir = std::env::temp_dir().join(format!(
-            "unlace_disk_cache_miss_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("unlace_disk_cache_miss_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let cache = DiskCache::new(&dir);
         let key = CacheKey::new("missing", 0x1, 1);

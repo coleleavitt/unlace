@@ -829,8 +829,11 @@ mod tests {
     #[test]
     fn immediate_alu_dispatches_by_subop() {
         let lifter = HexagonLifter::new();
-        for (subop, expected) in [(0x0u8, IrOp::IntAdd), (0x1, IrOp::IntSub), (0x2, IrOp::IntAnd)]
-        {
+        for (subop, expected) in [
+            (0x0u8, IrOp::IntAdd),
+            (0x1, IrOp::IntSub),
+            (0x2, IrOp::IntAnd),
+        ] {
             let bytes = word(0x04, subop, 5, 3, 0, 0b11);
             let lifted = lifter.lift_insn(&bytes, 0x1000).unwrap();
             assert_eq!(

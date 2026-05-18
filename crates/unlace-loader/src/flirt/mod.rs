@@ -496,7 +496,11 @@ mod tests {
         let m_hi = db.match_function_with_refs(&bytes_a, &resolved).unwrap();
         assert_eq!(m_hi.name, "calls_malloc");
         assert!(m_hi.refs_matched);
-        assert!((m_hi.confidence - 1.0).abs() < 1e-6, "expected 1.0 got {}", m_hi.confidence);
+        assert!(
+            (m_hi.confidence - 1.0).abs() < 1e-6,
+            "expected 1.0 got {}",
+            m_hi.confidence
+        );
         assert_eq!(m_hi.signature_id, 0);
 
         // Low-confidence fallback: byte prefix matches sig 1 but no
@@ -507,7 +511,11 @@ mod tests {
             .unwrap();
         assert_eq!(m_lo.name, "calls_free");
         assert!(!m_lo.refs_matched);
-        assert!((m_lo.confidence - 0.5).abs() < 1e-6, "expected 0.5 got {}", m_lo.confidence);
+        assert!(
+            (m_lo.confidence - 0.5).abs() < 1e-6,
+            "expected 0.5 got {}",
+            m_lo.confidence
+        );
         assert_eq!(m_lo.signature_id, 1);
     }
 

@@ -527,7 +527,10 @@ mod tests {
     #[test]
     fn pe_loader_flags_uefi_subsystem() {
         for &(raw, expected) in &[
-            (pe::IMAGE_SUBSYSTEM_EFI_APPLICATION, UefiSubsystem::Application),
+            (
+                pe::IMAGE_SUBSYSTEM_EFI_APPLICATION,
+                UefiSubsystem::Application,
+            ),
             (
                 pe::IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER,
                 UefiSubsystem::BootServiceDriver,

@@ -98,7 +98,11 @@ where
     // pass name `Callind` chains that narrow to an IAT slot.
     let iat_imports = build_iat_imports::<Pe>(&file);
 
-    let pe_mitigations = Some(parse_pe_mitigations::<Pe>(&file, data, load_config.as_ref()));
+    let pe_mitigations = Some(parse_pe_mitigations::<Pe>(
+        &file,
+        data,
+        load_config.as_ref(),
+    ));
 
     let mut image = BinaryImage {
         arch,

@@ -424,12 +424,21 @@ pub fn jar_list_classes(jar_bytes: &[u8]) -> Option<Vec<JarClassEntry>> {
     if eocd_offset + 22 > jar_bytes.len() {
         return None;
     }
-    let cd_entries =
-        u16::from_le_bytes(jar_bytes[eocd_offset + 10..eocd_offset + 12].try_into().ok()?) as usize;
-    let cd_size =
-        u32::from_le_bytes(jar_bytes[eocd_offset + 12..eocd_offset + 16].try_into().ok()?) as usize;
-    let cd_offset =
-        u32::from_le_bytes(jar_bytes[eocd_offset + 16..eocd_offset + 20].try_into().ok()?) as usize;
+    let cd_entries = u16::from_le_bytes(
+        jar_bytes[eocd_offset + 10..eocd_offset + 12]
+            .try_into()
+            .ok()?,
+    ) as usize;
+    let cd_size = u32::from_le_bytes(
+        jar_bytes[eocd_offset + 12..eocd_offset + 16]
+            .try_into()
+            .ok()?,
+    ) as usize;
+    let cd_offset = u32::from_le_bytes(
+        jar_bytes[eocd_offset + 16..eocd_offset + 20]
+            .try_into()
+            .ok()?,
+    ) as usize;
     if cd_offset + cd_size > jar_bytes.len() {
         return None;
     }
@@ -443,18 +452,16 @@ pub fn jar_list_classes(jar_bytes: &[u8]) -> Option<Vec<JarClassEntry>> {
         if jar_bytes[cursor..cursor + 4] != CDH_SIGNATURE {
             return None;
         }
-        let uncompressed_size = u32::from_le_bytes(
-            jar_bytes[cursor + 24..cursor + 28].try_into().ok()?,
-        ) as u64;
+        let uncompressed_size =
+            u32::from_le_bytes(jar_bytes[cursor + 24..cursor + 28].try_into().ok()?) as u64;
         let name_len =
             u16::from_le_bytes(jar_bytes[cursor + 28..cursor + 30].try_into().ok()?) as usize;
         let extra_len =
             u16::from_le_bytes(jar_bytes[cursor + 30..cursor + 32].try_into().ok()?) as usize;
         let comment_len =
             u16::from_le_bytes(jar_bytes[cursor + 32..cursor + 34].try_into().ok()?) as usize;
-        let local_header_offset = u32::from_le_bytes(
-            jar_bytes[cursor + 42..cursor + 46].try_into().ok()?,
-        ) as u64;
+        let local_header_offset =
+            u32::from_le_bytes(jar_bytes[cursor + 42..cursor + 46].try_into().ok()?) as u64;
         let name_start = cursor + 46;
         let name_end = name_start + name_len;
         if name_end > jar_bytes.len() {
@@ -794,7 +801,9 @@ mod tests {
         assert!(matches!(s0.kind, SymbolKind::Function));
         assert!(matches!(s1.kind, SymbolKind::Function));
         assert_eq!(
-            bin.string_table.get(&0xFFFF_FFFF_FFFF_FF02).map(|s| s.as_str()),
+            bin.string_table
+                .get(&0xFFFF_FFFF_FFFF_FF02)
+                .map(|s| s.as_str()),
             Some("MyClass")
         );
     }

@@ -431,7 +431,9 @@ mod tests {
     fn test_branch() {
         let l = AppleAgxLifter::new();
         // Branch forward by 0x10 from addr 0x1000 → target = 0x1000 + 4 + 0x10 = 0x1014
-        let r = l.lift_insn(&encode(OP_BRANCH, 0, 0, 0, 0x10), 0x1000).unwrap();
+        let r = l
+            .lift_insn(&encode(OP_BRANCH, 0, 0, 0, 0x10), 0x1000)
+            .unwrap();
         assert_eq!(r.ir_ops[0].op, IrOp::Branch);
         assert_eq!(r.ir_ops[0].inputs[0], ram_target(0x1014));
     }

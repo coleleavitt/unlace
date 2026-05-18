@@ -187,10 +187,7 @@ mod tests {
         let bytes: Vec<u8> = (0..1024u32).flat_map(|n| n.to_le_bytes()).collect();
         let path = write_fixture("identical", &bytes);
         let heap_view = std::fs::read(&path).expect("read");
-        let mmap_view = BinaryInput::open(&path)
-            .expect("open")
-            .as_bytes()
-            .to_vec();
+        let mmap_view = BinaryInput::open(&path).expect("open").as_bytes().to_vec();
         let _ = std::fs::remove_file(&path);
         assert_eq!(heap_view, mmap_view);
     }

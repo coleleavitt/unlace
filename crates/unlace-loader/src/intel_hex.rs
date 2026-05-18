@@ -586,9 +586,6 @@ mod tests {
         let sec = &bin.sections[0];
         assert_eq!(sec.name, ".text");
         assert_eq!(sec.vaddr, 0);
-        assert_eq!(
-            sec.data,
-            (0u8..16).collect::<Vec<u8>>()
-        );
+        assert_eq!(sec.data, (0u8..16).collect::<Vec<u8>>());
     }
 }

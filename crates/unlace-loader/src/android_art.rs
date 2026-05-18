@@ -261,10 +261,7 @@ pub fn parse_art_header(data: &[u8]) -> Result<ArtHeader, ArtError> {
 
     // Version string at offset 4..8.
     let version_bytes = &data[4..8];
-    let version_end = version_bytes
-        .iter()
-        .position(|&b| b == 0)
-        .unwrap_or(4);
+    let version_end = version_bytes.iter().position(|&b| b == 0).unwrap_or(4);
     let version = String::from_utf8_lossy(&version_bytes[..version_end]).to_string();
 
     // For simplicity, parse the common 32-bit layout first. This covers most
@@ -346,7 +343,10 @@ pub fn parse_art(data: &[u8]) -> Result<ArtFile, ArtError> {
     let mut methods = Vec::new();
 
     // Extract method entries from the ArtMethods section if present.
-    if let Some(methods_section) = sections.iter().find(|s| s.kind == ArtSectionKind::ArtMethods) {
+    if let Some(methods_section) = sections
+        .iter()
+        .find(|s| s.kind == ArtSectionKind::ArtMethods)
+    {
         let start = methods_section.offset as usize;
         let end = start + methods_section.size as usize;
         if end <= data.len() {
@@ -355,7 +355,10 @@ pub fn parse_art(data: &[u8]) -> Result<ArtFile, ArtError> {
     }
 
     // Extract class entries from the ClassTable section if present.
-    if let Some(class_section) = sections.iter().find(|s| s.kind == ArtSectionKind::ClassTable) {
+    if let Some(class_section) = sections
+        .iter()
+        .find(|s| s.kind == ArtSectionKind::ClassTable)
+    {
         let start = class_section.offset as usize;
         let end = start + class_section.size as usize;
         if end <= data.len() {

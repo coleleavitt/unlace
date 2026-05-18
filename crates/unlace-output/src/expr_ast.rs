@@ -44,7 +44,10 @@ pub enum CExpr {
 
     /// C-style cast: `(T)(inner)`.  The inner expression is always
     /// parenthesized to avoid precedence surprises with chained casts.
-    Cast { ty: String, inner: Box<CExpr> },
+    Cast {
+        ty: String,
+        inner: Box<CExpr>,
+    },
 
     /// Member access — `obj->field` when `arrow`, otherwise `obj.field`.
     /// Postfix; binds tightest.
@@ -55,7 +58,10 @@ pub enum CExpr {
     },
 
     /// Array subscript — `arr[idx]`.  Postfix.
-    Index { arr: Box<CExpr>, idx: Box<CExpr> },
+    Index {
+        arr: Box<CExpr>,
+        idx: Box<CExpr>,
+    },
 
     /// Pointer dereference — `*p`.  Unary prefix.
     Deref(Box<CExpr>),
@@ -81,7 +87,10 @@ pub enum CExpr {
     /// IDA-style narrowing coercion — `(_DWORD)x`, `(_QWORD)x`, etc.
     /// Semantically a cast, but kept distinct so the printer can apply
     /// IDA-specific style rules without scanning cast strings.
-    Coerce { kind: CoerceKind, inner: Box<CExpr> },
+    Coerce {
+        kind: CoerceKind,
+        inner: Box<CExpr>,
+    },
 
     /// IDA pseudo-macro — `LOBYTE(x)`, `HIDWORD(x)`, etc.  Printed as a
     /// function call but identified separately so future passes can
@@ -114,11 +123,17 @@ pub enum CExpr {
     PostDec(Box<CExpr>),
 
     /// `lhs , rhs` — sequence point + result is `rhs`. IDA `cot_comma`.
-    Comma { lhs: Box<CExpr>, rhs: Box<CExpr> },
+    Comma {
+        lhs: Box<CExpr>,
+        rhs: Box<CExpr>,
+    },
 
     /// `lhs = rhs`. Right-associative; side-effecting.
     /// IDA `cot_asg`.
-    Assign { lhs: Box<CExpr>, rhs: Box<CExpr> },
+    Assign {
+        lhs: Box<CExpr>,
+        rhs: Box<CExpr>,
+    },
 
     /// `lhs <op>= rhs` — compound assignment. `op` is one of
     /// `"+"`, `"-"`, `"*"`, `"/"`, `"%"`, `"<<"`, `">>"`, `"&"`, `"|"`,
@@ -148,7 +163,10 @@ pub enum CExpr {
     /// Integer-typed function id used in indirect call rewrites.
     /// IDA `cot_fnum`. Rendered as `(name@addr)` so the address is
     /// visible while still pointing at a name.
-    FuncId { name: String, addr: u64 },
+    FuncId {
+        name: String,
+        addr: u64,
+    },
 
     /// `({ … })` GCC statement expression. Body is rendered as a
     /// `{ stmt; stmt; expr }` block; this CExpr carries only the
@@ -164,7 +182,10 @@ pub enum CExpr {
     /// IDA `cot_obj` — reference to a global object at a known
     /// address. The name is the human-readable label; the address is
     /// preserved so cross-references survive.
-    Obj { name: String, addr: u64 },
+    Obj {
+        name: String,
+        addr: u64,
+    },
 
     /// IDA `cot_empty` (0) — sentinel for an absent expression.
     /// Renders as the empty string.
@@ -176,7 +197,10 @@ pub enum CExpr {
 
     /// IDA `cot_var` (8) — local variable reference. `idx` is the
     /// lvar id for cross-reference; only `name` is rendered.
-    Var { name: String, idx: u32 },
+    Var {
+        name: String,
+        idx: u32,
+    },
 
     /// IDA `cot_num` (9) — typed integer literal.
     Num {
@@ -216,7 +240,10 @@ pub enum CExpr {
     /// `(lhs - rhs)` with a trailing `/* ptrdiff */` hint; future
     /// passes can fold the `/ sizeof(*lhs)` divisor when the pointee
     /// type is known.
-    PtrDiff { lhs: Box<CExpr>, rhs: Box<CExpr> },
+    PtrDiff {
+        lhs: Box<CExpr>,
+        rhs: Box<CExpr>,
+    },
 }
 
 /// Narrowing coercion kinds for IDA-style casts.
@@ -258,12 +285,7 @@ pub fn substitute_lit(expr: CExpr, name: &str, replacement: &CExpr) -> (CExpr, u
     (out, hits)
 }
 
-fn substitute_lit_inner(
-    expr: CExpr,
-    name: &str,
-    replacement: &CExpr,
-    hits: &mut usize,
-) -> CExpr {
+fn substitute_lit_inner(expr: CExpr, name: &str, replacement: &CExpr, hits: &mut usize) -> CExpr {
     match expr {
         CExpr::Lit(s) if s == name => {
             *hits += 1;
@@ -283,9 +305,12 @@ fn substitute_lit_inner(
             arr: Box::new(substitute_lit_inner(*arr, name, replacement, hits)),
             idx: Box::new(substitute_lit_inner(*idx, name, replacement, hits)),
         },
-        CExpr::Deref(inner) => {
-            CExpr::Deref(Box::new(substitute_lit_inner(*inner, name, replacement, hits)))
-        }
+        CExpr::Deref(inner) => CExpr::Deref(Box::new(substitute_lit_inner(
+            *inner,
+            name,
+            replacement,
+            hits,
+        ))),
         CExpr::AddrOf(inner) => CExpr::AddrOf(Box::new(substitute_lit_inner(
             *inner,
             name,
@@ -324,21 +349,36 @@ fn substitute_lit_inner(
             then_branch: Box::new(substitute_lit_inner(*then_branch, name, replacement, hits)),
             else_branch: Box::new(substitute_lit_inner(*else_branch, name, replacement, hits)),
         },
-        CExpr::Sizeof(inner) => {
-            CExpr::Sizeof(Box::new(substitute_lit_inner(*inner, name, replacement, hits)))
-        }
-        CExpr::PreInc(inner) => {
-            CExpr::PreInc(Box::new(substitute_lit_inner(*inner, name, replacement, hits)))
-        }
-        CExpr::PreDec(inner) => {
-            CExpr::PreDec(Box::new(substitute_lit_inner(*inner, name, replacement, hits)))
-        }
-        CExpr::PostInc(inner) => {
-            CExpr::PostInc(Box::new(substitute_lit_inner(*inner, name, replacement, hits)))
-        }
-        CExpr::PostDec(inner) => {
-            CExpr::PostDec(Box::new(substitute_lit_inner(*inner, name, replacement, hits)))
-        }
+        CExpr::Sizeof(inner) => CExpr::Sizeof(Box::new(substitute_lit_inner(
+            *inner,
+            name,
+            replacement,
+            hits,
+        ))),
+        CExpr::PreInc(inner) => CExpr::PreInc(Box::new(substitute_lit_inner(
+            *inner,
+            name,
+            replacement,
+            hits,
+        ))),
+        CExpr::PreDec(inner) => CExpr::PreDec(Box::new(substitute_lit_inner(
+            *inner,
+            name,
+            replacement,
+            hits,
+        ))),
+        CExpr::PostInc(inner) => CExpr::PostInc(Box::new(substitute_lit_inner(
+            *inner,
+            name,
+            replacement,
+            hits,
+        ))),
+        CExpr::PostDec(inner) => CExpr::PostDec(Box::new(substitute_lit_inner(
+            *inner,
+            name,
+            replacement,
+            hits,
+        ))),
         CExpr::Comma { lhs, rhs } => CExpr::Comma {
             lhs: Box::new(substitute_lit_inner(*lhs, name, replacement, hits)),
             rhs: Box::new(substitute_lit_inner(*rhs, name, replacement, hits)),
@@ -352,9 +392,12 @@ fn substitute_lit_inner(
             lhs: Box::new(substitute_lit_inner(*lhs, name, replacement, hits)),
             rhs: Box::new(substitute_lit_inner(*rhs, name, replacement, hits)),
         },
-        CExpr::Neg(inner) => {
-            CExpr::Neg(Box::new(substitute_lit_inner(*inner, name, replacement, hits)))
-        }
+        CExpr::Neg(inner) => CExpr::Neg(Box::new(substitute_lit_inner(
+            *inner,
+            name,
+            replacement,
+            hits,
+        ))),
         CExpr::LogicalNot(inner) => CExpr::LogicalNot(Box::new(substitute_lit_inner(
             *inner,
             name,
@@ -375,10 +418,7 @@ fn substitute_lit_inner(
                 .collect(),
         },
         // Leaf-like: no nested CExpr → no substitution.
-        CExpr::FuncId { .. }
-        | CExpr::StmtExpr(_)
-        | CExpr::Str(_)
-        | CExpr::Obj { .. } => expr,
+        CExpr::FuncId { .. } | CExpr::StmtExpr(_) | CExpr::Str(_) | CExpr::Obj { .. } => expr,
         // §4 leaves are also opaque w.r.t. lit substitution; the `Var`
         // variant intentionally is *not* substituted by lit-name because
         // the lit-substitution helper targets `Lit(name)` only.
@@ -1006,7 +1046,11 @@ impl fmt::Display for CExpr {
             CExpr::Empty => Ok(()),
             CExpr::Label(n) => write!(f, "LABEL_{n}"),
             CExpr::Var { name, .. } => f.write_str(name),
-            CExpr::Num { value, signed, width } => {
+            CExpr::Num {
+                value,
+                signed,
+                width,
+            } => {
                 // Choose decimal vs hex by magnitude. Values above 0xff
                 // get the hex form (matches the IDA default).
                 let signed_value = if *signed && *width <= 8 {
@@ -1147,108 +1191,273 @@ impl CExpr {
     // implements it. No enum bloat: most cot_* nodes share variants
     // via `Binary { op }` / `CompoundAssign { op }` dispatch.
 
-    pub fn cot_empty() -> Self { CExpr::Empty }
+    pub fn cot_empty() -> Self {
+        CExpr::Empty
+    }
     pub fn cot_comma(lhs: CExpr, rhs: CExpr) -> Self {
-        CExpr::Comma { lhs: Box::new(lhs), rhs: Box::new(rhs) }
+        CExpr::Comma {
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        }
     }
     pub fn cot_asg(lhs: CExpr, rhs: CExpr) -> Self {
-        CExpr::Assign { lhs: Box::new(lhs), rhs: Box::new(rhs) }
+        CExpr::Assign {
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        }
     }
-    pub fn cot_asgbor(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("|", lhs, rhs) }
-    pub fn cot_asgxor(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("^", lhs, rhs) }
-    pub fn cot_asgband(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("&", lhs, rhs) }
-    pub fn cot_asgadd(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("+", lhs, rhs) }
-    pub fn cot_asgsub(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("-", lhs, rhs) }
-    pub fn cot_asgmul(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("*", lhs, rhs) }
-    pub fn cot_asgsshr(lhs: CExpr, rhs: CExpr) -> Self { Self::compound(">>", lhs, rhs) }
-    pub fn cot_asgushr(lhs: CExpr, rhs: CExpr) -> Self { Self::compound(">>", lhs, rhs) }
-    pub fn cot_asgshl(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("<<", lhs, rhs) }
-    pub fn cot_asgsdiv(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("/", lhs, rhs) }
-    pub fn cot_asgudiv(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("/", lhs, rhs) }
-    pub fn cot_asgsmod(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("%", lhs, rhs) }
-    pub fn cot_asgumod(lhs: CExpr, rhs: CExpr) -> Self { Self::compound("%", lhs, rhs) }
+    pub fn cot_asgbor(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("|", lhs, rhs)
+    }
+    pub fn cot_asgxor(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("^", lhs, rhs)
+    }
+    pub fn cot_asgband(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("&", lhs, rhs)
+    }
+    pub fn cot_asgadd(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("+", lhs, rhs)
+    }
+    pub fn cot_asgsub(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("-", lhs, rhs)
+    }
+    pub fn cot_asgmul(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("*", lhs, rhs)
+    }
+    pub fn cot_asgsshr(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound(">>", lhs, rhs)
+    }
+    pub fn cot_asgushr(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound(">>", lhs, rhs)
+    }
+    pub fn cot_asgshl(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("<<", lhs, rhs)
+    }
+    pub fn cot_asgsdiv(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("/", lhs, rhs)
+    }
+    pub fn cot_asgudiv(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("/", lhs, rhs)
+    }
+    pub fn cot_asgsmod(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("%", lhs, rhs)
+    }
+    pub fn cot_asgumod(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::compound("%", lhs, rhs)
+    }
     pub fn cot_tern(c: CExpr, t: CExpr, e: CExpr) -> Self {
-        CExpr::Ternary { cond: Box::new(c), then_branch: Box::new(t), else_branch: Box::new(e) }
+        CExpr::Ternary {
+            cond: Box::new(c),
+            then_branch: Box::new(t),
+            else_branch: Box::new(e),
+        }
     }
-    pub fn cot_lor(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("||", lhs, rhs) }
-    pub fn cot_land(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("&&", lhs, rhs) }
-    pub fn cot_bor(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("|", lhs, rhs) }
-    pub fn cot_xor(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("^", lhs, rhs) }
-    pub fn cot_band(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("&", lhs, rhs) }
-    pub fn cot_eq(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("==", lhs, rhs) }
-    pub fn cot_ne(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("!=", lhs, rhs) }
-    pub fn cot_sge(lhs: CExpr, rhs: CExpr) -> Self { Self::binary(">=", lhs, rhs) }
-    pub fn cot_uge(lhs: CExpr, rhs: CExpr) -> Self { Self::binary(">=", lhs, rhs) }
-    pub fn cot_sle(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("<=", lhs, rhs) }
-    pub fn cot_ule(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("<=", lhs, rhs) }
-    pub fn cot_sgt(lhs: CExpr, rhs: CExpr) -> Self { Self::binary(">", lhs, rhs) }
-    pub fn cot_ugt(lhs: CExpr, rhs: CExpr) -> Self { Self::binary(">", lhs, rhs) }
-    pub fn cot_slt(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("<", lhs, rhs) }
-    pub fn cot_ult(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("<", lhs, rhs) }
-    pub fn cot_sshr(lhs: CExpr, rhs: CExpr) -> Self { Self::binary(">>", lhs, rhs) }
-    pub fn cot_ushr(lhs: CExpr, rhs: CExpr) -> Self { Self::binary(">>", lhs, rhs) }
-    pub fn cot_shl(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("<<", lhs, rhs) }
-    pub fn cot_add(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("+", lhs, rhs) }
-    pub fn cot_sub(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("-", lhs, rhs) }
-    pub fn cot_mul(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("*", lhs, rhs) }
-    pub fn cot_sdiv(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("/", lhs, rhs) }
-    pub fn cot_udiv(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("/", lhs, rhs) }
-    pub fn cot_smod(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("%", lhs, rhs) }
-    pub fn cot_umod(lhs: CExpr, rhs: CExpr) -> Self { Self::binary("%", lhs, rhs) }
+    pub fn cot_lor(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("||", lhs, rhs)
+    }
+    pub fn cot_land(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("&&", lhs, rhs)
+    }
+    pub fn cot_bor(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("|", lhs, rhs)
+    }
+    pub fn cot_xor(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("^", lhs, rhs)
+    }
+    pub fn cot_band(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("&", lhs, rhs)
+    }
+    pub fn cot_eq(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("==", lhs, rhs)
+    }
+    pub fn cot_ne(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("!=", lhs, rhs)
+    }
+    pub fn cot_sge(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary(">=", lhs, rhs)
+    }
+    pub fn cot_uge(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary(">=", lhs, rhs)
+    }
+    pub fn cot_sle(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("<=", lhs, rhs)
+    }
+    pub fn cot_ule(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("<=", lhs, rhs)
+    }
+    pub fn cot_sgt(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary(">", lhs, rhs)
+    }
+    pub fn cot_ugt(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary(">", lhs, rhs)
+    }
+    pub fn cot_slt(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("<", lhs, rhs)
+    }
+    pub fn cot_ult(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("<", lhs, rhs)
+    }
+    pub fn cot_sshr(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary(">>", lhs, rhs)
+    }
+    pub fn cot_ushr(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary(">>", lhs, rhs)
+    }
+    pub fn cot_shl(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("<<", lhs, rhs)
+    }
+    pub fn cot_add(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("+", lhs, rhs)
+    }
+    pub fn cot_sub(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("-", lhs, rhs)
+    }
+    pub fn cot_mul(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("*", lhs, rhs)
+    }
+    pub fn cot_sdiv(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("/", lhs, rhs)
+    }
+    pub fn cot_udiv(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("/", lhs, rhs)
+    }
+    pub fn cot_smod(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("%", lhs, rhs)
+    }
+    pub fn cot_umod(lhs: CExpr, rhs: CExpr) -> Self {
+        Self::binary("%", lhs, rhs)
+    }
     pub fn cot_fadd(lhs: CExpr, rhs: CExpr) -> Self {
-        CExpr::FloatBinary { op: "+", lhs: Box::new(lhs), rhs: Box::new(rhs) }
+        CExpr::FloatBinary {
+            op: "+",
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        }
     }
     pub fn cot_fsub(lhs: CExpr, rhs: CExpr) -> Self {
-        CExpr::FloatBinary { op: "-", lhs: Box::new(lhs), rhs: Box::new(rhs) }
+        CExpr::FloatBinary {
+            op: "-",
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        }
     }
     pub fn cot_fmul(lhs: CExpr, rhs: CExpr) -> Self {
-        CExpr::FloatBinary { op: "*", lhs: Box::new(lhs), rhs: Box::new(rhs) }
+        CExpr::FloatBinary {
+            op: "*",
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        }
     }
     pub fn cot_fdiv(lhs: CExpr, rhs: CExpr) -> Self {
-        CExpr::FloatBinary { op: "/", lhs: Box::new(lhs), rhs: Box::new(rhs) }
+        CExpr::FloatBinary {
+            op: "/",
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        }
     }
-    pub fn cot_fneg(inner: CExpr) -> Self { CExpr::FloatNeg(Box::new(inner)) }
-    pub fn cot_neg(inner: CExpr) -> Self { CExpr::Neg(Box::new(inner)) }
-    pub fn cot_cast(ty: impl Into<String>, inner: CExpr) -> Self { Self::cast(ty, inner) }
-    pub fn cot_lnot(inner: CExpr) -> Self { CExpr::LogicalNot(Box::new(inner)) }
-    pub fn cot_bnot(inner: CExpr) -> Self { CExpr::BitwiseNot(Box::new(inner)) }
-    pub fn cot_ptr(inner: CExpr) -> Self { Self::deref(inner) }
-    pub fn cot_ref(inner: CExpr) -> Self { Self::addr_of(inner) }
-    pub fn cot_postinc(inner: CExpr) -> Self { CExpr::PostInc(Box::new(inner)) }
-    pub fn cot_postdec(inner: CExpr) -> Self { CExpr::PostDec(Box::new(inner)) }
-    pub fn cot_preinc(inner: CExpr) -> Self { CExpr::PreInc(Box::new(inner)) }
-    pub fn cot_predec(inner: CExpr) -> Self { CExpr::PreDec(Box::new(inner)) }
+    pub fn cot_fneg(inner: CExpr) -> Self {
+        CExpr::FloatNeg(Box::new(inner))
+    }
+    pub fn cot_neg(inner: CExpr) -> Self {
+        CExpr::Neg(Box::new(inner))
+    }
+    pub fn cot_cast(ty: impl Into<String>, inner: CExpr) -> Self {
+        Self::cast(ty, inner)
+    }
+    pub fn cot_lnot(inner: CExpr) -> Self {
+        CExpr::LogicalNot(Box::new(inner))
+    }
+    pub fn cot_bnot(inner: CExpr) -> Self {
+        CExpr::BitwiseNot(Box::new(inner))
+    }
+    pub fn cot_ptr(inner: CExpr) -> Self {
+        Self::deref(inner)
+    }
+    pub fn cot_ref(inner: CExpr) -> Self {
+        Self::addr_of(inner)
+    }
+    pub fn cot_postinc(inner: CExpr) -> Self {
+        CExpr::PostInc(Box::new(inner))
+    }
+    pub fn cot_postdec(inner: CExpr) -> Self {
+        CExpr::PostDec(Box::new(inner))
+    }
+    pub fn cot_preinc(inner: CExpr) -> Self {
+        CExpr::PreInc(Box::new(inner))
+    }
+    pub fn cot_predec(inner: CExpr) -> Self {
+        CExpr::PreDec(Box::new(inner))
+    }
     pub fn cot_call(callee: CExpr, args: Vec<CExpr>) -> Self {
-        CExpr::Call { callee: Box::new(callee), args }
+        CExpr::Call {
+            callee: Box::new(callee),
+            args,
+        }
     }
-    pub fn cot_idx(arr: CExpr, idx: CExpr) -> Self { Self::index(arr, idx) }
-    pub fn cot_memref(obj: CExpr, field: impl Into<String>) -> Self { Self::dot(obj, field) }
-    pub fn cot_memptr(obj: CExpr, field: impl Into<String>) -> Self { Self::arrow(obj, field) }
+    pub fn cot_idx(arr: CExpr, idx: CExpr) -> Self {
+        Self::index(arr, idx)
+    }
+    pub fn cot_memref(obj: CExpr, field: impl Into<String>) -> Self {
+        Self::dot(obj, field)
+    }
+    pub fn cot_memptr(obj: CExpr, field: impl Into<String>) -> Self {
+        Self::arrow(obj, field)
+    }
     pub fn cot_num(value: u64, signed: bool, width: u8) -> Self {
-        CExpr::Num { value, signed, width }
+        CExpr::Num {
+            value,
+            signed,
+            width,
+        }
     }
-    pub fn cot_fnum(bits: u64, width: u8) -> Self { CExpr::Fnum { bits, width } }
-    pub fn cot_str(s: impl Into<String>) -> Self { CExpr::Str(s.into()) }
+    pub fn cot_fnum(bits: u64, width: u8) -> Self {
+        CExpr::Fnum { bits, width }
+    }
+    pub fn cot_str(s: impl Into<String>) -> Self {
+        CExpr::Str(s.into())
+    }
     pub fn cot_obj(name: impl Into<String>, addr: u64) -> Self {
-        CExpr::Obj { name: name.into(), addr }
+        CExpr::Obj {
+            name: name.into(),
+            addr,
+        }
     }
     pub fn cot_var(name: impl Into<String>, idx: u32) -> Self {
-        CExpr::Var { name: name.into(), idx }
+        CExpr::Var {
+            name: name.into(),
+            idx,
+        }
     }
-    pub fn cot_insn(body: impl Into<String>) -> Self { CExpr::StmtExpr(body.into()) }
-    pub fn cot_sizeof(inner: CExpr) -> Self { CExpr::Sizeof(Box::new(inner)) }
+    pub fn cot_insn(body: impl Into<String>) -> Self {
+        CExpr::StmtExpr(body.into())
+    }
+    pub fn cot_sizeof(inner: CExpr) -> Self {
+        CExpr::Sizeof(Box::new(inner))
+    }
     pub fn cot_helper(name: impl Into<String>, args: Vec<CExpr>) -> Self {
-        CExpr::Helper { name: name.into(), args }
+        CExpr::Helper {
+            name: name.into(),
+            args,
+        }
     }
-    pub fn cot_type(name: impl Into<String>) -> Self { CExpr::TypeRef(name.into()) }
+    pub fn cot_type(name: impl Into<String>) -> Self {
+        CExpr::TypeRef(name.into())
+    }
     /// `cot_psub` — pointer subtraction; IDA `Idx 43` between fadd/fsub
     /// on some Hex-Rays versions, often emitted as a separate opcode.
     pub fn cot_psub(lhs: CExpr, rhs: CExpr) -> Self {
-        CExpr::PtrDiff { lhs: Box::new(lhs), rhs: Box::new(rhs) }
+        CExpr::PtrDiff {
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        }
     }
 
     fn compound(op: &'static str, lhs: CExpr, rhs: CExpr) -> Self {
-        CExpr::CompoundAssign { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }
+        CExpr::CompoundAssign {
+            op,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        }
     }
 }
 
@@ -1256,75 +1465,75 @@ impl CExpr {
 /// array is exhaustive: a future plugin can index by `cot_*` ordinal and
 /// dispatch to the corresponding `CExpr::cot_*` constructor.
 pub const COT_NAMES: [&str; 69] = [
-    "cot_empty",       // 0
-    "cot_comma",       // 1
-    "cot_asg",         // 2
-    "cot_asgbor",      // 3
-    "cot_asgxor",      // 4
-    "cot_asgband",     // 5
-    "cot_asgadd",      // 6
-    "cot_asgsub",      // 7
-    "cot_asgmul",      // 8
-    "cot_asgsshr",     // 9
-    "cot_asgushr",     // 10
-    "cot_asgshl",      // 11
-    "cot_asgsdiv",     // 12
-    "cot_asgudiv",     // 13
-    "cot_asgsmod",     // 14
-    "cot_asgumod",     // 15
-    "cot_tern",        // 16
-    "cot_lor",         // 17
-    "cot_land",        // 18
-    "cot_bor",         // 19
-    "cot_xor",         // 20
-    "cot_band",        // 21
-    "cot_eq",          // 22
-    "cot_ne",          // 23
-    "cot_sge",         // 24
-    "cot_uge",         // 25
-    "cot_sle",         // 26
-    "cot_ule",         // 27
-    "cot_sgt",         // 28
-    "cot_ugt",         // 29
-    "cot_slt",         // 30
-    "cot_ult",         // 31
-    "cot_sshr",        // 32
-    "cot_ushr",        // 33
-    "cot_shl",         // 34
-    "cot_add",         // 35
-    "cot_sub",         // 36
-    "cot_mul",         // 37
-    "cot_sdiv",        // 38
-    "cot_udiv",        // 39
-    "cot_smod",        // 40
-    "cot_umod",        // 41
-    "cot_fadd",        // 42
-    "cot_fsub",        // 43
-    "cot_fmul",        // 44
-    "cot_fdiv",        // 45
-    "cot_fneg",        // 46
-    "cot_neg",         // 47
-    "cot_cast",        // 48
-    "cot_lnot",        // 49
-    "cot_bnot",        // 50
-    "cot_ptr",         // 51
-    "cot_ref",         // 52
-    "cot_postinc",     // 53
-    "cot_postdec",     // 54
-    "cot_preinc",      // 55
-    "cot_predec",      // 56
-    "cot_call",        // 57
-    "cot_idx",         // 58
-    "cot_memref",      // 59
-    "cot_memptr",      // 60
-    "cot_num",         // 61
-    "cot_fnum",        // 62
-    "cot_str",         // 63
-    "cot_obj",         // 64
-    "cot_var",         // 65
-    "cot_insn",        // 66
-    "cot_sizeof",      // 67
-    "cot_helper",      // 68
+    "cot_empty",   // 0
+    "cot_comma",   // 1
+    "cot_asg",     // 2
+    "cot_asgbor",  // 3
+    "cot_asgxor",  // 4
+    "cot_asgband", // 5
+    "cot_asgadd",  // 6
+    "cot_asgsub",  // 7
+    "cot_asgmul",  // 8
+    "cot_asgsshr", // 9
+    "cot_asgushr", // 10
+    "cot_asgshl",  // 11
+    "cot_asgsdiv", // 12
+    "cot_asgudiv", // 13
+    "cot_asgsmod", // 14
+    "cot_asgumod", // 15
+    "cot_tern",    // 16
+    "cot_lor",     // 17
+    "cot_land",    // 18
+    "cot_bor",     // 19
+    "cot_xor",     // 20
+    "cot_band",    // 21
+    "cot_eq",      // 22
+    "cot_ne",      // 23
+    "cot_sge",     // 24
+    "cot_uge",     // 25
+    "cot_sle",     // 26
+    "cot_ule",     // 27
+    "cot_sgt",     // 28
+    "cot_ugt",     // 29
+    "cot_slt",     // 30
+    "cot_ult",     // 31
+    "cot_sshr",    // 32
+    "cot_ushr",    // 33
+    "cot_shl",     // 34
+    "cot_add",     // 35
+    "cot_sub",     // 36
+    "cot_mul",     // 37
+    "cot_sdiv",    // 38
+    "cot_udiv",    // 39
+    "cot_smod",    // 40
+    "cot_umod",    // 41
+    "cot_fadd",    // 42
+    "cot_fsub",    // 43
+    "cot_fmul",    // 44
+    "cot_fdiv",    // 45
+    "cot_fneg",    // 46
+    "cot_neg",     // 47
+    "cot_cast",    // 48
+    "cot_lnot",    // 49
+    "cot_bnot",    // 50
+    "cot_ptr",     // 51
+    "cot_ref",     // 52
+    "cot_postinc", // 53
+    "cot_postdec", // 54
+    "cot_preinc",  // 55
+    "cot_predec",  // 56
+    "cot_call",    // 57
+    "cot_idx",     // 58
+    "cot_memref",  // 59
+    "cot_memptr",  // 60
+    "cot_num",     // 61
+    "cot_fnum",    // 62
+    "cot_str",     // 63
+    "cot_obj",     // 64
+    "cot_var",     // 65
+    "cot_insn",    // 66
+    "cot_sizeof",  // 67
+    "cot_helper",  // 68
 ];
 
 /// Look up the canonical IDA name for a `cot_*` opcode index.
@@ -1339,7 +1548,10 @@ pub fn cot_name(idx: usize) -> Option<&'static str> {
 /// dispatches by raw opcode never has to unwrap an `Option`). The
 /// canonical (`Option`-returning) accessor is [`cot_name`].
 pub fn cot_index_to_name(idx: u8) -> &'static str {
-    COT_NAMES.get(idx as usize).copied().unwrap_or("cot_unknown")
+    COT_NAMES
+        .get(idx as usize)
+        .copied()
+        .unwrap_or("cot_unknown")
 }
 
 #[cfg(test)]
@@ -1529,11 +1741,42 @@ mod tests {
         let names: std::collections::BTreeSet<&'static str> =
             rows.iter().map(|r| r.variant).collect();
         for expected in [
-            "Lit", "Cast", "Member", "Index", "Deref", "AddrOf", "Binary", "Call", "Coerce",
-            "Macro", "Ternary", "Sizeof", "PreInc", "PreDec", "PostInc", "PostDec", "Comma",
-            "Assign", "CompoundAssign", "Neg", "LogicalNot", "BitwiseNot", "Helper", "FuncId",
-            "StmtExpr", "Str", "Obj", "Empty", "Label", "Var", "Num", "Fnum", "TypeRef",
-            "FloatNeg", "FloatBinary", "PtrDiff",
+            "Lit",
+            "Cast",
+            "Member",
+            "Index",
+            "Deref",
+            "AddrOf",
+            "Binary",
+            "Call",
+            "Coerce",
+            "Macro",
+            "Ternary",
+            "Sizeof",
+            "PreInc",
+            "PreDec",
+            "PostInc",
+            "PostDec",
+            "Comma",
+            "Assign",
+            "CompoundAssign",
+            "Neg",
+            "LogicalNot",
+            "BitwiseNot",
+            "Helper",
+            "FuncId",
+            "StmtExpr",
+            "Str",
+            "Obj",
+            "Empty",
+            "Label",
+            "Var",
+            "Num",
+            "Fnum",
+            "TypeRef",
+            "FloatNeg",
+            "FloatBinary",
+            "PtrDiff",
         ] {
             assert!(
                 names.contains(expected),
@@ -1819,10 +2062,7 @@ mod tests {
         for (name, expr) in cases {
             let rendered = expr.to_string();
             if name != "cot_empty" {
-                assert!(
-                    !rendered.is_empty(),
-                    "{name} rendered empty: {rendered:?}"
-                );
+                assert!(!rendered.is_empty(), "{name} rendered empty: {rendered:?}");
             }
             let _ = substitute_lit(expr.clone(), "a", &replacement);
         }

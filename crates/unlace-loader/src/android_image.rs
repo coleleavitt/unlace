@@ -8,9 +8,7 @@ use std::collections::BTreeMap;
 use crate::android_art::{ArtFile, ArtSectionKind};
 use crate::android_dex::DexClass;
 use crate::android_oat::{OatFile, OatInstructionSet};
-use crate::image::{
-    ArchId, BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind,
-};
+use crate::image::{ArchId, BinaryImage, Endian, Section, SectionFlags, Symbol, SymbolKind};
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -235,15 +233,13 @@ pub fn art_to_binary_image(art: &ArtFile) -> BinaryImage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::android_dex::{DexClass, DexMethod};
-    use crate::android_oat::{
-        OatDexFile, OatFile, OatHeader, OatInstructionSet, OatMethodInfo,
-    };
     use crate::android_art::{
-        ArtClassEntry, ArtClassStatus, ArtFile, ArtHeader, ArtImageSection,
-        ArtMethodEntry, ArtSectionKind,
+        ArtClassEntry, ArtClassStatus, ArtFile, ArtHeader, ArtImageSection, ArtMethodEntry,
+        ArtSectionKind,
     };
     use crate::android_dex::DexHeader;
+    use crate::android_dex::{DexClass, DexMethod};
+    use crate::android_oat::{OatDexFile, OatFile, OatHeader, OatInstructionSet, OatMethodInfo};
 
     #[test]
     fn dex_methods_become_symbols() {
@@ -344,9 +340,7 @@ mod tests {
         let img = oat_to_binary_image(&oat);
 
         // Verify .oat_text section exists with EXEC flag.
-        let text_sec = img
-            .section_by_name(".oat_text")
-            .expect(".oat_text section");
+        let text_sec = img.section_by_name(".oat_text").expect(".oat_text section");
         assert!(
             text_sec.flags.contains(SectionFlags::EXEC),
             ".oat_text must be executable"

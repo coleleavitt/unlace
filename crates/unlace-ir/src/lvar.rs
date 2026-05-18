@@ -246,14 +246,8 @@ impl Lvar {
 pub fn dump_lvars(lvars: &[Lvar]) -> String {
     use std::fmt::Write;
     let mut s = String::new();
-    let _ = writeln!(
-        s,
-        "| id | storage | range | ty | flags | name | source |"
-    );
-    let _ = writeln!(
-        s,
-        "|---:|---------|-------|----|-------|------|--------|"
-    );
+    let _ = writeln!(s, "| id | storage | range | ty | flags | name | source |");
+    let _ = writeln!(s, "|---:|---------|-------|----|-------|------|--------|");
     for lv in lvars {
         let storage = match &lv.storage {
             LvarStorage::Stack { offset } => format!("stack({offset:+})"),

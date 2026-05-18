@@ -178,11 +178,7 @@ fn lift_16(bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
                     smallvec![areg(hi_nib), const_vn(0)],
                     addr,
                 ),
-                IrInsn::without_output(
-                    IrOp::Cbranch,
-                    smallvec![ram_target(target), cond],
-                    addr,
-                ),
+                IrInsn::without_output(IrOp::Cbranch, smallvec![ram_target(target), cond], addr),
             ]
         }
         // RET (SR, mnemonic-class) — 0x00 0x90 maps to RET in 16-bit
@@ -205,7 +201,10 @@ fn lift_16(bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
             addr,
         )],
     };
-    Ok(LiftedInsn { ir_ops: ops, len: 2 })
+    Ok(LiftedInsn {
+        ir_ops: ops,
+        len: 2,
+    })
 }
 
 /// 32-bit instruction dispatch — opcode is the first byte.
@@ -247,18 +246,17 @@ fn lift_32(bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
         0x0D => Vec::new(),
         // DSYNC / DISABLE / ENABLE — encoded as 0x0D variants; surface
         // as Callother.
-        0x4D => vec![IrInsn::without_output(
-            IrOp::Callother,
-            smallvec![],
-            addr,
-        )],
+        0x4D => vec![IrInsn::without_output(IrOp::Callother, smallvec![], addr)],
         _ => vec![IrInsn::without_output(
             IrOp::Unimplemented,
             smallvec![],
             addr,
         )],
     };
-    Ok(LiftedInsn { ir_ops: ops, len: 4 })
+    Ok(LiftedInsn {
+        ir_ops: ops,
+        len: 4,
+    })
 }
 
 #[cfg(test)]
@@ -373,7 +371,9 @@ mod tests {
     /// 0x1D | (0x000002 << 8) → bytes 1D, 02, 00, 00.
     #[test]
     fn j_b_32() {
-        let r = lifter().lift_insn(&[0x1D, 0x02, 0x00, 0x00], 0x100).unwrap();
+        let r = lifter()
+            .lift_insn(&[0x1D, 0x02, 0x00, 0x00], 0x100)
+            .unwrap();
         assert_eq!(r.len, 4);
         assert_eq!(r.ir_ops[0].op, IrOp::Branch);
     }
@@ -381,35 +381,45 @@ mod tests {
     /// CALL disp24 — 0x6D.
     #[test]
     fn call_b_32() {
-        let r = lifter().lift_insn(&[0x6D, 0x02, 0x00, 0x00], 0x100).unwrap();
+        let r = lifter()
+            .lift_insn(&[0x6D, 0x02, 0x00, 0x00], 0x100)
+            .unwrap();
         assert_eq!(r.ir_ops[0].op, IrOp::Call);
     }
 
     /// RET (32-bit) — 0x09 0x00 ...
     #[test]
     fn ret_32() {
-        let r = lifter().lift_insn(&[0x09, 0x00, 0x00, 0x00], 0x100).unwrap();
+        let r = lifter()
+            .lift_insn(&[0x09, 0x00, 0x00, 0x00], 0x100)
+            .unwrap();
         assert_eq!(r.ir_ops[0].op, IrOp::Return);
     }
 
     /// RFE — 0x07.
     #[test]
     fn rfe_32() {
-        let r = lifter().lift_insn(&[0x07, 0x00, 0x00, 0x00], 0x100).unwrap();
+        let r = lifter()
+            .lift_insn(&[0x07, 0x00, 0x00, 0x00], 0x100)
+            .unwrap();
         assert_eq!(r.ir_ops[0].op, IrOp::Return);
     }
 
     /// DSYNC/ENABLE/DISABLE — 0x4D maps to Callother.
     #[test]
     fn dsync_32() {
-        let r = lifter().lift_insn(&[0x4D, 0x00, 0x00, 0x00], 0x100).unwrap();
+        let r = lifter()
+            .lift_insn(&[0x4D, 0x00, 0x00, 0x00], 0x100)
+            .unwrap();
         assert_eq!(r.ir_ops[0].op, IrOp::Callother);
     }
 
     /// 32-bit NOP — 0x0D ...
     #[test]
     fn nop_32() {
-        let r = lifter().lift_insn(&[0x0D, 0x00, 0x00, 0x00], 0x100).unwrap();
+        let r = lifter()
+            .lift_insn(&[0x0D, 0x00, 0x00, 0x00], 0x100)
+            .unwrap();
         assert_eq!(r.len, 4);
         assert!(r.ir_ops.is_empty());
     }

@@ -220,7 +220,12 @@ impl CrashCorpusDb {
         let new = self.by_status(TriageStatus::New).len();
         let confirmed = self.by_status(TriageStatus::Confirmed).len();
         let fixed = self.by_status(TriageStatus::Fixed).len();
-        CorpusStats { total, new, confirmed, fixed }
+        CorpusStats {
+            total,
+            new,
+            confirmed,
+            fixed,
+        }
     }
 
     /// Flush the index to disk.
@@ -260,12 +265,16 @@ fn sha256_hex(data: &[u8]) -> String {
     let v2 = h2.finish();
 
     let mut h3 = DefaultHasher::new();
-    (data.len() as u64).wrapping_mul(0x517cc1b727220a95).hash(&mut h3);
+    (data.len() as u64)
+        .wrapping_mul(0x517cc1b727220a95)
+        .hash(&mut h3);
     data.hash(&mut h3);
     let v3 = h3.finish();
 
     let mut h4 = DefaultHasher::new();
-    (data.len() as u64).wrapping_add(0x6c62272e07bb0142).hash(&mut h4);
+    (data.len() as u64)
+        .wrapping_add(0x6c62272e07bb0142)
+        .hash(&mut h4);
     data.hash(&mut h4);
     let v4 = h4.finish();
 
@@ -285,16 +294,22 @@ mod tests {
         let mut db = CrashCorpusDb::open(&dir).unwrap();
         assert!(db.is_empty());
 
-        let id1 = db.add(b"\x7fELF\x00\x00", "load", "invalid ELF", "abc123").unwrap();
+        let id1 = db
+            .add(b"\x7fELF\x00\x00", "load", "invalid ELF", "abc123")
+            .unwrap();
         assert_eq!(id1, 0);
         assert_eq!(db.len(), 1);
 
-        let id2 = db.add(b"\x7fELF\x01\x01", "lift", "bad opcode", "def456").unwrap();
+        let id2 = db
+            .add(b"\x7fELF\x01\x01", "lift", "bad opcode", "def456")
+            .unwrap();
         assert_eq!(id2, 1);
         assert_eq!(db.len(), 2);
 
         // Dedup: same input returns same ID
-        let id3 = db.add(b"\x7fELF\x00\x00", "load", "invalid ELF", "abc123").unwrap();
+        let id3 = db
+            .add(b"\x7fELF\x00\x00", "load", "invalid ELF", "abc123")
+            .unwrap();
         assert_eq!(id3, 0);
         assert_eq!(db.len(), 2);
 

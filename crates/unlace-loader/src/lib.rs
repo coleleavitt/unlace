@@ -6,7 +6,9 @@
 
 pub mod android_art;
 pub mod android_boot;
-pub use android_boot::{AndroidBoot, AndroidBootError, android_boot_to_binary_image, parse_android_boot};
+pub use android_boot::{
+    AndroidBoot, AndroidBootError, android_boot_to_binary_image, parse_android_boot,
+};
 pub mod android_dex;
 pub mod android_image;
 pub mod android_oat;
@@ -27,16 +29,18 @@ pub use dyld_cache::{
 pub fn is_dyld_shared_cache(data: &[u8]) -> bool {
     data.len() >= 7 && &data[..7] == b"dyld_v1"
 }
+pub mod dotnet_clr;
 pub mod eh_frame;
 pub mod elf;
 pub mod error;
-pub mod dotnet_clr;
 pub use dotnet_clr::{
     CLR_MAGIC, ClrMetadata, ClrMethodDef, ClrTypeDef, Cor20Header, cil_to_binary_image, detect_clr,
     parse_clr_header, parse_cor20_header,
 };
 pub mod esp32_image;
-pub use esp32_image::{Esp32Error, Esp32Image, Esp32Segment, esp32_to_binary_image, parse_esp32_image};
+pub use esp32_image::{
+    Esp32Error, Esp32Image, Esp32Segment, esp32_to_binary_image, parse_esp32_image,
+};
 pub mod flirt;
 pub mod gcc_except_table;
 pub mod go_moduledata;
@@ -78,6 +82,7 @@ pub use objc::{
     scan_objc_classlist,
 };
 
+pub use android_image::{art_to_binary_image, dex_to_binary_image, oat_to_binary_image};
 pub use dwarf::{
     DwarfInfo, DwoRef, EnumType, FunctionDebugInfo, LocalVariable, MacroDefinition, ParameterInfo,
     SimpleLocation, SourceLocation, StructField, StructType, UnionType, evaluate_simple_location,
@@ -100,15 +105,14 @@ pub use image::{
 pub use intel_hex::{
     IntelHexError, IntelHexImage, SRecordError, SRecordImage, load_intel_hex, load_s_record,
 };
-pub use android_image::{art_to_binary_image, dex_to_binary_image, oat_to_binary_image};
 pub use ios_img4::{Img4Container, Img4Error, img4_to_binary_image, is_img4, parse_img4};
 pub use java_class::{
-    JAVA_CLASS_MAGIC, JarClassEntry, JavaClass, JavaError, JavaField, JavaMethod,
-    jar_list_classes, java_class_to_binary_image, parse_class,
+    JAVA_CLASS_MAGIC, JarClassEntry, JavaClass, JavaError, JavaField, JavaMethod, jar_list_classes,
+    java_class_to_binary_image, parse_class,
 };
 pub use lua_bytecode::{
-    LuaBytecode, LuaChunkHeader, LuaConstant, LuaProto, LuaVersion, detect_lua,
-    parse_chunk_header, parse_lua_bytecode,
+    LuaBytecode, LuaChunkHeader, LuaConstant, LuaProto, LuaVersion, detect_lua, parse_chunk_header,
+    parse_lua_bytecode,
 };
 pub use macho::MachoLoader;
 pub use pdb::{PdbInfo, PdbLocal, import_pdb, merge_pdb_symbols};

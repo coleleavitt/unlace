@@ -295,9 +295,9 @@ fn parse_proto_53(cur: &mut Cursor<'_>) -> Option<LuaProto> {
     for _ in 0..num_constants {
         let tag = cur.read_byte()?;
         let c = match tag {
-            0 => LuaConstant::Nil,                           // LUA_TNIL
-            1 => LuaConstant::Boolean(cur.read_byte()? != 0), // LUA_TBOOLEAN
-            0x03 | 0x13 => LuaConstant::Integer(cur.read_i64()?), // LUA_TNUMINT
+            0 => LuaConstant::Nil,                                     // LUA_TNIL
+            1 => LuaConstant::Boolean(cur.read_byte()? != 0),          // LUA_TBOOLEAN
+            0x03 | 0x13 => LuaConstant::Integer(cur.read_i64()?),      // LUA_TNUMINT
             0x04 | 0x14 => LuaConstant::String(cur.read_string_53()?), // LUA_TSTRING
             _ => {
                 // Unknown constant type — try to skip gracefully
@@ -332,8 +332,8 @@ fn parse_proto_53(cur: &mut Cursor<'_>) -> Option<LuaProto> {
     let local_var_count = cur.read_int()?;
     for _ in 0..local_var_count {
         cur.read_string_53()?; // varname
-        cur.read_int()?;       // startpc
-        cur.read_int()?;       // endpc
+        cur.read_int()?; // startpc
+        cur.read_int()?; // endpc
     }
 
     // debug — upvalue names
@@ -684,7 +684,10 @@ mod tests {
 
         // Now parse
         let result = parse_lua_bytecode(&buf);
-        assert!(result.is_some(), "parse_lua_bytecode should succeed for valid Lua 5.3 input");
+        assert!(
+            result.is_some(),
+            "parse_lua_bytecode should succeed for valid Lua 5.3 input"
+        );
         let bc = result.unwrap();
         assert_eq!(bc.version, 0x53);
         assert!(bc.little_endian);

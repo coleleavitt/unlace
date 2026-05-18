@@ -182,10 +182,7 @@ pub fn parse_oat_header(oatdata: &[u8]) -> Result<OatHeader, OatError> {
 
     // Version is 4 ASCII bytes at offset 4 (e.g. "131\0" or "199\0").
     let version_bytes = &oatdata[4..8];
-    let version_end = version_bytes
-        .iter()
-        .position(|&b| b == 0)
-        .unwrap_or(4);
+    let version_end = version_bytes.iter().position(|&b| b == 0).unwrap_or(4);
     let version = String::from_utf8_lossy(&version_bytes[..version_end]).to_string();
 
     let oat_checksum = read_u32(oatdata, 8)?;

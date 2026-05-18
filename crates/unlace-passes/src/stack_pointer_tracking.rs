@@ -100,8 +100,7 @@ fn collect_stack_accesses(
                 continue;
             }
             let addr = &insn.inputs[addr_idx];
-            let Some(delta) =
-                resolve_addr_to_sp_offset(func, bid, idx, addr, spec, sp_delta_at)
+            let Some(delta) = resolve_addr_to_sp_offset(func, bid, idx, addr, spec, sp_delta_at)
             else {
                 continue;
             };
@@ -113,11 +112,7 @@ fn collect_stack_accesses(
             } else {
                 insn.output.as_ref().map(|v| v.size).unwrap_or(8)
             };
-            let resolved_slot = func
-                .stack_vars
-                .keys()
-                .copied()
-                .find(|off| *off == delta);
+            let resolved_slot = func.stack_vars.keys().copied().find(|off| *off == delta);
             let lost_provenance = resolved_slot.is_none()
                 && delta < 0
                 && delta >= func.dom_tree.root().0 as i64 - 4096;

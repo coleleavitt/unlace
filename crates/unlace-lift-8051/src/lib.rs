@@ -35,15 +35,30 @@ fn ram_target(addr: u64) -> Varnode {
 
 fn build_register_file() -> RegisterFile {
     let mut regs = vec![
-        RegisterDef { name: "A", varnode: vn_a() },
-        RegisterDef { name: "B", varnode: vn_b() },
+        RegisterDef {
+            name: "A",
+            varnode: vn_a(),
+        },
+        RegisterDef {
+            name: "B",
+            varnode: vn_b(),
+        },
     ];
     for i in 0..8u8 {
         let name = match i {
-            0 => "R0", 1 => "R1", 2 => "R2", 3 => "R3",
-            4 => "R4", 5 => "R5", 6 => "R6", _ => "R7",
+            0 => "R0",
+            1 => "R1",
+            2 => "R2",
+            3 => "R3",
+            4 => "R4",
+            5 => "R5",
+            6 => "R6",
+            _ => "R7",
         };
-        regs.push(RegisterDef { name, varnode: vn_r(i) });
+        regs.push(RegisterDef {
+            name,
+            varnode: vn_r(i),
+        });
     }
     regs.push(RegisterDef {
         name: "PC",
@@ -58,17 +73,25 @@ pub struct I8051Lifter {
 
 impl I8051Lifter {
     pub fn new() -> Self {
-        Self { reg_file: build_register_file() }
+        Self {
+            reg_file: build_register_file(),
+        }
     }
 }
 
 impl Default for I8051Lifter {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Lifter for I8051Lifter {
-    fn arch(&self) -> ArchId { ArchId::I8051 }
-    fn register_file(&self) -> &RegisterFile { &self.reg_file }
+    fn arch(&self) -> ArchId {
+        ArchId::I8051
+    }
+    fn register_file(&self) -> &RegisterFile {
+        &self.reg_file
+    }
 
     fn lift_insn(&self, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
         if bytes.is_empty() {
@@ -80,135 +103,262 @@ impl Lifter for I8051Lifter {
 
 fn decode(op: u8, bytes: &[u8], addr: u64) -> Result<LiftedInsn, LiftError> {
     if op == 0x00 {
-        return Ok(LiftedInsn { ir_ops: Vec::new(), len: 1 });
+        return Ok(LiftedInsn {
+            ir_ops: Vec::new(),
+            len: 1,
+        });
     }
     if op == 0x22 || op == 0x32 {
         return ret(addr, 1);
     }
     if op == 0xE4 {
-        return ok1(IrInsn::with_output(IrOp::Copy, vn_a(), smallvec![const_vn(0)], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::Copy,
+            vn_a(),
+            smallvec![const_vn(0)],
+            addr,
+        ));
     }
     if op == 0xF4 {
         return ok1(IrInsn::with_output(
-            IrOp::IntXor, vn_a(),
-            smallvec![vn_a(), const_vn(0xFF)], addr));
+            IrOp::IntXor,
+            vn_a(),
+            smallvec![vn_a(), const_vn(0xFF)],
+            addr,
+        ));
     }
     if matches!(op, 0x03 | 0x13 | 0x23 | 0x33) {
-        return ok1(IrInsn::with_output(IrOp::Callother, vn_a(), smallvec![vn_a()], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::Callother,
+            vn_a(),
+            smallvec![vn_a()],
+            addr,
+        ));
     }
     if op == 0xA4 {
-        return ok1(IrInsn::with_output(IrOp::IntMult, vn_a(),
-            smallvec![vn_a(), vn_b()], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::IntMult,
+            vn_a(),
+            smallvec![vn_a(), vn_b()],
+            addr,
+        ));
     }
     if op == 0x84 {
-        return ok1(IrInsn::with_output(IrOp::IntDiv, vn_a(),
-            smallvec![vn_a(), vn_b()], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::IntDiv,
+            vn_a(),
+            smallvec![vn_a(), vn_b()],
+            addr,
+        ));
     }
     if op == 0x80 {
         let rel = *bytes.get(1).ok_or(LiftError::ShortBuffer)? as i8;
         let target = (addr as i64 + 2 + rel as i64) as u64;
-        return ok_n(vec![IrInsn::without_output(IrOp::Branch,
-            smallvec![ram_target(target)], addr)], 2);
+        return ok_n(
+            vec![IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![ram_target(target)],
+                addr,
+            )],
+            2,
+        );
     }
     if op == 0x02 {
-        if bytes.len() < 3 { return Err(LiftError::ShortBuffer); }
+        if bytes.len() < 3 {
+            return Err(LiftError::ShortBuffer);
+        }
         let target = ((bytes[1] as u64) << 8) | bytes[2] as u64;
-        return ok_n(vec![IrInsn::without_output(IrOp::Branch,
-            smallvec![ram_target(target)], addr)], 3);
+        return ok_n(
+            vec![IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![ram_target(target)],
+                addr,
+            )],
+            3,
+        );
     }
     if op == 0x12 {
-        if bytes.len() < 3 { return Err(LiftError::ShortBuffer); }
+        if bytes.len() < 3 {
+            return Err(LiftError::ShortBuffer);
+        }
         let target = ((bytes[1] as u64) << 8) | bytes[2] as u64;
-        return ok_n(vec![IrInsn::without_output(IrOp::Call,
-            smallvec![ram_target(target)], addr)], 3);
+        return ok_n(
+            vec![IrInsn::without_output(
+                IrOp::Call,
+                smallvec![ram_target(target)],
+                addr,
+            )],
+            3,
+        );
     }
     if op & 0x1F == 0x01 {
-        if bytes.len() < 2 { return Err(LiftError::ShortBuffer); }
+        if bytes.len() < 2 {
+            return Err(LiftError::ShortBuffer);
+        }
         let high = ((op as u64) >> 5) << 8;
         let target = ((addr + 2) & 0xF800) | high | bytes[1] as u64;
-        return ok_n(vec![IrInsn::without_output(IrOp::Branch,
-            smallvec![ram_target(target)], addr)], 2);
+        return ok_n(
+            vec![IrInsn::without_output(
+                IrOp::Branch,
+                smallvec![ram_target(target)],
+                addr,
+            )],
+            2,
+        );
     }
     if op & 0x1F == 0x11 {
-        if bytes.len() < 2 { return Err(LiftError::ShortBuffer); }
+        if bytes.len() < 2 {
+            return Err(LiftError::ShortBuffer);
+        }
         let high = ((op as u64) >> 5) << 8;
         let target = ((addr + 2) & 0xF800) | high | bytes[1] as u64;
-        return ok_n(vec![IrInsn::without_output(IrOp::Call,
-            smallvec![ram_target(target)], addr)], 2);
+        return ok_n(
+            vec![IrInsn::without_output(
+                IrOp::Call,
+                smallvec![ram_target(target)],
+                addr,
+            )],
+            2,
+        );
     }
     if matches!(op, 0x40 | 0x50 | 0x60 | 0x70) {
         let rel = *bytes.get(1).ok_or(LiftError::ShortBuffer)? as i8;
         let target = (addr as i64 + 2 + rel as i64) as u64;
-        return ok_n(vec![IrInsn::without_output(IrOp::Cbranch,
-            smallvec![ram_target(target), vn_a()], addr)], 2);
+        return ok_n(
+            vec![IrInsn::without_output(
+                IrOp::Cbranch,
+                smallvec![ram_target(target), vn_a()],
+                addr,
+            )],
+            2,
+        );
     }
     let rn_idx = op & 0x07;
     if (0x08..=0x0F).contains(&op) {
         let r = vn_r(rn_idx);
-        return ok1(IrInsn::with_output(IrOp::IntAdd, r,
-            smallvec![r, const_vn(1)], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::IntAdd,
+            r,
+            smallvec![r, const_vn(1)],
+            addr,
+        ));
     }
     if (0x18..=0x1F).contains(&op) {
         let r = vn_r(rn_idx);
-        return ok1(IrInsn::with_output(IrOp::IntSub, r,
-            smallvec![r, const_vn(1)], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::IntSub,
+            r,
+            smallvec![r, const_vn(1)],
+            addr,
+        ));
     }
     if (0x28..=0x2F).contains(&op) || (0x38..=0x3F).contains(&op) {
-        return ok1(IrInsn::with_output(IrOp::IntAdd, vn_a(),
-            smallvec![vn_a(), vn_r(rn_idx)], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::IntAdd,
+            vn_a(),
+            smallvec![vn_a(), vn_r(rn_idx)],
+            addr,
+        ));
     }
     if (0x98..=0x9F).contains(&op) {
-        return ok1(IrInsn::with_output(IrOp::IntSub, vn_a(),
-            smallvec![vn_a(), vn_r(rn_idx)], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::IntSub,
+            vn_a(),
+            smallvec![vn_a(), vn_r(rn_idx)],
+            addr,
+        ));
     }
     if (0x58..=0x5F).contains(&op) {
-        return ok1(IrInsn::with_output(IrOp::IntAnd, vn_a(),
-            smallvec![vn_a(), vn_r(rn_idx)], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::IntAnd,
+            vn_a(),
+            smallvec![vn_a(), vn_r(rn_idx)],
+            addr,
+        ));
     }
     if (0x48..=0x4F).contains(&op) {
-        return ok1(IrInsn::with_output(IrOp::IntOr, vn_a(),
-            smallvec![vn_a(), vn_r(rn_idx)], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::IntOr,
+            vn_a(),
+            smallvec![vn_a(), vn_r(rn_idx)],
+            addr,
+        ));
     }
     if (0x68..=0x6F).contains(&op) {
-        return ok1(IrInsn::with_output(IrOp::IntXor, vn_a(),
-            smallvec![vn_a(), vn_r(rn_idx)], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::IntXor,
+            vn_a(),
+            smallvec![vn_a(), vn_r(rn_idx)],
+            addr,
+        ));
     }
     if (0xE8..=0xEF).contains(&op) {
-        return ok1(IrInsn::with_output(IrOp::Copy, vn_a(),
-            smallvec![vn_r(rn_idx)], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::Copy,
+            vn_a(),
+            smallvec![vn_r(rn_idx)],
+            addr,
+        ));
     }
     if (0xF8..=0xFF).contains(&op) {
-        return ok1(IrInsn::with_output(IrOp::Copy, vn_r(rn_idx),
-            smallvec![vn_a()], addr));
+        return ok1(IrInsn::with_output(
+            IrOp::Copy,
+            vn_r(rn_idx),
+            smallvec![vn_a()],
+            addr,
+        ));
     }
     if op == 0x74 {
         let imm = *bytes.get(1).ok_or(LiftError::ShortBuffer)? as u64;
-        return ok_n(vec![IrInsn::with_output(IrOp::Copy, vn_a(),
-            smallvec![const_vn(imm)], addr)], 2);
+        return ok_n(
+            vec![IrInsn::with_output(
+                IrOp::Copy,
+                vn_a(),
+                smallvec![const_vn(imm)],
+                addr,
+            )],
+            2,
+        );
     }
     if (0x78..=0x7F).contains(&op) {
         let imm = *bytes.get(1).ok_or(LiftError::ShortBuffer)? as u64;
-        return ok_n(vec![IrInsn::with_output(IrOp::Copy, vn_r(rn_idx),
-            smallvec![const_vn(imm)], addr)], 2);
+        return ok_n(
+            vec![IrInsn::with_output(
+                IrOp::Copy,
+                vn_r(rn_idx),
+                smallvec![const_vn(imm)],
+                addr,
+            )],
+            2,
+        );
     }
     if (0xD8..=0xDF).contains(&op) {
         let rel = *bytes.get(1).ok_or(LiftError::ShortBuffer)? as i8;
         let target = (addr as i64 + 2 + rel as i64) as u64;
         let r = vn_r(rn_idx);
-        return ok_n(vec![
-            IrInsn::with_output(IrOp::IntSub, r, smallvec![r, const_vn(1)], addr),
-            IrInsn::without_output(IrOp::Cbranch,
-                smallvec![ram_target(target), r], addr),
-        ], 2);
+        return ok_n(
+            vec![
+                IrInsn::with_output(IrOp::IntSub, r, smallvec![r, const_vn(1)], addr),
+                IrInsn::without_output(IrOp::Cbranch, smallvec![ram_target(target), r], addr),
+            ],
+            2,
+        );
     }
     Ok(LiftedInsn {
-        ir_ops: vec![IrInsn::without_output(IrOp::Unimplemented, smallvec![], addr)],
+        ir_ops: vec![IrInsn::without_output(
+            IrOp::Unimplemented,
+            smallvec![],
+            addr,
+        )],
         len: 1,
     })
 }
 
 fn ok1(insn: IrInsn) -> Result<LiftedInsn, LiftError> {
-    Ok(LiftedInsn { ir_ops: vec![insn], len: 1 })
+    Ok(LiftedInsn {
+        ir_ops: vec![insn],
+        len: 1,
+    })
 }
 
 fn ok_n(ir_ops: Vec<IrInsn>, len: usize) -> Result<LiftedInsn, LiftError> {

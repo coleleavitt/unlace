@@ -166,10 +166,16 @@ impl<'a> DyldCache<'a> {
         if magic != MH_MAGIC_64_LE {
             return None;
         }
-        let ncmds =
-            u32::from_le_bytes(self.data[header_off + 16..header_off + 20].try_into().ok()?);
-        let sizeofcmds =
-            u32::from_le_bytes(self.data[header_off + 20..header_off + 24].try_into().ok()?);
+        let ncmds = u32::from_le_bytes(
+            self.data[header_off + 16..header_off + 20]
+                .try_into()
+                .ok()?,
+        );
+        let sizeofcmds = u32::from_le_bytes(
+            self.data[header_off + 20..header_off + 24]
+                .try_into()
+                .ok()?,
+        );
         let lc_start = header_off.checked_add(32)?;
         let lc_end = lc_start.checked_add(sizeofcmds as usize)?;
         if lc_end > self.data.len() {
@@ -211,9 +217,7 @@ impl<'a> DyldCache<'a> {
                     u64::from_le_bytes(self.data[cursor + 40..cursor + 48].try_into().ok()?);
                 let filesize =
                     u64::from_le_bytes(self.data[cursor + 48..cursor + 56].try_into().ok()?);
-                let fileoff_in_cache = self
-                    .vaddr_to_file_offset(vmaddr)
-                    .unwrap_or(0);
+                let fileoff_in_cache = self.vaddr_to_file_offset(vmaddr).unwrap_or(0);
                 segments.push(SegmentPlan {
                     name,
                     vmaddr,
@@ -275,8 +279,8 @@ impl<'a> DyldCache<'a> {
         let mut seg_idx = 0usize;
         while cursor + 8 <= hdr_len {
             let cmd = u32::from_le_bytes(out[cursor..cursor + 4].try_into().unwrap());
-            let cmdsize = u32::from_le_bytes(out[cursor + 4..cursor + 8].try_into().unwrap())
-                as usize;
+            let cmdsize =
+                u32::from_le_bytes(out[cursor + 4..cursor + 8].try_into().unwrap()) as usize;
             if cmdsize == 0 || cursor + cmdsize > hdr_len {
                 break;
             }
@@ -336,16 +340,10 @@ impl<'a> DyldCache<'a> {
         if self.data.len() < 0x1d0 {
             return Vec::new();
         }
-        let off = u32::from_le_bytes(
-            self.data[0x1c8..0x1cc]
-                .try_into()
-                .expect("4-byte slice"),
-        ) as usize;
-        let count = u32::from_le_bytes(
-            self.data[0x1cc..0x1d0]
-                .try_into()
-                .expect("4-byte slice"),
-        ) as usize;
+        let off =
+            u32::from_le_bytes(self.data[0x1c8..0x1cc].try_into().expect("4-byte slice")) as usize;
+        let count =
+            u32::from_le_bytes(self.data[0x1cc..0x1d0].try_into().expect("4-byte slice")) as usize;
         if off == 0 || count == 0 {
             return Vec::new();
         }
@@ -372,8 +370,7 @@ impl<'a> DyldCache<'a> {
                 .iter()
                 .position(|&b| b == 0)
                 .unwrap_or(suffix_bytes.len());
-            let file_suffix =
-                String::from_utf8_lossy(&suffix_bytes[..nul]).into_owned();
+            let file_suffix = String::from_utf8_lossy(&suffix_bytes[..nul]).into_owned();
             out.push(SubCacheEntry {
                 uuid,
                 cache_vm_offset,
@@ -424,10 +421,7 @@ impl<'a> DyldCacheCollection<'a> {
     /// VA → bytes lookups are O(1) after construction.
     ///
     /// Returns `None` if any subcache fails to parse.
-    pub fn new(
-        primary: DyldCache<'a>,
-        subs: BTreeMap<String, &'a [u8]>,
-    ) -> Option<Self> {
+    pub fn new(primary: DyldCache<'a>, subs: BTreeMap<String, &'a [u8]>) -> Option<Self> {
         let mut parsed = BTreeMap::new();
         for (suffix, bytes) in subs {
             let sub = DyldCache::parse(bytes)?;
@@ -486,8 +480,7 @@ impl<'a> DyldCacheCollection<'a> {
         let mut seg_idx = 0usize;
         while cursor + 8 <= hdr_len {
             let cmd = u32::from_le_bytes(out[cursor..cursor + 4].try_into().ok()?);
-            let cmdsize =
-                u32::from_le_bytes(out[cursor + 4..cursor + 8].try_into().ok()?) as usize;
+            let cmdsize = u32::from_le_bytes(out[cursor + 4..cursor + 8].try_into().ok()?) as usize;
             if cmdsize == 0 || cursor + cmdsize > hdr_len {
                 break;
             }
@@ -654,8 +647,8 @@ pub fn parse_chained_fixups(data: &[u8]) -> Option<ChainedFixups> {
     if starts_offset.checked_add(4)? > data.len() {
         return None;
     }
-    let seg_count = u32::from_le_bytes(data[starts_offset..starts_offset + 4].try_into().ok()?)
-        as usize;
+    let seg_count =
+        u32::from_le_bytes(data[starts_offset..starts_offset + 4].try_into().ok()?) as usize;
     let mut rebases: std::collections::BTreeMap<u32, Vec<RebaseEntry>> =
         std::collections::BTreeMap::new();
     for seg in 0..seg_count {
@@ -663,8 +656,7 @@ pub fn parse_chained_fixups(data: &[u8]) -> Option<ChainedFixups> {
         if off + 4 > data.len() {
             return None;
         }
-        let seg_info_off =
-            u32::from_le_bytes(data[off..off + 4].try_into().ok()?) as usize;
+        let seg_info_off = u32::from_le_bytes(data[off..off + 4].try_into().ok()?) as usize;
         if seg_info_off == 0 {
             continue;
         }
@@ -682,14 +674,10 @@ pub fn parse_chained_fixups(data: &[u8]) -> Option<ChainedFixups> {
         }
         let _size = u32::from_le_bytes(data[base..base + 4].try_into().ok()?);
         let page_size = u16::from_le_bytes(data[base + 4..base + 6].try_into().ok()?) as usize;
-        let pointer_format =
-            u16::from_le_bytes(data[base + 6..base + 8].try_into().ok()?);
-        let segment_offset =
-            u64::from_le_bytes(data[base + 8..base + 16].try_into().ok()?);
-        let _max_valid =
-            u32::from_le_bytes(data[base + 16..base + 20].try_into().ok()?);
-        let page_count = u16::from_le_bytes(data[base + 20..base + 22].try_into().ok()?)
-            as usize;
+        let pointer_format = u16::from_le_bytes(data[base + 6..base + 8].try_into().ok()?);
+        let segment_offset = u64::from_le_bytes(data[base + 8..base + 16].try_into().ok()?);
+        let _max_valid = u32::from_le_bytes(data[base + 16..base + 20].try_into().ok()?);
+        let page_count = u16::from_le_bytes(data[base + 20..base + 22].try_into().ok()?) as usize;
 
         let mut entries = Vec::new();
         for page in 0..page_count {
@@ -744,8 +732,7 @@ fn walk_chain_for_page(
         2 | 6 => STRIDE_4,
         _ => return,
     };
-    let mut cursor_off =
-        page_index as u64 * page_size as u64 + page_start as u64;
+    let mut cursor_off = page_index as u64 * page_size as u64 + page_start as u64;
     // Safety cap so a malformed chain can't loop.
     let max_iters = (page_size as u64 / stride) + 1;
     for _ in 0..max_iters {
@@ -3368,10 +3355,8 @@ mod tests {
     #[test]
     fn collection_routes_subcache_vaddr_to_subcache_bytes() {
         let primary_va = 0x1_8000_0000u64;
-        let primary_macho =
-            build_minimal_macho_one_segment("__TEXT", primary_va, 0x1000);
-        let (primary_bytes, _) =
-            build_cache_with_image(primary_va, 0x1000, &primary_macho, &[]);
+        let primary_macho = build_minimal_macho_one_segment("__TEXT", primary_va, 0x1000);
+        let (primary_bytes, _) = build_cache_with_image(primary_va, 0x1000, &primary_macho, &[]);
 
         let sub_va = 0x1_9000_0000u64;
         let sub_macho = build_minimal_macho_one_segment("__TEXT", sub_va, 0x1000);

@@ -27,7 +27,11 @@ pub enum LuaCommand {
     /// Request decompilation of a function.
     Decompile { addr: u64 },
     /// Emit a finding/annotation.
-    EmitFinding { kind: String, message: String, addr: Option<u64> },
+    EmitFinding {
+        kind: String,
+        message: String,
+        addr: Option<u64>,
+    },
     /// Set a comment at an address.
     SetComment { addr: u64, text: String },
     /// Rename a function.
@@ -49,29 +53,52 @@ pub fn validate_lua_syntax(script: &str) -> Result<(), String> {
     for (i, ch) in script.chars().enumerate() {
         match ch {
             '(' => depth_paren += 1,
-            ')' => { depth_paren -= 1; if depth_paren < 0 { return Err(format!("unmatched ')' at offset {}", i)); } }
+            ')' => {
+                depth_paren -= 1;
+                if depth_paren < 0 {
+                    return Err(format!("unmatched ')' at offset {}", i));
+                }
+            }
             '[' => depth_bracket += 1,
-            ']' => { depth_bracket -= 1; if depth_bracket < 0 { return Err(format!("unmatched ']' at offset {}", i)); } }
+            ']' => {
+                depth_bracket -= 1;
+                if depth_bracket < 0 {
+                    return Err(format!("unmatched ']' at offset {}", i));
+                }
+            }
             _ => {}
         }
     }
-    if depth_paren != 0 { return Err("unmatched '('".into()); }
-    if depth_bracket != 0 { return Err("unmatched '['".into()); }
+    if depth_paren != 0 {
+        return Err("unmatched '('".into());
+    }
+    if depth_bracket != 0 {
+        return Err("unmatched '['".into());
+    }
     Ok(())
 }
 
 /// Parse Lua-emitted findings from a standardized output format.
 /// Format: `FINDING:<kind>:<addr_hex>:<message>\n`
 pub fn parse_lua_findings(output: &str) -> Vec<LuaCommand> {
-    output.lines().filter_map(|line| {
-        let rest = line.strip_prefix("FINDING:")?;
-        let parts: Vec<&str> = rest.splitn(3, ':').collect();
-        if parts.len() < 3 { return None; }
-        let kind = parts[0].to_string();
-        let addr = u64::from_str_radix(parts[1].trim_start_matches("0x"), 16).ok();
-        let message = parts[2].to_string();
-        Some(LuaCommand::EmitFinding { kind, message, addr })
-    }).collect()
+    output
+        .lines()
+        .filter_map(|line| {
+            let rest = line.strip_prefix("FINDING:")?;
+            let parts: Vec<&str> = rest.splitn(3, ':').collect();
+            if parts.len() < 3 {
+                return None;
+            }
+            let kind = parts[0].to_string();
+            let addr = u64::from_str_radix(parts[1].trim_start_matches("0x"), 16).ok();
+            let message = parts[2].to_string();
+            Some(LuaCommand::EmitFinding {
+                kind,
+                message,
+                addr,
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -90,11 +117,16 @@ mod tests {
 
     #[test]
     fn parse_findings_output() {
-        let output = "FINDING:crypto:0x401000:uses weak hash\nFINDING:vuln:0x402000:buffer overflow\n";
+        let output =
+            "FINDING:crypto:0x401000:uses weak hash\nFINDING:vuln:0x402000:buffer overflow\n";
         let cmds = parse_lua_findings(output);
         assert_eq!(cmds.len(), 2);
         match &cmds[0] {
-            LuaCommand::EmitFinding { kind, addr, message } => {
+            LuaCommand::EmitFinding {
+                kind,
+                addr,
+                message,
+            } => {
                 assert_eq!(kind, "crypto");
                 assert_eq!(*addr, Some(0x401000));
                 assert!(message.contains("weak hash"));

@@ -62,7 +62,8 @@ fn batch9_decompile_runs_on_every_fixture_without_panic() {
         if let Some(code) = output.status.code() {
             // SIGABRT-via-panic typically surfaces as code 134 on Linux.
             assert_ne!(
-                code, 134,
+                code,
+                134,
                 "{name}: unlace decompile aborted (likely panic). stderr:\n{}",
                 String::from_utf8_lossy(&output.stderr)
             );

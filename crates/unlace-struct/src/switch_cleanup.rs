@@ -48,7 +48,7 @@ pub fn cleanup_switches(func: &mut HirFunction) -> usize {
     modified
 }
 
-fn cleanup_nodes(nodes: &mut Vec<HirNode>, modified: &mut usize) {
+fn cleanup_nodes(nodes: &mut [HirNode], modified: &mut usize) {
     for node in nodes.iter_mut() {
         cleanup_node(node, modified);
     }
@@ -67,12 +67,10 @@ fn cleanup_node(node: &mut HirNode, modified: &mut usize) {
                 cleanup_nodes(eb, modified);
             }
         }
-        HirNode::While { body, .. }
-        | HirNode::DoWhile { body, .. }
-        | HirNode::For { body, .. } => cleanup_nodes(body, modified),
-        HirNode::Switch {
-            cases, default, ..
-        } => {
+        HirNode::While { body, .. } | HirNode::DoWhile { body, .. } | HirNode::For { body, .. } => {
+            cleanup_nodes(body, modified)
+        }
+        HirNode::Switch { cases, default, .. } => {
             // First recurse into nested HIR.
             for (_, body, _) in cases.iter_mut() {
                 cleanup_nodes(body, modified);
@@ -130,7 +128,7 @@ fn cleanup_node(node: &mut HirNode, modified: &mut usize) {
 /// with empty bodies are treated as "already part of a chain" and not
 /// re-rewritten, which keeps the operation idempotent.
 fn dedup_consecutive_cases(
-    cases: &mut Vec<(crate::hir::SwitchCase, Vec<HirNode>, bool)>,
+    cases: &mut [(crate::hir::SwitchCase, Vec<HirNode>, bool)],
     modified: &mut usize,
 ) {
     if cases.len() < 2 {
@@ -157,9 +155,9 @@ fn dedup_consecutive_cases(
             // Mark cases[i..j] as empty + fall_through; cases[j] keeps
             // its shared body and its existing fall_through bit (which
             // is typically `false`, so the printer emits `break;`).
-            for k in i..j {
-                cases[k].1.clear();
-                cases[k].2 = true;
+            for case in cases.iter_mut().take(j).skip(i) {
+                case.1.clear();
+                case.2 = true;
             }
             changed = true;
             i = j + 1;
@@ -208,8 +206,8 @@ mod tests {
     use crate::hir::{HirFunction, HirNode, SwitchCase};
     use std::collections::{BTreeMap, BTreeSet};
     use unlace_ir::Varnode;
-    use unlace_ir::ssa::SsaVarnode;
     use unlace_ir::ssa::PrimitiveType;
+    use unlace_ir::ssa::SsaVarnode;
 
     fn sv(offset: u64, _size: u8) -> SsaVarnode {
         SsaVarnode {

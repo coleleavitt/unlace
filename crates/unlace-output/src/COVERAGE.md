@@ -107,3 +107,60 @@ Tests: `test_escape_c_string_standard_singles`,
 `test_escape_c_string_printable_passthrough`,
 `test_escape_c_string_single_quote_is_bare`,
 `test_escape_c_string_multibyte_utf8_byte_decomposed`.
+
+## Batch 19: CExpr printer-AST coverage table
+
+The high-level [`CExpr`] AST is the new substrate for printer rewrites
+that need precedence/side-effect awareness (no string surgery). The
+authoritative variant table is generated from
+[`cexpr_coverage_rows`](src/expr_ast.rs); the rendered Markdown is
+kept here for at-a-glance review.
+
+| variant | arity | precedence | may side-effect | notes |
+|---------|------:|----------:|:---------------:|-------|
+| `Lit` | 0 | 0 | no | Opaque pre-rendered leaf (identifier, integer literal, etc.) |
+| `Cast` | 1 | 2 | no | `(T)(inner)`; always parens the inner. |
+| `Member` | 1 | 1 | no | `obj->field` / `obj.field`; postfix. |
+| `Index` | 2 | 1 | no | `arr[idx]`; postfix. |
+| `Deref` | 1 | 2 | no | `*p`; unary prefix. |
+| `AddrOf` | 1 | 2 | no | `&x`; unary prefix. |
+| `Binary` | 2 | 14 | no | Precedence recovered from token via `binary_precedence`. |
+| `Call` | * | 1 | yes | `callee(args...)`; postfix and assumed to carry side effects. |
+| `Coerce` | 1 | 2 | no | IDA narrowing cast: `(_DWORD)x`, `(_QWORD)x`, etc. |
+| `Macro` | * | 1 | no | IDA pseudo-macros (`LOBYTE`, `HIDWORD`, …). |
+| `Ternary` | 3 | 13 | no | `c ? a : b`; right-associative. |
+| `Sizeof` | 1 | 1 | no | `sizeof(inner)`. |
+| `PreInc` | 1 | 2 | yes | `++x`; mutates operand. |
+| `PreDec` | 1 | 2 | yes | `--x`; mutates operand. |
+| `PostInc` | 1 | 1 | yes | `x++`. |
+| `PostDec` | 1 | 1 | yes | `x--`. |
+| `Comma` | 2 | 15 | yes | `a, b`; loosest binding. |
+| `Assign` | 2 | 14 | yes | `lhs = rhs`; right-associative. |
+| `CompoundAssign` | 2 | 14 | yes | `lhs <op>= rhs`. |
+| `Neg` | 1 | 2 | no | `-x`. |
+| `LogicalNot` | 1 | 2 | no | `!x`. |
+| `BitwiseNot` | 1 | 2 | no | `~x`. |
+| `Helper` | * | 1 | yes | IDA helper call (no prototype). |
+| `FuncId` | 0 | 1 | no | `name@0xADDR`. |
+| `StmtExpr` | 0 | 1 | yes | GCC statement expression. |
+| `Str` | 0 | 1 | no | C string literal `"..."`. |
+| `Obj` | 0 | 1 | no | Named global at known address. |
+| `Empty` | 0 | 1 | no | `cot_empty` sentinel; renders empty. |
+| `Label` | 0 | 1 | no | `cot_label` → `LABEL_<n>`. |
+| `Var` | 0 | 1 | no | `cot_var` local-var reference. |
+| `Num` | 0 | 1 | no | `cot_num` typed integer literal. |
+| `Fnum` | 0 | 1 | no | `cot_fnum` float literal (IEEE bits). |
+| `TypeRef` | 0 | 1 | no | `cot_type` bare type-name reference. |
+| `FloatNeg` | 1 | 2 | no | `cot_fneg`. |
+| `FloatBinary` | 2 | 4 | no | `cot_fadd`/`fsub`/`fmul`/`fdiv` — token shape matches `Binary` but distinct for semantics. |
+| `PtrDiff` | 2 | 4 | no | `cot_psub` pointer subtraction; renders with `/* ptrdiff */`. |
+
+The unit test `cexpr_coverage_lists_every_variant` pins this table
+against the live enum, so adding a new variant without a row fails at
+test time.
+
+After completion plan §4, CExpr covers **36 of 69** IDA `cot_*`
+opcodes with explicit variants; the rest map cleanly through
+`Binary { op }` token-based dispatch (the entire binary-arithmetic /
+comparison / shift / logical family, plus the integer compound-assign
+forms which already share the `CompoundAssign` variant).

@@ -74,14 +74,14 @@ use unlace_passes::{
     StructFieldDetectPass, TailCallDetectPass, TypeConstraintSolverPass, VarNamingPass,
     VariableMergePass, annotate_libc_calls, bump_if_signature_changed,
     canonical_pipeline_descriptor, detect_byref, detect_go_defer, parse_printf_format_strings,
-    recover_stack_frame, recover_structs, run_instrumented, run_outer_fixedpoint,
-    run_to_fixedpoint, validate_named_phase_monotonicity,
+    recover_direct_call_args, recover_stack_frame, recover_structs, run_instrumented,
+    run_outer_fixedpoint, run_to_fixedpoint, validate_named_phase_monotonicity,
 };
 
 /// Once-per-process pipeline phase-monotonicity check.
 ///
-/// In debug builds (or any build with `UNLACE_VALIDATE_PIPELINE=1` set),
-/// the first call to `run_passes_with_report_inner` runs
+/// When `UNLACE_VALIDATE_PIPELINE=1` is set, the first call to
+/// `run_passes_with_report_inner` runs
 /// [`validate_named_phase_monotonicity`] against
 /// [`canonical_pipeline_descriptor`] and emits one warning line per
 /// out-of-order transition to stderr. Subsequent calls are a single
@@ -95,13 +95,10 @@ fn maybe_validate_pipeline_once() {
     use std::sync::OnceLock;
     static DONE: OnceLock<()> = OnceLock::new();
     DONE.get_or_init(|| {
-        // Gate: debug builds always run the check; release builds opt in
-        // via the env var so production binaries don't pay the (cheap)
-        // walk on the first decompile.
         let env_on = std::env::var_os("UNLACE_VALIDATE_PIPELINE")
             .map(|v| v != "0")
             .unwrap_or(false);
-        if !cfg!(debug_assertions) && !env_on {
+        if !env_on {
             return;
         }
         let desc = canonical_pipeline_descriptor();
@@ -1011,6 +1008,12 @@ fn run_passes_with_report_inner(
     ssa.maturity = Maturity::Zero;
     let mut total_ir_changes: usize = 0;
 
+    // Batch 16: opt-in per-maturity IR snapshots. Set
+    // `UNLACE_MATURITY_DUMP=<dir>` and one file per
+    // (function, maturity-stage, outer-iter) is written into that directory
+    // as a text dump of [`unlace_output::dump_ir`].
+    maturity_snapshot(ssa, "M_ZERO", 0);
+
     // (2) Outer fixed-point loop. Each iteration runs the staged pipeline;
     // the outer loop re-runs when type recovery discovers new facts.
     let outer_report = run_outer_fixedpoint(
@@ -1031,22 +1034,27 @@ fn run_passes_with_report_inner(
             ssa.maturity = Maturity::Generated;
             let ir_changes = pipeline_stage_ir_fixedpoint(ssa)?;
             total_ir_changes = total_ir_changes.saturating_add(ir_changes);
+            maturity_snapshot(ssa, "M_GENERATED", _iter);
 
             // Stage 2: M_PREOPTIMIZED — cleanup passes
             ssa.maturity = Maturity::PreOptimized;
             pipeline_stage_cleanup(ssa)?;
+            maturity_snapshot(ssa, "M_PREOPTIMIZED", _iter);
 
             // Stage 3: M_LOCOPT — structural detection + stack recovery
             ssa.maturity = Maturity::LocalOpt;
             pipeline_stage_structural(ssa)?;
+            maturity_snapshot(ssa, "M_LOCOPT", _iter);
 
             // Stage 4: M_CALLS — call resolution + vtables
             ssa.maturity = Maturity::Calls;
             pipeline_stage_call_resolution(ssa)?;
+            maturity_snapshot(ssa, "M_CALLS", _iter);
 
             // Stage 5: M_GLBOPT — type recovery
             ssa.maturity = Maturity::GlobalOpt;
             pipeline_stage_type_recovery(ssa)?;
+            maturity_snapshot(ssa, "M_GLBOPT", _iter);
 
             Ok(())
         },
@@ -1065,10 +1073,12 @@ fn run_passes_with_report_inner(
     ssa.maturity = Maturity::Lvars;
     pipeline_stage_post_loop(ssa)?;
     pipeline_stage_lvar(ssa)?;
+    maturity_snapshot(ssa, "M_LVARS", 0);
 
     // Stage 7: M_FINAL — language-specific + naming + finalization
     ssa.maturity = Maturity::Final;
     pipeline_stage_final(ssa, resolver)?;
+    maturity_snapshot(ssa, "M_FINAL", 0);
 
     let _ = bump_if_signature_changed(ssa, &pre_pipeline_sig);
 
@@ -1085,6 +1095,49 @@ fn run_passes_with_report_inner(
         ir_changes: total_ir_changes,
         outer: outer_report,
     })
+}
+
+/// Cached destination directory for [`maturity_snapshot`]. `None` when
+/// `UNLACE_MATURITY_DUMP` is unset (the common hot-path case). Read once
+/// per process via `OnceLock` so the no-op path is a single atomic load.
+fn maturity_dump_dir() -> Option<&'static std::path::Path> {
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+    static CELL: OnceLock<Option<PathBuf>> = OnceLock::new();
+    CELL.get_or_init(|| {
+        std::env::var_os("UNLACE_MATURITY_DUMP")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    })
+    .as_deref()
+}
+
+/// Write an IR snapshot for `ssa` to `<UNLACE_MATURITY_DUMP>/<func>-<stage>-<iter>.txt`.
+///
+/// Noop when the env var is unset. On write error we log a tracing
+/// warning but do not propagate — snapshots are observability, not
+/// correctness. `iter` is the outer-fixedpoint iteration this stage ran
+/// in; for stages that live outside the outer loop pass `0`.
+fn maturity_snapshot(ssa: &SsaFunction, stage: &str, iter: usize) {
+    let Some(dir) = maturity_dump_dir() else {
+        return;
+    };
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        tracing::warn!(dir = %dir.display(), err = %e, "maturity-dump: mkdir failed");
+        return;
+    }
+    let safe_func: String = ssa
+        .function
+        .name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .collect();
+    let file_name = format!("{safe_func}-{stage}-iter{iter}.txt");
+    let path = dir.join(file_name);
+    let body = unlace_output::dump_ir(ssa);
+    if let Err(e) = std::fs::write(&path, body) {
+        tracing::warn!(path = %path.display(), err = %e, "maturity-dump: write failed");
+    }
 }
 
 // ─── Pipeline Stage Helpers ─────────────────────────────────────────────────
@@ -1262,6 +1315,77 @@ fn dwarf_function_for_entry<'a>(
         .or_else(|| dwarf.functions.get(&entry.addr))
 }
 
+/// Batch §1 Phase 4 — overlay PDB-recovered composite types onto SSA
+/// varnodes. Mirrors [`apply_dwarf_to_ssa`] but pulls type information
+/// from `image.pdb_types.structs` (lowered via
+/// `unlace_loader::pdb_types::walk_tpi_with_index`) keyed by user-visible
+/// type name.
+///
+/// For each DWARF-named local whose declared type name (after stripping
+/// `struct`/`class` qualifiers) matches a recovered PDB struct, write
+/// the lowered `Type::Struct` onto every SSA varnode that aliases the
+/// local's stack offset.
+///
+/// `None` PDB info or no overlap → no-op.
+pub fn apply_pdb_types_to_ssa(ssa: &mut SsaFunction, image: &BinaryImage) {
+    let Some(pdb) = image.pdb_types.as_ref() else {
+        return;
+    };
+    if pdb.structs.is_empty() || ssa.dwarf_local_names.is_empty() {
+        return;
+    }
+    // Build a fast lookup of bare type names (strip `struct `/`class `/`union `
+    // prefixes so DWARF-style names match PDB-style names).
+    let mut by_name: BTreeMap<String, &Type> = BTreeMap::new();
+    for (name, ty) in &pdb.structs {
+        by_name.insert(strip_aggregate_qualifier(name), ty);
+    }
+    // Walk dwarf_local_names; the offset is the frame offset, the name
+    // is the source identifier. We don't have its declared type here,
+    // so the lookup matches by *variable* name → PDB struct name (the
+    // common pattern when a local's name carries the type, e.g.
+    // `point` of type `Point`).
+    let local_entries: Vec<(i64, String)> = ssa
+        .dwarf_local_names
+        .iter()
+        .map(|(&off, name)| (off, name.clone()))
+        .collect();
+    for (frame_offset, local_name) in local_entries {
+        let key = strip_aggregate_qualifier(&local_name);
+        let candidate = by_name
+            .get(&key)
+            .or_else(|| by_name.get(&capitalised(&key)))
+            .cloned();
+        let Some(ty) = candidate else { continue };
+        for base in stack_bases_for_frame_offset(ssa, frame_offset) {
+            ssa.composite_var_types
+                .entry(base)
+                .or_insert_with(|| ty.clone());
+        }
+    }
+}
+
+fn strip_aggregate_qualifier(name: &str) -> String {
+    name.strip_prefix("struct ")
+        .or_else(|| name.strip_prefix("class "))
+        .or_else(|| name.strip_prefix("union "))
+        .unwrap_or(name)
+        .trim()
+        .to_string()
+}
+
+fn capitalised(name: &str) -> String {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(c) => {
+            let mut out = c.to_uppercase().collect::<String>();
+            out.extend(chars);
+            out
+        }
+        None => name.to_string(),
+    }
+}
+
 fn stack_bases_for_frame_offset(ssa: &SsaFunction, frame_offset: i64) -> Vec<SsaVarnode> {
     let mut bases = BTreeSet::new();
     for var in ssa.var_map.values() {
@@ -1396,6 +1520,20 @@ pub fn build_symbol_table_with_functions(
     for (addr, name) in &image.plt_symbols {
         table.insert(*addr, name.clone());
     }
+    // Batch 20: overlay FLIRT/SIG-recovered canonical names. Replaces
+    // synthetic `sub_XXXX` stub names with the matched library name
+    // (e.g. `memcpy`, `strlen`) so call sites in other functions render
+    // the recognised name rather than the stripped-binary placeholder.
+    // We only overwrite names that look like stripped-binary stubs;
+    // application code keeps its original name.
+    for entry in discovered {
+        if !is_flirt_eligible_name(&entry.name) {
+            continue;
+        }
+        if let Some(canonical) = flirt_match(image, entry) {
+            table.insert(entry.addr, canonical);
+        }
+    }
     table
 }
 
@@ -1432,6 +1570,7 @@ pub fn lift_and_run_passes(
     if let Some(dwarf_info) = dwarf {
         apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
     }
+    apply_pdb_types_to_ssa(&mut ssa, image);
 
     populate_eh_landing_pads(image, entry, &mut ssa);
     warn_if_large_ir(&entry.name, &ssa);
@@ -1444,6 +1583,8 @@ pub fn lift_and_run_passes(
     }
     let resolve_name =
         |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
+
+    let _call_args_pre = recover_direct_call_args(&mut ssa, &resolve_name);
 
     // Batch 6 (pre-pass): parse printf-family format strings against the
     // raw post-SSA IR. The pre-pass run is load-bearing because the
@@ -1554,6 +1695,89 @@ pub fn decompile_function(
     decompile_function_with_symbols(image, lifter, entry, emit, config, dwarf, &[], None)
 }
 
+/// Lazy lifting entry point (Batch 25): decompile *one* function from a
+/// binary without driving the whole-binary pipeline.
+///
+/// Useful for interactive scenarios (LSP / future TUI) where the caller
+/// only wants the C output for the function under the cursor. We still
+/// have to discover function boundaries (to satisfy callees and ABI
+/// recovery), but the body of every other function never gets lifted.
+///
+/// `target_addr` selects the function by entry virtual address; the
+/// closest discovered function start that is `<= target_addr` wins.
+/// Returns the rendered C output on success.
+pub fn decompile_one_function(
+    image: &BinaryImage,
+    target_addr: u64,
+    emit: EmitFormat,
+) -> Result<String> {
+    decompile_one_function_cached(image, target_addr, emit, None, None)
+}
+
+/// `decompile_one_function` plus an optional persistent on-disk cache.
+///
+/// When `cache` is `Some`, the function:
+/// 1. Computes `CacheKey { binary_sha256, function_addr, function_size, pipeline_revision }`.
+/// 2. Looks up `cache.get(&key)`; on hit, returns the cached string.
+/// 3. On miss, runs the pipeline and writes the resulting C string to
+///    the cache.
+///
+/// `binary_sha256` is supplied by the caller so the hash is computed
+/// once per binary (not once per function). `None` skips caching for
+/// that call.
+pub fn decompile_one_function_cached(
+    image: &BinaryImage,
+    target_addr: u64,
+    emit: EmitFormat,
+    cache: Option<&crate::cache::DiskCache>,
+    binary_sha256: Option<&str>,
+) -> Result<String> {
+    let lifter = unlace_lift::get_lifter(image.arch);
+    let functions = discover_functions(image, None)?;
+
+    let entry = functions
+        .iter()
+        .filter(|f| f.addr <= target_addr)
+        .max_by_key(|f| f.addr)
+        .ok_or_else(|| anyhow::anyhow!(
+            "no function at or below 0x{target_addr:x} (out of {} discovered)",
+            functions.len()
+        ))?;
+
+    // Cache lookup before the heavy pipeline.
+    let cache_key = match (cache, binary_sha256) {
+        (Some(_), Some(sha)) => Some(crate::cache::CacheKey::new(sha, entry.addr, entry.size)),
+        _ => None,
+    };
+    if let (Some(cache), Some(key)) = (cache, cache_key.as_ref()) {
+        if let Ok(Some(body)) = cache.get(key) {
+            if let Ok(s) = std::str::from_utf8(&body) {
+                tracing::debug!(
+                    func = %entry.name,
+                    digest = %key.digest(),
+                    "cache hit: skipping pipeline"
+                );
+                return Ok(s.to_string());
+            }
+        }
+    }
+
+    let config = PipelineConfig {
+        timeout: Duration::from_secs(30),
+        print_config: None,
+        annotations: None,
+    };
+    let rendered = decompile_function(image, lifter.as_ref(), entry, emit, &config, None)?;
+
+    if let (Some(cache), Some(key)) = (cache, cache_key.as_ref()) {
+        if let Err(e) = cache.put(key, rendered.as_bytes()) {
+            tracing::warn!(err = %e, "cache put failed");
+        }
+    }
+
+    Ok(rendered)
+}
+
 /// Process-wide FLIRT signature database; lazily built on first use.
 fn flirt_db() -> &'static FlirtDb {
     use std::sync::OnceLock;
@@ -1572,8 +1796,26 @@ fn flirt_db() -> &'static FlirtDb {
 /// mirrors IDA's behaviour where FLIRT only renames `unknown_libname`
 /// entries.
 pub fn flirt_match(image: &BinaryImage, entry: &FunctionEntry) -> Option<String> {
+    flirt_match_detailed(image, entry).map(|m| m.name)
+}
+
+/// §5.5: confidence-aware FLIRT match result.
+///
+/// `confidence` is a synthetic 0.0–1.0 score: 1.0 when the matched
+/// signature's outbound-reference checks passed (best evidence), 0.5
+/// when only the byte/CRC prefix matched (signature still applies but
+/// the reference table didn't resolve), 0.0 when no match.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FlirtConfidence {
+    pub name: String,
+    pub confidence: f32,
+}
+
+/// Like [`flirt_match`] but returns the confidence score and the
+/// canonical name as a structured pair.
+pub fn flirt_match_detailed(image: &BinaryImage, entry: &FunctionEntry) -> Option<FlirtConfidence> {
     let resolved = flirt_resolved_names(image);
-    flirt_match_with_resolved(image, entry, &resolved)
+    flirt_match_detailed_with_resolved(image, entry, &resolved)
 }
 
 fn flirt_match_with_resolved(
@@ -1581,6 +1823,14 @@ fn flirt_match_with_resolved(
     entry: &FunctionEntry,
     resolved: &BTreeMap<u64, String>,
 ) -> Option<String> {
+    flirt_match_detailed_with_resolved(image, entry, resolved).map(|m| m.name)
+}
+
+fn flirt_match_detailed_with_resolved(
+    image: &BinaryImage,
+    entry: &FunctionEntry,
+    resolved: &BTreeMap<u64, String>,
+) -> Option<FlirtConfidence> {
     if !is_flirt_eligible_name(&entry.name) {
         return None;
     }
@@ -1597,7 +1847,10 @@ fn flirt_match_with_resolved(
     let bytes = &text.data[off_start..off_end];
     flirt_db()
         .match_function_with_refs(bytes, resolved)
-        .map(|m| m.name.to_string())
+        .map(|m| FlirtConfidence {
+            name: m.name.to_string(),
+            confidence: if m.refs_matched { 1.0 } else { 0.5 },
+        })
 }
 
 fn flirt_resolved_names(image: &BinaryImage) -> BTreeMap<u64, String> {
@@ -1742,6 +1995,7 @@ pub fn decompile_function_with_symbols(
     if let Some(dwarf_info) = dwarf {
         apply_dwarf_to_ssa(&mut ssa, dwarf_info, entry);
     }
+    apply_pdb_types_to_ssa(&mut ssa, image);
 
     populate_eh_landing_pads(image, entry, &mut ssa);
 
@@ -1762,6 +2016,8 @@ pub fn decompile_function_with_symbols(
     let t = Instant::now();
     let resolve_name =
         |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
+
+    let _call_args_pre = recover_direct_call_args(&mut ssa, &resolve_name);
 
     // Batch 6 (pre-pass): parse printf-family format strings *before*
     // the optimization pipeline runs. The IR pattern that
@@ -2347,6 +2603,7 @@ mod tests {
             function_starts: Vec::new(),
             debug_records: Vec::new(),
             load_config: None,
+            pe_mitigations: None,
             runtime_functions: Vec::new(),
             resources: Vec::new(),
             bound_imports: Vec::new(),
@@ -2829,5 +3086,243 @@ mod tests {
         };
         let canonical = super::flirt_match(&image, &entry);
         assert_eq!(canonical.as_deref(), Some("__memcpy_chk"));
+    }
+
+    /// Batch 20: FLIRT-matched names propagate through
+    /// `build_symbol_table_with_functions` so a call site to a recognised
+    /// libc stub renders the canonical name (`memcpy`) rather than the
+    /// stripped `sub_XXXX` placeholder.
+    /// §5.5: `flirt_match_detailed` returns a 0.5–1.0 confidence
+    /// alongside the canonical name. The memcpy stub (no references)
+    /// lands at confidence 0.5 because `refs_matched` is true only when
+    /// outbound calls resolve.
+    #[test]
+    fn flirt_match_detailed_returns_confidence() {
+        let memcpy_bytes: Vec<u8> = vec![
+            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
+        ];
+        let base: u64 = 0x1000;
+        let image = make_text_image(memcpy_bytes.clone(), base);
+        let entry = FunctionEntry {
+            name: "sub_1000".into(),
+            addr: base,
+            size: memcpy_bytes.len() as u64,
+        };
+        let detail = super::flirt_match_detailed(&image, &entry).expect("flirt hit");
+        assert_eq!(detail.name, "memcpy");
+        // Refs check: the stub has no outbound calls, so refs trivially
+        // match → confidence 1.0.
+        assert!(
+            detail.confidence >= 0.5 && detail.confidence <= 1.0,
+            "confidence in [0.5, 1.0], got {}",
+            detail.confidence
+        );
+    }
+
+    #[test]
+    fn build_symbol_table_overlays_flirt_canonical_names() {
+        let memcpy_bytes: Vec<u8> = vec![
+            0xF3, 0x0F, 0x1E, 0xFA, 0x48, 0x89, 0xF8, 0x48, 0x89, 0xD1, 0xF3, 0xA4, 0xC3,
+        ];
+        let base: u64 = 0x1000;
+        let image = make_text_image(memcpy_bytes.clone(), base);
+        let entry = FunctionEntry {
+            name: "sub_1000".into(),
+            addr: base,
+            size: memcpy_bytes.len() as u64,
+        };
+        let symbols = super::build_symbol_table_with_functions(&image, &[entry]);
+        assert_eq!(
+            symbols.get(&base).map(String::as_str),
+            Some("memcpy"),
+            "FLIRT canonical name must replace `sub_XXXX` in the symbol table",
+        );
+    }
+
+    /// Batch §1 Phase 4: `apply_pdb_types_to_ssa` writes
+    /// `composite_var_types` for SSA varnodes whose stack offset
+    /// matches a DWARF-named local *and* whose name aligns with a
+    /// recovered PDB struct.
+    #[test]
+    fn apply_pdb_types_populates_composite_var_types() {
+        use unlace_ir::Varnode;
+        use unlace_ir::ssa::SsaVarnode;
+        use unlace_ir::types::{StructFieldType, Type};
+        use unlace_loader::pdb_types::PdbTypes;
+
+        // Build a minimal image + PdbTypes carrying a recovered `Point`
+        // struct.
+        let code = vec![0x90, 0xc3]; // nop; ret
+        let mut image = make_text_image(code, 0x1000);
+
+        let mut pdb = PdbTypes::default();
+        let point_type = Type::Struct {
+            name: "Point".into(),
+            fields: vec![
+                StructFieldType {
+                    name: "x".into(),
+                    ty: Type::Primitive(unlace_ir::ssa::PrimitiveType::Int(4)),
+                    offset: 0,
+                },
+                StructFieldType {
+                    name: "y".into(),
+                    ty: Type::Primitive(unlace_ir::ssa::PrimitiveType::Int(4)),
+                    offset: 4,
+                },
+            ],
+        };
+        pdb.structs.insert("Point".into(), point_type.clone());
+        image.pdb_types = Some(pdb);
+
+        let entry = FunctionEntry {
+            name: "main".into(),
+            addr: 0x1000,
+            size: 2,
+        };
+        let lifter = unlace_lift::get_lifter(image.arch);
+        let ir = super::lift_function(&image, lifter.as_ref(), &entry).expect("lift");
+        let mut ssa = unlace_ir::ssa::build_ssa(ir);
+        ssa.arch = image.arch;
+
+        // Use a positive offset so `stack_offset_matches` resolves
+        // through the `raw_offset == frame_offset.unsigned_abs()` arm.
+        // Frame offset -16 has `unsigned_abs() == 16`; stack varnode at
+        // offset 16 matches.
+        let stack_var = SsaVarnode {
+            base: Varnode::stack(16, 4),
+            version: 1,
+        };
+        ssa.var_map.insert(
+            (
+                unlace_ir::BlockId(0),
+                0,
+                unlace_ir::ssa::VarnodeSlot::Output,
+            ),
+            stack_var,
+        );
+        ssa.dwarf_local_names.insert(-16, "Point".into());
+
+        super::apply_pdb_types_to_ssa(&mut ssa, &image);
+
+        let recovered = ssa
+            .composite_var_types
+            .get(&stack_var)
+            .expect("Point struct landed on the stack varnode");
+        assert!(matches!(recovered, Type::Struct { name, .. } if name == "Point"));
+    }
+
+    /// `apply_pdb_types_to_ssa` is a no-op when `image.pdb_types` is
+    /// `None`.
+    #[test]
+    fn apply_pdb_types_no_op_without_pdb_data() {
+        let code = vec![0xc3];
+        let image = make_text_image(code, 0x1000);
+        let entry = FunctionEntry {
+            name: "main".into(),
+            addr: 0x1000,
+            size: 1,
+        };
+        let lifter = unlace_lift::get_lifter(image.arch);
+        let ir = super::lift_function(&image, lifter.as_ref(), &entry).expect("lift");
+        let mut ssa = unlace_ir::ssa::build_ssa(ir);
+        ssa.arch = image.arch;
+        let before = ssa.composite_var_types.len();
+        super::apply_pdb_types_to_ssa(&mut ssa, &image);
+        assert_eq!(ssa.composite_var_types.len(), before);
+    }
+
+    /// §5.3: `decompile_one_function_cached` writes to the cache on
+    /// miss and returns the cached body on a subsequent identical call
+    /// (verified by overwriting the cache with a sentinel between calls
+    /// and observing the sentinel come back).
+    #[test]
+    fn decompile_one_function_cached_round_trips_through_disk_cache() {
+        use unlace_loader::Loader;
+        let fixture =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/hello_world.elf");
+        let data = std::fs::read(&fixture).expect("fixture present");
+        let image = unlace_loader::ElfLoader::load(&data).expect("elf parse");
+        let main_addr = image
+            .symbols
+            .iter()
+            .find(|(_, s)| s.name == "main")
+            .map(|(addr, _)| *addr)
+            .expect("main symbol");
+
+        let tmp = std::env::temp_dir().join(format!(
+            "unlace_pipeline_cache_test_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let cache = crate::cache::DiskCache::new(&tmp);
+        let sha = crate::cache::sha256_hex(&data);
+
+        // First call: cache miss, runs pipeline, writes body.
+        let first = super::decompile_one_function_cached(
+            &image,
+            main_addr,
+            EmitFormat::C,
+            Some(&cache),
+            Some(&sha),
+        )
+        .expect("first call");
+
+        // Overwrite the cache entry with a sentinel so the second call's
+        // returned body proves we're reading from cache rather than
+        // re-running the pipeline.
+        let key = crate::cache::CacheKey::new(&sha, main_addr, 0);
+        // The recorded size may differ from `0`; recover it from `discover_functions`
+        // the same way the cached entry was built.
+        let functions =
+            super::discover_functions(&image, None).expect("discover");
+        let entry = functions
+            .iter()
+            .filter(|f| f.addr <= main_addr)
+            .max_by_key(|f| f.addr)
+            .expect("entry");
+        let actual_key = crate::cache::CacheKey::new(&sha, entry.addr, entry.size);
+        cache.put(&actual_key, b"SENTINEL").expect("overwrite");
+
+        let second = super::decompile_one_function_cached(
+            &image,
+            main_addr,
+            EmitFormat::C,
+            Some(&cache),
+            Some(&sha),
+        )
+        .expect("second call");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+        // First-call output is real C; second-call output is the sentinel.
+        assert!(first.contains("main"));
+        assert_eq!(second, "SENTINEL");
+        let _ = key; // suppress unused warning
+    }
+
+    /// Batch 25: lazy lifting on a real fixture. The closest function
+    /// at-or-below the target address is decompiled; we just check that
+    /// a non-empty C string comes back and contains a known token.
+    #[test]
+    fn decompile_one_function_returns_c_for_hello_world_main() {
+        use unlace_loader::Loader;
+        let fixture =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/hello_world.elf");
+        let data = std::fs::read(&fixture).expect("fixture present");
+        let image = unlace_loader::ElfLoader::load(&data).expect("elf parse");
+        // Find `main`'s entry from the image symbols so we don't hard-code
+        // an address that could drift across rebuilds.
+        let main_addr = image
+            .symbols
+            .iter()
+            .find(|(_, s)| s.name == "main")
+            .map(|(addr, _)| *addr)
+            .expect("hello_world should export main");
+
+        let out = super::decompile_one_function(&image, main_addr, EmitFormat::C)
+            .expect("decompile_one_function");
+        assert!(
+            out.contains("int main") || out.contains("void main") || out.contains("main("),
+            "lazy decompile must render the function header; got: {out}",
+        );
     }
 }

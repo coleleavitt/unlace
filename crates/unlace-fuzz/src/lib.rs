@@ -229,3 +229,42 @@ fn panic_payload_to_string(payload: &Box<dyn std::any::Any + Send>) -> String {
         "<non-string panic payload>".to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Empty input: ELF magic gate must reject without panicking.
+    #[test]
+    fn empty_input_returns_not_elf() {
+        assert_eq!(fuzz_iteration(&[]), FuzzResult::NotElf);
+    }
+
+    /// Random bytes that don't begin with `\x7fELF` are rejected.
+    #[test]
+    fn random_garbage_returns_not_elf() {
+        assert_eq!(
+            fuzz_iteration(&[0xff; 64]),
+            FuzzResult::NotElf
+        );
+    }
+
+    /// A truncated ELF that has the magic but no valid header must
+    /// either return [`FuzzResult::LoadFailed`] or `Ok { functions_decompiled: 0 }`
+    /// — both are acceptable, the test is that it does not panic.
+    #[test]
+    fn truncated_elf_does_not_panic() {
+        let mut buf = vec![0u8; 32];
+        buf[0..4].copy_from_slice(b"\x7fELF");
+        buf[4] = 2; // 64-bit
+        buf[5] = 1; // little-endian
+        let r = fuzz_iteration(&buf);
+        assert!(
+            matches!(
+                r,
+                FuzzResult::LoadFailed(_) | FuzzResult::Ok { .. } | FuzzResult::NotElf
+            ),
+            "unexpected truncated-ELF outcome: {r:?}",
+        );
+    }
+}

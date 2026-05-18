@@ -11,17 +11,29 @@
 
 use std::path::PathBuf;
 
-use unlace_cli::quality::{analyze_binary, QualityTotals};
+use unlace_cli::quality::{
+    BinaryQuality, FunctionQuality, QualityTotals, analyze_binary, render_markdown,
+};
 
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures")
 }
 
 fn analyze(name: &str) -> QualityTotals {
+    analyze_report(name).totals
+}
+
+fn analyze_report(name: &str) -> BinaryQuality {
     let path = fixtures_dir().join(name);
-    analyze_binary(&path)
-        .unwrap_or_else(|e| panic!("quality analysis of {name} failed: {e:#}"))
-        .totals
+    analyze_binary(&path).unwrap_or_else(|e| panic!("quality analysis of {name} failed: {e:#}"))
+}
+
+fn find_function<'a>(report: &'a BinaryQuality, name: &str) -> &'a FunctionQuality {
+    report
+        .functions
+        .iter()
+        .find(|q| q.name == name)
+        .unwrap_or_else(|| panic!("{}: missing function {name}", report.binary))
 }
 
 /// Fixtures excluded from the per-fixture smoke loop because they are large
@@ -63,41 +75,111 @@ fn quality_runs_on_every_fixture_without_panic() {
         }
         checked += 1;
     }
-    assert!(checked >= 10, "expected to check >=10 ELF fixtures, saw {checked}");
+    assert!(
+        checked >= 10,
+        "expected to check >=10 ELF fixtures, saw {checked}"
+    );
 }
 
 /// Pinned baseline for `hello_world.elf`. Update deliberately when a pass
 /// changes output for the better.
 #[test]
 fn baseline_hello_world() {
-    let t = analyze("hello_world.elf");
-    assert_eq!(t.unimplemented_ops, 0, "hello_world should have no Unimplemented ops");
-    assert_eq!(t.asm_blocks, 0, "hello_world should have no raw __asm blocks");
+    let report = analyze_report("hello_world.elf");
+    let main = find_function(&report, "main");
+    let t = &report.totals;
+    assert_eq!(
+        t.unimplemented_ops, 0,
+        "hello_world should have no Unimplemented ops"
+    );
+    assert_eq!(
+        t.asm_blocks, 0,
+        "hello_world should have no raw __asm blocks"
+    );
     // Batch 0+ extended counters pinned baselines. hello_world is a
-    // single direct-call printf wrapper — no compound assigns, no
-    // short-circuit, no SIMD, all calls direct (rate = 100%).
-    assert_eq!(t.compound_assignments, 0, "hello_world: no compound assigns");
+    // single direct-call printf wrapper. Batch 17 stack/SSA provenance now
+    // preserves startup stack arithmetic, exposing two compound assignments
+    // in helper output; no short-circuit, no SIMD, all calls direct.
+    assert_eq!(
+        t.compound_assignments, 2,
+        "hello_world: two startup compound assigns recovered"
+    );
     assert_eq!(t.short_circuit_ops, 0, "hello_world: no &&/||");
     assert_eq!(t.simd_typed_vars, 0, "hello_world: no SIMD-typed vars");
     assert_eq!(
         t.call_resolution_rate, 100.0,
         "hello_world: every call site is direct → 100% resolved",
     );
+    assert_eq!(
+        main.output_null_deref_sites, 0,
+        "hello_world:main must not emit null-address dereferences"
+    );
+    assert_eq!(
+        main.output_stale_return_result, 0,
+        "hello_world:main must not emit stale `return result;`"
+    );
+    assert_eq!(
+        main.output_unimplemented_tokens, 0,
+        "hello_world:main must not leak `Unimplemented` tokens"
+    );
+    assert_eq!(
+        t.output_null_deref_sites, 0,
+        "hello_world aggregate null-deref output fixed"
+    );
+    assert_eq!(
+        t.output_stale_return_result, 0,
+        "hello_world aggregate stale helper returns fixed"
+    );
+    assert_eq!(
+        t.output_unimplemented_tokens, 0,
+        "hello_world aggregate must not leak Unimplemented tokens"
+    );
+    assert_eq!(
+        t.output_impossible_lvalue_sites, 0,
+        "hello_world aggregate must not emit small-immediate lvalue writes"
+    );
+    assert_eq!(
+        t.output_lost_frame_offset_sites, 0,
+        "hello_world aggregate must not leak raw frame-relative pointer arithmetic"
+    );
 }
 
-/// Pinned baseline for `branches.elf`. Captures the current shape: one
-/// `Callother` and one goto/label pair in `classify`, two stack vars + two
-/// recovered struct fields in `sub_10f0`.
+/// Pinned baseline for `branches.elf`. Captures the current shape after x86
+/// calls stopped materializing synthetic return-address stack stores, SCCP
+/// stopped zeroing first-use register inputs, and stack/struct artifact
+/// suppression stopped counting non-source startup temporaries as recovered
+/// source objects.
 #[test]
 fn baseline_branches() {
     let t = analyze("branches.elf");
     assert_eq!(t.unimplemented_ops, 0, "branches: no Unimplemented ops");
-    assert_eq!(t.callother_ops, 0, "branches: no Callother ops (SSE mov lowered to Copy)");
-    assert_eq!(t.stack_vars_recovered, 3, "branches: three stack vars recovered");
-    assert_eq!(t.struct_fields_recovered, 2, "branches: two struct fields recovered");
+    assert_eq!(
+        t.callother_ops, 0,
+        "branches: no Callother ops (SSE mov lowered to Copy)"
+    );
+    assert_eq!(
+        t.stack_vars_recovered, 2,
+        "branches: two startup/helper stack vars remain recovered"
+    );
+    assert_eq!(
+        t.struct_fields_recovered, 0,
+        "branches: no source struct fields recovered"
+    );
     assert_eq!(t.gotos_emitted, 0, "branches: no gotos emitted");
     assert_eq!(t.labels_emitted, 0, "branches: no labels emitted");
     assert_eq!(t.asm_blocks, 0, "branches: no raw __asm blocks");
+    assert_eq!(
+        t.output_null_deref_sites, 0,
+        "branches aggregate null-deref output fixed"
+    );
+    assert_eq!(
+        t.output_stale_return_result, 0,
+        "branches aggregate stale helper returns fixed"
+    );
+    assert_eq!(
+        t.output_unimplemented_tokens, 0,
+        "branches aggregate must not leak Unimplemented tokens"
+    );
 }
 
 /// `noreturn_functions` and `libc_annotated_calls` are SSA-field-derived
@@ -147,12 +229,61 @@ fn baseline_loops() {
     assert_eq!(t.asm_blocks, 0, "loops: no raw __asm blocks");
     // loops.elf must produce a non-trivial amount of IR — a guard against
     // the pipeline silently collapsing to empty output.
-    assert!(t.ir_insns > 20, "loops: expected >20 IR insns, got {}", t.ir_insns);
-    // Batch 0+ extended counters: loops contains a `&local` flowing into
-    // a call (current detector picks up exactly one byref local).
-    assert_eq!(t.byref_args, 1, "loops: one byref-taken local");
+    assert!(
+        t.ir_insns > 20,
+        "loops: expected >20 IR insns, got {}",
+        t.ir_insns
+    );
+    // Batch 0+ extended counters: loops contains `&local` flows into calls;
+    // current detector picks up one in each sum_* body.
+    assert_eq!(t.byref_args, 3, "loops: three byref-taken locals");
     assert_eq!(
         t.call_resolution_rate, 100.0,
         "loops: every call site is direct → 100% resolved",
     );
+    assert_eq!(
+        t.output_null_deref_sites, 0,
+        "loops aggregate null-deref output fixed"
+    );
+    assert_eq!(
+        t.output_stale_return_result, 0,
+        "loops aggregate stale helper returns fixed"
+    );
+    assert_eq!(
+        t.output_unimplemented_tokens, 0,
+        "loops aggregate must not leak Unimplemented tokens"
+    );
+}
+
+/// The quality report must expose bad final emitted-C shapes, not only SSA/HIR
+/// counters. This keeps stack/frame provenance work measurable across all
+/// functions while also pinning the already-fixed `hello_world:main` path.
+#[test]
+fn output_sanity_counters_are_reported() {
+    let report = analyze_report("hello_world.elf");
+    let md = render_markdown(&report);
+
+    assert!(
+        md.contains("| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | goto | label | unktype | asm | nullderef | badret | badtok |"),
+        "markdown table must include output-sanity columns"
+    );
+    assert!(
+        md.contains("### Output sanity"),
+        "markdown extended totals must include output sanity"
+    );
+    assert!(
+        md.contains("- null deref sites: 0"),
+        "markdown must render aggregate null-deref count"
+    );
+    assert!(
+        md.contains("- stale `return result;`: 0"),
+        "markdown must render aggregate stale-return count"
+    );
+
+    let main = find_function(&report, "main");
+    assert_eq!(main.output_null_deref_sites, 0);
+    assert_eq!(main.output_stale_return_result, 0);
+    assert_eq!(main.output_unimplemented_tokens, 0);
+    assert_eq!(report.totals.output_null_deref_sites, 0);
+    assert_eq!(report.totals.output_stale_return_result, 0);
 }

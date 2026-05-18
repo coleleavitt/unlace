@@ -38,7 +38,9 @@ pub struct PyBinaryInfo {
 ///
 /// These methods map 1:1 to Python methods on the `unlace.Binary` class.
 pub trait PyBinaryApi {
-    fn open(path: &str) -> Result<Self, String> where Self: Sized;
+    fn open(path: &str) -> Result<Self, String>
+    where
+        Self: Sized;
     fn info(&self) -> PyBinaryInfo;
     fn functions(&self) -> Vec<PyFunction>;
     fn decompile(&self, addr: u64) -> Result<PyDecompileResult, String>;
@@ -82,7 +84,12 @@ mod tests {
 
     #[test]
     fn py_function_struct() {
-        let f = PyFunction { name: "test".into(), address: 0x1000, size: 64, block_count: 3 };
+        let f = PyFunction {
+            name: "test".into(),
+            address: 0x1000,
+            size: 64,
+            block_count: 3,
+        };
         assert_eq!(f.name, "test");
         assert_eq!(f.block_count, 3);
     }
@@ -90,8 +97,11 @@ mod tests {
     #[test]
     fn py_binary_info() {
         let info = PyBinaryInfo {
-            path: "/tmp/test".into(), format: "ELF".into(), arch: "x86_64".into(),
-            entry_point: 0x401000, function_count: 42,
+            path: "/tmp/test".into(),
+            format: "ELF".into(),
+            arch: "x86_64".into(),
+            entry_point: 0x401000,
+            function_count: 42,
         };
         assert_eq!(info.function_count, 42);
     }

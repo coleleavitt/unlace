@@ -18,7 +18,7 @@
 //! - **implemented but wrong** — recovery ran but produced low-quality output
 //!   (raw temporaries, `Unknown` types).
 
-use std::path::Path;
+use std::{path::Path, sync::OnceLock};
 
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
@@ -30,6 +30,49 @@ use unlace_loader::{ElfLoader, Loader, MachoLoader, PeLoader};
 use unlace_struct::{HirFunction, HirNode};
 
 use crate::pipeline::{self, FunctionEntry};
+
+fn null_deref_regex() -> &'static regex::Regex {
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"\*\([^)]*\*\)\(0LL\)").expect("null-deref regex compiles")
+    })
+}
+
+/// Matches a final-C lvalue or rvalue whose address is a small immediate
+/// constant such as `*(_DWORD *)0x10 = …`. Constants below 0x1000 almost
+/// never represent a real source-level access — they are leftover stack/SP
+/// arithmetic that propagation simplified to a literal. Excludes `0LL` so
+/// it doesn't double-count the dedicated null-deref counter.
+fn impossible_lvalue_regex() -> &'static regex::Regex {
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"\*\([^)]*\*\)\(?0x[0-9a-fA-F]{1,3}(?:LL?)?\)?\s*=")
+            .expect("impossible-lvalue regex compiles")
+    })
+}
+
+/// Matches stack-frame-relative addresses that survived all the way into
+/// final C as raw pointer arithmetic. Examples we want to flag:
+///
+/// ```text
+/// *(_QWORD *)(rsp + 0x10) = …
+/// *(_DWORD *)(rbp - 0x4)
+/// *((char *)v3 + rsp + 0x8)
+/// ```
+///
+/// These almost always mean stack provenance was lost upstream — a
+/// frame-relative access should render as a named lvar instead. Note this
+/// is text-shape pattern matching, so a function whose source genuinely
+/// does pointer arithmetic on the stack pointer (rare; typically asm
+/// inline) would also light this counter. That tradeoff is fine; it makes
+/// regressions visible.
+fn lost_frame_offset_regex() -> &'static regex::Regex {
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        regex::Regex::new(r"\*\([^)]*\*\)\([^)]*\b(?:rsp|rbp|esp|ebp|sp|fp|bp)\b\s*[+\-]")
+            .expect("lost-frame regex compiles")
+    })
+}
 
 /// Per-function feature counters. Higher is better for `*_recovered` /
 /// `*_resolved`; lower is better for everything else.
@@ -70,6 +113,13 @@ pub struct FunctionQuality {
     /// recovery — these slots are now rendered as `aN` arguments rather
     /// than fictional `local_*` declarations.
     pub stack_args_classified: usize,
+    /// Batch 17: total [`StackAccess`] records produced by the SP tracker.
+    /// Higher = more frame-relative accesses with preserved provenance.
+    pub stack_accesses_recorded: usize,
+    /// Batch 17: stack accesses whose frame offset did not match a recovered
+    /// local. These are the *gaps* the printer would otherwise render as raw
+    /// `(rsp + N)` arithmetic.
+    pub stack_accesses_lost_provenance: usize,
     /// Struct fields recovered across stack composites + array-of-structs.
     pub struct_fields_recovered: usize,
     /// `switch` statements in the structured output.
@@ -87,6 +137,26 @@ pub struct FunctionQuality {
     pub unknown_types: usize,
     /// Raw `__asm { }` blocks the structurer could not lower.
     pub asm_blocks: usize,
+    /// Final emitted-C null dereference sites such as `*(_QWORD *)(0LL)`.
+    /// These are almost always bad stack/frame provenance artifacts unless
+    /// the source binary truly referenced absolute address zero.
+    pub output_null_deref_sites: usize,
+    /// Final emitted-C stale return placeholders, currently tracked as
+    /// `return result;`.
+    pub output_stale_return_result: usize,
+    /// Final emitted-C `Unimplemented` token leaks.
+    pub output_unimplemented_tokens: usize,
+    /// HIR control-flow nodes whose body collapsed to zero statements. Empty
+    /// `if (...) { }` / `while (...) { }` etc. are usually structuring or
+    /// DCE bugs — the cleanup never ran or the structurer kept a shell that
+    /// no longer carries any work. Batch 14 hard gate.
+    pub output_empty_bodies: usize,
+    /// Final emitted-C lvalue assignments to a small literal address such as
+    /// `*(_DWORD *)0x10 = …`. Batch 14 hard gate for impossible lvalues.
+    pub output_impossible_lvalue_sites: usize,
+    /// Final emitted-C uses of raw `(rsp + N)` / `(rbp - N)` pointer
+    /// arithmetic. Batch 14 hard gate for lost stack-frame provenance.
+    pub output_lost_frame_offset_sites: usize,
 
     // --- Batch 0+ extended control-flow counters ---
     /// `if` / `else` statements (counts `If` + `IfCmp` + `GuardedIf`).
@@ -256,6 +326,12 @@ impl FunctionQuality {
             })
             .unwrap_or(0);
         q.indirect_calls_resolved = ssa.resolved_indirect_calls.len();
+        q.stack_accesses_recorded = ssa.stack_accesses.len();
+        q.stack_accesses_lost_provenance = ssa
+            .stack_accesses
+            .iter()
+            .filter(|a| a.lost_provenance)
+            .count();
         q.unknown_types = ssa
             .var_types
             .values()
@@ -344,6 +420,48 @@ impl FunctionQuality {
 
         q
     }
+
+    fn collect_output_sanity(&mut self, emitted_c: &str) {
+        self.output_null_deref_sites = null_deref_regex().find_iter(emitted_c).count();
+        self.output_stale_return_result = stale_return_result_count(emitted_c);
+        self.output_unimplemented_tokens = emitted_c.matches("Unimplemented").count();
+        self.output_impossible_lvalue_sites = impossible_lvalue_regex().find_iter(emitted_c).count();
+        self.output_lost_frame_offset_sites = lost_frame_offset_regex().find_iter(emitted_c).count();
+    }
+}
+
+fn stale_return_result_count(emitted_c: &str) -> usize {
+    let returns = emitted_c.matches("return result;").count();
+    if returns == 0 {
+        return 0;
+    }
+    if result_variable_is_declared(emitted_c) && result_variable_is_assigned(emitted_c) {
+        return 0;
+    }
+    returns
+}
+
+fn result_variable_is_declared(emitted_c: &str) -> bool {
+    emitted_c.lines().any(|line| {
+        let line = line.trim_start();
+        !line.starts_with("return ")
+            && (line.contains(" result;")
+                || line.contains(" result =")
+                || line.contains(" result,"))
+    })
+}
+
+fn result_variable_is_assigned(emitted_c: &str) -> bool {
+    emitted_c.contains("result =")
+        || emitted_c.contains("result +=")
+        || emitted_c.contains("result -=")
+        || emitted_c.contains("result *=")
+        || emitted_c.contains("result /=")
+        || emitted_c.contains("result &=")
+        || emitted_c.contains("result |=")
+        || emitted_c.contains("result ^=")
+        || emitted_c.contains("result <<=")
+        || emitted_c.contains("result >>=")
 }
 
 /// Populate `byref_args`, `simd_typed_vars`, `call_resolution_rate`, and
@@ -364,11 +482,7 @@ fn fill_extended_typing_counters(
     // PrimitiveType has no SIMD variants yet, so we look at the
     // varnode width — 128/256/512-bit registers are the only sources
     // of such widths in current lifters.
-    q.simd_typed_vars = ssa
-        .var_types
-        .keys()
-        .filter(|sv| sv.base.size >= 16)
-        .count();
+    q.simd_typed_vars = ssa.var_types.keys().filter(|sv| sv.base.size >= 16).count();
     // call_resolution_rate: percentage of call sites with a known
     // target. Direct calls always have a concrete target address;
     // indirect calls are "resolved" only when they appear in
@@ -377,8 +491,7 @@ fn fill_extended_typing_counters(
     // 100%).
     let total_calls = direct_calls + indirect_calls;
     if total_calls > 0 {
-        let resolved =
-            (direct_calls + ssa.resolved_indirect_calls.len()).min(total_calls);
+        let resolved = (direct_calls + ssa.resolved_indirect_calls.len()).min(total_calls);
         q.call_resolution_rate = (resolved as f64 / total_calls as f64) * 100.0;
     }
     // type_quality_score: percentage of typed vars whose inferred type
@@ -394,13 +507,22 @@ fn fill_extended_typing_counters(
     }
 }
 
+/// True when a HIR body contains zero "real work" nodes after stripping
+/// pure wrappers like nested blocks and comment shells. Used by the Batch
+/// 14 empty-body counter.
+fn hir_body_is_empty(body: &[HirNode]) -> bool {
+    body.iter().all(|n| match n {
+        HirNode::Block(inner) => hir_body_is_empty(inner),
+        HirNode::Commented { inner, .. } => hir_body_is_empty(std::slice::from_ref(inner)),
+        _ => false,
+    })
+}
+
 /// Recursively count structural features in a HIR body.
 fn count_hir_nodes(body: &[HirNode], q: &mut FunctionQuality) {
     for node in body {
         match node {
-            HirNode::Switch {
-                cases, default, ..
-            } => {
+            HirNode::Switch { cases, default, .. } => {
                 q.switch_statements += 1;
                 for (_, arm, _) in cases {
                     count_hir_nodes(arm, q);
@@ -424,6 +546,11 @@ fn count_hir_nodes(body: &[HirNode], q: &mut FunctionQuality) {
                 ..
             } => {
                 q.if_statements += 1;
+                if hir_body_is_empty(then_body)
+                    && else_body.as_ref().map(|e| hir_body_is_empty(e)).unwrap_or(true)
+                {
+                    q.output_empty_bodies += 1;
+                }
                 count_hir_nodes(then_body, q);
                 if let Some(e) = else_body {
                     count_hir_nodes(e, q);
@@ -435,19 +562,31 @@ fn count_hir_nodes(body: &[HirNode], q: &mut FunctionQuality) {
                 ..
             } => {
                 q.if_statements += 1;
+                if hir_body_is_empty(then_body) && hir_body_is_empty(else_body) {
+                    q.output_empty_bodies += 1;
+                }
                 count_hir_nodes(then_body, q);
                 count_hir_nodes(else_body, q);
             }
             HirNode::While { body, .. } => {
                 q.while_loops += 1;
+                if hir_body_is_empty(body) {
+                    q.output_empty_bodies += 1;
+                }
                 count_hir_nodes(body, q);
             }
             HirNode::DoWhile { body, .. } => {
                 q.do_while_loops += 1;
+                if hir_body_is_empty(body) {
+                    q.output_empty_bodies += 1;
+                }
                 count_hir_nodes(body, q);
             }
             HirNode::For { body, .. } => {
                 q.for_loops += 1;
+                if hir_body_is_empty(body) {
+                    q.output_empty_bodies += 1;
+                }
                 count_hir_nodes(body, q);
             }
             HirNode::Ternary { .. }
@@ -475,10 +614,8 @@ fn count_hir_nodes(body: &[HirNode], q: &mut FunctionQuality) {
                 count_hir_nodes(finally_body, q);
             }
             HirNode::Commented { inner, .. } => count_hir_nodes(std::slice::from_ref(inner), q),
-            HirNode::Statement(insn) => {
-                if is_compound_assign_pattern(insn) {
-                    q.compound_assignments += 1;
-                }
+            HirNode::Statement(insn) if is_compound_assign_pattern(insn) => {
+                q.compound_assignments += 1;
             }
             // Leaf / expression-shaped nodes carry no nested bodies of interest.
             _ => {}
@@ -511,9 +648,7 @@ fn is_compound_assign_pattern(insn: &unlace_ir::IrInsn) -> bool {
     };
 
     let (commutative, eligible) = match insn.op {
-        IrOp::IntAdd | IrOp::IntMult | IrOp::IntAnd | IrOp::IntOr | IrOp::IntXor => {
-            (true, true)
-        }
+        IrOp::IntAdd | IrOp::IntMult | IrOp::IntAnd | IrOp::IntOr | IrOp::IntXor => (true, true),
         IrOp::IntSub
         | IrOp::IntDiv
         | IrOp::IntSdiv
@@ -588,6 +723,40 @@ pub struct BinaryQuality {
     pub functions: Vec<FunctionQuality>,
     /// Workspace-wide totals (sum across `functions`).
     pub totals: QualityTotals,
+    /// PE mitigation flags surfaced from the loader (Batch 23). `None` for
+    /// ELF/Mach-O / unsigned-format inputs.
+    #[serde(default)]
+    pub pe_mitigations: Option<PeMitigationsReport>,
+}
+
+/// Serialisable copy of [`unlace_loader::PeMitigations`] — kept inside
+/// the quality crate so `BinaryQuality` can be Serde-derived without
+/// pulling Serde derives into the loader.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct PeMitigationsReport {
+    pub nx_compat: bool,
+    pub dynamic_base: bool,
+    pub high_entropy_va: bool,
+    pub guard_cf: bool,
+    pub cfg_instrumented: bool,
+    pub xf_or_xfg_guarded: bool,
+    pub authenticode_present: bool,
+    pub authenticode_size: u32,
+}
+
+impl From<&unlace_loader::PeMitigations> for PeMitigationsReport {
+    fn from(m: &unlace_loader::PeMitigations) -> Self {
+        Self {
+            nx_compat: m.nx_compat,
+            dynamic_base: m.dynamic_base,
+            high_entropy_va: m.high_entropy_va,
+            guard_cf: m.guard_cf,
+            cfg_instrumented: m.cfg_instrumented,
+            xf_or_xfg_guarded: m.xf_or_xfg_guarded,
+            authenticode_present: m.authenticode_present,
+            authenticode_size: m.authenticode_size,
+        }
+    }
 }
 
 /// Sum of every [`FunctionQuality`] counter across a binary.
@@ -601,6 +770,8 @@ pub struct QualityTotals {
     pub frame_hole_entries: usize,
     pub saved_register_slots: usize,
     pub stack_args_classified: usize,
+    pub stack_accesses_recorded: usize,
+    pub stack_accesses_lost_provenance: usize,
     pub struct_fields_recovered: usize,
     pub switch_statements: usize,
     pub indirect_calls_resolved: usize,
@@ -608,6 +779,12 @@ pub struct QualityTotals {
     pub labels_emitted: usize,
     pub unknown_types: usize,
     pub asm_blocks: usize,
+    pub output_null_deref_sites: usize,
+    pub output_stale_return_result: usize,
+    pub output_unimplemented_tokens: usize,
+    pub output_empty_bodies: usize,
+    pub output_impossible_lvalue_sites: usize,
+    pub output_lost_frame_offset_sites: usize,
     // Batch 0+ extended counters
     pub if_statements: usize,
     pub while_loops: usize,
@@ -668,6 +845,8 @@ impl QualityTotals {
         self.frame_hole_entries += q.frame_hole_entries;
         self.saved_register_slots += q.saved_register_slots;
         self.stack_args_classified += q.stack_args_classified;
+        self.stack_accesses_recorded += q.stack_accesses_recorded;
+        self.stack_accesses_lost_provenance += q.stack_accesses_lost_provenance;
         self.struct_fields_recovered += q.struct_fields_recovered;
         self.switch_statements += q.switch_statements;
         self.indirect_calls_resolved += q.indirect_calls_resolved;
@@ -675,6 +854,12 @@ impl QualityTotals {
         self.labels_emitted += q.labels_emitted;
         self.unknown_types += q.unknown_types;
         self.asm_blocks += q.asm_blocks;
+        self.output_null_deref_sites += q.output_null_deref_sites;
+        self.output_stale_return_result += q.output_stale_return_result;
+        self.output_unimplemented_tokens += q.output_unimplemented_tokens;
+        self.output_empty_bodies += q.output_empty_bodies;
+        self.output_impossible_lvalue_sites += q.output_impossible_lvalue_sites;
+        self.output_lost_frame_offset_sites += q.output_lost_frame_offset_sites;
         self.if_statements += q.if_statements;
         self.while_loops += q.while_loops;
         self.do_while_loops += q.do_while_loops;
@@ -740,6 +925,8 @@ pub fn analyze_binary(binary_path: &Path) -> Result<BinaryQuality> {
     let lifter = get_lifter(image.arch);
     let functions = pipeline::discover_functions(&image, None)?;
 
+    let pe_mitigations = image.pe_mitigations.as_ref().map(PeMitigationsReport::from);
+
     let mut report = BinaryQuality {
         binary: binary_path.display().to_string(),
         arch: image.arch.to_string(),
@@ -747,6 +934,7 @@ pub fn analyze_binary(binary_path: &Path) -> Result<BinaryQuality> {
         functions_failed: 0,
         functions: Vec::new(),
         totals: QualityTotals::default(),
+        pe_mitigations,
     };
 
     for entry in &functions {
@@ -777,8 +965,16 @@ pub fn analyze_binary(binary_path: &Path) -> Result<BinaryQuality> {
             kept.iter().sum::<f64>() / kept.len() as f64
         }
     };
-    let call_rates: Vec<f64> = report.functions.iter().map(|q| q.call_resolution_rate).collect();
-    let type_scores: Vec<f64> = report.functions.iter().map(|q| q.type_quality_score).collect();
+    let call_rates: Vec<f64> = report
+        .functions
+        .iter()
+        .map(|q| q.call_resolution_rate)
+        .collect();
+    let type_scores: Vec<f64> = report
+        .functions
+        .iter()
+        .map(|q| q.type_quality_score)
+        .collect();
     report.totals.call_resolution_rate = mean_nonzero(&call_rates);
     report.totals.type_quality_score = mean_nonzero(&type_scores);
 
@@ -818,9 +1014,8 @@ fn analyze_function(
     for (&addr, name) in &symbols {
         stable_symbol_names.insert(addr, Box::leak(name.clone().into_boxed_str()));
     }
-    let resolve_name = |addr: u64| -> Option<&'static str> {
-        stable_symbol_names.get(&addr).copied()
-    };
+    let resolve_name =
+        |addr: u64| -> Option<&'static str> { stable_symbol_names.get(&addr).copied() };
 
     // Pre-pass mirror of `decompile_function_with_symbols`: the IR
     // pattern keyed by `find_constant_arg` (`Copy(arg_reg, t)` defined by
@@ -874,7 +1069,11 @@ fn analyze_function(
     unlace_struct::collapse_label_fallthroughs(&mut hir);
     unlace_struct::cleanup_unreachable_labels(&mut hir);
 
-    Ok(FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir))
+    let emitted_c =
+        unlace_output::print_c_full(&hir, None, None, Some(&symbols), Some(&image.string_table));
+    let mut quality = FunctionQuality::collect(&entry.name, entry.addr, &ssa, &hir);
+    quality.collect_output_sanity(&emitted_c);
+    Ok(quality)
 }
 
 /// Render a [`BinaryQuality`] report as a Markdown table.
@@ -976,7 +1175,9 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
          - saved_register slots: {srs}\n\
          - lvars total: {lt}\n\
          - lvars with non-empty live_range (multi-block): {lne}\n\
-         - stack_args classified: {sac}",
+         - stack_args classified: {sac}\n\
+         - stack accesses recorded (Batch 17): {sar}\n\
+         - stack accesses with lost provenance: {salp}",
         ca = t.compound_assignments,
         sc = t.short_circuit_ops,
         ba = t.byref_args,
@@ -988,6 +1189,24 @@ fn render_extended_totals(t: &QualityTotals, s: &mut String) {
         lt = t.lvars_total,
         lne = t.lvars_with_nonempty_range,
         sac = t.stack_args_classified,
+        sar = t.stack_accesses_recorded,
+        salp = t.stack_accesses_lost_provenance,
+    );
+    let _ = writeln!(
+        s,
+        "### Output sanity\n\
+         - null deref sites: {nds}\n\
+         - stale `return result;`: {srr}\n\
+         - `Unimplemented` token leaks: {utl}\n\
+         - empty structured bodies: {eb}\n\
+         - impossible lvalue sites: {il}\n\
+         - lost stack-frame offset sites: {lf}",
+        nds = t.output_null_deref_sites,
+        srr = t.output_stale_return_result,
+        utl = t.output_unimplemented_tokens,
+        eb = t.output_empty_bodies,
+        il = t.output_impossible_lvalue_sites,
+        lf = t.output_lost_frame_offset_sites,
     );
 }
 
@@ -996,16 +1215,16 @@ fn render_table(report: &BinaryQuality, s: &mut String) {
     use std::fmt::Write;
     let _ = writeln!(
         s,
-        "| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | goto | label | unktype | asm |"
+        "| function | insns | unimpl | callother | stkvars | holes | fields | switch | indcall | goto | label | unktype | asm | nullderef | badret | badtok |"
     );
     let _ = writeln!(
         s,
-        "|----------|------:|-------:|----------:|--------:|------:|-------:|-------:|--------:|-----:|------:|--------:|----:|"
+        "|----------|------:|-------:|----------:|--------:|------:|-------:|-------:|--------:|-----:|------:|--------:|----:|----------:|-------:|-------:|"
     );
     for q in &report.functions {
         let _ = writeln!(
             s,
-            "| `{}` | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+            "| `{}` | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
             q.name,
             q.ir_insns,
             q.unimplemented_ops,
@@ -1019,12 +1238,15 @@ fn render_table(report: &BinaryQuality, s: &mut String) {
             q.labels_emitted,
             q.unknown_types,
             q.asm_blocks,
+            q.output_null_deref_sites,
+            q.output_stale_return_result,
+            q.output_unimplemented_tokens,
         );
     }
     let t = &report.totals;
     let _ = writeln!(
         s,
-        "| **TOTAL** | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+        "| **TOTAL** | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
         t.ir_insns,
         t.unimplemented_ops,
         t.callother_ops,
@@ -1037,6 +1259,9 @@ fn render_table(report: &BinaryQuality, s: &mut String) {
         t.labels_emitted,
         t.unknown_types,
         t.asm_blocks,
+        t.output_null_deref_sites,
+        t.output_stale_return_result,
+        t.output_unimplemented_tokens,
     );
 }
 
@@ -1058,12 +1283,85 @@ fn render_classification(t: &QualityTotals, s: &mut String) {
     );
     let _ = writeln!(
         s,
-        "- **implemented but wrong** (recovery ran, low quality): {} unknown type(s), {} goto(s), {} asm block(s)",
-        t.unknown_types, t.gotos_emitted, t.asm_blocks
+        "- **implemented but wrong** (recovery ran, low quality): {} unknown type(s), {} goto(s), {} asm block(s), {} null deref site(s), {} stale return(s), {} unimplemented token leak(s), {} empty body sites, {} impossible-lvalue site(s), {} lost-frame offset site(s)",
+        t.unknown_types,
+        t.gotos_emitted,
+        t.asm_blocks,
+        t.output_null_deref_sites,
+        t.output_stale_return_result,
+        t.output_unimplemented_tokens,
+        t.output_empty_bodies,
+        t.output_impossible_lvalue_sites,
+        t.output_lost_frame_offset_sites,
     );
 }
 
 /// Render a [`BinaryQuality`] report as pretty-printed JSON for automation.
 pub fn render_json(report: &BinaryQuality) -> Result<String> {
     serde_json::to_string_pretty(report).context("failed to serialize quality report as JSON")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        impossible_lvalue_regex, lost_frame_offset_regex, stale_return_result_count,
+    };
+
+    #[test]
+    fn impossible_lvalue_matches_small_immediate_write() {
+        let emitted = "*(_DWORD *)0x10 = 5;\n*(_QWORD *)(0x4LL) = v1;\n";
+        assert_eq!(
+            impossible_lvalue_regex().find_iter(emitted).count(),
+            2,
+            "two small-immediate writes should be flagged"
+        );
+    }
+
+    #[test]
+    fn impossible_lvalue_does_not_match_large_address() {
+        let emitted = "*(_DWORD *)0xdeadbeef = 5;\n";
+        assert_eq!(
+            impossible_lvalue_regex().find_iter(emitted).count(),
+            0,
+            "real globals at high addresses are not flagged"
+        );
+    }
+
+    #[test]
+    fn lost_frame_offset_matches_rsp_arithmetic() {
+        let emitted = "v1 = *(_QWORD *)(rsp + 0x10);\n*(_DWORD *)(rbp - 0x4) = 1;\n";
+        assert_eq!(
+            lost_frame_offset_regex().find_iter(emitted).count(),
+            2,
+            "two raw frame-relative accesses should be flagged"
+        );
+    }
+
+    #[test]
+    fn lost_frame_offset_ignores_normal_pointer_arithmetic() {
+        let emitted = "v1 = *(_QWORD *)(buf + 8);\n*(_DWORD *)(p + 4) = 0;\n";
+        assert_eq!(
+            lost_frame_offset_regex().find_iter(emitted).count(),
+            0,
+            "pointer arithmetic without a frame-register base is allowed"
+        );
+    }
+
+    #[test]
+    fn stale_return_counter_counts_undeclared_result_returns() {
+        let emitted = "int f(void) {\n    return result;\n}\n";
+        assert_eq!(stale_return_result_count(emitted), 1);
+    }
+
+    #[test]
+    fn stale_return_counter_ignores_assigned_result_lvar() {
+        let emitted = "int f(void) {\n    int result;\n    result = 3;\n    return result;\n}\n";
+        assert_eq!(stale_return_result_count(emitted), 0);
+    }
+
+    #[test]
+    fn stale_return_counter_counts_uninitialized_result_lvar() {
+        let emitted = "int f(void) {\n    int result;\n    return result;\n}\n";
+        assert_eq!(stale_return_result_count(emitted), 1);
+    }
 }

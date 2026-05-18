@@ -48,7 +48,10 @@ fn scope_filters_to_single_function() {
         String::from_utf8_lossy(&out.stderr),
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let header_count = stdout.lines().filter(|l| l.starts_with("// \u{2550}")).count();
+    let header_count = stdout
+        .lines()
+        .filter(|l| l.starts_with("// \u{2550}"))
+        .count();
     assert_eq!(
         header_count, 1,
         "expected exactly one function header after --scope ^main$, got {header_count}\n{stdout}",

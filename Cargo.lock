@@ -1646,10 +1646,12 @@ dependencies = [
  "anyhow",
  "clap",
  "criterion",
+ "memmap2",
  "rayon",
  "regex",
  "serde",
  "serde_json",
+ "sha2",
  "smallvec",
  "tempfile",
  "tracing",
@@ -2450,6 +2452,7 @@ dependencies = [
  "serde",
  "toml",
  "unlace-passes",
+ "unlace-sbom",
 ]
 
 [[package]]

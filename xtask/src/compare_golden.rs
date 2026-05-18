@@ -227,8 +227,16 @@ fn compare_profiles(ida: &AggregateProfile, unlace: &AggregateProfile) -> Vec<Co
     };
 
     results.push(compare_density("if density", ida.total_if, unlace.total_if));
-    results.push(compare_density("else density", ida.total_else, unlace.total_else));
-    results.push(compare_density("for density", ida.total_for, unlace.total_for));
+    results.push(compare_density(
+        "else density",
+        ida.total_else,
+        unlace.total_else,
+    ));
+    results.push(compare_density(
+        "for density",
+        ida.total_for,
+        unlace.total_for,
+    ));
     results.push(compare_density(
         "while density",
         ida.total_while,
@@ -239,7 +247,11 @@ fn compare_profiles(ida: &AggregateProfile, unlace: &AggregateProfile) -> Vec<Co
         ida.total_return,
         unlace.total_return,
     ));
-    results.push(compare_density("goto density", ida.total_goto, unlace.total_goto));
+    results.push(compare_density(
+        "goto density",
+        ida.total_goto,
+        unlace.total_goto,
+    ));
     results.push(compare_density(
         "switch density",
         ida.total_switch,
@@ -330,9 +342,7 @@ fn is_type_keyword(word: &str) -> bool {
 
 fn count_calls(line: &str) -> usize {
     // Count identifier( patterns that aren't keywords
-    let keywords = [
-        "if", "for", "while", "switch", "return", "sizeof", "typeof",
-    ];
+    let keywords = ["if", "for", "while", "switch", "return", "sizeof", "typeof"];
     let mut count = 0;
     let bytes = line.as_bytes();
     let len = bytes.len();
@@ -442,7 +452,10 @@ pub fn run(root: &Path) {
     // ── Phase 1: Analyze IDA golden corpus ──
     let golden_dir = root.join("tests/golden/x86_64");
     if !golden_dir.is_dir() {
-        eprintln!("ERROR: golden directory not found: {}", golden_dir.display());
+        eprintln!(
+            "ERROR: golden directory not found: {}",
+            golden_dir.display()
+        );
         eprintln!("  Expected: tests/golden/x86_64/ with 150 IDA reference .c files");
         return;
     }
@@ -675,15 +688,11 @@ pub fn run(root: &Path) {
     // ── Phase 5: Binary↔Golden mapping report ──
     println!("Phase 5: Binary↔Golden mapping availability...");
     println!();
-    println!(
-        "  The 150 golden .c files were extracted from IDA's hexx64.so (Hex-Rays"
-    );
+    println!("  The 150 golden .c files were extracted from IDA's hexx64.so (Hex-Rays");
     println!("  x86_64 decompiler plugin). This binary is NOT redistributed in the repo.");
     println!();
     println!("  Golden files use addresses 0x100140–0x11D4A0 from hexx64.so.");
-    println!(
-        "  Our fixture ELFs use addresses 0x1040–0x1480 (small PIE executables)."
-    );
+    println!("  Our fixture ELFs use addresses 0x1040–0x1480 (small PIE executables).");
     println!();
     println!("  RESULT: No direct function-address mapping exists between golden corpus");
     println!("  and fixture binaries. Comparison is aggregate/structural only.");
@@ -693,7 +702,10 @@ pub fn run(root: &Path) {
     println!("══════════════════════════════════════════════════════════════");
     println!("  SUMMARY");
     println!("══════════════════════════════════════════════════════════════");
-    println!("  IDA corpus:     {} files, {} lines", ida_profile.total_files, ida_profile.total_lines);
+    println!(
+        "  IDA corpus:     {} files, {} lines",
+        ida_profile.total_files, ida_profile.total_lines
+    );
     println!(
         "  unlace output:  {} files, {} lines",
         unlace_profile.total_files, unlace_profile.total_lines
@@ -726,8 +738,7 @@ pub fn run(root: &Path) {
     if unlace_profile.total_goto > 0 {
         let goto_ratio =
             unlace_profile.total_goto as f64 / unlace_profile.total_lines as f64 * 100.0;
-        let ida_goto_ratio =
-            ida_profile.total_goto as f64 / ida_profile.total_lines as f64 * 100.0;
+        let ida_goto_ratio = ida_profile.total_goto as f64 / ida_profile.total_lines as f64 * 100.0;
         if goto_ratio > ida_goto_ratio * 2.0 {
             findings.push(format!(
                 "⚠ goto density ({:.3}%) is {:.1}x higher than IDA ({:.3}%)",

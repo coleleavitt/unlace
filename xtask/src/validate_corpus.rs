@@ -90,10 +90,7 @@ pub fn run(root: &Path) {
         if let Some(src) = &fix.source_path {
             let src_path = root.join(src);
             if !src_path.exists() {
-                errors.push(format!(
-                    "{}: source_path does not exist: {src}",
-                    fix.name
-                ));
+                errors.push(format!("{}: source_path does not exist: {src}", fix.name));
             }
         }
 
@@ -114,13 +111,20 @@ pub fn run(root: &Path) {
         }
     }
 
-    println!("validate-corpus-toml: {} fixture(s)", manifest.fixture.len());
+    println!(
+        "validate-corpus-toml: {} fixture(s)",
+        manifest.fixture.len()
+    );
 
     if !unknown_compiler.is_empty() {
         println!(
             "  unknown-compiler ({}): {}",
             unknown_compiler.len(),
-            unknown_compiler.iter().cloned().collect::<Vec<_>>().join(", ")
+            unknown_compiler
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
         );
     }
 

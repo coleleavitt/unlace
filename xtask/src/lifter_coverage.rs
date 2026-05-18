@@ -48,7 +48,11 @@ fn detect_arch(header: &[u8]) -> Option<&'static str> {
         let read_u16 = |off: usize| -> u16 {
             let lo = header[off] as u16;
             let hi = header[off + 1] as u16;
-            if little { (hi << 8) | lo } else { (lo << 8) | hi }
+            if little {
+                (hi << 8) | lo
+            } else {
+                (lo << 8) | hi
+            }
         };
         let em = read_u16(0x12);
         return Some(elf_machine_name(em));
@@ -65,8 +69,17 @@ fn detect_arch(header: &[u8]) -> Option<&'static str> {
     };
     let _ = sixty_four; // currently unused — present for future Mach-O32 support
     let read_u32 = |off: usize| -> u32 {
-        let b = [header[off], header[off + 1], header[off + 2], header[off + 3]];
-        if little { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) }
+        let b = [
+            header[off],
+            header[off + 1],
+            header[off + 2],
+            header[off + 3],
+        ];
+        if little {
+            u32::from_le_bytes(b)
+        } else {
+            u32::from_be_bytes(b)
+        }
     };
     let cputype = read_u32(4);
     Some(macho_cputype_name(cputype))
@@ -102,12 +115,12 @@ fn macho_cputype_name(cputype: u32) -> &'static str {
     let base = cputype & !ABI64;
     let is_64 = (cputype & ABI64) != 0;
     match (base, is_64) {
-        (7, false) => "x86",        // CPU_TYPE_X86
-        (7, true) => "x86_64",      // CPU_TYPE_X86_64
-        (12, false) => "arm",       // CPU_TYPE_ARM
-        (12, true) => "aarch64",    // CPU_TYPE_ARM64
-        (18, false) => "ppc",       // CPU_TYPE_POWERPC
-        (18, true) => "ppc64",      // CPU_TYPE_POWERPC64
+        (7, false) => "x86",     // CPU_TYPE_X86
+        (7, true) => "x86_64",   // CPU_TYPE_X86_64
+        (12, false) => "arm",    // CPU_TYPE_ARM
+        (12, true) => "aarch64", // CPU_TYPE_ARM64
+        (18, false) => "ppc",    // CPU_TYPE_POWERPC
+        (18, true) => "ppc64",   // CPU_TYPE_POWERPC64
         _ => "macho-unknown",
     }
 }
@@ -122,7 +135,9 @@ fn collect_fixtures(fixtures_dir: &Path) -> Vec<PathBuf> {
                 p.is_file()
                     && p.extension()
                         .and_then(|x| x.to_str())
-                        .map(|ext| ext.eq_ignore_ascii_case("elf") || ext.eq_ignore_ascii_case("macho"))
+                        .map(|ext| {
+                            ext.eq_ignore_ascii_case("elf") || ext.eq_ignore_ascii_case("macho")
+                        })
                         .unwrap_or(false)
             })
             .collect(),
@@ -224,7 +239,10 @@ fn extract_opcode_hint(line: &str) -> Option<String> {
 
 fn build_report(stats: &HashMap<String, ArchStats>) -> String {
     let mut s = String::new();
-    let _ = writeln!(s, "# Lifter Coverage — Unimplemented + Callother per Architecture");
+    let _ = writeln!(
+        s,
+        "# Lifter Coverage — Unimplemented + Callother per Architecture"
+    );
     let _ = writeln!(s);
     let _ = writeln!(
         s,
@@ -235,8 +253,14 @@ fn build_report(stats: &HashMap<String, ArchStats>) -> String {
         "Counts: literal occurrences of the `UNIMPLEMENTED` and `CALLOTHER` IR mnemonics in the dump."
     );
     let _ = writeln!(s);
-    let _ = writeln!(s, "| arch | fixtures | total Unimplemented | total Callother |");
-    let _ = writeln!(s, "|------|---------:|--------------------:|----------------:|");
+    let _ = writeln!(
+        s,
+        "| arch | fixtures | total Unimplemented | total Callother |"
+    );
+    let _ = writeln!(
+        s,
+        "|------|---------:|--------------------:|----------------:|"
+    );
 
     let mut archs: Vec<&String> = stats.keys().collect();
     archs.sort();

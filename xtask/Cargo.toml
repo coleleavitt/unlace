@@ -7,3 +7,4 @@ edition.workspace = true
 serde = { workspace = true }
 toml = "0.8"
 unlace-passes = { path = "../crates/unlace-passes" }
+unlace-sbom = { path = "../crates/unlace-sbom" }

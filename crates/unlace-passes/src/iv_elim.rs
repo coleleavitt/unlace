@@ -47,7 +47,10 @@ impl Pass for IvElimPass {
                     Some(p) => p,
                     None => continue,
                 };
-                let basic_ivs = detect_basic_ivs(func, header, &body);
+                let basic_ivs: Vec<_> = detect_basic_ivs(func, header, &body)
+                    .into_iter()
+                    .filter(|iv| iv.latch_block != header)
+                    .collect();
                 if basic_ivs.is_empty() {
                     continue;
                 }
@@ -377,8 +380,9 @@ mod tests {
 
     /// 4-block loop:
     ///   B0 (preheader): i_init = const(0); branch B1
-    ///   B1 (header): /* phi i */; j = i * 4; i_next = i + 1; cbranch B1, B2
-    ///   B2 (exit): return
+    ///   B1 (header): /* phi i */; j = i * 4; cbranch B2, B3
+    ///   B2 (latch): i_next = i + 1; branch B1
+    ///   B3 (exit): return
     /// Build via build_ssa so phis materialize for `i`.
     fn build_loop(extra_in_body: Option<IrInsn>) -> SsaFunction {
         let i = Varnode::reg(0, 4);
@@ -386,6 +390,64 @@ mod tests {
         let cond = Varnode::reg(64, 1);
 
         let mut func = Function::new("ivtest", BlockId(0), 0x1000);
+
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            i,
+            smallvec![Varnode::constant(0, 4)],
+            0x1000,
+        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1004));
+        b0.successors = smallvec![BlockId(1)];
+
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns.push(IrInsn::with_output(
+            IrOp::IntMult,
+            j,
+            smallvec![i, Varnode::constant(4, 4)],
+            0x1100,
+        ));
+        if let Some(insn) = extra_in_body {
+            b1.insns.push(insn);
+        }
+        b1.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![Varnode::constant(0, 8), cond],
+            0x110C,
+        ));
+        b1.successors = smallvec![BlockId(2), BlockId(3)];
+
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            i,
+            smallvec![i, Varnode::constant(1, 4)],
+            0x1110,
+        ));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1114));
+        b2.successors = smallvec![BlockId(1)];
+
+        let mut b3 = BasicBlock::new(BlockId(3));
+        b3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![j], 0x1200));
+
+        func.insert_block(b0);
+        func.insert_block(b1);
+        func.insert_block(b2);
+        func.insert_block(b3);
+
+        build_ssa(func)
+    }
+
+    fn build_self_loop(extra_in_body: Option<IrInsn>) -> SsaFunction {
+        let i = Varnode::reg(0, 4);
+        let j = Varnode::reg(8, 4);
+        let cond = Varnode::reg(64, 1);
+
+        let mut func = Function::new("ivself", BlockId(0), 0x1000);
 
         let mut b0 = BasicBlock::new(BlockId(0));
         b0.insns.push(IrInsn::with_output(
@@ -458,6 +520,22 @@ mod tests {
             .any(|i| i.op == IrOp::Copy && i.output == Some(Varnode::reg(8, 4)));
         assert!(!mult_still, "IntMult on j should have been rewritten");
         assert!(copy_present, "expected a Copy producing j");
+    }
+
+    #[test]
+    fn iv_elim_skips_self_loop_basic_iv() {
+        let mut ssa = build_self_loop(None);
+        let changed = IvElimPass.run(&mut ssa).expect("ok");
+        assert!(!changed, "self-loop IVs should be left intact");
+
+        let header = &ssa.function.blocks[&BlockId(1)];
+        assert!(
+            header
+                .insns
+                .iter()
+                .any(|i| i.op == IrOp::IntMult && i.output == Some(Varnode::reg(8, 4))),
+            "self-loop IntMult should remain in the header"
+        );
     }
 
     #[test]

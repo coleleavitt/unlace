@@ -13,8 +13,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_ir::ssa::{
-    CallingConvention, FunctionSignatureRegistry, PrimitiveType, SsaFunction,
-    SsaVarnode, VarnodeSlot,
+    CallingConvention, FunctionSignatureRegistry, PrimitiveType, SsaFunction, SsaVarnode,
+    VarnodeSlot,
 };
 use unlace_ir::xref::CallGraph;
 use unlace_ir::{BlockId, IrOp, SpaceId};
@@ -151,9 +151,7 @@ fn merge_into_registry(
     cc: CallingConvention,
     arg_types: &[PrimitiveType],
 ) -> bool {
-    let entry = registry
-        .entry(callee_addr)
-        .or_default();
+    let entry = registry.entry(callee_addr).or_default();
 
     let mut changed = false;
     if entry.calling_convention == CallingConvention::Unknown && cc != CallingConvention::Unknown {
@@ -229,9 +227,7 @@ pub fn seed_registry_from_funcs(
     registry: &mut FunctionSignatureRegistry,
 ) {
     for (&addr, ssa) in funcs {
-        let entry = registry
-            .entry(addr)
-            .or_default();
+        let entry = registry.entry(addr).or_default();
         if entry.calling_convention == CallingConvention::Unknown {
             entry.calling_convention = ssa.calling_convention;
         }

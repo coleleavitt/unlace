@@ -3,8 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::SsaFunction;
-use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
 
@@ -58,15 +58,29 @@ impl Pass for ConditionSimplifyPass {
                     ),
                 });
             }
-            let def_map = build_def_map(func);
             let mut changed = false;
+            let old_var_map = func.var_map.clone();
+            let mut rebuilt_var_map = BTreeMap::new();
 
-            for block in func.function.blocks.values_mut() {
+            for (&bid, block) in func.function.blocks.iter_mut() {
                 let mut new_insns: Vec<IrInsn> = Vec::with_capacity(block.insns.len());
+                let mut def_map = BTreeMap::new();
+                let mut raw_ssa_map = BTreeMap::new();
 
-                for insn in &block.insns {
+                for (insn_idx, insn) in block.insns.iter().enumerate() {
+                    record_input_ssa(&old_var_map, &mut raw_ssa_map, bid, insn_idx, insn);
+                    let new_idx = new_insns.len();
                     match try_simplify(insn, &def_map, &mut next_unique) {
                         Some(Simplification::Replace(replacement)) => {
+                            remap_replacement_var_map(
+                                &old_var_map,
+                                &raw_ssa_map,
+                                &mut rebuilt_var_map,
+                                bid,
+                                insn_idx,
+                                new_idx,
+                                &replacement,
+                            );
                             new_insns.push(replacement);
                             changed = true;
                         }
@@ -74,17 +88,51 @@ impl Pass for ConditionSimplifyPass {
                             prefix,
                             replacement,
                         }) => {
-                            new_insns.extend(prefix);
+                            for prefix_insn in prefix {
+                                let prefix_idx = new_insns.len();
+                                map_new_insn_var_map(
+                                    &raw_ssa_map,
+                                    &mut rebuilt_var_map,
+                                    bid,
+                                    prefix_idx,
+                                    &prefix_insn,
+                                );
+                                record_new_output_ssa(&mut raw_ssa_map, &prefix_insn);
+                                new_insns.push(prefix_insn);
+                            }
+                            let replacement_idx = new_insns.len();
+                            remap_replacement_var_map(
+                                &old_var_map,
+                                &raw_ssa_map,
+                                &mut rebuilt_var_map,
+                                bid,
+                                insn_idx,
+                                replacement_idx,
+                                &replacement,
+                            );
                             new_insns.push(replacement);
                             changed = true;
                         }
                         None => {
+                            copy_old_var_map_entries(
+                                &old_var_map,
+                                &mut rebuilt_var_map,
+                                bid,
+                                insn_idx,
+                                new_idx,
+                            );
                             new_insns.push(insn.clone());
                         }
                     }
+                    record_def(&mut def_map, insn);
+                    record_output_ssa(&old_var_map, &mut raw_ssa_map, bid, insn_idx, insn);
                 }
 
                 block.insns = new_insns;
+            }
+
+            if changed {
+                func.var_map = rebuilt_var_map;
             }
 
             if changed {
@@ -99,21 +147,135 @@ impl Pass for ConditionSimplifyPass {
     }
 }
 
-/// Build a map from output Varnode → defining IrInsn for def-use lookups.
+/// Record the latest same-block definition for raw-varnode def-use lookups.
 ///
-/// Only non-const outputs are indexed.
-fn build_def_map(func: &SsaFunction) -> BTreeMap<Varnode, IrInsn> {
-    let mut map = BTreeMap::new();
-    for block in func.function.blocks.values() {
-        for insn in &block.insns {
-            if let Some(output) = insn.output {
-                if output.space != SpaceId::Const {
-                    map.insert(output, insn.clone());
-                }
-            }
+/// Raw register/unique varnodes are reused across basic blocks before the
+/// printer sees HIR. Keeping this map block-local avoids folding a condition
+/// through an unrelated definition from another block with the same raw name.
+fn record_def(map: &mut BTreeMap<Varnode, IrInsn>, insn: &IrInsn) {
+    if let Some(output) = insn.output {
+        if output.space != SpaceId::Const {
+            map.insert(output, insn.clone());
         }
     }
-    map
+}
+
+fn record_input_ssa(
+    old_var_map: &BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>,
+    bid: BlockId,
+    insn_idx: usize,
+    insn: &IrInsn,
+) {
+    for (input_idx, raw) in insn.inputs.iter().enumerate() {
+        if raw.space == SpaceId::Const {
+            continue;
+        }
+        if let Some(&sv) = old_var_map.get(&(bid, insn_idx, VarnodeSlot::Input(input_idx))) {
+            raw_ssa_map.insert(*raw, sv);
+        }
+    }
+}
+
+fn record_output_ssa(
+    old_var_map: &BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>,
+    bid: BlockId,
+    insn_idx: usize,
+    insn: &IrInsn,
+) {
+    let Some(output) = insn.output else {
+        return;
+    };
+    if output.space == SpaceId::Const {
+        return;
+    }
+    if let Some(&sv) = old_var_map.get(&(bid, insn_idx, VarnodeSlot::Output)) {
+        raw_ssa_map.insert(output, sv);
+    }
+}
+
+fn record_new_output_ssa(raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>, insn: &IrInsn) {
+    let Some(output) = insn.output else {
+        return;
+    };
+    if output.space == SpaceId::Const {
+        return;
+    }
+    raw_ssa_map.insert(
+        output,
+        SsaVarnode {
+            base: output,
+            version: 0,
+        },
+    );
+}
+
+fn copy_old_var_map_entries(
+    old_var_map: &BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    rebuilt_var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    bid: BlockId,
+    old_idx: usize,
+    new_idx: usize,
+) {
+    for ((entry_bid, entry_idx, slot), &sv) in old_var_map {
+        if *entry_bid == bid && *entry_idx == old_idx {
+            rebuilt_var_map.insert((bid, new_idx, slot.clone()), sv);
+        }
+    }
+}
+
+fn remap_replacement_var_map(
+    old_var_map: &BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    raw_ssa_map: &BTreeMap<Varnode, SsaVarnode>,
+    rebuilt_var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    bid: BlockId,
+    old_idx: usize,
+    new_idx: usize,
+    replacement: &IrInsn,
+) {
+    if let Some(&out_sv) = old_var_map.get(&(bid, old_idx, VarnodeSlot::Output)) {
+        rebuilt_var_map.insert((bid, new_idx, VarnodeSlot::Output), out_sv);
+    }
+    map_replacement_inputs(raw_ssa_map, rebuilt_var_map, bid, new_idx, replacement);
+}
+
+fn map_new_insn_var_map(
+    raw_ssa_map: &BTreeMap<Varnode, SsaVarnode>,
+    rebuilt_var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    bid: BlockId,
+    new_idx: usize,
+    insn: &IrInsn,
+) {
+    if let Some(output) = insn.output {
+        if output.space != SpaceId::Const {
+            rebuilt_var_map.insert(
+                (bid, new_idx, VarnodeSlot::Output),
+                SsaVarnode {
+                    base: output,
+                    version: 0,
+                },
+            );
+        }
+    }
+    map_replacement_inputs(raw_ssa_map, rebuilt_var_map, bid, new_idx, insn);
+}
+
+fn map_replacement_inputs(
+    raw_ssa_map: &BTreeMap<Varnode, SsaVarnode>,
+    rebuilt_var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    bid: BlockId,
+    new_idx: usize,
+    insn: &IrInsn,
+) {
+    for (input_idx, raw) in insn.inputs.iter().enumerate() {
+        if raw.space == SpaceId::Const {
+            continue;
+        }
+        if let Some(&sv) = raw_ssa_map.get(raw) {
+            rebuilt_var_map.insert((bid, new_idx, VarnodeSlot::Input(input_idx)), sv);
+        }
+    }
 }
 
 fn find_max_unique_offset(func: &SsaFunction) -> u64 {
@@ -200,6 +362,17 @@ fn simplify_eq(
 
     if b.space == SpaceId::Const && b.offset == 0 {
         if let Some(inner) = def_map.get(&a) {
+            if is_boolean_result(inner) {
+                if insn.op == IrOp::IntNotequal {
+                    return Some(Simplification::Replace(make_copy(insn, a)));
+                }
+                return Some(Simplification::Replace(replace_op(
+                    insn,
+                    IrOp::BoolNegate,
+                    smallvec::smallvec![a],
+                )));
+            }
+
             if inner.op == IrOp::IntAnd && inner.inputs.len() == 2 {
                 let x = inner.inputs[0];
                 let y = inner.inputs[1];
@@ -268,6 +441,29 @@ fn simplify_eq(
     }
 
     None
+}
+
+fn is_boolean_result(insn: &IrInsn) -> bool {
+    let Some(output) = insn.output else {
+        return false;
+    };
+    output.size == 1
+        && matches!(
+            insn.op,
+            IrOp::IntEqual
+                | IrOp::IntNotequal
+                | IrOp::IntLess
+                | IrOp::IntLessequal
+                | IrOp::IntSless
+                | IrOp::IntSlessequal
+                | IrOp::IntCarry
+                | IrOp::IntScarry
+                | IrOp::IntSborrow
+                | IrOp::BoolNegate
+                | IrOp::BoolAnd
+                | IrOp::BoolOr
+                | IrOp::BoolXor
+        )
 }
 
 fn is_safe_offset_fold_target(a: &Varnode, x: &Varnode, inner: &IrInsn) -> bool {
@@ -1117,6 +1313,51 @@ mod tests {
         let neq = IrInsn::with_output(IrOp::IntNotequal, v2, smallvec![v1, zero], 0x1004);
 
         let mut ssa = make_single_block_ssa(vec![sub, neq]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[1].op, IrOp::IntNotequal);
+        assert_eq!(block.insns[1].inputs[0], r0);
+        assert_eq!(block.insns[1].inputs[1], r8);
+    }
+
+    #[test]
+    fn test_bool_result_neq_zero_to_copy() {
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let zero = Varnode::constant(0, 1);
+        let cmp = Varnode::unique(0, 1);
+        let out = Varnode::unique(8, 1);
+
+        let eq = IrInsn::with_output(IrOp::IntEqual, cmp, smallvec![r0, r8], 0x1000);
+        let neq_zero = IrInsn::with_output(IrOp::IntNotequal, out, smallvec![cmp, zero], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![eq, neq_zero]);
+        let changed = ConditionSimplifyPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+        assert!(changed);
+
+        let block = ssa.function.blocks.values().next().expect("has block");
+        assert_eq!(block.insns[1].op, IrOp::Copy);
+        assert_eq!(block.insns[1].inputs[0], cmp);
+    }
+
+    #[test]
+    fn test_bool_result_eq_zero_to_negated_comparison() {
+        let r0 = Varnode::reg(0, 4);
+        let r8 = Varnode::reg(8, 4);
+        let zero = Varnode::constant(0, 1);
+        let cmp = Varnode::unique(0, 1);
+        let out = Varnode::unique(8, 1);
+
+        let eq = IrInsn::with_output(IrOp::IntEqual, cmp, smallvec![r0, r8], 0x1000);
+        let eq_zero = IrInsn::with_output(IrOp::IntEqual, out, smallvec![cmp, zero], 0x1004);
+
+        let mut ssa = make_single_block_ssa(vec![eq, eq_zero]);
         let changed = ConditionSimplifyPass
             .run(&mut ssa)
             .expect("pass should succeed");

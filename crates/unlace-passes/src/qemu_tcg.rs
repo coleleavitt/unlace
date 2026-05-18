@@ -40,13 +40,21 @@ pub fn parse_tcg_coverage(data: &[u8]) -> Result<TcgCoverageTrace, QemuTcgError>
     addrs.sort_unstable();
     addrs.dedup();
 
-    Ok(TcgCoverageTrace { hit_bbs: addrs, total_executions })
+    Ok(TcgCoverageTrace {
+        hit_bbs: addrs,
+        total_executions,
+    })
 }
 
 /// Compute coverage percentage given hit BBs and total known BBs.
 pub fn coverage_ratio(hit: &[u64], total_bbs: &[u64]) -> f64 {
-    if total_bbs.is_empty() { return 0.0; }
-    let hit_count = total_bbs.iter().filter(|bb| hit.binary_search(bb).is_ok()).count();
+    if total_bbs.is_empty() {
+        return 0.0;
+    }
+    let hit_count = total_bbs
+        .iter()
+        .filter(|bb| hit.binary_search(bb).is_ok())
+        .count();
     hit_count as f64 / total_bbs.len() as f64
 }
 
@@ -72,7 +80,10 @@ mod tests {
 
     #[test]
     fn misaligned_error() {
-        assert_eq!(parse_tcg_coverage(&[1, 2, 3]), Err(QemuTcgError::BadAlignment { len: 3 }));
+        assert_eq!(
+            parse_tcg_coverage(&[1, 2, 3]),
+            Err(QemuTcgError::BadAlignment { len: 3 })
+        );
     }
 
     #[test]

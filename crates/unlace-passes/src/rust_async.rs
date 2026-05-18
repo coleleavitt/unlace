@@ -66,9 +66,10 @@ pub fn detect_async_state_machines(func: &SsaFunction) -> Vec<AsyncStateMachine>
         }
 
         // Check if there's a load from a struct field at offset 0 (discriminant)
-        let has_discriminant_load = block.insns.iter().any(|insn| {
-            insn.op == IrOp::Load && insn.inputs.len() >= 2
-        });
+        let has_discriminant_load = block
+            .insns
+            .iter()
+            .any(|insn| insn.op == IrOp::Load && insn.inputs.len() >= 2);
 
         if !has_discriminant_load {
             continue;

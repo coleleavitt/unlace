@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 use unlace_ir::SpaceId;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
 /// Minimum register-space offset for x86 flag bits (CF starts at 256).
 const FLAG_OFFSET_MIN: u64 = 256;
@@ -73,7 +73,15 @@ impl Pass for DeadFlagElimPass {
         for (&bid, block) in &mut func.function.blocks {
             let mut keep = Vec::with_capacity(block.insns.len());
 
-            for (insn_idx, _insn) in block.insns.iter().enumerate() {
+            for (insn_idx, insn) in block.insns.iter().enumerate() {
+                let produces_flag_output = insn.output.is_some_and(|vn| {
+                    vn.space == SpaceId::Register && vn.offset >= FLAG_OFFSET_MIN
+                });
+                if !produces_flag_output {
+                    keep.push(insn_idx);
+                    continue;
+                }
+
                 let output_sv = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output));
 
                 let is_dead_flag = match output_sv {
@@ -99,30 +107,21 @@ impl Pass for DeadFlagElimPass {
             for (new_idx, &old_idx) in keep.iter().enumerate() {
                 block.insns.push(old_insns[old_idx].clone());
 
-                if new_idx != old_idx {
-                    // Re-key output
-                    if let Some(sv) = func.var_map.remove(&(bid, old_idx, VarnodeSlot::Output)) {
-                        func.var_map.insert((bid, new_idx, VarnodeSlot::Output), sv);
-                    }
-
-                    // Re-key inputs
-                    let input_count = block
-                        .insns
-                        .last()
-                        .ok_or_else(|| PassError::InvariantViolation {
-                            message: "block has no instructions after compaction".into(),
-                        })?
-                        .inputs
-                        .len();
-                    for i in 0..input_count {
-                        if let Some(sv) =
-                            func.var_map.remove(&(bid, old_idx, VarnodeSlot::Input(i)))
-                        {
-                            func.var_map
-                                .insert((bid, new_idx, VarnodeSlot::Input(i)), sv);
-                        }
-                    }
-                }
+                let input_count = block
+                    .insns
+                    .last()
+                    .ok_or_else(|| PassError::InvariantViolation {
+                        message: "block has no instructions after compaction".into(),
+                    })?
+                    .inputs
+                    .len();
+                compact_var_map_for_moved_insn(
+                    &mut func.var_map,
+                    bid,
+                    old_idx,
+                    new_idx,
+                    input_count,
+                );
             }
 
             // Purge stale var_map entries beyond the new instruction count.
@@ -233,6 +232,7 @@ mod tests {
             op_bindings: unlace_ir::ssa::OpTypeBindings::default(),
             byref_boxes: std::collections::BTreeMap::new(),
             stack_frame: None,
+            stack_accesses: Vec::new(),
             byref_info: None,
             libc_call_annotations: std::collections::BTreeMap::new(),
             libc_sig_annotations: std::collections::BTreeMap::new(),
@@ -507,5 +507,36 @@ mod tests {
 
         assert!(!changed, "non-flag dead code should NOT be removed");
         assert_eq!(ssa.function.blocks[&BlockId(0)].insns.len(), 2);
+    }
+
+    #[test]
+    fn test_dead_flag_elim_ignores_stale_output_on_outputless_call() {
+        let stale_zf = flag_sv(ZF, 0);
+        let target = Varnode::constant(0x2000, 8);
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![target],
+            0x1000,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
+
+        let mut var_map = BTreeMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), stale_zf);
+
+        let mut ssa = make_ssa(vec![bb], var_map, BTreeMap::new());
+
+        let pass = DeadFlagElimPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+
+        assert!(
+            !changed,
+            "stale var_map output must not make an output-less CALL removable"
+        );
+        let insns = &ssa.function.blocks[&BlockId(0)].insns;
+        assert_eq!(insns.len(), 2);
+        assert_eq!(insns[0].op, IrOp::Call);
     }
 }

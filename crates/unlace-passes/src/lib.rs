@@ -11,6 +11,7 @@ pub mod boost_recognize;
 pub mod bsim_db;
 pub mod builtin_recognize;
 pub mod byref_detect;
+pub mod call_args;
 pub mod call_boundary_copyprop;
 pub mod caller_param_propagate;
 pub mod calling_conv_coverage;
@@ -131,6 +132,7 @@ pub use builtin_recognize::{
     BuiltinAnnotation, recognize_builtins, recognize_builtins_with_resolver,
 };
 pub use byref_detect::detect_byref;
+pub use call_args::recover_direct_call_args;
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
 pub use caller_param_propagate::{
     apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,
@@ -169,8 +171,9 @@ pub use indirect_call_resolve::IndirectCallResolvePass;
 pub use indirect_jump_resolve::{IndirectJumpResolvePass, collect_jump_table_candidates};
 pub use inline_foldback::{InlineFoldback, detect_inlined_calls};
 pub use instrument::{
-    dump_pass_timings, dump_pass_timings_csv, pass_should_trace, pass_timing_csv_path,
-    pass_timing_enabled, record_pass_timing, run_instrumented,
+    dump_pass_timings, dump_pass_timings_csv, dump_schedule_audit_csv, pass_should_trace,
+    pass_timing_csv_path, pass_timing_enabled, record_pass_timing, run_instrumented,
+    schedule_audit_oscillations, schedule_audit_path,
 };
 pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint};
 pub use iv_elim::IvElimPass;

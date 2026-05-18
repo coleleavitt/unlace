@@ -223,10 +223,10 @@ mod tests {
             if sv.base != base {
                 continue;
             }
-            if matches!(slot, VarnodeSlot::Output)
-                && best.map_or(true, |b| sv.version < b.version) {
-                    best = Some(*sv);
-                }
+            if matches!(slot, VarnodeSlot::Output) && best.map_or(true, |b| sv.version < b.version)
+            {
+                best = Some(*sv);
+            }
         }
         if best.is_none() {
             for sv in ssa.var_map.values() {

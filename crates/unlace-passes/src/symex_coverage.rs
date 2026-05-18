@@ -64,7 +64,9 @@ pub fn mark_trivially_infeasible(branches: &mut [UncoveredBranch]) {
 
 /// Compute gap ratio: fraction of branches not covered.
 pub fn coverage_gap_ratio(total_branches: usize, covered: usize) -> f64 {
-    if total_branches == 0 { return 0.0; }
+    if total_branches == 0 {
+        return 0.0;
+    }
     1.0 - (covered as f64 / total_branches as f64)
 }
 
@@ -84,8 +86,18 @@ mod tests {
     #[test]
     fn mark_infeasible() {
         let mut branches = vec![
-            UncoveredBranch { branch_addr: 0x1000, target_addr: 0, feasibility: Feasibility::Unknown, condition: None },
-            UncoveredBranch { branch_addr: 0x2000, target_addr: 0x2010, feasibility: Feasibility::Unknown, condition: None },
+            UncoveredBranch {
+                branch_addr: 0x1000,
+                target_addr: 0,
+                feasibility: Feasibility::Unknown,
+                condition: None,
+            },
+            UncoveredBranch {
+                branch_addr: 0x2000,
+                target_addr: 0x2010,
+                feasibility: Feasibility::Unknown,
+                condition: None,
+            },
         ];
         mark_trivially_infeasible(&mut branches);
         assert_eq!(branches[0].feasibility, Feasibility::Infeasible);

@@ -46,7 +46,9 @@ pub fn prioritize_functions(traces: &[StackTrace]) -> Vec<u64> {
 
 /// Filter frames to only those within a specific module.
 pub fn frames_in_module<'a>(trace: &'a StackTrace, module: &str) -> Vec<&'a StackFrame> {
-    trace.frames.iter()
+    trace
+        .frames
+        .iter()
         .filter(|f| f.module.as_deref() == Some(module))
         .collect()
 }
@@ -56,14 +58,29 @@ mod tests {
     use super::*;
 
     fn frame(pc: u64, name: Option<&str>) -> StackFrame {
-        StackFrame { pc, fp: None, function_name: name.map(Into::into), module: None }
+        StackFrame {
+            pc,
+            fp: None,
+            function_name: name.map(Into::into),
+            module: None,
+        }
     }
 
     #[test]
     fn prioritize_innermost_first() {
         let traces = vec![
-            StackTrace { thread_id: 1, frames: vec![frame(0x1000, Some("crash")), frame(0x2000, Some("caller")), frame(0x3000, Some("main"))] },
-            StackTrace { thread_id: 2, frames: vec![frame(0x4000, Some("other")), frame(0x2000, Some("caller"))] },
+            StackTrace {
+                thread_id: 1,
+                frames: vec![
+                    frame(0x1000, Some("crash")),
+                    frame(0x2000, Some("caller")),
+                    frame(0x3000, Some("main")),
+                ],
+            },
+            StackTrace {
+                thread_id: 2,
+                frames: vec![frame(0x4000, Some("other")), frame(0x2000, Some("caller"))],
+            },
         ];
         let prio = prioritize_functions(&traces);
         assert_eq!(prio, vec![0x1000, 0x4000, 0x2000, 0x3000]);
@@ -76,11 +93,29 @@ mod tests {
 
     #[test]
     fn module_filter() {
-        let trace = StackTrace { thread_id: 1, frames: vec![
-            StackFrame { pc: 0x1000, fp: None, function_name: None, module: Some("libc.so".into()) },
-            StackFrame { pc: 0x2000, fp: None, function_name: None, module: Some("app".into()) },
-            StackFrame { pc: 0x3000, fp: None, function_name: None, module: Some("libc.so".into()) },
-        ]};
+        let trace = StackTrace {
+            thread_id: 1,
+            frames: vec![
+                StackFrame {
+                    pc: 0x1000,
+                    fp: None,
+                    function_name: None,
+                    module: Some("libc.so".into()),
+                },
+                StackFrame {
+                    pc: 0x2000,
+                    fp: None,
+                    function_name: None,
+                    module: Some("app".into()),
+                },
+                StackFrame {
+                    pc: 0x3000,
+                    fp: None,
+                    function_name: None,
+                    module: Some("libc.so".into()),
+                },
+            ],
+        };
         let filtered = frames_in_module(&trace, "libc.so");
         assert_eq!(filtered.len(), 2);
         assert_eq!(filtered[0].pc, 0x1000);

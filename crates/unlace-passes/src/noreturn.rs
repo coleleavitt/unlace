@@ -74,7 +74,7 @@ pub fn is_noreturn_by_name(name: &str) -> bool {
     if name.starts_with(NORETURN_PREFIX) {
         return true;
     }
-    NORETURN_NAMES.iter().any(|n| *n == name)
+    NORETURN_NAMES.contains(&name)
 }
 
 pub struct NoreturnDetectPass {
@@ -390,6 +390,7 @@ mod tests {
             op_bindings: unlace_ir::ssa::OpTypeBindings::default(),
             byref_boxes: std::collections::BTreeMap::new(),
             stack_frame: None,
+            stack_accesses: Vec::new(),
             byref_info: None,
             libc_call_annotations: std::collections::BTreeMap::new(),
             libc_sig_annotations: std::collections::BTreeMap::new(),

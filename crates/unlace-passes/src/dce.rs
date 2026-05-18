@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use unlace_ir::IrOp;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
 /// Returns `true` if `op` may have observable side effects and must not
 /// be removed even when its output is unused.
@@ -114,28 +114,21 @@ impl Pass for DeadCodeElimPass {
             for (new_idx, &old_idx) in keep.iter().enumerate() {
                 block.insns.push(old_insns[old_idx].clone());
 
-                if new_idx != old_idx {
-                    if let Some(sv) = func.var_map.remove(&(bid, old_idx, VarnodeSlot::Output)) {
-                        func.var_map.insert((bid, new_idx, VarnodeSlot::Output), sv);
-                    }
-
-                    let input_count = block
-                        .insns
-                        .last()
-                        .ok_or_else(|| PassError::InvariantViolation {
-                            message: "block has no instructions after compaction".into(),
-                        })?
-                        .inputs
-                        .len();
-                    for i in 0..input_count {
-                        if let Some(sv) =
-                            func.var_map.remove(&(bid, old_idx, VarnodeSlot::Input(i)))
-                        {
-                            func.var_map
-                                .insert((bid, new_idx, VarnodeSlot::Input(i)), sv);
-                        }
-                    }
-                }
+                let input_count = block
+                    .insns
+                    .last()
+                    .ok_or_else(|| PassError::InvariantViolation {
+                        message: "block has no instructions after compaction".into(),
+                    })?
+                    .inputs
+                    .len();
+                compact_var_map_for_moved_insn(
+                    &mut func.var_map,
+                    bid,
+                    old_idx,
+                    new_idx,
+                    input_count,
+                );
             }
 
             // Purge stale var_map entries beyond the new instruction count.
@@ -241,6 +234,7 @@ mod tests {
             op_bindings: unlace_ir::ssa::OpTypeBindings::default(),
             byref_boxes: std::collections::BTreeMap::new(),
             stack_frame: None,
+            stack_accesses: Vec::new(),
             byref_info: None,
             libc_call_annotations: std::collections::BTreeMap::new(),
             libc_sig_annotations: std::collections::BTreeMap::new(),
@@ -431,5 +425,48 @@ mod tests {
 
         let changed3 = pass.run(&mut ssa).expect("pass should succeed");
         assert!(!changed3, "pass 3 should be a no-op (fixed point)");
+    }
+
+    #[test]
+    fn test_dce_clears_stale_output_when_outputless_insn_moves() {
+        let rax = sv(0, 0);
+        let zf = SsaVarnode {
+            base: Varnode::reg(259, 1),
+            version: 0,
+        };
+        let target = Varnode::constant(0x2000, 8);
+
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::with_output(
+            IrOp::IntEqual,
+            zf.base,
+            smallvec![rax.base, Varnode::constant(0, 8)],
+            0x1000,
+        ));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Call,
+            smallvec![target],
+            0x1004,
+        ));
+        bb.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
+
+        let mut var_map = std::collections::BTreeMap::new();
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rax);
+        var_map.insert((BlockId(0), 0, VarnodeSlot::Output), zf);
+
+        let mut ssa = make_ssa(vec![bb], var_map, std::collections::BTreeMap::new());
+
+        let pass = DeadCodeElimPass;
+        let changed = pass.run(&mut ssa).expect("pass should succeed");
+
+        assert!(changed, "dead flag-producing compare should be removed");
+        let insns = &ssa.function.blocks[&BlockId(0)].insns;
+        assert_eq!(insns[0].op, IrOp::Call, "CALL should move into slot 0");
+        assert!(
+            !ssa.var_map
+                .contains_key(&(BlockId(0), 0, VarnodeSlot::Output)),
+            "slot 0 must not retain the removed compare's output metadata"
+        );
     }
 }

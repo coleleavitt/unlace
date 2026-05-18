@@ -232,7 +232,6 @@ pub struct SizeofRecognitionPass {
     pub name_resolver: Option<Box<dyn Fn(u64) -> Option<&'static str> + Send + Sync>>,
 }
 
-
 impl Pass for SizeofRecognitionPass {
     fn name(&self) -> &str {
         "sizeof-recognition"
@@ -404,7 +403,11 @@ mod tests {
         // Likewise a malloc() with a size that doesn't match any struct.
         let mut ssa2 = build_call_with_const_size_arg(99, RDI, 0xCAFE);
         let r2 = |a: u64| if a == 0xCAFE { Some("malloc") } else { None };
-        assert!(!recognize_with_resolver(&mut ssa2, r2, std::slice::from_ref(&pt)));
+        assert!(!recognize_with_resolver(
+            &mut ssa2,
+            r2,
+            std::slice::from_ref(&pt)
+        ));
         assert!(ssa2.sizeof_type_map.is_empty());
 
         // Use resolver helper too to keep it referenced.

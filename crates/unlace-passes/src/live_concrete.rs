@@ -52,7 +52,9 @@ pub fn overlay_concrete_values(
 /// Read a concrete memory value from the state.
 pub fn read_concrete_memory(state: &ConcreteState, addr: u64, size: usize) -> Option<u64> {
     let bytes = state.memory.get(&addr)?;
-    if bytes.len() < size { return None; }
+    if bytes.len() < size {
+        return None;
+    }
     let mut val = 0u64;
     for (i, &b) in bytes.iter().take(size).enumerate() {
         val |= (b as u64) << (i * 8);
@@ -77,7 +79,11 @@ mod tests {
         let mut regs = BTreeMap::new();
         regs.insert("rax".into(), 42u64);
         regs.insert("rbx".into(), 0x100);
-        let state = ConcreteState { registers: regs, memory: BTreeMap::new(), pc: 0x401000 };
+        let state = ConcreteState {
+            registers: regs,
+            memory: BTreeMap::new(),
+            pc: 0x401000,
+        };
 
         let mut var_map = BTreeMap::new();
         var_map.insert("result".into(), "rax".into());
@@ -93,7 +99,11 @@ mod tests {
 
     #[test]
     fn missing_register_skipped() {
-        let state = ConcreteState { registers: BTreeMap::new(), memory: BTreeMap::new(), pc: 0 };
+        let state = ConcreteState {
+            registers: BTreeMap::new(),
+            memory: BTreeMap::new(),
+            pc: 0,
+        };
         let mut var_map = BTreeMap::new();
         var_map.insert("x".into(), "rax".into());
         assert!(overlay_concrete_values(&state, &var_map).is_empty());
@@ -103,7 +113,11 @@ mod tests {
     fn read_memory() {
         let mut mem = BTreeMap::new();
         mem.insert(0x7000, vec![0x78, 0x56, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00]);
-        let state = ConcreteState { registers: BTreeMap::new(), memory: mem, pc: 0 };
+        let state = ConcreteState {
+            registers: BTreeMap::new(),
+            memory: mem,
+            pc: 0,
+        };
         assert_eq!(read_concrete_memory(&state, 0x7000, 4), Some(0x12345678));
     }
 

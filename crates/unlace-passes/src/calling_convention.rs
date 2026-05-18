@@ -122,9 +122,7 @@ fn collect_whole_function_reads(func: &SsaFunction) -> BTreeSet<u64> {
                 _ => {}
             }
             for inp in &insn.inputs {
-                if inp.space == SpaceId::Register
-                    && !defined_in_block.contains(&inp.offset)
-                {
+                if inp.space == SpaceId::Register && !defined_in_block.contains(&inp.offset) {
                     reads.insert(inp.offset);
                 }
             }
@@ -218,6 +216,10 @@ fn stores_this_pointer(func: &SsaFunction) -> bool {
 /// Inspect every `Return` instruction and return the maximum non-zero
 /// constant operand (the bytes the callee pops from the stack). A value of
 /// `0` means no `ret N`-style epilogue was observed.
+///
+/// Small constants are also how SCCP represents `return 0;` / `return 6;`
+/// after the return register has folded away, so they must not be used as
+/// callee-pop evidence.
 fn callee_pop_bytes(func: &SsaFunction) -> u64 {
     let mut max_pop = 0u64;
     for block in func.function.blocks.values() {
@@ -226,10 +228,13 @@ fn callee_pop_bytes(func: &SsaFunction) -> u64 {
                 continue;
             }
             for inp in &insn.inputs {
-                if inp.space == SpaceId::Const && inp.offset > 0
-                    && inp.offset > max_pop {
-                        max_pop = inp.offset;
-                    }
+                if inp.space == SpaceId::Const
+                    && inp.size > 4
+                    && inp.offset > 0
+                    && inp.offset > max_pop
+                {
+                    max_pop = inp.offset;
+                }
             }
         }
     }
@@ -554,7 +559,9 @@ fn infer_stack_params(func: &SsaFunction) -> BTreeSet<i64> {
         if insn.op != IrOp::Load {
             continue;
         }
-        let Some(addr) = insn.inputs.get(1) else { continue; };
+        let Some(addr) = insn.inputs.get(1) else {
+            continue;
+        };
         // Direct Stack-space load: e.g. `Load(stack, off)`.
         if addr.space == SpaceId::Stack {
             let off = addr.offset as i64;
@@ -614,10 +621,10 @@ fn detect_varargs(func: &SsaFunction) -> bool {
                 if insn.op != IrOp::Store {
                     continue;
                 }
-                let Some(value) = insn.inputs.get(2) else { continue; };
-                if value.space == SpaceId::Register
-                    && SYSV_FLOAT_REGS.contains(&value.offset)
-                {
+                let Some(value) = insn.inputs.get(2) else {
+                    continue;
+                };
+                if value.space == SpaceId::Register && SYSV_FLOAT_REGS.contains(&value.offset) {
                     xmm_spilled += 1;
                 }
             }
@@ -702,6 +709,10 @@ fn infer_return_type(func: &SsaFunction) -> PrimitiveType {
             }
             has_return = true;
 
+            if let Some(ret_ty) = constant_return_type(insn) {
+                return ret_ty;
+            }
+
             // Look backwards from the RETURN to find the last write to RAX or XMM0
             // in this block.
             let mut found_rax = false;
@@ -751,6 +762,19 @@ fn infer_return_type(func: &SsaFunction) -> PrimitiveType {
 
     // RETURN exists but no RAX/XMM0 write found — likely void.
     PrimitiveType::Unknown
+}
+
+fn constant_return_type(insn: &unlace_ir::IrInsn) -> Option<PrimitiveType> {
+    let ret = insn.inputs.first()?;
+    if ret.space != SpaceId::Const || ret.size > 4 {
+        return None;
+    }
+    Some(match ret.size {
+        1 => PrimitiveType::Bool,
+        2 => PrimitiveType::Int(2),
+        4 => PrimitiveType::Int(4),
+        _ => PrimitiveType::Int(8),
+    })
 }
 
 fn classify_return_op(
@@ -903,7 +927,10 @@ mod tests {
         ssa.calling_convention = CallingConvention::MicrosoftX64;
         let stack_params = infer_stack_params(&ssa);
         assert!(!stack_params.contains(&16), "shadow @16 leaked");
-        assert!(stack_params.contains(&40), "missed real arg @40: {stack_params:?}");
+        assert!(
+            stack_params.contains(&40),
+            "missed real arg @40: {stack_params:?}"
+        );
     }
 
     // -- Varargs detection ----------------------------------------------------
@@ -996,6 +1023,37 @@ mod tests {
             matches!(ty, PrimitiveType::Int(_) | PrimitiveType::Bool),
             "got {ty:?}"
         );
+    }
+
+    #[test]
+    fn return_type_int_when_return_operand_is_folded_constant() {
+        let mut func = Function::new("test", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(0, 4)],
+            0x1000,
+        ));
+        func.insert_block(bb);
+
+        let ssa = build_ssa(func);
+        assert_eq!(infer_return_type(&ssa), PrimitiveType::Int(4));
+    }
+
+    #[test]
+    fn constant_return_value_is_not_stdcall_callee_pop_evidence() {
+        let mut func = Function::new("test", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![Varnode::constant(6, 4)],
+            0x1000,
+        ));
+        func.insert_block(bb);
+
+        let mut ssa = build_ssa(func);
+        ssa.arch = unlace_ir::ArchId::X86_64;
+        assert_eq!(detect_calling_convention(&ssa), CallingConvention::SystemV);
     }
 
     // -- End-to-end via the pass ---------------------------------------------

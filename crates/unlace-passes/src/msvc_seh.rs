@@ -18,8 +18,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SehRegion, SsaFunction};
 use unlace_ir::BlockId;
+use unlace_ir::ssa::{SehRegion, SsaFunction};
 
 use crate::pass::{Pass, PassError};
 

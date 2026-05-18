@@ -17,10 +17,10 @@
 //! # Algorithm
 //!
 //! 1. Walk the dominator tree iteratively in pre-order.
-//! 2. Maintain a [`BTreeMap<Varnode, Varnode>`] of currently-live
-//!    `dst → src` equivalences.  Entries are pushed when entering a block
-//!    and popped when leaving the dominator subtree, so an equivalence is
-//!    only used at uses dominated by its definition.
+//! 2. Maintain a [`BTreeMap`] of currently-live SSA `dst -> src`
+//!    equivalences. Entries are pushed when entering a block and popped when
+//!    leaving the dominator subtree, so an equivalence is only used at uses
+//!    dominated by its definition.
 //! 3. At each instruction in a block:
 //!    - Replace each input that has a known dominating equivalent.
 //!    - If the instruction defines an output, kill any equivalences whose
@@ -33,17 +33,14 @@
 //!
 //! # Comparison with the local pass
 //!
-//! `CopyPropagationPass` processes a function-wide flat map.  Because SSA
-//! gives every definition a unique version, that approach is already
-//! correct in pure SSA form — but our IR keeps raw [`Varnode`]s alongside
-//! SSA bookkeeping, and the flat map cannot distinguish which definition
-//! of a base register is live at a given use.  Walking the dominator tree
-//! gives a per-use answer that matches the SSA notion of "current
-//! definition reaching this point".
+//! `CopyPropagationPass` handles the within-block case.  Cross-block
+//! propagation must key equivalences by SSA varnode, not raw [`Varnode`]
+//! base, because loop headers and joins often reuse the same machine
+//! register base for a distinct phi-defined value.
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, VarnodeSlot};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -77,13 +74,20 @@ struct InputRewrite {
     insn_idx: usize,
     input_idx: usize,
     new_input: Varnode,
+    new_ssa: Option<SsaVarnode>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct CopySource {
+    raw: Varnode,
+    ssa: Option<SsaVarnode>,
 }
 
 /// Walk the dominator tree iteratively and record which input slots should
 /// be rewritten to a dominating COPY source.
 fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
-    // Live `dst → src` equivalences scoped by dominator subtree.
-    let mut equiv: BTreeMap<Varnode, Varnode> = BTreeMap::new();
+    // Live SSA `dst -> src` equivalences scoped by dominator subtree.
+    let mut equiv: BTreeMap<SsaVarnode, CopySource> = BTreeMap::new();
     // Per-block log of mutations to `equiv`, replayed in reverse on cleanup.
     let mut log_per_block: BTreeMap<BlockId, Vec<EquivMutation>> = BTreeMap::new();
     let mut rewrites: Vec<InputRewrite> = Vec::new();
@@ -111,43 +115,62 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
         if let Some(block) = func.function.blocks.get(&bid) {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
                 // Step 1: rewrite inputs that have a known dominating
-                // equivalent.  Skip constants and self-equivalences.
+                // equivalent. Skip constants and self-equivalences.
                 for (input_idx, raw) in insn.inputs.iter().enumerate() {
                     if raw.space == SpaceId::Const {
                         continue;
                     }
-                    if let Some(&replacement) = equiv.get(raw) {
-                        if replacement != *raw {
-                            rewrites.push(InputRewrite {
-                                block: bid,
-                                insn_idx,
-                                input_idx,
-                                new_input: replacement,
-                            });
-                        }
+                    let Some(input_sv) = input_ssa(func, bid, insn_idx, input_idx) else {
+                        continue;
+                    };
+                    let Some(&source) = equiv.get(&input_sv) else {
+                        continue;
+                    };
+                    let source = resolve_chain(&equiv, source);
+                    let new_ssa = if source.raw.space == SpaceId::Const {
+                        None
+                    } else {
+                        source.ssa
+                    };
+                    if *raw != source.raw || Some(input_sv) != new_ssa {
+                        rewrites.push(InputRewrite {
+                            block: bid,
+                            insn_idx,
+                            input_idx,
+                            new_input: source.raw,
+                            new_ssa,
+                        });
                     }
                 }
 
-                // Step 2: a definition kills any equivalence whose
-                // src or dst matches the new output base.
-                if let Some(out) = insn.output {
-                    if out.space != SpaceId::Const {
-                        kill_for_def(&mut equiv, &mut local_log, out);
-                    }
-                }
-
-                // Step 3: record a new COPY equivalence.  Resolve the source
+                // Step 2: record a new COPY equivalence. Resolve the source
                 // through any existing equivalence so chains collapse to their
                 // ultimate origin in one pass.
                 if insn.op == IrOp::Copy {
                     if let (Some(out), Some(&raw_src)) = (insn.output, insn.inputs.first()) {
                         if out.space != SpaceId::Const && out != raw_src {
-                            let resolved_src = resolve_chain(&equiv, raw_src);
-                            // Avoid trivial self-loops introduced by chasing.
-                            if resolved_src != out {
-                                let prev = equiv.insert(out, resolved_src);
+                            let Some(output_sv) = output_ssa(func, bid, insn_idx) else {
+                                continue;
+                            };
+                            let source_ssa = if raw_src.space == SpaceId::Const {
+                                None
+                            } else {
+                                let Some(sv) = input_ssa(func, bid, insn_idx, 0) else {
+                                    continue;
+                                };
+                                Some(sv)
+                            };
+                            let source = resolve_chain(
+                                &equiv,
+                                CopySource {
+                                    raw: raw_src,
+                                    ssa: source_ssa,
+                                },
+                            );
+                            if source.raw != out || source.ssa != Some(output_sv) {
+                                let prev = equiv.insert(output_sv, source);
                                 local_log.push(EquivMutation::Inserted {
-                                    key: out,
+                                    key: output_sv,
                                     previous: prev,
                                 });
                             }
@@ -155,12 +178,6 @@ fn collect_rewrites(func: &SsaFunction) -> Vec<InputRewrite> {
                     }
                 }
 
-                // We intentionally rely solely on the input slot's raw
-                // varnode for matching: var_map gives SSA versions but
-                // already-renamed bases are unique anyway, and the COPY
-                // propagation operates on raw Varnodes (matching the local
-                // pass).  The dominator walk plus per-def kill ensures
-                // soundness against raw redefinitions.
                 let _ = func.var_map.get(&(bid, insn_idx, VarnodeSlot::Output));
             }
         }
@@ -184,14 +201,12 @@ enum EquivMutation {
     /// `equiv.insert(key, _)` — restore by either re-inserting `previous`
     /// or removing `key` if there was no previous binding.
     Inserted {
-        key: Varnode,
-        previous: Option<Varnode>,
+        key: SsaVarnode,
+        previous: Option<CopySource>,
     },
-    /// `equiv.remove(key)` — restore by re-inserting the removed value.
-    Removed { key: Varnode, value: Varnode },
 }
 
-fn apply_mutation_reverse(equiv: &mut BTreeMap<Varnode, Varnode>, m: EquivMutation) {
+fn apply_mutation_reverse(equiv: &mut BTreeMap<SsaVarnode, CopySource>, m: EquivMutation) {
     match m {
         EquivMutation::Inserted { key, previous } => match previous {
             Some(prev) => {
@@ -201,39 +216,20 @@ fn apply_mutation_reverse(equiv: &mut BTreeMap<Varnode, Varnode>, m: EquivMutati
                 equiv.remove(&key);
             }
         },
-        EquivMutation::Removed { key, value } => {
-            equiv.insert(key, value);
-        }
-    }
-}
-
-/// Kill every equivalence whose key or value matches the redefined varnode.
-/// Recording each removal in `log` so the cleanup phase can restore them.
-fn kill_for_def(
-    equiv: &mut BTreeMap<Varnode, Varnode>,
-    log: &mut Vec<EquivMutation>,
-    def: Varnode,
-) {
-    let to_remove: Vec<Varnode> = equiv
-        .iter()
-        .filter(|(k, v)| **k == def || **v == def)
-        .map(|(k, _)| *k)
-        .collect();
-    for key in to_remove {
-        if let Some(value) = equiv.remove(&key) {
-            log.push(EquivMutation::Removed { key, value });
-        }
     }
 }
 
 /// Chase `v` through the equivalence map until we reach a varnode with no
 /// further equivalence.  Bounded by map size to defeat any pathological
 /// cycles (none should exist after `kill_for_def`, but be safe).
-fn resolve_chain(equiv: &BTreeMap<Varnode, Varnode>, start: Varnode) -> Varnode {
+fn resolve_chain(equiv: &BTreeMap<SsaVarnode, CopySource>, start: CopySource) -> CopySource {
     let mut current = start;
     let limit = equiv.len();
     let mut depth = 0;
-    while let Some(&next) = equiv.get(&current) {
+    while let Some(source_sv) = current.ssa {
+        let Some(&next) = equiv.get(&source_sv) else {
+            break;
+        };
         if depth >= limit || next == current {
             break;
         }
@@ -260,7 +256,33 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<InputRewrite>) {
         if *input != rw.new_input {
             *input = rw.new_input;
         }
+
+        let key = (rw.block, rw.insn_idx, VarnodeSlot::Input(rw.input_idx));
+        if rw.new_input.space == SpaceId::Const {
+            func.var_map.remove(&key);
+        } else if let Some(new_ssa) = rw.new_ssa {
+            func.var_map.insert(key, new_ssa);
+        } else {
+            func.var_map.remove(&key);
+        }
     }
+}
+
+fn input_ssa(
+    func: &SsaFunction,
+    bid: BlockId,
+    insn_idx: usize,
+    input_idx: usize,
+) -> Option<SsaVarnode> {
+    func.var_map
+        .get(&(bid, insn_idx, VarnodeSlot::Input(input_idx)))
+        .copied()
+}
+
+fn output_ssa(func: &SsaFunction, bid: BlockId, insn_idx: usize) -> Option<SsaVarnode> {
+    func.var_map
+        .get(&(bid, insn_idx, VarnodeSlot::Output))
+        .copied()
 }
 
 // ---------------------------------------------------------------------------
@@ -439,6 +461,71 @@ mod tests {
         assert_eq!(
             bb2_after.insns[0].inputs[0], a,
             "v7 → v3 → a chain must collapse to a in the dominated use"
+        );
+    }
+
+    /// A pre-loop copy to a register base must not rewrite the loop-header
+    /// phi's use of that same raw register. The phi is a distinct SSA value
+    /// even though its raw base is still `r0`.
+    #[test]
+    fn test_global_copy_prop_preserves_loop_phi_register_use() {
+        let r0 = Varnode::reg(0, 4);
+        let cond = Varnode::reg(16, 1);
+        let next = Varnode::unique(0, 4);
+        let c0 = Varnode::constant(0, 4);
+        let c2 = Varnode::constant(2, 4);
+
+        let mut func = Function::new("loop_phi", BlockId(0), 0x4500);
+
+        let mut bb0 = BasicBlock::new(BlockId(0));
+        bb0.insns
+            .push(IrInsn::with_output(IrOp::Copy, r0, smallvec![c0], 0x4500));
+        bb0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x4504));
+        bb0.successors = smallvec![BlockId(1)];
+
+        let mut bb1 = BasicBlock::new(BlockId(1));
+        bb1.insns.push(IrInsn::with_output(
+            IrOp::IntAdd,
+            next,
+            smallvec![r0, c2],
+            0x4510,
+        ));
+        bb1.insns
+            .push(IrInsn::with_output(IrOp::Copy, r0, smallvec![next], 0x4514));
+        bb1.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![Varnode::constant(0x4510, 8), cond],
+            0x4518,
+        ));
+        bb1.successors = smallvec![BlockId(1), BlockId(2)];
+
+        let mut bb2 = BasicBlock::new(BlockId(2));
+        bb2.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![r0], 0x4520));
+
+        func.insert_block(bb0);
+        func.insert_block(bb1);
+        func.insert_block(bb2);
+
+        let mut ssa = build_ssa(func);
+        let add_input_key = (BlockId(1), 0, VarnodeSlot::Input(0));
+        let phi_input = ssa.var_map[&add_input_key];
+
+        let _ = GlobalCopyPropPass
+            .run(&mut ssa)
+            .expect("pass should succeed");
+
+        let bb1_after = &ssa.function.blocks[&BlockId(1)];
+        assert_eq!(bb1_after.insns[0].op, IrOp::IntAdd);
+        assert_eq!(
+            bb1_after.insns[0].inputs[0], r0,
+            "loop phi use must not be rewritten to the pre-loop constant"
+        );
+        assert_eq!(bb1_after.insns[0].inputs[1], c2);
+        assert_eq!(
+            ssa.var_map[&add_input_key], phi_input,
+            "input SSA mapping must remain the loop-header phi"
         );
     }
 

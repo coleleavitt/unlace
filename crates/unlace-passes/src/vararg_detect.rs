@@ -19,9 +19,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_ir::ssa::{
-    CallingConvention, FunctionSignatureRegistry, PrimitiveType, SsaFunction,
-};
+use unlace_ir::ssa::{CallingConvention, FunctionSignatureRegistry, PrimitiveType, SsaFunction};
 use unlace_ir::xref::CallGraph;
 use unlace_ir::{BlockId, IrOp, SpaceId};
 
@@ -92,9 +90,7 @@ pub fn detect_variadic_callees(
     let mut changed = false;
     for (callee, counts) in arg_counts {
         if counts.len() > 1 {
-            let entry = registry
-                .entry(callee)
-                .or_default();
+            let entry = registry.entry(callee).or_default();
             // Set the *fixed* prefix to the smallest observed count.
             // Variadic-ness is signalled to downstream passes by the
             // mismatch between this prefix size and the observed
@@ -162,11 +158,17 @@ pub fn parse_printf_format_strings(
                 continue;
             }
             let format_arg_index = printf_format_index(name);
-            let format_string = match find_constant_arg(&insns_snapshot, idx, format_arg_index, cc)
-            {
-                Some(addr) => string_table.get(&addr).cloned(),
-                None => None,
-            };
+            let format_string = insn
+                .inputs
+                .get(1 + format_arg_index)
+                .filter(|vn| vn.space == SpaceId::Const)
+                .and_then(|vn| string_table.get(&vn.offset).cloned())
+                .or_else(
+                    || match find_constant_arg(&insns_snapshot, idx, format_arg_index, cc) {
+                        Some(addr) => string_table.get(&addr).cloned(),
+                        None => None,
+                    },
+                );
             let Some(fmt) = format_string else { continue };
             let parsed = parse_format_string(&fmt);
             if parsed.is_empty() {

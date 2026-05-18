@@ -69,11 +69,7 @@ mod tests {
                 smallvec![Varnode::constant(0, 8), Varnode::reg(0, 8)],
                 0x1000,
             ),
-            IrInsn::without_output(
-                IrOp::Branchind,
-                smallvec![Varnode::unique(0, 8)],
-                0x1004,
-            ),
+            IrInsn::without_output(IrOp::Branchind, smallvec![Varnode::unique(0, 8)], 0x1004),
         ];
         let tables = detect_switch_tables(&insns);
         assert_eq!(tables.len(), 1);
@@ -82,9 +78,11 @@ mod tests {
 
     #[test]
     fn test_no_false_positive_for_regular_branch() {
-        let insns = vec![
-            IrInsn::without_output(IrOp::Branch, smallvec![Varnode::ram(0x2000, 8)], 0x1000),
-        ];
+        let insns = vec![IrInsn::without_output(
+            IrOp::Branch,
+            smallvec![Varnode::ram(0x2000, 8)],
+            0x1000,
+        )];
         let tables = detect_switch_tables(&insns);
         assert!(tables.is_empty());
     }

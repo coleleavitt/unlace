@@ -27,9 +27,15 @@ pub fn detect_union_candidates(insns: &[IrInsn]) -> Vec<UnionCandidate> {
     for insn in insns {
         let is_float_op = matches!(
             insn.op,
-            IrOp::FloatAdd | IrOp::FloatSub | IrOp::FloatMult | IrOp::FloatDiv
-                | IrOp::FloatNeg | IrOp::FloatAbs | IrOp::FloatSqrt
-                | IrOp::FloatInt2float | IrOp::FloatFloat2int
+            IrOp::FloatAdd
+                | IrOp::FloatSub
+                | IrOp::FloatMult
+                | IrOp::FloatDiv
+                | IrOp::FloatNeg
+                | IrOp::FloatAbs
+                | IrOp::FloatSqrt
+                | IrOp::FloatInt2float
+                | IrOp::FloatFloat2int
         );
 
         if let Some(output) = &insn.output {
@@ -65,8 +71,18 @@ mod tests {
     #[test]
     fn test_no_union_for_consistent_access() {
         let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, Varnode::stack(0, 4), smallvec![Varnode::stack(0, 4), Varnode::constant(1, 4)], 0),
-            IrInsn::with_output(IrOp::IntAdd, Varnode::stack(0, 4), smallvec![Varnode::stack(0, 4), Varnode::constant(2, 4)], 4),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                Varnode::stack(0, 4),
+                smallvec![Varnode::stack(0, 4), Varnode::constant(1, 4)],
+                0,
+            ),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                Varnode::stack(0, 4),
+                smallvec![Varnode::stack(0, 4), Varnode::constant(2, 4)],
+                4,
+            ),
         ];
         let candidates = detect_union_candidates(&insns);
         assert!(candidates.is_empty());
@@ -75,8 +91,18 @@ mod tests {
     #[test]
     fn test_detects_size_mismatch() {
         let insns = vec![
-            IrInsn::with_output(IrOp::Copy, Varnode::stack(8, 4), smallvec![Varnode::constant(0, 4)], 0),
-            IrInsn::with_output(IrOp::Copy, Varnode::stack(8, 8), smallvec![Varnode::constant(0, 8)], 4),
+            IrInsn::with_output(
+                IrOp::Copy,
+                Varnode::stack(8, 4),
+                smallvec![Varnode::constant(0, 4)],
+                0,
+            ),
+            IrInsn::with_output(
+                IrOp::Copy,
+                Varnode::stack(8, 8),
+                smallvec![Varnode::constant(0, 8)],
+                4,
+            ),
         ];
         let candidates = detect_union_candidates(&insns);
         assert_eq!(candidates.len(), 1);
@@ -87,8 +113,18 @@ mod tests {
     #[test]
     fn test_detects_mixed_float_int() {
         let insns = vec![
-            IrInsn::with_output(IrOp::IntAdd, Varnode::stack(0, 4), smallvec![Varnode::stack(0, 4), Varnode::constant(1, 4)], 0),
-            IrInsn::with_output(IrOp::FloatAdd, Varnode::stack(0, 4), smallvec![Varnode::stack(0, 4), Varnode::constant(1, 4)], 4),
+            IrInsn::with_output(
+                IrOp::IntAdd,
+                Varnode::stack(0, 4),
+                smallvec![Varnode::stack(0, 4), Varnode::constant(1, 4)],
+                0,
+            ),
+            IrInsn::with_output(
+                IrOp::FloatAdd,
+                Varnode::stack(0, 4),
+                smallvec![Varnode::stack(0, 4), Varnode::constant(1, 4)],
+                4,
+            ),
         ];
         let candidates = detect_union_candidates(&insns);
         assert_eq!(candidates.len(), 1);

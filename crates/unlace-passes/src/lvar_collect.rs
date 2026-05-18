@@ -82,7 +82,14 @@ fn collect(func: &SsaFunction) -> Vec<Lvar> {
         r
     };
 
-    collect_stack(func, &mut out, &mut next_id, &alloc_id, &use_blocks, func_range);
+    collect_stack(
+        func,
+        &mut out,
+        &mut next_id,
+        &alloc_id,
+        &use_blocks,
+        func_range,
+    );
     collect_temps(func, &mut out, &mut next_id, &alloc_id, &use_blocks, entry);
     collect_params(func, &mut out, &mut next_id, &alloc_id, func_range);
     collect_return(func, &mut out, &mut next_id, &alloc_id, func_range);
@@ -94,13 +101,7 @@ fn collect(func: &SsaFunction) -> Vec<Lvar> {
 /// Falls back to a single-point range at `entry` if the function has
 /// no blocks (defensive — shouldn't happen for well-formed SSA).
 fn function_wide_range(func: &SsaFunction, entry: BlockId) -> LiveRange {
-    let max = func
-        .function
-        .blocks
-        .keys()
-        .copied()
-        .last()
-        .unwrap_or(entry);
+    let max = func.function.blocks.keys().copied().last().unwrap_or(entry);
     LiveRange {
         start_block: entry.min(max),
         end_block: entry.max(max),
@@ -205,7 +206,7 @@ fn collect_temps(
     use_blocks: &BTreeMap<SsaVarnode, (BlockId, BlockId)>,
     entry: BlockId,
 ) {
-    for (sv, _) in &func.merged_names {
+    for sv in func.merged_names.keys() {
         let lr = live_range_for_temp(*sv, use_blocks, entry);
         let ty = primitive_to_kind(
             func.var_types
@@ -494,8 +495,7 @@ mod tests {
             version: 0,
         };
         ssa.merged_names.insert(sv, "v0".to_string());
-        ssa.var_map
-            .insert((BlockId(0), 0, VarnodeSlot::Output), sv);
+        ssa.var_map.insert((BlockId(0), 0, VarnodeSlot::Output), sv);
         assert!(LvarCollectPass.run(&mut ssa).unwrap());
         assert_eq!(ssa.lvars.len(), 1);
         assert!(matches!(ssa.lvars[0].storage, LvarStorage::Temp { .. }));
@@ -520,8 +520,7 @@ mod tests {
         // `var_map` directly, so the live-range comes from the
         // observed varnode keys regardless of whether the function's
         // `blocks` map physically contains BlockId(3).
-        ssa.var_map
-            .insert((BlockId(0), 0, VarnodeSlot::Output), sv);
+        ssa.var_map.insert((BlockId(0), 0, VarnodeSlot::Output), sv);
         ssa.var_map
             .insert((BlockId(3), 2, VarnodeSlot::Input(0)), sv);
 
@@ -553,8 +552,7 @@ mod tests {
                 },
                 version: v,
             };
-            ssa.var_map
-                .insert((BlockId(v), 0, VarnodeSlot::Output), sv);
+            ssa.var_map.insert((BlockId(v), 0, VarnodeSlot::Output), sv);
             accesses.push(sv);
         }
         ssa.stack_vars.insert(

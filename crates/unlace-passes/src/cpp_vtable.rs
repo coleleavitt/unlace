@@ -494,12 +494,7 @@ mod tests {
                 0x1000,
             ),
             // vtable_ptr_copy = COPY(vtable_ptr) — compiler-generated copy
-            IrInsn::with_output(
-                IrOp::Copy,
-                vtable_ptr_copy,
-                smallvec![vtable_ptr],
-                0x1008,
-            ),
+            IrInsn::with_output(IrOp::Copy, vtable_ptr_copy, smallvec![vtable_ptr], 0x1008),
             // method_ptr = LOAD(ram, vtable_ptr_copy) — load via the copy
             IrInsn::with_output(
                 IrOp::Load,
@@ -513,10 +508,7 @@ mod tests {
 
         let mut ssa = make_single_block_ssa(insns);
         let changed = CppVtablePass.run(&mut ssa).expect("pass succeeds");
-        assert!(
-            changed,
-            "should detect vtable tail-jmp through COPY chain"
-        );
+        assert!(changed, "should detect vtable tail-jmp through COPY chain");
 
         let info = ssa
             .cpp_vtable_calls

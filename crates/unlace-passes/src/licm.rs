@@ -183,6 +183,14 @@ fn is_hoistable_op(op: IrOp) -> bool {
 fn try_hoist_loop(func: &mut SsaFunction, nat: &NaturalLoop) -> bool {
     let header = nat.header;
 
+    // In a single-block self-loop the header is also the body and latch.
+    // Moving definitions out of that block changes the loop-carried phi
+    // shape downstream passes rely on, especially for lifted flag/counter
+    // state. Leave those loops intact until LICM can split latch/body state.
+    if nat.body.len() == 1 && nat.body.contains(&header) {
+        return false;
+    }
+
     let preds = func.cfg.predecessors(header);
     let outside_preds: Vec<BlockId> = preds
         .iter()
@@ -202,11 +210,24 @@ fn try_hoist_loop(func: &mut SsaFunction, nat: &NaturalLoop) -> bool {
         return false;
     }
 
+    let mut to_hoist = candidates;
+    to_hoist.sort_by_key(|c| (c.block, c.insn_idx));
+    to_hoist.retain(|cand| {
+        cand.block == header
+            && func
+                .function
+                .blocks
+                .get(&header)
+                .is_some_and(|block| cand.insn_idx < block.insns.len())
+            && still_hoistable(func, header, cand.insn_idx, nat)
+    });
+    if to_hoist.is_empty() {
+        return false;
+    }
+
     let preheader = ensure_preheader(func, header, &outside_preds);
 
     let mut hoisted = 0usize;
-    let mut to_hoist = candidates;
-    to_hoist.sort_by_key(|c| (c.block, c.insn_idx));
 
     while let Some(cand) = to_hoist.pop() {
         if cand.block != header {
@@ -255,6 +276,9 @@ fn collect_hoist_candidates(func: &SsaFunction, nat: &NaturalLoop) -> Vec<Candid
         };
         for (idx, insn) in block.insns.iter().enumerate() {
             if !is_hoistable_op(insn.op) {
+                continue;
+            }
+            if output_feeds_header_phi(func, nat.header, bid, idx) {
                 continue;
             }
             if !inputs_invariant(func, bid, idx, insn, nat) {
@@ -347,7 +371,20 @@ fn still_hoistable(func: &SsaFunction, bid: BlockId, idx: usize, nat: &NaturalLo
     if !is_hoistable_op(insn.op) {
         return false;
     }
+    if output_feeds_header_phi(func, nat.header, bid, idx) {
+        return false;
+    }
     inputs_invariant(func, bid, idx, insn, nat)
+}
+
+fn output_feeds_header_phi(func: &SsaFunction, header: BlockId, bid: BlockId, idx: usize) -> bool {
+    let Some(output_sv) = func.var_map.get(&(bid, idx, VarnodeSlot::Output)) else {
+        return false;
+    };
+    func.phi_map.get(&header).is_some_and(|phis| {
+        phis.iter()
+            .any(|phi| phi.inputs.iter().any(|(_, in_sv)| in_sv == output_sv))
+    })
 }
 
 pub(crate) fn ensure_preheader(
@@ -558,8 +595,93 @@ mod tests {
         build_ssa(func)
     }
 
+    /// Build a loop with a distinct latch:
+    ///   B0: COPY a; COPY b; BRANCH B1
+    ///   B1: candidate; CBRANCH B2/B3
+    ///   B2: BRANCH B1
+    ///   B3: RETURN
+    fn build_header_latch_loop_with(insn_in_loop: IrInsn) -> SsaFunction {
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let cond = Varnode::reg(64, 1);
+        let zero = Varnode::constant(0, 8);
+
+        let mut func = Function::new("loop_test", BlockId(0), 0x1000);
+
+        let mut b0 = BasicBlock::new(BlockId(0));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            a,
+            smallvec![Varnode::constant(1, 4)],
+            0x1000,
+        ));
+        b0.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            b,
+            smallvec![Varnode::constant(2, 4)],
+            0x1004,
+        ));
+        b0.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1008));
+        b0.successors = smallvec![BlockId(1)];
+
+        let mut b1 = BasicBlock::new(BlockId(1));
+        b1.insns.push(insn_in_loop);
+        b1.insns.push(IrInsn::without_output(
+            IrOp::Cbranch,
+            smallvec![zero, cond],
+            0x1100,
+        ));
+        b1.successors = smallvec![BlockId(2), BlockId(3)];
+
+        let mut b2 = BasicBlock::new(BlockId(2));
+        b2.insns
+            .push(IrInsn::without_output(IrOp::Branch, smallvec![], 0x1110));
+        b2.successors = smallvec![BlockId(1)];
+
+        let mut b3 = BasicBlock::new(BlockId(3));
+        b3.insns
+            .push(IrInsn::without_output(IrOp::Return, smallvec![a], 0x1200));
+
+        func.insert_block(b0);
+        func.insert_block(b1);
+        func.insert_block(b2);
+        func.insert_block(b3);
+
+        build_ssa(func)
+    }
+
     #[test]
-    fn licm_hoists_loop_invariant_add() {
+    fn licm_keeps_header_phi_input_in_place() {
+        let a = Varnode::reg(0, 4);
+        let b = Varnode::reg(8, 4);
+        let c = Varnode::reg(16, 4);
+        let add = IrInsn::with_output(IrOp::IntAdd, c, smallvec![a, b], 0x1080);
+
+        let mut ssa = build_header_latch_loop_with(add);
+        let block_count_before = ssa.function.blocks.len();
+
+        let changed = LicmPass.run(&mut ssa).expect("ok");
+        assert!(!changed, "phi-fed header definitions should not be hoisted");
+        assert_eq!(
+            ssa.function.blocks.len(),
+            block_count_before,
+            "LICM must not insert a preheader when no candidate is moved"
+        );
+
+        let header = &ssa.function.blocks[&BlockId(1)];
+        let still_has_add = header
+            .insns
+            .iter()
+            .any(|i| i.op == IrOp::IntAdd && i.output == Some(c));
+        assert!(
+            still_has_add,
+            "header ADD should stay in place when it feeds a header phi"
+        );
+    }
+
+    #[test]
+    fn licm_leaves_self_loop_header_intact() {
         let a = Varnode::reg(0, 4);
         let b = Varnode::reg(8, 4);
         let c = Varnode::reg(16, 4);
@@ -568,33 +690,15 @@ mod tests {
         let mut ssa = build_self_loop_with(add);
 
         let changed = LicmPass.run(&mut ssa).expect("ok");
-        assert!(changed, "expected LICM to hoist the invariant add");
+        assert!(!changed, "self-loop headers should not be rewritten");
 
         let header = &ssa.function.blocks[&BlockId(1)];
-        let still_has_add = header
-            .insns
-            .iter()
-            .any(|i| i.op == IrOp::IntAdd && i.output == Some(c));
-        assert!(!still_has_add, "ADD should have left the header");
-
-        let preheader = ssa
-            .function
-            .blocks
-            .values()
-            .find(|b| {
-                b.id != BlockId(1)
-                    && b.successors.len() == 1
-                    && b.successors[0] == BlockId(1)
-                    && b.insns
-                        .iter()
-                        .any(|i| i.op == IrOp::IntAdd && i.output == Some(c))
-            })
-            .expect("preheader with hoisted ADD");
         assert!(
-            preheader
+            header
                 .insns
                 .iter()
-                .any(|i| i.op == IrOp::IntAdd && i.output == Some(c))
+                .any(|i| i.op == IrOp::IntAdd && i.output == Some(c)),
+            "self-loop ADD should stay in the header"
         );
     }
 

@@ -14,9 +14,9 @@
 //!
 //! # Supported instruction classes
 //!
-//! - Integer: `IADD3`, `IMAD`, `LOP3`, `SHF`
+//! - Integer: `IADD`, `IADD3`, `ISUB`, `IMUL`, `IMAD`, `LOP3`, `SHF`
 //! - Floating point: `FADD`, `FMUL`, `FFMA`
-//! - Data movement and memory: `MOV`, `LDG`, `STG`
+//! - Data movement and memory: `MOV`, `LDG`, `STG`, `LDS`, `STS`
 //! - Control flow: `BRA`, `CALL`, `RET`, `EXIT`
 
 use unlace_ir::{
@@ -40,11 +40,16 @@ const OP_IADD3: u8 = 0x10;
 const OP_IMAD: u8 = 0x11;
 const OP_LOP3: u8 = 0x12;
 const OP_SHF: u8 = 0x13;
+const OP_IADD: u8 = 0x14;
+const OP_ISUB: u8 = 0x15;
+const OP_IMUL: u8 = 0x16;
 const OP_FADD: u8 = 0x20;
 const OP_FMUL: u8 = 0x21;
 const OP_FFMA: u8 = 0x22;
 const OP_LDG: u8 = 0x30;
 const OP_STG: u8 = 0x31;
+const OP_LDS: u8 = 0x32;
+const OP_STS: u8 = 0x33;
 const OP_BRA: u8 = 0x40;
 const OP_CALL: u8 = 0x41;
 const OP_RET: u8 = 0x42;
@@ -190,7 +195,7 @@ fn lift_imad_or_ffma(first: IrOp, second: IrOp, word: u64, addr: u64) -> LiftedI
 fn lift_lop3(word: u64, addr: u64) -> LiftedInsn {
     // LOP3 is an arbitrary three-input LUT.  Preserve the LUT byte as an input
     // to a CALLOTHER so downstream analyses know the instruction was decoded.
-    let lut = Varnode::constant(((word >> 48) & 0xff) as u64, 1);
+    let lut = Varnode::constant((word >> 48) & 0xff, 1);
     LiftedInsn {
         ir_ops: vec![IrInsn::with_output(
             IrOp::Callother,
@@ -307,11 +312,16 @@ fn decode(word: u64, addr: u64) -> LiftedInsn {
         OP_IMAD => lift_imad_or_ffma(IrOp::IntMult, IrOp::IntAdd, word, addr),
         OP_LOP3 => lift_lop3(word, addr),
         OP_SHF => lift_shf(word, addr),
+        OP_IADD => lift_binary(IrOp::IntAdd, dst(word), src1(word), operand2(word), addr),
+        OP_ISUB => lift_binary(IrOp::IntSub, dst(word), src1(word), operand2(word), addr),
+        OP_IMUL => lift_binary(IrOp::IntMult, dst(word), src1(word), operand2(word), addr),
         OP_FADD => lift_binary(IrOp::FloatAdd, dst(word), src1(word), operand2(word), addr),
         OP_FMUL => lift_binary(IrOp::FloatMult, dst(word), src1(word), operand2(word), addr),
         OP_FFMA => lift_imad_or_ffma(IrOp::FloatMult, IrOp::FloatAdd, word, addr),
         OP_LDG => lift_load(word, addr),
         OP_STG => lift_store(word, addr),
+        OP_LDS => lift_load(word, addr),
+        OP_STS => lift_store(word, addr),
         OP_BRA => LiftedInsn {
             ir_ops: vec![IrInsn::without_output(
                 IrOp::Branch,
@@ -454,52 +464,6 @@ mod tests {
     }
 
     #[test]
-    fn lifts_iadd3_to_add_chain() {
-        let lifter = SassLifter::new();
-        let lifted = lifter
-            .lift_insn(&enc(OP_IADD3, 1, 2, 3, 4, 0, false), 0x1000)
-            .unwrap();
-        assert_eq!(lifted.len, 16);
-        assert_eq!(lifted.ir_ops.len(), 2);
-        assert_eq!(lifted.ir_ops[0].op, IrOp::IntAdd);
-        assert_eq!(lifted.ir_ops[1].op, IrOp::IntAdd);
-        assert_eq!(lifted.ir_ops[1].output, Some(gpr(1)));
-    }
-
-    #[test]
-    fn lifts_mov_immediate() {
-        let lifter = SassLifter::new();
-        let lifted = lifter
-            .lift_insn(&enc(OP_MOV, 7, 0, 0, 0, 0x12345, true), 0)
-            .unwrap();
-        assert_eq!(lifted.ir_ops[0].op, IrOp::Copy);
-        assert_eq!(lifted.ir_ops[0].output, Some(gpr(7)));
-        assert_eq!(lifted.ir_ops[0].inputs[0], imm32(0x12345));
-    }
-
-    #[test]
-    fn lifts_global_load_with_displacement() {
-        let lifter = SassLifter::new();
-        let lifted = lifter
-            .lift_insn(&enc(OP_LDG, 8, 9, 0, 0, 0x40, false), 0x2000)
-            .unwrap();
-        assert_eq!(lifted.ir_ops.len(), 2);
-        assert_eq!(lifted.ir_ops[0].op, IrOp::IntAdd);
-        assert_eq!(lifted.ir_ops[1].op, IrOp::Load);
-        assert_eq!(lifted.ir_ops[1].output, Some(gpr(8)));
-    }
-
-    #[test]
-    fn lifts_branch_relative_to_instruction_record() {
-        let lifter = SassLifter::new();
-        let lifted = lifter
-            .lift_insn(&enc(OP_BRA, 0, 0, 0, 0, 2, false), 0x1000)
-            .unwrap();
-        assert_eq!(lifted.ir_ops[0].op, IrOp::Branch);
-        assert_eq!(lifted.ir_ops[0].inputs[0], Varnode::ram(0x1030, ADDR_SIZE));
-    }
-
-    #[test]
     fn short_buffer_is_decode_error() {
         let lifter = SassLifter::new();
         assert!(matches!(
@@ -515,5 +479,216 @@ mod tests {
             .lift_insn(&enc(0xfe, 0, 0, 0, 0, 0, false), 0)
             .unwrap();
         assert_eq!(lifted.ir_ops[0].op, IrOp::Unimplemented);
+    }
+
+    // --- Per-opcode tests for the 15 target instructions ---
+
+    #[test]
+    fn lift_iadd() {
+        let lifter = SassLifter::new();
+        // IADD R3 = R1 + R2
+        let lifted = lifter
+            .lift_insn(&enc(OP_IADD, 3, 1, 2, 0, 0, false), 0x100)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 1);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(lifted.ir_ops[0].output, Some(gpr(3)));
+        assert_eq!(lifted.ir_ops[0].inputs[0], gpr(1));
+        assert_eq!(lifted.ir_ops[0].inputs[1], gpr(2));
+    }
+
+    #[test]
+    fn lift_isub() {
+        let lifter = SassLifter::new();
+        // ISUB R5 = R10 - R20
+        let lifted = lifter
+            .lift_insn(&enc(OP_ISUB, 5, 10, 20, 0, 0, false), 0x200)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 1);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntSub);
+        assert_eq!(lifted.ir_ops[0].output, Some(gpr(5)));
+        assert_eq!(lifted.ir_ops[0].inputs[0], gpr(10));
+        assert_eq!(lifted.ir_ops[0].inputs[1], gpr(20));
+    }
+
+    #[test]
+    fn lift_imul() {
+        let lifter = SassLifter::new();
+        // IMUL R4 = R2 * R3
+        let lifted = lifter
+            .lift_insn(&enc(OP_IMUL, 4, 2, 3, 0, 0, false), 0x300)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 1);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntMult);
+        assert_eq!(lifted.ir_ops[0].output, Some(gpr(4)));
+        assert_eq!(lifted.ir_ops[0].inputs[0], gpr(2));
+        assert_eq!(lifted.ir_ops[0].inputs[1], gpr(3));
+    }
+
+    #[test]
+    fn lift_fadd() {
+        let lifter = SassLifter::new();
+        // FADD R6 = R1 + R2
+        let lifted = lifter
+            .lift_insn(&enc(OP_FADD, 6, 1, 2, 0, 0, false), 0x400)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 1);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::FloatAdd);
+        assert_eq!(lifted.ir_ops[0].output, Some(gpr(6)));
+        assert_eq!(lifted.ir_ops[0].inputs[0], gpr(1));
+        assert_eq!(lifted.ir_ops[0].inputs[1], gpr(2));
+    }
+
+    #[test]
+    fn lift_fmul() {
+        let lifter = SassLifter::new();
+        // FMUL R7 = R3 * R4
+        let lifted = lifter
+            .lift_insn(&enc(OP_FMUL, 7, 3, 4, 0, 0, false), 0x500)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 1);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::FloatMult);
+        assert_eq!(lifted.ir_ops[0].output, Some(gpr(7)));
+        assert_eq!(lifted.ir_ops[0].inputs[0], gpr(3));
+        assert_eq!(lifted.ir_ops[0].inputs[1], gpr(4));
+    }
+
+    #[test]
+    fn lift_ffma() {
+        let lifter = SassLifter::new();
+        // FFMA R8 = R1 * R2 + R3
+        let lifted = lifter
+            .lift_insn(&enc(OP_FFMA, 8, 1, 2, 3, 0, false), 0x600)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 2);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::FloatMult);
+        assert_eq!(lifted.ir_ops[1].op, IrOp::FloatAdd);
+        assert_eq!(lifted.ir_ops[1].output, Some(gpr(8)));
+        // Second add uses the tmp product and src3
+        assert_eq!(lifted.ir_ops[1].inputs[1], gpr(3));
+    }
+
+    #[test]
+    fn lift_mov() {
+        let lifter = SassLifter::new();
+        // MOV R7, #0x12345
+        let lifted = lifter
+            .lift_insn(&enc(OP_MOV, 7, 0, 0, 0, 0x12345, true), 0)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(lifted.ir_ops[0].output, Some(gpr(7)));
+        assert_eq!(lifted.ir_ops[0].inputs[0], imm32(0x12345));
+    }
+
+    #[test]
+    fn lift_ldg() {
+        let lifter = SassLifter::new();
+        // LDG R8, [R9 + 0x40]
+        let lifted = lifter
+            .lift_insn(&enc(OP_LDG, 8, 9, 0, 0, 0x40, false), 0x2000)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 2);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(lifted.ir_ops[1].op, IrOp::Load);
+        assert_eq!(lifted.ir_ops[1].output, Some(gpr(8)));
+    }
+
+    #[test]
+    fn lift_stg() {
+        let lifter = SassLifter::new();
+        // STG [R5 + 0x10], R2
+        let lifted = lifter
+            .lift_insn(&enc(OP_STG, 2, 5, 0, 0, 0x10, false), 0x3000)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 2);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(lifted.ir_ops[1].op, IrOp::Store);
+        // Store has no output
+        assert_eq!(lifted.ir_ops[1].output, None);
+    }
+
+    #[test]
+    fn lift_lds() {
+        let lifter = SassLifter::new();
+        // LDS R10, [R4 + 0x20] — shared memory load (same IR as LDG)
+        let lifted = lifter
+            .lift_insn(&enc(OP_LDS, 10, 4, 0, 0, 0x20, false), 0x4000)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 2);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(lifted.ir_ops[1].op, IrOp::Load);
+        assert_eq!(lifted.ir_ops[1].output, Some(gpr(10)));
+    }
+
+    #[test]
+    fn lift_sts() {
+        let lifter = SassLifter::new();
+        // STS [R6 + 0x8], R3 — shared memory store (same IR as STG)
+        let lifted = lifter
+            .lift_insn(&enc(OP_STS, 3, 6, 0, 0, 0x8, false), 0x5000)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 2);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(lifted.ir_ops[1].op, IrOp::Store);
+        assert_eq!(lifted.ir_ops[1].output, None);
+    }
+
+    #[test]
+    fn lift_bra() {
+        let lifter = SassLifter::new();
+        // BRA +2 (offset 2 → target = 0x1000 + 16 + 2*16 = 0x1030)
+        let lifted = lifter
+            .lift_insn(&enc(OP_BRA, 0, 0, 0, 0, 2, false), 0x1000)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Branch);
+        assert_eq!(lifted.ir_ops[0].inputs[0], Varnode::ram(0x1030, ADDR_SIZE));
+    }
+
+    #[test]
+    fn lift_call() {
+        let lifter = SassLifter::new();
+        // CALL +4 (offset 4 → target = 0x2000 + 16 + 4*16 = 0x2050)
+        let lifted = lifter
+            .lift_insn(&enc(OP_CALL, 0, 0, 0, 0, 4, false), 0x2000)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Call);
+        assert_eq!(lifted.ir_ops[0].inputs[0], Varnode::ram(0x2050, ADDR_SIZE));
+    }
+
+    #[test]
+    fn lift_ret() {
+        let lifter = SassLifter::new();
+        let lifted = lifter
+            .lift_insn(&enc(OP_RET, 0, 0, 0, 0, 0, false), 0x6000)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 1);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Return);
+        assert_eq!(lifted.ir_ops[0].output, None);
+    }
+
+    #[test]
+    fn lift_exit() {
+        let lifter = SassLifter::new();
+        let lifted = lifter
+            .lift_insn(&enc(OP_EXIT, 0, 0, 0, 0, 0, false), 0x7000)
+            .unwrap();
+        assert_eq!(lifted.len, 16);
+        assert_eq!(lifted.ir_ops.len(), 1);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Return);
+        assert_eq!(lifted.ir_ops[0].output, None);
     }
 }

@@ -761,4 +761,322 @@ mod tests {
             Err(LiftError::ShortBuffer)
         ));
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Per-opcode C28x unit tests (20+)
+    // ──────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn c28x_nop() {
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x0000), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops.len(), 1);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Copy);
+        // NOP copies reg(0) to itself
+        assert_eq!(insn.ir_ops[0].output, Some(reg(0, C28X_REG_SIZE)));
+    }
+
+    #[test]
+    fn c28x_mov_imm_to_al() {
+        // opc=0x1, dst=0 (AL), imm=0x42
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x1042), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(0, C28X_REG_SIZE)));
+        assert_eq!(insn.ir_ops[0].inputs[0], Varnode::constant(0x42, C28X_REG_SIZE));
+    }
+
+    #[test]
+    fn c28x_mov_imm_to_ar3() {
+        // opc=0x1, dst=7 (AR3), imm=0xff
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x17ff), 0x100).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(7, C28X_REG_SIZE)));
+        assert_eq!(insn.ir_ops[0].inputs[0], Varnode::constant(0xff, C28X_REG_SIZE));
+    }
+
+    #[test]
+    fn c28x_mov_reg_to_reg() {
+        // opc=0x2, dst=3, src=5
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x2350), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(3, C28X_REG_SIZE)));
+        assert_eq!(insn.ir_ops[0].inputs[0], reg(5, C28X_REG_SIZE));
+    }
+
+    #[test]
+    fn c28x_add() {
+        // opc=0x3, dst=2, src=4  → IntAdd with flags
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x3240), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(2, C28X_REG_SIZE)));
+        // Flag setting: Z and N
+        assert!(insn.ir_ops.iter().any(|i| i.op == IrOp::IntEqual));
+        assert!(insn.ir_ops.iter().any(|i| i.op == IrOp::IntRight));
+    }
+
+    #[test]
+    fn c28x_sub() {
+        // opc=0x4, dst=1, src=6
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x4160), 0x100).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::IntSub);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(1, C28X_REG_SIZE)));
+        // Should produce flags
+        assert!(insn.ir_ops.len() >= 3);
+        assert!(insn.ir_ops.iter().any(|i| i.op == IrOp::IntEqual));
+    }
+
+    #[test]
+    fn c28x_and() {
+        // opc=0x5, dst=0, src=1
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x5010), 0x100).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::IntAnd);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(0, C28X_REG_SIZE)));
+        // AND does not set flags in this impl
+        assert_eq!(insn.ir_ops.len(), 1);
+    }
+
+    #[test]
+    fn c28x_or() {
+        // opc=0x6, dst=3, src=7
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x6370), 0x100).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::IntOr);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(3, C28X_REG_SIZE)));
+        assert_eq!(insn.ir_ops.len(), 1);
+    }
+
+    #[test]
+    fn c28x_xor() {
+        // opc=0x7, dst=5, src=2
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x7520), 0x100).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::IntXor);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(5, C28X_REG_SIZE)));
+        assert_eq!(insn.ir_ops.len(), 1);
+    }
+
+    #[test]
+    fn c28x_load_via_ar0() {
+        // opc=0x8, dst=0 (AL), ar=src&7=0 → Load from AR0 (register index 4)
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x8000), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Load);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(0, C28X_REG_SIZE)));
+        // Address pointer is AR0 = reg(4)
+        assert_eq!(insn.ir_ops[0].inputs[1], reg(4, C28X_REG_SIZE));
+    }
+
+    #[test]
+    fn c28x_load_via_ar5() {
+        // opc=0x8, dst=2, ar=5 → Load from AR5 (register index 9)
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x8250), 0x100).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::Load);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(2, C28X_REG_SIZE)));
+        assert_eq!(insn.ir_ops[0].inputs[1], reg(4 + 5, C28X_REG_SIZE));
+    }
+
+    #[test]
+    fn c28x_store_via_ar1() {
+        // opc=0x9, src=dst_field=3, ar=src_field&7=1 → Store reg(3) via AR1 (register index 5)
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x9310), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Store);
+        assert_eq!(insn.ir_ops[0].output, None);
+        // inputs: [space_ram, ar_reg, src_reg]
+        assert_eq!(insn.ir_ops[0].inputs[1], reg(4 + 1, C28X_REG_SIZE));
+        assert_eq!(insn.ir_ops[0].inputs[2], reg(3, C28X_REG_SIZE));
+    }
+
+    #[test]
+    fn c28x_store_via_ar7() {
+        // opc=0x9, src=0, ar=7 → Store reg(0) via AR7 (register index 11)
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x9070), 0x100).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::Store);
+        assert_eq!(insn.ir_ops[0].inputs[1], reg(4 + 7, C28X_REG_SIZE));
+        assert_eq!(insn.ir_ops[0].inputs[2], reg(0, C28X_REG_SIZE));
+    }
+
+    #[test]
+    fn c28x_branch_forward() {
+        // opc=0xa, low=0x04 → disp = 4*2 = 8, target = addr+2+8 = 0x10a
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0xa004), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Branch);
+        assert_eq!(insn.ir_ops[0].inputs[0].offset, 0x10a);
+    }
+
+    #[test]
+    fn c28x_branch_backward() {
+        // opc=0xa, low=0xfe → i8 -2 → disp = -2*2 = -4, target = 0x200+2+(-4 as u16) = 0x200+2+0xfffc
+        // Actually: disp = (0xfe as i8) as i16 * 2 = -2 * 2 = -4
+        // target = addr.wrapping_add(2).wrapping_add(disp as u16 as u64)
+        // disp as u16 = (-4i16) as u16 = 0xfffc
+        // 0x200 + 2 + 0xfffc = 0x101fe (wrapping within u64)
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0xa0fe), 0x200).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::Branch);
+        // 0x200 + 2 + 0xfffc = 0x101fe
+        assert_eq!(insn.ir_ops[0].inputs[0].offset, 0x200u64.wrapping_add(2).wrapping_add(0xfffc));
+    }
+
+    #[test]
+    fn c28x_cbranch_nz_forward() {
+        // opc=0xb, low=0x03 → disp = 3*2 = 6, target = addr+2+6 = 0x108
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0xb003), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Cbranch);
+        assert_eq!(insn.ir_ops[0].inputs[0].offset, 0x108);
+        // Second input is ZF flag
+        assert_eq!(insn.ir_ops[0].inputs[1], flag(ZF_OFFSET));
+    }
+
+    #[test]
+    fn c28x_cbranch_nz_backward() {
+        // opc=0xb, low=0x80 → i8 -128 → disp = -128*2 = -256
+        // disp as u16 = 0xff00, target = 0x400+2+0xff00 = 0x10102
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0xb080), 0x400).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::Cbranch);
+        let expected = 0x400u64.wrapping_add(2).wrapping_add((-256i16) as u16 as u64);
+        assert_eq!(insn.ir_ops[0].inputs[0].offset, expected);
+    }
+
+    #[test]
+    fn c28x_call_with_target() {
+        // opc=0xc, 4-byte insn: [lo, 0xc0, target_lo, target_hi]
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&[0x00, 0xc0, 0x00, 0x80], 0x100).unwrap();
+        assert_eq!(insn.len, 4);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Call);
+        assert_eq!(insn.ir_ops[0].inputs[0].offset, 0x8000);
+    }
+
+    #[test]
+    fn c28x_call_target_zero() {
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&[0x00, 0xc0, 0x00, 0x00], 0x100).unwrap();
+        assert_eq!(insn.len, 4);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Call);
+        assert_eq!(insn.ir_ops[0].inputs[0].offset, 0x0000);
+    }
+
+    #[test]
+    fn c28x_return() {
+        // opc=0xd
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0xd000), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Return);
+        assert!(insn.ir_ops[0].inputs.is_empty());
+    }
+
+    #[test]
+    fn c28x_multiply() {
+        // opc=0xe, dst=1, src=2
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0xe120), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops[0].op, IrOp::IntMult);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(1, C28X_REG_SIZE)));
+        // Multiply doesn't set flags in this impl
+        assert_eq!(insn.ir_ops.len(), 1);
+    }
+
+    #[test]
+    fn c28x_multiply_same_reg() {
+        // opc=0xe, dst=5, src=5 (squaring)
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0xe550), 0x100).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::IntMult);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(5, C28X_REG_SIZE)));
+        assert_eq!(insn.ir_ops[0].inputs[0], reg(5, C28X_REG_SIZE));
+        assert_eq!(insn.ir_ops[0].inputs[1], reg(5, C28X_REG_SIZE));
+    }
+
+    #[test]
+    fn c28x_unknown_opcode() {
+        // opc=0xf produces Unknown → Unimplemented
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0xf000), 0x100).unwrap();
+        assert_eq!(insn.len, 2);
+        assert_eq!(insn.ir_ops[0].op, IrOp::Unimplemented);
+    }
+
+    #[test]
+    fn c28x_add_sets_flags_correctly() {
+        // Verify flag structure in detail: ADD produces IntAdd + IntEqual(ZF) + IntRight + Subpiece(NF)
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x3010), 0x100).unwrap();
+        assert_eq!(insn.ir_ops.len(), 4); // IntAdd, IntEqual, IntRight, Subpiece
+        assert_eq!(insn.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(insn.ir_ops[1].op, IrOp::IntEqual);
+        assert_eq!(insn.ir_ops[1].output, Some(flag(ZF_OFFSET)));
+        assert_eq!(insn.ir_ops[2].op, IrOp::IntRight);
+        assert_eq!(insn.ir_ops[3].op, IrOp::Subpiece);
+        assert_eq!(insn.ir_ops[3].output, Some(flag(NF_OFFSET)));
+    }
+
+    #[test]
+    fn c28x_sub_sets_flags_correctly() {
+        // SUB also has 4 IR ops with flag-setting
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x4230), 0x100).unwrap();
+        assert_eq!(insn.ir_ops.len(), 4);
+        assert_eq!(insn.ir_ops[0].op, IrOp::IntSub);
+        assert_eq!(insn.ir_ops[1].op, IrOp::IntEqual);
+        assert_eq!(insn.ir_ops[1].output, Some(flag(ZF_OFFSET)));
+        assert_eq!(insn.ir_ops[3].output, Some(flag(NF_OFFSET)));
+    }
+
+    #[test]
+    fn c28x_mov_imm_zero() {
+        // MovImm with imm=0
+        let lifter = TiLifter::new_c28x();
+        let insn = lifter.lift_insn(&word16(0x1500), 0x100).unwrap();
+        assert_eq!(insn.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(insn.ir_ops[0].output, Some(reg(5, C28X_REG_SIZE)));
+        assert_eq!(insn.ir_ops[0].inputs[0], Varnode::constant(0, C28X_REG_SIZE));
+    }
+
+    #[test]
+    fn c28x_call_short_buffer_error() {
+        // Call opcode (0xc) but only 3 bytes → ShortBuffer
+        let lifter = TiLifter::new_c28x();
+        let result = lifter.lift_insn(&[0x00, 0xc0, 0x12], 0x100);
+        assert!(matches!(result, Err(LiftError::ShortBuffer)));
+    }
+
+    #[test]
+    fn c28x_decode_all_opcodes_produces_ir() {
+        // Smoke test: every top-nibble 0..=0xf decodes without panic
+        let lifter = TiLifter::new_c28x();
+        for opc in 0u16..=0xf {
+            let word = opc << 12 | 0x0120; // arbitrary lower bits
+            // For call (0xc), need 4 bytes
+            if opc == 0xc {
+                let bytes = [word.to_le_bytes()[0], word.to_le_bytes()[1], 0x00, 0x10];
+                let insn = lifter.lift_insn(&bytes, 0x100).unwrap();
+                assert!(!insn.ir_ops.is_empty(), "opcode 0x{opc:x} produced empty IR");
+            } else {
+                let insn = lifter.lift_insn(&word.to_le_bytes(), 0x100).unwrap();
+                assert!(!insn.ir_ops.is_empty(), "opcode 0x{opc:x} produced empty IR");
+            }
+        }
+    }
 }

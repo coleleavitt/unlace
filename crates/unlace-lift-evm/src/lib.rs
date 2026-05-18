@@ -766,4 +766,185 @@ mod tests {
         assert_eq!(lifted.ir_ops[0].op, IrOp::Copy);
         assert_eq!(lifted.ir_ops[0].inputs[0].space, SpaceId::Register);
     }
+
+    /// Lifts a single-byte EVM instruction and returns the first IR op's opcode.
+    fn first_ir_op(byte: u8) -> IrOp {
+        lifter().lift_insn(&[byte], 0).unwrap().ir_ops[0].op
+    }
+
+    // --- Arithmetic (10) ---
+    #[test] fn op_stop_yields_return() { assert_eq!(first_ir_op(0x00), IrOp::Return); }
+    #[test] fn op_add_yields_int_add() { assert_eq!(first_ir_op(0x01), IrOp::IntAdd); }
+    #[test] fn op_mul_yields_int_mult() { assert_eq!(first_ir_op(0x02), IrOp::IntMult); }
+    #[test] fn op_sub_yields_int_sub() { assert_eq!(first_ir_op(0x03), IrOp::IntSub); }
+    #[test] fn op_div_yields_int_div() { assert_eq!(first_ir_op(0x04), IrOp::IntDiv); }
+    #[test] fn op_sdiv_yields_int_sdiv() { assert_eq!(first_ir_op(0x05), IrOp::IntSdiv); }
+    #[test] fn op_mod_yields_int_rem() { assert_eq!(first_ir_op(0x06), IrOp::IntRem); }
+    #[test] fn op_smod_yields_int_srem() { assert_eq!(first_ir_op(0x07), IrOp::IntSrem); }
+
+    #[test]
+    fn op_addmod_yields_intadd_then_intrem() {
+        let lifted = lifter().lift_insn(&[0x08], 0).unwrap();
+        assert_eq!(lifted.ir_ops.len(), 2);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntAdd);
+        assert_eq!(lifted.ir_ops[1].op, IrOp::IntRem);
+    }
+
+    #[test]
+    fn op_mulmod_yields_intmult_then_intrem() {
+        let lifted = lifter().lift_insn(&[0x09], 0).unwrap();
+        assert_eq!(lifted.ir_ops.len(), 2);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntMult);
+        assert_eq!(lifted.ir_ops[1].op, IrOp::IntRem);
+    }
+
+    #[test] fn op_exp_yields_callother() { assert_eq!(first_ir_op(0x0a), IrOp::Callother); }
+    #[test] fn op_signextend_yields_intsext() { assert_eq!(first_ir_op(0x0b), IrOp::IntSext); }
+
+    // --- Comparison (6) ---
+    #[test] fn op_lt_yields_int_less() { assert_eq!(first_ir_op(0x10), IrOp::IntLess); }
+    #[test] fn op_gt_yields_int_less_reversed() {
+        let lifted = lifter().lift_insn(&[0x11], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntLess);
+        // reversed_compare swaps operands so stack(1) appears first
+        assert_eq!(lifted.ir_ops[0].inputs[0], stack(1));
+    }
+    #[test] fn op_slt_yields_int_sless() { assert_eq!(first_ir_op(0x12), IrOp::IntSless); }
+    #[test] fn op_sgt_yields_int_sless_reversed() {
+        let lifted = lifter().lift_insn(&[0x13], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntSless);
+    }
+    #[test] fn op_eq_yields_int_equal() { assert_eq!(first_ir_op(0x14), IrOp::IntEqual); }
+    #[test] fn op_iszero_yields_int_equal_to_zero() {
+        let lifted = lifter().lift_insn(&[0x15], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntEqual);
+        assert_eq!(lifted.ir_ops[0].inputs[1], word_const(0));
+    }
+
+    // --- Bitwise (8) ---
+    #[test] fn op_and_yields_int_and() { assert_eq!(first_ir_op(0x16), IrOp::IntAnd); }
+    #[test] fn op_or_yields_int_or() { assert_eq!(first_ir_op(0x17), IrOp::IntOr); }
+    #[test] fn op_xor_yields_int_xor() { assert_eq!(first_ir_op(0x18), IrOp::IntXor); }
+    #[test] fn op_not_yields_int_xor_with_max() {
+        let lifted = lifter().lift_insn(&[0x19], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::IntXor);
+        assert_eq!(lifted.ir_ops[0].inputs[1].offset, u64::MAX);
+    }
+    #[test] fn op_byte_yields_subpiece() { assert_eq!(first_ir_op(0x1a), IrOp::Subpiece); }
+    #[test] fn op_shl_yields_int_left() { assert_eq!(first_ir_op(0x1b), IrOp::IntLeft); }
+    #[test] fn op_shr_yields_int_right() { assert_eq!(first_ir_op(0x1c), IrOp::IntRight); }
+    #[test] fn op_sar_yields_int_sright() { assert_eq!(first_ir_op(0x1d), IrOp::IntSright); }
+
+    // --- Crypto / Environment (3) ---
+    #[test]
+    fn op_sha3_yields_callother() {
+        assert_eq!(first_ir_op(0x20), IrOp::Callother);
+    }
+    #[test]
+    fn op_caller_yields_copy_from_opcode_const() {
+        let lifted = lifter().lift_insn(&[0x33], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Copy);
+        // Generic environment values come from a Const-space synthetic source
+        // (opcode_id). Callvalue/Calldatasize/Returndatasize use dedicated
+        // Register-space slots and are tested by the legacy env smoke test.
+        assert_eq!(lifted.ir_ops[0].inputs[0].space, SpaceId::Const);
+    }
+    #[test]
+    fn op_calldataload_yields_callother() {
+        assert_eq!(first_ir_op(0x35), IrOp::Callother);
+    }
+
+    // --- Memory & Storage (5) ---
+    #[test] fn op_mload_yields_load() { assert_eq!(first_ir_op(0x51), IrOp::Load); }
+    #[test] fn op_mstore_yields_store() { assert_eq!(first_ir_op(0x52), IrOp::Store); }
+    #[test] fn op_mstore8_yields_store() { assert_eq!(first_ir_op(0x53), IrOp::Store); }
+    #[test] fn op_sload_yields_load_from_storage_space() {
+        let lifted = lifter().lift_insn(&[0x54], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Load);
+        assert_eq!(lifted.ir_ops[0].inputs[0], small_const(1, 4));
+    }
+    #[test] fn op_sstore_yields_store_to_storage_space() {
+        let lifted = lifter().lift_insn(&[0x55], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Store);
+        assert_eq!(lifted.ir_ops[0].inputs[0], small_const(1, 4));
+    }
+
+    // --- Control flow (5) ---
+    #[test] fn op_jump_yields_branchind() { assert_eq!(first_ir_op(0x56), IrOp::Branchind); }
+    #[test] fn op_jumpi_yields_cbranch() { assert_eq!(first_ir_op(0x57), IrOp::Cbranch); }
+    #[test] fn op_jumpdest_yields_branch() { assert_eq!(first_ir_op(0x5b), IrOp::Branch); }
+    #[test] fn op_return_yields_return() { assert_eq!(first_ir_op(0xf3), IrOp::Return); }
+    #[test] fn op_revert_yields_return() { assert_eq!(first_ir_op(0xfd), IrOp::Return); }
+
+    // --- Stack manipulation (4) ---
+    #[test]
+    fn op_push1_decodes_immediate() {
+        let lifted = lifter().lift_insn(&[0x60, 0x42], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(lifted.ir_ops[0].inputs[0], imm_const(0x42));
+        assert_eq!(lifted.len, 2);
+    }
+    #[test]
+    fn op_push5_consumes_five_bytes() {
+        let lifted = lifter().lift_insn(&[0x64, 1, 2, 3, 4, 5], 0).unwrap();
+        assert_eq!(lifted.len, 6);
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Copy);
+    }
+    #[test]
+    fn op_dup1_copies_stack_top() {
+        let lifted = lifter().lift_insn(&[0x80], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(lifted.ir_ops[0].inputs[0], stack(0));
+    }
+    #[test]
+    fn op_swap1_emits_three_copies() {
+        let lifted = lifter().lift_insn(&[0x90], 0).unwrap();
+        assert_eq!(lifted.ir_ops.len(), 3);
+        assert!(lifted.ir_ops.iter().all(|i| i.op == IrOp::Copy));
+    }
+
+    // --- Logging (1) ---
+    #[test]
+    fn op_log0_yields_callother() {
+        let lifted = lifter().lift_insn(&[0xa0], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Callother);
+    }
+
+    // --- Call family (3) ---
+    #[test] fn op_call_yields_callother() {
+        let lifted = lifter().lift_insn(&[0xf1], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Callother);
+    }
+    #[test] fn op_create_yields_callother() {
+        let lifted = lifter().lift_insn(&[0xf0], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Callother);
+    }
+    #[test] fn op_staticcall_yields_callother() {
+        let lifted = lifter().lift_insn(&[0xfa], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Callother);
+    }
+
+    // --- Misc registers (4) ---
+    #[test]
+    fn op_pc_copies_addr_constant() {
+        let lifted = lifter().lift_insn(&[0x58], 0xdead_beef).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(lifted.ir_ops[0].inputs[0], word_const(0xdead_beef));
+    }
+    #[test]
+    fn op_msize_copies_memory_size() {
+        let lifted = lifter().lift_insn(&[0x59], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Copy);
+    }
+    #[test]
+    fn op_gas_copies_register() {
+        let lifted = lifter().lift_insn(&[0x5a], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Copy);
+        assert_eq!(lifted.ir_ops[0].inputs[0].space, SpaceId::Register);
+    }
+    #[test]
+    fn unknown_opcode_emits_unimplemented() {
+        let lifted = lifter().lift_insn(&[0x0c], 0).unwrap();
+        assert_eq!(lifted.ir_ops[0].op, IrOp::Unimplemented);
+    }
 }

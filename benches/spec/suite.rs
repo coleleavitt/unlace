@@ -44,21 +44,17 @@ fn bench_category_a_single_function(c: &mut Criterion) {
     group.sample_size(20);
 
     for sym in &funcs {
-        group.bench_with_input(
-            BenchmarkId::new("single_fn", &sym.name),
-            &sym,
-            |b, sym| {
-                b.iter(|| {
-                    let text = image.section_by_name(".text").unwrap();
-                    let offset = (sym.addr - text.vaddr) as usize;
-                    let end = offset + sym.size as usize;
-                    if end <= text.data.len() {
-                        let code = &text.data[offset..end];
-                        let _ = lifter.lift_insn(code, sym.addr);
-                    }
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("single_fn", &sym.name), &sym, |b, sym| {
+            b.iter(|| {
+                let text = image.section_by_name(".text").unwrap();
+                let offset = (sym.addr - text.vaddr) as usize;
+                let end = offset + sym.size as usize;
+                if end <= text.data.len() {
+                    let code = &text.data[offset..end];
+                    let _ = lifter.lift_insn(code, sym.addr);
+                }
+            });
+        });
     }
     group.finish();
 }
@@ -146,29 +142,25 @@ fn bench_category_c_scalability(c: &mut Criterion) {
             continue;
         }
 
-        group.bench_with_input(
-            BenchmarkId::new("functions", count),
-            &count,
-            |b, _| {
-                b.iter(|| {
-                    let text = match image.section_by_name(".text") {
-                        Some(t) => t,
-                        None => return,
-                    };
-                    for sym in &subset {
-                        let offset = sym.addr.wrapping_sub(text.vaddr) as usize;
-                        if offset >= text.data.len() {
-                            continue;
-                        }
-                        let end = (offset + sym.size as usize).min(text.data.len());
-                        let code = &text.data[offset..end];
-                        if code.len() > 4 {
-                            let _ = lifter.lift_insn(code, sym.addr);
-                        }
+        group.bench_with_input(BenchmarkId::new("functions", count), &count, |b, _| {
+            b.iter(|| {
+                let text = match image.section_by_name(".text") {
+                    Some(t) => t,
+                    None => return,
+                };
+                for sym in &subset {
+                    let offset = sym.addr.wrapping_sub(text.vaddr) as usize;
+                    if offset >= text.data.len() {
+                        continue;
                     }
-                });
-            },
-        );
+                    let end = (offset + sym.size as usize).min(text.data.len());
+                    let code = &text.data[offset..end];
+                    if code.len() > 4 {
+                        let _ = lifter.lift_insn(code, sym.addr);
+                    }
+                }
+            });
+        });
     }
 
     group.finish();

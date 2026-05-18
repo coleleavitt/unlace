@@ -37,31 +37,131 @@ struct PatternSpec {
 }
 
 const PATTERNS: &[PatternSpec] = &[
-    PatternSpec { label: "__fastcall",       needle: "__fastcall",    kind: PatternKind::Substring },
-    PatternSpec { label: "__usercall",       needle: "__usercall",    kind: PatternKind::Substring },
-    PatternSpec { label: "__noreturn",       needle: "__noreturn",    kind: PatternKind::Substring },
-    PatternSpec { label: "_QWORD",           needle: "_QWORD",        kind: PatternKind::Word },
-    PatternSpec { label: "_DWORD",           needle: "_DWORD",        kind: PatternKind::Word },
-    PatternSpec { label: "_WORD",            needle: "_WORD",         kind: PatternKind::Word },
-    PatternSpec { label: "_BYTE",            needle: "_BYTE",         kind: PatternKind::Word },
-    PatternSpec { label: "__int64",          needle: "__int64",       kind: PatternKind::Word },
-    PatternSpec { label: "aN params (a1..)", needle: "a",             kind: PatternKind::IdentPrefixDigits },
-    PatternSpec { label: "vN locals (v1..)", needle: "v",             kind: PatternKind::IdentPrefixDigits },
-    PatternSpec { label: "result",           needle: "result",        kind: PatternKind::Word },
-    PatternSpec { label: "LOBYTE",           needle: "LOBYTE",        kind: PatternKind::Substring },
-    PatternSpec { label: "HIDWORD",          needle: "HIDWORD",       kind: PatternKind::Substring },
-    PatternSpec { label: "HIWORD",           needle: "HIWORD",        kind: PatternKind::Substring },
-    PatternSpec { label: "LOWORD",           needle: "LOWORD",        kind: PatternKind::Substring },
-    PatternSpec { label: "__readfsqword",    needle: "__readfsqword", kind: PatternKind::Substring },
-    PatternSpec { label: "__readgsqword",    needle: "__readgsqword", kind: PatternKind::Substring },
-    PatternSpec { label: "goto LABEL_",      needle: "goto LABEL_",   kind: PatternKind::Substring },
-    PatternSpec { label: "switch (",         needle: "switch",        kind: PatternKind::SwitchParen },
-    PatternSpec { label: "case",             needle: "case",          kind: PatternKind::Word },
-    PatternSpec { label: "if (",             needle: "if (",          kind: PatternKind::Substring },
-    PatternSpec { label: "else",             needle: "else",          kind: PatternKind::Word },
-    PatternSpec { label: "for (",            needle: "for (",         kind: PatternKind::Substring },
-    PatternSpec { label: "while (",          needle: "while (",       kind: PatternKind::Substring },
-    PatternSpec { label: "do {",             needle: "do {",          kind: PatternKind::Substring },
+    PatternSpec {
+        label: "__fastcall",
+        needle: "__fastcall",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "__usercall",
+        needle: "__usercall",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "__noreturn",
+        needle: "__noreturn",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "_QWORD",
+        needle: "_QWORD",
+        kind: PatternKind::Word,
+    },
+    PatternSpec {
+        label: "_DWORD",
+        needle: "_DWORD",
+        kind: PatternKind::Word,
+    },
+    PatternSpec {
+        label: "_WORD",
+        needle: "_WORD",
+        kind: PatternKind::Word,
+    },
+    PatternSpec {
+        label: "_BYTE",
+        needle: "_BYTE",
+        kind: PatternKind::Word,
+    },
+    PatternSpec {
+        label: "__int64",
+        needle: "__int64",
+        kind: PatternKind::Word,
+    },
+    PatternSpec {
+        label: "aN params (a1..)",
+        needle: "a",
+        kind: PatternKind::IdentPrefixDigits,
+    },
+    PatternSpec {
+        label: "vN locals (v1..)",
+        needle: "v",
+        kind: PatternKind::IdentPrefixDigits,
+    },
+    PatternSpec {
+        label: "result",
+        needle: "result",
+        kind: PatternKind::Word,
+    },
+    PatternSpec {
+        label: "LOBYTE",
+        needle: "LOBYTE",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "HIDWORD",
+        needle: "HIDWORD",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "HIWORD",
+        needle: "HIWORD",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "LOWORD",
+        needle: "LOWORD",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "__readfsqword",
+        needle: "__readfsqword",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "__readgsqword",
+        needle: "__readgsqword",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "goto LABEL_",
+        needle: "goto LABEL_",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "switch (",
+        needle: "switch",
+        kind: PatternKind::SwitchParen,
+    },
+    PatternSpec {
+        label: "case",
+        needle: "case",
+        kind: PatternKind::Word,
+    },
+    PatternSpec {
+        label: "if (",
+        needle: "if (",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "else",
+        needle: "else",
+        kind: PatternKind::Word,
+    },
+    PatternSpec {
+        label: "for (",
+        needle: "for (",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "while (",
+        needle: "while (",
+        kind: PatternKind::Substring,
+    },
+    PatternSpec {
+        label: "do {",
+        needle: "do {",
+        kind: PatternKind::Substring,
+    },
 ];
 
 fn count_pattern(text: &str, spec: &PatternSpec) -> usize {
@@ -298,7 +398,10 @@ fn build_report(
 pub fn run(root: &Path) {
     let golden_dir = root.join("tests/golden/x86_64");
     if !golden_dir.is_dir() {
-        eprintln!("ERROR: golden directory not found: {}", golden_dir.display());
+        eprintln!(
+            "ERROR: golden directory not found: {}",
+            golden_dir.display()
+        );
         std::process::exit(1);
     }
     let fixtures_dir = root.join("fixtures");
@@ -322,7 +425,9 @@ pub fn run(root: &Path) {
     eprintln!("scanning {} IDA reference .c files...", golden_files.len());
     let mut ida_counts: Vec<usize> = vec![0; PATTERNS.len()];
     for path in &golden_files {
-        let Ok(src) = std::fs::read_to_string(path) else { continue };
+        let Ok(src) = std::fs::read_to_string(path) else {
+            continue;
+        };
         for (i, spec) in PATTERNS.iter().enumerate() {
             ida_counts[i] += count_pattern(&src, spec);
         }

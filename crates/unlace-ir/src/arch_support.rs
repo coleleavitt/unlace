@@ -60,8 +60,8 @@ pub const fn support_tier(arch: ArchId) -> SupportTier {
         Z80 | Msp430 | Mos6502 | V850 | Arc | Avr | Stm8 | TriCore | RxRenesas | Hexagon
         | Pic16 | I8051 => Beta,
         Mips64 | Sparc | M68k | SuperH | Xtensa | Wasm | Ebpf | Sbpf | Lua => FixtureOnly,
-        Agx | AppleAgx | TiC28x | AmdGpu | NvidiaSass | TiC6x | SpirV | Evm
-        | Sharc | SharcBlackfin => Beta,
+        Agx | AppleAgx | TiC28x | AmdGpu | NvidiaSass | TiC6x | SpirV | Evm | Sharc
+        | SharcBlackfin => Beta,
         Unknown(_) => Stub,
     }
 }
@@ -153,5 +153,40 @@ mod tests {
         let md = support_matrix_markdown();
         let data_rows = md.lines().filter(|l| l.starts_with("| `")).count();
         assert_eq!(data_rows, all_arches().len());
+    }
+
+    /// Batch 22: every architecture that previously sat at `Stub` (Evm,
+    /// SpirV, NvidiaSass, TiC6x, Sharc, SharcBlackfin, AppleAgx, Agx,
+    /// AmdGpu, TiC28x) must now be reported as `Beta`, and the rendered
+    /// matrix must not contain any `stub` rows. `Stub` is reserved for
+    /// `ArchId::Unknown(_)`, which is not enumerated in `all_arches()`.
+    #[test]
+    fn batch22_former_stubs_are_beta() {
+        for arch in [
+            ArchId::Evm,
+            ArchId::SpirV,
+            ArchId::NvidiaSass,
+            ArchId::TiC6x,
+            ArchId::Sharc,
+            ArchId::SharcBlackfin,
+            ArchId::AppleAgx,
+            ArchId::Agx,
+            ArchId::AmdGpu,
+            ArchId::TiC28x,
+        ] {
+            assert_eq!(
+                support_tier(arch),
+                SupportTier::Beta,
+                "{arch:?} must be Beta per Batch 22",
+            );
+        }
+
+        let md = support_matrix_markdown();
+        for line in md.lines().filter(|l| l.starts_with("| `")) {
+            assert!(
+                !line.ends_with("| stub |"),
+                "support matrix must not advertise any architecture as stub: {line}",
+            );
+        }
     }
 }

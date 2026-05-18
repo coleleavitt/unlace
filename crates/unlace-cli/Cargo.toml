@@ -11,6 +11,8 @@ unlace-passes = { workspace = true }
 unlace-struct = { workspace = true }
 unlace-output = { workspace = true }
 unlace-plugin = { workspace = true }
+unlace-lumina = { path = "../unlace-lumina" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "io-util"] }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }

@@ -176,6 +176,16 @@ pub enum Cmd {
         verbose: u8,
     },
 
+    /// Interact with a Hex-Rays-compatible Lumina v6 server.
+    ///
+    /// The protocol is the real on-the-wire framing used by IDA Pro's Lumina
+    /// (length-prefixed binary frames, vuint32 codec, packet ids 10..49) —
+    /// see `crates/unlace-lumina` for details.
+    Lumina {
+        #[command(subcommand)]
+        action: LuminaAction,
+    },
+
     /// Measure decompiler output quality (feature counters, no C emission).
     Quality {
         /// Path to the binary file.
@@ -188,6 +198,63 @@ pub enum Cmd {
         /// Increase verbosity (-v, -vv, -vvv).
         #[arg(long, short, action = clap::ArgAction::Count)]
         verbose: u8,
+    },
+}
+
+/// Sub-actions for `unlace lumina`.
+#[derive(Subcommand)]
+pub enum LuminaAction {
+    /// Run a Lumina v6 server backed by a sqlite database.
+    Serve {
+        /// Address to bind (e.g. `127.0.0.1:1234`).
+        #[arg(long, default_value = "127.0.0.1:1234")]
+        bind: String,
+        /// Path to the sqlite database file. Use `:memory:` for an
+        /// ephemeral in-process database.
+        #[arg(long, default_value = ":memory:")]
+        db: String,
+    },
+    /// Push a single function record to a Lumina server. The hash is the
+    /// 32-byte content hash of the binary file (SHA-256). Intended as a
+    /// minimal smoke-test driver, not a full IDA-style pusher.
+    Push {
+        /// Server address (host:port).
+        #[arg(long)]
+        server: String,
+        /// File to upload as the function's metadata blob; the SHA-256 of
+        /// its bytes is also used as the calcrel_hash.
+        #[arg(long)]
+        binary: PathBuf,
+        /// Function name to record.
+        #[arg(long, default_value = "anonymous")]
+        name: String,
+        /// Lumina protocol version (1..=6).
+        #[arg(long, default_value_t = 6)]
+        proto: u32,
+        /// Username for HELO credentials.
+        #[arg(long, default_value = "anonymous")]
+        user: String,
+        /// Password for HELO credentials.
+        #[arg(long, default_value = "")]
+        password: String,
+    },
+    /// Pull a single function record by `calcrel_hash` (64 hex chars).
+    Pull {
+        /// Server address (host:port).
+        #[arg(long)]
+        server: String,
+        /// `calcrel_hash` as 64 hex chars.
+        #[arg(long)]
+        hash: String,
+        /// Lumina protocol version (1..=6).
+        #[arg(long, default_value_t = 6)]
+        proto: u32,
+        /// Username for HELO credentials.
+        #[arg(long, default_value = "anonymous")]
+        user: String,
+        /// Password for HELO credentials.
+        #[arg(long, default_value = "")]
+        password: String,
     },
 }
 

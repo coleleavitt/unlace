@@ -1474,6 +1474,7 @@ mod tests {
             function_starts: Vec::new(),
             debug_records: Vec::new(),
             load_config: None,
+            pe_mitigations: None,
             runtime_functions: Vec::new(),
             resources: Vec::new(),
             bound_imports: Vec::new(),
@@ -1539,8 +1540,8 @@ mod tests {
             }
             other => panic!("expected Type::Slice, got {other:?}"),
         }
-        // The slice itself renders as `[]__int32`.
-        assert_eq!(ty.to_string(), "[]__int32");
+        // The slice itself renders in Go-facing syntax.
+        assert_eq!(ty.to_string(), "[]int");
     }
 
     /// t191 — `map[string]int` lifts to `Type::Map` with both K and V
@@ -1578,7 +1579,7 @@ mod tests {
             }
             other => panic!("expected Type::Map, got {other:?}"),
         }
-        assert_eq!(ty.to_string(), "map[void *]__int32");
+        assert_eq!(ty.to_string(), "map[void *]int");
     }
 
     /// t191 — map of `S → []int` (struct keys, slice values). Verifies
@@ -1627,7 +1628,7 @@ mod tests {
             }
             other => panic!("expected Type::Map, got {other:?}"),
         }
-        assert_eq!(ty.to_string(), "map[struct S][]__int32");
+        assert_eq!(ty.to_string(), "map[struct S][]int");
     }
 
     #[test]
@@ -1725,6 +1726,7 @@ mod tests {
             function_starts: Vec::new(),
             debug_records: Vec::new(),
             load_config: None,
+            pe_mitigations: None,
             runtime_functions: Vec::new(),
             resources: Vec::new(),
             bound_imports: Vec::new(),
@@ -1837,6 +1839,7 @@ mod tests {
             function_starts: Vec::new(),
             debug_records: Vec::new(),
             load_config: None,
+            pe_mitigations: None,
             runtime_functions: Vec::new(),
             resources: Vec::new(),
             bound_imports: Vec::new(),
@@ -1865,7 +1868,7 @@ mod tests {
 
         populate_go_types_from_module(&mut img);
 
-        // Outer map: map[int32]map[int8]int32.
+        // Outer map: map[int]map[char]int in the current Go-facing display.
         let outer = img
             .go_types
             .get(&outer_map_va)
@@ -1883,7 +1886,7 @@ mod tests {
             }
             other => panic!("expected Type::Map at outer VA, got {other:?}"),
         }
-        assert_eq!(outer.to_string(), "map[__int32]map[__int8]__int32");
+        assert_eq!(outer.to_string(), "map[int]map[char]int");
 
         // Inner map should also be independently registered.
         assert!(img.go_types.contains_key(&inner_map_va));

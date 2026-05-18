@@ -684,6 +684,7 @@ mod tests {
             function_starts: Vec::new(),
             debug_records: Vec::new(),
             load_config: None,
+            pe_mitigations: None,
             runtime_functions: Vec::new(),
             resources: Vec::new(),
             bound_imports: Vec::new(),
@@ -1478,13 +1479,15 @@ mod tests {
         let imlist_va: u64 = 0x50000;
         let imlist = build_method_list_section(
             imlist_va,
-            &[(foo_name_va, types_va, 0x1234), (bar_name_va, types_va, 0x5678)],
+            &[
+                (foo_name_va, types_va, 0x1234),
+                (bar_name_va, types_va, 0x5678),
+            ],
         );
 
         // class method list at 0x50100: cMet→0x9abc
         let cmlist_va: u64 = 0x50100;
-        let cmlist =
-            build_method_list_section(cmlist_va, &[(cm_name_va, types_va, 0x9abc)]);
+        let cmlist = build_method_list_section(cmlist_va, &[(cm_name_va, types_va, 0x9abc)]);
 
         // category struct at 0x60000
         let cat_va: u64 = 0x60000;
@@ -1500,14 +1503,62 @@ mod tests {
         let catlist = cat_va.to_le_bytes().to_vec();
 
         let sections = vec![
-            Section { name: "__objc_classlist".into(), vaddr: classlist_va, size: classlist.len() as u64, data: classlist, flags: SectionFlags::READ },
-            Section { name: "__objc_catlist".into(), vaddr: catlist_va, size: catlist.len() as u64, data: catlist, flags: SectionFlags::READ },
-            Section { name: "__DATA".into(), vaddr: class_va, size: class.len() as u64, data: class, flags: SectionFlags::READ },
-            Section { name: "__DATA_CONST".into(), vaddr: class_ro_va, size: class_ro.len() as u64, data: class_ro, flags: SectionFlags::READ },
-            Section { name: "__DATA2".into(), vaddr: cat_va, size: cat.len() as u64, data: cat, flags: SectionFlags::READ },
-            Section { name: "__objc_methlist".into(), vaddr: imlist_va, size: imlist.len() as u64, data: imlist, flags: SectionFlags::READ },
-            Section { name: "__objc_methlist2".into(), vaddr: cmlist_va, size: cmlist.len() as u64, data: cmlist, flags: SectionFlags::READ },
-            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+            Section {
+                name: "__objc_classlist".into(),
+                vaddr: classlist_va,
+                size: classlist.len() as u64,
+                data: classlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_catlist".into(),
+                vaddr: catlist_va,
+                size: catlist.len() as u64,
+                data: catlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: class_va,
+                size: class.len() as u64,
+                data: class,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA_CONST".into(),
+                vaddr: class_ro_va,
+                size: class_ro.len() as u64,
+                data: class_ro,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA2".into(),
+                vaddr: cat_va,
+                size: cat.len() as u64,
+                data: cat,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_methlist".into(),
+                vaddr: imlist_va,
+                size: imlist.len() as u64,
+                data: imlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_methlist2".into(),
+                vaddr: cmlist_va,
+                size: cmlist.len() as u64,
+                data: cmlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
         ];
         make_test_image(sections)
     }
@@ -1520,9 +1571,18 @@ mod tests {
         // Three methods (2 instance + 1 class), all in the MyClass+Helpers
         // namespace.
         assert_eq!(map.len(), 3);
-        assert_eq!(map.get(&0x1234).map(String::as_str), Some("MyClass+Helpers"));
-        assert_eq!(map.get(&0x5678).map(String::as_str), Some("MyClass+Helpers"));
-        assert_eq!(map.get(&0x9abc).map(String::as_str), Some("MyClass+Helpers"));
+        assert_eq!(
+            map.get(&0x1234).map(String::as_str),
+            Some("MyClass+Helpers")
+        );
+        assert_eq!(
+            map.get(&0x5678).map(String::as_str),
+            Some("MyClass+Helpers")
+        );
+        assert_eq!(
+            map.get(&0x9abc).map(String::as_str),
+            Some("MyClass+Helpers")
+        );
     }
 
     #[test]
@@ -1557,10 +1617,34 @@ mod tests {
         let catlist = cat_va.to_le_bytes().to_vec();
 
         let sections = vec![
-            Section { name: "__objc_catlist".into(), vaddr: catlist_va, size: catlist.len() as u64, data: catlist, flags: SectionFlags::READ },
-            Section { name: "__DATA".into(), vaddr: cat_va, size: cat.len() as u64, data: cat, flags: SectionFlags::READ },
-            Section { name: "__objc_methlist".into(), vaddr: mlist_va, size: mlist.len() as u64, data: mlist, flags: SectionFlags::READ },
-            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+            Section {
+                name: "__objc_catlist".into(),
+                vaddr: catlist_va,
+                size: catlist.len() as u64,
+                data: catlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: cat_va,
+                size: cat.len() as u64,
+                data: cat,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_methlist".into(),
+                vaddr: mlist_va,
+                size: mlist.len() as u64,
+                data: mlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
         ];
 
         let mut image = make_test_image(sections);
@@ -1575,7 +1659,10 @@ mod tests {
         // Note: cat.name is read as "UIExtra" — the b"UIExtra" wrote 7 bytes
         // followed by zeros from the pre-allocated buffer, so the C string
         // terminates at byte 7.
-        assert_eq!(map.get(&0xAA00).map(String::as_str), Some("NSObject+UIExtra"));
+        assert_eq!(
+            map.get(&0xAA00).map(String::as_str),
+            Some("NSObject+UIExtra")
+        );
     }
 
     #[test]
@@ -1608,19 +1695,46 @@ mod tests {
         let catlist = cat_va.to_le_bytes().to_vec();
 
         let sections = vec![
-            Section { name: "__objc_catlist".into(), vaddr: catlist_va, size: catlist.len() as u64, data: catlist, flags: SectionFlags::READ },
-            Section { name: "__DATA".into(), vaddr: cat_va, size: cat.len() as u64, data: cat, flags: SectionFlags::READ },
-            Section { name: "__objc_methlist".into(), vaddr: mlist_va, size: mlist.len() as u64, data: mlist, flags: SectionFlags::READ },
-            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+            Section {
+                name: "__objc_catlist".into(),
+                vaddr: catlist_va,
+                size: catlist.len() as u64,
+                data: catlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: cat_va,
+                size: cat.len() as u64,
+                data: cat,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_methlist".into(),
+                vaddr: mlist_va,
+                size: mlist.len() as u64,
+                data: mlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
         ];
 
         let mut image = make_test_image(sections);
-        image.symbols.insert(class_slot_va, crate::image::Symbol {
-            name: "_OBJC_CLASS_$_NSString".to_string(),
-            addr: class_slot_va,
-            size: 8,
-            kind: crate::image::SymbolKind::Object,
-        });
+        image.symbols.insert(
+            class_slot_va,
+            crate::image::Symbol {
+                name: "_OBJC_CLASS_$_NSString".to_string(),
+                addr: class_slot_va,
+                size: 8,
+                kind: crate::image::SymbolKind::Object,
+            },
+        );
 
         let map = build_category_namespace_map(&image);
         assert_eq!(map.len(), 1);
@@ -1656,10 +1770,34 @@ mod tests {
         let catlist = cat_va.to_le_bytes().to_vec();
 
         let sections = vec![
-            Section { name: "__objc_catlist".into(), vaddr: catlist_va, size: catlist.len() as u64, data: catlist, flags: SectionFlags::READ },
-            Section { name: "__DATA".into(), vaddr: cat_va, size: cat.len() as u64, data: cat, flags: SectionFlags::READ },
-            Section { name: "__objc_methlist".into(), vaddr: mlist_va, size: mlist.len() as u64, data: mlist, flags: SectionFlags::READ },
-            Section { name: "__TEXT".into(), vaddr: 0x40000, size: text.len() as u64, data: text, flags: SectionFlags::READ },
+            Section {
+                name: "__objc_catlist".into(),
+                vaddr: catlist_va,
+                size: catlist.len() as u64,
+                data: catlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__DATA".into(),
+                vaddr: cat_va,
+                size: cat.len() as u64,
+                data: cat,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__objc_methlist".into(),
+                vaddr: mlist_va,
+                size: mlist.len() as u64,
+                data: mlist,
+                flags: SectionFlags::READ,
+            },
+            Section {
+                name: "__TEXT".into(),
+                vaddr: 0x40000,
+                size: text.len() as u64,
+                data: text,
+                flags: SectionFlags::READ,
+            },
         ];
         let image = make_test_image(sections);
 
@@ -1671,6 +1809,9 @@ mod tests {
         assert!(info.categories[0].class_name.is_none());
 
         let map = build_category_namespace_map(&image);
-        assert!(map.is_empty(), "unresolved category target must not pollute the namespace map");
+        assert!(
+            map.is_empty(),
+            "unresolved category target must not pollute the namespace map"
+        );
     }
 }

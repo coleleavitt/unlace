@@ -70,6 +70,7 @@ where
         function_starts: Vec::new(),
         debug_records: Vec::new(),
         load_config: None,
+            pe_mitigations: None,
         runtime_functions: Vec::new(),
         resources: Vec::new(),
         bound_imports: Vec::new(),
@@ -517,9 +518,7 @@ mod tests {
             "medium.elf should expose at least one PLT import"
         );
         assert!(
-            img.plt_symbols
-                .values()
-                .any(|n| n == "__stack_chk_fail"),
+            img.plt_symbols.values().any(|n| n == "__stack_chk_fail"),
             "medium.elf PLT should include __stack_chk_fail; got {:?}",
             img.plt_symbols
         );

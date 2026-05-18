@@ -566,6 +566,7 @@ mod tests {
             function_starts: vec![],
             debug_records: vec![],
             load_config: None,
+            pe_mitigations: None,
             runtime_functions: vec![],
             resources: vec![],
             bound_imports: vec![],

@@ -855,6 +855,12 @@ const LF_UNION: u16 = 0x1506;
 const LF_ENUM: u16 = 0x1507;
 const LF_FIELDLIST: u16 = 0x1203;
 const LF_MEMBER: u16 = 0x150D;
+const LF_MODIFIER: u16 = 0x1001;
+const LF_POINTER: u16 = 0x1002;
+const LF_PROCEDURE: u16 = 0x1008;
+const LF_ARGLIST: u16 = 0x1201;
+const LF_ARRAY: u16 = 0x1503;
+const LF_BITFIELD: u16 = 0x1205;
 
 // IPI stream leaf kinds (0x1601..=0x1606). IPI lives in a separate stream
 // from TPI but shares the same record framing.
@@ -882,6 +888,22 @@ const LF_NUMERIC_UQUAD: u16 = 0x800A;
 /// offset 0; pass the bytes *after* the TPI header. Unknown leaf kinds are
 /// skipped over using their `length` prefix.
 pub fn walk_tpi(stream_data: &[u8]) -> Result<Vec<PdbType>, PdbError> {
+    walk_tpi_with_index(stream_data).map(|(types, _)| types)
+}
+
+/// Phase 2 entrypoint: walk the TPI stream and additionally return a
+/// `BTreeMap<u32, Type>` keyed by CodeView TI. Every recognised
+/// aggregate lands in the map under its TI; primitive TIs are *not*
+/// stored eagerly (call [`primitive_ti_to_type`] for those).
+///
+/// The map runs a fixpoint pass over its own entries: for each struct
+/// / union, replace `Unknown` field types with the resolved Type when
+/// the field's CodeView TI (`PdbField::field_type`) is known. Cap the
+/// fixpoint at 16 iterations to avoid diverging on malformed cyclic
+/// streams.
+pub fn walk_tpi_with_index(
+    stream_data: &[u8],
+) -> Result<(Vec<PdbType>, BTreeMap<u32, Type>), PdbError> {
     // First pass: collect every record's bounds + kind. Under the
     // CodeView convention the first record is TI 0x1000 and each
     // subsequent record gets the next TI; we use that for field-list
@@ -899,10 +921,13 @@ pub fn walk_tpi(stream_data: &[u8]) -> Result<Vec<PdbType>, PdbError> {
         ti_to_idx.insert(0x1000 + i as u32, i);
     }
 
-    // Second pass: decode aggregates.
+    // Second pass: decode aggregates. Track each decoded entry's TI so
+    // we can index it in the map below.
     let mut out = Vec::new();
-    for rec in &records {
+    let mut ti_of_out: Vec<u32> = Vec::new();
+    for (rec_idx, rec) in records.iter().enumerate() {
         let payload = &stream_data[rec.payload_start..rec.payload_end];
+        let ti = 0x1000u32 + rec_idx as u32;
         match rec.kind {
             LF_STRUCTURE | LF_CLASS => {
                 let agg = decode_struct_or_class(payload, rec.payload_start)?;
@@ -917,6 +942,7 @@ pub fn walk_tpi(stream_data: &[u8]) -> Result<Vec<PdbType>, PdbError> {
                     },
                     fields,
                 });
+                ti_of_out.push(ti);
             }
             LF_UNION => {
                 let u = decode_union(payload, rec.payload_start)?;
@@ -927,6 +953,7 @@ pub fn walk_tpi(stream_data: &[u8]) -> Result<Vec<PdbType>, PdbError> {
                     kind: PdbTypeKind::Union,
                     fields,
                 });
+                ti_of_out.push(ti);
             }
             LF_ENUM => {
                 let e = decode_enum(payload, rec.payload_start)?;
@@ -937,11 +964,241 @@ pub fn walk_tpi(stream_data: &[u8]) -> Result<Vec<PdbType>, PdbError> {
                     kind: PdbTypeKind::Enum,
                     fields,
                 });
+                ti_of_out.push(ti);
             }
             _ => {}
         }
     }
-    Ok(out)
+
+    // Build the TI → Type registry. Phase 2 covered aggregates; Phase
+    // 3 fills in `LF_POINTER` / `LF_ARRAY` / `LF_PROCEDURE` /
+    // `LF_BITFIELD` / `LF_MODIFIER` from the per-record decoders.
+    let mut by_index: BTreeMap<u32, Type> = BTreeMap::new();
+    let mut arglist_by_ti: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    for (entry, &ti) in out.iter().zip(ti_of_out.iter()) {
+        if let Some(ty) = pdb_type_to_ir_type(entry) {
+            by_index.insert(ti, ty);
+        }
+    }
+    // Pre-decode every complex record so its TI lands in the registry
+    // before the fixpoint runs. We use placeholders for chained types
+    // (e.g. a pointer to a not-yet-decoded struct) that the fixpoint
+    // below resolves.
+    for (rec_idx, rec) in records.iter().enumerate() {
+        let payload = &stream_data[rec.payload_start..rec.payload_end];
+        let ti = 0x1000u32 + rec_idx as u32;
+        match rec.kind {
+            LF_POINTER => {
+                if let Ok(p) = decode_pointer(payload) {
+                    // Placeholder pointee; fixpoint replaces with the
+                    // resolved type when available.
+                    let placeholder = primitive_ti_to_type(p.utype)
+                        .unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+                    by_index.insert(ti, Type::Ptr(Box::new(placeholder)));
+                }
+            }
+            LF_ARRAY => {
+                if let Ok(a) = decode_array(payload, rec.payload_start) {
+                    let elem_placeholder = primitive_ti_to_type(a.elem_ti)
+                        .unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+                    by_index.insert(
+                        ti,
+                        Type::Array {
+                            element: Box::new(elem_placeholder),
+                            size: Some(a.size_bytes),
+                        },
+                    );
+                }
+            }
+            LF_PROCEDURE => {
+                if let Ok(proc) = decode_procedure(payload) {
+                    let return_placeholder = primitive_ti_to_type(proc.return_ti)
+                        .unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+                    by_index.insert(
+                        ti,
+                        Type::FuncPtr {
+                            params: Vec::new(),
+                            return_type: Box::new(return_placeholder),
+                            variadic: false,
+                        },
+                    );
+                    // Remember which arglist TI to expand later.
+                    arglist_by_ti.insert(ti, vec![proc.arglist_ti]);
+                }
+            }
+            LF_BITFIELD => {
+                if let Ok(b) = decode_bitfield(payload) {
+                    let underlying = primitive_ti_to_type(b.underlying_ti)
+                        .unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+                    by_index.insert(
+                        ti,
+                        Type::Bitfield {
+                            underlying: Box::new(underlying),
+                            offset: b.position as u32,
+                            width: b.length as u32,
+                        },
+                    );
+                }
+            }
+            LF_MODIFIER => {
+                if let Ok(m) = decode_modifier(payload) {
+                    // Pass through: the modified type *is* the underlying
+                    // (we don't model const/volatile in the IR today).
+                    let underlying = primitive_ti_to_type(m.underlying_ti)
+                        .unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+                    by_index.insert(ti, underlying);
+                }
+            }
+            LF_ARGLIST => {
+                if let Ok(args) = decode_arglist(payload) {
+                    arglist_by_ti.insert(ti, args);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Fixpoint: resolve each struct/union's `Unknown` field types by
+    // looking up the field's `field_type` TI in `by_index` (or in the
+    // primitive table). Also resolves chained Ptr/Array/FuncPtr nodes
+    // whose pointee/element/return type referenced a not-yet-decoded
+    // user TI. Cap iterations.
+    const MAX_FIXPOINT_ITERS: usize = 16;
+    for _ in 0..MAX_FIXPOINT_ITERS {
+        let snapshot = by_index.clone();
+        let mut changed = false;
+        // Aggregate field resolution.
+        for (entry, &ti) in out.iter().zip(ti_of_out.iter()) {
+            let Some(current) = by_index.get_mut(&ti) else {
+                continue;
+            };
+            if resolve_field_types(current, entry, &snapshot) {
+                changed = true;
+            }
+        }
+        // Chained-type resolution: walk every Ptr/Array/FuncPtr and
+        // try to replace any embedded `Unknown` with a resolved type.
+        let tis: Vec<u32> = by_index.keys().copied().collect();
+        for ti in tis {
+            // Build the records-index → TI map so we can find the
+            // *source* CodeView TI for each chained type.
+            if let Some(rec_idx) = ti.checked_sub(0x1000) {
+                let Some(rec) = records.get(rec_idx as usize) else {
+                    continue;
+                };
+                let payload = &stream_data[rec.payload_start..rec.payload_end];
+                let resolved_ptr_arr = match rec.kind {
+                    LF_POINTER => {
+                        let p = match decode_pointer(payload) {
+                            Ok(p) => p,
+                            Err(_) => continue,
+                        };
+                        snapshot
+                            .get(&p.utype)
+                            .cloned()
+                            .or_else(|| primitive_ti_to_type(p.utype))
+                            .map(|ty| Type::Ptr(Box::new(ty)))
+                    }
+                    LF_ARRAY => {
+                        let a = match decode_array(payload, rec.payload_start) {
+                            Ok(a) => a,
+                            Err(_) => continue,
+                        };
+                        snapshot
+                            .get(&a.elem_ti)
+                            .cloned()
+                            .or_else(|| primitive_ti_to_type(a.elem_ti))
+                            .map(|elem| Type::Array {
+                                element: Box::new(elem),
+                                size: Some(a.size_bytes),
+                            })
+                    }
+                    LF_PROCEDURE => {
+                        let proc = match decode_procedure(payload) {
+                            Ok(p) => p,
+                            Err(_) => continue,
+                        };
+                        let return_ty = snapshot
+                            .get(&proc.return_ti)
+                            .cloned()
+                            .or_else(|| primitive_ti_to_type(proc.return_ti))
+                            .unwrap_or(Type::Primitive(PrimitiveType::Unknown));
+                        // Resolve the arglist if available.
+                        let params: Vec<Type> = arglist_by_ti
+                            .get(&proc.arglist_ti)
+                            .map(|tis| {
+                                tis.iter()
+                                    .map(|&arg_ti| {
+                                        snapshot
+                                            .get(&arg_ti)
+                                            .cloned()
+                                            .or_else(|| primitive_ti_to_type(arg_ti))
+                                            .unwrap_or(Type::Primitive(PrimitiveType::Unknown))
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        Some(Type::FuncPtr {
+                            params,
+                            return_type: Box::new(return_ty),
+                            variadic: false,
+                        })
+                    }
+                    _ => continue,
+                };
+                if let Some(new_ty) = resolved_ptr_arr {
+                    if let Some(slot) = by_index.get_mut(&ti) {
+                        if *slot != new_ty {
+                            *slot = new_ty;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    Ok((out, by_index))
+}
+
+/// Fill `Unknown` field types inside `current` (a `Type::Struct` or
+/// `Type::Union`) using `entry.fields[i].field_type` lookups against
+/// `by_index` (user TIs) or [`primitive_ti_to_type`] (primitive TIs).
+/// Returns `true` when any substitution was made.
+fn resolve_field_types(
+    current: &mut Type,
+    entry: &PdbType,
+    by_index: &BTreeMap<u32, Type>,
+) -> bool {
+    let fields_mut = match current {
+        Type::Struct { fields, .. } | Type::Union { fields, .. } => fields,
+        _ => return false,
+    };
+    let mut changed = false;
+    for (i, raw_field) in entry.fields.iter().enumerate() {
+        if i >= fields_mut.len() {
+            break;
+        }
+        if !matches!(&fields_mut[i].ty, Type::Primitive(PrimitiveType::Unknown)) {
+            continue;
+        }
+        let ti = raw_field.field_type;
+        let resolved = if let Some(prim) = primitive_ti_to_type(ti) {
+            Some(prim)
+        } else if let Some(user) = by_index.get(&ti) {
+            Some(user.clone())
+        } else {
+            None
+        };
+        if let Some(r) = resolved {
+            fields_mut[i].ty = r;
+            changed = true;
+        }
+    }
+    changed
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1092,6 +1349,119 @@ fn decode_field_list(payload: &[u8], abs_off: usize) -> Result<Vec<PdbField>, Pd
                 break;
             }
         }
+    }
+    Ok(out)
+}
+
+/// Decoded LF_POINTER payload.
+struct PointerRecord {
+    /// Pointee CodeView TI.
+    utype: u32,
+}
+
+fn decode_pointer(payload: &[u8]) -> Result<PointerRecord, PdbError> {
+    // utype u32, attr u32 (flags — kind/mode/modifiers + size). We
+    // ignore attr for the lowered C type since unlace's `Type::Ptr`
+    // is flavour-agnostic.
+    if payload.len() < 8 {
+        return Err(PdbError::UnexpectedEof(0));
+    }
+    let utype = read_u32(payload, 0)?;
+    Ok(PointerRecord { utype })
+}
+
+/// Decoded LF_ARRAY payload.
+struct ArrayRecord {
+    elem_ti: u32,
+    /// Total byte size of the array. Element count is `size /
+    /// sizeof(elem)`; we don't compute it here because the element
+    /// type isn't resolved yet at decode time.
+    size_bytes: u64,
+}
+
+fn decode_array(payload: &[u8], abs_off: usize) -> Result<ArrayRecord, PdbError> {
+    // elemtype u32, idxtype u32, size numeric, name (often empty).
+    if payload.len() < 8 {
+        return Err(PdbError::UnexpectedEof(abs_off));
+    }
+    let elem_ti = read_u32(payload, 0)?;
+    let _idx_ti = read_u32(payload, 4)?;
+    let (size, _after) = read_numeric_leaf(payload, 8)?;
+    Ok(ArrayRecord {
+        elem_ti,
+        size_bytes: size as u64,
+    })
+}
+
+/// Decoded LF_PROCEDURE payload.
+struct ProcedureRecord {
+    return_ti: u32,
+    arglist_ti: u32,
+}
+
+fn decode_procedure(payload: &[u8]) -> Result<ProcedureRecord, PdbError> {
+    // return u32, call_conv u8, funcattr u8, parm_count u16, arglist u32.
+    if payload.len() < 12 {
+        return Err(PdbError::UnexpectedEof(0));
+    }
+    let return_ti = read_u32(payload, 0)?;
+    // call_conv (1 byte) + funcattr (1 byte) + parm_count (2 bytes) = 4 bytes
+    let arglist_ti = read_u32(payload, 8)?;
+    Ok(ProcedureRecord {
+        return_ti,
+        arglist_ti,
+    })
+}
+
+/// Decoded LF_BITFIELD payload.
+struct BitfieldRecord {
+    underlying_ti: u32,
+    length: u8,
+    position: u8,
+}
+
+fn decode_bitfield(payload: &[u8]) -> Result<BitfieldRecord, PdbError> {
+    if payload.len() < 6 {
+        return Err(PdbError::UnexpectedEof(0));
+    }
+    let underlying_ti = read_u32(payload, 0)?;
+    let length = payload[4];
+    let position = payload[5];
+    Ok(BitfieldRecord {
+        underlying_ti,
+        length,
+        position,
+    })
+}
+
+/// Decoded LF_MODIFIER payload — `const` / `volatile` / `unaligned`
+/// wrappers around an underlying TI. We pass through to the underlying
+/// type (the IR has no `const` annotation today).
+struct ModifierRecord {
+    underlying_ti: u32,
+}
+
+fn decode_modifier(payload: &[u8]) -> Result<ModifierRecord, PdbError> {
+    if payload.len() < 6 {
+        return Err(PdbError::UnexpectedEof(0));
+    }
+    let underlying_ti = read_u32(payload, 0)?;
+    Ok(ModifierRecord { underlying_ti })
+}
+
+/// Decoded LF_ARGLIST payload — a count followed by `count` TI entries.
+fn decode_arglist(payload: &[u8]) -> Result<Vec<u32>, PdbError> {
+    if payload.len() < 4 {
+        return Err(PdbError::UnexpectedEof(0));
+    }
+    let count = read_u32(payload, 0)? as usize;
+    let mut out = Vec::with_capacity(count);
+    for i in 0..count {
+        let off = 4 + i * 4;
+        if off + 4 > payload.len() {
+            return Err(PdbError::UnexpectedEof(off));
+        }
+        out.push(read_u32(payload, off)?);
     }
     Ok(out)
 }
@@ -1273,6 +1643,155 @@ pub fn walk_ipi(stream_data: &[u8]) -> Result<Vec<PdbIpiItem>, PdbError> {
         out.push(PdbIpiItem { id, kind, name });
     }
     Ok(out)
+}
+
+/// Resolve a CodeView primitive type index (TI < 0x1000) into an
+/// [`unlace_ir::types::Type`]. Returns `None` for non-primitive indices
+/// (i.e. user-defined types in the `>= 0x1000` range).
+///
+/// The CodeView primitive table is described in `cvinfo.h` / Microsoft
+/// CV4 docs. The most commonly seen TIs cover signed/unsigned integer
+/// widths, floating-point types, `void`, `bool`, and a "pointer to
+/// primitive" family in the `0x04xx` range (the low byte names the
+/// pointee TI).
+pub fn primitive_ti_to_type(ti: u32) -> Option<Type> {
+    Some(match ti {
+        0x0000 => Type::Primitive(PrimitiveType::Unknown), // T_NOTYPE
+        // T_VOID — represented as `Unknown` because `PrimitiveType`
+        // has no `Void` variant; the printer renders Unknown returns
+        // as `void` already.
+        0x0003 => Type::Primitive(PrimitiveType::Unknown),
+        0x0030 => Type::Primitive(PrimitiveType::Bool),
+        // Signed integers (legacy + modern aliases).
+        0x0010 | 0x0068 => Type::Primitive(PrimitiveType::Int(1)),
+        0x0011 | 0x0072 => Type::Primitive(PrimitiveType::Int(2)),
+        0x0012 | 0x0074 => Type::Primitive(PrimitiveType::Int(4)),
+        0x0013 | 0x0076 => Type::Primitive(PrimitiveType::Int(8)),
+        // Unsigned integers.
+        0x0020 | 0x0069 => Type::Primitive(PrimitiveType::UnsignedInt(1)),
+        0x0021 | 0x0073 => Type::Primitive(PrimitiveType::UnsignedInt(2)),
+        0x0022 | 0x0075 => Type::Primitive(PrimitiveType::UnsignedInt(4)),
+        0x0023 | 0x0077 => Type::Primitive(PrimitiveType::UnsignedInt(8)),
+        // Char family — CodeView splits signed/unsigned char from
+        // generic char; we surface them all as Int(1)/UnsignedInt(1)
+        // since the downstream IR has no separate "char" tag.
+        0x0070 => Type::Primitive(PrimitiveType::Int(1)),
+        0x0071 => Type::Primitive(PrimitiveType::UnsignedInt(1)),
+        // Floats.
+        0x0040 => Type::Primitive(PrimitiveType::Float),
+        0x0041 => Type::Primitive(PrimitiveType::Double),
+        // T_64PVOID — 64-bit pointer to void. Use the dedicated
+        // helper so the printer renders `void *` correctly.
+        0x0603 => Type::void_ptr(),
+        // Pointer-to-primitive family: the high byte of the TI encodes
+        // the pointer flavour (near/far/huge/32-bit/64-bit) and the low
+        // byte names the pointee TI. We treat every flavour identically
+        // because at the C-output level "Foo *" is "Foo *".
+        _ if (ti & 0xFF00) == 0x0400 // T_PCHAR-family / T_32PVOID etc.
+            || (ti & 0xFF00) == 0x0500
+            || (ti & 0xFF00) == 0x0600 =>
+        {
+            let pointee_ti = ti & 0x00FF;
+            return primitive_ti_to_type(pointee_ti).map(|t| Type::Ptr(Box::new(t)));
+        }
+        _ => return None,
+    })
+}
+
+/// Lower one `PdbType` (a CodeView aggregate from [`walk_tpi`]) into a
+/// concrete `unlace_ir::types::Type`.
+///
+/// Strategy:
+///
+/// * `PdbTypeKind::Structure` / `PdbTypeKind::Class` → [`Type::Struct`]
+///   with one `StructFieldType` per `PdbField`. Field types default to
+///   `Type::Primitive(PrimitiveType::Unknown)` because the field-list
+///   leaf only carries the *type index* of each member; resolving that
+///   index back to a `Type` requires the full TPI index, which is the
+///   next slice. Callers that already have the index can replace the
+///   `Unknown` placeholder via [`apply_field_type_map`].
+/// * `PdbTypeKind::Union` → [`Type::Union`] with the same caveat.
+/// * `PdbTypeKind::Enum` → currently lowered as a `Type::Primitive(Int)`
+///   sized 4 bytes; the variant table lives on `PdbType::fields` for
+///   future enum representation work.
+///
+/// Returns `None` when the aggregate has no usable name (forward-ref or
+/// anonymous shell). The lowered shape is stable so future callers can
+/// hash it (`ipi_type_hash`) to compare across modules.
+pub fn pdb_type_to_ir_type(pty: &PdbType) -> Option<Type> {
+    if pty.name.is_empty() {
+        return None;
+    }
+    match pty.kind {
+        PdbTypeKind::Structure | PdbTypeKind::Class => Some(Type::Struct {
+            name: pty.name.clone(),
+            fields: pty
+                .fields
+                .iter()
+                .map(|f| StructFieldType {
+                    name: f.name.clone(),
+                    ty: Type::Primitive(PrimitiveType::Unknown),
+                    offset: f.offset,
+                })
+                .collect(),
+        }),
+        PdbTypeKind::Union => Some(Type::Union {
+            name: pty.name.clone(),
+            fields: pty
+                .fields
+                .iter()
+                .map(|f| StructFieldType {
+                    name: f.name.clone(),
+                    ty: Type::Primitive(PrimitiveType::Unknown),
+                    offset: f.offset,
+                })
+                .collect(),
+        }),
+        PdbTypeKind::Enum => Some(Type::Primitive(PrimitiveType::Int(4))),
+    }
+}
+
+/// Convenience: lower every `PdbType` in `types` and collect successful
+/// entries into a `BTreeMap` keyed by name. Duplicate names keep the
+/// first occurrence (TPI conventionally puts the forward-ref first;
+/// callers that want the *defining* record should filter the input
+/// before calling).
+pub fn lower_pdb_types(types: &[PdbType]) -> BTreeMap<String, Type> {
+    let mut out: BTreeMap<String, Type> = BTreeMap::new();
+    for pty in types {
+        if let Some(ty) = pdb_type_to_ir_type(pty) {
+            out.entry(pty.name.clone()).or_insert(ty);
+        }
+    }
+    out
+}
+
+/// Replace `Unknown` field types inside `aggregate` with the entries from
+/// `field_types`, keyed by `(struct_name, field_name)`. Returns the
+/// number of substitutions performed.
+///
+/// Use this when the caller has resolved the type-index → `Type`
+/// mapping separately (e.g. via the full `pdb` crate) and just wants to
+/// fold the resolved field types into the lowered aggregate.
+pub fn apply_field_type_map(
+    aggregate: &mut Type,
+    field_types: &BTreeMap<(String, String), Type>,
+) -> usize {
+    let mut hits = 0;
+    match aggregate {
+        Type::Struct { name, fields } | Type::Union { name, fields } => {
+            for field in fields {
+                if matches!(&field.ty, Type::Primitive(PrimitiveType::Unknown)) {
+                    if let Some(resolved) = field_types.get(&(name.clone(), field.name.clone())) {
+                        field.ty = resolved.clone();
+                        hits += 1;
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    hits
 }
 
 #[cfg(test)]
@@ -1852,5 +2371,436 @@ mod tests {
         assert_eq!(items[1].id, 0x1002, "id slot consumed by unknown leaf");
         assert_eq!(items[1].kind, PdbIpiKind::StringId);
         assert_eq!(items[1].name.as_deref(), Some("beta"));
+    }
+
+    /// Phase 1 — primitive TI lookup covers the common signed /
+    /// unsigned / float widths and returns `None` for user TIs.
+    #[test]
+    fn primitive_ti_lookup_for_common_widths() {
+        // Signed int4 (T_INT4 = 0x0074).
+        assert!(matches!(
+            primitive_ti_to_type(0x0074),
+            Some(Type::Primitive(PrimitiveType::Int(4)))
+        ));
+        // Unsigned long long (T_UQUAD = 0x0023).
+        assert!(matches!(
+            primitive_ti_to_type(0x0023),
+            Some(Type::Primitive(PrimitiveType::UnsignedInt(8)))
+        ));
+        // 32-bit float.
+        assert!(matches!(
+            primitive_ti_to_type(0x0040),
+            Some(Type::Primitive(PrimitiveType::Float))
+        ));
+        // 64-bit float.
+        assert!(matches!(
+            primitive_ti_to_type(0x0041),
+            Some(Type::Primitive(PrimitiveType::Double))
+        ));
+        // Bool.
+        assert!(matches!(
+            primitive_ti_to_type(0x0030),
+            Some(Type::Primitive(PrimitiveType::Bool))
+        ));
+    }
+
+    /// Pointer-to-primitive (0x04xx / 0x05xx / 0x06xx) recurses and
+    /// wraps the pointee. T_64PINT4 (0x0674) → `int *`.
+    #[test]
+    fn primitive_ti_pointer_family_unwraps_pointee() {
+        let t = primitive_ti_to_type(0x0674).expect("ptr-to-int4");
+        let Type::Ptr(inner) = t else {
+            panic!("expected Ptr");
+        };
+        assert!(matches!(*inner, Type::Primitive(PrimitiveType::Int(4))));
+    }
+
+    /// T_64PVOID (0x0603) — 64-bit pointer to void.
+    #[test]
+    fn primitive_ti_64pvoid_is_void_ptr() {
+        let t = primitive_ti_to_type(0x0603).expect("64pvoid");
+        assert!(t.is_pointer());
+    }
+
+    /// User TIs (≥ 0x1000) are not primitives.
+    #[test]
+    fn primitive_ti_returns_none_for_user_indices() {
+        assert!(primitive_ti_to_type(0x1000).is_none());
+        assert!(primitive_ti_to_type(0xDEAD).is_none());
+    }
+
+    // ----- Phase 2: walk_tpi_with_index ----------------------------------
+
+    /// Build a minimal TPI record stream containing one `LF_STRUCTURE`
+    /// with two primitive-typed fields. Mirrors the existing
+    /// `walk_tpi_decodes_struct` builder so we exercise the index map
+    /// on a known shape.
+    fn build_struct_with_int4_and_uint4_fields() -> Vec<u8> {
+        let mut stream = Vec::new();
+
+        // LF_FIELDLIST (TI 0x1000): two LF_MEMBER entries.
+        // Members: x at offset 0 with field_type=T_INT4 (0x0074),
+        //          y at offset 4 with field_type=T_UINT4 (0x0075).
+        let fl_kind = LF_FIELDLIST;
+        let mut fl_payload: Vec<u8> = Vec::new();
+
+        // member x
+        fl_payload.extend_from_slice(&LF_MEMBER.to_le_bytes());
+        fl_payload.extend_from_slice(&0u16.to_le_bytes()); // attrs
+        fl_payload.extend_from_slice(&0x00000074u32.to_le_bytes()); // type
+        // numeric leaf: offset 0 (raw u16 < 0x8000 is taken literally)
+        fl_payload.extend_from_slice(&0u16.to_le_bytes());
+        fl_payload.extend_from_slice(b"x\0");
+        while fl_payload.len() % 4 != 0 {
+            fl_payload.push(0xF0); // pad
+        }
+
+        // member y
+        fl_payload.extend_from_slice(&LF_MEMBER.to_le_bytes());
+        fl_payload.extend_from_slice(&0u16.to_le_bytes());
+        fl_payload.extend_from_slice(&0x00000075u32.to_le_bytes());
+        fl_payload.extend_from_slice(&4u16.to_le_bytes()); // offset = 4
+        fl_payload.extend_from_slice(b"y\0");
+        while fl_payload.len() % 4 != 0 {
+            fl_payload.push(0xF0);
+        }
+
+        write_record(&mut stream, fl_kind, &fl_payload);
+
+        // LF_STRUCTURE (TI 0x1001).
+        let mut s_payload: Vec<u8> = Vec::new();
+        s_payload.extend_from_slice(&2u16.to_le_bytes()); // count=2
+        s_payload.extend_from_slice(&0u16.to_le_bytes()); // property
+        s_payload.extend_from_slice(&0x1000u32.to_le_bytes()); // field_list ti
+        s_payload.extend_from_slice(&0u32.to_le_bytes()); // derivation
+        s_payload.extend_from_slice(&0u32.to_le_bytes()); // vshape
+        // size = 8 numeric leaf
+        s_payload.extend_from_slice(&8u16.to_le_bytes());
+        s_payload.extend_from_slice(b"Point\0");
+        while s_payload.len() % 4 != 0 {
+            s_payload.push(0xF0);
+        }
+        write_record(&mut stream, LF_STRUCTURE, &s_payload);
+
+        stream
+    }
+
+    fn write_record(stream: &mut Vec<u8>, kind: u16, payload: &[u8]) {
+        let len = (2 + payload.len()) as u16; // kind + payload
+        stream.extend_from_slice(&len.to_le_bytes());
+        stream.extend_from_slice(&kind.to_le_bytes());
+        stream.extend_from_slice(payload);
+    }
+
+    #[test]
+    fn walk_tpi_with_index_returns_named_types() {
+        let stream = build_struct_with_int4_and_uint4_fields();
+        let (types, index) = walk_tpi_with_index(&stream).expect("walk");
+        // One LF_STRUCTURE survives the second-pass filter (FIELDLIST
+        // is internal and doesn't emit a PdbType).
+        assert_eq!(types.len(), 1);
+        // The struct's TI is 0x1001 (FIELDLIST occupies 0x1000).
+        let entry = index.get(&0x1001).expect("struct in index");
+        assert!(matches!(entry, Type::Struct { .. }));
+    }
+
+    #[test]
+    fn walk_tpi_with_index_resolves_primitive_field_types() {
+        let stream = build_struct_with_int4_and_uint4_fields();
+        let (_, index) = walk_tpi_with_index(&stream).expect("walk");
+        let Some(Type::Struct { fields, name }) = index.get(&0x1001) else {
+            panic!("missing struct at TI 0x1001");
+        };
+        assert_eq!(name, "Point");
+        assert_eq!(fields.len(), 2);
+        assert!(matches!(
+            &fields[0].ty,
+            Type::Primitive(PrimitiveType::Int(4))
+        ));
+        assert!(matches!(
+            &fields[1].ty,
+            Type::Primitive(PrimitiveType::UnsignedInt(4))
+        ));
+    }
+
+    /// The fixpoint loop terminates within MAX_FIXPOINT_ITERS for a
+    /// well-formed stream. We assert by simple "no panic, all fields
+    /// resolved" — the explicit iteration cap inside the function is
+    /// the other half of the safety contract.
+    #[test]
+    fn walk_tpi_with_index_fixpoint_terminates() {
+        let stream = build_struct_with_int4_and_uint4_fields();
+        let (_, index) = walk_tpi_with_index(&stream).expect("walk");
+        let Some(Type::Struct { fields, .. }) = index.get(&0x1001) else {
+            panic!("missing struct");
+        };
+        // No field should still be Unknown.
+        for f in fields {
+            assert!(
+                !matches!(&f.ty, Type::Primitive(PrimitiveType::Unknown)),
+                "field {} stayed Unknown after fixpoint",
+                f.name
+            );
+        }
+    }
+
+    /// `walk_tpi` (legacy wrapper) still returns the same `Vec<PdbType>`
+    /// shape — it just drops the index map.
+    #[test]
+    fn walk_tpi_legacy_wrapper_drops_index_map() {
+        let stream = build_struct_with_int4_and_uint4_fields();
+        let via_legacy = walk_tpi(&stream).expect("legacy walk");
+        let (via_new, _) = walk_tpi_with_index(&stream).expect("new walk");
+        assert_eq!(via_legacy, via_new);
+    }
+
+    // ----- Phase 3: complex record decoders ------------------------------
+
+    /// `LF_POINTER` (TI 0x1000) → pointee T_INT4.
+    #[test]
+    fn decode_lf_pointer_returns_ptr_type() {
+        let mut stream = Vec::new();
+        let mut payload = Vec::new();
+        // utype = T_INT4 (0x74), attr = arbitrary.
+        payload.extend_from_slice(&0x00000074u32.to_le_bytes());
+        payload.extend_from_slice(&0u32.to_le_bytes());
+        write_record(&mut stream, LF_POINTER, &payload);
+
+        let (_, index) = walk_tpi_with_index(&stream).expect("walk");
+        let Some(ty) = index.get(&0x1000) else {
+            panic!("missing pointer at TI 0x1000; index={index:?}");
+        };
+        let Type::Ptr(inner) = ty else {
+            panic!("expected Ptr, got {ty:?}");
+        };
+        assert!(matches!(**inner, Type::Primitive(PrimitiveType::Int(4))));
+    }
+
+    /// `LF_ARRAY` of `int[4]`.
+    #[test]
+    fn decode_lf_array_returns_array_type() {
+        let mut stream = Vec::new();
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&0x00000074u32.to_le_bytes()); // elem T_INT4
+        payload.extend_from_slice(&0x00000022u32.to_le_bytes()); // idx T_ULONG (unused)
+        // size numeric = 16 (literal u16 < 0x8000)
+        payload.extend_from_slice(&16u16.to_le_bytes());
+        // name (empty)
+        payload.push(0);
+        while payload.len() % 4 != 0 {
+            payload.push(0xF0);
+        }
+        write_record(&mut stream, LF_ARRAY, &payload);
+
+        let (_, index) = walk_tpi_with_index(&stream).expect("walk");
+        let Some(Type::Array { element, size }) = index.get(&0x1000) else {
+            panic!("missing array");
+        };
+        assert!(matches!(**element, Type::Primitive(PrimitiveType::Int(4))));
+        assert_eq!(*size, Some(16));
+    }
+
+    /// `LF_PROCEDURE` returning T_VOID with no args (empty arglist).
+    #[test]
+    fn decode_lf_procedure_returns_funcptr_type() {
+        let mut stream = Vec::new();
+
+        // LF_ARGLIST at TI 0x1000 with count=0.
+        let mut arg_payload = Vec::new();
+        arg_payload.extend_from_slice(&0u32.to_le_bytes());
+        write_record(&mut stream, LF_ARGLIST, &arg_payload);
+
+        // LF_PROCEDURE at TI 0x1001.
+        let mut proc_payload = Vec::new();
+        proc_payload.extend_from_slice(&0x00000003u32.to_le_bytes()); // return T_VOID
+        proc_payload.push(0); // call_conv
+        proc_payload.push(0); // funcattr
+        proc_payload.extend_from_slice(&0u16.to_le_bytes()); // parm_count
+        proc_payload.extend_from_slice(&0x00001000u32.to_le_bytes()); // arglist TI
+        write_record(&mut stream, LF_PROCEDURE, &proc_payload);
+
+        let (_, index) = walk_tpi_with_index(&stream).expect("walk");
+        let Some(Type::FuncPtr {
+            params,
+            return_type,
+            variadic,
+        }) = index.get(&0x1001)
+        else {
+            panic!("missing FuncPtr");
+        };
+        assert!(params.is_empty());
+        assert!(matches!(
+            **return_type,
+            Type::Primitive(PrimitiveType::Unknown)
+        ));
+        assert!(!variadic);
+    }
+
+    /// `LF_BITFIELD` of width 3 starting at bit 5 over an `int` underlying.
+    #[test]
+    fn decode_lf_bitfield_returns_bitfield_type() {
+        let mut stream = Vec::new();
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&0x00000074u32.to_le_bytes()); // underlying T_INT4
+        payload.push(3); // length
+        payload.push(5); // position
+        write_record(&mut stream, LF_BITFIELD, &payload);
+
+        let (_, index) = walk_tpi_with_index(&stream).expect("walk");
+        let Some(Type::Bitfield {
+            underlying,
+            offset,
+            width,
+        }) = index.get(&0x1000)
+        else {
+            panic!("missing Bitfield");
+        };
+        assert_eq!(*offset, 5);
+        assert_eq!(*width, 3);
+        assert!(matches!(**underlying, Type::Primitive(PrimitiveType::Int(4))));
+    }
+
+    /// `LF_MODIFIER` passes through to the underlying type.
+    #[test]
+    fn decode_lf_modifier_passes_through_underlying() {
+        let mut stream = Vec::new();
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&0x00000074u32.to_le_bytes()); // underlying T_INT4
+        payload.extend_from_slice(&0u16.to_le_bytes()); // attr (const/volatile)
+        write_record(&mut stream, LF_MODIFIER, &payload);
+
+        let (_, index) = walk_tpi_with_index(&stream).expect("walk");
+        let ty = index.get(&0x1000).expect("modifier present");
+        assert!(matches!(ty, Type::Primitive(PrimitiveType::Int(4))));
+    }
+
+    /// Chained: pointer to a user struct resolves through the fixpoint.
+    /// Lay out: FIELDLIST at 0x1000, STRUCTURE at 0x1001, POINTER at 0x1002.
+    #[test]
+    fn pointer_to_user_struct_resolves_via_fixpoint() {
+        let mut stream = build_struct_with_int4_and_uint4_fields();
+        // Append LF_POINTER targeting TI 0x1001 (the struct).
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&0x00001001u32.to_le_bytes());
+        payload.extend_from_slice(&0u32.to_le_bytes());
+        write_record(&mut stream, LF_POINTER, &payload);
+
+        let (_, index) = walk_tpi_with_index(&stream).expect("walk");
+        let Some(Type::Ptr(inner)) = index.get(&0x1002) else {
+            panic!("missing pointer at TI 0x1002");
+        };
+        assert!(matches!(**inner, Type::Struct { .. }));
+    }
+
+    /// `pdb_type_to_ir_type` produces `Type::Struct` with one
+    /// `StructFieldType` per `PdbField`, with field types defaulting to
+    /// `PrimitiveType::Unknown`. The struct name and field offsets are
+    /// preserved exactly.
+    #[test]
+    fn pdb_type_lowering_emits_struct_with_unknown_fields() {
+        let pty = PdbType {
+            name: "Point".into(),
+            size: 8,
+            kind: PdbTypeKind::Structure,
+            fields: vec![
+                PdbField {
+                    name: "x".into(),
+                    offset: 0,
+                    field_type: 0x74,
+                },
+                PdbField {
+                    name: "y".into(),
+                    offset: 4,
+                    field_type: 0x74,
+                },
+            ],
+        };
+        let ir_ty = pdb_type_to_ir_type(&pty).expect("non-empty name");
+        match ir_ty {
+            Type::Struct { name, fields } => {
+                assert_eq!(name, "Point");
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].name, "x");
+                assert_eq!(fields[0].offset, 0);
+                assert!(matches!(
+                    &fields[0].ty,
+                    Type::Primitive(PrimitiveType::Unknown)
+                ));
+                assert_eq!(fields[1].offset, 4);
+            }
+            other => panic!("expected Struct, got {other:?}"),
+        }
+    }
+
+    /// Empty name → `None` (anonymous / forward-ref records are skipped).
+    #[test]
+    fn pdb_type_lowering_skips_unnamed_records() {
+        let pty = PdbType {
+            name: String::new(),
+            size: 0,
+            kind: PdbTypeKind::Structure,
+            fields: Vec::new(),
+        };
+        assert!(pdb_type_to_ir_type(&pty).is_none());
+    }
+
+    /// `apply_field_type_map` replaces `Unknown` fields with the
+    /// resolved entries from the map.
+    #[test]
+    fn apply_field_type_map_replaces_unknown_field_types() {
+        let pty = PdbType {
+            name: "Header".into(),
+            size: 8,
+            kind: PdbTypeKind::Structure,
+            fields: vec![PdbField {
+                name: "len".into(),
+                offset: 0,
+                field_type: 0x74,
+            }],
+        };
+        let mut ir_ty = pdb_type_to_ir_type(&pty).expect("struct");
+        let mut map: BTreeMap<(String, String), Type> = BTreeMap::new();
+        map.insert(
+            ("Header".into(), "len".into()),
+            Type::Primitive(PrimitiveType::UnsignedInt(4)),
+        );
+        let hits = apply_field_type_map(&mut ir_ty, &map);
+        assert_eq!(hits, 1);
+        let Type::Struct { fields, .. } = ir_ty else {
+            panic!("expected Struct");
+        };
+        assert!(matches!(
+            fields[0].ty,
+            Type::Primitive(PrimitiveType::UnsignedInt(4))
+        ));
+    }
+
+    /// `lower_pdb_types` collects every named aggregate.
+    #[test]
+    fn lower_pdb_types_collects_named_aggregates() {
+        let inputs = vec![
+            PdbType {
+                name: "A".into(),
+                size: 4,
+                kind: PdbTypeKind::Structure,
+                fields: Vec::new(),
+            },
+            PdbType {
+                name: String::new(), // anonymous → skipped
+                size: 0,
+                kind: PdbTypeKind::Structure,
+                fields: Vec::new(),
+            },
+            PdbType {
+                name: "B".into(),
+                size: 4,
+                kind: PdbTypeKind::Union,
+                fields: Vec::new(),
+            },
+        ];
+        let map = lower_pdb_types(&inputs);
+        assert_eq!(map.len(), 2);
+        assert!(matches!(map.get("A"), Some(Type::Struct { .. })));
+        assert!(matches!(map.get("B"), Some(Type::Union { .. })));
     }
 }

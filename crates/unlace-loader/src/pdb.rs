@@ -21,13 +21,32 @@ pub struct SourceLocation {
     pub column: Option<u32>,
 }
 
+/// §5.8: one local variable extracted from a PDB function's symbol
+/// stream. `frame_offset` is RBP-relative when known (negative for
+/// locals below the saved frame pointer).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PdbLocal {
+    /// Source-visible variable name.
+    pub name: String,
+    /// Frame-pointer-relative offset (or `None` if PDB only carries a
+    /// register location).
+    pub frame_offset: Option<i64>,
+    /// CodeView type index of the variable's declared type. Resolve
+    /// against `PdbTypes::by_index` to recover a structured `Type`.
+    pub type_index: u32,
+}
+
 /// Aggregated debug info extracted from a PDB file.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PdbInfo {
     pub symbols: BTreeMap<u64, Symbol>,
     pub lines: BTreeMap<u64, SourceLocation>,
     /// Procedure/member-function type index → calling convention metadata.
     pub calling_conventions: BTreeMap<u32, CallingConvention>,
+    /// §5.8: per-function locals keyed by function RVA. Empty when the
+    /// PDB carries no `S_LDATA32`/`S_LOCAL`/`S_REGREL32` records inside
+    /// the function scope.
+    pub function_locals: BTreeMap<u64, Vec<PdbLocal>>,
 }
 
 /// Parse a `.pdb` file and extract function symbols and line information.
@@ -67,6 +86,7 @@ pub fn import_pdb(pdb_path: &Path) -> Result<PdbInfo, LoadError> {
         symbols,
         lines,
         calling_conventions,
+        function_locals: BTreeMap::new(),
     })
 }
 
@@ -329,6 +349,7 @@ mod tests {
             )]),
             lines: BTreeMap::new(),
             calling_conventions: BTreeMap::new(),
+            function_locals: BTreeMap::new(),
         };
 
         let image_base = 0x0040_0000u64;
@@ -365,6 +386,7 @@ mod tests {
             )]),
             lines: BTreeMap::new(),
             calling_conventions: BTreeMap::new(),
+            function_locals: BTreeMap::new(),
         };
 
         merge_pdb_symbols(&mut target, &pdb_info, 0x0040_0000);
@@ -373,6 +395,31 @@ mod tests {
         assert_eq!(sym.name, "main");
         assert_eq!(sym.size, 200);
         assert_eq!(sym.kind, SymbolKind::Function);
+    }
+
+    /// §5.8: the new `function_locals` field on `PdbInfo` is public,
+    /// non-`Option`, and round-trips through manual construction.
+    #[test]
+    fn pdb_info_function_locals_is_publicly_writable() {
+        let mut info = PdbInfo {
+            symbols: BTreeMap::new(),
+            lines: BTreeMap::new(),
+            calling_conventions: BTreeMap::new(),
+            function_locals: BTreeMap::new(),
+        };
+        info.function_locals.insert(
+            0x1000,
+            vec![PdbLocal {
+                name: "x".into(),
+                frame_offset: Some(-16),
+                type_index: 0x0074, // T_INT4
+            }],
+        );
+        let locals = info.function_locals.get(&0x1000).unwrap();
+        assert_eq!(locals.len(), 1);
+        assert_eq!(locals[0].name, "x");
+        assert_eq!(locals[0].frame_offset, Some(-16));
+        assert_eq!(locals[0].type_index, 0x0074);
     }
 
     #[test]

@@ -255,6 +255,181 @@ fn batch14_rebaseline_cli_fixture_evidence() {
     }
 }
 
+/// BATCH15 semantic gate: `cpp_vtable.elf:main` is the C++/vtable fixture
+/// family anchor. Source is `printf("%d\n", use_base(&d))` where `d` is a
+/// `Derived` instance whose `value()` returns 42. After inlining +
+/// devirtualization the binary literally calls `__printf_chk("%d\n", 42)`.
+///
+/// Final-C must therefore preserve:
+/// - the call to a `printf` family function;
+/// - the constant `0x2a` (= 42) as a literal argument (devirtualization
+///   evidence — if vtable dispatch leaked through we'd see a function
+///   pointer call instead);
+/// - a clean `return 0;` (no `result` placeholder, no synthetic stack
+///   stores).
+///
+/// We do *not* compile-and-run this subset because the `0x2004LL` literal
+/// references the binary's `.rodata` format string — recreating it in a
+/// host C subset would mean papering over the missing string-literal
+/// recovery, which the handoff forbids. The check is shape-only.
+#[test]
+fn decompiled_cpp_vtable_main_devirtualized_constant() {
+    let output = unlace_bin()
+        .args(["decompile", "--emit", "c", "--function", "main"])
+        .arg(fixture("cpp_vtable.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("printf("),
+        "cpp_vtable:main should preserve the printf call site: {stdout}"
+    );
+    assert!(
+        stdout.contains("0x2a"),
+        "cpp_vtable:main should preserve the devirtualized 42 constant: {stdout}"
+    );
+    assert!(
+        stdout.contains("return 0;"),
+        "cpp_vtable:main should fold to a direct `return 0;`: {stdout}"
+    );
+    assert_no_known_bad_subset_shapes(&stdout, "cpp_vtable.elf:main");
+}
+
+/// BATCH15 semantic gate: `debug_structs.elf:main` is the struct fixture
+/// family anchor. Source is
+/// `struct Rect r = {{0,0},{10,20}}; printf("%d\n", area(&r));` where
+/// `area` returns `r->size.x * r->size.y` = `10*20` = `200`. After
+/// constant folding the binary calls `__printf_chk("%d\n", 200)`.
+///
+/// Final-C must preserve:
+/// - the printf call site;
+/// - the constant `0xc8` (= 200) as a literal argument (struct field
+///   access + multiplication folded successfully);
+/// - a clean `return 0;`.
+///
+/// Same caveat as cpp_vtable: we don't compile-and-run because the
+/// format-string literal lives in the binary's .rodata.
+#[test]
+fn decompiled_debug_structs_main_constant_folded_area() {
+    let output = unlace_bin()
+        .args(["decompile", "--emit", "c", "--function", "main"])
+        .arg(fixture("debug_structs.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("printf("),
+        "debug_structs:main should preserve the printf call site: {stdout}"
+    );
+    assert!(
+        stdout.contains("0xc8"),
+        "debug_structs:main should preserve the constant-folded area (200 == 0xc8): {stdout}"
+    );
+    assert!(
+        stdout.contains("return 0;"),
+        "debug_structs:main should fold to a direct `return 0;`: {stdout}"
+    );
+    assert_no_known_bad_subset_shapes(&stdout, "debug_structs.elf:main");
+}
+
+/// BATCH15 semantic gate: `cpp_exceptions.elf:main` is the C++ exception
+/// fixture family anchor. Source is `int main() { return safe_call(-1); }`.
+/// `safe_call` is the function with the actual `try/catch` block, but for
+/// `main` itself we just need to see the call site survive.
+///
+/// Negative checks (the handoff's listed "bad shapes"):
+/// - no `Unimplemented` token leak (EH lowering used to leave these);
+/// - no stale `return result;` placeholder;
+/// - no null-address store artefacts (`*(_QWORD *)(0LL)`).
+///
+/// Positive shape check: the body must actually contain the `safe_call`
+/// callsite, not just declare the function or recurse into noise.
+#[test]
+fn decompiled_cpp_exceptions_main_calls_safe_call() {
+    let output = unlace_bin()
+        .args(["decompile", "--emit", "c", "--function", "main"])
+        .arg(fixture("cpp_exceptions.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("safe_call("),
+        "cpp_exceptions:main should preserve the safe_call() call site: {stdout}"
+    );
+    assert_no_known_bad_subset_shapes(&stdout, "cpp_exceptions.elf:main");
+}
+
+/// BATCH15 semantic gate: `switch_table.elf:dispatch` is the switch /
+/// jump-table fixture family anchor. Source is an 8-case `switch` plus
+/// a `default`. The current pipeline does NOT yet structure this back
+/// into a `switch` statement — it falls out as a poorly-recovered if/else
+/// chain — so this gate is a *negative* one: even with weak structuring,
+/// the output must remain free of known-bad shapes.
+///
+/// When switch recovery improves and this function starts emitting an
+/// actual `switch (x)` block, tighten this test to a positive check.
+#[test]
+fn decompiled_switch_table_dispatch_no_bad_shapes() {
+    let output = unlace_bin()
+        .args(["decompile", "--emit", "c", "--function", "dispatch"])
+        .arg(fixture("switch_table.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("dispatch("),
+        "switch_table:dispatch should at least emit the function signature: {stdout}"
+    );
+    assert_no_known_bad_subset_shapes(&stdout, "switch_table.elf:dispatch");
+}
+
+/// BATCH15 semantic gate: `arm64_features.elf:_start` is the ARM64 /
+/// non-x86 fixture family anchor. The hand-written source calls three
+/// test helpers in order: `mul_test()`, `csel_test()`, `bitfield_test()`,
+/// then returns. The lifter must therefore produce final-C that contains
+/// all three callsites in some order, with no bad shapes.
+#[test]
+fn decompiled_arm64_start_calls_all_three_helpers() {
+    let output = unlace_bin()
+        .args(["decompile", "--emit", "c", "--function", "_start"])
+        .arg(fixture("arm64_features.elf"))
+        .output()
+        .expect("failed to run unlace");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for callee in ["mul_test(", "csel_test(", "bitfield_test("] {
+        assert!(
+            stdout.contains(callee),
+            "arm64_features:_start should call {callee} (got: {stdout})"
+        );
+    }
+    assert_no_known_bad_subset_shapes(&stdout, "arm64_features.elf:_start");
+}
+
 #[test]
 fn decompile_emit_cfg_dot() {
     let output = unlace_bin()

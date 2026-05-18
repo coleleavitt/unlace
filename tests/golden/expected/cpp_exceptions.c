@@ -6,39 +6,39 @@
 // may_throw(int) [clone .cold]
 void __noreturn __aapcs may_throw(void * a1) {
     int v1; // rax
-    int v5; // r14
-    int v6; // rip
-    *(_QWORD *)(0LL) = v5; *(_QWORD *)(0LL) = v1; *(_QWORD *)(0LL) = v1;
-    *(_QWORD *)(0LL) = 0x114eLL;
+    __int64 v3; // rbx
+    int v6; // r14
+    _QWORD v9; // temp
+    *(_QWORD *)(0LL) = v6; *(_QWORD *)(0LL) = v1; *(_QWORD *)(0LL) = v1;
     /* allocate exception */
-    __cxa_allocate_exception();
-    v3 = v1; *(_QWORD *)(0LL) = 0x1160LL; std_runtime_error_runtime_error();
-    *(_QWORD *)(0LL) = 0x1176LL;
+    __cxa_allocate_exception(0x10);
+    v3 = v1; std_runtime_error_runtime_error(); v9 = *(_QWORD *)(0LL);
+    v2 = v9;
+    __int64 v11 = v1; // rdi
     /* throw */
-    __cxa_throw();
+    __cxa_throw(v1, 0x3d40LL, v9);
     return;
 }
 
-/* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0x9f (159 bytes) | Convention: stdcall | Stack frame: 0x88 (136 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_throw | Xrefs from: unknown */
+/* Function:   safe_call(int) [clone .cold] | Address: 0x118d | Size: 0x9f (159 bytes) | Convention: stdcall | Stack frame: 0x18 (24 bytes) | Xrefs to:   _Unwind_Resume, std::runtime_error::runtime_error(char const*), __cxa_allocate_exception, __cxa_begin_catch, __cxa_end_catch, __cxa_throw, __printf_chk | Xrefs from: unknown */
 // safe_call(int) [clone .cold]
 int __noreturn __stdcall safe_call(void) {
-    int v7; // rip
-    *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0x119cLL;
+    *(_QWORD *)(0LL) = 0LL;
     /* allocate exception */
-    __cxa_allocate_exception();
-    *(_QWORD *)(0LL) = 0x11aeLL; std_runtime_error_runtime_error(); *(_QWORD *)(0LL) = 0x11c4LL;
+    __cxa_allocate_exception(0x10);
+    std_runtime_error_runtime_error();
     /* throw */
-    __cxa_throw();
+    __cxa_throw(0LL, 0x3d40LL, 0LL);
     v10 = 0;
     if (v10) {
-        qword_FFFFFFFFFFFFFFFF = 0x122dLL; _Unwind_Resume();
+        _Unwind_Resume();
     } else {
-        qword_FFFFFFFFFFFFFFFF = 0x11edLL;
         /* catch */
         __cxa_begin_catch();
-        qword_FFFFFFFFFFFFFFFF = 0x11f6LL;
-        _QWORD pfn = *(_QWORD *)(0LL); // temp
-        ((void (*)())pfn)(); qword_FFFFFFFFFFFFFFFF = 0x1211LL; return result;
+        ((void (*)())sub_0)(); printf("caught: %s\n", (char *)0LL);
+        /* end catch */
+        __cxa_end_catch();
+        return -1;
     }
     return;
 }
@@ -49,99 +49,81 @@ void main(void) {
     safe_call(); return result;
 }
 
-/* Function:   _start | Address: 0x1260 | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void _start(void) {
-    int v6; // rip
-    *(_QWORD *)(0LL) = 0x1285LL; return;
+/* Function:   _start | Address: 0x1260 | Size: 0x1f (31 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void __aapcs _start(void * a1) {
+    int v1; // rax
+    *(_QWORD *)(0LL) = v1; *(_QWORD *)(0LL) = 0LL; ((void (*)())sub_0)();
+    return;
 }
 
-/* Function:   may_throw(int) | Address: 0x1350 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   may_throw(int) | Address: 0x1350 | Size: 0xc (12 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // may_throw(int)
-void may_throw(void) {
-    int v4; // reg?
-    if (v4) {
+void may_throw(__int64 a1) {
+    int result; // eax
+    v3 = LOBYTE(v2 < 0);
+    if (v3) {
     }
-    __int64 result = 0LL; // temp
     return result;
 }
 
-/* Function:   safe_call(int) | Address: 0x1360 | Size: 0x6 (6 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   safe_call(int) | Address: 0x1360 | Size: 0xe (14 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // safe_call(int)
-void safe_call(void) {
-    int v5; // reg?
-    if (v5) {
+int safe_call(__int64 a1) {
+    v3 = 0;
+    if (v3) {
     }
-    return;
+    return 0;
 }
 
 /* Function:   sub_1176 | Address: 0x1176 | Size: 0x12 (18 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   _Unwind_Resume, __cxa_free_exception | Xrefs from: unknown */
 void __noreturn __aapcs sub_1176(__int64 a1) {
     int v1; // rax
-    v4 = v1; *(_QWORD *)(0LL) = 0x1185LL; __cxa_free_exception();
-    *(_QWORD *)(0LL) = 0x118dLL; _Unwind_Resume(); return;
+    int v2; // rbx
+    v4 = v1; saved_rbx = v2; __cxa_free_exception(v1);
+    v3 = v1; _Unwind_Resume(v1); return;
 }
 
-// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
-struct __anon0 {
-    void * field_0;
-    void * field_8;
-};
-
-/* Function:   sub_11c4 | Address: 0x11c4 | Size: 0x54 (84 bytes) | Convention: System V AMD64 | Stack frame: 0x20 (32 bytes) | Xrefs to:   __cxa_begin_catch, __cxa_free_exception | Xrefs from: unknown */
-void sub_11c4(void) {
-    __int64 v4; // rsp
-    *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; v4 = 0LL;
-    *(_QWORD *)(0LL) = 0x11d9LL; __cxa_free_exception();
-    if (v4) {
+/* Function:   sub_11c4 | Address: 0x11c4 | Size: 0x57 (87 bytes) | Convention: stdcall | Stack frame: 0x8 (8 bytes) | Xrefs to:   __cxa_begin_catch, __cxa_end_catch, __cxa_free_exception, __printf_chk | Xrefs from: unknown */
+int __stdcall sub_11c4(void) {
+    *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; __cxa_free_exception(0LL);
+    v8 = 0;
+    if (v8) {
     }
-    *(_QWORD *)(0LL) = 0x11edLL;
     /* catch */
     __cxa_begin_catch();
-    *(_QWORD *)(0LL) = 0x11f6LL;
-    _QWORD pfn = *(_QWORD *)(0x10LL); // temp
-    ((void (*)())pfn)(); *(_QWORD *)(0x10LL) = 0x1211LL; return;
+    ((void (*)())sub_0)(); printf("caught: %s\n", (char *)0LL);
+    /* end catch */
+    __cxa_end_catch();
+    result = -1; return result;
 }
 
-/* Function:   sub_121c | Address: 0x121c | Size: 0x9 (9 bytes) | Convention: Microsoft x64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   _Unwind_Resume | Xrefs from: unknown */
-void __noreturn __fastcall sub_121c(void) {
-    int v2; // rdx
-    __int64 v5; // temp
-    a3 = v2; sub_11e2(); v5 -= 8LL;
-    v3 = v5; *(_QWORD *)(v5) = 0x122dLL; _Unwind_Resume();
-    return;
+/* Function:   sub_121c | Address: 0x121c | Size: 0x6 (6 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   _Unwind_Resume | Xrefs from: unknown */
+void __noreturn sub_121c(void) {
+    sub_11e2(); _Unwind_Resume(); return;
 }
 
 /* Function:   sub_122d | Address: 0x122d | Size: 0xf (15 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs to:   _Unwind_Resume, __cxa_end_catch | Xrefs from: unknown */
 void __noreturn __aapcs sub_122d(__int64 a1) {
     int v1; // rax
-    v2 = v1; *(_QWORD *)(0LL) = 0x1239LL;
+    v2 = v1;
     /* end catch */
     __cxa_end_catch();
-    *(_QWORD *)(0LL) = 0x1241LL; _Unwind_Resume(); return;
+    v3 = v1; _Unwind_Resume(v1); return;
 }
 
-// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
-struct __anon0 {
-    void * field_0;
-    void * field_8;
-};
-
-/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
+/* Function:   sub_1300 | Address: 0x1300 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_10b0, sub_1290 | Xrefs from: unknown */
 void sub_1300(void) {
-    __int64 v1; // rsp
-    int v4; // rip
-    _QWORD c1; // temp
-    if (v4) {
+    int result; // eax
+    v9 = 0;
+    if (v9) {
         return result;
     } else {
-        *(_QWORD *)(0LL) = 0LL; c1 = *(_QWORD *)(c1);
+        *(_QWORD *)(0LL) = 0LL; cond = 1;
         if (cond) {
         } else {
-            c1 = *(_QWORD *)(c1); *(_QWORD *)(0LL) = 0x1327LL; sub_10b0();
+            sub_10b0();
         }
-        v1 = c1; *(_QWORD *)(c1) = 0x132cLL; sub_1290();
-        *(_BYTE *)(c1) = 1; c1 = c1; v1 = c1;
-        result = *(_QWORD *)(c1); return result;
+        sub_1290(); *(_BYTE *)(0LL) = 1; return result;
     }
 }
 
@@ -152,14 +134,16 @@ void sub_1340(void) {
 
 /* Function:   sub_1290 | Address: 0x1290 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1290(void) {
-    int v5; // rip
-    v8 = 1;
-    if (v8) {
+    int result; // eax
+    __int64 v2; // rax
+    v2 = v14;
+    char cond = 1; // ZF
+    if (cond) {
         return result;
     } else {
-        result = 0LL; v8 = 1;
-        if (v8) {
-            result = 0LL; return result;
+        v2 = v14; cond = v14 == 0LL;
+        if (cond) {
+            return result;
         }
     }
     return;

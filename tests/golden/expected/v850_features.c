@@ -11,7 +11,7 @@ void sub_10104(void) {
 /* Function:   v850_branch | Address: 0x10114 | Size: 0x10 (16 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void v850_branch(void) {
     int result; // reg?
-    if (v8) {
+    if (v7) {
     }
     return result;
 }

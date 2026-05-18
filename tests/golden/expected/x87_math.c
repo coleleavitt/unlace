@@ -1,67 +1,65 @@
-/* Function:   _start | Address: 0x1040 | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void _start(void) {
-    int v6; // rip
-    *(_QWORD *)(0LL) = 0x1065LL; return;
+/* Function:   _start | Address: 0x1040 | Size: 0x1f (31 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void __aapcs _start(void * a1) {
+    int v1; // rax
+    *(_QWORD *)(0LL) = v1; *(_QWORD *)(0LL) = 0LL; ((void (*)())sub_0)();
+    return;
 }
-/* Function:   sum_squares_x87 | Address: 0x1129 | Size: 0x14 (20 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void sum_squares_x87(void) {
-    int v3; // reg?
-    v6 = *(_QWORD *)(0LL);
+/* Function:   sum_squares_x87 | Address: 0x1129 | Size: 0x14 (20 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0xa (10 bytes) | Xrefs from: unknown */
+void __aapcs sum_squares_x87(__int64 a1) {
+    int result; // eax
+    int v2; // rsp
+    int v4; // reg?
+    v6 = *(_QWORD *)(v2 + 8LL);
     int v7 = /* CALLOTHER tag=784 */ 0; // reg?
-    v2 = /* CALLOTHER tag=788 */ 0; /* CALLOTHER tag=791 */ 0; v2 = /* CALLOTHER tag=788 */ 0;
-    v3 = /* CALLOTHER tag=786 */ 0; result = 0LL; return result;
+    v3 = /* CALLOTHER tag=788 */ 0; /* CALLOTHER tag=791 */ 0; v3 = /* CALLOTHER tag=788 */ 0;
+    v4 = /* CALLOTHER tag=786 */ 0; return result;
 }
-/* Function:   compare_floats_x87 | Address: 0x113e | Size: 0x27 (39 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   compare_floats_x87 | Address: 0x113e | Size: 0x27 (39 bytes) | Convention: System V AMD64 | Stack frame: 0xa (10 bytes) | Xrefs from: unknown */
 void compare_floats_x87(void) {
+    int result; // eax
+    int v3; // rsp
     int v4; // CF
     int v5; // ZF
     int v7; // reg?
-    v13 = *(_QWORD *)(0LL);
-    int v14 = /* CALLOTHER tag=784 */ 0; // reg?
+    v11 = *(_QWORD *)(v3 + 0x18LL);
+    int v12 = /* CALLOTHER tag=784 */ 0; // reg?
     _BOOL cond = !v4; // temp
     _BOOL cond = !v5; // temp
-    _BOOL c2 = cond && cond; // temp
-    if (c2) {
+    _BOOL c3 = cond && cond; // temp
+    if (c3) {
+        v6 = /* CALLOTHER tag=785 */ 0; c0 = /* CALLOTHER tag=785 */ 0;
     } else {
-        /* CALLOTHER tag=791 */ 0;
+        /* CALLOTHER tag=791 */ 0; v6 = /* CALLOTHER tag=785 */ 0;
     }
-    result = 0LL; return result;
-}
-/* Function:   mix_ops_x87 | Address: 0x1166 | Size: 0x1a (26 bytes) | Convention: System V AMD64 | Stack frame: 0xa (10 bytes) | Xrefs from: unknown */
-void mix_ops_x87(void) {
-    int v3; // reg?
-    int v4; // reg?
-    v7 = *(_QWORD *)(0LL);
-    int v8 = /* CALLOTHER tag=784 */ 0; // reg?
-    v3 = /* CALLOTHER tag=788 */ 0; v4 = /* CALLOTHER tag=787 */ 0; return;
-}
-/* Function:   main | Address: 0x1181 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void main(void) {
-    __int64 result = 0LL; // temp
     return result;
 }
-// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
-struct __anon0 {
-    void * field_0;
-    void * field_8;
-};
-
-/* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
+/* Function:   mix_ops_x87 | Address: 0x1166 | Size: 0x1a (26 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0xa (10 bytes) | Xrefs from: unknown */
+void __aapcs mix_ops_x87(__int64 a1) {
+    int result; // eax
+    int v2; // rsp
+    int v4; // reg?
+    int v5; // reg?
+    v7 = v2[4];
+    int v8 = /* CALLOTHER tag=784 */ 0; // reg?
+    v4 = /* CALLOTHER tag=788 */ 0; v5 = /* CALLOTHER tag=787 */ 0; return result;
+}
+/* Function:   main | Address: 0x1181 | Size: 0x9 (9 bytes) | Convention: stdcall | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+int __stdcall main(void) {
+    return 1;
+}
+/* Function:   sub_10e0 | Address: 0x10e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1030, sub_1070 | Xrefs from: unknown */
 void sub_10e0(void) {
-    __int64 v1; // rsp
-    int v4; // rip
-    _QWORD c1; // temp
-    if (v4) {
+    int result; // eax
+    v9 = 0;
+    if (v9) {
         return result;
     } else {
-        *(_QWORD *)(0LL) = 0LL; c1 = *(_QWORD *)(c1);
+        *(_QWORD *)(0LL) = 0LL; cond = 1;
         if (cond) {
         } else {
-            c1 = *(_QWORD *)(c1); *(_QWORD *)(0LL) = 0x1107LL; sub_1030();
+            sub_1030();
         }
-        v1 = c1; *(_QWORD *)(c1) = 0x110cLL; sub_1070();
-        *(_BYTE *)(c1) = 1; c1 = c1; v1 = c1;
-        result = *(_QWORD *)(c1); return result;
+        sub_1070(); *(_BYTE *)(0LL) = 1; return result;
     }
 }
 /* Function:   sub_1120 | Address: 0x1120 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
@@ -70,14 +68,16 @@ void sub_1120(void) {
 }
 /* Function:   sub_1070 | Address: 0x1070 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1070(void) {
-    int v5; // rip
-    v8 = 1;
-    if (v8) {
+    int result; // eax
+    __int64 v2; // rax
+    v2 = v14;
+    char cond = 1; // ZF
+    if (cond) {
         return result;
     } else {
-        result = 0LL; v8 = 1;
-        if (v8) {
-            result = 0LL; return result;
+        v2 = v14; cond = v14 == 0LL;
+        if (cond) {
+            return result;
         }
     }
     return;

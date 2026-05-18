@@ -21,69 +21,73 @@
  *       vfunc[2] = Cat::~Cat() [override]
  */
 /* Function:   main | Address: 0x10c0 | Size: 0x77 (119 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   identify(Animal*), __printf_chk, __stack_chk_fail | Xrefs from: unknown */
-void __noreturn main(void) {
-    int v6; // rip
-    int result;
+int __noreturn main(void) {
+    int result; // eax
     *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL; *(_QWORD *)(0LL) = 0LL;
-    *(_QWORD *)(0LL) = 0x10f9LL; identify(); *(_QWORD *)(0LL) = 0x1106LL;
-    identify(); *(_QWORD *)(0LL) = 0x111fLL; printf();
-    v8 = 0;
-    if (v8) {
-        *(_QWORD *)(0LL) = 0x113cLL; __stack_chk_fail();
+    identify(); identify(); printf("%s %s\n", (char *)0x3d28LL, (char *)0x3d28LL);
+    v7 = 0;
+    if (v7) {
+        __stack_chk_fail();
+    } else {
+        return 0;
     }
     return result;
 }
 
-/* Function:   _start | Address: 0x1140 | Size: 0x1f (31 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
-void _start(void) {
-    int v6; // rip
-    *(_QWORD *)(0LL) = 0x1165LL; return;
+/* Function:   _start | Address: 0x1140 | Size: 0x1f (31 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+void __aapcs _start(void * a1) {
+    int v1; // rax
+    *(_QWORD *)(0LL) = v1; *(_QWORD *)(0LL) = 0LL; ((void (*)())sub_0)();
+    return;
 }
 
-/* Function:   identify(Animal*) | Address: 0x1230 | Size: 0xbb (187 bytes) | Convention: stdcall | Stack frame: 0x8 (8 bytes) | Xrefs to:   __dynamic_cast | Xrefs from: unknown */
+/* Function:   identify(Animal*) | Address: 0x1230 | Size: 0xc7 (199 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   __dynamic_cast | Xrefs from: unknown */
 // identify(Animal*)
-void __stdcall identify(void) {
-    int v8; // rip
-    if (v7) {
+void identify(void) {
+    int result; // eax
+    char v11 = 0; // ZF
+    if (v11) {
         return result;
     } else {
-        qword_FFFFFFFFFFFFFFE0 = 0x125bLL; __dynamic_cast(); v7 = 0LL;
+        *(_QWORD *)(0LL) = 0LL; __dynamic_cast();
         if (v11) {
             __dynamic_cast();
             if (v11) {
                 return result;
             } else {
+                v11 = 1;
             }
         } else {
-            result = v8 + 0x1300LL; v11 = 1;
         }
         return result;
     }
 }
 
-/* Function:   Dog::speak() | Address: 0x1300 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   Dog::speak() | Address: 0x1300 | Size: 0x4 (4 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Dog::speak()
-void Dog_speak(Dog *this) {
+void __aapcs Dog_speak(Dog *this, __int64 a1) {
+    int result; // eax
     return result;
 }
 
-/* Function:   Cat::speak() | Address: 0x1310 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   Cat::speak() | Address: 0x1310 | Size: 0x4 (4 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Cat::speak()
-void Cat_speak(Cat *this) {
+void __aapcs Cat_speak(Cat *this, __int64 a1) {
+    int result; // eax
     return result;
 }
 
-/* Function:   Dog::~Dog() | Address: 0x1320 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   Dog::~Dog() | Address: 0x1320 | Size: 0x4 (4 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Dog::~Dog()
-void Dog_Dog(Dog *this) {
-    __int64 result = 0LL; // temp
+void __aapcs Dog_Dog(Dog *this, __int64 a1) {
+    int result; // eax
     return result;
 }
 
-/* Function:   Cat::~Cat() | Address: 0x1330 | Size: 0x4 (4 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
+/* Function:   Cat::~Cat() | Address: 0x1330 | Size: 0x4 (4 bytes) | Convention: AArch64 AAPCS64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 // Cat::~Cat()
-void Cat_Cat(Cat *this) {
-    __int64 result = 0LL; // temp
+void __aapcs Cat_Cat(Cat *this, __int64 a1) {
+    int result; // eax
     return result;
 }
 
@@ -99,28 +103,19 @@ void Dog_Dog(Dog *this) {
     delete(); return;
 }
 
-// Recovered composite layouts (t147 stack frame, t213 array-of-structs)
-struct __anon0 {
-    void * field_0;
-    void * field_8;
-};
-
-/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x10 (16 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
+/* Function:   sub_11e0 | Address: 0x11e0 | Size: 0x38 (56 bytes) | Convention: System V AMD64 | Stack frame: 0x8 (8 bytes) | Xrefs to:   sub_1070, sub_1170 | Xrefs from: unknown */
 void sub_11e0(void) {
-    __int64 v1; // rsp
-    int v4; // rip
-    _QWORD c1; // temp
-    if (v4) {
+    int result; // eax
+    v9 = 0;
+    if (v9) {
         return result;
     } else {
-        *(_QWORD *)(0LL) = 0LL; c1 = *(_QWORD *)(c1);
+        *(_QWORD *)(0LL) = 0LL; cond = 1;
         if (cond) {
         } else {
-            c1 = *(_QWORD *)(c1); *(_QWORD *)(0LL) = 0x1207LL; sub_1070();
+            sub_1070();
         }
-        v1 = c1; *(_QWORD *)(c1) = 0x120cLL; sub_1170();
-        *(_BYTE *)(c1) = 1; c1 = c1; v1 = c1;
-        result = *(_QWORD *)(c1); return result;
+        sub_1170(); *(_BYTE *)(0LL) = 1; return result;
     }
 }
 
@@ -131,14 +126,16 @@ void sub_1220(void) {
 
 /* Function:   sub_1170 | Address: 0x1170 | Size: 0x6c (108 bytes) | Convention: System V AMD64 | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void sub_1170(void) {
-    int v5; // rip
-    v8 = 1;
-    if (v8) {
+    int result; // eax
+    __int64 v2; // rax
+    v2 = v14;
+    char cond = 1; // ZF
+    if (cond) {
         return result;
     } else {
-        result = 0LL; v8 = 1;
-        if (v8) {
-            result = 0LL; return result;
+        v2 = v14; cond = v14 == 0LL;
+        if (cond) {
+            return result;
         }
     }
     return;

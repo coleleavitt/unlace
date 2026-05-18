@@ -11,8 +11,8 @@ void sub_10000104(void) {
 /* Function:   ppc_branch | Address: 0x1000011c | Size: 0x18 (24 bytes) | Convention: unknown | Stack frame: 0x0 (0 bytes) | Xrefs from: unknown */
 void ppc_branch(void) {
     int result; // reg?
-    v3 = 0;
-    if (v3) {
+    v2 = 0;
+    if (v2) {
     }
     return result;
 }

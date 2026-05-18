@@ -42,10 +42,8 @@ pub enum ArchId {
     TiC6x,
     TiC28x,
     Evm,
-    NvSass,
     SpirV,
     AppleAgx,
-    M6502,
     Lua,
     Unknown(u16),
 }
@@ -89,10 +87,8 @@ impl fmt::Display for ArchId {
             Self::TiC6x => f.write_str("tic6x"),
             Self::TiC28x => f.write_str("ti-c28x"),
             Self::Evm => f.write_str("evm"),
-            Self::NvSass => f.write_str("nvsass"),
             Self::SpirV => f.write_str("spirv"),
             Self::AppleAgx => f.write_str("appleagx"),
-            Self::M6502 => f.write_str("m6502"),
             Self::Lua => f.write_str("lua"),
             Self::Unknown(id) => write!(f, "unknown({id:#x})"),
         }

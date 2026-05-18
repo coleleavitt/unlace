@@ -34,16 +34,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// See module docs for the categorization heuristics and the optimizer
 /// barrier semantics.
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    serde::Serialize,
-    serde::Deserialize,
+    Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
 pub enum AliasCategory {
     /// Stack-relative: base is the architectural stack/frame pointer.

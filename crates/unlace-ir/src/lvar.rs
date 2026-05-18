@@ -24,18 +24,7 @@ use crate::types::TypeKind;
 /// densely from 0 by the producing pass (collector). Ordering is
 /// deterministic by id so callers iterating `SsaFunction::lvars` see a
 /// stable sequence across runs.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct LvarId(pub u32);
 
 impl LvarId {
@@ -146,17 +135,7 @@ pub enum LvarSource {
 /// like the eventual `bitflags!`-based version. Keeping it manual avoids
 /// adding a new workspace dependency for this foundation slice.
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
+    Copy, Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
 )]
 pub struct LvarFlags(pub u32);
 
@@ -259,6 +238,71 @@ impl Lvar {
     }
 }
 
+/// Render `lvars` as a markdown table for the Batch 18 audit report.
+///
+/// Columns: id, storage class+detail, live range, ty, address-taken/volatile/synthetic/param flags, chosen name, source.
+/// Rows are emitted in `id` order so the dump is deterministic across
+/// runs. Empty `lvars` produces the header-only table.
+pub fn dump_lvars(lvars: &[Lvar]) -> String {
+    use std::fmt::Write;
+    let mut s = String::new();
+    let _ = writeln!(
+        s,
+        "| id | storage | range | ty | flags | name | source |"
+    );
+    let _ = writeln!(
+        s,
+        "|---:|---------|-------|----|-------|------|--------|"
+    );
+    for lv in lvars {
+        let storage = match &lv.storage {
+            LvarStorage::Stack { offset } => format!("stack({offset:+})"),
+            LvarStorage::Reg { name } => format!("reg({name})"),
+            LvarStorage::Spill { offset } => format!("spill({offset:+})"),
+            LvarStorage::Temp { ssa_var } => {
+                format!("temp({:?}#{})", ssa_var.base.space, ssa_var.version)
+            }
+            LvarStorage::Param { idx } => format!("param({idx})"),
+            LvarStorage::Return => "return".to_string(),
+        };
+        let range = format!(
+            "[{}..={}]",
+            lv.live_range.start_block.0, lv.live_range.end_block.0
+        );
+        let mut flag_parts: Vec<&'static str> = Vec::new();
+        if lv.flags.contains(LvarFlags::ADDRESS_TAKEN) {
+            flag_parts.push("addr_taken");
+        }
+        if lv.flags.contains(LvarFlags::VOLATILE) {
+            flag_parts.push("volatile");
+        }
+        if lv.flags.contains(LvarFlags::SYNTHETIC) {
+            flag_parts.push("synthetic");
+        }
+        if lv.flags.contains(LvarFlags::IS_PARAM) {
+            flag_parts.push("param");
+        }
+        if lv.flags.contains(LvarFlags::IS_RETURN) {
+            flag_parts.push("return");
+        }
+        if lv.flags.contains(LvarFlags::FROM_DEBUG) {
+            flag_parts.push("debug");
+        }
+        let flags = if flag_parts.is_empty() {
+            "-".to_string()
+        } else {
+            flag_parts.join("|")
+        };
+        let name = lv.name.clone().unwrap_or_else(|| "-".to_string());
+        let _ = writeln!(
+            s,
+            "| {} | {} | {} | {:?} | {} | {} | {:?} |",
+            lv.id, storage, range, lv.ty, flags, name, lv.source
+        );
+    }
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,13 +359,7 @@ mod tests {
     #[test]
     fn storage_class_labels() {
         assert_eq!(LvarStorage::Stack { offset: -8 }.class(), "stack");
-        assert_eq!(
-            LvarStorage::Reg {
-                name: "rax".into()
-            }
-            .class(),
-            "reg"
-        );
+        assert_eq!(LvarStorage::Reg { name: "rax".into() }.class(), "reg");
         assert_eq!(LvarStorage::Spill { offset: -16 }.class(), "spill");
         assert_eq!(LvarStorage::Param { idx: 0 }.class(), "param");
         assert_eq!(LvarStorage::Return.class(), "return");
@@ -341,5 +379,55 @@ mod tests {
         assert_eq!(lv.name, None);
         assert_eq!(lv.ty, TypeKind::Int);
         assert!(lv.flags.contains(LvarFlags::IS_PARAM));
+    }
+
+    /// Batch 18 audit: `dump_lvars` produces a stable markdown table
+    /// whose rows preserve `id` order. The header is always present even
+    /// for an empty slice.
+    #[test]
+    fn dump_lvars_renders_stable_table() {
+        let mut a = Lvar::new(
+            LvarId::new(0),
+            LvarStorage::Param { idx: 0 },
+            LiveRange::point(b(0)),
+            TypeKind::Int,
+            LvarSource::FromSig,
+            LvarFlags::IS_PARAM,
+        );
+        a.name = Some("a1".into());
+
+        let mut b_lv = Lvar::new(
+            LvarId::new(1),
+            LvarStorage::Stack { offset: -16 },
+            LiveRange {
+                start_block: b(0),
+                end_block: b(3),
+            },
+            TypeKind::Void,
+            LvarSource::Inferred,
+            LvarFlags::ADDRESS_TAKEN | LvarFlags::SYNTHETIC,
+        );
+        b_lv.name = Some("buf".into());
+
+        let table = dump_lvars(&[a, b_lv]);
+        assert!(
+            table.starts_with("| id | storage | range | ty | flags | name | source |"),
+            "header row missing: {table}"
+        );
+        // id 0 row precedes id 1 row.
+        let a_idx = table.find("| lv0 ").expect("lv0 row");
+        let b_idx = table.find("| lv1 ").expect("lv1 row");
+        assert!(a_idx < b_idx);
+        assert!(table.contains("param(0)"));
+        assert!(table.contains("stack(-16)"));
+        assert!(table.contains("addr_taken|synthetic"));
+    }
+
+    #[test]
+    fn dump_lvars_empty_slice_yields_header_only() {
+        let table = dump_lvars(&[]);
+        assert!(table.contains("| id | storage |"));
+        // 2 header rows, no data rows: total newlines = 2.
+        assert_eq!(table.lines().count(), 2);
     }
 }

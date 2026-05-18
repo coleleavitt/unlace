@@ -339,7 +339,7 @@ impl IrOp {
             // CBRANCH: input0 is the target (integer), input1 is condition (boolean)
             Self::Cbranch if index == 1 => 'b',
             Self::Cbranch => 'i',
-            
+
             // SELECT: input0 is condition (boolean), inputs 1,2 are integer
             Self::Select if index == 0 => 'b',
             Self::Select => 'i',

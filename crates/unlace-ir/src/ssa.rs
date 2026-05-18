@@ -696,6 +696,13 @@ pub struct SsaFunction {
     /// bounds, ready for the type-recovery layer to project into
     /// `local_X`/`arg_X` declarations.
     pub stack_frame: Option<StackFrame>,
+    /// Batch 17 stack-access provenance: one entry per resolved
+    /// `LOAD`/`STORE` whose effective address is `SP/BP + const`. Used
+    /// by the printer/lvar layer to render named locals without re-deriving
+    /// the offset from raw arithmetic, and by the quality report to count
+    /// lost-frame-provenance gaps.
+    #[serde(default)]
+    pub stack_accesses: Vec<StackAccess>,
     /// Parameter-byref / local-byref bookkeeping populated by
     /// [`unlace_passes::byref_detect::detect_byref`]. `None` until the
     /// detector has run; an empty `ByrefInfo` means "ran, found nothing".
@@ -1116,6 +1123,38 @@ pub struct StackLocal {
     pub kind: FrameSlotKind,
 }
 
+/// Resolved memory access whose effective address is a function-frame
+/// offset.
+///
+/// Batch 17: provenance record produced by stack/frame recovery. One
+/// entry per `LOAD`/`STORE` whose address expression simplifies to
+/// `SP/BP + const` (or an aliased frame register). Future printer/lvar
+/// code can render these as named slots without re-deriving the offset
+/// from raw pointer arithmetic.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct StackAccess {
+    /// Source instruction address (`IrInsn::address`).
+    pub source_addr: u64,
+    /// Decoded register name of the base — `"rsp"`, `"rbp"`, `"esp"`, etc.
+    /// Empty when the base was an aliased SSA temp (the resolver does not
+    /// always carry that back to a register name).
+    pub base_register: String,
+    /// Signed offset from the frame base.
+    pub delta: i64,
+    /// Access width in bytes (1/2/4/8 typically; 16/32/64 for SIMD).
+    pub width: u8,
+    /// `true` for `STORE`, `false` for `LOAD` / address-of.
+    pub is_store: bool,
+    /// Final frame slot offset resolved into [`StackFrame::locals`], when
+    /// the access was tied to a recovered local. `None` for accesses that
+    /// failed slot resolution (e.g. byref escape, overlapping slot, etc.).
+    pub resolved_slot: Option<i64>,
+    /// `true` when the offset exists outside any recovered local — usually
+    /// indicates a recovery gap (lost frame provenance) rather than a real
+    /// out-of-frame access. Quality reports key off this to surface gaps.
+    pub lost_provenance: bool,
+}
+
 /// Recovered logical layout of a function's stack frame.
 ///
 /// Produced by [`unlace_passes::stack_frame_recovery::recover_stack_frame`].
@@ -1288,6 +1327,7 @@ pub fn build_ssa(func: Function) -> SsaFunction {
         op_bindings: OpTypeBindings::default(),
         byref_boxes: BTreeMap::new(),
         stack_frame: None,
+        stack_accesses: Vec::new(),
         byref_info: None,
         libc_call_annotations: BTreeMap::new(),
         libc_sig_annotations: BTreeMap::new(),

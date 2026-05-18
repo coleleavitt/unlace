@@ -139,7 +139,16 @@ pub fn compute_sccs(cg: &CallGraph, all_addrs: &[u64]) -> Vec<Vec<u64>> {
 
         for &w in cg.callees_of(v) {
             if !indices.contains_key(&w) {
-                strongconnect(w, cg, index_counter, stack, on_stack, indices, lowlinks, result);
+                strongconnect(
+                    w,
+                    cg,
+                    index_counter,
+                    stack,
+                    on_stack,
+                    indices,
+                    lowlinks,
+                    result,
+                );
                 let w_low = lowlinks[&w];
                 let v_low = lowlinks.get_mut(&v).unwrap();
                 if w_low < *v_low {

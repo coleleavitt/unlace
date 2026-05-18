@@ -113,8 +113,6 @@ pub enum Type {
     TypeParam { name: String, constraint: String },
 }
 
-
-
 /// Compact, `Copy` type tag used to stamp libc-call argument/return shapes
 /// onto SSA call sites without dragging the full composite [`Type`] tree
 /// (which owns `String`/`Vec` and isn't `Copy`).
@@ -130,16 +128,7 @@ pub enum Type {
 /// Stored in [`crate::ssa::SsaFunction::libc_sig_annotations`] via
 /// [`CallSiteLibcSig`].
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    serde::Serialize,
-    serde::Deserialize,
+    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
 pub enum TypeKind {
     /// `void` (return only).
@@ -820,5 +809,4 @@ mod tests {
         assert_eq!(t.to_string(), "T any");
         assert_eq!(t.size(), Some(8));
     }
-
-    }
+}

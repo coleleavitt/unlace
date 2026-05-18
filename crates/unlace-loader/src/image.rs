@@ -207,13 +207,72 @@ pub struct PeMitigations {
     /// `IMAGE_GUARD_XFG_ENABLED`, or `IMAGE_GUARD_RF_*` bits are present.
     pub xf_or_xfg_guarded: bool,
     /// `true` when an `IMAGE_DIRECTORY_ENTRY_SECURITY` blob (Authenticode
-    /// PKCS#7 envelope) is present in the file. We only record presence
-    /// and size — actual signature validation is out of scope.
+    /// PKCS#7 envelope) is present in the file. Cryptographic signature
+    /// validation is out of scope; structural parsing is performed and
+    /// surfaced via [`authenticode_certificates`](Self::authenticode_certificates).
     pub authenticode_present: bool,
     /// Length of the Authenticode certificate blob in bytes when
     /// [`authenticode_present`](Self::authenticode_present) is true.
     pub authenticode_size: u32,
+    /// Per-entry decomposition of the certificate table. The directory
+    /// is a sequence of 8-byte-aligned `WIN_CERTIFICATE` records; one
+    /// element per record. Empty when the directory is absent or
+    /// malformed.
+    pub authenticode_certificates: Vec<AuthenticodeCertificate>,
+    /// `true` when the certificate-table walk hit a truncated or
+    /// invalid `WIN_CERTIFICATE` header before consuming the directory
+    /// — useful as a "this binary's signature blob is corrupted"
+    /// signal even when the optional-header bookkeeping checked out.
+    pub authenticode_malformed: bool,
 }
+
+/// One parsed `WIN_CERTIFICATE` entry from the PE security directory.
+///
+/// Mirrors the `_WIN_CERTIFICATE` struct from `winnt.h`:
+///
+/// ```text
+/// DWORD dwLength;          // total entry length including this 8-byte header
+/// WORD  wRevision;         // 0x0100 = v1, 0x0200 = v2
+/// WORD  wCertificateType;  // 0x0002 = PKCS_SIGNED_DATA (Authenticode)
+/// BYTE  bCertificate[];    // length = dwLength - 8
+/// ```
+///
+/// Records are stored in directory order. Decoding the PKCS#7 envelope
+/// inside `bCertificate` is intentionally out of scope.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AuthenticodeCertificate {
+    /// File offset at which this `WIN_CERTIFICATE` header starts.
+    pub file_offset: u32,
+    /// `dwLength` — total bytes consumed by this entry including the
+    /// 8-byte header. Always `>= 8` when the record validated.
+    pub length: u32,
+    /// `wRevision`. `0x0100` = `WIN_CERT_REVISION_1_0`, `0x0200` =
+    /// `WIN_CERT_REVISION_2_0`. Values outside that set are kept
+    /// verbatim — the field is informational.
+    pub revision: u16,
+    /// `wCertificateType`. Authenticode uses
+    /// `WIN_CERT_TYPE_PKCS_SIGNED_DATA` (0x0002); other values
+    /// (`X509`=0x0001, `RESERVED_1`=0x0003, `TS_STACK_SIGNED`=0x0004)
+    /// appear in legacy or terminal-stack signatures.
+    pub cert_type: u16,
+    /// Length of `bCertificate` payload (`length - 8`).
+    pub data_size: u32,
+}
+
+/// `wCertificateType` value for an X.509 v3 certificate.
+pub const WIN_CERT_TYPE_X509: u16 = 0x0001;
+/// `wCertificateType` value for the PKCS#7 SignedData envelope used by
+/// Authenticode.
+pub const WIN_CERT_TYPE_PKCS_SIGNED_DATA: u16 = 0x0002;
+/// `wCertificateType` value reserved by Microsoft (rare).
+pub const WIN_CERT_TYPE_RESERVED_1: u16 = 0x0003;
+/// `wCertificateType` value for a terminal-stack signed certificate.
+pub const WIN_CERT_TYPE_TS_STACK_SIGNED: u16 = 0x0004;
+
+/// `wRevision` value for the original `WIN_CERTIFICATE` layout.
+pub const WIN_CERT_REVISION_1_0: u16 = 0x0100;
+/// `wRevision` value introduced for modern Authenticode containers.
+pub const WIN_CERT_REVISION_2_0: u16 = 0x0200;
 
 /// A resource entry from the PE resource directory tree.
 ///

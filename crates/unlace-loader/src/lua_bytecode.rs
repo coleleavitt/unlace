@@ -448,7 +448,7 @@ pub fn parse_lua_bytecode(bytes: &[u8]) -> Option<LuaBytecode> {
 
     let version_byte = bytes[4];
     let version = match version_byte {
-        0x51 | 0x52 | 0x53 | 0x54 => version_byte,
+        0x51..=0x54 => version_byte,
         _ => return None,
     };
 

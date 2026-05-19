@@ -13,7 +13,7 @@
 //! ST(i) registers reach this module via [`crate::register_file::st_reg`].
 
 use smallvec::smallvec;
-use unlace_ir::{IrInsn, IrOp, Varnode};
+use unlace_ir::{IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::lift::LiftCtx;
 use crate::register_file::st_reg;
@@ -319,4 +319,118 @@ pub fn lift_fxch(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
         smallvec![tag, a, b],
         ctx.addr,
     ));
+}
+
+// ── SSE scalar float helpers (for addsd/subsd/mulsd/divsd etc.) ─────────
+
+/// Lift a scalar SSE binary float op (addsd, subsd, mulsd, divsd, etc.)
+/// directly to a proper IR FloatOp. `float_size` is 4 for single, 8 for double.
+pub fn lift_sse_scalar_binop(
+    ctx: &mut LiftCtx,
+    insn: &iced_x86::Instruction,
+    op: IrOp,
+    float_size: u8,
+) {
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src0) = ctx.operand_read(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src1) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    // Use a destination varnode sized to the float width (not the full XMM width).
+    let out = Varnode::new(dst.space, dst.offset, float_size);
+    let a = Varnode::new(src0.space, src0.offset, float_size);
+    let b = if src1.space == SpaceId::Const {
+        src1
+    } else {
+        Varnode::new(src1.space, src1.offset, float_size)
+    };
+
+    ctx.emit(IrInsn::with_output(op, out, smallvec![a, b], ctx.addr));
+}
+
+/// Lift a scalar SSE unary float op (sqrtsd, sqrtss, etc.).
+pub fn lift_sse_scalar_unop(
+    ctx: &mut LiftCtx,
+    insn: &iced_x86::Instruction,
+    op: IrOp,
+    float_size: u8,
+) {
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    let out = Varnode::new(dst.space, dst.offset, float_size);
+    let a = if src.space == SpaceId::Const {
+        src
+    } else {
+        Varnode::new(src.space, src.offset, float_size)
+    };
+
+    ctx.emit(IrInsn::with_output(op, out, smallvec![a], ctx.addr));
+}
+
+/// Lift cvtsi2sd / cvtsi2ss (integer → float conversion).
+pub fn lift_int_to_float(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, float_size: u8) {
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    let out = Varnode::new(dst.space, dst.offset, float_size);
+    ctx.emit(IrInsn::with_output(IrOp::FloatInt2float, out, smallvec![src], ctx.addr));
+}
+
+/// Lift cvttsd2si / cvttss2si (float → integer truncation).
+pub fn lift_float_to_int(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    ctx.emit(IrInsn::with_output(IrOp::FloatTrunc, dst, smallvec![src], ctx.addr));
+}
+
+/// Lift ucomisd / ucomiss / comisd / comiss (scalar float compare → flags).
+pub fn lift_sse_scalar_compare(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, float_size: u8) {
+    let Some(src0) = ctx.operand_read(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src1) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    let a = Varnode::new(src0.space, src0.offset, float_size);
+    let b = if src1.space == SpaceId::Const {
+        src1
+    } else {
+        Varnode::new(src1.space, src1.offset, float_size)
+    };
+
+    // Emit FloatLess for the ZF/CF flag effects — downstream passes can
+    // interpret the flags. We use a 1-byte unique output for the comparison result.
+    let cmp_out = Varnode::new(SpaceId::Unique, ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(IrOp::FloatLess, cmp_out, smallvec![a, b], ctx.addr));
 }

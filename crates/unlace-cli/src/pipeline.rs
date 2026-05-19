@@ -671,8 +671,21 @@ fn lift_instructions(
                 offset += lifted.len;
             }
             Err(e) => {
-                tracing::warn!(addr = %format_args!("{:#x}", addr), err = %e, "lift failed; stopping");
-                break;
+                tracing::warn!(addr = %format_args!("{:#x}", addr), err = %e, "lift failed; emitting Unimplemented and continuing");
+                // Emit an Unimplemented marker so the CFG continues past this
+                // instruction. Skip 1 byte and try the next alignment.
+                let marker = unlace_ir::IrInsn::without_output(
+                    IrOp::Unimplemented,
+                    smallvec::smallvec![],
+                    addr,
+                );
+                records.push(LiftedInsnRecord {
+                    addr,
+                    len: 1,
+                    ir_ops: vec![marker],
+                    is_terminator: false,
+                });
+                offset += 1;
             }
         }
     }

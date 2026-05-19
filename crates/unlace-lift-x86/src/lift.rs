@@ -553,6 +553,26 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Instruction) {
         M::Sha256msg1 => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA256MSG1),
         M::Sha256msg2 => crypto::lift_sha_binop(ctx, insn, crypto::tag::SHA256MSG2),
 
+        // ── SSE/SSE2 scalar float arithmetic → proper FloatOps ──
+        M::Addsd => fpu::lift_sse_scalar_binop(ctx, insn, IrOp::FloatAdd, 8),
+        M::Subsd => fpu::lift_sse_scalar_binop(ctx, insn, IrOp::FloatSub, 8),
+        M::Mulsd => fpu::lift_sse_scalar_binop(ctx, insn, IrOp::FloatMult, 8),
+        M::Divsd => fpu::lift_sse_scalar_binop(ctx, insn, IrOp::FloatDiv, 8),
+        M::Addss => fpu::lift_sse_scalar_binop(ctx, insn, IrOp::FloatAdd, 4),
+        M::Subss => fpu::lift_sse_scalar_binop(ctx, insn, IrOp::FloatSub, 4),
+        M::Mulss => fpu::lift_sse_scalar_binop(ctx, insn, IrOp::FloatMult, 4),
+        M::Divss => fpu::lift_sse_scalar_binop(ctx, insn, IrOp::FloatDiv, 4),
+        M::Sqrtsd => fpu::lift_sse_scalar_unop(ctx, insn, IrOp::FloatSqrt, 8),
+        M::Sqrtss => fpu::lift_sse_scalar_unop(ctx, insn, IrOp::FloatSqrt, 4),
+        // SSE scalar float conversions
+        M::Cvtsi2sd => fpu::lift_int_to_float(ctx, insn, 8),
+        M::Cvtsi2ss => fpu::lift_int_to_float(ctx, insn, 4),
+        M::Cvttsd2si => fpu::lift_float_to_int(ctx, insn),
+        M::Cvttss2si => fpu::lift_float_to_int(ctx, insn),
+        // SSE scalar float comparisons
+        M::Ucomisd | M::Comisd => fpu::lift_sse_scalar_compare(ctx, insn, 8),
+        M::Ucomiss | M::Comiss => fpu::lift_sse_scalar_compare(ctx, insn, 4),
+
         M::Fld => fpu::lift_fld(ctx, insn),
         M::Fst => fpu::lift_fst(ctx, insn),
         M::Fstp => fpu::lift_fstp(ctx, insn),

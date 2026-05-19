@@ -11,11 +11,12 @@ unlace-ir.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+libc = { version = "0.2", optional = true }
 
 [features]
 default = []
 # Real ptrace / debug-API backends — disabled by default so the crate
 # can be built+tested on any host without privilege.
-linux-ptrace = []
+linux-ptrace = ["dep:libc"]
 windows-debugapi = []
 gdb-stub = []

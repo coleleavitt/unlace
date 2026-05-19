@@ -144,6 +144,54 @@ fn main() {
             run_ir_dump(&binary, function.as_deref(), phase.as_deref())
         }
         Cmd::Lumina { action } => run_lumina(action),
+        Cmd::Gui { binary } => {
+            init_tracing(0);
+            run_gui(binary.as_deref())
+        }
+        Cmd::Emu {
+            binary,
+            max_instructions,
+            trace,
+            verbose,
+        } => {
+            init_tracing(verbose);
+            run_emu(&binary, max_instructions, trace)
+        }
+        Cmd::Dbg {
+            pid,
+            breakpoint,
+            cont,
+        } => {
+            init_tracing(0);
+            run_dbg(pid, breakpoint.as_deref(), cont)
+        }
+        Cmd::Patch {
+            binary,
+            ea,
+            bytes,
+            output,
+        } => {
+            init_tracing(0);
+            run_patch(&binary, &ea, &bytes, output.as_deref())
+        }
+        Cmd::Symfetch {
+            pdb,
+            guid,
+            age,
+            buildid,
+            server,
+            fetch,
+        } => {
+            init_tracing(0);
+            run_symfetch(
+                pdb.as_deref(),
+                guid.as_deref(),
+                age,
+                buildid.as_deref(),
+                &server,
+                fetch,
+            )
+        }
     };
 
     // Batch 17: per-pass timing dump. The wrapper inside
@@ -348,6 +396,192 @@ fn run_quality(binary_path: &std::path::Path, format: args::QualityFormat) -> Re
         println!();
     }
     Ok(())
+}
+
+fn run_gui(binary: Option<&std::path::Path>) -> Result<()> {
+    let session = unlace_session::Session::new();
+    if let Some(p) = binary {
+        session.load_binary(p).with_context(|| {
+            format!("loading {} into GUI session", p.display())
+        })?;
+    }
+    #[cfg(feature = "gui-render")]
+    {
+        unlace_gui::app::run(session).map_err(|e| anyhow::anyhow!("iced runtime: {e}"))?;
+        Ok(())
+    }
+    #[cfg(not(feature = "gui-render"))]
+    {
+        let _ = session;
+        bail!(
+            "unlace-cli was built without the `gui-render` feature; \
+             rebuild with `cargo build -p unlace-cli --features gui-render` \
+             to enable the iced desktop UI"
+        );
+    }
+}
+
+fn run_emu(binary: &std::path::Path, max_instructions: u64, trace: bool) -> Result<()> {
+    let bytes = std::fs::read(binary)
+        .with_context(|| format!("reading {}", binary.display()))?;
+    let image = dispatch_loader(&bytes)?;
+    let cfg = unlace_emu::runner::RunConfig {
+        max_instructions,
+        trace,
+        ..unlace_emu::runner::RunConfig::default()
+    };
+    let mut interp = unlace_emu::Interpreter::new();
+    let result = unlace_emu::runner::run_image(&mut interp, &image, &cfg);
+    println!(
+        "executed {} IR instructions",
+        result.instructions_executed
+    );
+    if let Some(code) = result.exit_code {
+        println!("exited with code {code}");
+    }
+    if let Some(fault) = &result.fault {
+        println!("faulted: {fault}");
+    }
+    if trace {
+        println!("\n--- syscall trace ({} entries) ---", result.syscall_trace.len());
+        for entry in &result.syscall_trace {
+            println!("  nr={} args={:?} -> {:?}", entry.nr, entry.args, entry.outcome);
+        }
+    }
+    Ok(())
+}
+
+fn run_dbg(pid: u32, breakpoint: Option<&str>, cont: bool) -> Result<()> {
+    #[cfg(feature = "dbg-ptrace")]
+    {
+        use unlace_debugger::Debugger;
+        let mut dbg = unlace_debugger::LinuxPtraceDebugger::new();
+        dbg.attach(pid).with_context(|| format!("ptrace attach pid={pid}"))?;
+        println!("attached to pid {pid}");
+        if let Some(s) = breakpoint {
+            let ea = parse_hex_u64(s)?;
+            let id = dbg.set_breakpoint(ea)?;
+            println!("set breakpoint id={id} at {:#x}", ea);
+        }
+        if cont {
+            let reason = dbg.cont()?;
+            println!("continued; stopped: {:?}", reason);
+        }
+        Ok(())
+    }
+    #[cfg(not(feature = "dbg-ptrace"))]
+    {
+        let _ = (pid, breakpoint, cont);
+        bail!(
+            "unlace-cli was built without the `dbg-ptrace` feature; \
+             rebuild with `cargo build -p unlace-cli --features dbg-ptrace` \
+             to enable the Linux ptrace debugger backend"
+        );
+    }
+}
+
+fn run_patch(
+    binary: &std::path::Path,
+    ea: &str,
+    bytes_hex: &str,
+    output: Option<&std::path::Path>,
+) -> Result<()> {
+    let addr = parse_hex_u64(ea)?;
+    let patch_bytes = parse_hex_bytes(bytes_hex)?;
+    let session = unlace_session::Session::new();
+    session.load_binary(binary)
+        .with_context(|| format!("loading {}", binary.display()))?;
+    session.add_patch(unlace_session::Patch {
+        ea: addr,
+        bytes: patch_bytes,
+        comment: String::new(),
+        source: unlace_session::PatchSource::UserHex,
+    });
+    let out_path = output.map(std::path::PathBuf::from).unwrap_or_else(|| {
+        let mut p = binary.to_path_buf();
+        let mut name = p.file_name().unwrap_or_default().to_owned();
+        name.push(".patched");
+        p.set_file_name(name);
+        p
+    });
+    let report = unlace_session::patches::apply_patches_to(&session, binary, &out_path)?;
+    println!(
+        "patched {} → {} ({} applied, {} skipped)",
+        binary.display(),
+        report.output_path.display(),
+        report.patches_applied,
+        report.patches_skipped,
+    );
+    Ok(())
+}
+
+fn run_symfetch(
+    pdb: Option<&str>,
+    guid: Option<&str>,
+    age: u32,
+    buildid: Option<&str>,
+    server: &str,
+    fetch: bool,
+) -> Result<()> {
+    if let (Some(pdb_name), Some(guid_hex)) = (pdb, guid) {
+        let guid_bytes = parse_guid(guid_hex)?;
+        let url = unlace_loader::symcache::msft_symbol_server_url(pdb_name, &guid_bytes, age);
+        println!("{url}");
+        if fetch {
+            bail!("--fetch is wired but no HTTP client is compiled into this build");
+        }
+        return Ok(());
+    }
+    if let Some(bid) = buildid {
+        let bid_bytes = parse_hex_bytes(bid)?;
+        let url = unlace_loader::symcache::debuginfod_url(server, &bid_bytes);
+        println!("{url}");
+        if fetch {
+            bail!("--fetch is wired but no HTTP client is compiled into this build");
+        }
+        return Ok(());
+    }
+    bail!("supply either --pdb + --guid + --age (MSFT) or --buildid (debuginfod)")
+}
+
+fn dispatch_loader(data: &[u8]) -> Result<BinaryImage> {
+    if ElfLoader::can_load(data) {
+        ElfLoader::load(data).context("ELF load failed")
+    } else if MachoLoader::can_load(data) {
+        MachoLoader::load(data).context("Mach-O load failed")
+    } else if PeLoader::can_load(data) {
+        PeLoader::load(data).context("PE load failed")
+    } else {
+        bail!("unrecognized binary format (not ELF/PE/Mach-O)")
+    }
+}
+
+fn parse_hex_u64(s: &str) -> Result<u64> {
+    let t = s.trim();
+    let hex = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).unwrap_or(t);
+    u64::from_str_radix(hex, 16).with_context(|| format!("parsing {s:?} as hex u64"))
+}
+
+fn parse_hex_bytes(s: &str) -> Result<Vec<u8>> {
+    let t: String = s.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
+    if t.len() % 2 != 0 {
+        bail!("hex byte string must have even length");
+    }
+    let mut out = Vec::with_capacity(t.len() / 2);
+    for i in (0..t.len()).step_by(2) {
+        out.push(u8::from_str_radix(&t[i..i + 2], 16).with_context(|| format!("parsing byte at {i}"))?);
+    }
+    Ok(out)
+}
+
+fn parse_guid(s: &str) -> Result<[u8; 16]> {
+    let bytes = parse_hex_bytes(s)?;
+    if bytes.len() != 16 {
+        bail!("GUID must be 16 bytes (32 hex chars), got {}", bytes.len());
+    }
+    let mut out = [0u8; 16];
+    out.copy_from_slice(&bytes);
+    Ok(out)
 }
 
 /// Run the `unlace lumina` subcommand. The async runtime is spun up here so

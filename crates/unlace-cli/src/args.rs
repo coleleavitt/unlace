@@ -199,6 +199,110 @@ pub enum Cmd {
         #[arg(long, short, action = clap::ArgAction::Count)]
         verbose: u8,
     },
+
+    /// Launch the iced-based desktop GUI.
+    ///
+    /// Loads a binary into a shared `Session`, then drives an iced 0.14
+    /// application with a left function list, center pseudocode/disasm/hex
+    /// tabs, and right xrefs/types/comments panel. Only available with
+    /// `--features render` on `unlace-gui`.
+    Gui {
+        /// Optional binary to load on startup.
+        binary: Option<PathBuf>,
+    },
+
+    /// Run the IR-level interpreter on a binary, sandboxed.
+    ///
+    /// Loads sections into the emulator's MemoryMap, sets `rip` to the
+    /// entry point, then steps lifted IR instructions until syscall_exit
+    /// or `--max-instructions`. Syscalls fork/exec/clone are denied; only
+    /// stdout/stderr writes are forwarded.
+    Emu {
+        /// Path to the binary to interpret.
+        binary: PathBuf,
+
+        /// Maximum IR instructions to execute.
+        #[arg(long, default_value_t = 1_000_000)]
+        max_instructions: u64,
+
+        /// Print the per-syscall trace on exit.
+        #[arg(long)]
+        trace: bool,
+
+        /// Increase verbosity.
+        #[arg(long, short, action = clap::ArgAction::Count)]
+        verbose: u8,
+    },
+
+    /// Attach the Linux ptrace debugger to a running PID.
+    ///
+    /// Requires the `linux-ptrace` feature; on hosts without that or on
+    /// non-Linux, prints an explanatory error and exits non-zero.
+    Dbg {
+        /// PID of the live process to attach to.
+        #[arg(long)]
+        pid: u32,
+
+        /// Hex address to set a software breakpoint at on attach.
+        #[arg(long)]
+        breakpoint: Option<String>,
+
+        /// Continue after attaching (otherwise stops on initial SIGSTOP).
+        #[arg(long)]
+        cont: bool,
+    },
+
+    /// Apply a binary patch and write the result to a new file.
+    ///
+    /// Searches every section's raw bytes for an address-matching offset,
+    /// overwrites with the supplied hex bytes, writes the modified file.
+    Patch {
+        /// Source binary.
+        binary: PathBuf,
+
+        /// Hex address to patch (e.g. `0x401234`).
+        #[arg(long)]
+        ea: String,
+
+        /// Hex bytes to write (e.g. `9090C3` = nop nop ret).
+        #[arg(long)]
+        bytes: String,
+
+        /// Output path. Defaults to `<binary>.patched`.
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+
+    /// Print a symbol-server URL for the given identifier.
+    ///
+    /// Supports the Microsoft Symbol Server (--pdb + --guid + --age) and
+    /// debuginfod (--buildid). With `--fetch`, also downloads via ureq
+    /// to the local symcache.
+    Symfetch {
+        /// MSFT PDB name (e.g. `kernel32.pdb`).
+        #[arg(long)]
+        pdb: Option<String>,
+
+        /// MSFT GUID (32 hex chars, no dashes). Pairs with --pdb + --age.
+        #[arg(long)]
+        guid: Option<String>,
+
+        /// MSFT PDB age. Pairs with --pdb + --guid.
+        #[arg(long, default_value_t = 1)]
+        age: u32,
+
+        /// debuginfod build-id (hex).
+        #[arg(long)]
+        buildid: Option<String>,
+
+        /// debuginfod server.
+        #[arg(long, default_value = "https://debuginfod.elfutils.org/")]
+        server: String,
+
+        /// Actually fetch (vs. just print the URL).
+        #[arg(long)]
+        fetch: bool,
+    },
 }
 
 /// Sub-actions for `unlace lumina`.

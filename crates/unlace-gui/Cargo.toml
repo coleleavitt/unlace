@@ -10,9 +10,11 @@ unlace-session = { path = "../unlace-session" }
 unlace-ir.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
+iced = { version = "0.14", default-features = false, features = ["wgpu", "advanced", "x11", "wayland", "thread-pool"], optional = true }
 
 [features]
 default = []
 # Enable iced-based rendering. Off by default so `cargo check` and `cargo
-# test` work without pulling the heavy GPU stack.
-render = []
+# test` work without pulling the heavy GPU stack. When on, pulls in iced
+# 0.14 with the tiny-skia software renderer (no wgpu/Vulkan dependency).
+render = ["dep:iced"]

@@ -1,9 +1,13 @@
 //! End-to-end `unlace emu` runner: load an ELF, set up memory, run until
 //! exit or instruction limit.
 //!
-//! This is the high-level driver; the per-opcode interpreter step lives in
-//! `interpreter.rs`. For now the runner exercises memory setup + syscall
-//! plumbing without lifting actual instructions (those land in B36.2).
+//! This is the high-level driver. `run` is the legacy stack-only setup
+//! preserved for tests. `run_image` is the real one: walks executable
+//! segments into the [`MemoryMap`], lifts the instruction at `rip`,
+//! steps it through the [`Interpreter`], advances `rip`, repeats.
+
+use unlace_lift::get_lifter;
+use unlace_loader::{BinaryImage, SectionFlags};
 
 use crate::interpreter::{Interpreter, StepOutcome};
 use crate::syscalls::SyscallTrace;
@@ -66,24 +70,131 @@ pub fn run(interp: &mut Interpreter, cfg: &RunConfig) -> RunResult {
         }
     }
 
-    match last_outcome {
-        StepOutcome::Continue | StepOutcome::Halt => RunResult {
-            instructions_executed: interp.instruction_count,
-            exit_code: None,
-            fault: None,
-            syscall_trace: std::mem::take(&mut interp.syscall_trace),
-        },
+    finalize_result(interp, last_outcome)
+}
+
+/// Load a binary image into the interpreter and run it for at most
+/// `cfg.max_instructions`. Lifts the instruction at `rip` each step,
+/// updates `rip` on Continue or branch outcomes, and stops on
+/// SyscallExit / Faulted / Return / unmapped PC.
+pub fn run_image(
+    interp: &mut Interpreter,
+    image: &BinaryImage,
+    cfg: &RunConfig,
+) -> RunResult {
+    // Map every section into memory.
+    for sec in &image.sections {
+        if sec.data.is_empty() {
+            continue;
+        }
+        let perms = (
+            sec.flags.contains(SectionFlags::READ) || true,
+            sec.flags.contains(SectionFlags::WRITE),
+            sec.flags.contains(SectionFlags::EXEC),
+        );
+        interp.memory.map(sec.vaddr, &sec.data, perms);
+    }
+    // Set up the stack.
+    let stack_low = cfg.stack_top.saturating_sub(cfg.stack_size);
+    let stack_bytes = vec![0u8; cfg.stack_size as usize];
+    interp
+        .memory
+        .map(stack_low, &stack_bytes, (true, true, false));
+    interp.regs.set("rsp", cfg.stack_top);
+    interp.regs.set("rbp", cfg.stack_top);
+    interp.regs.set("rip", image.entry);
+
+    let mut outcome = StepOutcome::Continue;
+    while interp.instruction_count < cfg.max_instructions {
+        let pc = interp.regs.pc();
+        let Some(window) = interp.memory.read(pc, 16) else {
+            outcome = StepOutcome::Faulted(format!("unmapped PC {:#x}", pc));
+            break;
+        };
+        let lifter = get_lifter(image.arch);
+        let lifted = match lifter.lift_insn(&window, pc) {
+            Ok(l) => l,
+            Err(e) => {
+                outcome = StepOutcome::Faulted(format!("lift error at {:#x}: {}", pc, e));
+                break;
+            }
+        };
+        let consumed = lifted.len;
+        if lifted.ir_ops.is_empty() {
+            interp.regs.set_pc(pc + consumed.max(1) as u64);
+            continue;
+        }
+        let mut local = StepOutcome::Continue;
+        for ir_insn in &lifted.ir_ops {
+            local = interp.step(ir_insn);
+            if !matches!(local, StepOutcome::Continue) {
+                break;
+            }
+            if interp.instruction_count >= cfg.max_instructions {
+                break;
+            }
+        }
+        if let Some(o) = advance_pc_for(&mut interp.regs, pc, consumed, &local) {
+            outcome = o;
+            break;
+        }
+        outcome = local;
+    }
+    finalize_result(interp, outcome)
+}
+
+fn advance_pc_for(
+    regs: &mut crate::regs::EmuRegs,
+    pc: u64,
+    consumed: usize,
+    outcome: &StepOutcome,
+) -> Option<StepOutcome> {
+    match outcome {
+        StepOutcome::Continue => {
+            regs.set_pc(pc.wrapping_add(consumed as u64));
+            None
+        }
+        StepOutcome::Jump(target) | StepOutcome::IndirectJump(target) => {
+            regs.set_pc(*target);
+            None
+        }
+        StepOutcome::ConditionalJump { target, taken } => {
+            if *taken {
+                regs.set_pc(*target);
+            } else {
+                regs.set_pc(pc.wrapping_add(consumed as u64));
+            }
+            None
+        }
+        StepOutcome::Call(target) => {
+            regs.set_pc(*target);
+            None
+        }
+        StepOutcome::Return | StepOutcome::Halt => Some(outcome.clone()),
+        StepOutcome::SyscallExit(_) | StepOutcome::Faulted(_) => Some(outcome.clone()),
+    }
+}
+
+fn finalize_result(interp: &mut Interpreter, outcome: StepOutcome) -> RunResult {
+    let trace = std::mem::take(&mut interp.syscall_trace);
+    match outcome {
         StepOutcome::SyscallExit(code) => RunResult {
             instructions_executed: interp.instruction_count,
             exit_code: Some(code),
             fault: None,
-            syscall_trace: std::mem::take(&mut interp.syscall_trace),
+            syscall_trace: trace,
         },
         StepOutcome::Faulted(msg) => RunResult {
             instructions_executed: interp.instruction_count,
             exit_code: None,
             fault: Some(msg),
-            syscall_trace: std::mem::take(&mut interp.syscall_trace),
+            syscall_trace: trace,
+        },
+        _ => RunResult {
+            instructions_executed: interp.instruction_count,
+            exit_code: None,
+            fault: None,
+            syscall_trace: trace,
         },
     }
 }

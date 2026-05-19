@@ -50,7 +50,7 @@ pub fn parse_btf_header(bytes: &[u8]) -> Option<BtfHeader> {
 }
 
 /// Read a NUL-terminated string from the BTF string table at offset `idx`.
-pub fn read_string<'a>(strings: &'a [u8], idx: u32) -> Option<&'a str> {
+pub fn read_string(strings: &[u8], idx: u32) -> Option<&str> {
     let start = idx as usize;
     if start >= strings.len() {
         return None;

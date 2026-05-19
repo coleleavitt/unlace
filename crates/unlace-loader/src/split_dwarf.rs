@@ -36,25 +36,19 @@ pub fn extract_skeleton(attrs: &[(u16, Vec<u8>)]) -> Option<SkeletonRef> {
 
     for (code, data) in attrs {
         match *code {
-            DW_AT_GNU_DWO_ID => {
-                if data.len() >= 8 {
-                    dwo_id = Some(u64::from_le_bytes(data[..8].try_into().unwrap()));
-                }
+            DW_AT_GNU_DWO_ID if data.len() >= 8 => {
+                dwo_id = Some(u64::from_le_bytes(data[..8].try_into().unwrap()));
             }
             DW_AT_GNU_DWO_NAME => {
                 dwo_name = std::str::from_utf8(data)
                     .ok()
                     .map(|s| s.trim_end_matches('\0').to_string());
             }
-            DW_AT_GNU_ADDR_BASE => {
-                if data.len() >= 8 {
-                    addr_base = Some(u64::from_le_bytes(data[..8].try_into().unwrap()));
-                }
+            DW_AT_GNU_ADDR_BASE if data.len() >= 8 => {
+                addr_base = Some(u64::from_le_bytes(data[..8].try_into().unwrap()));
             }
-            DW_AT_GNU_RANGES_BASE => {
-                if data.len() >= 8 {
-                    ranges_base = Some(u64::from_le_bytes(data[..8].try_into().unwrap()));
-                }
+            DW_AT_GNU_RANGES_BASE if data.len() >= 8 => {
+                ranges_base = Some(u64::from_le_bytes(data[..8].try_into().unwrap()));
             }
             _ => {}
         }

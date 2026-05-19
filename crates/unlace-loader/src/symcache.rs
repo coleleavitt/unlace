@@ -63,8 +63,8 @@ pub fn msft_guid_hex(guid: &[u8; 16]) -> String {
         s.push_str(&format!("{:02X}", guid[i]));
     }
     // Fields 4 + 5: big-endian
-    for i in 8..16 {
-        s.push_str(&format!("{:02X}", guid[i]));
+    for byte in &guid[8..16] {
+        s.push_str(&format!("{:02X}", byte));
     }
     s
 }

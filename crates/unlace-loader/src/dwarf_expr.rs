@@ -111,9 +111,12 @@ fn step_opcode(op: u8, bytes: &[u8], pos: &mut usize, st: &mut EvalState) -> Ste
         DW_OP_FBREG => step_fbreg(bytes, pos, st),
         DW_OP_CONST1U => step_push_byte(bytes, pos, st, false),
         DW_OP_CONST1S => step_push_byte(bytes, pos, st, true),
-        DW_OP_CONST2U => step_push_const(bytes, pos, 2, st),
-        DW_OP_CONST4U => step_push_const(bytes, pos, 4, st),
-        DW_OP_CONST8U | DW_OP_ADDR => step_push_const(bytes, pos, 8, st),
+        DW_OP_CONST2U => step_push_const(bytes, pos, 2, false, st),
+        DW_OP_CONST2S => step_push_const(bytes, pos, 2, true, st),
+        DW_OP_CONST4U => step_push_const(bytes, pos, 4, false, st),
+        DW_OP_CONST4S => step_push_const(bytes, pos, 4, true, st),
+        DW_OP_CONST8U | DW_OP_ADDR => step_push_const(bytes, pos, 8, false, st),
+        DW_OP_CONST8S => step_push_const(bytes, pos, 8, true, st),
         DW_OP_PLUS => {
             let b = st.stack.pop().unwrap_or(0);
             let a = st.stack.pop().unwrap_or(0);
@@ -176,14 +179,22 @@ fn step_push_byte(bytes: &[u8], pos: &mut usize, st: &mut EvalState, signed: boo
     StepResult::Continue
 }
 
-fn step_push_const(bytes: &[u8], pos: &mut usize, width: usize, st: &mut EvalState) -> StepResult {
+fn step_push_const(
+    bytes: &[u8],
+    pos: &mut usize,
+    width: usize,
+    signed: bool,
+    st: &mut EvalState,
+) -> StepResult {
     if *pos + width > bytes.len() {
         return StepResult::Halt(Location::Unknown);
     }
-    let v = match width {
-        2 => u16::from_le_bytes([bytes[*pos], bytes[*pos + 1]]) as i64,
-        4 => u32::from_le_bytes(bytes[*pos..*pos + 4].try_into().unwrap()) as i64,
-        8 => i64::from_le_bytes(bytes[*pos..*pos + 8].try_into().unwrap()),
+    let v = match (width, signed) {
+        (2, false) => u16::from_le_bytes([bytes[*pos], bytes[*pos + 1]]) as i64,
+        (2, true) => i16::from_le_bytes([bytes[*pos], bytes[*pos + 1]]) as i64,
+        (4, false) => u32::from_le_bytes(bytes[*pos..*pos + 4].try_into().unwrap()) as i64,
+        (4, true) => i32::from_le_bytes(bytes[*pos..*pos + 4].try_into().unwrap()) as i64,
+        (8, _) => i64::from_le_bytes(bytes[*pos..*pos + 8].try_into().unwrap()),
         _ => return StepResult::Halt(Location::Unknown),
     };
     *pos += width;
@@ -240,14 +251,12 @@ fn read_uleb128(bytes: &[u8]) -> Option<(u64, usize)> {
 fn read_sleb128(bytes: &[u8]) -> Option<(i64, usize)> {
     let mut result = 0i64;
     let mut shift = 0u32;
-    let mut last_byte = 0u8;
     for (i, &b) in bytes.iter().enumerate().take(10) {
         result |= ((b & 0x7F) as i64) << shift;
         shift += 7;
-        last_byte = b;
         if b & 0x80 == 0 {
-            // Sign-extend if needed.
-            if shift < 64 && (last_byte & 0x40) != 0 {
+            // Sign-extend if the sign bit of the final 7-bit chunk is set.
+            if shift < 64 && (b & 0x40) != 0 {
                 result |= -(1i64 << shift);
             }
             return Some((result, i + 1));
@@ -311,5 +320,31 @@ mod tests {
     fn test_dwarf_expr_unknown_op() {
         let bytes = [0xFE]; // unknown opcode
         assert_eq!(evaluate(&bytes), Location::Unknown);
+    }
+
+    #[test]
+    fn test_dwarf_expr_const2s_negative() {
+        // DW_OP_const2s -3 → push i16(-3) as i64
+        let mut bytes = vec![DW_OP_CONST2S];
+        bytes.extend_from_slice(&(-3i16).to_le_bytes());
+        bytes.push(DW_OP_STACK_VALUE);
+        assert_eq!(evaluate(&bytes), Location::Constant(-3));
+    }
+
+    #[test]
+    fn test_dwarf_expr_const4s_negative() {
+        let mut bytes = vec![DW_OP_CONST4S];
+        bytes.extend_from_slice(&(-12345i32).to_le_bytes());
+        bytes.push(DW_OP_STACK_VALUE);
+        assert_eq!(evaluate(&bytes), Location::Constant(-12345));
+    }
+
+    #[test]
+    fn test_dwarf_expr_const2u_positive() {
+        // DW_OP_const2u 0xFFFE → push 0xFFFE (unsigned zero-extend)
+        let mut bytes = vec![DW_OP_CONST2U];
+        bytes.extend_from_slice(&0xFFFEu16.to_le_bytes());
+        bytes.push(DW_OP_STACK_VALUE);
+        assert_eq!(evaluate(&bytes), Location::Constant(0xFFFE));
     }
 }

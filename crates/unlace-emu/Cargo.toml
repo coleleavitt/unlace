@@ -1,0 +1,14 @@
+[package]
+name = "unlace-emu"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "IR-level interpreter / emulator for unlace"
+
+[dependencies]
+unlace-ir.workspace = true
+unlace-loader.workspace = true
+unlace-session = { path = "../unlace-session" }
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

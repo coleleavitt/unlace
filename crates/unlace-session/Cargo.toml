@@ -1,0 +1,17 @@
+[package]
+name = "unlace-session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared session state for unlace TUI/GUI/CLI surfaces"
+
+[dependencies]
+unlace-ir.workspace = true
+unlace-loader.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+bincode.workspace = true
+zstd = "0.13"
+sha2 = "0.10"
+parking_lot = "0.12"
+tracing.workspace = true

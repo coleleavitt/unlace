@@ -1,0 +1,21 @@
+[package]
+name = "unlace-debugger"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Debugger backends for unlace (Linux ptrace, Windows DebugAPI, GDB stub)"
+
+[dependencies]
+unlace-session = { path = "../unlace-session" }
+unlace-ir.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[features]
+default = []
+# Real ptrace / debug-API backends — disabled by default so the crate
+# can be built+tested on any host without privilege.
+linux-ptrace = []
+windows-debugapi = []
+gdb-stub = []

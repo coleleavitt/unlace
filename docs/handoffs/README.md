@@ -70,6 +70,9 @@ completion plan that targets the remaining honest "not landed" items:
   Android boot/dex/oat, Java, .NET CIL, Python `.pyc`, Lua bytecode.
 - `COMPLETION_08_STUB_LIFTERS.md` — EVM, TI C28x backfill, TI C6x,
   SHARC family, AppleAgx/Agx, NvidiaSass, AmdGpu, SpirV.
+- `COMPETITIVE_PARITY_HANDOFF.md` — IDAPython compatibility, stable SDK,
+  UI, debugger, emulator, LLVM IR export, platform/debug breadth, and
+  real-binary quality dashboard.
 
 The plan intentionally skips full TUI/Web UI front-ends and signed
 release / CI infrastructure work; those are out-of-source-tree

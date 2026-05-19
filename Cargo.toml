@@ -49,6 +49,12 @@ members = [
     "crates/unlace-fuzz",
     "crates/unlace-test-harness",
     "crates/unlace-lumina",
+    "crates/unlace-session",
+    "crates/unlace-idapython",
+    "crates/unlace-tui",
+    "crates/unlace-gui",
+    "crates/unlace-debugger",
+    "crates/unlace-emu",
     "xtask",
 ]
 

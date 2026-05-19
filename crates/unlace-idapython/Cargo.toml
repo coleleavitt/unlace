@@ -1,0 +1,22 @@
+[package]
+name = "unlace-idapython"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "IDAPython compatibility shim — re-implements idc/idautils/idaapi APIs on top of unlace"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+unlace-ir.workspace = true
+unlace-loader.workspace = true
+unlace-session = { path = "../unlace-session" }
+anyhow.workspace = true
+tracing.workspace = true
+
+[features]
+default = []
+# Enable the pyo3-backed Python wrapper. Disabled by default so the crate
+# can be built/tested without a Python interpreter installed.
+python = []

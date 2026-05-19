@@ -1,0 +1,18 @@
+[package]
+name = "unlace-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Desktop GUI for unlace (iced + iced_aw)"
+
+[dependencies]
+unlace-session = { path = "../unlace-session" }
+unlace-ir.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+
+[features]
+default = []
+# Enable iced-based rendering. Off by default so `cargo check` and `cargo
+# test` work without pulling the heavy GPU stack.
+render = []

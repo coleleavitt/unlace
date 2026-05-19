@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 
 use unlace_ir::memory_ssa::{MemoryAccessId, MemoryLocation, MemorySSAGraph};
-use unlace_ir::ssa::{SsaFunction, VarnodeSlot};
+use unlace_ir::ssa::SsaFunction;
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 /// Position of a memory access in the original IR (BlockId, insn index).

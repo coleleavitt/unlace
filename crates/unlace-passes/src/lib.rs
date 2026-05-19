@@ -49,6 +49,8 @@ pub mod embed_interp_recognize;
 pub mod expression_tree;
 pub mod format_magic;
 pub mod func_fingerprint;
+pub mod function_attrs;
+pub mod hir_loop_recovery;
 pub mod generated_code;
 pub mod generated_code_filter;
 pub mod global_copy_prop;
@@ -64,9 +66,12 @@ pub mod indirect_jump_resolve;
 pub mod inline_foldback;
 pub mod instrument;
 pub mod interproc_fixpoint;
+pub mod itanium_demangle;
 pub mod iv_elim;
 pub mod known_bits_analysis;
+pub mod known_bits_simplify;
 pub mod memory_ssa_builder;
+pub mod memory_ssa_dse;
 pub mod lazy_lift;
 pub mod libc_idioms;
 #[cfg(test)]
@@ -81,6 +86,7 @@ pub mod nday_correlate;
 pub mod noreturn;
 pub mod noreturn_propagation;
 pub mod nullability;
+pub mod nullability_taint;
 pub mod objc_blocks;
 pub mod objc_byref;
 pub mod objc_dispatch;
@@ -104,6 +110,8 @@ pub mod rust_panic;
 pub mod rust_result;
 pub mod rust_vtable;
 pub mod scalar_evolution;
+pub mod scev_nested;
+pub mod sysv_eightbyte;
 pub mod sccp;
 pub mod serial_recognize;
 pub mod sixty_four_bit_demote;
@@ -173,6 +181,11 @@ pub use dse_global::DeadStoreElimGlobalPass;
 pub use expression_tree::ExpressionTreePass;
 pub use format_magic::{MagicCheck, detect_magic_check};
 pub use func_fingerprint::{build_feature_vector, fingerprint_function, similarity};
+pub use function_attrs::{
+    AttrMap, FunctionAttrs, infer_attrs_batch, infer_attrs_for_function,
+    propagate_noreturn as propagate_attrs_noreturn,
+};
+pub use hir_loop_recovery::{CountedLoop, LoopFacts, Reduction, ReductionOp, recover_loop_facts};
 pub use generated_code::{
     FunctionTag, classify_by_name, classify_functions, classify_plt_stub, classify_wrapper_thunk,
     count_hidden_shown,
@@ -195,11 +208,14 @@ pub use instrument::{
     schedule_audit_oscillations, schedule_audit_path,
 };
 pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint};
+pub use itanium_demangle::{VtableHeader, demangle_itanium, read_vtable_header};
 pub use iv_elim::IvElimPass;
 pub use known_bits_analysis::{KnownBitsMap, compute_known_bits};
+pub use known_bits_simplify::KnownBitsSimplifyPass;
 pub use memory_ssa_builder::{
     AccessSite, MemorySsaMap, build_memory_ssa, clobber_for_load,
 };
+pub use memory_ssa_dse::MemorySsaDsePass;
 pub use libc_idioms::{LibcKind, annotate_libc_calls, recognize_libc};
 pub use licm::{LicmPass, NaturalLoop, find_natural_loops};
 pub use lvar_collect::LvarCollectPass;
@@ -208,6 +224,9 @@ pub use nday_correlate::{NdayHit, NdayPattern, match_against_binary as match_nda
 pub use noreturn::NoreturnDetectPass;
 pub use noreturn_propagation::{DEFAULT_PROPAGATE_CAP, propagate_noreturn};
 pub use nullability::{Nullability, infer_param_nullability};
+pub use nullability_taint::{
+    TaintWarning, analyze_taint, infer_nullability, is_taint_sink, is_taint_source,
+};
 pub use objc_blocks::{BLOCK_ISA_SYMBOLS, BlockLiteral, detect_objc_blocks};
 pub use objc_byref::{ByrefBox, apply_objc_byref, detect_objc_byref_boxes};
 pub use objc_dispatch::ObjcDispatchPass;
@@ -236,6 +255,10 @@ pub use scalar_evolution::{
     AffineIv, LoopExitFact, LoopExitPredicate, LoopScevInfo, ScevExpr, TriangularSumReduction,
     analyze_loop_scevs, compute_trip_count, derive_scev_expr, detect_triangular_sum_reduction,
 };
+pub use scev_nested::{
+    NoWrapFlags, contains_addrec, loop_nest_depth, nested_add_rec, scev_add, scev_mul_const,
+};
+pub use sysv_eightbyte::{EightbyteClass, FieldKind as SysvFieldKind, classify_aggregate};
 pub use sccp::SccpPass;
 pub use serial_recognize::{SerialKind, recognize_serial_api};
 pub use sixty_four_bit_demote::SixtyFourBitDemotePass;

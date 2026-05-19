@@ -220,7 +220,7 @@ pub use rust_result::{RustTaggedUnion, detect_rust_tagged_unions};
 pub use rust_vtable::RustVtablePass;
 pub use scalar_evolution::{
     AffineIv, LoopExitFact, LoopExitPredicate, LoopScevInfo, ScevExpr, TriangularSumReduction,
-    analyze_loop_scevs, derive_scev_expr, detect_triangular_sum_reduction,
+    analyze_loop_scevs, compute_trip_count, derive_scev_expr, detect_triangular_sum_reduction,
 };
 pub use sccp::SccpPass;
 pub use serial_recognize::{SerialKind, recognize_serial_api};

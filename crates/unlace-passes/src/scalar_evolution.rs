@@ -31,7 +31,164 @@ pub enum ScevExpr {
         start: Box<ScevExpr>,
         step: i64,
     },
+    /// Zero-extend cast (from narrower to wider).
+    ZextCast {
+        inner: Box<ScevExpr>,
+        from_width: u8,
+        to_width: u8,
+    },
+    /// Sign-extend cast.
+    SextCast {
+        inner: Box<ScevExpr>,
+        from_width: u8,
+        to_width: u8,
+    },
+    /// Truncate cast.
+    TruncCast {
+        inner: Box<ScevExpr>,
+        to_width: u8,
+    },
+    /// Unsigned min(a, b).
+    UMin(Box<ScevExpr>, Box<ScevExpr>),
+    /// Unsigned max(a, b).
+    UMax(Box<ScevExpr>, Box<ScevExpr>),
+    /// Signed min(a, b).
+    SMin(Box<ScevExpr>, Box<ScevExpr>),
+    /// Signed max(a, b).
+    SMax(Box<ScevExpr>, Box<ScevExpr>),
+    /// Unsigned division.
+    UDiv(Box<ScevExpr>, Box<ScevExpr>),
+    /// Could not compute (analysis gave up).
+    CouldNotCompute,
     Unknown,
+}
+
+impl ScevExpr {
+    /// Evaluate this SCEV expression at a specific iteration count.
+    ///
+    /// For `AddRec { start, step }` at iteration `n`, returns `start + step * n`.
+    /// For non-recurrence expressions, returns the expression unchanged (wrapped in const if possible).
+    pub fn evaluate_at_iteration(&self, n: u64) -> ScevExpr {
+        match self {
+            ScevExpr::AddRec { start, step, .. } => {
+                let start_val = start.evaluate_at_iteration(n);
+                let step_contrib = (*step as i128).wrapping_mul(n as i128) as i64;
+                match start_val {
+                    ScevExpr::Const { value, size } => ScevExpr::Const {
+                        value: (value as i64).wrapping_add(step_contrib) as u64,
+                        size,
+                    },
+                    other => ScevExpr::AddConst(Box::new(other), step_contrib),
+                }
+            }
+            ScevExpr::Const { .. } => self.clone(),
+            ScevExpr::AddConst(inner, c) => {
+                let inner_val = inner.evaluate_at_iteration(n);
+                match inner_val {
+                    ScevExpr::Const { value, size } => ScevExpr::Const {
+                        value: (value as i64).wrapping_add(*c) as u64,
+                        size,
+                    },
+                    other => ScevExpr::AddConst(Box::new(other), *c),
+                }
+            }
+            ScevExpr::MulConst(inner, c) => {
+                let inner_val = inner.evaluate_at_iteration(n);
+                match inner_val {
+                    ScevExpr::Const { value, size } => ScevExpr::Const {
+                        value: (value as i64).wrapping_mul(*c) as u64,
+                        size,
+                    },
+                    other => ScevExpr::MulConst(Box::new(other), *c),
+                }
+            }
+            _ => self.clone(),
+        }
+    }
+
+    /// Whether this expression could not be computed.
+    pub fn is_could_not_compute(&self) -> bool {
+        matches!(self, ScevExpr::CouldNotCompute)
+    }
+
+    /// Whether this is a constant.
+    pub fn as_const(&self) -> Option<u64> {
+        match self {
+            ScevExpr::Const { value, .. } => Some(*value),
+            _ => None,
+        }
+    }
+}
+
+/// Compute the trip count for a simple counted loop.
+///
+/// Given a loop with IV starting at `start`, stepping by `step`, and exiting
+/// when `iv <pred> bound`, returns the number of iterations (trip count).
+///
+/// Returns `None` if the trip count cannot be determined statically.
+pub fn compute_trip_count(
+    start: u64,
+    step: i64,
+    bound: u64,
+    predicate: LoopExitPredicate,
+) -> Option<u64> {
+    if step == 0 {
+        return None; // infinite or zero-trip depending on condition
+    }
+
+    match predicate {
+        LoopExitPredicate::Ult => {
+            // Loop continues while iv < bound.
+            if start >= bound {
+                return Some(0);
+            }
+            if step > 0 {
+                let distance = bound - start;
+                Some((distance + step as u64 - 1) / step as u64)
+            } else {
+                None // step < 0 with Ult — infinite or wrapping
+            }
+        }
+        LoopExitPredicate::Ne => {
+            // Loop continues while iv != bound.
+            if start == bound {
+                return Some(0);
+            }
+            if step > 0 && bound > start {
+                let distance = bound - start;
+                if distance % step as u64 == 0 {
+                    Some(distance / step as u64)
+                } else {
+                    None // doesn't exactly hit the bound
+                }
+            } else if step < 0 && bound < start {
+                let distance = start - bound;
+                let abs_step = step.unsigned_abs();
+                if distance % abs_step == 0 {
+                    Some(distance / abs_step)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        LoopExitPredicate::Slt => {
+            // Signed less-than: loop continues while iv < bound (signed).
+            let start_s = start as i64;
+            let bound_s = bound as i64;
+            if start_s >= bound_s {
+                return Some(0);
+            }
+            if step > 0 {
+                let distance = (bound_s - start_s) as u64;
+                Some((distance + step as u64 - 1) / step as u64)
+            } else {
+                None
+            }
+        }
+        _ => None, // Other predicates not yet handled
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -794,5 +951,118 @@ mod tests {
                 1,
             )
         );
+    }
+
+    #[test]
+    fn test_scev_evaluate_at_iteration_addrec() {
+        let expr = ScevExpr::AddRec {
+            loop_header: BlockId(0),
+            start: Box::new(ScevExpr::Const { value: 5, size: 4 }),
+            step: 3,
+        };
+        // At iteration 0: start = 5.
+        assert_eq!(expr.evaluate_at_iteration(0), ScevExpr::Const { value: 5, size: 4 });
+        // At iteration 4: 5 + 3*4 = 17.
+        assert_eq!(expr.evaluate_at_iteration(4), ScevExpr::Const { value: 17, size: 4 });
+    }
+
+    #[test]
+    fn test_scev_evaluate_at_iteration_mul_addrec() {
+        // 2 * AddRec{start=0, step=1} at iteration 3 = 2 * 3 = 6.
+        let expr = ScevExpr::MulConst(
+            Box::new(ScevExpr::AddRec {
+                loop_header: BlockId(0),
+                start: Box::new(ScevExpr::Const { value: 0, size: 4 }),
+                step: 1,
+            }),
+            2,
+        );
+        assert_eq!(expr.evaluate_at_iteration(3), ScevExpr::Const { value: 6, size: 4 });
+    }
+
+    #[test]
+    fn test_scev_trip_count_simple_ult() {
+        // for (i = 0; i < 10; i++) → 10 iterations.
+        let tc = super::compute_trip_count(0, 1, 10, LoopExitPredicate::Ult);
+        assert_eq!(tc, Some(10));
+    }
+
+    #[test]
+    fn test_scev_trip_count_step_2() {
+        // for (i = 0; i < 10; i += 2) → 5 iterations.
+        let tc = super::compute_trip_count(0, 2, 10, LoopExitPredicate::Ult);
+        assert_eq!(tc, Some(5));
+    }
+
+    #[test]
+    fn test_scev_trip_count_ne() {
+        // for (i = 0; i != 10; i++) → 10 iterations.
+        let tc = super::compute_trip_count(0, 1, 10, LoopExitPredicate::Ne);
+        assert_eq!(tc, Some(10));
+    }
+
+    #[test]
+    fn test_scev_trip_count_zero_trip() {
+        // for (i = 10; i < 5; i++) → 0 iterations.
+        let tc = super::compute_trip_count(10, 1, 5, LoopExitPredicate::Ult);
+        assert_eq!(tc, Some(0));
+    }
+
+    #[test]
+    fn test_scev_trip_count_slt() {
+        // for (i = -5; i < 5; i++) → 10 iterations.
+        let tc = super::compute_trip_count((-5i64) as u64, 1, 5, LoopExitPredicate::Slt);
+        assert_eq!(tc, Some(10));
+    }
+
+    #[test]
+    fn test_scev_cast_variants_exist() {
+        let zext = ScevExpr::ZextCast {
+            inner: Box::new(ScevExpr::Const { value: 1, size: 1 }),
+            from_width: 8,
+            to_width: 32,
+        };
+        let sext = ScevExpr::SextCast {
+            inner: Box::new(ScevExpr::Const { value: 0xFF, size: 1 }),
+            from_width: 8,
+            to_width: 32,
+        };
+        let trunc = ScevExpr::TruncCast {
+            inner: Box::new(ScevExpr::Const { value: 0xABCD, size: 2 }),
+            to_width: 8,
+        };
+        assert!(!zext.is_could_not_compute());
+        assert!(!sext.is_could_not_compute());
+        assert!(!trunc.is_could_not_compute());
+    }
+
+    #[test]
+    fn test_scev_minmax_variants_exist() {
+        let umin = ScevExpr::UMin(
+            Box::new(ScevExpr::Const { value: 5, size: 4 }),
+            Box::new(ScevExpr::Const { value: 10, size: 4 }),
+        );
+        let smax = ScevExpr::SMax(
+            Box::new(ScevExpr::Const { value: 5, size: 4 }),
+            Box::new(ScevExpr::Const { value: 10, size: 4 }),
+        );
+        assert!(!umin.is_could_not_compute());
+        assert!(!smax.is_could_not_compute());
+    }
+
+    #[test]
+    fn test_scev_udiv_variant_exists() {
+        let udiv = ScevExpr::UDiv(
+            Box::new(ScevExpr::Const { value: 20, size: 4 }),
+            Box::new(ScevExpr::Const { value: 4, size: 4 }),
+        );
+        assert!(!udiv.is_could_not_compute());
+        assert_eq!(udiv.as_const(), None); // UDiv not reduced to const automatically
+    }
+
+    #[test]
+    fn test_scev_could_not_compute() {
+        assert!(ScevExpr::CouldNotCompute.is_could_not_compute());
+        assert!(!ScevExpr::Unknown.is_could_not_compute());
     }
 }

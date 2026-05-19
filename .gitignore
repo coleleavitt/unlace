@@ -9,6 +9,26 @@ hexrays/
 # retdec, rellic, ida-binary, idalib). Local-only.
 references/
 
+# Iced ecosystem clones — local reference mirrors of iced + widget repos
+# used as implementation references for the unlace GUI. Only README.md
+# is tracked; the clones themselves are ~400MB and reproducible via
+# the documented `git clone --depth=1` commands.
+research/iced-ecosystem/iced/
+research/iced-ecosystem/iced_aw/
+research/iced-ecosystem/iced_audio/
+research/iced-ecosystem/iced-code-editor/
+research/iced-ecosystem/iced_term/
+research/iced-ecosystem/frostbyte_terminal/
+research/iced-ecosystem/plotters-iced/
+research/iced-ecosystem/cosmic-time/
+research/iced-ecosystem/cosmic-files/
+research/iced-ecosystem/halloy/
+research/iced-ecosystem/sniffnet/
+research/iced-ecosystem/Neothesia/
+research/iced-ecosystem/book/
+research/iced-ecosystem/cookbook/
+research/iced-ecosystem/awesome-iced/
+
 # jfc agent worktrees + scratch
 .jfc-worktrees/
 session-ses_*.md

@@ -1124,7 +1124,503 @@ Acceptance:
 - A new user can tell what works, what is experimental, and what is aspirational
   without reading source code.
 
+## Batch 27 - IDAPython Compatibility Layer
+
+**Goal**: Run unmodified IDA Pro Python scripts on top of unlace's domain API.
+This is the single highest-leverage feature for hobbyist/academic adoption —
+every published IDA script (FindCrypt, IDArling, malware unpackers, FLIRT
+generators) assumes the `idaapi` / `idc` / `idautils` API surface.
+
+**Reference material already in tree**:
+
+- `research/ida-hexrays-docs/scripting/idapython/` — 55 actual IDAPython
+  modules from IDA 9.3sp1 (`idc.py`, `idautils.py`, `idaapi.py`,
+  `ida_bytes.py`, `ida_funcs.py`, `ida_hexrays.py`, `ida_dbg.py`, ...)
+- `research/ida-hexrays-docs/sdk/idapython-swig/` — 52 SWIG `.i` files —
+  the authoritative C++↔Python binding spec for every IDAPython symbol
+- `research/ida-hexrays-docs/sdk/idapython-pywraps/` — 85 C++ wrapper
+  source files
+- `research/ida-hexrays-docs/sdk/idapython-examples/` — 152 real IDAPython
+  scripts that act as the compat test corpus
+
+### Tasks
+
+- [ ] Create new crate `crates/unlace-idapython/`. It exposes `idc`,
+      `idautils`, `idaapi`, `ida_bytes`, `ida_funcs`, `ida_name`,
+      `ida_xref`, `ida_kernwin`, `ida_typeinf`, `ida_dbg`, `ida_hexrays`,
+      `ida_segment`, `ida_loader`, `ida_lumina` modules to Python via
+      `pyo3`. Implementation backs each call onto the unlace domain
+      types in `unlace-ir` / `unlace-passes` / `unlace-struct` /
+      `unlace-loader`.
+- [ ] Implement the 25 most-used APIs first (per `idautils.py` usage
+      survey from the example corpus):
+      - `idautils.Functions()`, `idautils.Heads()`,
+        `idautils.Segments()`, `idautils.XrefsTo()`, `idautils.XrefsFrom()`
+      - `idc.get_func_name(ea)`, `idc.get_func_attr(ea, attr)`,
+        `idc.set_name(ea, name)`, `idc.get_segm_name(ea)`,
+        `idc.get_bytes(ea, n)`, `idc.SetType(ea, decl)`
+      - `idaapi.get_func(ea)`, `idaapi.decompile(ea)`,
+        `idaapi.get_imagebase()`
+      - `ida_bytes.get_byte(ea)`, `ida_bytes.get_word(ea)`,
+        `ida_bytes.get_dword(ea)`, `ida_bytes.get_qword(ea)`,
+        `ida_bytes.get_strlit_contents(ea)`
+      - `ida_hexrays.decompile(ea)` returning a ctree-shaped object
+      - `ida_funcs.get_func_qty()`, `ida_funcs.getn_func(idx)`
+- [ ] Wire `unlace py <script.py>` CLI subcommand that initializes the
+      shim, opens the input binary, and execs the user's script in a
+      sandboxed Python process.
+- [ ] Add a regression suite that runs N example IDAPython scripts from
+      `research/ida-hexrays-docs/sdk/idapython-examples/` against
+      golden binaries and snapshot-compares the textual output (where
+      possible) with IDA's own output.
+- [ ] Document supported / unsupported APIs in
+      `docs/idapython-compat.md`. Be honest about coverage; mark each
+      API row as Supported / Stub / Unsupported.
+
+Acceptance:
+
+- `unlace py research/ida-hexrays-docs/sdk/idapython-examples/<script>.py
+  <binary>` runs without import errors for ≥ 25 of the 152 example
+  scripts.
+- The compat-coverage table in `docs/idapython-compat.md` lists exactly
+  which APIs work and which return `NotImplementedError`.
+- The shim crate uses BTreeMap-based storage in any output-affecting
+  path; determinism lint stays clean.
+
+## Batch 28 - Interactive UI (TUI + Native Desktop)
+
+**Goal**: Replace the current CLI-only workflow with an interactive
+disassembly/pseudocode browser. Two surfaces ship together:
+
+1. **`unlace tui`** — a ratatui-based terminal UI. Works over SSH, runs
+   anywhere, no GPU required. The minimum-viable interactive surface.
+2. **`unlace gui`** — a native desktop app using **iced** (the ELM-
+   inspired cross-platform Rust GUI). Single-binary, no webview, no JS,
+   no Node toolchain. Same backing data as the TUI; both consume the
+   same `unlace_session::Session` API.
+
+### UI library decision: iced
+
+After reviewing iced, egui, slint, dioxus, tauri, and GPUI for the 2025
+desktop RE-tool use case, **iced wins** because:
+
+1. **The ELM message model fits RE workflows.** RE is "user clicks →
+   message → state mutation → re-render only what changed." Iced's
+   `update(state, msg) -> Task` is exactly this. egui's immediate-mode
+   redraws every frame; for an RE tool that's wasteful since user
+   actions are sparse and the data is huge.
+2. **iced_code_editor is production-ready.** The pseudocode pane is the
+   single largest UI surface in an RE tool. iced ships a working code
+   editor widget (`iced-code-editor` crate, mirrored at
+   `research/iced-ecosystem/iced-code-editor/`) with syntax highlight,
+   line numbers, selection, and keyboard nav.
+3. **Halloy and Sniffnet prove iced scales.** Both are production multi-
+   pane apps. Halloy in particular is a near-perfect layout reference
+   for unlace (left sidebar nav + center content + bottom status). Both
+   mirrored at `research/iced-ecosystem/{halloy,sniffnet}/`.
+4. **iced_aw widget set** ships tabs, modals, menus, drop-downs, color
+   pickers, split panes, spinners, and number inputs — every widget an
+   RE tool needs.
+5. **plotters-iced** gives us flamegraphs / heatmaps / CFG renders
+   without writing graphics code.
+6. **The COSMIC desktop environment uses iced**, which is the largest
+   active commercial consumer of iced. Anything blocking us in iced
+   blocks them too; we ride their stability floor.
+
+Rejected alternatives, with explicit reasons:
+
+- **egui** — immediate-mode redraw is wasteful for sparse-update RE
+  workflows. The code-editor widget is less polished than iced's.
+- **tauri** — pulls in webview + Node.js + HTML/CSS. Solo + AI-agent
+  team can't afford a TypeScript frontend. Webview RE tools are a
+  known anti-pattern (Binary Ninja chose Qt-native specifically because
+  webviews choke on huge functions).
+- **slint / dioxus** — smaller communities, younger ecosystems.
+- **GPUI** — Zed's internal framework, not generally available.
+
+Reference clones already in tree at `research/iced-ecosystem/`:
+
+| Repo | Purpose |
+|------|---------|
+| `iced/` | Core framework |
+| `iced_aw/` | Additional widgets (tabs, modals, etc.) |
+| `iced-code-editor/` | Pseudocode pane reference |
+| `iced_term/` | Terminal widget for embedded debug shell |
+| `frostbyte_terminal/` | High-perf text rendering reference |
+| `plotters-iced/` | Charts/graphs |
+| `cosmic-time/` | Animation toolkit |
+| `halloy/` | Multi-pane layout reference (IRC client) |
+| `sniffnet/` | High-row-count UI reference (network monitor) |
+| `cosmic-files/` | Tree-view + table reference (file manager) |
+| `Neothesia/` | High-FPS rendering reference (MIDI visualizer) |
+| `book/` + `cookbook/` | Official docs |
+
+TUI library decision: **ratatui** + crossterm. De-facto Rust TUI library
+(60k+ ⭐ when counting tui-rs lineage). Same data-model split as iced:
+the `Session` struct is the source of truth, ratatui renders snapshots.
+
+### Tasks
+
+- [ ] Create crate `crates/unlace-session/`. Defines a `Session` struct
+      that owns the loaded binary, the IR, the decompiled functions,
+      the user's renames/comments/types, and the analysis state. Both
+      TUI and GUI consume this same struct via shared API.
+- [ ] Add `unlace_session::SessionDb` for persistence (see Batch 29).
+- [ ] Create crate `crates/unlace-tui/`. Use `ratatui` + `crossterm`.
+      Panes:
+      - **Functions list** (left, ~30% width): scrollable, filterable
+        by name or address.
+      - **Disassembly view** (top right): syntax-highlighted asm with
+        cursor/selection.
+      - **Pseudocode view** (bottom right): the unlace C output for the
+        currently selected function.
+      - **Status bar**: function name, segment, cursor address.
+      - **Command palette** (`:`): goto address, rename, retype, run
+        script.
+      - Keybindings mirror IDA's where they make sense (G = jump to
+        address, N = rename, Y = set type, X = xrefs, ESC = back).
+- [ ] Create crate `crates/unlace-gui/`. Use `iced` (the App trait) +
+      `iced_aw` (additional widgets) + `iced-code-editor` (pseudocode
+      pane). Pane layout:
+      - **Left sidebar**: Functions list, Strings, Imports, Exports,
+        Bookmarks tabs (use `iced_aw::Tabs`).
+      - **Center**: Disassembly tab + Pseudocode tab + Hex tab
+        (`iced_aw::TabBar`); each tab shows the currently selected
+        function/region.
+      - **Right sidebar**: Xrefs, Type signature, Comments
+        (collapsible).
+      - **Bottom**: Output log + Command palette (toggleable via Ctrl-K).
+      - Use `iced::widget::pane_grid` for resizable split panes.
+- [ ] Use `plotters-iced` for the CFG view (Batch 35 detail).
+- [ ] Wire `unlace tui` and `unlace gui` CLI subcommands.
+- [ ] Add screenshot/asciicast fixtures for the docs.
+- [ ] Document the UI architecture in `docs/ui-architecture.md`.
+
+Acceptance:
+
+- `unlace tui fixtures/hello_world.elf` opens an interactive terminal
+  UI, shows the function list, lets the user select `main`, and renders
+  the decompiled pseudocode in the right pane.
+- `unlace gui fixtures/hello_world.elf` opens a native desktop window
+  with the iced-based pane layout.
+- Both surfaces share the `Session` crate; renaming a function in the
+  TUI persists if you reopen with the GUI on the same database.
+- Function list renders 50k+ entries without visible lag (use
+  `iced::widget::scrollable` with chunked virtualization or
+  `iced_aw::SelectionList`).
+
+## Batch 29 - Database Persistence (.unldb format)
+
+**Goal**: Replace "re-run full analysis every time" with a saveable
+project database. IDA has `.idb` / `.i64`. unlace gets `.unldb`.
+
+Format options reviewed and rejected:
+
+- **SQLite** — would work but locks us into a relational schema and
+  C-FFI dependency.
+- **Capnp / Flatbuffers** — schema discipline is good but version
+  migration is painful and the deserializer overhead matters for huge
+  projects.
+- **Bincode + zstd** — simple, fast, no FFI. Versioning via a small
+  header struct. Chosen for v0.
+
+### Tasks
+
+- [ ] Define `unlace_session::SessionDb` with on-disk format
+      `<binary>.unldb`:
+      - Header: magic `UNLDB\0`, format version u32, unlace version
+        string, original binary SHA256.
+      - Section: serialized SSA per function (lazily decoded).
+      - Section: user annotations (renames, comments, types,
+        bookmarks).
+      - Section: cached analysis facts (KnownBits / MemorySSA /
+        AnalysisContext outputs).
+      - Section: HIR/structured output cache.
+      - All sections individually zstd-compressed.
+- [ ] Implement `Session::save_to(path)` and `Session::load_from(path)`.
+- [ ] Wire automatic save on TUI/GUI quit and explicit
+      `unlace save / unlace load`.
+- [ ] Add migration support: when the format version is older than
+      current, run a registered migration chain. Refuse newer-than-known
+      versions with a clear error.
+- [ ] Add a `.gitignore` template entry for `*.unldb`.
+- [ ] Add a `unlace db inspect <path>` subcommand that dumps header,
+      section count, byte sizes per section, and SHA verification status.
+
+Acceptance:
+
+- `unlace decompile <binary> --save proj.unldb` produces a `.unldb`
+  file.
+- `unlace tui proj.unldb` opens without re-running full analysis (cold
+  cache wall time ≥ 2x faster than from-scratch).
+- Renaming a function in the TUI, closing, and reopening preserves the
+  rename.
+- `unlace db inspect proj.unldb` verifies SHA against the original
+  binary and reports OK.
+
+## Batch 30 - FLIRT Signature Library Shipping
+
+**Goal**: Ship pre-generated FLIRT signatures for the most common
+runtime libraries so that stripped binaries actually look readable. The
+matcher exists in `crates/unlace-flirt/` already; what's missing is the
+library of signatures.
+
+### Tasks
+
+- [ ] Build a `flirt-sigs/` directory layout matching IDA's:
+      ```
+      flirt-sigs/
+        linux/
+          libc-2.31.sig
+          libc-2.35.sig
+          libc-2.39.sig
+          libstdc++.so.6.sig
+          libgcc_s.so.1.sig
+          libm.so.6.sig
+        windows/
+          msvcrt-vs2019.sig
+          msvcrt-vs2022.sig
+          ucrtbase.sig
+          mingw64.sig
+        macos/
+          libsystem.B.dylib.sig
+          libobjc.A.dylib.sig
+        runtimes/
+          go-1.21.sig
+          go-1.22.sig
+          go-1.23.sig
+          rust-1.70-std.sig
+          rust-1.75-std.sig
+        compilers/
+          glibc-startup.sig
+          msvc-startup.sig
+          mingw-startup.sig
+      ```
+- [ ] Implement `unlace flirt build <dynamic-lib> <output.sig>` —
+      generate a unlace-flavored FLIRT-equivalent from a real .so/.dll.
+- [ ] Set up a CI job that regenerates the shipped signatures on every
+      compiler/glibc point release.
+- [ ] Default the loader's FLIRT search path to include the system
+      `flirt-sigs/` directory.
+- [ ] Add a quality counter `flirt_named_calls` that tracks how many
+      previously-unknown imports now have library function names.
+- [ ] Add a CLI `unlace flirt list --binary <bin>` that prints which
+      signatures matched and their confidence.
+
+Acceptance:
+
+- `unlace decompile /bin/ls` shows named libc calls (`puts`, `strcpy`,
+  `getopt_long`) instead of `sub_402130`.
+- The quality counter `flirt_named_calls` on `/bin/ls` is ≥ 30 (i.e.,
+  at least 30 imports now resolve to library functions).
+- The shipped sigs directory is ≤ 50 MB total compressed.
+
+## Batch 31 - Type Library Imports
+
+**Goal**: Bundled type libraries so that API calls in the decompiler
+output show proper signatures (`HANDLE`, `LPSTR`, `errno_t`, etc.) instead
+of `void*` / `_QWORD`.
+
+The C++ SDK in `research/ida-hexrays-docs/sdk/include/typeinf.hpp` is the
+reference for the TIL format. We don't need binary compat with `.til`;
+we just need a unlace-flavored equivalent that the type system can
+consume.
+
+### Tasks
+
+- [ ] Define `unlace_til` format: serialized `tinfo_t` equivalents,
+      function prototypes, struct/union/enum definitions. zstd-
+      compressed.
+- [ ] Implement `unlace til build <header.h> <output.til>` using the
+      idaclang-equivalent path (`crates/unlace-passes/src/abi_layout.rs`
+      already has the substrate).
+- [ ] Ship pre-built TILs for:
+      - `windows.h` + `winsock2.h` + `bcrypt.h` (most common Win32 API)
+      - POSIX headers (`unistd.h`, `pthread.h`, `signal.h`, `fcntl.h`,
+        `sys/socket.h`)
+      - libc/C99/C11 standard library
+      - libc++ / libstdc++ subset
+      - Objective-C runtime (`objc/runtime.h`)
+      - Common SDKs: OpenSSL, zlib, libcurl, sqlite
+- [ ] Wire automatic TIL selection in the pipeline based on detected
+      OS + compiler + imports.
+- [ ] Update the C printer to consume TIL types so that imports get
+      proper prototypes.
+- [ ] Add quality counter `typed_imports` and `typed_locals`.
+
+Acceptance:
+
+- `unlace decompile <win32-binary>` shows `CreateFileW(LPCWSTR
+  lpFileName, DWORD dwDesiredAccess, ...)` instead of `sub_401000(void*,
+  unsigned int, ...)`.
+- The shipped TIL directory is ≤ 30 MB total.
+
+## Batch 32 - Local Debugger (Linux + Windows MVP)
+
+**Goal**: First-class native debugger as a separate `unlace dbg`
+subcommand. Half of professional RE is debugging; without this,
+unlace is a decompiler-only tool that competes with Ghidra's free
+offering rather than IDA Pro's paid one.
+
+Reference material:
+
+- `research/ida-hexrays-docs/sdk/dbg/` — 87 SDK files showing how IDA
+  models a debugger backend (`dbg_plugmod.hpp`, `dbg_rpc_*.cpp`).
+- `references/ida/plugins/gdb_user/all/` — decompiled GDB-stub plugin
+  (984 functions).
+- `references/ida/plugins/linux_user/all/` — decompiled local Linux
+  debugger (610 functions).
+- `references/ida/plugins/bochs_user/all/` — Bochs integration (946
+  functions).
+
+### Tasks
+
+- [ ] Create crate `crates/unlace-debugger/` defining a `Debugger`
+      trait with `attach`, `detach`, `continue`, `step`, `step_over`,
+      `breakpoint`, `read_memory`, `write_memory`, `read_registers`,
+      `write_registers`, `get_stack_trace`, `get_threads`.
+- [ ] Implement `LinuxPtraceDebugger` — local x86_64 / aarch64 via
+      `nix::sys::ptrace`. Software breakpoints (INT3 / BRK), then HW
+      breakpoints via debug registers.
+- [ ] Implement `WindowsDebugger` — local x86 / x64 via Windows
+      `DebugActiveProcess` + `WaitForDebugEvent`.
+- [ ] Implement `GdbStubFrontend` — talks GDB Remote Serial Protocol so
+      unlace can connect to a remote stub (qemu-system, openocd, etc.).
+- [ ] Wire `unlace dbg <binary>` CLI that launches the binary, suspends
+      on entry, and gives a `(unlace-dbg)` interactive prompt with
+      commands: `b <addr>`, `c`, `n`, `s`, `r`, `bt`, `info regs`, `x
+      <addr>`, `q`.
+- [ ] Wire debugger panes into the TUI + GUI: Registers, Memory, Call
+      Stack, Threads, Breakpoints, Locals.
+- [ ] Synchronize debugger PC with the decompiler view (highlight the
+      current source line).
+- [ ] Add ASLR-disable flag (Linux personality, Windows DEP-bypass).
+- [ ] Document supported targets in `docs/debugger.md`.
+
+Acceptance:
+
+- `unlace dbg fixtures/hello_world.elf` runs hello_world under unlace
+  control, hits an int3 in `main`, prints register state, single-steps,
+  continues to exit cleanly.
+- A breakpoint set in the GUI on `main` triggers; the disassembly view
+  highlights the current instruction and registers update in the side
+  pane.
+- The GDB stub frontend can connect to `qemu-system-x86_64 -s -S` and
+  control execution.
+
+## Batch 33 - Symbol Server Integration
+
+**Goal**: Auto-fetch debug symbols from public symbol servers when the
+input binary references them but they aren't locally available.
+
+### Tasks
+
+- [ ] Microsoft Symbol Server: parse `RSDS` debug directory entry in
+      PE, build the symstore URL
+      `https://msdl.microsoft.com/download/symbols/<pdb-name>/<guid+age>/<pdb-name>`,
+      cache to `~/.cache/unlace/symcache/`.
+- [ ] Debuginfod (Linux): query
+      `https://debuginfod.elfutils.org/buildid/<buildid>/debuginfo` for
+      separate debug files. Cache the same way.
+- [ ] dsymutil-equivalent for Mach-O: locate matching .dSYM bundles in
+      Spotlight's index on macOS, or fall back to network.
+- [ ] Settings: `unlace config set symcache.path <dir>` and
+      `unlace config set symcache.timeout 30s`.
+- [ ] Show fetch progress in TUI/GUI status bar.
+
+Acceptance:
+
+- Loading a stripped Linux binary with a build-id and debuginfod
+  available causes unlace to fetch and apply the matching `.debug` file
+  automatically.
+- Loading a stripped Windows PE with a PDB reference causes unlace to
+  fetch from the MSFT symbol server.
+
+## Batch 34 - Binary Patching
+
+**Goal**: Modify a loaded binary and write the result back to disk.
+Required for malware research (patching anti-debug checks),
+exploit dev (injecting shellcode), and CTF (modifying win conditions).
+
+### Tasks
+
+- [ ] Add `unlace_session::Patch { ea, bytes, comment }` records to the
+      Session.
+- [ ] Add CLI `unlace patch <binary> --at <ea> --bytes <hex>` and
+      `unlace patch <binary> --asm "nop; nop"`.
+- [ ] Add TUI/GUI keybinding `P` for patch-at-cursor, with an inline
+      asm/hex editor.
+- [ ] Implement `Session::apply_patches_to(<output-binary>)` that
+      writes patches into the correct file offset (handling
+      ELF/PE/Mach-O section-to-file-offset mapping).
+- [ ] For PE, recompute checksum; for Mach-O, recompute LC_SEGMENT
+      file checksums where present; for ELF, no checksum change needed.
+- [ ] Detect and warn on patches that cross instruction boundaries.
+
+Acceptance:
+
+- `unlace patch fixtures/hello_world.elf --at 0x401050 --bytes "9090"
+  --output /tmp/patched.elf` produces a runnable patched binary where
+  the two patched bytes are NOPs.
+- TUI patch action persists into the `.unldb` and applies on output.
+
+## Batch 35 - Graph Views (CFG + Call Graph)
+
+**Goal**: Render rendered graphs in the GUI (and ASCII art in the TUI)
+for CFG and call graph.
+
+### Tasks
+
+- [ ] CFG renderer: nodes are basic blocks (asm + small fixed footprint),
+      edges are taken/not-taken/call/return. Layout via `layout-rs` or
+      `petgraph` + a simple Sugiyama implementation.
+- [ ] Call graph renderer: nodes are functions, edges are calls. Folder
+      grouping by module/segment.
+- [ ] In the GUI, use `egui_graphs` or hand-rolled with `egui::Painter`.
+- [ ] In the TUI, ASCII box-drawing (use `petgraph-dot` and parse the
+      output) or a "list of edges" textual fallback.
+- [ ] Add minimap (current viewport indicator in a small overview pane).
+- [ ] Add export to SVG / GraphViz dot.
+
+Acceptance:
+
+- The CFG of `loops.elf::main` renders with at least 4 blocks and the
+  back-edge clearly drawn.
+- The call graph of `branches.elf` shows `main`, `puts`, `printf`
+  with appropriate edges.
+
+## Batch 36 - Emulator / Interpreter on the IR
+
+**Goal**: Interpret unlace's IR directly. This unlocks: sandboxed
+malware analysis, ROP chain debugging, shellcode triage, fuzzing
+harness simulation.
+
+### Tasks
+
+- [ ] Create crate `crates/unlace-emu/`. Defines an `Interpreter` that
+      walks IR `IrInsn`s and updates a `MachineState` (register file,
+      stack memory, heap memory, mmap'd memory).
+- [ ] Implement the 75-opcode IR semantics one-by-one, with tests that
+      compare against a known-good x86_64 emulator (unicorn-engine via
+      FFI as a reference, optional).
+- [ ] Implement system call simulation for the most common Linux
+      syscalls (read/write/open/close/mmap/brk/exit) — enough to run
+      hello_world.elf under unlace's own interpreter.
+- [ ] Wire `unlace emu <binary>` CLI subcommand that runs the binary
+      under unlace's interpreter, printing trace events.
+- [ ] Wire into the debugger as `DebuggerKind::Emulator` so the same
+      breakpoint/step/registers UI works on emulated runs.
+- [ ] Document architecture coverage in `docs/emulator.md`.
+
+Acceptance:
+
+- `unlace emu fixtures/hello_world.elf` prints "Hello, World!" to
+  stdout and exits with code 0, all via the in-process interpreter.
+- Single-step in the debugger UI works against the emulator backend.
+
 ## Recommended Next Order
+
+Pre-product (decompiler quality):
 
 1. **Batch 17: Stack and Frame Provenance**. This is the active implementation
    phase because it is still the clearest source of nonsensical C. The next
@@ -1142,6 +1638,37 @@ Acceptance:
    real decompiler quality.
 6. **Batch 22 onward**. Architecture, loader, ecosystem, performance, and
    product polish should follow the core quality work.
+
+Product surface (from competitive-parity audit, derived from reading 55 IDA
+changelogs + 33 reference PDFs + 238K decompiled IDA functions and from the
+external reviewer's "what would make this a real tool" feedback):
+
+7. **Batch 27: IDAPython Compatibility Layer** (4-6 weeks). Single highest-
+   leverage item for hobbyist/academic adoption. All reference material is
+   already in `research/ida-hexrays-docs/scripting/` and `sdk/idapython-swig/`.
+8. **Batch 28: Interactive UI (TUI + egui Desktop)** (3-4 weeks). The CLI is
+   the bottleneck for "people will try it." Ratatui TUI for SSH workflows,
+   egui desktop GUI for primary RE work. iced/tauri/slint/dioxus reviewed and
+   rejected for this use case in Batch 28's rationale.
+9. **Batch 29: Database Persistence (.unldb)** (1-2 weeks). Without this,
+   every run is a from-scratch analysis. Bincode + zstd format.
+10. **Batch 30: FLIRT Signature Library Shipping** (1-2 weeks). The matcher
+    exists; the libraries don't. libc / MSVCRT / mingw / Go / Rust runtimes.
+11. **Batch 31: Type Library Imports** (2-3 weeks). win32, POSIX, libc,
+    OpenSSL, libcurl, sqlite. So pseudocode shows `HANDLE` not `_QWORD`.
+12. **Batch 32: Local Debugger (Linux + Windows MVP)** (8-12 weeks). The big
+    one. Half of professional RE is debugging. Linux ptrace + Windows DebugAPI
+    first; GDB-stub frontend second for embedded/remote.
+13. **Batch 33: Symbol Server Integration** (1 week). MSFT symstore +
+    debuginfod auto-fetch.
+14. **Batch 34: Binary Patching** (1 week). Modify and write back.
+15. **Batch 35: Graph Views** (2-3 weeks). CFG + call graph in the GUI.
+16. **Batch 36: Emulator / Interpreter on IR** (4-6 weeks). Sandboxed
+    execution. Pairs with Batch 32 (debugger UI works against emulator
+    backend too).
+
+Total product-surface budget: ~6 months of focused work, matching the
+external reviewer's "6 months to take you seriously" timeline.
 
 ## Definition of Done for Future Batches
 

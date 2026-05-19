@@ -150,8 +150,8 @@ mod tests {
     #[test]
     fn test_idc_coverage_marks_apis() {
         let s = Session::new();
-        let _ = get_func_name(&s, 0);
-        let _ = set_cmt(&s, 0, "x", false);
+        _ = get_func_name(&s, 0);
+        _ = set_cmt(&s, 0, "x", false);
         let apis = coverage::implemented_apis();
         assert!(apis.contains(&"idc.get_func_name"));
         assert!(apis.contains(&"idc.set_cmt"));

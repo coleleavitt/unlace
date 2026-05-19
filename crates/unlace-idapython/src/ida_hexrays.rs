@@ -39,7 +39,7 @@ pub fn init_hexrays_plugin() -> bool {
 /// CFunc by running the decompilation pipeline.
 pub fn decompile(session: &Session, ea: u64) -> Option<CFunc> {
     coverage::mark_implemented("ida_hexrays.decompile");
-    let _ = (session, ea);
+    _ = (session, ea);
     None
 }
 

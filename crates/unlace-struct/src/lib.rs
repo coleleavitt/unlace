@@ -1,6 +1,7 @@
 //! Control-flow structuring: recover `if`/`while`/`switch` from SSA CFGs.
 
 pub mod bitfield_recovery;
+pub mod graph_layout;
 pub mod block_merge;
 pub mod cmov_switch;
 pub mod condition_dup;

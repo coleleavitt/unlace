@@ -9,7 +9,7 @@ description = "Shared session state for unlace TUI/GUI/CLI surfaces"
 unlace-ir.workspace = true
 unlace-loader.workspace = true
 anyhow.workspace = true
-serde.workspace = true
+serde = { workspace = true, features = ["derive"] }
 bincode.workspace = true
 zstd = "0.13"
 sha2 = "0.10"

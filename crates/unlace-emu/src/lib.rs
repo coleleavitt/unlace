@@ -13,8 +13,10 @@
 pub mod interpreter;
 pub mod memory;
 pub mod regs;
+pub mod runner;
 pub mod syscalls;
 
 pub use interpreter::{Interpreter, StepOutcome};
 pub use memory::MemoryMap;
 pub use regs::EmuRegs;
+pub use runner::{RunConfig, RunResult, run, run_with_initial_syscall};

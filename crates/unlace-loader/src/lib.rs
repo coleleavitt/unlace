@@ -6,6 +6,7 @@
 
 pub mod android_art;
 pub mod archive;
+pub mod symcache;
 pub mod btf;
 pub mod compact_unwind;
 pub mod sframe;

@@ -10,25 +10,25 @@ use crate::coverage;
 
 pub fn get_first_cref_to(session: &Session, ea: u64) -> Option<u64> {
     coverage::mark_implemented("ida_xref.get_first_cref_to");
-    let _ = (session, ea);
+    _ = (session, ea);
     None
 }
 
 pub fn get_next_cref_to(session: &Session, ea: u64, prev: u64) -> Option<u64> {
     coverage::mark_implemented("ida_xref.get_next_cref_to");
-    let _ = (session, ea, prev);
+    _ = (session, ea, prev);
     None
 }
 
 pub fn get_first_cref_from(session: &Session, ea: u64) -> Option<u64> {
     coverage::mark_implemented("ida_xref.get_first_cref_from");
-    let _ = (session, ea);
+    _ = (session, ea);
     None
 }
 
 pub fn get_first_dref_to(session: &Session, ea: u64) -> Option<u64> {
     coverage::mark_implemented("ida_xref.get_first_dref_to");
-    let _ = (session, ea);
+    _ = (session, ea);
     None
 }
 

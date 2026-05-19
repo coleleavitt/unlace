@@ -8,6 +8,8 @@
 //! Persistence (the `.unldb` format) is implemented in `db.rs`.
 
 pub mod db;
+pub mod patches;
+pub mod til;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

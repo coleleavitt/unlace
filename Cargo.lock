@@ -1844,12 +1844,16 @@ dependencies = [
 name = "unlace-flirt"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "bincode",
  "object",
  "serde",
  "thiserror",
  "toml",
  "tracing",
  "unlace-ir",
+ "unlace-loader",
+ "zstd",
 ]
 
 [[package]]

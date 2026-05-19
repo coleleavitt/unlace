@@ -15,6 +15,7 @@
 
 pub mod backends;
 pub mod breakpoint;
+pub mod gdb_rsp;
 pub mod regs;
 
 use std::collections::BTreeMap;
@@ -130,9 +131,10 @@ mod tests {
     #[test]
     fn test_breakpoint_table_find_by_ea() {
         let mut t = BreakpointTable::new();
-        let _ = t.add(0x401000);
+        let added_id = t.add(0x401000);
         let bp = t.find_by_ea(0x401000).unwrap();
         assert_eq!(bp.ea, 0x401000);
+        assert_eq!(bp.id, added_id);
         assert!(t.find_by_ea(0x999).is_none());
     }
 }

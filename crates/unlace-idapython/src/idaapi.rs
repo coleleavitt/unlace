@@ -30,14 +30,14 @@ pub fn get_imagename(session: &Session) -> Option<String> {
 /// `idaapi.next_addr(ea)` — the next valid address after ea (we just +1).
 pub fn next_addr(session: &Session, ea: u64) -> u64 {
     coverage::mark_implemented("idaapi.next_addr");
-    let _ = session;
+    _ = session;
     ea.saturating_add(1)
 }
 
 /// `idaapi.prev_addr(ea)` — the previous valid address before ea.
 pub fn prev_addr(session: &Session, ea: u64) -> u64 {
     coverage::mark_implemented("idaapi.prev_addr");
-    let _ = session;
+    _ = session;
     ea.saturating_sub(1)
 }
 
@@ -47,7 +47,7 @@ pub fn prev_addr(session: &Session, ea: u64) -> u64 {
 /// follows in B27.6.
 pub fn decompile(session: &Session, ea: u64) -> Option<String> {
     coverage::mark_implemented("idaapi.decompile");
-    let _ = (session, ea);
+    _ = (session, ea);
     None
 }
 

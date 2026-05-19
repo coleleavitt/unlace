@@ -45,16 +45,16 @@ pub fn xrefs_to(session: &Session, ea: u64) -> Vec<u64> {
     // unlace-loader stores xrefs on the BinaryImage; we don't have that field
     // resolved yet so return empty for now. The real wiring happens once
     // crates/unlace-ir/src/xref.rs is plumbed into the session.
-    let _ = ea;
-    let _ = session;
+    _ = ea;
+    _ = session;
     Vec::new()
 }
 
 /// `idautils.XrefsFrom(ea, flags=0)` — addresses referenced FROM `ea`.
 pub fn xrefs_from(session: &Session, ea: u64) -> Vec<u64> {
     coverage::mark_implemented("idautils.XrefsFrom");
-    let _ = ea;
-    let _ = session;
+    _ = ea;
+    _ = session;
     Vec::new()
 }
 

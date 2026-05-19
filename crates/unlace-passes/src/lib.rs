@@ -94,6 +94,7 @@ pub mod rust_enum;
 pub mod rust_panic;
 pub mod rust_result;
 pub mod rust_vtable;
+pub mod scalar_evolution;
 pub mod sccp;
 pub mod serial_recognize;
 pub mod sixty_four_bit_demote;
@@ -209,6 +210,10 @@ pub use rust_enum::RustEnumPass;
 pub use rust_panic::RustPanicPass;
 pub use rust_result::{RustTaggedUnion, detect_rust_tagged_unions};
 pub use rust_vtable::RustVtablePass;
+pub use scalar_evolution::{
+    AffineIv, LoopExitFact, LoopExitPredicate, LoopScevInfo, ScevExpr, TriangularSumReduction,
+    analyze_loop_scevs, derive_scev_expr, detect_triangular_sum_reduction,
+};
 pub use sccp::SccpPass;
 pub use serial_recognize::{SerialKind, recognize_serial_api};
 pub use sixty_four_bit_demote::SixtyFourBitDemotePass;

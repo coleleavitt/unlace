@@ -1,11 +1,8 @@
 //! sqlite-backed [`Handler`] implementation.
 //!
-//! Only the tables we currently exercise are created here: `funcs`,
-//! `calcrel_hash`, `func_freqs`, `history`, `pushes`, `users`. The remaining
-//! tables (`idbs`, `inputs`, `hostnames`) are deferred — the reverse-
-//! engineered C source references them mostly inside the unimplemented
-//! `PUSH_TLM` / `DUMP_MD` / `USER_OPERATION` bodies, and creating empty rows
-//! for them now would just be guess-work about the column layout.
+//! The schema covers the protocol bodies this crate can service without an
+//! application-provided decompiler backend: metadata push/pull, history,
+//! pushes, users, stats, and raw telemetry retention.
 
 use std::io;
 use std::net::SocketAddr;
@@ -15,7 +12,10 @@ use std::sync::Mutex;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::helo::Helo;
-use crate::server::{FuncMetadata, Handler, HeloAccept, LuminaStats, Session};
+use crate::server::{
+    FuncMetadata, Handler, HeloAccept, HistoryEntry, LuminaStats, MetadataFilter, PushEntry,
+    Session, TelemetrySession, UserInfo, UserOperation, UserOperationUser,
+};
 
 /// File-backed Lumina store. Holds the sqlite connection behind a `Mutex` —
 /// rusqlite's `Connection` is `!Send + Sync` per the bundled docs, and our
@@ -80,11 +80,52 @@ impl SqliteStore {
                 salt BLOB,
                 is_admin INTEGER NOT NULL DEFAULT 0,
                 features INTEGER NOT NULL DEFAULT 0xffffffff,
-                deleted INTEGER NOT NULL DEFAULT 0
+                deleted INTEGER NOT NULL DEFAULT 0,
+                license_id TEXT NOT NULL DEFAULT '',
+                license_name TEXT NOT NULL DEFAULT '',
+                license_email TEXT NOT NULL DEFAULT '',
+                karma INTEGER NOT NULL DEFAULT 0,
+                last_active INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS telemetry (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                ts INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                payload BLOB NOT NULL
             );
             "#,
         )
         .map_err(map_err)?;
+        Self::ensure_user_profile_columns(conn)?;
+        Ok(())
+    }
+
+    fn ensure_user_profile_columns(conn: &Connection) -> io::Result<()> {
+        for (column, decl) in [
+            ("license_id", "TEXT NOT NULL DEFAULT ''"),
+            ("license_name", "TEXT NOT NULL DEFAULT ''"),
+            ("license_email", "TEXT NOT NULL DEFAULT ''"),
+            ("karma", "INTEGER NOT NULL DEFAULT 0"),
+            ("last_active", "INTEGER NOT NULL DEFAULT 0"),
+        ] {
+            Self::ensure_user_column(conn, column, decl)?;
+        }
+        Ok(())
+    }
+
+    fn ensure_user_column(conn: &Connection, column: &str, decl: &str) -> io::Result<()> {
+        let exists: Option<i64> = conn
+            .query_row(
+                "SELECT 1 FROM pragma_table_info('users') WHERE name = ?",
+                params![column],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(map_err)?;
+        if exists.is_none() {
+            let sql = format!("ALTER TABLE users ADD COLUMN {column} {decl}");
+            conn.execute(&sql, []).map_err(map_err)?;
+        }
         Ok(())
     }
 
@@ -178,6 +219,75 @@ impl SqliteStore {
         } else {
             Ok(None)
         }
+    }
+
+    fn validate_user_operation_name(user: &UserOperationUser) -> io::Result<()> {
+        if user.name.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "USER_OPERATION requires a user name",
+            ));
+        }
+        Ok(())
+    }
+
+    fn upsert_user_profile(conn: &Connection, user: &UserOperationUser) -> io::Result<()> {
+        Self::validate_user_operation_name(user)?;
+        conn.execute(
+            "INSERT INTO users(
+                username, is_admin, features, deleted,
+                license_id, license_name, license_email, karma, last_active
+             )
+             VALUES(?, ?, ?, 0, ?, ?, ?, ?, ?)
+             ON CONFLICT(username) DO UPDATE SET
+               is_admin=excluded.is_admin,
+               features=excluded.features,
+               deleted=0,
+               license_id=excluded.license_id,
+               license_name=excluded.license_name,
+               license_email=excluded.license_email,
+               karma=excluded.karma,
+               last_active=excluded.last_active",
+            params![
+                &user.name,
+                i64::from((user.features & 1) != 0),
+                user.features as i64,
+                &user.license.id,
+                &user.license.name,
+                &user.license.email,
+                user.karma as i64,
+                user.last_active as i64,
+            ],
+        )
+        .map_err(map_err)?;
+        Ok(())
+    }
+
+    fn update_user_profile(conn: &Connection, user: &UserOperationUser) -> io::Result<()> {
+        Self::validate_user_operation_name(user)?;
+        conn.execute(
+            "UPDATE users SET
+               is_admin = ?,
+               features = ?,
+               license_id = ?,
+               license_name = ?,
+               license_email = ?,
+               karma = ?,
+               last_active = ?
+             WHERE username = ? AND deleted = 0",
+            params![
+                i64::from((user.features & 1) != 0),
+                user.features as i64,
+                &user.license.id,
+                &user.license.name,
+                &user.license.email,
+                user.karma as i64,
+                user.last_active as i64,
+                &user.name,
+            ],
+        )
+        .map_err(map_err)?;
+        Ok(())
     }
 }
 
@@ -283,6 +393,12 @@ impl Handler for SqliteStore {
                         params![r.name, r.size as i64, r.metadata, id],
                     )
                     .map_err(map_err)?;
+                    tx.execute(
+                        "INSERT INTO func_freqs(func_id, counter) VALUES(?, ?)
+                         ON CONFLICT(func_id) DO UPDATE SET counter = excluded.counter",
+                        params![id, r.counter as i64],
+                    )
+                    .map_err(map_err)?;
                     id
                 }
                 None => {
@@ -342,6 +458,403 @@ impl Handler for SqliteStore {
             inputs: 0,
         })
     }
+
+    async fn get_pop(&self, _session: &Session, limit: u32) -> io::Result<Vec<FuncMetadata>> {
+        let conn = self.db.lock().expect("sqlite mutex");
+        let limit = i64::from(limit.min(crate::server::MAX_PACKET_ITEMS as u32));
+        let mut stmt = conn
+            .prepare(
+                "SELECT funcs.name, funcs.size, funcs.metadata,
+                        COALESCE(func_freqs.counter, 0), calcrel_hash.hash
+                 FROM funcs
+                 JOIN calcrel_hash ON calcrel_hash.func_id = funcs.id
+                 LEFT JOIN func_freqs ON func_freqs.func_id = funcs.id
+                 ORDER BY COALESCE(func_freqs.counter, 0) DESC, funcs.name ASC
+                 LIMIT ?",
+            )
+            .map_err(map_err)?;
+        let rows = stmt
+            .query_map(params![limit], func_row)
+            .map_err(map_err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_err)?;
+        Ok(rows)
+    }
+
+    async fn delete_history(&self, _session: &Session, filter: MetadataFilter) -> io::Result<u64> {
+        let conn = self.db.lock().expect("sqlite mutex");
+        let limit = i64::from(
+            filter
+                .max_entries
+                .min(crate::server::MAX_PACKET_ITEMS as u32),
+        );
+        let deleted = conn
+            .execute(
+                "DELETE FROM history
+                 WHERE id IN (SELECT id FROM history ORDER BY id DESC LIMIT ?)",
+                params![limit],
+            )
+            .map_err(map_err)?;
+        Ok(deleted as u64)
+    }
+
+    async fn show_history(
+        &self,
+        _session: &Session,
+        filter: MetadataFilter,
+    ) -> io::Result<Vec<HistoryEntry>> {
+        let conn = self.db.lock().expect("sqlite mutex");
+        let limit = i64::from(
+            filter
+                .max_entries
+                .min(crate::server::MAX_PACKET_ITEMS as u32),
+        );
+        let mut stmt = conn
+            .prepare(
+                "SELECT history.id, history.username, history.ts,
+                        funcs.name, funcs.size, history.metadata,
+                        COALESCE(func_freqs.counter, 0), calcrel_hash.hash
+                 FROM history
+                 JOIN funcs ON funcs.id = history.func_id
+                 JOIN calcrel_hash ON calcrel_hash.func_id = funcs.id
+                 LEFT JOIN func_freqs ON func_freqs.func_id = funcs.id
+                 ORDER BY history.id DESC
+                 LIMIT ?",
+            )
+            .map_err(map_err)?;
+        let rows = stmt
+            .query_map(params![limit], history_row)
+            .map_err(map_err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_err)?;
+        Ok(rows)
+    }
+
+    async fn dump_md(
+        &self,
+        _session: &Session,
+        filter: MetadataFilter,
+    ) -> io::Result<Vec<FuncMetadata>> {
+        let conn = self.db.lock().expect("sqlite mutex");
+        let limit = i64::from(
+            filter
+                .max_entries
+                .min(crate::server::MAX_PACKET_ITEMS as u32),
+        );
+        let mut stmt = conn
+            .prepare(
+                "SELECT funcs.name, funcs.size, funcs.metadata,
+                        COALESCE(func_freqs.counter, 0), calcrel_hash.hash
+                 FROM funcs
+                 JOIN calcrel_hash ON calcrel_hash.func_id = funcs.id
+                 LEFT JOIN func_freqs ON func_freqs.func_id = funcs.id
+                 ORDER BY funcs.id ASC
+                 LIMIT ?",
+            )
+            .map_err(map_err)?;
+        let rows = stmt
+            .query_map(params![limit], func_row)
+            .map_err(map_err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_err)?;
+        Ok(rows)
+    }
+
+    async fn clean_db(&self, _session: &Session) -> io::Result<()> {
+        let mut conn = self.db.lock().expect("sqlite mutex");
+        let tx = conn.transaction().map_err(map_err)?;
+        tx.execute("DELETE FROM telemetry", []).map_err(map_err)?;
+        tx.execute("DELETE FROM pushes", []).map_err(map_err)?;
+        tx.execute("DELETE FROM history", []).map_err(map_err)?;
+        tx.execute("DELETE FROM func_freqs", []).map_err(map_err)?;
+        tx.execute("DELETE FROM calcrel_hash", [])
+            .map_err(map_err)?;
+        tx.execute("DELETE FROM funcs", []).map_err(map_err)?;
+        tx.commit().map_err(map_err)?;
+        Ok(())
+    }
+
+    async fn debugctl(&self, _session: &Session, args: &[String]) -> io::Result<Vec<String>> {
+        Ok(args.iter().map(|s| format!("ack:{s}")).collect())
+    }
+
+    async fn push_tlm(&self, session: &Session, payload: Vec<u8>) -> io::Result<()> {
+        let conn = self.db.lock().expect("sqlite mutex");
+        conn.execute(
+            "INSERT INTO telemetry(username, payload) VALUES(?, ?)",
+            params![session.username, payload],
+        )
+        .map_err(map_err)?;
+        Ok(())
+    }
+
+    async fn show_tlm_sessions(
+        &self,
+        _session: &Session,
+        filter: MetadataFilter,
+    ) -> io::Result<Vec<TelemetrySession>> {
+        let conn = self.db.lock().expect("sqlite mutex");
+        let limit = i64::from(
+            filter
+                .max_entries
+                .min(crate::server::MAX_PACKET_ITEMS as u32),
+        );
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, username, ts, length(payload)
+                 FROM telemetry
+                 ORDER BY id DESC
+                 LIMIT ?",
+            )
+            .map_err(map_err)?;
+        let rows = stmt
+            .query_map(params![limit], |r| {
+                let id: i64 = r.get(0)?;
+                let username: String = r.get(1)?;
+                let ts: i64 = r.get(2)?;
+                let payload_len: i64 = r.get(3)?;
+                Ok(TelemetrySession {
+                    id: id as u64,
+                    username,
+                    timestamp: ts as u64,
+                    payload_len: payload_len as u64,
+                })
+            })
+            .map_err(map_err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_err)?;
+        Ok(rows)
+    }
+
+    async fn show_pushes(
+        &self,
+        _session: &Session,
+        filter: MetadataFilter,
+    ) -> io::Result<Vec<PushEntry>> {
+        let conn = self.db.lock().expect("sqlite mutex");
+        let limit = i64::from(
+            filter
+                .max_entries
+                .min(crate::server::MAX_PACKET_ITEMS as u32),
+        );
+        let mut stmt = conn
+            .prepare(
+                "SELECT pushes.id, pushes.username, pushes.ts,
+                        funcs.name, funcs.size, funcs.metadata,
+                        COALESCE(func_freqs.counter, 0), calcrel_hash.hash
+                 FROM pushes
+                 JOIN funcs ON funcs.id = pushes.func_id
+                 JOIN calcrel_hash ON calcrel_hash.func_id = funcs.id
+                 LEFT JOIN func_freqs ON func_freqs.func_id = funcs.id
+                 ORDER BY pushes.id DESC
+                 LIMIT ?",
+            )
+            .map_err(map_err)?;
+        let rows = stmt
+            .query_map(params![limit], push_row)
+            .map_err(map_err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_err)?;
+        Ok(rows)
+    }
+
+    async fn show_users(&self, _session: &Session, sort: u32) -> io::Result<Vec<UserInfo>> {
+        let conn = self.db.lock().expect("sqlite mutex");
+        let order_by = match sort {
+            1 => "last_active DESC, username ASC",
+            2 => "karma DESC, username ASC",
+            _ => "username ASC",
+        };
+        let sql = format!(
+            "SELECT username, is_admin, features, deleted,
+                    license_id, license_name, license_email, karma, last_active
+             FROM users
+             WHERE deleted = 0
+             ORDER BY {order_by}
+             LIMIT ?"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(map_err)?;
+        let rows = stmt
+            .query_map(params![crate::server::MAX_PACKET_ITEMS as i64], |r| {
+                let username: String = r.get(0)?;
+                let is_admin: i64 = r.get(1)?;
+                let features: i64 = r.get(2)?;
+                let deleted: i64 = r.get(3)?;
+                let license_id: String = r.get(4)?;
+                let license_name: String = r.get(5)?;
+                let license_email: String = r.get(6)?;
+                let karma: i64 = r.get(7)?;
+                let last_active: i64 = r.get(8)?;
+                Ok(UserInfo {
+                    username,
+                    is_admin: is_admin != 0,
+                    features: features as u32,
+                    deleted: deleted != 0,
+                    license_id,
+                    license_name,
+                    license_email,
+                    karma: karma as u32,
+                    last_active: last_active as u64,
+                })
+            })
+            .map_err(map_err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_err)?;
+        Ok(rows)
+    }
+
+    async fn set_password(
+        &self,
+        _session: &Session,
+        username: &str,
+        password: &str,
+    ) -> io::Result<()> {
+        let (is_admin, features) = {
+            let conn = self.db.lock().expect("sqlite mutex");
+            conn.query_row(
+                "SELECT is_admin, features FROM users WHERE username = ?",
+                params![username],
+                |r| {
+                    let is_admin: i64 = r.get(0)?;
+                    let features: i64 = r.get(1)?;
+                    Ok((is_admin != 0, features as u32))
+                },
+            )
+            .optional()
+            .map_err(map_err)?
+            .unwrap_or((false, u32::MAX))
+        };
+        self.upsert_user(username, password, is_admin, features)
+    }
+
+    async fn user_operation(&self, _session: &Session, op: &UserOperation) -> io::Result<()> {
+        let conn = self.db.lock().expect("sqlite mutex");
+        match op.op_type {
+            // Recovered user-management handlers:
+            // 4 inserts or undeletes, 5 updates profile/license fields,
+            // 6 marks a user deleted, 37 applies vault-server user sync data.
+            4 | 37 => Self::upsert_user_profile(&conn, &op.user),
+            5 => Self::update_user_profile(&conn, &op.user),
+            6 => {
+                Self::validate_user_operation_name(&op.user)?;
+                conn.execute(
+                    "UPDATE users SET deleted = 1 WHERE username = ?",
+                    params![&op.user.name],
+                )
+                .map_err(map_err)?;
+                Ok(())
+            }
+            9 => {
+                Self::validate_user_operation_name(&op.user)?;
+                conn.execute(
+                    "UPDATE users SET last_active = ? WHERE username = ? AND deleted = 0",
+                    params![op.user.last_active as i64, &op.user.name],
+                )
+                .map_err(map_err)?;
+                Ok(())
+            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                format!("USER_OPERATION type {} not supported", op.op_type),
+            )),
+        }
+    }
+
+    async fn get_func_histories(
+        &self,
+        _session: &Session,
+        hashes: &[[u8; 32]],
+    ) -> io::Result<Vec<Vec<HistoryEntry>>> {
+        let conn = self.db.lock().expect("sqlite mutex");
+        let mut out = Vec::with_capacity(hashes.len());
+        let mut stmt = conn
+            .prepare(
+                "SELECT history.id, history.username, history.ts,
+                        funcs.name, funcs.size, history.metadata,
+                        COALESCE(func_freqs.counter, 0), calcrel_hash.hash
+                 FROM history
+                 JOIN funcs ON funcs.id = history.func_id
+                 JOIN calcrel_hash ON calcrel_hash.func_id = funcs.id
+                 LEFT JOIN func_freqs ON func_freqs.func_id = funcs.id
+                 WHERE calcrel_hash.hash = ?
+                 ORDER BY history.id DESC
+                 LIMIT ?",
+            )
+            .map_err(map_err)?;
+        for h in hashes {
+            let rows = stmt
+                .query_map(
+                    params![h.as_slice(), crate::server::MAX_PACKET_ITEMS as i64],
+                    history_row,
+                )
+                .map_err(map_err)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(map_err)?;
+            out.push(rows);
+        }
+        Ok(out)
+    }
+}
+
+fn func_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<FuncMetadata> {
+    let name: String = r.get(0)?;
+    let size: i64 = r.get(1)?;
+    let metadata: Vec<u8> = r.get(2)?;
+    let counter: i64 = r.get(3)?;
+    let hash: Vec<u8> = r.get(4)?;
+    Ok(FuncMetadata {
+        name,
+        size: size as u64,
+        metadata,
+        counter: counter as u32,
+        calcrel_hash: blob_to_hash(&hash),
+    })
+}
+
+fn history_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryEntry> {
+    let id: i64 = r.get(0)?;
+    let username: String = r.get(1)?;
+    let ts: i64 = r.get(2)?;
+    Ok(HistoryEntry {
+        id: id as u64,
+        username,
+        timestamp: ts as u64,
+        func: func_row_from_offset(r, 3)?,
+    })
+}
+
+fn push_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<PushEntry> {
+    let id: i64 = r.get(0)?;
+    let username: String = r.get(1)?;
+    let ts: i64 = r.get(2)?;
+    Ok(PushEntry {
+        id: id as u64,
+        username,
+        timestamp: ts as u64,
+        func: func_row_from_offset(r, 3)?,
+    })
+}
+
+fn func_row_from_offset(r: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<FuncMetadata> {
+    let name: String = r.get(offset)?;
+    let size: i64 = r.get(offset + 1)?;
+    let metadata: Vec<u8> = r.get(offset + 2)?;
+    let counter: i64 = r.get(offset + 3)?;
+    let hash: Vec<u8> = r.get(offset + 4)?;
+    Ok(FuncMetadata {
+        name,
+        size: size as u64,
+        metadata,
+        counter: counter as u32,
+        calcrel_hash: blob_to_hash(&hash),
+    })
+}
+
+fn blob_to_hash(bytes: &[u8]) -> [u8; 32] {
+    let mut h = [0u8; 32];
+    let n = bytes.len().min(32);
+    h[..n].copy_from_slice(&bytes[..n]);
+    h
 }
 
 fn map_err(e: rusqlite::Error) -> io::Error {
@@ -464,5 +977,104 @@ mod tests {
         assert_eq!(stats.funcs, 3);
         assert_eq!(stats.pushes, 3);
         assert!(stats.history >= 3);
+    }
+
+    #[tokio::test]
+    async fn admin_surfaces_cover_users_history_pushes_and_clean() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        let s = dummy_session();
+        let low = FuncMetadata {
+            name: "low".into(),
+            size: 1,
+            metadata: vec![1],
+            counter: 1,
+            calcrel_hash: [0x11; 32],
+        };
+        let high = FuncMetadata {
+            name: "high".into(),
+            size: 2,
+            metadata: vec![2],
+            counter: 99,
+            calcrel_hash: [0x22; 32],
+        };
+        store
+            .push_md(&s, &[low.clone(), high.clone()])
+            .await
+            .unwrap();
+
+        let pop = store.get_pop(&s, 1).await.unwrap();
+        assert_eq!(pop.len(), 1);
+        assert_eq!(pop[0].name, "high");
+
+        let filter = MetadataFilter { max_entries: 10 };
+        assert_eq!(store.dump_md(&s, filter).await.unwrap().len(), 2);
+        assert_eq!(store.show_history(&s, filter).await.unwrap().len(), 2);
+        assert_eq!(store.show_pushes(&s, filter).await.unwrap().len(), 2);
+
+        let histories = store
+            .get_func_histories(&s, &[[0x22; 32], [0xff; 32]])
+            .await
+            .unwrap();
+        assert_eq!(histories[0].len(), 1);
+        assert!(histories[1].is_empty());
+
+        store.set_password(&s, "bob", "pw").await.unwrap();
+        let users = store.show_users(&s, 0).await.unwrap();
+        assert!(users.iter().any(|u| u.username == "bob"));
+
+        store.push_tlm(&s, vec![1, 2, 3]).await.unwrap();
+        let tlm = store.show_tlm_sessions(&s, filter).await.unwrap();
+        assert_eq!(tlm.len(), 1);
+        assert_eq!(tlm[0].payload_len, 3);
+
+        let deleted = store
+            .delete_history(&s, MetadataFilter { max_entries: 1 })
+            .await
+            .unwrap();
+        assert_eq!(deleted, 1);
+        assert_eq!(store.show_history(&s, filter).await.unwrap().len(), 1);
+
+        store.clean_db(&s).await.unwrap();
+        let stats = store.lumina_stats(&s).await.unwrap();
+        assert_eq!(stats.funcs, 0);
+        assert_eq!(stats.pushes, 0);
+        assert_eq!(stats.history, 0);
+    }
+
+    #[tokio::test]
+    async fn user_operation_updates_profile_fields_and_deletes() {
+        let store = SqliteStore::open_in_memory().unwrap();
+        let s = dummy_session();
+        let op = UserOperation {
+            user: UserOperationUser {
+                license: crate::server::LicenseInfo {
+                    id: "lic-1".into(),
+                    name: "Alice License".into(),
+                    email: "alice@example.test".into(),
+                },
+                name: "alice".into(),
+                karma: 42,
+                last_active: 123456,
+                features: 3,
+            },
+            op_type: 4,
+        };
+
+        store.user_operation(&s, &op).await.unwrap();
+        let users = store.show_users(&s, 0).await.unwrap();
+        assert_eq!(users.len(), 1);
+        assert_eq!(users[0].username, "alice");
+        assert_eq!(users[0].license_id, "lic-1");
+        assert_eq!(users[0].license_name, "Alice License");
+        assert_eq!(users[0].license_email, "alice@example.test");
+        assert_eq!(users[0].karma, 42);
+        assert_eq!(users[0].last_active, 123456);
+        assert!(users[0].is_admin);
+
+        store
+            .user_operation(&s, &UserOperation { op_type: 6, ..op })
+            .await
+            .unwrap();
+        assert!(store.show_users(&s, 0).await.unwrap().is_empty());
     }
 }

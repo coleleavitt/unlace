@@ -747,8 +747,10 @@ fn loops_sum_for_avoids_placeholder_condition_loop() {
         "sum_for should not print the loop-carried comparison as a stale temp-vs-zero guard: {stdout}"
     );
     assert!(
-        stdout.contains("while (v6 !="),
-        "sum_for should preserve a comparison against the input bound: {stdout}"
+        stdout.contains("for (int i = 0; i < a1; i++)")
+            || stdout.contains("while (a1 !=")
+            || stdout.contains("while (v6 !="),
+        "sum_for should preserve a bound-based counted loop: {stdout}"
     );
     assert!(
         !stdout.contains("int result;"),

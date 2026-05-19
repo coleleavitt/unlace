@@ -21,7 +21,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_ir::ssa::{ByrefInfo, CallingConvention, SsaFunction, VarnodeSlot};
+use unlace_ir::ssa::{ByrefInfo, CallingConvention, PrimitiveType, SsaFunction, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 /// AMD64 register-space offsets used by the address-trace.
@@ -101,13 +101,20 @@ pub fn detect_byref(func: &SsaFunction) -> ByrefInfo {
                 continue;
             }
             // Param register read directly (without prior write) → index it.
-            if let Some(idx) = param_index_for_input(base_vn, &active_param_regs, func) {
+            if let Some(idx) = param_index_for_input(base_vn, &active_param_regs, func)
+                .filter(|idx| param_is_pointer(func, *idx))
+            {
                 info.byref_params.insert(idx);
                 continue;
             }
             // Or resolve through a Copy chain.
             if let Some(AddrRoot::Param(idx)) =
-                resolve_root(base_vn, func, &def_map, &active_param_regs, 0)
+                resolve_root(base_vn, func, &def_map, &active_param_regs, 0).filter(|root| {
+                    match root {
+                        AddrRoot::Param(idx) => param_is_pointer(func, *idx),
+                        AddrRoot::Stack(_) => true,
+                    }
+                })
             {
                 info.byref_params.insert(idx);
             }
@@ -164,6 +171,12 @@ fn param_register_list(cc: CallingConvention) -> &'static [u64] {
         CallingConvention::Thiscall => &[8], // RCX only
         CallingConvention::Cdecl | CallingConvention::Stdcall | CallingConvention::Unknown => &[],
     }
+}
+
+fn param_is_pointer(func: &SsaFunction, idx: u32) -> bool {
+    func.inferred_params
+        .get(idx as usize)
+        .is_some_and(|(_, ty)| *ty == PrimitiveType::Ptr)
 }
 
 /// If `vn` is a direct register read of a parameter register *that has

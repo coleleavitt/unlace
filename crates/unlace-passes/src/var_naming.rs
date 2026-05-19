@@ -183,6 +183,41 @@ pub fn classify_variables(func: &SsaFunction) -> VarClassification {
         }
     }
 
+    // 2a. Optimized leaf functions often use an incoming argument register
+    // directly instead of first copying it to a temporary. Give those live-in
+    // input varnodes the same argument role so the body name matches the
+    // printed prototype (`a1` rather than an unrelated fresh `vN`).
+    if let Some(entry_block) = func.function.blocks.get(&func.function.entry) {
+        let mut defined = std::collections::BTreeSet::new();
+        for (idx, insn) in entry_block.insns.iter().enumerate() {
+            for (input_idx, input) in insn.inputs.iter().enumerate() {
+                if input.space != SpaceId::Register || defined.contains(&input.offset) {
+                    continue;
+                }
+                let Some(sv) =
+                    func.var_map
+                        .get(&(func.function.entry, idx, VarnodeSlot::Input(input_idx)))
+                else {
+                    continue;
+                };
+                if roles.contains_key(sv) {
+                    continue;
+                }
+                for &(off, arg_idx) in arg_regs_x86_64() {
+                    if input.offset == off {
+                        roles.insert(*sv, VarRole::Argument(arg_idx));
+                        break;
+                    }
+                }
+            }
+            if let Some(output) = insn.output {
+                if output.space == SpaceId::Register {
+                    defined.insert(output.offset);
+                }
+            }
+        }
+    }
+
     // 2b. Return-value classification: find the last write to the return
     //     register (RAX on x86-64, X0 on AArch64) immediately before a
     //     Return instruction. The SSA varnode written there is the `result`.

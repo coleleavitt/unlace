@@ -155,6 +155,15 @@ fn find_def_with_step(
     sv: SsaVarnode,
     body: &[BlockId],
 ) -> Option<(BlockId, usize, IrOp, i64)> {
+    find_def_with_step_inner(func, sv, body, 4)
+}
+
+fn find_def_with_step_inner(
+    func: &SsaFunction,
+    sv: SsaVarnode,
+    body: &[BlockId],
+    depth: usize,
+) -> Option<(BlockId, usize, IrOp, i64)> {
     for ((bid, idx, slot), v) in &func.var_map {
         if !matches!(slot, VarnodeSlot::Output) {
             continue;
@@ -167,6 +176,13 @@ fn find_def_with_step(
         }
         let block = func.function.blocks.get(bid)?;
         let insn = block.insns.get(*idx)?;
+        if depth > 0 && matches!(insn.op, IrOp::Copy | IrOp::Cast) && insn.inputs.len() == 1 {
+            let input_sv = func
+                .var_map
+                .get(&(*bid, *idx, VarnodeSlot::Input(0)))
+                .copied()?;
+            return find_def_with_step_inner(func, input_sv, body, depth - 1);
+        }
         let step = if insn.inputs.len() == 2 && insn.inputs[1].space == SpaceId::Const {
             insn.inputs[1].offset as i64
         } else {

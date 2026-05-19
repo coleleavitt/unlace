@@ -700,7 +700,8 @@ fn run_decompile(
     }
 
     if matches!(emit, args::EmitFormat::C) {
-        all_output = unlace_output::strip_ida_typedefs(&all_output);
+        all_output = unlace_output::dedupe_ida_typedefs(&all_output);
+        all_output = unlace_output::declare_pseudo_c_externals(&all_output);
         all_output = unlace_output::dedupe_rtti_hierarchy(&all_output);
     }
 

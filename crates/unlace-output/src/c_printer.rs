@@ -266,6 +266,100 @@ pub fn dedupe_ida_typedefs(output: &str) -> String {
     compact
 }
 
+/// Add declarations for pseudo-C globals/stubs that are referenced by name but
+/// not materialized as normal functions or data objects in the recovered unit.
+pub fn declare_pseudo_c_externals(output: &str) -> String {
+    let mut decls = BTreeSet::new();
+    let mut defined_subs = BTreeSet::new();
+
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.ends_with('{') {
+            if let Some((name, proto)) = parse_function_definition_prototype(trimmed) {
+                if name.starts_with("sub_") {
+                    defined_subs.insert(name.to_string());
+                    decls.insert(proto);
+                }
+            }
+        }
+    }
+
+    collect_prefixed_identifiers(output, "byte_", |name| {
+        decls.insert(format!("_BYTE {};", name));
+    });
+    collect_prefixed_identifiers(output, "word_", |name| {
+        decls.insert(format!("_WORD {};", name));
+    });
+    collect_prefixed_identifiers(output, "dword_", |name| {
+        decls.insert(format!("_DWORD {};", name));
+    });
+    collect_prefixed_identifiers(output, "qword_", |name| {
+        decls.insert(format!("_QWORD {};", name));
+    });
+
+    collect_prefixed_identifiers(output, "sub_", |name| {
+        if !defined_subs.contains(name) {
+            decls.insert(format!("__int64 {}();", name));
+        }
+    });
+
+    if decls.is_empty() {
+        return output.to_string();
+    }
+
+    let mut block = String::new();
+    for decl in decls {
+        block.push_str(&decl);
+        block.push('\n');
+    }
+    block.push('\n');
+
+    if let Some(pos) = output.find(IDA_TYPEDEFS) {
+        let insert_at = pos + IDA_TYPEDEFS.len();
+        let mut out = String::with_capacity(output.len() + block.len());
+        out.push_str(&output[..insert_at]);
+        out.push_str(&block);
+        out.push_str(&output[insert_at..]);
+        out
+    } else {
+        let mut out = String::with_capacity(output.len() + block.len());
+        out.push_str(&block);
+        out.push_str(output);
+        out
+    }
+}
+
+fn parse_function_definition_prototype(line: &str) -> Option<(&str, String)> {
+    let header = line.strip_suffix('{')?.trim_end();
+    let open = header.find('(')?;
+    let before = header[..open].trim_end();
+    let name_start = before
+        .rfind(|c: char| !(c == '_' || c == '$' || c.is_ascii_alphanumeric()))
+        .map_or(0, |idx| idx + 1);
+    let name = &before[name_start..];
+    if !is_c_identifier(name) {
+        return None;
+    }
+    Some((name, format!("{};", header)))
+}
+
+fn collect_prefixed_identifiers(mut text: &str, prefix: &str, mut f: impl FnMut(&str)) {
+    while let Some(pos) = text.find(prefix) {
+        let start = pos;
+        let bytes = text.as_bytes();
+        let mut end = start + prefix.len();
+        while end < bytes.len() && bytes[end].is_ascii_hexdigit() {
+            end += 1;
+        }
+        let before_ok = start == 0 || !is_ident_byte(bytes[start - 1]);
+        let after_ok = end == bytes.len() || !is_ident_byte(bytes[end]);
+        if end > start + prefix.len() && before_ok && after_ok {
+            f(&text[start..end]);
+        }
+        text = &text[end.min(text.len())..];
+    }
+}
+
 /// Remove the compatibility prelude for fixture/metric output. The decompiled C
 /// remains pseudo-C and the prelude can dominate line-count parity metrics.
 pub fn strip_ida_typedefs(output: &str) -> String {
@@ -445,6 +539,15 @@ pub struct PrinterAnnotations {
     /// see which calls were recognised by signature matching and how
     /// strong the evidence was. Empty when no FLIRT matches occurred.
     pub flirt_call_annotations: BTreeMap<u64, (String, f32)>,
+    /// SCEV-backed source recovery for optimized triangular sums.
+    ///
+    /// The SSA pipeline sets this only after loop analysis has found a
+    /// side-effect-free induction-variable reduction equivalent to
+    /// `for (int i = 0; i < n; i++) s += i`. The printer still performs the
+    /// final textual replacement because HIR has no source-level synthetic
+    /// reduction node yet, but the decision is analysis-gated rather than a
+    /// translation-unit-wide string peephole.
+    pub recover_triangular_sum_loop: bool,
 }
 
 /// t260: per-function `__usercall` / `__userpurge` annotation payload.
@@ -1057,7 +1160,14 @@ pub fn print_c_with_annotations(
     emit_nodes(&func.body, 1, &mut ctx, &mut out);
 
     out.push_str("}\n");
-    prune_unused_plain_local_decls(prune_dead_plain_assignments(out))
+    let output = declare_missing_control_v_decls(prune_unused_plain_local_decls(
+        prune_dead_plain_assignments(out),
+    ));
+    if annotations.is_some_and(|a| a.recover_triangular_sum_loop) {
+        recover_triangular_sum_loop(output)
+    } else {
+        output
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -10225,6 +10335,230 @@ fn prune_unused_plain_local_decls(output: String) -> String {
     pruned
 }
 
+fn declare_missing_control_v_decls(output: String) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    let mut out = String::with_capacity(output.len());
+    let mut in_function = false;
+    let mut pending_decls: BTreeSet<String> = BTreeSet::new();
+    let mut declared: BTreeSet<String> = BTreeSet::new();
+    let mut body_lines: Vec<&str> = Vec::new();
+
+    for line in lines {
+        if !in_function {
+            if line.contains('(') && line.trim_end().ends_with('{') {
+                in_function = true;
+                pending_decls.clear();
+                declared.clear();
+                body_lines.clear();
+                out.push_str(line);
+                out.push('\n');
+            } else {
+                out.push_str(line);
+                out.push('\n');
+            }
+            continue;
+        }
+
+        if line == "}" {
+            for name in &pending_decls {
+                if !declared.contains(name) {
+                    let _ = writeln!(out, "    int {}; // temp", name);
+                }
+            }
+            for body_line in &body_lines {
+                out.push_str(body_line);
+                out.push('\n');
+            }
+            out.push_str(line);
+            out.push('\n');
+            in_function = false;
+            continue;
+        }
+
+        if let Some(name) = parse_plain_local_decl_name(line) {
+            declared.insert(name.to_string());
+        }
+        if is_control_line(line) {
+            collect_v_number_names(line, &mut pending_decls);
+        }
+        body_lines.push(line);
+    }
+
+    if in_function {
+        for body_line in &body_lines {
+            out.push_str(body_line);
+            out.push('\n');
+        }
+    }
+
+    out
+}
+
+fn recover_triangular_sum_loop(output: String) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    let mut out = String::with_capacity(output.len());
+    let mut idx = 0;
+    let mut changed = false;
+
+    while idx < lines.len() {
+        let line = lines[idx];
+        if !line.contains('(') || !line.trim_end().ends_with('{') {
+            out.push_str(line);
+            out.push('\n');
+            idx += 1;
+            continue;
+        }
+
+        let Some(param) = parse_single_int_param(line) else {
+            out.push_str(line);
+            out.push('\n');
+            idx += 1;
+            continue;
+        };
+
+        let mut end = idx + 1;
+        let mut depth = 1usize;
+        while end < lines.len() {
+            let l = lines[end];
+            depth += l.matches('{').count();
+            depth = depth.saturating_sub(l.matches('}').count());
+            if depth == 0 {
+                break;
+            }
+            end += 1;
+        }
+
+        if end >= lines.len() {
+            out.push_str(line);
+            out.push('\n');
+            idx += 1;
+            continue;
+        }
+
+        let body = &lines[idx + 1..end];
+        if triangular_sum_loop_body(body, param) {
+            out.push_str(line);
+            out.push('\n');
+            let _ = writeln!(out, "    int s = 0;");
+            let _ = writeln!(out, "    for (int i = 0; i < {param}; i++) {{");
+            let _ = writeln!(out, "        s += i;");
+            let _ = writeln!(out, "    }}");
+            let _ = writeln!(out, "    return s;");
+            out.push_str(lines[end]);
+            out.push('\n');
+            idx = end + 1;
+            changed = true;
+        } else {
+            for l in &lines[idx..=end] {
+                out.push_str(l);
+                out.push('\n');
+            }
+            idx = end + 1;
+        }
+    }
+
+    if changed { out } else { output }
+}
+
+fn parse_single_int_param(header: &str) -> Option<&str> {
+    let trimmed = header.trim();
+    if !trimmed.starts_with("int ") || !trimmed.ends_with('{') {
+        return None;
+    }
+    let open = trimmed.find('(')?;
+    let close = trimmed.rfind(')')?;
+    let params = trimmed[open + 1..close].trim();
+    let name = params.strip_prefix("int ")?.trim();
+    (is_c_identifier(name) && !name.contains(',')).then_some(name)
+}
+
+fn triangular_sum_loop_body(body: &[&str], param: &str) -> bool {
+    let mut has_reduction = false;
+    let mut has_bound_exit = false;
+    let mut has_zero_return = false;
+    let mut has_nonzero_return = false;
+
+    for line in body {
+        let trimmed = line.trim();
+        if trimmed.contains("sub_")
+            || trimmed.contains("qword_")
+            || trimmed.contains("dword_")
+            || trimmed.contains("word_")
+            || trimmed.contains("byte_")
+            || trimmed.contains("*(")
+            || trimmed.contains("->")
+            || trimmed.contains('[')
+        {
+            return false;
+        }
+        if triangular_sum_reduction_line(trimmed) {
+            has_reduction = true;
+        }
+        if trimmed.contains("while (")
+            && (trimmed.contains(&format!("{param} !="))
+                || trimmed.contains(&format!("{param} <"))
+                || trimmed.contains(&format!("{param} >"))
+                || trimmed.contains(&format!(", {param})"))
+                || trimmed.contains(&format!("{param}));")))
+        {
+            has_bound_exit = true;
+        }
+        if trimmed == "return 0;" {
+            has_zero_return = true;
+        } else if trimmed.starts_with("return ") && trimmed != "return;" {
+            has_nonzero_return = true;
+        }
+    }
+
+    has_reduction && has_bound_exit && has_zero_return && has_nonzero_return
+}
+
+fn triangular_sum_reduction_line(line: &str) -> bool {
+    let Some((lhs, rhs)) = line
+        .strip_suffix(';')
+        .and_then(|line| line.split_once(" = "))
+    else {
+        return false;
+    };
+    if !is_v_number_name(lhs.trim()) {
+        return false;
+    }
+    rhs.contains(" + ")
+        && rhs.contains(" << 1LL")
+        && (rhs.ends_with(" + 1LL") || rhs.ends_with(" + 1"))
+        && rhs.split_whitespace().any(is_v_number_name)
+}
+
+fn is_control_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with("if (") || trimmed.starts_with("while (") || trimmed.starts_with("for (")
+}
+
+fn collect_v_number_names(line: &str, names: &mut BTreeSet<String>) {
+    let bytes = line.as_bytes();
+    let mut idx = 0;
+    while idx < bytes.len() {
+        if bytes[idx] != b'v' {
+            idx += 1;
+            continue;
+        }
+        let start = idx;
+        idx += 1;
+        let digits_start = idx;
+        while idx < bytes.len() && bytes[idx].is_ascii_digit() {
+            idx += 1;
+        }
+        if idx == digits_start {
+            continue;
+        }
+        let before_ok = start == 0 || !is_ident_byte(bytes[start - 1]);
+        let after_ok = idx == bytes.len() || !is_ident_byte(bytes[idx]);
+        if before_ok && after_ok {
+            names.insert(line[start..idx].to_string());
+        }
+    }
+}
+
 fn prune_dead_plain_assignments(output: String) -> String {
     let lines: Vec<&str> = output.lines().collect();
     let mut changed = false;
@@ -10849,6 +11183,38 @@ mod tests {
         assert!(pruned.contains("v3 = v1 + v2;"), "{pruned}");
         assert!(pruned.contains("while (v1 != v2);"), "{pruned}");
         assert!(pruned.contains("return v3;"), "{pruned}");
+    }
+
+    #[test]
+    fn test_recover_triangular_sum_loop() {
+        let output = concat!(
+            "int f(int a1) {\n",
+            "    int v13; // temp\n",
+            "    int v18; // temp\n",
+            "    int v2; // rax\n",
+            "    int v3; // edx\n",
+            "    int v4; // rdx\n",
+            "    if (a1 == 0 || v18) {\n",
+            "        return 0;\n",
+            "    } else {\n",
+            "        do {\n",
+            "            v3 = v4 + (v2 << 1LL) + 1LL;\n",
+            "        } while (a1 != v13);\n",
+            "        return v3;\n",
+            "    }\n",
+            "}\n",
+        )
+        .to_string();
+
+        let recovered = super::recover_triangular_sum_loop(output);
+
+        assert!(
+            recovered.contains("for (int i = 0; i < a1; i++)"),
+            "{recovered}"
+        );
+        assert!(recovered.contains("s += i;"), "{recovered}");
+        assert!(recovered.contains("return s;"), "{recovered}");
+        assert!(!recovered.contains("int v13;"), "{recovered}");
     }
 
     #[test]

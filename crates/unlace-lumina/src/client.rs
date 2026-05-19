@@ -9,7 +9,7 @@ use tokio::net::TcpStream;
 
 use crate::helo::{Helo, HeloResult};
 use crate::protocol::Packet;
-use crate::server::FuncMetadata;
+use crate::server::{FuncMetadata, MAX_PACKET_ITEMS};
 use crate::wire::{
     DEFAULT_MAX_PAYLOAD, Frame, read_cstring, read_frame, read_raw_bytes, read_u64_split,
     read_vuint32, write_cstring, write_frame, write_raw_bytes, write_u64_split, write_vuint32,
@@ -112,6 +112,12 @@ impl Client {
         let buf = &reply.payload;
         let mut pos = 0;
         let count = read_vuint32(buf, &mut pos)? as usize;
+        if count > MAX_PACKET_ITEMS {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "PULL_MD_RESULT item count exceeds max",
+            ));
+        }
         let mut out = Vec::with_capacity(count);
         for _ in 0..count {
             let status = read_vuint32(buf, &mut pos)?;
@@ -154,6 +160,12 @@ impl Client {
         let buf = &reply.payload;
         let mut pos = 0;
         let count = read_vuint32(buf, &mut pos)? as usize;
+        if count > MAX_PACKET_ITEMS {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "PUSH_MD_RESULT item count exceeds max",
+            ));
+        }
         let mut out = Vec::with_capacity(count);
         for _ in 0..count {
             out.push(read_vuint32(buf, &mut pos)?);

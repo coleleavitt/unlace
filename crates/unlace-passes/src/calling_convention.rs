@@ -88,7 +88,7 @@ fn detect_calling_convention(func: &SsaFunction) -> CallingConvention {
         }
     }
 
-    let base = score_convention(&read_before_write);
+    let base = score_convention_for_arch(func, &read_before_write);
     let result = refine_convention(func, base, &read_before_write);
 
     // If entry-block-only analysis produced Unknown (common after SSA
@@ -297,6 +297,20 @@ fn score_convention(read_before_write: &BTreeSet<u64>) -> CallingConvention {
     CallingConvention::Unknown
 }
 
+fn score_convention_for_arch(
+    func: &SsaFunction,
+    read_before_write: &BTreeSet<u64>,
+) -> CallingConvention {
+    use unlace_ir::ArchId;
+
+    let scored = score_convention(read_before_write);
+    match func.arch {
+        ArchId::AArch64 => scored,
+        ArchId::X86_64 if scored == CallingConvention::AArch64 => CallingConvention::Unknown,
+        _ => scored,
+    }
+}
+
 // Helper to check if a register-space store to RSP-relative addresses exists
 // (shadow space detection for MS x64). Reserved for future refinement.
 #[allow(dead_code)]
@@ -440,10 +454,16 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
     // Build a map of which registers feed into which ops for type inference
     // of each parameter. When we fell back to the whole-function scan, collect
     // consumer ops across all blocks too.
-    let reg_consumer_ops = if has_arg_reg_in_entry {
-        collect_reg_consumer_ops_block(func, entry)
+    let (reg_consumer_ops, reg_input_sizes) = if has_arg_reg_in_entry {
+        (
+            collect_reg_consumer_ops_block(func, entry),
+            collect_reg_input_size_set_block(func, entry),
+        )
     } else {
-        collect_reg_consumer_ops_all(func)
+        (
+            collect_reg_consumer_ops_all(func),
+            collect_reg_input_size_set_all(func),
+        )
     };
 
     let mut params = Vec::new();
@@ -454,7 +474,7 @@ fn infer_params(func: &SsaFunction) -> Vec<(String, PrimitiveType)> {
         if !read_before_write.contains(&reg_off) {
             break;
         }
-        let ty = infer_param_type(reg_off, &reg_consumer_ops);
+        let ty = infer_param_type(reg_off, &reg_consumer_ops, &reg_input_sizes);
         params.push((format!("a{}", param_idx), ty));
         param_idx += 1;
     }
@@ -494,6 +514,38 @@ fn collect_reg_consumer_ops_all(func: &SsaFunction) -> BTreeMap<u64, Vec<IrOp>> 
             for inp in &insn.inputs {
                 if inp.space == SpaceId::Register {
                     map.entry(inp.offset).or_default().push(insn.op);
+                }
+            }
+        }
+    }
+    map
+}
+
+fn collect_reg_input_size_set_block(
+    func: &SsaFunction,
+    entry: BlockId,
+) -> BTreeMap<u64, BTreeSet<u8>> {
+    let Some(block) = func.function.blocks.get(&entry) else {
+        return BTreeMap::new();
+    };
+    let mut map: BTreeMap<u64, BTreeSet<u8>> = BTreeMap::new();
+    for insn in &block.insns {
+        for inp in &insn.inputs {
+            if inp.space == SpaceId::Register {
+                map.entry(inp.offset).or_default().insert(inp.size);
+            }
+        }
+    }
+    map
+}
+
+fn collect_reg_input_size_set_all(func: &SsaFunction) -> BTreeMap<u64, BTreeSet<u8>> {
+    let mut map: BTreeMap<u64, BTreeSet<u8>> = BTreeMap::new();
+    for block in func.function.blocks.values() {
+        for insn in &block.insns {
+            for inp in &insn.inputs {
+                if inp.space == SpaceId::Register {
+                    map.entry(inp.offset).or_default().insert(inp.size);
                 }
             }
         }
@@ -638,9 +690,13 @@ fn detect_varargs(func: &SsaFunction) -> bool {
     (reads_rax && all_int_args_read) || has_xmm_save_area()
 }
 
-fn infer_param_type(reg_off: u64, consumer_ops: &BTreeMap<u64, Vec<IrOp>>) -> PrimitiveType {
+fn infer_param_type(
+    reg_off: u64,
+    consumer_ops: &BTreeMap<u64, Vec<IrOp>>,
+    input_sizes: &BTreeMap<u64, BTreeSet<u8>>,
+) -> PrimitiveType {
     let Some(ops) = consumer_ops.get(&reg_off) else {
-        return PrimitiveType::Int(8);
+        return PrimitiveType::Int(preferred_scalar_param_width(reg_off, input_sizes));
     };
     for &op in ops {
         match op {
@@ -666,7 +722,19 @@ fn infer_param_type(reg_off: u64, consumer_ops: &BTreeMap<u64, Vec<IrOp>>) -> Pr
             _ => {}
         }
     }
-    PrimitiveType::Int(8)
+    PrimitiveType::Int(preferred_scalar_param_width(reg_off, input_sizes))
+}
+
+fn preferred_scalar_param_width(reg_off: u64, input_sizes: &BTreeMap<u64, BTreeSet<u8>>) -> u8 {
+    let Some(sizes) = input_sizes.get(&reg_off) else {
+        return 8;
+    };
+    sizes
+        .iter()
+        .copied()
+        .find(|size| *size >= 4)
+        .or_else(|| sizes.iter().next().copied())
+        .unwrap_or(8)
 }
 
 // ---------------------------------------------------------------------------

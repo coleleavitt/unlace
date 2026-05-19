@@ -1,6 +1,10 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
+pub mod aarch64_pac_bti;
 pub mod abi_layout;
+pub mod arm_it_block;
+pub mod cxx_eh;
+pub mod mips_delay_slot;
 pub mod algebraic_simplify;
 pub mod analysis_context;
 pub mod alias_categorize;

@@ -106,16 +106,19 @@ pub(crate) fn detect_basic_ivs(
         None => return out,
     };
     for phi in phis {
-        if phi.inputs.len() != 2 {
-            continue;
-        }
-        let (a_pred, a_sv) = phi.inputs[0];
-        let (b_pred, b_sv) = phi.inputs[1];
-        let (init_sv, latch_pred, back_sv) = if !body.contains(&a_pred) && body.contains(&b_pred) {
-            (a_sv, b_pred, b_sv)
-        } else if !body.contains(&b_pred) && body.contains(&a_pred) {
-            (b_sv, a_pred, a_sv)
-        } else {
+        let Some((init_sv, latch_pred, back_sv)) = phi
+            .inputs
+            .iter()
+            .filter(|(pred, _)| body.contains(pred))
+            .find_map(|&(latch_pred, back_sv)| {
+                let init_sv = phi
+                    .inputs
+                    .iter()
+                    .find(|(pred, _)| !body.contains(pred))
+                    .map(|(_, sv)| *sv)?;
+                Some((init_sv, latch_pred, back_sv))
+            })
+        else {
             continue;
         };
         let Some((bid, idx, op, inputs_const_step)) = find_def_with_step(func, back_sv, body)

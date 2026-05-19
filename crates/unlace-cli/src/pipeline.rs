@@ -1705,7 +1705,7 @@ pub fn emit_function_interproc(
         .map(|(addr, fc)| (*addr, (fc.name.clone(), fc.confidence)))
         .collect();
     printer_annotations.recover_triangular_sum_loop =
-        unlace_passes::detect_triangular_sum_reduction(&ssa).is_some();
+        unlace_passes::detect_triangular_sum_reduction(ssa).is_some();
     let printer_annotations = Some(printer_annotations);
     resolve_jump_table_targets(ssa, image);
     let jt_sections = build_jump_table_section_views(image);
@@ -2165,6 +2165,8 @@ pub fn decompile_function_with_symbols(
         .iter()
         .map(|(addr, fc)| (*addr, (fc.name.clone(), fc.confidence)))
         .collect();
+    printer_annotations.recover_triangular_sum_loop =
+        unlace_passes::detect_triangular_sum_reduction(&ssa).is_some();
     let printer_annotations = Some(printer_annotations);
 
     // Batch 9: section-aware second phase of jump-table recovery.

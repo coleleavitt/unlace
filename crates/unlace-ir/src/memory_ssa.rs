@@ -234,7 +234,7 @@ impl MemorySSAGraph {
                     // May-alias: conservative, treat as clobber.
                     return Some(*id);
                 }
-                MemoryAccess::Phi { inputs, .. } => {
+                MemoryAccess::Phi { inputs: _, .. } => {
                     // Conservative: if any phi input could clobber, return this phi.
                     // A real implementation would walk each arm.
                     return Some(cur_id);

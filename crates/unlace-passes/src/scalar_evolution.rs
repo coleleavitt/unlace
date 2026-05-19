@@ -131,10 +131,17 @@ pub fn detect_triangular_sum_reduction(func: &SsaFunction) -> Option<TriangularS
 
     let loops = analyze_loop_scevs(func);
     for info in loops.values() {
-        let bound = info.exits.iter().find_map(|exit| match &exit.bound {
-            Some(ScevExpr::Value(bound)) if exit.iv.is_some() => Some(*bound),
-            _ => None,
-        })?;
+        let Some(bound) = info
+            .exits
+            .iter()
+            .find_map(|exit| match &exit.bound {
+                Some(ScevExpr::Value(bound)) if exit.iv.is_some() => Some(*bound),
+                _ => None,
+            })
+            .or_else(|| find_loop_bound_value(func, info))
+        else {
+            continue;
+        };
         for &bid in &info.body {
             let Some(block) = func.function.blocks.get(&bid) else {
                 continue;
@@ -250,6 +257,61 @@ fn has_single_int_param(func: &SsaFunction) -> bool {
         params.as_slice(),
         [Some(PrimitiveType::Int(_) | PrimitiveType::UnsignedInt(_))]
     )
+}
+
+fn find_loop_bound_value(func: &SsaFunction, info: &LoopScevInfo) -> Option<SsaVarnode> {
+    for &bid in &info.body {
+        let Some(block) = func.function.blocks.get(&bid) else {
+            continue;
+        };
+        for (idx, insn) in block.insns.iter().enumerate() {
+            if !matches!(
+                insn.op,
+                IrOp::IntEqual
+                    | IrOp::IntNotequal
+                    | IrOp::IntLess
+                    | IrOp::IntLessequal
+                    | IrOp::IntSless
+                    | IrOp::IntSlessequal
+                    | IrOp::IntSub
+                    | IrOp::IntSborrow
+            ) || insn.inputs.len() < 2
+            {
+                continue;
+            }
+            let lhs = expr_for_def_input(
+                func,
+                info.header,
+                &info.ivs,
+                bid,
+                idx,
+                0,
+                insn.inputs[0],
+                MAX_EXPR_DEPTH,
+            );
+            let rhs = expr_for_def_input(
+                func,
+                info.header,
+                &info.ivs,
+                bid,
+                idx,
+                1,
+                insn.inputs[1],
+                MAX_EXPR_DEPTH,
+            );
+            if root_iv(&lhs, &info.ivs).is_some()
+                && let ScevExpr::Value(bound) = rhs
+            {
+                return Some(bound);
+            }
+            if root_iv(&rhs, &info.ivs).is_some()
+                && let ScevExpr::Value(bound) = lhs
+            {
+                return Some(bound);
+            }
+        }
+    }
+    None
 }
 
 fn primitive_type_from_type(ty: &unlace_ir::types::Type) -> Option<PrimitiveType> {

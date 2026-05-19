@@ -173,7 +173,7 @@ pub enum TargetAbi {
 }
 
 /// Classify how an aggregate of the given size/alignment is passed.
-pub fn classify_aggregate_passing(size: u64, alignment: u64, abi: TargetAbi) -> AggregatePassingClass {
+pub fn classify_aggregate_passing(size: u64, _alignment: u64, abi: TargetAbi) -> AggregatePassingClass {
     match abi {
         TargetAbi::SystemVAmd64 => {
             if size == 0 {

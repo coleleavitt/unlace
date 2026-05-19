@@ -1,0 +1,244 @@
+================================================================================
+LLVM ANALYSIS SUBSYSTEM - QUICK REFERENCE SUMMARY
+================================================================================
+
+TOTAL INVENTORY:
+- 143 Header files
+- 125 Implementation files
+- 135+ Distinct analyses
+
+================================================================================
+CRITICAL ANALYSES FOR DECOMPILER (10 MUST-HAVE)
+================================================================================
+
+1. DominatorTree / PostDominatorTree
+   - Computes: Dominance relationships
+   - Decompiler use: Control-flow structuring, immediate dominators
+   - Status: Already implemented in unlace-struct
+
+2. LoopInfo
+   - Computes: Natural loop detection and hierarchy
+   - Decompiler use: Loop recovery, loop nesting
+   - Status: Already implemented
+
+3. ScalarEvolution
+   - Computes: Symbolic expressions for scalar values in loops
+   - Decompiler use: Induction variable analysis, trip count computation
+   - Status: Needs full implementation
+
+4. CallGraph
+   - Computes: Module-level call graph with external nodes
+   - Decompiler use: Function call relationships
+   - Status: Already implemented
+
+5. MemorySSA
+   - Computes: SSA form for memory operations (MemoryDef, MemoryUse, MemoryPhi)
+   - Decompiler use: Memory SSA form, critical for memory analysis
+   - Status: Partially implemented in unlace-ir
+
+6. AliasAnalysis
+   - Computes: Generic alias analysis interface (MustAlias, MayAlias, NoAlias)
+   - Decompiler use: Pointer disambiguation, memory access analysis
+   - Status: Needs improvement
+
+7. ValueTracking
+   - Computes: Properties of values (known bits, sign, range, etc.)
+   - Decompiler use: Value property inference
+   - Status: Partially implemented
+
+8. InstructionSimplify
+   - Computes: Simplifies instructions without creating new ones
+   - Decompiler use: Expression simplification
+   - Status: Partially implemented
+
+9. ConstantFolding
+   - Computes: Folds constant expressions
+   - Decompiler use: Constant folding
+   - Status: Partially implemented
+
+10. TargetLibraryInfo
+    - Computes: Library function signatures and properties
+    - Decompiler use: Function signature database
+    - Status: Needs implementation
+
+================================================================================
+HIGH PRIORITY ANALYSES (10 SHOULD-HAVE)
+================================================================================
+
+1. IVDescriptors - Induction variable patterns (add, mul, sub, recurrences)
+2. LoopAccessAnalysis - Memory access patterns in loops, dependence analysis
+3. LazyValueInfo - Lazy value constraint analysis (ranges, constants)
+4. MemoryDependenceAnalysis - Memory dependencies (load-store, store-store)
+5. BranchProbabilityInfo - Branch probability estimation
+6. BlockFrequencyInfo - Basic block execution frequency
+7. RegionInfo - Single-Entry-Single-Exit (SESE) regions in CFG
+8. DemandedBits - Determines which bits are used
+9. StackLifetime - Stack variable lifetime analysis
+10. CaptureTracking - Determines if pointers are captured
+
+================================================================================
+MEDIUM PRIORITY ANALYSES (10 NICE-TO-HAVE)
+================================================================================
+
+1. DominanceFrontier / IteratedDominanceFrontier - SSA construction
+2. CycleAnalysis - Cycle information (generalization of loops)
+3. DependenceAnalysis - Memory dependence between instructions
+4. Delinearization - Delinearizes array subscripts
+5. LoopNestAnalysis - Nested loop structure and properties
+6. LoopUnrollAnalyzer - Loop unroll cost estimation
+7. InlineCost - Inlining cost estimation
+8. VectorUtils - Vector function database and utilities
+9. EHUtils - Exception handling utilities
+10. IRSimilarityIdentifier - Identifies similar IR sequences
+
+================================================================================
+ANALYSIS CATEGORIES & COUNTS
+================================================================================
+
+Control Flow Analyses:        8 (DominatorTree, PostDominatorTree, RegionInfo, etc.)
+Loop Analyses:                8 (LoopInfo, IVDescriptors, LoopAccessAnalysis, etc.)
+Scalar Evolution Analyses:    5 (ScalarEvolution, SCEV*, etc.)
+Alias Analysis:               8 (AliasAnalysis, BasicAliasAnalysis, TBAA, etc.)
+Memory Analyses:              7 (MemorySSA, MemoryDependenceAnalysis, etc.)
+Call Graph Analyses:          4 (CallGraph, LazyCallGraph, IndirectCall*, etc.)
+Value Analysis:               8 (ValueTracking, LazyValueInfo, PhiValues, etc.)
+Instruction Analysis:         7 (InstructionSimplify, ConstantFolding, etc.)
+Profile Analyses:             8 (BranchProbabilityInfo, BlockFrequencyInfo, etc.)
+Type Analyses:                5 (TargetLibraryInfo, TypeMetadata*, ObjCARC*, etc.)
+Target Information:           4 (TargetTransformInfo, CostModel, InlineCost, etc.)
+Vector Analyses:              3 (VectorUtils, IVDescriptors, IVUsers)
+Dependence Analyses:          3 (DependenceAnalysis, DependenceGraphBuilder, etc.)
+Utility Analyses:            40+ (AssumptionCache, DemandedBits, StackLifetime, etc.)
+Pass Infrastructure:          8 (CallGraphSCCPass, LoopPass, RegionPass, etc.)
+Printers & Visualization:     9 (CFGPrinter, CallPrinter, DomPrinter, etc.)
+Global Analyses:              1 (GlobalsModRef)
+
+================================================================================
+DECOMPILER IMPLEMENTATION ROADMAP
+================================================================================
+
+PHASE 1: FOUNDATION (Already Mostly Done)
+✓ DominatorTree / PostDominatorTree
+✓ LoopInfo
+✓ CallGraph
+✓ MemorySSA (partial)
+✓ ValueTracking (partial)
+✓ InstructionSimplify (partial)
+✓ ConstantFolding (partial)
+
+PHASE 2: CORE ANALYSIS (In Progress)
+- ScalarEvolution (full implementation)
+- IVDescriptors (full implementation)
+- AliasAnalysis (improve)
+- MemoryDependenceAnalysis
+- LazyValueInfo
+- StackLifetime
+
+PHASE 3: ADVANCED ANALYSIS (Future)
+- DependenceAnalysis
+- Delinearization
+- RegionInfo
+- CycleAnalysis
+- LoopAccessAnalysis
+- DemandedBits
+
+PHASE 4: OPTIMIZATION (Future)
+- Profile analyses
+- Inlining detection
+- Code clone detection
+- Exception handling recovery
+
+================================================================================
+KEY INSIGHTS FOR UNLACE
+================================================================================
+
+1. LLVM has 135+ distinct analyses - unlace needs ~40-50 core ones for parity
+
+2. CRITICAL GAP: ScalarEvolution
+   - LLVM's most sophisticated loop analysis
+   - Needed for induction variable recovery
+   - Currently missing in unlace
+
+3. CRITICAL GAP: TargetLibraryInfo
+   - Function signature database
+   - Essential for function recovery
+   - Currently missing in unlace
+
+4. CRITICAL GAP: StackLifetime
+   - Local variable lifetime analysis
+   - Essential for stack frame recovery
+   - Currently missing in unlace
+
+5. CRITICAL GAP: Full AliasAnalysis
+   - Pointer disambiguation
+   - Essential for memory analysis
+   - Partially implemented in unlace
+
+6. MEDIUM GAP: DependenceAnalysis
+   - Memory dependence tracking
+   - Useful for loop analysis
+   - Not implemented in unlace
+
+7. MEDIUM GAP: Delinearization
+   - Multi-dimensional array recovery
+   - Useful for array analysis
+   - Not implemented in unlace
+
+8. MEDIUM GAP: RegionInfo
+   - SESE region analysis
+   - Could improve structuring
+   - Not implemented in unlace
+
+9. LOW PRIORITY: Profile analyses
+   - Useful for annotation but not critical
+   - Can be added later
+
+10. LOW PRIORITY: ML-related analyses
+    - Not needed for core decompilation
+    - Can be ignored
+
+================================================================================
+NEXT STEPS FOR UNLACE
+================================================================================
+
+1. Implement ScalarEvolution (highest impact)
+   - Enables induction variable recovery
+   - Enables trip count computation
+   - Enables loop optimization
+
+2. Implement TargetLibraryInfo
+   - Enables function signature recovery
+   - Enables library function recognition
+   - Enables calling convention inference
+
+3. Implement StackLifetime
+   - Enables local variable lifetime analysis
+   - Enables stack frame recovery
+   - Enables variable coalescing
+
+4. Improve AliasAnalysis
+   - Better pointer disambiguation
+   - Better memory analysis
+   - Better type inference
+
+5. Implement DependenceAnalysis
+   - Better loop analysis
+   - Better memory dependence tracking
+   - Better loop optimization
+
+6. Implement Delinearization
+   - Multi-dimensional array recovery
+   - Better array analysis
+   - Better type inference
+
+7. Consider RegionInfo
+   - SESE region analysis
+   - Could improve structuring
+   - Lower priority than above
+
+8. Add profile analyses (optional)
+   - Branch probability annotation
+   - Block frequency annotation
+   - Useful for output quality
+
+================================================================================

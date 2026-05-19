@@ -1258,6 +1258,17 @@ pub enum VarnodeSlot {
     Input(usize),
 }
 
+/// Rebuild the CFG and dominator trees from the current function blocks.
+///
+/// Call this after passes that modify block successors (e.g., after jump table
+/// resolution adds new edges) to keep the CFG, dominator tree, and
+/// post-dominator tree consistent with the function's actual control flow.
+pub fn rebuild_cfg(ssa: &mut SsaFunction) {
+    ssa.cfg = build_cfg(&ssa.function);
+    ssa.dom_tree = build_dominator_tree(&ssa.cfg);
+    ssa.post_dom_tree = Some(build_post_dominator_tree(&ssa.cfg, &ssa.function));
+}
+
 pub fn build_ssa(func: Function) -> SsaFunction {
     let cfg = build_cfg(&func);
     let dom_tree = build_dominator_tree(&cfg);

@@ -1721,6 +1721,8 @@ pub fn emit_function_interproc(
         unlace_passes::detect_triangular_sum_reduction(ssa).is_some();
     let printer_annotations = Some(printer_annotations);
     resolve_jump_table_targets(ssa, image);
+    // Rebuild CFG after jump table resolution added new block successors.
+    unlace_ir::ssa::rebuild_cfg(ssa);
     let jt_sections = build_jump_table_section_views(image);
     emit_output(
         emit,
@@ -2189,6 +2191,8 @@ pub fn decompile_function_with_symbols(
     // image to decode the concrete target addresses out of `.rodata`.
     // No-op when no candidates were detected.
     resolve_jump_table_targets(&mut ssa, image);
+    // Rebuild CFG after jump table resolution added new block successors.
+    unlace_ir::ssa::rebuild_cfg(&mut ssa);
     let jt_sections = build_jump_table_section_views(image);
 
     let result = emit_output(

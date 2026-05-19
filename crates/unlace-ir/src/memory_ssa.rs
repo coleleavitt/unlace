@@ -57,6 +57,10 @@ impl MemoryLocation {
 
     /// Whether two locations are provably non-overlapping (must-not-alias).
     pub fn must_not_alias(&self, other: &Self) -> bool {
+        // Unknown locations may alias with anything (opaque barrier).
+        if self.is_unknown() || other.is_unknown() {
+            return false;
+        }
         // Different spaces never alias (stack vs global vs heap).
         if self.space != other.space {
             return true;
@@ -72,6 +76,11 @@ impl MemoryLocation {
         let end_a = off_a + self.size as i64;
         let end_b = off_b + other.size as i64;
         end_a <= off_b || end_b <= off_a
+    }
+
+    /// Whether this represents a fully-unknown location (aliases everything).
+    pub fn is_unknown(&self) -> bool {
+        self.space == SpaceId::Unique && self.offset.is_none() && self.size == 0
     }
 
     /// Whether two locations must alias (same space, same offset, same size).

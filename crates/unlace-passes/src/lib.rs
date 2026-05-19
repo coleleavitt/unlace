@@ -50,6 +50,7 @@ pub mod expression_tree;
 pub mod format_magic;
 pub mod func_fingerprint;
 pub mod generated_code;
+pub mod generated_code_filter;
 pub mod global_copy_prop;
 pub mod go_closure;
 pub mod go_defer;
@@ -64,8 +65,12 @@ pub mod inline_foldback;
 pub mod instrument;
 pub mod interproc_fixpoint;
 pub mod iv_elim;
+pub mod known_bits_analysis;
+pub mod memory_ssa_builder;
 pub mod lazy_lift;
 pub mod libc_idioms;
+#[cfg(test)]
+mod llvm_fixture_tests;
 pub mod libc_signatures;
 pub mod licm;
 pub mod live_concrete;
@@ -83,6 +88,7 @@ pub mod op_type_binding;
 pub mod opaque_pred;
 pub mod packet_struct;
 pub mod pass;
+pub mod pass_with_context;
 pub mod printf_type_infer;
 pub mod prologue_elim;
 pub mod protobuf_recognize;
@@ -129,6 +135,7 @@ pub mod whole_prog_type_unify;
 
 pub use algebraic_simplify::AlgebraicSimplifyPass;
 pub use analysis_context::{AnalysisContext, AnalysisKind};
+pub use pass_with_context::{PassAdapter, PassWithContext, run_to_fixedpoint_with_context};
 pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bitfield_idioms::BitfieldIdiomPass;
 pub use bmi_idioms::BmiIdiomPass;
@@ -170,6 +177,9 @@ pub use generated_code::{
     FunctionTag, classify_by_name, classify_functions, classify_plt_stub, classify_wrapper_thunk,
     count_hidden_shown,
 };
+pub use generated_code_filter::{
+    FunctionVisibility, annotation_for_function, classify_pipeline, should_hide_function,
+};
 pub use global_copy_prop::GlobalCopyPropPass;
 pub use go_closure::{ClosureAllocation, ClosureCall, detect_go_closures};
 pub use go_defer::{GoDeferSite, detect_go_defer};
@@ -186,6 +196,10 @@ pub use instrument::{
 };
 pub use interproc_fixpoint::{DEFAULT_INTERPROC_CAP, InterprocReport, run_interproc_fixpoint};
 pub use iv_elim::IvElimPass;
+pub use known_bits_analysis::{KnownBitsMap, compute_known_bits};
+pub use memory_ssa_builder::{
+    AccessSite, MemorySsaMap, build_memory_ssa, clobber_for_load,
+};
 pub use libc_idioms::{LibcKind, annotate_libc_calls, recognize_libc};
 pub use licm::{LicmPass, NaturalLoop, find_natural_loops};
 pub use lvar_collect::LvarCollectPass;

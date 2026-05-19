@@ -1,6 +1,8 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
+pub mod abi_layout;
 pub mod algebraic_simplify;
+pub mod analysis_context;
 pub mod alias_categorize;
 pub mod auth_call_resolve;
 pub mod bb_align;
@@ -47,6 +49,7 @@ pub mod embed_interp_recognize;
 pub mod expression_tree;
 pub mod format_magic;
 pub mod func_fingerprint;
+pub mod generated_code;
 pub mod global_copy_prop;
 pub mod go_closure;
 pub mod go_defer;
@@ -125,6 +128,7 @@ pub mod whole_prog_cc;
 pub mod whole_prog_type_unify;
 
 pub use algebraic_simplify::AlgebraicSimplifyPass;
+pub use analysis_context::{AnalysisContext, AnalysisKind};
 pub use auth_call_resolve::{AuthCallAnnotation, resolve_auth_calls};
 pub use bitfield_idioms::BitfieldIdiomPass;
 pub use bmi_idioms::BmiIdiomPass;
@@ -162,6 +166,10 @@ pub use dse_global::DeadStoreElimGlobalPass;
 pub use expression_tree::ExpressionTreePass;
 pub use format_magic::{MagicCheck, detect_magic_check};
 pub use func_fingerprint::{build_feature_vector, fingerprint_function, similarity};
+pub use generated_code::{
+    FunctionTag, classify_by_name, classify_functions, classify_plt_stub, classify_wrapper_thunk,
+    count_hidden_shown,
+};
 pub use global_copy_prop::GlobalCopyPropPass;
 pub use go_closure::{ClosureAllocation, ClosureCall, detect_go_closures};
 pub use go_defer::{GoDeferSite, detect_go_defer};

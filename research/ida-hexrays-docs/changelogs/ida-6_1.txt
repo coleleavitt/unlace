@@ -1,0 +1,436 @@
+IDA 6.1 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 6.1
+Highlights
+Support for Android The long awaited Android support in IDA is ready!
+The new version can disassemble Android bytecode (Dalvik).
+An IDA user kindly contributed the processor module and file loader (thank you!)
+A screenshot for your pleasure:
+Dalvik disassembler is available in the Professional Edition.
+Native ARM code can be debugged too.
+IDA supports mixed ARM/Thumb code and can handle multithreaded applications:
+64-bit support for Bochs/GDB debuggers The Bochs emulating debugger is very handy for small snippets of code. Before we could handle only 32-bit code but the new version adds 64-bit support.
+Currently only the IDB mode is supported, later we plan to add PE+ support as well.
+The GDBServer module adds x64 support and works with the latest VMWare versions.
+Loading PDB files under Linux/MacOSX Another long awaited feature is loading of PDB files under Linux and Mac OS X. Lack of this feature was a blocking factor for many Unix users. It is available now. Below is a screenshot made immediately after loading a PE file with PDB info on Linux:
+We added PDB support to the win32 debugger server. The Unix version of IDA connects to a remote MS Windows computer (or local Wine session) and retrieves PDB information from it.
+String encodings Not only Unicode, but other character encodings can be displayed in the disassembly listing. It is even possible to specify the encoding of individual strings:
+Low level conditional breakpoints Conditional breakpoints can be very slow, especially during remote debugging. We addressed this problem by creating server side low level conditional breakpoints. They speed up the debugger tremendously. In our tests breakpoints were handled more than 20 times faster, even when running the remote server on the same computer as IDA. Low level breakpoints are beneifical even for local debugging, so they are available for local debuggers too:
+By the way, the screenshot shows other new breakpoint features: module relative, symbolic, and source code breakpoints. Unfortunately we had no time to finish source level debugging, so source level breakpoints are disabled for the moment.
+Multithreaded debugger Another measure to speed up the debugger: we made the debugger itself multithreaded. While this feature is not visible, it makes IDA more responsive and enjoyable to use. Also we introduced multithread support in the IDA kernel. The kernel is still single threaded but it is much more friendly towards multithreaded plugins.
+Power PC improvements Many things were improved in the Power PC module. All the latest instructions defined by Power ISA were added, including Altivec and VSX extensions.
+Another addition is the VLE (Variable Length Encoding) instruction set, used in many embedded PPC processors.
+Also useful for embedded PPC is the new option to set a fixed value for the r13 register, commonly used as base for the small data area.
+Wingraph is back! Chris Eagle has ported Wingraph32 to Qt framework (thanks!), and now we include it with all platforms, not just Windows.
+SPU In addition to Dalvik, there is another new processor module in 6.1. It is the SPU (aka Synergistic Processing Unit) of the Cell BE processor, used in Sony PS3 console. This processor module is available in the Professional Edition.
+Changelist
+Processor Modules
++ DALVIK: new processor module (Android Dalvik VM)
++ SPU: new processor module (Cell Broadband Engine Synergistic Processor Unit); contributed by Felix Domke
++ ARM: turned on BL-as-jump analysis for ARM code. Before it was enabled only for Thumb code
++ AVR: added XMega instructions DES, LAC, LAS, LAT, XCH
++ AVR: decode eijmp and eicall instructions
++ C166: allow double-word and floating-point items in the disassembly
++ EBC: discover and comment function thunks
++ EBC: implemented instruction auto comments
++ EBC: made disassembly syntax closer to the one used in UEFI specification
++ EBC: trace stack pointer and create stack variables
++ MIPS: added support for Cavium Networks (Octeon) instructions
++ MIPS: added support for MIPS64r2 instructions (doubleword bit manipulation)
++ MIPS: added support for Sony PSP (Allegrex) instructions
++ MIPS: added type system support (parameter identification and tracking)
++ MSP430: added support for MSP430X (20-bit) instructions
++ MSP430: resolve PC-relative (aka symbolic) addresses
++ PC: recognize prologs of VB6 applications (substantially speeds up analysis in some cases)
++ PC: show Intel conditional branch hints (prefixes 2E/3E)
++ PC: disassemble retn/retf opcodes with operand size override
++ PC: disassemble undocumented bswap ax instruction
++ PIC: automatically track changes to the PA0 status bit (bank selector) for 12-bit PIC processors
++ PIC: track values of BANK and PCLATH registers through the code flow - this improves disassembly of code that resides in multiple banks
++ PPC: added support for AltiVec instructions (including Cell BE extensions)
++ PPC: added support for VLE (Variable Length Encoding) instructions
++ PPC: it is now possible to specify a fixed base for the r13 register (small data area, often used in embedded PPC processors) and automatically convert all references to it
++ PPC: recognize switches used in 64-bit code with 32-bit addressing
++ PPC: updated GNU register names to reflect current conventions
++ SuperH: added option to disable immediates substitution (pre-6.0 behavior)
++ SuperH: it is now possible to use zero-offset structure fields in indirect register operands
+File Formats
++ DEX: new loader for Dalvik Executable files
++ COFF: added support for TI MSP430 files
++ COFF: handle Xbox 360 files (PPCBE). Also small improvements for ARM and MIPS files
++ DOS: added support of loading of CodeView debug info for DOS .exe files
++ ELF: added support for Cell SPU files (no relocations supported yet)
++ ELF: added support for PPC64 relocations
++ ELF: added support for R_*_IRELATIVE relocations
++ ELF: Android prelinked files are detected and loaded at the correct address
++ ELF: handle files produced by Tasking C166/ST10 compiler
++ ELF: if data at entry point is not present in the section list, use program headers to load the missing code.
++ ELF: implemented some workarounds to load Cisco IOS files
++ ELF: PPC: handle files with VLE code sections and mark them as such
++ ELF: PPC: handle VLE relocations
++ ELF: support PSP PRX files
++ NE: support self-loading NE files
++ PE: added support for ARMv7 files
+Kernel
++ added support for arbitrarily big types in the type parser
++ added support for custom data formats inside structures
++ improved PIT (parameter identification and tracking) to better handle compex functions
++ improved the speed of rebasing the program
++ IDS: added ceddk.ids for Windows CE
+FLIRT & TILS
++ FLIRT: added autodetection of the programs written in the D language
++ FLIRT: added Digital Mars FLIRT signatures
++ FLIRT: added FLIRT signatures for the Intel Compose XE 2011 ICL compiler
++ FLIRT: pcf: handle ARMv7 COFF files
++ FLIRT: pcf: handle PowerPC BE (Xbox 360) COFF files
++ FLIRT: pelf: i386 TLS related relocations require special handing because the linker modifies instructions
++ FLIRT: pelf: added support for SuperH files
++ prepared new mssdk til files based on the Windows SDK 7.0a
+Scripts & SDK
++ IDAPython: added PluginForm class which adds the possibility to extend the UI with PyQt or PySide
++ IDAPython: Python statement execution and script timeout are configurable
++ IDAPython: added AskUsingForm() with embedded choosers support
++ IDAPython: added idautils.DecodePreviousInstruction() / DecodePrecedingInstruction()
++ IDAPython: added idc.BeginTypeUpdating() / EndTypeUpdating() for fast batch type update operations
++ IDAPython: added more IDP callbacks
++ IDAPython: added UI_Hooks with a few notification events
++ IDAPython: added process_ui_action()
++ IDAPython: better handling of ea_t in 32/64bit
++ IDAPython: Added netnode.index() method
++ IDC: added DbgRead/DbgWrite functions to access the debuggee memory directly
++ IDC: added highlevel breakpoint management class
++ IDC: added get_nsec_stamp()
++ IDC: added SetBptCndEx(), unlink(), rename(), mkdir() functions
++ IDC: added ProcessUiAction()
++ IDC: added sp register change points functions
++ SDK: added begin_type_updating() / end_type_updating() functions to allow faster updates to the types
++ SDK: added get_strmem2()
++ SDK: added support for asynchronious execute_sync() calls (MFF_NOWAIT)
++ SDK: added system-independent functions to work with pipes
++ SDK: added process_ui_command()
++ SDK: IDC engine is thread safe. However, multiple threads should not access/modify the same IDC variables, this is not supported
++ SDK: implemented choosers embeddable in forms
++ SDK: introduced get_full_data_elsize(), useful for wide-byte processors
++ SDK: introduced qisspace and similar functions to avoid problems with signed chars
++ SDK: introduced thread-local functions to handle error codes (set_qerrno/get_qerrno)
++ SDK: renamed init_process() to launch_process()
++ SDK: trim() removes all whitespace at the string end (before it was removing only spaces and tabs)
+User Interface
++ wingraph for Qt, kindly shared by Chris Eagle
++ graph: respect the selection priority when displaying nodes and clicking on them
++ added "New instance" menu entry
++ added "Produce header file from local types" menu entry
++ added 'Unsort' command in choosers
++ added Select All/Deselect All context menu items to the structure offset dialog
++ allow to open any file by drag&dropping on IDA icon (previously only .idb files could be opened this way)
++ allow multiple selection in the recent scripts window
++ enabled multi-selection in the Strings List
++ improved 'rename register' dialog box
++ improved the rebase dialog
++ it is now possible to set a string's encoding from "Setup ASCII types" dialog (Alt-A)
++ pressing Ctrl+K will always jump to the stack variable under the cursor (even if stack window is already open)
++ qt: implemented functions to load/free custom icons to be used in contexts like the chooser
++ qt: improved scroll speed
++ qt: improved the windows list dialog (Ctrl-Tab)
++ qt: improved wait dialog speed
++ txt: implemented the Load Binary dialog
++ gui: this is the last release of VCL based idag.exe
+Debugger
++ added support for server-side low-level breakpoint conditions. Such conditions are evaluated on the remote computer, without causing any network traffic
++ added support for Android debugger target (native ARM only)
++ Bochs: added debugging support for 64bit code snippets
++ Bochs: path to Bochs can now only be specified through IDA.CFG or PATH environment variable
++ GDB: added support for debugging x64 code
++ GDB: enabled "Run external program" option for Linux and OS X
++ GDB: handle read/write memory breakpoints if the stub supports them (e.g. VMWare)
++ GDB: improved debugging of MIPS16 code
++ Windbg: added support for the 'reconnect' option
++ Windbg: the debugging tools path can now only be specified through IDA.CFG or PATH environment variable
+Bugfixes
+all bugfixes since the initial release of IDA 6.0:
+BUGFIX: 'open file' dialog in idal was not sorting directories to the end of the list
+BUGFIX: "copy structure" and "create structure from data" commands should copy the type information
+BUGFIX: "Produce HTML file" functionality was susceptible to Javascript injection vulnerability
+BUGFIX: .NET: opcode "constrained." was decoded incorrectly
+BUGFIX: a variable name was accepted and ignored in "enum : int mystupidvarname"
+BUGFIX: Adding an enum or struct from an already parsed typeinfo that does not correspond to an enum or struct would cause IDA to crash
+BUGFIX: AIF: a specially crafted file could trigger arbitrary code execution
+BUGFIX: appcall was failing on high addresses
+BUGFIX: arm debuggers could lose control after stepping over pop {pc} insn (the target address was calculated incorrectly)
+BUGFIX: ARM: ARM processor module was ignoring the "Mark typical code sequences as code" autonalysis setting
+BUGFIX: ARM: in rare cases, bogus data interpreted as code could crash IDA with a stack overflow
+BUGFIX: ARM: TBB/THB switch constructs were marked up incorrectly, leading to incorrect decompilation in Hex-Rays
+BUGFIX: Bochs debugger plugin was hanging if bochsdbg was terminated due to a crash or VM OS shutdown
+BUGFIX: Bochs debugger run menu item was not present in the list when no database is opened
+BUGFIX: change_storage_type() was creating sparse flags very inefficiently in some cases
+BUGFIX: coff/psx/geos loaders had an integer overflow bug in memory allocation
+BUGFIX: COFF: a specially crafted file could trigger a heap overflow
+BUGFIX: COFF: relocation REL_ARM_SECREL was not handled
+BUGFIX: convert_codepage() was prone to buffer overflow exploits
+BUGFIX: debugger / stack view address size was incorrect when debugging without an initial database
+BUGFIX: debugger options were not restored if the database had no segments
+BUGFIX: demangler: for Borland names do not unmangle procedure/template name when it contains >= 36 arguments
+BUGFIX: EBC: indirect register operands without index were disassembled incorrectly
+BUGFIX: ELF: import list for ELF files was attaching one of the linked .so files to all imports. Since ELF imports use global namespace, don't attach a library name to them.
+BUGFIX: ELF: some SuperH files marked as "sh2a-or-sh3" were loaded incorrectly
+BUGFIX: ELF: symbols were not loaded from some ELF files with non-standard section names
+BUGFIX: enums with custom size were printed incorrectly and thus their names were lost after editing in "Local Types" list
+BUGFIX: EPOC: a specially crafted file could cause a heap overflow
+BUGFIX: Executing a script with File/Script file could add a wrong file name to the recent scripts list in some cases
+BUGFIX: exiting IDA at the very start of debugging would lead to an internal error
+BUGFIX: EXPLOAD: a specially crafted file could trigger a heap overflow
+BUGFIX: fixed a longstanding 'nrect(..)' internal error that was occurring in rare cases
+BUGFIX: fixed a very rare btree error (there was no logic to handle a double page overflow during a key deletion; only single page overflows were handled)
+BUGFIX: fixed DLL hijacking exploit for windmp, windbg and pdb plugins
+BUGFIX: Fixed multiple execution of the same sync request for blocking operations like launching modal dialog as the chooser.
+BUGFIX: fixed occasional crash when opening the breakpoint list
+BUGFIX: GDB: for big-endian ARM targets, PSR register value was sent in wrong byte order
+BUGFIX: get_flags_novalue() could fail in some rare circumstances (when the debugger is running and a previously defined memory area disappears it could return garbage)
+BUGFIX: header() callback was not working in scripted processor modules
+BUGFIX: HEX files for wide-byte processors (e.g. AVR) were loaded at a wrong address if a start address record was present
+BUGFIX: hardware breakpoints were not deleted correctly on OSX
+BUGFIX: hppa: delay slots were calculated wrongly while applying type information to function calls
+BUGFIX: IDA could interr when parsing a C header with the same type name as in a loaded standard type library.
+BUGFIX: IDA would crash on Mac / Linux when exiting after the user has attached to a process without an initial database
+BUGFIX: IDA could fail to detect some address space overflows (when too many big segments were created)
+BUGFIX: idag -S switch was not working properly for file names with spaces
+BUGFIX: IDC: open_loader_input() would leak linput_t handles
+BUGFIX: IDC: SetSegmentAttr() could crash if passed wrong segment address
+BUGFIX: implemented the "CLOSED_BY_ESC" configuration parameter for idaq
+BUGFIX: in some cases, trying to focus the recent scripts window with Alt-F9 after having added a new script may not work properly unless the window is closed and reopened
+BUGFIX: in some cases, when the cursor was on a structure member, IDA was proposing to rename the whole structure instead of the member
+BUGFIX: integer overflow was possible in qcalloc()
+BUGFIX: get_chooser_object() was broken in the text UI
+BUGFIX: it was impossible to launch idaq64 with command line arguments on OS X
+BUGFIX: it was impossible to remotely debug 32-bit programs from IDA64
+BUGFIX: it was not possible to rename stack variables from the listing at the start of the function in PowerPC files
+BUGFIX: it was possible to rename a register to a name with a space
+BUGFIX: it was possible to specify malicious plugins to be autorun at the database opening time; introduced an option to enable/disable autorun plugins and set it to 'off' by default
+BUGFIX: kernel: on big-endian processors, float values in collapsed (terse) structures were displayed wrong
+BUGFIX: OS X debugger could fail if a hardware breakpoint and software breakpoint occurred at the same address simultaneously
+BUGFIX: Mach-O: buffer overflow when loading Mach-O files with corrupted export information
+BUGFIX: Mach-O: some corrupted files could cause IDA to crash with out-of-memory exception
+BUGFIX: MSP430: sub and subc instructions were swapped
+BUGFIX: on very rare occasions the graph overview window would process a paint event after having closed a file and access invalid memory
+BUGFIX: opcode bytes were not always printed along with the insruction for TMS320C6
+BUGFIX: PatchByte() and similar functions were not refreshing the disassembly view
+BUGFIX: PC: pushfq and some other 64-bit stack operating instructions were not handled during stack pointer tracing
+BUGFIX: PC: some memory references were displayed incorrectly in TASM Ideal mode (for example: [name[eax*4], note the second bracket)
+BUGFIX: PC: some switch constructs were marked up incorrectly by IDA leading to wrong decompilation in Hex-Rays
+BUGFIX: PC: the wait instruction could be printed with erroneous prefix byte which belonged to the following non-FPU instruction
+BUGFIX: PDB plugin would crash on certain input files
+BUGFIX: PEF: a specially crafted file could trigger heap overflow
+BUGFIX: PPC: immediate operands for some binary instructions (ori, xori, etc.) were incorrectly displayed as signed values
+BUGFIX: pressing Esc in a form with Yes/No/Cancel buttons would return 0 (must return -1)
+BUGFIX: qt: added graphs toolbar and implemented prev/next toolbar menu
+BUGFIX: qt: adding items to the top-level Edit/Jump/Search menus of enum and struct views would fail
+BUGFIX: qt: adding menu items to the Edit menu could fail if it was invisible
+BUGFIX: qt: after executing custom menu items from the menu by keyboard on Windows the current focus might be lost
+BUGFIX: qt: breakpoint dialog was missing the "Refresh debugger memory" option
+BUGFIX: qt: call the sizer() callback in the chooser only for refresh events
+BUGFIX: qt: calling msg() from chooser's sizer() and getl() callbacks would crash idaq
+BUGFIX: qt: correctly associate the idb extension on Windows
+BUGFIX: qt: correctly restore arrows width in disassembly when loading a saved database
+BUGFIX: qt: correctly restore focus on Windows after having executed an action in the menu (make sure the focus doesn't remain on the menu)
+BUGFIX: qt: correctly restore focus with floating docks under Linux
+BUGFIX: qt: correctly restore row selection in a sorted list in a chooser after an edit action
+BUGFIX: qt: correctly update navigation history when clicking on an edge in graph mode
+BUGFIX: qt: could crash when calling Exit() or idaapi.qexit() from scripts
+BUGFIX: qt: could sometimes crash when renaming structure members from the disassembly
+BUGFIX: qt: couldn't close dock tabs with the middle mouse button
+BUGFIX: qt: debug actions were not updated when an instant debugging session ended
+BUGFIX: qt: docking the graph overview in a tab view would lead to problems
+BUGFIX: qt: don't ask twice in the Save File dialog to overwrite an existing file
+BUGFIX: qt: don't show the Sync submenu in a stackview.
+BUGFIX: qt: fixed -t command line switch behavior
+BUGFIX: qt: fixed a problem with the shortcut system on mac
+BUGFIX: qt: fixed case insensitive completer for input fields in forms.
+BUGFIX: qt: fixed incremental search in choosers
+BUGFIX: qt: fixed some minor graph rendering glitches
+BUGFIX: qt: fixed specific group box frame drawing issue in forms
+BUGFIX: qt: fixed the not working Follow in Dump command in the hex editor
+BUGFIX: qt: fixed the setting of the initial focus in forms
+BUGFIX: qt: fixed wait dialog problems on Linux
+BUGFIX: qt: fixed wrong behavior of the numpad Enter
+BUGFIX: qt: implemented alternative key to Ins on OS X
+BUGFIX: qt: implemented blinking arrows in graph view when debugging
+BUGFIX: qt: implemented HELP/ENDHELP in custom forms
+BUGFIX: qt: implemented external help support for Windows
+BUGFIX: qt: implemented FORM_PERSIST flag in open_tform
+BUGFIX: qt: implemented auto-indentation in comment/script dialog
+BUGFIX: qt: implemented set_dock_pos()
+BUGFIX: qt: improved quality of graph rendering in zoom mode
+BUGFIX: qt: improved shortcuts behavior on OS X
+BUGFIX: qt: input fields in forms were not generating change events
+BUGFIX: qt: it was not possible to open Struct window if a function stack window was open before
+BUGFIX: qt: it was not possible to overwrite menu label shortcuts with user created shortcuts
+BUGFIX: qt: mac: fixed minor glitch in drawing the cursor
+BUGFIX: qt: make sure that after closing an idb all actions are refreshed.
+BUGFIX: qt: message box shortcuts now work without pressing Alt
+BUGFIX: qt: Produce HTML file was using wrong font
+BUGFIX: qt: remember the position of the cursor in the struct view when saving database
+BUGFIX: qt: reset desktop was not working properly sometimes on mac
+BUGFIX: qt: restore focus after a dock drag operation
+BUGFIX: qt: select current thread in debug mode
+BUGFIX: qt: set_custom_viewer_popup and add_custom_viewer_popup work now even on non-TCustomViewer IDA memos
+BUGFIX: qt: set_focused_field in forms would fail at initialization time
+BUGFIX: qt: shortcuts for custom data types were not set correctly
+BUGFIX: qt: show lock status on the Highlight toolbar button
+BUGFIX: qt: show text cursor in the output window
+BUGFIX: qt: some entries of the quick open dialog may fail because of wrong context
+BUGFIX: qt: the '.' shortcut now activates the command line when the current focus is in the output window already
+BUGFIX: qt: the Cancel button in forms was not returning -1
+BUGFIX: qt: the chooser now accepts Home and End even from the numpad and acts the same when Ctrl is pressed. Also, the fast search is cleared when pressing these keys
+BUGFIX: qt: the Del shortcut in the watchlist was not always working
+BUGFIX: qt: the jump to neighbor node shortcuts were working only on mac
+BUGFIX: qt: the main window would not show when starting to debug from the command line
+BUGFIX: qt: UI would hang if typing a non-matching letter at the last item of a chooser
+BUGFIX: qt: was eating too much cpu time when idle
+BUGFIX: qt: was not using system locale to convert text data, so localized comments, file paths, etc. were not displayed properly
+BUGFIX: qt: would hang if trying to incrementally search for an item in a chooser without having a selection first
+BUGFIX: qt: would not revert to default stack variable name if the name was cleared
+BUGFIX: text: chooser was leaking memory on destruction
+BUGFIX: right click menu was not listing structures with unions and unions as creatable variable types
+BUGFIX: rebase_program() was not updating the xref cache, so cross-references could be wrong immediately after rebasing
+BUGFIX: Recent scripts window displays blank script file names if no database was open
+BUGFIX: result of custom_ana notification was not handled properly, breaking some processor extension plugins.
+BUGFIX: IDC: Qword() was not returning 64bit values in IDA32
+BUGFIX: SBN: a specially crafted input file could lead to buffer overflow
+BUGFIX: SDK: get_default_reftype() was not working correctly for processors with wide bytes
+BUGFIX: The IDC engine was failing on __get/setattr__ functions for IDC objects if those functions were registered from the SDK via set_idc_getattr()/set_idc_setattr()
+BUGFIX: SDK: launch_process(formerly init_process) function did not handle properly quoted command-line arguments on Linux and OS X
+BUGFIX: SDK: OutMnem() did not work properly for values of 'width' different from default
+BUGFIX: set_auto_plugins() was allowing arbitrary plugin path (including UNC) thus leading to malicious code execution
+BUGFIX: shortcuts for custom graph actions were not working
+BUGFIX: some win32 OEM keys were incorrectly converted to qt codes
+BUGFIX: SPARC: R_SPARC_JMP_SLOT relocation was not processed properly in 64-bit files
+BUGFIX: SPARC: some WR instructions were decoded incorrectly in V8 mode
+BUGFIX: stack view was always using 64-bit addressing in IDA64, even for 32-bit programs
+BUGFIX: Symbian debugger was not clearing the old process list before retrieving a new one.
+BUGFIX: text version: in the 'create array' dialog box, it was impossible to switch back from binary indexes to any other number base
+BUGFIX: The "OK" button in the Choose Structure window was not being enabled when a struct is selected for the first time
+BUGFIX: The debugger popup menu to open a register class window was not working
+BUGFIX: type parser: type definitions without the terminating ; were silently ignored at the end of the input file (or line)
+BUGFIX: ui: a byte with value 0xFF was not printed as a character, even if it was in the AsciiStringChars list.
+BUGFIX: ui: avoid duplicate upper/lower-case history entries on Windows
+BUGFIX: ui: binary search was searching for wrong pattern if a too long number was entered
+BUGFIX: ui: buffer overflow could happen when trying to display a very long string
+BUGFIX: ui: Calculator (Shift-/ key) was picking up wrong value from disassembly on OSX and Linux
+BUGFIX: ui: fill the Edit->Plugins menu with PLUGIN_FIX plugins when no IDB is open
+BUGFIX: ui: IDA could hang while trying to display a hint in some rare situations
+BUGFIX: ui: IDA could lock up for some time while trying to display a hint.
+BUGFIX: ui: in the 'User Offset' dialog, set initial focus to the 'Base address' field
+BUGFIX: ui: the cross reference list would show empty if already open for the same target
+BUGFIX: unix: unicode strings were not handled correctly for some locales
+BUGFIX: while undecorating names try to preserve the suffix after '@'. remove it only in some special cases
+BUGFIX: Windbg debugging mode option was not saved in instant debugging mode
+BUGFIX: zero values were always represented as "0" in terse structure representations, even if they should be replaced by offsets or enums or something else
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+Was this helpful?

@@ -1,0 +1,189 @@
+IDA 9.3sp1 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 9.3sp1
+This Service Pack focuses mostly on V850 Decompiler improvements and bugfixes. You can download the latest IDA installer from
+My Hex-Rays portal
+.
+V850
+v850: improved
+o_imm
+-to-offset conversion for
+ADD
+,
+ADDI
+(not just
+MOVEA
+) using the regfinder
+v850: improved resolution of many memory access patterns, including
+GP
+-relative ones
+v850: improved PC-based (
+localpic
+) offset display
+v850: improved regfinder for
+__ghssave*
+function calls (they set
+R29
+)
+v850: improved setting offsets for indirect calls (setting
+LP
+followed by indirect jump)
+v850, decompiler: added a new microcode rule for resolving
+localpic
+memory references
+Debugger
+debugger: PDB symbols can now be loaded during GDB debugger sessions
+debugger: the win32 x86 debug server can now run under Windows XP
+Bugfixes
+BUGFIX: decompiler: fixed a crash when loading a corrupted i64 file with stale microcode
+BUGFIX: decompiler: fixed a crash caused by deserialization of stale microcode from idb
+BUGFIX: decompiler: fixed internal error 50898 when return type change required decompilation restart
+BUGFIX: decompiler: fixed internal error 50757 when extracting scattered UDT operands
+BUGFIX: decompiler: fixed internal error 50442 in function type analysis
+BUGFIX: decompiler: fixed internal error 51680 during chain-based variable allocation
+BUGFIX: decompiler: fixed internal error 50324 when lvar allocation spanned multiple blocks
+BUGFIX: decompiler: fixed a hang during propagation of ABI-split operands
+BUGFIX: ui: fixed a crash when using chooser actions dispatched via the command palette
+BUGFIX: ui: "Jump to structure definition" from decompiler sometimes did not navigate to the expected type
+BUGFIX: ui: Xrefs Graph could leak netnodes and duplicate data on Undo, leading to unnecessarily large database size
+BUGFIX: ui: fixed keyboard accelerator conflict in the exit prompt dialog
+BUGFIX: ui/sdk:
+get_chooser_rows
+could crash IDA when used on dirtree-based widgets
+BUGFIX: ui/sdk:
+chooser_selection
+was not filled anymore for the Functions window and other dirtree-based choosers
+BUGFIX: v850: fixed creation of bad offsets for some instructions with immediate operands
+BUGFIX: debugger: android: ignored
+SIGSEGV
+signals used internally by the ART runtime
+BUGFIX: microcode: removed placeholder double-click messages and hover hints in the microcode graph viewer
+BUGFIX: switch: fixed internal error 1505 happening on some very large switches
+BUGFIX: objc: fixed parsing of
+objc_methlist
+when it is not aligned to 8
+BUGFIX: golang: fixed infinite loop when processing structs with self-referential pointer cycles
+BUGFIX: indexer: "Jump Anywhere" prefix matching stopped working after renaming a function
+BUGFIX: IDAPython:
+var_ref_t.getv()
+was wrongly removed from the decompiler bindings
+BUGFIX: sdk: using
+ALLMEM
+memory specifier would lead to link errors
+BUGFIX: licensing: after waking from hibernation, IDA would immediately enter read-only mode instead of retrying the connection to the license server
+BUGFIX: licensing: users can now save the database during the license reconnection window
+BUGFIX: licensing: better error reporting during .conf to .json migration
+BUGFIX: licensing: fixed missing enforcement of ACL deny policies
+BUGFIX: installer: windows: updated MSVC redistributable would not be installed on some outdated Windows systems, leading to error 0xc0000142 when starting IDA
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+V850
+Debugger
+Bugfixes
+Was this helpful?

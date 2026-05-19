@@ -1,0 +1,606 @@
+IDA 8.5 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 8.5
+IDA 8.5.250228
+,
+February 28, 2025
+With IDA 8.5, we bring you some critical fixes, UI enhancements, and updates to the IDA API/SDK and IDB. IDA 8.5 will help users on perpetual terms gradually migrate to the IDA 9-series. Please mind that IDA 8.5 does not support features specific to the 9-series platform, such as x64 exceptions, IDA feeds and others.
+Who Can Upgrade to IDA Pro 8.5?
+If you have a license for IDA Pro 8.4 under active support, you are eligible to upgrade to IDA Pro 8.5.
+How to upgrade to IDA Pro 8.5?
+Log in to the
+My Hex-Rays Customer Portal
+using the email address associated with your previous license. In the banner at the top of the
+Licenses
+tab, click
+Upgrade to IDA 8.5 Now
+to proceed.
+Your updated perpetual license should now appear in the list. Click the three dots under the
+Actions
+column, and select
+Download hexlic
+to get your new license file.
+Download the 8.5 installer via our
+Customer Portal
+and follow the steps in the
+Installation Guide
+.
+IDA 8.5 Highlights
+Important updates to be aware of:
+The IDB file format has been updated. This means that IDBs saved with IDA 9.0 will be compatible with IDA 8.5.
+The C++ SDK and IDAPython API have been revised. You may need to update your plugins to ensure compatibility with IDA 8.5. Check the porting guide under Developer Portal.
+For floating license users, a new license server is required. You can download it from
+My Hex-Rays Customer Portal
+. The FlexNet server from IDA 8.4 will not work with 8.5.
+Licensing changes
+New license type and installers for all supported platforms (Windows/Linux/macOS).
+Note that
+IDA 8.5 requires a new license file to work
+. You can download the new .hexlic license via My Hex-rays
+Customer Portal
+.
+A custom Hex-Rays licensing server replaces the FlexNet licensing server for floating licenses. The updated license server can be downloaded via
+My Hex-Rays Customer Portal
+. For more details about the new license server, check our
+License Server Admin Guide
+Customer portal - licenses view
+WASM Disassembler and File Format Loader
+With many apps shifting to client-side browser applications, we saw the need for a new disassembler for Web Assembly (WASM)
+WASM code is embedded into its own binary file format hence we also ship a file loader that decodes the WASM file format
+Screenshot of WASM disassembly
+nanoMIPS support
+Both the MIPS disassembler and decompiler now support nanoMIPS instructions
+Despite the name, it's not a simple extension of the MIPS ISA but a completely new encoding of the existing MIPS instructions and addition of new ones, as well as a brand new calling convention
+nanoMIPS support is included in the MIPS decompiler (HEXMIPS), there is no need for an extra license
+Firmware compiled for nanoMIPS often ships in md1rom format, which is why we added md1rom file loader to IDA (including parsing and applying of debug symbols, if available)
+Screenshot of nanoMIPS disassembly/decompilation
+IDAPython Improvements
+Most IDAPython APIs now have type annotations, making the API less obstructive to use.
+Python virtual environments (venvs) are now supported - simply run IDA from an activated virtual environment and it will pick up locally installed modules
+Objects returned in the Python API are properly zero-initialized.
+idapyswitch
+can now be used with read-only IDA installations (nothing is changed in the installation directory when picking a different Python version/install)
+Auto-completion in IDA's CLI now disregards
+__magic_methods__
+and auto-generated SWIG methods, reducing noise and helping to find a particular function faster
+Auto-completing a method call shows its prototype with type annotations and docstring (if available) in a pop-up hint
+Screenshot of IDA run from venv
+Screenshot of IDAPython completion hint
+No more IDA32
+We deprecated IDA32 a few versions ago. Now, just one IDA binary handles both 32- and 64-bit code:
+Thus, the number of installed executable files is cut in half.
+Native plugin maintainers will have an easier life since only one version (
+__EA64__=1
+) needs to be maintained
+The conversion of legacy IDB into the I64 file format is transparent and automatically performed by IDA
+Screenshot of idb conversion prompt
+UI Improvements
+The legacy Enums and Structures views are removed entirely and replaced by the Local Types.
+This also means that
+struct.hpp
+and
+enum.hpp
+and their Python counterparts
+ida_struct
+and
+ida_enum
+disappear from the API. Replacement functionality for both headers/modules is now located (mostly) in
+typeinf.hpp
+/
+ida_typeinf
+. A porting guide
+is available
+.
+It is now possible to specify fixed size for structures and to enable field packing easily
+The function prototype editor (aka
+Y
+shortcut on a function name) now can toggle between the classic free-text one-line editor and a new multi-line editor featuring the usual shortcuts and controls.
+At the same time, we added basic support for UI-based editing of argument locations, to make our custom
+__usercall
+syntax less of a hassle to remember.
+Screenshot of new prototype editor
+The basic function prototype editor now indicates invalid prototypes via a red rectangle while typing
+Screenshot of new prototype editor
+A refreshed set of shortcuts that better matches the modern OS conventions can now be selected instead of the traditional shortcuts
+Screenshot of new shortcuts
+Metadata Descriptors for Plugins
+ida-plugin.json
+now offers a standardized entrypoint for plugins. This enables plugin authors to follow their own plugin directory structure, all they need to do is point IDA to the main plugin entry point. To maintain backward compatibility, IDA will keep loading plugins in the legacy way for a couple of releases.
+With the following directory structure:
+A possible
+ida-plugin.json
+could look as follows:
+This approach allows for easy management of plugin's resources and bundled dependencies
+Full list of changes and new features:
+Processor modules
+68K: added typical code start sequences
+ARM: improved detection of targets of indirect jump instructions
+ARM: improved prolog analysis to recognize and mark calls to
+chkstk_darwin
+AVR: updated missing bit definitions for ATmega640
+MIPS: support for NanoMIPS instruction set
+wasm: new processor module (Web Assembly)
+RH850: added new instructions supported by RH850G4MH core (SIMD, FXU, etc.)
+V850/RH850: convert two-instruction loads and stores into one macroinstruction
+File formats
+ELF: added support for nanoMIPS
+ELF: ARM64: added support for
+R_AARCH64_P32_TLS_TPREL
+relocation type, used by ILP32
+ELF: RISCV: added suport for R_RISCV_ALIGN relocation type
+md1img: loader for Mediatek modem firmware images (nanoMIPS and MIPS16e2)
+MACHO: support
+__chain_starts
+format 5 (
+DYLD_CHAINED_PTR_32_FIRMWARE
+)
+MACHO: handle iOS18 DSC with zero-sized
+__OBJC_RO
+segment in libobjc
+wasm: new file loader for Web Asembly modules
+Standard plugins
+eh_parse: skip leading and trailing zero entries in x64
+.pdata
+for PE files (real binaries have them); improve recognition of exception dispatcher functions in debug builds
+eh_parse: x64 exception handlers are now proper standalone functions and not function chunks
+makesig: add run() method which can be used to generate .sig (or just pat) from the database in batch mode
+pdb: added an option to only load names (useful with large PDBs when you don't need types)
+pdb: allow user to choose what to load for a module (types and/or names) during debugging
+Kernel/Misc
+goodname.cfg: improve simplification of MSVC STL classes
+kernel: c/c++ keywords are now forbidden as struct fields
+kernel: support for ida-plugin.json
+kernel: improved strlit detection (short ones were converted to data items)
+kernel: improved recognition of noret functions which call other noret functions indirectly
+noret.cfg: added terminate, std_terminate to the list of non-returning functions
+installer: macOS: install all contents into a single
+.app
+bundle
+licensing: replaced FlexNet licensing server by custom Hex-Rays licensing server (floating licenses only)
+IDAPython & SDK
+IDAPython: added
+find_binary
+and
+find_string
+IDAPython: added detection of virtual environments (venv)
+IDAPython: added more pointer wrappers for integer types defined in pro.h
+IDAPython: added
+cli_t.OnFindCompletions
+replacing
+cli_t.OnCompleteLine
+IDAPython: idapyswitch can now be used with read-only IDA installations
+IDAPython: idapyswitch can now detect recent homebrew versions on macOS
+IDAPython: Removed
+__magic_methods__
+from CLI auto completion
+IDAPython: zero-initialize C++ objects exposed in the Python API
+IDAPython: simplify directory structure (got rid of '3', and 'ida_32|64' became 'lib-dynload')
+IDAPython:
+loader_input_t.read()
+should return an empty
+bytes
+object upon read error, not
+None
+SDK: added Visual Studio templates for plugins and loaders
+SDK: added
+get_last_widget(mask)
+SDK: added
+FUNC_UNWIND
+/
+FUNC_CATCH
+function flags to mark exception handlers, they will be ignored in decompilation
+SDK: added
+pipe_process()
+to launch a process and establish a 2-way communication with it
+SDK: added
+qlist::splice()
+SDK: extended
+cli_t
+interface to allow retrieving function prototypes and docstrings on auto completion
+SDK: introduced flags
+IRI_...
+to be used in
+is_ret_insn()
+,
+ev_is_ret_insn
+instead of
+bool strict
+SDK: moved
+node_ordering_t
+to
+gdl.hpp
+SDK: package decompiler's interface (hexrays.hpp) and samples as part of the SDK instead of inside IDA
+SDK: published basic undo interface (create undo point, undo, redo)
+SDK: renamed
+abstract_graph_t
+->
+drawable_graph_t
+;
+mutable_graph_t
+->
+interactive_graph_t
+added support for Python 3.13
+added
+tinfo_t
+convenience constructors
+tinfo_t(c_decl:str)
+(to parse a C type definition)
+tinfo_t(ordinal=N:int)
+to fetch by ordinal
+tinfo_t(name=N:str)
+to fetch by name
+tinfo_t(tid=N:int)
+to fetch by
+tid_t
+added
+tinfo_t.add_edm
+to simplify building enumerations
+added
+tinfo_t.add_udm
+convenience methods
+added
+tinfo_t.get_udm
+(either by name, or by index)
+added
+tinfo_t.get_udm_by_offset
+added
+tinfo_t
+iterators, for easy member manipulation:
+tinfo_t.iter_struct
+tinfo_t.iter_union
+tinfo_t.iter_udt
+tinfo_t.iter_enum
+added
+til_t.get_named_type
+and
+til_t.get_numbered_type
+, making it more idiomatic to retrieve types from a library
+added
+til_t.named_types
+and
+til_t.numbered_types
+generators
+added
+udt_type_data_t.get_best_fit_member
+added convenience
+funcarg_t
+constructors
+added convenience
+udm_t
+constructors
+added convenience
+edm_t
+constructor
+added many new examples of using core API functions into
+examples/types/
+added
+empty()
+method to udt member type (
+udm_t
+) and enum constant type (
+edm_t
+)
+func_type_data_t
+now defaults to
+CM_CC_UNKNOWN
+calling convention
+added
+append()
+and
+extend()
+to all
+qvector
+-based types
+added
+get_process_options2
+to retrieve the list of environment variables
+the
+displayhook
+now uses
+__repr__
+, and not
+__str__
+, to print information
+expose
+get_undo_action_label()
+,
+get_redo_action_label()
+expose needed functions for checking if a file is a startup signature
+UI
+UI: added an option to retain structure size (Fixed size structs)
+UI: added "pack fields" checkbox to control gaps between fields for structs
+UI: added syntax highlighting for user-defined types in the freetext editor
+UI: command palette: fix wrong reports about "command failed"
+ui: graphs: do not display a prompt when there's only one choice for jumping to a parent/child node
+UI: handle export/import of Local types to IDC in a more flexible way. User is able to select the different policies, for example: load the types and skip the equal.
+UI: if IDA already has a file open, File > Open or dropping a file on its window opens it in a new IDA instance (configurable via
+OPEN_IDB_IN_NEW_WINDOW
+in
+idagui.cfg
+)
+UI: it is now possible to inspect contents of base type libraries, by double-clicking on them in the "Type libraries" view
+UI: introduced a new set of keyboard shortcuts better aligned with modern OS conventions
+UI: got rid of "Structs" and "Enums" widgets
+UI: new shortcuts: Alt- (and CMD-) to jump to a window
+UI: enabled Wayland support on Linux
+HVUI: added a new action "Convert IDB"; it converts the idb and replaces it with i64. bulk operation is also possible
+UI: do not offer to apply startup signatures by default
+local types: allow adding comments on gaps by creating a dummy field automatically
+local types: enabled "Remove gap" action on padding bytes at the end of fixed layout struct
+local types: removed "repeatable" checkbox from the comment form since all such comments are repeatable
+Decompilers
+decompiler: added try/catch ctree statement
+decompiler: improved detection of variadic arg types
+decompiler: introduced a new event:
+hxe_inlining_func
+decompiler: arm: added support for VSEL instruction (ARMv8-M)
+decompiler: improved structure copy recognition
+decompiler: improved cfunc_t cache by introducing "saved_to_idb"; otherwise we were saving all decompiled functions upon each "save_database", again and again
+decompiler: improved constant representation in comparisons with binary operators
+decompiler: improved the error message about the missing license: tell the user what license is missing
+decompiler: mips: added support for movtz and movtn (MIPS16e2)
+decompiler: ui: added "Jump to matching brace" action to the context menu
+decompiler: removed welcome form, renamed menu entry to "Hex-Rays Decompiler Options"
+Other improvements
+installer: install
+defs.h
+header with decompiler helpers into
+include/
+kernel: added new parameters REGTRACK_MAX_XREFS, REGTRACK_MAX_BBLK_INSNS, REGTRACK_MAX_VALS to limit tracking in complex binaries
+licensing: show the number of floating license seats available in the "License manager" dialog
+lumina: improved the
+lumina_server
+'s
+--recreate-schema
+help text
+Bugfixes
+BUGFIX: ARM: analysis speed could be slow on large 32-bit firmware binaries
+BUGFIX: ARM: comment for UBFIZ instruction was wrong
+BUGFIX: ARM: fixed endless loop which could happen when analysing function chunk before main function entry
+BUGFIX: ARM: fixed CF_JUMP/CALL flags for some instructions (e.g. BLR)
+BUGFIX: ARM: stop decoding undefined MOV Wx, #imm variants (imm not fitting in 32 bits)
+BUGFIX: cvt64: converting an old .idb to .i64 would fail if its path contained a space
+BUGFIX: debugger: win32_remote.exe was unnecessarily requiring an API introduced in Windows Vista and would not run on XP anymore
+BUGFIX: debugger: win32: IDA's debugger could be detected by a file lock on the modules being loaded into the process
+BUGFIX: debugger: bochs: added support for Bochs 2.8.0
+BUGFIX: decompiler: decompilation of different syscalls in close sequence could be wrong
+BUGFIX: decompiler: expressions with variable sized structures could be mishandled
+BUGFIX: decompiler: IDA could complain "Could not find a matching license for product" when multiple decompilers were installed
+BUGFIX: decompiler: internal errors triggered by UI-related code (e.g. generating tooltips) could result in "Unknown C++ exception" fatal error
+BUGFIX: decompiler: pressing F5 was not refreshing the pseudocode window in some cases; we were discarding the decompilation result
+BUGFIX: decompiler: value range optimization could lead to code being wrongly removed
+BUGFIX: decompiler: fixed multiple interrs
+BUGFIX: decompiler:
+hxe_flowchart
+event would have the wrong argument 'fc'
+BUGFIX: decompiler: in rare cases a goto label would be misplaced
+BUGFIX: decompiler:
+refresh_ctext()
+would not refresh the function name if it was renamed
+BUGFIX: decompiler: split
+__asm
+blocks when there are interleaved instructions that have been optimized out
+BUGFIX: DSCU: a GAP spanning multiple subcache files would fail to load
+BUGFIX: kernel: IDA on Linux had an unnecessary hard dependency on libsecret and would refuse to run without it.
+BUGFIX: kernel: index comments for arrays inside structures would be wrong
+BUGFIX: kernel: fix stack overflow when parsing some incomplete types
+BUGFIX: kernel: fixed crash when parsing an invalid .sig file format
+BUGFIX: kernel: fixed crash when printing type with invalid base type
+BUGFIX: kernel:
+get_udm_tid()
+could crash if wrong idx was passed to it
+BUGFIX: kernel: parsing an ill-formed type could crash IDA
+BUGFIX: kernel:
+tinfo_t::get_innermost_udm()
+could crash with division by 0 if zero-sized members were present
+BUGFIX: kernel: TID was not preserved for renamed enum constant
+BUGFIX: lumina_server: the server could reject creating of new users in case local authentication was used
+BUGFIX: lumina_server: the
+-L
+argument (to point at a license file) was not honored
+BUGFIX: makesig: "Create SIG file..." could lead to IDA exiting on some binaries
+BUGFIX: merge: merging of a large fixed structure with a small one was buggy
+BUGFIX: PyQt5: IDA could crash or exit with iterr 1442 when using PyQt5 on Linux with Python 3.12
+BUGFIX: IDA would not mark typical code sequences in raw binary files even if the processor module supported it
+BUGFIX: navigating to a global name which matched a known type name would fail
+BUGFIX: objc: NS*Block reference detection error would end up creating incoherent block structures over unrelated data
+BUGFIX: PC:
+alloca_probe
+/
+chkstk_ms
+does not modify rsp or rax in x64 code, unlike x86
+BUGFIX: PC: REX prefix could be incorrectly applied to 32-bit instructions
+BUGFIX: PC: vmovw instruction was decoded as if using 16-bit registers (it actually uses 32-bit ones)
+BUGFIX: PC: disabling "Locate and create jump tables" analysis option was not honored by the processor module
+BUGFIX: elf: deliberately misleading info about section headers could confuse IDA
+BUGFIX: IDA Free/Home: fix misleading message when opening .idb files
+BUGFIX: PDB: importing types from some large PDBs would fail with "the maximum recursion level was reached"
+BUGFIX: PDB: improved algorithm to extract anonymous(embedded) unions: gap members could be mis-ordered
+BUGFIX: SDK: fixed a debug/opt build incompatibility in
+reg_finder_t
+(due to embedded
+std::map
+member)
+BUGFIX: SDK:
+set_all_bits()
+and
+clear_all_bits()
+would behave wrongly on bitmaps with size not a multiple of 8
+BUGFIX: sometimes information about newly created range-like entities (segments/functions/...) could be lost during UNDO
+BUGFIX: tinfo: xrefs to a deleted enum were not removed
+BUGFIX: IDAPython:
+Hexrays_Hooks.collect_warnings
+was not usable
+BUGFIX: IDAPython:
+IDP_Hooks.ev_get_abi_info
+was not usable
+BUGFIX: IDAPython:
+set_process_options()
+could not be used to set environment variables for debugging
+BUGFIX: IDAPython: using
+mop_t.make_insn
+could result in a double-free, and crash IDA
+BUGFIX: IDC: appcall could report an error instead of the function's return value
+BUGFIX: IDT: fixed potential crash when parsing corrupted ids files
+BUGFIX: installer: IDA Free for Linux was missing the local debugger
+BUGFIX: UI: default buttons in the 'dark' theme wouldn't stand out
+BUGFIX: UI: editing type of items inside current function was not possible
+BUGFIX: UI: fixed missing scrollbars in the "Output" window when long text was printed
+BUGFIX: UI: large amounts of lines in the "Output" window could cause slowdowns
+BUGFIX: UI: long strings could be truncated when using "Export data"
+BUGFIX: UI: when using
+COLOR_INV
+color code (e.g. in a custom viewer), IDA would use default color for the text instead of the previous background color
+BUGFIX: UI: quick filters would apply to hidden columns
+BUGFIX: UI: .wasm files were not listed in the "Open file" dialog by default
+BUGFIX: UI: IDA could fail to rename stack frame members from the disasembly view
+BUGFIX: UI: it was not possible to select the first line in hex view if it didn't start on 16-aligned address
+BUGFIX: UI: Local Types: do not apply filtering and ordering of the types chooser (the left pane) to the listing (the right pane) when "Show selection only" is off
+BUGFIX: UI: opening IDA without an IDB or a license and performing a check-for-update operation, could cause INTERR 41270
+BUGFIX: UI: pulling graph nodes too far up could result in rendering glitches
+BUGFIX: UI: switching between CLI interpreters didn't work if "new shortcuts" were enabled
+BUGFIX: UI: text search results in graph mode displayed labels instead of instructions
+BUGFIX: WASM: fix "out of order subsection" loader error on some files
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+Who Can Upgrade to IDA Pro 8.5?
+How to upgrade to IDA Pro 8.5?
+IDA 8.5 Highlights
+Licensing changes
+WASM Disassembler and File Format Loader
+nanoMIPS support
+IDAPython Improvements
+No more IDA32
+UI Improvements
+Metadata Descriptors for Plugins
+Full list of changes and new features:
+Processor modules
+File formats
+Standard plugins
+Kernel/Misc
+IDAPython & SDK
+UI
+Decompilers
+Other improvements
+Bugfixes
+Was this helpful?
+Copy
+plugins
+└── ida_greeter
+├── ida-plugin.json
+└── main.py
+Copy
+{
+"IDAMetadataDescriptorVersion": 1,
+"plugin" :
+{
+"name" : "greeter",
+"entryPoint" : "main.py"
+}
+}

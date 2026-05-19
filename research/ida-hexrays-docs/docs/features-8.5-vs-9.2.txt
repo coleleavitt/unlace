@@ -1,0 +1,145 @@
+Feature overview: IDA 8.5 vs 9.1
+{background_position=MIDDLE_CENTER, background_size=cover, css=background-image: url('https://hex-rays.com/hubfs/lp-hero.png');
+background-size: cover;
+background-position: center center;
+, src=https://hex-rays.com/hubfs/lp-hero.png}
+background-image: url('https://hex-rays.com/hubfs/lp-hero.png');
+background-size: cover;
+background-position: center center;
+Feature overview: IDA 8.5 vs 9.2
+Explore 9.2 plans
+Explore the key differences between IDA 8.5 and IDA 9.2 in this concise feature comparison. This overview highlights just major improvements, for a deeper dive into what’s new, don’t hesitate to reach out to our sales team at
+sales@hex-rays.com
+.
+Feature
+Summary
+IDA 9.2
+IDA 8.5
+Open-Source Tools
+IDA SDK & IDA Python
+IDA Domain API
+IDA SDK & IDA Python - Users can build and adapt the SDK to integrate IDA into a custom workflow, extend its capabilities, or maintain tooling across teams.
+IDA Domain API - a new open-source Python API designed to make scripting in IDA simpler, more consistent, and more approachable.
+Mircocode Viewer
+Hook into the pipeline and intercept microcode generation, so plugins can reshape the hierarchy however they see fit. This new microcode view syncs with disassembly, pseudocode, or other microcode views at any stage in the decompilation process
+idalib
+Headless Processing
+Run scripts directly using IDA as a library. Both the C++ and Python APIs can be used from outside IDA to form standalone applications. If configured correctly, you get auto-completion and debugging in your favorite C++/Python IDE.
+Now you can pass IDA's command-line arguments to the open_database() function. This allows, for example, processing raw binaries for non-x86 using idalib.
+RISC-V and ARM
+Decompiler & Disassembler Extensions
+New decompilers targeting 32- and 64-bit RISC-V code (HEXRV and HEXRV64). There is now an extended RISC-V processor module to support T-Head extension instructions (used in Xuantie and Allwinner processors).
+Automatic switch detection for both RISC-V and ARM
+Visualization
+Xref Graph & Xref Tree
+These new views bring clarity to function relationships and data flows, making it easier to trace code paths and understand complex binaries.
+Decompiler
+Improvements
+ARM64 – Now supports ILP32 mode, making decompilation more accurate for systems like Apple’s watchOS.ARM64 – Displaying of symbolic system register names in pseudocode means better, more readable decompilation for OS-level applications.
+PPC – Support for EFP (Embedded Floating Point) extension instructions of the Signal Processing Engine (SPE), expanding your analysis capabilities.
+RISC-V – Added more intrinsics, reducing the number of __asm fragments in your pseudocode for a cleaner view. The decompiler now also handles Atomic Memory operation (AMO) instructions seamlessly.
+GO - Cleaner Golang decompilation with tuple types.
+Processor Module
+Updates
+TMS320C6 – The compact (16-bit) encodings from TMS320C66x and TMS320C674x series are now disassembled.
+RISC-V & RH850 – Improved switch table recognition, broader relocation handling, and extended register tracking.
+TriCore – mfcr/mtcr instructions now use symbolic names for Core Special Function Registers (CSFRs) when known, making code easier to read.
+50+ new instructions from TC1.8 are now supported, expanded chip definitions (TC1765, TC1724, TC128, TC1130, ane more), and global address registers (A0, A1, A8, A9) can now be configured as segment registers..
+C++ Exceptions
+Support in the Decompiler
+The Decompiler can now emit try/catch blocks. There is now support for the C++ exception scheme in binaries compiled for x64 using Microsoft VC++.
+Debugger
+Register Subview & Call Stack Recon
+A redesigned register subview that provides a much richer context.
+A more accurate call stack reconstruction mechanism for certain x64 PE files.
+FLIRT Manager
+Updates
+Extensive update includes modernized and extended number of FLIRT signatures available for modern languages like Golang and Rust.
+A new plugin (FLIRT Manager) allows easy application of multiple signatures to the database and lets you see which one gives the best results.
+Updates for classic compilers (MSVC for Windows, GCC for Linux).
+IDA now detects the Rust version of the loaded binary, enabling the automated creation of custom, version-specific FLIRT signatures.
+zstd Compression
+IDA now uses zstd compression in IDB files. The higher compression results in smaller IDBs for faster saving and loading, especially when working with large databases.
+This also improves performance when working with remote storage or syncing with version control.
+IDA Teams
+Improvements
+IDA Teams versioning functionality can now send and receive small binary delta files instead of whole IDBs, delivering faster version management operations and less network traffic by only sending what has changed.
+The delta files can also be stored on the Vault server, keeping down disk usage.
+Metadata Descriptors
+Plugins
+ida-plugin.json now offers a standardized entrypoint for plugins allowing authors to follow their own plugin directory structure.
+License Flexibility
+Licenses are no longer bound to a specific platform. After buying one IDA license, it can be used on all supported platforms (Windows/Linux/macOS).
+IDA Teams & Lumina are now add-ons and can be added to any subscription plan.
+A custom Hex-Rays licensing server replaces the FlexNet licensing server for floating licenses.
+WASM Disassembler
+and
+File Format Loader
+The new disassembler for Web Assembly (WASM) supports client-side browser applications.
+WASM code is embedded into its own binary file format so we include a file loader that decodes the WASM file format.
+IDAPython
+Improvements
+Most IDAPython APIs now have type annotations.
+Python virtual environments (venvs) are now supported.
+Objects returned in the Python API are properly zero-initialized.
+idapyswitch can now be used with read-only IDA installations.
+Auto-completion in IDA's CLI now disregards __magic_methods__ and auto-generated SWIG methods.
+Auto-completing a method call shows its prototype with type annotations and docstring (if available) in a pop-up hint.
+nanoMIPS
+Decompiler & Support
+Both the MIPS disassembler and decompiler now support nanoMIPS instructions.
+This is not a simple extension of the MIPS ISA but a completely new encoding of the existing MIPS instructions and addition of new ones, as well as a brand new calling convention.
+nanoMIPS support is included in the MIPS decompiler (HEXMIPS), there is no need for an extra license.
+UI
+Improvements
+Modernized look and feel with updated icons, added crosshair effect in minigraph, higher-res fonts, and more.
+Replacement functionality for both headers/modules is now located (mostly) in typeinf.hpp / ida_typeinf. A porting guide
+is available
+.
+It is now possible to specify fixed size for structures and to enable field packing easily.
+The function prototype editor (aka Y shortcut on a function name) now can toggle between the classic free-text one-line editor and a new multi-line editor featuring the usual shortcuts and controls.
+The basic function prototype editor now indicates invalid prototypes via a red rectangle while typing.
+A refreshed set of shortcuts that better matches the modern OS conventions can now be selected instead of the traditional shortcuts.
+Unified type storage
+(ASMTIL)
+Reestablished features to Local Types, such as structure field representation and all type manipulations. New databases only have Local Types by default and Structures and Enums are deprecated.
+The new Local Types Widget allows editing structures like the classic Structures widget, or via a free-text editor.
+ARM/iOS
+Improvements
+Added support for common Apple-specific instructions and system registers commonly encountered in iOS and macOS software to see fewer instances of undefined bytes breaking disassembly and more understandable code when working with these files.
+Debugger
+Improvements
+Added support for recent Android versions and made it more robust when working with apps without debug information. If running on a recent (API28+) Android, IDA will try to guess the variable type automatically. Since in the Dalvik VM the value of a variable cannot be displayed without knowing its type, this boosts the debugging experience significantly.
+Purchase 9.2
+For IDA 9.1
+Release Notes IDA 9.2
+What’s New with IDA 9.2 - Read Detailed Blogs
+For IDA 8.5
+Release Notes IDA 8.5
+FAQs
+Frequently asked questions
+You’ve got questions. We have answers!
+I currently have IDA Pro 8.x, what are my options to get to IDA 9?
+You have two options:
+If your perpetual license is in active support, you do not need to purchase a subscription to access IDA 9 under the new subscription model. Your active license allows you to receive a free subscription to IDA 9! To start using IDA 9 today you can access the installer in the new customer portal at
+my.hex-rays.com
+. There you can request a license key for your free subscription. Please note that the license key for your free IDA 9 subscription will expire at the end of your active support period. You can find detailed instructions on how to upgrade to IDA 9
+here
+.
+If your perpetual license has run out of support, or your support period is about to end, you can select a plan
+here
+and upgrade within our customer portal,
+my.hex-rays.com
+. For any questions or doubt, do not hesitate to contact
+sales@hex-rays.com
+Can I get IDA Pro with a monthly subscription?
+We offer solely yearly subscriptions.
+Can I purchase IDA with a perpetual license?
+Perpetual licenses are no longer offered as from September 30, 2024
+as Hex-Rays adopts a subscription-based licensing model.
+Any perpetual licenses bought before September 30, 2024 will remain valid and continue working according to their licensing terms. This means that you can continue to use indefinitely the specific IDA Pro version that you purchased before that date.
+Please bear in mind that updates and support for previous versions will be discontinued after one year of the activation date.
+Connect with the community on
+Privacy policy
+Terms of use
+© 2026 Copyright Hex-Rays

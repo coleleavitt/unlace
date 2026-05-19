@@ -1,0 +1,168 @@
+IDA 7.4sp1 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 7.4sp1
+IDA 7.4.191112 (SP1)
+November 12, 2019
+Welcome to IDA 7.4 SP1!
+IDA 7.4 SP1 fixes several minor issues discovered since the release of
+IDA 7.4
+.
+Complete changelist
+Processor Modules
++ M16C: improved jumptable recognition for M32C and R32C
+Installer
++ installer: improved support for HiDPI displays in installers
++ installer: ignore known unusable/buggy Python 3.x installs on Windows
+Debugger
++ DEBUGGER: android: introduced IDA_LIBC_PATH envvar to specify the path of libc.in a nonstandard location (e.g. in Android 10)
+Plugins
++ DSCU: allow __auth_stubs sections to be loaded individually from the dyldcache
+Kernel/Misc
++ goodname.cfg: improved std::basic_string patterns
+BUGFIXES
+BUGFIX: 6502: cross-references to 16-bit addresses could be truncated to 8 bits
+BUGFIX: debugger: IDA could appear to hang when deleting debugger segments after terminating a debugged process.
+BUGFIX: debugger: mac, linux debug servers could crash when using --on-broken-connection-keep-session (-k) switch.
+BUGFIX: DOS: IDA could crash after rebasing databases created for DOS .SYS files
+BUGFIX: DSCU: "load libname.dylib" context menu item could be unavailable for some valid addresses
+BUGFIX: hexrays: 32-bit magic divisions could be incorrectly recognized on arm64 and ppc64
+BUGFIX: hexrays: fixed interr 50340
+BUGFIX: hexrays: IDA could crash if no type was selected in "Convert to struct *" dialog, but OK was clicked
+BUGFIX: hexrays: it was impossible to change the representation of some constants
+BUGFIX: hexrays: op_uses_x() was returning false for 'cot_sizeof'
+BUGFIX: hexrays: some switch cases would be wrongly printed as unsigned values
+BUGFIX: hexrays: UDT return type could cause INTERR and __spoil<...> attribute was not supported for user-defined calls
+BUGFIX: hexrays: wrong handling of big register arglocs on BE plaftorm: valid fastcall functions could be erroneously converted to usercall
+BUGFIX: IDA could crash when trying to use license borrowing functionality without opening a file first
+BUGFIX: IDA could fail with "out of memory" if something was wrong with the list of trusted idbs
+BUGFIX: IDAPython could crash at startup on OSX when used with Python 3.6.
+BUGFIX: IDAPython: ida_hexrays.cblock_t.insert() was unusable
+BUGFIX: IDAPython: ida_kernwin.UI_Hooks.preprocess_action() wouldn't allow inhibiting the action
+BUGFIX: IDAPython: ida_nalt.retrieve_input_file_md5() & ida_nalt.retrieve_input_file_sha256() were returning invalid data
+BUGFIX: IDAPython: inspect.stack() could fail on recent versions of Python3 (e.g., Python 3.7.4)
+BUGFIX: IDAPython: re-instantiating a chooser a second time could cause some context menu items to appear twice
+BUGFIX: IDAPython: when returning an inappropriate type for ida_kernwin.Chooser2.OnGetLine() (e.g., returning a 'map()' in Python3, which produces a map iterable object and not a list), we would receive a cryptic message.
+BUGFIX: installer: Python 2.7 installation could fail if path to temp directory contained non-latin characters.
+BUGFIX: Lumina: IDA could submit the "File Name:" comment at the beginning of the IDB, as part of the first function's comments.
+BUGFIX: M16C: ADD.L #imm, SP instructions could update SP with wrong value
+BUGFIX: M16C: added missing DIV?.L and MUL?.L M32C instructions
+BUGFIX: pc: sysret was not marked as an instruction that stops execution
+BUGFIX: PPC: some VLE switches were not recognized if they used a register other than r0 for loading jump table elements
+BUGFIX: Pressing F5 could cause a confusing "conflicting shortcuts" message to be printed in some situations
+BUGFIX: ui/qt: it was impossible to change the font for the new type editor
+BUGFIX: ui/qt: navigating some forms containing a text area using <Tab> and <Shift+Tab>, was broken
+BUGFIX: ui/qt: the "Output window" was not understanding the '\r' (carriage return) character, making Python's 'tqdm' unusable
+BUGFIX: UI: it was impossible to add the same file in "Recent scripts" in two IDA instances running simultaneously
+BUGFIX: UI: IDA's UI could be sluggish on OSX when using an external display.
+BUGFIX: UI: list of patched bytes would be empty when patching a rebased program
+BUGFIX: ui: the script snippets could fail highlighting properly when Unicode was involved
+BUGFIX: unnamed types could not be imported in structure/enum views
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+Was this helpful?

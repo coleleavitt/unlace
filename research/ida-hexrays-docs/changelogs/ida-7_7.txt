@@ -1,0 +1,363 @@
+IDA 7.7 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 7.7
+IDA 7.7.211224
+December 24, 2021
+IDA 7.7 Highlights
+iOS15 and macOS 12 support
+Apple has made major changes to the internal format of core OS files. In particular, the DYLD Shared Cache (DSC) has been split into multiple parts. Our Mach-O loader and the helper DSCU plugin have been updated to handle this seamlessly. We have also updated our iOS and Mac debuggers to handle peculiarities of debugging in the new OS versions.
+Clang-based C++ parser
+In addition to the built-in C parser, IDA now supports an additional parser based on libclang. It allows IDA to handle complex, real-life C, C++, and Objective-C syntax found in STL, MFC, Apple's XNU and iOS SDK, and Linux kernel headers. We will also soon provide a command-line version to build your own type libraries - stay tuned!
+Thanks to Clang-based parser, now the types from the Boost library can be parsed:
+Configuring it is very easy:
+Golang improvements
+We took our golang analysis to another level. Detection of golang binaries is more robust thanks to the standard startup code detection, and standard library signatures allow you to ignore unimportant functions. We also use more of the rich metadata present in Go binaries:
+Functions are automatically grouped into folders by modules. Once you enable folders, these groups will be visible:
+\
+Reflection metadata is parsed to recover types used by the program
+\
+UI candy
+The Lock Highlight button now allows you to have multiple permanent highlights in the database, so you can see the important things at a glance.
+New icons to easily hide or unhide the listing elements, like functions, segments, etc.
+Output window gained an option to enable timestamps making it easier to keep track of the various messages printed there.
+Qt libraries have been upgraded to version 5.15.2, offering improved support for HiDPI (4K+) screens, as well as native support for macOS's "dark mode".
+Switching between IDA's windows using a keyboard just got easier: hold down Alt to reveal the corresponding digit you need to press to switch to that window.
+Breakpoints list now uses the standard folder view for grouping. You can enable or disable all breakpoints in a folder with one click.
+Multiple highlights:
+Native macOS Dark Mode:
+Breakpoint groups:
+New processors
+Two new processor modules were added in this release: Cadence Tensilica Xtensa and the Renesas RX series.
+RX processor:
+XTensa processor:
+Type system
+Basic type system support has been enabled for all processors, This means that now you can use C syntax declarations for structures and enums via the Local Types editor or by parsing C headers. DWARF types are also imported, when available. FYI, DWARF5, the new version of the debug format, which is the default since GCC 11, is now supported.
+RISC-V types imported from DWARF:
+Decompilers
+We have ported our decompiler to MIPS64. We have also added support for some of the custom instructions of Cavium OCTEON MIPS processors used in advanced network equipment. Currently only n64 ABI is supported for MIPS64. Of course, the existing decompilers also received numerous improvements and fixes. For example, the new extended flow guard (XFG) calls are handled in x64 and ARM64 Windows binaries.
+Full list of changes and new features:
+Procesor modules:
+8051: added configuration for the R8051XC2 core in M5 FPGA by Capital Microelectronics (thanks to Zak Escano)
+8051: allow loading binary files without a device selection (thanks to Zak Escano)
+ARM: improved function recognition
+ARM: improved thunk function detection
+ARM: added decoding of ARMv8.4-CondM and ARMv8.5-CondM instructions (RMIF, SETF8, SETF16, CFINV, XAFlag, AXFlag)
+ARM: added decoding of ARMv8.5-FRINT instructions (FRINT32Z/FRINT32X/FRINT64Z/FRINT64X)
+PC: improved speed in analysis of big x86 PE files
+PC: recognize switches with BTI notrack prefix (3Eh) on the indirect jump
+PIC16: allow 8-bit addressing in data segments for the PIC24/PIC33 series
+PPC: improved ppc64 thunk function detection
+RISCV: added support for switch patterns
+RL78: added RL78S3 core instruction decoding
+RL78: added support 32-bit and 64-bit data items and 32-bit segments
+RX: new processor module (Renesas RX series)
+SPARC: improved detection of functions that use a stack frame
+XTENSA: new processor module (Tensilica Xtensa)
+Debuggers:
+bochs: added a config parameter HIDE_CONSOLE in dbg_bochs.cfg
+bochs: inform the user about the presence of a .lock file, instead of launching bochs that would complain about the wrong img file
+debugger: improve stack walking for macos x64
+debugger: improve stack walking for windows x64
+debugger: ios: improve debugging on iOS15
+debugger: linux: improve call stack recovery on Linux x86_64 (also use libunwind if present)
+debugger: report the precise address that caused a page breakpoint to trigger (win32, windbg)
+PIN: support PIN 3.21
+File formats:
+MACHO: support new format of the dyld shared cache split into subcaches (iOS 15, macOS12)
+MACHO: disable ASLR slide detection in dyld shared cache by default (use IDA_DYLD_SHARED_CACHE_SLIDE environment variable to set it manually)
+PE, COFF: parse and format new FH4 (CxxFrameHandler4) C++ exception tables
+PE: speed up loading of files with a huge number of imports.
+DWARF: support for DWARF 5 debug information
+DWARF: added DWARF_ENABLE config option, as well as an 'off' command-line option, to disable the plugin
+DWARF: add a dialog for fine-grained selection of debug information to import (e.g. do not import types for speed)
+FLIRT / TILS / IDS:
+FLAIR: go2pat: go obj file to .pat converter for generating Go function signatures
+FLAIR: sigmake: added support for signatures with names > 1024 characters
+FLIRT: GO: added signatures for the major standard libraries for golang 1.10-1.16 (x64 only)
+FLIRT: Updated VC and MFC signatures up to Visual Studio 2019 16.11
+FLIRT: BC: added signatures for xe104 (RAD Studio 10.4)
+FLIRT: BC: added signatures for xe11 (RAD Studio 11)
+FLIRT: ICL: added signatures for icl213 (intel c++ 2021.3)
+FLIRT: ICL: added signatures for icl214 (intel c++ 2021.4)
+IDS: update coredll ordinal mappings for SH3/SH4 to WinCE 6.0
+TIL: idaclang: new command-line utility for creating type libraries using clang C++ parser
+Standard plugins
+golang: add a numerical suffix when a type name already exists (this can happen due to different import paths)
+golang: add definitions of some builtin types (string, array, interface, slice)
+golang: annotate interface (itab) table
+golang: annotate the full reflect.name (possible presence of field tag and import path)
+golang: improved detection of prologs in x86/x64 bnaries
+golang: provide the ability to turn off(/on) deriving a function's end from pclntab (GOLANG_FUNC_END_FROM_PCVAL_TABS in golang.cfg)
+golang: show unprocessed (original) function name as function comment if the name was sanitized.
+golang: startup signatures allow detection of golang binaries (currently x86 ELF, PE and Mach-O)
+swift: updated libSwiftDemangle to 5.5.1 to enable recent Swift symbols demangling
+Core / Misc
+goodname.cfg: simplify names of STL classes in __cxx11 namespace (libstdc++)
+ida.cfg: added DEVICE parameter to specify the target device (e.g. ida -pavr -DDEVICE=\"AT90C8534\" firmware.hex)
+ida.cfg: added PRIVRANGE parameter to specify the default private address interval (addresses for internal usage) for new databases
+idaclang: added support for libclang-based C++ parser (can be enabled in Options > Compiler...)
+installer: allow running of x64 installers on Apple Silicon (under Rosetta)
+installer: Installers for Apple Silicon are fully native and do not require Rosetta
+kernel: enabled type system for all processors; the processors that do not define the necessary callbacks will still have limited support (e.g. the argument locations won't be calculated, among other things)
+kernel: improved function recognition in binary files
+Scripting & SDK
+IDAPython: added colorize_disassembly_on_the_fly.py example to demonstrate dynamically coloring listing lines (w/o touching the IDB)
+IDAPython: added example print_call_stack.py
+IDAPython: added IDAPYTHON_IDAUSR_SYSPATH parameter to idapython.cfg to automatically add $IDAUSR/python/[2|3]/ directories to sys.path (enabled by default)
+IDAPython: added list_function_items.py sample to demonstrate usage of func_t iterators
+IDAPython: examples directory now has an index with the listing of examples and functions used in them
+IDAPython: functions returning multiple values or structures, now return tuples instead of lists
+IDAPython: idalines_generate_disassembly now returns (int, [line, line, ...]) instead of (int, (line, line, ...))
+IDAPython: improve return type information shown in docstrings
+IDAPython: improved online API documentation
+IDAPython: the xrefblk_t class now provides functions for iterating the cross-references using generator expressions (for ... in)
+SDK: added enable_bptgrp() function
+SDK: added dirtree_t::find_entry()
+SDK: added get_user_input_event() to retrieve information about the event that triggered a certain notification (e.g., view_curpos, hxe_curpos, ...)
+SDK: added qstring::split() & qstring::join()
+SDK: added REFINFO_NO_ZEROS/REFINFO_NO_ONES flags for refinfo_t to handle special cases of offset values
+SDK: added the new ALOPT_ONLYTERM option for get_max_strlit_length() to allow invalid characters inside string literals
+SDK: clarify documentation for show_wait_box() about HIDECANCEL
+SDK: idb_event::segm_deleted notification now provides the flags that were used for deletion
+SDK: introduced functions to convert UTC time to struct tm and back (qgmtime/qtimegm)
+SDK: moved qfsize() from diskio.hpp to fpro.h
+SDK: renamed inf.comment -> inf.cmt_indent
+SDK: APIs working with breakpoint groups (e.g. set_bpt_group) now accept a path instead of a simple name
+UI:
+UI: add the shortcut number to the tabs' titles if Alt is pressed for 1 second
+UI: added checks in the floating license borrow/retun forms to avoid a problem with decompiler licenses not being returned
+UI: added ymmword and zmmword data types to "Setup data dialog" (for processors that support them)
+UI: enable Command+F for QuickFilter actions on macOS
+UI: improved speed when manipulating large numbers of breakpoints
+UI: improved UI responsiveness when manipulating huge structures
+UI: messages in Output window can now be timestamped by enabling the option from the context menu
+UI: multiple lockable highlights are now available in listings
+UI: show collapse/expand icons to the left of disassembly items when the corresponding action is available
+UI: support for relative (i.e., '+N', '-N') jumps in structures window
+UI: when a widget is reopened with WOPN_RESTORE, IDA will attempt to place it where it was previously located, instead of next to the currently active widget
+UI: the breakpoints view now uses a standard folder view for breakpoint groups
+Decompilers:
+decompiler: add the "Copy" action in the context menu when it's available
+decompiler: added PSEUDOCODE_SYNC_XPOS option, to prevent synchronized Pseudocode-* views from scrolling horizontally when navigating in the other view
+decompiler: optimize complex conditions by removing useless parts. E.g. x==3 || x!=4 is replaced by x!=4
+decompiler: print the decompiler version when writing a C file output
+decompiler: recognize more magic division sequences
+decompiler: transform memcpy calls into memset when all source bytes are the same
+decompiler: transform two shifts in opposite directions into a corresponding division or multiplication
+decompiler: disable actions 'Set call type', 'Remove function argument' for helper calls generated by the decompiler
+decompiler: improved comments in hexrays.cfg
+decompiler: support for the Extended Flow Guard helper (guard_xfg_dispatch)
+decompiler: ARM: intrinsic functions swapXX, __rbitXX now use 32/64 suffix to show the underlying operation size
+decompiler: MIPS: added support of n64 ABI (MIPS64 decompiler)
+decompiler: MIPS: added support for Cavium-specific instructions
+decompiler: x86/x64: decompile prefetchnta instruction
+decompiler: PPC: CR and CR32..CR63 bits can be specified as argument/return locations in
+__usercall
+functions, e.g.
+bool __usercall sub_610ACA@<cr34>(int *a1@<r5>)
+Bugfixes:
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+IDA 7.7 Highlights
+Full list of changes and new features:
+Bugfixes:
+Was this helpful?
+Copy
+BUGFIX: 8051: it was not possible to select a different Intel 51 subtype after double-clicking one in the Load a new file dialog
+BUGFIX: ARM: fixed high memory consumption in regtracker for some files
+BUGFIX: ARM: some ARM files could cause IDA to consume too much memory during analysis
+BUGFIX: choosers/dirtrees with big selections could slow down IDA significantly after certain operations.
+BUGFIX: databases with more than 5000 selectors (e.g. from a file many small segments) would be restored incorrectly after saving
+BUGFIX: debugger: IDA could produce internal error 40201 in case of connection problems during a remote debugging session. Now it terminates the debugging session gracefully
+BUGFIX: debugger: Locals view would fail to display variables stored in registers when debugging MIPS programs
+BUGFIX: debugger: android: IDA could fail to display some processes on Android 10
+BUGFIX: debugger: bochs: it was impossible to suspend execution by clicking on "Cancel"
+BUGFIX: debugger: mac debugger would fail to detect loaded dylibs on macOS12
+BUGFIX: debugger: windbg: debugger could fail to pause when clicking on "Suspend"
+BUGFIX: debugger: windbg: fixed interr 40038, which could happen when modifying breakpoints immediately after continuing execution
+BUGFIX: debugger: windbg: reattaching a kernel debbuging session now initialize all kernel event for all cores instead of one core and show all cores in 'Threads' widget
+BUGFIX: debugger: windbg: switching a CPU core via windbg command line or Threads window was not always handled correctly
+BUGFIX: debugger: windbg: clicking "Suspend" could fail to pause debugging on the first try
+BUGFIX: DOS: when rebasing a DOS executable using full rebase (MSF_NETNODES), segment register change points were not properly updated to the new segment bases
+BUGFIX: DWARF: The DWARF plugin could fail to apply relocations to certain sections that were, in fact, loaded
+BUGFIX: fixed interr 40036 whch could happen while moving breakpoints during rebasing
+BUGFIX: flowchart graphing functions (from "View > Graph" menu) would fail to consider tail calls (jumps to functions)
+BUGFIX: garbage pixels could be present in the graph view on OSX.
+BUGFIX: gdb: it was impossible to use -rgdb+pid for instant debugging
+BUGFIX: golang: allow utf8 (non standard ascii) characters in function names retrieved from pclntab
+BUGFIX: IDA could crash at the exit time after collecting a trace info in the debugger
+BUGFIX: IDA could crash when deleting function tails with multiple parents (e.g. when using Help > Extract function...)
+BUGFIX: IDA could INTERR(40408) during editing in hexview
+BUGFIX: IDA would die with "out of memory" if the same name (with a numeric suffix) was used in more than 2^15 locations
+BUGFIX: IDA would exit with internal error 86 if the __spoils keyword was specified twice in a function prototype.
+BUGFIX: IDA would exit with "Fatal error before kernel init" instead of a proper error message if the ida.reg file was corrupted.
+BUGFIX: IDA would still try to set the processor even if the loader had no flag LDRF_REQ_PROC
+BUGFIX: IDAPython was missing ida_idp.CF_USE7/8 and ida_idp.CF_CHG7/8.
+BUGFIX: IDAPython: fix the run_plugin() wrapper (argument should be size_t, not int)
+BUGFIX: IDAPython: func_item_iterator_t::next/prev couldn't be used
+BUGFIX: IDAPython: IDA could crash if ida_kernwin.twinpos_t.place was called for an invalid selection
+BUGFIX: IDAPython: IDA could INTERR(918) when ida_hexrays.udc_filter_t subclasses were used in the same IDA session, but across multiple databases
+BUGFIX: IDAPython: ida_kernwin.Form() could crash IDA on arm64 macOS
+BUGFIX: IDAPython: some legacy properies from the 6.95 API were still available by mistake. Now accessing them produces a one-time deprecation warning
+BUGFIX: installer: fixed black window issue on Apple Silicon macOS Monterey.
+BUGFIX: kernel: reject function types with more than 32766 arguments instead of storing wrong information
+BUGFIX: macho loader could INTERR(20005) on dyldcahce files.
+BUGFIX: MACHO: ARM64 (not ARM64E) binaries that used chained fixups for imports (e.g. on iOS15) were processed incorrectly
+BUGFIX: MIPS: don't try to detect GOT address in non-ELF files(it could lead to incorrect disassembly)
+BUGFIX: PC: fixed an endless loop during stack analysis
+BUGFIX: PC: prolog could be detected incorrectly in functions, which use SSE instructions
+BUGFIX: PC: sometimes functions could be incorrectly split at the push rbp; mov rbp, rsp sequence
+BUGFIX: PCF: parsing of COFF files without a string table (only short, inline symbol names) would fail
+BUGFIX: PDB: unions with sparse bit fields were imported incorrectly
+BUGFIX: pelf: pelf could crash in per-function mode (-f).
+BUGFIX: PIC: references to memory using bank 4 and above were decoded incorrectly for the PIC16F series
+BUGFIX: PIC: registers with addresses above 0x200 were not present in the DATA area
+BUGFIX: Python & IDC: get_fchunk_referer() could return garbage or crash IDA if called with an address belonging to an entry function chunk
+BUGFIX: Python: calling append_func_tail() from the CLI could cause INTERR 1733
+BUGFIX: RISCV: change assembly directives to riscv-asm-manual recommendation
+BUGFIX: SDK: qdirname() would return empty path for the root directory
+BUGFIX: Some older IDBs could cause IDA to INTERR at upgrade-time
+BUGFIX: TXT: idat could crash if started in a directory with > 8000 files
+BUGFIX: UI/qt: "Copy" in choosers/trees would respect the internal selection ordering, rather than the ordering as it is visible on the screen
+BUGFIX: UI/qt: "Copy/Copy all" in choosers/trees would also retrieve text from hidden columns
+BUGFIX: UI/qt: it was possible to create the same bookmark in multiple places within the tree structure
+BUGFIX: UI/qt: when the permanent bookmarks chooser is opened, selecting a folder and adding a bookmark from the disassembly, will add it to the end of the tree, not in the expected folder
+BUGFIX: UI: "copy struct type" command could fail showing the freshly-created structure
+BUGFIX: UI: deleting a 'manual memory region' from within the debugger-specific options's modal widget, could lead to a crash later
+BUGFIX: UI: deleting or enabling/disabling a huge number of breakpoints would appear to hang IDA
+BUGFIX: UI: double-clicking on a stack frame variable whose frame view is already opened, wouldn't jump to that variable
+BUGFIX: UI: IDA could appear to hang trying to display a watch item pointing into a middle of a defined item such as a struct instance
+BUGFIX: UI: IDA could be killed silently if it was blocked by a network firewall on macOS; now it displays an error message
+BUGFIX: UI: IDA could crash when loading a database with empty saved strings list
+BUGFIX: ui: in the "Structures" widget, 'Create before current structure' checkbox was not honored
+BUGFIX: UI: it was impossible to delete a bookmark from the modal list that was opened using Ctrl+M
+BUGFIX: UI: selecting multiple entries in the "Functions", triggering editing, and canceling editing would still prompt for all remaining functions
+BUGFIX: UI: some valid config parameters were not accepted if bit 31 was set
+BUGFIX: UI: the "Arguments" column in the Functions list could show wrong value for functions that do not use any stack for passing arguments (e.g. on ARM)
+BUGFIX: UI: when debugging, modifying bit registers (e.g., ZF, OF, ...) would modify the aggregating register (e.g., EFL), but not the bit register itself
+BUGFIX: UI: when debugging, toggle/edit/increment/decrement of bit registers (e.g., ZF, OF, ...) wouldn't always work
+BUGFIX: decompiler: 'remove return value' could spoil the __userpurge calling convention
+BUGFIX: decompiler: "Send database..." could crash IDA with fresh binary files, if 'Edit notes' was clicked
+BUGFIX: decompiler: clicking on a variable would not offer to create a new forced variable for it if it was already forced somewhere else.
+BUGFIX: decompiler: combination of m_and and m_shift could be optimized incorrectly
+BUGFIX: decompiler: decompiler rejected function types with explicit stack argument locations
+BUGFIX: decompiler: fixed dozens of internal errrors (thanks to our users for bug reports!)
+BUGFIX: decompiler: fixed wrong decompilation if the switch input register was overwritten before the indirect jump;
+BUGFIX: decompiler: if GENERATE_EMPTY_LINES=YES in hexrays.cfg, xrefs to local items would sometimes show empty lines
+BUGFIX: decompiler: jumping to a name in the comment displayed at the function header would not work
+BUGFIX: decompiler: PPC: memory accesses with 0 base (e.g. lwz r11, addr(0) ) could be decompiled incorrectly (using r0 value instead of zero)
+BUGFIX: decompiler: ppc: wrong intrinsic function was generated for PPC_sc in case of little endian
+BUGFIX: decompiler: printing a chain_t object could cause a crash when invoking chain_t::print|dstr
+BUGFIX: decompiler: programmatically jumping to an address in pseudocode (e.g., using 'ida_hexrays.open_pseudocode') could fail to save the current position
+BUGFIX: decompiler: specifying explicit unaligned stack argument locations was sometimes not accepted by the decompiler
+BUGFIX: decompiler: switching to pseudocode window could lead to unexpected refresh (e.g. if a struct was modified via Structures window)
+BUGFIX: decompiler: xrefs to __vftable of base classes could be missed in some cases
+BUGFIX: decompiler: ARM: zero out the top 32bits of the destination in ARM64 intrinsic function calls that modify a 32bit register
+BUGIX: PC: when performing a full rebase (MSF_NETNODES), information about skipped instructions(prolog/epilog/switch) was not moved correctly
+BUGIX: SDK: fix idp.hpp comment for PR_DELAYED (has_delay_slot does not exist)

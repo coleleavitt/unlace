@@ -1,0 +1,1138 @@
+IDA 9.2 | Hex-Rays Docs
+The docs have been restructured for better navigation. Found a broken link or have feedback to share? Let us know
+here.
+⌘
+Ctrl
+k
+IDA 9.3
+Getting started
+IDA Installation
+License Activation
+Basic Usage
+IDA Core
+User Interface
+Disassembler
+Decompiler
+Debugger
+Types & Data Structure
+FLIRT
+idalib
+IDA Extensions
+Teams
+Lumina
+Plugins
+Floating License
+Developer
+Domain API
+C++ SDK
+IDAPython SDK
+IDC
+Publishing Plugins
+Release Notes
+IDA 9.3sp2
+IDA 9.3sp1
+IDA 9.3
+IDA 9.3 Beta
+IDA 9.2
+IDA 9.2 Beta
+IDA 9.1
+IDA 9.0sp1
+IDA 9.0
+IDA 8.5
+IDA 8.4sp2
+IDA 8.4sp1
+IDA 8.4
+IDA 8.3
+IDA 8.2sp1
+IDA 8.2
+IDA 8.1
+IDA 8.0sp1
+IDA 8.0
+IDA 7.7sp1
+IDA 7.7
+IDA 7.6sp1
+IDA 7.6
+IDA 7.5sp3
+IDA 7.5sp2
+IDA 7.5sp1
+IDA 7.5
+IDA 7.4sp1
+IDA 7.4
+IDA 7.3
+IDA 7.2
+IDA 7.1
+IDA 7.0sp1
+IDA 7.0
+IDA 6.95
+IDA 6.9
+IDA 6.8
+IDA 6.7
+IDA 6.6
+IDA 6.5
+IDA 6.4
+IDA 6.3
+IDA 6.2
+IDA 6.1
+IDA 6.0
+IDA 5.7
+IDA 5.6
+IDA 5.5
+IDA 5.4
+IDA 5.3
+IDA 5.2
+IDA 5.1
+IDA 5.0
+IDA 4.9SP
+IDA 4.9
+IDA 4.8
+IDA 4.7
+IDA 4.6
+IDA 4.x
+IDA 3.x
+Cumulative bugfix for IDA
+Powered by GitBook
+On this page
+Copy
+On this page
+Release Notes
+IDA 9.2
+Welcome to the IDA 9.2 release highlights. You can get your 9.2 installers in the
+Download Center
+of My Hex-Rays portal. Prefer a quick summary? Check out the
+IDA 9.2 Highlights
+video.
+Major Golang Analysis Improvements
+The decompiler now fully supports golang's stack-based ABI for return values and handles stack-register-scattered data items passed to and from functions much better. We also added recognition of object copy operations and golang compiler idioms (
+runtime.convTnoptr
+,
+runtime.convT
+,
+runtime.growslice
+,
+runtime.makeslicecopy
+,
+runtime.duffcopy
+,
+runtime.duffzero
+) and improved the algorithm dissecting the string pool. With these changes, decompiled golang code becomes
+much
+more readable!
+For example, this crackme from
+Flare-On 11, Challenge 2
+looks as follows in older IDA versions:
+Flare-On Golang Crackme Broken Old 9.1
+With the new decompiler, the cases of (seemingly) uninitialized stack variables (which are in reality values passed from and to callees), get remedied completely:
+Flare-On Golang Crackme Readable 9.2
+From this release on, disassembler and decompiler understand two different golang calling conventions:
+__gostk
+(
+CM_CC_GOSTK
+) - stack abi: default for old apps (golang version < 1.17)
+__golang
+(
+CM_CC_GOLANG
+) - regabi: default for newer apps
+More information about these changes (and the
+__tuple
+concept freshly added to our type system) can be found on
+our blog
+.
+UI
+Qt6
+We migrated IDA from (the now-EOL) Qt version
+5.15
+to Qt version
+6.8
+LTS (specifically 6.8.2). For our users, this surfaces as a lot of bugfixes, especially for those running IDA on Wayland Linux.
+This has an impact on plugins relying on PyQt5 (as this has been replaced with PySide6). We came up with
+a PyQt5 compatibility layer
+, that should let those plugins run properly in IDA 9.2.
+Bye-Bye, Terminal Interface
+As of this release,
+idat
+does not support interactive mode anymore (read: the TUI is gone (for now)!). Batch mode processing is still available (and will stay), so infrastructure relying on batch processing still works as expected. Non-interactive
+idat
+is now based on
+idalib
+.
+Jump Anywhere
+Jump Anywhere is a new dialog created to simplify quick jumps to locations anywhere in the IDB. It is envisioned to become the successor of the
+JumpAsk
+("Jump to address...", bound to the
+G
+key) dialog.
+Jump Anywhere
+Simply press
+Ctrl-Alt-G
+(
+CMD-Alt-G
+on macOS) to fire up the dialog and start typing. The Jump Anywhere widget performs a case-insensitive search across
+functions
+,
+local types
+,
+names
+, and
+segments
+and displays the results and a preview in a list that the user can select from via the cursor arrows on the keyboard. We added a checkbox to the (new) Feature Flags dialog (
+Options
+→
+Feature Flags...
+) to quickly map/unmap the Jump Anywhere dialog to the
+G
+key (where it eventually will land by default, once we added all envisioned features and polished its ergonomics).
+The Jump Anywhere feature aims to be
+fast
+. We achieve this via an internal indexer mechanism that caches relevant data. For this release, the indexer operates on functions, local types, names, segments, we plan to extend this list and also to introduce a public API, allowing users to extend the index, querying it, and much more. If the input is interpretable as an
+address expression
+, a result entry for the corresponding destination will be prepended.
+This is the first iteration of the "Jump Anywhere" functionality; we expect it will mature into an amazing feature.
+Unified Location History
+IDA now features a global history stack across Disassembly, Pseudocode, Local Types, and Stack Views.
+This remediates the sometimes non-natural behavior of the navigation history when switching between multiple views, like in the following two examples:
+Double clicking on a static variable in the Pseudocode would switch to the disassembler to show the memory contents of the global variable, but
+ESC
+would not navigate back to Pseudocode
+Double clicking on a type or stack variable would trap navigation (in Stack View resp. Local Types), with no easy way to return back to the origin.
+Now pressing
+Esc
+or using the back button will jump back to the previous location in the global history, even if it was in a different view.
+A few notes:
+Existing IDB's
+will not
+share histories: every listing will still have its own.
+New IDB's
+will
+have a centralized history - except if you already have a custom "Default" desktop.
+The old behavior can be re-instantiated by unchecking
+Options
+→
+General
+→
+Browser
+→
+Enable history sharing
+.
+You can use the "Navigation History" widget (
+View
+→
+Open subviews
+→
+Misc. tools
+→
+Navigation History
+) to inspect the history stack.
+Autocompletion for C Editor in Local Types
+When creating types using the free-text editor in Local Types, IDA will now suggest names of existing types while you type (either automatically, or manually invoked via
+Ctrl-Space
+).
+Auto Completing Type Names
+Autocompletion suggests the existing types in the database and C/C++ keywords (such as
+struct
+,
+int
+, ...). Moreover, a hint box will appear on the side to provide more context, allowing to quickly inspect the suggested type. If autocompletion suggestions are in your way, you can discard them by pressing
+Esc
+. It is also possible to deliberately request to show completions at any moment using
+Ctrl-Space
+(action
+ForceTypesAutoCompl
+, the shortcut is configurable). We also added automatic completion of curly braces and auto-indentation: when entering
+{
+,
+}
+will be automatically added, and between them an empty line with an indentation.
+The distinct parts of this feature can be selectively disabled in
+Options
+→
+General
+→
+Misc
+→
+Types autocompletion
+:
+Enable autocomplete for types — enables or disables the entire mechanism. If unchecked, the type editor will not differ from previous versions. Enabled by default.
+Case sensitive — changes case sensitivity. If checked, then, for example, typing
+f
+will show
+foobar
+, but not
+Foobar
+. Disabled by default.
+Enable autocomplete for curly braces — enables or disables autocompletion of curly braces and indents. Enabled by default.
+Enable type hints — enables or disables the additional hint box showing the suggested type. Enabled by default.
+Xref Graph
+Xref Graph is a new widget for graphically displaying inter-function relationships (code and data). The graph gathers a set of nodes connected by xrefs. Nodes are laid out using a force-directed approach.
+Xref Graph
+This new subview replaces the following widgets / actions / tools:
+Qwingraph
+Xrefs graph from ... (function name context menu)
+Xrefs graph to ... (function name context menu)
+Function call graph
+User call graph
+To create an Xref Graph, either go via
+Edit
+→
+Plugins
+→
+Xref Graph
+in the main menu, or click
+Xrefs graph from...
+or
+Xrefs graph to...
+when right-clicking any function name in an IDA View.
+The controls are quite simple:
+Dragging nodes around moves them.
+Clicking and dragging around the graph pans around (holding the
+Shift
+key will pan without unintentionally grabbing a node).
+Holding
+Ctrl
+/
+CMD
+while scrolling will zoom in / out.
+Double-clicking on a node will jump to the corresponding item in an IDA View.
+The layout mechanism can be resumed / paused using the
+Space
+key.
+Furthermore, Xref Graph can be modified interactively by either picking the corresponding action from a node's right-click context menu, or via the following hotkeys:
+T
+: Add all nodes referencing the current node (Xrefs
+T
+o)
+F
+: Add all nodes referenced by the current node (Xrefs
+F
+rom)
+A
+: Add all nodes referenced by and referencing the current node (
+A
+ll Xrefs)
+X
+: Selectively add nodes referenced by or the current node (
+X
+ref from or to)
+D
+: Delete current node (
+D
+elete)
+The plugin requires OpenGL support and is disabled automatically on platforms that don't offer GPU-accelerated drawing contexts.
+Xref Graph is described in more detail in a
+recent blog post
+.
+Xref Tree
+Xref Tree is a new widget enabling textual, interactive, non-modal traversing of (disassembler) xrefs to provide a better overview of the function call hierarchies and data references. This view complements, and will eventually be tightly integrated with, the new Xref Graph and xrefs in general.
+Xref Tree
+The tree shows both references
+to
+and
+from
+the current function, in a fashion similar to call hierarchy views in IDEs. Both code and data references are displayed. The tree is non-modal and there can be multiple instances of it open at the same time, each displaying a different function. Navigation works intuitively using either the mouse or the cursor keys on the keyboard.
+It is possible to synchronize the widget with the current IDA View, by checking the "Sync" checkbox.
+This widget replaces the following subviews:
+Function Calls
+Cross References
+It is accessible via:
+View
+→
+Open Subview
+→
+Cross References Tree
+,
+The Command Palette (action name:
+OpenXrefsTree
+),
+Shift-X
+on any function or address with incoming / outgoing Xrefs.
+The following non-obvious options are available:
+Some unnecessary functions can be filtered out, by checking the "Add filter" button, or by using the
+Ctrl-F
+shortcut (
+Ctrl-Shift-F
+to remove the filter).
+By default, the tree displays function names in simplified form, such as
+main(argc, argv)
+instead of
+int main(int argc, char **argv)
+. This can be changed by unchecking the
+Simplified view
+checkbox.
+If there are multiple xrefs to the same function, they are deduplicated by default. This can be changed by checking the
+Show Duplicates
+checkbox.
+Xref Tree was showcased together with Xref Graph in a recent
+post
+on our blog.
+Decompiler
+Show all Call / Xref Decompilations
+The decompiler features two new actions that allow to quickly examine all pseudocode snippets referencing a given code or data item. This is highly useful to see for example parameters passed down to the current function:
+Show all Call Decompilations
+Both actions are available from the right-click context menu in the Pseudocode view for functions or global variables.
+Simplify Unreachable Cases in Switch Statements
+Simplify away unreachable cases in switch statements (limited by config variable
+OPT_VALRNG_SWITCH_NCASES
+)
+An example of how this improvement helps with deobfuscation can be found in
+our blog
+.
+Copy Structure Offsets from the Decompiler to the Disassembler
+The disassembler can now "learn" structure offsets from type member accesses that the decompiler discovered. This feature is disabled by default, add
+HO_COPY_XREFS_TO_IDB
+to
+HEXOPTIONS
+in
+hexrays.cfg
+to activate it by default.
+Microcode Viewer
+We added a new subview that allows inspecting the decompiler microcode as it passes through the different maturity levels during the operation of the decompiler. Activate it via hotkey
+Ctrl-Shift-F8
+, or
+View
+→
+Open subviews
+→
+Generate microcode
+in the main menu.
+Microcode Viewer
+This new microcode view syncs with disassembly, pseudocode, or other microcode views at any stage in the microcode generation and transformation process. The displayed maturity level can be changed by means of the
+>
+(raise maturity level) and
+<
+(lower maturity level) hotkeys. It provides plugin authors and users the ability to get more detailed understanding of what is happening during the first stages of decompilation. (Huge thanks to
+Markus Gaasedelen
+,
+patois
+, and
+Rolf Rolles
+whose various microcode viewer plugins have been bridging this gap until now.)
+The Microcode viewer was recently
+featured
+on the Hex-Rays blog.
+Architecture Support
+ARM
+Disassembler Instruction Set Extensions
+Decode ARMv8.7-A
+FEAT_WFxT
+,
+FEAT_xNS
+instructions specified by
+ARMv8.7-A
+(fixes non-disassembled instructions in Apple's SPTM firmware).
+ARMv8.7-A Instructions
+Decode
+Low Overhead Branch Extensions
+instructions specified by ARMv8.1-M:
+Decode
+Custom Datapath Extension
+instructions specified by ARMv8.1-M:
+Handle ARM64(EC) COFF files in FLAIR and IDA
+FLAIR tooling now is aware of Windows-on-ARM64 "fat" static link libraries that bundle object files for ARM64 and
+ARM64EC
+. Use
+pcf
+'s new
+-f
+switch to filter processed object files for a particular COFF magic:
+ARM64 fat library parsed by pcf
+Moreover, IDA now recognizes and loads ARM64EC COFF files (with proper processing of common ARM64(EC) relocations).
+ARM64EC COFF file in IDA
+Speed improvements of the internal register tracking logic
+Improved Stack Frame Analysis of 32-bit ARM Code
+Added support of STMIA pseudo-instructions. For example,
+STM
+at
+DE6
+is used to store R1-R3 at the frame top (space was allocated by the
+SUB
+at
+DD4
+).
+Improved detection of non-PROLOG instructions. For example,
+PUSH
+at
+B910
+and
+B91C
+are not prolog instructions, because
+R12
+is not a callee-saved register.
+TriCore
+Support for TC4x (TC1.8) instructions
+50+ new instructions from the TC1.8 architecture are now fully supported in the disassembler. This includes double-precision FPU instructions, virtualization instructions, and new Q (quad-sized) registers.
+TC1.8
+Make A0, A1, A8, A9 user-specifiable global registers
+Support for setting global address registers (A0, A1, A8, A9) as segment registers. TriCore uses these registers for global address computation, typically via GP-relative access. By configuring them via
+Edit → Segments
+(or
+Alt
++
+G
+), you help IDA resolve memory references more accurately.
+Tricore Segment Registers
+New Chipset Definitions
+We added (or improved) chipset definitions:
+tc1100
+,
+tc1130
+,
+tc1724
+,
+tc1728
+,
+tc1762
+,
+tc1764
+,
+tc1765
+,
+tc1766
+,
+tc1767
+,
+tc1782
+,
+tc1784
+,
+tc1791
+,
+tc1792
+,
+tc1793
+,
+tc1796
+,
+tc1797
+,
+tc1798
+tc21x
+,
+tc22x
+,
+tc23x
+,
+tc26x
+,
+tc27x
+,
+tc29x
+tc32xLP
+,
+tc33xLP
+,
+tc33xDA
+,
+tc35x
+,
+tc36x
+,
+tc37x
+,
+tc38x
+,
+tc39xQ
+,
+tc39xX
+Generic meta definitions
+tc1xxx
+,
+tc2xx
+,
+tc3xx
+,
+tc4x
+All generations are now organized in directories according to their TriCore revision/generation.
+TriCore Chipsets
+MIPS
+Added support for the o64 ABI for big- and little endian MIPS in the disassembler and the decompiler.
+RH850
+The rh850 processor module and ELF loader received a couple of updates:
+Add support for relocation types ,
+R_V810_WORD
+,
+R_V850_PC32
+,
+R_V810_HWORD
+,
+R_V810_WLO
+,
+R_V810_REGWLO
+,
+R_V810_WHI
+,
+R_V810_REGWHI
+,
+R_V810_WHI1
+,
+R_V810_REGWHI1
+,
+R_V850_PCR22
+,
+R_V850_PC16U
+,
+R_V850_PC9
+.
+Make
+tp
+,
+gp
+,
+callt
+registers user-assignable global registers.
+Many small improvements in macro building.
+FLAIR
+The
+pelf
+utility now supports v850/rh850 relocatables. We also added processing of GHS- and Renesas-specific relocations.
+RISCV
+Function prologues are now additionally recognized via their alignment to a
+0x10
+bytes boundary.
+Lots of table-based switch constructs relying on Xuantie THEAD instructions are now properly recognized by disassembler and decompiler.
+TMS320C6
+Added decoding of 32bit SIMD instructions.
+TMS320C6 SIMD
+Type System
+New Parser
+You are already familiar with
+tilib
+and
+idaclang
+to parse types. We unified the two into a
+third one
+, based on LLVM's LibTooling.
+As of this release, there are three parsers available:
+legacy
+- old internal IDA parser (still the default with IDA 9.2, will become obsolete)
+old_clang
+- previous parser based on clang
+clang
+- new parser based on clang's LibTooling llvm-20.1.0 (will become the default)
+The new
+clang
+parser allows for C++ in the type editor, not only in header files. You will see the benefit, for example, when editing an instantiated template from inside IDA. For this release,
+legacy
+will remain the default. We will switch to
+clang
+by default in an upcoming release of IDA.
+The parser name is taken from
+ida.cfg
+instead of the registry. See the
+TYPE_PARSER
+option.
+Using the parser
+You can switch between parsers (as usual) by tweaking the settings found in the
+Options
+→
+Compiler
+dialog.
+Compiler Options
+Additionally, you can use the
+-Oclang:on
+command line switch to activate the new parser in IDA, or set the
+IDA_CLANG_PARSER
+environment variable to
+1
+. To activate the new parser in tilib, pass the
+-IC
+command line switch. You may also pass additional arguments down to clang using
+-CT
+(e.g.
+-CT-target -CTx86_64-pc-linux
+to pass
+-target x86_64-pc-linux
+).
+The
+clang
+parser is fully migrated to clang's LibTooling, and it unifies all type parsing done by IDA into a single backend. This means that the same parser will be used in the type editor, in idaclang and in tilib.
+A convenient way to tweak the new parser is via the
+Options
+→
+Compiler
+→
+Parser specific options
+dialog.
+Check
+Standalone declaration
+in order to enable parsing of
+anonymous structs
+or
+tuples
+with the
+clang
+parser.
+Parser Options
+You may set defaults for these options and check their documentation in
+idaclang.cfg
+.
+Python API
+Using the parser from the Python API can be done via the
+ida_srclang
+module:
+For example, the new parser can be used to parse C++ templates:
+New Parser
+Note that two new HTI flags are available in
+ida_typeinf
+:
+HTI_SEMICOLON
+: Do not complain if the terminating semicolon is absent
+HTI_STANDALONE
+: Should parse standalone declaration, which may contain qualified names and type names (IDA-specific keywords, for example)
+Backwards Compatibility of User-Defined Calling Conventions
+There are two approaches to define a
+__usercall
+:
+int __usercall f<eax>(int *a<edx>[])
+- obsolete
+int __usercall f@<eax>(int *a@<edx>[])
+- recommended way
+With the new parser, the first notation is no longer supported. Please switch to syntax #2.
+Tuples
+As part of the handling of the golang ABI, we added the notion of tuples to our type system. Tuples are pretty similar to structs, except that exact member allocation is ignored during comparison. Adding a tuple via the type editor is easy:
+__tuple tuple1 { int x; char y; void *z; };
+(There also is a new checkbox
+Tuple
+in the UI when creating a new
+struct
+, to turn the
+struct
+into a
+tuple
+.)
+tuples1
+tuples2
+Currently, tuples are used for golang functions returning several values. When a golang function returns several values, some of them can be returned in registers, some on the stack - each one is handled separately. When a function returns a single value (e.g., a structure) - it will be returned entirely in registers (if there is sufficient number of registers) or entirely on the stack. Hence, the main purpose of tuples if to specify multiple return values.
+A quick rundown of tuples can also be found in the
+recent Golang Decompilation
+post on our blog.
+Debugger
+Exception Info-Based Stack Unwinding for x86-64 PE Files
+For functions in
+x86-64
+PE+ executables that have
+UNWIND_INFO
+data available, the stack is now reconstructed according to the information contained in the exception directory. This makes callstack computation more precise, especially in presence of unanalyzed code, or code with non-standard stack layout. IDA's debugger has long featured a Call Stack widget (hotkey
+Ctrl-Alt-S
+during debugging, also known as "Stack Trace") that displayes the call hierarchy that led up to the current instruction pointer when execution is paused or hits a breakpoint.
+Take the following execution path that
+cmd.exe
+would take via
+KERNELBASE.dll
+and
+ntdll.dll
+until it hits an example breakpoint we set at
+RtlValidSid
+:
+This is what the now-legacy stack unwinding logic would compute:
+Stack Trace computed by IDA 9.1
+And this is the same location but enhanced with information extracted from unwind records in 9.2 (
+much
+closer to the ground truth given above):
+Stack Trace computed by IDA 9.2
+We recently
+blogged
+about this feature on the Hex-Rays blog.
+Refurbished Debugger Register Widget
+The debuggers now ship with a register window that applies auto-dereferencing and color coding according to properties of the memory type the data resides in:
+Register View in IDA 9.1 and IDA 9.2
+The dereference depth is configurable via the context menu. The concrete color scheme depends on the theme in use. In the above screenshot (i.e. IDA's default theme), the following mapping is applied (look it up / configure it under
+Options
+→
+Colors
+→
+Debugger
+→
+Register value
+):
+Default color mapping for the Register Widget
+This feature is further described in a
+recent blog post
+.
+Multiple Names as comments
+When multiple names are discovered for the same address, they are shown as comments. This behaviour existed before, but we extended the list of supported file formats from which multiple names are recovered.
+Multiple Names
+SDK
+Both C++ SDK and the IDAPython SDK are now open source and have been unified into the
+HexRaysSA/ida-sdk
+repository on
+GitHub
+. See our
+blog
+for more details.
+Novelties
+We released a new, open-source and easy-to-use
+Domain API for IDA
+. Please refer to the respective
+blog post
+and
+documentation
+Minimum required C++ version to compile is now
+c++17
+(imposed by Qt6)
+On Windows, the build system now defaults to the compiler installed as part of Visual Studio 2022 (rather than 2019)
+Plugins can now register custom calling conventions. For more information please see
+type
+custom_callcnv_t
+and functions
+[un]register_custom_callcnv
+,
+[get|find]_custom_callcnv
+in the SDK.
+sample plugin
+plugins/ex_callcnv
+in the SDK.
+Events
+New
+event
+idb_event::local_type_renamed
+, triggered when a local type is about to be renamed (providing old and new name)
+New
+event
+hexrays_event_t::hxe_mba_maturity
+, triggered when maturity level of an MBA was changed
+Functions
+New
+function
+extend_sign_bits()
+to sign-extend integral types to a given number of bits
+New
+function
+bitcountr_zero()
+to count number of consecutive trailing zero bits
+New
+function
+get_flags32()
+to retrieve only the lower 32 bits of the flags attached to an
+ea
+New IDAPython function
+compiled_binpat_vec_t.parse()
+to convert user-specified binary string to internal representation
+Constants
+New
+enum constants
+ARM_*
+,
+TMS_*
+,
+MIPS_*
+,
+TRICORE_*
+for instructions newly supported by the disassembler
+New
+macros
+AEF_WEAK
+and
+AEF_NOFORCE
+(meant to be passed to
+add_entry()
+) to control naming when adding entry points
+New
+macro
+STKVAR_KEEP_EXISTING
+(meant to be passed to
+add_stkvar()
+) to prevent overwriting of existing stack variables
+idapython: added
+ida_kernwin.BWN_MICROCODE
+constant to identify microcode subviews
+Classes
+New
+class
+int64_emulator_t
+, to compute operand values via emulation (restricted to 64 bit integers for now)
+New
+class
+intval64_t
+, representing 64-bit integers that the emulator operates on
+Deprecations
+Deprecate
+hook_to_notification_point()
+and
+unhook_from_notification_point()
+functions
+.
+Please use the (almost) drop-in replacement
+hook_event_listener()
+in combination with the
+DECLARE_LISTENER
+macro (definitions
+here
+)
+No need to explicitly call
+unhook_event_listener()
+for your plugin, with the new mechanism yor callback is automatically removed.
+Manually add a class member to your
+event_listener_t
+-derived definition of the class containing the
+on_event
+callback if you need to pass
+user_data
+to your callback (this precludes the use of the
+DECLARE_LISTENER
+macro)
+Misc
+IDA manual is now fully browsable offline (uncheck
+Help
+→
+Online Help
+)
+IDA Home & Pro Essential now provide the
+Create C File
+(
+Ctrl-F5
+) functionality
+New
+Options
+→
+Feature Flags
+dialog for enabling / disabling new / experimental features
+Added the
+LUMINA_RECV_HELO_TIMEOUT
+environment variable, for the lumina server. Can be used to set the user login timeout in milliseconds.
+Security
+Fixed an arbitrary command execution via debugger attachment of malicious IDB (thanks, @HonicRoku)
+Fixed a format string vulnerability in pdb plugin (thanks, Golo Mühr)
+Watch what's new in IDA 9.2
+Discover the 9.2 updates with this feature overview video on the
+All Things IDA
+channel.
+Courtesy of Elias Bachaalany (
+@allthingsida
+)
+Minor Improvements / Bugfixes
+arm64: improved recognition of PAC
+__auth_stubs
+(commonly used by iOS import trampoline patterns)
+arm64: performance improvements in the register tracking algorithm. This reduces the analysis time of large iOS DSCs.
+arm: better handle AND operations on stack pointer during stack pointer tracking
+riscv: create xrefs for all immediate operands
+tms320: fixed decoding of EXT/EXTU TMS320C67xx instructions
+tms320: added
+TMS6_SCALE_OFFSETS
+processor specific option (default = YES). Turning it off displays un-scaled offsets.
+decompiler: mach-o: Wrong segment name used with
+USE_SEG_PREFIXES=YES
+decompiler:
+split expression
+was not available in some contexts
+decompiler: field member names were omitted for seemingly anonymous structs
+decompiler: pc: splitting assignments made using xmm instructions was not working
+decompiler: pc: recognize shifts performed via a combination of cvtsi128 and srli
+decompiler: editing imported function prototype would cause a crash
+decompiler: rather than creating an extra variable and assigning the result expression right before returning, directly return the expression
+ui: double-clicking/Enter on the header of a type wouldn't open the editor
+ui: double-clicking/Enter on a structure member name wouldn't offer to rename it
+ui: fix macOS drag&drop under
+SHOW_BANNER=NO
+ui: fix crashes on macOS when opening files with
+SHOW_BANNER=NO
+ui: do not suggest shortcut migration
+ui: restore old behaviour of setting prototype as user-defined when hitting return in "Set item type" (
+y
+shortcut) dialog
+ui: better support for widget docking on Wayland
+ui: scrolling through local types could become very slow on macOS
+ui: when adding multiple types via
+Add type...
+C syntax tab, some types would be silently lost
+ui: fix crash when changing desktop geometries / switching to debug desktop
+ui: increase default output scrollback to 128k lines
+ui: made 'Cancel' button the default in 'Send database' dialog
+ui: ask for confirmation before pushing metadata to public Lumina server
+ui: add actions to control font size
+ui: add shortcuts to increase (
+Ctrl-+
+/
+Ctrl-=
+) and decrease (
+Ctrl--
+) font size (
+Ctrl-0
+resets)
+ui: pdb: add more wait boxes at different stages of PDB processing to allow cancelling long-running operations at any point in time
+ui:
+AUTO_CLOSE_MSGBOX
+configuration option in
+idagui.cfg
+(useful for long-running operations)
+ui: register
+.i64
+file extension on macOS
+idc: wrong enum flag was returned for character representation of constants
+gdb: avoid usage of already freed memory
+kernel: fixed regarg comments for an argument in the register pair in big endian MIPS
+kernel: now
+append_cmt()
+respects the repeatable flag for the function start
+kernel: fixed handling of special Go assembler characters
+licensing: offer to save idb when connection to license server is not re-established within grace period
+licensing: add
+MAX_BORROW_HOURS
+environment variable to limit borrowing duration in the server
+goomba: new algorithm backing Goomba's MBA Deobfuscation
+parser: fix reparsing of specialized templates
+parser: ignore error for top-level anonymous structure
+parser: handle function arguments named
+this
+parser: legacy parser would reject a usercall function sometimes
+parser: allow specifying only the argument type when editing a function argument
+parser: calling convention in pointer to function was missing
+parser: qualified name was not handled when using
+__shifted()
+parser: attribute
+__hidden
+was wrongly treated as a simple annotation
+parser: argument named "this" was preventing successful parsing
+parser: do not use fake name
+_
+for abstract type declarator
+makesig: generating signature from selected functions now works also when demangling is enabled
+ldr: elf: fixed
+gnu_debugdata_t: XZ decode error
+message on some ELF files
+ldr: pe: add
+GuardMemcpyFunctionPointer
+to
+IMAGE_LOAD_CONFIG_DIRECTORY
+ldr: pe: recognize x86/x86-64/arm/arm64 versions of control flow guard stubs
+macho: fixed handling of
+DYLD_CHAINED_IMPORT
+records (
+name_offset
+==0 was wrongly considered invalid)
+pc: improved switch recognition for cases where table base is encoded in an immediate
+types: method
+tinfo_t::expand_udm()
+was spoiling the type
+function prototype editor: default prototype is ignored by ida
+ida_feeds: recover more Rust compiler versions from binaries
+idalib: pass down IDA command line arguments in
+open_database
+idalib: respect
+$IDAUSR
+environment variable
+idalib: do not pollute file history when opening files with IDAlib
+idalib: re-enable debugging in VS Code
+pdb: update MSDIA bindings version to 14.44
+pdb: fix logic error when reusing enums via typedefs
+dwarf: improved handling of stkvars
+dwarf: support DWARF5 debug info in Mach-O binaries
+dwarf: support stack/register scattered structures, arrays, and integral types
+flair: pmacho: support ARM64 relocatables
+flair: pcf: Fix processing of ARM64 relocations
+flair: properly emit and consume ARM THUMB bits in PAT files
+Last updated
+27 days ago
+Was this helpful?
+Need Help?
+FAQs
+Support
+Community
+Forum
+Plugins
+Resources
+Blog
+Download center
+© 2025 Copyright Hex-Rays
+Major Golang Analysis Improvements
+UI
+Qt6
+Bye-Bye, Terminal Interface
+Jump Anywhere
+Unified Location History
+Autocompletion for C Editor in Local Types
+Xref Graph
+Xref Tree
+Decompiler
+Show all Call / Xref Decompilations
+Simplify Unreachable Cases in Switch Statements
+Copy Structure Offsets from the Decompiler to the Disassembler
+Microcode Viewer
+Architecture Support
+ARM
+TriCore
+MIPS
+RH850
+RISCV
+TMS320C6
+Type System
+New Parser
+Tuples
+Debugger
+Exception Info-Based Stack Unwinding for x86-64 PE Files
+Refurbished Debugger Register Widget
+Multiple Names as comments
+SDK
+Novelties
+Events
+Functions
+Constants
+Classes
+Deprecations
+Misc
+Security
+Watch what's new in IDA 9.2
+Minor Improvements / Bugfixes
+Was this helpful?
+Copy
+.text:000011B8 42 F0 19 C0                     WLS             LR, R2, loc_11EC
+.text:000011BC 02 F0 17 C0                     WLSTP.8         LR, R2, loc_11EC
+.text:000011C0 12 F0 15 C0                     WLSTP.16        LR, R2, loc_11EC
+.text:000011C4 22 F0 13 C0                     WLSTP.32        LR, R2, loc_11EC
+.text:000011C8 32 F0 11 C0                     WLSTP.64        LR, R2, loc_11EC
+.text:000011CC 42 F0 01 E0                     DLS             LR, R2
+.text:000011D0 02 F0 01 E0                     DLSTP.8         LR, R2
+.text:000011D4 12 F0 01 E0                     DLSTP.16        LR, R2
+.text:000011D8 22 F0 01 E0                     DLSTP.32        LR, R2
+.text:000011DC 32 F0 01 E0                     DLSTP.64        LR, R2
+.text:000011E0 0F F0 17 C0                     LE              LR, loc_11B8
+.text:000011E4 2F F0 19 C0                     LE              loc_11B8
+.text:000011E8 1F F0 1B C0                     LETP            LR, loc_11B8
+Copy
+.text:00000014 42 EE 01 11                     CX2             p1, R1, R2, #1
+.text:00000018 42 FE BF 11                     CX2A            p1, R1, R2, #0x7F
+.text:0000001C 44 EE 41 21                     CX2D            p1, R2, R3, R4, #1
+.text:00000020 74 FE FF 21                     CX2DA           p1, R2, R3, R4, #0x1FF
+.text:00000024 82 EE 11 31                     CX3             p1, R1, R2, R3, #1
+.text:00000028 82 FE 31 31                     CX3A            p1, R1, R2, R3, #3
+.text:0000002C 84 EE 52 51                     CX3D            p1, R2, R3, R4, R5, #1
+.text:00000030 F4 FE F2 51                     CX3DA           p1, R2, R3, R4, R5, #0x3F ; '?'
+Copy
+00000DD4 000 SUB     SP, SP, #0xC   ; PROLOG
+00000DD6 00C PUSH    {R4-R7,LR}     ; PROLOG
+00000DD8 020 ADD     R7, SP, #0xC   ; PROLOG
+00000DDA 020 PUSH.W  {R8,R10} ; PROLOG
+00000DDE 028 SUB     SP, SP, #0x34  ; PROLOG
+00000DE0 05C MOV     R4, R0
+00000DE2 05C ADD     R0, SP, #0x34+varg_r1
+00000DE4 05C LDR     R6, [SP,#0x34+arg_4]
+00000DE6 05C STM.W   R0, {R1-R3}    ; PROLOG
+Copy
+0000B910 000 PUSH    {R12}
+0000B914 004 LDR     R12, =(off_C1A4 - 0xB920)
+0000B918 004 ADD     R12, PC, R12 ; off_C1A4
+0000B91C 004 PUSH    {R12}
+Copy
+import ida_srclang
+argv = [ "-target x86_64-apple-darwin-macho",
+"-x c++",
+"-std=c++17",
+"-Werror",
+"-Wno-incompatible-sysroot",
+]
+ida_srclang.set_parser_argv("clang", " ".join(argv))
+ida_srclang.set_parser_option("clang", "CLANG_SMART_POINTERS", "OSSharedPtr")
+ida_srclang.parse_decls_with_parser_ext("clang", None, "header_file.h", idaapi.HTI_FIL)
+Copy
+struct std::char_traits<char>
+{
+};
+Copy
+main
+↳ RegOpenKeyEx
+↳ RegOpenKeyExInternal
+↳ MapPredefinedHandleInternal
+↳ (cfguard protected thunk function)
+↳ RtlOpenCurrentUser
+↳ RtlFormatCurrentUserKeyPath
+↳ RtlLengthSidAsUnicodeString
+↳ RtlValidSid

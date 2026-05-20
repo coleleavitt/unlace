@@ -913,7 +913,7 @@ mod tests {
             phis.len()
         );
 
-        let _ = make_multi_block_ssa; // keep helper referenced; not used here.
+        _ = make_multi_block_ssa; // keep helper referenced; not used here.
 
         // Run the solver.
         let changed = collect_and_apply(&mut ssa);
@@ -962,7 +962,7 @@ mod tests {
 
         let mut ssa = make_ssa(vec![i0, i1, i2]);
 
-        let _ = collect_and_apply(&mut ssa);
+        _ = collect_and_apply(&mut ssa);
 
         // STORE address operand: insn idx 2, input 1.
         let addr_sv = lookup_in(&ssa, BlockId(0), 2, 1);
@@ -1128,7 +1128,7 @@ mod tests {
         let i0 = IrInsn::with_output(IrOp::Popcount, x, smallvec![r0], 0x1000);
         let mut ssa = make_ssa(vec![i0]);
 
-        let _ = collect_and_apply(&mut ssa);
+        _ = collect_and_apply(&mut ssa);
 
         let x_sv = lookup_out(&ssa, BlockId(0), 0);
         assert!(

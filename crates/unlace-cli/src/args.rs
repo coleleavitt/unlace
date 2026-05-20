@@ -71,6 +71,13 @@ pub enum Cmd {
         /// this path after the run. Useful for seeding a fresh sidecar.
         #[arg(long)]
         annotations_save: Option<PathBuf>,
+
+        /// Print a per-phase performance + quality scorecard to stderr
+        /// after the run: load/discover/lift/passes/print timings, a
+        /// live progress bar, per-function instruction counts, and
+        /// aggregate counters (Unimplemented/Callother/goto/etc.).
+        #[arg(long)]
+        stats: bool,
     },
 
     /// Generate FLIRT patterns from a compiled static library archive (.a).

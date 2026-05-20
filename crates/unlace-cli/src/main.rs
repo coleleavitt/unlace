@@ -36,6 +36,7 @@ fn main() {
             tab_width,
             annotations_load,
             annotations_save,
+            stats,
         } => {
             init_tracing(verbose);
             let print_config = if max_width.is_some() || tab_width.is_some() {
@@ -69,6 +70,7 @@ fn main() {
                     output.as_deref(),
                     &config,
                     &mgr,
+                    stats,
                 )
             });
             if let Some(path) = annotations_save.as_deref() {
@@ -1036,6 +1038,7 @@ fn attach_pdb_sidecar(image: &mut BinaryImage, binary_path: &std::path::Path) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_decompile(
     binary_path: &std::path::Path,
     function_filter: Option<&str>,
@@ -1044,7 +1047,10 @@ fn run_decompile(
     output_path: Option<&std::path::Path>,
     config: &PipelineConfig,
     _plugin_mgr: &PluginManager,
+    stats: bool,
 ) -> Result<()> {
+    let mut sw = StatsCollector::new(stats);
+    let t_load = std::time::Instant::now();
     let data = fs::read(binary_path)
         .with_context(|| format!("failed to read '{}'", binary_path.display()))?;
 
@@ -1061,6 +1067,8 @@ fn run_decompile(
         );
     }
     .with_context(|| format!("failed to parse '{}'", binary_path.display()))?;
+    sw.phase("load+parse", t_load.elapsed());
+    sw.set_input_size(data.len() as u64);
 
     tracing::info!(arch = %image.arch, entry = %format_args!("{:#x}", image.entry), "loaded binary");
 
@@ -1097,6 +1105,7 @@ fn run_decompile(
     }
 
     let lifter = get_lifter(image.arch);
+    let t_discover = std::time::Instant::now();
     let mut functions = pipeline::discover_functions(&image, function_filter)?;
 
     let dwarf = match import_dwarf(&image) {
@@ -1115,19 +1124,27 @@ fn run_decompile(
             None
         }
     };
+    sw.phase("discover+dwarf", t_discover.elapsed());
+    sw.set_function_count(functions.len());
 
     tracing::info!(count = functions.len(), "discovered functions");
 
     // Scan RTTI once for the whole binary; the C printer uses it to
     // emit class hierarchy + reconstructed vtable layouts.
+    let t_rtti = std::time::Instant::now();
     let rtti = unlace_loader::scan_rtti(&image);
     let rtti_opt = if rtti.is_empty() { None } else { Some(&rtti) };
+    sw.phase("rtti-scan", t_rtti.elapsed());
 
     let mut all_output = String::new();
 
-    for func_entry in &functions {
+    let t_decompile = std::time::Instant::now();
+    let total = functions.len();
+    for (idx, func_entry) in functions.iter().enumerate() {
         tracing::info!(name = %func_entry.name, addr = %format_args!("{:#x}", func_entry.addr), "decompiling");
+        sw.tick_progress(idx, total, &func_entry.name);
 
+        let t_fn = std::time::Instant::now();
         match pipeline::decompile_function_with_symbols(
             &image,
             lifter.as_ref(),
@@ -1138,8 +1155,12 @@ fn run_decompile(
             &functions,
             rtti_opt,
         ) {
-            Ok(text) => all_output.push_str(&text),
+            Ok(text) => {
+                sw.record_function(&func_entry.name, t_fn.elapsed(), text.len(), &text);
+                all_output.push_str(&text);
+            }
             Err(e) => {
+                sw.record_failure(&func_entry.name);
                 tracing::warn!(name = %func_entry.name, err = %e, "function decompilation failed");
                 all_output.push_str(&format!(
                     "/* decompilation failed for '{}': {} */\n",
@@ -1148,12 +1169,17 @@ fn run_decompile(
             }
         }
     }
+    sw.phase("decompile (all functions)", t_decompile.elapsed());
+    sw.clear_progress();
 
+    let t_post = std::time::Instant::now();
     if matches!(emit, args::EmitFormat::C) {
         all_output = unlace_output::dedupe_ida_typedefs(&all_output);
         all_output = unlace_output::declare_pseudo_c_externals(&all_output);
         all_output = unlace_output::dedupe_rtti_hierarchy(&all_output);
     }
+    sw.phase("post-process", t_post.elapsed());
+    sw.set_output_size(all_output.len() as u64);
 
     if let Some(path) = output_path {
         let mut file = fs::File::create(path)
@@ -1164,7 +1190,245 @@ fn run_decompile(
         print!("{all_output}");
     }
 
+    sw.emit_summary(binary_path);
     Ok(())
+}
+
+// ============================================================================
+// --stats: per-phase + per-function performance + quality scorecard
+// ============================================================================
+
+/// Collects timing + counter data across the decompile pipeline and
+/// prints a scorecard to stderr at the end. All collection is gated on
+/// the `--stats` flag; when off, every method is a near-noop so the hot
+/// path stays clean.
+struct StatsCollector {
+    on: bool,
+    input_bytes: u64,
+    output_bytes: u64,
+    function_count: usize,
+    phases: Vec<(String, std::time::Duration)>,
+    per_func: Vec<FunctionStat>,
+    failed_count: usize,
+    // Aggregate quality counters scraped from the emitted text. Cheap
+    // substring tally — exact match against the C printer's tokens.
+    decompile_failed_blocks: usize,
+    flirt_matches: usize,
+    unimplemented_tokens: usize,
+    callother_tokens: usize,
+    goto_tokens: usize,
+    readfsqword_tokens: usize,
+    stack_chk_fail_tokens: usize,
+    last_progress_len: usize,
+}
+
+struct FunctionStat {
+    name: String,
+    elapsed_us: u128,
+    out_len: usize,
+}
+
+impl StatsCollector {
+    fn new(on: bool) -> Self {
+        Self {
+            on,
+            input_bytes: 0,
+            output_bytes: 0,
+            function_count: 0,
+            phases: Vec::new(),
+            per_func: Vec::new(),
+            failed_count: 0,
+            decompile_failed_blocks: 0,
+            flirt_matches: 0,
+            unimplemented_tokens: 0,
+            callother_tokens: 0,
+            goto_tokens: 0,
+            readfsqword_tokens: 0,
+            stack_chk_fail_tokens: 0,
+            last_progress_len: 0,
+        }
+    }
+
+    fn phase(&mut self, name: &str, dur: std::time::Duration) {
+        if !self.on {
+            return;
+        }
+        self.phases.push((name.to_string(), dur));
+    }
+
+    fn set_input_size(&mut self, n: u64) {
+        self.input_bytes = n;
+    }
+
+    fn set_output_size(&mut self, n: u64) {
+        self.output_bytes = n;
+    }
+
+    fn set_function_count(&mut self, n: usize) {
+        self.function_count = n;
+    }
+
+    fn tick_progress(&mut self, idx: usize, total: usize, name: &str) {
+        if !self.on || total == 0 {
+            return;
+        }
+        // Only redraw every ~32 functions or for the last one to avoid
+        // killing throughput on huge binaries.
+        let interval = (total / 100).max(1);
+        if idx % interval != 0 && idx + 1 != total {
+            return;
+        }
+        let pct = (idx as f64 / total as f64) * 100.0;
+        let bar_width = 30usize;
+        let filled = ((pct / 100.0) * bar_width as f64) as usize;
+        let bar: String = (0..bar_width)
+            .map(|i| if i < filled { '=' } else { ' ' })
+            .collect();
+        let trimmed_name: String = name.chars().take(40).collect();
+        let line = format!(
+            "\r[{}] {:>3.0}% {}/{} {}",
+            bar, pct, idx, total, trimmed_name
+        );
+        let pad = self.last_progress_len.saturating_sub(line.len());
+        eprint!("{}{}", line, " ".repeat(pad));
+        let _ = std::io::Write::flush(&mut std::io::stderr());
+        self.last_progress_len = line.len();
+    }
+
+    fn clear_progress(&mut self) {
+        if !self.on || self.last_progress_len == 0 {
+            return;
+        }
+        eprint!("\r{}\r", " ".repeat(self.last_progress_len));
+        let _ = std::io::Write::flush(&mut std::io::stderr());
+        self.last_progress_len = 0;
+    }
+
+    fn record_function(
+        &mut self,
+        name: &str,
+        elapsed: std::time::Duration,
+        out_len: usize,
+        text: &str,
+    ) {
+        if !self.on {
+            return;
+        }
+        self.per_func.push(FunctionStat {
+            name: name.to_string(),
+            elapsed_us: elapsed.as_micros(),
+            out_len,
+        });
+        // Tally quality tokens. These match what the C printer emits.
+        self.unimplemented_tokens += text.matches("UNIMPLEMENTED").count();
+        self.callother_tokens += text.matches("CALLOTHER").count();
+        self.goto_tokens += text.matches("goto ").count();
+        self.readfsqword_tokens += text.matches("__readfsqword").count();
+        self.stack_chk_fail_tokens += text.matches("__stack_chk_fail").count();
+        self.flirt_matches += text.matches("/* flirt:").count();
+        self.decompile_failed_blocks += text.matches("/* decompilation failed").count();
+    }
+
+    fn record_failure(&mut self, _name: &str) {
+        if !self.on {
+            return;
+        }
+        self.failed_count += 1;
+    }
+
+    fn emit_summary(&self, binary: &std::path::Path) {
+        if !self.on {
+            return;
+        }
+        let total_dur: std::time::Duration = self.phases.iter().map(|(_, d)| *d).sum();
+        let bin_kb = self.input_bytes as f64 / 1024.0;
+        let out_kb = self.output_bytes as f64 / 1024.0;
+        let throughput = if total_dur.as_secs_f64() > 0.0 {
+            (self.input_bytes as f64) / (1024.0 * total_dur.as_secs_f64())
+        } else {
+            0.0
+        };
+
+        eprintln!();
+        eprintln!("====================================================");
+        eprintln!("  unlace --stats: {}", binary.display());
+        eprintln!("====================================================");
+        eprintln!(
+            "  input:           {:>10.2} KB    ({} bytes)",
+            bin_kb, self.input_bytes
+        );
+        eprintln!(
+            "  output:          {:>10.2} KB    ({} bytes)",
+            out_kb, self.output_bytes
+        );
+        eprintln!(
+            "  functions:       {:>10}        ({} failed)",
+            self.function_count, self.failed_count
+        );
+        eprintln!("  total time:      {:>10.3} s", total_dur.as_secs_f64());
+        eprintln!(
+            "  throughput:      {:>10.2} KB/s   ({:.0} fns/s)",
+            throughput,
+            self.function_count as f64 / total_dur.as_secs_f64().max(1e-9)
+        );
+        eprintln!();
+        eprintln!("  --- per-phase wall-clock ---");
+        for (name, dur) in &self.phases {
+            let ms = dur.as_secs_f64() * 1000.0;
+            let pct = if total_dur.as_secs_f64() > 0.0 {
+                (dur.as_secs_f64() / total_dur.as_secs_f64()) * 100.0
+            } else {
+                0.0
+            };
+            eprintln!("    {:<28} {:>10.2} ms  ({:>5.1}%)", name, ms, pct);
+        }
+        eprintln!();
+        // Top 5 slowest functions by wall-clock — usually the structurer
+        // hot path or a single giant function in libc.
+        let mut top = self.per_func.iter().collect::<Vec<_>>();
+        top.sort_by_key(|f| std::cmp::Reverse(f.elapsed_us));
+        eprintln!("  --- top 5 slowest functions ---");
+        for f in top.iter().take(5) {
+            eprintln!(
+                "    {:<32} {:>8.2} ms   {} bytes emitted",
+                trim_name(&f.name, 32),
+                f.elapsed_us as f64 / 1000.0,
+                f.out_len
+            );
+        }
+        eprintln!();
+        eprintln!("  --- quality tokens scraped from output ---");
+        eprintln!("    flirt-annotated calls       {:>8}", self.flirt_matches);
+        eprintln!(
+            "    Unimplemented IR leaks      {:>8}",
+            self.unimplemented_tokens
+        );
+        eprintln!(
+            "    CALLOTHER leaks             {:>8}",
+            self.callother_tokens
+        );
+        eprintln!("    `goto` tokens               {:>8}", self.goto_tokens);
+        eprintln!(
+            "    __readfsqword (canary read) {:>8}",
+            self.readfsqword_tokens
+        );
+        eprintln!(
+            "    __stack_chk_fail calls      {:>8}",
+            self.stack_chk_fail_tokens
+        );
+        eprintln!(
+            "    decompilation-failed blocks {:>8}",
+            self.decompile_failed_blocks
+        );
+        eprintln!("====================================================");
+    }
+}
+
+fn trim_name(s: &str, n: usize) -> String {
+    if s.chars().count() <= n {
+        return s.to_string();
+    }
+    s.chars().take(n.saturating_sub(1)).collect::<String>() + "…"
 }
 
 // `parse_arch` moved to `unlace_cli::parse_arch` (lib.rs) so the

@@ -424,7 +424,7 @@ fn run_gui(binary: Option<&std::path::Path>) -> Result<()> {
     }
     #[cfg(not(feature = "gui-render"))]
     {
-        let _ = session;
+        drop(session);
         bail!(
             "unlace-cli was built without the `gui-render` feature; \
              rebuild with `cargo build -p unlace-cli --features gui-render` \
@@ -483,7 +483,7 @@ fn run_dbg(pid: u32, breakpoint: Option<&str>, cont: bool) -> Result<()> {
     }
     #[cfg(not(feature = "dbg-ptrace"))]
     {
-        let _ = (pid, breakpoint, cont);
+        drop((pid, breakpoint, cont));
         bail!(
             "unlace-cli was built without the `dbg-ptrace` feature; \
              rebuild with `cargo build -p unlace-cli --features dbg-ptrace` \
@@ -793,7 +793,7 @@ fn run_lumina(action: LuminaAction) -> Result<()> {
                     .next()
                     .ok_or_else(|| anyhow::anyhow!("could not resolve --server {server}"))?;
                 let mut c = Client::connect(addr).await?;
-                let _ = c.helo(proto, &user, &password).await?;
+                _ = c.helo(proto, &user, &password).await?;
                 let rows = c.pull_md(&[hash_bytes]).await?;
                 match &rows[0] {
                     Some(r) => {

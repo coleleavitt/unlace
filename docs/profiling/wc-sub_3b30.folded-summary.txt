@@ -1,0 +1,3 @@
+5200166976 ThreadId(1)-main; unlace_cli::pipeline::decompile_function:crates/unlace-cli/src/pipeline.rs:1999; unlace_passes::instrument::pass:crates/unlace-passes/src/instrument.rs:418
+2742685996 ThreadId(1)-main; unlace_cli::pipeline::decompile_function:crates/unlace-cli/src/pipeline.rs:1999
+603885 ThreadId(1)-main

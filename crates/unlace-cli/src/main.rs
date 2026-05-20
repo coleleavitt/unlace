@@ -38,7 +38,7 @@ fn main() {
             annotations_save,
             stats,
         } => {
-            init_tracing(verbose);
+            let _flame_guard = init_tracing(verbose);
             let print_config = if max_width.is_some() || tab_width.is_some() {
                 let mut cfg = unlace_output::PrintConfig::from_env();
                 if let Some(w) = max_width {
@@ -89,7 +89,7 @@ fn main() {
             min_function_len,
             verbose,
         } => {
-            init_tracing(verbose);
+            let _flame_guard = init_tracing(verbose);
             run_siggen(
                 &archive,
                 output.as_deref(),
@@ -114,7 +114,7 @@ fn main() {
             max_iterations,
             verbose,
         } => {
-            init_tracing(verbose);
+            let _flame_guard = init_tracing(verbose);
             run_batch_cmd(
                 binary,
                 jobs,
@@ -133,7 +133,7 @@ fn main() {
             format,
             verbose,
         } => {
-            init_tracing(verbose);
+            let _flame_guard = init_tracing(verbose);
             run_quality(&binary, format)
         }
         Cmd::IrDump {
@@ -142,12 +142,12 @@ fn main() {
             phase,
             verbose,
         } => {
-            init_tracing(verbose);
+            let _flame_guard = init_tracing(verbose);
             run_ir_dump(&binary, function.as_deref(), phase.as_deref())
         }
         Cmd::Lumina { action } => run_lumina(action),
         Cmd::Gui { binary } => {
-            init_tracing(0);
+            let _flame_guard = init_tracing(0);
             run_gui(binary.as_deref())
         }
         Cmd::Emu {
@@ -156,7 +156,7 @@ fn main() {
             trace,
             verbose,
         } => {
-            init_tracing(verbose);
+            let _flame_guard = init_tracing(verbose);
             run_emu(&binary, max_instructions, trace)
         }
         Cmd::Dbg {
@@ -164,7 +164,7 @@ fn main() {
             breakpoint,
             cont,
         } => {
-            init_tracing(0);
+            let _flame_guard = init_tracing(0);
             run_dbg(pid, breakpoint.as_deref(), cont)
         }
         Cmd::Patch {
@@ -173,7 +173,7 @@ fn main() {
             bytes,
             output,
         } => {
-            init_tracing(0);
+            let _flame_guard = init_tracing(0);
             run_patch(&binary, &ea, &bytes, output.as_deref())
         }
         Cmd::Symfetch {
@@ -184,7 +184,7 @@ fn main() {
             server,
             fetch,
         } => {
-            init_tracing(0);
+            let _flame_guard = init_tracing(0);
             run_symfetch(
                 pdb.as_deref(),
                 guid.as_deref(),
@@ -202,7 +202,7 @@ fn main() {
             binary,
             force,
         } => {
-            init_tracing(0);
+            let _flame_guard = init_tracing(0);
             run_sigload(&path, limit, json, apply, binary.as_deref(), force)
         }
         Cmd::Tilload {
@@ -212,11 +212,11 @@ fn main() {
             apply,
             binary,
         } => {
-            init_tracing(0);
+            let _flame_guard = init_tracing(0);
             run_tilload(&path, limit, json, apply, binary.as_deref())
         }
         Cmd::Py { script, binary } => {
-            init_tracing(0);
+            let _flame_guard = init_tracing(0);
             run_py(&script, binary.as_deref())
         }
     };
@@ -933,19 +933,63 @@ fn hex_nibble(b: u8) -> Option<u8> {
     }
 }
 
-fn init_tracing(verbose: u8) {
-    let filter = match verbose {
+/// Install the global tracing subscriber.
+///
+/// Composition (bottom → top):
+///   1. `Registry`             — owns span storage so [`tracing-flame`] can walk it.
+///   2. `EnvFilter`            — RUST_LOG / -v / -vv / -vvv level filter.
+///   3. `fmt::Layer` (stderr)  — pretty-printed lines for humans.
+///   4. `FlameLayer` (optional) — when `UNLACE_FLAME=<path>` is set, capture
+///      per-span timings and write a folded-stack file readable by
+///      `inferno-flamegraph`. Wrapped in a `WorkerGuard` returned to the
+///      caller so it stays alive for the lifetime of the process and the
+///      folded file is flushed on drop.
+///
+/// Usage to produce a flamegraph:
+///   UNLACE_FLAME=/tmp/u.folded unlace decompile <bin>
+///   cat /tmp/u.folded | inferno-flamegraph > /tmp/u.svg
+fn init_tracing(verbose: u8) -> Option<tracing_flame::FlushGuard<std::io::BufWriter<std::fs::File>>> {
+    use tracing_flame::FlameLayer;
+    use tracing_subscriber::Layer;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+
+    let level = match verbose {
         0 => "warn",
         1 => "info",
         2 => "debug",
         _ => "trace",
     };
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)),
-        )
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
+
+    // The fmt layer respects the user's verbosity / RUST_LOG filter.
+    let fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)
+        .with_filter(env_filter);
+
+    let (flame_layer, flame_guard) = if let Ok(path) = std::env::var("UNLACE_FLAME") {
+        match FlameLayer::with_file(&path) {
+            // The flame layer needs to see TRACE-level pass spans, so it
+            // gets its own filter independent of the user's RUST_LOG.
+            Ok((layer, guard)) => (
+                Some(layer.with_filter(tracing_subscriber::filter::LevelFilter::TRACE)),
+                Some(guard),
+            ),
+            Err(e) => {
+                eprintln!("warning: UNLACE_FLAME='{path}' could not open: {e}");
+                (None, None)
+            }
+        }
+    } else {
+        (None, None)
+    };
+
+    tracing_subscriber::registry()
+        .with(fmt_layer)
+        .with(flame_layer)
         .init();
+    flame_guard
 }
 
 /// Resolve which annotation DB (if any) should be loaded for `binary`.
@@ -1291,7 +1335,7 @@ impl StatsCollector {
         );
         let pad = self.last_progress_len.saturating_sub(line.len());
         eprint!("{}{}", line, " ".repeat(pad));
-        let _ = std::io::Write::flush(&mut std::io::stderr());
+        _ = std::io::Write::flush(&mut std::io::stderr());
         self.last_progress_len = line.len();
     }
 
@@ -1300,7 +1344,7 @@ impl StatsCollector {
             return;
         }
         eprint!("\r{}\r", " ".repeat(self.last_progress_len));
-        let _ = std::io::Write::flush(&mut std::io::stderr());
+        _ = std::io::Write::flush(&mut std::io::stderr());
         self.last_progress_len = 0;
     }
 

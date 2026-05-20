@@ -1,0 +1,140 @@
+# Zulip digest — 116 messages across 55 topics
+
+
+## [t-compiler/mir-opts] Place's projection interning design meeting ?  (20 msgs)
+
+- **eddyb** (2019-09-27 13:02): I feel like that could make interning far more effective
+- **Santiago Pastorino** (2019-09-27 13:02): I feel like that could make interning far more effective you meant, interning the whole Place structure?
+- **nikomatsakis** (2019-09-27 13:05): It seems to me that interning has two challenges: construction (I prefer the "builder" approach we discussed earlier, not sure if you've all thought about that more) the mut visitor, which cannot descend to non-owned content (I think some of the NLL visitors rely on being able to e.g. mutate the types)
+- **eddyb** (2019-09-27 13:05): interning PlaceBase on top of projections means you'll have less reuse while there is only an ergonomic (if at all) benefit to having the whole Place being interned, since its size is really small
+- **Santiago Pastorino** (2019-09-27 13:05): It seems to me that interning has two challenges: construction (I prefer the "builder" approach we discussed earlier, not sure if you've all thought about that more) the mut visitor, which cannot descend to non-owned content (I think some of the NLL visitors rely on being able to e.g. mutate the types) for more info on the construction thing Niko is mentioning https://rust-lang.zulipchat.com/#narr …
+
+## [t-compiler/mir-opts] interning next steps  (13 msgs)
+
+- **nikomatsakis** (2019-10-01 19:35): So @@Santiago Pastorino I was thinking that, after #64922, the next step for interning is probably modifying the MutVisitor so that they don't visit the contents of places
+- **Santiago Pastorino** (2019-10-01 19:44): since once we intern we're going to have to visit a place as an atomic thing unsure why is this, we are interning only the projections of a place first, right?
+- **Santiago Pastorino** (2019-10-01 19:44): if we are interning projections, why do we end visiting a place as an atomic thing?
+- **Santiago Pastorino** (2019-10-01 19:45): So @Santiago Pastorino I was thinking that, after #64922, the next step for interning is probably modifying the MutVisitor so that they don't visit the contents of places If you don't visit contents of places what do you do on each visitor? or how do you emulate what visitors are right now doing?
+- **nikomatsakis** (2019-10-01 19:54): if we are interning projections, why do we end visiting a place as an atomic thing? ok well we can visit the "base"
+
+## [t-compiler/performance] Compile-time case-study: AWS crates  (4 msgs)
+
+- **lqd** (2022-12-09 10:47): (I remember the crate that preceded it was hit by the quadraticness of coherence for example) Running it in cachegrind will take a while, and the crate's so big that it breaks the self-profiler. Most of the time is in rustc and not LLVM (codegen is around 3 mins) so a check profile is more interesting. Incremental compilation is significant here, 9 mins with it turned off compared to 14 mins, and  …
+- **nnethercote** (2022-12-12 03:43): @lqd said: (I remember the crate that preceded it was hit by the quadraticness of coherence for example) Running it in cachegrind will take a while, and the crate's so big that it breaks the self-profiler. Most of the time is in rustc and not LLVM (codegen is around 3 mins) so a check profile is more interesting. Incremental compilation is significant here, 9 mins with it turned off compared to 14 …
+- **nnethercote** (2022-12-13 02:00): So the fundamental problem is that there are just a huge number of these comparisons being made. I don't really understand the coherence checking, but I think there might be inherently quadratic, due to an every-type-must-be-compared-against-every-other-type algorithm?
+- **lcnr** (2022-12-13 10:05): @nnethercote said: Maybe @lcnr has some more algorithm-level insight. it's only quadratic for impls which have the same simplified_self type
+
+## [t-compiler/mir-opts] double deallocation  (3 msgs)
+
+- **RalfJ** (2019-07-30 07:27): the global alloc_map is where statics and consts go after they have been computed (that's "interning"). it's also where fn ptr allocations go (so that a Pointer can point to a function)
+- **Alexander Regueiro** (2019-07-30 16:14): the global alloc_map is where statics and consts go after they have been computed (that's "interning"). it's also where fn ptr allocations go (so that a Pointer can point to a function) the tcx's alloc_map you mean, not Memory's, right? that would make sense.
+- **RalfJ** (2019-07-31 10:15): the global alloc_map is where statics and consts go after they have been computed (that's "interning"). it's also where fn ptr allocations go (so that a Pointer can point to a function) the tcx's alloc_map you mean, not Memory's, right? that would make sense. but what is the new InterpCx's tcx? If it is not the same as the old one's that means you got two tcx, which means you had to create a secon …
+
+## [t-compiler/mir-opts] eddyb - niko sync  (3 msgs)
+
+- **eddyb** (2019-09-04 13:38): but OTOH we have a bunch of information like SourceInfo that would probably defeat any interning-like MIR storage optimization
+- **eddyb** (2019-09-04 13:48): both of them are ready (minus debuginfo), NRVO may require a heuristic threshold (it's quadratic so a lot of locals slows it down)
+- **eddyb** (2019-09-04 13:49): (the NRVO PR actually has some log of me doing speedups of many orders of magnitude or something just because I was optimizing the term under the quadratic :P)
+
+## [t-compiler/mir-opts] interning links  (3 msgs)
+
+- **nikomatsakis** (2019-09-30 19:28): So @@Santiago Pastorino you were asking about interning
+- **Wesley Wiser** (2019-09-30 19:32): (I had to add interning stuff in a recent PR. This commit is where that happens if that's helpful. src/librustc/ty/context.rs is the main bit.)
+- **Santiago Pastorino** (2019-10-09 16:00): this means ... the actual interning code, using slice_interners! macro
+
+## [t-compiler/mir-opts] #66339 const prop causes ICE due to bad AllocId  (3 msgs)
+
+- **Wesley Wiser** (2019-11-21 12:37): I'm looking into #66339 and I believe the issue is that we lost the code here which handles interning allocated memory. I think I can call intern_const_alloc_recursive() from the right places in ConstProp but it takes a CompileTimeEvalContext which is a InterpCx<'_, '_, CompileTimeInterpreter> and ConstProp has a InterpCx<'_, '_, ConstPropMachine>. I think it's possible to make this code more gene …
+- **RalfJ** (2019-11-22 14:44): interning is for the results consts and statics and the like
+- **RalfJ** (2019-11-22 15:14): okay... hm. let me rephrase: interning should only happen "at the end", when a certain value was computed for something and is being inserted into the MIR. that basically adds a new static and puts the result of const-prop into that static. but intermediate computations shouldn't be interned.
+
+## [t-compiler/mir-opts] `x & false == false`  (3 msgs)
+
+- **Wesley Wiser** (2020-07-13 19:24): I don't have an issue running it to a fixed point though.
+- **Xavier Denis** (2020-07-13 19:25): or bounded fixpoint
+- **oli** (2020-07-14 07:52): @Wesley Wiser said: Yeah, we don't do partial propagation yet that's why I wanted to do this in const prop first. Another reason is that in contrast to a + 0, we can continue const propping after true | a, so if we do it in const prop we don't need a fixed point iteration
+
+## [t-compiler/mir-opts] Flow-sensitive MIR const-propagation  (3 msgs)
+
+- **Dylan MacKenzie (ecstatic-morse)** (2020-08-31 19:52): My thought was that your optimization will work better if arithmetic operations on a place cause that place to be assigned a maximally conservative range. This may have been your plan all along, but it wouldn't have been obvious to me. Hitting an iteration limit means that you cannot optimize anything in the function, since fixpoint wasn't reached.
+- **Jannis Harder** (2020-09-01 07:46): Is this something where widening (as in abstract interpretation) can be used? I don't have any practical experience with that, but from what I've read and understand they are used to avoid infinite or impractically long chains during fixpoint computations.
+- **Jannis Harder** (2020-09-01 18:06): At least that's my intuitive understanding, as I haven't used it myself I'm not sure how well that matches the actual theory... besides widening there is also something called narrowing, which you do after you find a fixed point to regain some of the precision lost during widening... but I don't have any intuition for that at all
+
+## [t-compiler/performance] NRVO  (3 msgs)
+
+- **eddyb** (2020-07-13 23:31): well, maybe not the analysis leading up to it, but the quadratic stuff
+- **eddyb** (2020-07-13 23:48): I had a bigger one back when I started with Rust and quadratic behavior in borrowck or w/e led to a 700TB allocation attempt
+- **eddyb** (2020-07-14 21:47): you might be getting lucky with the local filtering, even when it doesn't remove quadratic behavior, which makes me worried that someone out there was more optimizable bloat than inflate
+
+## [t-compiler/performance] New trait solver perf  (3 msgs)
+
+- **nnethercote** (2025-05-22 01:26): I just did some quick profiling of the new trait solver on the *-new-solver* benchmarks. Here are some relevant numbers from serde: ``` TOTAL 8,500M 60,700M intern_predicate 110M 4,020M mk_args 233M 3,965M Canonicalizer::fold_ty ~0M 3,570M (allocations) 520M 3,075M intern_ty 138M 2,312M PredicateKind::eq 15M 1,936M PredicateKind::fold_with 15M 1,904M EvalCtxtevaluate_goal_raw 0M 1,586M ``` The oth …
+- **nnethercote** (2025-05-22 12:12): Even with the old solver we do a lot of interning, and changing regions (e.g. erasing) is a big source of that.
+- **nnethercote** (2026-01-07 06:32): I tried and failed to speed up the canonicalization/interning/etc. using my usual profiling/micro-optimization approaches. Domain-specific knowledge seems necessary to improve things further here. I'm happy to attempt such changes if they aren't too hard, and if you can give me a slightly deeper description than the two sentences in the previous comment :slight_smile:
+
+## [t-compiler/mir-opts] Place 2.0  (2 msgs)
+
+- **Santiago Pastorino** (2019-08-25 02:11): I'd leave the judge up to you but we can wait the merge and keep working on interning the thing in the same PR, new commits
+- **Santiago Pastorino** (2019-08-25 02:37): do you think it worth? or should we go directly to interning?
+
+## [t-compiler/mir-opts] Deref is not a projection  (2 msgs)
+
+- **nikomatsakis** (2019-10-08 14:42): this is kind of the "per MIR place interning" I guess but baked in :P
+- **oli** (2022-06-28 19:48): My only concern is that it makes all places bigger. I considered just interning the deref op together with the projection slice to avoid that, but that's just an impl technicality. Anything we come up with here must scale to also having the index projection pulled out.
+
+## [t-compiler/mir-opts] turn on const prop by default  (2 msgs)
+
+- **Wesley Wiser** (2019-11-06 11:32): So when I introduced ConstPropMachine, we lost the code that handles interning Memory. It happens to work ok for the mir-opt tests, probably because the tests are small and compilation is deterministic enough to end up with AllocIds from ConstPropMachine matching up exactly with the same ones from CompileTimeInterpreter. However, if I just switch on const prop without that check in should_const_pr …
+- **oli** (2019-11-06 11:35): oh, interesting. This could probably be resolved by interning all such constants before throwing away the InterpCx
+
+## [t-compiler/mir-opts] const prop breaking const rules  (2 msgs)
+
+- **oli** (2019-12-16 13:23): or should we do the interning in immutable static mode?
+- **oli** (2019-12-29 00:34): do you mean that even if we add a ConstProp mode to interning we still prevent reading from mutable statics during const prop?
+
+## [t-compiler/mir-opts] Pinned basic blocks?  (2 msgs)
+
+- **eddyb** (2020-04-18 13:13): if you can get away with interning then yes. otherwise, pointers are still a nightmare to mutate behind
+- **eddyb** (2020-04-18 13:22): maybe I should make it really clear that I've gone off the deep end on interning entire DAG IRs using integers, and ended up loving it, and neither interning nor integers might be a good fit for MIR
+
+## [t-compiler/mir-opts] Status of NRVO-like optimizations  (2 msgs)
+
+- **Jonas Schievink  [he/him]** (2020-05-25 23:30): I've tried to make the dataflow traversal take linear time, but it still seems quadratic. https://github.com/rust-lang/rust/commit/f99570bd551a34f5864792ef8a685e0cff4c58d7 Probably just a brain fart on my side though, will revisit tomorrow.
+- **oli** (2020-05-26 15:19): Or can we prefilter the locals to just look at those that are relevant at all? We have a few super local heavy tests in the perf suite, they may actually notice such a quadratic algorithm
+
+## [t-compiler/mir-opts] Dataflow Constant Propagation  (2 msgs)
+
+- **Jak{e,ob} Degen** (2023-01-17 01:04): A case where this normally would be problematic is a loop, where a constant from above is accessed. If the "bottom" state (which is used initially for all locations) is Top for all places, the first join at the loop header would join a constant with Top from the back-edge, meaning that the analysis cannot propagate constants through or into loops. @@jachris you're worried about code like this, rig …
+- **jachris** (2023-01-17 10:04): @@Jak{e,ob} Degen Maybe unreachability does save us there though? It does. Upon entering the loop for the first time, the backedge is "unreachable", such that the join preserves x = 5. This should be independent from whether or not you have the assignment inside the loop. Also, one iteration for every block suffices to reach the fixpoint here.
+
+## [t-compiler/performance] Generalized measureme-like library  (2 msgs)
+
+- **Riccardo D'Ambrosio** (2020-08-19 22:57): Interning saves the day
+- **eddyb** (2020-08-19 22:57): interning and ropes and lazy binding :P
+
+## [t-compiler/performance] rustdoc calls `for_each_relevant_impl` a lot  (2 msgs)
+
+- **jyn** (2020-12-19 05:16): won't finish this tonight but I bet doing this would make it O(n^2) instead of n^3
+- **jyn** (2020-12-19 22:13): @Joshua Nelson said: won't finish this tonight but I bet doing this would make it O(n^2) instead of n^3 btw I was wrong, this would make it linear :)
+
+## [t-compiler/performance] keccak bimodality  (2 msgs)
+
+- **nnethercote** (2023-03-06 04:56): As for the ordering, I don't think it's order-sensitive. It's a fixpoint computation, you have to process everything, so I don't see how processing the tail first would change things.
+- **The 8472** (2023-03-07 15:41): Anyway, I wonder why obligation processing currently does the "run to fixpoint" stuff (#97674, seems to be for simplicity reasons, not perf) even though not all callers need it to "run to completion"? Maybe it would be better to distinguish between "do a little work on things that have been piling up" and "this needs to run to completion" calls. The former could avoid processing the whole array.
+
+## [t-compiler/performance] bitmaps-3.1.0  (2 msgs)
+
+- **nnethercote** (2023-03-08 00:45): @@lcnr we've talked before about bitmaps-3.1.0, which does some quadratic trait coherence checking. Specifically, it has to look for overlap between <types::BitsImpl<M> as types::Bits> and <types::BitsImpl<N> as types::Bits> for N: 1..1024 and M: 1..1024.
+- **nnethercote** (2023-03-08 00:45): That seems hard to avoid. But I noticed that this quadratic checking happens not once but twice.
+
+## [t-compiler/mir-opts] Place size  (1 msgs)
+
+- **oli** (2019-07-25 15:19): interning seems practical for all the Places that just reference a local (especially the ones with small ids, which there are a lot of)
+
+## [t-compiler/mir-opts] non recursive Place construction  (1 msgs)
+
+- **Santiago Pastorino** (2019-09-16 15:36): ``` nikomatsakis: I just think working recursively is more natural nikomatsakis: I think what I had in mind was that we returned not a Place nikomatsakis: but rather a PlaceBuilder nikomatsakis: that accumulates into a Vec nikomatsakis: and then has some kind of into_place method that does the interning ```
+
+## [t-compiler/mir-opts] matching again projection List<T>  (1 msgs)
+
+- **Santiago Pastorino** (2019-10-11 20:41): we were talking about matching Place now that after interning instead of having Box<[T]> we will have &List<T>

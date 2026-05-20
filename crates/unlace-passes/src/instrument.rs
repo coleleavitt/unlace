@@ -411,6 +411,12 @@ pub fn dump_pass_timings_csv() -> String {
 /// `OnceLock` loads + the underlying [`Pass::run`] call — no allocation,
 /// no string formatting, no clock read.
 pub fn run_instrumented(pass: &dyn Pass, func: &mut SsaFunction) -> Result<bool, PassError> {
+    // A per-pass span so `tracing-flame` (UNLACE_FLAME=<path>) attributes
+    // wall-clock to the pass that consumed it. When no flame/fmt layer is
+    // interested this is a single atomic load + early return inside
+    // `tracing`, so the common path stays effectively free.
+    let _pass_span = tracing::trace_span!("pass", name = pass.name()).entered();
+
     let trace = pass_should_trace(pass.name());
     let timing = pass_timing_enabled();
     let csv = func_timing_enabled();
@@ -638,13 +644,13 @@ mod tests {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         // Must not panic. The literal `false` cannot be asserted without
         // controlling the env, but the call itself must be safe.
-        let _ = pass_should_trace("totally_made_up_pass_name_xyzzy");
+        _ = pass_should_trace("totally_made_up_pass_name_xyzzy");
     }
 
     #[test]
     fn pass_timing_enabled_no_panic() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        let _ = pass_timing_enabled();
+        _ = pass_timing_enabled();
     }
 
     // ---- UNLACE_TIMING_CSV (Batch 17 slice 2) ----
@@ -717,7 +723,7 @@ main,cse,0,12.346
     #[test]
     fn pass_timing_csv_path_no_panic() {
         let _g = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        let _ = pass_timing_csv_path();
+        _ = pass_timing_csv_path();
     }
 
     // ---- UNLACE_SCHEDULE_AUDIT (Batch 16) ----

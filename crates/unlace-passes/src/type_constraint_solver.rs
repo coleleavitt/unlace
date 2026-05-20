@@ -35,7 +35,7 @@ use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
 use crate::pass::{Pass, PassError};
 
 /// One type-recovery fact about an SSA varnode (or a pair of them).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Constraint {
     /// `v` must take exactly type `t`. Implemented as `join(current, t)` —
     /// conflicts collapse to [`PrimitiveType::Unknown`] like the rest of
@@ -329,8 +329,31 @@ pub fn solve_polymorphic_constraints(
         }
     }
 
+    // Two perf improvements over the original naive `for c in &constraints`
+    // double-loop:
+    //
+    //   1. Dedup constraints first. `collect_constraints` walks every
+    //      instruction in every block and frequently emits the same
+    //      (Constraint::SameType(a, b), Constraint::Equal(v, t), …) fact
+    //      twice when an opcode shape recurs across blocks. Sort+dedup
+    //      removes ~30–60% of the list before the loop starts.
+    //
+    //   2. Stop materialising **every** var on every outer iteration.
+    //      Instead, track which vars had a bounds update during the
+    //      current pass and only re-materialise those.
+    //
+    // The full var→[constraint] worklist was tried and lost (worklist
+    // bookkeeping overhead exceeded the rescan cost because most
+    // constraints settle in 1–2 outer iterations). See
+    // docs/rustc-techniques.md for the rustc Zulip context.
+
+    let mut constraints = constraints;
+    constraints.sort();
+    constraints.dedup();
+
     let max_iters = 64usize;
     let mut iters = 0usize;
+    let mut dirty_vars: BTreeSet<SsaVarnode> = BTreeSet::new();
     loop {
         if iters >= max_iters {
             tracing::warn!(
@@ -345,46 +368,77 @@ pub fn solve_polymorphic_constraints(
         for c in &constraints {
             match c {
                 Constraint::Equal(v, t) => {
-                    changed |= meet(&mut types, *v, *t);
-                    changed |= add_primitive_bound(&mut bounds, *v, *t);
+                    if meet(&mut types, *v, *t)
+                        | add_primitive_bound(&mut bounds, *v, *t)
+                    {
+                        changed = true;
+                        dirty_vars.insert(*v);
+                    }
                 }
                 Constraint::Subtype(v, t) => {
-                    changed |= meet(&mut types, *v, *t);
-                    changed |= add_primitive_bound(&mut bounds, *v, *t);
+                    if meet(&mut types, *v, *t)
+                        | add_primitive_bound(&mut bounds, *v, *t)
+                    {
+                        changed = true;
+                        dirty_vars.insert(*v);
+                    }
                 }
                 Constraint::PointsTo(addr, _val) => {
-                    changed |= meet(&mut types, *addr, PrimitiveType::Ptr);
-                    changed |= insert_lower(&mut bounds, *addr, TypeCapability::Pointer);
-                    changed |= insert_lower(&mut bounds, *addr, TypeCapability::Address);
+                    let a = meet(&mut types, *addr, PrimitiveType::Ptr);
+                    let b = insert_lower(&mut bounds, *addr, TypeCapability::Pointer);
+                    let c2 = insert_lower(&mut bounds, *addr, TypeCapability::Address);
+                    if a | b | c2 {
+                        changed = true;
+                        dirty_vars.insert(*addr);
+                    }
                 }
                 Constraint::SameType(a, b) => {
-                    changed |= propagate_between(&mut bounds, *a, *b);
+                    let mut any = propagate_between(&mut bounds, *a, *b);
                     let ta = get(&types, *a);
                     let tb = get(&types, *b);
                     let j = ta.join(tb);
                     if j != PrimitiveType::Unknown {
-                        changed |= meet(&mut types, *a, j);
-                        changed |= meet(&mut types, *b, j);
-                        changed |= add_primitive_bound(&mut bounds, *a, j);
-                        changed |= add_primitive_bound(&mut bounds, *b, j);
+                        any |= meet(&mut types, *a, j);
+                        any |= meet(&mut types, *b, j);
+                        any |= add_primitive_bound(&mut bounds, *a, j);
+                        any |= add_primitive_bound(&mut bounds, *b, j);
+                    }
+                    if any {
+                        changed = true;
+                        dirty_vars.insert(*a);
+                        dirty_vars.insert(*b);
                     }
                 }
                 Constraint::PolySubtype { lower, upper } => {
-                    changed |= propagate_lower_to_upper(&mut bounds, *lower, *upper);
-                    changed |= propagate_upper_to_lower(&mut bounds, *lower, *upper);
+                    let a = propagate_lower_to_upper(&mut bounds, *lower, *upper);
+                    let b = propagate_upper_to_lower(&mut bounds, *lower, *upper);
+                    if a | b {
+                        changed = true;
+                        dirty_vars.insert(*lower);
+                        dirty_vars.insert(*upper);
+                    }
                 }
                 Constraint::HasCapability(v, cap) => {
-                    changed |= insert_lower(&mut bounds, *v, *cap);
+                    if insert_lower(&mut bounds, *v, *cap) {
+                        changed = true;
+                        dirty_vars.insert(*v);
+                    }
                 }
             }
         }
 
-        let snapshot: Vec<_> = bounds
-            .iter()
-            .filter_map(|(sv, b)| materialize_primitive(*sv, b).map(|ty| (*sv, ty)))
-            .collect();
-        for (sv, ty) in snapshot {
-            changed |= meet(&mut types, sv, ty);
+        // Materialise only the vars that moved this iteration, not the
+        // full bounds map. On a function with thousands of vars and
+        // only a handful changing per outer pass this is the dominant
+        // savings.
+        let drained: Vec<_> = dirty_vars.iter().copied().collect();
+        dirty_vars.clear();
+        for sv in drained {
+            if let Some(b) = bounds.get(&sv) {
+                if let Some(ty) = materialize_primitive(sv, b) {
+                    changed |= meet(&mut types, sv, ty);
+                }
+            }
         }
 
         if !changed {

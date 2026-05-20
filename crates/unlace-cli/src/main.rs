@@ -483,9 +483,9 @@ fn run_dbg(pid: u32, breakpoint: Option<&str>, cont: bool) -> Result<()> {
     }
     #[cfg(not(feature = "dbg-ptrace"))]
     {
-        drop((pid, breakpoint, cont));
         bail!(
-            "unlace-cli was built without the `dbg-ptrace` feature; \
+            "cannot attach to pid {pid} (breakpoint={breakpoint:?}, cont={cont}): \
+             unlace-cli was built without the `dbg-ptrace` feature; \
              rebuild with `cargo build -p unlace-cli --features dbg-ptrace` \
              to enable the Linux ptrace debugger backend"
         );

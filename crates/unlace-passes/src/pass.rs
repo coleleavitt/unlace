@@ -174,19 +174,29 @@ pub(crate) fn compact_var_map_for_moved_insn(
     }
 }
 
+/// Remove every `(bid, idx, *)` entry from `var_map`.
+///
+/// The keys are `(BlockId, usize, VarnodeSlot)` ordered lexicographically,
+/// so all slots at `(bid, idx)` form a *contiguous range*. Use
+/// `BTreeMap::extract_if` (stable since 1.91) with a bounded range to do
+/// one O(log n) descent and drain in place, avoiding the `Vec` and the
+/// second remove-pass the previous implementation used.
+///
+/// (Measured impact on `/usr/bin/wc`: under the noise floor. The
+/// `Iter::next` cycles a perf flamegraph attributes to this map come
+/// almost entirely from reverse lookups in indirect_jump_resolve,
+/// indirect_call_resolve, auth_call_resolve, and go_iface_devirt —
+/// each of which scans `var_map.iter()` to find an SsaVarnode by
+/// value. Fixing those needs a reverse index on SsaFunction and is
+/// tracked as future work.)
 fn clear_var_map_entries_at(
     var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
     bid: BlockId,
     idx: usize,
 ) {
-    let stale_keys: Vec<_> = var_map
-        .keys()
-        .filter(|(b, i, _)| *b == bid && *i == idx)
-        .cloned()
-        .collect();
-    for key in stale_keys {
-        var_map.remove(&key);
-    }
+    let start = (bid, idx, VarnodeSlot::Output);
+    let end = (bid, idx, VarnodeSlot::Input(usize::MAX));
+    var_map.extract_if(start..=end, |_, _| true).for_each(drop);
 }
 
 /// Run a sequence of passes to a fixed point, returning the total number

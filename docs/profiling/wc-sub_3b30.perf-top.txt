@@ -1,0 +1,35 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 64  of event 'cpu_atom/cycles/P'
+# Event count (approx.): 224112005
+#
+# Overhead  Command  Shared Object         Symbol                    
+# ........  .......  ....................  ..........................
+#
+     5.50%  unlace   unlace                [.] 0x00000000010a16c6
+            |
+            ---0x55f8f09116c6
+
+     3.87%  unlace   unlace                [.] 0x000000000104cc3e
+            |
+            ---0x55f8f08bcc3e
+               |          
+               |--1.96%--0x4
+               |          
+                --1.91%--0x1c
+
+     3.79%  unlace   unlace                [.] 0x00000000010540fd
+            |
+            ---0x55f8f08c40fd
+
+     3.78%  unlace   unlace                [.] 0x00000000010a16bd
+            |
+            ---0x55f8f09116bd
+
+     3.69%  unlace   unlace                [.] 0x0000000000fbe493
+            |
+            ---0x55f8f082e493
+               |          

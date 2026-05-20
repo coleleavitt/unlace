@@ -82,10 +82,56 @@ Existing artefacts under `docs/profiling/`:
   pass name.
 
 * Sampling resolution is wall-clock between span enter/exit, not CPU
-  cycles. For instruction-level hot-spot analysis we'd need a real
-  sampling profiler (`perf record` + `cargo-flamegraph`), but `perf` is
-  not always available — this path works on any host with no kernel
-  permissions.
+  cycles. For instruction-level hot-spot analysis use the real perf
+  path below.
+
+## perf + cargo-flamegraph
+
+Once you have `perf` installed (`emerge sys-process/perf` on gentoo, or
+`linux-tools-common` on Debian), and `/proc/sys/kernel/perf_event_paranoid`
+≤ 1 (we're set to -1):
+
+```bash
+# Build with debug symbols + frame pointers, run perf record under it,
+# generate the SVG.
+CARGO_PROFILE_RELEASE_DEBUG=line-tables-only \
+CARGO_PROFILE_RELEASE_STRIP=none \
+CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO=off \
+cargo flamegraph --release --bin unlace \
+    -o docs/profiling/wc-sub_3b30.perf.svg \
+    -- decompile tmp/wc.elf --function sub_3b30 -o /dev/null
+
+# View per-function hot list directly from perf.data:
+perf report --stdio --no-children -i perf.data | head -30
+```
+
+The three env vars are critical because `~/.cargo/config.toml` sets
+`strip = "symbols"` and `split-debuginfo = "unpacked"` for release —
+both must be turned off for `perf` to resolve Rust symbols.
+
+### Real findings from /usr/bin/wc sub_3b30
+
+10,866 samples × `perf record`:
+
+| % | function |
+|--:|----------|
+| 23.4% | `alloc::collections::btree::map::Iter<(BlockId, usize, VarnodeSlot), SsaVarnode>::next` |
+| 13.2% | `SccpPass::run` |
+| 11.7% | `ConditionSimplifyPass::run` |
+| 11.2% | `Vec::from_iter` (filtered iteration over var_map keys) |
+|  7.1% | `BTreeMap::search_tree` |
+|  5.2% | `DeadCodeElimPass::run` |
+|  3.9% | `GvnPass::run` |
+| 19.3% | `type_constraint_solver::solve_polymorphic_constraints` (cross-cutting) |
+
+**The dominant cost (~42% combined) is on `SsaFunction::var_map`** — a
+`BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>`. Four passes
+(`indirect_jump_resolve`, `indirect_call_resolve`, `auth_call_resolve`,
+`go_iface_devirt`) do reverse lookups via `var_map.iter().find_map(...)`
+— scanning the entire map to find an entry by **value**. Filed as
+**t135** to add a sibling `BTreeMap<SsaVarnode, (BlockId, usize)>` reverse
+index for O(log n) lookups. See `docs/rustc-techniques.md` technique #4
+(bucket-by-cheap-key-first) for context.
 
 ## When to reach for which tool
 

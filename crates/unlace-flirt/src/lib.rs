@@ -7,6 +7,7 @@ pub mod builder;
 mod error;
 mod pattern;
 pub mod prologue;
+pub mod sig;
 
 pub use builder::{
     FlirtSignature as SigV2, FlirtSignatureFile, build_from_function_map,

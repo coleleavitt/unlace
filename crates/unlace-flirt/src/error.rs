@@ -13,6 +13,10 @@ pub enum FlirtError {
     #[error("failed to parse pattern TOML: {0}")]
     Parse(#[from] toml::de::Error),
 
+    /// Signature blob is malformed or corrupt.
+    #[error("malformed signature: {0}")]
+    Sig(String),
+
     /// Static archive parsing failed.
     #[error("failed to parse archive: {detail}")]
     ArchiveParse { detail: String },

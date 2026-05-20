@@ -16,5 +16,6 @@ tracing = { workspace = true }
 toml = "0.8"
 object = { workspace = true }
 zstd = "0.13"
+flate2 = "1.0"
 
 [dev-dependencies]

@@ -10,6 +10,7 @@
 pub mod db;
 pub mod patches;
 pub mod til;
+pub mod til_parser;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

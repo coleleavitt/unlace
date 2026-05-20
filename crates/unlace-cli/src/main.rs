@@ -192,6 +192,18 @@ fn main() {
                 fetch,
             )
         }
+        Cmd::Sigload { path, limit, json } => {
+            init_tracing(0);
+            run_sigload(&path, limit, json)
+        }
+        Cmd::Tilload { path, limit, json } => {
+            init_tracing(0);
+            run_tilload(&path, limit, json)
+        }
+        Cmd::Py { script, binary } => {
+            init_tracing(0);
+            run_py(&script, binary.as_deref())
+        }
     };
 
     // Batch 17: per-pass timing dump. The wrapper inside
@@ -515,6 +527,100 @@ fn run_patch(
     Ok(())
 }
 
+#[cfg(feature = "python")]
+fn run_py(script: &std::path::Path, binary: Option<&std::path::Path>) -> Result<()> {
+    let session = unlace_session::Session::new();
+    if let Some(b) = binary {
+        session.load_binary(b)
+            .with_context(|| format!("loading {}", b.display()))?;
+    }
+    let source = std::fs::read_to_string(script)
+        .with_context(|| format!("reading {}", script.display()))?;
+    unlace_idapython::pybridge::run_script(session, &source)
+        .map_err(|e| anyhow::anyhow!("python: {e}"))
+}
+
+#[cfg(not(feature = "python"))]
+fn run_py(_script: &std::path::Path, _binary: Option<&std::path::Path>) -> Result<()> {
+    bail!(
+        "unlace-cli was built without the `python` feature; \
+         rebuild with `cargo build -p unlace-cli --features python` \
+         to enable IDAPython script execution"
+    )
+}
+
+fn run_sigload(path: &std::path::Path, limit: usize, json: bool) -> Result<()> {
+    let sig = unlace_flirt::sig::SigFile::load(path)
+        .with_context(|| format!("parsing {}", path.display()))?;
+    if json {
+        let summary = serde_json::json!({
+            "version": sig.version,
+            "arch": sig.arch,
+            "features": sig.features,
+            "file_types": sig.file_types,
+            "os_types": sig.os_types,
+            "app_types": sig.app_types,
+            "library_name": sig.library_name,
+            "n_functions": sig.n_functions,
+            "extracted_functions": sig.functions.len(),
+            "sample": sig.functions.iter()
+                .take(limit)
+                .map(|f| serde_json::json!({
+                    "name": f.name,
+                    "pattern_hex": hex::encode(&f.pattern),
+                }))
+                .collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&summary)?);
+    } else {
+        println!("IDASGN v{} arch={} features={:#x}", sig.version, sig.arch, sig.features);
+        println!("library: {:?}", sig.library_name);
+        println!(
+            "declared n_functions={}, extracted ascii names={}",
+            sig.n_functions,
+            sig.functions.len()
+        );
+        println!("sample of first {} functions:", limit.min(sig.functions.len()));
+        for f in sig.functions.iter().take(limit) {
+            println!("  {} pattern={} bytes", f.name, f.pattern.len());
+        }
+    }
+    Ok(())
+}
+
+fn run_tilload(path: &std::path::Path, limit: usize, json: bool) -> Result<()> {
+    let til = unlace_session::til_parser::TilFile::load(path)
+        .with_context(|| format!("parsing {}", path.display()))?;
+    if json {
+        let summary = serde_json::json!({
+            "version": til.version,
+            "flags": til.flags,
+            "title": til.title,
+            "base": til.base,
+            "symbol_count": til.symbols.len(),
+            "sample": til.symbols.iter()
+                .take(limit)
+                .map(|s| serde_json::json!({
+                    "name": s.name,
+                    "ordinal": s.ordinal,
+                    "type_bytes_len": s.type_bytes.len(),
+                }))
+                .collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&summary)?);
+    } else {
+        println!("IDATIL v{} flags={:#x}", til.version, til.flags);
+        println!("title: {:?}", til.title);
+        println!("base:  {:?}", til.base);
+        println!("symbol_count: {}", til.symbols.len());
+        println!("sample of first {} symbols:", limit.min(til.symbols.len()));
+        for s in til.symbols.iter().take(limit) {
+            println!("  {} ord={} type={} bytes", s.name, s.ordinal, s.type_bytes.len());
+        }
+    }
+    Ok(())
+}
+
 fn run_symfetch(
     pdb: Option<&str>,
     guid: Option<&str>,
@@ -528,7 +634,9 @@ fn run_symfetch(
         let url = unlace_loader::symcache::msft_symbol_server_url(pdb_name, &guid_bytes, age);
         println!("{url}");
         if fetch {
-            bail!("--fetch is wired but no HTTP client is compiled into this build");
+            let cache_dir = unlace_loader::symcache::default_cache_dir();
+            let target = unlace_loader::symcache::msft_cache_path(&cache_dir, pdb_name, &guid_bytes, age);
+            return fetch_url_to(&url, &target);
         }
         return Ok(());
     }
@@ -537,11 +645,33 @@ fn run_symfetch(
         let url = unlace_loader::symcache::debuginfod_url(server, &bid_bytes);
         println!("{url}");
         if fetch {
-            bail!("--fetch is wired but no HTTP client is compiled into this build");
+            let cache_dir = unlace_loader::symcache::default_cache_dir();
+            let target = unlace_loader::symcache::debuginfod_cache_path(&cache_dir, &bid_bytes);
+            return fetch_url_to(&url, &target);
         }
         return Ok(());
     }
     bail!("supply either --pdb + --guid + --age (MSFT) or --buildid (debuginfod)")
+}
+
+fn fetch_url_to(url: &str, target: &std::path::Path) -> Result<()> {
+    use std::io::Write;
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    println!("fetching {url}");
+    let resp = ureq::get(url).call()
+        .with_context(|| format!("GET {url}"))?;
+    let mut reader = resp.into_reader();
+    let mut buf = Vec::new();
+    std::io::copy(&mut reader, &mut buf)?;
+    let tmp = target.with_extension("part");
+    let mut f = std::fs::File::create(&tmp)?;
+    f.write_all(&buf)?;
+    f.sync_all()?;
+    std::fs::rename(&tmp, target)?;
+    println!("wrote {} bytes -> {}", buf.len(), target.display());
+    Ok(())
 }
 
 fn dispatch_loader(data: &[u8]) -> Result<BinaryImage> {

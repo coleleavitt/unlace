@@ -29,6 +29,7 @@
 
 pub mod idaapi;
 pub mod ida_bytes;
+pub mod pybridge;
 pub mod ida_funcs;
 pub mod ida_hexrays;
 pub mod ida_name;

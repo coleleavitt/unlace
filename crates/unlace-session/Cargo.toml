@@ -12,6 +12,7 @@ anyhow.workspace = true
 serde = { workspace = true, features = ["derive"] }
 bincode.workspace = true
 zstd = "0.13"
+flate2 = "1.0"
 sha2 = "0.10"
 parking_lot = "0.12"
 tracing.workspace = true

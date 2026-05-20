@@ -273,6 +273,57 @@ pub enum Cmd {
         output: Option<PathBuf>,
     },
 
+    /// Run an IDAPython-compatible script against a loaded binary.
+    ///
+    /// Requires `--features python` on `unlace-cli`. The script can
+    /// `import idc`, `idautils`, `ida_funcs` and will see the loaded
+    /// binary's symbol table + sections through the unlace
+    /// `Session`.
+    Py {
+        /// Path to the Python script.
+        script: PathBuf,
+
+        /// Binary to load before running the script.
+        #[arg(long)]
+        binary: Option<PathBuf>,
+    },
+
+    /// Load and inspect an IDA FLIRT `.sig` signature file.
+    ///
+    /// Decompresses the IDASGN zlib payload and prints the parsed
+    /// header + a sample of the extracted function names. Useful for
+    /// confirming a sig file is valid before wiring it into the
+    /// FLIRT-match pipeline.
+    Sigload {
+        /// Path to the `.sig` file.
+        path: PathBuf,
+
+        /// Maximum function names to print (default 20).
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+
+        /// Emit JSON instead of human-readable text.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Load and inspect an IDA `.til` type library.
+    ///
+    /// Decompresses the IDATIL zlib payload and prints the parsed
+    /// header + a sample of the extracted symbol names + ordinals.
+    Tilload {
+        /// Path to the `.til` file.
+        path: PathBuf,
+
+        /// Maximum symbols to print (default 20).
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+
+        /// Emit JSON instead of human-readable text.
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Print a symbol-server URL for the given identifier.
     ///
     /// Supports the Microsoft Symbol Server (--pdb + --guid + --age) and

@@ -16,6 +16,8 @@ unlace-session = { path = "../unlace-session" }
 unlace-emu = { path = "../unlace-emu" }
 unlace-debugger = { path = "../unlace-debugger" }
 unlace-gui = { path = "../unlace-gui" }
+unlace-flirt = { path = "../unlace-flirt" }
+unlace-idapython = { path = "../unlace-idapython" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "io-util"] }
 clap = { workspace = true }
 anyhow = { workspace = true }
@@ -25,6 +27,8 @@ smallvec = { workspace = true }
 rayon = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+hex = "0.4"
+ureq = { version = "2.10", default-features = false, features = ["tls"] }
 regex = "1"
 memmap2 = "0.9"
 sha2 = "0.10"
@@ -40,6 +44,8 @@ default = []
 gui-render = ["unlace-gui/render"]
 # Enable the Linux ptrace debugger backend behind `unlace dbg`. Linux-only.
 dbg-ptrace = ["unlace-debugger/linux-ptrace"]
+# Enable IDAPython script execution via pyo3.
+python = ["unlace-idapython/python"]
 
 [[bin]]
 name = "unlace"

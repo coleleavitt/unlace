@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 unlace-ir = { workspace = true }
-unlace-loader = { workspace = true }
+unlace-loader = { workspace = true, features = ["http-symfetch"] }
 unlace-lift = { workspace = true }
 unlace-passes = { workspace = true }
 unlace-struct = { workspace = true }
@@ -28,7 +28,6 @@ rayon = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 hex = "0.4"
-ureq = { version = "2.10", default-features = false, features = ["tls"] }
 regex = "1"
 memmap2 = "0.9"
 sha2 = "0.10"

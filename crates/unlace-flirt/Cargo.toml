@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 unlace-ir = { workspace = true }
 unlace-loader.workspace = true
+unlace-session = { path = "../unlace-session" }
 serde = { workspace = true, features = ["derive"] }
 bincode.workspace = true
 anyhow.workspace = true

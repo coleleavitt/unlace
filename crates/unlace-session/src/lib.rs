@@ -10,7 +10,10 @@
 pub mod db;
 pub mod patches;
 pub mod til;
+pub mod til_import;
 pub mod til_parser;
+
+pub use til_import::{CatalogEntry, TilApplyReport, TilCatalog};
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -171,6 +174,17 @@ impl Session {
     {
         let g = self.inner.read();
         g.binary.as_ref().map(f)
+    }
+
+    /// Replace the loaded binary with one constructed in-process.
+    ///
+    /// Useful when the caller already parsed an image via a custom
+    /// loader and wants to attach it to a session without round-tripping
+    /// through a file on disk. Emits no `Loaded` event because there is
+    /// no path to associate.
+    pub fn set_binary(&self, image: BinaryImage) {
+        let mut g = self.inner.write();
+        g.binary = Some(image);
     }
 
     pub fn annotations(&self) -> Annotations {

@@ -5,9 +5,12 @@
 
 pub mod builder;
 mod error;
+pub mod match_pass;
 mod pattern;
 pub mod prologue;
 pub mod sig;
+
+pub use match_pass::{FlirtApplyReport, FlirtMatcher};
 
 pub use builder::{
     FlirtSignature as SigV2, FlirtSignatureFile, build_from_function_map,

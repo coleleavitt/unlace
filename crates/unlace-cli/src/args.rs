@@ -305,6 +305,19 @@ pub enum Cmd {
         /// Emit JSON instead of human-readable text.
         #[arg(long)]
         json: bool,
+
+        /// Apply matched signatures to `--binary` and print a report.
+        #[arg(long)]
+        apply: bool,
+
+        /// Binary to apply signatures against (required when `--apply` is set).
+        #[arg(long)]
+        binary: Option<PathBuf>,
+
+        /// Overwrite already-named functions (default: only rename
+        /// synthetic `sub_*` symbols).
+        #[arg(long)]
+        force: bool,
     },
 
     /// Load and inspect an IDA `.til` type library.
@@ -322,6 +335,14 @@ pub enum Cmd {
         /// Emit JSON instead of human-readable text.
         #[arg(long)]
         json: bool,
+
+        /// Apply type-library entries to `--binary` and print a report.
+        #[arg(long)]
+        apply: bool,
+
+        /// Binary to apply type annotations against (required when `--apply` is set).
+        #[arg(long)]
+        binary: Option<PathBuf>,
     },
 
     /// Print a symbol-server URL for the given identifier.

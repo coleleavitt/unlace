@@ -13,6 +13,12 @@ tracing = { workspace = true }
 rustc-demangle = "0.1"
 unlace-ir = { workspace = true }
 wasmparser = "0.225"
+ureq = { version = "2.10", default-features = false, features = ["tls"], optional = true }
+
+[features]
+default = []
+# Enable symbol-server HTTP fetch (debuginfod + MSFT symstore).
+http-symfetch = ["dep:ureq"]
 
 [dev-dependencies]
 insta = { workspace = true }

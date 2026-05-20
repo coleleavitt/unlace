@@ -192,13 +192,26 @@ fn main() {
                 fetch,
             )
         }
-        Cmd::Sigload { path, limit, json } => {
+        Cmd::Sigload {
+            path,
+            limit,
+            json,
+            apply,
+            binary,
+            force,
+        } => {
             init_tracing(0);
-            run_sigload(&path, limit, json)
+            run_sigload(&path, limit, json, apply, binary.as_deref(), force)
         }
-        Cmd::Tilload { path, limit, json } => {
+        Cmd::Tilload {
+            path,
+            limit,
+            json,
+            apply,
+            binary,
+        } => {
             init_tracing(0);
-            run_tilload(&path, limit, json)
+            run_tilload(&path, limit, json, apply, binary.as_deref())
         }
         Cmd::Py { script, binary } => {
             init_tracing(0);
@@ -549,9 +562,51 @@ fn run_py(_script: &std::path::Path, _binary: Option<&std::path::Path>) -> Resul
     )
 }
 
-fn run_sigload(path: &std::path::Path, limit: usize, json: bool) -> Result<()> {
+fn run_sigload(
+    path: &std::path::Path,
+    limit: usize,
+    json: bool,
+    apply: bool,
+    binary: Option<&std::path::Path>,
+    force: bool,
+) -> Result<()> {
     let sig = unlace_flirt::sig::SigFile::load(path)
         .with_context(|| format!("parsing {}", path.display()))?;
+    if apply {
+        let bin = binary.ok_or_else(|| {
+            anyhow::anyhow!("--apply requires --binary <path-to-binary>")
+        })?;
+        let session = unlace_session::Session::new();
+        session.load_binary(bin)
+            .with_context(|| format!("loading {}", bin.display()))?;
+        let matcher = unlace_flirt::FlirtMatcher::from_sig(&sig);
+        let report = matcher.apply_to_session(&session, force);
+        if json {
+            let summary = serde_json::json!({
+                "sig_path": path,
+                "binary": bin,
+                "force": force,
+                "signatures_loaded": matcher.len(),
+                "functions_inspected": report.inspected,
+                "functions_renamed": report.renamed,
+                "applied": report.applied,
+            });
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        } else {
+            println!(
+                "applied {} sigs from {} to {}: {} of {} functions renamed",
+                matcher.len(),
+                path.display(),
+                bin.display(),
+                report.renamed,
+                report.inspected,
+            );
+            for (addr, name) in report.applied.iter().take(limit) {
+                println!("  {:#010x} -> {}", addr, name);
+            }
+        }
+        return Ok(());
+    }
     if json {
         let summary = serde_json::json!({
             "version": sig.version,
@@ -588,9 +643,48 @@ fn run_sigload(path: &std::path::Path, limit: usize, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn run_tilload(path: &std::path::Path, limit: usize, json: bool) -> Result<()> {
+fn run_tilload(
+    path: &std::path::Path,
+    limit: usize,
+    json: bool,
+    apply: bool,
+    binary: Option<&std::path::Path>,
+) -> Result<()> {
     let til = unlace_session::til_parser::TilFile::load(path)
         .with_context(|| format!("parsing {}", path.display()))?;
+    if apply {
+        let bin = binary.ok_or_else(|| {
+            anyhow::anyhow!("--apply requires --binary <path-to-binary>")
+        })?;
+        let session = unlace_session::Session::new();
+        session.load_binary(bin)
+            .with_context(|| format!("loading {}", bin.display()))?;
+        let mut catalog = unlace_session::TilCatalog::new();
+        catalog.add_from_til(&til);
+        let report = catalog.apply_to_session(&session);
+        if json {
+            let summary = serde_json::json!({
+                "til_path": path,
+                "binary": bin,
+                "catalog_size": report.catalog_size,
+                "symbols_annotated": report.annotated,
+                "applied": report.applied,
+            });
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        } else {
+            println!(
+                "applied til catalog ({} entries from {}) to {}: {} symbols annotated",
+                report.catalog_size,
+                path.display(),
+                bin.display(),
+                report.annotated,
+            );
+            for (addr, name) in report.applied.iter().take(limit) {
+                println!("  {:#010x} -> {}", addr, name);
+            }
+        }
+        return Ok(());
+    }
     if json {
         let summary = serde_json::json!({
             "version": til.version,
@@ -655,22 +749,14 @@ fn run_symfetch(
 }
 
 fn fetch_url_to(url: &str, target: &std::path::Path) -> Result<()> {
-    use std::io::Write;
-    if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
     println!("fetching {url}");
-    let resp = ureq::get(url).call()
-        .with_context(|| format!("GET {url}"))?;
-    let mut reader = resp.into_reader();
-    let mut buf = Vec::new();
-    std::io::copy(&mut reader, &mut buf)?;
-    let tmp = target.with_extension("part");
-    let mut f = std::fs::File::create(&tmp)?;
-    f.write_all(&buf)?;
-    f.sync_all()?;
-    std::fs::rename(&tmp, target)?;
-    println!("wrote {} bytes -> {}", buf.len(), target.display());
+    let report = unlace_loader::symcache_fetch::fetch_to_path(url, target)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    println!(
+        "wrote {} bytes -> {}",
+        report.bytes_written,
+        report.destination.display()
+    );
     Ok(())
 }
 

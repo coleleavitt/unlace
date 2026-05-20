@@ -4148,7 +4148,6 @@ dependencies = [
  "unlace-plugin",
  "unlace-session",
  "unlace-struct",
- "ureq",
 ]
 
 [[package]]
@@ -4191,6 +4190,7 @@ dependencies = [
  "tracing",
  "unlace-ir",
  "unlace-loader",
+ "unlace-session",
  "zstd",
 ]
 
@@ -4595,6 +4595,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "unlace-ir",
+ "ureq",
  "wasmparser 0.225.0",
 ]
 

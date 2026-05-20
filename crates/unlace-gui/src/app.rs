@@ -68,6 +68,16 @@ impl App {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Gui(GuiMessage::Quit) => iced::exit(),
+            Message::Gui(GuiMessage::SelectFunction(ea)) => {
+                self.state.update(GuiMessage::SelectFunction(ea));
+                self.refresh_function_view(ea);
+                Task::none()
+            }
+            Message::Gui(GuiMessage::Goto(ea)) => {
+                self.state.update(GuiMessage::Goto(ea));
+                self.refresh_function_view(ea);
+                Task::none()
+            }
             Message::Gui(m) => {
                 self.state.update(m);
                 Task::none()
@@ -116,6 +126,25 @@ impl App {
 
     pub fn theme(&self) -> Theme {
         Theme::Dark
+    }
+
+    /// Disassemble the function at `ea` and load it into both the
+    /// disassembly and pseudocode text buffers. The pseudocode pane
+    /// gets an IR-text dump until the full structuring pipeline is
+    /// wired into the GUI.
+    fn refresh_function_view(&mut self, ea: u64) {
+        let (disasm, pseudo) = self
+            .state
+            .session
+            .with_binary(|img| render_function(img, ea))
+            .unwrap_or_else(|| {
+                (
+                    format!("; no binary loaded"),
+                    format!("// no binary loaded\n"),
+                )
+            });
+        self.disassembly_content = text_editor::Content::with_text(&disasm);
+        self.pseudocode_content = text_editor::Content::with_text(&pseudo);
     }
 
     fn top_toolbar(&self) -> Element<'_, Message> {
@@ -269,6 +298,77 @@ fn tab_button<'a>(label: &'a str, active: bool, msg: Message) -> Element<'a, Mes
 
 fn placeholder<'a>(s: &'a str) -> Element<'a, Message> {
     container(text(s)).padding(12).into()
+}
+
+/// Disassemble up to ~200 instructions starting at `ea` and produce both
+/// a textual disassembly listing and a pcode/IR dump for the pseudocode
+/// pane. Returns (disasm, pseudo).
+fn render_function(image: &unlace_loader::BinaryImage, ea: u64) -> (String, String) {
+    let Some(section) = image
+        .sections
+        .iter()
+        .find(|s| ea >= s.vaddr && ea < s.vaddr + s.size)
+    else {
+        return (
+            format!("; address {:#x} is not inside any loaded section\n", ea),
+            format!("// address {:#x} is not inside any loaded section\n", ea),
+        );
+    };
+    let label = image
+        .symbols
+        .get(&ea)
+        .map(|s| s.name.clone())
+        .unwrap_or_else(|| format!("sub_{:x}", ea));
+    let mut disasm = format!("; {} @ {:#x} in section {}\n\n", label, ea, section.name);
+    let mut pseudo = format!("// Decompiled view of {} @ {:#x}\n// ", label, ea);
+    pseudo.push_str(&format!("(IR-level dump; full C printer not yet wired into the GUI)\n\n"));
+
+    let lifter = unlace_lift::get_lifter(image.arch);
+    let mut cursor = ea;
+    let end = (section.vaddr + section.size).min(ea + 0x400);
+    let mut steps = 0usize;
+    while cursor < end && steps < 200 {
+        let off = (cursor - section.vaddr) as usize;
+        if off >= section.data.len() {
+            break;
+        }
+        let window = &section.data[off..(off + 16).min(section.data.len())];
+        match lifter.lift_insn(window, cursor) {
+            Ok(lifted) => {
+                let bytes: Vec<String> =
+                    window.iter().take(lifted.len).map(|b| format!("{:02x}", b)).collect();
+                disasm.push_str(&format!(
+                    "{:#010x}: {:<24}  ; {} pcode ops\n",
+                    cursor,
+                    bytes.join(" "),
+                    lifted.ir_ops.len()
+                ));
+                for op in &lifted.ir_ops {
+                    pseudo.push_str(&format!("    {:?}\n", op.op));
+                }
+                pseudo.push('\n');
+                if lifted.len == 0 {
+                    break;
+                }
+                // Stop at return / call-otherwise control flow leaves
+                let last = lifted.ir_ops.last().map(|o| o.op);
+                cursor += lifted.len as u64;
+                if matches!(last, Some(unlace_ir::IrOp::Return)) {
+                    disasm.push_str("\n; --- end of function ---\n");
+                    break;
+                }
+            }
+            Err(e) => {
+                disasm.push_str(&format!("{:#010x}: <decode error: {}>\n", cursor, e));
+                break;
+            }
+        }
+        steps += 1;
+    }
+    if steps == 0 {
+        disasm.push_str("; (no instructions decoded)\n");
+    }
+    (disasm, pseudo)
 }
 
 fn parse_hex_addr(s: &str) -> Option<u64> {

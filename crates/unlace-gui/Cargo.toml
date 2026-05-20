@@ -8,6 +8,8 @@ description = "Desktop GUI for unlace (iced + iced_aw)"
 [dependencies]
 unlace-session = { path = "../unlace-session" }
 unlace-ir.workspace = true
+unlace-lift = { workspace = true }
+unlace-loader = { workspace = true }
 anyhow.workspace = true
 tracing.workspace = true
 iced = { version = "0.14", default-features = false, features = ["wgpu", "advanced", "x11", "wayland", "thread-pool"], optional = true }

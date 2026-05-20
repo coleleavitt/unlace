@@ -4216,6 +4216,8 @@ dependencies = [
  "iced",
  "tracing",
  "unlace-ir",
+ "unlace-lift",
+ "unlace-loader",
  "unlace-session",
 ]
 

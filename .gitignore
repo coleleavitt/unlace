@@ -34,6 +34,13 @@ research/gdb/
 research/windows-debug/
 research/ida-sig-til-samples/
 
+# perf / flamegraph raw capture — large + non-reproducible. The rendered
+# SVGs + the text top-N reports under docs/profiling/ ARE tracked; only
+# the multi-hundred-MB raw captures and intermediate folded stacks are not.
+perf.data
+perf.data.old
+*.folded
+
 # jfc agent worktrees + scratch
 .jfc-worktrees/
 session-ses_*.md

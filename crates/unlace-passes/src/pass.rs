@@ -187,8 +187,8 @@ pub(crate) fn compact_var_map_for_moved_insn(
 /// almost entirely from reverse lookups in indirect_jump_resolve,
 /// indirect_call_resolve, auth_call_resolve, and go_iface_devirt —
 /// each of which scans `var_map.iter()` to find an SsaVarnode by
-/// value. Fixing those needs a reverse index on SsaFunction and is
-/// tracked as future work.)
+/// value. Those are fixed by building a per-pass [`DefIndex`] once at
+/// pass entry — see below.)
 fn clear_var_map_entries_at(
     var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
     bid: BlockId,
@@ -197,6 +197,77 @@ fn clear_var_map_entries_at(
     let start = (bid, idx, VarnodeSlot::Output);
     let end = (bid, idx, VarnodeSlot::Input(usize::MAX));
     var_map.extract_if(start..=end, |_, _| true).for_each(drop);
+}
+
+/// Per-pass reverse index from a defined SSA varnode to its
+/// `(BlockId, instruction_index)` Output slot.
+///
+/// Built once at pass entry by [`DefIndex::build`], then consulted via
+/// [`DefIndex::lookup`] for O(log n) reverse lookups, replacing the
+/// O(|var_map|) `var_map.iter().find_map(...)` pattern in
+/// `indirect_jump_resolve`, `indirect_call_resolve`, `auth_call_resolve`,
+/// and `go_iface_devirt`.
+///
+/// **Lifecycle**: the index is owned by the caller and only consulted
+/// during read-only analysis within a single pass invocation. None of
+/// the four passes using it mutate `var_map` between construction and
+/// last lookup, so staleness is impossible by construction. If a future
+/// caller needs to interleave mutations with lookups, rebuild the
+/// index after each mutation batch.
+///
+/// **Why a newtype, not a bare BTreeMap**: keeps `DefIndex::lookup`'s
+/// signature stable as a documented API, and prevents accidental
+/// inversion (storing `(bid, idx) -> SsaVarnode`, which would just
+/// duplicate `var_map`).
+///
+/// **Profile context**: a `perf record` of `unlace decompile
+/// /usr/bin/wc --function sub_3b30` showed ~42 % of total wall-clock
+/// in `BTreeMap::Iter::next` + `Vec::from_iter` over `var_map` from
+/// these four passes. Approach D from the
+/// `docs/perf/var-map-reverse-index-approach.md` decision matrix:
+/// per-pass-local index, zero changes to `SsaFunction`, zero risk of
+/// stale cross-pass index.
+pub struct DefIndex {
+    by_value: BTreeMap<SsaVarnode, (BlockId, usize)>,
+}
+
+impl DefIndex {
+    /// Walk `func.var_map` once, collecting every Output-slot entry
+    /// keyed by its defining `SsaVarnode`. O(|var_map|) one-time cost,
+    /// then O(log n) per lookup.
+    ///
+    /// Input slots are intentionally skipped: every existing
+    /// `find_def` helper this index replaces filtered on
+    /// `slot == VarnodeSlot::Output`. Including Inputs would make the
+    /// map non-functional (one SSA value can be the Input slot of
+    /// many instructions) and would silently regress the calls that
+    /// rely on the Output-only contract.
+    pub fn build(func: &SsaFunction) -> Self {
+        let mut by_value = BTreeMap::new();
+        for ((bid, idx, slot), sv) in &func.var_map {
+            if matches!(slot, VarnodeSlot::Output) {
+                by_value.insert(*sv, (*bid, *idx));
+            }
+        }
+        Self { by_value }
+    }
+
+    /// O(log n) reverse lookup: returns the `(BlockId, instruction_index)`
+    /// whose Output slot is `sv`, or `None` if `sv` is not defined by a
+    /// concrete instruction (e.g. it's a function parameter or a phi
+    /// output — phis aren't carried in `var_map`).
+    pub fn lookup(&self, sv: SsaVarnode) -> Option<(BlockId, usize)> {
+        self.by_value.get(&sv).copied()
+    }
+
+    /// Number of indexed Output definitions. Useful in tests.
+    pub fn len(&self) -> usize {
+        self.by_value.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.by_value.is_empty()
+    }
 }
 
 /// Run a sequence of passes to a fixed point, returning the total number
@@ -768,6 +839,70 @@ pub fn canonical_pipeline_descriptor() -> Vec<PassDescriptor> {
         PassDescriptor::new("VarNamingPass", FinalCleanup),
         PassDescriptor::new("CallingConvFinalizePass", FinalCleanup),
     ]
+}
+
+#[cfg(test)]
+mod def_index_tests {
+    use super::*;
+    use smallvec::smallvec;
+    use unlace_ir::ssa::build_ssa;
+    use unlace_ir::{BasicBlock, Function, IrInsn, IrOp, Varnode};
+
+    /// `u0 = COPY const; u1 = COPY u0; RETURN u1` — the index must map
+    /// each Output varnode back to its defining instruction index, and
+    /// return None for a value that no instruction defines.
+    #[test]
+    fn def_index_maps_outputs_and_misses_undefined() {
+        let mut func = Function::new("f", BlockId(0), 0x1000);
+        let mut bb = BasicBlock::new(BlockId(0));
+        let u0 = Varnode::unique(0, 8);
+        let u1 = Varnode::unique(8, 8);
+        bb.insns.push(IrInsn::with_output(
+            IrOp::Copy,
+            u0,
+            smallvec![Varnode::constant(0xCAFE, 8)],
+            0x1000,
+        ));
+        bb.insns
+            .push(IrInsn::with_output(IrOp::Copy, u1, smallvec![u0], 0x1004));
+        bb.insns.push(IrInsn::without_output(
+            IrOp::Return,
+            smallvec![u1],
+            0x1008,
+        ));
+        func.insert_block(bb);
+        let ssa = build_ssa(func);
+
+        let defs = DefIndex::build(&ssa);
+        // Every Output slot in var_map must resolve through the index to
+        // the same (bid, idx) the forward map records.
+        for ((bid, idx, slot), sv) in &ssa.var_map {
+            if matches!(slot, VarnodeSlot::Output) {
+                assert_eq!(
+                    defs.lookup(*sv),
+                    Some((*bid, *idx)),
+                    "Output {sv:?} must map back to ({bid:?}, {idx})"
+                );
+            }
+        }
+        // A varnode that is never an Output (a fresh unique) misses.
+        let absent = SsaVarnode {
+            base: Varnode::unique(99, 8),
+            version: 0,
+        };
+        assert_eq!(defs.lookup(absent), None);
+        assert!(!defs.is_empty());
+    }
+
+    /// An empty function yields an empty index.
+    #[test]
+    fn def_index_empty_function() {
+        let func = Function::new("empty", BlockId(0), 0x2000);
+        let ssa = build_ssa(func);
+        let defs = DefIndex::build(&ssa);
+        assert!(defs.is_empty());
+        assert_eq!(defs.len(), 0);
+    }
 }
 
 #[cfg(test)]

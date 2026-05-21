@@ -21,6 +21,8 @@ use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId};
 use unlace_loader::dyld_cache::AuthPointer;
 
+use crate::pass::DefIndex;
+
 /// One PAC-authenticated indirect call site.
 ///
 /// Fields mirror the matching [`AuthPointer`] slot: `key` selects the
@@ -64,6 +66,11 @@ pub fn resolve_auth_calls(
     let by_offset: BTreeMap<usize, &AuthPointer> =
         auth_pointers.iter().map(|p| (p.offset, p)).collect();
 
+    // Reverse Output-definition index, built once. `resolve_auth_calls`
+    // is detection-only — it never mutates `var_map` — so the index is
+    // valid for the whole scan.
+    let defs = DefIndex::build(func);
+
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             if !matches!(insn.op, IrOp::Callind | IrOp::Callother) {
@@ -87,7 +94,7 @@ pub fn resolve_auth_calls(
             else {
                 continue;
             };
-            let Some(load_addr) = trace_load_address(func, target_sv) else {
+            let Some(load_addr) = trace_load_address(func, &defs, target_sv) else {
                 continue;
             };
             let off = match load_addr.checked_sub(image_base) {
@@ -116,14 +123,14 @@ pub fn resolve_auth_calls(
 /// We intentionally do *not* follow phi joins or non-constant loads —
 /// an auth-call annotation must be precise; ambiguity yields no
 /// annotation rather than a wrong one.
-fn trace_load_address(func: &SsaFunction, sv: SsaVarnode) -> Option<u64> {
+fn trace_load_address(func: &SsaFunction, defs: &DefIndex, sv: SsaVarnode) -> Option<u64> {
     let mut cur = sv;
     let mut hops = 0u32;
     // Modest bound — chains longer than this are almost certainly the
     // wrong call site and we'd rather bail than walk forever.
     while hops < 8 {
         hops += 1;
-        let (bid, idx) = find_def(func, cur)?;
+        let (bid, idx) = defs.lookup(cur)?;
         let block = func.function.blocks.get(&bid)?;
         let insn = block.insns.get(idx)?;
         match insn.op {
@@ -149,19 +156,6 @@ fn trace_load_address(func: &SsaFunction, sv: SsaVarnode) -> Option<u64> {
         }
     }
     None
-}
-
-/// Locate the `(BlockId, insn_idx)` whose **output** is `sv`. Phi
-/// definitions are ignored (only direct instruction outputs are
-/// considered, mirroring `indirect_call_resolve::find_def`).
-fn find_def(func: &SsaFunction, sv: SsaVarnode) -> Option<(BlockId, usize)> {
-    func.var_map.iter().find_map(|((bid, idx, slot), other)| {
-        if *other == sv && matches!(slot, VarnodeSlot::Output) {
-            Some((*bid, *idx))
-        } else {
-            None
-        }
-    })
 }
 
 #[cfg(test)]

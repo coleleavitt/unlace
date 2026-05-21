@@ -40,7 +40,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use unlace_ir::ssa::{JumpTableInfo, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId};
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{DefIndex, Pass, PassError};
 
 pub struct IndirectJumpResolvePass;
 
@@ -80,6 +80,11 @@ impl Pass for IndirectJumpResolvePass {
 pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTableInfo> {
     let mut out: BTreeMap<u64, JumpTableInfo> = BTreeMap::new();
 
+    // Reverse Output-definition index, built once for the whole scan.
+    // This function and everything it calls only reads `func`; the
+    // pass's `run` mutates only `resolved_jump_tables` afterwards.
+    let defs = DefIndex::build(func);
+
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
             if insn.op != IrOp::Branchind {
@@ -91,14 +96,14 @@ pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTa
             };
 
             // Chase through Copy chains to find the producing operation.
-            let (prod_loc, prod_op) = match chase_copies_to_producer(func, target_sv) {
+            let (prod_loc, prod_op) = match chase_copies_to_producer(func, &defs, target_sv) {
                 Some(v) => v,
                 None => continue,
             };
 
             // --- Pattern 1: Branchind ← Load (absolute jump table) ---
             if prod_op == IrOp::Load {
-                if let Some(cand) = extract_load_candidate(func, prod_loc) {
+                if let Some(cand) = extract_load_candidate(func, &defs, prod_loc) {
                     out.insert(insn.addr, cand);
                     continue;
                 }
@@ -112,14 +117,15 @@ pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTa
                     else {
                         continue;
                     };
-                    let Some((inner_loc, inner_op)) = chase_copies_to_producer(func, operand_sv)
+                    let Some((inner_loc, inner_op)) =
+                        chase_copies_to_producer(func, &defs, operand_sv)
                     else {
                         continue;
                     };
                     if inner_op != IrOp::Load {
                         continue;
                     }
-                    if let Some(cand) = extract_load_candidate(func, inner_loc) {
+                    if let Some(cand) = extract_load_candidate(func, &defs, inner_loc) {
                         out.insert(insn.addr, cand);
                         break;
                     }
@@ -135,11 +141,12 @@ pub fn collect_jump_table_candidates(func: &SsaFunction) -> BTreeMap<u64, JumpTa
 /// non-Copy producer's location and opcode.
 fn chase_copies_to_producer(
     func: &SsaFunction,
+    defs: &DefIndex,
     start: SsaVarnode,
 ) -> Option<((BlockId, usize), IrOp)> {
     let mut cur_sv = start;
     for _ in 0..16 {
-        let def_loc = find_def(func, cur_sv)?;
+        let def_loc = defs.lookup(cur_sv)?;
         let di = func
             .function
             .blocks
@@ -159,7 +166,11 @@ fn chase_copies_to_producer(
 /// Given a Load instruction location, extract the jump-table candidate
 /// (base address + entry size). Returns None if the Load's address
 /// can't be traced to a constant base.
-fn extract_load_candidate(func: &SsaFunction, load_loc: (BlockId, usize)) -> Option<JumpTableInfo> {
+fn extract_load_candidate(
+    func: &SsaFunction,
+    defs: &DefIndex,
+    load_loc: (BlockId, usize),
+) -> Option<JumpTableInfo> {
     let load_insn = func
         .function
         .blocks
@@ -185,7 +196,7 @@ fn extract_load_candidate(func: &SsaFunction, load_loc: (BlockId, usize)) -> Opt
         .get(&(load_loc.0, load_loc.1, VarnodeSlot::Input(1)))?;
 
     let mut visited = BTreeSet::new();
-    trace_table_base(func, *addr_sv, &mut visited).map(|base| unresolved(base, entry_size))
+    trace_table_base(func, defs, *addr_sv, &mut visited).map(|base| unresolved(base, entry_size))
 }
 
 /// Build an unresolved candidate — base + entry size known, targets pending
@@ -208,6 +219,7 @@ fn unresolved(base: u64, entry_size: u8) -> JumpTableInfo {
 /// cycles, phi joins, and ambiguous multi-const arithmetic yield `None`.
 fn trace_table_base(
     func: &SsaFunction,
+    defs: &DefIndex,
     sv: SsaVarnode,
     visited: &mut BTreeSet<SsaVarnode>,
 ) -> Option<u64> {
@@ -215,7 +227,7 @@ fn trace_table_base(
         return None;
     }
 
-    let def_loc = find_def(func, sv)?;
+    let def_loc = defs.lookup(sv)?;
     let block = func.function.blocks.get(&def_loc.0)?;
     let insn = block.insns.get(def_loc.1)?;
 
@@ -231,7 +243,7 @@ fn trace_table_base(
             let next = func
                 .var_map
                 .get(&(def_loc.0, def_loc.1, VarnodeSlot::Input(0)))?;
-            trace_table_base(func, *next, visited)
+            trace_table_base(func, defs, *next, visited)
         }
 
         // base + scaled_index — the base may be either operand.
@@ -258,7 +270,7 @@ fn trace_table_base(
             for slot in [VarnodeSlot::Input(0), VarnodeSlot::Input(1)] {
                 if let Some(next) = func.var_map.get(&(def_loc.0, def_loc.1, slot)) {
                     let mut sub = visited.clone();
-                    if let Some(base) = trace_table_base(func, *next, &mut sub) {
+                    if let Some(base) = trace_table_base(func, defs, *next, &mut sub) {
                         if found.is_some() {
                             return None; // ambiguous
                         }
@@ -276,18 +288,6 @@ fn trace_table_base(
 
         _ => None,
     }
-}
-
-/// Locate the `(BlockId, insn_index)` whose `Output` slot is `sv`.
-/// Phi-defined values are intentionally skipped (multi-source join).
-fn find_def(func: &SsaFunction, sv: SsaVarnode) -> Option<(BlockId, usize)> {
-    func.var_map.iter().find_map(|((bid, idx, slot), other)| {
-        if *other == sv && matches!(slot, VarnodeSlot::Output) {
-            Some((*bid, *idx))
-        } else {
-            None
-        }
-    })
 }
 
 #[cfg(test)]

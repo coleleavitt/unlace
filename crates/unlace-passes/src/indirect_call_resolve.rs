@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, TargetSet, VarnodeSlot};
 use unlace_ir::{BlockId, IrOp, SpaceId};
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{DefIndex, Pass, PassError};
 
 pub struct IndirectCallResolvePass;
 
@@ -35,6 +35,11 @@ impl Pass for IndirectCallResolvePass {
         let targets_snapshot = func.indirect_call_targets.clone();
         let mut found: BTreeMap<(BlockId, usize), u64> = BTreeMap::new();
         let mut targets: BTreeMap<(BlockId, usize), TargetSet> = BTreeMap::new();
+
+        // Build the reverse Output-definition index once. The whole
+        // analysis below only reads `func` — no `var_map` mutation —
+        // so the index stays consistent for the lifetime of the loop.
+        let defs = DefIndex::build(func);
 
         for (&bid, block) in &func.function.blocks {
             for (insn_idx, insn) in block.insns.iter().enumerate() {
@@ -65,7 +70,7 @@ impl Pass for IndirectCallResolvePass {
                 //   0 → `Unknown`, 1 → `Resolved`, ≥2 → `Multiple`.
                 let mut visited = BTreeSet::new();
                 let mut sinks: BTreeSet<u64> = BTreeSet::new();
-                gather_constants(func, target_sv, &mut visited, &mut sinks);
+                gather_constants(func, &defs, target_sv, &mut visited, &mut sinks);
 
                 match sinks.len() {
                     0 => {
@@ -132,8 +137,13 @@ fn name_for(addr: u64) -> String {
 /// the shared `visited` set; the caller decides whether to map the
 /// resulting set to `Resolved` (singleton), `Multiple`, or `Unknown`
 /// (empty).
+///
+/// `defs` is the per-pass reverse Output-definition index built by the
+/// caller (see [`crate::pass::DefIndex`]); each `find_def` lookup is
+/// `O(log n)` instead of the previous `O(|var_map|)` linear scan.
 fn gather_constants(
     func: &SsaFunction,
+    defs: &DefIndex,
     sv: SsaVarnode,
     visited: &mut BTreeSet<SsaVarnode>,
     sinks: &mut BTreeSet<u64>,
@@ -147,14 +157,14 @@ fn gather_constants(
         for phi in phis {
             if phi.output == sv {
                 for (_, inp) in &phi.inputs {
-                    gather_constants(func, *inp, visited, sinks);
+                    gather_constants(func, defs, *inp, visited, sinks);
                 }
                 return;
             }
         }
     }
 
-    let Some(def_loc) = find_def(func, sv) else {
+    let Some(def_loc) = defs.lookup(sv) else {
         return;
     };
     let Some(block) = func.function.blocks.get(&def_loc.0) else {
@@ -177,7 +187,7 @@ fn gather_constants(
                 .get(&(def_loc.0, def_loc.1, VarnodeSlot::Input(0)))
                 .copied()
             {
-                gather_constants(func, next, visited, sinks);
+                gather_constants(func, defs, next, visited, sinks);
             }
         }
         IrOp::Load => {
@@ -196,19 +206,6 @@ fn gather_constants(
         }
         _ => {}
     }
-}
-
-/// Locate the `(BlockId, insn_index)` whose output is `sv`, by linear
-/// scan through `var_map`. Phi-defined values are intentionally not
-/// returned (they imply a multi-source join).
-fn find_def(func: &SsaFunction, sv: SsaVarnode) -> Option<(BlockId, usize)> {
-    func.var_map.iter().find_map(|((bid, idx, slot), other)| {
-        if *other == sv && matches!(slot, VarnodeSlot::Output) {
-            Some((*bid, *idx))
-        } else {
-            None
-        }
-    })
 }
 
 #[cfg(test)]

@@ -27,7 +27,7 @@ use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 use unlace_loader::go_types::GoItab;
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{DefIndex, Pass, PassError};
 
 const DEFAULT_PTR_SIZE: u64 = 8;
 const GO_ITAB_FUN_OFFSET: u64 = 24;
@@ -99,6 +99,11 @@ pub fn resolve_go_iface_calls(
         return Vec::new();
     }
 
+    // Reverse Output-definition index, built once. `resolve_go_iface_calls`
+    // is read-only over `func`; the pass's `run` mutates only
+    // `resolved_indirect_calls` afterwards, so the index never goes stale.
+    let defs = DefIndex::build(func);
+
     let mut out = Vec::new();
     for (&bid, block) in &func.function.blocks {
         let insns = &block.insns;
@@ -106,7 +111,7 @@ pub fn resolve_go_iface_calls(
             if insn.op != IrOp::Callind || insn.inputs.is_empty() {
                 continue;
             }
-            let Some(call) = try_resolve_call(func, bid, insns, insn_idx, itabs) else {
+            let Some(call) = try_resolve_call(func, &defs, bid, insns, insn_idx, itabs) else {
                 continue;
             };
             out.push(call);
@@ -117,6 +122,7 @@ pub fn resolve_go_iface_calls(
 
 fn try_resolve_call(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insns: &[IrInsn],
     callind_idx: usize,
@@ -130,7 +136,7 @@ fn try_resolve_call(
         .var_map
         .get(&(bid, callind_idx, VarnodeSlot::Input(0)))?;
     let mut visited = BTreeSet::new();
-    let method_load = trace_to_load(func, target_sv, &mut visited)?;
+    let method_load = trace_to_load(func, defs, target_sv, &mut visited)?;
     let method_insn = insns.get(method_load.1)?;
     let method_addr = load_address(method_insn)?;
     let (itab_value, method_offset) = resolve_offset(insns, method_load.1, &method_addr)?;
@@ -146,7 +152,7 @@ fn try_resolve_call(
     // `itab_value` is the first word of the interface. Resolve it to a
     // constant itab VA, either through a preceding `iface.tab = const` store
     // or a direct copy/constant chain in synthetic IR.
-    let itab_va = resolve_static_itab(func, bid, insns, method_load.1, itab_value)?;
+    let itab_va = resolve_static_itab(func, defs, bid, insns, method_load.1, itab_value)?;
     let itab = itabs.get(&itab_va)?;
     let target = *itab.methods.get(method_index)?;
     if target == 0 {
@@ -166,6 +172,7 @@ fn try_resolve_call(
 
 fn resolve_static_itab(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insns: &[IrInsn],
     before: usize,
@@ -177,7 +184,7 @@ fn resolve_static_itab(
 
     if let Some(&sv) = func.var_map.get(&(bid, before, VarnodeSlot::Input(1))) {
         let mut visited = BTreeSet::new();
-        if let Some(value) = trace_constant_value(func, sv, &mut visited) {
+        if let Some(value) = trace_constant_value(func, defs, sv, &mut visited) {
             return Some(value);
         }
     }
@@ -214,7 +221,7 @@ fn resolve_static_itab(
             let sidx = insns.iter().position(|i| std::ptr::eq(i, sinsn))?;
             let &sv = func.var_map.get(&(bid, sidx, VarnodeSlot::Input(2)))?;
             let mut visited = BTreeSet::new();
-            return trace_constant_value(func, sv, &mut visited);
+            return trace_constant_value(func, defs, sv, &mut visited);
         }
     }
 
@@ -223,19 +230,20 @@ fn resolve_static_itab(
 
 fn trace_to_load(
     func: &SsaFunction,
+    defs: &DefIndex,
     sv: SsaVarnode,
     visited: &mut BTreeSet<SsaVarnode>,
 ) -> Option<(BlockId, usize)> {
     if !visited.insert(sv) {
         return None;
     }
-    let def = find_ssa_def(func, sv)?;
+    let def = defs.lookup(sv)?;
     let insn = func.function.blocks.get(&def.0)?.insns.get(def.1)?;
     match insn.op {
         IrOp::Load => Some(def),
         IrOp::Copy => {
             let next = func.var_map.get(&(def.0, def.1, VarnodeSlot::Input(0)))?;
-            trace_to_load(func, *next, visited)
+            trace_to_load(func, defs, *next, visited)
         }
         _ => None,
     }
@@ -243,13 +251,14 @@ fn trace_to_load(
 
 fn trace_constant_value(
     func: &SsaFunction,
+    defs: &DefIndex,
     sv: SsaVarnode,
     visited: &mut BTreeSet<SsaVarnode>,
 ) -> Option<u64> {
     if !visited.insert(sv) {
         return None;
     }
-    let def = find_ssa_def(func, sv)?;
+    let def = defs.lookup(sv)?;
     let insn = func.function.blocks.get(&def.0)?.insns.get(def.1)?;
     match insn.op {
         IrOp::Copy | IrOp::Cast => {
@@ -258,7 +267,7 @@ fn trace_constant_value(
                 return Some(input.offset);
             }
             let next = func.var_map.get(&(def.0, def.1, VarnodeSlot::Input(0)))?;
-            trace_constant_value(func, *next, visited)
+            trace_constant_value(func, defs, *next, visited)
         }
         IrOp::IntAdd => match (insn.inputs.first(), insn.inputs.get(1)) {
             (Some(a), Some(b)) if a.space == SpaceId::Const && b.space == SpaceId::Const => {
@@ -328,16 +337,6 @@ fn find_def(insns: &[IrInsn], before: usize, vn: &Varnode) -> Option<usize> {
         .take(before)
         .rev()
         .find_map(|(idx, insn)| (insn.output == Some(*vn)).then_some(idx))
-}
-
-fn find_ssa_def(func: &SsaFunction, sv: SsaVarnode) -> Option<(BlockId, usize)> {
-    func.var_map.iter().find_map(|((bid, idx, slot), other)| {
-        if *other == sv && matches!(slot, VarnodeSlot::Output) {
-            Some((*bid, *idx))
-        } else {
-            None
-        }
-    })
 }
 
 #[cfg(test)]

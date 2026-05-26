@@ -2720,12 +2720,14 @@ fn fuse_guarded_if_else(nodes: &mut Vec<HirNode>) {
 /// fires for canonical counted loops even when the induction variable is
 /// referenced after the loop in the same scope.
 pub fn recover_for_loops(nodes: &mut Vec<HirNode>) {
+    for node in nodes.iter_mut() {
+        recover_for_loops_in_children(node);
+    }
+
     let defs = collect_hir_defs(nodes);
     let mut i = 0;
     while i < nodes.len() {
-        recover_for_loops_in_children(&mut nodes[i]);
         if i + 1 < nodes.len() {
-            recover_for_loops_in_children(&mut nodes[i + 1]);
             if let Some(replacement) = try_recover_for_at(nodes, i, &defs) {
                 let after_i = nodes.split_off(i + 2);
                 nodes.truncate(i);
@@ -2741,19 +2743,31 @@ pub fn recover_for_loops(nodes: &mut Vec<HirNode>) {
     }
 }
 
-fn collect_hir_defs(nodes: &[HirNode]) -> BTreeMap<Varnode, IrInsn> {
+#[derive(Clone, Debug)]
+struct HirDef {
+    op: IrOp,
+    inputs: Vec<Varnode>,
+}
+
+fn collect_hir_defs(nodes: &[HirNode]) -> BTreeMap<Varnode, HirDef> {
     let mut defs = BTreeMap::new();
     collect_hir_defs_inner(nodes, &mut defs);
     defs
 }
 
-fn collect_hir_defs_inner(nodes: &[HirNode], defs: &mut BTreeMap<Varnode, IrInsn>) {
+fn collect_hir_defs_inner(nodes: &[HirNode], defs: &mut BTreeMap<Varnode, HirDef>) {
     for node in nodes {
         match node {
             HirNode::Statement(insn) => {
                 if let Some(out) = insn.output {
                     if out.space != SpaceId::Const {
-                        defs.insert(out, insn.clone());
+                        defs.insert(
+                            out,
+                            HirDef {
+                                op: insn.op,
+                                inputs: insn.inputs.iter().copied().collect(),
+                            },
+                        );
                     }
                 }
             }
@@ -2880,7 +2894,7 @@ fn recover_for_loops_in_children(node: &mut HirNode) {
 fn try_recover_for_at(
     nodes: &[HirNode],
     idx: usize,
-    defs: &BTreeMap<Varnode, IrInsn>,
+    defs: &BTreeMap<Varnode, HirDef>,
 ) -> Option<HirNode> {
     let init_insn = match nodes.get(idx)? {
         HirNode::Statement(insn) => insn.clone(),
@@ -2915,7 +2929,7 @@ fn try_recover_for_at(
     })
 }
 
-fn try_recover_for_no_init(node: &HirNode, defs: &BTreeMap<Varnode, IrInsn>) -> Option<HirNode> {
+fn try_recover_for_no_init(node: &HirNode, defs: &BTreeMap<Varnode, HirDef>) -> Option<HirNode> {
     let (cond, body) = match node {
         HirNode::While { cond, body } => (*cond, body.clone()),
         _ => return None,
@@ -2958,7 +2972,7 @@ fn try_recover_for_no_init(node: &HirNode, defs: &BTreeMap<Varnode, IrInsn>) -> 
 fn condition_mentions_counter_strict(
     cond: Varnode,
     counter: &Varnode,
-    defs: &BTreeMap<Varnode, IrInsn>,
+    defs: &BTreeMap<Varnode, HirDef>,
 ) -> bool {
     if cond == *counter {
         return true;
@@ -2980,7 +2994,7 @@ fn condition_mentions_counter_strict(
 fn condition_mentions_counter(
     cond: Varnode,
     counter: &Varnode,
-    defs: &BTreeMap<Varnode, IrInsn>,
+    defs: &BTreeMap<Varnode, HirDef>,
 ) -> bool {
     if cond == *counter {
         return true;
@@ -3604,7 +3618,13 @@ mod tests {
 
         let cmp = IrInsn::with_output(IrOp::IntLess, cond, smallvec![i, bound], 0x1008);
         let mut defs = BTreeMap::new();
-        defs.insert(cond, cmp);
+        defs.insert(
+            cond,
+            HirDef {
+                op: cmp.op,
+                inputs: cmp.inputs.iter().copied().collect(),
+            },
+        );
 
         assert!(condition_mentions_counter(cond, &i, &defs));
         assert!(
@@ -3620,9 +3640,13 @@ mod tests {
             },
         ];
         let mut defs = BTreeMap::new();
+        let cmp = IrInsn::with_output(IrOp::IntLess, cond, smallvec![i, bound], 0x1008);
         defs.insert(
             cond,
-            IrInsn::with_output(IrOp::IntLess, cond, smallvec![i, bound], 0x1008),
+            HirDef {
+                op: cmp.op,
+                inputs: cmp.inputs.iter().copied().collect(),
+            },
         );
 
         let replacement =

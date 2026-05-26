@@ -2,11 +2,11 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
+use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
 use unlace_ir::types::Type;
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId};
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{DefIndex, Pass, PassError};
 
 pub struct TypeInferPass;
 
@@ -24,6 +24,7 @@ impl Pass for TypeInferPass {
         let snapshot: BTreeMap<SsaVarnode, PrimitiveType> = func.var_types.clone();
 
         seed_from_composites(func);
+        let defs = DefIndex::build(func);
 
         let max_iterations = 100;
         let mut changed = true;
@@ -43,6 +44,7 @@ impl Pass for TypeInferPass {
                 for (insn_idx, insn) in block.insns.iter().enumerate() {
                     changed |= infer_insn(
                         &func.var_map,
+                        &defs,
                         &mut func.var_types,
                         &func.composite_var_types,
                         &func.function.blocks,
@@ -254,6 +256,9 @@ fn force_set_type(
         .get(&sv)
         .copied()
         .unwrap_or(PrimitiveType::Unknown);
+    if old == PrimitiveType::Unknown && var_types.contains_key(&sv) {
+        return false;
+    }
     if old != ty {
         var_types.insert(sv, ty);
         true
@@ -268,6 +273,7 @@ type BlockMap = BTreeMap<BlockId, unlace_ir::BasicBlock>;
 
 fn infer_insn(
     var_map: &VarMap,
+    defs: &DefIndex,
     var_types: &mut TypeMap,
     composite_var_types: &CompositeMap,
     blocks: &BlockMap,
@@ -301,8 +307,17 @@ fn infer_insn(
         | IrOp::IntRight
         | IrOp::IntSright => {
             let preserve_ptr = matches!(insn.op, IrOp::IntAdd | IrOp::IntSub);
+            let ptr_arith = preserve_ptr
+                && insn.inputs.iter().enumerate().any(|(idx, inp)| {
+                    inp.space != SpaceId::Const
+                        && input_sv(idx)
+                            .map(|sv| current_type(var_types, &sv) == PrimitiveType::Ptr)
+                            .unwrap_or(false)
+                });
             if let Some(out) = output_sv {
-                if !(preserve_ptr && current_type(var_types, &out) == PrimitiveType::Ptr) {
+                if ptr_arith && out.base.size == 8 {
+                    changed |= set_type(var_types, out, PrimitiveType::Ptr);
+                } else if !(preserve_ptr && current_type(var_types, &out) == PrimitiveType::Ptr) {
                     changed |= set_type(var_types, out, PrimitiveType::Int(out.base.size));
                 }
             }
@@ -516,7 +531,7 @@ fn infer_insn(
 
                 if addr_is_ptr && !addr_is_chain && out.base.size == 8 {
                     let field_ty = addr_sv.and_then(|sv| {
-                        lookup_struct_field_type(var_map, composite_var_types, blocks, sv)
+                        lookup_struct_field_type(var_map, defs, composite_var_types, blocks, sv)
                     });
 
                     let promoted_ty = match field_ty {
@@ -607,14 +622,12 @@ fn infer_insn(
 /// `Type::Struct` in `composite_var_types`, return the field's primitive type.
 fn lookup_struct_field_type(
     var_map: &VarMap,
+    defs: &DefIndex,
     composite_var_types: &CompositeMap,
     blocks: &BlockMap,
     addr_sv: SsaVarnode,
 ) -> Option<PrimitiveType> {
-    let (def_bid, def_idx) = var_map
-        .iter()
-        .find(|(key, sv)| key.2 == VarnodeSlot::Output && **sv == addr_sv)
-        .map(|(key, _)| (key.0, key.1))?;
+    let (def_bid, def_idx) = defs.lookup(addr_sv)?;
 
     let def_insn = blocks.get(&def_bid)?.insns.get(def_idx)?;
     if def_insn.op != IrOp::IntAdd {

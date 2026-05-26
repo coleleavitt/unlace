@@ -180,14 +180,10 @@ impl CapSet {
             .iter()
             .filter(move |(bit, _)| flags & bit != 0)
             .map(|(_, cap)| *cap)
-            .chain(
-                self.integers
-                    .iter()
-                    .map(|&(w, s)| TypeCapability::Integer {
-                        width: w,
-                        signed: s,
-                    }),
-            )
+            .chain(self.integers.iter().map(|&(w, s)| TypeCapability::Integer {
+                width: w,
+                signed: s,
+            }))
     }
 
     /// Union another set into self. Returns `true` if self changed.
@@ -203,6 +199,10 @@ impl CapSet {
         }
         changed
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.flags == 0 && self.integers.is_empty()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -215,6 +215,77 @@ pub struct PolyTypeBounds {
 pub struct PolyTypeSolution {
     pub bounds: BTreeMap<SsaVarnode, PolyTypeBounds>,
     pub primitive_types: BTreeMap<SsaVarnode, PrimitiveType>,
+}
+
+#[derive(Copy, Clone, Debug)]
+enum IndexedConstraint {
+    Equal(usize, PrimitiveType),
+    Subtype(usize, PrimitiveType),
+    PointsTo(usize, usize),
+    SameType(usize, usize),
+    PolySubtype { lower: usize, upper: usize },
+    HasCapability(usize, TypeCapability),
+}
+
+struct DenseVars {
+    vars: Vec<SsaVarnode>,
+    index: BTreeMap<SsaVarnode, usize>,
+}
+
+impl DenseVars {
+    fn new(func: &SsaFunction, constraints: &[Constraint]) -> Self {
+        let mut seen: BTreeSet<SsaVarnode> = func.var_types.keys().copied().collect();
+        for constraint in constraints {
+            constraint_vars(constraint, &mut seen);
+        }
+        let vars: Vec<_> = seen.into_iter().collect();
+        let index = vars
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(idx, sv)| (sv, idx))
+            .collect();
+        Self { vars, index }
+    }
+
+    fn idx(&self, sv: SsaVarnode) -> usize {
+        *self
+            .index
+            .get(&sv)
+            .expect("constraint var should be indexed")
+    }
+
+    fn convert(&self, constraint: &Constraint) -> IndexedConstraint {
+        match *constraint {
+            Constraint::Equal(v, ty) => IndexedConstraint::Equal(self.idx(v), ty),
+            Constraint::Subtype(v, ty) => IndexedConstraint::Subtype(self.idx(v), ty),
+            Constraint::PointsTo(addr, val) => {
+                IndexedConstraint::PointsTo(self.idx(addr), self.idx(val))
+            }
+            Constraint::SameType(a, b) => IndexedConstraint::SameType(self.idx(a), self.idx(b)),
+            Constraint::PolySubtype { lower, upper } => IndexedConstraint::PolySubtype {
+                lower: self.idx(lower),
+                upper: self.idx(upper),
+            },
+            Constraint::HasCapability(v, cap) => IndexedConstraint::HasCapability(self.idx(v), cap),
+        }
+    }
+}
+
+fn constraint_vars(constraint: &Constraint, seen: &mut BTreeSet<SsaVarnode>) {
+    match *constraint {
+        Constraint::Equal(v, _) | Constraint::Subtype(v, _) | Constraint::HasCapability(v, _) => {
+            seen.insert(v);
+        }
+        Constraint::PointsTo(a, b) | Constraint::SameType(a, b) => {
+            seen.insert(a);
+            seen.insert(b);
+        }
+        Constraint::PolySubtype { lower, upper } => {
+            seen.insert(lower);
+            seen.insert(upper);
+        }
+    }
 }
 
 /// Walk every instruction in `func` and emit the constraint list dictated
@@ -438,15 +509,6 @@ pub fn solve_polymorphic_constraints(
     func: &SsaFunction,
     constraints: Vec<Constraint>,
 ) -> PolyTypeSolution {
-    let mut types: BTreeMap<SsaVarnode, PrimitiveType> = func.var_types.clone();
-    let mut bounds: BTreeMap<SsaVarnode, PolyTypeBounds> = BTreeMap::new();
-
-    for (sv, ty) in &func.var_types {
-        if let Some(cap) = primitive_to_capability(*ty, sv.base.size) {
-            insert_lower(&mut bounds, *sv, cap);
-        }
-    }
-
     // Two perf improvements over the original naive `for c in &constraints`
     // double-loop:
     //
@@ -460,6 +522,12 @@ pub fn solve_polymorphic_constraints(
     //      Instead, track which vars had a bounds update during the
     //      current pass and only re-materialise those.
     //
+    //   3. Intern `SsaVarnode` once, then run the fixed-point on dense
+    //      `Vec` storage indexed by `usize`. This mirrors rustc's
+    //      `Idx`/`IndexVec`/bitset style: the hot loop does array lookups
+    //      instead of BTreeMap root-to-leaf searches for every constraint
+    //      propagation step.
+    //
     // The full var→[constraint] worklist was tried and lost (worklist
     // bookkeeping overhead exceeded the rescan cost because most
     // constraints settle in 1–2 outer iterations). See
@@ -469,9 +537,26 @@ pub fn solve_polymorphic_constraints(
     constraints.sort();
     constraints.dedup();
 
+    let dense = DenseVars::new(func, &constraints);
+    let indexed_constraints: Vec<_> = constraints.iter().map(|c| dense.convert(c)).collect();
+    let var_count = dense.vars.len();
+    let mut types = vec![PrimitiveType::Unknown; var_count];
+    let mut type_present = vec![false; var_count];
+    let mut bounds = vec![PolyTypeBounds::default(); var_count];
+
+    for (sv, ty) in &func.var_types {
+        let idx = dense.idx(*sv);
+        types[idx] = *ty;
+        type_present[idx] = true;
+        if let Some(cap) = primitive_to_capability(*ty, sv.base.size) {
+            insert_lower_dense(&mut bounds, &dense.vars, idx, cap);
+        }
+    }
+
     let max_iters = 64usize;
     let mut iters = 0usize;
-    let mut dirty_vars: BTreeSet<SsaVarnode> = BTreeSet::new();
+    let mut dirty_vars: Vec<usize> = Vec::new();
+    let mut dirty_flags = vec![false; var_count];
     loop {
         if iters >= max_iters {
             tracing::warn!(
@@ -483,63 +568,74 @@ pub fn solve_polymorphic_constraints(
         iters += 1;
 
         let mut changed = false;
-        for c in &constraints {
+        for c in &indexed_constraints {
             match c {
-                Constraint::Equal(v, t) => {
-                    if meet(&mut types, *v, *t)
-                        | add_primitive_bound(&mut bounds, *v, *t)
-                    {
+                IndexedConstraint::Equal(v, t) => {
+                    let type_changed = meet_dense(&mut types, &mut type_present, *v, *t);
+                    let bound_changed = add_primitive_bound_dense(&mut bounds, &dense.vars, *v, *t);
+                    if type_changed || bound_changed {
                         changed = true;
-                        dirty_vars.insert(*v);
+                        mark_dirty(*v, &mut dirty_flags, &mut dirty_vars);
                     }
                 }
-                Constraint::Subtype(v, t) => {
-                    if meet(&mut types, *v, *t)
-                        | add_primitive_bound(&mut bounds, *v, *t)
-                    {
+                IndexedConstraint::Subtype(v, t) => {
+                    let type_changed = meet_dense(&mut types, &mut type_present, *v, *t);
+                    let bound_changed = add_primitive_bound_dense(&mut bounds, &dense.vars, *v, *t);
+                    if type_changed || bound_changed {
                         changed = true;
-                        dirty_vars.insert(*v);
+                        mark_dirty(*v, &mut dirty_flags, &mut dirty_vars);
                     }
                 }
-                Constraint::PointsTo(addr, _val) => {
-                    let a = meet(&mut types, *addr, PrimitiveType::Ptr);
-                    let b = insert_lower(&mut bounds, *addr, TypeCapability::Pointer);
-                    let c2 = insert_lower(&mut bounds, *addr, TypeCapability::Address);
+                IndexedConstraint::PointsTo(addr, _val) => {
+                    let a = meet_dense(&mut types, &mut type_present, *addr, PrimitiveType::Ptr);
+                    let b = insert_lower_dense(
+                        &mut bounds,
+                        &dense.vars,
+                        *addr,
+                        TypeCapability::Pointer,
+                    );
+                    let c2 = insert_lower_dense(
+                        &mut bounds,
+                        &dense.vars,
+                        *addr,
+                        TypeCapability::Address,
+                    );
                     if a | b | c2 {
                         changed = true;
-                        dirty_vars.insert(*addr);
+                        mark_dirty(*addr, &mut dirty_flags, &mut dirty_vars);
                     }
                 }
-                Constraint::SameType(a, b) => {
-                    let mut any = propagate_between(&mut bounds, *a, *b);
-                    let ta = get(&types, *a);
-                    let tb = get(&types, *b);
+                IndexedConstraint::SameType(a, b) => {
+                    let mut any = propagate_between_dense(&mut bounds, &dense.vars, *a, *b);
+                    let ta = get_dense(&types, &type_present, *a);
+                    let tb = get_dense(&types, &type_present, *b);
                     let j = ta.join(tb);
                     if j != PrimitiveType::Unknown {
-                        any |= meet(&mut types, *a, j);
-                        any |= meet(&mut types, *b, j);
-                        any |= add_primitive_bound(&mut bounds, *a, j);
-                        any |= add_primitive_bound(&mut bounds, *b, j);
+                        any |= meet_dense(&mut types, &mut type_present, *a, j);
+                        any |= meet_dense(&mut types, &mut type_present, *b, j);
+                        any |= add_primitive_bound_dense(&mut bounds, &dense.vars, *a, j);
+                        any |= add_primitive_bound_dense(&mut bounds, &dense.vars, *b, j);
                     }
                     if any {
                         changed = true;
-                        dirty_vars.insert(*a);
-                        dirty_vars.insert(*b);
+                        mark_dirty(*a, &mut dirty_flags, &mut dirty_vars);
+                        mark_dirty(*b, &mut dirty_flags, &mut dirty_vars);
                     }
                 }
-                Constraint::PolySubtype { lower, upper } => {
-                    let a = propagate_lower_to_upper(&mut bounds, *lower, *upper);
-                    let b = propagate_upper_to_lower(&mut bounds, *lower, *upper);
+                IndexedConstraint::PolySubtype { lower, upper } => {
+                    let a =
+                        propagate_lower_to_upper_dense(&mut bounds, &dense.vars, *lower, *upper);
+                    let b = propagate_upper_to_lower_dense(&mut bounds, *lower, *upper);
                     if a | b {
                         changed = true;
-                        dirty_vars.insert(*lower);
-                        dirty_vars.insert(*upper);
+                        mark_dirty(*lower, &mut dirty_flags, &mut dirty_vars);
+                        mark_dirty(*upper, &mut dirty_flags, &mut dirty_vars);
                     }
                 }
-                Constraint::HasCapability(v, cap) => {
-                    if insert_lower(&mut bounds, *v, *cap) {
+                IndexedConstraint::HasCapability(v, cap) => {
+                    if insert_lower_dense(&mut bounds, &dense.vars, *v, *cap) {
                         changed = true;
-                        dirty_vars.insert(*v);
+                        mark_dirty(*v, &mut dirty_flags, &mut dirty_vars);
                     }
                 }
             }
@@ -549,13 +645,11 @@ pub fn solve_polymorphic_constraints(
         // full bounds map. On a function with thousands of vars and
         // only a handful changing per outer pass this is the dominant
         // savings.
-        let drained: Vec<_> = dirty_vars.iter().copied().collect();
-        dirty_vars.clear();
-        for sv in drained {
-            if let Some(b) = bounds.get(&sv) {
-                if let Some(ty) = materialize_primitive(sv, b) {
-                    changed |= meet(&mut types, sv, ty);
-                }
+        let drained = std::mem::take(&mut dirty_vars);
+        for idx in drained {
+            dirty_flags[idx] = false;
+            if let Some(ty) = materialize_primitive(dense.vars[idx], &bounds[idx]) {
+                changed |= meet_dense(&mut types, &mut type_present, idx, ty);
             }
         }
 
@@ -564,9 +658,22 @@ pub fn solve_polymorphic_constraints(
         }
     }
 
+    let mut bounds_map = BTreeMap::new();
+    for (idx, b) in bounds.into_iter().enumerate() {
+        if !b.lower.is_empty() || !b.upper.is_empty() {
+            bounds_map.insert(dense.vars[idx], b);
+        }
+    }
+    let mut primitive_types = BTreeMap::new();
+    for (idx, ty) in types.into_iter().enumerate() {
+        if type_present[idx] {
+            primitive_types.insert(dense.vars[idx], ty);
+        }
+    }
+
     PolyTypeSolution {
-        bounds,
-        primitive_types: types,
+        bounds: bounds_map,
+        primitive_types,
     }
 }
 
@@ -657,11 +764,15 @@ fn float_cap_for(sv: SsaVarnode) -> TypeCapability {
 
 // ----- helpers -----
 
-fn get(types: &BTreeMap<SsaVarnode, PrimitiveType>, sv: SsaVarnode) -> PrimitiveType {
-    types.get(&sv).copied().unwrap_or(PrimitiveType::Unknown)
+fn get_dense(types: &[PrimitiveType], present: &[bool], idx: usize) -> PrimitiveType {
+    if present[idx] {
+        types[idx]
+    } else {
+        PrimitiveType::Unknown
+    }
 }
 
-/// Join `sv`'s current type with `ty` and store the result. Returns `true`
+/// Join `idx`'s current type with `ty` and store the result. Returns `true`
 /// when the stored type actually moved.
 ///
 /// **Monotonicity invariant**: once a var reaches `Unknown` via a conflict
@@ -670,27 +781,34 @@ fn get(types: &BTreeMap<SsaVarnode, PrimitiveType>, sv: SsaVarnode) -> Primitive
 /// constraints that mix incompatible concrete types create an infinite
 /// oscillation: Equal re-asserts a concrete type, SameType collapses it
 /// back to Unknown, repeat for 64 iterations.
-fn meet(
-    types: &mut BTreeMap<SsaVarnode, PrimitiveType>,
-    sv: SsaVarnode,
+fn meet_dense(
+    types: &mut [PrimitiveType],
+    present: &mut [bool],
+    idx: usize,
     ty: PrimitiveType,
 ) -> bool {
     if ty == PrimitiveType::Unknown {
         return false;
     }
-    let cur = types.get(&sv).copied().unwrap_or(PrimitiveType::Unknown);
+    let cur = if present[idx] {
+        types[idx]
+    } else {
+        PrimitiveType::Unknown
+    };
     // If the var was already concrete and is now being set to Unknown
     // via a conflict join, freeze it at Unknown permanently.
-    if cur == PrimitiveType::Unknown && types.contains_key(&sv) {
+    if cur == PrimitiveType::Unknown && present[idx] {
         // Already collapsed — don't let it come back to concrete.
         return false;
     }
     let joined = cur.join(ty);
     if joined != cur {
-        types.insert(sv, joined);
+        types[idx] = joined;
+        present[idx] = true;
         true
-    } else if !types.contains_key(&sv) {
-        types.insert(sv, ty);
+    } else if !present[idx] {
+        types[idx] = ty;
+        present[idx] = true;
         true
     } else {
         false
@@ -719,105 +837,96 @@ fn primitive_to_capability(ty: PrimitiveType, fallback_width: u8) -> Option<Type
     }
 }
 
-fn add_primitive_bound(
-    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
-    sv: SsaVarnode,
-    ty: PrimitiveType,
-) -> bool {
-    primitive_to_capability(ty, sv.base.size).is_some_and(|cap| insert_lower(bounds, sv, cap))
+fn mark_dirty(idx: usize, dirty_flags: &mut [bool], dirty_vars: &mut Vec<usize>) {
+    if !dirty_flags[idx] {
+        dirty_flags[idx] = true;
+        dirty_vars.push(idx);
+    }
 }
 
-fn insert_lower(
-    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
-    sv: SsaVarnode,
+fn add_primitive_bound_dense(
+    bounds: &mut [PolyTypeBounds],
+    vars: &[SsaVarnode],
+    idx: usize,
+    ty: PrimitiveType,
+) -> bool {
+    primitive_to_capability(ty, vars[idx].base.size)
+        .is_some_and(|cap| insert_lower_dense(bounds, vars, idx, cap))
+}
+
+fn insert_lower_dense(
+    bounds: &mut [PolyTypeBounds],
+    vars: &[SsaVarnode],
+    idx: usize,
     cap: TypeCapability,
 ) -> bool {
-    let mut changed = bounds.entry(sv).or_default().lower.insert(cap);
+    let sv = vars[idx];
+    let mut changed = bounds[idx].lower.insert(cap);
     match cap {
         TypeCapability::Pointer => {
-            changed |= bounds
-                .entry(sv)
-                .or_default()
-                .lower
-                .insert(TypeCapability::Address);
-            changed |= bounds
-                .entry(sv)
-                .or_default()
-                .lower
-                .insert(TypeCapability::Integer {
-                    width: sv.base.size,
-                    signed: None,
-                });
+            changed |= bounds[idx].lower.insert(TypeCapability::Address);
+            changed |= bounds[idx].lower.insert(TypeCapability::Integer {
+                width: sv.base.size,
+                signed: None,
+            });
         }
         TypeCapability::Callable => {
-            changed |= bounds
-                .entry(sv)
-                .or_default()
-                .lower
-                .insert(TypeCapability::Pointer);
-            changed |= bounds
-                .entry(sv)
-                .or_default()
-                .lower
-                .insert(TypeCapability::Address);
+            changed |= bounds[idx].lower.insert(TypeCapability::Pointer);
+            changed |= bounds[idx].lower.insert(TypeCapability::Address);
         }
         _ => {}
     }
     changed
 }
 
-fn insert_upper(
-    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
-    sv: SsaVarnode,
-    cap: TypeCapability,
-) -> bool {
-    bounds.entry(sv).or_default().upper.insert(cap)
+fn insert_upper_dense(bounds: &mut [PolyTypeBounds], idx: usize, cap: TypeCapability) -> bool {
+    bounds[idx].upper.insert(cap)
 }
 
-fn propagate_between(
-    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
-    a: SsaVarnode,
-    b: SsaVarnode,
+fn propagate_between_dense(
+    bounds: &mut [PolyTypeBounds],
+    vars: &[SsaVarnode],
+    a: usize,
+    b: usize,
 ) -> bool {
-    let mut changed = propagate_lower_to_upper(bounds, a, b);
-    changed |= propagate_lower_to_upper(bounds, b, a);
-    changed |= propagate_upper_to_lower(bounds, a, b);
-    changed |= propagate_upper_to_lower(bounds, b, a);
+    let mut changed = propagate_lower_to_upper_dense(bounds, vars, a, b);
+    changed |= propagate_lower_to_upper_dense(bounds, vars, b, a);
+    changed |= propagate_upper_to_lower_dense(bounds, a, b);
+    changed |= propagate_upper_to_lower_dense(bounds, b, a);
     changed
 }
 
-fn propagate_lower_to_upper(
-    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
-    lower: SsaVarnode,
-    upper: SsaVarnode,
+fn propagate_lower_to_upper_dense(
+    bounds: &mut [PolyTypeBounds],
+    vars: &[SsaVarnode],
+    lower: usize,
+    upper: usize,
 ) -> bool {
-    let caps: Vec<_> = bounds
-        .get(&lower)
-        .map(|b| b.lower.iter().collect())
-        .unwrap_or_default();
+    let caps: Vec<_> = bounds[lower].lower.iter().collect();
     // `fold` (not `any`) is intentional: `insert_lower` mutates `bounds` for
     // every `cap`, and we need to visit them all. `any` would short-circuit on
     // the first `true` and skip the remaining capability insertions.
     #[allow(clippy::unnecessary_fold)]
     caps.into_iter().fold(false, |changed, cap| {
-        insert_lower(bounds, upper, cap) || changed
+        insert_lower_dense(bounds, vars, upper, cap) || changed
     })
 }
 
-fn propagate_upper_to_lower(
-    bounds: &mut BTreeMap<SsaVarnode, PolyTypeBounds>,
-    lower: SsaVarnode,
-    upper: SsaVarnode,
+fn propagate_upper_to_lower_dense(
+    bounds: &mut [PolyTypeBounds],
+    lower: usize,
+    upper: usize,
 ) -> bool {
-    let caps: Vec<_> = bounds
-        .get(&upper)
-        .map(|b| b.upper.iter().chain(b.lower.iter()).collect())
-        .unwrap_or_default();
+    let caps: Vec<_> = bounds[upper]
+        .upper
+        .iter()
+        .chain(bounds[upper].lower.iter())
+        .collect();
     // See note above: `fold` is intentional to avoid short-circuiting the
     // side-effectful `insert_upper` call.
     #[allow(clippy::unnecessary_fold)]
     caps.into_iter().fold(false, |changed, cap| {
-        insert_upper(bounds, lower, cap) || changed
+        insert_upper_dense(bounds, lower, cap) || changed
     })
 }
 
@@ -876,29 +985,59 @@ mod capset_tests {
     #[test]
     fn insert_integer_deduplicates() {
         let mut s = CapSet::new();
-        assert!(s.insert(TypeCapability::Integer { width: 4, signed: Some(true) }));
-        assert!(!s.insert(TypeCapability::Integer { width: 4, signed: Some(true) }));
-        assert!(s.insert(TypeCapability::Integer { width: 4, signed: Some(false) }));
-        assert!(s.contains(&TypeCapability::Integer { width: 4, signed: Some(true) }));
-        assert!(s.contains(&TypeCapability::Integer { width: 4, signed: Some(false) }));
-        assert!(!s.contains(&TypeCapability::Integer { width: 8, signed: None }));
+        assert!(s.insert(TypeCapability::Integer {
+            width: 4,
+            signed: Some(true)
+        }));
+        assert!(!s.insert(TypeCapability::Integer {
+            width: 4,
+            signed: Some(true)
+        }));
+        assert!(s.insert(TypeCapability::Integer {
+            width: 4,
+            signed: Some(false)
+        }));
+        assert!(s.contains(&TypeCapability::Integer {
+            width: 4,
+            signed: Some(true)
+        }));
+        assert!(s.contains(&TypeCapability::Integer {
+            width: 4,
+            signed: Some(false)
+        }));
+        assert!(!s.contains(&TypeCapability::Integer {
+            width: 8,
+            signed: None
+        }));
     }
 
     #[test]
     fn union_merges_flags_and_integers() {
         let mut a = CapSet::new();
         a.insert(TypeCapability::Pointer);
-        a.insert(TypeCapability::Integer { width: 8, signed: None });
+        a.insert(TypeCapability::Integer {
+            width: 8,
+            signed: None,
+        });
 
         let mut b = CapSet::new();
         b.insert(TypeCapability::Callable);
-        b.insert(TypeCapability::Integer { width: 4, signed: Some(true) });
+        b.insert(TypeCapability::Integer {
+            width: 4,
+            signed: Some(true),
+        });
 
         assert!(a.union(&b));
         assert!(a.contains(&TypeCapability::Pointer));
         assert!(a.contains(&TypeCapability::Callable));
-        assert!(a.contains(&TypeCapability::Integer { width: 8, signed: None }));
-        assert!(a.contains(&TypeCapability::Integer { width: 4, signed: Some(true) }));
+        assert!(a.contains(&TypeCapability::Integer {
+            width: 8,
+            signed: None
+        }));
+        assert!(a.contains(&TypeCapability::Integer {
+            width: 4,
+            signed: Some(true)
+        }));
         assert!(!a.union(&b)); // idempotent
     }
 
@@ -907,12 +1046,21 @@ mod capset_tests {
         let mut s = CapSet::new();
         s.insert(TypeCapability::Callable);
         s.insert(TypeCapability::Bool);
-        s.insert(TypeCapability::Integer { width: 2, signed: Some(false) });
+        s.insert(TypeCapability::Integer {
+            width: 2,
+            signed: Some(false),
+        });
         let items: Vec<_> = s.iter().collect();
         // Flags come first (Bool before Callable by bit order), then integers.
         assert_eq!(items[0], TypeCapability::Bool);
         assert_eq!(items[1], TypeCapability::Callable);
-        assert_eq!(items[2], TypeCapability::Integer { width: 2, signed: Some(false) });
+        assert_eq!(
+            items[2],
+            TypeCapability::Integer {
+                width: 2,
+                signed: Some(false)
+            }
+        );
     }
 }
 

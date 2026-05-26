@@ -663,17 +663,33 @@ fn get(types: &BTreeMap<SsaVarnode, PrimitiveType>, sv: SsaVarnode) -> Primitive
 
 /// Join `sv`'s current type with `ty` and store the result. Returns `true`
 /// when the stored type actually moved.
+///
+/// **Monotonicity invariant**: once a var reaches `Unknown` via a conflict
+/// (i.e., it was previously concrete and `join` collapsed it), it stays
+/// `Unknown` for the rest of the solve. Without this, `SameType(a, b)`
+/// constraints that mix incompatible concrete types create an infinite
+/// oscillation: Equal re-asserts a concrete type, SameType collapses it
+/// back to Unknown, repeat for 64 iterations.
 fn meet(
     types: &mut BTreeMap<SsaVarnode, PrimitiveType>,
     sv: SsaVarnode,
     ty: PrimitiveType,
 ) -> bool {
-    let cur = get(types, sv);
+    if ty == PrimitiveType::Unknown {
+        return false;
+    }
+    let cur = types.get(&sv).copied().unwrap_or(PrimitiveType::Unknown);
+    // If the var was already concrete and is now being set to Unknown
+    // via a conflict join, freeze it at Unknown permanently.
+    if cur == PrimitiveType::Unknown && types.contains_key(&sv) {
+        // Already collapsed — don't let it come back to concrete.
+        return false;
+    }
     let joined = cur.join(ty);
     if joined != cur {
         types.insert(sv, joined);
         true
-    } else if !types.contains_key(&sv) && ty != PrimitiveType::Unknown {
+    } else if !types.contains_key(&sv) {
         types.insert(sv, ty);
         true
     } else {

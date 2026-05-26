@@ -211,6 +211,13 @@ fn record_new_output_ssa(raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>, insn: 
     );
 }
 
+/// Copy the SSA var_map entries for one unchanged instruction, remapping
+/// its index from `old_idx` → `new_idx`.
+///
+/// Uses `BTreeMap::range` to seek directly to `(bid, old_idx, Output)`
+/// and walk only the 1–4 entries for this instruction in O(log n),
+/// instead of the previous O(|var_map|) full scan that was 44% of total
+/// wall-clock on `/usr/bin/wc` per perf record.
 fn copy_old_var_map_entries(
     old_var_map: &BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
     rebuilt_var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
@@ -218,10 +225,10 @@ fn copy_old_var_map_entries(
     old_idx: usize,
     new_idx: usize,
 ) {
-    for ((entry_bid, entry_idx, slot), &sv) in old_var_map {
-        if *entry_bid == bid && *entry_idx == old_idx {
-            rebuilt_var_map.insert((bid, new_idx, slot.clone()), sv);
-        }
+    let start = (bid, old_idx, VarnodeSlot::Output);
+    let end = (bid, old_idx, VarnodeSlot::Input(usize::MAX));
+    for ((_b, _i, slot), &sv) in old_var_map.range(start..=end) {
+        rebuilt_var_map.insert((bid, new_idx, slot.clone()), sv);
     }
 }
 

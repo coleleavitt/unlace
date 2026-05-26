@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{PrimitiveType, SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
 use unlace_ir::types::Type;
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId};
 
@@ -244,7 +244,6 @@ fn force_set_type(
     }
 }
 
-type VarMap = BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>;
 type TypeMap = BTreeMap<SsaVarnode, PrimitiveType>;
 type CompositeMap = BTreeMap<SsaVarnode, Type>;
 type BlockMap = BTreeMap<BlockId, unlace_ir::BasicBlock>;

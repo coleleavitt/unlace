@@ -2,8 +2,7 @@
 //! using algebraic identities (double negation, absorption, De Morgan).
 
 use std::collections::BTreeMap;
-
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -60,7 +59,7 @@ impl Pass for ConditionSimplifyPass {
             }
             let mut changed = false;
             let old_var_map = func.var_map.clone();
-            let mut rebuilt_var_map = BTreeMap::new();
+            let mut rebuilt_var_map = VarMap::new();
 
             for (&bid, block) in func.function.blocks.iter_mut() {
                 let mut new_insns: Vec<IrInsn> = Vec::with_capacity(block.insns.len());
@@ -161,7 +160,7 @@ fn record_def(map: &mut BTreeMap<Varnode, IrInsn>, insn: &IrInsn) {
 }
 
 fn record_input_ssa(
-    old_var_map: &BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    old_var_map: &VarMap,
     raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>,
     bid: BlockId,
     insn_idx: usize,
@@ -178,7 +177,7 @@ fn record_input_ssa(
 }
 
 fn record_output_ssa(
-    old_var_map: &BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    old_var_map: &VarMap,
     raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>,
     bid: BlockId,
     insn_idx: usize,
@@ -219,8 +218,8 @@ fn record_new_output_ssa(raw_ssa_map: &mut BTreeMap<Varnode, SsaVarnode>, insn: 
 /// instead of the previous O(|var_map|) full scan that was 44% of total
 /// wall-clock on `/usr/bin/wc` per perf record.
 fn copy_old_var_map_entries(
-    old_var_map: &BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
-    rebuilt_var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    old_var_map: &VarMap,
+    rebuilt_var_map: &mut VarMap,
     bid: BlockId,
     old_idx: usize,
     new_idx: usize,
@@ -233,9 +232,9 @@ fn copy_old_var_map_entries(
 }
 
 fn remap_replacement_var_map(
-    old_var_map: &BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    old_var_map: &VarMap,
     raw_ssa_map: &BTreeMap<Varnode, SsaVarnode>,
-    rebuilt_var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    rebuilt_var_map: &mut VarMap,
     bid: BlockId,
     old_idx: usize,
     new_idx: usize,
@@ -249,7 +248,7 @@ fn remap_replacement_var_map(
 
 fn map_new_insn_var_map(
     raw_ssa_map: &BTreeMap<Varnode, SsaVarnode>,
-    rebuilt_var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    rebuilt_var_map: &mut VarMap,
     bid: BlockId,
     new_idx: usize,
     insn: &IrInsn,
@@ -270,7 +269,7 @@ fn map_new_insn_var_map(
 
 fn map_replacement_inputs(
     raw_ssa_map: &BTreeMap<Varnode, SsaVarnode>,
-    rebuilt_var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    rebuilt_var_map: &mut VarMap,
     bid: BlockId,
     new_idx: usize,
     insn: &IrInsn,

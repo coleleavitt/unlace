@@ -85,7 +85,7 @@ mod tests {
             pc: 0x401000,
         };
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map: BTreeMap<String, String> = BTreeMap::new();
         var_map.insert("result".into(), "rax".into());
         var_map.insert("count".into(), "rbx".into());
 
@@ -104,7 +104,7 @@ mod tests {
             memory: BTreeMap::new(),
             pc: 0,
         };
-        let mut var_map = BTreeMap::new();
+        let mut var_map: BTreeMap<String, String> = BTreeMap::new();
         var_map.insert("x".into(), "rax".into());
         assert!(overlay_concrete_values(&state, &var_map).is_empty());
     }

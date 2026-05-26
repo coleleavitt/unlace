@@ -21,7 +21,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -185,7 +185,7 @@ mod tests {
 
     fn make_ssa(
         blocks: Vec<BasicBlock>,
-        var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+        var_map: VarMap,
     ) -> SsaFunction {
         let entry = blocks.first().expect("blocks").id;
         let mut func = Function::new("test", entry, 0x1000);
@@ -202,7 +202,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map: BTreeMap::new(),
-            var_map,
+            var_map: var_map.into(),
             var_types: BTreeMap::new(),
             calling_convention: CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
@@ -326,7 +326,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), a);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(1)), b);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), diff);
@@ -382,7 +382,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), a);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(1)), b);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), diff);
@@ -419,7 +419,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), a);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), z);
 

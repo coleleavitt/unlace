@@ -1270,7 +1270,11 @@ pub enum VarnodeSlot {
 /// that `BTreeMap` provides today.
 #[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct VarMap {
-    inner: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    /// The underlying storage. Currently a `BTreeMap`; will be replaced with
+    /// a flat `Vec<Vec<InsnSlots>>` in Step 3. Public for the migration period
+    /// so existing code that builds/destructures `BTreeMap`s can gradually
+    /// move to the `VarMap` API methods.
+    pub inner: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
 }
 
 impl<'a> IntoIterator for &'a VarMap {

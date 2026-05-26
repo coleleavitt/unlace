@@ -4,7 +4,7 @@
 //! `SsaFunction::panic_sites` so downstream consumers (e.g. the C printer)
 //! can annotate them.
 
-use unlace_ir::ssa::{PanicKind, SsaFunction};
+use unlace_ir::ssa::{PanicKind, SsaFunction, SsaVarnode, VarMap, VarnodeSlot};
 use unlace_ir::{IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
@@ -130,7 +130,7 @@ mod tests {
 
     fn make_ssa(
         blocks: Vec<BasicBlock>,
-        var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+        var_map: VarMap,
     ) -> SsaFunction {
         let entry = blocks.first().expect("blocks non-empty").id;
         let mut func = Function::new("test", entry, 0x1000);
@@ -149,7 +149,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map: BTreeMap::new(),
-            var_map,
+            var_map: var_map.into(),
             var_types: BTreeMap::new(),
             calling_convention: CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
@@ -269,7 +269,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = RustPanicPass;
         let changed = pass.run_with_resolver(&mut ssa, mock_resolver).unwrap();
 
@@ -291,7 +291,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = RustPanicPass;
         let changed = pass.run_with_resolver(&mut ssa, mock_resolver).unwrap();
 
@@ -313,7 +313,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = RustPanicPass;
         let changed = pass.run_with_resolver(&mut ssa, mock_resolver).unwrap();
 
@@ -332,7 +332,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = RustPanicPass;
         let changed = pass.run_with_resolver(&mut ssa, mock_resolver).unwrap();
 
@@ -351,7 +351,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = RustPanicPass;
         let changed = pass.run_with_resolver(&mut ssa, mock_resolver).unwrap();
 
@@ -373,7 +373,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = RustPanicPass;
         let changed = pass.run_with_resolver(&mut ssa, mock_resolver).unwrap();
 
@@ -395,7 +395,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = RustPanicPass;
         let changed = pass.run_with_resolver(&mut ssa, mock_resolver).unwrap();
 
@@ -417,7 +417,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = RustPanicPass;
         assert!(pass.run_with_resolver(&mut ssa, mock_resolver).unwrap());
         assert!(!pass.run_with_resolver(&mut ssa, mock_resolver).unwrap());
@@ -434,7 +434,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = RustPanicPass;
         let changed = pass.run(&mut ssa).unwrap();
         assert!(!changed);

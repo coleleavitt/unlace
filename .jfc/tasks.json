@@ -5,7 +5,7 @@
       "id": "t2",
       "subject": "Step 1: Encapsulate var_map behind VarMap wrapper API",
       "description": "Add a VarMap wrapper struct in unlace-ir/src/ssa.rs that encapsulates the storage. Initially backed by the same BTreeMap internally but with a clean API: get(bid, idx, slot), set(bid, idx, slot, sv), remove(bid, idx, slot), iter(), range(bid, idx). All 208 direct var_map.insert/remove/get call sites must go through these methods. The field becomes private (pub(crate) at most). This is the prerequisite for swapping the backing store without touching callers.",
-      "status": "in_progress",
+      "status": "completed",
       "blocks": [],
       "blockedBy": [],
       "created_at_ms": 1779807119111,

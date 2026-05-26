@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{EnumDiscriminant, SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{EnumDiscriminant, SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
 use unlace_ir::{BlockId, IrOp, SpaceId, Varnode};
 
 use crate::pass::{Pass, PassError};
@@ -266,7 +266,7 @@ mod tests {
 
     fn make_ssa(
         block: BasicBlock,
-        var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+        var_map: VarMap,
     ) -> SsaFunction {
         let mut func = Function::new("cpp_variant_test", block.id, 0x1000);
         func.insert_block(block);
@@ -281,7 +281,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map: BTreeMap::new(),
-            var_map,
+            var_map: var_map.into(),
             var_types: BTreeMap::new(),
             calling_convention: CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
@@ -402,7 +402,7 @@ mod tests {
             0x1010,
         ));
 
-        let mut ssa = make_ssa(bb, map);
+        let mut ssa = make_ssa(bb, map.into());
         assert!(CppVariantPass.run(&mut ssa).expect("pass succeeds"));
         assert_eq!(ssa.enum_discriminants.len(), 1);
         let disc = &ssa.enum_discriminants[0];
@@ -445,7 +445,7 @@ mod tests {
             0x2010,
         ));
 
-        let mut ssa = make_ssa(bb, map);
+        let mut ssa = make_ssa(bb, map.into());
         assert!(CppVariantPass.run(&mut ssa).expect("pass succeeds"));
         assert_eq!(ssa.enum_discriminants[0].variants[&0], "nullopt");
         assert_eq!(ssa.enum_discriminants[0].variants[&1], "has_value");

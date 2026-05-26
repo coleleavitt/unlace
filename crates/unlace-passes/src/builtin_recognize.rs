@@ -184,7 +184,7 @@ mod tests {
 
     use unlace_ir::ssa::{
         CallingConvention, DominatorTree, OpTypeBindings, PrimitiveType, SsaFunction, SsaVarnode,
-        VarnodeSlot,
+        VarnodeSlot, VarMap,
     };
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
@@ -212,7 +212,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map: BTreeMap::new(),
-            var_map: BTreeMap::<(BlockId, usize, VarnodeSlot), SsaVarnode>::new(),
+            var_map: VarMap::new(),
             var_types: BTreeMap::new(),
             calling_convention: CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),

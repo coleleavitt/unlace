@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
 use unlace_ir::BlockId;
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
 
 /// Error type for optimization passes.
 #[derive(Debug, thiserror::Error)]
@@ -151,7 +151,7 @@ pub trait Pass: Send + Sync {
 /// slots before moving the source instruction's slots so stale metadata cannot
 /// make an output-less instruction look like it defines a variable.
 pub(crate) fn compact_var_map_for_moved_insn(
-    var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    var_map: &mut VarMap,
     bid: BlockId,
     old_idx: usize,
     new_idx: usize,
@@ -190,7 +190,7 @@ pub(crate) fn compact_var_map_for_moved_insn(
 /// value. Those are fixed by building a per-pass [`DefIndex`] once at
 /// pass entry — see below.)
 fn clear_var_map_entries_at(
-    var_map: &mut BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    var_map: &mut VarMap,
     bid: BlockId,
     idx: usize,
 ) {

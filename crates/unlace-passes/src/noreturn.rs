@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use unlace_ir::ssa::{SsaFunction, VarnodeSlot};
+use unlace_ir::ssa::{SsaFunction, VarnodeSlot, VarMap};
 use unlace_ir::{BlockId, IrOp, SpaceId};
 
 use crate::pass::{Pass, PassError};
@@ -316,7 +316,7 @@ mod tests {
 
     fn make_ssa(
         blocks: Vec<BasicBlock>,
-        var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+        var_map: VarMap,
     ) -> SsaFunction {
         let entry = blocks.first().expect("blocks non-empty").id;
         let mut func = Function::new("test", entry, 0x1000);
@@ -335,7 +335,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map: BTreeMap::new(),
-            var_map,
+            var_map: var_map.into(),
             var_types: BTreeMap::new(),
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
@@ -458,7 +458,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let var_map = BTreeMap::new();
+        let var_map = VarMap::new();
         let mut ssa = make_ssa(vec![bb], var_map);
 
         let pass = NoreturnDetectPass::new();
@@ -479,7 +479,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let var_map = BTreeMap::new();
+        let var_map = VarMap::new();
         let mut ssa = make_ssa(vec![bb], var_map);
 
         let pass = NoreturnDetectPass::new();
@@ -503,7 +503,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), v1);
 
         let mut ssa = make_ssa(vec![bb], var_map);
@@ -545,7 +545,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x100c));
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), v1);
         var_map.insert((BlockId(0), 2, VarnodeSlot::Input(0)), v1);
         var_map.insert((BlockId(0), 2, VarnodeSlot::Input(1)), v3);
@@ -584,7 +584,7 @@ mod tests {
             0x1000,
         ));
 
-        let var_map = BTreeMap::new();
+        let var_map = VarMap::new();
         let mut ssa = make_ssa(vec![bb], var_map);
 
         let pass = NoreturnDetectPass::new();
@@ -604,7 +604,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let var_map = BTreeMap::new();
+        let var_map = VarMap::new();
         let mut ssa = make_ssa(vec![bb], var_map);
 
         let pass = NoreturnDetectPass::new();
@@ -717,7 +717,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = NoreturnDetectPass::new();
         let changed = pass.run_with_resolver(&mut ssa, fixpoint_resolver).unwrap();
         assert!(changed);
@@ -737,7 +737,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = NoreturnDetectPass::new();
         let changed = pass.run_with_resolver(&mut ssa, fixpoint_resolver).unwrap();
         assert!(changed);
@@ -757,7 +757,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut ssa = make_ssa(vec![bb], BTreeMap::new());
+        let mut ssa = make_ssa(vec![bb], VarMap::new());
         let pass = NoreturnDetectPass::new();
         let changed = pass.run_with_resolver(&mut ssa, fixpoint_resolver).unwrap();
         assert!(!changed);

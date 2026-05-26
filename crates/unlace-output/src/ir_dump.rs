@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use unlace_ir::ssa::{PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{VarMap, PhiNode, SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
 /// Dump an SSA function in the canonical text form defined by IR spec §2.
@@ -403,7 +403,7 @@ mod tests {
     use smallvec::smallvec;
 
     use unlace_ir::cfg::build_cfg;
-    use unlace_ir::ssa::{DominatorTree, PhiNode, SsaFunction, SsaVarnode};
+    use unlace_ir::ssa::{VarMap, DominatorTree, PhiNode, SsaFunction, SsaVarnode};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::dump_ir;
@@ -420,7 +420,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map: BTreeMap::new(),
-            var_map: BTreeMap::new(),
+            var_map: VarMap::new(),
             var_types: BTreeMap::new(),
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
@@ -818,7 +818,7 @@ mod tests {
     #[test]
     fn dump_type_audit_emits_header_and_rows() {
         use super::dump_type_audit;
-        use unlace_ir::ssa::{PrimitiveType, SsaVarnode};
+        use unlace_ir::ssa::{VarMap, PrimitiveType, SsaVarnode};
         let func = Function::new("ty_audit", BlockId(0), 0x1000);
         let mut ssa = make_ssa(func);
 
@@ -850,7 +850,7 @@ mod tests {
     #[test]
     fn dump_type_audit_buckets_signature_params() {
         use super::dump_type_audit;
-        use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaVarnode};
+        use unlace_ir::ssa::{VarMap, CallingConvention, PrimitiveType, SsaVarnode};
         let func = Function::new("sig_bucket", BlockId(0), 0x1000);
         let mut ssa = make_ssa(func);
         ssa.calling_convention = CallingConvention::SystemV;
@@ -889,7 +889,7 @@ mod tests {
     #[test]
     fn dump_type_audit_signature_requires_known_cc() {
         use super::dump_type_audit;
-        use unlace_ir::ssa::{CallingConvention, PrimitiveType, SsaVarnode};
+        use unlace_ir::ssa::{VarMap, CallingConvention, PrimitiveType, SsaVarnode};
         let func = Function::new("no_cc", BlockId(0), 0x1000);
         let mut ssa = make_ssa(func);
         ssa.calling_convention = CallingConvention::Unknown;

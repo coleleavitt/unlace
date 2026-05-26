@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 
 use unlace_ir::IrOp;
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
 
 use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
@@ -159,7 +159,7 @@ mod tests {
 
     fn make_ssa(
         blocks: Vec<BasicBlock>,
-        var_map: std::collections::BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+        var_map: VarMap,
         phi_map: std::collections::BTreeMap<BlockId, Vec<PhiNode>>,
     ) -> SsaFunction {
         let entry = blocks.first().expect("blocks non-empty").id;
@@ -179,7 +179,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map,
-            var_map,
+            var_map: var_map.into(),
             var_types: std::collections::BTreeMap::new(),
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: std::collections::BTreeMap::new(),
@@ -299,7 +299,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut var_map = std::collections::BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), v1);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(1)), v2);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), v3);
@@ -329,7 +329,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut var_map = std::collections::BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), v1);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(1)), v2);
 
@@ -357,7 +357,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut var_map = std::collections::BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), v1);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), v3);
 
@@ -395,7 +395,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
 
-        let mut var_map = std::collections::BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), v1);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), v2);
         var_map.insert((BlockId(0), 1, VarnodeSlot::Input(0)), v2);
@@ -451,7 +451,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1008));
 
-        let mut var_map = std::collections::BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rax);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), zf);
 

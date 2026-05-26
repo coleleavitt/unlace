@@ -163,7 +163,7 @@ mod tests {
 
     use smallvec::smallvec;
 
-    use unlace_ir::ssa::{CallingConvention, DominatorTree, PrimitiveType, SsaFunction};
+    use unlace_ir::ssa::{VarMap, CallingConvention, DominatorTree, PrimitiveType, SsaFunction};
     use unlace_ir::{BasicBlock, BlockId, Function, IrInsn, IrOp, Varnode};
 
     use super::*;
@@ -184,7 +184,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map: BTreeMap::new(),
-            var_map: BTreeMap::new(),
+            var_map: VarMap::new(),
             var_types: BTreeMap::new(),
             calling_convention: CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),

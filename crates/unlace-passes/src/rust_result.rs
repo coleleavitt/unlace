@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
 use unlace_ir::{BlockId, IrOp, SpaceId};
 
 /// A detected Rust tagged union (`Result<T,E>` or `Option<T>`).
@@ -268,7 +268,7 @@ mod tests {
 
     fn make_ssa(
         blocks: Vec<BasicBlock>,
-        var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+        var_map: VarMap,
     ) -> SsaFunction {
         let entry = blocks.first().expect("blocks non-empty").id;
         let mut func = Function::new("test", entry, 0x1000);
@@ -287,7 +287,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map: BTreeMap::new(),
-            var_map,
+            var_map: var_map.into(),
             var_types: BTreeMap::new(),
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
@@ -358,12 +358,12 @@ mod tests {
         constants: &[u64],
     ) -> (
         Vec<BasicBlock>,
-        BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+        VarMap,
         SsaVarnode, // base_sv
     ) {
         let bid = BlockId(0);
         let mut bb = BasicBlock::new(bid);
-        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> = BTreeMap::new();
+        let mut var_map = VarMap::new();
 
         // Base pointer in register r0
         let ptr_reg = Varnode::reg(0, 8);
@@ -454,7 +454,7 @@ mod tests {
     fn test_no_detect_non_byte_tag() {
         let bid = BlockId(0);
         let mut bb = BasicBlock::new(bid);
-        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> = BTreeMap::new();
+        let mut var_map = VarMap::new();
 
         let ptr_reg = Varnode::reg(0, 8);
         let ptr_sv = SsaVarnode {
@@ -516,7 +516,7 @@ mod tests {
     fn test_detect_with_int_add_zero_offset() {
         let bid = BlockId(0);
         let mut bb = BasicBlock::new(bid);
-        let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> = BTreeMap::new();
+        let mut var_map = VarMap::new();
 
         let ptr_reg = Varnode::reg(0, 8);
         let ptr_sv = SsaVarnode {

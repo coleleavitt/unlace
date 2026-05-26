@@ -15,7 +15,7 @@
 use std::collections::BTreeSet;
 
 use unlace_ir::SpaceId;
-use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
+use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot, VarMap};
 
 use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
@@ -157,7 +157,7 @@ mod tests {
 
     fn make_ssa(
         blocks: Vec<BasicBlock>,
-        var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+        var_map: VarMap,
         phi_map: BTreeMap<BlockId, Vec<PhiNode>>,
     ) -> SsaFunction {
         let entry = blocks.first().expect("blocks non-empty").id;
@@ -177,7 +177,7 @@ mod tests {
             dom_tree,
             post_dom_tree: None,
             phi_map,
-            var_map,
+            var_map: var_map.into(),
             var_types: BTreeMap::new(),
             calling_convention: unlace_ir::ssa::CallingConvention::Unknown,
             stack_vars: BTreeMap::new(),
@@ -314,7 +314,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rax);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(1)), rbx);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), zf);
@@ -355,7 +355,7 @@ mod tests {
             0x1004,
         ));
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map = VarMap::new();
         // INT_EQUAL inputs + output
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rax);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(1)), rbx);
@@ -437,7 +437,7 @@ mod tests {
             0x1014,
         ));
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map = VarMap::new();
         // insn 0: INT_ADD
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rax);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(1)), rbx);
@@ -495,7 +495,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(0)), rax);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Input(1)), rbx);
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), rdx);
@@ -523,7 +523,7 @@ mod tests {
         bb.insns
             .push(IrInsn::without_output(IrOp::Return, smallvec![], 0x1004));
 
-        let mut var_map = BTreeMap::new();
+        let mut var_map = VarMap::new();
         var_map.insert((BlockId(0), 0, VarnodeSlot::Output), stale_zf);
 
         let mut ssa = make_ssa(vec![bb], var_map, BTreeMap::new());

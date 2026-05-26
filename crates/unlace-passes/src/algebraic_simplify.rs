@@ -8,7 +8,7 @@ use smallvec::SmallVec;
 use unlace_ir::ssa::{SsaFunction, SsaVarnode, VarnodeSlot};
 use unlace_ir::{BlockId, IrInsn, IrOp, SpaceId, Varnode};
 
-use crate::pass::{Pass, PassError};
+use crate::pass::{DefIndex, Pass, PassError};
 
 /// Simplifies algebraic SSA expressions.
 pub struct AlgebraicSimplifyPass;
@@ -40,7 +40,8 @@ impl Pass for AlgebraicSimplifyPass {
             "algebraic_simplify: starting"
         );
 
-        let rewrites = collect_rewrites(func);
+        let defs = DefIndex::build(func);
+        let rewrites = collect_rewrites(func, &defs);
         let simplified = rewrites.len();
         apply_rewrites(func, rewrites);
 
@@ -77,12 +78,12 @@ struct Rewrite {
     replacement: Replacement,
 }
 
-fn collect_rewrites(func: &SsaFunction) -> Vec<Rewrite> {
+fn collect_rewrites(func: &SsaFunction, defs: &DefIndex) -> Vec<Rewrite> {
     let mut rewrites = Vec::new();
 
     for (&bid, block) in &func.function.blocks {
         for (insn_idx, insn) in block.insns.iter().enumerate() {
-            if let Some(replacement) = try_simplify(func, bid, insn_idx, insn) {
+            if let Some(replacement) = try_simplify(func, defs, bid, insn_idx, insn) {
                 rewrites.push(Rewrite {
                     block: bid,
                     insn_idx,
@@ -173,6 +174,7 @@ fn apply_rewrites(func: &mut SsaFunction, rewrites: Vec<Rewrite>) {
 
 fn try_simplify(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -528,22 +530,23 @@ fn simplify_rhs_float_one(
     }
 }
 
-/// Looks up the defining instruction for an SSA value, if it lives in the
-/// current function.
-fn defining_insn(func: &SsaFunction, target: SsaVarnode) -> Option<(BlockId, usize, &IrInsn)> {
-    for (&(def_bid, def_idx, ref slot), &def_ssa) in &func.var_map {
-        if !matches!(slot, VarnodeSlot::Output) || def_ssa != target {
-            continue;
-        }
-        let def_insn = func.function.blocks.get(&def_bid)?.insns.get(def_idx)?;
-        return Some((def_bid, def_idx, def_insn));
-    }
-    None
+/// Looks up the defining instruction for an SSA value via the per-pass
+/// reverse index. O(log n) instead of the previous O(|var_map|) full scan
+/// that was 30% of total wall-clock on `/usr/bin/wc`.
+fn defining_insn<'a>(
+    func: &'a SsaFunction,
+    defs: &DefIndex,
+    target: SsaVarnode,
+) -> Option<(BlockId, usize, &'a IrInsn)> {
+    let (bid, idx) = defs.lookup(target)?;
+    let insn = func.function.blocks.get(&bid)?.insns.get(idx)?;
+    Some((bid, idx, insn))
 }
 
 /// Rewrites `(-x) + y` → `y - x` and `x + (-y)` → `x - y` (FloatAdd only).
 fn simplify_fadd_negation(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -552,7 +555,7 @@ fn simplify_fadd_negation(
 
     // Try `x + (-y)` → `x - y`: rhs is FloatNeg(y)
     if let Some(rhs_ssa) = input_ssa(func, bid, insn_idx, 1) {
-        if let Some((def_bid, def_idx, def_insn)) = defining_insn(func, rhs_ssa) {
+        if let Some((def_bid, def_idx, def_insn)) = defining_insn(func, defs, rhs_ssa) {
             if def_insn.op == IrOp::FloatNeg {
                 if let Some(inner) = one_input(def_insn) {
                     let lhs_ssa = input_ssa(func, bid, insn_idx, 0);
@@ -569,7 +572,7 @@ fn simplify_fadd_negation(
 
     // Try `(-x) + y` → `y - x`: lhs is FloatNeg(x)
     if let Some(lhs_ssa) = input_ssa(func, bid, insn_idx, 0) {
-        if let Some((def_bid, def_idx, def_insn)) = defining_insn(func, lhs_ssa) {
+        if let Some((def_bid, def_idx, def_insn)) = defining_insn(func, defs, lhs_ssa) {
             if def_insn.op == IrOp::FloatNeg {
                 if let Some(inner) = one_input(def_insn) {
                     let rhs_ssa = input_ssa(func, bid, insn_idx, 1);
@@ -590,13 +593,14 @@ fn simplify_fadd_negation(
 /// Rewrites `x - (-y)` → `x + y` (FloatSub only).
 fn simplify_fsub_negation(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
 ) -> Option<Replacement> {
     let (lhs, _rhs) = two_inputs(insn)?;
     let rhs_ssa = input_ssa(func, bid, insn_idx, 1)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, rhs_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, rhs_ssa)?;
     if def_insn.op != IrOp::FloatNeg {
         return None;
     }
@@ -638,12 +642,13 @@ fn simplify_fsub_negation(
 /// is the underlying pointer value to substitute in place of the offset add.
 fn unwrap_zero_offset_addr(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     addr_input_idx: usize,
 ) -> Option<(Varnode, Option<SsaVarnode>)> {
     let addr_ssa = input_ssa(func, bid, insn_idx, addr_input_idx)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, addr_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, addr_ssa)?;
 
     match def_insn.op {
         IrOp::IntAdd => {
@@ -675,6 +680,7 @@ fn unwrap_zero_offset_addr(
 /// `LOAD space, (p - 0)` → `LOAD space, p`.
 fn simplify_load_addr(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -696,6 +702,7 @@ fn simplify_load_addr(
 /// `STORE space, (p - 0), v` → `STORE space, p, v`.
 fn simplify_store_addr(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -717,6 +724,7 @@ fn simplify_store_addr(
 /// Folds chained pointer offsets into a single offset.
 fn simplify_addr_offset_fold(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -731,7 +739,7 @@ fn simplify_addr_offset_fold(
         return None;
     }
     let lhs_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, lhs_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, lhs_ssa)?;
     if def_insn.op != IrOp::IntAdd {
         return None;
     }
@@ -762,6 +770,7 @@ fn simplify_addr_offset_fold(
 /// Rule 7: `(p + a) - b → p + (a - b)` when both `a` and `b` are constants.
 fn simplify_addr_offset_sub_fold(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -772,7 +781,7 @@ fn simplify_addr_offset_sub_fold(
         return None;
     }
     let lhs_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, lhs_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, lhs_ssa)?;
     if def_insn.op != IrOp::IntAdd {
         return None;
     }
@@ -832,6 +841,7 @@ fn simplify_subpiece_identity(
 /// Rule 2: `SUBPIECE(SUBPIECE(x, a), b)` → `SUBPIECE(x, a + b)`.
 fn simplify_subpiece_compose(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -839,7 +849,7 @@ fn simplify_subpiece_compose(
     let outer_off = subpiece_offset(insn)?;
     let (_outer_src, outer_off_vn) = two_inputs(insn)?;
     let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, inner_ssa)?;
     if def_insn.op != IrOp::Subpiece {
         return None;
     }
@@ -861,6 +871,7 @@ fn simplify_subpiece_compose(
 /// the original `x` size (i.e. the zero-extension is being undone).
 fn simplify_subpiece_zext(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -870,7 +881,7 @@ fn simplify_subpiece_zext(
         return None;
     }
     let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, inner_ssa)?;
     if def_insn.op != IrOp::IntZext {
         return None;
     }
@@ -887,6 +898,7 @@ fn simplify_subpiece_zext(
 /// Rule 4: `SUBPIECE(PIECE(hi, lo), 0)` where the output size matches `lo.size` → `lo`.
 fn simplify_subpiece_piece_low(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -896,7 +908,7 @@ fn simplify_subpiece_piece_low(
         return None;
     }
     let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, inner_ssa)?;
     if def_insn.op != IrOp::Piece {
         return None;
     }
@@ -914,6 +926,7 @@ fn simplify_subpiece_piece_low(
 /// `hi.size` → `hi` (extracts the high half of a concatenation).
 fn simplify_subpiece_piece_high(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -921,7 +934,7 @@ fn simplify_subpiece_piece_high(
     let output = insn.output?;
     let off = subpiece_offset(insn)?;
     let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, inner_ssa)?;
     if def_insn.op != IrOp::Piece {
         return None;
     }
@@ -943,6 +956,7 @@ fn simplify_subpiece_piece_high(
 /// together they reconstruct the entirety of `x`.
 fn simplify_piece_full_reassembly(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -953,8 +967,8 @@ fn simplify_piece_full_reassembly(
     let hi_ssa = input_ssa(func, bid, insn_idx, 0)?;
     let lo_ssa = input_ssa(func, bid, insn_idx, 1)?;
 
-    let (hi_def_bid, hi_def_idx, hi_def) = defining_insn(func, hi_ssa)?;
-    let (_lo_def_bid, _lo_def_idx, lo_def) = defining_insn(func, lo_ssa)?;
+    let (hi_def_bid, hi_def_idx, hi_def) = defining_insn(func, defs, hi_ssa)?;
+    let (_lo_def_bid, _lo_def_idx, lo_def) = defining_insn(func, defs, lo_ssa)?;
     if hi_def.op != IrOp::Subpiece || lo_def.op != IrOp::Subpiece {
         return None;
     }
@@ -994,6 +1008,7 @@ fn simplify_piece_full_reassembly(
 /// all zero — the OR cannot affect the bytes the SUBPIECE keeps.
 fn simplify_subpiece_or_high_mask(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -1005,7 +1020,7 @@ fn simplify_subpiece_or_high_mask(
     }
 
     let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, inner_ssa)?;
     if def_insn.op != IrOp::IntOr {
         return None;
     }
@@ -1041,6 +1056,7 @@ fn simplify_subpiece_or_high_mask(
 
 fn simplify_cmp_xor_zero(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -1063,7 +1079,7 @@ fn simplify_cmp_xor_zero(
 
     // Look up the defining instruction of the xor operand
     let xor_ssa = input_ssa(func, bid, insn_idx, xor_idx)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, xor_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, xor_ssa)?;
     if def_insn.op != IrOp::IntXor || def_insn.inputs.len() != 2 {
         return None;
     }
@@ -1086,6 +1102,7 @@ fn simplify_cmp_xor_zero(
 
 fn simplify_double_sext(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -1094,7 +1111,7 @@ fn simplify_double_sext(
     let _output = insn.output?;
 
     let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, inner_ssa)?;
     if def_insn.op != IrOp::IntSext || def_insn.inputs.len() != 1 {
         return None;
     }
@@ -1130,6 +1147,7 @@ fn simplify_sext_noop(
 /// `IntZext(IntZext(x))` → `IntZext(x)` (collapse double zero-extend)
 fn simplify_double_zext(
     func: &SsaFunction,
+    defs: &DefIndex,
     bid: BlockId,
     insn_idx: usize,
     insn: &IrInsn,
@@ -1143,7 +1161,7 @@ fn simplify_double_zext(
     }
 
     let inner_ssa = input_ssa(func, bid, insn_idx, 0)?;
-    let (def_bid, def_idx, def_insn) = defining_insn(func, inner_ssa)?;
+    let (def_bid, def_idx, def_insn) = defining_insn(func, defs, inner_ssa)?;
     if def_insn.op != IrOp::IntZext || def_insn.inputs.len() != 1 {
         return None;
     }

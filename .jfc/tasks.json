@@ -17,7 +17,7 @@
       "id": "t1",
       "subject": "Replace var_map BTreeMap with flat IndexVec (rustc-style O(1) lookup)",
       "description": "Replace SsaFunction::var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> with a flat IndexVec-style structure. Each block gets a Vec of per-instruction slot arrays. Forward lookup becomes O(1) indexing instead of O(log n) tree search. This is ~2000 lines across the SSA builder + every pass that accesses var_map. Slice into sub-tasks.",
-      "status": "pending",
+      "status": "completed",
       "blocks": [],
       "blockedBy": [],
       "created_at_ms": 1779807119110,

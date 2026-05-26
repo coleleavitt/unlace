@@ -195,9 +195,14 @@ fn seed_from_composites(func: &mut SsaFunction) {
             | Type::Union { .. } => PrimitiveType::Ptr,
         };
         let entry = func.var_types.entry(*sv).or_insert(primitive);
-        *entry = entry.join(primitive);
-        if *entry == PrimitiveType::Unknown {
-            *entry = primitive;
+        // Only promote if the var hasn't already been collapsed to Unknown
+        // by a prior conflict. Without this guard, seed_from_composites
+        // re-asserts a concrete type every outer iteration, creating an
+        // oscillation with any constraint that collapses it.
+        if *entry == PrimitiveType::Unknown && *entry != primitive {
+            // Already collapsed — leave frozen.
+        } else {
+            *entry = entry.join(primitive);
         }
     }
 }
@@ -206,20 +211,33 @@ fn current_type(var_types: &BTreeMap<SsaVarnode, PrimitiveType>, sv: &SsaVarnode
     var_types.get(sv).copied().unwrap_or(PrimitiveType::Unknown)
 }
 
+/// Join `sv`'s type with `ty`. Returns true if the type changed.
+///
+/// **Monotonicity**: once a var is present in the map with value `Unknown`
+/// (meaning it was concrete and got collapsed by a conflict join), it stays
+/// frozen — subsequent concrete assertions are rejected. This prevents the
+/// infinite oscillation that caused TypeInfer to hit its 100-iteration cap.
 fn set_type(
     var_types: &mut BTreeMap<SsaVarnode, PrimitiveType>,
     sv: SsaVarnode,
     ty: PrimitiveType,
 ) -> bool {
+    if ty == PrimitiveType::Unknown {
+        return false;
+    }
     let old = var_types
         .get(&sv)
         .copied()
         .unwrap_or(PrimitiveType::Unknown);
+    // Frozen: was concrete, collapsed to Unknown — don't ascend.
+    if old == PrimitiveType::Unknown && var_types.contains_key(&sv) {
+        return false;
+    }
     let joined = old.join(ty);
     if joined != old {
         var_types.insert(sv, joined);
         true
-    } else if !var_types.contains_key(&sv) && ty != PrimitiveType::Unknown {
+    } else if !var_types.contains_key(&sv) {
         var_types.insert(sv, ty);
         true
     } else {

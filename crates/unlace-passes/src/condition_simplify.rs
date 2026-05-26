@@ -132,7 +132,7 @@ impl Pass for ConditionSimplifyPass {
             }
 
             if changed {
-                func.var_map = rebuilt_var_map;
+                func.var_map = rebuilt_var_map.into();
             }
 
             if changed {

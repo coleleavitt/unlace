@@ -1,0 +1,28 @@
+{
+  "next_id": 2,
+  "tasks": {
+    "t2": {
+      "id": "t2",
+      "subject": "Step 1: Encapsulate var_map behind VarMap wrapper API",
+      "description": "Add a VarMap wrapper struct in unlace-ir/src/ssa.rs that encapsulates the storage. Initially backed by the same BTreeMap internally but with a clean API: get(bid, idx, slot), set(bid, idx, slot, sv), remove(bid, idx, slot), iter(), range(bid, idx). All 208 direct var_map.insert/remove/get call sites must go through these methods. The field becomes private (pub(crate) at most). This is the prerequisite for swapping the backing store without touching callers.",
+      "status": "in_progress",
+      "blocks": [],
+      "blockedBy": [],
+      "created_at_ms": 1779807119111,
+      "acceptance_criteria": "cargo check -p unlace-ir passes; VarMap struct compiles with get/set/remove/iter methods; existing var_map field type changed to VarMap",
+      "verification_command": "RUSTC_WRAPPER= cargo check -p unlace-ir",
+      "parent_id": "t136"
+    },
+    "t1": {
+      "id": "t1",
+      "subject": "Replace var_map BTreeMap with flat IndexVec (rustc-style O(1) lookup)",
+      "description": "Replace SsaFunction::var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> with a flat IndexVec-style structure. Each block gets a Vec of per-instruction slot arrays. Forward lookup becomes O(1) indexing instead of O(log n) tree search. This is ~2000 lines across the SSA builder + every pass that accesses var_map. Slice into sub-tasks.",
+      "status": "pending",
+      "blocks": [],
+      "blockedBy": [],
+      "created_at_ms": 1779807119110,
+      "acceptance_criteria": "cargo test -p unlace-passes --lib passes 1035/1035; cargo test -p unlace-ir --lib passes; wc decompile output byte-identical; perf shows BTreeMap::search_tree < 5% (was 16%)",
+      "kind": "milestone"
+    }
+  }
+}

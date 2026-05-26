@@ -478,7 +478,7 @@ pub struct SsaFunction {
     /// Used to find join points (convergence) for if/else and switch constructs.
     pub post_dom_tree: Option<DominatorTree>,
     pub phi_map: BTreeMap<BlockId, Vec<PhiNode>>,
-    pub var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    pub var_map: VarMap,
     pub var_types: BTreeMap<SsaVarnode, PrimitiveType>,
     /// Counterexample-guided refinements recorded for ambiguous primitive
     /// inferences. Populated by `TypeConstraintSolverPass` when Z3-style
@@ -1258,6 +1258,148 @@ pub enum VarnodeSlot {
     Input(usize),
 }
 
+/// Encapsulated var_map storage.
+///
+/// Wraps the `(BlockId, usize, VarnodeSlot) → SsaVarnode` mapping behind
+/// a method API so the backing store can be swapped from `BTreeMap` to a
+/// flat `Vec<Vec<InsnSlots>>` without touching callers. All access goes
+/// through the methods below.
+///
+/// **Determinism contract**: iteration order is always sorted by
+/// `(BlockId, insn_idx, VarnodeSlot)` — the same lexicographic order
+/// that `BTreeMap` provides today.
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub struct VarMap {
+    inner: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+}
+
+impl<'a> IntoIterator for &'a VarMap {
+    type Item = (&'a (BlockId, usize, VarnodeSlot), &'a SsaVarnode);
+    type IntoIter = std::collections::btree_map::Iter<'a, (BlockId, usize, VarnodeSlot), SsaVarnode>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.iter()
+    }
+}
+
+impl std::ops::Deref for VarMap {
+    type Target = BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl std::ops::DerefMut for VarMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl From<BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>> for VarMap {
+    fn from(inner: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>) -> Self {
+        Self { inner }
+    }
+}
+
+impl VarMap {
+    pub fn new() -> Self {
+        Self { inner: BTreeMap::new() }
+    }
+
+    /// Insert a mapping. Returns the previous value if the key was already present.
+    #[inline]
+    pub fn insert(
+        &mut self,
+        key: (BlockId, usize, VarnodeSlot),
+        value: SsaVarnode,
+    ) -> Option<SsaVarnode> {
+        self.inner.insert(key, value)
+    }
+
+    /// Look up by exact key.
+    #[inline]
+    pub fn get(&self, key: &(BlockId, usize, VarnodeSlot)) -> Option<&SsaVarnode> {
+        self.inner.get(key)
+    }
+
+    /// Mutable lookup by exact key.
+    #[inline]
+    pub fn get_mut(&mut self, key: &(BlockId, usize, VarnodeSlot)) -> Option<&mut SsaVarnode> {
+        self.inner.get_mut(key)
+    }
+
+    /// Remove a key, returning its value if present.
+    #[inline]
+    pub fn remove(&mut self, key: &(BlockId, usize, VarnodeSlot)) -> Option<SsaVarnode> {
+        self.inner.remove(key)
+    }
+
+    /// Iterate all entries in sorted order.
+    #[inline]
+    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
+        self.inner.iter()
+    }
+
+    /// Iterate all values.
+    #[inline]
+    pub fn values(&self) -> std::collections::btree_map::Values<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
+        self.inner.values()
+    }
+
+    /// Range query over a key range.
+    #[inline]
+    pub fn range<R>(&self, range: R) -> std::collections::btree_map::Range<'_, (BlockId, usize, VarnodeSlot), SsaVarnode>
+    where
+        R: std::ops::RangeBounds<(BlockId, usize, VarnodeSlot)>,
+    {
+        self.inner.range(range)
+    }
+
+    /// In-place drain by range + predicate (stable since Rust 1.91).
+    #[inline]
+    pub fn extract_if<R, F>(&mut self, range: R, pred: F) -> std::collections::btree_map::ExtractIf<'_, (BlockId, usize, VarnodeSlot), SsaVarnode, R, F>
+    where
+        R: std::ops::RangeBounds<(BlockId, usize, VarnodeSlot)>,
+        F: FnMut(&(BlockId, usize, VarnodeSlot), &mut SsaVarnode) -> bool,
+    {
+        self.inner.extract_if(range, pred)
+    }
+
+    /// Number of entries.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    /// Get-or-insert-default via the entry API.
+    #[inline]
+    pub fn entry(&mut self, key: (BlockId, usize, VarnodeSlot)) -> std::collections::btree_map::Entry<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
+        self.inner.entry(key)
+    }
+
+    /// Keys iterator (used by some passes for scanning).
+    #[inline]
+    pub fn keys(&self) -> std::collections::btree_map::Keys<'_, (BlockId, usize, VarnodeSlot), SsaVarnode> {
+        self.inner.keys()
+    }
+
+    /// Clear all entries.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.inner.clear();
+    }
+
+    /// Check if a key is present.
+    #[inline]
+    pub fn contains_key(&self, key: &(BlockId, usize, VarnodeSlot)) -> bool {
+        self.inner.contains_key(key)
+    }
+}
+
 /// Rebuild the CFG and dominator trees from the current function blocks.
 ///
 /// Call this after passes that modify block successors (e.g., after jump table
@@ -1564,7 +1706,7 @@ fn place_phis(
 /// lint happy.
 type RenameResult = (
     BTreeMap<BlockId, Vec<PhiNode>>,
-    BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode>,
+    VarMap,
 );
 
 fn rename_variables(
@@ -1576,7 +1718,7 @@ fn rename_variables(
     let mut version_counter: BTreeMap<Varnode, u32> = BTreeMap::new();
     let mut var_stack: BTreeMap<Varnode, Vec<u32>> = BTreeMap::new();
     let mut phi_map: BTreeMap<BlockId, Vec<PhiNode>> = BTreeMap::new();
-    let mut var_map: BTreeMap<(BlockId, usize, VarnodeSlot), SsaVarnode> = BTreeMap::new();
+    let mut var_map = VarMap::new();
 
     fn new_version(
         base: Varnode,

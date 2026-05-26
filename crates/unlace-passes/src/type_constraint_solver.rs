@@ -843,6 +843,64 @@ fn materialize_primitive(sv: SsaVarnode, bounds: &PolyTypeBounds) -> Option<Prim
 // ----- tests -----
 
 #[cfg(test)]
+mod capset_tests {
+    use super::*;
+
+    #[test]
+    fn insert_flag_caps_returns_changed() {
+        let mut s = CapSet::new();
+        assert!(s.insert(TypeCapability::Pointer));
+        assert!(!s.insert(TypeCapability::Pointer)); // duplicate
+        assert!(s.insert(TypeCapability::Bool));
+        assert!(s.contains(&TypeCapability::Pointer));
+        assert!(s.contains(&TypeCapability::Bool));
+        assert!(!s.contains(&TypeCapability::Float64));
+    }
+
+    #[test]
+    fn insert_integer_deduplicates() {
+        let mut s = CapSet::new();
+        assert!(s.insert(TypeCapability::Integer { width: 4, signed: Some(true) }));
+        assert!(!s.insert(TypeCapability::Integer { width: 4, signed: Some(true) }));
+        assert!(s.insert(TypeCapability::Integer { width: 4, signed: Some(false) }));
+        assert!(s.contains(&TypeCapability::Integer { width: 4, signed: Some(true) }));
+        assert!(s.contains(&TypeCapability::Integer { width: 4, signed: Some(false) }));
+        assert!(!s.contains(&TypeCapability::Integer { width: 8, signed: None }));
+    }
+
+    #[test]
+    fn union_merges_flags_and_integers() {
+        let mut a = CapSet::new();
+        a.insert(TypeCapability::Pointer);
+        a.insert(TypeCapability::Integer { width: 8, signed: None });
+
+        let mut b = CapSet::new();
+        b.insert(TypeCapability::Callable);
+        b.insert(TypeCapability::Integer { width: 4, signed: Some(true) });
+
+        assert!(a.union(&b));
+        assert!(a.contains(&TypeCapability::Pointer));
+        assert!(a.contains(&TypeCapability::Callable));
+        assert!(a.contains(&TypeCapability::Integer { width: 8, signed: None }));
+        assert!(a.contains(&TypeCapability::Integer { width: 4, signed: Some(true) }));
+        assert!(!a.union(&b)); // idempotent
+    }
+
+    #[test]
+    fn iter_yields_flags_then_integers() {
+        let mut s = CapSet::new();
+        s.insert(TypeCapability::Callable);
+        s.insert(TypeCapability::Bool);
+        s.insert(TypeCapability::Integer { width: 2, signed: Some(false) });
+        let items: Vec<_> = s.iter().collect();
+        // Flags come first (Bool before Callable by bit order), then integers.
+        assert_eq!(items[0], TypeCapability::Bool);
+        assert_eq!(items[1], TypeCapability::Callable);
+        assert_eq!(items[2], TypeCapability::Integer { width: 2, signed: Some(false) });
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use smallvec::smallvec;

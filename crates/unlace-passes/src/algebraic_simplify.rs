@@ -191,13 +191,13 @@ fn try_simplify(
     }
 
     match insn.op {
-        IrOp::Load => simplify_load_addr(func, bid, insn_idx, insn),
-        IrOp::Store => simplify_store_addr(func, bid, insn_idx, insn),
+        IrOp::Load => simplify_load_addr(func, defs, bid, insn_idx, insn),
+        IrOp::Store => simplify_store_addr(func, defs, bid, insn_idx, insn),
         IrOp::IntAdd => simplify_commutative_const(func, bid, insn_idx, insn, 0)
-            .or_else(|| simplify_addr_offset_fold(func, bid, insn_idx, insn)),
+            .or_else(|| simplify_addr_offset_fold(func, defs, bid, insn_idx, insn)),
         IrOp::IntSub => simplify_rhs_const(func, bid, insn_idx, insn, 0)
             .or_else(|| simplify_same_ssa_to_const(func, bid, insn_idx, insn, 0))
-            .or_else(|| simplify_addr_offset_sub_fold(func, bid, insn_idx, insn)),
+            .or_else(|| simplify_addr_offset_sub_fold(func, defs, bid, insn_idx, insn)),
         IrOp::IntMult => simplify_commutative_const(func, bid, insn_idx, insn, 1)
             .or_else(|| simplify_commutative_const_to_const(func, bid, insn_idx, insn, 0, 0)),
         IrOp::IntDiv => simplify_rhs_const(func, bid, insn_idx, insn, 1),
@@ -207,31 +207,31 @@ fn try_simplify(
         IrOp::IntOr => simplify_commutative_const(func, bid, insn_idx, insn, 0)
             .or_else(|| simplify_commutative_all_ones_to_all_ones(insn)),
         IrOp::Subpiece => simplify_subpiece_identity(func, bid, insn_idx, insn)
-            .or_else(|| simplify_subpiece_compose(func, bid, insn_idx, insn))
-            .or_else(|| simplify_subpiece_zext(func, bid, insn_idx, insn))
-            .or_else(|| simplify_subpiece_piece_low(func, bid, insn_idx, insn))
-            .or_else(|| simplify_subpiece_piece_high(func, bid, insn_idx, insn))
-            .or_else(|| simplify_subpiece_or_high_mask(func, bid, insn_idx, insn)),
-        IrOp::Piece => simplify_piece_full_reassembly(func, bid, insn_idx, insn),
+            .or_else(|| simplify_subpiece_compose(func, defs, bid, insn_idx, insn))
+            .or_else(|| simplify_subpiece_zext(func, defs, bid, insn_idx, insn))
+            .or_else(|| simplify_subpiece_piece_low(func, defs, bid, insn_idx, insn))
+            .or_else(|| simplify_subpiece_piece_high(func, defs, bid, insn_idx, insn))
+            .or_else(|| simplify_subpiece_or_high_mask(func, defs, bid, insn_idx, insn)),
+        IrOp::Piece => simplify_piece_full_reassembly(func, defs, bid, insn_idx, insn),
         IrOp::IntXor => simplify_commutative_const(func, bid, insn_idx, insn, 0)
             .or_else(|| simplify_same_ssa_to_const(func, bid, insn_idx, insn, 0)),
         IrOp::IntNegate | IrOp::BoolNegate | IrOp::FloatNeg => {
             simplify_double_negate(func, bid, insn_idx, insn)
         }
         IrOp::FloatAdd => simplify_commutative_float_zero(func, bid, insn_idx, insn)
-            .or_else(|| simplify_fadd_negation(func, bid, insn_idx, insn)),
+            .or_else(|| simplify_fadd_negation(func, defs, bid, insn_idx, insn)),
         IrOp::FloatSub => simplify_rhs_float_zero(func, bid, insn_idx, insn)
-            .or_else(|| simplify_fsub_negation(func, bid, insn_idx, insn)),
+            .or_else(|| simplify_fsub_negation(func, defs, bid, insn_idx, insn)),
         IrOp::FloatMult => simplify_commutative_float_one(func, bid, insn_idx, insn),
         IrOp::FloatDiv => simplify_rhs_float_one(func, bid, insn_idx, insn),
-        IrOp::IntEqual => simplify_cmp_xor_zero(func, bid, insn_idx, insn)
+        IrOp::IntEqual => simplify_cmp_xor_zero(func, defs, bid, insn_idx, insn)
             .or_else(|| simplify_same_ssa_to_const(func, bid, insn_idx, insn, 1)),
-        IrOp::IntNotequal => simplify_cmp_xor_zero(func, bid, insn_idx, insn)
+        IrOp::IntNotequal => simplify_cmp_xor_zero(func, defs, bid, insn_idx, insn)
             .or_else(|| simplify_same_ssa_to_const(func, bid, insn_idx, insn, 0)),
         IrOp::Multiequal => simplify_multiequal_all_same(func, bid, insn_idx, insn),
-        IrOp::IntSext => simplify_double_sext(func, bid, insn_idx, insn)
+        IrOp::IntSext => simplify_double_sext(func, defs, bid, insn_idx, insn)
             .or_else(|| simplify_sext_noop(func, bid, insn_idx, insn)),
-        IrOp::IntZext => simplify_double_zext(func, bid, insn_idx, insn),
+        IrOp::IntZext => simplify_double_zext(func, defs, bid, insn_idx, insn),
         _ => None,
     }
 }
@@ -690,7 +690,7 @@ fn simplify_load_addr(
         return None;
     }
     let (space, _addr) = (insn.inputs[0], insn.inputs[1]);
-    let (new_addr, new_addr_ssa) = unwrap_zero_offset_addr(func, bid, insn_idx, 1)?;
+    let (new_addr, new_addr_ssa) = unwrap_zero_offset_addr(func, defs, bid, insn_idx, 1)?;
     Some(Replacement::Reop {
         op: IrOp::Load,
         inputs: smallvec::smallvec![space, new_addr],
@@ -711,7 +711,7 @@ fn simplify_store_addr(
         return None;
     }
     let (space, _addr, value) = (insn.inputs[0], insn.inputs[1], insn.inputs[2]);
-    let (new_addr, new_addr_ssa) = unwrap_zero_offset_addr(func, bid, insn_idx, 1)?;
+    let (new_addr, new_addr_ssa) = unwrap_zero_offset_addr(func, defs, bid, insn_idx, 1)?;
     let value_ssa = input_ssa(func, bid, insn_idx, 2);
     Some(Replacement::Reop {
         op: IrOp::Store,

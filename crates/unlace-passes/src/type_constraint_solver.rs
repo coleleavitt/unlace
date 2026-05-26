@@ -87,10 +87,128 @@ pub enum TypeCapability {
     Callable,
 }
 
+/// Compact capability set replacing `BTreeSet<TypeCapability>`.
+///
+/// The 6 non-parameterized variants are tracked as flag bits in a `u8`:
+///   bit 0 = Any, 1 = Bool, 2 = Float32, 3 = Float64,
+///   4 = Pointer, 5 = Address, 6 = Callable
+///
+/// `Integer { width, signed }` variants are stored in a small inline
+/// vec (most vars have 0–2). `insert` returns `true` when the set
+/// changed; `contains` is O(1) for flags, O(n) for integers (n ≤ 4).
+///
+/// Inspired by rustc's `DenseBitSet<T>` (`compiler/rustc_index/src/
+/// bit_set.rs`) but adapted for the parameterized Integer variant
+/// which can't be encoded as a single bit position.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct CapSet {
+    flags: u8,
+    /// Integer capabilities — deduplicated by (width, signed).
+    integers: smallvec::SmallVec<[(u8, Option<bool>); 2]>,
+}
+
+const CAP_ANY: u8 = 1 << 0;
+const CAP_BOOL: u8 = 1 << 1;
+const CAP_FLOAT32: u8 = 1 << 2;
+const CAP_FLOAT64: u8 = 1 << 3;
+const CAP_POINTER: u8 = 1 << 4;
+const CAP_ADDRESS: u8 = 1 << 5;
+const CAP_CALLABLE: u8 = 1 << 6;
+
+impl CapSet {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn flag_bit(cap: &TypeCapability) -> Option<u8> {
+        match cap {
+            TypeCapability::Any => Some(CAP_ANY),
+            TypeCapability::Bool => Some(CAP_BOOL),
+            TypeCapability::Float32 => Some(CAP_FLOAT32),
+            TypeCapability::Float64 => Some(CAP_FLOAT64),
+            TypeCapability::Pointer => Some(CAP_POINTER),
+            TypeCapability::Address => Some(CAP_ADDRESS),
+            TypeCapability::Callable => Some(CAP_CALLABLE),
+            TypeCapability::Integer { .. } => None,
+        }
+    }
+
+    /// Insert a capability. Returns `true` if the set changed.
+    pub fn insert(&mut self, cap: TypeCapability) -> bool {
+        if let Some(bit) = Self::flag_bit(&cap) {
+            let old = self.flags;
+            self.flags |= bit;
+            self.flags != old
+        } else if let TypeCapability::Integer { width, signed } = cap {
+            let key = (width, signed);
+            if self.integers.contains(&key) {
+                false
+            } else {
+                self.integers.push(key);
+                true
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Check membership. O(1) for flags, O(n) for integers (n ≤ 4 typical).
+    pub fn contains(&self, cap: &TypeCapability) -> bool {
+        if let Some(bit) = Self::flag_bit(cap) {
+            self.flags & bit != 0
+        } else if let TypeCapability::Integer { width, signed } = cap {
+            self.integers.contains(&(*width, *signed))
+        } else {
+            false
+        }
+    }
+
+    /// Iterate all contained capabilities in a deterministic order
+    /// (flags first in bit order, then integers in insertion order).
+    pub fn iter(&self) -> impl Iterator<Item = TypeCapability> + '_ {
+        static FLAG_CAPS: [(u8, TypeCapability); 7] = [
+            (CAP_ANY, TypeCapability::Any),
+            (CAP_BOOL, TypeCapability::Bool),
+            (CAP_FLOAT32, TypeCapability::Float32),
+            (CAP_FLOAT64, TypeCapability::Float64),
+            (CAP_POINTER, TypeCapability::Pointer),
+            (CAP_ADDRESS, TypeCapability::Address),
+            (CAP_CALLABLE, TypeCapability::Callable),
+        ];
+        let flags = self.flags;
+        FLAG_CAPS
+            .iter()
+            .filter(move |(bit, _)| flags & bit != 0)
+            .map(|(_, cap)| *cap)
+            .chain(
+                self.integers
+                    .iter()
+                    .map(|&(w, s)| TypeCapability::Integer {
+                        width: w,
+                        signed: s,
+                    }),
+            )
+    }
+
+    /// Union another set into self. Returns `true` if self changed.
+    pub fn union(&mut self, other: &CapSet) -> bool {
+        let old_flags = self.flags;
+        self.flags |= other.flags;
+        let mut changed = self.flags != old_flags;
+        for &key in &other.integers {
+            if !self.integers.contains(&key) {
+                self.integers.push(key);
+                changed = true;
+            }
+        }
+        changed
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct PolyTypeBounds {
-    pub lower: BTreeSet<TypeCapability>,
-    pub upper: BTreeSet<TypeCapability>,
+    pub lower: CapSet,
+    pub upper: CapSet,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -659,7 +777,7 @@ fn propagate_lower_to_upper(
 ) -> bool {
     let caps: Vec<_> = bounds
         .get(&lower)
-        .map(|b| b.lower.iter().copied().collect())
+        .map(|b| b.lower.iter().collect())
         .unwrap_or_default();
     // `fold` (not `any`) is intentional: `insert_lower` mutates `bounds` for
     // every `cap`, and we need to visit them all. `any` would short-circuit on
@@ -677,13 +795,7 @@ fn propagate_upper_to_lower(
 ) -> bool {
     let caps: Vec<_> = bounds
         .get(&upper)
-        .map(|b| {
-            b.upper
-                .iter()
-                .copied()
-                .chain(b.lower.iter().copied())
-                .collect()
-        })
+        .map(|b| b.upper.iter().chain(b.lower.iter()).collect())
         .unwrap_or_default();
     // See note above: `fold` is intentional to avoid short-circuiting the
     // side-effectful `insert_upper` call.
@@ -710,8 +822,8 @@ fn materialize_primitive(sv: SsaVarnode, bounds: &PolyTypeBounds) -> Option<Prim
     }
 
     let mut best: Option<(u8, Option<bool>)> = None;
-    for cap in &bounds.lower {
-        if let TypeCapability::Integer { width, signed } = *cap {
+    for cap in bounds.lower.iter() {
+        if let TypeCapability::Integer { width, signed } = cap {
             let width = if width == 0 { sv.base.size } else { width };
             best = Some(match (best, signed) {
                 (None, s) => (width, s),

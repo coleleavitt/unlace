@@ -7,8 +7,8 @@ is that "parity" is not a single number. unlace now tracks three axes:
    score. This is a regression watchdog only.
 2. **Semantic correctness** - source-known decompiled C recompiles and behaves
    like the original. Current coverage is `xtask semantic-report`, which passes
-   9 executable source-known cases, tracks 8 host/source-known semantic gaps as
-   XFAIL, and lists 3 non-host unsupported cases with reasons.
+   15 executable source-known cases, tracks 2 host/source-known semantic gaps
+   as XFAIL, and lists 3 non-host unsupported cases with reasons.
 3. **Type/variable recovery accuracy** - recovered locals, types, structs, and
    arrays match source/DWARF ground truth. `xtask type-recovery-report` now
    runs an exact textual DWARF/source scorer for C debug fixtures.
@@ -30,18 +30,25 @@ RUSTC_WRAPPER= cargo run -p xtask -- validate-corpus-toml
 
 Current known state:
 
-- Stylistic fixture parity: **91.1%** on the current 15 golden fixtures.
+- Stylistic fixture parity: **86.8%** emitted by `scripts/score_parity.sh` on
+  the current golden stream. The exact-line golden test still exits nonzero
+  because the checked-in goldens are stale.
 - Semantic correctness: `xtask semantic-report` passes
   `hello_world.elf:main`, `branches.elf:main`, `loops.elf:main`,
   `calls.elf:main`, `empty.elf:main`, `debug_hello.elf:main`,
   `debug_structs.elf:main`, `x87_math.elf:main`, and
-  `cpp_vtable.elf:main`; 8 host/source-known cases are XFAIL and 3 non-host
-  cases are explicitly unsupported with reasons.
+  `cpp_vtable.elf:main`, `debug_calls.elf:main`, `type_stack_o2.elf:main`,
+  `switch_table.elf:dispatch`, `cpp_exceptions.elf:main`,
+  `cpp_rtti.elf:main`, and `debug_templates.elf:main`; `medium.elf:main` and
+  `stripped.elf:main` remain XFAIL because optimized main still loses
+  loop-carried lvar/phi plus x86 subregister state and the recompiled subset
+  times out. Three
+  non-host cases are explicitly unsupported with reasons.
 - Fidelity taxonomy counters: golden metrics currently total
   `cf=1 expr=45 type=8 decl=0 names=989 memstack=16 unknown=0 total=1059`.
 - Fixture optimization levels: recorded in `tests/corpus.toml`.
 - Type/variable recovery accuracy:
-  `fixtures=4 functions=17 recovered=74 expected=101 accuracy=73.3%`
+  `fixtures=4 functions=17 recovered=73 expected=101 accuracy=72.3%`
   with `source_known=20 dwarf_candidates=5`.
 
 ## Tier 0 - Claim Cleanup And Honest Reporting
@@ -62,7 +69,8 @@ quality, and every gate reports what it actually measures.
 
 ## Tier 1 - Semantic Correctness
 
-Status: first-class report landed; XFAIL breadth tracked.
+Status: first-class report landed; only the optimized `medium`/`stripped`
+host cases remain XFAIL.
 
 6. Promote the current compileable-subset tests into a named semantic gate in
    CI. Landed locally as `cargo run -p xtask -- semantic-report`.

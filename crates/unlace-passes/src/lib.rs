@@ -1,6 +1,7 @@
 //! Analysis and optimization passes over the IR (CFG, SSA, propagation, etc.).
 
 pub mod aarch64_pac_bti;
+pub mod abi_clobber;
 pub mod abi_layout;
 pub mod algebraic_simplify;
 pub mod alias_analysis;
@@ -22,6 +23,7 @@ pub mod builtin_recognize;
 pub mod byref_detect;
 pub mod call_args;
 pub mod call_boundary_copyprop;
+pub mod call_snapshot;
 pub mod caller_param_propagate;
 pub mod calling_conv_coverage;
 pub mod calling_conv_finalize;
@@ -101,6 +103,7 @@ pub mod live_concrete;
 mod llvm_fixture_tests;
 pub mod loop_canonical;
 pub mod lvar_collect;
+pub mod lvar_lanes;
 pub mod memory_ssa_builder;
 pub mod memory_ssa_dse;
 pub mod memory_ssa_updater;
@@ -177,6 +180,9 @@ pub mod variable_merge;
 pub mod whole_prog_cc;
 pub mod whole_prog_type_unify;
 
+pub use abi_clobber::{
+    CallClobber, CallClobberModel, UpperLaneEffect, argument_registers, classify_call_clobber,
+};
 pub use algebraic_simplify::AlgebraicSimplifyPass;
 pub use alias_analysis::{AliasAnalysis, AliasRelation, ModRef};
 pub use alias_categorize::AliasCategorizePass;
@@ -195,6 +201,7 @@ pub use builtin_recognize::{
 pub use byref_detect::detect_byref;
 pub use call_args::{recover_direct_call_args, recover_direct_call_args_with_param_counts};
 pub use call_boundary_copyprop::CallBoundaryCopyPropPass;
+pub use call_snapshot::{CallRegisterSnapshot, CallSnapshot, UseSite, collect_call_snapshots};
 pub use caller_param_propagate::{
     apply_registry_to_callees, propagate_caller_params, seed_registry_from_funcs,
 };
@@ -276,6 +283,9 @@ pub use libc_idioms::{LibcKind, annotate_libc_calls, recognize_libc};
 pub use licm::{LicmPass, NaturalLoop, find_natural_loops};
 pub use loop_canonical::{LoopCanonicalDiagnostic, diagnose_loop_canonical_form};
 pub use lvar_collect::LvarCollectPass;
+pub use lvar_lanes::{
+    LaneDecision, LaneSite, RegisterLane, RegisterLaneGroup, analyze_register_lanes,
+};
 pub use memory_ssa_builder::{AccessSite, MemorySsaMap, build_memory_ssa, clobber_for_load};
 pub use memory_ssa_dse::MemorySsaDsePass;
 pub use memory_ssa_updater::MemorySsaUpdater;

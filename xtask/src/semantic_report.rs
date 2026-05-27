@@ -100,12 +100,16 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
     SemanticCase {
         fixture: "medium",
         function: "main",
-        expected_failure: Some("large optimized fixture still emits stack/SIMD artifacts"),
+        expected_failure: Some(
+            "optimized main still loses loop-carried lvar/phi and x86 subregister state; recompiled subset times out",
+        ),
     },
     SemanticCase {
         fixture: "stripped",
         function: "main",
-        expected_failure: Some("stripped symbol recovery does not identify main yet"),
+        expected_failure: Some(
+            "same optimized main lvar/phi/subregister recovery gap under stripped symbols",
+        ),
     },
     SemanticCase {
         fixture: "switch_table",
@@ -125,7 +129,7 @@ const SEMANTIC_CASES: &[SemanticCase] = &[
     SemanticCase {
         fixture: "debug_templates",
         function: "main",
-        expected_failure: Some("C++ template aggregate/call recovery is not standalone C yet"),
+        expected_failure: None,
     },
 ];
 
@@ -537,7 +541,9 @@ fn c_subset_prelude(binary: &Path, helper_decls: &str) -> String {
          #define _mm_add_epi32(a, b) ((__int128)0)\n\
          #define _mm_mul_epu32(a, b) ((__int128)0)\n\
          #define _mm_shuffle_epi32(a, b) ((__int128)0)\n\
-         void __stack_chk_fail(void);\n\n",
+         void __stack_chk_fail(void);\n\
+         unsigned long long __readfsqword(unsigned int offset) { (void)offset; return 0; }\n\
+         unsigned int __readfsdword(unsigned int offset) { (void)offset; return 0; }\n\n",
     );
     if !helper_decls.is_empty() {
         out.push_str(helper_decls);
@@ -624,9 +630,6 @@ int call_add(int x) { return x + 3; }
 long long make_array(long long *out) {
     if (out) {
         out[0] = 9;
-        out[1] = 0;
-        out[2] = 0;
-        out[3] = 0;
     }
     return 9;
 }

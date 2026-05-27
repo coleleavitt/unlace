@@ -30,16 +30,15 @@ use unlace_ir::{BlockId, SpaceId};
 
 use crate::pass::{Pass, PassError, PassPhase};
 
-/// Minimum register-space offset for x86 RFLAGS bits (CF starts at 256).
-/// Mirrors [`crate::dead_flag_elim`] — any `Register`-space varnode at or
-/// above this offset is a flag bit and must not surface as a user-visible
-/// source variable in the lvar dump.
+/// x86 RFLAGS bits occupy CF..OF at offsets 256..=261.
+/// Mirrors [`crate::dead_flag_elim`].
 const FLAG_OFFSET_MIN: u64 = 256;
+const FLAG_OFFSET_END: u64 = 262;
 
 /// x86-64 RIP register offset in the lifter's register file. Matches
 /// [`unlace-lift-x86/src/register_file.rs`]; the instruction pointer is
 /// never a user-visible C declaration.
-const RIP_OFFSET: u64 = 128;
+const RIP_OFFSET: u64 = 0x288;
 
 /// Suppression reason recorded against a candidate `Temp` SSA varnode
 /// that the lvar collector dropped instead of emitting as an [`Lvar`].
@@ -84,11 +83,13 @@ impl SuppressionReason {
 /// for "why didn't variable X appear in the output?".
 pub fn classify_temp_suppression(sv: SsaVarnode, use_count: usize) -> Option<SuppressionReason> {
     match sv.base.space {
-        SpaceId::Register if sv.base.offset >= FLAG_OFFSET_MIN => {
-            Some(SuppressionReason::FlagRegister)
-        }
         SpaceId::Register if sv.base.offset == RIP_OFFSET => {
             Some(SuppressionReason::InstructionPointer)
+        }
+        SpaceId::Register
+            if sv.base.offset >= FLAG_OFFSET_MIN && sv.base.offset < FLAG_OFFSET_END =>
+        {
+            Some(SuppressionReason::FlagRegister)
         }
         SpaceId::Unique if use_count <= 1 => Some(SuppressionReason::OneShotTemp),
         _ => None,
@@ -804,7 +805,7 @@ mod tests {
         let rip = SsaVarnode {
             base: Varnode {
                 space: SpaceId::Register,
-                offset: 128, // RIP in the x86-64 register file.
+                offset: RIP_OFFSET, // RIP in the x86-64 register file.
                 size: 8,
             },
             version: 0,
@@ -898,7 +899,7 @@ mod tests {
         let rip = SsaVarnode {
             base: Varnode {
                 space: SpaceId::Register,
-                offset: 128,
+                offset: RIP_OFFSET,
                 size: 8,
             },
             version: 0,

@@ -726,3 +726,231 @@ independent after SSA — but this is rare in x86-64 code).
 - LLVM RegisterCoalescer: llvm.org/doxygen/RegisterCoalescer_8cpp_source.html
 - Hex-Rays SDK: hexrays.hpp lvar_ref_t (MMAT_LVARS model)
 - Ghidra p-code: SUBPIECE/INT_ZEXT/PIECE ops for sub-register modeling
+
+## Part 4: Deep-read addendum on register aliasing/type papers (2026-05-27)
+
+This is the reconciled read of the local/public papers and code references used
+for Part 3. The key correction is that these sources are not all arguing for the
+same implementation layer:
+
+- **Van Emmerik / Ghidra / iced** are directly relevant to lifter semantics.
+- **LLVM / GCC** are compiler back-end models for live ranges, lanes, modes, and
+  register classes.
+- **Puzzle Solving / Colibri** are allocation/coalescing models; useful for the
+  later lvar allocator, not the first fix for decompiler SSA.
+- **Soni et al.** is the right evaluation harness for type/variable recovery, but
+  it explicitly excludes register-allocated variables, so it would not by itself
+  catch the `eax`/`rax`/`al` bug fixed here.
+
+### Soni et al. SURE'25: what the benchmark actually measures
+
+Soni, Dutcher, Bao, and Wang evaluate five decompilers against DWARF ground truth
+on Nixpkgs C binaries compiled at `-O0` and `-O2`. The metrics are:
+
+- **Coverage:** recovered ground-truth variables, regardless of type.
+- **Accuracy:** recovered ground-truth variables with correct type.
+- **Precision:** decompiler-reported variables that are real and correctly typed.
+- **False positive rate:** reported variables not present in ground truth.
+
+Important limitation for our register-alias work: their ground truth identifies a
+variable by stack-frame offset and explicitly excludes register-allocated variables
+and static variables. That makes the paper excellent for stack/lvar/type scoring,
+but incomplete for partial-register SSA bugs. We need both:
+
+1. Soni-style DWARF/type/lvar scoring for stack locals, structs, arrays, pointers.
+2. ISA-specific semantic fixtures for register aliasing, flags, SIMD lanes, calls,
+   and ABI clobbers.
+
+The hard numbers still matter for priorities:
+
+- Hex-Rays leads the evaluated tools, but overall variable type accuracy is only
+  **35.69% at `-O0`** and **49.74% at `-O2`**.
+- Hex-Rays precision drops from **54.92% at `-O0`** to **21.85% at `-O2`**.
+- Pointer target resolution remains weak: Hex-Rays resolves **19.24%** at `-O0`
+  and **40.59%** at `-O2`.
+- Struct identification remains weak even for Hex-Rays: **20.25%** at `-O0`,
+  **17.08%** at `-O2`.
+- Array base-type recognition is often possible, but array length is commonly
+  wrong.
+
+Implication for unlace: stylistic IDA parity is not enough. The real gate should
+track `coverage / accuracy / precision / FPR` separately, plus type-specific
+rows for primitive, pointer, array, struct, and typedef cases.
+
+### Van Emmerik 2007: decompiler-side SSA, not compiler allocation
+
+Van Emmerik's Chapter 3.7 is the direct ancestor of the Part 3 fix. The thesis
+rejects two tempting models:
+
+- Treating `eax`, `ax`, `al`, and `ah` as independent IR variables is wrong,
+  because it loses architectural aliasing.
+- Treating everything as one physical register is also wrong, because `al` and
+  `ah` can carry genuinely independent 8-bit source variables.
+
+The proposed Boomerang solution is to keep overlapped registers as separate
+locations but emit explicit side-effect assignments at decode time. For example:
+
+- `eax := x` implies `ax := trunc(eax)`, `al := trunc(eax)`, and `ah := eax[8:15]`.
+- `ax := x` implies `eax := (eax & 0xFFFF0000) | ax`, plus `al`/`ah` side effects.
+- `al := x` and `ah := x` imply masked updates of `eax` and `ax`.
+
+Dead code elimination then removes almost all auxiliary side effects. The complex
+ones that survive are evidence that the source really used sub-field operations.
+
+Our implemented approach is the simpler variant already described in Part 3:
+**pre-SSA canonicalization to the full GPR parent**. That is not exactly
+Boomerang's representation, but it applies the same core lesson at an earlier
+boundary:
+
+- `eax` writes become `rax := zext32(x)`.
+- `ax`/`al`/`ah` writes become masked updates of `rax`.
+- sub-register reads become `SUBPIECE(rax, offset)`.
+- SSA versions `rax`, not independent `eax`/`ax`/`al` names.
+
+This is the right first implementation for x86-64 because it prevents the
+incorrect split before SSA. The tradeoff is delayed recovery of the rare
+independent `al`/`ah` local-variable case; that belongs in the later lvar
+allocator as lane splitting, not in the raw lifter.
+
+Van Emmerik's broader message is still not done:
+
+- **Collectors:** snapshot reaching definitions and live variables at calls and
+  returns during SSA renaming. These support call bypassing, caller/callee
+  context translation, argument discovery, result discovery, and childless calls.
+- **Preservation analysis:** decide which registers/memory locations a call
+  preserves, including recursive and indirect calls.
+- **Sparse type analysis:** store type variables on SSA definitions/constants and
+  solve over a lattice; addition/subtraction need special pointer-or-int logic.
+- **Indirect jump/call restart:** delay switch/vcall analysis until propagation is
+  strong enough, then restart affected function analysis when new CFG edges are
+  discovered.
+- **Value + alias analysis:** required for pointer targets, aggregate offsets,
+  escaped locals, colocated variables, VFT resolution, and function pointers.
+
+### iced: the local decoder already knows the missing facts
+
+`iced-x86` has exactly the metadata the lifter should lean on:
+
+- `Register::info()` gives `RegisterInfo`.
+- `RegisterInfo::{base, number, full_register, full_register32, size}` describe
+  the register family and width.
+- `InstructionInfoFactory::info()` exposes used registers and operand access
+  modes through `UsedRegister` and `OpAccess`.
+- `InstructionInfoFactory::add_register()` already models the critical 64-bit
+  rule: in 64-bit mode, 32-bit GPR writes are promoted to the 64-bit full
+  register; read-write operations are represented as a read of the original
+  register plus a write of the promoted register.
+
+What is now wired in unlace:
+
+- `X86RegView` wraps iced metadata for GPRs.
+- `LiftCtx::read_register()` emits `SUBPIECE(parent, byte_offset)` for GPR
+  sub-register reads.
+- `LiftCtx::write_register()` emits:
+  - full-width copy for `rax`;
+  - `INT_ZEXT` into `rax` for `eax`;
+  - mask/shift/or update into `rax` for `ax`, `al`, `ah`.
+- MOV/CMOV/LEA/XCHG and key special register writes are routed through this
+  central helper.
+- `RIP` was moved out of the APX `R16` slot, so `R16` and `RIP` no longer alias.
+
+Remaining iced-derived gaps:
+
+- Vector zeroing semantics are not solved by the GPR-only `X86RegView`.
+  VEX/EVEX instructions can zero upper vector lanes; iced's `ZERO_EXT_VEC_REGS`
+  path models this. unlace should add a vector-lane version of the same
+  canonicalization for XMM/YMM/ZMM.
+- Future iced APX support should extend `X86RegView` from 16 GPRs to 32 GPRs.
+  unlace already reserves `R16..R31`, but the current iced metadata table does
+  not expose those registers in this checkout.
+- Flag/status sub-fields should stay as explicit bit registers unless we decide
+  to model a packed RFLAGS parent; current separate flag vars are acceptable for
+  decompiler output.
+
+### Ghidra p-code: same shape, different names
+
+Ghidra-style p-code represents sub-register effects with explicit operators:
+
+- `SUBPIECE(parent, offset)` for extracting byte ranges.
+- `INT_ZEXT` for 32-bit-to-64-bit GPR write semantics.
+- `PIECE`/composition for rebuilding wider values when needed.
+
+unlace now uses equivalent semantics for GPRs with existing IR ops:
+`Subpiece`, `IntZext`, `IntAnd`, `IntLeft`, and `IntOr`. A separate `Compose`
+operator is still optional; the current lowered mask/or form is explicit and
+optimizable.
+
+### LLVM/GCC: useful for later, but not the first decompiler fix
+
+LLVM's `RegisterCoalescer` is the right reference for later lvar/lane allocation:
+
+- `LiveInterval` subranges track lane-specific liveness.
+- `LaneBitmask` records which subregister lanes are affected.
+- `mergeSubRangeInto()` and `joinSubRegRanges()` split and join subregister live
+  ranges when coalescing copies.
+- `setUndefOnPrunedSubRegUses()` handles pruned lanes after dead subrange
+  segments are removed.
+
+That model belongs after lifter canonicalization, when unlace decides whether two
+SSA values can become one user-visible lvar or whether a wide register should be
+split into lane variables.
+
+GCC's model says the same thing in RTL/back-end terms:
+
+- `hard_regno_nregs(regno, mode)` tells how many hard registers a mode occupies.
+- `subreg_get_info()` computes whether a subreg view is representable and where
+  it lands.
+- `function_abi` distinguishes full register clobbers from partial clobbers, so a
+  call can destroy upper bits while preserving lower bits.
+
+These are valuable references for an eventual ABI/liveness layer, not a reason to
+put exact-width `eax` SSA names back into the lifter.
+
+### Puzzle Solving and Colibri: lvar coalescing, not lifter semantics
+
+Pereira/Palsberg's Puzzle Solving paper models the register file as a puzzle board
+and variables as pieces. Register aliasing and pre-coloring fit naturally; for x86
+the register file is a hybrid of type-0 and type-1 puzzles. This is a compiler
+allocation algorithm over live ranges.
+
+Colibri focuses on coalescing for aliased registers. Its useful takeaways:
+
+- x86 register aliasing is hierarchical: `EAX -> AX -> AH/AL`, with other
+  families having fewer split levels.
+- Aliasing-aware coalescing can remove more copies than an alias-oblivious
+  coalescer.
+- Global coalescing is hard; local/specialized cases are tractable.
+
+For unlace, these papers are the design source for a later **lvar allocator**:
+
+1. Build an interference graph over optimized SSA values.
+2. Add alias/lane metadata from their original physical register family.
+3. Coalesce non-interfering values into one C local when it improves output.
+4. Split lanes (`al` vs `ah`, XMM lanes, bitfields) only when the surviving uses
+   prove they are independent.
+
+They are not the right first step for the original bug, because post-SSA
+coalescing cannot reliably recover semantics already lost by exact-width SSA.
+
+### Updated implementation status
+
+Done for the GPR aliasing bug:
+
+- GPR sub-register reads/writes are canonicalized before SSA.
+- 32-bit GPR writes zero-extend to the 64-bit parent.
+- 8-/16-bit GPR writes update the full parent with masks.
+- direct MOV/CMOV/LEA/XCHG-style writes route through the central helper.
+- `R16`/`RIP` register-space collision is fixed.
+- regression tests cover `eax`, `ax`, `al`, `ah`, call-return use, and APX slot
+  separation.
+
+Still real follow-up work:
+
+1. Add vector upper-lane zeroing and sub-lane tests using iced `InstructionInfo`.
+2. Add collector-like call snapshots if current call-argument recovery cannot
+   express Van Emmerik's def/use collector cases.
+3. Add partial-call-clobber modeling: full clobber vs partial clobber vs preserved.
+4. Add lvar lane splitting/coalescing after SSA optimization, borrowing LLVM lane
+   masks / Colibri hierarchy ideas.
+5. Extend the Soni-style evaluator with a separate register-alias semantic suite,
+   because DWARF stack-offset scoring will not catch register-only alias bugs.

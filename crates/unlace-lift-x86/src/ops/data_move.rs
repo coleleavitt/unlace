@@ -10,7 +10,6 @@ use crate::register_file::*;
 pub const CMOV_CALLOTHER_TAG: u64 = 0x350;
 
 pub fn lift_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
-    let is_mem_dst = insn.op0_kind() == OpKind::Memory;
     let dst = ctx.operand_write(insn, 0);
     let src = ctx.operand_read(insn, 1);
     let (dst, src) = match (dst, src) {
@@ -21,38 +20,41 @@ pub fn lift_mov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
         }
     };
 
-    if is_mem_dst {
-        ctx.emit_store(dst, src);
-    } else {
-        ctx.emit(IrInsn::with_output(
-            IrOp::Copy,
-            dst,
-            smallvec![src],
-            ctx.addr,
-        ));
-    }
+    ctx.write_operand_insn(insn, 0, dst, src);
 }
 
 pub fn lift_cmov(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     let dst = ctx.operand_write(insn, 0);
+    let old_dst = ctx.operand_read(insn, 0);
     let src = ctx.operand_read(insn, 1);
     let cond = setcc_condition(ctx, insn.mnemonic());
-    let (dst, src, cond) = match (dst, src, cond) {
-        (Some(d), Some(s), Some(c)) => (d, s, c),
+    let (dst, old_dst, src, cond) = match (dst, old_dst, src, cond) {
+        (Some(d), Some(o), Some(s), Some(c)) => (d, o, s, c),
         _ => {
             ctx.emit_unimplemented();
             return;
         }
     };
 
-    // SELECT(cond, true_val=src, false_val=dst) → dst
-    // Semantics: dst = cond ? src : dst
+    let needs_fixup =
+        insn.op0_kind() == OpKind::Register && ctx.register_write_needs_fixup(insn.op0_register());
+    let selected = if needs_fixup {
+        Varnode::unique(ctx.alloc_unique(), dst.size)
+    } else {
+        dst
+    };
+
+    // SELECT(cond, true_val=src, false_val=old_dst) -> selected.
+    // Semantics: dst = cond ? src : old_dst.
     ctx.emit(IrInsn::with_output(
         IrOp::Select,
-        dst,
-        smallvec![cond, src, dst],
+        selected,
+        smallvec![cond, src, old_dst],
         ctx.addr,
     ));
+    if needs_fixup {
+        ctx.write_operand_insn(insn, 0, dst, selected);
+    }
 }
 
 pub fn lift_lea(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
@@ -65,12 +67,7 @@ pub fn lift_lea(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
             return;
         }
     };
-    ctx.emit(IrInsn::with_output(
-        IrOp::Copy,
-        dst,
-        smallvec![ea],
-        ctx.addr,
-    ));
+    ctx.write_operand_insn(insn, 0, dst, ea);
 }
 
 pub fn lift_nop(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
@@ -84,8 +81,6 @@ pub fn lift_nop(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
 }
 
 pub fn lift_xchg(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
-    let is_mem_0 = insn.op0_kind() == OpKind::Memory;
-    let is_mem_1 = insn.op_count() > 1 && insn.op_kind(1) == OpKind::Memory;
     let a = ctx.operand_read(insn, 0);
     let b = ctx.operand_read(insn, 1);
     let dst_a = ctx.operand_write(insn, 0);
@@ -94,21 +89,8 @@ pub fn lift_xchg(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
         (Some(a), Some(b), Some(da), Some(db)) => {
             let tmp = Varnode::unique(ctx.alloc_unique(), a.size);
             ctx.emit(IrInsn::with_output(IrOp::Copy, tmp, smallvec![a], ctx.addr));
-            if is_mem_0 {
-                ctx.emit_store(da, b);
-            } else {
-                ctx.emit(IrInsn::with_output(IrOp::Copy, da, smallvec![b], ctx.addr));
-            }
-            if is_mem_1 {
-                ctx.emit_store(db, tmp);
-            } else {
-                ctx.emit(IrInsn::with_output(
-                    IrOp::Copy,
-                    db,
-                    smallvec![tmp],
-                    ctx.addr,
-                ));
-            }
+            ctx.write_operand_insn(insn, 0, da, b);
+            ctx.write_operand_insn(insn, 1, db, tmp);
         }
         _ => ctx.emit_unimplemented(),
     }

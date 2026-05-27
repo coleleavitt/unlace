@@ -6,8 +6,8 @@
 //! Jcc).  This pass removes flag-producing instructions whose SSA output has
 //! zero uses, shrinking the IR before more expensive analyses run.
 //!
-//! A flag varnode is any `Register`-space varnode with offset >= 256
-//! (the x86-64 RFLAGS region defined in `unlace-lift-x86`).
+//! A flag varnode is any `Register`-space varnode in the x86-64 RFLAGS byte
+//! range defined in `unlace-lift-x86` (CF..OF at 256..=261).
 //!
 //! The pass is intentionally narrow: it only removes instructions that
 //! produce a flag output.  General dead code is handled by [`DeadCodeElimPass`].
@@ -21,10 +21,13 @@ use crate::pass::{Pass, PassError, compact_var_map_for_moved_insn};
 
 /// Minimum register-space offset for x86 flag bits (CF starts at 256).
 const FLAG_OFFSET_MIN: u64 = 256;
+const FLAG_OFFSET_END: u64 = 262;
 
 /// Returns `true` if `sv` refers to an x86 RFLAGS bit.
 fn is_flag_varnode(sv: &SsaVarnode) -> bool {
-    sv.base.space == SpaceId::Register && sv.base.offset >= FLAG_OFFSET_MIN
+    sv.base.space == SpaceId::Register
+        && sv.base.offset >= FLAG_OFFSET_MIN
+        && sv.base.offset < FLAG_OFFSET_END
 }
 
 /// Dead flag elimination: remove instructions whose output is an unused
@@ -75,7 +78,9 @@ impl Pass for DeadFlagElimPass {
 
             for (insn_idx, insn) in block.insns.iter().enumerate() {
                 let produces_flag_output = insn.output.is_some_and(|vn| {
-                    vn.space == SpaceId::Register && vn.offset >= FLAG_OFFSET_MIN
+                    vn.space == SpaceId::Register
+                        && vn.offset >= FLAG_OFFSET_MIN
+                        && vn.offset < FLAG_OFFSET_END
                 });
                 if !produces_flag_output {
                     keep.push(insn_idx);

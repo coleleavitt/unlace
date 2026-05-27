@@ -18,13 +18,13 @@ execution plan is `docs/parity-quality-execution-plan-2026-05.md`.
 - `xtask semantic-report` captures original-binary stdout/stderr/exit status,
   recompiles the decompiled C subset, compares behavior, synthesizes rodata
   format strings for the C subset, and reports PASS/XFAIL/unsupported rows.
-  Current result: 9 passed, 8 XFAIL, 0 unexpected failed, 3 unsupported.
+  Current result: 15 passed, 2 XFAIL, 0 unexpected failed, 3 unsupported.
 - The golden fixture metrics summary now emits fidelity taxonomy counters:
   control-flow, expressions, types, declarations, names, memory/stack, and
   unknown-helper artifacts.
 - `xtask type-recovery-report` scores recovered C facts against DWARF/source
   ground truth for C debug fixtures:
-  `fixtures=4 functions=17 recovered=74 expected=101 accuracy=73.3%`
+  `fixtures=4 functions=17 recovered=73 expected=101 accuracy=72.3%`
   with `source_known=20 dwarf_candidates=5`.
 - Added `type_stack_o2` (`-O2 -g -fno-omit-frame-pointer`) so type/stack
   recovery is not measured only on easy debug builds.
@@ -35,8 +35,10 @@ execution plan is `docs/parity-quality-execution-plan-2026-05.md`.
 
 ## Next Work
 
-1. Convert semantic XFAIL rows into PASS rows, starting with `debug_calls`,
-   `type_stack_o2`, `switch_table`, and the raw-address C++ RTTI cases.
+1. Convert the remaining semantic XFAIL rows into PASS rows. The only current
+   host/source-known XFAILs are `medium` and `stripped`; both time out because
+   optimized `main` still loses loop-carried lvar/phi and x86 subregister
+   state.
 2. Keep non-host semantic rows unsupported until an emulator or architecture
    runner is part of the gate.
 3. Add per-fixture budgets for the fidelity counters so artifact categories can
@@ -69,3 +71,5 @@ RUSTC_WRAPPER= cargo test -p unlace-test-harness --test golden_fixtures golden_f
   and precision.
 - Any axis that remains unmeasured is printed as unmeasured, not implied by the
   style score.
+- Exact-line golden fixtures are still stale and should not be treated as a
+  semantic-quality claim until rebaselined intentionally.

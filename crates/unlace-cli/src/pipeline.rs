@@ -2707,6 +2707,16 @@ fn collect_ssa_statement_slots(
     out
 }
 
+fn collect_ssa_phi_uses(ssa: &SsaFunction) -> Vec<SsaVarnode> {
+    let mut out = Vec::new();
+    for phis in ssa.phi_map.values() {
+        for phi in phis {
+            out.extend(phi.inputs.iter().map(|&(_pred, sv)| sv));
+        }
+    }
+    out
+}
+
 fn collect_return_value_aliases(
     ssa: &SsaFunction,
     symbols: &BTreeMap<u64, String>,
@@ -3353,6 +3363,7 @@ pub fn emit_output(
                 }
             }
             ann_clone.ssa_statement_slots = collect_ssa_statement_slots(ssa);
+            ann_clone.ssa_phi_uses = collect_ssa_phi_uses(ssa);
             ann_clone.return_value_aliases = collect_return_value_aliases(ssa, symbols);
             let ann_owned = Some(ann_clone);
             let ann_ref = ann_owned.as_ref();

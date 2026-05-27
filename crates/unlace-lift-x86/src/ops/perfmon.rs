@@ -14,7 +14,6 @@ use smallvec::smallvec;
 use unlace_ir::{IrInsn, IrOp, Varnode};
 
 use crate::lift::LiftCtx;
-use crate::register_file::{RAX, RCX, RDX};
 
 /// Callother tag for the x86 `RDPMC` instruction.
 ///
@@ -34,9 +33,10 @@ pub const RDPMC_CALLOTHER_TAG: u64 = 0x351;
 /// This keeps the counter-select register (`ECX`) explicit and preserves the
 /// split-result architectural convention visible to downstream SSA / printers.
 pub fn lift_rdpmc(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
-    let ecx = Varnode::new(unlace_ir::SpaceId::Register, RCX, 4);
-    let eax = Varnode::new(unlace_ir::SpaceId::Register, RAX, 4);
-    let edx = Varnode::new(unlace_ir::SpaceId::Register, RDX, 4);
+    let Some(ecx) = ctx.read_register(iced_x86::Register::ECX) else {
+        ctx.emit_unimplemented();
+        return;
+    };
 
     let result64 = Varnode::unique(ctx.alloc_unique(), 8);
     ctx.emit(IrInsn::with_output(
@@ -46,16 +46,25 @@ pub fn lift_rdpmc(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
         ctx.addr,
     ));
 
+    let eax = Varnode::unique(ctx.alloc_unique(), 4);
     ctx.emit(IrInsn::with_output(
         IrOp::Subpiece,
         eax,
         smallvec![result64, Varnode::constant(0, 1)],
         ctx.addr,
     ));
+    if ctx.write_register(iced_x86::Register::EAX, eax).is_none() {
+        ctx.emit_unimplemented();
+    }
+
+    let edx = Varnode::unique(ctx.alloc_unique(), 4);
     ctx.emit(IrInsn::with_output(
         IrOp::Subpiece,
         edx,
         smallvec![result64, Varnode::constant(4, 1)],
         ctx.addr,
     ));
+    if ctx.write_register(iced_x86::Register::EDX, edx).is_none() {
+        ctx.emit_unimplemented();
+    }
 }

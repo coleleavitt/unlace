@@ -21,8 +21,8 @@ pub const R15: u64 = 120;
 
 // Intel APX (Advanced Performance Extensions) extends the GP register set to
 // 32 architectural registers. R16..R31 use the natural 8-byte GP stride after
-// R15. The legacy RIP/RFLAGS offsets stay unchanged below so existing IR and
-// downstream tests continue to address flags at their historical locations.
+// R15. RIP lives in a separate slot below the x87/vector regions so it cannot
+// alias R16.
 pub const R16: u64 = 128;
 pub const R17: u64 = 136;
 pub const R18: u64 = 144;
@@ -40,7 +40,7 @@ pub const R29: u64 = 232;
 pub const R30: u64 = 240;
 pub const R31: u64 = 248;
 
-pub const RIP: u64 = 128;
+pub const RIP: u64 = 0x288;
 
 // RFLAGS individual bits at offsets 256+.
 pub const CF: u64 = 256;
@@ -995,6 +995,88 @@ pub fn iced_reg_to_varnode(reg: iced_x86::Register) -> Option<(u64, u8)> {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct X86RegView {
+    pub reg: iced_x86::Register,
+    pub offset: u64,
+    pub size: u8,
+    pub full_offset: u64,
+    pub full_size: u8,
+    pub byte_offset: u8,
+    pub is_gpr: bool,
+    pub is_vector: bool,
+}
+
+impl X86RegView {
+    #[inline]
+    pub const fn varnode(self) -> Varnode {
+        Varnode::new(SpaceId::Register, self.offset, self.size)
+    }
+
+    #[inline]
+    pub const fn full_varnode(self) -> Varnode {
+        Varnode::new(SpaceId::Register, self.full_offset, self.full_size)
+    }
+
+    #[inline]
+    pub const fn is_full_width(self) -> bool {
+        self.offset == self.full_offset && self.size == self.full_size
+    }
+
+    #[inline]
+    pub const fn zero_extends_on_write(self) -> bool {
+        self.is_gpr && self.byte_offset == 0 && self.size == 4
+    }
+}
+
+pub fn x86_reg_view(reg: iced_x86::Register) -> Option<X86RegView> {
+    use iced_x86::Register as R;
+
+    let (offset, size) = iced_reg_to_varnode(reg)?;
+    let mut view = X86RegView {
+        reg,
+        offset,
+        size,
+        full_offset: offset,
+        full_size: size,
+        byte_offset: 0,
+        is_gpr: false,
+        is_vector: false,
+    };
+
+    let info = reg.info();
+    let full = info.full_register();
+    let full_info = full.info();
+    if full_info.base() == R::RAX && full_info.size() == 8 {
+        let number = full_info.number();
+        if number < 16 {
+            let full_offset = egpr_offset(number as u8);
+            let byte_offset = offset.checked_sub(full_offset)?;
+            if byte_offset + size as u64 <= 8 {
+                view.full_offset = full_offset;
+                view.full_size = 8;
+                view.byte_offset = byte_offset as u8;
+                view.is_gpr = true;
+            }
+        }
+    }
+    if full_info.base() == R::ZMM0 && full_info.size() == 64 {
+        let number = full_info.number();
+        if number < 32 {
+            let full_offset = vec_offset(number as u64);
+            let byte_offset = offset.checked_sub(full_offset)?;
+            if byte_offset + size as u64 <= VEC_STRIDE {
+                view.full_offset = full_offset;
+                view.full_size = VEC_STRIDE as u8;
+                view.byte_offset = byte_offset as u8;
+                view.is_vector = true;
+            }
+        }
+    }
+
+    Some(view)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1036,6 +1118,50 @@ mod tests {
                 "XMM offset {xmm:#x} overlaps GP/flag region ending at {gp_end:#x}"
             );
         }
+    }
+
+    #[test]
+    fn t313_apx_egprs_do_not_alias_rip_or_flags() {
+        assert_ne!(R16, RIP, "R16 and RIP must be distinct register slots");
+        assert!(R16 < CF, "APX EGPRs should remain ordinary GP registers");
+        assert_eq!(R31 + 8, CF, "R31 should end exactly before RFLAGS bits");
+        assert!(RIP > OF, "RIP must not live inside the RFLAGS region");
+    }
+
+    #[test]
+    fn t313_iced_gpr_view_uses_full_parent_metadata() {
+        use iced_x86::Register as R;
+
+        let eax = x86_reg_view(R::EAX).expect("EAX view");
+        assert!(eax.is_gpr);
+        assert_eq!(eax.varnode(), Varnode::reg(RAX, 4));
+        assert_eq!(eax.full_varnode(), Varnode::reg(RAX, 8));
+        assert_eq!(eax.byte_offset, 0);
+        assert!(eax.zero_extends_on_write());
+
+        let ah = x86_reg_view(R::AH).expect("AH view");
+        assert!(ah.is_gpr);
+        assert_eq!(ah.varnode(), Varnode::reg(RAX + 1, 1));
+        assert_eq!(ah.full_varnode(), Varnode::reg(RAX, 8));
+        assert_eq!(ah.byte_offset, 1);
+        assert!(!ah.zero_extends_on_write());
+    }
+
+    #[test]
+    fn t314_iced_vector_view_uses_zmm_parent_metadata() {
+        use iced_x86::Register as R;
+
+        let ymm0 = x86_reg_view(R::YMM0).expect("YMM0 view");
+        assert!(ymm0.is_vector);
+        assert_eq!(ymm0.varnode(), Varnode::reg(YMM0, 32));
+        assert_eq!(ymm0.full_varnode(), Varnode::reg(ZMM0, 64));
+        assert_eq!(ymm0.byte_offset, 0);
+        assert!(!ymm0.is_full_width());
+
+        let zmm0 = x86_reg_view(R::ZMM0).expect("ZMM0 view");
+        assert!(zmm0.is_vector);
+        assert_eq!(zmm0.full_varnode(), Varnode::reg(ZMM0, 64));
+        assert!(zmm0.is_full_width());
     }
 
     #[test]
@@ -1130,7 +1256,7 @@ mod tests {
 
     #[test]
     fn test_st_offsets_do_not_collide_with_gp() {
-        let gp_end = OF + 1;
+        let gp_end = (RIP + 8).max(OF + 1);
         assert!(
             ST0 >= gp_end,
             "ST0 {ST0:#x} would overlap GP/flag region ending at {gp_end:#x}"

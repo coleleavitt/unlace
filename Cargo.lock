@@ -5708,6 +5708,8 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "toml",
+ "unlace-ir",
+ "unlace-lift-x86",
  "unlace-loader",
  "unlace-passes",
  "unlace-sbom",

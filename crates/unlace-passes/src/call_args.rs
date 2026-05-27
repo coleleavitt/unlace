@@ -24,7 +24,7 @@ const RSI: u64 = 48;
 const RDI: u64 = 56;
 const R8: u64 = 64;
 const R9: u64 = 72;
-const RIP: u64 = 128;
+const RIP: u64 = 0x288;
 
 const SYSV_ARG_REGS: &[u64] = &[RDI, RSI, RDX, RCX, R8, R9];
 const MSX64_ARG_REGS: &[u64] = &[RCX, RDX, R8, R9];

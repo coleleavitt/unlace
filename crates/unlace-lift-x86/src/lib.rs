@@ -13,7 +13,7 @@ mod tests {
     use unlace_ir::{ArchId, IrOp, Lifter, SpaceId, Varnode};
 
     use crate::X86Lifter;
-    use crate::register_file::{RDI, RSP};
+    use crate::register_file::{RAX, RCX, RDI, RSP};
 
     fn lifter() -> X86Lifter {
         X86Lifter::new()
@@ -53,6 +53,103 @@ mod tests {
             .expect("should decode");
         assert_eq!(result.len, 7);
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn t313_mov_eax_defines_canonical_rax() {
+        // 89 d8 = mov eax, ebx
+        let result = lifter()
+            .lift_insn(&[0x89, 0xd8], 0x1000)
+            .expect("should decode mov eax, ebx");
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::IntZext && i.output == Some(Varnode::reg(RAX, 8)) }),
+            "32-bit GPR writes must zero-extend into the 64-bit parent: {:?}",
+            result.ir_ops
+        );
+        assert!(
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| i.output == Some(Varnode::reg(RAX, 4))),
+            "EAX must not be versioned as an independent SSA destination"
+        );
+    }
+
+    #[test]
+    fn t313_mov_ecx_eax_reads_eax_as_subpiece_and_writes_rcx() {
+        // 8b c8 = mov ecx, eax
+        let result = lifter()
+            .lift_insn(&[0x8b, 0xc8], 0x1000)
+            .expect("should decode mov ecx, eax");
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::Subpiece
+                    && i.output.is_some_and(|out| out.size == 4)
+                    && i.inputs.first() == Some(&Varnode::reg(RAX, 8))
+            }),
+            "EAX reads should be explicit SUBPIECEs from RAX: {:?}",
+            result.ir_ops
+        );
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::IntZext && i.output == Some(Varnode::reg(RCX, 8)) }),
+            "ECX write should define canonical RCX"
+        );
+    }
+
+    #[test]
+    fn t313_mov_ax_preserves_parent_high_bits() {
+        // 66 89 d8 = mov ax, bx
+        let result = lifter()
+            .lift_insn(&[0x66, 0x89, 0xd8], 0x1000)
+            .expect("should decode mov ax, bx");
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::IntAnd
+                    && i.inputs
+                        .iter()
+                        .any(|v| v.space == SpaceId::Const && v.offset == !0xffffu64)
+            }),
+            "AX write should clear only the low 16 bits first: {:?}",
+            result.ir_ops
+        );
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::IntOr && i.output == Some(Varnode::reg(RAX, 8)) }),
+            "AX write should merge back into canonical RAX"
+        );
+    }
+
+    #[test]
+    fn t313_mov_ah_updates_parent_byte_range() {
+        // 88 dc = mov ah, bl
+        let result = lifter()
+            .lift_insn(&[0x88, 0xdc], 0x1000)
+            .expect("should decode mov ah, bl");
+        assert!(
+            result.ir_ops.iter().any(|i| {
+                i.op == IrOp::IntLeft
+                    && i.inputs
+                        .iter()
+                        .any(|v| v.space == SpaceId::Const && v.offset == 8)
+            }),
+            "AH write should shift the incoming byte into bit position 8: {:?}",
+            result.ir_ops
+        );
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::IntOr && i.output == Some(Varnode::reg(RAX, 8)) }),
+            "AH write should merge back into canonical RAX"
+        );
     }
 
     #[test]
@@ -274,11 +371,11 @@ mod tests {
             "x86-64 CALL must define the full RAX register; pointer returns otherwise read stale high bits"
         );
         assert!(
-            result.ir_ops.iter().any(|i| {
-                i.op == IrOp::Subpiece
-                    && i.output == Some(unlace_ir::Varnode::new(SpaceId::Register, 0, 4))
-            }),
-            "CALL should also materialize EAX for 32-bit integer return consumers"
+            !result
+                .ir_ops
+                .iter()
+                .any(|i| { i.output == Some(unlace_ir::Varnode::new(SpaceId::Register, 0, 4)) }),
+            "CALL should only define canonical RAX; EAX consumers read a SUBPIECE"
         );
         assert!(
             !result.ir_ops.iter().any(|i| i.op == IrOp::Store),
@@ -1355,7 +1452,12 @@ mod tests {
             .expect("should decode sete al");
         assert_eq!(result.len, 3);
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::IntOr && i.output == Some(Varnode::reg(RAX, 8)) })
+        );
     }
 
     #[test]
@@ -1375,7 +1477,12 @@ mod tests {
             .lift_insn(&[0x0F, 0x92, 0xC0], 0x1000)
             .expect("should decode setb al");
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
-        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| { i.op == IrOp::IntOr && i.output == Some(Varnode::reg(RAX, 8)) })
+        );
     }
 
     #[test]
@@ -2295,14 +2402,15 @@ mod tests {
     // (verified by round-tripping through iced-x86's `Encoder`). The
     // assertion shape:
     //   * Callother is emitted with the expected `sse_tag::*` constant.
-    //   * The destination varnode is the 32-byte YMM register at YMM0.
+    //   * The intrinsic result is a 32-byte temp.
+    //   * A following IntZext writes the full ZMM0 parent.
     //   * No `IrOp::Unimplemented` slips through.
     // A separate sanity test confirms the register file places YMM0..
     // YMM15 at the same base offsets as XMM0..XMM15 with size=32 — the
     // alias layout AVX2 lifting relies on for clobber semantics.
 
-    /// Helper: assert a Callother with `expected_tag` is emitted AND its
-    /// output writes a `expected_dst_size`-byte register at YMM0's offset.
+    /// Helper: assert a Callother with `expected_tag` is emitted, then
+    /// zero-extended into the full ZMM parent per iced InstructionInfo.
     fn assert_avx_lift(bytes: &[u8], expected_tag: u64, expected_dst_size: u8) {
         let result = lifter()
             .lift_insn(bytes, 0x1000)
@@ -2320,12 +2428,22 @@ mod tests {
         let dst = co.output.expect("AVX instruction should have a YMM dst");
         assert_eq!(
             dst.size, expected_dst_size,
-            "AVX destination should be {expected_dst_size}-byte YMM",
+            "AVX intrinsic temp should be {expected_dst_size} bytes",
         );
         assert_eq!(
-            dst.offset,
-            crate::register_file::YMM0,
-            "AVX destination should be YMM0",
+            dst.space,
+            SpaceId::Unique,
+            "AVX intrinsic result should be staged in a temp before zero-extension",
+        );
+        let zext = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntZext && i.inputs.first() == Some(&dst))
+            .expect("AVX instruction should zero-extend into the full ZMM parent");
+        assert_eq!(
+            zext.output,
+            Some(Varnode::reg(crate::register_file::ZMM0, 64)),
+            "AVX zero-extension should write the full ZMM0 parent",
         );
         let unimpl = result
             .ir_ops
@@ -2340,6 +2458,36 @@ mod tests {
     fn t192_vpaddd_lift() {
         // c5 fd fe c1 = vpaddd ymm0, ymm0, ymm1.
         assert_avx_lift(&[0xC5, 0xFD, 0xFE, 0xC1], sse_tag::VPADDD, 32);
+    }
+
+    /// t314 — VEX.128 writes also zero the full architectural vector
+    /// parent; legacy SSE is tested separately and must stay narrow.
+    #[test]
+    fn t314_vpaddd_xmm_zero_extends_zmm_parent() {
+        // c5 f9 fe c1 = vpaddd xmm0, xmm0, xmm1.
+        assert_avx_lift(&[0xC5, 0xF9, 0xFE, 0xC1], sse_tag::VPADDD, 16);
+    }
+
+    #[test]
+    fn t314_legacy_paddd_xmm_does_not_zero_upper_lanes() {
+        // 66 0f fe c1 = paddd xmm0, xmm1.
+        let result = lifter()
+            .lift_insn(&[0x66, 0x0F, 0xFE, 0xC1], 0x1000)
+            .expect("legacy paddd should decode");
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .expect("legacy paddd should emit Callother");
+        assert_eq!(
+            co.output,
+            Some(Varnode::reg(crate::register_file::XMM0, 16))
+        );
+        assert!(
+            !result.ir_ops.iter().any(|i| i.op == IrOp::IntZext
+                && i.output == Some(Varnode::reg(crate::register_file::ZMM0, 64))),
+            "legacy SSE XMM writes must not clear upper YMM/ZMM lanes",
+        );
     }
 
     /// t192 — VPSUBD ymm0, ymm0, ymm1 → `_mm256_sub_epi32`.
@@ -2416,12 +2564,9 @@ mod tests {
         assert_avx_lift(&[0xC5, 0xFD, 0xEF, 0xC1], sse_tag::VPXOR, 32);
     }
 
-    /// t192 — YMM register-write sanity: every lifted AVX2 op produces
-    /// a Callother whose destination is a 32-byte register at the YMM
-    /// base offset, and that base offset matches the XMM alias of the
-    /// same lane. The register-file invariant (XMM/YMM share base) is
-    /// already covered in `register_file::tests`; here we confirm the
-    /// *lifter* preserves it on a representative op.
+    /// t192/t314 — YMM write sanity: a VEX YMM destination carries a
+    /// 32-byte intrinsic result but architecturally zeroes the upper ZMM
+    /// lanes, so the lifted IR must end in `ZMM0 = zext(tmp32)`.
     #[test]
     fn t192_ymm_register_write_sanity() {
         // c5 fd fe c1 = vpaddd ymm0, ymm0, ymm1 — picks the simplest
@@ -2437,11 +2582,20 @@ mod tests {
             .expect("vpaddd should emit Callother");
         let dst = co.output.expect("vpaddd should write a register");
 
-        // The destination occupies the full 256-bit YMM0 — its base
-        // offset aliases XMM0, distinguished only by size=32.
-        assert_eq!(dst.offset, crate::register_file::YMM0);
-        assert_eq!(dst.offset, crate::register_file::XMM0);
+        // The Callother stays semantically 256-bit; the architectural
+        // full-register write is represented by the following IntZext.
+        assert_eq!(dst.space, SpaceId::Unique);
         assert_eq!(dst.size, 32, "VPADDD writes 256 bits / 32 bytes");
+        let zext = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::IntZext && i.inputs.first() == Some(&dst))
+            .expect("VPADDD should zero-extend the YMM result into ZMM0");
+        let zext_dst = zext.output.expect("zero-extension should write a register");
+        assert_eq!(zext_dst.offset, crate::register_file::ZMM0);
+        assert_eq!(zext_dst.offset, crate::register_file::XMM0);
+        assert_eq!(zext_dst.offset, crate::register_file::YMM0);
+        assert_eq!(zext_dst.size, 64, "upper ZMM lanes must be zeroed");
 
         // Sources are operand 1 and operand 2 (VEX layout — op0 is
         // pure destination, *not* read). Both are 32-byte YMM reads.

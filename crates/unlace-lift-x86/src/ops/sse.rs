@@ -415,11 +415,10 @@ pub fn lift_sse_string_compare(
 /// Unlike the legacy SSE form (`lift_sse_binop`) which reads op0 as
 /// src0, VEX-encoded AVX2 ops are non-destructive: op0 is purely the
 /// destination, leaving op1 and op2 untouched on the source side. The
-/// register-file layout already places YMM0..YMM15 at the same base
-/// offsets as XMM0..XMM15 with `size=32`, so a 32-byte write naturally
-/// clobbers the matching XMM alias — the SSA dataflow will see a fresh
-/// YMM definition that subsumes any pre-existing XMM value at the same
-/// base offset.
+/// iced's instruction-info layer marks VEX XMM/YMM writes as writes to
+/// the full ZMM parent. We preserve the intrinsic's narrow output in a
+/// temp, then emit an explicit zero-extension to the ZMM parent so SSA
+/// cannot keep stale upper lanes alive.
 pub fn lift_avx_binop(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
     let tag_vn = Varnode::constant(callother_tag, 8);
 
@@ -435,13 +434,15 @@ pub fn lift_avx_binop(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother
         ctx.emit_unimplemented();
         return;
     };
+    let (call_dst, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
 
     ctx.emit(IrInsn::with_output(
         IrOp::Callother,
-        dst,
+        call_dst,
         smallvec![tag_vn, src0, src1],
         ctx.addr,
     ));
+    ctx.finish_zero_extending_vector_output(zero_ext_reg, call_dst);
 }
 
 /// Four-operand AVX2 blend (VPBLENDD): VEX layout with an immediate
@@ -469,13 +470,15 @@ pub fn lift_avx_blend(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother
         ctx.emit_unimplemented();
         return;
     };
+    let (call_dst, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
 
     ctx.emit(IrInsn::with_output(
         IrOp::Callother,
-        dst,
+        call_dst,
         smallvec![tag_vn, src0, src1, mask],
         ctx.addr,
     ));
+    ctx.finish_zero_extending_vector_output(zero_ext_reg, call_dst);
 }
 
 /// MOVSD (scalar double): 8-byte move in the low half of an XMM register.

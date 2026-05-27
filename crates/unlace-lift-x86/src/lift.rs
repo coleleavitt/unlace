@@ -1,4 +1,6 @@
-use iced_x86::{Decoder, DecoderOptions, Instruction, Mnemonic, OpKind};
+use iced_x86::{
+    Decoder, DecoderOptions, Instruction, InstructionInfoFactory, Mnemonic, OpAccess, OpKind,
+};
 use smallvec::smallvec;
 use unlace_ir::{
     ArchId, IrInsn, IrOp, LiftError, LiftedInsn, Lifter, RegisterFile, SpaceId, Varnode,
@@ -8,7 +10,7 @@ use crate::apx;
 use crate::ops::{
     arithmetic, bitwise, control_flow, crypto, data_move, fpu, sse, stack, string_ops,
 };
-use crate::register_file::{iced_reg_to_varnode, x86_64_register_file};
+use crate::register_file::{iced_reg_to_varnode, x86_64_register_file, x86_reg_view};
 
 pub struct X86Lifter {
     reg_file: RegisterFile,
@@ -120,6 +122,10 @@ impl LiftCtx {
     ) {
         if insn.op_kind(idx) == OpKind::Memory {
             self.emit_store(dst, value);
+        } else if insn.op_kind(idx) == OpKind::Register {
+            if self.write_register(insn.op_register(idx), value).is_none() {
+                self.emit_unimplemented();
+            }
         } else {
             self.emit(IrInsn::with_output(
                 IrOp::Copy,
@@ -132,11 +138,7 @@ impl LiftCtx {
 
     pub fn operand_read(&mut self, insn: &Instruction, idx: u32) -> Option<Varnode> {
         match insn.op_kind(idx) {
-            OpKind::Register => {
-                let reg = insn.op_register(idx);
-                let (offset, size) = iced_reg_to_varnode(reg)?;
-                Some(Varnode::new(SpaceId::Register, offset, size))
-            }
+            OpKind::Register => self.read_register(insn.op_register(idx)),
             OpKind::Immediate8 => Some(Varnode::constant(insn.immediate8() as u64, 1)),
             OpKind::Immediate8_2nd => Some(Varnode::constant(insn.immediate8_2nd() as u64, 1)),
             OpKind::Immediate16 => Some(Varnode::constant(insn.immediate16() as u64, 2)),
@@ -182,8 +184,7 @@ impl LiftCtx {
         match insn.op_kind(idx) {
             OpKind::Register => {
                 let reg = insn.op_register(idx);
-                let (offset, size) = iced_reg_to_varnode(reg)?;
-                Some(Varnode::new(SpaceId::Register, offset, size))
+                Some(x86_reg_view(reg)?.varnode())
             }
             OpKind::Memory => self.compute_memory_address(insn),
             _ => None,
@@ -194,19 +195,186 @@ impl LiftCtx {
         self.compute_memory_address(insn)
     }
 
+    pub fn read_register(&mut self, reg: iced_x86::Register) -> Option<Varnode> {
+        let view = x86_reg_view(reg)?;
+        if view.is_gpr && !view.is_full_width() {
+            let out = Varnode::unique(self.alloc_unique(), view.size);
+            self.emit(IrInsn::with_output(
+                IrOp::Subpiece,
+                out,
+                smallvec![
+                    view.full_varnode(),
+                    Varnode::constant(view.byte_offset as u64, 1)
+                ],
+                self.addr,
+            ));
+            Some(out)
+        } else {
+            Some(view.varnode())
+        }
+    }
+
+    pub fn write_register(&mut self, reg: iced_x86::Register, value: Varnode) -> Option<()> {
+        let view = x86_reg_view(reg)?;
+        if !view.is_gpr || view.is_full_width() {
+            let value = self.resize_value(value, view.size);
+            self.emit(IrInsn::with_output(
+                IrOp::Copy,
+                view.varnode(),
+                smallvec![value],
+                self.addr,
+            ));
+            return Some(());
+        }
+
+        if view.zero_extends_on_write() {
+            let value = self.resize_value(value, view.size);
+            self.emit(IrInsn::with_output(
+                IrOp::IntZext,
+                view.full_varnode(),
+                smallvec![value],
+                self.addr,
+            ));
+            return Some(());
+        }
+
+        let value = self.resize_value(value, view.size);
+        let wide = self.resize_value(value, view.full_size);
+        let parent = view.full_varnode();
+        let clear_mask = !register_field_mask(view.byte_offset, view.size);
+        let cleared = Varnode::unique(self.alloc_unique(), view.full_size);
+        self.emit(IrInsn::with_output(
+            IrOp::IntAnd,
+            cleared,
+            smallvec![parent, Varnode::constant(clear_mask, view.full_size)],
+            self.addr,
+        ));
+
+        let shifted = if view.byte_offset == 0 {
+            wide
+        } else {
+            let shifted = Varnode::unique(self.alloc_unique(), view.full_size);
+            self.emit(IrInsn::with_output(
+                IrOp::IntLeft,
+                shifted,
+                smallvec![wide, Varnode::constant((view.byte_offset as u64) * 8, 1)],
+                self.addr,
+            ));
+            shifted
+        };
+
+        self.emit(IrInsn::with_output(
+            IrOp::IntOr,
+            parent,
+            smallvec![cleared, shifted],
+            self.addr,
+        ));
+        Some(())
+    }
+
+    pub fn zero_extending_vector_write(
+        &self,
+        insn: &Instruction,
+        idx: u32,
+    ) -> Option<iced_x86::Register> {
+        if insn.op_kind(idx) != OpKind::Register {
+            return None;
+        }
+        let reg = insn.op_register(idx);
+        let view = x86_reg_view(reg)?;
+        if !view.is_vector || view.is_full_width() {
+            return None;
+        }
+
+        let mut factory = InstructionInfoFactory::new();
+        let info = factory.info(insn);
+        let writes_full_parent = info.used_registers().iter().any(|used| {
+            register_access_writes(used.access())
+                && x86_reg_view(used.register()).is_some_and(|used_view| {
+                    used_view.is_vector
+                        && used_view.is_full_width()
+                        && used_view.full_offset == view.full_offset
+                })
+        });
+        writes_full_parent.then_some(reg)
+    }
+
+    pub fn prepare_zero_extending_vector_output(
+        &mut self,
+        insn: &Instruction,
+        idx: u32,
+        dst: Varnode,
+    ) -> (Varnode, Option<iced_x86::Register>) {
+        match self.zero_extending_vector_write(insn, idx) {
+            Some(reg) => (Varnode::unique(self.alloc_unique(), dst.size), Some(reg)),
+            None => (dst, None),
+        }
+    }
+
+    pub fn finish_zero_extending_vector_output(
+        &mut self,
+        reg: Option<iced_x86::Register>,
+        value: Varnode,
+    ) {
+        let Some(reg) = reg else {
+            return;
+        };
+        let Some(view) = x86_reg_view(reg) else {
+            self.emit_unimplemented();
+            return;
+        };
+        let value = self.resize_value(value, view.size);
+        self.emit(IrInsn::with_output(
+            IrOp::IntZext,
+            view.full_varnode(),
+            smallvec![value],
+            self.addr,
+        ));
+    }
+
+    pub fn register_write_needs_fixup(&self, reg: iced_x86::Register) -> bool {
+        x86_reg_view(reg).is_some_and(|view| view.is_gpr && !view.is_full_width())
+    }
+
+    fn resize_value(&mut self, value: Varnode, size: u8) -> Varnode {
+        if value.size == size {
+            return value;
+        }
+        if value.space == SpaceId::Const {
+            return Varnode::constant(mask_value_to_size(value.offset, size), size);
+        }
+
+        let out = Varnode::unique(self.alloc_unique(), size);
+        if value.size < size {
+            self.emit(IrInsn::with_output(
+                IrOp::IntZext,
+                out,
+                smallvec![value],
+                self.addr,
+            ));
+        } else {
+            self.emit(IrInsn::with_output(
+                IrOp::Subpiece,
+                out,
+                smallvec![value, Varnode::constant(0, 1)],
+                self.addr,
+            ));
+        }
+        out
+    }
+
     fn compute_memory_address(&mut self, insn: &Instruction) -> Option<Varnode> {
         let mut addr = None;
 
         let base_reg = insn.memory_base();
         if base_reg != iced_x86::Register::None {
-            let (offset, size) = iced_reg_to_varnode(base_reg)?;
-            addr = Some(Varnode::new(SpaceId::Register, offset, size));
+            addr = Some(self.read_register(base_reg)?);
         }
 
         let index_reg = insn.memory_index();
         if index_reg != iced_x86::Register::None {
-            let (offset, size) = iced_reg_to_varnode(index_reg)?;
-            let idx_vn = Varnode::new(SpaceId::Register, offset, size);
+            let idx_vn = self.read_register(index_reg)?;
+            let size = idx_vn.size;
 
             let scale = insn.memory_index_scale();
             let scaled = if scale > 1 {
@@ -268,6 +436,32 @@ impl LiftCtx {
         }
 
         addr
+    }
+}
+
+fn register_access_writes(access: OpAccess) -> bool {
+    matches!(
+        access,
+        OpAccess::Write | OpAccess::CondWrite | OpAccess::ReadWrite | OpAccess::ReadCondWrite
+    )
+}
+
+fn register_field_mask(byte_offset: u8, size: u8) -> u64 {
+    let shift = (byte_offset as u32) * 8;
+    let bits = (size as u32) * 8;
+    if bits >= 64 {
+        u64::MAX
+    } else {
+        ((1u64 << bits) - 1) << shift
+    }
+}
+
+fn mask_value_to_size(value: u64, size: u8) -> u64 {
+    let bits = (size as u32) * 8;
+    if bits >= 64 {
+        value
+    } else {
+        value & ((1u64 << bits) - 1)
     }
 }
 

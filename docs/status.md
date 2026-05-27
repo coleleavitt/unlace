@@ -127,9 +127,9 @@ The old "aggregate parity" wording is retired. The current gates are:
 
 | axis | gate | current state | caveat |
 |------|------|---------------|--------|
-| Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 91.1%` on the current 15 golden fixtures | Regression watchdog only; token/shape similarity is not semantic quality. |
-| Semantic correctness | `cargo run -p xtask -- semantic-report` | 9 source-known executable equivalence cases pass; 8 host/source-known cases are tracked as XFAIL; 3 non-host cases are unsupported | Not full-corpus semantic correctness yet; known semantic gaps stay visible as XFAIL until fixed. |
-| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=4 functions=17 recovered=74 expected=101 accuracy=73.3% source_known=20 dwarf_candidates=5` | First exact textual DWARF/source scorer; C++ templates/RTTI and non-host binaries are still explicit skips. |
+| Stylistic fixture similarity | `bash scripts/score_parity.sh` | `Stylistic Fixture Parity: 86.8%` emitted on the current golden stream | Regression watchdog only; token/shape similarity is not semantic quality. The exact-line golden test still exits nonzero because checked-in goldens are stale. |
+| Semantic correctness | `cargo run -p xtask -- semantic-report` | 15 source-known executable equivalence cases pass; 2 host/source-known cases (`medium`, `stripped`) are tracked as XFAIL; 3 non-host cases are unsupported | Not full-corpus semantic correctness yet; known semantic gaps stay visible as XFAIL until fixed. |
+| Type/variable recovery accuracy | `cargo run -p xtask -- type-recovery-report` | `MEASURED fixtures=4 functions=17 recovered=73 expected=101 accuracy=72.3% source_known=20 dwarf_candidates=5` | First exact textual DWARF/source scorer; C++ templates/RTTI and non-host binaries are still explicit skips. |
 
 `bash scripts/quality_axes.sh` runs all three reports without treating a known
 XFAIL or skipped axis as solved. See
@@ -149,8 +149,9 @@ production form. Tracked so the README doesn't overclaim:
 - LSP/TUI/Web UI front-ends.
 - Reproducible signed releases + SBOM publishing.
 - Full semantic recompile-and-compare across the source-known fixture corpus.
-  The current report covers 9 passing executable cases, 8 known failing host
-  cases, and 3 non-host unsupported cases.
+  The current report covers 15 passing executable cases, 2 known failing host
+  cases (optimized-main lvar/phi plus x86 subregister recovery), and 3
+  non-host unsupported cases.
 - Broad DWARF/source-ground-truth type and variable recovery accuracy metrics.
   The current report scores 4 C DWARF fixtures exactly and skips C++/non-host
   cases explicitly.

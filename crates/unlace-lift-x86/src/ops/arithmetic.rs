@@ -607,8 +607,10 @@ pub fn lift_dec(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
 
 /// CBW: sign-extend AL (1 byte) → AX (2 bytes)
 pub fn lift_cbw(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
-    let al = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 1);
-    let ax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 2);
+    let Some(al) = ctx.read_register(iced_x86::Register::AL) else {
+        ctx.emit_unimplemented();
+        return;
+    };
     let ext = Varnode::unique(ctx.alloc_unique(), 2);
     ctx.emit(IrInsn::with_output(
         IrOp::IntSext,
@@ -616,18 +618,17 @@ pub fn lift_cbw(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
         smallvec![al],
         ctx.addr,
     ));
-    ctx.emit(IrInsn::with_output(
-        IrOp::Copy,
-        ax,
-        smallvec![ext],
-        ctx.addr,
-    ));
+    if ctx.write_register(iced_x86::Register::AX, ext).is_none() {
+        ctx.emit_unimplemented();
+    }
 }
 
 /// CWDE: sign-extend AX (2 bytes) → EAX (4 bytes)
 pub fn lift_cwde(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
-    let ax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 2);
-    let eax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 4);
+    let Some(ax) = ctx.read_register(iced_x86::Register::AX) else {
+        ctx.emit_unimplemented();
+        return;
+    };
     let ext = Varnode::unique(ctx.alloc_unique(), 4);
     ctx.emit(IrInsn::with_output(
         IrOp::IntSext,
@@ -635,18 +636,17 @@ pub fn lift_cwde(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
         smallvec![ax],
         ctx.addr,
     ));
-    ctx.emit(IrInsn::with_output(
-        IrOp::Copy,
-        eax,
-        smallvec![ext],
-        ctx.addr,
-    ));
+    if ctx.write_register(iced_x86::Register::EAX, ext).is_none() {
+        ctx.emit_unimplemented();
+    }
 }
 
 /// CDQE (AT&T: CLTQ): sign-extend EAX (4 bytes) → RAX (8 bytes)
 pub fn lift_cdqe(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
-    let eax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 4);
-    let rax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 8);
+    let Some(eax) = ctx.read_register(iced_x86::Register::EAX) else {
+        ctx.emit_unimplemented();
+        return;
+    };
     let ext = Varnode::unique(ctx.alloc_unique(), 8);
     ctx.emit(IrInsn::with_output(
         IrOp::IntSext,
@@ -654,19 +654,18 @@ pub fn lift_cdqe(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
         smallvec![eax],
         ctx.addr,
     ));
-    ctx.emit(IrInsn::with_output(
-        IrOp::Copy,
-        rax,
-        smallvec![ext],
-        ctx.addr,
-    ));
+    if ctx.write_register(iced_x86::Register::RAX, ext).is_none() {
+        ctx.emit_unimplemented();
+    }
 }
 
 /// CDQ (AT&T: CLTD): sign-extend EAX → EDX:EAX.
 /// Fills EDX with the sign bit of EAX: `EDX = INT_SRIGHT(EAX, 31)`.
 pub fn lift_cdq(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
-    let eax = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RAX, 4);
-    let edx = Varnode::new(unlace_ir::SpaceId::Register, crate::register_file::RDX, 4);
+    let Some(eax) = ctx.read_register(iced_x86::Register::EAX) else {
+        ctx.emit_unimplemented();
+        return;
+    };
     let shift = Varnode::constant(31, 1);
     let result = Varnode::unique(ctx.alloc_unique(), 4);
     ctx.emit(IrInsn::with_output(
@@ -675,12 +674,12 @@ pub fn lift_cdq(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
         smallvec![eax, shift],
         ctx.addr,
     ));
-    ctx.emit(IrInsn::with_output(
-        IrOp::Copy,
-        edx,
-        smallvec![result],
-        ctx.addr,
-    ));
+    if ctx
+        .write_register(iced_x86::Register::EDX, result)
+        .is_none()
+    {
+        ctx.emit_unimplemented();
+    }
 }
 
 /// CQO (AT&T: CQTO): sign-extend RAX → RDX:RAX.

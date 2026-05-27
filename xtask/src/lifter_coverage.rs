@@ -45,6 +45,7 @@ struct ArchStats {
     callother: usize,
     unimpl_opcodes: HashMap<String, usize>,
     callother_opcodes: HashMap<String, usize>,
+    unimpl_sites: Vec<OpcodeSite>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -56,6 +57,15 @@ struct CoverageCounts {
     callother: usize,
     unimpl_opcodes: HashMap<String, usize>,
     callother_opcodes: HashMap<String, usize>,
+    unimpl_sites: Vec<OpcodeSite>,
+}
+
+#[derive(Debug, Clone)]
+struct OpcodeSite {
+    fixture: String,
+    function: String,
+    addr: u64,
+    hint: String,
 }
 
 /// Detect arch label from the first 64 bytes of a binary. Returns `None` for
@@ -339,9 +349,18 @@ fn run_lift_coverage(fixture: &Path) -> Result<CoverageCounts, String> {
                 match insn.op {
                     IrOp::Unimplemented => {
                         counts.unimplemented += 1;
-                        if let Some(hint) = opcode_hint(&image, insn.addr) {
-                            *counts.unimpl_opcodes.entry(hint).or_insert(0) += 1;
-                        }
+                        let hint =
+                            opcode_hint(&image, insn.addr).unwrap_or_else(|| "unknown".to_string());
+                        *counts.unimpl_opcodes.entry(hint.clone()).or_insert(0) += 1;
+                        counts.unimpl_sites.push(OpcodeSite {
+                            fixture: fixture
+                                .file_name()
+                                .map(|s| s.to_string_lossy().into_owned())
+                                .unwrap_or_default(),
+                            function: entry.name.clone(),
+                            addr: insn.addr,
+                            hint,
+                        });
                     }
                     IrOp::Callother => {
                         counts.callother += 1;
@@ -447,6 +466,40 @@ fn build_report(stats: &HashMap<String, ArchStats>) -> String {
         let _ = writeln!(s, "- **{arch}**: {}", top.join(", "));
     }
 
+    let _ = writeln!(s);
+    let _ = writeln!(s, "## Unimplemented sites");
+    let _ = writeln!(s);
+    for arch in &archs {
+        let st = &stats[*arch];
+        if st.unimpl_sites.is_empty() {
+            continue;
+        }
+        let _ = writeln!(s, "### {arch}");
+        let _ = writeln!(s);
+        let _ = writeln!(s, "| fixture | function | address | hint |");
+        let _ = writeln!(s, "|---------|----------|--------:|------|");
+        let mut sites = st.unimpl_sites.clone();
+        sites.sort_by(|a, b| {
+            a.fixture
+                .cmp(&b.fixture)
+                .then_with(|| a.function.cmp(&b.function))
+                .then_with(|| a.addr.cmp(&b.addr))
+                .then_with(|| a.hint.cmp(&b.hint))
+        });
+        for site in sites.iter().take(64) {
+            let _ = writeln!(
+                s,
+                "| `{}` | `{}` | `{:#x}` | `{}` |",
+                site.fixture, site.function, site.addr, site.hint
+            );
+        }
+        if sites.len() > 64 {
+            let _ = writeln!(s,);
+            let _ = writeln!(s, "_{} more omitted._", sites.len() - 64);
+        }
+        let _ = writeln!(s);
+    }
+
     // Failures.
     let mut any_err = false;
     for st in stats.values() {
@@ -515,6 +568,7 @@ pub fn run(root: &Path) {
                 for (k, v) in counts.callother_opcodes {
                     *entry.callother_opcodes.entry(k).or_insert(0) += v;
                 }
+                entry.unimpl_sites.extend(counts.unimpl_sites);
                 eprintln!(
                     "ok (discovered={}, lifted={}, skipped={}, unimpl={}, callother={})",
                     counts.discovered_functions,

@@ -2347,7 +2347,10 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
 
         Arm64Insn::ARM64_INS_MRS => emit_aarch64_mrs(ctx, &ops),
         Arm64Insn::ARM64_INS_MSR => emit_aarch64_msr(ctx, &ops),
-        Arm64Insn::ARM64_INS_BRK | Arm64Insn::ARM64_INS_UDF => emit_aarch64_brk(ctx, &ops),
+        Arm64Insn::ARM64_INS_BRK | Arm64Insn::ARM64_INS_UDF => {
+            emit_aarch64_exception(ctx, &ops, CALLOTHER_AARCH64_BRK)
+        }
+        Arm64Insn::ARM64_INS_SVC => emit_aarch64_exception(ctx, &ops, CALLOTHER_AARCH64_SVC),
         Arm64Insn::ARM64_INS_CLREX => emit_aarch64_clrex(ctx, &ops),
 
         // t186 — AArch64 NEON LDn/STn multi-structure register-list ops.
@@ -2614,6 +2617,7 @@ const CALLOTHER_AARCH64_CNEG: u64 = 0x433;
 const CALLOTHER_AARCH64_CLREX: u64 = 0x434;
 const CALLOTHER_AARCH64_FCCMP: u64 = 0x435;
 const CALLOTHER_AARCH64_BFI: u64 = 0x436;
+const CALLOTHER_AARCH64_SVC: u64 = 0x437;
 
 fn aarch64_dst_reg(ops: &[(Arm64OperandType, Arm64Shift)]) -> Option<Varnode> {
     match ops.first() {
@@ -3038,14 +3042,14 @@ fn emit_aarch64_movi(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) 
     ));
 }
 
-fn emit_aarch64_brk(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {
+fn emit_aarch64_exception(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)], tag: u64) {
     let imm = ops
         .first()
         .and_then(|(op, _)| aarch64_immediate_const(op, 8))
         .unwrap_or_else(|| Varnode::constant(0, 8));
     ctx.emit(IrInsn::without_output(
         IrOp::Callother,
-        smallvec![Varnode::constant(CALLOTHER_AARCH64_BRK, 8), imm],
+        smallvec![Varnode::constant(tag, 8), imm],
         ctx.addr,
     ));
 }

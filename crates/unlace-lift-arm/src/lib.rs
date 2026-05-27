@@ -519,6 +519,12 @@ mod tests {
     }
 
     #[test]
+    fn arm64_svc_lifts_to_callother() {
+        // SVC #0 → d4000001
+        assert_callother_tag(&[0x01, 0x00, 0x00, 0xd4], 0x437);
+    }
+
+    #[test]
     fn try_aarch64_csel_recognizes_csel_x0_x1_x2_eq() {
         // CSEL X0, X1, X2, EQ  →  0x9A820020
         let d = try_aarch64_csel(0x9A82_0020).expect("CSEL must decode");

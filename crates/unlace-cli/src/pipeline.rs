@@ -54,6 +54,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
+use iced_x86::{Decoder, DecoderOptions, FlowControl};
 
 use unlace_ir::ssa::SsaFunction;
 use unlace_ir::ssa::VarnodeSlot;
@@ -191,7 +192,7 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         infer_arch_fixture_sizes(image, &mut funcs);
     }
 
-    if funcs.is_empty() {
+    if funcs.is_empty() && uses_x86_function_discovery(image.arch) {
         tracing::info!("no function symbols found; attempting prologue scan");
         funcs = scan_for_prologues(image);
     }
@@ -219,13 +220,14 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
         add_post_entry_functions(image, &mut funcs);
     }
 
-    if !(had_symbol_funcs && permissive_symbol_sizes) {
+    if !(had_symbol_funcs && permissive_symbol_sizes) && uses_x86_function_discovery(image.arch) {
         funcs = recursive_descent_discovery(image, funcs);
     }
     if permissive_symbol_sizes {
         infer_arch_fixture_sizes(image, &mut funcs);
     }
     recover_libc_start_main_main_alias(image, &mut funcs);
+    prune_invalid_function_starts(image, &mut funcs);
 
     if let Some(filter) = filter {
         let target = parse_function_filter(filter);
@@ -239,6 +241,25 @@ pub fn discover_functions(image: &BinaryImage, filter: Option<&str>) -> Result<V
     }
 
     Ok(funcs)
+}
+
+fn uses_x86_function_discovery(arch: ArchId) -> bool {
+    matches!(arch, ArchId::X86 | ArchId::X86_64)
+}
+
+fn function_start_alignment(arch: ArchId) -> u64 {
+    match arch {
+        ArchId::AArch64 => 4,
+        _ => 1,
+    }
+}
+
+fn prune_invalid_function_starts(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
+    let align = function_start_alignment(image.arch);
+    if align <= 1 {
+        return;
+    }
+    funcs.retain(|func| func.addr.is_multiple_of(align));
 }
 
 fn recover_libc_start_main_main_alias(image: &BinaryImage, funcs: &mut Vec<FunctionEntry>) {
@@ -592,25 +613,20 @@ fn recursive_descent_discovery(
                 continue;
             }
 
+            let bitness = if image.arch == ArchId::X86 { 32 } else { 64 };
             let region = &data[start_off..end_off];
-            let mut i = 0;
-            while i + 5 <= region.len() {
-                if region[i] == 0xE8 {
-                    let rel = i32::from_le_bytes([
-                        region[i + 1],
-                        region[i + 2],
-                        region[i + 3],
-                        region[i + 4],
-                    ]);
-                    let call_site = base + (start_off + i) as u64;
-                    let target = call_site.wrapping_add(5).wrapping_add(rel as i64 as u64);
-
-                    if target >= base && target < text_end && !known.contains(&target) {
-                        new_targets.push(target);
-                    }
-                    i += 5;
-                } else {
-                    i += 1;
+            let mut decoder = Decoder::with_ip(bitness, region, func_start, DecoderOptions::NONE);
+            while decoder.can_decode() {
+                let insn = decoder.decode();
+                if insn.is_invalid() {
+                    continue;
+                }
+                if insn.flow_control() != FlowControl::Call {
+                    continue;
+                }
+                let target = insn.near_branch_target();
+                if target >= base && target < text_end && !known.contains(&target) {
+                    new_targets.push(target);
                 }
             }
         }
@@ -742,18 +758,33 @@ fn lift_instructions(
         match lifter.lift_insn(remaining, addr) {
             Ok(lifted) => {
                 let is_term = lifted.ir_ops.iter().any(|op| is_terminator(op.op));
+                let no_fallthrough = lifted
+                    .ir_ops
+                    .iter()
+                    .any(|op| is_no_fallthrough_terminator(op.op));
+                let len = lifted.len;
                 records.push(LiftedInsnRecord {
                     addr,
-                    len: lifted.len,
+                    len,
                     ir_ops: lifted.ir_ops,
                     is_terminator: is_term,
                 });
-                offset += lifted.len;
+                let next_offset = offset.saturating_add(len);
+                if no_fallthrough && is_padding_tail(lifter.arch(), &code[next_offset..]) {
+                    break;
+                }
+                offset = next_offset;
             }
             Err(e) => {
+                if is_padding_tail(lifter.arch(), remaining) {
+                    break;
+                }
                 tracing::warn!(addr = %format_args!("{:#x}", addr), err = %e, "lift failed; emitting Unimplemented and continuing");
                 // Emit an Unimplemented marker so the CFG continues past this
-                // instruction. Skip 1 byte and try the next alignment.
+                // instruction. Fixed-width ISAs must stay aligned after a
+                // decode failure; byte stepping turns one bad AArch64 word
+                // into a long stream of fake shifted opcodes.
+                let advance = decode_error_advance(lifter.arch(), remaining.len());
                 let marker = unlace_ir::IrInsn::without_output(
                     IrOp::Unimplemented,
                     smallvec::smallvec![],
@@ -761,11 +792,11 @@ fn lift_instructions(
                 );
                 records.push(LiftedInsnRecord {
                     addr,
-                    len: 1,
+                    len: advance,
                     ir_ops: vec![marker],
                     is_terminator: false,
                 });
-                offset += 1;
+                offset += advance;
             }
         }
     }
@@ -773,11 +804,43 @@ fn lift_instructions(
     Ok(records)
 }
 
+fn decode_error_advance(arch: ArchId, remaining: usize) -> usize {
+    let width = match arch {
+        ArchId::AArch64 | ArchId::Mips | ArchId::Mips64 | ArchId::Ppc | ArchId::Ppc64 => 4,
+        ArchId::Arc | ArchId::RiscV64 | ArchId::V850 => 2,
+        _ => 1,
+    };
+    width.min(remaining).max(1)
+}
+
 fn is_terminator(op: IrOp) -> bool {
     matches!(
         op,
         IrOp::Branch | IrOp::Cbranch | IrOp::Branchind | IrOp::Return
     )
+}
+
+fn is_no_fallthrough_terminator(op: IrOp) -> bool {
+    matches!(op, IrOp::Branch | IrOp::Branchind | IrOp::Return)
+}
+
+fn is_padding_tail(arch: ArchId, bytes: &[u8]) -> bool {
+    !bytes.is_empty() && bytes.iter().all(|byte| is_padding_byte(arch, *byte))
+}
+
+fn is_padding_byte(arch: ArchId, byte: u8) -> bool {
+    match arch {
+        ArchId::X86 | ArchId::X86_64 => matches!(byte, 0x00 | 0x90 | 0xcc),
+        ArchId::AArch64
+        | ArchId::Mips
+        | ArchId::Mips64
+        | ArchId::Ppc
+        | ArchId::Ppc64
+        | ArchId::Arc
+        | ArchId::V850
+        | ArchId::RiscV64 => byte == 0x00,
+        _ => false,
+    }
 }
 
 fn build_function_from_insns(name: &str, entry_addr: u64, insns: &[LiftedInsnRecord]) -> Function {
@@ -3726,6 +3789,90 @@ mod tests {
             addrs.contains(&0x1010),
             "recursive descent should discover call target 0x1010, got: {addrs:?}",
         );
+    }
+
+    #[test]
+    fn test_recursive_discovery_ignores_e8_inside_x86_instruction() {
+        let base: u64 = 0x1000;
+        let code = vec![
+            0x48, 0x83, 0xba, 0xe8, 0x02, 0x00, 0x00, 0x00, // cmpq $0, 0x2e8(%rdx)
+            0xc3, // ret
+        ];
+        let image = make_text_image(code, base);
+        let initial = vec![FunctionEntry {
+            name: "func".into(),
+            addr: base,
+            size: 9,
+        }];
+
+        let result = recursive_descent_discovery(&image, initial);
+        let addrs: BTreeSet<u64> = result.iter().map(|f| f.addr).collect();
+        assert_eq!(
+            addrs,
+            BTreeSet::from([base]),
+            "recursive descent must decode instructions instead of byte-scanning E8: {addrs:?}",
+        );
+    }
+
+    #[test]
+    fn test_non_x86_discovery_does_not_treat_e8_as_call() {
+        let base: u64 = 0x1000;
+        let rel: i32 = 0x1010_i64.wrapping_sub(0x1005) as i32;
+        let mut code = vec![0u8; 0x40];
+        code[0] = 0xE8;
+        code[1..5].copy_from_slice(&rel.to_le_bytes());
+
+        let mut image = make_text_image(code, base);
+        image.arch = ArchId::AArch64;
+
+        let result = discover_functions(&image, None).expect("discover");
+        let addrs: BTreeSet<u64> = result.iter().map(|f| f.addr).collect();
+        assert_eq!(
+            addrs,
+            BTreeSet::from([base]),
+            "AArch64 discovery must not run x86 E8 recursive descent: {addrs:?}",
+        );
+    }
+
+    #[test]
+    fn test_aarch64_function_prune_rejects_unaligned_entries() {
+        let base: u64 = 0x1000;
+        let mut image = make_text_image(vec![0; 0x40], base);
+        image.arch = ArchId::AArch64;
+        let mut funcs = vec![
+            FunctionEntry {
+                name: "aligned".into(),
+                addr: base,
+                size: 4,
+            },
+            FunctionEntry {
+                name: "unaligned".into(),
+                addr: base + 1,
+                size: 4,
+            },
+        ];
+
+        prune_invalid_function_starts(&image, &mut funcs);
+
+        assert_eq!(funcs.len(), 1);
+        assert_eq!(funcs[0].name, "aligned");
+    }
+
+    #[test]
+    fn test_decode_error_advance_keeps_fixed_width_alignment() {
+        assert_eq!(decode_error_advance(ArchId::X86_64, 9), 1);
+        assert_eq!(decode_error_advance(ArchId::AArch64, 9), 4);
+        assert_eq!(decode_error_advance(ArchId::AArch64, 3), 3);
+        assert_eq!(decode_error_advance(ArchId::Arc, 9), 2);
+    }
+
+    #[test]
+    fn test_padding_tail_detection_is_arch_specific() {
+        assert!(is_padding_tail(ArchId::Arc, &[0, 0]));
+        assert!(is_padding_tail(ArchId::AArch64, &[0, 0, 0, 0]));
+        assert!(is_padding_tail(ArchId::X86_64, &[0xcc, 0x90, 0x00]));
+        assert!(!is_padding_tail(ArchId::Arc, &[0, 0x22]));
+        assert!(!is_padding_tail(ArchId::X86_64, &[0xcc, 0x48]));
     }
 
     #[test]

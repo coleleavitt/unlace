@@ -200,3 +200,281 @@ Ordered by value-per-effort, grounded in the findings above:
 - Xie et al., CCS'24 — ReSym; Tan et al., EMNLP'24 — LLM4Decompile + Decompile-Eval
 - Tan et al., 2025 — DecompileBench (arXiv 2505.12668)
 - Liu & Wang, ISSTA'20; Cao et al., ISSTA'24; Kline & Kulkarni, ICISSP'23
+
+---
+
+## Part 2: Deep-dive on remaining recovery gaps (2026-05-27)
+
+Expanded research on the specific gaps blocking medium/stripped/debug_templates
+fixture convergence and broader output quality.
+
+### 1. Optimized loop recovery (medium/stripped XFAIL timeout)
+
+**The problem:** Compiler-optimized loops (loop rotation, unswitching, unrolling,
+LICM, induction variable strength-reduction) produce CFGs that don't match any
+simple while/for template. Our structurer either infinite-loops trying to match
+or produces goto-heavy output.
+
+**Binary Ninja 4.1's approach (2024-06):**
+A blog post from Vector 35 describes their complete rewrite of control-flow
+recovery. Key ideas directly applicable to unlace:
+
+1. **Graph transformation primitives** — instead of pattern-matching templates:
+   - `&&`/`||` transformation: merge nested conditionals into compound conditions
+   - **Condition duplication**: duplicate condition nodes to eliminate multi-entry
+   - **Code duplication**: duplicate code blocks (undo compiler tail-merging)
+   - **Sub-region resolution**: recursively resolve single-entry/single-exit regions
+   - **Jump-table transformation**: recognize unreachable-default + bounds-check
+   - **Merge adjacent code nodes**: simplify after transforms
+   - **Goto insertion as last resort** (always terminates, always sound)
+
+2. **Condition complexity explosion** is the failure mode of condition-graph
+   resolution — exponential conditions when the compiler deduplicated code paths.
+   BN's new approach avoids this by selectively applying duplication vs goto.
+
+3. **Test suite**: they generate random CFGs (simple/complex control, data flow,
+   simple/complex loops, simple/complex switch) as AArch64 machine code, then
+   compare execution results against HLIL interpreter. Their old algorithm: 41%
+   accuracy on complex loops → new: **99.8%**. Complex switch: 45% → **100%**.
+
+**SAILR's approach (USENIX'24):**
+Rather than generic structuring, SAILR identifies *specific compiler
+optimizations* and reverses them:
+
+- **ISD (Implicit Subgraph Duplication)** — e.g. Jump Threading. GCC duplicates
+  a subgraph when reaching conditions overlap. SAILR finds storage-equivalent
+  statement pairs, expands match via BFS + KMP, merges them back, re-applies
+  conditions. This directly undoes the gotos Jump Threading introduces.
+- **ISC (Implicit Subgraph Condensing)** — e.g. Cross Jumping. GCC merges
+  semantically-equivalent tails (e.g. multiple `return -1;`) into one block +
+  gotos. SAILR duplicates the condensed block back to each predecessor. Special
+  case: stack-canary exit regions (if + return + `__stack_chk_fail`) — copy
+  entire exit cluster.
+- **Switch Lowering reversion** — binary decision trees from switch statements:
+  identify `a == c` cascading conditions in a single region, merge into switch
+  node. Also handles switch clustering (multiple disjoint sub-switches).
+- **Short-circuit Boolean recovery** — GCC transforms `&&`/`||` into control-flow
+  at Gimple level. SAILR adds graph schemas to recognize and re-fold them.
+- **Comma-separated multi-statement expressions** — loop conditions with side
+  effects; only Hex-Rays handles this among current tools.
+- **Common-condition while-loop exits** — when a while-loop contains a branch
+  with both successors being inversions (`c` and `!c`), replace with if + break.
+- **Non-returning function detection** — missing `noreturn` attributes cause
+  spurious successor edges that make structurable code appear irreducible.
+
+**Loop rotation reversal (the specific -O2 problem):**
+GCC's `-O2` applies loop rotation: transforms `while(cond) { body }` into
+`if(cond) { do { body } while(cond) }`. This is a well-known decompiler pain
+point. The fix is a post-structuring pass:
+1. Detect `if(C) { do { body } while(C) }` where C is the same condition
+2. Collapse back to `while(C) { body }`
+Our `recover_for_loops` in `refinement.rs` does part of this, but only for
+for-loop patterns — need a generic while-rotation reversal pass.
+
+**Actionable for unlace:**
+- Add a **timeout/fuel limit** to `structure_region` so it can't infinite-loop
+  (this fixes the XFAIL hang immediately)
+- Add **condition duplication** and **code duplication** transforms as
+  alternatives to goto insertion
+- Add **loop rotation reversal** as a refinement pass
+- Add **ISC reversal** (duplicate condensed exit blocks — especially stack-canary
+  patterns which we already detect in `prologue_elim.rs`)
+- Add **non-returning function detection** pre-pass (we have `attributor.rs` —
+  wire its `noreturn` findings into the CFG before structuring)
+
+### 2. C++ SRET / aggregate return recovery (debug_templates XFAIL)
+
+**The problem:** When a C++ function returns a struct by value, the System V
+AMD64 ABI passes a hidden pointer in RDI (the "sret" parameter). The callee
+writes the return value through this pointer, and RAX holds the pointer on
+return. Decompilers that don't recognize this pattern show raw pointer
+dereferences instead of a clean return expression.
+
+**How it works in practice:**
+```c
+// Source:
+MyStruct foo() { return {1, 2, 3}; }
+
+// What the compiler actually generates (pseudo-C ABI lowering):
+MyStruct* foo(MyStruct* __sret_hidden) {
+    __sret_hidden->a = 1;
+    __sret_hidden->b = 2;
+    __sret_hidden->c = 3;
+    return __sret_hidden;  // RAX = RDI
+}
+```
+
+**IDA's approach:**
+- Detects `__sret` via function prototype / type info (if available from
+  DWARF/PDB/TIL)
+- If no debug info: heuristic — first arg is a pointer, callee writes through
+  it, RAX == RDI on return → mark as sret
+- Renders as: `MyStruct result = foo();` rather than showing the hidden pointer
+
+**Classification rules (System V AMD64, §3.2.3):**
+- Struct ≤ 16 bytes, all members INTEGER/SSE class → returned in RAX(:RDX)/XMM0(:XMM1)
+- Struct > 16 bytes OR has MEMORY-class member → caller allocates, passes
+  hidden pointer in RDI (shifted, real args start at RSI), callee returns RDI in RAX
+
+**What unlace needs:**
+1. In `calling_conv.rs`: detect when first arg is a pointer that is:
+   - Written to (multiple stores through it) in the function body
+   - Returned in RAX (RAX == first-arg at every return)
+   - Not read from before the first write (rules out input pointer)
+2. Mark the function signature with `sret` attribute
+3. In the printer: when calling an sret function, emit
+   `MyStruct var = func(real_args)` and suppress the hidden pointer arg
+4. In the callee body: emit `return (MyStruct){.a=1, .b=2, .c=3}` instead of
+   individual pointer writes + `return __sret_hidden`
+
+**Also applies to:** Win64 (hidden pointer in RCX when struct > 8 bytes or
+non-trivially-copyable), ARM64 (X8 register for sret), and `__thiscall` where
+ECX/RCX holds `this`.
+
+### 3. Expression recovery / cross-statement folding (Backlog #6)
+
+**The problem:** IDA's output reads like:
+```c
+result = (unsigned int)(v3 + 4 * v2);
+```
+Ours reads like:
+```c
+t1 = v2 << 2;
+t2 = v3 + t1;
+result = (unsigned int)t2;
+```
+The difference is **expression propagation** — folding single-use temporaries
+into the expressions that consume them.
+
+**IDA's pipeline (from session research):**
+- `MMAT_PREOPTIMIZED`: initial expression propagation (`sub_17D8C0`)
+- `MMAT_LOCOPT`: combiner/peephole (`sub_B36D0`/`sub_B5190`/`sub_B5460`)
+- `MMAT_GLBOPT1-3`: global propagation (`sub_181F80`), 64-bit demotion
+- `MMAT_LVARS`: variable allocation + interference-based coalescing
+- Each level runs multiple sub-passes in a fixed-point loop
+
+**dewolf's approach (NDSS-BAR'23):**
+- **Expression propagation**: after SSA analysis, propagate single-definition
+  single-use variables into their use site (standard compiler-like
+  propagation). Key rule: only propagate if the definition has exactly one use
+  (or the expression is side-effect-free and cheap).
+- **Subexpression elimination**: after propagation, find duplicate
+  subexpressions and introduce a named variable for them (reverse of
+  propagation — used for readability when the expression appears 2+ times).
+- **Redundant cast elimination**: nested casts from register sub-access
+  (`(int)(short)(char)x` where all are widening) → keep only the outermost.
+- **Constant representation**: infer hex vs decimal vs char vs address based on
+  context (comparison with known constants, string ops, etc.).
+- **Graph-coloring Out-of-SSA**: key for reducing leaked SSA temps. Build
+  interference graph from liveness, color it, group same-color vars under one
+  name. This is exactly what we need for our LVAR allocation gap.
+
+**Binary Ninja's expression folding:**
+From their documentation: "Expression Folding — folds a single-use assignment
+into the expression that uses it." This is a standard HLIL pass applied after
+type propagation.
+
+**What unlace needs (ordered):**
+1. **Single-use temp propagation** — for each `tN = expr` where tN has exactly
+   one use, substitute expr at the use site and delete the assignment. We have
+   `propagate_copies` and `propagate_copies_ssa` but they're limited to
+   `Assign(var, var)` — need to generalize to `Assign(var, arbitrary_expr)`.
+2. **Multi-use subexpression extraction** — after propagation, any expression
+   appearing 2+ times gets a named temp (readability).
+3. **Cast simplification** — collapse nested casts: `(T1)(T2)x` where T1 is
+   wider → just `(T1)x`. Remove identity casts.
+4. **Interference-graph-based variable coalescing** in out-of-SSA (our
+   `coalesce_ssa_vars` is a simple heuristic — needs real liveness +
+   interference graph à la dewolf).
+5. **Cross-statement folding** — after structuring, walk HIR: any `HirStmt::Expr`
+   that is just `var = expr` where var has one use in the next statement → fold.
+
+### 4. Variable naming (Backlog #10)
+
+**Academic state of the art:**
+- **DIRE** (ASE'19) — uses AST structure (GGNN over decompiled code AST) to
+  predict names. ~44.9% exact-match accuracy on their test set.
+- **DIRTY** (USENIX'22) — transformer that jointly predicts names + types from
+  decompiler output. Trains on source↔decompiled pairs from open-source code.
+- **VarBERT** (S&P'24) — BERT with constrained masked language modeling.
+  Current SOTA: ~52.8% exact-match. Key insight: decompiled code is
+  structurally similar enough to source that transfer learning works.
+
+**Practical heuristic naming (no ML, high value):**
+IDA uses simple rules that cover ~80% of the perceived naming quality:
+- `result` — variable that is returned (RAX at return site)
+- `a1, a2, ...` — function parameters in ABI order
+- `v1, v2, ...` — local variables (stack/register allocated)
+- `i, j, k` — loop induction variables (detected by for-loop recovery)
+- `this` — first arg of `__thiscall` functions
+- `buf, src, dst, len, n, s` — from known libc call sites:
+  `memcpy(dst, src, n)`, `strlen(s)`, `malloc(n)`, etc.
+- `ptr` — variables that are used exclusively in dereference expressions
+
+**What unlace can do cheaply (no ML):**
+1. Name `result` for returned variables (detect RAX at return)
+2. Name `aN` for detected parameters (already done partially)
+3. Name `vN` for locals with stable scope (already done)
+4. Name induction variables `i`/`j`/`k` in for-loops
+5. Propagate names from known libc prototypes to arguments at call sites
+6. Name `this` for first arg of functions with vtable dispatch patterns
+
+### 5. Struct/field/array recovery (Backlog #8)
+
+**OSPREY (IEEE S&P'21):**
+The definitive paper on probabilistic struct recovery from stripped binaries.
+Key technique:
+
+1. **Access pattern collection** — for each base pointer, collect all
+   (offset, size, operation_type) tuples from loads/stores through it
+2. **Probabilistic constraint model** — assign confidence to each access being
+   a field access vs coincidental pointer arithmetic:
+   - High confidence: consistent offset, consistent size, multiple access sites
+   - Low confidence: single access, variable offset, mixed sizes
+3. **Constraint propagation** — propagate struct shapes interprocedurally:
+   if `foo(ptr)` accesses `ptr+0`, `ptr+8`, `ptr+16` and `bar(ptr)` accesses
+   `ptr+0`, `ptr+4` → the struct has fields at 0, 4, 8, 16 (overlap resolved
+   probabilistically)
+4. **Type lattice unification** — join field types across all access sites
+5. **Result:** named struct layout with typed fields + confidence scores
+
+OSPREY achieves **74% precision, 70% recall** on variable recovery and
+significantly outperforms IDA/Ghidra on struct identification in stripped
+binaries.
+
+**dewolf array detection:**
+- Find `*(base + offset)` patterns where offset is `index * stride`
+- Verify consistent stride across all accesses through the same base
+- Emit `base[index]` syntax
+- Discard candidates without consistent array size
+
+**What unlace needs:**
+1. **Stack struct detector** — in `stack_analysis.rs`, group adjacent stack slots
+   that are always accessed through the same base (RBP/RSP + offset range) →
+   emit as struct fields
+2. **Heap struct propagation** — when a `malloc(N)` result is accessed at
+   consistent offsets, create a struct type with fields at those offsets
+3. **Array stride detection** — when offset = `var * constant`, emit as array
+   access (`base[var]`) instead of `*(base + var * 8)`
+4. **Interprocedural propagation** — if function A passes a pointer to function
+   B, and B accesses fields, propagate the struct type back to A's variable
+
+### Summary: specific fixes for the three XFAILs
+
+| XFAIL | Root cause | Fix |
+|---|---|---|
+| medium | structurer timeout on -O2 loop rotation | fuel limit + loop-rotation reversal pass |
+| stripped | same as medium (same binary, stripped) | same fix benefits both |
+| debug_templates | C++ sret not detected → raw pointer writes | sret detection in calling_conv + printer rendering |
+
+### Additional sources found
+
+- Binary Ninja blog (2024-06): https://binary.ninja/2024/06/19/restructuring-the-decompiler.html
+- SAILR eval code: https://github.com/mahaloz/sailr-eval
+- dewolf code: https://github.com/fkie-cad/dewolf
+- "A Comb for Decompiled C Code" (rev.ng, 2022) — code duplication approach
+- CMU reports: http://reports-archive.adm.cs.cmu.edu/anon/s3d2023/CMU-S3D-23-103.pdf
+  (variable naming annotation)
+- Decompilation Wiki: https://decompilation.wiki/ (Zion Basque et al.)
+- DIRTY code/model: https://github.com/CMUSTRUDEL/DIRTY
+- VarBERT: https://sefcom.asu.edu/publications/varbert-oakland24.pdf

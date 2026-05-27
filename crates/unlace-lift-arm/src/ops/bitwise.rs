@@ -8,7 +8,9 @@ type Ops = [(Arm64OperandType, Arm64Shift)];
 
 fn dst_size(ops: &Ops) -> u8 {
     match ops.first() {
-        Some((Arm64OperandType::Reg(reg), _)) if crate::register_file::is_w_reg(*reg) => 4,
+        Some((Arm64OperandType::Reg(reg), _)) => crate::register_file::reg_varnode(*reg)
+            .map(|vn| vn.size)
+            .unwrap_or(8),
         _ => 8,
     }
 }
@@ -93,6 +95,36 @@ pub fn lift_eor(ctx: &mut LiftCtx, ops: &Ops) {
     }
 }
 
+pub fn lift_bic(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let a = operand_to_varnode(ctx, &ops[1].0);
+    let b = operand_to_varnode(ctx, &ops[2].0);
+    match (a, b) {
+        (Some(a), Some(b)) => {
+            let inverted = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntNegate,
+                inverted,
+                smallvec![b],
+                ctx.addr,
+            ));
+            let result = Varnode::unique(ctx.alloc_unique(), size);
+            ctx.emit(IrInsn::with_output(
+                IrOp::IntAnd,
+                result,
+                smallvec![a, inverted],
+                ctx.addr,
+            ));
+            write_dst(ctx, ops, result);
+        }
+        _ => ctx.emit_unimplemented(),
+    }
+}
+
 pub fn lift_lsl(ctx: &mut LiftCtx, ops: &Ops) {
     if ops.len() < 3 {
         ctx.emit_unimplemented();
@@ -137,6 +169,27 @@ pub fn lift_lsr(ctx: &mut LiftCtx, ops: &Ops) {
         }
         _ => ctx.emit_unimplemented(),
     }
+}
+
+pub fn lift_ror(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let size = dst_size(ops);
+    let Some(src) = operand_to_varnode(ctx, &ops[1].0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let shift = match &ops[2].0 {
+        Arm64OperandType::Imm(v) | Arm64OperandType::Cimm(v) => *v as u64,
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+    let rotated = emit_ror(ctx, src, shift % (u64::from(size) * 8), size);
+    write_dst(ctx, ops, rotated);
 }
 
 pub fn lift_asr(ctx: &mut LiftCtx, ops: &Ops) {

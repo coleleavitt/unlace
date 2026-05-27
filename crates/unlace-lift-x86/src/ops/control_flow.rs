@@ -54,6 +54,23 @@ pub fn lift_jcc(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     }
 }
 
+pub fn lift_loopne(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let target = Varnode::constant(insn.near_branch_target(), 8);
+    let zf = Varnode::new(SpaceId::Register, ZF, 1);
+    let not_zf = Varnode::unique(ctx.alloc_unique(), 1);
+    ctx.emit(IrInsn::with_output(
+        IrOp::BoolNegate,
+        not_zf,
+        smallvec![zf],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::without_output(
+        IrOp::Cbranch,
+        smallvec![target, not_zf],
+        ctx.addr,
+    ));
+}
+
 fn jcc_condition(ctx: &mut LiftCtx, mnemonic: iced_x86::Mnemonic) -> Option<Varnode> {
     use iced_x86::Mnemonic as M;
 

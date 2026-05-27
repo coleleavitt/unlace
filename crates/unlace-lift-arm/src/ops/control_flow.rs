@@ -170,6 +170,63 @@ pub fn lift_cbnz(ctx: &mut LiftCtx, ops: &Ops) {
     }
 }
 
+pub fn lift_tbz(ctx: &mut LiftCtx, ops: &Ops, branch_on_zero: bool) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(reg) = operand_to_varnode(ctx, &ops[0].0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let bit = match &ops[1].0 {
+        Arm64OperandType::Imm(imm) => *imm as u64,
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+    let target = match &ops[2].0 {
+        Arm64OperandType::Imm(imm) => Varnode::constant(*imm as u64, 8),
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+
+    let shifted = Varnode::unique(ctx.alloc_unique(), reg.size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntRight,
+        shifted,
+        smallvec![reg, Varnode::constant(bit, 1)],
+        ctx.addr,
+    ));
+    let masked = Varnode::unique(ctx.alloc_unique(), reg.size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAnd,
+        masked,
+        smallvec![shifted, Varnode::constant(1, reg.size)],
+        ctx.addr,
+    ));
+    let cond = Varnode::unique(ctx.alloc_unique(), 1);
+    let cmp_op = if branch_on_zero {
+        IrOp::IntEqual
+    } else {
+        IrOp::IntNotequal
+    };
+    ctx.emit(IrInsn::with_output(
+        cmp_op,
+        cond,
+        smallvec![masked, Varnode::constant(0, reg.size)],
+        ctx.addr,
+    ));
+    ctx.emit(IrInsn::without_output(
+        IrOp::Cbranch,
+        smallvec![target, cond],
+        ctx.addr,
+    ));
+}
+
 pub fn lift_ret(ctx: &mut LiftCtx, ops: &Ops) {
     let target = if ops.is_empty() {
         Varnode::reg(X30, 8)

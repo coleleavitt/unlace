@@ -10075,7 +10075,7 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x1D2 => Some("_mm512_mullo_epi64"), // VPMULLQ
 
         // ── AVX-512 generic EVEX fallback (t306) ─────────────────
-        0x1F0 => Some("__builtin_ia32_avx512_evex"),
+        0x1EF => Some("__builtin_ia32_avx512_evex"),
 
         // ── AES-NI intrinsics (0x1E0..0x1E4) ──────────────────────
         0x1E0 => Some("_mm_aesenc_si128"),          // AESENC
@@ -10172,6 +10172,17 @@ fn callother_intrinsic_name(tag: u64) -> Option<&'static str> {
         0x427 => Some("svst1_s32"),
         0x428 => Some("svand_pred"),
         0x429 => Some("svptrue_b32"),
+
+        // ── Intel AMX tile intrinsics (0x500..0x508) ────────────────
+        0x500 => Some("_tile_loadd"),
+        0x501 => Some("_tile_stream_loadd"),
+        0x502 => Some("_tile_stored"),
+        0x503 => Some("_tile_release"),
+        0x504 => Some("_tile_dpbssd"),
+        0x505 => Some("_tile_dpbsud"),
+        0x506 => Some("_tile_dpbusd"),
+        0x507 => Some("_tile_dpbuud"),
+        0x508 => Some("_tile_dpbf16ps"),
         _ => None,
     }
 }
@@ -18120,6 +18131,36 @@ mod tests {
         assert!(
             !output.contains("/* CALLOTHER"),
             "known AVX-512 tag should not leak CALLOTHER fallback: {output}",
+        );
+    }
+
+    #[test]
+    fn test_callother_amx_dpbssd_resolved() {
+        let tmm1 = reg(0x1040, 255);
+        let tmm2 = reg(0x1440, 255);
+        let tmm3 = reg(0x1840, 255);
+        let tag = con(0x504, 8); // TDPBSSD
+
+        let body = vec![
+            HirNode::Statement(IrInsn::with_output(
+                IrOp::Callother,
+                tmm1,
+                smallvec![tag, tmm1, tmm2, tmm3],
+                0x1000,
+            )),
+            HirNode::Return(None),
+        ];
+
+        let func = make_func("amx_dpbssd", body);
+        let output = print_c(&func);
+
+        assert!(
+            output.contains("_tile_dpbssd("),
+            "AMX TDPBSSD tag should emit _tile_dpbssd: {output}",
+        );
+        assert!(
+            !output.contains("/* CALLOTHER"),
+            "known AMX tag should not leak CALLOTHER fallback: {output}",
         );
     }
 

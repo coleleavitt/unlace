@@ -167,11 +167,21 @@ const ARM64_REG_SP: u16 = 5;
 const ARM64_REG_WZR: u16 = 8;
 const ARM64_REG_XZR: u16 = 9;
 
+const ARM64_REG_B0: u16 = 11;
+const ARM64_REG_B31: u16 = 42;
+const ARM64_REG_D0: u16 = 43;
+const ARM64_REG_D31: u16 = 74;
+const ARM64_REG_H0: u16 = 75;
+const ARM64_REG_H31: u16 = 106;
 const ARM64_REG_W0: u16 = 187;
 const ARM64_REG_W28: u16 = 215;
 const ARM64_REG_W29: u16 = 216;
 const ARM64_REG_W30: u16 = 217;
 
+const ARM64_REG_Q0: u16 = 123;
+const ARM64_REG_Q31: u16 = 154;
+const ARM64_REG_S0: u16 = 155;
+const ARM64_REG_S31: u16 = 186;
 const ARM64_REG_X0: u16 = 218;
 const ARM64_REG_X28: u16 = 246;
 const ARM64_REG_Z0: u16 = 247;
@@ -179,6 +189,8 @@ const ARM64_REG_Z31: u16 = 278;
 
 const ARM64_REG_P0: u16 = 107;
 const ARM64_REG_P15: u16 = 122;
+const ARM64_REG_V0: u16 = 310;
+const ARM64_REG_V31: u16 = 341;
 
 /// Map a capstone RegId to `(register_space_offset, size)`.
 ///
@@ -211,6 +223,33 @@ pub fn cs_reg_to_varnode(reg: RegId) -> Option<(u64, u8)> {
         x if x == ARM64_REG_W30 => Some((X30, 4)),
         // WZR — 32-bit zero register, handled separately in reg_varnode
         x if x == ARM64_REG_WZR => None,
+
+        // SIMD/FP aliases. Model B/H/S/D/Q/V as low lanes of the Z-register
+        // storage so scalar FP and Neon aliases share dataflow with Z0-Z31.
+        _ if (ARM64_REG_B0..=ARM64_REG_B31).contains(&id) => {
+            let idx = (id - ARM64_REG_B0) as u8;
+            Some((sve_z_offset(idx), 1))
+        }
+        _ if (ARM64_REG_H0..=ARM64_REG_H31).contains(&id) => {
+            let idx = (id - ARM64_REG_H0) as u8;
+            Some((sve_z_offset(idx), 2))
+        }
+        _ if (ARM64_REG_S0..=ARM64_REG_S31).contains(&id) => {
+            let idx = (id - ARM64_REG_S0) as u8;
+            Some((sve_z_offset(idx), 4))
+        }
+        _ if (ARM64_REG_D0..=ARM64_REG_D31).contains(&id) => {
+            let idx = (id - ARM64_REG_D0) as u8;
+            Some((sve_z_offset(idx), 8))
+        }
+        _ if (ARM64_REG_Q0..=ARM64_REG_Q31).contains(&id) => {
+            let idx = (id - ARM64_REG_Q0) as u8;
+            Some((sve_z_offset(idx), 16))
+        }
+        _ if (ARM64_REG_V0..=ARM64_REG_V31).contains(&id) => {
+            let idx = (id - ARM64_REG_V0) as u8;
+            Some((sve_z_offset(idx), 16))
+        }
 
         // SVE Z0–Z31
         _ if (ARM64_REG_Z0..=ARM64_REG_Z31).contains(&id) => {

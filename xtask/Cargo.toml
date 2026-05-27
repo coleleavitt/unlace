@@ -6,8 +6,12 @@ edition.workspace = true
 [dependencies]
 serde = { workspace = true }
 toml = "0.8"
+capstone = { workspace = true }
+iced-x86 = { workspace = true }
 unlace-loader = { path = "../crates/unlace-loader" }
 unlace-ir = { path = "../crates/unlace-ir" }
+unlace-cli = { path = "../crates/unlace-cli" }
+unlace-lift = { path = "../crates/unlace-lift" }
 unlace-lift-x86 = { path = "../crates/unlace-lift-x86" }
 unlace-passes = { path = "../crates/unlace-passes" }
 unlace-sbom = { path = "../crates/unlace-sbom" }

@@ -2082,9 +2082,64 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_MUL if aarch64_is_vector_form(detail) => {
             emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_MUL)
         }
-        Arm64Insn::ARM64_INS_FADD => emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FADD),
-        Arm64Insn::ARM64_INS_FSUB => emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FSUB),
-        Arm64Insn::ARM64_INS_FMUL => emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FMUL),
+        Arm64Insn::ARM64_INS_FADD if aarch64_is_vector_form(detail) => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FADD)
+        }
+        Arm64Insn::ARM64_INS_FSUB if aarch64_is_vector_form(detail) => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FSUB)
+        }
+        Arm64Insn::ARM64_INS_FMUL if aarch64_is_vector_form(detail) => {
+            emit_aarch64_neon_arith(ctx, detail, CALLOTHER_NEON_FMUL)
+        }
+        Arm64Insn::ARM64_INS_FADD => emit_aarch64_float_binop(ctx, &ops, IrOp::FloatAdd),
+        Arm64Insn::ARM64_INS_FSUB => emit_aarch64_float_binop(ctx, &ops, IrOp::FloatSub),
+        Arm64Insn::ARM64_INS_FMUL => emit_aarch64_float_binop(ctx, &ops, IrOp::FloatMult),
+        Arm64Insn::ARM64_INS_FDIV => emit_aarch64_float_binop(ctx, &ops, IrOp::FloatDiv),
+        Arm64Insn::ARM64_INS_FMOV => emit_aarch64_fmov(ctx, &ops),
+        Arm64Insn::ARM64_INS_FNEG => emit_aarch64_float_unop(ctx, &ops, IrOp::FloatNeg),
+        Arm64Insn::ARM64_INS_FABS => emit_aarch64_float_unop(ctx, &ops, IrOp::FloatAbs),
+        Arm64Insn::ARM64_INS_FSQRT => emit_aarch64_float_unop(ctx, &ops, IrOp::FloatSqrt),
+        Arm64Insn::ARM64_INS_FCMP | Arm64Insn::ARM64_INS_FCMPE => {
+            emit_aarch64_float_compare(ctx, &ops)
+        }
+        Arm64Insn::ARM64_INS_FCCMP | Arm64Insn::ARM64_INS_FCCMPE => {
+            emit_aarch64_float_cond_compare(ctx, &ops, detail)
+        }
+        Arm64Insn::ARM64_INS_FCSEL => emit_aarch64_fcsel(ctx, &ops, detail),
+        Arm64Insn::ARM64_INS_FMAXNM => {
+            emit_aarch64_float_callother_binop(ctx, &ops, CALLOTHER_AARCH64_FMAXNM)
+        }
+        Arm64Insn::ARM64_INS_FMINNM => {
+            emit_aarch64_float_callother_binop(ctx, &ops, CALLOTHER_AARCH64_FMINNM)
+        }
+        Arm64Insn::ARM64_INS_FABD => {
+            emit_aarch64_float_callother_binop(ctx, &ops, CALLOTHER_AARCH64_FABD)
+        }
+        Arm64Insn::ARM64_INS_FMADD => emit_aarch64_float_madd(ctx, &ops, false),
+        Arm64Insn::ARM64_INS_FMSUB => emit_aarch64_float_madd(ctx, &ops, true),
+        Arm64Insn::ARM64_INS_FRINTM => emit_aarch64_float_unop(ctx, &ops, IrOp::FloatFloor),
+        Arm64Insn::ARM64_INS_FRINTP => emit_aarch64_float_unop(ctx, &ops, IrOp::FloatCeil),
+        Arm64Insn::ARM64_INS_FRINTZ => emit_aarch64_float_unop(ctx, &ops, IrOp::FloatTrunc),
+        Arm64Insn::ARM64_INS_FRINTA
+        | Arm64Insn::ARM64_INS_FRINTI
+        | Arm64Insn::ARM64_INS_FRINTN
+        | Arm64Insn::ARM64_INS_FRINTX => emit_aarch64_float_unop(ctx, &ops, IrOp::FloatRound),
+        Arm64Insn::ARM64_INS_SCVTF | Arm64Insn::ARM64_INS_UCVTF => {
+            emit_aarch64_float_convert(ctx, &ops, IrOp::FloatInt2float)
+        }
+        Arm64Insn::ARM64_INS_FCVT => emit_aarch64_float_convert(ctx, &ops, IrOp::FloatFloat2float),
+        Arm64Insn::ARM64_INS_FCVTAS
+        | Arm64Insn::ARM64_INS_FCVTAU
+        | Arm64Insn::ARM64_INS_FCVTMS
+        | Arm64Insn::ARM64_INS_FCVTMU
+        | Arm64Insn::ARM64_INS_FCVTNS
+        | Arm64Insn::ARM64_INS_FCVTNU
+        | Arm64Insn::ARM64_INS_FCVTPS
+        | Arm64Insn::ARM64_INS_FCVTPU
+        | Arm64Insn::ARM64_INS_FCVTZS
+        | Arm64Insn::ARM64_INS_FCVTZU => {
+            emit_aarch64_float_convert(ctx, &ops, IrOp::FloatFloat2int)
+        }
         Arm64Insn::ARM64_INS_ADD => arithmetic::lift_add(ctx, &ops),
         Arm64Insn::ARM64_INS_SUB => arithmetic::lift_sub(ctx, &ops),
         Arm64Insn::ARM64_INS_ADDS => arithmetic::lift_adds(ctx, &ops),
@@ -2102,10 +2157,13 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_SMULH => arithmetic::lift_mul_high(ctx, &ops, true),
 
         Arm64Insn::ARM64_INS_AND => bitwise::lift_and(ctx, &ops),
+        Arm64Insn::ARM64_INS_ANDS => bitwise::lift_and(ctx, &ops),
+        Arm64Insn::ARM64_INS_BIC => bitwise::lift_bic(ctx, &ops),
         Arm64Insn::ARM64_INS_ORR => bitwise::lift_orr(ctx, &ops),
         Arm64Insn::ARM64_INS_EOR => bitwise::lift_eor(ctx, &ops),
         Arm64Insn::ARM64_INS_LSL => bitwise::lift_lsl(ctx, &ops),
         Arm64Insn::ARM64_INS_LSR => bitwise::lift_lsr(ctx, &ops),
+        Arm64Insn::ARM64_INS_ROR => bitwise::lift_ror(ctx, &ops),
         Arm64Insn::ARM64_INS_ASR => bitwise::lift_asr(ctx, &ops),
         Arm64Insn::ARM64_INS_MVN => bitwise::lift_mvn(ctx, &ops),
         Arm64Insn::ARM64_INS_UBFM => bitwise::lift_ubfm(ctx, &ops),
@@ -2116,11 +2174,15 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_SXTH => bitwise::lift_sxt(ctx, &ops, 2),
         Arm64Insn::ARM64_INS_SXTW => bitwise::lift_sxt(ctx, &ops, 4),
         Arm64Insn::ARM64_INS_EXTR => bitwise::lift_extr(ctx, &ops),
+        Arm64Insn::ARM64_INS_CLZ => emit_aarch64_unary_callother(ctx, &ops, CALLOTHER_AARCH64_CLZ),
+        Arm64Insn::ARM64_INS_RBIT => emit_aarch64_unary_callother(ctx, &ops, CALLOTHER_ARM_RBIT),
+        Arm64Insn::ARM64_INS_BFI => emit_aarch64_bfi(ctx, &ops),
 
         Arm64Insn::ARM64_INS_MOV => data_move::lift_mov(ctx, &ops),
         Arm64Insn::ARM64_INS_MOVZ => data_move::lift_movz(ctx, &ops),
         Arm64Insn::ARM64_INS_MOVK => data_move::lift_movk(ctx, &ops),
         Arm64Insn::ARM64_INS_MOVN => data_move::lift_movn(ctx, &ops),
+        Arm64Insn::ARM64_INS_MOVI => emit_aarch64_movi(ctx, &ops),
         Arm64Insn::ARM64_INS_NOP => data_move::lift_nop(ctx),
         Arm64Insn::ARM64_INS_ADR => data_move::lift_adr(ctx, &ops),
         Arm64Insn::ARM64_INS_ADRP => data_move::lift_adr(ctx, &ops),
@@ -2129,11 +2191,22 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_LDRB => data_move::lift_ldr_sized(ctx, &ops, 1),
         Arm64Insn::ARM64_INS_LDRH => data_move::lift_ldr_sized(ctx, &ops, 2),
         Arm64Insn::ARM64_INS_LDRSW => data_move::lift_ldrsw(ctx, &ops),
+        Arm64Insn::ARM64_INS_LDUR => data_move::lift_ldr(ctx, &ops),
+        Arm64Insn::ARM64_INS_LDURB => data_move::lift_ldr_sized(ctx, &ops, 1),
+        Arm64Insn::ARM64_INS_LDURH => data_move::lift_ldr_sized(ctx, &ops, 2),
+        Arm64Insn::ARM64_INS_LDURSW => data_move::lift_ldrsw(ctx, &ops),
         Arm64Insn::ARM64_INS_LDP => data_move::lift_ldp(ctx, &ops),
+        Arm64Insn::ARM64_INS_LDXP => data_move::lift_ldp(ctx, &ops),
+        Arm64Insn::ARM64_INS_LDAXP => data_move::lift_ldp(ctx, &ops),
         Arm64Insn::ARM64_INS_STR => data_move::lift_str(ctx, &ops),
         Arm64Insn::ARM64_INS_STRB => data_move::lift_str_sized(ctx, &ops, 1),
         Arm64Insn::ARM64_INS_STRH => data_move::lift_str_sized(ctx, &ops, 2),
+        Arm64Insn::ARM64_INS_STUR => data_move::lift_str(ctx, &ops),
+        Arm64Insn::ARM64_INS_STURB => data_move::lift_str_sized(ctx, &ops, 1),
+        Arm64Insn::ARM64_INS_STURH => data_move::lift_str_sized(ctx, &ops, 2),
         Arm64Insn::ARM64_INS_STP => data_move::lift_stp(ctx, &ops),
+        Arm64Insn::ARM64_INS_STXP => data_move::lift_stxp(ctx, &ops),
+        Arm64Insn::ARM64_INS_STLXP => data_move::lift_stxp(ctx, &ops),
         Arm64Insn::ARM64_INS_LDXR => {
             data_move::lift_exclusive_load(ctx, &ops, CALLOTHER_AARCH64_LDXR)
         }
@@ -2258,6 +2331,8 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_BLR => control_flow::lift_blr(ctx, &ops),
         Arm64Insn::ARM64_INS_CBZ => control_flow::lift_cbz(ctx, &ops),
         Arm64Insn::ARM64_INS_CBNZ => control_flow::lift_cbnz(ctx, &ops),
+        Arm64Insn::ARM64_INS_TBZ => control_flow::lift_tbz(ctx, &ops, true),
+        Arm64Insn::ARM64_INS_TBNZ => control_flow::lift_tbz(ctx, &ops, false),
         Arm64Insn::ARM64_INS_RET => control_flow::lift_ret(ctx, &ops),
         Arm64Insn::ARM64_INS_CSEL => control_flow::lift_csel(ctx, &ops, detail, 0x330),
         Arm64Insn::ARM64_INS_CSINC => control_flow::lift_csel(ctx, &ops, detail, 0x331),
@@ -2265,11 +2340,15 @@ fn dispatch_mnemonic(ctx: &mut LiftCtx, insn: &Insn, detail: &InsnDetail) {
         Arm64Insn::ARM64_INS_CSNEG => control_flow::lift_csel(ctx, &ops, detail, 0x333),
         Arm64Insn::ARM64_INS_CSET => control_flow::lift_cset(ctx, &ops, detail, 0x331),
         Arm64Insn::ARM64_INS_CSETM => control_flow::lift_cset(ctx, &ops, detail, 0x332),
+        Arm64Insn::ARM64_INS_CINC => emit_aarch64_cinc(ctx, &ops, detail),
+        Arm64Insn::ARM64_INS_CNEG => emit_aarch64_cneg(ctx, &ops, detail),
         Arm64Insn::ARM64_INS_CCMP => control_flow::lift_ccmp(ctx, &ops, detail, false),
         Arm64Insn::ARM64_INS_CCMN => control_flow::lift_ccmp(ctx, &ops, detail, true),
 
         Arm64Insn::ARM64_INS_MRS => emit_aarch64_mrs(ctx, &ops),
         Arm64Insn::ARM64_INS_MSR => emit_aarch64_msr(ctx, &ops),
+        Arm64Insn::ARM64_INS_BRK | Arm64Insn::ARM64_INS_UDF => emit_aarch64_brk(ctx, &ops),
+        Arm64Insn::ARM64_INS_CLREX => emit_aarch64_clrex(ctx, &ops),
 
         // t186 — AArch64 NEON LDn/STn multi-structure register-list ops.
         Arm64Insn::ARM64_INS_LD1 => emit_aarch64_neon_ldst(ctx, detail, CALLOTHER_AARCH64_LD1),
@@ -2520,6 +2599,467 @@ fn emit_aarch64_neon_arith(ctx: &mut LiftCtx, detail: &InsnDetail, tag: u64) {
         Varnode::constant(info.reg_indices[2] as u64, 1),
     ];
     ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
+}
+
+const CALLOTHER_AARCH64_MOVI: u64 = 0x42A;
+const CALLOTHER_AARCH64_FCMP: u64 = 0x42B;
+const CALLOTHER_AARCH64_FCSEL: u64 = 0x42C;
+const CALLOTHER_AARCH64_FMINNM: u64 = 0x42D;
+const CALLOTHER_AARCH64_FABD: u64 = 0x42E;
+const CALLOTHER_AARCH64_FMAXNM: u64 = 0x42F;
+const CALLOTHER_AARCH64_BRK: u64 = 0x430;
+const CALLOTHER_AARCH64_CINC: u64 = 0x431;
+const CALLOTHER_AARCH64_CLZ: u64 = 0x432;
+const CALLOTHER_AARCH64_CNEG: u64 = 0x433;
+const CALLOTHER_AARCH64_CLREX: u64 = 0x434;
+const CALLOTHER_AARCH64_FCCMP: u64 = 0x435;
+const CALLOTHER_AARCH64_BFI: u64 = 0x436;
+
+fn aarch64_dst_reg(ops: &[(Arm64OperandType, Arm64Shift)]) -> Option<Varnode> {
+    match ops.first() {
+        Some((Arm64OperandType::Reg(reg), _)) => reg_varnode(*reg),
+        _ => None,
+    }
+}
+
+fn aarch64_fp_const(value: f64, size: u8) -> Varnode {
+    if size == 4 {
+        Varnode::constant((value as f32).to_bits() as u64, 4)
+    } else {
+        Varnode::constant(value.to_bits(), 8)
+    }
+}
+
+fn aarch64_operand_to_varnode_sized(
+    ctx: &mut LiftCtx,
+    op: &Arm64OperandType,
+    size: u8,
+) -> Option<Varnode> {
+    match op {
+        Arm64OperandType::Fp(value) => Some(aarch64_fp_const(*value, size)),
+        _ => operand_to_varnode(ctx, op),
+    }
+}
+
+fn emit_aarch64_fmov(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit_copy(dst, src);
+}
+
+fn emit_aarch64_float_binop(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)], op: IrOp) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(lhs) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = aarch64_operand_to_varnode_sized(ctx, &ops[2].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(op, dst, smallvec![lhs, rhs], ctx.addr));
+}
+
+fn emit_aarch64_float_unop(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)], op: IrOp) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(op, dst, smallvec![src], ctx.addr));
+}
+
+fn emit_aarch64_float_convert(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)], op: IrOp) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = operand_to_varnode(ctx, &ops[1].0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(op, dst, smallvec![src], ctx.addr));
+}
+
+fn emit_aarch64_float_madd(
+    ctx: &mut LiftCtx,
+    ops: &[(Arm64OperandType, Arm64Shift)],
+    subtract: bool,
+) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(a) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(b) = aarch64_operand_to_varnode_sized(ctx, &ops[2].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(c) = aarch64_operand_to_varnode_sized(ctx, &ops[3].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let product = Varnode::unique(ctx.alloc_unique(), dst.size);
+    ctx.emit(IrInsn::with_output(
+        IrOp::FloatMult,
+        product,
+        smallvec![a, b],
+        ctx.addr,
+    ));
+    let op = if subtract {
+        IrOp::FloatSub
+    } else {
+        IrOp::FloatAdd
+    };
+    ctx.emit(IrInsn::with_output(
+        op,
+        dst,
+        smallvec![product, c],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_float_compare(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {
+    if ops.is_empty() {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(lhs) = operand_to_varnode(ctx, &ops[0].0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let rhs = ops
+        .get(1)
+        .and_then(|(op, _)| aarch64_operand_to_varnode_sized(ctx, op, lhs.size))
+        .unwrap_or_else(|| Varnode::constant(0, lhs.size));
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(CALLOTHER_AARCH64_FCMP, 8), lhs, rhs],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_float_cond_compare(
+    ctx: &mut LiftCtx,
+    ops: &[(Arm64OperandType, Arm64Shift)],
+    detail: &InsnDetail,
+) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(lhs) = operand_to_varnode(ctx, &ops[0].0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, lhs.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let nzcv = ops
+        .get(2)
+        .and_then(|(op, _)| aarch64_immediate_const(op, 1))
+        .unwrap_or_else(|| Varnode::constant(0, 1));
+    let cond = detail
+        .arch_detail()
+        .arm64()
+        .map(|a| a.cc() as u64)
+        .unwrap_or(0);
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![
+            Varnode::constant(CALLOTHER_AARCH64_FCCMP, 8),
+            Varnode::constant(cond, 1),
+            nzcv,
+            lhs,
+            rhs,
+        ],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_fcsel(
+    ctx: &mut LiftCtx,
+    ops: &[(Arm64OperandType, Arm64Shift)],
+    detail: &InsnDetail,
+) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(lhs) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = aarch64_operand_to_varnode_sized(ctx, &ops[2].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let cond = detail
+        .arch_detail()
+        .arm64()
+        .map(|a| a.cc() as u64)
+        .unwrap_or(0);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![
+            Varnode::constant(CALLOTHER_AARCH64_FCSEL, 8),
+            Varnode::constant(cond, 1),
+            lhs,
+            rhs,
+        ],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_float_callother_binop(
+    ctx: &mut LiftCtx,
+    ops: &[(Arm64OperandType, Arm64Shift)],
+    tag: u64,
+) {
+    if ops.len() < 3 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(lhs) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(rhs) = aarch64_operand_to_varnode_sized(ctx, &ops[2].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(tag, 8), lhs, rhs],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_cinc(
+    ctx: &mut LiftCtx,
+    ops: &[(Arm64OperandType, Arm64Shift)],
+    detail: &InsnDetail,
+) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let cond = detail
+        .arch_detail()
+        .arm64()
+        .map(|a| a.cc() as u64)
+        .unwrap_or(0);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![
+            Varnode::constant(CALLOTHER_AARCH64_CINC, 8),
+            Varnode::constant(cond, 1),
+            src,
+        ],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_cneg(
+    ctx: &mut LiftCtx,
+    ops: &[(Arm64OperandType, Arm64Shift)],
+    detail: &InsnDetail,
+) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let cond = detail
+        .arch_detail()
+        .arm64()
+        .map(|a| a.cc() as u64)
+        .unwrap_or(0);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![
+            Varnode::constant(CALLOTHER_AARCH64_CNEG, 8),
+            Varnode::constant(cond, 1),
+            src,
+        ],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_unary_callother(
+    ctx: &mut LiftCtx,
+    ops: &[(Arm64OperandType, Arm64Shift)],
+    tag: u64,
+) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(tag, 8), src],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_bfi(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(src) = aarch64_operand_to_varnode_sized(ctx, &ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(lsb) = aarch64_immediate_const(&ops[2].0, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(width) = aarch64_immediate_const(&ops[3].0, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(CALLOTHER_AARCH64_BFI, 8), src, lsb, width,],
+        ctx.addr,
+    ));
+}
+
+fn aarch64_immediate_const(op: &Arm64OperandType, size: u8) -> Option<Varnode> {
+    match op {
+        Arm64OperandType::Imm(value) | Arm64OperandType::Cimm(value) => {
+            Some(Varnode::constant(*value as u64, size))
+        }
+        Arm64OperandType::Fp(value) => Some(aarch64_fp_const(*value, size)),
+        _ => None,
+    }
+}
+
+fn emit_aarch64_movi(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {
+    if ops.len() < 2 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let Some(dst) = aarch64_dst_reg(ops) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(imm) = aarch64_immediate_const(&ops[1].0, dst.size) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    if imm.offset == 0 {
+        ctx.emit_copy(dst, imm);
+        return;
+    }
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![Varnode::constant(CALLOTHER_AARCH64_MOVI, 8), imm],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_brk(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {
+    let imm = ops
+        .first()
+        .and_then(|(op, _)| aarch64_immediate_const(op, 8))
+        .unwrap_or_else(|| Varnode::constant(0, 8));
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(CALLOTHER_AARCH64_BRK, 8), imm],
+        ctx.addr,
+    ));
+}
+
+fn emit_aarch64_clrex(ctx: &mut LiftCtx, ops: &[(Arm64OperandType, Arm64Shift)]) {
+    let imm = ops
+        .first()
+        .and_then(|(op, _)| aarch64_immediate_const(op, 8))
+        .unwrap_or_else(|| Varnode::constant(0, 8));
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(CALLOTHER_AARCH64_CLREX, 8), imm],
+        ctx.addr,
+    ));
 }
 
 fn aarch64_sysreg_const(op: &Arm64OperandType) -> Option<Varnode> {

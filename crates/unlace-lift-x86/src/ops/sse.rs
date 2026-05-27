@@ -124,6 +124,46 @@ pub mod tag {
     /// SSE4.2 packed string compare → ECX/flags (3-operand: xmm1, xmm2, imm8).
     pub const PCMPESTRI: u64 = 0x1AA;
     pub const PCMPISTRI: u64 = 0x1AB;
+    /// Generic vector op coverage tags for instructions that are semantically
+    /// opaque today but should not surface as `Unimplemented` lifter holes.
+    /// Keep this range away from the curated SSE/AVX, TSX, crypto, perf, and
+    /// AMX tag blocks so generic fallbacks cannot alias real intrinsics.
+    pub const MOVQ: u64 = 0x600;
+    pub const VMOVDQU: u64 = 0x601;
+    pub const VMOVDQU64: u64 = 0x602;
+    pub const VPERMB: u64 = 0x603;
+    pub const VGF2P8AFFINEQB: u64 = 0x604;
+    pub const XORPS: u64 = 0x605;
+    pub const MOVSS: u64 = 0x606;
+    pub const KMOVQ: u64 = 0x607;
+    pub const VPERMI2B: u64 = 0x608;
+    pub const VZEROUPPER: u64 = 0x609;
+    pub const PSLLD: u64 = 0x60A;
+    pub const PSRLD: u64 = 0x60B;
+    pub const VMOVNTDQ: u64 = 0x60C;
+    pub const VPCMPEQB: u64 = 0x60D;
+    pub const PSHUFLW: u64 = 0x60E;
+    pub const VMOVDQA: u64 = 0x60F;
+    pub const VPMOVMSKB: u64 = 0x610;
+    pub const CVTSS2SD: u64 = 0x611;
+    pub const VPORQ: u64 = 0x612;
+    pub const PREFETCH: u64 = 0x613;
+    pub const PSRLDQ: u64 = 0x614;
+    pub const MOVD: u64 = 0x615;
+    pub const PREFETCHT0: u64 = 0x616;
+    pub const VPBROADCASTB: u64 = 0x617;
+    pub const VPTEST: u64 = 0x618;
+    pub const VPCOMPRESSQ: u64 = 0x619;
+    pub const KMOVW: u64 = 0x61A;
+    pub const MINSD: u64 = 0x61B;
+    pub const PSHUFHW: u64 = 0x61C;
+    pub const PSRLQ: u64 = 0x61D;
+    pub const PUNPCKLDQ: u64 = 0x61E;
+    pub const VPANDQ: u64 = 0x61F;
+    pub const VPCMPUQ: u64 = 0x620;
+    pub const VPOPCNTB: u64 = 0x621;
+    pub const KMOVB: u64 = 0x622;
+    pub const CVTSD2SS: u64 = 0x623;
 
     // ── AVX/AVX2 packed integer ops (t192) ──────────────────────
     //
@@ -163,9 +203,11 @@ pub mod tag {
     pub const VPSUBQ_512: u64 = 0x1D1;
     /// VPMULLQ (EVEX/ZMM form) — packed signed 64×64→low-64 multiply (512-bit).
     pub const VPMULLQ_512: u64 = 0x1D2;
-    // Reserved EVEX dispatch tag — referenced once AVX-512 lowering lands.
+    // Reserved generic EVEX fallback tag — referenced once broad AVX-512
+    // fallback lowering lands. Keep inside the EVEX block and away from
+    // bitwise::TRAP (0x300).
     #[allow(dead_code)]
-    pub const AVX512_EVEX: u64 = 0x300;
+    pub const AVX512_EVEX: u64 = 0x1EF;
 }
 
 /// Returns `true` iff operand 0 of `insn` is a ZMM register \u2014 the
@@ -404,6 +446,54 @@ pub fn lift_sse_string_compare(
     ctx.emit(IrInsn::without_output(
         IrOp::Callother,
         smallvec![tag_vn, src0, src1, imm],
+        ctx.addr,
+    ));
+}
+
+pub fn lift_vector_generic(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, callother_tag: u64) {
+    use iced_x86::OpKind;
+
+    let tag_vn = Varnode::constant(callother_tag, 8);
+    let mut inputs = smallvec![tag_vn];
+
+    if insn.op_kind(0) == OpKind::Memory {
+        let Some(dst_addr) = ctx.memory_address(insn) else {
+            ctx.emit_unimplemented();
+            return;
+        };
+        inputs.push(dst_addr);
+        for idx in 1..insn.op_count() {
+            if let Some(src) = ctx.operand_read(insn, idx) {
+                inputs.push(src);
+            }
+        }
+        ctx.emit(IrInsn::without_output(IrOp::Callother, inputs, ctx.addr));
+        return;
+    }
+
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    for idx in 1..insn.op_count() {
+        if let Some(src) = ctx.operand_read(insn, idx) {
+            inputs.push(src);
+        }
+    }
+    let (call_dst, zero_ext_reg) = ctx.prepare_zero_extending_vector_output(insn, 0, dst);
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        call_dst,
+        inputs,
+        ctx.addr,
+    ));
+    ctx.finish_zero_extending_vector_output(zero_ext_reg, call_dst);
+}
+
+pub fn lift_tag_only(ctx: &mut LiftCtx, callother_tag: u64) {
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![Varnode::constant(callother_tag, 8)],
         ctx.addr,
     ));
 }

@@ -2,12 +2,10 @@
 //!
 //! For each binary fixture under `fixtures/` (ELF + Mach-O):
 //!   1. Detect the architecture from the file header (ELF `e_machine`,
-//!      Mach-O `cputype`). No external crate dep — we read raw bytes so
-//!      `xtask` stays a tiny crate.
-//!   2. Run the locally built `unlace` binary with `decompile --emit ir`,
-//!      capture stdout, and count occurrences of `UNIMPLEMENTED` /
-//!      `CALLOTHER` (the canonical IR text mnemonics for
-//!      `IrOp::Unimplemented` / `IrOp::Callother`).
+//!      Mach-O `cputype`) for deterministic report bucketing.
+//!   2. Load the fixture in-process, discover functions, lift each function,
+//!      and count `IrOp::Unimplemented` / `IrOp::Callother` directly from
+//!      the raw lifted IR.
 //!   3. Bucket counts by detected architecture and emit a markdown table to
 //!      stdout AND `target/lifter-coverage.md`.
 //!
@@ -20,16 +18,40 @@
 //! crates) per `xtask/src/main.rs::ENFORCED_CRATES`. We still emit output
 //! in a deterministic (alphabetical) order by sorting at print time.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+
+use capstone::prelude::*;
+use iced_x86::{Decoder, DecoderOptions};
+use unlace_cli::pipeline::{discover_functions, lift_function};
+use unlace_ir::{ArchId, IrOp};
+use unlace_lift::get_lifter;
+use unlace_loader::{BinaryImage, ElfLoader, Loader, MachoLoader, PeLoader};
+
+thread_local! {
+    static AARCH64_HINT_CS: RefCell<Option<Capstone>> = const { RefCell::new(None) };
+}
 
 /// Per-architecture accumulator.
 #[derive(Default, Debug, Clone)]
 struct ArchStats {
     fixtures: Vec<String>,
     errored: Vec<(String, String)>,
+    lifted_functions: usize,
+    skipped_functions: usize,
+    unimplemented: usize,
+    callother: usize,
+    unimpl_opcodes: HashMap<String, usize>,
+    callother_opcodes: HashMap<String, usize>,
+}
+
+#[derive(Default, Debug, Clone)]
+struct CoverageCounts {
+    discovered_functions: usize,
+    lifted_functions: usize,
+    skipped_functions: usize,
     unimplemented: usize,
     callother: usize,
     unimpl_opcodes: HashMap<String, usize>,
@@ -147,39 +169,12 @@ fn collect_fixtures(fixtures_dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-fn find_unlace_binary(root: &Path) -> Option<PathBuf> {
-    let target_dir = std::env::var("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| root.join("target"));
-    for sub in ["release", "debug"] {
-        let p = target_dir.join(sub).join("unlace");
-        if p.exists() {
-            return Some(p);
-        }
-    }
-    None
-}
-
-fn run_decompile_ir(bin: &Path, fixture: &Path) -> Result<String, String> {
-    let output = Command::new(bin)
-        .args(["decompile", "--emit", "ir", "--timeout", "30"])
-        .arg(fixture)
-        .env_remove("RUST_LOG")
-        .output()
-        .map_err(|e| format!("spawn failed: {e}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let first = stderr.lines().next().unwrap_or("unknown error");
-        return Err(first.to_string());
-    }
-    String::from_utf8(output.stdout).map_err(|e| format!("non-UTF8: {e}"))
-}
-
 /// Tally `UNIMPLEMENTED` / `CALLOTHER` mnemonics in IR-dump text. Also pulls
 /// out adjacent opcode-name hints (the architectural instruction mnemonic
 /// when present in a trailing comment like `// movbe`, or a quoted name).
 /// Best-effort, purely informational. Returns `(unimpl_count,
 /// callother_count, unimpl_opcode_hist, callother_opcode_hist)`.
+#[cfg(test)]
 fn count_in_ir(text: &str) -> (usize, usize, HashMap<String, usize>, HashMap<String, usize>) {
     let mut unimpl = 0usize;
     let mut callother = 0usize;
@@ -205,6 +200,7 @@ fn count_in_ir(text: &str) -> (usize, usize, HashMap<String, usize>, HashMap<Str
 /// Pull the first parenthesised string-literal argument or the first `//`
 /// comment token as a best-effort opcode-name hint. Used only for the
 /// per-arch "top opcodes" diagnostic — counts are independent.
+#[cfg(test)]
 fn extract_opcode_hint(line: &str) -> Option<String> {
     // Prefer `// foo` trailing comment.
     if let Some(idx) = line.find("//") {
@@ -237,6 +233,131 @@ fn extract_opcode_hint(line: &str) -> Option<String> {
     None
 }
 
+fn load_image(path: &Path) -> Result<BinaryImage, String> {
+    let data = std::fs::read(path).map_err(|e| format!("read failed: {e}"))?;
+    if ElfLoader::can_load(&data) {
+        ElfLoader::load(&data).map_err(|e| format!("ELF load failed: {e}"))
+    } else if MachoLoader::can_load(&data) {
+        MachoLoader::load(&data).map_err(|e| format!("Mach-O load failed: {e}"))
+    } else if PeLoader::can_load(&data) {
+        PeLoader::load(&data).map_err(|e| format!("PE load failed: {e}"))
+    } else {
+        Err("unsupported fixture format".to_string())
+    }
+}
+
+fn opcode_hint(image: &BinaryImage, addr: u64) -> Option<String> {
+    let section = image.sections.iter().find(|section| {
+        let start = section.vaddr;
+        let end = start.saturating_add(section.data.len() as u64);
+        addr >= start && addr < end
+    })?;
+    let offset = addr.checked_sub(section.vaddr)? as usize;
+    let bytes = section.data.get(offset..)?;
+    if bytes.is_empty() {
+        return None;
+    }
+
+    match image.arch {
+        ArchId::X86 | ArchId::X86_64 => {
+            let bitness = if image.arch == ArchId::X86 { 32 } else { 64 };
+            let mut decoder = Decoder::with_ip(bitness, bytes, addr, DecoderOptions::NONE);
+            let insn = decoder.decode();
+            if insn.is_invalid() {
+                Some(format!("invalid_{:02x}", bytes[0]))
+            } else {
+                Some(format!("{:?}", insn.mnemonic()).to_ascii_lowercase())
+            }
+        }
+        ArchId::AArch64 => capstone_aarch64_hint(bytes, addr).or_else(|| byte_opcode_hint(bytes)),
+        ArchId::Arm
+        | ArchId::Mips
+        | ArchId::Mips64
+        | ArchId::Ppc
+        | ArchId::Ppc64
+        | ArchId::RiscV64
+        | ArchId::V850
+        | ArchId::Arc => byte_opcode_hint(bytes),
+        _ => Some(format!("byte_{:02x}", bytes[0])),
+    }
+}
+
+fn byte_opcode_hint(bytes: &[u8]) -> Option<String> {
+    let width = bytes.len().min(4);
+    Some(
+        bytes[..width]
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<Vec<_>>()
+            .join("_"),
+    )
+}
+
+fn capstone_aarch64_hint(bytes: &[u8], addr: u64) -> Option<String> {
+    AARCH64_HINT_CS.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        if slot.is_none() {
+            *slot = Capstone::new()
+                .arm64()
+                .mode(capstone::arch::arm64::ArchMode::Arm)
+                .build()
+                .ok();
+        }
+        let cs = slot.as_ref()?;
+        let insns = cs.disasm_count(bytes, addr, 1).ok()?;
+        let insn = insns.as_ref().first()?;
+        insn.mnemonic().map(str::to_ascii_lowercase)
+    })
+}
+
+fn run_lift_coverage(fixture: &Path) -> Result<CoverageCounts, String> {
+    let image = load_image(fixture)?;
+    let functions =
+        discover_functions(&image, None).map_err(|e| format!("discover failed: {e}"))?;
+    let text = image
+        .section_by_name(".text")
+        .or_else(|| image.section_by_name("__text"))
+        .ok_or_else(|| "binary has no text section (.text / __text)".to_string())?;
+    let text_start = text.vaddr;
+    let text_end = text_start.saturating_add(text.data.len() as u64);
+    let lifter = get_lifter(image.arch);
+    let mut counts = CoverageCounts {
+        discovered_functions: functions.len(),
+        ..CoverageCounts::default()
+    };
+
+    for entry in &functions {
+        if entry.addr < text_start || entry.addr >= text_end {
+            counts.skipped_functions += 1;
+            continue;
+        }
+        counts.lifted_functions += 1;
+        let function = lift_function(&image, lifter.as_ref(), entry)
+            .map_err(|e| format!("{} @ {:#x}: lift failed: {e}", entry.name, entry.addr))?;
+        for block in function.blocks.values() {
+            for insn in &block.insns {
+                match insn.op {
+                    IrOp::Unimplemented => {
+                        counts.unimplemented += 1;
+                        if let Some(hint) = opcode_hint(&image, insn.addr) {
+                            *counts.unimpl_opcodes.entry(hint).or_insert(0) += 1;
+                        }
+                    }
+                    IrOp::Callother => {
+                        counts.callother += 1;
+                        if let Some(hint) = opcode_hint(&image, insn.addr) {
+                            *counts.callother_opcodes.entry(hint).or_insert(0) += 1;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    Ok(counts)
+}
+
 fn build_report(stats: &HashMap<String, ArchStats>) -> String {
     let mut s = String::new();
     let _ = writeln!(
@@ -246,20 +367,20 @@ fn build_report(stats: &HashMap<String, ArchStats>) -> String {
     let _ = writeln!(s);
     let _ = writeln!(
         s,
-        "Source: each fixture under `fixtures/` decompiled via `unlace decompile --emit ir`."
+        "Source: each fixture under `fixtures/` loaded and lifted in-process via `discover_functions` + `lift_function`."
     );
     let _ = writeln!(
         s,
-        "Counts: literal occurrences of the `UNIMPLEMENTED` and `CALLOTHER` IR mnemonics in the dump."
+        "Counts: direct raw-lifter `IrOp::Unimplemented` and `IrOp::Callother` occurrences before SSA/passes/printer cleanup."
     );
     let _ = writeln!(s);
     let _ = writeln!(
         s,
-        "| arch | fixtures | total Unimplemented | total Callother |"
+        "| arch | fixtures | lifted funcs | skipped funcs | total Unimplemented | total Callother |"
     );
     let _ = writeln!(
         s,
-        "|------|---------:|--------------------:|----------------:|"
+        "|------|---------:|-------------:|--------------:|--------------------:|----------------:|"
     );
 
     let mut archs: Vec<&String> = stats.keys().collect();
@@ -268,24 +389,46 @@ fn build_report(stats: &HashMap<String, ArchStats>) -> String {
     let mut tot_unimpl = 0usize;
     let mut tot_callother = 0usize;
     let mut tot_fixtures = 0usize;
+    let mut tot_lifted_functions = 0usize;
+    let mut tot_skipped_functions = 0usize;
     for arch in &archs {
         let st = &stats[*arch];
         let n = st.fixtures.len();
         tot_fixtures += n;
+        tot_lifted_functions += st.lifted_functions;
+        tot_skipped_functions += st.skipped_functions;
         tot_unimpl += st.unimplemented;
         tot_callother += st.callother;
         let _ = writeln!(
             s,
-            "| `{arch}` | {n} | {} | {} |",
-            st.unimplemented, st.callother
+            "| `{arch}` | {n} | {} | {} | {} | {} |",
+            st.lifted_functions, st.skipped_functions, st.unimplemented, st.callother
         );
     }
     let _ = writeln!(
         s,
-        "| **total** | **{tot_fixtures}** | **{tot_unimpl}** | **{tot_callother}** |"
+        "| **total** | **{tot_fixtures}** | **{tot_lifted_functions}** | **{tot_skipped_functions}** | **{tot_unimpl}** | **{tot_callother}** |"
     );
 
     // Per-arch top opcodes (best-effort hints).
+    let _ = writeln!(s);
+    let _ = writeln!(s, "## Top Unimplemented opcode hints (per arch)");
+    let _ = writeln!(s);
+    for arch in &archs {
+        let st = &stats[*arch];
+        if st.unimpl_opcodes.is_empty() {
+            continue;
+        }
+        let mut items: Vec<(&String, &usize)> = st.unimpl_opcodes.iter().collect();
+        items.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+        let top: Vec<String> = items
+            .iter()
+            .take(8)
+            .map(|(k, v)| format!("`{k}` ({v})"))
+            .collect();
+        let _ = writeln!(s, "- **{arch}**: {}", top.join(", "));
+    }
+
     let _ = writeln!(s);
     let _ = writeln!(s, "## Top Callother opcode hints (per arch)");
     let _ = writeln!(s);
@@ -314,7 +457,7 @@ fn build_report(stats: &HashMap<String, ArchStats>) -> String {
     }
     if any_err {
         let _ = writeln!(s);
-        let _ = writeln!(s, "## Fixtures that errored during decompile");
+        let _ = writeln!(s, "## Fixtures that errored during lifting");
         let _ = writeln!(s);
         for arch in &archs {
             for (name, err) in &stats[*arch].errored {
@@ -331,17 +474,8 @@ pub fn run(root: &Path) {
         eprintln!("ERROR: fixtures dir not found: {}", fixtures_dir.display());
         std::process::exit(1);
     }
-    let unlace_bin = match find_unlace_binary(root) {
-        Some(p) => p,
-        None => {
-            eprintln!("ERROR: unlace binary not found in target/{{release,debug}}/.");
-            eprintln!("Run `cargo build --release -p unlace-cli` first.");
-            std::process::exit(1);
-        }
-    };
-    eprintln!("using unlace binary: {}", unlace_bin.display());
-
     let fixtures = collect_fixtures(&fixtures_dir);
+    eprintln!("using direct lifter path: load -> discover_functions -> lift_function");
     eprintln!("scanning {} fixture(s)...", fixtures.len());
 
     let mut stats: HashMap<String, ArchStats> = HashMap::new();
@@ -367,20 +501,28 @@ pub fn run(root: &Path) {
         };
 
         eprint!("  [{arch}] {name} ... ");
-        match run_decompile_ir(&unlace_bin, fx) {
-            Ok(ir) => {
-                let (u, c, u_ops, c_ops) = count_in_ir(&ir);
+        match run_lift_coverage(fx) {
+            Ok(counts) => {
                 let entry = stats.entry(arch).or_default();
                 entry.fixtures.push(name);
-                entry.unimplemented += u;
-                entry.callother += c;
-                for (k, v) in u_ops {
+                entry.lifted_functions += counts.lifted_functions;
+                entry.skipped_functions += counts.skipped_functions;
+                entry.unimplemented += counts.unimplemented;
+                entry.callother += counts.callother;
+                for (k, v) in counts.unimpl_opcodes {
                     *entry.unimpl_opcodes.entry(k).or_insert(0) += v;
                 }
-                for (k, v) in c_ops {
+                for (k, v) in counts.callother_opcodes {
                     *entry.callother_opcodes.entry(k).or_insert(0) += v;
                 }
-                eprintln!("ok (unimpl={u}, callother={c})");
+                eprintln!(
+                    "ok (discovered={}, lifted={}, skipped={}, unimpl={}, callother={})",
+                    counts.discovered_functions,
+                    counts.lifted_functions,
+                    counts.skipped_functions,
+                    counts.unimplemented,
+                    counts.callother
+                );
             }
             Err(e) => {
                 let entry = stats.entry(arch).or_default();

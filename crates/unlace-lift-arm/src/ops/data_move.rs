@@ -9,7 +9,9 @@ type Ops = [(Arm64OperandType, Arm64Shift)];
 
 fn dst_size(ops: &Ops) -> u8 {
     match ops.first() {
-        Some((Arm64OperandType::Reg(reg), _)) if register_file::is_w_reg(*reg) => 4,
+        Some((Arm64OperandType::Reg(reg), _)) => register_file::reg_varnode(*reg)
+            .map(|vn| vn.size)
+            .unwrap_or(8),
         _ => 8,
     }
 }
@@ -245,13 +247,9 @@ pub fn lift_ldp(ctx: &mut LiftCtx, ops: &Ops) {
         return;
     }
     let size1 = match &ops[0].0 {
-        Arm64OperandType::Reg(reg) => {
-            if register_file::is_w_reg(*reg) {
-                4u8
-            } else {
-                8u8
-            }
-        }
+        Arm64OperandType::Reg(reg) => register_file::reg_varnode(*reg)
+            .map(|vn| vn.size)
+            .unwrap_or(8),
         _ => {
             ctx.emit_unimplemented();
             return;
@@ -345,7 +343,9 @@ pub fn lift_stp(ctx: &mut LiftCtx, ops: &Ops) {
     let src1 = operand_to_varnode(ctx, &ops[0].0);
     let src2 = operand_to_varnode(ctx, &ops[1].0);
     let size = match &ops[0].0 {
-        Arm64OperandType::Reg(reg) if register_file::is_w_reg(*reg) => 4u8,
+        Arm64OperandType::Reg(reg) => register_file::reg_varnode(*reg)
+            .map(|vn| vn.size)
+            .unwrap_or(8),
         _ => 8,
     };
 
@@ -379,6 +379,49 @@ pub fn lift_stp(ctx: &mut LiftCtx, ops: &Ops) {
             ctx.emit_store(addr2, s2);
         }
         _ => ctx.emit_unimplemented(),
+    }
+}
+
+pub fn lift_stxp(ctx: &mut LiftCtx, ops: &Ops) {
+    if ops.len() < 4 {
+        ctx.emit_unimplemented();
+        return;
+    }
+    let status = match &ops[0].0 {
+        Arm64OperandType::Reg(reg) if !register_file::is_zero_reg(*reg) => {
+            register_file::reg_varnode(*reg)
+        }
+        _ => None,
+    };
+    let src1 = operand_to_varnode(ctx, &ops[1].0);
+    let src2 = operand_to_varnode(ctx, &ops[2].0);
+    let mem = match &ops[3].0 {
+        Arm64OperandType::Mem(mem) => mem,
+        _ => {
+            ctx.emit_unimplemented();
+            return;
+        }
+    };
+    let Some(base_addr) = compute_mem_address(ctx, mem) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let (Some(src1), Some(src2)) = (src1, src2) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    ctx.emit_store(base_addr, src1);
+    let addr2 = Varnode::unique(ctx.alloc_unique(), 8);
+    ctx.emit(IrInsn::with_output(
+        IrOp::IntAdd,
+        addr2,
+        smallvec![base_addr, Varnode::constant(src1.size as u64, 8)],
+        ctx.addr,
+    ));
+    ctx.emit_store(addr2, src2);
+    if let Some(status) = status {
+        ctx.emit_copy(status, Varnode::constant(0, status.size));
     }
 }
 

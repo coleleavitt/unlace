@@ -433,17 +433,13 @@ mod tests {
     }
 
     #[test]
-    fn test_unknown_insn() {
+    fn test_psrlq_not_unimplemented() {
         // 66 0f 73 d0 01 = psrlq xmm0, 1 (SSE instruction)
         let result = lifter()
             .lift_insn(&[0x66, 0x0f, 0x73, 0xd0, 0x01], 0x1000)
             .expect("should not panic");
-        assert!(
-            result
-                .ir_ops
-                .iter()
-                .any(|i| matches!(i.op, IrOp::Unimplemented))
-        );
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
     }
 
     #[test]
@@ -1840,6 +1836,118 @@ mod tests {
         assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Popcount));
         assert!(result.ir_ops.iter().any(|i| i.op == IrOp::IntEqual));
+    }
+
+    #[test]
+    fn test_endbr64_is_not_unimplemented() {
+        // F3 0F 1E FA = endbr64
+        let result = lifter()
+            .lift_insn(&[0xF3, 0x0F, 0x1E, 0xFA], 0x1000)
+            .expect("should decode endbr64");
+        assert_eq!(result.len, 4);
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn test_hlt_emits_trap() {
+        // F4 = hlt
+        let result = lifter()
+            .lift_insn(&[0xF4], 0x1000)
+            .expect("should decode hlt");
+        assert_eq!(result.len, 1);
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::TRAP, 8));
+        assert!(co.output.is_none(), "HLT should have no output");
+    }
+
+    #[test]
+    fn test_int3_emits_trap() {
+        // CC = int3
+        let result = lifter()
+            .lift_insn(&[0xCC], 0x1000)
+            .expect("should decode int3");
+        assert_eq!(result.len, 1);
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(co.inputs[0], unlace_ir::Varnode::constant(bit_tag::TRAP, 8));
+    }
+
+    #[test]
+    fn test_syscall_emits_callother() {
+        // 0F 05 = syscall
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x05], 0x1000)
+            .expect("should decode syscall");
+        assert_eq!(result.len, 2);
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        let co = result
+            .ir_ops
+            .iter()
+            .find(|i| i.op == IrOp::Callother)
+            .unwrap();
+        assert_eq!(
+            co.inputs[0],
+            unlace_ir::Varnode::constant(bit_tag::SYSCALL, 8)
+        );
+    }
+
+    #[test]
+    fn test_xorps_self_zero_not_unimplemented() {
+        // 0F 57 C0 = xorps xmm0, xmm0
+        let result = lifter()
+            .lift_insn(&[0x0F, 0x57, 0xC0], 0x1000)
+            .expect("should decode xorps xmm0, xmm0");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Copy));
+    }
+
+    #[test]
+    fn test_movq_vector_not_unimplemented() {
+        // 66 48 0F 6E C0 = movq xmm0, rax
+        let result = lifter()
+            .lift_insn(&[0x66, 0x48, 0x0F, 0x6E, 0xC0], 0x1000)
+            .expect("should decode movq xmm0, rax");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
+    #[test]
+    fn test_movss_not_unimplemented() {
+        // F3 0F 10 C1 = movss xmm0, xmm1
+        let result = lifter()
+            .lift_insn(&[0xF3, 0x0F, 0x10, 0xC1], 0x1000)
+            .expect("should decode movss xmm0, xmm1");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
+    #[test]
+    fn test_bts_not_unimplemented() {
+        // 0F AB D8 = bts eax, ebx
+        let result = lifter()
+            .lift_insn(&[0x0F, 0xAB, 0xD8], 0x1000)
+            .expect("should decode bts eax, ebx");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+    }
+
+    #[test]
+    fn test_vzeroupper_not_unimplemented() {
+        // C5 F8 77 = vzeroupper
+        let result = lifter()
+            .lift_insn(&[0xC5, 0xF8, 0x77], 0x1000)
+            .expect("should decode vzeroupper");
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+        assert!(result.ir_ops.iter().any(|i| i.op == IrOp::Callother));
     }
 
     #[test]

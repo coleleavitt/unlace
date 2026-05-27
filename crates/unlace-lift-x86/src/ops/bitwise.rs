@@ -350,7 +350,23 @@ pub mod bit_tag {
     pub const LZCNT: u64 = 0x203;
     #[allow(dead_code)]
     pub const POPCNT: u64 = 0x204;
+    pub const BTS: u64 = 0x205;
+    pub const BTR: u64 = 0x206;
+    pub const BTC: u64 = 0x207;
+    pub const RCR: u64 = 0x208;
     pub const TRAP: u64 = 0x300;
+    pub const SYSCALL: u64 = 0x301;
+    pub const INTERRUPT: u64 = 0x302;
+    pub const CPUID: u64 = 0x303;
+    pub const PAUSE: u64 = 0x304;
+    pub const CLD: u64 = 0x305;
+    pub const RDTSC: u64 = 0x306;
+    pub const RDTSCP: u64 = 0x307;
+    pub const STD: u64 = 0x308;
+    pub const XGETBV: u64 = 0x309;
+    pub const IN: u64 = 0x30A;
+    pub const PUSHF: u64 = 0x30B;
+    pub const POPF: u64 = 0x30C;
 }
 
 /// `CF = (base >> bit_index) & 1`
@@ -589,11 +605,81 @@ pub fn lift_popcnt(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
     }
 }
 
-pub fn lift_ud2(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
+pub fn lift_trap(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
     let tag_vn = Varnode::constant(bit_tag::TRAP, 8);
     ctx.emit(IrInsn::without_output(
         IrOp::Callother,
         smallvec![tag_vn],
+        ctx.addr,
+    ));
+}
+
+pub fn lift_syscall(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
+    let tag_vn = Varnode::constant(bit_tag::SYSCALL, 8);
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![tag_vn],
+        ctx.addr,
+    ));
+}
+
+pub fn lift_interrupt(ctx: &mut LiftCtx, insn: &iced_x86::Instruction) {
+    let tag_vn = Varnode::constant(bit_tag::INTERRUPT, 8);
+    let vector = ctx
+        .operand_read(insn, 0)
+        .unwrap_or_else(|| Varnode::constant(0, 1));
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![tag_vn, vector],
+        ctx.addr,
+    ));
+}
+
+pub fn lift_cpuid(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
+    lift_tag_callother(ctx, bit_tag::CPUID);
+}
+
+pub fn lift_tag_callother(ctx: &mut LiftCtx, tag: u64) {
+    let tag_vn = Varnode::constant(tag, 8);
+    ctx.emit(IrInsn::without_output(
+        IrOp::Callother,
+        smallvec![tag_vn],
+        ctx.addr,
+    ));
+}
+
+pub fn lift_fence(ctx: &mut LiftCtx, _insn: &iced_x86::Instruction) {
+    ctx.emit(IrInsn::without_output(IrOp::Fence, smallvec![], ctx.addr));
+}
+
+pub fn lift_bit_modify_callother(ctx: &mut LiftCtx, insn: &iced_x86::Instruction, tag: u64) {
+    let tag_vn = Varnode::constant(tag, 8);
+    let Some(base) = ctx.operand_read(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    let Some(bit_idx) = ctx.operand_read(insn, 1) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+
+    if insn.op0_kind() == iced_x86::OpKind::Memory {
+        ctx.emit(IrInsn::without_output(
+            IrOp::Callother,
+            smallvec![tag_vn, base, bit_idx],
+            ctx.addr,
+        ));
+        return;
+    }
+
+    let Some(dst) = ctx.operand_write(insn, 0) else {
+        ctx.emit_unimplemented();
+        return;
+    };
+    ctx.emit(IrInsn::with_output(
+        IrOp::Callother,
+        dst,
+        smallvec![tag_vn, base, bit_idx],
         ctx.addr,
     ));
 }

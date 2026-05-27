@@ -2888,6 +2888,139 @@ mod tests {
         );
     }
 
+    #[test]
+    fn aarch64_scalar_fmul_d0_d0_d1_lifts_t315() {
+        let result = lifter()
+            .lift_insn(&[0x00, 0x08, 0x61, 0x1e], 0x1000)
+            .expect("FMUL D0,D0,D1 decodes");
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::FloatMult),
+            "scalar FMUL should emit FloatMult, got {:?}",
+            result.ir_ops
+        );
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn aarch64_scalar_fdiv_d0_d0_d1_lifts_t315() {
+        let result = lifter()
+            .lift_insn(&[0x00, 0x18, 0x61, 0x1e], 0x1000)
+            .expect("FDIV D0,D0,D1 decodes");
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::FloatDiv),
+            "scalar FDIV should emit FloatDiv, got {:?}",
+            result.ir_ops
+        );
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn aarch64_fmov_d8_d0_lifts_t315() {
+        let result = lifter()
+            .lift_insn(&[0x08, 0x40, 0x60, 0x1e], 0x1000)
+            .expect("FMOV D8,D0 decodes");
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Copy && i.output.map(|vn| vn.size) == Some(8)),
+            "FMOV should copy an 8-byte scalar FP value, got {:?}",
+            result.ir_ops
+        );
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn aarch64_movi_v0_16b_zero_lifts_t315() {
+        let result = lifter()
+            .lift_insn(&[0x00, 0xe4, 0x00, 0x4f], 0x1000)
+            .expect("MOVI V0.16B,#0 decodes");
+        assert!(
+            result.ir_ops.iter().any(|i| i.op == IrOp::Copy
+                && i.output.map(|vn| vn.size) == Some(16)
+                && i.inputs.first().map(|vn| vn.offset) == Some(0)),
+            "MOVI zero should copy a 16-byte zero constant, got {:?}",
+            result.ir_ops
+        );
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn aarch64_ldr_d0_mem_lifts_t315() {
+        let result = lifter()
+            .lift_insn(&[0x00, 0xb1, 0x47, 0xfd], 0x1000)
+            .expect("LDR D0,[X8,#0xf60] decodes");
+        assert!(
+            result
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Load && i.output.map(|vn| vn.size) == Some(8)),
+            "LDR D0 should load an 8-byte FP scalar, got {:?}",
+            result.ir_ops
+        );
+        assert!(!result.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn aarch64_stur_and_ldur_lift_t315() {
+        let stur = lifter()
+            .lift_insn(&[0xa8, 0x03, 0x1a, 0xf8], 0x1000)
+            .expect("STUR X8,[X29,#-0x60] decodes");
+        assert!(stur.ir_ops.iter().any(|i| i.op == IrOp::Store));
+        assert!(!stur.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+
+        let ldur = lifter()
+            .lift_insn(&[0xa8, 0x03, 0x5a, 0xf8], 0x1000)
+            .expect("LDUR X8,[X29,#-0x60] decodes");
+        assert!(ldur.ir_ops.iter().any(|i| i.op == IrOp::Load));
+        assert!(!ldur.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn aarch64_tbz_and_tbnz_lift_t315() {
+        let tbz = lifter()
+            .lift_insn(&[0x1a, 0x01, 0x00, 0x36], 0x1000)
+            .expect("TBZ W26,#0,target decodes");
+        assert!(tbz.ir_ops.iter().any(|i| i.op == IrOp::Cbranch));
+        assert!(!tbz.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+
+        let tbnz = lifter()
+            .lift_insn(&[0xd6, 0x01, 0x00, 0x37], 0x1000)
+            .expect("TBNZ W22,#0,target decodes");
+        assert!(tbnz.ir_ops.iter().any(|i| i.op == IrOp::Cbranch));
+        assert!(!tbnz.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
+    #[test]
+    fn aarch64_fcmp_fcsel_and_fabd_lift_t315() {
+        let fcmp = lifter()
+            .lift_insn(&[0x00, 0x20, 0x68, 0x1e], 0x1000)
+            .expect("FCMP D0,D8 decodes");
+        assert!(fcmp.ir_ops.iter().any(|i| i.op == IrOp::Callother));
+        assert!(!fcmp.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+
+        let fcsel = lifter()
+            .lift_insn(&[0xac, 0x4d, 0x60, 0x1e], 0x1000)
+            .expect("FCSEL D12,D13,D0,MI decodes");
+        assert!(
+            fcsel
+                .ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.output.map(|vn| vn.size) == Some(8))
+        );
+        assert!(!fcsel.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+
+        let fabd = lifter()
+            .lift_insn(&[0x2a, 0xd5, 0xe8, 0x7e], 0x1000)
+            .expect("FABD D10,D9,D8 decodes");
+        assert!(
+            fabd.ir_ops
+                .iter()
+                .any(|i| i.op == IrOp::Callother && i.output.map(|vn| vn.size) == Some(8))
+        );
+        assert!(!fabd.ir_ops.iter().any(|i| i.op == IrOp::Unimplemented));
+    }
+
     // ── t194: ARM saturating + parallel-add encodings ──────────────
     //
     // Each opcode lifts to a single Callother whose first input is the

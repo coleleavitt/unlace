@@ -123,6 +123,8 @@ struct Metrics {
 impl Metrics {
     fn collect(source: &str) -> Self {
         let mut m = Metrics::default();
+        let mut brace_depth = 0usize;
+        let mut function_body_depth: Option<usize> = None;
 
         for line in source.lines() {
             m.lines += 1;
@@ -134,15 +136,22 @@ impl Metrics {
             m.return_count += count_keyword(trimmed, "return");
             m.goto_count += count_keyword(trimmed, "goto");
 
-            if !trimmed.starts_with("typedef") && !trimmed.starts_with("#define") {
-                for ty in [
-                    "_BYTE ", "_WORD ", "_DWORD ", "_QWORD ", "_BOOL ", "__int8 ", "__int16 ",
-                    "__int32 ", "__int64 ",
-                ] {
-                    if trimmed.starts_with(ty) && trimmed.contains(';') {
-                        m.variable_count += 1;
-                        break;
-                    }
+            if function_body_depth.is_some() && is_variable_decl_line(trimmed) {
+                m.variable_count += 1;
+            }
+
+            let opens = trimmed.bytes().filter(|b| *b == b'{').count();
+            let closes = trimmed.bytes().filter(|b| *b == b'}').count();
+            let starts_function = function_body_depth.is_none() && starts_function_body(trimmed);
+
+            brace_depth = brace_depth.saturating_add(opens);
+            if starts_function && opens > 0 {
+                function_body_depth = Some(brace_depth);
+            }
+            brace_depth = brace_depth.saturating_sub(closes);
+            if let Some(depth) = function_body_depth {
+                if brace_depth < depth {
+                    function_body_depth = None;
                 }
             }
         }
@@ -200,6 +209,35 @@ impl Metrics {
         let raw = (weighted - goto_penalty - var_penalty) / total_weight * 100.0;
         raw.clamp(0.0, 100.0)
     }
+}
+
+fn is_variable_decl_line(line: &str) -> bool {
+    if line.starts_with("typedef") || line.starts_with("#define") {
+        return false;
+    }
+
+    [
+        "_BYTE ", "_WORD ", "_DWORD ", "_QWORD ", "_BOOL ", "__int8 ", "__int16 ", "__int32 ",
+        "__int64 ",
+    ]
+    .iter()
+    .any(|ty| line.starts_with(ty) && line.contains(';'))
+}
+
+fn starts_function_body(line: &str) -> bool {
+    let Some((prefix, _)) = line.split_once('{') else {
+        return false;
+    };
+    let prefix = prefix.trim();
+    if !prefix.ends_with(')') || !prefix.contains('(') {
+        return false;
+    }
+
+    ![
+        "if", "for", "while", "switch", "else", "do", "typedef", "struct", "union", "enum",
+    ]
+    .iter()
+    .any(|kw| prefix == *kw || prefix.starts_with(&format!("{kw} ")))
 }
 
 /// Count occurrences of a C keyword on a line.
@@ -514,6 +552,7 @@ fn golden_fixtures_metrics_summary() {
         "v850_features",
         "arc_features",
         "ppc64_features",
+        "switch_table",
     ];
     let mut total = Metrics::default();
 
@@ -570,6 +609,28 @@ int main() {
     assert_eq!(m.return_count, 2);
     assert_eq!(m.variable_count, 2);
     assert!(m.lines >= 8);
+}
+
+#[test]
+fn metrics_collect_ignores_header_declarations() {
+    let src = "\
+typedef unsigned char _BYTE;
+_BYTE byte_4008;
+_QWORD qword_3FD8;
+__int64 sub_1040();
+
+void f(void) {
+    _DWORD v0;
+    __int64 v1;
+    if (v0) {
+        return;
+    }
+}
+";
+    let m = Metrics::collect(src);
+    assert_eq!(m.if_count, 1);
+    assert_eq!(m.return_count, 1);
+    assert_eq!(m.variable_count, 2);
 }
 
 #[test]

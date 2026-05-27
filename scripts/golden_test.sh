@@ -12,7 +12,23 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-FIXTURES=(medium debug_structs debug_calls debug_hello)
+FIXTURES=(
+  medium
+  debug_structs
+  debug_calls
+  debug_hello
+  cpp_vtable
+  cpp_exceptions
+  cpp_rtti
+  x87_math
+  arm64_features
+  mips64_features
+  riscv64_features
+  v850_features
+  arc_features
+  ppc64_features
+  switch_table
+)
 GOLDEN_DIR="${ROOT}/tests/golden/expected"
 UPDATE=0
 
@@ -50,7 +66,39 @@ for name in "${FIXTURES[@]}"; do
   lines=$(wc -l < "$actual" | tr -d ' ')
   ifs=$(grep -cE '(^|[^A-Za-z_])if[[:space:]]*\(' "$actual" || true)
   rets=$(grep -cE '(^|[^A-Za-z_])return([[:space:]]|;)' "$actual" || true)
-  vars=$(grep -cE '^\s*(_BYTE|_WORD|_DWORD|_QWORD|_BOOL|__int8|__int16|__int32|__int64) ' "$actual" || true)
+  vars=$(
+    awk '
+      function trim(s) {
+        sub(/^[ \t]+/, "", s)
+        sub(/[ \t]+$/, "", s)
+        return s
+      }
+      function starts_function(line, prefix) {
+        split(line, parts, "{")
+        prefix = trim(parts[1])
+        if (prefix !~ /\)$/ || prefix !~ /\(/) return 0
+        if (prefix ~ /^(if|for|while|switch|else|do|typedef|struct|union|enum)([ \t]|$)/) return 0
+        return 1
+      }
+      {
+        line = trim($0)
+        if (func_depth > 0 && line ~ /^(_BYTE|_WORD|_DWORD|_QWORD|_BOOL|__int8|__int16|__int32|__int64)[ \t]/ && line ~ /;/) {
+          vars++
+        }
+        tmp = line
+        opens = gsub(/\{/, "", tmp)
+        tmp = line
+        closes = gsub(/\}/, "", tmp)
+        new_func = (func_depth == 0 && starts_function(line) && opens > 0)
+        depth += opens
+        if (new_func) func_depth = depth
+        depth -= closes
+        if (depth < 0) depth = 0
+        if (func_depth > 0 && depth < func_depth) func_depth = 0
+      }
+      END { print vars + 0 }
+    ' "$actual"
+  )
   printf '[metrics] %s: lines=%s if=%s return=%s vars=%s\n' "$name" "$lines" "$ifs" "$rets" "$vars"
 
   if [[ $UPDATE -eq 1 ]]; then
